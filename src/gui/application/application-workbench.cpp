@@ -286,12 +286,12 @@ namespace telar::gui::application::workbench {
       return;
     }
 
-    constexpr auto characters = std::to_array<std::pair<PaneDirection, char>>({
+    constexpr auto characters = ds::Array<std::pair<PaneDirection, char>, 4>{{
         {PaneDirection::left, 'h'},
         {PaneDirection::right, 'l'},
         {PaneDirection::up, 'k'},
         {PaneDirection::down, 'j'},
-    });
+    }};
 
     const auto* const found = std::ranges::find(characters, direction, &decltype(characters)::value_type::first);
     if (found == characters.end()) {
@@ -350,7 +350,7 @@ namespace telar::gui::application::workbench {
       return;
     }
 
-    std::array<ClientTabLayout, feature::maximum_tabs> layouts;
+    ds::Array<ClientTabLayout, feature::maximum_tabs> layouts;
     std::size_t count = 0;
     std::size_t retained_nodes = 0;
     const auto append = [&](const Tab<Memory>& tab) {
@@ -358,7 +358,7 @@ namespace telar::gui::application::workbench {
         return;
       }
 
-      layouts[count++] = {tab.location, tab.focused_pane, tab.fullscreen, tab.workspace_active, tab.layout.nodes()};
+      layouts.atMut(count++) = {tab.location, tab.focused_pane, tab.fullscreen, tab.workspace_active, tab.layout.nodes()};
       retained_nodes += tab.layout.nodes().size();
     };
 
@@ -561,7 +561,7 @@ namespace telar::gui::application::workbench {
         .nodes = tab->layout.nodes(),
     };
 
-    const std::array tabs{saved_tab};
+    const ds::Array tabs{saved_tab};
     const ClientLayoutSnapshot snapshot{
         .restored = true,
         .sidebar_visible = Access::configuration(session).sidebar_visible,

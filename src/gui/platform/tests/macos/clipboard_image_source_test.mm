@@ -2,6 +2,7 @@
 #include "foundation/core/application_memory.hpp"
 #include "objc_case.hpp"
 #include "platform/clipboard_image_source.hpp"
+#include "telar_base/ds/values.hpp"
 #include <AppKit/AppKit.h>
 #include <CoreFoundation/CoreFoundation.h>
 #include <CoreGraphics/CoreGraphics.h>
@@ -32,7 +33,7 @@ namespace {
   constexpr std::size_t component_bits = 8;
 
   NSData* _Nonnull imageData(CFStringRef kind) {
-    constexpr std::array<std::uint8_t, image_width * image_height * components> pixels{
+    constexpr telar::ds::Array<std::uint8_t, image_width * image_height * components> pixels{
         255,
         0,
         0,

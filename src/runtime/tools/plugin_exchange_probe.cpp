@@ -17,6 +17,7 @@ import telar.plugins;
 import telar.runtime.vocabulary.exchange;
 import telar.runtime.vocabulary.traffic;
 import telar.platform.error;
+import telar.base.ds;
 
 using namespace telar;
 using namespace telar::runtime;
@@ -82,11 +83,11 @@ int main(int argc, char** argv) {
     specification.declared.insert(tap::Capability::proxy_tap);
     specification.declared.insert(tap::Capability::notifications);
     specification.granted = specification.declared;
-    const std::array specifications{specification};
+    const ds::Array specifications{specification};
     tap::Service service{memory, std::span<const tap::ServiceSpec>{specifications}, argv[2]};
     const auto iterations = static_cast<unsigned>(std::stoul(argv[3]));
     std::ofstream dump{argv[4], std::ios::binary};
-    std::array<Byte, tap::Limits::effect_bytes> output;
+    ds::Array<Byte, tap::Limits::effect_bytes> output;
     std::uint64_t delivered = 0;
 
     // The first exchanges start the plugin's process and warm its interpreter.
@@ -107,7 +108,7 @@ int main(int argc, char** argv) {
       service.submit(exchange);
       await(service);
       service.collect([&](const tap::EffectBatch& batch) {
-        const auto frame = tap::Protocol::encodeEffects(output, index, batch);
+        const auto frame = tap::Protocol::encodeEffects(output.viewMut(), index, batch);
 
         dump.write(reinterpret_cast<const char*>(frame.data()), static_cast<std::streamsize>(frame.size()));
         ++delivered;

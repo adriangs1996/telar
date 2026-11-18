@@ -76,7 +76,7 @@ export {
       static constexpr std::size_t capacity = 128;
 
     private:
-      std::array<Row, capacity> rows_{};
+      ds::Array<Row, capacity> rows_{};
       std::size_t count_ = 0;
       std::uint64_t evicted_ = 0;
     };

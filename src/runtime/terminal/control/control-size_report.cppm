@@ -8,6 +8,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.vocabulary;
 import :reply;
+import telar.base.ds;
 
 export namespace telar::runtime::control {
 
@@ -28,14 +29,14 @@ export namespace telar::runtime::control {
     static_assert(sizeof(size.cols) == sizeof(std::uint16_t));
     static_assert(sizeof(size.cell_height_px) == sizeof(std::uint16_t));
     static_assert(sizeof(size.cell_width_px) == sizeof(std::uint16_t));
-    std::array<char, maximum_reply_bytes> encoded;
+    ds::Array<char, maximum_reply_bytes> encoded;
     constexpr std::string_view prefix = Kind == SizeReport::pixels ? "\x1b[4;" : Kind == SizeReport::cell ? "\x1b[6;"
                                                                              : Kind == SizeReport::text   ? "\x1b[8;"
                                                                              : Kind == SizeReport::screen ? "\x1b[9;"
                                                                                                           : "\x1b[48;";
-    auto* next = std::copy(prefix.begin(), prefix.end(), encoded.data());
+    auto* next = std::copy(prefix.begin(), prefix.end(), encoded.dataMut());
     const auto number = [&](std::uint32_t value) {
-      const auto result = std::to_chars(next, encoded.data() + encoded.size(), value);
+      const auto result = std::to_chars(next, encoded.dataMut() + encoded.size(), value);
 
       TELAR_ASSERT(result.ec == std::errc{});
       next = result.ptr;

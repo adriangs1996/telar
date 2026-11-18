@@ -303,15 +303,15 @@ namespace telar::runtime::cli::sessions {
         }
 
         const auto login = loginShell();
-        std::array<std::string_view, workspace_command_words> command;
+        ds::Array<std::string_view, workspace_command_words> command;
         std::size_t count = 0;
 
         for (const auto word : options.command) {
-          command[count++] = word;
+          command.atMut(count++) = word;
         }
 
         if (count == 0) {
-          command[count++] = login.view();
+          command.atMut(count++) = login.view();
         }
 
         auto size = workspace_size;
@@ -400,7 +400,7 @@ namespace telar::runtime::cli::sessions {
         usage("InvalidCoordinatorReference");
       }
 
-      result.session_id[index] = static_cast<Byte>(byte);
+      result.session_id.atMut(index) = static_cast<Byte>(byte);
       nonzero |= byte != 0;
     }
 
@@ -830,8 +830,8 @@ namespace telar::runtime::cli::sessions {
 
     if (status != 0) {
       if (std::string_view{failure} != "NotARepository" && !stream) {
-        std::array<Byte, diagnostic_bytes> bytes;
-        const auto tail = diagnostics.read(diagnostics.retainedOffset(), bytes);
+        ds::Array<Byte, diagnostic_bytes> bytes;
+        const auto tail = diagnostics.read(diagnostics.retainedOffset(), bytes.viewMut());
 
         if (diagnostics.retainedOffset() != 0) {
           std::fprintf(stderr, "(%llu earlier bytes of Git's output omitted)\n", static_cast<unsigned long long>(diagnostics.retainedOffset()));

@@ -48,10 +48,10 @@ export {
     class NatLookup {
       // Darwin pfioc_natlook, including four 32-bit pf_state_xport unions.
       struct Request {
-        std::array<Byte, 16> source{};
-        std::array<Byte, 16> destination{};
-        std::array<Byte, 16> translated_source{};
-        std::array<Byte, 16> translated_destination{};
+        ds::Array<Byte, 16> source{};
+        ds::Array<Byte, 16> destination{};
+        ds::Array<Byte, 16> translated_source{};
+        ds::Array<Byte, 16> translated_destination{};
         std::uint32_t source_port = 0;
         std::uint32_t destination_port = 0;
         std::uint32_t translated_source_port = 0;

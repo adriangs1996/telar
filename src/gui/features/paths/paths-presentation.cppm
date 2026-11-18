@@ -105,7 +105,7 @@ export {
 
       void push(tbc::view<PathLabelRun, tbc::lt::a> run) noexcept;
 
-      tbc::view<std::array<PathLabelRun, maximum_runs>, tbc::lt::a> runs_{};
+      tbc::view<ds::Array<PathLabelRun, maximum_runs>, tbc::lt::a> runs_{};
       std::size_t count_ = 0;
     };
 
@@ -158,10 +158,10 @@ export {
       static constexpr std::uint16_t status_gap = 3;
       static constexpr std::uint16_t key_gap = 1;
       static constexpr std::uint16_t word_gap = 2;
-      static constexpr std::array<PathPickerHint, maximum_hints> mac_hints{{{.key = "↵", .word = "insert"}, {.key = "⇥", .word = "open"}, {.key = "⇧⇥", .word = "parent"}, {.key = "⌥↵", .word = "absolute"}, {.key = "esc", .word = "close"}}};
-      static constexpr std::array<PathPickerHint, maximum_hints> pc_hints{{{.key = "enter", .word = "insert"}, {.key = "tab", .word = "open"}, {.key = "shift+tab", .word = "parent"}, {.key = "alt+enter", .word = "absolute"}, {.key = "esc", .word = "close"}}};
+      static constexpr ds::Array<PathPickerHint, maximum_hints> mac_hints{{{.key = "↵", .word = "insert"}, {.key = "⇥", .word = "open"}, {.key = "⇧⇥", .word = "parent"}, {.key = "⌥↵", .word = "absolute"}, {.key = "esc", .word = "close"}}};
+      static constexpr ds::Array<PathPickerHint, maximum_hints> pc_hints{{{.key = "enter", .word = "insert"}, {.key = "tab", .word = "open"}, {.key = "shift+tab", .word = "parent"}, {.key = "alt+enter", .word = "absolute"}, {.key = "esc", .word = "close"}}};
 
-      std::array<PathPickerHintPlacement, maximum_hints> hints{};
+      ds::Array<PathPickerHintPlacement, maximum_hints> hints{};
       std::size_t count = 0;
 
       // The footer places only its own literal hints; the status is measured, not kept.
@@ -180,7 +180,7 @@ export {
             break;
           }
 
-          result.hints[result.count++] = {
+          result.hints.atMut(result.count++) = {
               .label = label,
               .key = {.x = static_cast<std::uint16_t>(row.x + used), .y = row.y, .width = static_cast<std::uint16_t>(key), .height = row.height},
               .word = {.x = static_cast<std::uint16_t>(row.x + used + key_room), .y = row.y, .width = static_cast<std::uint16_t>(word), .height = row.height},
@@ -237,7 +237,7 @@ export {
       CellRectangle count_label;
       CellRectangle footer;
       CellRectangle empty;
-      std::array<PathPickerRowPlacement, PathPickerPlacement::maximum_rows> rows{};
+      ds::Array<PathPickerRowPlacement, PathPickerPlacement::maximum_rows> rows{};
       std::size_t row_count = 0;
 
       [[nodiscard]] static PathPickerGeometry measure(PathPickerPlacement placement, std::size_t total, std::size_t selection, PathPickerFieldColumns columns) noexcept;

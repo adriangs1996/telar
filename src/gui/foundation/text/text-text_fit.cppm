@@ -7,6 +7,7 @@ import std;
 import telar.tbc;
 
 import telar.machines;
+import telar.base.ds;
 
 // Interface: text/bounded_text.cppm
 // Shared with the CLI: telar.machines defines it.
@@ -36,7 +37,7 @@ export {
     struct TextFit {
       static constexpr std::size_t maximum_bytes = label_text_capacity;
       static constexpr std::string_view ellipsis = "…";
-      using Buffer = std::array<char, maximum_bytes>;
+      using Buffer = ds::Array<char, maximum_bytes>;
 
       template <LabelMeasure Measure>
       // The fitted text is the text itself or the prefix written into the buffer, region `a`.
@@ -65,7 +66,7 @@ export {
         }
 
         const auto prefix = text.substr(0, prefixes.bytes[keep]);
-        auto* output = std::ranges::copy(prefix, buffer.begin()).out;
+        auto* output = std::ranges::copy(prefix, buffer.dataMut()).out;
 
         output = std::ranges::copy(ellipsis, output).out;
 
@@ -84,7 +85,7 @@ export {
       }
 
       struct Prefixes {
-        std::array<std::size_t, maximum_bytes> bytes{};
+        ds::Array<std::size_t, maximum_bytes> bytes{};
         std::size_t graphemes = 0;
         std::size_t stored = 0;
       };

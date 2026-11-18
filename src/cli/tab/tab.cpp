@@ -10,6 +10,7 @@ import telar.platform.primitives;
 import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Older glibc keeps these in libdl. Keep the CLI linkable there; history
 // discovery reports unavailability when no loader is present. A static
@@ -368,7 +369,7 @@ namespace telar::runtime::cli::sessions {
         }
 
         const auto login = loginShell();
-        const std::array shell{login.view()};
+        const ds::Array shell{login.view()};
 
         wireTabLabel(options.label.valueOr(""), true);
         const auto opened = session.template exchange<PaneOpened>(LaunchTab{.workspace = workspace, .label = options.label.valueOr(""), .size = launch_size, .launch = {.cwd = entry->path, .arguments = shell}});

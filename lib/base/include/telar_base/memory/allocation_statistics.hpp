@@ -2,6 +2,7 @@
 
 #include "telar_base/diagnostics/config.hpp"
 #include "telar_base/diagnostics/timing.hpp"
+#include "telar_base/ds/values.hpp"
 #include <array>
 #include <utility>
 
@@ -28,7 +29,7 @@ namespace telar {
     std::uint64_t live_bytes = 0;
     std::uint64_t live_allocations = 0;
     AllocationTotals total;
-    std::array<AllocationTotals, 4> paths{};
+    ds::Array<AllocationTotals, 4> paths{};
     AllocationTotals interactive_terminal;
   };
 

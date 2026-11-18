@@ -42,9 +42,9 @@ export {
       full,
     };
 
-    inline constexpr std::array<std::string_view, 4> cursor_style_names{"block", "bar", "underline", "hollow"};
-    inline constexpr std::array<std::string_view, 3> font_hinting_names{"native", "light", "full"};
-    inline constexpr std::array<std::string_view, 5> surface_names{"sidebar", "topbar", "bottombar", "workspace", "pane"};
+    inline constexpr ds::Array<std::string_view, 4> cursor_style_names{"block", "bar", "underline", "hollow"};
+    inline constexpr ds::Array<std::string_view, 3> font_hinting_names{"native", "light", "full"};
+    inline constexpr ds::Array<std::string_view, 5> surface_names{"sidebar", "topbar", "bottombar", "workspace", "pane"};
 
     // The `gui` table as read: each field the configuration sets, already within its bounds.
     struct GuiSettings {
@@ -96,7 +96,7 @@ export {
       Sidebar sidebar;
       ds::Option<double> chrome_scale;
       ds::Option<std::uint16_t> max_fps;
-      std::array<ds::Option<double>, surface_names.size()> opacity{};
+      ds::Array<ds::Option<double>, surface_names.size()> opacity{};
     };
 
     class GuiReader {
@@ -110,7 +110,7 @@ export {
       static void scroll(const lua::Value& table, GuiSettings::Scroll& scroll);
       static void window(const lua::Value& table, GuiSettings::Window& window);
       static void chrome(const lua::Value& table, GuiSettings& settings);
-      static void opacity(const lua::Value& table, std::array<ds::Option<double>, surface_names.size()>& opacity);
+      static void opacity(const lua::Value& table, ds::Array<ds::Option<double>, surface_names.size()>& opacity);
       static void sidebar(const lua::Value& table, GuiSettings::Sidebar& sidebar);
     };
 
@@ -123,10 +123,10 @@ export {
 
     // The names `theme.colors` and `theme.syntax` admit, in the order of the GUI's palette and
     // syntax roles.
-    inline constexpr std::array<std::string_view, 16> theme_color_names{"accent", "panel_bg", "surface0", "surface1", "surface_dim", "overlay0", "overlay1", "text", "subtext0", "mauve", "green", "yellow", "red", "blue", "teal", "peach"};
-    inline constexpr std::array<std::string_view, 15> theme_syntax_names{"plain", "keyword", "string", "number", "comment", "constant", "builtin_constant", "builtin", "func", "type", "parameter", "property", "namespace", "operator", "punctuation"};
+    inline constexpr ds::Array<std::string_view, 16> theme_color_names{"accent", "panel_bg", "surface0", "surface1", "surface_dim", "overlay0", "overlay1", "text", "subtext0", "mauve", "green", "yellow", "red", "blue", "teal", "peach"};
+    inline constexpr ds::Array<std::string_view, 15> theme_syntax_names{"plain", "keyword", "string", "number", "comment", "constant", "builtin_constant", "builtin", "func", "type", "parameter", "property", "namespace", "operator", "punctuation"};
 
-    using ThemeRgb = std::array<std::uint8_t, 3>;
+    using ThemeRgb = ds::Array<std::uint8_t, 3>;
 
     // A theme color as configured: an RGB value, or the terminal's own color for "default".
     struct ThemeColor {
@@ -141,7 +141,7 @@ export {
         ds::Option<ThemeRgb> background;
         ds::Option<ThemeRgb> cursor_color;
         ds::Option<ThemeRgb> cursor_text_color;
-        ds::Option<std::array<ThemeRgb, palette_size>> palette;
+        ds::Option<ds::Array<ThemeRgb, palette_size>> palette;
       };
 
       struct Syntax {
@@ -152,9 +152,9 @@ export {
 
       // The preset's canonical name, which outlives the configuration.
       ds::Option<std::string_view> preset;
-      std::array<ds::Option<ThemeColor>, theme_color_names.size()> colors{};
+      ds::Array<ds::Option<ThemeColor>, theme_color_names.size()> colors{};
       Terminal terminal;
-      std::array<ds::Option<Syntax>, theme_syntax_names.size()> syntax{};
+      ds::Array<ds::Option<Syntax>, theme_syntax_names.size()> syntax{};
     };
 
     // `theme` (or its alias `client.theme`) and the `client.appearance` variants of a
@@ -172,7 +172,7 @@ export {
 
     private:
       // Each name a theme may give, with the preset it selects.
-      static constexpr std::array<std::pair<std::string_view, std::string_view>, 19> presets{{
+      static constexpr ds::Array<std::pair<std::string_view, std::string_view>, 19> presets{{
           {"cybervenom", "cybervenom"},
           {"shade", "shade"},
           {"vesper", "vesper"},
@@ -197,9 +197,9 @@ export {
       static ds::Option<std::string_view> preset(const lua::Value& value);
       static ThemeColor color(const lua::Value& value, bool allow_default);
       static ds::Option<ThemeRgb> rgb(const lua::Value& value);
-      static void colors(const lua::Value& table, std::array<ds::Option<ThemeColor>, theme_color_names.size()>& colors);
+      static void colors(const lua::Value& table, ds::Array<ds::Option<ThemeColor>, theme_color_names.size()>& colors);
       static void terminal(const lua::Value& table, ThemeSettings::Terminal& terminal);
-      static void syntax(const lua::Value& table, std::array<ds::Option<ThemeSettings::Syntax>, theme_syntax_names.size()>& syntax);
+      static void syntax(const lua::Value& table, ds::Array<ds::Option<ThemeSettings::Syntax>, theme_syntax_names.size()>& syntax);
       static void appearance(const lua::Value& table, ThemeSelectionSettings& selection);
     };
 

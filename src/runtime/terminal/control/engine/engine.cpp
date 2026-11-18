@@ -551,8 +551,8 @@ namespace telar::runtime::control {
   }
 
   void Engine::eraseDisplay(Sequence sequence, unsigned mode, bool history_erased, bool homed) {
-    static constexpr std::array<std::uint8_t, 4> erase_history{0x1b, '[', '3', 'J'};
-    static constexpr std::array<std::uint8_t, 4> erase_screen{0x1b, '[', '2', 'J'};
+    static constexpr ds::Array<std::uint8_t, 4> erase_history{0x1b, '[', '3', 'J'};
+    static constexpr ds::Array<std::uint8_t, 4> erase_screen{0x1b, '[', '2', 'J'};
 
     if (mode == 0 && homed && homeOnPrimary()) {
       responses_.release();
@@ -583,7 +583,7 @@ namespace telar::runtime::control {
         const auto slot = static_cast<std::size_t>(owned - desktop_modes.begin());
 
         if (parameters.final == 's') {
-          saved_desktop_modes_[slot] = state_.mode(mode);
+          saved_desktop_modes_.atMut(slot) = state_.mode(mode);
           continue;
         }
 
@@ -633,7 +633,7 @@ namespace telar::runtime::control {
       return;
     }
 
-    static constexpr std::array<std::uint8_t, 4> response{0x1b, '[', '0', 'n'};
+    static constexpr ds::Array<std::uint8_t, 4> response{0x1b, '[', '0', 'n'};
     if (!clipboard_.hasReply() && responses_.tryPushFixed(response)) {
       return;
     }
@@ -921,8 +921,8 @@ namespace telar::runtime::control {
     const auto style = state_.style();
 
     reply_.append("0");
-    const std::array<bool, 9> flags{style.bold, style.faint, style.italic, style.underline != 0, style.overline, style.blink, style.inverse, style.invisible, style.strikethrough};
-    constexpr std::array<unsigned, flags.size()> codes{1, 2, 3, 4, 53, 5, 7, 8, 9};
+    const ds::Array<bool, 9> flags{style.bold, style.faint, style.italic, style.underline != 0, style.overline, style.blink, style.inverse, style.invisible, style.strikethrough};
+    constexpr ds::Array<unsigned, flags.size()> codes{1, 2, 3, 4, 53, 5, 7, 8, 9};
 
     for (std::size_t index = 0; index < flags.size(); ++index) {
       if (flags[index]) {

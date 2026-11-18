@@ -98,7 +98,7 @@ namespace {
       Result result;
 
       for (std::size_t index = request.count; index-- > 0;) {
-        auto& observed = result.panes[result.count++];
+        auto& observed = result.panes.atMut(result.count++);
 
         observed.request = request.panes[index];
         observed.provider = request.panes[index].pane == 1 ? AgentProvider::claude : AgentProvider::codex;
@@ -125,7 +125,7 @@ namespace {
     decltype(processor)::Request request;
 
     for (std::uint64_t pane = 1; pane <= 2; ++pane) {
-      auto& entry = request.entries[request.count++];
+      auto& entry = request.entries.atMut(request.count++);
 
       entry.pane = pane;
       entry.observer = std::allocate_shared<PaneObserver>(AllocatorRef<PaneObserver, ConcurrentMemory>{memory}, memory, TerminalSize{80, 24, 8, 16});

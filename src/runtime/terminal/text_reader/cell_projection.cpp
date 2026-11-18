@@ -6,6 +6,7 @@ import telar.ghostty.vt;
 import telar.wire.vocabulary;
 import telar.runtime.terminal.control;
 import telar.runtime.terminal.grid;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -41,7 +42,7 @@ namespace telar::runtime {
 
   bool CellProjection::updateColors(GhosttyTerminal terminal, GhosttyRenderState render_state) {
     checkGhostty(ghostty_render_state_get(render_state, GHOSTTY_RENDER_STATE_DATA_COLORS, &colors_));
-    checkGhostty(ghostty_terminal_get(terminal, GHOSTTY_TERMINAL_DATA_COLOR_PALETTE_OVERRIDES, palette_overrides_.data()));
+    checkGhostty(ghostty_terminal_get(terminal, GHOSTTY_TERMINAL_DATA_COLOR_PALETTE_OVERRIDES, palette_overrides_.dataMut()));
 
     GhosttyColorRgb foreground{};
     GhosttyColorRgb background{};
@@ -113,8 +114,8 @@ namespace telar::runtime {
 
   void CellProjection::writeGrapheme(GhosttyRenderStateRowCells cells, ScreenCell& destination) {
     constexpr std::size_t maximum_extra_codepoints = 15;
-    std::array<std::uint32_t, maximum_extra_codepoints> storage;
-    GhosttyCodepointsBuffer codepoints{.ptr = storage.data(), .cap = storage.size(), .len = 0};
+    ds::Array<std::uint32_t, maximum_extra_codepoints> storage;
+    GhosttyCodepointsBuffer codepoints{.ptr = storage.dataMut(), .cap = storage.size(), .len = 0};
 
     checkGhostty(ghostty_render_state_row_cells_get(cells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_GRAPHEMES_EXTRA, &codepoints));
     for (const auto codepoint : std::span<const std::uint32_t>{codepoints.ptr, codepoints.len}) {
@@ -123,7 +124,7 @@ namespace telar::runtime {
         break;
       }
 
-      destination.length += encodeCodepoint(codepoint, destination.text.data() + destination.length);
+      destination.length += encodeCodepoint(codepoint, destination.text.dataMut() + destination.length);
     }
   }
 
@@ -170,10 +171,10 @@ namespace telar::runtime {
       cell.width = width == GHOSTTY_CELL_WIDE_WIDE ? CellWidth::wide : CellWidth::single;
       switch (content) {
       case GHOSTTY_CELL_CONTENT_CODEPOINT:
-        cell.length = encodeCodepoint(static_cast<std::uint32_t>(cell_layout::codepoint(raw)), cell.text.data());
+        cell.length = encodeCodepoint(static_cast<std::uint32_t>(cell_layout::codepoint(raw)), cell.text.dataMut());
         break;
       case GHOSTTY_CELL_CONTENT_CODEPOINT_GRAPHEME:
-        cell.length = encodeCodepoint(static_cast<std::uint32_t>(cell_layout::codepoint(raw)), cell.text.data());
+        cell.length = encodeCodepoint(static_cast<std::uint32_t>(cell_layout::codepoint(raw)), cell.text.dataMut());
         checkGhostty(ghostty_render_state_row_cells_select(cells, static_cast<std::uint16_t>(column)));
         writeGrapheme(cells, cell);
         break;

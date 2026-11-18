@@ -106,7 +106,7 @@ namespace telar::gui::features::terminal::graphics {
     void setWaiting(std::size_t slot, bool waiting) noexcept;
     void resume(std::size_t slot, std::uint64_t now_ns) noexcept;
 
-    std::array<Row, capacity> rows_{};
+    ds::Array<Row, capacity> rows_{};
     std::size_t count_ = 0;
     std::size_t waiting_count_ = 0;
     std::uint64_t revision_ = 0;

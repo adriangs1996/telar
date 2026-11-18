@@ -53,7 +53,7 @@ namespace telar::runtime {
       return command;
     }
 
-    constexpr std::array<std::string_view, 11> leaders{"git", "docker", "kubectl", "cargo", "zig", "npm", "pnpm", "yarn", "make", "brew", "systemctl"};
+    constexpr ds::Array<std::string_view, 11> leaders{"git", "docker", "kubectl", "cargo", "zig", "npm", "pnpm", "yarn", "make", "brew", "systemctl"};
     const auto first = command.substr(0, first_end);
 
     for (const auto leader : leaders) {

@@ -6,6 +6,7 @@ import telar.base.editors;
 import telar.gui.foundation.text;
 import telar.wire.editor;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::features::terminal::links {
 
@@ -74,13 +75,13 @@ namespace telar::gui::features::terminal::links {
         throw std::invalid_argument{"UnterminatedVariable"};
       }
 
-      std::array<char, maximum_bytes + 1> name{};
+      ds::Array<char, maximum_bytes + 1> name{};
       const auto variable = text.substr(name_start, name_end - name_start);
       if (variable.size() > maximum_bytes) {
         throw std::length_error{"PathTooLong"};
       }
 
-      std::ranges::copy(variable, name.begin());
+      std::ranges::copy(variable, name.viewMut().begin());
       const auto value = environment(name.data());
       if (!value) {
         throw std::invalid_argument{"UnknownVariable"};
@@ -133,9 +134,9 @@ namespace telar::gui::features::terminal::links {
     executable_.append(executable);
     path_.truncate(0);
     path_.append(path);
-    arguments_[0] = executable_.view();
+    arguments_.atMut(0) = executable_.view();
     if (line == 0 || convention == Convention::none) {
-      arguments_[1] = path_.view();
+      arguments_.atMut(1) = path_.view();
 
       return std::span{arguments_}.first(2);
     }
@@ -143,13 +144,13 @@ namespace telar::gui::features::terminal::links {
     position_.truncate(0);
     writePosition({.path = path, .line = line, .column = column}, convention);
     if (convention == Convention::path_suffix) {
-      arguments_[1] = position_.view();
+      arguments_.atMut(1) = position_.view();
 
       return std::span{arguments_}.first(2);
     }
 
-    arguments_[1] = convention == Convention::goto_flag ? "-g" : position_.view();
-    arguments_[2] = convention == Convention::goto_flag ? position_.view() : path_.view();
+    arguments_.atMut(1) = convention == Convention::goto_flag ? "-g" : position_.view();
+    arguments_.atMut(2) = convention == Convention::goto_flag ? position_.view() : path_.view();
 
     return arguments_;
   }

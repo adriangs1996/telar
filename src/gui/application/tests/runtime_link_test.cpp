@@ -16,6 +16,7 @@ static_assert(true);
 import telar.testing;
 import telar.gui.features.machines;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace {
 
@@ -53,7 +54,7 @@ namespace {
     link.start("host");
     check(link.phase == MachinePhase::connecting && link.headline().view() == "Connecting to host…", "a first start must name its target without a retry counter");
     link.connectionFailed(MachineError::endpoint_unavailable, "Timed out");
-    constexpr std::array delays{500, 1000, 2000, 4000, 8000, 16000, 30000, 30000};
+    constexpr telar::ds::Array delays{500, 1000, 2000, 4000, 8000, 16000, 30000, 30000};
 
     for (const auto delay : delays) {
       check(link.phase == MachinePhase::lost && link.retryDelayMilliseconds() == delay, "the original retry doubles from half a second up to thirty seconds");

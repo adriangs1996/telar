@@ -29,7 +29,7 @@ namespace telar::gui::qt {
       runtime::plugins::PackageDigest result{};
       const auto bytes = hash_.resultView();
 
-      std::ranges::copy(bytes, result.begin());
+      std::ranges::copy(bytes, result.viewMut().begin());
 
       return result;
     }

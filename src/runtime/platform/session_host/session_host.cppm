@@ -3,6 +3,7 @@ export module telar.runtime.platform.session_host;
 import std;
 
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: agents/session_host.cppm
 export {
@@ -15,7 +16,7 @@ export {
     };
 
     inline constexpr std::string_view codex_pane_argument = "--no-daemon";
-    inline constexpr std::array codex_batch_arguments{
+    inline constexpr ds::Array codex_batch_arguments{
         "exec",
         "e",
         "review",

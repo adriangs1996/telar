@@ -59,9 +59,9 @@ namespace telar::gui::inline foundation::inline text {
       return application;
     }
 
-    std::memcpy(storage.data(), directory.data(), directory.size());
-    std::memcpy(storage.data() + directory.size(), separator.data(), separator.size());
-    std::memcpy(storage.data() + directory.size() + separator.size(), application.data(), application.size());
+    std::memcpy(storage.dataMut(), directory.data(), directory.size());
+    std::memcpy(storage.dataMut() + directory.size(), separator.data(), separator.size());
+    std::memcpy(storage.dataMut() + directory.size() + separator.size(), application.data(), application.size());
 
     return {storage.data(), length};
   }

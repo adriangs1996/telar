@@ -102,7 +102,7 @@ namespace telar::gui::features::palette {
         break;
       }
 
-      result.rows[result.count++] = {.index = index, .group = group, .bounds = {.x = bounds.x, .y = y, .width = bounds.width, .height = height}};
+      result.rows.atMut(result.count++) = {.index = index, .group = group, .bounds = {.x = bounds.x, .y = y, .width = bounds.width, .height = height}};
       y += height;
     }
 

@@ -285,7 +285,7 @@ namespace telar::gui::application {
 
     // What the session tracks of the request `pending` registered last, for its reply to read.
     [[nodiscard]] static constexpr Pending& lastPending(Session& session) noexcept {
-      return session.pending_[session.pending_count_ - 1];
+      return session.pending_.atMut(session.pending_count_ - 1);
     }
 
     // The requests the runtime is yet to answer.

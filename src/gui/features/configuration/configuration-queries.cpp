@@ -143,7 +143,7 @@ namespace telar::gui::features::configuration {
   }
 
   void ThemeQuery::writeColor(JsonWriter& writer, CellColor color) {
-    constexpr std::array names{"default", "indexed", "rgb"};
+    constexpr ds::Array names{"default", "indexed", "rgb"};
 
     writer.object([&](JsonWriter& object) {
       object.member("kind", std::string_view{names[static_cast<std::size_t>(color.kind)]});
@@ -316,7 +316,7 @@ namespace telar::gui::features::configuration {
   template void ActionQuery::write<telar::ConcurrentMemory>(JsonWriter& writer, BindingAction action, const ActionDescriptions<telar::ConcurrentMemory>& descriptions, const runtime::config::RetainedCommandTabRegistry& commands);
 
   bool ActionQuery::writeNamed(JsonWriter& writer, BindingActionKind kind) {
-    constexpr auto directions = std::to_array<NamedAction>({
+    constexpr auto directions = ds::Array<NamedAction, 20>{{
         {.kind = BindingActionKind::scroll_pane_up, .type = "scroll_pane", .value = "up"},
         {.kind = BindingActionKind::scroll_pane_down, .type = "scroll_pane", .value = "down"},
         {.kind = BindingActionKind::split_horizontal, .type = "split_pane", .value = "horizontal"},
@@ -337,7 +337,7 @@ namespace telar::gui::features::configuration {
         {.kind = BindingActionKind::resize_sidebar_right, .type = "resize_sidebar", .value = "right"},
         {.kind = BindingActionKind::move_tab_previous, .type = "move_tab", .value = "previous"},
         {.kind = BindingActionKind::move_tab_next, .type = "move_tab", .value = "next"},
-    });
+    }};
 
     for (const auto& description : directions) {
       if (description.kind == kind) {
@@ -347,7 +347,7 @@ namespace telar::gui::features::configuration {
       }
     }
 
-    constexpr auto voids = std::to_array<std::pair<BindingActionKind, std::string_view>>({
+    constexpr auto voids = ds::Array<std::pair<BindingActionKind, std::string_view>, 21>{{
         {BindingActionKind::toggle_pane_fullscreen, "toggle_pane_fullscreen"},
         {BindingActionKind::toggle_sidebar, "toggle_sidebar"},
         {BindingActionKind::toggle_workspace_list, "toggle_workspace_list"},
@@ -369,7 +369,7 @@ namespace telar::gui::features::configuration {
         {BindingActionKind::machine_picker, "machine_picker"},
         {BindingActionKind::add_machine, "add_machine"},
         {BindingActionKind::copy_mode, "enter_copy_mode"},
-    });
+    }};
 
     for (const auto& [action_kind, type] : voids) {
       if (kind == action_kind) {
@@ -446,7 +446,7 @@ namespace telar::gui::features::configuration {
   }
 
   void ActionQuery::writeNotification(JsonWriter& writer, const NotificationActionDescription& description) {
-    constexpr std::array levels{"info", "success", "warning", "failure"};
+    constexpr ds::Array levels{"info", "success", "warning", "failure"};
 
     writer.object([&](JsonWriter& object) {
       object.member("title", description.title.view());
@@ -465,7 +465,7 @@ namespace telar::gui::features::configuration {
   }
 
   void ActionQuery::writeTarget(JsonWriter& writer, NotificationTarget target) {
-    constexpr std::array targets{"none", "pane", "tab", "workspace"};
+    constexpr ds::Array targets{"none", "pane", "tab", "workspace"};
 
     writer.object([&](JsonWriter& object) {
       const auto name = std::string_view{targets[static_cast<std::size_t>(target.kind)]};
@@ -547,7 +547,7 @@ namespace telar::gui::features::configuration {
   }
 
   void InputQuery::writeCharacter(JsonWriter& writer, KeyChord key) {
-    const auto bytes = std::bit_cast<std::array<char, sizeof(key.character)>>(key.character);
+    const auto bytes = std::bit_cast<ds::Array<char, sizeof(key.character)>>(key.character);
     const auto first = static_cast<unsigned char>(bytes.front());
     std::size_t length = 1;
 
@@ -562,7 +562,7 @@ namespace telar::gui::features::configuration {
   }
 
   std::string_view InputQuery::keyName(KeyChord::Key key) {
-    constexpr std::array names{"char", "up", "down", "left", "right", "home", "end", "delete", "page_up", "page_down", "enter", "escape", "backspace", "tab", "back_tab"};
+    constexpr ds::Array names{"char", "up", "down", "left", "right", "home", "end", "delete", "page_up", "page_down", "enter", "escape", "backspace", "tab", "back_tab"};
     const auto index = static_cast<std::size_t>(key);
     if (index >= names.size()) {
       throw std::invalid_argument{"Unknown key code"};

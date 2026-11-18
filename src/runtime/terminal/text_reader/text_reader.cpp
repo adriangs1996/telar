@@ -83,8 +83,8 @@ namespace telar::runtime {
 
     links_.push_back(MetadataLink{.offset = static_cast<std::uint32_t>(uris_.size()), .len = static_cast<std::uint16_t>(identity.uri.size())});
     uris_.insert(uris_.end(), identity.uri.begin(), identity.uri.end());
-    table.identities[index] = identity;
-    table.slots[slot] = index + 1;
+    table.identities.atMut(index) = identity;
+    table.slots.atMut(slot) = index + 1;
     return index;
   }
 
@@ -255,7 +255,7 @@ namespace telar::runtime {
   }
 
   void TerminalEffects::updateTitle(std::string_view raw) {
-    std::array<char, 256> candidate{};
+    ds::Array<char, 256> candidate{};
     std::size_t length = 0;
 
     while (!raw.empty()) {
@@ -280,7 +280,7 @@ namespace telar::runtime {
         continue;
       }
 
-      std::copy(sequence.begin(), sequence.end(), candidate.begin() + length);
+      std::copy(sequence.begin(), sequence.end(), candidate.dataMut() + length);
       length += count;
     }
 
@@ -312,7 +312,7 @@ namespace telar::runtime {
       return;
     }
 
-    std::array<char, 4096> candidate{};
+    ds::Array<char, 4096> candidate{};
     std::size_t length = 0;
 
     while (!raw.empty()) {
@@ -336,7 +336,7 @@ namespace telar::runtime {
         return;
       }
 
-      candidate[length++] = character;
+      candidate.atMut(length++) = character;
       raw.remove_prefix(1);
     }
 
@@ -614,7 +614,7 @@ namespace telar::runtime {
     checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_CLIPBOARD_WRITE, reinterpret_cast<const void*>(&clipboardWrite)));
     checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_PROGRESS_REPORT, reinterpret_cast<const void*>(&progressReported)));
     checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_SIZE, reinterpret_cast<const void*>(&reportSize)));
-    checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_COLOR_PALETTE_DEFAULT, default_palette_.data()));
+    checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_COLOR_PALETTE_DEFAULT, default_palette_.dataMut()));
     const std::size_t scrollback_bytes = 10'000'000;
 
     checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_SCROLLBACK_MAX_BYTES, &scrollback_bytes));
@@ -734,7 +734,7 @@ namespace telar::runtime {
 
     if (colors.palette) {
       for (std::size_t index = 0; index < colors.palette->size() / 3; ++index) {
-        palette[index] = {(*colors.palette)[index * 3], (*colors.palette)[index * 3 + 1], (*colors.palette)[index * 3 + 2]};
+        palette.atMut(index) = {(*colors.palette)[index * 3], (*colors.palette)[index * 3 + 1], (*colors.palette)[index * 3 + 2]};
       }
     }
 
@@ -744,7 +744,7 @@ namespace telar::runtime {
     force_ = true;
   }
 
-  void Terminal::configureCursorColor(ds::Option<std::array<Byte, 3>> color) {
+  void Terminal::configureCursorColor(ds::Option<ds::Array<Byte, 3>> color) {
     const GhosttyColorRgb rgb = color ? GhosttyColorRgb{(*color)[0], (*color)[1], (*color)[2]} : GhosttyColorRgb{};
 
     checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_COLOR_CURSOR, color ? &rgb : nullptr));
@@ -1207,7 +1207,7 @@ namespace telar::runtime {
     GhosttyString pointer{};
 
     checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_MOUSE_SHAPE_NAME, &pointer));
-    static constexpr std::array<std::string_view, 34> shapes{
+    static constexpr ds::Array<std::string_view, 34> shapes{
         "default",
         "context_menu",
         "help",

@@ -32,9 +32,9 @@ namespace {
 
   constexpr int wait_ms = 5000;
   constexpr Rect whole{.width = 800, .height = 600};
-  constexpr std::array initial{PaneMotionSlot{.id = 1, .bounds = whole}};
-  constexpr std::array horizontal{PaneMotionSlot{.id = 1, .bounds = {.width = 390, .height = 600}}, PaneMotionSlot{.id = 2, .bounds = {.x = 410, .width = 390, .height = 600}}};
-  constexpr std::array vertical{PaneMotionSlot{.id = 1, .bounds = {.width = 800, .height = 290}}, PaneMotionSlot{.id = 2, .bounds = {.y = 310, .width = 800, .height = 290}}};
+  constexpr telar::ds::Array initial{PaneMotionSlot{.id = 1, .bounds = whole}};
+  constexpr telar::ds::Array horizontal{PaneMotionSlot{.id = 1, .bounds = {.width = 390, .height = 600}}, PaneMotionSlot{.id = 2, .bounds = {.x = 410, .width = 390, .height = 600}}};
+  constexpr telar::ds::Array vertical{PaneMotionSlot{.id = 1, .bounds = {.width = 800, .height = 290}}, PaneMotionSlot{.id = 2, .bounds = {.y = 310, .width = 800, .height = 290}}};
 
   Rect sample(const PaneMotions& motions, std::size_t index, std::uint64_t now) {
     TabMotionFrame frame{.now_ns = now, .deadline_ns = telar::ds::none};
@@ -103,9 +103,9 @@ namespace {
       QCOMPARE(sample(motions, 0, 10 + PaneMotions::opening_ns), horizontal[0].bounds);
       auto resized = horizontal;
 
-      resized[0].bounds.width = 300;
-      resized[1].bounds.x = 320;
-      resized[1].bounds.width = 480;
+      resized.atMut(0).bounds.width = 300;
+      resized.atMut(1).bounds.x = 320;
+      resized.atMut(1).bounds.width = 480;
       motions.update(resized, 20);
       QCOMPARE(sample(motions, 0, 20), resized[0].bounds);
       QCOMPARE(sample(motions, 1, 20), resized[1].bounds);
@@ -119,8 +119,8 @@ namespace {
       motions.update(initial, 0);
       auto unrelated = horizontal;
 
-      unrelated[0].id = 3;
-      unrelated[1].id = 4;
+      unrelated.atMut(0).id = 3;
+      unrelated.atMut(1).id = 4;
       motions.update(unrelated, 10);
       QCOMPARE(sample(motions, 0, 10), unrelated[0].bounds);
       QCOMPARE(sample(motions, 1, 10), unrelated[1].bounds);

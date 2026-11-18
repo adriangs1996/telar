@@ -17,6 +17,7 @@ import telar.config.runtime;
 import telar.plugins;
 import telar.runtime.vocabulary.exchange;
 import telar.runtime.vocabulary.frames;
+import telar.base.ds;
 
 namespace {
 
@@ -47,7 +48,7 @@ namespace {
     ConcurrentMemory& memory = adapter;
     CaptureQuota quota{4096};
     const ProxyCaptureLimits limits{.part_bytes = 1024, .exchange_bytes = 2048, .total_bytes = 4096, .enabled = true};
-    std::array<Byte, 4096> buffer;
+    ds::Array<Byte, 4096> buffer;
 
     for (const auto protocol : {CaptureProtocol::http1, CaptureProtocol::http2, CaptureProtocol::upgraded}) {
       for (const auto present : {1, 2, 3}) {
@@ -74,7 +75,7 @@ namespace {
           exchange.include(std::move(half));
         }
 
-        const auto encoded = tap::Protocol::encodeExchange(buffer, {UINT64_MAX, 7}, exchange);
+        const auto encoded = tap::Protocol::encodeExchange(buffer.viewMut(), {UINT64_MAX, 7}, exchange);
 
         check(tap::Protocol::exchangeBytes(exchange) == encoded.size());
         const auto decoded = tap::Protocol::decodeExchange(encoded);
@@ -95,11 +96,11 @@ namespace {
           });
 
           rejects([&] {
-            tap::Protocol::encodeExchange(std::span{buffer}.first(count), {UINT64_MAX, 7}, exchange);
+            tap::Protocol::encodeExchange(buffer.viewMut().first(count), {UINT64_MAX, 7}, exchange);
           });
         }
 
-        tap::Protocol::encodeExchange(buffer, {UINT64_MAX, 7}, exchange);
+        tap::Protocol::encodeExchange(buffer.viewMut(), {UINT64_MAX, 7}, exchange);
         rejects([&] {
           tap::Protocol::decodeExchange(std::span{buffer}.first(encoded.size() + 1));
         });
@@ -109,7 +110,7 @@ namespace {
     CapturedExchange empty{memory};
 
     rejects([&] {
-      tap::Protocol::encodeExchange(buffer, {}, empty);
+      tap::Protocol::encodeExchange(buffer.viewMut(), {}, empty);
     });
 
     rejects([&] {
@@ -120,18 +121,18 @@ namespace {
   }
 
   void testEffectProtocol() {
-    std::array<Byte, tap::Limits::effect_bytes> buffer;
+    ds::Array<Byte, tap::Limits::effect_bytes> buffer;
 
     for (const auto level : {NotificationLevel::info, NotificationLevel::success, NotificationLevel::warning, NotificationLevel::failure}) {
       for (const std::uint8_t count : {0, 1, 16}) {
         tap::EffectBatch effects;
 
         effects.count = count;
-        for (auto& notification : effects.notifications) {
+        for (auto& notification : effects.notifications.viewMut()) {
           notification = {.level = level, .duration_ms = UINT32_MAX, .title = std::string_view{"a\0b", 3}, .message = "message"};
         }
 
-        const auto encoded = tap::Protocol::encodeEffects(buffer, UINT64_MAX, effects);
+        const auto encoded = tap::Protocol::encodeEffects(buffer.viewMut(), UINT64_MAX, effects);
         const auto decoded = tap::Protocol::decodeEffects(encoded);
 
         check(decoded.event_id == UINT64_MAX && decoded.batch.count == count);
@@ -155,11 +156,11 @@ namespace {
 
     oversized.count = tap::Limits::effects + 1;
     rejects([&] {
-      tap::Protocol::encodeEffects(buffer, 1, oversized);
+      tap::Protocol::encodeEffects(buffer.viewMut(), 1, oversized);
     });
 
     for (const Byte count : {17, 255}) {
-      tap::FrameWriter writer{buffer};
+      tap::FrameWriter writer{buffer.viewMut()};
 
       writer.tag(tap::FrameKind::effects);
       writer.integer(std::uint64_t{1});
@@ -170,7 +171,7 @@ namespace {
     }
 
     for (const Byte level : {4, 255}) {
-      tap::FrameWriter writer{buffer};
+      tap::FrameWriter writer{buffer.viewMut()};
 
       writer.tag(tap::FrameKind::effects);
       writer.integer(std::uint64_t{1});
@@ -187,9 +188,9 @@ namespace {
   }
 
   void testErrorProtocol() {
-    std::array<Byte, tap::Limits::effect_bytes> buffer;
+    ds::Array<Byte, tap::Limits::effect_bytes> buffer;
     const std::string long_message(tap::Limits::error_bytes + 1, 'e');
-    const auto encoded = tap::Protocol::encodeError(buffer, 73, long_message);
+    const auto encoded = tap::Protocol::encodeError(buffer.viewMut(), 73, long_message);
     const auto decoded = tap::Protocol::decodeError(encoded);
 
     check(decoded.event_id == 73 && decoded.message == std::string_view{long_message}.substr(0, tap::Limits::error_bytes));
@@ -235,10 +236,10 @@ namespace {
   // A plugin's reply frame and each effect in it say what they are: a frame of another kind, or an
   // effect of a kind the runtime does not know, is refused instead of read as a notification.
   void testEffectsRejectUnknownKinds() {
-    std::array<Byte, tap::Limits::effect_bytes> buffer;
+    ds::Array<Byte, tap::Limits::effect_bytes> buffer;
 
     auto reply = [&](tap::FrameKind frame, Byte effect) {
-      tap::FrameWriter writer{buffer};
+      tap::FrameWriter writer{buffer.viewMut()};
 
       writer.tag(frame);
       writer.integer(std::uint64_t{1});
@@ -275,7 +276,7 @@ namespace {
     ConcurrentMemory& memory = adapter;
     CaptureQuota quota{4096};
     const ProxyCaptureLimits limits{.part_bytes = 1024, .exchange_bytes = 2048, .total_bytes = 4096, .enabled = true};
-    std::array<Byte, 4096> buffer;
+    ds::Array<Byte, 4096> buffer;
     CapturedExchange exchange{memory};
     auto half = makeOwned<CaptureHalf>(memory, memory, quota, limits, CaptureStart{.key = {1, 0}, .side = CaptureSide::request, .protocol = CaptureProtocol::http1, .host = "example.test"});
 
@@ -290,12 +291,12 @@ namespace {
       return std::string_view{reinterpret_cast<const char*>(bytes.data()), bytes.size()};
     };
 
-    const auto cut = tap::Protocol::decodeExchange(tap::Protocol::encodeExchange(buffer, {1, 1}, exchange, 4));
+    const auto cut = tap::Protocol::decodeExchange(tap::Protocol::encodeExchange(buffer.viewMut(), {1, 1}, exchange, 4));
 
     check(cut.request && text(cut.request->head) == "0123" && text(cut.request->body) == "abcd");
     check(cut.request->head_truncated && cut.request->body_truncated);
 
-    const auto whole = tap::Protocol::decodeExchange(tap::Protocol::encodeExchange(buffer, {1, 1}, exchange, 10));
+    const auto whole = tap::Protocol::decodeExchange(tap::Protocol::encodeExchange(buffer.viewMut(), {1, 1}, exchange, 10));
 
     check(whole.request && text(whole.request->body) == "abcdefghij" && !whole.request->head_truncated && !whole.request->body_truncated);
   }

@@ -41,6 +41,7 @@ import telar.base.memory.allocators;
 import telar.platform.primitives;
 import telar.testing;
 import telar.runtime.platform.event_loop;
+import telar.base.ds;
 
 namespace {
 
@@ -51,7 +52,7 @@ namespace {
 
   namespace {
 
-    std::array<FileDescriptor, 2> socketPair() {
+    ds::Array<FileDescriptor, 2> socketPair() {
       int descriptors[2];
 
       check(::socketpair(AF_UNIX, SOCK_STREAM, 0, descriptors) == 0);
@@ -60,50 +61,50 @@ namespace {
 
     void interestsAndTokens(SystemAllocator& memory) {
       NativeEventLoop<SystemAllocator> poller{memory};
-      std::array<Event, NativeEventLoop<SystemAllocator>::event_capacity> ready{};
+      ds::Array<Event, NativeEventLoop<SystemAllocator>::event_capacity> ready{};
       auto sockets = socketPair();
       constexpr std::uint64_t token = UINT64_MAX;
 
       poller.watch(sockets[0].get(), token);
       poller.writeInterest(sockets[0].get(), token, true);
-      const auto writable = poller.wait(std::chrono::nanoseconds::zero(), ready);
+      const auto writable = poller.wait(std::chrono::nanoseconds::zero(), ready.viewMut());
 
       check(std::ranges::any_of(writable, [&](const Event& event) {
         return event.descriptor == sockets[0].get() && event.token == token && event.kind == EventKind::writable;
       }));
 
       poller.writeInterest(sockets[0].get(), token, false);
-      check(poller.wait(std::chrono::nanoseconds::zero(), ready).empty());
+      check(poller.wait(std::chrono::nanoseconds::zero(), ready.viewMut()).empty());
       constexpr char payload = 'x';
 
       check(::write(sockets[1].get(), &payload, sizeof(payload)) == sizeof(payload));
-      const auto readable = poller.wait(std::chrono::milliseconds{100}, ready);
+      const auto readable = poller.wait(std::chrono::milliseconds{100}, ready.viewMut());
 
       check(std::ranges::any_of(readable, [&](const Event& event) {
         return event.descriptor == sockets[0].get() && event.token == token && event.kind == EventKind::readable;
       }));
 
       poller.readInterest(sockets[0].get(), token, false);
-      check(poller.wait(std::chrono::nanoseconds::zero(), ready).empty());
+      check(poller.wait(std::chrono::nanoseconds::zero(), ready.viewMut()).empty());
       poller.readInterest(sockets[0].get(), token, true);
       char received = 0;
 
       check(::read(sockets[0].get(), &received, sizeof(received)) == sizeof(received));
       check(received == payload);
-      sockets[1].reset();
-      const auto closed = poller.wait(std::chrono::milliseconds{100}, ready);
+      sockets.atMut(1).reset();
+      const auto closed = poller.wait(std::chrono::milliseconds{100}, ready.viewMut());
 
       check(std::ranges::any_of(closed, [&](const Event& event) {
         return event.descriptor == sockets[0].get() && event.closed;
       }));
 
       poller.remove(sockets[0].get());
-      check(poller.wait(std::chrono::nanoseconds::zero(), ready).empty());
+      check(poller.wait(std::chrono::nanoseconds::zero(), ready.viewMut()).empty());
     }
 
     void replaceDescriptor(SystemAllocator& memory) {
       NativeEventLoop<SystemAllocator> poller{memory};
-      std::array<Event, NativeEventLoop<SystemAllocator>::event_capacity> ready{};
+      ds::Array<Event, NativeEventLoop<SystemAllocator>::event_capacity> ready{};
       auto first = socketPair();
       const auto descriptor = first[0].get();
       constexpr std::uint64_t previous_token = UINT64_MAX;
@@ -113,11 +114,11 @@ namespace {
       FileDescriptor retained{::dup(descriptor)};
 
       check(static_cast<bool>(retained));
-      first[0].reset();
+      first.atMut(0).reset();
       auto replacement = socketPair();
       if (replacement[0].get() != descriptor) {
         check(::dup2(replacement[0].get(), descriptor) == descriptor);
-        replacement[0].reset(descriptor);
+        replacement.atMut(0).reset(descriptor);
       }
 
       poller.watch(descriptor, replacement_token);
@@ -125,7 +126,7 @@ namespace {
 
       check(::write(first[1].get(), &payload, sizeof(payload)) == sizeof(payload));
       check(::write(replacement[1].get(), &payload, sizeof(payload)) == sizeof(payload));
-      const auto events = poller.wait(std::chrono::milliseconds{100}, ready);
+      const auto events = poller.wait(std::chrono::milliseconds{100}, ready.viewMut());
 
       check(events.size() == 1);
       for (const auto& event : events) {
@@ -135,7 +136,7 @@ namespace {
       char received = 0;
 
       check(::read(replacement[0].get(), &received, sizeof(received)) == sizeof(received));
-      check(poller.wait(std::chrono::nanoseconds::zero(), ready).empty());
+      check(poller.wait(std::chrono::nanoseconds::zero(), ready.viewMut()).empty());
     }
 
     void signals(SystemAllocator& memory) {
@@ -144,7 +145,7 @@ namespace {
       check(::sigaction(SIGUSR1, nullptr, &previous) == 0);
       {
         NativeEventLoop<SystemAllocator> poller{memory};
-        std::array<Event, NativeEventLoop<SystemAllocator>::event_capacity> ready{};
+        ds::Array<Event, NativeEventLoop<SystemAllocator>::event_capacity> ready{};
 
         poller.watchSignal(SIGUSR1);
         poller.watchSignal(SIGCHLD);
@@ -155,7 +156,7 @@ namespace {
         notifier.join();
         bool notified = false;
 
-        for (const auto& event : poller.wait(std::chrono::milliseconds{100}, ready)) {
+        for (const auto& event : poller.wait(std::chrono::milliseconds{100}, ready.viewMut())) {
           notified |= event.kind == EventKind::signal && event.descriptor == SIGUSR1;
         }
 
@@ -172,7 +173,7 @@ namespace {
         bool reaped = false;
 
         while (!reaped && std::chrono::steady_clock::now() < deadline) {
-          for (const auto& event : poller.wait(std::chrono::milliseconds{100}, ready)) {
+          for (const auto& event : poller.wait(std::chrono::milliseconds{100}, ready.viewMut())) {
             reaped |= event.kind == EventKind::signal && event.descriptor == SIGCHLD;
           }
         }

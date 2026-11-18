@@ -23,7 +23,7 @@ namespace telar::runtime {
   }
 
   void ClipboardService::configure(const ClientStore& clients, Pane& pane) {
-    std::array<control::ClipboardRoute, control::ClipboardGrants::capacity> routes;
+    ds::Array<control::ClipboardRoute, control::ClipboardGrants::capacity> routes;
     std::size_t count = 0;
     const ClientSession* preferred = nullptr;
 
@@ -36,7 +36,7 @@ namespace telar::runtime {
         break;
       }
 
-      routes[count++] = {client->id, client->generation};
+      routes.atMut(count++) = {client->id, client->generation};
       if (preferred == nullptr || precedes(*client, *preferred, pane.id)) {
         preferred = client;
       }
@@ -128,7 +128,7 @@ namespace telar::runtime {
     for (std::size_t index = 0; index < client.attachments.size(); ++index) {
       const auto& attachment = *client.attachments[index];
       if (model.panes.find(attachment.pane_id) != nullptr && !attachment.exit_sent) {
-        slots_[attachment.slot] = {static_cast<std::uint8_t>(index), false};
+        slots_.atMut(attachment.slot) = {static_cast<std::uint8_t>(index), false};
         occupied_ |= std::uint64_t{1} << attachment.slot;
       }
     }
@@ -287,7 +287,7 @@ namespace telar::runtime {
       return false;
     }
 
-    std::array<CommandBlock, PaneBlocks::capacity> storage;
+    ds::Array<CommandBlock, PaneBlocks::capacity> storage;
 
     connection.send(pane.blocks->message(pane.id, storage));
     attachment.blocks_revision = pane.blocks->revision();
@@ -321,7 +321,7 @@ namespace telar::runtime {
 
     const bool snapshot = attachment.frames.needsSnapshot(pane.terminal.screen);
     if (!snapshot && !pane.terminal.dirty() && attachment.frames.observedRevision() == pane.terminal.screen.revision) {
-      slots_[attachment.slot].cells_current = true;
+      slots_.atMut(attachment.slot).cells_current = true;
       return false;
     }
 
@@ -359,7 +359,7 @@ namespace telar::runtime {
     const auto payload = attachment.frames.prepare(pane.terminal.screen);
 
     TELAR_DIAGNOSTIC(output.metrics.frames.merge(attachment.frames.takeCounters()));
-    slots_[attachment.slot].cells_current = true;
+    slots_.atMut(attachment.slot).cells_current = true;
     if (attachment.viewport) {
       pane.terminal.scrollToBottom();
     }
@@ -484,7 +484,7 @@ namespace telar::runtime {
       return false;
     }
 
-    std::array<PaneListEntry, max_pane_list_entries> entries;
+    ds::Array<PaneListEntry, max_pane_list_entries> entries;
     std::size_t count = 0;
 
     for (const auto* pane : model_.panes.items()) {
@@ -499,7 +499,7 @@ namespace telar::runtime {
       const auto age = std::chrono::duration_cast<std::chrono::seconds>(now - pane->foreground_since).count();
       const auto name = pane->foreground.view();
 
-      entries[count++] = {
+      entries.atMut(count++) = {
           .pane_id = pane->id,
           .pane_generation = pane->generation,
           .location = pane->location,
@@ -529,7 +529,7 @@ namespace telar::runtime {
         continue;
       }
 
-      auto& sent = client.foregrounds[slot];
+      auto& sent = client.foregrounds.atMut(slot);
       if (sent.pane != pane->id || sent.revision != pane->foreground_revision) {
         client.connection.send(PaneForeground{pane->id, pane->foreground.view()});
         sent = {pane->id, pane->foreground_revision};
@@ -544,8 +544,8 @@ namespace telar::runtime {
       : editor_(memory) {}
 
   void EditorService::process(std::span<const Byte> payload, EncodedReply<ConcurrentMemory>& reply, const RequestContext& context) {
-    std::array<Byte, 1024> scratch;
-    DecodeStorage storage{scratch};
+    ds::Array<Byte, 1024> scratch;
+    DecodeStorage storage{scratch.viewMut()};
 
     editor_.open(Codec::decode<OpenEditor>(payload, storage), context, reply);
   }

@@ -14,6 +14,7 @@ static_assert(true);
 import std;
 import telar.testing;
 import telar.client;
+import telar.base.ds;
 
 namespace {
 
@@ -25,10 +26,10 @@ namespace {
   // The client's socket is never inherited by a program the process runs, and it is closed once,
   // by whichever client owns it last.
   void testClientSocket() {
-    std::array<char, 64> temporary{};
+    ds::Array<char, 64> temporary{};
 
-    std::strcpy(temporary.data(), "/tmp/telar-client-test-XXXXXX");
-    check(::mkdtemp(temporary.data()) != nullptr);
+    std::strcpy(temporary.dataMut(), "/tmp/telar-client-test-XXXXXX");
+    check(::mkdtemp(temporary.dataMut()) != nullptr);
     const std::string root = temporary.data();
     const auto path = root + "/runtime.sock";
     const int listener = ::socket(AF_UNIX, SOCK_STREAM, 0);

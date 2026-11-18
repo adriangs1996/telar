@@ -12,6 +12,7 @@ import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::runtime::cli {
 
@@ -50,8 +51,8 @@ namespace telar::runtime::cli {
   }
 
   std::string agentEventEntryJson(const AgentSnapshotEntry& agent) {
-    constexpr std::array status_names{"unknown", "working", "blocked", "ready", "failed", "done"};
-    constexpr std::array reason_names{"none", "permission", "question", "plan", "other"};
+    constexpr ds::Array status_names{"unknown", "working", "blocked", "ready", "failed", "done"};
+    constexpr ds::Array reason_names{"none", "permission", "question", "plan", "other"};
     const auto session = lowerHex(agent.session_id);
 
     constexpr auto escapes = JsonEscapes::control;
@@ -82,7 +83,7 @@ namespace telar::runtime::cli::api {
     std::uint64_t value;
   };
 
-  constexpr std::array client_requests{
+  constexpr ds::Array client_requests{
       NamedValue{.name = "open_pane", .value = static_cast<std::uint64_t>(ClientTag::open_pane)},
       NamedValue{.name = "pane_input", .value = static_cast<std::uint64_t>(ClientTag::pane_input)},
       NamedValue{.name = "pane_resize", .value = static_cast<std::uint64_t>(ClientTag::pane_resize)},
@@ -157,7 +158,7 @@ namespace telar::runtime::cli::api {
       NamedValue{.name = "configure_shell_prompt", .value = static_cast<std::uint64_t>(ClientTag::configure_shell_prompt)},
   };
 
-  constexpr std::array server_messages{
+  constexpr ds::Array server_messages{
       NamedValue{.name = "pane_opened", .value = static_cast<std::uint64_t>(ServerTag::pane_opened)},
       NamedValue{.name = "pane_frame", .value = static_cast<std::uint64_t>(ServerTag::pane_frame)},
       NamedValue{.name = "pane_exited", .value = static_cast<std::uint64_t>(ServerTag::pane_exited)},
@@ -223,7 +224,7 @@ namespace telar::runtime::cli::api {
       NamedValue{.name = "pane_document", .value = static_cast<std::uint64_t>(ServerTag::pane_document)},
   };
 
-  constexpr std::array agent_statuses{
+  constexpr ds::Array agent_statuses{
       NamedValue{.name = "unknown", .value = static_cast<std::uint64_t>(AgentStatus::unknown)},
       NamedValue{.name = "working", .value = static_cast<std::uint64_t>(AgentStatus::working)},
       NamedValue{.name = "blocked", .value = static_cast<std::uint64_t>(AgentStatus::blocked)},
@@ -232,7 +233,7 @@ namespace telar::runtime::cli::api {
       NamedValue{.name = "done", .value = static_cast<std::uint64_t>(AgentStatus::done)},
   };
 
-  constexpr std::array bounds{
+  constexpr ds::Array bounds{
       NamedValue{.name = "max_frame_bytes", .value = max_payload_size},
       NamedValue{.name = "max_agent_snapshot_entries", .value = 64},
       NamedValue{.name = "max_pane_list_entries", .value = max_pane_list_entries},
@@ -429,9 +430,9 @@ namespace telar::runtime::cli {
       connection.receiveTimeout(30);
     }
 
-    std::array<Byte, 32> outgoing;
+    ds::Array<Byte, 32> outgoing;
 
-    connection.send(RequestRuntimeState{.client_identity = randomIdentity(), .interactive = false}, outgoing);
+    connection.send(RequestRuntimeState{.client_identity = randomIdentity(), .interactive = false}, outgoing.viewMut());
     Vector<Byte, Memory> incoming(max_payload_size, Byte{}, AllocatorRef<Byte, Memory>{memory});
     Vector<Byte, Memory> decoded(max_payload_size, Byte{}, AllocatorRef<Byte, Memory>{memory});
     std::uint64_t count = 0;

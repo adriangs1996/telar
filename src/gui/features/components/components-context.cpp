@@ -3,6 +3,7 @@ module telar.gui.features.components;
 import std;
 
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::features::components {
 
@@ -37,7 +38,7 @@ namespace telar::gui::features::components {
   }
 
   template <std::size_t Count>
-  std::string_view Clock::named(const std::array<std::string_view, Count>& names, unsigned index) noexcept {
+  std::string_view Clock::named(const ds::Array<std::string_view, Count>& names, unsigned index) noexcept {
     return names[std::min<std::size_t>(index, Count - 1)];
   }
 

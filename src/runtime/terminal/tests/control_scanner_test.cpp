@@ -1,6 +1,7 @@
 import std;
 import telar.runtime.terminal.control;
 import telar.testing;
+import telar.base.ds;
 
 namespace {
 
@@ -82,7 +83,7 @@ namespace {
 
   template <Isa Set>
   void repeatedSgrBoundaries() {
-    const std::array styles{"\x1b[m", "\x1b[0m", "\x1b[1;32m", "\x1b[12345m", "\x1b[123456m"};
+    const telar::ds::Array styles{"\x1b[m", "\x1b[0m", "\x1b[1;32m", "\x1b[12345m", "\x1b[123456m"};
 
     for (const auto first : styles) {
       for (const auto second : styles) {

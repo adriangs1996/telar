@@ -63,13 +63,13 @@ namespace {
     TestSession client{memory, transport};
 
     openFirstPane(client, transport);
-    std::array entries{agentSnapshotEntry()};
+    ds::Array entries{agentSnapshotEntry()};
     std::uint64_t revision = 1;
 
     deliver(client, AgentSnapshot{.revision = revision++, .entries = entries});
     const auto initial = countAcknowledgements(transport);
 
-    entries.front().status = AgentStatus::done;
+    entries.atMut(0).status = AgentStatus::done;
     deliver(client, AgentSnapshot{.revision = revision++, .entries = entries});
     check(countAcknowledgements(transport) == initial + 1, "a completion arriving after focus must be acknowledged without another click");
     const auto request = transport.last<AcknowledgeAgent>();
@@ -78,9 +78,9 @@ namespace {
     deliver(client, AgentSnapshot{.revision = revision++, .entries = entries});
     application::workbench::focusPane(client, entries.front().pane_id);
     check(countAcknowledgements(transport) == initial + 1, "repeated snapshots and repeated focus must not resend a completion");
-    entries.front().status = AgentStatus::working;
+    entries.atMut(0).status = AgentStatus::working;
     deliver(client, AgentSnapshot{.revision = revision++, .entries = entries});
-    entries.front().status = AgentStatus::done;
+    entries.atMut(0).status = AgentStatus::done;
     deliver(client, AgentSnapshot{.revision = revision, .entries = entries});
     check(countAcknowledgements(transport) == initial + 2, "a new turn must be able to complete and be acknowledged independently");
   }
@@ -91,22 +91,22 @@ namespace {
     TestSession client{memory, transport};
 
     openFirstPane(client, transport);
-    std::array entries{agentSnapshotEntry()};
+    ds::Array entries{agentSnapshotEntry()};
 
-    entries.front().status = AgentStatus::done;
-    entries.front().location.tab_id = 2;
+    entries.atMut(0).status = AgentStatus::done;
+    entries.atMut(0).location.tab_id = 2;
     const auto initial = countAcknowledgements(transport);
 
     deliver(client, AgentSnapshot{.revision = 1, .entries = entries});
     check(countAcknowledgements(transport) == initial, "an agent in another tab must remain unseen");
-    entries.front().location.tab_id = 1;
+    entries.atMut(0).location.tab_id = 1;
     constexpr std::uint64_t current_generation = 9;
 
-    entries.front().pane_generation = current_generation;
+    entries.atMut(0).pane_generation = current_generation;
     deliver(client, AgentSnapshot{.revision = 2, .entries = entries});
     check(countAcknowledgements(transport) == initial + 1 && transport.last<AcknowledgeAgent>().pane_generation == current_generation, "acknowledgements must use the snapshot generation rather than stale pane metadata");
     deliver(client, AgentSnapshot{.revision = 1, .entries = entries});
-    const std::array duplicate{entries.front(), entries.front()};
+    const ds::Array duplicate{entries.front(), entries.front()};
     bool rejected = false;
 
     try {

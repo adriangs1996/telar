@@ -12,6 +12,7 @@ import telar.runtime.runtime.tests.protocol_peer;
 import telar.wire.content;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 using telar::testing::check;
 
@@ -38,7 +39,7 @@ static void writeAll(std::string_view bytes) {
 static std::size_t readReplies(char final, std::size_t expected) {
   const auto deadline = Clock::now() + response_timeout;
   std::size_t replies = 0;
-  std::array<char, 4096> bytes;
+  ds::Array<char, 4096> bytes;
 
   while (replies != expected) {
     check(Clock::now() < deadline);
@@ -50,7 +51,7 @@ static std::size_t readReplies(char final, std::size_t expected) {
       continue;
     }
 
-    const auto count = ::read(STDIN_FILENO, bytes.data(), bytes.size());
+    const auto count = ::read(STDIN_FILENO, bytes.dataMut(), bytes.size());
     if (count < 0 && errno == EINTR) {
       continue;
     }
@@ -85,8 +86,8 @@ static void readExactReply(std::string_view expected) {
       continue;
     }
 
-    std::array<char, 4096> bytes;
-    const auto count = ::read(STDIN_FILENO, bytes.data(), bytes.size());
+    ds::Array<char, 4096> bytes;
+    const auto count = ::read(STDIN_FILENO, bytes.dataMut(), bytes.size());
     if (count < 0 && errno == EINTR) {
       continue;
     }
@@ -130,9 +131,9 @@ static void measure(std::ostream& output, const Workload& workload) {
   } while (Clock::now() - warmup_started < minimum_warmup);
 
   const auto warmup_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - warmup_started).count();
-  std::array<std::uint64_t, measured_samples> samples;
+  ds::Array<std::uint64_t, measured_samples> samples;
 
-  for (auto& sample : samples) {
+  for (auto& sample : samples.viewMut()) {
     sample = roundtrip();
   }
 
@@ -185,8 +186,8 @@ static void measureOrder(std::ostream& output) {
         continue;
       }
 
-      std::array<char, 4096> bytes;
-      const auto count = ::read(STDIN_FILENO, bytes.data(), bytes.size());
+      ds::Array<char, 4096> bytes;
+      const auto count = ::read(STDIN_FILENO, bytes.dataMut(), bytes.size());
 
       check(count > 0);
       actual.append(bytes.data(), static_cast<std::size_t>(count));
@@ -223,7 +224,7 @@ static void saturate(std::ostream& output) {
   std::size_t sent = 0;
   std::size_t received_bytes = 0;
   std::size_t child_write_eagain = 0;
-  std::array<char, 4096> bytes;
+  ds::Array<char, 4096> bytes;
 
   while (Clock::now() - started < response_timeout) {
     const auto now = Clock::now();
@@ -240,7 +241,7 @@ static void saturate(std::ostream& output) {
     }
 
     if (now - started >= std::chrono::milliseconds{100}) {
-      const auto count = ::read(STDIN_FILENO, bytes.data(), bytes.size());
+      const auto count = ::read(STDIN_FILENO, bytes.dataMut(), bytes.size());
       if (count > 0) {
         for (const char byte : std::span{bytes}.first(static_cast<std::size_t>(count))) {
           check(received_bytes < queries * status_reply.size());
@@ -279,7 +280,7 @@ static void saturate(std::ostream& output) {
       continue;
     }
 
-    const auto count = ::read(STDIN_FILENO, bytes.data(), bytes.size());
+    const auto count = ::read(STDIN_FILENO, bytes.dataMut(), bytes.size());
     if (count < 0 && errno == EINTR) {
       continue;
     }
@@ -320,7 +321,7 @@ static int child(const char* report_path, std::string_view only) {
 
   styled += "\x1b[5n";
 
-  const std::array workloads{
+  const ds::Array workloads{
       Workload{"operating-status", "\x1b[5n", 1, 'n'},
       Workload{"cursor", "\x1b[6n", 1, 'R'},
       Workload{"cursor-byte-writes", "\x1b[6n", 1, 'R', true},
@@ -378,7 +379,7 @@ int main(int argc, char** argv) {
     ProtocolPeer peer{argv[1]};
 
     peer.send(RequestRuntimeState{.client_identity = 102, .interactive = true});
-    const std::array<std::string_view, 4> all_arguments{argv[0], "--latency-child", argv[2], argc == 4 ? argv[3] : ""};
+    const ds::Array<std::string_view, 4> all_arguments{argv[0], "--latency-child", argv[2], argc == 4 ? argv[3] : ""};
     const auto arguments = std::span{all_arguments}.first(argc == 4 ? 4 : 3);
     const auto opened = peer.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = {80, 24, 0, 0}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
     const auto deadline = Clock::now() + std::chrono::seconds{30};

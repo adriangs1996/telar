@@ -5,6 +5,7 @@ import telar.base.memory.allocators;
 import telar.gui.foundation.core;
 import telar.wire.graphics;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::features::terminal::graphics {
 
@@ -413,14 +414,14 @@ namespace telar::gui::features::terminal::graphics {
 
   template <Allocator Memory>
   std::size_t GraphicsStore<Memory>::logicalImageCount() const noexcept {
-    std::array<std::uint32_t, image_capacity> identifiers{};
+    ds::Array<std::uint32_t, image_capacity> identifiers{};
     std::size_t count = 0;
 
     for (const auto& image : images_) {
       const auto id = image->description().key.image_id;
       const auto known = std::span{identifiers}.first(count);
       if (std::ranges::find(known, id) == known.end()) {
-        identifiers[count++] = id;
+        identifiers.atMut(count++) = id;
       }
     }
 

@@ -6,6 +6,7 @@ import telar.sys.process;
 import telar.platform.error;
 import telar.platform.net;
 import telar.runtime.vocabulary.traffic;
+import telar.base.ds;
 
 namespace telar::runtime::traffic {
 
@@ -54,15 +55,15 @@ namespace telar::runtime::traffic {
         discovery = now;
       }
 
-      std::array<pollfd, Limits::interfaces + 1> descriptors{};
+      ds::Array<pollfd, Limits::interfaces + 1> descriptors{};
 
-      descriptors[0] = {.fd = socket_.get(), .events = POLLIN, .revents = 0};
+      descriptors.atMut(0) = {.fd = socket_.get(), .events = POLLIN, .revents = 0};
       for (std::size_t index = 0; index < devices_.size(); ++index) {
-        descriptors[index + 1] = {.fd = devices_[index] ? pcap_get_selectable_fd(devices_[index]->handle.get()) : -1, .events = POLLIN, .revents = 0};
+        descriptors.atMut(index + 1) = {.fd = devices_[index] ? pcap_get_selectable_fd(devices_[index]->handle.get()) : -1, .events = POLLIN, .revents = 0};
       }
 
       constexpr int poll_ms = 100;
-      if (::poll(descriptors.data(), descriptors.size(), poll_ms) < 0 && sys::lastError() != EINTR) {
+      if (::poll(descriptors.dataMut(), descriptors.size(), poll_ms) < 0 && sys::lastError() != EINTR) {
         throw SystemError{"Poll packet capture"};
       }
 
@@ -80,8 +81,8 @@ namespace telar::runtime::traffic {
   }
 
   void Capture::offline(const char* path) {
-    std::array<char, PCAP_ERRBUF_SIZE> error{};
-    const std::unique_ptr<pcap_t, decltype(&pcap_close)> file{pcap_open_offline(path, error.data()), &pcap_close};
+    ds::Array<char, PCAP_ERRBUF_SIZE> error{};
+    const std::unique_ptr<pcap_t, decltype(&pcap_close)> file{pcap_open_offline(path, error.dataMut()), &pcap_close};
     if (!file) {
       throw std::runtime_error{error.data()};
     }
@@ -129,15 +130,15 @@ namespace telar::runtime::traffic {
   }
 
   void Capture::greet(Role role) {
-    std::array<Byte, Protocol::greeting_bytes> output;
+    ds::Array<Byte, Protocol::greeting_bytes> output;
 
-    sendAll(socket_.get(), Protocol::greeting(output, role));
+    sendAll(socket_.get(), Protocol::greeting(output.viewMut(), role));
     setNonblocking(socket_.get());
   }
 
   void Capture::drainControl() {
-    std::array<Byte, Limits::metadata_bytes> bytes;
-    const auto count = ::recv(socket_.get(), bytes.data(), bytes.size(), MSG_DONTWAIT);
+    ds::Array<Byte, Limits::metadata_bytes> bytes;
+    const auto count = ::recv(socket_.get(), bytes.dataMut(), bytes.size(), MSG_DONTWAIT);
     if (count == 0 || (count < 0 && !socketWouldBlock(sys::lastError()))) {
       throw SystemError{"Traffic runtime disconnected", ECONNRESET};
     }
@@ -199,14 +200,14 @@ namespace telar::runtime::traffic {
 
   void Capture::discover() {
     pcap_if_t* raw = nullptr;
-    std::array<char, PCAP_ERRBUF_SIZE> error{};
-    if (pcap_findalldevs(&raw, error.data()) < 0) {
+    ds::Array<char, PCAP_ERRBUF_SIZE> error{};
+    if (pcap_findalldevs(&raw, error.dataMut()) < 0) {
       throw std::runtime_error{error.data()};
     }
 
     const std::unique_ptr<pcap_if_t, decltype(&pcap_freealldevs)> interfaces{raw, &pcap_freealldevs};
 
-    for (auto& device : devices_) {
+    for (auto& device : devices_.viewMut()) {
       if (device) {
         device.getMut().seen = false;
       }
@@ -219,27 +220,28 @@ namespace telar::runtime::traffic {
         continue;
       }
 
-      auto existing = std::ranges::find_if(devices_, [&](auto& device) {
+      const auto devices = devices_.viewMut();
+      auto existing = std::ranges::find_if(devices, [&](auto& device) {
         return device && device->name.view() == name;
       });
-      if (existing != devices_.end()) {
+      if (existing != devices.end()) {
         if ((*existing)->index == index) {
           existing->getMut().seen = true;
           continue;
         }
 
-        close(static_cast<std::size_t>(existing - devices_.begin()));
+        close(static_cast<std::size_t>(existing - devices.begin()));
       }
 
-      auto slot = std::ranges::find_if(devices_, [](auto& device) {
+      auto slot = std::ranges::find_if(devices, [](auto& device) {
         return !device;
       });
-      if (slot == devices_.end()) {
+      if (slot == devices.end()) {
         notice(Kind::interface_error, name, "Capture interface limit reached", index);
         continue;
       }
 
-      pcap_t* handle = pcap_create(interface->name, error.data());
+      pcap_t* handle = pcap_create(interface->name, error.dataMut());
       if (!handle) {
         notice(Kind::interface_error, name, error.data(), index);
         continue;
@@ -249,7 +251,7 @@ namespace telar::runtime::traffic {
       auto& capture = slot->getMut();
       constexpr int read_timeout_ms = 50;
       constexpr int kernel_buffer_bytes = 1024 * 1024;
-      if (pcap_set_snaplen(handle, Limits::packet_bytes) != 0 || pcap_set_promisc(handle, 0) != 0 || pcap_set_timeout(handle, read_timeout_ms) != 0 || pcap_set_buffer_size(handle, kernel_buffer_bytes) != 0 || pcap_set_immediate_mode(handle, 1) != 0 || pcap_activate(handle) < 0 || pcap_setnonblock(handle, 1, error.data()) != 0) {
+      if (pcap_set_snaplen(handle, Limits::packet_bytes) != 0 || pcap_set_promisc(handle, 0) != 0 || pcap_set_timeout(handle, read_timeout_ms) != 0 || pcap_set_buffer_size(handle, kernel_buffer_bytes) != 0 || pcap_set_immediate_mode(handle, 1) != 0 || pcap_activate(handle) < 0 || pcap_setnonblock(handle, 1, error.dataMut()) != 0) {
         notice(Kind::interface_error, name, pcap_geterr(handle), index);
         slot->reset();
         continue;
@@ -314,7 +316,7 @@ namespace telar::runtime::traffic {
   }
 
   void Capture::statistics() {
-    for (auto& device : devices_) {
+    for (auto& device : devices_.viewMut()) {
       if (device) {
         sample(kernel_drops_, device.getMut());
       }
@@ -331,12 +333,12 @@ namespace telar::runtime::traffic {
   }
 
   void Capture::close(std::size_t slot) {
-    sample(kernel_drops_, devices_[slot].getMut());
+    sample(kernel_drops_, devices_.atMut(slot).getMut());
     const auto name = devices_[slot]->name;
     const auto index = devices_[slot]->index;
 
     notice(Kind::interface_closed, name.view(), {}, index);
-    devices_[slot].reset();
+    devices_.atMut(slot).reset();
   }
 
   EventFrame::EventFrame(ConcurrentMemory& memory, std::size_t size)

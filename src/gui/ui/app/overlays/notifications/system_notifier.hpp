@@ -80,7 +80,7 @@ namespace telar::gui::qt {
     }
 
     [[nodiscard]] bool post(const NotificationPayload& payload) {
-      for (auto& delivery : deliveries_) {
+      for (auto& delivery : deliveries_.viewMut()) {
         if (!delivery) {
           delivery = makeOwned<Delivery>(memory_);
         }
@@ -106,7 +106,7 @@ namespace telar::gui::qt {
     };
 
     Memory& memory_;
-    std::array<ds::Option<Owned<Delivery, Memory>>, maximum_active> deliveries_;
+    ds::Array<ds::Option<Owned<Delivery, Memory>>, maximum_active> deliveries_;
   };
 
 }

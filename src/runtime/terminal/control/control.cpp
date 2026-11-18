@@ -51,7 +51,7 @@ namespace telar::runtime::control {
           return ds::none;
         }
 
-        result.values[result.count++] = static_cast<std::uint16_t>(accumulator);
+        result.values.atMut(result.count++) = static_cast<std::uint16_t>(accumulator);
         result.colon |= byte == ':';
         accumulator = 0;
         digits = 0;
@@ -64,7 +64,7 @@ namespace telar::runtime::control {
           return ds::none;
         }
 
-        result.intermediate[result.intermediate_count++] = byte;
+        result.intermediate.atMut(result.intermediate_count++) = byte;
         intermediate_phase |= !prefix;
         continue;
       }
@@ -77,7 +77,7 @@ namespace telar::runtime::control {
         return ds::none;
       }
 
-      result.values[result.count++] = static_cast<std::uint16_t>(accumulator);
+      result.values.atMut(result.count++) = static_cast<std::uint16_t>(accumulator);
     }
 
     return result;
@@ -248,7 +248,7 @@ namespace telar::runtime::control {
     query = false;
     bool values_valid = true;
     GraphicsQuery result;
-    std::array<ds::Option<std::uint32_t>, static_cast<std::size_t>(Field::ignored)> values;
+    ds::Array<ds::Option<std::uint32_t>, static_cast<std::size_t>(Field::ignored)> values;
     const bool valid = GraphicsHeader::scan(header, has_payload, [&](std::uint8_t key, std::string_view text) noexcept {
       const auto value = GraphicsHeader::value(key, text);
 
@@ -263,7 +263,7 @@ namespace telar::runtime::control {
 
       const auto field = parameterField(key);
       if (field != Field::ignored) {
-        values[static_cast<std::size_t>(field)] = *value;
+        values.atMut(static_cast<std::size_t>(field)) = *value;
       }
 
       return true;
@@ -308,7 +308,7 @@ namespace telar::runtime::control {
   }
 
   std::span<const std::uint8_t> capability(std::string_view hex) noexcept {
-    std::array<char, 32> decoded;
+    ds::Array<char, 32> decoded;
     if (hex.size() % 2 != 0 || hex.size() > decoded.size() * 2) {
       return {};
     }
@@ -336,7 +336,7 @@ namespace telar::runtime::control {
         return {};
       }
 
-      decoded[index / 2] = static_cast<char>(high * 16 + low);
+      decoded.atMut(index / 2) = static_cast<char>(high * 16 + low);
     }
 
     const std::string_view name{decoded.data(), hex.size() / 2};
@@ -445,7 +445,7 @@ namespace telar::runtime::control {
       return true;
     }
 
-    std::array<char, 64> lower;
+    ds::Array<char, 64> lower;
     if (value.size() > lower.size()) {
       return false;
     }
@@ -453,7 +453,7 @@ namespace telar::runtime::control {
     for (std::size_t i = 0; i < value.size(); ++i) {
       const auto c = value[i];
 
-      lower[i] = c >= 'A' && c <= 'Z' ? static_cast<char>(c + ('a' - 'A')) : c;
+      lower.atMut(i) = c >= 'A' && c <= 'Z' ? static_cast<char>(c + ('a' - 'A')) : c;
     }
 
     return std::binary_search(named_colors.begin(), named_colors.end(), std::string_view{lower.data(), value.size()});

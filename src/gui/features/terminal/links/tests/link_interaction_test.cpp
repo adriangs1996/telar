@@ -12,6 +12,7 @@ import telar.gui.foundation.terminal;
 import telar.gui.foundation.core;
 import telar.gui.features.terminal.links;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -47,7 +48,7 @@ namespace {
 
   void gestureContexts() {
     constexpr ViewVersion original;
-    constexpr auto fields = std::to_array<std::uint64_t ViewVersion::*>({&ViewVersion::workspace, &ViewVersion::active_tab, &ViewVersion::tabs, &ViewVersion::panes, &ViewVersion::host, &ViewVersion::configuration, &ViewVersion::viewport});
+    constexpr auto fields = ds::Array<std::uint64_t ViewVersion::*, 7>{&ViewVersion::workspace, &ViewVersion::active_tab, &ViewVersion::tabs, &ViewVersion::panes, &ViewVersion::host, &ViewVersion::configuration, &ViewVersion::viewport};
     LinkGesture gesture;
 
     for (const auto field : fields) {
@@ -185,8 +186,8 @@ namespace {
     constexpr std::uint16_t columns = 8;
     constexpr std::uint16_t rows = 3;
     constexpr std::uint32_t offset = 10;
-    const std::array<CellValue, static_cast<std::size_t>(columns) * rows> cells{};
-    const std::array<Byte, rows> flags{static_cast<Byte>(RowFlag::wide_padding), 0, 0};
+    const ds::Array<CellValue, static_cast<std::size_t>(columns) * rows> cells{};
+    const ds::Array<Byte, rows> flags{static_cast<Byte>(RowFlag::wide_padding), 0, 0};
     const LinkGrid grid{.cells = cells, .columns = columns, .rows = rows, .scroll = {.total_rows = offset + rows, .offset = offset}, .row_flags = flags};
     auto match = hit().match;
 
@@ -201,7 +202,7 @@ namespace {
     check(plain.next() == LinkRegion{.x = 0, .y = 2, .width = last_column} && !plain.next(), "plain underlines must stop at the exclusive link end");
 
     match.metadata_index = 1;
-    const std::array runs{MetadataRun{.start = 1, .len = 2, .link_index = 1}, MetadataRun{.start = last_column, .len = 2, .link_index = 0}, MetadataRun{.start = columns + 1, .len = 3, .link_index = 1}};
+    const ds::Array runs{MetadataRun{.start = 1, .len = 2, .link_index = 1}, MetadataRun{.start = last_column, .len = 2, .link_index = 0}, MetadataRun{.start = columns + 1, .len = 3, .link_index = 1}};
     LinkRegions osc8{match, grid, runs};
 
     check(osc8.next() == LinkRegion{.x = 1, .y = 0, .width = 2}, "OSC 8 underlines must use metadata run bounds");

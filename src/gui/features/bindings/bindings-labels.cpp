@@ -23,12 +23,12 @@ namespace telar::gui::features::bindings {
   }
 
   void KeyLabel::append(Text& text, KeyChord key, KeyLabelStyle style) {
-    constexpr auto modifiers = std::to_array<ModifierLabel>({
+    constexpr auto modifiers = ds::Array<ModifierLabel, 4>{{
         {.modifier = KeyChord::Modifier::control, .pc = "Ctrl+", .mac = "⌃"},
         {.modifier = KeyChord::Modifier::alt, .pc = "Alt+", .mac = "⌥"},
         {.modifier = KeyChord::Modifier::shift, .pc = "Shift+", .mac = "⇧"},
         {.modifier = KeyChord::Modifier::super, .pc = "Super+", .mac = "⌘"},
-    });
+    }};
 
     for (const auto& modifier : modifiers) {
       if (key.has(modifier.modifier)) {
@@ -46,7 +46,7 @@ namespace telar::gui::features::bindings {
       return;
     }
 
-    constexpr auto names = std::to_array<KeyName>({
+    constexpr auto names = ds::Array<KeyName, 14>{{
         {.key = KeyChord::Key::up, .pc = "Up", .mac = "↑"},
         {.key = KeyChord::Key::down, .pc = "Down", .mac = "↓"},
         {.key = KeyChord::Key::left, .pc = "Left", .mac = "←"},
@@ -61,7 +61,7 @@ namespace telar::gui::features::bindings {
         {.key = KeyChord::Key::backspace, .pc = "Backspace", .mac = "⌫"},
         {.key = KeyChord::Key::tab, .pc = "Tab", .mac = "⇥"},
         {.key = KeyChord::Key::back_tab, .pc = "Shift+Tab", .mac = "⇧⇥"},
-    });
+    }};
 
     for (const auto& name : names) {
       if (name.key == key.key) {

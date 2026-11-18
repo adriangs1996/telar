@@ -22,7 +22,7 @@ namespace telar::runtime {
 
   void AgentSnapshotBuilder::publish(ClientSession& client, const RuntimeModel& model, const AgentRegistry<ConcurrentMemory>& registry) {
     // The entries view the model, the registry and these texts only while the snapshot is sent.
-    std::array<AgentSnapshotEntry, AgentRegistry<ConcurrentMemory>::capacity> entries;
+    ds::Array<AgentSnapshotEntry, AgentRegistry<ConcurrentMemory>::capacity> entries;
     auto& directories = directories_;
     auto& placeholders = placeholders_;
     std::size_t count = 0;
@@ -48,22 +48,22 @@ namespace telar::runtime {
       auto provider = describeProvider(agent->provider);
       const auto* manifest = model.manifests.find(agent->provider);
       if (manifest != nullptr) {
-        provider = {.name = manifest->name.view(), .display_name = manifest->displayName(), .placeholder = manifest->placeholderTitle(placeholders[count]), .attachments = manifest->attachments};
+        provider = {.name = manifest->name.view(), .display_name = manifest->displayName(), .placeholder = manifest->placeholderTitle(placeholders.atMut(count)), .attachments = manifest->attachments};
       }
 
       std::string_view cwd = pane->cwd;
       const auto home = processHome();
       if (!home.empty() && cwd.starts_with(home) && (cwd.size() == home.size() || cwd[home.size()] == '/')) {
-        std::array<char, 48> shortened{'~'};
+        ds::Array<char, 48> shortened{'~'};
         const auto suffix = utf8Prefix(cwd.substr(home.size()), 47);
 
-        std::copy(suffix.begin(), suffix.end(), shortened.begin() + 1);
-        directories[count].assign({shortened.data(), suffix.size() + 1});
+        std::copy(suffix.begin(), suffix.end(), shortened.dataMut() + 1);
+        directories.atMut(count).assign({shortened.data(), suffix.size() + 1});
       } else {
-        directories[count].assign(utf8Prefix(cwd, 48));
+        directories.atMut(count).assign(utf8Prefix(cwd, 48));
       }
 
-      entries[count] = {
+      entries.atMut(count) = {
           .pane_id = pane->id,
           .pane_generation = pane->generation,
           .location = pane->location,
@@ -286,7 +286,7 @@ namespace telar::runtime {
       throw RequestError{FailureCode::agent_blocked, "Agent is waiting for a decision"};
     }
 
-    std::array<char, 192> prefix{};
+    ds::Array<char, 192> prefix{};
     std::size_t length = 0;
     const auto* sender = request.sender ? model.panes.find(*request.sender) : nullptr;
     if (request.mode == PaneTextMode::prompt && sender != nullptr) {
@@ -308,7 +308,7 @@ namespace telar::runtime {
       }
 
       name = utf8Prefix(name, 64);
-      length = static_cast<std::size_t>(std::snprintf(prefix.data(), prefix.size(), "[telar: from %.*s, pane %llu] ", static_cast<int>(name.size()), name.data(), static_cast<unsigned long long>(sender->id)));
+      length = static_cast<std::size_t>(std::snprintf(prefix.dataMut(), prefix.size(), "[telar: from %.*s, pane %llu] ", static_cast<int>(name.size()), name.data(), static_cast<unsigned long long>(sender->id)));
     }
 
     panes.sendText(model.panes, client, request, {prefix.data(), length}, [this](const Pane& target, std::span<const Byte> bytes) {
@@ -353,9 +353,9 @@ namespace telar::runtime {
       throw RequestError{FailureCode::interrupt_unsupported, "Agent declares no interrupt key"};
     }
 
-    std::array<Byte, 128> encoded;
+    ds::Array<Byte, 128> encoded;
     const bool control_c = manifest->interrupt == AgentInterruptKey::control_c;
-    const auto bytes = pane.terminal.encodeKey(control_c ? GHOSTTY_KEY_C : GHOSTTY_KEY_ESCAPE, control_c ? GHOSTTY_MODS_CTRL : 0, encoded);
+    const auto bytes = pane.terminal.encodeKey(control_c ? GHOSTTY_KEY_C : GHOSTTY_KEY_ESCAPE, control_c ? GHOSTTY_MODS_CTRL : 0, encoded.viewMut());
     const auto repeats = manifest->interrupt == AgentInterruptKey::escape_twice ? 2 : 1;
     if (panes.admitInput(pane, bytes.size() * repeats)) {
       for (int index = 0; index < repeats; ++index) {
@@ -582,8 +582,8 @@ namespace telar::runtime {
       pane.terminal.refresh();
       const auto observation = AgentScreenReader{pane.terminal}.observe(agent.provider);
       if (observation.restored_draft && !agent.interrupt_draft_cleared && !focused) {
-        std::array<Byte, 128> encoded;
-        const auto bytes = pane.terminal.encodeKey(GHOSTTY_KEY_C, GHOSTTY_MODS_CTRL, encoded);
+        ds::Array<Byte, 128> encoded;
+        const auto bytes = pane.terminal.encodeKey(GHOSTTY_KEY_C, GHOSTTY_MODS_CTRL, encoded.viewMut());
         if (panes.admitInput(pane, bytes.size())) {
           pane.enqueueInput(bytes);
           panes.flushInput(pane);
@@ -657,7 +657,7 @@ namespace telar::runtime {
   template <EventLoop Poller, HistoryEventSink History>
   void AgentService<Poller, History>::SoundQueue::push(const Agent& agent) noexcept {
     if (count_ < entries_.size()) {
-      entries_[count_++] = AgentSoundNotification{
+      entries_.atMut(count_++) = AgentSoundNotification{
           .pane_id = agent.pane,
           .pane_generation = agent.generation,
           .sound = agent.status == AgentStatus::blocked ? AgentSound::needs_input : AgentSound::ready,
@@ -729,8 +729,8 @@ namespace telar::runtime {
 
   void PluginDelivery::publish(ClientStore& clients, const NotificationBody& body) {
     const Notification notification{body};
-    std::array<Byte, validation_bytes> validation;
-    std::span<Byte> remaining{validation};
+    ds::Array<Byte, validation_bytes> validation;
+    std::span<Byte> remaining{validation.viewMut()};
 
     try {
       Codec::encode(notification, remaining);
@@ -1131,12 +1131,12 @@ namespace telar::runtime {
 
   template <EventLoop Poller, HistoryEventSink History>
   void WorkspaceService<Poller, History>::publishList(const RuntimeModel& model, ClientSession& client) {
-    std::array<WorkspaceListEntry, 64> entries{};
+    ds::Array<WorkspaceListEntry, 64> entries{};
     std::size_t count = 0;
 
     for (const auto* workspace : model.workspaces.items()) {
       if (workspace != nullptr) {
-        entries[count++] = WorkspaceListEntry{
+        entries.atMut(count++) = WorkspaceListEntry{
             .workspace = workspace->id,
             .name = workspace->displayName(),
             .path = workspace->path,
@@ -1147,12 +1147,12 @@ namespace telar::runtime {
       }
     }
 
-    std::array<WorktreeListEntry, Worktrees::capacity> worktrees;
+    ds::Array<WorktreeListEntry, Worktrees::capacity> worktrees;
     std::size_t worktree_count = 0;
 
     for (const auto* entry : model.worktrees.items()) {
       if (entry != nullptr) {
-        worktrees[worktree_count++] = entry->entry();
+        worktrees.atMut(worktree_count++) = entry->entry();
       }
     }
 
@@ -1185,7 +1185,7 @@ namespace telar::runtime {
       return;
     }
 
-    notices_[notice_count_++] = {workspace, origin, previous};
+    notices_.atMut(notice_count_++) = {workspace, origin, previous};
   }
 
   template <EventLoop Poller, HistoryEventSink History>
@@ -1197,11 +1197,11 @@ namespace telar::runtime {
     }
 
     const auto closed = removeTab(model, location);
-    std::array<std::uint64_t, client_capacity> viewers{};
+    ds::Array<std::uint64_t, client_capacity> viewers{};
     std::size_t count = 0;
 
     broadcastTabClosed(clients, closed, [&](const ClientSession& client) {
-      viewers[count++] = client.id;
+      viewers.atMut(count++) = client.id;
     });
 
     if (closed.workspace_closed) {
@@ -1262,12 +1262,12 @@ namespace telar::runtime {
       }
     }
 
-    std::array<std::uint64_t, client_capacity> viewers{};
+    ds::Array<std::uint64_t, client_capacity> viewers{};
     std::size_t count = 0;
 
     for (const auto* client : clients.items()) {
       if (client != nullptr && client->workspace == workspace && client->attachments.empty()) {
-        viewers[count++] = client->id;
+        viewers.atMut(count++) = client->id;
       }
     }
 
@@ -1402,9 +1402,9 @@ namespace telar::runtime {
       throw RequestError{FailureCode::invalid_request, "Working directory must be an absolute path"};
     }
 
-    std::array<char, PATH_MAX> directory{};
+    ds::Array<char, PATH_MAX> directory{};
 
-    std::copy(path.begin(), path.end(), directory.begin());
+    std::copy(path.begin(), path.end(), directory.dataMut());
     for (std::size_t index = 1; index <= path.size(); ++index) {
       if (directory[index] != '/' && directory[index] != '\0') {
         continue;
@@ -1412,12 +1412,12 @@ namespace telar::runtime {
 
       const char separator = directory[index];
 
-      directory[index] = '\0';
+      directory.atMut(index) = '\0';
       if (::mkdir(directory.data(), 0700) != 0 && sys::lastError() != EEXIST) {
         throw SystemError{"create working directory"};
       }
 
-      directory[index] = separator;
+      directory.atMut(index) = separator;
     }
   }
 
@@ -2234,7 +2234,7 @@ namespace telar::runtime {
         const auto group = ::tcgetpgrp(pane->process->descriptor());
         const auto process = group > 0 ? process_inspector_.identity(group) : ds::none;
         if (process && context.editor_candidate_count < context.editor_candidates.size()) {
-          context.editor_candidates[context.editor_candidate_count++] = {pane->id, pane->generation, *process};
+          context.editor_candidates.atMut(context.editor_candidate_count++) = {pane->id, pane->generation, *process};
         }
       }
     }
@@ -2766,8 +2766,8 @@ namespace telar::runtime {
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::deliverEditorReply(const PaneStore& panes, ClientSession& client, std::span<const Byte> payload) {
-    std::array<Byte, 256> scratch;
-    DecodeStorage storage{scratch};
+    ds::Array<Byte, 256> scratch;
+    DecodeStorage storage{scratch.viewMut()};
     auto reply = Codec::decode<EditorOpened>(payload, storage);
     const auto* source = livePane(panes, client.editor_source, client.editor_generation);
     const auto* target = livePane(panes, reply.pane_id, reply.pane_generation);

@@ -61,6 +61,7 @@ import telar.runtime.graphics.pane_media;
 import telar.runtime.model.client_layouts;
 import telar.runtime.platform.event_loop;
 import telar.runtime.terminal.ghostty;
+import telar.base.ds;
 
 namespace {
 
@@ -144,10 +145,10 @@ namespace {
     }
 
     void localMedia(auto& memory) {
-      std::array<char, 64> directory;
+      ds::Array<char, 64> directory;
 
-      std::strcpy(directory.data(), "/tmp/telar-control-graphics-XXXXXX");
-      check(::mkdtemp(directory.data()) != nullptr);
+      std::strcpy(directory.dataMut(), "/tmp/telar-control-graphics-XXXXXX");
+      check(::mkdtemp(directory.dataMut()) != nullptr);
       const std::filesystem::path root{directory.data()};
       const auto path = (root / "tty-graphics-protocol-image").string();
       const auto wrong = (root / "ordinary-file").string();
@@ -213,14 +214,14 @@ namespace {
             Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
             const auto header = "i=" + std::to_string(image) + ",I=" + std::to_string(number) + ",p=" + std::to_string(placement) + ",s=1,v=1";
             const auto actual = query(terminal, header, "AAAAAA==");
-            std::array<char, 160> expected;
+            ds::Array<char, 160> expected;
             const auto count = number != 0
                                    ? placement != 0
-                                         ? std::snprintf(expected.data(), expected.size(), "\x1b_Gi=%u,I=%u,p=%u;EINVAL: image ID and number are mutually exclusive\x1b\\", image, number, placement)
-                                         : std::snprintf(expected.data(), expected.size(), "\x1b_Gi=%u,I=%u;EINVAL: image ID and number are mutually exclusive\x1b\\", image, number)
+                                         ? std::snprintf(expected.dataMut(), expected.size(), "\x1b_Gi=%u,I=%u,p=%u;EINVAL: image ID and number are mutually exclusive\x1b\\", image, number, placement)
+                                         : std::snprintf(expected.dataMut(), expected.size(), "\x1b_Gi=%u,I=%u;EINVAL: image ID and number are mutually exclusive\x1b\\", image, number)
                                : placement != 0
-                                   ? std::snprintf(expected.data(), expected.size(), "\x1b_Gi=%u,p=%u;OK\x1b\\", image, placement)
-                                   : std::snprintf(expected.data(), expected.size(), "\x1b_Gi=%u;OK\x1b\\", image);
+                                   ? std::snprintf(expected.dataMut(), expected.size(), "\x1b_Gi=%u,p=%u;OK\x1b\\", image, placement)
+                                   : std::snprintf(expected.dataMut(), expected.size(), "\x1b_Gi=%u;OK\x1b\\", image);
 
             check(count > 0 && static_cast<std::size_t>(count) < expected.size());
             check(actual == std::string_view{expected.data(), static_cast<std::size_t>(count)});
@@ -352,7 +353,7 @@ namespace {
         check(media->seal());
         MediaProcessor::Request request;
 
-        request.entries[request.count++].media = media;
+        request.entries.atMut(request.count++).media = media;
         check(worker.submit(request));
         worker.wait([&](const auto& result) {
           check(result.count == 1);
@@ -507,7 +508,7 @@ namespace {
         check(media->seal());
         MediaProcessor::Request request;
 
-        request.entries[request.count++].media = media;
+        request.entries.atMut(request.count++).media = media;
         check(worker.submit(request));
         worker.wait([&](const auto&) {
           media->complete();
@@ -600,7 +601,7 @@ namespace {
         check(media->seal());
         MediaProcessor::Request request;
 
-        request.entries[request.count++].media = media;
+        request.entries.atMut(request.count++).media = media;
         check(worker.submit(request));
       };
 
@@ -728,7 +729,7 @@ namespace {
         NativeEventLoop<ConcurrentMemory> poller{memory};
         PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/control-resize-failure.sock"}};
         MediaService<decltype(poller), decltype(limits)> service{poller, limits};
-        const std::array<std::string_view, 1> arguments{"/bin/cat"};
+        const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
         const Launch launch{.cwd = "/tmp", .arguments = arguments};
         const TabLocation location{.workspace = {.id = 7}, .tab_id = 1};
         auto& failed = panes.launch(model, nullptr, false, launch, location, {80, 24, 9, 18});
@@ -774,7 +775,7 @@ namespace {
         LimitService limits;
         NativeEventLoop<ConcurrentMemory> poller{memory};
         PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/control-semantic-failure.sock"}};
-        const std::array<std::string_view, 1> arguments{"/bin/cat"};
+        const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
         const Launch launch{.cwd = "/tmp", .arguments = arguments};
         const TabLocation location{.workspace = {.id = 7}, .tab_id = 1};
         auto& failed = panes.launch(model, nullptr, false, launch, location, {80, 24, 9, 18});
@@ -813,10 +814,10 @@ namespace {
     }
 
     void retainedAtomicFrames() {
-      std::array<char, 64> directory;
+      ds::Array<char, 64> directory;
 
-      std::strcpy(directory.data(), "/tmp/telar-control-atomic-boundary-XXXXXX");
-      check(::mkdtemp(directory.data()) != nullptr);
+      std::strcpy(directory.dataMut(), "/tmp/telar-control-atomic-boundary-XXXXXX");
+      check(::mkdtemp(directory.dataMut()) != nullptr);
       const std::filesystem::path root{directory.data()};
       const auto path = (root / "pixels").string();
 
@@ -886,9 +887,9 @@ namespace {
       const auto pixels = GraphicsFramePixels::open({payload, size, size, GraphicsInputMedium::shared_memory});
 
       check(pixels.hasValue());
-      std::array<Byte, size> output;
+      ds::Array<Byte, size> output;
 
-      check(pixels->copyTo(output) && output.front() == 23 && output.back() == 23);
+      check(pixels->copyTo(output.viewMut()) && output.front() == 23 && output.back() == 23);
       const auto truncated = ::ftruncate(writer.get(), 0);
 
 #if defined(__APPLE__)
@@ -898,24 +899,24 @@ namespace {
       check(truncated == 0);
 #endif
       if (truncated == 0) {
-        check(!pixels->copyTo(output));
+        check(!pixels->copyTo(output.viewMut()));
       }
 
       FileDescriptor reopened{::shm_open(name.data(), O_RDONLY, 0)};
 
       check(!reopened && errno == ENOENT);
 
-      std::array<char, 64> path;
+      ds::Array<char, 64> path;
 
-      std::strcpy(path.data(), "/tmp/telar-control-copy-XXXXXX");
-      FileDescriptor backing{::mkstemp(path.data())};
+      std::strcpy(path.dataMut(), "/tmp/telar-control-copy-XXXXXX");
+      FileDescriptor backing{::mkstemp(path.dataMut())};
 
       check(static_cast<bool>(backing) && ::unlink(path.data()) == 0);
       output.fill(41);
       check(::write(backing.get(), output.data(), output.size()) == static_cast<ssize_t>(output.size()));
-      check(GraphicsChildSharedMemory::read(backing.get(), output, 0) && output.front() == 41);
+      check(GraphicsChildSharedMemory::read(backing.get(), output.viewMut(), 0) && output.front() == 41);
       check(::ftruncate(backing.get(), 0) == 0);
-      check(!GraphicsChildSharedMemory::read(backing.get(), output, 0));
+      check(!GraphicsChildSharedMemory::read(backing.get(), output.viewMut(), 0));
     }
 
     std::vector<Byte> pngPixels(unsigned depth, unsigned color, unsigned interlace, std::span<const Byte> raw) {
@@ -935,12 +936,12 @@ namespace {
         integer(static_cast<std::uint32_t>(::crc32(0, result.data() + start, result.size() - start)));
       };
 
-      const std::array<Byte, 13> header{0, 0, 0, 3, 0, 0, 0, 3, static_cast<Byte>(depth), static_cast<Byte>(color), 0, 0, static_cast<Byte>(interlace)};
+      const ds::Array<Byte, 13> header{0, 0, 0, 3, 0, 0, 0, 3, static_cast<Byte>(depth), static_cast<Byte>(color), 0, 0, static_cast<Byte>(interlace)};
 
       chunk("IHDR", header);
       if (color == 3) {
-        constexpr std::array<Byte, 12> palette{255, 0, 0, 0, 255, 0, 0, 0, 0, 0, 0, 255};
-        constexpr std::array<Byte, 4> alpha{255, 128, 0, 255};
+        constexpr ds::Array<Byte, 12> palette{255, 0, 0, 0, 255, 0, 0, 0, 0, 0, 0, 255};
+        constexpr ds::Array<Byte, 4> alpha{255, 128, 0, 255};
 
         chunk("PLTE", palette);
         chunk("tRNS", alpha);
@@ -963,8 +964,8 @@ namespace {
       MemoryAdapter adapter{synchronized};
       ConcurrentMemory& memory = adapter;
       GhosttyAllocatorBridge allocator{memory};
-      constexpr std::array<std::array<Byte, 4>, 4> palette{{{255, 0, 0, 255}, {0, 255, 0, 128}, {0, 0, 0, 0}, {0, 0, 255, 255}}};
-      constexpr std::array<unsigned, 9> indices{0, 1, 2, 3, 0, 1, 2, 3, 0};
+      constexpr ds::Array<ds::Array<Byte, 4>, 4> palette{{{255, 0, 0, 255}, {0, 255, 0, 128}, {0, 0, 0, 0}, {0, 0, 255, 255}}};
+      constexpr ds::Array<unsigned, 9> indices{0, 1, 2, 3, 0, 1, 2, 3, 0};
       std::vector<Byte> expected;
 
       for (const auto index : indices) {
@@ -981,7 +982,7 @@ namespace {
         check(budget.liveBytes() == 0);
       };
 
-      constexpr std::array<Byte, 6> indexed{0, 0x18, 0, 0xc4, 0, 0xb0};
+      constexpr ds::Array<Byte, 6> indexed{0, 0x18, 0, 0xc4, 0, 0xb0};
 
       verify(pngPixels(2, 3, 0, indexed));
 
@@ -1002,7 +1003,7 @@ namespace {
       std::vector<Byte> adam7;
       // Nonempty scanlines of the seven Adam7 passes for a 3x3 image.
       constexpr unsigned absent = indices.size();
-      constexpr std::array<std::array<unsigned, 3>, 6> rows{{{0, absent, absent}, {2, absent, absent}, {6, 8, absent}, {1, absent, absent}, {7, absent, absent}, {3, 4, 5}}};
+      constexpr ds::Array<ds::Array<unsigned, 3>, 6> rows{{{0, absent, absent}, {2, absent, absent}, {6, 8, absent}, {1, absent, absent}, {7, absent, absent}, {3, 4, 5}}};
 
       for (const auto& row : rows) {
         adam7.push_back(0);
@@ -1036,7 +1037,7 @@ namespace {
 
     void pngFailureCleanup() {
       // Independent 1x1 RGBA red PNG fixture: Python zlib plus PNG CRC32 chunks.
-      constexpr std::array<Byte, 70> png{
+      constexpr ds::Array<Byte, 70> png{
           0x89,
           0x50,
           0x4e,
@@ -1123,7 +1124,7 @@ namespace {
 
         check(decoded == (length >= complete_frame_bytes));
         if (decoded) {
-          const std::array<Byte, 4> expected{255, 0, 0, 255};
+          const ds::Array<Byte, 4> expected{255, 0, 0, 255};
 
           check(image.width == 1 && image.height == 1 && image.data_len == expected.size());
           check(std::equal(expected.begin(), expected.end(), image.data));
@@ -1136,7 +1137,7 @@ namespace {
       for (std::size_t position = 0; position < png.size(); ++position) {
         auto mutated = png;
 
-        mutated[position] ^= 0x80;
+        mutated.atMut(position) ^= 0x80;
         GhosttySysImage image{};
         if (decodePngImage(allocator.get(), mutated, image)) {
           ghostty_free(allocator.get(), image.data, image.data_len);

@@ -196,7 +196,7 @@ export {
           throw std::bad_alloc{};
         }
 
-        std::array<Candidate, 50> ranked;
+        ds::Array<Candidate, 50> ranked;
         std::size_t count = 0;
 
         for (std::size_t index = 0; index < published; ++index) {
@@ -224,22 +224,22 @@ export {
           const auto kept = std::min<std::size_t>(count, request.limit - 1);
 
           for (std::size_t moved = kept; moved > position; --moved) {
-            ranked[moved] = ranked[moved - 1];
+            ranked.atMut(moved) = ranked[moved - 1];
           }
 
-          ranked[position] = candidate;
+          ranked.atMut(position) = candidate;
           count = kept + 1;
         }
 
-        std::array<PathMatch, 50> matches;
-        std::array<std::array<std::uint16_t, 64>, 50> positions;
+        ds::Array<PathMatch, 50> matches;
+        ds::Array<ds::Array<std::uint16_t, 64>, 50> positions;
 
         for (std::size_t index = 0; index < count; ++index) {
           const auto& entry = storage_.entry(ranked[index].entry);
           const auto value = path(entry);
 
-          matcher_.score(value, request.query, positions[index]);
-          matches[index] = {value, entry.kind, std::span{positions[index]}.first(request.query.size())};
+          matcher_.score(value, request.query, positions.atMut(index).viewMut());
+          matches.atMut(index) = {value, entry.kind, std::span{positions[index]}.first(request.query.size())};
         }
 
         reply.send(PathResults{request.request_id, root_, static_cast<std::uint32_t>(published), complete, complete && storage_.truncated, std::span{matches}.first(count)});

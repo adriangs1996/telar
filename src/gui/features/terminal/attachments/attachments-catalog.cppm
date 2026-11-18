@@ -93,7 +93,7 @@ export namespace telar::gui::features::terminal::attachments {
   };
 
   inline constexpr std::size_t attachment_uuid_bytes = 36;
-  using AttachmentPathUuid = std::array<std::uint8_t, attachment_uuid_bytes>;
+  using AttachmentPathUuid = ds::Array<std::uint8_t, attachment_uuid_bytes>;
 
   struct PathAttachmentMarker {
     AttachmentPathUuid uuid{};
@@ -116,8 +116,8 @@ export namespace telar::gui::features::terminal::attachments {
 
   private:
     static constexpr std::string_view prefix = "pi-clipboard-";
-    static constexpr std::array<std::string_view, 4> extensions{"png", "jpg", "webp", "gif"};
-    static constexpr std::array<std::size_t, 4> dash_positions{8, 13, 18, 23};
+    static constexpr ds::Array<std::string_view, 4> extensions{"png", "jpg", "webp", "gif"};
+    static constexpr ds::Array<std::size_t, 4> dash_positions{8, 13, 18, 23};
 
     class Scan {
     public:
@@ -208,7 +208,7 @@ export namespace telar::gui::features::terminal::attachments {
   };
 
   struct AttachmentSnapshot {
-    std::array<AttachmentItem, AttachmentLimits::maximum_items> items{};
+    ds::Array<AttachmentItem, AttachmentLimits::maximum_items> items{};
     std::size_t count = 0;
     ds::Option<std::uint64_t> modal;
   };
@@ -273,11 +273,11 @@ export namespace telar::gui::features::terminal::attachments {
 
       for (const auto& slot : slots_) {
         if (slot && target_ && slot->owns(*target_)) {
-          result.items[result.count++] = {.id = slot->capture.request.capture.id, .width = slot->capture.width, .height = slot->capture.height};
+          result.items.atMut(result.count++) = {.id = slot->capture.request.capture.id, .width = slot->capture.width, .height = slot->capture.height};
         }
       }
 
-      std::sort(result.items.begin(), result.items.begin() + static_cast<std::ptrdiff_t>(result.count), [](const auto& left, const auto& right) {
+      std::sort(result.items.dataMut(), result.items.dataMut() + static_cast<std::ptrdiff_t>(result.count), [](const auto& left, const auto& right) {
         return left.id < right.id;
       });
 
@@ -310,7 +310,7 @@ export namespace telar::gui::features::terminal::attachments {
           throw std::runtime_error{"AttachmentSelfFull"};
         }
 
-        auto& slot = slots_[*oldest];
+        auto& slot = slots_.atMut(*oldest);
         if (!slot) {
           throw std::logic_error{"MissingAttachmentSlot"};
         }
@@ -330,7 +330,7 @@ export namespace telar::gui::features::terminal::attachments {
       }
 
       total_bytes_ += capture.png.size();
-      slots_[*index].emplace(Slot{.capture = std::move(capture), .delivery = std::move(resource)});
+      slots_.atMut(*index).emplace(Slot{.capture = std::move(capture), .delivery = std::move(resource)});
       ++ingress_version_;
 
       return evicted;
@@ -469,8 +469,8 @@ export namespace telar::gui::features::terminal::attachments {
         return false;
       }
 
-      std::array<PathAttachmentMarker, AttachmentLimits::maximum_items * 2> paths{};
-      const auto count = PathAttachmentMarkers::collect(screen, paths);
+      ds::Array<PathAttachmentMarker, AttachmentLimits::maximum_items * 2> paths{};
+      const auto count = PathAttachmentMarkers::collect(screen, paths.viewMut());
 
       for (std::size_t index = 0; index < count; ++index) {
         const auto& path = paths[index];
@@ -598,7 +598,7 @@ export namespace telar::gui::features::terminal::attachments {
     }
 
     [[nodiscard]] ds::Option<std::uint16_t> nextNumber(AttachmentTarget target, AttachmentMarkerScreen screen) const noexcept {
-      std::array<std::uint16_t, AttachmentLimits::maximum_items> candidates{};
+      ds::Array<std::uint16_t, AttachmentLimits::maximum_items> candidates{};
       std::size_t count = 0;
       NumericAttachmentMarkers scan{screen};
 
@@ -620,13 +620,13 @@ export namespace telar::gui::features::terminal::attachments {
 
         while (index != 0 && candidates[index - 1] < marker->number) {
           if (index < candidates.size()) {
-            candidates[index] = candidates[index - 1];
+            candidates.atMut(index) = candidates[index - 1];
           }
 
           --index;
         }
 
-        candidates[index] = marker->number;
+        candidates.atMut(index) = marker->number;
       }
 
       const auto needed = unpaired(target, AttachmentMarkerPolicy::stable_number);
@@ -635,14 +635,14 @@ export namespace telar::gui::features::terminal::attachments {
     }
 
     [[nodiscard]] ds::Option<AttachmentPathUuid> nextPath(AttachmentTarget target, AttachmentMarkerScreen screen) const noexcept {
-      std::array<PathAttachmentMarker, AttachmentLimits::maximum_items * 2> paths{};
-      const auto count = PathAttachmentMarkers::collect(screen, paths);
-      std::array<AttachmentPathUuid, paths.size()> candidates{};
+      ds::Array<PathAttachmentMarker, AttachmentLimits::maximum_items * 2> paths{};
+      const auto count = PathAttachmentMarkers::collect(screen, paths.viewMut());
+      ds::Array<AttachmentPathUuid, paths.size()> candidates{};
       std::size_t available = 0;
 
       for (std::size_t index = 0; index < count; ++index) {
         if (!pathClaimed(target, paths[index].uuid)) {
-          candidates[available++] = paths[index].uuid;
+          candidates.atMut(available++) = paths[index].uuid;
         }
       }
 
@@ -652,7 +652,7 @@ export namespace telar::gui::features::terminal::attachments {
     }
 
     [[nodiscard]] Slot* findMutable(std::uint64_t id) noexcept {
-      for (auto& slot : slots_) {
+      for (auto& slot : slots_.viewMut()) {
         if (slot && slot->capture.request.capture.id == id) {
           return &slot.getMut();
         }
@@ -728,7 +728,7 @@ export namespace telar::gui::features::terminal::attachments {
     }
 
     void retire(std::size_t index) noexcept {
-      auto& slot = slots_[index].getMut();
+      auto& slot = slots_.atMut(index).getMut();
 
       delivery_.retire(slot.delivery);
       slot.retired = true;
@@ -738,7 +738,7 @@ export namespace telar::gui::features::terminal::attachments {
     }
 
     void free(std::size_t index) noexcept {
-      auto& slot = slots_[index];
+      auto& slot = slots_.atMut(index);
       if (!slot) {
         std::terminate();
       }
@@ -748,7 +748,7 @@ export namespace telar::gui::features::terminal::attachments {
     }
 
     Delivery& delivery_;
-    std::array<ds::Option<Slot>, AttachmentLimits::maximum_items> slots_;
+    ds::Array<ds::Option<Slot>, AttachmentLimits::maximum_items> slots_;
     ds::Option<AttachmentTarget> target_;
     ds::Option<std::uint64_t> modal_;
     ds::Option<PendingDeletion> deletion_pending_;

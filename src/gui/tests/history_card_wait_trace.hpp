@@ -29,6 +29,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.foundation.system;
+import telar.base.ds;
 
 namespace telar::gui::test {
 
@@ -41,21 +42,21 @@ namespace telar::gui::test {
           timer_(window.findChild<QTimer*>(QStringLiteral("agentStatusAnimation"))),
           selection_(window.findChild<qt::HistorySelectionLayout*>()) {
       window_.installEventFilter(this);
-      connections_[0] = connect(&window_, &QQuickWindow::afterAnimating, this, [this] {
+      connections_.atMut(0) = connect(&window_, &QQuickWindow::afterAnimating, this, [this] {
         ++frames_;
         record(Phase::animation);
       });
 
-      connections_[1] = connect(&window_, &QQuickWindow::afterSynchronizing, this, [samples = samples_] {
+      connections_.atMut(1) = connect(&window_, &QQuickWindow::afterSynchronizing, this, [samples = samples_] {
         samples->record({.phase = Phase::synchronized, .timestamp = system::AwakeClock::nowNanoseconds()});
       },
           Qt::DirectConnection);
-      connections_[2] = connect(&window_, &QQuickWindow::frameSwapped, this, [samples = samples_] {
+      connections_.atMut(2) = connect(&window_, &QQuickWindow::frameSwapped, this, [samples = samples_] {
         samples->record({.phase = Phase::swapped, .timestamp = system::AwakeClock::nowNanoseconds()});
       },
           Qt::DirectConnection);
       if (!timer_.isNull()) {
-        connections_[3] = connect(timer_, &QTimer::timeout, this, [this] {
+        connections_.atMut(3) = connect(timer_, &QTimer::timeout, this, [this] {
           record(Phase::timer);
         });
       }
@@ -133,11 +134,11 @@ namespace telar::gui::test {
       void record(Sample sample) {
         const std::scoped_lock lock{mutex};
 
-        values[count++ % values.size()] = sample;
+        values.atMut(count++ % values.size()) = sample;
       }
 
       std::mutex mutex;
-      std::array<Sample, capacity> values{};
+      ds::Array<Sample, capacity> values{};
       std::size_t count = 0;
       std::uint64_t start = system::AwakeClock::nowNanoseconds();
     };
@@ -150,7 +151,7 @@ namespace telar::gui::test {
     std::shared_ptr<Samples> samples_;
     QPointer<QTimer> timer_;
     QPointer<qt::HistorySelectionLayout> selection_;
-    std::array<QMetaObject::Connection, 4> connections_;
+    ds::Array<QMetaObject::Connection, 4> connections_;
     int frames_ = 0;
   };
 

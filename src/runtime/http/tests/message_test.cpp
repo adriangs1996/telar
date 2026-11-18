@@ -5,6 +5,7 @@ import telar.runtime.http.message;
 import telar.runtime.http1.head;
 import telar.runtime.vocabulary.frames;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -60,7 +61,7 @@ namespace {
     HttpMessageCodec::readMessage(request, accepted);
     check(request.target == "/edited");
 
-    const std::array<void (*)(HttpMessageView&), 6> mutations{
+    const ds::Array<void (*)(HttpMessageView&), 6> mutations{
         [](HttpMessageView& message) {
           message.response = true;
         },

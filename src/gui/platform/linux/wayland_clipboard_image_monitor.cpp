@@ -261,10 +261,11 @@ namespace telar::gui::platform {
     }
 
     void offered(::wl_data_offer* handle) {
-      auto* const available = std::ranges::find_if(offers_, [](const auto& offer) {
+      const auto offers = offers_.viewMut();
+      const auto available = std::ranges::find_if(offers, [](const auto& offer) {
         return !offer.isInitialized();
       });
-      if (available == offers_.end()) {
+      if (available == offers.end()) {
         wl_data_offer_destroy(handle);
 
         return;
@@ -275,7 +276,7 @@ namespace telar::gui::platform {
 
     void select(::wl_data_offer* handle) noexcept {
       selected_ = nullptr;
-      for (auto& offer : offers_) {
+      for (auto& offer : offers_.viewMut()) {
         if (handle != nullptr && offer.isInitialized() && offer.object() == handle) {
           selected_ = &offer;
         } else {
@@ -285,7 +286,7 @@ namespace telar::gui::platform {
     }
 
     void entered(::wl_data_offer* handle) {
-      for (auto& offer : offers_) {
+      for (auto& offer : offers_.viewMut()) {
         if (offer.isInitialized() && offer.object() == handle && &offer != selected_) {
           offer.clear();
         }
@@ -300,7 +301,7 @@ namespace telar::gui::platform {
     std::uint32_t seat_global_ = 0;
     std::uint32_t manager_global_ = 0;
     ::wl_data_device_manager* manager_ = nullptr;
-    std::array<Offer, maximum_pending_offers> offers_;
+    ds::Array<Offer, maximum_pending_offers> offers_;
     Offer* selected_ = nullptr;
     bool failed_ = false;
     bool binding_retired_ = false;

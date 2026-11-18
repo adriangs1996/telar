@@ -27,14 +27,14 @@ namespace telar::runtime {
   }
 
   void ExitedPanes::record(std::uint64_t pane_id, std::uint64_t generation, const PaneText& text) noexcept {
-    auto& entry = entries_[next_];
+    auto& entry = entries_.atMut(next_);
 
     entry.pane_id = pane_id;
     entry.generation = generation;
     entry.exit_code = text.exit_code.valueOr(0);
     entry.length = std::min(text.text.size(), maximum_bytes);
     entry.truncated = text.truncated || entry.length != text.text.size();
-    std::copy_n(text.text.end() - entry.length, entry.length, entry.bytes.begin());
+    std::copy_n(text.text.end() - entry.length, entry.length, entry.bytes.dataMut());
     next_ = (next_ + 1) % capacity;
   }
 
@@ -62,7 +62,7 @@ namespace telar::runtime {
       return false;
     }
 
-    locations_[count_++] = location;
+    locations_.atMut(count_++) = location;
     return true;
   }
 
@@ -72,7 +72,7 @@ namespace telar::runtime {
       return false;
     }
 
-    locations_[*index] = locations_[--count_];
+    locations_.atMut(*index) = locations_[--count_];
     return true;
   }
 

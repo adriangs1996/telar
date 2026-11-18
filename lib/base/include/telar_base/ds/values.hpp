@@ -10,6 +10,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <stdexcept>
 #include <type_traits>
 #include <utility>
 #if defined(_LIBCPP_VERSION)
@@ -40,6 +41,8 @@ namespace telar::ds {
   template <typename Value, std::size_t Count>
     requires(Count > 0)
   struct TBC_GENERIC Array {
+    using value_type = Value;
+
     [[nodiscard]] static constexpr std::size_t size() noexcept {
       return Count;
     }
@@ -52,6 +55,32 @@ namespace telar::ds {
     [[nodiscard]] constexpr Value& atMut(std::size_t index) noexcept {
       TELAR_ASSERT(index < Count);
       return values[index];
+    }
+
+    // A value whose index comes from outside, checked in every build: an index past the end throws
+    // what std::array::at throws, for a caller that reports it.
+    [[nodiscard]] constexpr const Value& at(std::size_t index) const {
+      if (index >= Count) {
+        throw std::out_of_range{"telar::ds::Array index out of range"};
+      }
+
+      return values[index];
+    }
+
+    [[nodiscard]] constexpr Value& atCheckedMut(std::size_t index) {
+      if (index >= Count) {
+        throw std::out_of_range{"telar::ds::Array index out of range"};
+      }
+
+      return values[index];
+    }
+
+    [[nodiscard]] constexpr const Value& front() const noexcept {
+      return values[0];
+    }
+
+    [[nodiscard]] constexpr const Value& back() const noexcept {
+      return values[Count - 1];
     }
 
     [[nodiscard]] constexpr const Value* data() const noexcept {
@@ -84,12 +113,38 @@ namespace telar::ds {
 
     friend constexpr bool operator==(const Array&, const Array&) = default;
 
+    friend constexpr auto operator<=>(const Array&, const Array&)
+      requires std::three_way_comparable<Value>
+    = default;
+
     // Public so that braces initialize it, as std::array's member is; read it through the methods.
     Value values[Count];
   };
 
   template <typename First, typename... Rest>
   Array(First, Rest...) -> Array<First, 1 + sizeof...(Rest)>;
+
+  // Structured bindings read an Array's values, as they read std::array's: `auto [a, b] = pair;`.
+  template <std::size_t Index, typename Value, std::size_t Count>
+    requires(Index < Count)
+  [[nodiscard]] constexpr const Value& get(const Array<Value, Count>& array) noexcept {
+    return array.values[Index];
+  }
+
+  template <std::size_t Index, typename Value, std::size_t Count>
+    requires(Index < Count)
+  [[nodiscard]] constexpr Value&& get(Array<Value, Count>&& array) noexcept {
+    return std::move(array.values[Index]);
+  }
+
+  // An Array of a C array's values, its size counted, as std::to_array does for a string literal's
+  // characters. A braced list builds an Array directly, `Array<T, N>{a, b}`, which keeps a copy of each.
+  template <typename Value, std::size_t Count>
+  constexpr Array<std::remove_cv_t<Value>, Count> toArray(Value (&values)[Count]) {
+    return [&]<std::size_t... Index>(std::index_sequence<Index...>) {
+      return Array<std::remove_cv_t<Value>, Count>{{values[Index]...}};
+    }(std::make_index_sequence<Count>{});
+  }
 
   // What an empty Option is built from, as Rust's `None`.
   struct None {
@@ -384,3 +439,11 @@ namespace telar::ds {
   }
 
 }
+
+template <typename Value, std::size_t Count>
+struct std::tuple_size<telar::ds::Array<Value, Count>> : std::integral_constant<std::size_t, Count> {};
+
+template <std::size_t Index, typename Value, std::size_t Count>
+struct std::tuple_element<Index, telar::ds::Array<Value, Count>> {
+  using type = Value;
+};

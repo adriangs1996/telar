@@ -60,9 +60,9 @@ namespace {
   runtime::config::CommandTabView sampleCommand() {
     runtime::config::CommandTabView command;
 
-    command.arguments[0] = "/bin/echo";
-    command.arguments[1] = "quotes ' \" $HOME $(ignored)";
-    command.arguments[2] = "中";
+    command.arguments.atMut(0) = "/bin/echo";
+    command.arguments.atMut(1) = "quotes ' \" $HOME $(ignored)";
+    command.arguments.atMut(2) = "中";
     command.count = 3;
 
     return command;
@@ -79,7 +79,7 @@ namespace {
     commands.seal();
     constexpr std::size_t argument_bytes = 4096;
     const std::string argument(argument_bytes, 'x');
-    const std::array<std::string_view, 1> arguments{argument};
+    const ds::Array<std::string_view, 1> arguments{argument};
     const auto first = requireValue(commands.keepReference(arguments, "first", limits));
     constexpr std::size_t command_count = 128;
 
@@ -105,7 +105,7 @@ namespace {
     invalid.kind = BindingActionKind::callback;
     check(!commandTabReference(invalid), "a callback reference must never decode as a command");
     invalid.kind = BindingActionKind::command_tab;
-    for (const auto identity : std::array{-1, static_cast<int>(maximum_row_id) + 1}) {
+    for (const auto identity : ds::Array{-1, static_cast<int>(maximum_row_id) + 1}) {
       invalid.reference = identity;
       check(!commandTabReference(invalid), "out-of-range row IDs must be rejected before narrowing");
     }
@@ -121,7 +121,7 @@ namespace {
     commands.beginRender();
     constexpr std::size_t argument_bytes = 4096;
     const std::string argument(argument_bytes, 'x');
-    const std::array<std::string_view, 1> arguments{argument};
+    const ds::Array<std::string_view, 1> arguments{argument};
     const auto first = requireValue(commands.keepReference(arguments, "first", limits));
     constexpr std::size_t attempts = 64;
     bool refused = false;
@@ -273,8 +273,8 @@ namespace {
       constexpr std::string_view discovered_application = "foreground_process_requiring_heap_storage";
 
       if (discover_before_confirmation) {
-        const std::array panes{TabPane{.pane_id = 2, .foreground = discovered_application}};
-        const std::array descriptors{
+        const ds::Array panes{TabPane{.pane_id = 2, .foreground = discovered_application}};
+        const ds::Array descriptors{
             TabDescriptor{.tab_id = 1, .position = 0, .pane_count = 1},
             TabDescriptor{.tab_id = 2, .position = 1, .pane_count = 1, .panes = panes},
         };
@@ -336,7 +336,7 @@ namespace {
 
     check(application::workbench::createCommandTab(client, command) == application::TabCreationOutcome::requested, "a command must start its correlated tab operation");
     const auto request = transport.last<CreateTab>();
-    const std::array descriptors{
+    const ds::Array descriptors{
         TabDescriptor{.tab_id = 1, .position = 0, .pane_count = 1, .label = "source"},
         TabDescriptor{.tab_id = 2, .position = 1, .pane_count = 1, .label = "echo"},
     };
@@ -461,12 +461,12 @@ namespace {
       std::uint64_t selected;
     };
 
-    constexpr auto cases = std::to_array<ClosureCase>({
+    constexpr auto cases = ds::Array<ClosureCase, 4>{{
         {.active = 1, .closing = 1, .selected = 2},
         {.active = 2, .closing = 2, .selected = 3},
         {.active = 3, .closing = 3, .selected = 2},
         {.active = 3, .closing = 1, .selected = 3},
-    });
+    }};
 
     for (const auto& entry : cases) {
       SystemAllocator system;

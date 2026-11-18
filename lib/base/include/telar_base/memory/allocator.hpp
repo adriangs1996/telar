@@ -110,7 +110,7 @@ namespace telar {
     void recordAllocation(std::size_t size) noexcept {
       ++statistics_.live_allocations;
       statistics_.total.record(size);
-      statistics_.paths[static_cast<std::size_t>(current_allocation_path)].record(size);
+      statistics_.paths.atMut(static_cast<std::size_t>(current_allocation_path)).record(size);
       if (current_allocation_path == AllocationPath::interactive && terminal_allocation) {
         statistics_.interactive_terminal.record(size);
       }

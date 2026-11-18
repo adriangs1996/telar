@@ -22,6 +22,7 @@ import telar.runtime.platform.request_worker;
 import telar.wire.vocabulary;
 import telar.platform.process;
 import telar.runtime.history.event;
+import telar.base.ds;
 
 namespace {
 
@@ -35,7 +36,7 @@ namespace {
   }
 
   void testQueryEditing() {
-    const std::array cases{
+    const ds::Array cases{
         std::pair{"  Fix\t the   tests \rignored", "Fix the tests"},
         std::pair{"old\x15new\r", "new"},
         std::pair{"Fix wrong\x17parser\r", "Fix parser"},
@@ -103,7 +104,7 @@ namespace {
   }
 
   void testGenerator(ConcurrentMemory& memory) {
-    const std::array cases{
+    const ds::Array cases{
         std::pair{"cat >/dev/null; printf '  \"Fix café\"  \\n'", DescriptionStatus::success},
         std::pair{"cat >/dev/null; printf 'one\\ntwo'", DescriptionStatus::invalid_output},
         std::pair{"cat >/dev/null; printf '\\377'", DescriptionStatus::invalid_output},
@@ -119,7 +120,7 @@ namespace {
 
     request.query.append("A private request");
     for (const auto& [script, expected] : cases) {
-      const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", script};
+      const ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", script};
       DescriptionGenerator generator{memory, DescriptionOptions{arguments, std::chrono::milliseconds{100}}};
       const auto result = generator.observe(request);
 
@@ -130,12 +131,12 @@ namespace {
       }
     }
 
-    const std::array<std::string_view, 1> absent{"/nonexistent/telar-description-helper"};
+    const ds::Array<std::string_view, 1> absent{"/nonexistent/telar-description-helper"};
     DescriptionGenerator missing{memory, DescriptionOptions{absent}};
 
     check(missing.observe(request).status == DescriptionStatus::unavailable);
 
-    const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", "cat >/dev/null; sleep 60"};
+    const ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", "cat >/dev/null; sleep 60"};
     DescriptionGenerator generator{memory, DescriptionOptions{arguments, std::chrono::seconds{60}}};
     const auto started = std::chrono::steady_clock::now();
 
@@ -150,11 +151,11 @@ namespace {
   }
 
   void testProcessInput(SystemAllocator& memory) {
-    const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", "head -c 100000 /dev/zero >&2; wc -c"};
+    const ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", "head -c 100000 /dev/zero >&2; wc -c"};
     Command command{memory, Launch{.cwd = "/", .arguments = arguments}, CommandPurpose::administration};
     CommandOutput output{memory, 64};
     const std::string body(100'000, 'x');
-    const std::array<std::string_view, 3> fragments{body, {}, body};
+    const ds::Array<std::string_view, 3> fragments{body, {}, body};
 
     check(output.runWithInput(command, std::chrono::steady_clock::now() + std::chrono::seconds{2}, fragments) == 0);
     check(output.text().find("200000") != std::string_view::npos);
@@ -167,7 +168,7 @@ namespace {
     PaneHistoryWriter writer{database};
     HistorySession session{.pane = 7, .started_at_ms = 100, .workspace_path = "/project", .shell = "/bin/sh"};
 
-    session.id[0] = 1;
+    session.id.atMut(0) = 1;
     writer.persist(HistoryEventView{.kind = HistoryEventKind::session_started, .session = session});
     HistorySessionTitle title{.session = session.id, .source = AgentTitleSource::generated, .state = AgentTitleState::ready};
 

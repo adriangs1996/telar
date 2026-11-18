@@ -15,6 +15,7 @@ import telar.testing;
 import telar.runtime.transport.connection;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -49,8 +50,8 @@ namespace {
       SystemAllocator memory;
       Channel channel;
       ClientConnection connection{memory, std::move(channel.local)};
-      std::array<Byte, frame_prefix_size> prefix;
-      std::span<Byte> output = prefix;
+      ds::Array<Byte, frame_prefix_size> prefix;
+      std::span<Byte> output = prefix.viewMut();
 
       u32::encode(length, output);
       check(::write(channel.peer.get(), prefix.data(), prefix.size()) == static_cast<ssize_t>(prefix.size()));

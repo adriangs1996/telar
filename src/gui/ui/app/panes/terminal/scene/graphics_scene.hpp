@@ -117,7 +117,7 @@ namespace telar::gui::qt {
     QPointer<QQuickItem> owner_;
     GraphicsScene* previous_ = nullptr;
     GraphicsScene* next_ = nullptr;
-    std::array<ResolvedImage, application::terminal::graphics::GraphicsStore<Memory>::image_capacity> resolved_;
+    ds::Array<ResolvedImage, application::terminal::graphics::GraphicsStore<Memory>::image_capacity> resolved_;
     std::size_t resolved_count_ = 0;
     application::terminal::graphics::GraphicsLifetime graphics_lifetime_;
     std::uint64_t graphics_revision_ = 0;

@@ -4,6 +4,7 @@ module;
 export module telar.gui.platform:clipboard_image_pipe;
 
 import std;
+import telar.base.ds;
 
 export {
   namespace telar::gui::platform {
@@ -24,7 +25,7 @@ export {
       static constexpr std::size_t chunk_bytes = std::size_t{16} * 1024;
 
       struct Chunk {
-        std::array<std::byte, chunk_bytes> bytes{};
+        ds::Array<std::byte, chunk_bytes> bytes{};
 
         Chunk() = default;
         Chunk(const Chunk&) = delete;

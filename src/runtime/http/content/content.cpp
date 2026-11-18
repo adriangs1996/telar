@@ -45,7 +45,7 @@ namespace telar::runtime {
         break;
       }
 
-      result.codings[result.count++] = coding(name);
+      result.codings.atMut(result.count++) = coding(name);
     }
 
     return result;

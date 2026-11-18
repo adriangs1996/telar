@@ -72,7 +72,7 @@ namespace telar::gui::features::notifications {
 
     [[nodiscard]] std::size_t oldest() const noexcept;
 
-    std::array<Row, capacity> rows_{};
+    ds::Array<Row, capacity> rows_{};
     std::size_t count_ = 0;
     std::uint64_t evicted_ = 0;
   };

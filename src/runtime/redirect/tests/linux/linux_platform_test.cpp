@@ -92,8 +92,8 @@ namespace {
       check(::prctl(PR_SET_NAME, unusual_name.data()) == 0);
       check(inspector.name(::getpid()).view() == unusual_name);
       check(inspector.identity(::getpid()) == identity);
-      std::array<char, 16> restored_name{};
-      std::ranges::copy(original_name.view(), restored_name.begin());
+      ds::Array<char, 16> restored_name{};
+      std::ranges::copy(original_name.view(), restored_name.viewMut().begin());
       check(::prctl(PR_SET_NAME, restored_name.data()) == 0);
       check(!ProcStat::parse("1 (broken)"));
     }
@@ -104,14 +104,14 @@ namespace {
       check((peer ? ::getpeername(descriptor, reinterpret_cast<sockaddr*>(&address), &length) : ::getsockname(descriptor, reinterpret_cast<sockaddr*>(&address), &length)) == 0);
       redirect::Target target;
       target.endpoint = *NetworkAddress::copy(reinterpret_cast<const sockaddr*>(&address), length);
-      std::array<char, INET6_ADDRSTRLEN> host{};
+      ds::Array<char, INET6_ADDRSTRLEN> host{};
       if (address.ss_family == AF_INET) {
         const auto& v4 = reinterpret_cast<const sockaddr_in&>(address);
-        check(::inet_ntop(AF_INET, &v4.sin_addr, host.data(), host.size()) != nullptr);
+        check(::inet_ntop(AF_INET, &v4.sin_addr, host.dataMut(), host.size()) != nullptr);
         target.port = ntohs(v4.sin_port);
       } else {
         const auto& v6 = reinterpret_cast<const sockaddr_in6&>(address);
-        check(::inet_ntop(AF_INET6, &v6.sin6_addr, host.data(), host.size()) != nullptr);
+        check(::inet_ntop(AF_INET6, &v6.sin6_addr, host.dataMut(), host.size()) != nullptr);
         target.port = ntohs(v6.sin6_port);
       }
       target.endpoint.setPort(target.port);
@@ -136,7 +136,7 @@ namespace {
       const redirect::FlowKey flow{socketEndpoint(client.get(), false), socketEndpoint(client.get(), true)};
       const auto identity = ProcessInspector{}.identity(::getpid());
       check(identity.hasValue());
-      const std::array selected{*identity};
+      const ds::Array selected{*identity};
       redirect::SocketOwners owners{::geteuid(), selected};
       const auto owner = owners.find(flow);
       check(owner.complete && owner.process == identity);

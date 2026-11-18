@@ -3,6 +3,7 @@ module telar.cli.window;
 import telar.sys.posix;
 import telar.base.text.utf8;
 import telar.cli.command_limit;
+import telar.base.ds;
 
 // The bodies of the window interface that cli-window carries, since
 // telar-config-check parses its options too; window.cpp builds only into the
@@ -31,8 +32,8 @@ namespace telar::runtime::cli::window {
     }
 
     constexpr std::size_t maximum_float_bytes = 64;
-    std::array<char, maximum_float_bytes> buffer;
-    const auto formatted = std::to_chars(buffer.data(), buffer.data() + buffer.size(), value);
+    ds::Array<char, maximum_float_bytes> buffer;
+    const auto formatted = std::to_chars(buffer.dataMut(), buffer.dataMut() + buffer.size(), value);
     const std::string_view number{buffer.data(), formatted.ptr};
     const auto exponent_at = number.find('e');
     if (exponent_at == std::string_view::npos) {
@@ -154,7 +155,7 @@ namespace telar::runtime::cli::machine {
 
   void SetupReport::end(Step step, Status status, std::string detail) {
     const auto index = static_cast<std::size_t>(step);
-    auto& result = results.at(index);
+    auto& result = results.atCheckedMut(index);
 
     result.status = status;
     result.detail = bounded(std::move(detail));
@@ -175,7 +176,7 @@ namespace telar::runtime::cli::machine {
     }
 
     ++note_count;
-    auto& result = results.at(static_cast<std::size_t>(step));
+    auto& result = results.atCheckedMut(static_cast<std::size_t>(step));
 
     result.notes.push_back(bounded(std::move(detail)));
     if (!json && result.status) {

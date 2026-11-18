@@ -5,6 +5,7 @@ import telar.tbc;
 import telar.base.text.json;
 import telar.base.text.utf8;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::inline foundation::inline core {
 
@@ -115,8 +116,8 @@ namespace telar::gui::inline foundation::inline core {
     }
 
     constexpr std::size_t capacity = std::numeric_limits<double>::max_exponent10 + std::numeric_limits<double>::max_digits10 + sizeof("-0.");
-    std::array<char, capacity> encoded{};
-    const auto result = std::to_chars(encoded.data(), encoded.data() + encoded.size(), value, std::chars_format::fixed);
+    ds::Array<char, capacity> encoded{};
+    const auto result = std::to_chars(encoded.dataMut(), encoded.dataMut() + encoded.size(), value, std::chars_format::fixed);
     if (result.ec != std::errc{}) {
       throw std::length_error{"WriteFailed"};
     }

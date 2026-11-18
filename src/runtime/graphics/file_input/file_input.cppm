@@ -218,8 +218,8 @@ export {
       bool kitty = false;
 
     private:
-      std::array<Byte, byte_capacity> bytes_;
-      std::array<Event, event_capacity> events_;
+      ds::Array<Byte, byte_capacity> bytes_;
+      ds::Array<Event, event_capacity> events_;
       std::size_t byte_count_ = 0;
       std::size_t event_count_ = 0;
     };

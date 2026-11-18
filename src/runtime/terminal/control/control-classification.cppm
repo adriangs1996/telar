@@ -9,16 +9,16 @@ import telar.base.ds;
 
 export namespace telar::runtime::control {
 
-  inline constexpr std::array<std::uint16_t, 5> desktop_modes{1004, 2031, 2033, 2048, 5522};
+  inline constexpr ds::Array<std::uint16_t, 5> desktop_modes{1004, 2031, 2033, 2048, 5522};
 
   // Generic over the caller's writer, so it stays here.
   template <typename Writer>
   TBC_GENERIC void forwardPrivateMode(std::uint16_t mode, char final, Writer&& write) {
-    std::array<char, 16> command;
+    ds::Array<char, 16> command;
     constexpr std::string_view prefix = "\x1b[?";
 
-    std::copy(prefix.begin(), prefix.end(), command.begin());
-    const auto number = std::to_chars(command.data() + prefix.size(), command.data() + command.size() - 1, mode);
+    std::copy(prefix.begin(), prefix.end(), command.dataMut());
+    const auto number = std::to_chars(command.dataMut() + prefix.size(), command.dataMut() + command.size() - 1, mode);
 
     *number.ptr = final;
     write(std::span<const std::uint8_t>{reinterpret_cast<const std::uint8_t*>(command.data()), static_cast<std::size_t>(number.ptr + 1 - command.data())});

@@ -31,8 +31,8 @@ namespace telar::runtime {
     // One row of /proc/net/tcp or tcp6: `sl local remote st tx:rx tr:when retransmits uid timeout inode`.
     ds::Option<ListeningSocket> parseListening(std::string_view line, uid_t user) noexcept {
       constexpr unsigned listen_state = 0x0a;
-      std::array<std::string_view, 10> fields;
-      for (auto& field : fields) {
+      ds::Array<std::string_view, 10> fields;
+      for (auto& field : fields.viewMut()) {
         const auto first = line.find_first_not_of(' ');
         if (first == std::string_view::npos) {
           return ds::none;
@@ -61,11 +61,11 @@ namespace telar::runtime {
         return count;
       }
 
-      std::array<char, 16 * 1024> buffer;
+      ds::Array<char, 16 * 1024> buffer;
       std::size_t kept = 0;
       bool header = true;
       while (count < sockets.size()) {
-        const auto read = ::read(file.get(), buffer.data() + kept, buffer.size() - kept);
+        const auto read = ::read(file.get(), buffer.dataMut() + kept, buffer.size() - kept);
         if (read < 0 && sys::lastError() == EINTR) {
           continue;
         }
@@ -92,7 +92,7 @@ namespace telar::runtime {
         }
 
         kept = text.size();
-        std::memmove(buffer.data(), text.data(), kept);
+        std::memmove(buffer.dataMut(), text.data(), kept);
       }
 
       return count;
@@ -102,8 +102,8 @@ namespace telar::runtime {
 
   ds::Option<ProcessSnapshot> ProcessInspector::snapshot(pid_t process) const noexcept {
     ProcDirectory directory{process};
-    std::array<char, process_stat_capacity> storage;
-    const auto bytes = directory.read("stat", storage);
+    ds::Array<char, process_stat_capacity> storage;
+    const auto bytes = directory.read("stat", storage.viewMut());
     const auto status = bytes ? ProcStat::parse(*bytes) : ds::none;
     if (!status || !directory.belongsTo(uid_)) {
       return ds::none;
@@ -137,8 +137,8 @@ namespace telar::runtime {
 
   FixedText<4096> ProcessInspector::executable(pid_t process) noexcept {
     FixedText<4096> result;
-    std::array<char, 4096> buffer;
-    if (const auto path = ProcDirectory{process}.link("exe", buffer)) {
+    ds::Array<char, 4096> buffer;
+    if (const auto path = ProcDirectory{process}.link("exe", buffer.viewMut())) {
       result.assign(*path);
     }
     return result;
@@ -148,18 +148,18 @@ namespace telar::runtime {
     constexpr std::size_t maximum_group_processes = 64;
     constexpr std::size_t maximum_sockets = 256;
     ListeningPorts ports;
-    std::array<ListeningSocket, maximum_sockets> sockets;
-    auto count = readListening("/proc/net/tcp", uid_, sockets, 0);
-    count = readListening("/proc/net/tcp6", uid_, sockets, count);
+    ds::Array<ListeningSocket, maximum_sockets> sockets;
+    auto count = readListening("/proc/net/tcp", uid_, sockets.viewMut(), 0);
+    count = readListening("/proc/net/tcp6", uid_, sockets.viewMut(), count);
     if (count == 0) {
       return ports;
     }
 
     const auto listening = std::span{sockets}.first(count);
-    std::array<pid_t, maximum_group_processes> members;
-    for (const auto member : std::span{members}.first(groupMembers(group, members))) {
-      std::array<char, sizeof("/proc//fd") + std::numeric_limits<pid_t>::digits10 + 1> path{};
-      std::snprintf(path.data(), path.size(), "/proc/%d/fd", member);
+    ds::Array<pid_t, maximum_group_processes> members;
+    for (const auto member : std::span{members}.first(groupMembers(group, members.viewMut()))) {
+      ds::Array<char, sizeof("/proc//fd") + std::numeric_limits<pid_t>::digits10 + 1> path{};
+      std::snprintf(path.dataMut(), path.size(), "/proc/%d/fd", member);
       auto* directory = ::opendir(path.data());
       if (directory == nullptr) {
         continue;
@@ -167,8 +167,8 @@ namespace telar::runtime {
 
       constexpr std::string_view prefix = "socket:[";
       while (const auto* entry = ::readdir(directory)) {
-        std::array<char, 64> target;
-        const auto length = ::readlinkat(::dirfd(directory), entry->d_name, target.data(), target.size());
+        ds::Array<char, 64> target;
+        const auto length = ::readlinkat(::dirfd(directory), entry->d_name, target.dataMut(), target.size());
         const std::string_view link{target.data(), length > 0 ? static_cast<std::size_t>(length) : 0};
         std::uint64_t inode = 0;
         if (!link.starts_with(prefix) || !link.ends_with(']') || !parseNumber(link.substr(prefix.size(), link.size() - prefix.size() - 1), inode, 10)) {
@@ -213,8 +213,8 @@ namespace telar::runtime {
 
   FixedText<48> ProcessInspector::name(pid_t process) const noexcept {
     FixedText<48> result;
-    std::array<char, process_stat_capacity> storage;
-    const auto bytes = ProcDirectory{process}.read("stat", storage);
+    ds::Array<char, process_stat_capacity> storage;
+    const auto bytes = ProcDirectory{process}.read("stat", storage.viewMut());
     const auto status = bytes ? ProcStat::parse(*bytes) : ds::none;
     if (status) {
       try {
@@ -228,8 +228,8 @@ namespace telar::runtime {
 
   FixedText<4096> ProcessInspector::directory(pid_t process) const noexcept {
     FixedText<4096> result;
-    std::array<char, 4096> buffer;
-    if (const auto path = ProcDirectory{process}.link("cwd", buffer); path && path->starts_with('/')) {
+    ds::Array<char, 4096> buffer;
+    if (const auto path = ProcDirectory{process}.link("cwd", buffer.viewMut()); path && path->starts_with('/')) {
       result.assign(*path);
     }
     return result;
@@ -237,8 +237,8 @@ namespace telar::runtime {
 
   FixedText<4096> ProcessInspector::terminal(pid_t process) const noexcept {
     FixedText<4096> result;
-    std::array<char, 4096> buffer;
-    if (const auto path = ProcDirectory{process}.link("fd/0", buffer); path && path->starts_with("/dev/")) {
+    ds::Array<char, 4096> buffer;
+    if (const auto path = ProcDirectory{process}.link("fd/0", buffer.viewMut()); path && path->starts_with("/dev/")) {
       result.assign(*path);
     }
     return result;

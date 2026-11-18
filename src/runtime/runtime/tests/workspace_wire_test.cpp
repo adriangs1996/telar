@@ -20,7 +20,7 @@ namespace {
   using namespace telar;
 
   constexpr TerminalSize size{80, 24, 8, 16};
-  constexpr std::array<std::string_view, 1> cat{"/bin/cat"};
+  constexpr ds::Array<std::string_view, 1> cat{"/bin/cat"};
 
   // The code a request that answers `Reply` failed with, or nothing when it was answered.
   template <typename Reply, typename Request>
@@ -65,7 +65,7 @@ namespace {
     RuntimeHost host;
     ProtocolPeer control{host.socket()};
     const auto nested = host.directory() + "/new/project/root";
-    const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", "pwd; echo created-in; exec cat"};
+    const ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", "pwd; echo created-in; exec cat"};
 
     // The GUI's "create directory" opens a workspace where nothing exists yet.
     const auto opened = control.exchange<PaneOpened>(CreateWorkspace{.request_id = 1, .size = size, .name = "New", .create_cwd = true, .launch = Launch{.cwd = nested, .arguments = arguments}});
@@ -107,7 +107,7 @@ namespace {
     ProtocolPeer control{host.socket()};
     const auto opened = control.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = cat}});
     const auto workspace = opened.location.workspace;
-    const std::array<std::string_view, 1> missing{"/nonexistent/telar-missing-program"};
+    const ds::Array<std::string_view, 1> missing{"/nonexistent/telar-missing-program"};
 
     // A tab whose program cannot start leaves no empty tab behind, opened either way.
     check(failure<TabCreated>(control, CreateTab{.request_id = 2, .workspace = workspace, .label = "Broken", .size = size, .launch = Launch{.cwd = "/tmp", .arguments = missing}}).hasValue());
@@ -173,22 +173,22 @@ namespace {
     const auto a2 = control.exchange<TabCreated>(CreateTab{.request_id = 2, .workspace = first.location.workspace, .label = "A2", .size = size, .launch = Launch{.cwd = "/tmp", .arguments = cat}});
     const auto second = control.exchange<PaneOpened>(CreateWorkspace{.request_id = 3, .size = size, .name = "B", .launch = Launch{.cwd = "/tmp", .arguments = cat}});
     const auto b1 = TabCreated{.location = second.location, .root_pane_id = second.pane_id};
-    const std::array<ClientLayoutNode, 1> a1_nodes{ClientLayoutPane{a1.root_pane_id}};
-    const std::array<ClientLayoutNode, 1> a2_nodes{ClientLayoutPane{a2.root_pane_id}};
-    const std::array<ClientLayoutNode, 1> b1_nodes{ClientLayoutPane{b1.root_pane_id}};
-    const std::array<ClientTabLayout, 2> workspace_a{tabLayout(a1, true, a1_nodes), tabLayout(a2, false, a2_nodes)};
-    const std::array<ClientTabLayout, 1> workspace_b{tabLayout(b1, true, b1_nodes)};
-    const std::array<ClientTabLayout, 1> back_to_a{tabLayout(a2, true, a2_nodes)};
+    const ds::Array<ClientLayoutNode, 1> a1_nodes{ClientLayoutPane{a1.root_pane_id}};
+    const ds::Array<ClientLayoutNode, 1> a2_nodes{ClientLayoutPane{a2.root_pane_id}};
+    const ds::Array<ClientLayoutNode, 1> b1_nodes{ClientLayoutPane{b1.root_pane_id}};
+    const ds::Array<ClientTabLayout, 2> workspace_a{tabLayout(a1, true, a1_nodes), tabLayout(a2, false, a2_nodes)};
+    const ds::Array<ClientTabLayout, 1> workspace_b{tabLayout(b1, true, b1_nodes)};
+    const ds::Array<ClientTabLayout, 1> back_to_a{tabLayout(a2, true, a2_nodes)};
 
     // The window shows A, then switches to B: A's tabs stay, A1 still A's active tab.
-    const std::array<UpdateClientLayout, 2> switched{UpdateClientLayout{true, 30, false, a1.location, workspace_a}, UpdateClientLayout{true, 30, false, b1.location, workspace_b}};
+    const ds::Array<UpdateClientLayout, 2> switched{UpdateClientLayout{true, 30, false, a1.location, workspace_a}, UpdateClientLayout{true, 30, false, b1.location, workspace_b}};
     const auto both = layoutAfter(host, 91, switched);
 
     check(both.restored && both.tabs.size() == 3, "switching workspaces forgot the other workspace's tabs");
     check(shows(both, a1.location, true) && shows(both, a2.location, false) && shows(both, b1.location, true));
 
     // Back in A on A2: A1 is no longer A's active tab, and B keeps its own.
-    const std::array<UpdateClientLayout, 1> returned{UpdateClientLayout{true, 30, false, a2.location, back_to_a}};
+    const ds::Array<UpdateClientLayout, 1> returned{UpdateClientLayout{true, 30, false, a2.location, back_to_a}};
     const auto again = layoutAfter(host, 91, returned);
 
     check(again.tabs.size() == 3 && shows(again, a1.location, false) && shows(again, a2.location, true) && shows(again, b1.location, true));
@@ -198,9 +198,9 @@ namespace {
     RuntimeHost host;
     ProtocolPeer control{host.socket()};
     const auto opened = control.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = cat}});
-    const std::array<ClientLayoutNode, 1> nodes{ClientLayoutPane{opened.pane_id}};
-    const std::array<ClientTabLayout, 1> tabs{ClientTabLayout{.location = opened.location, .focused_pane = opened.pane_id, .workspace_active = true, .nodes = nodes}};
-    const std::array<UpdateClientLayout, 1> update{UpdateClientLayout{true, 30, false, opened.location, tabs}};
+    const ds::Array<ClientLayoutNode, 1> nodes{ClientLayoutPane{opened.pane_id}};
+    const ds::Array<ClientTabLayout, 1> tabs{ClientTabLayout{.location = opened.location, .focused_pane = opened.pane_id, .workspace_active = true, .nodes = nodes}};
+    const ds::Array<UpdateClientLayout, 1> update{UpdateClientLayout{true, 30, false, opened.location, tabs}};
 
     // As many windows as the runtime remembers, the first of them reopened since.
     for (std::uint64_t identity = 1; identity <= 16; ++identity) {

@@ -5,6 +5,7 @@ import telar.sys.posix;
 import telar.sys.process;
 import telar.sys.socket;
 import telar.platform.error;
+import telar.base.ds;
 
 namespace telar::runtime::cli {
 
@@ -44,7 +45,7 @@ namespace telar::runtime::cli {
 
   template <Allocator Memory>
   pid_t launchDaemon(Memory& memory, const ServerOptions& options, const RuntimePaths<Memory>& paths, const ExecutablePath& executable) {
-    std::array<char, PATH_MAX> config_path;
+    ds::Array<char, PATH_MAX> config_path;
     Vector<char*, Memory> arguments{AllocatorRef<char*, Memory>{memory}};
 
     arguments.reserve(2 * options.engine_argument_count + 28);
@@ -73,7 +74,7 @@ namespace telar::runtime::cli {
     }
 
     if (!options.config.empty()) {
-      if (::realpath(options.config.data(), config_path.data()) == nullptr) {
+      if (::realpath(options.config.data(), config_path.dataMut()) == nullptr) {
         throw SystemError{"Resolve daemon configuration"};
       }
 
@@ -91,7 +92,7 @@ namespace telar::runtime::cli {
       append(argument);
     }
 
-    for (const auto [enabled, flag] : std::array<std::pair<bool, std::string_view>, 4>{{{options.no_config, "--no-config"}, {options.fresh, "--fresh"}, {!options.persist_session, "--no-session"}, {!options.resume_agents, "--no-resume"}}}) {
+    for (const auto [enabled, flag] : ds::Array<std::pair<bool, std::string_view>, 4>{{{options.no_config, "--no-config"}, {options.fresh, "--fresh"}, {!options.persist_session, "--no-session"}, {!options.resume_agents, "--no-resume"}}}) {
       if (enabled) {
         append(flag);
       }

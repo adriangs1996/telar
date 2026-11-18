@@ -78,7 +78,7 @@ namespace telar::gui::qt {
     for (std::size_t index = 0; index < collection_->count; ++index) {
       const auto& source = *collection_->fallback[index];
 
-      fallbacks_[index].emplace(source.bytes(), source.match());
+      fallbacks_.atMut(index).emplace(source.bytes(), source.match());
     }
   }
 
@@ -95,7 +95,7 @@ namespace telar::gui::qt {
       return symbols_;
     default:
       if (const auto index = fonts::fallbackIndex(role); index && *index < fallbackCount()) {
-        auto& face = fallbacks_[*index];
+        auto& face = fallbacks_.atMut(*index);
         if (face) {
           return face.getMut();
         }

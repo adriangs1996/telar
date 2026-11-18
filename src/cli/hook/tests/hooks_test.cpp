@@ -23,6 +23,7 @@ import telar.platform.paths;
 import telar.wire.vocabulary;
 import telar.cli.hooks.command;
 import telar.cli.hooks.session;
+import telar.base.ds;
 
 namespace {
 
@@ -73,7 +74,7 @@ namespace {
     constexpr std::string_view prefix = R"({"hook_event_name":"SessionStart","number":17,"tool_input":{"content":")";
 
     check(::write(file.get(), prefix.data(), prefix.size()) == static_cast<ssize_t>(prefix.size()));
-    std::array<char, 4096> padding;
+    ds::Array<char, 4096> padding;
 
     padding.fill('x');
     for (std::size_t written = prefix.size(); written <= Input::maximum_bytes; written += padding.size()) {

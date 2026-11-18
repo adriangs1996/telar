@@ -61,8 +61,8 @@ namespace telar::runtime {
 #if defined(__APPLE__)
     // Only the forked child enumerates descriptors, so no other thread can open
     // one during the scan. proc_pidinfo copies kernel data into this stack buffer.
-    std::array<proc_fdinfo, 1024> descriptors;
-    const int bytes = ::proc_pidinfo(::getpid(), PROC_PIDLISTFDS, 0, descriptors.data(), sizeof(descriptors));
+    ds::Array<proc_fdinfo, 1024> descriptors;
+    const int bytes = ::proc_pidinfo(::getpid(), PROC_PIDLISTFDS, 0, descriptors.dataMut(), sizeof(descriptors));
 
     if (bytes > 0 && bytes < static_cast<int>(sizeof(descriptors)) && bytes % sizeof(proc_fdinfo) == 0) {
       const auto count = static_cast<std::size_t>(bytes) / sizeof(proc_fdinfo);

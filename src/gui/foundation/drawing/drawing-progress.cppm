@@ -38,7 +38,7 @@ export {
     private:
       [[nodiscard]] static Point endpoint(float fraction) noexcept;
 
-      static const std::array<Point, segments> circle;
+      static const ds::Array<Point, segments> circle;
     };
 
   }
@@ -84,11 +84,11 @@ export {
       static constexpr float pause_height_ratio = 0.36F;
       static constexpr float error_height_ratio = 0.24F;
       static constexpr float error_dot_ratio = 0.63F;
-      static constexpr std::array pause_offsets{-1.5F, 0.5F};
+      static constexpr ds::Array pause_offsets{-1.5F, 0.5F};
 
       Rect background;
       Rect ring;
-      std::array<Rect, 2> marks{};
+      ds::Array<Rect, 2> marks{};
       std::size_t mark_count = 0;
       float mark_radius = 0;
 

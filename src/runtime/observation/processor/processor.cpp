@@ -47,7 +47,7 @@ namespace telar::runtime {
   }
 
   void PaneObserver::bytes(ObservationKind kind, std::span<const Byte> bytes, ds::Option<bool> shell_foreground) noexcept {
-    auto& batch = batches_[active_];
+    auto& batch = batches_.atMut(active_);
     if (batch.event_count == ObservationBatch::event_capacity || bytes.size() > ObservationBatch::byte_capacity - batch.byte_count) {
       drop(bytes.size());
     }
@@ -58,9 +58,9 @@ namespace telar::runtime {
 
     const auto offset = batch.byte_count;
 
-    std::copy(bytes.begin(), bytes.end(), batch.bytes.begin() + offset);
+    std::copy(bytes.begin(), bytes.end(), batch.bytes.dataMut() + offset);
     batch.byte_count += bytes.size();
-    batch.events[batch.event_count++] = {kind, ObservationTime::now(), static_cast<std::uint32_t>(offset), static_cast<std::uint32_t>(bytes.size()), shell_foreground};
+    batch.events.atMut(batch.event_count++) = {kind, ObservationTime::now(), static_cast<std::uint32_t>(offset), static_cast<std::uint32_t>(bytes.size()), shell_foreground};
   }
 
   void PaneObserver::resize(TerminalSize size) noexcept {
@@ -90,7 +90,7 @@ namespace telar::runtime {
   }
 
   void PaneObserver::complete() noexcept {
-    batches_[*sealed_].clear();
+    batches_.atMut(*sealed_).clear();
     sealed_.reset();
   }
 
@@ -105,16 +105,16 @@ namespace telar::runtime {
   }
 
   void PaneObserver::control(const ObservationEvent& event) noexcept {
-    auto& batch = batches_[active_];
+    auto& batch = batches_.atMut(active_);
     if (batch.event_count == ObservationBatch::event_capacity) {
       drop(0);
     }
 
-    batch.events[batch.event_count++] = event;
+    batch.events.atMut(batch.event_count++) = event;
   }
 
   void PaneObserver::drop(std::size_t incoming) noexcept {
-    auto& batch = batches_[active_];
+    auto& batch = batches_.atMut(active_);
     if (batch.event_count == ObservationBatch::event_capacity) {
       drop_ = LimitReach{.name = "history.observer_batch_events", .noun = "events", .value = ObservationBatch::event_capacity, .requested = batch.event_count + 1};
     } else {

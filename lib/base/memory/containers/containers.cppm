@@ -333,7 +333,7 @@ export {
           }
         }
 
-        slots_[(head_ + count_) % Capacity].emplace(std::move(value));
+        slots_.atMut((head_ + count_) % Capacity).emplace(std::move(value));
         ++count_;
         queued_.store(count_, std::memory_order_relaxed);
         high_water_.store(std::max(high_water_.load(std::memory_order_relaxed), static_cast<std::uint64_t>(count_)), std::memory_order_relaxed);
@@ -358,13 +358,13 @@ export {
       }
 
       inline void close() noexcept {
-        std::array<ds::Option<Value>, Capacity> discarded;
+        ds::Array<ds::Option<Value>, Capacity> discarded;
 
         {
           const std::lock_guard lock{mutex_};
 
           closed_ = true;
-          discarded.swap(slots_);
+          std::swap(discarded, slots_);
           count_ = 0;
           head_ = 0;
           queued_.store(0, std::memory_order_relaxed);
@@ -391,9 +391,9 @@ export {
           return ds::none;
         }
 
-        auto value = std::move(slots_[head_]);
+        auto value = std::move(slots_.atMut(head_));
 
-        slots_[head_].reset();
+        slots_.atMut(head_).reset();
         head_ = (head_ + 1) % Capacity;
         --count_;
         queued_.store(count_, std::memory_order_relaxed);
@@ -402,7 +402,7 @@ export {
 
       std::mutex mutex_;
       std::condition_variable ready_;
-      std::array<ds::Option<Value>, Capacity> slots_;
+      ds::Array<ds::Option<Value>, Capacity> slots_;
       std::size_t head_ = 0;
       std::size_t count_ = 0;
       bool closed_ = false;
@@ -467,11 +467,11 @@ export {
 
     public:
       inline void insert(std::size_t index) noexcept {
-        words_[index / word_bits] |= std::uint64_t{1} << (index % word_bits);
+        words_.atMut(index / word_bits) |= std::uint64_t{1} << (index % word_bits);
       }
 
       inline void erase(std::size_t index) noexcept {
-        words_[index / word_bits] &= ~(std::uint64_t{1} << (index % word_bits));
+        words_.atMut(index / word_bits) &= ~(std::uint64_t{1} << (index % word_bits));
       }
 
       inline ds::Option<std::size_t> firstUnused() const noexcept {
@@ -502,7 +502,7 @@ export {
 
     private:
       static constexpr std::size_t word_bits = 64;
-      std::array<std::uint64_t, (Capacity + word_bits - 1) / word_bits> words_{};
+      ds::Array<std::uint64_t, (Capacity + word_bits - 1) / word_bits> words_{};
     };
 
   }

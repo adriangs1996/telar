@@ -27,6 +27,7 @@ import telar.base.text;
 import telar.base.text.json;
 import telar.base.text.utf8;
 import telar.testing;
+import telar.base.ds;
 
 namespace {
 
@@ -57,8 +58,8 @@ namespace {
       check(budget.liveBytes() == 0);
       check(budget.failures() == 1);
 
-      std::array<std::byte, 32> buffer{};
-      telar::BufferAllocator local{budget, buffer};
+      telar::ds::Array<std::byte, 32> buffer{};
+      telar::BufferAllocator local{budget, buffer.viewMut()};
       auto* pointer = local.allocate(8, 1);
 
       check(pointer == buffer.data());
@@ -155,8 +156,8 @@ namespace {
 
       check(budget.liveBytes() == 0);
 
-      alignas(16) std::array<std::byte, 32> buffer{};
-      telar::BufferAllocator<Budget> buffered{budget, buffer};
+      alignas(16) telar::ds::Array<std::byte, 32> buffer{};
+      telar::BufferAllocator<Budget> buffered{budget, buffer.viewMut()};
       Erasing erasing{buffered};
       telar::MemoryAdapter sensitive{erasing};
       telar::ErasingMemory& secrets = sensitive;
@@ -173,17 +174,17 @@ namespace {
     void testRetainedStream() {
       telar::SystemAllocator memory;
       telar::runtime::RetainedStream stream{memory, 4};
-      const std::array<std::uint8_t, 3> first{1, 2, 3};
-      const std::array<std::uint8_t, 2> second{4, 5};
+      const telar::ds::Array<std::uint8_t, 3> first{1, 2, 3};
+      const telar::ds::Array<std::uint8_t, 2> second{4, 5};
 
       stream.append(first);
       stream.append(second);
-      std::array<std::uint8_t, 4> output{};
+      telar::ds::Array<std::uint8_t, 4> output{};
 
-      check(stream.read(1, output).size() == output.size());
-      check((output == std::array<std::uint8_t, 4>{2, 3, 4, 5}));
+      check(stream.read(1, output.viewMut()).size() == output.size());
+      check((output == telar::ds::Array<std::uint8_t, 4>{2, 3, 4, 5}));
       check(stream.retainedOffset() == 1 && stream.total() == 5);
-      check(stream.read(0, output).empty());
+      check(stream.read(0, output.viewMut()).empty());
     }
 
     void testLimits() {

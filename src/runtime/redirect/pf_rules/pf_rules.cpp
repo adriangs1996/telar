@@ -88,14 +88,14 @@ namespace telar::runtime::redirect {
   }
 
   Target FlowKey::endpoint(unsigned family, std::span<const Byte> bytes, std::uint16_t port) {
-    std::array<char, INET6_ADDRSTRLEN> host{};
-    if (::inet_ntop(static_cast<int>(family), bytes.data(), host.data(), host.size()) == nullptr) {
+    ds::Array<char, INET6_ADDRSTRLEN> host{};
+    if (::inet_ntop(static_cast<int>(family), bytes.data(), host.dataMut(), host.size()) == nullptr) {
       throw std::invalid_argument{"Invalid discovery address"};
     }
 
-    std::array<char, INET6_ADDRSTRLEN + 16> text{};
+    ds::Array<char, INET6_ADDRSTRLEN + 16> text{};
 
-    std::snprintf(text.data(), text.size(), family == AF_INET6 ? "[%s]:%u" : "%s:%u", host.data(), port);
+    std::snprintf(text.dataMut(), text.size(), family == AF_INET6 ? "[%s]:%u" : "%s:%u", host.dataMut(), port);
     return Target::parse(text.data());
   }
 
@@ -123,16 +123,16 @@ namespace telar::runtime::redirect {
     }
 
     request.family = peer.ss_family;
-    address(peer, request.source, request.source_port);
-    address(local, request.destination, request.destination_port);
+    address(peer, request.source.viewMut(), request.source_port);
+    address(local, request.destination.viewMut(), request.destination_port);
     if (::ioctl(device_.get(), lookup, &request) != 0) {
       return false;
     }
 
-    std::array<Byte, 16> expected{};
+    ds::Array<Byte, 16> expected{};
     std::uint32_t port = 0;
 
-    address(flow.destination.endpoint.storage, expected, port);
+    address(flow.destination.endpoint.storage, expected.viewMut(), port);
     return expected == request.translated_destination && port == request.translated_destination_port;
   }
 
@@ -143,13 +143,13 @@ namespace telar::runtime::redirect {
       return false;
     }
 
-    std::array<Byte, 16> actual{};
-    std::array<Byte, 16> expected{};
+    ds::Array<Byte, 16> actual{};
+    ds::Array<Byte, 16> expected{};
     std::uint32_t actual_port = 0;
     std::uint32_t expected_port = 0;
 
-    address(peer, actual, actual_port);
-    address(flow.source.endpoint.storage, expected, expected_port);
+    address(peer, actual.viewMut(), actual_port);
+    address(flow.source.endpoint.storage, expected.viewMut(), expected_port);
     return actual == expected && actual_port == expected_port;
   }
 
@@ -189,21 +189,21 @@ namespace telar::runtime::redirect {
     message.rtm_addrs = RTA_DST | RTA_IFP;
     message.rtm_pid = ::getpid();
     message.rtm_seq = 1;
-    std::array<Byte, maximum_message_bytes> bytes{};
+    ds::Array<Byte, maximum_message_bytes> bytes{};
 
-    std::memcpy(bytes.data(), &message, sizeof(message));
+    std::memcpy(bytes.dataMut(), &message, sizeof(message));
     auto destination = target.endpoint;
 
     destination.setPort(0);
-    std::memcpy(bytes.data() + sizeof(message), destination.address(), destination.length);
+    std::memcpy(bytes.dataMut() + sizeof(message), destination.address(), destination.length);
     sockaddr_dl interface{};
 
     interface.sdl_len = sizeof(interface);
     interface.sdl_family = AF_LINK;
     interface.sdl_index = static_cast<unsigned short>(scope);
-    std::memcpy(bytes.data() + message.rtm_msglen, &interface, sizeof(interface));
+    std::memcpy(bytes.dataMut() + message.rtm_msglen, &interface, sizeof(interface));
     message.rtm_msglen += aligned(sizeof(interface));
-    std::memcpy(bytes.data(), &message, sizeof(message));
+    std::memcpy(bytes.dataMut(), &message, sizeof(message));
     ssize_t sent;
 
     do {
@@ -226,7 +226,7 @@ namespace telar::runtime::redirect {
         continue;
       }
 
-      const auto received = ::read(socket.get(), bytes.data(), bytes.size());
+      const auto received = ::read(socket.get(), bytes.dataMut(), bytes.size());
       if (received < 0 && socketWouldBlock(sys::lastError())) {
         continue;
       }
@@ -318,8 +318,8 @@ namespace telar::runtime::redirect {
       offset += size;
     }
 
-    std::array<char, IFNAMSIZ> name{};
-    if (path.index == 0 || !::if_indextoname(path.index, name.data())) {
+    ds::Array<char, IFNAMSIZ> name{};
+    if (path.index == 0 || !::if_indextoname(path.index, name.dataMut())) {
       throw SystemError{"Original route interface is unavailable", ENXIO};
     }
 
@@ -336,8 +336,8 @@ namespace telar::runtime::redirect {
   }
 
   void RoutePath::addressText(FixedText<INET6_ADDRSTRLEN>& target, int family, const void* address) {
-    std::array<char, INET6_ADDRSTRLEN> text{};
-    if (!::inet_ntop(family, address, text.data(), text.size())) {
+    ds::Array<char, INET6_ADDRSTRLEN> text{};
+    if (!::inet_ntop(family, address, text.dataMut(), text.size())) {
       throw SystemError{"Format original route gateway"};
     }
 
@@ -354,9 +354,9 @@ namespace telar::runtime::redirect {
       : anchor(AllocatorRef<char, Memory>{memory}),
         label(AllocatorRef<char, Memory>{memory}) {
     const auto hash = plugins::stableId(endpoint);
-    std::array<char, 32> hex{};
+    ds::Array<char, 32> hex{};
 
-    std::snprintf(hex.data(), hex.size(), "tlr_%016llx", static_cast<unsigned long long>(hash));
+    std::snprintf(hex.dataMut(), hex.size(), "tlr_%016llx", static_cast<unsigned long long>(hash));
     label = hex.data();
     anchor = "com.apple/telar-redirect-";
     anchor += label;
@@ -379,7 +379,7 @@ namespace telar::runtime::redirect {
       throw std::invalid_argument{"Invalid incoming discovery scope"};
     }
 
-    std::array<char, 512> line{};
+    ds::Array<char, 512> line{};
 
     for (const auto& mapping : mappings) {
       if (mapping.listener_port == 0 || (mapping.target.host.view() == "127.0.0.1" && mapping.listener_port == mapping.target.port) || (mapping.target.host.view() == "::1" && mapping.listener_port == mapping.target.port)) {
@@ -402,8 +402,8 @@ namespace telar::runtime::redirect {
       const auto name = bypass.route.interface.view();
       const auto gateway = bypass.route.gateway.view();
       const auto family = flow.destination.endpoint.storage.ss_family;
-      std::array<char, INET6_ADDRSTRLEN> text{};
-      std::array<Byte, sizeof(in6_addr)> address{};
+      ds::Array<char, INET6_ADDRSTRLEN> text{};
+      ds::Array<Byte, sizeof(in6_addr)> address{};
 
       if (name.empty() || name.size() >= IFNAMSIZ || name == interface || name.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-") != std::string_view::npos || gateway.empty() || gateway.size() >= text.size() || family != flow.source.endpoint.storage.ss_family || !std::ranges::any_of(mappings, [&](const auto& mapping) {
             return FlowKey::same(mapping.target, flow.destination);
@@ -411,8 +411,8 @@ namespace telar::runtime::redirect {
         throw std::invalid_argument{"Invalid original route bypass"};
       }
 
-      std::ranges::copy(gateway, text.begin());
-      if (::inet_pton(family, text.data(), address.data()) != 1) {
+      std::ranges::copy(gateway, text.viewMut().begin());
+      if (::inet_pton(family, text.dataMut(), address.dataMut()) != 1) {
         throw std::invalid_argument{"Bypass gateway must be numeric"};
       }
     }
@@ -430,7 +430,7 @@ namespace telar::runtime::redirect {
         const auto source = flow.source.host.view();
         const auto destination = flow.destination.host.view();
         const auto listener = selected->listenerAddress();
-        const auto count = std::snprintf(line.data(), line.size(), "rdr on lo0 %s proto tcp from %.*s port %u to %.*s port %u -> %.*s port %u\n", ipv6 ? "inet6" : "inet", static_cast<int>(source.size()), source.data(), flow.source.port, static_cast<int>(destination.size()), destination.data(), flow.destination.port, static_cast<int>(listener.size()), listener.data(), selected->listener_port);
+        const auto count = std::snprintf(line.dataMut(), line.size(), "rdr on lo0 %s proto tcp from %.*s port %u to %.*s port %u -> %.*s port %u\n", ipv6 ? "inet6" : "inet", static_cast<int>(source.size()), source.data(), flow.source.port, static_cast<int>(destination.size()), destination.data(), flow.destination.port, static_cast<int>(listener.size()), listener.data(), selected->listener_port);
 
         rules.append(line.data(), static_cast<std::size_t>(count));
       }
@@ -442,7 +442,7 @@ namespace telar::runtime::redirect {
       const auto destination = flow.destination.host.view();
       const auto name = bypass.route.interface.view();
       const auto gateway = bypass.route.gateway.view();
-      const auto count = std::snprintf(line.data(), line.size(), "pass out quick route-to (%.*s %.*s) %s proto tcp from %.*s port %u to %.*s port %u user %u flags S/SA no state\n", static_cast<int>(name.size()), name.data(), static_cast<int>(gateway.size()), gateway.data(), flow.destination.endpoint.storage.ss_family == AF_INET6 ? "inet6" : "inet", static_cast<int>(source.size()), source.data(), flow.source.port, static_cast<int>(destination.size()), destination.data(), flow.destination.port, uid);
+      const auto count = std::snprintf(line.dataMut(), line.size(), "pass out quick route-to (%.*s %.*s) %s proto tcp from %.*s port %u to %.*s port %u user %u flags S/SA no state\n", static_cast<int>(name.size()), name.data(), static_cast<int>(gateway.size()), gateway.data(), flow.destination.endpoint.storage.ss_family == AF_INET6 ? "inet6" : "inet", static_cast<int>(source.size()), source.data(), flow.source.port, static_cast<int>(destination.size()), destination.data(), flow.destination.port, uid);
 
       rules.append(line.data(), static_cast<std::size_t>(count));
     }
@@ -456,7 +456,7 @@ namespace telar::runtime::redirect {
         const bool ipv6 = flow.destination.endpoint.storage.ss_family == AF_INET6;
         const auto source = flow.source.host.view();
         const auto listener = selected->listenerAddress();
-        const auto count = std::snprintf(line.data(), line.size(), "pass in quick on lo0 %s proto tcp from %.*s port %u to %.*s port %u flags S/SA keep state label \"%.*s\"\n", ipv6 ? "inet6" : "inet", static_cast<int>(source.size()), source.data(), flow.source.port, static_cast<int>(listener.size()), listener.data(), selected->listener_port, static_cast<int>(label.size()), label.data());
+        const auto count = std::snprintf(line.dataMut(), line.size(), "pass in quick on lo0 %s proto tcp from %.*s port %u to %.*s port %u flags S/SA keep state label \"%.*s\"\n", ipv6 ? "inet6" : "inet", static_cast<int>(source.size()), source.data(), flow.source.port, static_cast<int>(listener.size()), listener.data(), selected->listener_port, static_cast<int>(label.size()), label.data());
 
         rules.append(line.data(), static_cast<std::size_t>(count));
       }
@@ -466,7 +466,7 @@ namespace telar::runtime::redirect {
       const bool ipv6 = flow.destination.endpoint.storage.ss_family == AF_INET6;
       const auto source = flow.source.host.view();
       const auto destination = flow.destination.host.view();
-      const auto count = std::snprintf(line.data(), line.size(), "pass out quick route-to (lo0 %s) %s proto tcp from %.*s port %u to %.*s port %u user %u flags any no state\n", ipv6 ? "::1" : "127.0.0.1", ipv6 ? "inet6" : "inet", static_cast<int>(source.size()), source.data(), flow.source.port, static_cast<int>(destination.size()), destination.data(), flow.destination.port, uid);
+      const auto count = std::snprintf(line.dataMut(), line.size(), "pass out quick route-to (lo0 %s) %s proto tcp from %.*s port %u to %.*s port %u user %u flags any no state\n", ipv6 ? "::1" : "127.0.0.1", ipv6 ? "inet6" : "inet", static_cast<int>(source.size()), source.data(), flow.source.port, static_cast<int>(destination.size()), destination.data(), flow.destination.port, uid);
 
       rules.append(line.data(), static_cast<std::size_t>(count));
     }
@@ -475,7 +475,7 @@ namespace telar::runtime::redirect {
       const bool ipv6 = flow.destination.endpoint.storage.ss_family == AF_INET6;
       const auto source = flow.source.host.view();
       const auto destination = flow.destination.host.view();
-      const auto count = std::snprintf(line.data(), line.size(), "pass in quick on ! lo0 route-to (lo0 %s) %s proto tcp from %.*s port %u to %.*s port %u user %u flags any no state\n", ipv6 ? "::1" : "127.0.0.1", ipv6 ? "inet6" : "inet", static_cast<int>(source.size()), source.data(), flow.source.port, static_cast<int>(destination.size()), destination.data(), flow.destination.port, uid);
+      const auto count = std::snprintf(line.dataMut(), line.size(), "pass in quick on ! lo0 route-to (lo0 %s) %s proto tcp from %.*s port %u to %.*s port %u user %u flags any no state\n", ipv6 ? "::1" : "127.0.0.1", ipv6 ? "inet6" : "inet", static_cast<int>(source.size()), source.data(), flow.source.port, static_cast<int>(destination.size()), destination.data(), flow.destination.port, uid);
 
       rules.append(line.data(), static_cast<std::size_t>(count));
     }
@@ -483,24 +483,24 @@ namespace telar::runtime::redirect {
     for (const auto& mapping : mappings) {
       const bool ipv6 = mapping.target.endpoint.storage.ss_family == AF_INET6;
       const auto host = mapping.target.host.view();
-      std::array<char, 48> logging{};
+      ds::Array<char, 48> logging{};
 
       if ((host == "::1" || scope.log_all) && scope.log_interface) {
         if (*scope.log_interface >= 16) {
           throw std::invalid_argument{"Invalid discovery log interface"};
         }
 
-        std::snprintf(logging.data(), logging.size(), " log (user, to pflog%u)", *scope.log_interface);
+        std::snprintf(logging.dataMut(), logging.size(), " log (user, to pflog%u)", *scope.log_interface);
       }
 
       if (allowsOutgoing(scope.direction)) {
-        const auto count = std::snprintf(line.data(), line.size(), "pass out%s quick on ! %.*s route-to %.*s %s proto tcp from any to %.*s port %u user %u flags S/SA no state\n", logging.data(), static_cast<int>(interface.size()), interface.data(), static_cast<int>(interface.size()), interface.data(), ipv6 ? "inet6" : "inet", static_cast<int>(host.size()), host.data(), mapping.target.port, uid);
+        const auto count = std::snprintf(line.dataMut(), line.size(), "pass out%s quick on ! %.*s route-to %.*s %s proto tcp from any to %.*s port %u user %u flags S/SA no state\n", logging.dataMut(), static_cast<int>(interface.size()), interface.data(), static_cast<int>(interface.size()), interface.data(), ipv6 ? "inet6" : "inet", static_cast<int>(host.size()), host.data(), mapping.target.port, uid);
 
         rules.append(line.data(), static_cast<std::size_t>(count));
       }
 
       if (allowsIncoming(scope.direction) && mapping.incoming && scope.log_interface) {
-        const auto count = std::snprintf(line.data(), line.size(), "pass in log (user, to pflog%u) quick on ! lo0 route-to %.*s %s proto tcp from any to %.*s port %u user %u flags S/SA no state\n", *scope.log_interface, static_cast<int>(interface.size()), interface.data(), ipv6 ? "inet6" : "inet", static_cast<int>(host.size()), host.data(), mapping.target.port, uid);
+        const auto count = std::snprintf(line.dataMut(), line.size(), "pass in log (user, to pflog%u) quick on ! lo0 route-to %.*s %s proto tcp from any to %.*s port %u user %u flags S/SA no state\n", *scope.log_interface, static_cast<int>(interface.size()), interface.data(), ipv6 ? "inet6" : "inet", static_cast<int>(host.size()), host.data(), mapping.target.port, uid);
 
         rules.append(line.data(), static_cast<std::size_t>(count));
       }

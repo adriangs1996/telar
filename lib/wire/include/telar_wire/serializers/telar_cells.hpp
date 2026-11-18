@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../codecs/telar_value_codec.hpp"
+#include "telar_base/ds/values.hpp"
 
 namespace telar {
 
@@ -35,7 +36,7 @@ namespace telar {
       rgb,
     };
     Kind kind = Kind::default_color;
-    std::array<Byte, 3> channels{};
+    ds::Array<Byte, 3> channels{};
 
     constexpr bool operator==(const CellColor& other) const {
       if (kind != other.kind) {

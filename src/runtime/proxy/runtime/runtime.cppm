@@ -1192,7 +1192,7 @@ export {
             throw std::bad_alloc{};
           }
 
-          const std::array<nghttp2_settings_entry, 4> settings{{{NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, maximum_streams}, {NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE, wire_body_bytes}, {NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE, HttpMessageLimits::head_bytes}, {NGHTTP2_SETTINGS_ENABLE_PUSH, 0}}};
+          const ds::Array<nghttp2_settings_entry, 4> settings{{{NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, maximum_streams}, {NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE, wire_body_bytes}, {NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE, HttpMessageLimits::head_bytes}, {NGHTTP2_SETTINGS_ENABLE_PUSH, 0}}};
           if (nghttp2_submit_settings(session, NGHTTP2_FLAG_NONE, settings.data(), child ? settings.size() - 1 : settings.size()) != 0) {
             close();
             throw std::bad_alloc{};
@@ -1329,7 +1329,7 @@ export {
         bool child;
         nghttp2_session* session = nullptr;
         // What one read takes from the peer, erased as soon as nghttp2 has parsed it.
-        std::array<std::uint8_t, io_bytes> input;
+        ds::Array<std::uint8_t, io_bytes> input;
         // What nghttp2 last produced, [output_offset, output_size) still unsent. The storage is kept
         // for the next batch, and erased once a batch is sent.
         ds::Option<SensitiveAllocation<Local>> output;
@@ -1412,7 +1412,7 @@ export {
           progress = send(false, origin, readiness.origin) || progress;
           progress = receive(true, child, readiness.child) || progress;
           progress = receive(false, origin, readiness.origin) || progress;
-          for (auto& slot : streams_) {
+          for (auto& slot : streams_.viewMut()) {
             auto* stream = tbc::raw(slot.get());
             if (!stream) {
               continue;
@@ -1535,7 +1535,7 @@ export {
 
         auto* stream = side(child).stream(frame.hd.stream_id);
         if (!stream && child && frame.headers.cat == NGHTTP2_HCAT_REQUEST && !draining_) {
-          for (auto& slot : streams_) {
+          for (auto& slot : streams_.viewMut()) {
             if (slot) {
               continue;
             }
@@ -1782,9 +1782,9 @@ export {
         }
 
         Fields fields{secure_};
-        std::array<char, 3> status{};
+        ds::Array<char, 3> status{};
 
-        std::to_chars(status.data(), status.data() + status.size(), half.message.status);
+        std::to_chars(status.dataMut(), status.dataMut() + status.size(), half.message.status);
         fields.add(":status", {status.data(), status.size()});
         for (const auto& field : half.message.headers.fields()) {
           fields.add(field.name(), field.value());
@@ -1822,18 +1822,18 @@ export {
           }
 
           if (!half.message.bodyless() || half.message.status == 205 || materialized_head) {
-            std::array<char, 32> length;
-            const auto formatted = std::to_chars(length.data(), length.data() + length.size(), half.queue.size());
+            ds::Array<char, 32> length;
+            const auto formatted = std::to_chars(length.dataMut(), length.dataMut() + length.size(), half.queue.size());
 
             half.message.headers.append("content-length", {length.data(), formatted.ptr});
           }
         }
 
         Fields fields{secure_};
-        std::array<char, 3> status{};
+        ds::Array<char, 3> status{};
 
         if (half.message.response) {
-          std::to_chars(status.data(), status.data() + status.size(), half.message.status);
+          std::to_chars(status.dataMut(), status.dataMut() + status.size(), half.message.status);
           fields.add(":status", {status.data(), status.size()});
         } else {
           fields.add(":method", half.message.method);
@@ -1969,7 +1969,7 @@ export {
         }
 
         auto& input = side(child).input;
-        const auto read = source.read(input);
+        const auto read = source.read(input.viewMut());
         if (read.state == StreamResult::State::blocked) {
           side(child).read_wait = read.waiting;
           return false;
@@ -1995,7 +1995,7 @@ export {
         // The session calls back into this connection while it parses the input.
         const auto consumed = nghttp2_session_mem_recv2(side(child).session, input.data(), read.bytes);
 
-        eraseSensitive(input.data(), read.bytes);
+        eraseSensitive(input.dataMut(), read.bytes);
         if (consumed < 0 || static_cast<std::size_t>(consumed) != read.bytes) {
           fail("http2_connection_failed");
         }
@@ -2097,7 +2097,7 @@ export {
 
       inline static auto makeSlots(Local& memory) {
         return [&]<std::size_t... Index>(std::index_sequence<Index...>) {
-          return std::array<Owned<Stream, Local>, maximum_streams>{((void)Index, Owned<Stream, Local>{nullptr, AllocationDeleter<Stream, Local>{memory}})...};
+          return ds::Array<Owned<Stream, Local>, maximum_streams>{((void)Index, Owned<Stream, Local>{nullptr, AllocationDeleter<Stream, Local>{memory}})...};
         }(std::make_index_sequence<maximum_streams>{});
       }
 
@@ -2110,7 +2110,7 @@ export {
       traffic::FlowIdentity identity_;
       // Each endpoint's session calls back into this connection, so it stays where it was built.
       tbc::view<Endpoint, tbc::lt::a> child_, origin_;
-      tbc::view<std::array<Owned<Stream, Local>, maximum_streams>, tbc::lt::a> streams_;
+      tbc::view<ds::Array<Owned<Stream, Local>, maximum_streams>, tbc::lt::a> streams_;
       std::int32_t highest_forwarded_ = 0;
       bool failed_ = false, closing_ = false, draining_ = false;
     };
@@ -2218,8 +2218,8 @@ export {
 
           active = read.state == StreamResult::State::data;
           identify();
-          std::array<Byte, Http2Frame::header_bytes> banner{};
-          const auto origin = origin_stream.peek(banner);
+          ds::Array<Byte, Http2Frame::header_bytes> banner{};
+          const auto origin = origin_stream.peek(banner.viewMut());
 
           if (!protocol_ && prefix_.empty() && (origin.state == StreamResult::State::data || origin.state == StreamResult::State::ended || origin.state == StreamResult::State::failed)) {
             ds::Option<Http2Frame> initial;
@@ -2877,7 +2877,7 @@ export {
       Memory& memory_;
       int directory_;
       String<Memory> endpoint_;
-      std::array<char, filename_bytes + 1> name_;
+      ds::Array<char, filename_bytes + 1> name_;
       ProxyPortRange::Set reserved_;
       ds::Option<std::uint16_t> own_;
       ds::Option<std::uint16_t> legacy_;
@@ -3024,7 +3024,7 @@ export {
       inline void run() noexcept {
         setThreadName("telar.proxy");
         try {
-          std::array<Event, Poller::event_capacity> ready{};
+          ds::Array<Event, Poller::event_capacity> ready{};
           auto reap_at = Policy::Clock::now() + reap_interval;
 
           while (!stopping_.load(std::memory_order_acquire)) {
@@ -3044,7 +3044,7 @@ export {
             }
 
             occupied_.forEach([&](std::size_t index) {
-              auto& slot = slots_[index];
+              auto& slot = slots_.atMut(index);
 
               if (now >= reap_at) {
                 slot.getMut().connection->expire(now);
@@ -3068,7 +3068,7 @@ export {
               reap_at = now + reap_interval;
             }
 
-            const auto events = poller_.wait(wake_at - Policy::Clock::now(), ready);
+            const auto events = poller_.wait(wake_at - Policy::Clock::now(), ready.viewMut());
 
             for (const auto& event : events) {
               if (stopping_.load(std::memory_order_acquire)) {
@@ -3185,7 +3185,7 @@ export {
       }
 
       inline void keep(Owned<Connection, ConcurrentMemory> connection, std::size_t index, Time now) {
-        slots_[index].emplace(std::move(connection), nextGeneration());
+        slots_.atMut(index).emplace(std::move(connection), nextGeneration());
         occupied_.insert(index);
         active_.fetch_add(1, std::memory_order_relaxed);
         advance(index, {}, now);
@@ -3241,7 +3241,7 @@ export {
       }
 
       inline void advance(std::size_t index, TunnelReadiness readiness, Time now) noexcept {
-        auto& slot = slots_[index].getMut();
+        auto& slot = slots_.atMut(index).getMut();
 
         slot.connection->advance(interception_, observations_, readiness, now);
         if (slot.connection->closed()) {
@@ -3280,7 +3280,7 @@ export {
       }
 
       inline void release(std::size_t index) noexcept {
-        auto& slot = slots_[index];
+        auto& slot = slots_.atMut(index);
         if (slot) {
           slot.getMut().child.remove(poller_);
           slot.getMut().origin.remove(poller_);
@@ -3330,7 +3330,7 @@ export {
       DropChannel<redirect::Connection, 32> adoptions_;
       typename NameResolutions<Resolver>::Notifications resolutions_;
       traffic::FlowControl* flows_;
-      std::array<ds::Option<Slot>, Policy::capacity> slots_;
+      ds::Array<ds::Option<Slot>, Policy::capacity> slots_;
       SlotIndexes<Policy::capacity> occupied_;
       ds::Option<ProxyRefusal> refusal_;
       SocketWatch refusal_watch_;
@@ -3483,9 +3483,9 @@ export {
         bool active = false;
         bool accepting = false;
         proxy_trust::Status trust = proxy_trust::Status::absent;
-        std::array<char, 40> fingerprint_sha1{};
-        std::array<char, 64> fingerprint_sha256{};
-        std::array<Byte, PemDocument::maximum_bytes> certificate{};
+        ds::Array<char, 40> fingerprint_sha1{};
+        ds::Array<char, 64> fingerprint_sha256{};
+        ds::Array<Byte, PemDocument::maximum_bytes> certificate{};
         std::size_t certificate_bytes = 0;
       };
 
@@ -3516,7 +3516,7 @@ export {
         if (include_certificate) {
           const PemDocument certificate{authority.certificate()};
 
-          std::ranges::copy(certificate.bytes(), result.certificate.begin());
+          std::ranges::copy(certificate.bytes(), result.certificate.viewMut().begin());
           result.certificate_bytes = certificate.bytes().size();
         }
 

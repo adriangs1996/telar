@@ -18,6 +18,7 @@ import telar.testing;
 import telar.runtime.agents.snapshot;
 import telar.wire.vocabulary;
 import telar.runtime.history.store;
+import telar.base.ds;
 
 namespace {
 
@@ -157,10 +158,10 @@ namespace {
     SystemAllocator system;
     MemoryAdapter memory{system};
     SessionFileReader<ConcurrentMemory> reader{memory};
-    std::array<char, 64> temporary{};
+    ds::Array<char, 64> temporary{};
 
-    std::strcpy(temporary.data(), "/tmp/telar-session-file-XXXXXX");
-    check(::mkdtemp(temporary.data()) != nullptr);
+    std::strcpy(temporary.dataMut(), "/tmp/telar-session-file-XXXXXX");
+    check(::mkdtemp(temporary.dataMut()) != nullptr);
     const std::string root{temporary.data()};
 
     testTranscript(reader, root);

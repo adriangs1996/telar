@@ -284,12 +284,12 @@ export {
         Reader reader{bytes};
 
         model_.next_pane_generation = std::max(model_.next_pane_generation, reader.counters.generation);
-        std::array<PaneRecord, 256> records;
+        ds::Array<PaneRecord, 256> records;
         std::size_t count = 0;
 
         reader.read([&]<typename Record>(const Record& record) {
           if constexpr (std::same_as<Record, PaneRecord>) {
-            records[count++] = record;
+            records.atMut(count++) = record;
           } else if constexpr (!std::same_as<Record, LayoutRecord>) {
             try {
               restore(record);
@@ -298,7 +298,7 @@ export {
           }
         });
 
-        const auto panes = std::span{records}.first(count);
+        const auto panes = records.viewMut().first(count);
 
         std::ranges::sort(panes, {}, &PaneRecord::id);
         for (const auto& record : panes) {
@@ -318,8 +318,8 @@ export {
         layouts.read([&]<typename Record>(const Record& record) {
           if constexpr (std::same_as<Record, LayoutRecord>) {
             try {
-              std::array<Byte, 64 * 1024> scratch;
-              DecodeStorage storage{scratch};
+              ds::Array<Byte, 64 * 1024> scratch;
+              DecodeStorage storage{scratch.viewMut()};
 
               layouts_.retain(model_, record.identity, Codec::decode<UpdateClientLayout>(record.payload, storage));
             } catch (const std::exception&) {
@@ -374,22 +374,22 @@ export {
           return;
         }
 
-        std::array<std::string_view, 64> original;
+        ds::Array<std::string_view, 64> original;
         auto remaining = record.arguments;
 
         for (std::size_t index = 0; index < record.argument_count; ++index) {
           const auto end = remaining.find('\0');
 
-          original[index] = remaining.substr(0, end);
+          original.atMut(index) = remaining.substr(0, end);
           remaining.remove_prefix(end + 1);
         }
 
         ds::Option<AgentResume> resume = resumable(record);
-        std::array<std::string_view, 4> resume_storage;
+        ds::Array<std::string_view, 4> resume_storage;
         auto resumed = resume ? resumeArguments(*resume, resume_storage) : std::span<const std::string_view>{};
         const bool direct = !resumed.empty() && original[0].substr(original[0].rfind('/') + 1) == resumed[0];
         if (direct) {
-          resume_storage[0] = original[0];
+          resume_storage.atMut(0) = original[0];
         }
 
         const auto arguments = direct ? resumed : std::span<const std::string_view>{original}.first(record.argument_count);
@@ -448,7 +448,7 @@ export {
       }
 
       inline void dropEmptyTabs() {
-        std::array<std::uint64_t, WorkspaceStore::capacity> emptied{};
+        ds::Array<std::uint64_t, WorkspaceStore::capacity> emptied{};
         std::size_t count = 0;
 
         for (auto* workspace : model_.workspaces.items()) {
@@ -461,7 +461,7 @@ export {
           });
 
           if (workspace->tabs.empty()) {
-            emptied[count++] = workspace->id;
+            emptied.atMut(count++) = workspace->id;
           }
         }
 
@@ -616,10 +616,10 @@ export {
           writer.append(record);
         }
 
-        std::array<Byte, 16 * 1024> payload;
+        ds::Array<Byte, 16 * 1024> payload;
 
         layouts.exportRecords(model, [&](std::uint64_t identity, std::uint64_t last_used, const UpdateClientLayout& layout) {
-          writer.append(LayoutRecord{identity, last_used, Codec::encode(layout, payload)});
+          writer.append(LayoutRecord{identity, last_used, Codec::encode(layout, payload.viewMut())});
         });
 
         dropped = writer.dropped;
@@ -627,7 +627,7 @@ export {
       }
 
       inline bool changed(const RuntimeModel& model, const ClientLayouts& layouts, const Agents& agents) noexcept {
-        const std::array revisions{model.workspace_revision, layouts.revision(), agents.revision()};
+        const ds::Array revisions{model.workspace_revision, layouts.revision(), agents.revision()};
         bool changed = revisions != revisions_;
 
         revisions_ = revisions;
@@ -638,7 +638,7 @@ export {
           const PaneStamp stamp = pane == nullptr ? PaneStamp{} : PaneStamp{pane->id, pane->cwd_revision, pane->terminal.screen.cols, pane->terminal.screen.rows, pane->output_closed || pane->exit_status.hasValue() || pane->close_requested};
 
           changed |= stamp != stamps_[index];
-          stamps_[index] = stamp;
+          stamps_.atMut(index) = stamp;
         }
 
         return changed;
@@ -655,9 +655,9 @@ export {
         bool operator==(const PaneStamp&) const = default;
       };
 
-      std::array<std::uint64_t, 3> revisions_{};
+      ds::Array<std::uint64_t, 3> revisions_{};
       // One stamp per pane slot, so `changed` indexes it with every slot the store can hold.
-      std::array<PaneStamp, PaneStore::capacity> stamps_{};
+      ds::Array<PaneStamp, PaneStore::capacity> stamps_{};
     };
 
   }

@@ -185,14 +185,14 @@ export {
       [[gnu::noinline]] bool decide(lua_State* state);
 
       ServiceSpec specification_;
-      std::array<Binding, TrafficLimits::registrations> bindings_;
+      ds::Array<Binding, TrafficLimits::registrations> bindings_;
       std::uint32_t next_identifier_ = 0;
       bool changed_ = true;
       SensitiveAllocation<Memory> scratch_;
       ByteQueue<Memory> decisions_;
       SensitiveAllocation<Memory> effects_;
       std::size_t effect_bytes_ = 0;
-      std::array<QueuedDecision, TrafficLimits::decisions> queued_;
+      ds::Array<QueuedDecision, TrafficLimits::decisions> queued_;
       std::size_t decision_count_ = 0;
       Owned<TrafficReply, Memory> reply_;
     };

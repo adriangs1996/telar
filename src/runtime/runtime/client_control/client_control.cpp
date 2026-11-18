@@ -3,11 +3,12 @@ module;
 module telar.runtime.runtime.client_control;
 
 import telar.runtime.transport.connection;
+import telar.base.ds;
 
 namespace telar::runtime {
 
   void ClientControl::list(ClientStore& clients, std::uint64_t requester_id, const QueryClients& request) {
-    std::array<ClientDescriptor, client_capacity> entries;
+    ds::Array<ClientDescriptor, client_capacity> entries;
     std::size_t count = 0;
 
     for (const auto* client : clients.items()) {
@@ -15,7 +16,7 @@ namespace telar::runtime {
         continue;
       }
 
-      entries[count++] = ClientDescriptor{
+      entries.atMut(count++) = ClientDescriptor{
           .id = client->id,
           .generation = client->generation,
           .identity = client->identity,

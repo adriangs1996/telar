@@ -260,7 +260,7 @@ namespace {
     }
 
     void finish(const ImageDescription& image, QColor color) {
-      const std::array pattern{color};
+      const ds::Array pattern{color};
 
       finishPattern(image, pattern);
     }
@@ -302,12 +302,12 @@ namespace {
     }
 
     void placeholders() {
-      constexpr std::array<std::string_view, 4> graphemes{"\xf4\x8e\xbb\xae\xcc\x85\xcc\x85", "\xf4\x8e\xbb\xae\xcc\x85\xcc\x8d", "\xf4\x8e\xbb\xae\xcc\x8d\xcc\x85", "\xf4\x8e\xbb\xae\xcc\x8d\xcc\x8d"};
-      std::array<Cell, 4> cells;
+      constexpr ds::Array<std::string_view, 4> graphemes{"\xf4\x8e\xbb\xae\xcc\x85\xcc\x85", "\xf4\x8e\xbb\xae\xcc\x85\xcc\x8d", "\xf4\x8e\xbb\xae\xcc\x8d\xcc\x85", "\xf4\x8e\xbb\xae\xcc\x8d\xcc\x8d"};
+      ds::Array<Cell, 4> cells;
 
       for (std::size_t index = 0; index < cells.size(); ++index) {
-        cells[index].text = byteView(graphemes[index]);
-        cells[index].style.foreground = {.kind = CellColor::Kind::rgb, .channels = {0, 0, 1}};
+        cells.atMut(index).text = byteView(graphemes[index]);
+        cells.atMut(index).style.foreground = {.kind = CellColor::Kind::rgb, .channels = {0, 0, 1}};
       }
 
       replaceScreen(cells, {.cols = 2, .rows = 2, .cell_width_px = 0, .cell_height_px = 0});
@@ -316,7 +316,7 @@ namespace {
     void replaceScreen(std::span<const Cell> cells, TerminalSize size) {
       std::vector<Byte> encoded(CellRunCodec::encodedSize(cells));
       const auto run = CellRunCodec::encode(cells, encoded);
-      const std::array<FrameSpan, 1> spans{{{.start = 0, .count = static_cast<std::uint32_t>(cells.size()), .cells = run}}};
+      const ds::Array<FrameSpan, 1> spans{{{.start = 0, .count = static_cast<std::uint32_t>(cells.size()), .cells = run}}};
       const std::vector<Byte> flags(size.rows);
       PaneFrame frame;
 
@@ -395,7 +395,7 @@ namespace {
       constexpr std::int64_t above = 6;
       constexpr std::int64_t below = 20;
       application::FoldMap<> folds;
-      const std::array spans{application::FoldMap<>::Span{.first = fold_first, .count = fold_rows}};
+      const ds::Array spans{application::FoldMap<>::Span{.first = fold_first, .count = fold_rows}};
 
       folds.assign(spans);
       const ImageRows plain{.top = top};
@@ -423,11 +423,11 @@ namespace {
         fixture.graphics().placement({.header = header, .placement = {.key = image.key, .virtual_id = index + 1, .columns = 2, .rows = 2, .z_index = std::numeric_limits<std::int32_t>::max(), .location = PlacementLocation::placeholders}});
       }
 
-      std::array<ds::Option<GraphicsStore<Memory>>, view_count - 1> catalogs;
+      ds::Array<ds::Option<GraphicsStore<Memory>>, view_count - 1> catalogs;
       std::vector<std::unique_ptr<ImageItem>> views;
 
       for (std::size_t index = 1; index < view_count; ++index) {
-        auto& catalog = catalogs[index - 1];
+        auto& catalog = catalogs.atMut(index - 1);
 
         catalog.emplace(fixture.memory_, fixture.budget_);
         catalog.getMut().image({.header = header, .image = image});
@@ -491,7 +491,7 @@ namespace {
 
       QCOMPARE(fixture.sample(lower_half), red);
       const auto current = fixture.begin(2, 4, 2);
-      constexpr std::array bands{blue, blue, red, red};
+      constexpr ds::Array bands{blue, blue, red, red};
 
       fixture.finishPattern(current, bands);
       QCOMPARE(fixture.sample(lower_half), blue);
@@ -501,7 +501,7 @@ namespace {
     Q_SLOT static void placeholderFragmentsSampleTheWholeStandIn() {
       Fixture fixture;
       const auto previous = fixture.begin(1);
-      constexpr std::array quadrants{red, green, blue, yellow};
+      constexpr ds::Array quadrants{red, green, blue, yellow};
 
       fixture.finishPattern(previous, quadrants);
       fixture.placeholders();
@@ -751,7 +751,7 @@ namespace {
       ds::Option<GraphicsStore<Memory>> catalog{std::in_place, memory, fixture.budget()};
       constexpr std::size_t texture_bytes = 16;
       constexpr Byte full_channel = 255;
-      const std::array<Byte, texture_bytes> pixels{0, 0, full_channel, full_channel, 0, 0, full_channel, full_channel, 0, 0, full_channel, full_channel, 0, 0, full_channel, full_channel};
+      const ds::Array<Byte, texture_bytes> pixels{0, 0, full_channel, full_channel, 0, 0, full_channel, full_channel, 0, 0, full_channel, full_channel, 0, 0, full_channel, full_channel};
 
       catalog.getMut().image({.header = header, .image = image});
       catalog.getMut().chunk({.header = header, .key = image.key, .bytes = pixels});

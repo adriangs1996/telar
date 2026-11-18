@@ -241,8 +241,8 @@ namespace telar::gui::features::activity {
 
   void TaskCardLabels::decimal(Text& storage, std::uint32_t value) {
     constexpr auto decimal_digits = std::numeric_limits<std::uint32_t>::digits10 + 1;
-    std::array<char, decimal_digits> digits{};
-    const auto result = std::to_chars(digits.data(), digits.data() + digits.size(), value);
+    ds::Array<char, decimal_digits> digits{};
+    const auto result = std::to_chars(digits.dataMut(), digits.dataMut() + digits.size(), value);
 
     append(storage, {digits.data(), static_cast<std::size_t>(result.ptr - digits.data())});
   }

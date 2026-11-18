@@ -9,6 +9,7 @@ import telar.platform.net;
 import telar.platform.error;
 import telar.wire.vocabulary;
 import telar.wire.runtime;
+import telar.base.ds;
 
 namespace telar::runtime::cli {
 
@@ -52,10 +53,10 @@ namespace telar::runtime::cli {
     }
 
     client_.send(RuntimeStop{});
-    std::array<Byte, 2048> incoming;
-    const auto response = client_.receiveFrame(incoming);
-    std::array<Byte, 2048> decoded;
-    DecodeStorage storage{decoded};
+    ds::Array<Byte, 2048> incoming;
+    const auto response = client_.receiveFrame(incoming.viewMut());
+    ds::Array<Byte, 2048> decoded;
+    DecodeStorage storage{decoded.viewMut()};
 
     if (!response.empty() && response.front() == static_cast<Byte>(ServerTag::request_failed)) {
       const auto failure = Codec::decode<RequestFailed>(response, storage);
@@ -74,10 +75,10 @@ namespace telar::runtime::cli {
     };
 
     [[noreturn]] void relay(RelayDirection direction) noexcept {
-      std::array<Byte, 64 * 1024> buffer;
+      ds::Array<Byte, 64 * 1024> buffer;
 
       for (;;) {
-        const auto count = ::read(direction.source, buffer.data(), buffer.size());
+        const auto count = ::read(direction.source, buffer.dataMut(), buffer.size());
         if (count < 0 && sys::lastError() == EINTR) {
           continue;
         }

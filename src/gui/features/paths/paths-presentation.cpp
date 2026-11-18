@@ -205,7 +205,7 @@ namespace telar::gui::features::paths {
 
   void PathLabel::push(tbc::view<PathLabelRun, tbc::lt::a> run) noexcept {
     if (count_ < runs_.size()) {
-      runs_[count_++] = run;
+      runs_.atMut(count_++) = run;
     }
   }
 
@@ -324,7 +324,7 @@ namespace telar::gui::features::paths {
     for (std::size_t offset = 0; offset < count; ++offset) {
       const auto row = placement.flipped ? row_area.height - 1 - offset : offset;
 
-      result.rows[offset] = {.bounds = {.x = row_area.x, .y = static_cast<std::uint16_t>(row_area.y + row), .width = row_area.width, .height = 1}, .index = first + offset};
+      result.rows.atMut(offset) = {.bounds = {.x = row_area.x, .y = static_cast<std::uint16_t>(row_area.y + row), .width = row_area.width, .height = 1}, .index = first + offset};
     }
 
     result.row_count = count;

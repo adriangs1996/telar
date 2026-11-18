@@ -17,6 +17,7 @@ import std;
 import telar.tbc;
 import telar.base.text.utf8;
 import telar.gui.foundation.terminal;
+import telar.base.ds;
 
 namespace telar::gui::inline foundation::inline fonts {
   namespace {
@@ -193,10 +194,10 @@ namespace telar::gui::inline foundation::inline fonts {
 
     const auto master = variationMaster(library_.get(), face_.get());
     const auto axes = std::span{master->axis, master->num_axis};
-    std::array<FT_Fixed, telar_font_max_axes> coordinates{};
+    ds::Array<FT_Fixed, telar_font_max_axes> coordinates{};
 
     for (std::size_t index = 0; index < axes.size(); ++index) {
-      coordinates[index] = axes[index].def;
+      coordinates.atMut(index) = axes[index].def;
     }
 
     for (std::size_t index = 0; index < variation.count; ++index) {
@@ -212,10 +213,10 @@ namespace telar::gui::inline foundation::inline fonts {
         throw std::invalid_argument{"FontVariationOutOfRange"};
       }
 
-      coordinates[static_cast<std::size_t>(found - axes.begin())] = static_cast<FT_Fixed>(std::round(fixed));
+      coordinates.atMut(static_cast<std::size_t>(found - axes.begin())) = static_cast<FT_Fixed>(std::round(fixed));
     }
 
-    if (FT_Set_Var_Design_Coordinates(face_.get(), master->num_axis, coordinates.data()) != 0) {
+    if (FT_Set_Var_Design_Coordinates(face_.get(), master->num_axis, coordinates.dataMut()) != 0) {
       throw std::runtime_error{"FontVariationFailed"};
     }
   }
@@ -226,8 +227,8 @@ namespace telar::gui::inline foundation::inline fonts {
     }
 
     const auto master = variationMaster(library_.get(), face_.get());
-    std::array<FT_Fixed, telar_font_max_axes> coordinates{};
-    if (FT_Get_Var_Design_Coordinates(face_.get(), master->num_axis, coordinates.data()) != 0) {
+    ds::Array<FT_Fixed, telar_font_max_axes> coordinates{};
+    if (FT_Get_Var_Design_Coordinates(face_.get(), master->num_axis, coordinates.dataMut()) != 0) {
       throw std::runtime_error{"FontVariationFailed"};
     }
 
@@ -271,11 +272,11 @@ namespace telar::gui::inline foundation::inline fonts {
       return;
     }
 
-    auto* found = std::ranges::find(sizes_, pixel_height, &SizeEntry::height);
-    if (found == sizes_.end()) {
+    auto* found = std::ranges::find(sizes_.dataMut(), sizes_.dataMut() + sizes_.size(), pixel_height, &SizeEntry::height);
+    if (found == sizes_.dataMut() + sizes_.size()) {
       auto candidate = createSize(pixel_height);
 
-      found = sizes_.begin() + static_cast<std::ptrdiff_t>(next_size_slot_);
+      found = sizes_.dataMut() + static_cast<std::ptrdiff_t>(next_size_slot_);
       *found = {.height = pixel_height, .handle = std::move(candidate)};
       next_size_slot_ = (next_size_slot_ + 1) % sizes_.size();
     }
@@ -345,7 +346,7 @@ namespace telar::gui::inline foundation::inline fonts {
 
   GlyphBitmapView Face::rasterize(GlyphRasterRequest request) {
     selectSize(request.pixel_height);
-    constexpr std::array<FT_Int32, 3> load_flags{FT_LOAD_DEFAULT, FT_LOAD_TARGET_LIGHT, FT_LOAD_FORCE_AUTOHINT};
+    constexpr ds::Array<FT_Int32, 3> load_flags{FT_LOAD_DEFAULT, FT_LOAD_TARGET_LIGHT, FT_LOAD_FORCE_AUTOHINT};
     if (FT_Load_Glyph(face_.get(), request.index, load_flags.at(static_cast<std::size_t>(request.hinting))) != 0) {
       throw std::runtime_error{"GlyphLoadFailed"};
     }

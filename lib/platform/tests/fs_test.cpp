@@ -27,10 +27,10 @@ namespace {
   using namespace telar::runtime;
 
   void testPrivateDirectory() {
-    std::array<char, 64> temporary{};
+    ds::Array<char, 64> temporary{};
 
-    std::strcpy(temporary.data(), "/tmp/telar-cli-test-XXXXXX");
-    check(::mkdtemp(temporary.data()) != nullptr);
+    std::strcpy(temporary.dataMut(), "/tmp/telar-cli-test-XXXXXX");
+    check(::mkdtemp(temporary.dataMut()) != nullptr);
     const std::string root = temporary.data();
     const auto path = root + "/parent/child";
 
@@ -122,7 +122,7 @@ namespace {
 
     std::filesystem::create_directories(inner);
     const FileDescriptor directory{::open(inner.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
-    const std::array<std::uint8_t, 3> bytes{'k', 'e', 'y'};
+    const ds::Array<std::uint8_t, 3> bytes{'k', 'e', 'y'};
     const std::string too_long(NAME_MAX + 1, 'a');
 
     check(static_cast<bool>(directory));
@@ -255,9 +255,9 @@ namespace {
     check(relative(memory, "./b/../c", "/a") == "/a/c");
     check(relative(memory, "/abs/../path", "/a") == "/abs/../path");
 
-    std::array<char, PATH_MAX> current{};
+    ds::Array<char, PATH_MAX> current{};
 
-    check(::getcwd(current.data(), current.size()) != nullptr);
+    check(::getcwd(current.dataMut(), current.size()) != nullptr);
     String<SystemAllocator> path{"rel", AllocatorRef<char, SystemAllocator>{memory}};
 
     resolveAbsolutePath(path);

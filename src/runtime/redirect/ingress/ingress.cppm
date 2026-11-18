@@ -130,8 +130,8 @@ export {
       Connection take();
 
     private:
-      std::array<Byte, Protocol::frame_bytes> bytes_{};
-      std::array<FileDescriptor, Protocol::descriptor_count> sockets_;
+      ds::Array<Byte, Protocol::frame_bytes> bytes_{};
+      ds::Array<FileDescriptor, Protocol::descriptor_count> sockets_;
       std::size_t size_ = 0;
       std::size_t received_ = 0;
     };
@@ -195,16 +195,16 @@ export {
       }
 
       inline void step() {
-        std::array<pollfd, maximum_peers + 2> descriptors{};
+        ds::Array<pollfd, maximum_peers + 2> descriptors{};
 
-        descriptors[0] = {.fd = listener_.descriptor(), .events = POLLIN, .revents = 0};
-        descriptors[1] = {.fd = wake_.descriptor(), .events = POLLIN, .revents = 0};
+        descriptors.atMut(0) = {.fd = listener_.descriptor(), .events = POLLIN, .revents = 0};
+        descriptors.atMut(1) = {.fd = wake_.descriptor(), .events = POLLIN, .revents = 0};
         for (std::size_t index = 0; index < peers_.size(); ++index) {
-          descriptors[index + 2] = {.fd = peers_[index] ? peers_[index]->socket.get() : -1, .events = POLLIN, .revents = 0};
+          descriptors.atMut(index + 2) = {.fd = peers_[index] ? peers_[index]->socket.get() : -1, .events = POLLIN, .revents = 0};
         }
 
         constexpr int poll_ms = 100;
-        if (::poll(descriptors.data(), descriptors.size(), poll_ms) < 0 && sys::lastError() != EINTR) {
+        if (::poll(descriptors.dataMut(), descriptors.size(), poll_ms) < 0 && sys::lastError() != EINTR) {
           throw SystemError{"Poll redirected socket ingress"};
         }
 
@@ -217,7 +217,7 @@ export {
         }
 
         if (stop_requested_.exchange(false, std::memory_order_acq_rel)) {
-          for (auto& peer : peers_) {
+          for (auto& peer : peers_.viewMut()) {
             if (peer && peer->monitor) {
               status_.store(MonitorState::stopping, std::memory_order_release);
               if (::send(peer->socket.get(), &stop_request, 1, 0) != 1) {
@@ -233,7 +233,7 @@ export {
         }
 
         for (std::size_t index = 0; index < peers_.size(); ++index) {
-          auto& peer = peers_[index];
+          auto& peer = peers_.atMut(index);
           if (!peer) {
             continue;
           }
@@ -253,8 +253,8 @@ export {
 
                 peer.getMut().monitor = true;
                 status_.store(MonitorState::starting, std::memory_order_release);
-                std::array<Byte, sizeof(std::uint32_t)> reply;
-                plugins::FrameWriter writer{reply};
+                ds::Array<Byte, sizeof(std::uint32_t)> reply;
+                plugins::FrameWriter writer{reply.viewMut()};
 
                 writer.integer(static_cast<std::uint32_t>(::geteuid()));
                 close = ::send(peer->socket.get(), reply.data(), reply.size(), 0) != static_cast<ssize_t>(reply.size());
@@ -327,7 +327,7 @@ export {
           return;
         }
 
-        for (auto& peer : peers_) {
+        for (auto& peer : peers_.viewMut()) {
           if (!peer) {
             peer.emplace();
             peer.getMut().socket = std::move(socket);
@@ -340,7 +340,7 @@ export {
       LocalListener listener_;
       Sink& sink_;
       CompletionSignal wake_;
-      std::array<ds::Option<Peer>, maximum_peers> peers_;
+      ds::Array<ds::Option<Peer>, maximum_peers> peers_;
       std::atomic<bool> stopping_{false};
       std::atomic<bool> stop_requested_{false};
       std::atomic<MonitorState> status_{MonitorState::idle};
@@ -373,8 +373,8 @@ export {
           throw std::invalid_argument{"Redirect requires 1..16 destinations"};
         }
 
-        std::array<Pending, Target::maximum_targets> pending;
-        std::array<ds::Option<Target>, Target::maximum_targets> numeric_targets;
+        ds::Array<Pending, Target::maximum_targets> pending;
+        ds::Array<ds::Option<Target>, Target::maximum_targets> numeric_targets;
         CompletionSignal signal;
         typename Resolutions::Notifications notifications{signal};
         std::size_t remaining = 0;
@@ -394,13 +394,13 @@ export {
               throw std::invalid_argument{"Duplicate redirect destination"};
             }
 
-            numeric_targets[index] = target;
+            numeric_targets.atMut(index) = target;
             append(target);
             continue;
           }
 
-          pending[index].port = authority.port;
-          pending[index].ticket = Resolutions::request(host);
+          pending.atMut(index).port = authority.port;
+          pending.atMut(index).ticket = Resolutions::request(host);
           if (!pending[index].ticket) {
             throw SystemError{"Redirect hostname resolver is at capacity", EAGAIN};
           }
@@ -410,7 +410,7 @@ export {
 
         while (remaining != 0) {
           check(cancelled, deadline);
-          for (auto& item : pending) {
+          for (auto& item : pending.viewMut()) {
             if (!item.ticket) {
               continue;
             }
@@ -468,24 +468,24 @@ export {
 
       inline void append(const NetworkAddress& address, std::uint16_t port) {
         const auto family = address.storage.ss_family;
-        std::array<char, INET6_ADDRSTRLEN> host{};
+        ds::Array<char, INET6_ADDRSTRLEN> host{};
 
         if (family == AF_INET) {
-          if (address.length != sizeof(sockaddr_in) || !::inet_ntop(AF_INET, &reinterpret_cast<const sockaddr_in*>(&address.storage)->sin_addr, host.data(), host.size())) {
+          if (address.length != sizeof(sockaddr_in) || !::inet_ntop(AF_INET, &reinterpret_cast<const sockaddr_in*>(&address.storage)->sin_addr, host.dataMut(), host.size())) {
             throw std::invalid_argument{"Invalid resolved IPv4 destination"};
           }
         } else if (family == AF_INET6) {
           const auto& v6 = *reinterpret_cast<const sockaddr_in6*>(&address.storage);
-          if (address.length != sizeof(sockaddr_in6) || v6.sin6_scope_id != 0 || !::inet_ntop(AF_INET6, &v6.sin6_addr, host.data(), host.size())) {
+          if (address.length != sizeof(sockaddr_in6) || v6.sin6_scope_id != 0 || !::inet_ntop(AF_INET6, &v6.sin6_addr, host.dataMut(), host.size())) {
             throw std::invalid_argument{"Invalid resolved IPv6 destination"};
           }
         } else {
           throw std::invalid_argument{"Resolved destination must use IP"};
         }
 
-        std::array<char, maximum_argument_bytes> text{};
+        ds::Array<char, maximum_argument_bytes> text{};
 
-        std::snprintf(text.data(), text.size(), family == AF_INET6 ? "[%s]:%u" : "%s:%u", host.data(), static_cast<unsigned>(port));
+        std::snprintf(text.dataMut(), text.size(), family == AF_INET6 ? "[%s]:%u" : "%s:%u", host.data(), static_cast<unsigned>(port));
         append(Target::parse(text.data()));
       }
 
@@ -500,16 +500,16 @@ export {
           throw std::invalid_argument{"Resolved redirect selection exceeds 16 destinations"};
         }
 
-        std::array<char, maximum_argument_bytes> argument{};
+        ds::Array<char, maximum_argument_bytes> argument{};
         const auto host = target.host.view();
 
-        std::snprintf(argument.data(), argument.size(), target.endpoint.storage.ss_family == AF_INET6 ? "[%.*s]:%u" : "%.*s:%u", static_cast<int>(host.size()), host.data(), static_cast<unsigned>(target.port));
-        targets_[count_] = target;
-        arguments_[count_++].assign(argument.data());
+        std::snprintf(argument.dataMut(), argument.size(), target.endpoint.storage.ss_family == AF_INET6 ? "[%.*s]:%u" : "%.*s:%u", static_cast<int>(host.size()), host.data(), static_cast<unsigned>(target.port));
+        targets_.atMut(count_) = target;
+        arguments_.atMut(count_++).assign(argument.data());
       }
 
-      std::array<Target, Target::maximum_targets> targets_;
-      std::array<FixedText<maximum_argument_bytes>, Target::maximum_targets> arguments_;
+      ds::Array<Target, Target::maximum_targets> targets_;
+      ds::Array<FixedText<maximum_argument_bytes>, Target::maximum_targets> arguments_;
       std::size_t count_ = 0;
     };
 

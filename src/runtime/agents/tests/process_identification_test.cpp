@@ -198,7 +198,7 @@ namespace {
     std::filesystem::create_hard_link(executable.c_str(), directory / "claude");
     const auto codex = (directory / "codex").string();
     const auto claude = (directory / "claude").string();
-    const std::array<std::string_view, 6> arguments{"/bin/sh", "-c", "\"$1\" --process-identification-fixture & \"$2\" --process-identification-fixture & wait", "fixture", codex, claude};
+    const ds::Array<std::string_view, 6> arguments{"/bin/sh", "-c", "\"$1\" --process-identification-fixture & \"$2\" --process-identification-fixture & wait", "fixture", codex, claude};
     Command command{memory, Launch{.cwd = "/", .arguments = arguments}, CommandPurpose::administration};
     PipeProcess process{command.specification({})};
     ProcessInspector inspector;
@@ -227,8 +227,8 @@ namespace {
     ProcessProbe probe{inspector};
     ProcessProbe<ProcessInspector>::Request request;
 
-    request.panes[0] = {.pane = 1, .generation = 2, .root = process.processId(), .foreground = process.processId(), .recheck = true};
-    request.panes[0].cache.update(process.processId(), selected_codex, false);
+    request.panes.atMut(0) = {.pane = 1, .generation = 2, .root = process.processId(), .foreground = process.processId(), .recheck = true};
+    request.panes.atMut(0).cache.update(process.processId(), selected_codex, false);
     request.count = 1;
     const auto result = probe.observe(request);
 
@@ -278,25 +278,25 @@ namespace {
     ProcessProbe probe{inspector};
     ProcessProbe<LeaderlessGroupInspector>::Request request;
 
-    request.panes[0] = {.pane = 1, .generation = 1, .root = 10, .foreground = 20};
+    request.panes.atMut(0) = {.pane = 1, .generation = 1, .root = 10, .foreground = 20};
     request.count = 1;
     auto result = probe.observe(request);
 
     check(result.count == 1 && result.panes[0].provider == AgentProvider::claude);
     check(result.panes[0].identity->pid == 20 && result.panes[0].agent_identity->pid == 21);
     check(!result.panes[0].shell_foreground);
-    request.panes[0].cache = result.panes[0].cache;
+    request.panes.atMut(0).cache = result.panes[0].cache;
     result = probe.observe(request);
     check(result.count == 1 && !result.panes[0].inspected && inspector.identifications == 1);
     check(!result.panes[0].ports_inspected && result.panes[0].ports.count == 0);
-    request.panes[0].ports = true;
+    request.panes.atMut(0).ports = true;
     result = probe.observe(request);
     check(result.panes[0].ports_inspected && result.panes[0].ports.view().size() == 1 && result.panes[0].ports.view().front() == 3000);
-    request.panes[0].ports = false;
-    request.panes[0].recheck = true;
+    request.panes.atMut(0).ports = false;
+    request.panes.atMut(0).recheck = true;
     check(probe.observe(request).panes[0].inspected && inspector.identifications == 2);
-    request.panes[0].foreground = 0;
-    request.panes[0].discover_foreground = true;
+    request.panes.atMut(0).foreground = 0;
+    request.panes.atMut(0).discover_foreground = true;
     result = probe.observe(request);
     check(result.count == 1 && result.panes[0].request.foreground == 20);
     check(result.panes[0].identity->pid == 20 && result.panes[0].agent_identity->pid == 21);
@@ -309,7 +309,7 @@ namespace {
       ports.add(port);
     }
 
-    check(std::ranges::equal(ports.view(), std::array<std::uint16_t, 4>{22, 3000, 5173, 8080}));
+    check(std::ranges::equal(ports.view(), ds::Array<std::uint16_t, 4>{22, 3000, 5173, 8080}));
   }
 
   // The runtime's own process group holds a socket listening on an ephemeral port.
@@ -337,7 +337,7 @@ namespace {
   }
 
   void testTerminalForegroundSnapshot(SystemAllocator& memory) {
-    const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", "PS1='READY> '; export PS1; ENV=/dev/null; export ENV; exec /bin/sh -i"};
+    const ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", "PS1='READY> '; export PS1; ENV=/dev/null; export ENV; exec /bin/sh -i"};
     Command command{memory, Launch{.cwd = "/", .arguments = arguments}};
     PtyProcess process{command.specification({80, 24, 0, 0})};
     ProcessInspector inspector;
@@ -345,8 +345,8 @@ namespace {
     std::string output;
 
     while (!output.contains("READY> ")) {
-      std::array<char, 256> bytes;
-      const auto count = ::read(process.descriptor(), bytes.data(), bytes.size());
+      ds::Array<char, 256> bytes;
+      const auto count = ::read(process.descriptor(), bytes.dataMut(), bytes.size());
       if (count > 0) {
         output.append(bytes.data(), static_cast<std::size_t>(count));
       } else {
@@ -368,7 +368,7 @@ namespace {
           ProcessProbe probe{inspector};
           ProcessProbe<ProcessInspector>::Request request;
 
-          request.panes[0] = {.pane = 1, .generation = 1, .root = process.processId(), .discover_foreground = true};
+          request.panes.atMut(0) = {.pane = 1, .generation = 1, .root = process.processId(), .discover_foreground = true};
           request.count = 1;
           const auto result = probe.observe(request);
 
@@ -405,10 +405,10 @@ namespace {
 
   void testProcessIdentification() {
     SystemAllocator memory;
-    std::array<char, 64> temporary;
+    ds::Array<char, 64> temporary;
 
-    std::strcpy(temporary.data(), "/tmp/telar-process-test-XXXXXX");
-    check(::mkdtemp(temporary.data()) != nullptr);
+    std::strcpy(temporary.dataMut(), "/tmp/telar-process-test-XXXXXX");
+    check(::mkdtemp(temporary.dataMut()) != nullptr);
     const std::filesystem::path root{temporary.data()};
 
     testHookSettings(root);

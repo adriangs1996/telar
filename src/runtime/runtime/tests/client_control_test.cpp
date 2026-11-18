@@ -62,6 +62,7 @@ import telar.runtime.plugins.service;
 import telar.runtime.runtime.execution_service;
 import telar.runtime.transport.connection;
 import telar.runtime.vocabulary.traffic;
+import telar.base.ds;
 #if (TELAR_DIAGNOSTICS)
 import telar.runtime.runtime.runtime_telemetry;
 #endif
@@ -153,7 +154,7 @@ namespace {
     PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/response-capacity.sock"}};
     WorkspaceService<decltype(poller)> workspaces{memory};
     ClientPeer owner{memory, model, clients, ClientRole::interactive};
-    const std::array<std::string_view, 1> arguments{"/bin/cat"};
+    const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
 
     workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 1, .size = {80, 24, 0, 0}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
     const auto opened = owner.receive<PaneOpened>();
@@ -280,7 +281,7 @@ namespace {
 
     workspace->tabs.emplace_back(memory, 1, "Shell");
     const TabLocation location{WorkspaceLocation{.id = workspace_id}, 1};
-    const std::array<std::string_view, 1> arguments{"/bin/cat"};
+    const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
     Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
     const auto pane_id = model.panes.nextId();
     auto pane = makeOwned<Pane>(memory, memory, pane_id, location, command, PaneLaunch{TerminalSize{80, 24, 0, 0}, model.media_budget, model.graphics_limits});
@@ -307,14 +308,14 @@ namespace {
     check(requester.receive<PaneFocusResult>().focused_pane_id == pane_id);
     check(requester.session().connection.closing);
 
-    std::array<ClientLayoutNode, 1> nodes{ClientLayoutPane{pane_id}};
-    std::array<ClientTabLayout, 1> tabs{ClientTabLayout{.location = location, .focused_pane = pane_id, .workspace_active = true, .nodes = nodes}};
+    ds::Array<ClientLayoutNode, 1> nodes{ClientLayoutPane{pane_id}};
+    ds::Array<ClientTabLayout, 1> tabs{ClientTabLayout{.location = location, .focused_pane = pane_id, .workspace_active = true, .nodes = nodes}};
     UpdateClientLayout update{.sidebar_visible = true, .sidebar_width = 35, .active_tab = location, .tabs = tabs};
 
     update.validate();
     layouts.retain(model, target.session().identity, update);
     check(layouts.focusedPane(target.session().identity) == pane_id);
-    nodes[0] = ClientLayoutPane{999};
+    nodes.atMut(0) = ClientLayoutPane{999};
     layouts.publish(model, reconnect.session());
     const auto restored = reconnect.receive<ClientLayoutSnapshot>();
 
@@ -365,7 +366,7 @@ namespace {
 
     for (const auto& invalid : {NotificationBody{.duration_ms = 499, .title = "invalid"}, NotificationBody{.duration_ms = 60001, .title = "invalid"}, NotificationBody{.title = ""}, NotificationBody{.title = "line\nbreak"}, NotificationBody{.title = "\xff"}}) {
       events.batch.count = 1;
-      events.batch.notifications[0] = invalid;
+      events.batch.notifications.atMut(0) = invalid;
       delivery.collect(clients, events);
       check(!target.session().connection.hasOutput());
     }
@@ -376,8 +377,8 @@ namespace {
     const std::string oversized_message(maximum_message.size() + 1, 'x');
 
     events.batch.count = 2;
-    events.batch.notifications[0] = NotificationBody{.title = "valid", .message = oversized_message};
-    events.batch.notifications[1] = NotificationBody{.title = "valid", .message = maximum_message};
+    events.batch.notifications.atMut(0) = NotificationBody{.title = "valid", .message = oversized_message};
+    events.batch.notifications.atMut(1) = NotificationBody{.title = "valid", .message = maximum_message};
     delivery.collect(clients, events);
     check(target.receive<Notification>().message == maximum_message);
     check(!target.session().connection.hasOutput());

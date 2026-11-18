@@ -61,8 +61,8 @@ namespace {
     static QByteArray framedMessage(const Message& message) {
       std::vector<Byte> storage(Codec::encodedSize(message));
       const auto payload = textView(Codec::encode(message, storage));
-      std::array<Byte, frame_prefix_size> prefix{};
-      std::span<Byte> output{prefix};
+      ds::Array<Byte, frame_prefix_size> prefix{};
+      std::span<Byte> output{prefix.viewMut()};
 
       u32::encode(static_cast<std::uint32_t>(payload.size()), output);
       const auto prefix_text = textView(std::span<const Byte>{prefix});
@@ -129,7 +129,7 @@ namespace {
       connection.send(open);
       QCOMPARE(readWithoutSenderEvents(*peer, expected.size()), expected);
 
-      constexpr std::array<Byte, 3> bytes{'o', 'k', '\n'};
+      constexpr ds::Array<Byte, 3> bytes{'o', 'k', '\n'};
       const PaneInput input{.pane_id = 7, .bytes = bytes};
 
       connection.send(input);
@@ -278,8 +278,8 @@ namespace {
       const std::unique_ptr<QLocalSocket> peer{listener.nextPendingConnection()};
 
       QVERIFY(peer != nullptr);
-      std::array<Byte, frame_prefix_size> prefix{};
-      std::span<Byte> output{prefix};
+      ds::Array<Byte, frame_prefix_size> prefix{};
+      std::span<Byte> output{prefix.viewMut()};
 
       u32::encode(length, output);
       const auto bytes = textView(std::span<const Byte>{prefix});
@@ -423,8 +423,8 @@ namespace {
 
     static QByteArray framedHello(const SchemaId& schema) {
       const auto payload = HandshakeCodec::encode(ClientHello{.schema = schema});
-      std::array<Byte, frame_prefix_size> prefix{};
-      std::span<Byte> output{prefix};
+      ds::Array<Byte, frame_prefix_size> prefix{};
+      std::span<Byte> output{prefix.viewMut()};
 
       u32::encode(static_cast<std::uint32_t>(payload.size()), output);
       const auto prefix_text = textView(std::span<const Byte>{prefix});
@@ -503,8 +503,8 @@ namespace {
     }
 
     static bool sendPayload(QLocalSocket& peer, QByteArrayView payload) {
-      std::array<Byte, frame_prefix_size> prefix{};
-      std::span<Byte> output{prefix};
+      ds::Array<Byte, frame_prefix_size> prefix{};
+      std::span<Byte> output{prefix.viewMut()};
 
       u32::encode(static_cast<std::uint32_t>(payload.size()), output);
 

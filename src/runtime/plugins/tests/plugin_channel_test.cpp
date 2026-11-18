@@ -18,6 +18,7 @@ import telar.platform.error;
 import telar.platform.net;
 import telar.plugins;
 import telar.runtime.vocabulary.traffic;
+import telar.base.ds;
 
 namespace {
 
@@ -91,8 +92,8 @@ namespace {
     }
 
     for (std::uint32_t length : {0u, static_cast<std::uint32_t>(tap::Limits::frame_bytes + 1)}) {
-      std::array<Byte, 4> prefix;
-      std::span<Byte> destination{prefix};
+      ds::Array<Byte, 4> prefix;
+      std::span<Byte> destination{prefix.viewMut()};
 
       LittleEndian<std::uint32_t>::encode(length, destination);
       FragmentedPipe input{prefix, 1};
@@ -108,7 +109,7 @@ namespace {
       check(rejected && memory.liveBytes() == 0);
     }
 
-    const std::array<Byte, 6> truncated{4, 0, 0, 0, 1, 2};
+    const ds::Array<Byte, 6> truncated{4, 0, 0, 0, 1, 2};
     FragmentedPipe input{truncated, 1};
     tap::FrameChannel reader{input};
     bool rejected = false;

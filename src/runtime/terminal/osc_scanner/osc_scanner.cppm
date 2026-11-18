@@ -97,7 +97,7 @@ export {
       State state_ = State::ground;
       std::uint16_t parameter_ = 0;
       bool has_parameter_ = false;
-      std::array<char, maximum_typed_bytes> typed_;
+      ds::Array<char, maximum_typed_bytes> typed_;
       std::size_t typed_length_ = 0;
       bool typed_exact_ = true;
     };
@@ -164,7 +164,7 @@ export {
       static constexpr std::size_t inline_bytes = 2048;
       static constexpr std::size_t maximum_bytes = PtyResponseQueue::total_byte_capacity;
       static constexpr std::size_t header_bytes = sizeof(std::uint16_t);
-      std::array<std::uint8_t, inline_bytes> inline_;
+      ds::Array<std::uint8_t, inline_bytes> inline_;
       Vector<std::uint8_t, Memory> overflow_;
       std::shared_ptr<PtyResponseQueue> queue_;
       std::size_t size_ = 0;
@@ -214,9 +214,9 @@ export {
       static constexpr std::size_t maximum_columns = 512;
       static constexpr std::size_t rows_per_turn = 32;
       static constexpr auto deadline_budget = std::chrono::milliseconds{(maximum_rows + rows_per_turn - 1) / rows_per_turn};
-      std::array<std::uint32_t, 128> needle_{};
-      std::array<std::size_t, 128> prefix_{};
-      std::array<PaneMatch, 256> matches_{};
+      ds::Array<std::uint32_t, 128> needle_{};
+      ds::Array<std::size_t, 128> prefix_{};
+      ds::Array<PaneMatch, 256> matches_{};
       Rows rows_;
       std::uint64_t revision_;
       Clock::time_point deadline_;

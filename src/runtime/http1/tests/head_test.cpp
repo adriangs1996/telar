@@ -1,6 +1,7 @@
 import std;
 import telar.testing;
 import telar.runtime.http1.head;
+import telar.base.ds;
 
 namespace {
 
@@ -16,7 +17,7 @@ namespace {
 
     // RFC 9112 5.1: a peer that rejects whitespace around a field name never reads these fields, so
     // framing the body by them would let a hidden message pass the relay.
-    const std::array whitespace{
+    const telar::ds::Array whitespace{
         Head{"POST / HTTP/1.1\r\nTransfer-Encoding : chunked\r\n\r\n", false},
         Head{"POST / HTTP/1.1\r\nContent-Length\t: 5\r\n\r\n", false},
         Head{"POST / HTTP/1.1\r\nHost: a\r\n Transfer-Encoding: chunked\r\n\r\n", false},

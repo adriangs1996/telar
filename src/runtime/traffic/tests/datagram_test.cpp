@@ -23,6 +23,7 @@ import telar.runtime.traffic.control_backend;
 import telar.vocabulary;
 import telar.runtime.traffic.control_protocol;
 import telar.runtime.vocabulary.frames;
+import telar.base.ds;
 
 namespace {
 
@@ -257,8 +258,8 @@ namespace {
 
     check(ip.hasValue());
     auto message = *DatagramCodec::parse(*ip);
-    std::array<Byte, 256> output;
-    const auto encoded = DatagramCodec::encode(output, message);
+    ds::Array<Byte, 256> output;
+    const auto encoded = DatagramCodec::encode(output.viewMut(), message);
 
     for (std::size_t size = 0; size < encoded.size(); ++size) {
       rejects([&] {
@@ -266,15 +267,15 @@ namespace {
       });
     }
 
-    message.source_address[15] = 1;
+    message.source_address.atMut(15) = 1;
     rejects([&] {
-      DatagramCodec::encode(output, message);
+      DatagramCodec::encode(output.viewMut(), message);
     });
 
-    message.source_address[15] = 0;
+    message.source_address.atMut(15) = 0;
     message.truncated = true;
     rejects([&] {
-      DatagramCodec::encode(output, message);
+      DatagramCodec::encode(output.viewMut(), message);
     });
 
     const auto icmp = packet(false, true, "body");
@@ -282,7 +283,7 @@ namespace {
     message = *DatagramCodec::parse(*IpPayload::decode(icmp));
     ++message.icmp_type;
     rejects([&] {
-      DatagramCodec::encode(output, message);
+      DatagramCodec::encode(output.viewMut(), message);
     });
   }
 
@@ -338,7 +339,7 @@ namespace {
       };
 
       const Byte family = ipv6 ? 30 : 2;
-      const std::array<std::pair<std::vector<Byte>, std::uint32_t>, 7> framings{{
+      const ds::Array<std::pair<std::vector<Byte>, std::uint32_t>, 7> framings{{
           {ethernet({}), DLT_EN10MB},
           {ethernet({0x81, 0x00, 0x00, 0x07}), DLT_EN10MB},
           {ethernet({0x88, 0xa8, 0x00, 0x05, 0x81, 0x00, 0x00, 0x07}), DLT_EN10MB},
@@ -369,11 +370,11 @@ namespace {
   void ipv6ExtensionChain(TlsTestMemory& memory) {
     const auto datagram = packet(true, false, "extensions");
     std::vector<Byte> extended{datagram.begin(), datagram.begin() + 40};
-    const std::array<Byte, 8> routing{60, 0, 0, 0, 0, 0, 0, 0};
-    const std::array<Byte, 8> options{51, 0, 1, 4, 0, 0, 0, 0};
-    std::array<Byte, 24> authentication{17, 4};
+    const ds::Array<Byte, 8> routing{60, 0, 0, 0, 0, 0, 0, 0};
+    const ds::Array<Byte, 8> options{51, 0, 1, 4, 0, 0, 0, 0};
+    ds::Array<Byte, 24> authentication{17, 4};
 
-    std::fill(authentication.begin() + 2, authentication.end(), 0xa5);
+    std::ranges::fill(authentication.viewMut().subspan(2), 0xa5);
     extended[6] = 43;
     extended.insert(extended.end(), routing.begin(), routing.end());
     extended.insert(extended.end(), options.begin(), options.end());
@@ -387,7 +388,7 @@ namespace {
     // The destination options run 16 bytes into a packet whose payload declares 8; the frame goes on
     // with a datagram after the packet, as an Ethernet trailer or the next capture bytes would.
     std::vector<Byte> overrun{datagram.begin(), datagram.begin() + 40};
-    const std::array<Byte, 16> long_options{17, 1};
+    const ds::Array<Byte, 16> long_options{17, 1};
 
     overrun[6] = 60;
     word(overrun, 4, 8);

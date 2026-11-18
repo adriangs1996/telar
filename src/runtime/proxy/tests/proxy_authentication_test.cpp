@@ -32,6 +32,7 @@ import telar.testing;
 import telar.runtime.proxy.authenticate;
 import telar.platform.error;
 import telar.config.runtime;
+import telar.base.ds;
 
 namespace {
 
@@ -62,9 +63,9 @@ namespace {
 
     check(!ProxySecret::fromHexadecimal(std::string(63, 'a')) && !ProxySecret::fromHexadecimal(std::string(64, 'g')));
 
-    std::array<char, 128> url;
+    ds::Array<char, 128> url;
 
-    check(secret->formatUrl(url, 45100) == "http://telar:" + hexadecimal + "@127.0.0.1:45100");
+    check(secret->formatUrl(url.viewMut(), 45100) == "http://telar:" + hexadecimal + "@127.0.0.1:45100");
     const std::string request = "CONNECT api.example.com:443 HTTP/1.1\r\n";
     const auto credential = authorization("telar:" + hexadecimal);
     const auto header = request + credential + "Host: api.example.com:443\r\n\r\n";
@@ -115,10 +116,10 @@ namespace {
   }
 
   void testSecretFile(Memory& memory) {
-    std::array<char, 64> path;
+    ds::Array<char, 64> path;
 
-    std::strcpy(path.data(), "/tmp/telar-proxy-secret-XXXXXX");
-    check(::mkdtemp(path.data()) != nullptr);
+    std::strcpy(path.dataMut(), "/tmp/telar-proxy-secret-XXXXXX");
+    check(::mkdtemp(path.dataMut()) != nullptr);
     FileDescriptor directory{::open(path.data(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
 
     check(directory && !ProxySecretFile::load(memory, directory.get()));

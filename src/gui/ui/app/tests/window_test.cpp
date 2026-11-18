@@ -171,7 +171,7 @@ namespace {
         qreal small_row;
       };
 
-      constexpr std::array samples{
+      constexpr telar::ds::Array samples{
           Sample{.density = 0.8, .navigation = 38, .footer = 33, .small_row = 13},
           Sample{.density = 1, .navigation = 47, .footer = 41, .small_row = 17},
           Sample{.density = 1.25, .navigation = 59, .footer = 51, .small_row = 21},
@@ -219,7 +219,7 @@ namespace {
 
     Q_SLOT static void densityChangesRemeasureAnIndependentTerminal() {
       constexpr QSize target_size{320, 240};
-      constexpr std::array scales{1.25, 2.0, 1.0};
+      constexpr telar::ds::Array scales{1.25, 2.0, 1.0};
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       ApplicationController client{memory};
@@ -278,3 +278,4 @@ namespace {
 }
 
 #include "window_test.moc"
+#include "telar_base/ds/values.hpp"

@@ -25,7 +25,7 @@ namespace telar {
       const auto capacity = (index + 1) * block_alignment;
 
       while (auto* block = available_[index]) {
-        available_[index] = block->next;
+        available_.atMut(index) = block->next;
         eraseSensitive(block, capacity);
         upstream_.deallocate(block, capacity, block_alignment);
       }
@@ -42,7 +42,7 @@ namespace telar {
     const auto capacity = (index + 1) * block_alignment;
 
     if (auto* block = available_[index]) {
-      available_[index] = block->next;
+      available_.atMut(index) = block->next;
       retained_bytes_ -= capacity;
       return block;
     }
@@ -71,7 +71,7 @@ namespace telar {
       return;
     }
 
-    available_[index] = std::construct_at(static_cast<Block*>(pointer), Block{available_[index]});
+    available_.atMut(index) = std::construct_at(static_cast<Block*>(pointer), Block{available_[index]});
     retained_bytes_ += capacity;
   }
 

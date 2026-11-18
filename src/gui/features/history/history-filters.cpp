@@ -5,6 +5,7 @@ import std;
 import telar.tbc;
 import telar.wire.vocabulary;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::features::history {
 
@@ -109,13 +110,13 @@ namespace telar::gui::features::history {
   }
 
   template <std::size_t Count>
-  float HistoryFilterGeometry::placeGroup(std::array<HistoryFilterChipGeometry, Count>& destination, Rect group, ChromeMetrics chrome, const std::array<HistoryFilterChipMeasurements, Count>& measured) noexcept {
+  float HistoryFilterGeometry::placeGroup(ds::Array<HistoryFilterChipGeometry, Count>& destination, Rect group, ChromeMetrics chrome, const ds::Array<HistoryFilterChipMeasurements, Count>& measured) noexcept {
     auto x = group.x + chrome.px(chip_inset);
 
     for (std::size_t index = 0; index < Count; ++index) {
       const auto width = HistoryFilterChipGeometry::width(chrome, measured[index]);
 
-      destination[index] = HistoryFilterChipGeometry::derive({.x = x, .y = group.y + chrome.px(chip_inset), .width = width, .height = std::max(0.0F, group.height - chrome.px(chip_inset * 2))}, chrome, measured[index]);
+      destination.atMut(index) = HistoryFilterChipGeometry::derive({.x = x, .y = group.y + chrome.px(chip_inset), .width = width, .height = std::max(0.0F, group.height - chrome.px(chip_inset * 2))}, chrome, measured[index]);
       x += width + chrome.px(chip_inset);
     }
 
@@ -162,7 +163,7 @@ namespace telar::gui::features::history {
     const auto scope_end = placeGroup(result.scopes, result.scope_group, chrome, measured.scopes);
 
     if (result.show_keys) {
-      result.keys[0] = {.x = scope_end + key_spacing, .y = y, .width = scope_key_width, .height = height};
+      result.keys.atMut(0) = {.x = scope_end + key_spacing, .y = y, .width = scope_key_width, .height = height};
     }
 
     if (!result.show_right) {
@@ -173,7 +174,7 @@ namespace telar::gui::features::history {
 
     if (result.show_keys) {
       right -= failed_key_width;
-      result.keys[2] = {.x = right + key_spacing, .y = y, .width = failed_key_width, .height = height};
+      result.keys.atMut(2) = {.x = right + key_spacing, .y = y, .width = failed_key_width, .height = height};
     }
 
     right -= failed_width;
@@ -181,7 +182,7 @@ namespace telar::gui::features::history {
     right -= gap;
     if (result.show_keys) {
       right -= author_key_width;
-      result.keys[1] = {.x = right + key_spacing, .y = y, .width = author_key_width, .height = height};
+      result.keys.atMut(1) = {.x = right + key_spacing, .y = y, .width = author_key_width, .height = height};
     }
 
     right -= author_total;

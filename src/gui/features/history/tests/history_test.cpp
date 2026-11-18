@@ -106,7 +106,7 @@ namespace {
     check(started.query == "compiler errors" && std::get<std::string_view>(started.scope_value) == "/work/project", "query plans must own borrowed query and scope bytes");
     check(started.limit == decltype(browser)::page_entries && started.offset == 0 && started.snapshot_id == 0, "new searches must begin at an unbounded first page");
 
-    const std::array first{HistoryEntry{.id = 1, .pane_id = 1, .command = "first"}, HistoryEntry{.id = 2, .pane_id = 1, .command = "second"}};
+    const ds::Array first{HistoryEntry{.id = 1, .pane_id = 1, .command = "first"}, HistoryEntry{.id = 2, .pane_id = 1, .command = "second"}};
 
     check(browser.apply(HistoryResults{.request_id = 1, .snapshot_id = 4, .has_more = true, .entries = first}), "the active page must commit");
     const auto older = browser.page(HistoryPage::older, 2);
@@ -115,7 +115,7 @@ namespace {
     check(browser.rows().size() == first.size() && browser.state().phase == HistoryPhase::loading, "pending pages must retain their visible rows");
     check(!browser.apply(HistoryResults{.request_id = 1, .snapshot_id = 4, .entries = first}), "late page replies must not unlock a newer request");
 
-    const std::array second{HistoryEntry{.id = 3, .pane_id = 1, .command = "older"}};
+    const ds::Array second{HistoryEntry{.id = 3, .pane_id = 1, .command = "older"}};
 
     check(browser.apply(HistoryResults{.request_id = 2, .snapshot_id = 4, .entries = second}), "the older page must replace the previous rows");
     check(!browser.canPage(HistoryPage::older) && browser.canPage(HistoryPage::newer), "page controls must reflect the actual page boundary");
@@ -135,7 +135,7 @@ namespace {
     Browser browser{adapted};
 
     check(!browser.choice(), "an idle browser must not offer a command choice");
-    const std::array entries{HistoryEntry{.id = 1, .command = "first"}, HistoryEntry{.id = 2, .command = "second"}};
+    const ds::Array entries{HistoryEntry{.id = 1, .command = "first"}, HistoryEntry{.id = 2, .command = "second"}};
 
     static_cast<void>(browser.begin({.request_id = 1}));
     browser.apply(HistoryResults{.request_id = 1, .snapshot_id = 1, .has_more = true, .entries = entries});
@@ -165,7 +165,7 @@ namespace {
     static_cast<void>(browser.page(HistoryPage::older, 2));
     check(!browser.choice() && !browser.acceptsRow(*selected), "loading must disable the old choice while retaining its visible rows");
     check(browser.rows().size() == entries.size(), "the pending page must preserve displayed rows");
-    const std::array replacement{HistoryEntry{.id = 3, .command = "replacement"}};
+    const ds::Array replacement{HistoryEntry{.id = 3, .command = "replacement"}};
 
     browser.apply(HistoryResults{.request_id = 2, .snapshot_id = 1, .entries = replacement});
     check(!browser.acceptsRow(*selected), "a completed page must not reuse a previous row index as a command choice");
@@ -221,13 +221,13 @@ namespace {
       Browser browser{adapter};
 
       static_cast<void>(browser.begin({.request_id = 1}));
-      const std::array initial{HistoryEntry{.id = 1, .pane_id = 1, .command = "retained"}};
+      const ds::Array initial{HistoryEntry{.id = 1, .pane_id = 1, .command = "retained"}};
 
       browser.apply(HistoryResults{.request_id = 1, .snapshot_id = 1, .entries = initial});
       static_cast<void>(browser.begin({.request_id = 2}));
       const auto live_bytes = budget.liveBytes();
       const std::string large_command(decltype(browser)::maximum_output_bytes, 'x');
-      const std::array replacement{HistoryEntry{.id = 2, .pane_id = 1, .command = large_command}};
+      const ds::Array replacement{HistoryEntry{.id = 2, .pane_id = 1, .command = large_command}};
       bool rejected = false;
 
       try {
@@ -257,7 +257,7 @@ namespace {
       Browser browser{adapter};
 
       static_cast<void>(browser.begin({.request_id = 1}));
-      const std::array entries{HistoryEntry{.id = 1, .pane_id = 1, .command = "available"}};
+      const ds::Array entries{HistoryEntry{.id = 1, .pane_id = 1, .command = "available"}};
 
       browser.apply(HistoryResults{.request_id = 1, .snapshot_id = 1, .entries = entries});
       browser.setInspecting(true);
@@ -293,7 +293,7 @@ namespace {
     Browser browser{adapted};
     std::uint64_t sequence = 0;
     const auto query = browser.begin({.request_id = ++sequence});
-    const std::array entries{HistoryEntry{.id = 1, .pane_id = 1, .command = "first"}, HistoryEntry{.id = 2, .pane_id = 1, .command = "second"}};
+    const ds::Array entries{HistoryEntry{.id = 1, .pane_id = 1, .command = "first"}, HistoryEntry{.id = 2, .pane_id = 1, .command = "second"}};
 
     browser.apply(HistoryResults{.request_id = query.request_id, .snapshot_id = 1, .entries = entries});
     browser.setInspecting(true);
@@ -342,10 +342,10 @@ namespace {
       constexpr auto command_bytes = decltype(browser)::maximum_command_bytes;
       constexpr auto first_uncached = Storage::command_cache_bytes / command_bytes;
       const std::string large_command(command_bytes, 'x');
-      std::array<HistoryEntry, decltype(browser)::page_entries> entries{};
+      ds::Array<HistoryEntry, decltype(browser)::page_entries> entries{};
 
       for (std::size_t index = 0; index < entries.size(); ++index) {
-        entries[index] = {.id = index + 1, .pane_id = 1, .command = large_command};
+        entries.atMut(index) = {.id = index + 1, .pane_id = 1, .command = large_command};
       }
 
       static_cast<void>(browser.begin({.request_id = ++sequence}));
@@ -391,13 +391,13 @@ namespace {
     constexpr auto command_bytes = decltype(browser)::maximum_command_bytes;
     constexpr auto cached_entries = Storage::command_cache_bytes / command_bytes;
     const std::string large_command(command_bytes, 'x');
-    std::array<HistoryEntry, cached_entries + 2> entries{};
+    ds::Array<HistoryEntry, cached_entries + 2> entries{};
 
     for (std::size_t index = 0; index < entries.size(); ++index) {
-      entries[index] = {.id = index + 1, .pane_id = 1, .command = large_command};
+      entries.atMut(index) = {.id = index + 1, .pane_id = 1, .command = large_command};
     }
 
-    entries.back().command_truncated = true;
+    entries.atMut(entries.size() - 1).command_truncated = true;
     static_cast<void>(browser.begin({.request_id = ++sequence}));
     browser.apply(HistoryResults{.request_id = sequence, .entries = entries});
     browser.select(entries.size() - 1);
@@ -428,7 +428,7 @@ namespace {
     std::string command(Storage::command_preview_bytes - 1, 'x');
 
     command += "🌱tail";
-    const std::array entries{HistoryEntry{.id = 1, .pane_id = 1, .command = command}};
+    const ds::Array entries{HistoryEntry{.id = 1, .pane_id = 1, .command = command}};
     telar::MemoryAdapter adapted{memory};
     Browser page{adapted};
 
@@ -450,10 +450,10 @@ namespace {
     {
       Browser browser{adapter};
       const std::string command(command_bytes, 'x');
-      std::array<HistoryEntry, cached_entries + 1> entries{};
+      ds::Array<HistoryEntry, cached_entries + 1> entries{};
 
       for (std::size_t index = 0; index < entries.size(); ++index) {
-        entries[index] = {.id = index + 1, .pane_id = 1, .command = command};
+        entries.atMut(index) = {.id = index + 1, .pane_id = 1, .command = command};
       }
 
       static_cast<void>(browser.begin({.request_id = 1}));
@@ -485,25 +485,25 @@ namespace {
       std::string_view expected;
     };
 
-    constexpr auto examples = std::to_array<Example>({
+    constexpr auto examples = ds::Array<Example, 5>{{
         {.input = "\x1b[31mfail\x1b[0m\r\n", .expected = "fail\n"},
         {.input = "before\x1b]52;c;hidden\aafter", .expected = "beforeafter"},
         {.input = "a\x1bPpayload\x1b\\b\x1bXhidden\x1b\\c\x1b^private\ad\x1b_graphics\x1b\\e", .expected = "abcde"},
         {.input = "a\x1b(Bb\x1b[12;", .expected = "ab"},
         {.input = "café\t🌱\n", .expected = "café\t🌱\n"},
-    });
+    }};
 
     constexpr std::size_t output_capacity = 128;
-    std::array<char, output_capacity> output{};
+    ds::Array<char, output_capacity> output{};
 
     for (const auto& example : examples) {
-      const auto written = PlainText::strip(byteView(example.input), output);
+      const auto written = PlainText::strip(byteView(example.input), output.viewMut());
 
       check(std::string_view{output.data(), written} == example.expected, "terminal control stripping must match the original scanner fixtures");
     }
 
     constexpr std::size_t bounded_capacity = 3;
-    const auto written = PlainText::strip(byteView("abcdef"), std::span{output}.first(bounded_capacity));
+    const auto written = PlainText::strip(byteView("abcdef"), output.viewMut().first(bounded_capacity));
 
     check(std::string_view{output.data(), written} == "abc" && PlainText::strip(byteView("text"), {}) == 0, "plain text output must respect empty and bounded destinations");
   }

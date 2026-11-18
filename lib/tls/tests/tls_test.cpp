@@ -38,6 +38,7 @@ import telar.tls.tests.tls_fixture;
 import telar.platform.error;
 import telar.platform.fs;
 import telar.tls;
+import telar.base.ds;
 
 namespace {
 
@@ -80,9 +81,9 @@ namespace {
     OPENSSL_free(expanded);
     check(OPENSSL_malloc(std::numeric_limits<std::size_t>::max()) == nullptr);
 
-    std::array<std::thread, 4> workers;
+    ds::Array<std::thread, 4> workers;
 
-    for (auto& worker : workers) {
+    for (auto& worker : workers.viewMut()) {
       worker = std::thread{[] {
         for (unsigned index = 0; index < 256; ++index) {
           void* allocation = OPENSSL_malloc(index + 1);
@@ -95,7 +96,7 @@ namespace {
       }};
     }
 
-    for (auto& worker : workers) {
+    for (auto& worker : workers.viewMut()) {
       worker.join();
     }
   }

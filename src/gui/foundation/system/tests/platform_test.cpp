@@ -18,6 +18,7 @@ import telar.platform.primitives;
 import telar.gui.foundation.system;
 import telar.platform.net;
 import telar.platform.fs;
+import telar.base.ds;
 
 namespace {
 
@@ -122,9 +123,9 @@ namespace {
   }
 
   void peerCredentials() {
-    std::array<int, 2> descriptors{};
+    telar::ds::Array<int, 2> descriptors{};
 
-    check(::socketpair(AF_UNIX, SOCK_STREAM, 0, descriptors.data()) == 0, "create peer credential fixture");
+    check(::socketpair(AF_UNIX, SOCK_STREAM, 0, descriptors.dataMut()) == 0, "create peer credential fixture");
     const auto valid = telar::gui::system::isCurrentUser(descriptors[0]);
 
     ::close(descriptors[0]);

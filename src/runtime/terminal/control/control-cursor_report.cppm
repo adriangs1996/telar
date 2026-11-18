@@ -8,6 +8,7 @@ import std;
 import telar.base.memory.allocators;
 import :reply;
 import :vt_state;
+import telar.base.ds;
 
 export namespace telar::runtime::control {
 
@@ -15,8 +16,8 @@ export namespace telar::runtime::control {
   template <Allocator Memory>
   TBC_GENERIC void cursorReport(Reply<Memory>& reply, Position position, bool extended) {
     constexpr std::size_t maximum_cursor_reply = 32;
-    std::array<char, maximum_cursor_reply> encoded;
-    auto* next = encoded.data();
+    ds::Array<char, maximum_cursor_reply> encoded;
+    auto* next = encoded.dataMut();
 
     *next++ = '\x1b';
     *next++ = '[';
@@ -24,12 +25,12 @@ export namespace telar::runtime::control {
       *next++ = '?';
     }
 
-    const auto row = std::to_chars(next, encoded.data() + encoded.size(), static_cast<unsigned>(position.row) + 1);
+    const auto row = std::to_chars(next, encoded.dataMut() + encoded.size(), static_cast<unsigned>(position.row) + 1);
 
     TELAR_ASSERT(row.ec == std::errc{});
     next = row.ptr;
     *next++ = ';';
-    const auto column = std::to_chars(next, encoded.data() + encoded.size(), static_cast<unsigned>(position.column) + 1);
+    const auto column = std::to_chars(next, encoded.dataMut() + encoded.size(), static_cast<unsigned>(position.column) + 1);
 
     TELAR_ASSERT(column.ec == std::errc{});
     next = column.ptr;

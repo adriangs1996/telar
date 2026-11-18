@@ -98,7 +98,7 @@ namespace telar::gui::qt {
 
     int direction_ = row;
     qreal gap_ = 0;
-    std::array<qreal, 4> padding_{};
+    ds::Array<qreal, 4> padding_{};
     int align_ = 0;
     int justify_ = 0;
     qreal ratio_ = 1;

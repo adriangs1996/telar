@@ -141,7 +141,7 @@ namespace telar::gui::qt {
   }
 
   void MachineChromeLayout::observeSources() {
-    std::array<ds::Option<Source>, application::machines::MachineLimits::window_slots> incoming;
+    ds::Array<ds::Option<Source>, application::machines::MachineLimits::window_slots> incoming;
     const bool shown = controller_ != nullptr && controller_->store().machines().count() > 1;
     const bool attention = controller_ != nullptr && controller_->store().machines().attentionElsewhere();
 
@@ -151,9 +151,9 @@ namespace telar::gui::qt {
         if (controller_->store().machines().shown(slot)) {
           const auto& row = controller_->store().machines().row(slot);
 
-          incoming[index] = Source{.token = controller_->store().machines().token(slot), .label = row.label, .color = row.color, .active = slot == controller_->store().machines().active(), .attention = row.attention, .live = row.live, .phase = inlineFacts() ? row.phase : application::machines::MachinePhase::connecting, .cpu_percent = inlineFacts() ? row.cpu_percent : ds::none};
+          incoming.atMut(index) = Source{.token = controller_->store().machines().token(slot), .label = row.label, .color = row.color, .active = slot == controller_->store().machines().active(), .attention = row.attention, .live = row.live, .phase = inlineFacts() ? row.phase : application::machines::MachinePhase::connecting, .cpu_percent = inlineFacts() ? row.cpu_percent : ds::none};
           if (mode_ == Mode::list && !incoming[index]->active) {
-            collectCards(slot, incoming[index].getMut());
+            collectCards(slot, incoming.atMut(index).getMut());
           }
         }
       }
@@ -338,25 +338,25 @@ namespace telar::gui::qt {
     }
 
     const auto agents = std::span{(*client)->session.agents()};
-    std::array<std::size_t, application::activity::AgentOrder::maximum_agents> chosen{};
+    ds::Array<std::size_t, application::activity::AgentOrder::maximum_agents> chosen{};
     std::size_t count = 0;
 
     for (std::size_t index = 0; index < agents.size() && count < chosen.size(); ++index) {
       if (application::activity::AgentOrder::stacked(agents[index].status)) {
-        chosen[count++] = index;
+        chosen.atMut(count++) = index;
       }
     }
 
     const auto shown = std::min(count, stack_cards);
 
-    std::partial_sort(chosen.begin(), chosen.begin() + static_cast<std::ptrdiff_t>(shown), chosen.begin() + static_cast<std::ptrdiff_t>(count), [&](std::size_t left, std::size_t right) {
+    std::partial_sort(chosen.dataMut(), chosen.dataMut() + static_cast<std::ptrdiff_t>(shown), chosen.dataMut() + static_cast<std::ptrdiff_t>(count), [&](std::size_t left, std::size_t right) {
       return application::activity::AgentOrder::priority(agents[left]) < application::activity::AgentOrder::priority(agents[right]);
     });
 
     for (std::size_t rank = 0; rank < shown; ++rank) {
       const auto& agent = agents[chosen[rank]];
 
-      source.cards[rank] = {.provider = static_cast<std::uint8_t>(agent.provider_kind), .status = static_cast<std::uint8_t>(agent.status)};
+      source.cards.atMut(rank) = {.provider = static_cast<std::uint8_t>(agent.provider_kind), .status = static_cast<std::uint8_t>(agent.status)};
     }
 
     source.card_count = shown;
@@ -383,8 +383,8 @@ namespace telar::gui::qt {
     }
 
     const auto label = toQString(source.label.view());
-    std::array<char, application::machines::MachineChromeGeometry::list_status_capacity> storage{};
-    const auto status = application::machines::MachineChromeGeometry::listStatus(source.live, source.agent_count, storage);
+    ds::Array<char, application::machines::MachineChromeGeometry::list_status_capacity> storage{};
+    const auto status = application::machines::MachineChromeGeometry::listStatus(source.live, source.agent_count, storage.viewMut());
 
     return {
         {QStringLiteral("key"), machineKey(source.token)},
@@ -417,8 +417,8 @@ namespace telar::gui::qt {
       }
 
       const bool stacked = source->card_count != 0;
-      std::array<char, Geometry::list_status_capacity> storage{};
-      const auto advance = std::max(measure(source->label.view(), true), measure(Geometry::listStatus(source->live, source->agent_count, storage), false));
+      ds::Array<char, Geometry::list_status_capacity> storage{};
+      const auto advance = std::max(measure(source->label.view(), true), measure(Geometry::listStatus(source->live, source->agent_count, storage.viewMut()), false));
 
       widest = std::max(widest, Geometry::listNaturalWidth(chrome_, advance, stacked));
       // The sidebar sizes the area to the rows that fit; the item clips the rest.

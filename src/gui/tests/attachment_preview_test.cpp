@@ -24,6 +24,7 @@ static_assert(true);
 #include <span>
 
 import telar.gui.features.terminal.attachments;
+import telar.base.ds;
 
 namespace {
 
@@ -36,7 +37,7 @@ namespace {
   constexpr std::uint32_t maximum_channel = 255;
   constexpr std::uint32_t half_channel = maximum_channel / 2;
   constexpr std::uint32_t thin_width = 70000;
-  constexpr std::array small_pixels{
+  constexpr telar::ds::Array small_pixels{
       std::uint8_t{255},
       std::uint8_t{64},
       std::uint8_t{16},

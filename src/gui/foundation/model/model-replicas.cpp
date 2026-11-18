@@ -63,7 +63,7 @@ namespace telar::gui::inline foundation::inline model {
 
     validate(snapshot);
     prepareStaging(snapshot.entries.size());
-    std::array<AgentStatusChange, capacity> status_changes;
+    ds::Array<AgentStatusChange, capacity> status_changes;
     std::size_t status_change_count = 0;
     const auto sample_ns = std::max(now_ns_, now_ns);
 
@@ -80,12 +80,12 @@ namespace telar::gui::inline foundation::inline model {
       agent.status_clock.observe({.pane_id = agent.pane_id, .pane_generation = agent.pane_generation, .status = agent.status, .provider = agent.provider_kind, .reported_seconds = agent.status_age_s}, sample_ns);
 
       if (retain_clocks_ && previous != entries_.end() && previous->status != agent.status) {
-        status_changes[status_change_count++] = {.pane_id = agent.pane_id, .pane_generation = agent.pane_generation, .pane_index = agent.pane_index, .provider = agent.provider_kind, .previous = previous->status, .current = agent.status};
+        status_changes.atMut(status_change_count++) = {.pane_id = agent.pane_id, .pane_generation = agent.pane_generation, .pane_index = agent.pane_index, .provider = agent.provider_kind, .previous = previous->status, .current = agent.status};
       }
     }
 
     entries_.swap(staging_);
-    std::ranges::copy(std::span{status_changes}.first(status_change_count), status_changes_.begin());
+    std::ranges::copy(status_changes.viewMut().first(status_change_count), status_changes_.viewMut().begin());
     status_change_count_ = status_change_count;
     revision_ = snapshot.revision;
     now_ns_ = sample_ns;
@@ -211,7 +211,7 @@ namespace telar::gui::inline foundation::inline model {
       pane.age = {.age_ns = std::uint64_t{entry.foreground_age_s} * StatusAgeInterval::nanoseconds_per_second, .sampled_ns = now_ns};
       pane.shell = entry.shell;
       pane.port_count = static_cast<std::uint8_t>(std::min(entry.ports.size(), pane.port_values.size()));
-      std::ranges::copy(entry.ports.first(pane.port_count), pane.port_values.begin());
+      std::ranges::copy(entry.ports.first(pane.port_count), pane.port_values.viewMut().begin());
     }
 
     revision_ = list.revision;
@@ -317,12 +317,12 @@ namespace telar::gui::inline foundation::inline model {
       static_cast<void>(ValueCodec<WorktreeListEntry>::encodedSize(row));
     }
 
-    std::array<const WorkspaceListEntry*, maximum_workspaces> ordered{};
+    ds::Array<const WorkspaceListEntry*, maximum_workspaces> ordered{};
     std::size_t count = 0;
 
     for (const auto& entry : snapshot.entries) {
       if (!holdsWorktree(snapshot, entry.workspace)) {
-        ordered[count++] = &entry;
+        ordered.atMut(count++) = &entry;
       }
     }
 
@@ -330,7 +330,7 @@ namespace telar::gui::inline foundation::inline model {
 
     for (const auto& entry : snapshot.entries) {
       if (holdsWorktree(snapshot, entry.workspace)) {
-        ordered[count++] = &entry;
+        ordered.atMut(count++) = &entry;
       }
     }
 

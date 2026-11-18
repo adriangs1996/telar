@@ -17,6 +17,7 @@ import telar.platform.fs;
 import telar.testing;
 import telar.vocabulary;
 import telar.platform.process;
+import telar.base.ds;
 
 namespace {
 
@@ -25,7 +26,7 @@ namespace {
   using namespace telar;
   using namespace telar::runtime;
 
-  constexpr std::array<std::string_view, 5> pane_identity{"SSH_AUTH_SOCK", "TELAR_PANE_ID", "TELAR_PANE_GENERATION", "TELAR_WORKSPACE_ID", "TELAR_TAB_ID"};
+  constexpr ds::Array<std::string_view, 5> pane_identity{"SSH_AUTH_SOCK", "TELAR_PANE_ID", "TELAR_PANE_GENERATION", "TELAR_WORKSPACE_ID", "TELAR_TAB_ID"};
 
   // A helper the runtime runs for itself reaches neither the user's ssh-agent nor the identity
   // of a pane, so an agent hook gated on TELAR_PANE_ID does not fire from it; a helper the
@@ -34,8 +35,8 @@ namespace {
     SystemAllocator system;
     MemoryAdapter adapter{system};
     Memory& memory = adapter;
-    const std::array<std::string_view, 1> arguments{"/bin/sh"};
-    const std::array<EnvironmentEntry, 6> environment{{
+    const ds::Array<std::string_view, 1> arguments{"/bin/sh"};
+    const ds::Array<EnvironmentEntry, 6> environment{{
         {"SSH_AUTH_SOCK", "/tmp/agent.sock"},
         {"TELAR_PANE_ID", "7"},
         {"TELAR_PANE_GENERATION", "2"},
@@ -82,8 +83,8 @@ namespace {
       input[index] = static_cast<char>(index * 31 % 251);
     }
 
-    const std::array<std::string_view, 1> arguments{"/bin/cat"};
-    const std::array<std::string_view, 1> pieces{input};
+    const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
+    const ds::Array<std::string_view, 1> pieces{input};
     Command command{memory, Launch{.arguments = arguments}, CommandPurpose::configured_helper};
     CommandOutput<Memory> process{memory, 0};
     std::string output;
@@ -110,8 +111,8 @@ namespace {
     SystemAllocator system;
     MemoryAdapter adapter{system};
     Memory& memory = adapter;
-    const std::array<std::string_view, 1> arguments{"/bin/sh"};
-    const std::array<EnvironmentEntry, 5> environment{{
+    const ds::Array<std::string_view, 1> arguments{"/bin/sh"};
+    const ds::Array<EnvironmentEntry, 5> environment{{
         {"TELAR_SOCKET", "/other/runtime.sock"},
         {"GHOSTTY_RESOURCES_DIR", "/ghostty"},
         {"TERM", "dumb"},
@@ -143,11 +144,11 @@ namespace {
     Memory& memory = adapter;
     TemporaryDirectory temporary{"/tmp/telar-launch-path-XXXXXX"};
     const std::string base{temporary.path()};
-    const std::array<std::string_view, 1> arguments{"telar-launch-path-tool"};
+    const ds::Array<std::string_view, 1> arguments{"telar-launch-path-tool"};
 
     writeExecutable(base + "/bin/telar-launch-path-tool");
     const auto executable = [&](std::string_view path, std::string_view cwd) -> std::string {
-      const std::array<EnvironmentEntry, 1> environment{{{"PATH", path}}};
+      const ds::Array<EnvironmentEntry, 1> environment{{{"PATH", path}}};
       Command command{memory, Launch{.cwd = cwd, .arguments = arguments, .environment_mode = EnvironmentMode::replace, .environment = environment}};
 
       return command.specification({}).executable;
@@ -181,9 +182,9 @@ namespace {
     std::size_t shells = 0;
 
     for (const std::string_view name : {"sh", "dash", "bash", "zsh", "fish"}) {
-      std::array<char, PATH_MAX> shell{};
+      ds::Array<char, PATH_MAX> shell{};
       const char* path = std::getenv("PATH");
-      if (!findExecutable(path == nullptr ? "/usr/bin:/bin" : path, name, shell)) {
+      if (!findExecutable(path == nullptr ? "/usr/bin:/bin" : path, name, shell.viewMut())) {
         continue;
       }
 
@@ -194,8 +195,8 @@ namespace {
       auto* output = ::popen(line.c_str(), "r");
 
       check(output != nullptr);
-      std::array<char, 256> bytes{};
-      const auto count = std::fread(bytes.data(), 1, bytes.size(), output);
+      ds::Array<char, 256> bytes{};
+      const auto count = std::fread(bytes.dataMut(), 1, bytes.size(), output);
 
       check(::pclose(output) == 0, name);
       check(std::string_view{bytes.data(), count} == "[a b][-x]", name);

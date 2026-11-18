@@ -161,7 +161,7 @@ export {
 
       void encodeLegacy(const TerminalKey& key, const Encoding& encoding, const InputModes& modes);
 
-      std::array<char, capacity> bytes_{};
+      ds::Array<char, capacity> bytes_{};
       std::size_t used_ = 0;
     };
 

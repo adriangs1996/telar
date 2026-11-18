@@ -5,6 +5,7 @@ import std;
 import telar.sys.posix;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
+import telar.base.ds;
 
 namespace telar::gui::inline foundation::inline system {
 
@@ -25,9 +26,9 @@ namespace telar::gui::inline foundation::inline system {
     validateSharedImageName(name);
     constexpr std::size_t name_capacity = 32;
     constexpr mode_t nonprivate_permissions = 0077;
-    std::array<char, name_capacity> terminated{};
+    ds::Array<char, name_capacity> terminated{};
 
-    std::ranges::copy(name, terminated.begin());
+    std::ranges::copy(name, terminated.viewMut().begin());
 #if defined(__linux__)
     constexpr int open_flags = O_RDONLY | O_NONBLOCK;
 #else

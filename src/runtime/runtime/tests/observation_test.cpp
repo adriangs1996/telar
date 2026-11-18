@@ -301,7 +301,7 @@ namespace {
       Result result;
 
       for (const auto& entry : std::span{request.panes}.first(request.count)) {
-        auto& observed = result.panes[result.count++];
+        auto& observed = result.panes.atMut(result.count++);
 
         observed.request = entry;
         observed.cwd.assign("/observed");
@@ -322,10 +322,10 @@ namespace {
       decltype(processor)::Request request;
 
       request.count = 1;
-      request.entries[0].pane = 1;
-      request.entries[0].observer = observer;
-      request.entries[0].process_request = {.pane = 1, .root = 1};
-      request.entries[0].probe_process = probe_process;
+      request.entries.atMut(0).pane = 1;
+      request.entries.atMut(0).observer = observer;
+      request.entries.atMut(0).process_request = {.pane = 1, .root = 1};
+      request.entries.atMut(0).probe_process = probe_process;
 
       const auto command = [&](std::string_view text) {
         feedObserver(*observer, "$ ");
@@ -362,7 +362,7 @@ namespace {
   void testPendingInputPreservesForegroundObservation(ConcurrentMemory& memory) {
     RuntimeModel model{memory};
     ClientStore clients{memory};
-    const std::array<std::string_view, 1> arguments{"/bin/cat"};
+    const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
     Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
     auto owned = makeOwned<Pane>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits});
     auto& pane = *owned;
@@ -373,8 +373,8 @@ namespace {
     DirectoryOnlyProbe probe;
     CaptureHistory history;
     PaneObservationService<decltype(agents), decltype(limits), decltype(probe), decltype(history)> service{limits, model.manifests, probe, history};
-    const std::array<Byte, 1> editing{'x'};
-    const std::array<Byte, 1> submitted{'\r'};
+    const ds::Array<Byte, 1> editing{'x'};
+    const ds::Array<Byte, 1> submitted{'\r'};
 
     pane.enqueueInput(editing);
     service.observe(model, agents, pane.id);
@@ -394,7 +394,7 @@ namespace {
   void testEmptyObservationRequiresExplicitRecheck(ConcurrentMemory& memory) {
     RuntimeModel model{memory};
     ClientStore clients{memory};
-    const std::array<std::string_view, 1> arguments{"/bin/cat"};
+    const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
     Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
     auto owned = makeOwned<Pane>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits});
     auto& pane = *owned;

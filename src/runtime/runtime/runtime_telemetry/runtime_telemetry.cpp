@@ -73,7 +73,7 @@ namespace telar::runtime::diagnostics {
       return;
     }
 
-    const auto length = std::snprintf(path_.data(), path_.size(), "%.*s.runtime-%d.log", static_cast<int>(endpoint.size()), endpoint.data(), process);
+    const auto length = std::snprintf(path_.dataMut(), path_.size(), "%.*s.runtime-%d.log", static_cast<int>(endpoint.size()), endpoint.data(), process);
     if (length < 0 || static_cast<std::size_t>(length) >= path_.size()) {
       return;
     }
@@ -130,11 +130,11 @@ namespace telar::runtime::diagnostics {
       return;
     }
 
-    std::array<char, PATH_MAX> directory_path;
+    ds::Array<char, PATH_MAX> directory_path;
     const auto directory_length = std::max<std::size_t>(1, slash);
 
-    std::copy_n(endpoint.begin(), directory_length, directory_path.begin());
-    directory_path[directory_length] = '\0';
+    std::copy_n(endpoint.begin(), directory_length, directory_path.dataMut());
+    directory_path.atMut(directory_length) = '\0';
 
     try {
       DirectoryStream directory{FileDescriptor{::open(directory_path.data(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)}};
@@ -173,10 +173,10 @@ namespace telar::runtime::diagnostics {
   }
 
   bool LogSink::rotate() noexcept {
-    std::array<char, PATH_MAX + 2> previous;
+    ds::Array<char, PATH_MAX + 2> previous;
 
-    std::copy_n(path_.begin(), path_length_, previous.begin());
-    std::copy_n(".1", 3, previous.begin() + path_length_);
+    std::copy_n(path_.begin(), path_length_, previous.dataMut());
+    std::copy_n(".1", 3, previous.dataMut() + path_length_);
     file_.reset();
     if (::rename(path_.data(), previous.data()) != 0) {
       return false;
@@ -231,8 +231,8 @@ namespace telar::runtime::diagnostics {
 
     return information.resident_size;
 #else
-    std::array<char, 256> buffer;
-    const auto bytes = ProcDirectory{::getpid()}.read("statm", buffer);
+    ds::Array<char, 256> buffer;
+    const auto bytes = ProcDirectory{::getpid()}.read("statm", buffer.viewMut());
     if (!bytes) {
       return 0;
     }

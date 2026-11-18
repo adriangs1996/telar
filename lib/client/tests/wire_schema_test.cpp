@@ -12,6 +12,7 @@ import telar.wire.agents;
 import telar.wire.clients;
 import telar.wire.pane_io;
 import telar.wire.runtime;
+import telar.base.ds;
 
 namespace {
 
@@ -28,13 +29,13 @@ namespace {
 
   struct SchemaLayouts {
     SchemaId schema;
-    std::array<Layout, 6> layouts;
+    ds::Array<Layout, 6> layouts;
   };
 
   // A client and a runtime of other versions, over SSH among others, trust each other's layouts
   // only through handshake::schema_id. A change to any of these layouts needs a new schema id and
   // its row here; a row is never edited.
-  constexpr std::array known_schemas{
+  constexpr ds::Array known_schemas{
       SchemaLayouts{
           .schema = {'c', 'q', 'p', '0', '0', '0', '0', '4'},
           .layouts = {{
@@ -66,24 +67,24 @@ namespace {
   }
 
   // One canonical instance of each family, with every kind of field it has set.
-  std::array<std::uint64_t, 6> canonicalHashes() {
-    const std::array<std::string_view, 3> arguments{"sh", "-c", "echo hi"};
-    const std::array<EnvironmentEntry, 1> environment{{{"PATH", "/bin"}}};
-    std::array<Cell, 4> grid;
-    const std::array<Byte, 1> letter{'a'};
+  ds::Array<std::uint64_t, 6> canonicalHashes() {
+    const ds::Array<std::string_view, 3> arguments{"sh", "-c", "echo hi"};
+    const ds::Array<EnvironmentEntry, 1> environment{{{"PATH", "/bin"}}};
+    ds::Array<Cell, 4> grid;
+    const ds::Array<Byte, 1> letter{'a'};
 
-    for (auto& cell : grid) {
+    for (auto& cell : grid.viewMut()) {
       cell.text = letter;
     }
 
     std::vector<Byte> cells(CellRunCodec::encodedSize(grid));
 
     static_cast<void>(CellRunCodec::encode(grid, std::span<Byte>{cells}));
-    const std::array<FrameSpan, 1> spans{{{.start = 0, .count = 4, .cells = cells}}};
-    const std::array<Byte, 1> row_flags{static_cast<Byte>(RowFlag::hyperlinks)};
-    const std::array<MetadataLink, 1> links{{{.offset = 0, .len = 5}}};
-    const std::array<MetadataRun, 1> runs{{{.start = 1, .len = 2, .link_index = 0}}};
-    const std::array<Byte, 5> uris{'h', 't', 't', 'p', 's'};
+    const ds::Array<FrameSpan, 1> spans{{{.start = 0, .count = 4, .cells = cells}}};
+    const ds::Array<Byte, 1> row_flags{static_cast<Byte>(RowFlag::hyperlinks)};
+    const ds::Array<MetadataLink, 1> links{{{.offset = 0, .len = 5}}};
+    const ds::Array<MetadataRun, 1> runs{{{.start = 1, .len = 2, .link_index = 0}}};
+    const ds::Array<Byte, 5> uris{'h', 't', 't', 'p', 's'};
     PaneFrame frame{};
 
     frame.pane_id = 3;
@@ -95,7 +96,7 @@ namespace {
     frame.text_metadata = TextMetadata{.status = MetadataStatus::complete, .row_flags = row_flags, .links = links, .runs = runs, .uris = uris};
     frame.spans = spans;
 
-    const std::array entries{AgentSnapshotEntry{
+    const ds::Array entries{AgentSnapshotEntry{
         .pane_id = 3,
         .pane_generation = 2,
         .location = {.workspace = {.id = 1}, .tab_id = 4},

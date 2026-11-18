@@ -53,7 +53,7 @@ export {
 
       [[nodiscard]] std::size_t find(std::uint64_t physical) const noexcept;
 
-      std::array<Lease, BindingLimits::physical_keys> leases_{};
+      ds::Array<Lease, BindingLimits::physical_keys> leases_{};
       std::size_t count_ = 0;
       std::uint64_t overflow_ = 0;
     };
@@ -73,7 +73,7 @@ export {
         Outcome outcome = Outcome::discard;
         Action action{};
         Event event{};
-        std::array<Event, BindingLimits::keys> held{};
+        ds::Array<Event, BindingLimits::keys> held{};
         std::size_t held_count = 0;
         bool has_current = false;
         bool repeated = false;
@@ -317,7 +317,7 @@ export {
           return {.outcome = Outcome::action, .action = action, .event = event, .now_ns = now_ns};
         }
 
-        held_[depth_] = event;
+        held_.atMut(depth_) = event;
         ++depth_;
         candidates_ = matched;
         if (depth_ == 1 && prefix_) {
@@ -347,7 +347,7 @@ export {
         if (depth_ != 0 && !prefix_pending_) {
           decision.outcome = Outcome::replay;
           decision.held_count = depth_;
-          std::copy_n(held_.begin(), depth_, decision.held.begin());
+          std::copy_n(held_.begin(), depth_, decision.held.dataMut());
           for (const auto& held : std::span{held_}.first(depth_)) {
             transfer(held.physical);
           }
@@ -368,7 +368,7 @@ export {
       BindingMap<Action> map_;
       ds::Option<KeyChord> prefix_;
       BindingMap<Action>::Range candidates_;
-      std::array<Event, BindingLimits::keys> held_{};
+      ds::Array<Event, BindingLimits::keys> held_{};
       KeyLeases leases_;
       ds::Option<Repeating> repeating_;
       ds::Option<std::uint64_t> since_;

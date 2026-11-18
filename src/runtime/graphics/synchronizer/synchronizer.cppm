@@ -82,7 +82,7 @@ export {
       };
 
       struct Request {
-        std::array<Entry, 8> entries;
+        ds::Array<Entry, 8> entries;
         std::size_t count = 0;
       };
 
@@ -167,7 +167,7 @@ export {
         std::uint64_t revision;
         FrozenImage frozen;
         std::size_t offset = 0;
-        std::array<GraphicsPlacement, graphics_placement_count> placements{};
+        ds::Array<GraphicsPlacement, graphics_placement_count> placements{};
         std::size_t placement_count = 0;
         std::size_t placement_index = 0;
         bool metadata_sent = false;
@@ -187,8 +187,8 @@ export {
       std::uint64_t pane_;
       // Keeps the media media_ owns.
       tbc::view<ds::Option<Transfer>, tbc::lt::self> transfer_;
-      std::array<ImageKey, graphics_image_count * 2> known_images_{};
-      std::array<GraphicsPlacement, graphics_placement_count * 2> known_placements_{};
+      ds::Array<ImageKey, graphics_image_count * 2> known_images_{};
+      ds::Array<GraphicsPlacement, graphics_placement_count * 2> known_placements_{};
       std::uint64_t observed_revision_ = 0;
       SnapshotState snapshot_ = SnapshotState::idle;
       bool shared_ = false;

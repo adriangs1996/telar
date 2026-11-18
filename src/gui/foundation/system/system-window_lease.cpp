@@ -5,6 +5,7 @@ import telar.tbc;
 
 import telar.platform.fs;
 import telar.sys.posix;
+import telar.base.ds;
 
 namespace telar::gui::inline foundation::inline system {
 
@@ -50,12 +51,12 @@ namespace telar::gui::inline foundation::inline system {
     const auto separator = endpoint.rfind('/');
     const auto directory_name = endpoint.substr(0, separator == 0 ? 1 : separator);
     const auto basename = endpoint.substr(separator + 1);
-    std::array<char, PATH_MAX> directory_path{};
+    ds::Array<char, PATH_MAX> directory_path{};
 
-    std::ranges::copy(directory_name, directory_path.begin());
+    std::ranges::copy(directory_name, directory_path.viewMut().begin());
     const auto directory = runtime::openPrivateParent(endpoint);
 
-    if (::realpath(directory_path.data(), canonical_endpoint_.data()) == nullptr) {
+    if (::realpath(directory_path.dataMut(), canonical_endpoint_.dataMut()) == nullptr) {
       throw std::runtime_error{"Cannot resolve runtime endpoint directory"};
     }
 
@@ -64,14 +65,14 @@ namespace telar::gui::inline foundation::inline system {
       throw std::runtime_error{"Canonical runtime endpoint exceeds path capacity"};
     }
 
-    canonical_endpoint_[canonical_length] = '/';
-    std::ranges::copy(basename, canonical_endpoint_.begin() + canonical_length + 1);
+    canonical_endpoint_.atMut(canonical_length) = '/';
+    std::ranges::copy(basename, canonical_endpoint_.viewMut().begin() + canonical_length + 1);
     endpoint_length_ = canonical_length + 1 + basename.size();
-    canonical_endpoint_[endpoint_length_] = '\0';
+    canonical_endpoint_.atMut(endpoint_length_) = '\0';
 
     for (unsigned slot = 0; slot < maximum_windows; ++slot) {
-      std::array<char, NAME_MAX> filename{};
-      const auto name = lockFilename(filename, basename, slot);
+      ds::Array<char, NAME_MAX> filename{};
+      const auto name = lockFilename(filename.viewMut(), basename, slot);
       constexpr mode_t private_file_permissions = 0600;
       auto file = runtime::openBeneath(directory.get(), name, O_RDWR | O_CREAT, private_file_permissions);
 

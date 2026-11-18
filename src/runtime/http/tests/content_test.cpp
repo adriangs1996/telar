@@ -2,6 +2,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.testing;
 import telar.runtime.http.message;
+import telar.base.ds;
 
 namespace {
 
@@ -11,7 +12,7 @@ namespace {
   using namespace telar::runtime;
 
   // A zstd frame holding one raw block of "x", whose header declares a window of 2^window_log bytes.
-  auto zstdFrame(unsigned window_log) -> std::array<std::uint8_t, 10> {
+  auto zstdFrame(unsigned window_log) -> ds::Array<std::uint8_t, 10> {
     const auto exponent = static_cast<std::uint8_t>(window_log - 10);
 
     return {0x28, 0xb5, 0x2f, 0xfd, 0x00, static_cast<std::uint8_t>(exponent << 3), 0x09, 0x00, 0x00, 'x'};

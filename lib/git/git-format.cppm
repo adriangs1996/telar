@@ -67,7 +67,7 @@ export namespace telar::git {
   }
 
   struct ObjectId {
-    std::array<std::uint8_t, maximum_hash_size> bytes{};
+    ds::Array<std::uint8_t, maximum_hash_size> bytes{};
     std::uint8_t size = 0;
 
     friend bool operator==(const ObjectId&, const ObjectId&) = default;
@@ -135,7 +135,7 @@ namespace telar::git {
     std::string_view view() const noexcept;
 
   private:
-    std::array<char, 4096> bytes_;
+    ds::Array<char, 4096> bytes_;
     std::size_t length_ = 0;
   };
 
@@ -163,7 +163,7 @@ namespace telar::git {
   public:
     Sha1() noexcept;
     void update(std::span<const std::uint8_t> bytes) noexcept;
-    std::array<std::uint8_t, SHA_DIGEST_LENGTH> finish() noexcept;
+    ds::Array<std::uint8_t, SHA_DIGEST_LENGTH> finish() noexcept;
 
   private:
     SHA_CTX context_;

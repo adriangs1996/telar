@@ -4,9 +4,9 @@ import telar.base.ds;
 namespace telar::runtime {
 
   ProcDirectory::ProcDirectory(pid_t process) noexcept {
-    std::array<char, sizeof("/proc/") + std::numeric_limits<pid_t>::digits10 + 1> path{};
+    ds::Array<char, sizeof("/proc/") + std::numeric_limits<pid_t>::digits10 + 1> path{};
     if (process > 0) {
-      std::snprintf(path.data(), path.size(), "/proc/%d", process);
+      std::snprintf(path.dataMut(), path.size(), "/proc/%d", process);
       directory_.reset(::open(path.data(), O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW));
     }
   }

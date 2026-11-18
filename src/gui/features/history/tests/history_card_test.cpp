@@ -12,6 +12,7 @@ import telar.gui.foundation.core;
 import telar.gui.foundation.forms;
 import telar.gui.foundation.text;
 import telar.gui.features.history;
+import telar.base.ds;
 
 namespace {
 
@@ -65,7 +66,7 @@ namespace {
       std::string_view message;
     };
 
-    constexpr std::array invalid{
+    constexpr telar::ds::Array invalid{
         InvalidScalar{.text = "", .message = "Expected one UTF-8 scalar"},
         InvalidScalar{.text = "abcde", .message = "Expected one UTF-8 scalar"},
         InvalidScalar{.text = "\x80", .message = "Invalid UTF-8 leading byte"},
@@ -84,7 +85,7 @@ namespace {
       }
     }
 
-    constexpr std::array<std::string_view, 4> valid{"a", "é", "中", "👩"};
+    constexpr telar::ds::Array<std::string_view, 4> valid{"a", "é", "中", "👩"};
 
     for (const auto text : valid) {
       check(Utf8Scalar::tryDecode(text) == Utf8Scalar::decode(text), "both scalar readers must decode every valid sequence identically");
@@ -111,10 +112,10 @@ namespace {
     constexpr float cell_width = 8;
     constexpr Rect first{.x = 10, .y = 20, .width = 100, .height = 20};
     constexpr Rect second{.x = 10, .y = 40, .width = 100, .height = 20};
-    std::array<Rect, 3> matches{};
+    telar::ds::Array<Rect, 3> matches{};
     std::size_t count = 0;
     auto record = [&](Rect area, std::string_view) {
-      matches.at(count++) = area;
+      matches.atCheckedMut(count++) = area;
     };
 
     highlight.paint("á中B", first, cell_width, record);

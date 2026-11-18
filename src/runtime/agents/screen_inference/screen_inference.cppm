@@ -32,7 +32,7 @@ export {
 
       static constexpr std::chrono::seconds window{60};
       static constexpr unsigned prompts_per_window = 8;
-      std::array<Pair, 32> pairs_{};
+      ds::Array<Pair, 32> pairs_{};
     };
 
   }
@@ -54,7 +54,7 @@ export {
     bool validResumeSession(AgentProvider provider, std::string_view value) noexcept;
 
     // The arguments view the session and the caller's array.
-    tbc::view<std::span<const std::string_view>, tbc::lt::a> resumeArguments(tbc::view<const AgentResume&, tbc::lt::a> resume, tbc::view<std::array<std::string_view, 4>&, tbc::lt::a> arguments) noexcept;
+    tbc::view<std::span<const std::string_view>, tbc::lt::a> resumeArguments(tbc::view<const AgentResume&, tbc::lt::a> resume, tbc::view<ds::Array<std::string_view, 4>&, tbc::lt::a> arguments) noexcept;
 
   }
 }
@@ -72,7 +72,7 @@ export {
     std::uint32_t cellCodepoint(const ScreenCell& cell) noexcept;
 
     struct AgentScreenRow {
-      std::array<char, 1024> bytes{};
+      ds::Array<char, 1024> bytes{};
       std::size_t length = 0;
       std::uint32_t first = 0;
       std::size_t column = 0;
@@ -132,7 +132,7 @@ export {
       bool prepend(std::string_view bytes) noexcept;
       std::string_view text() const noexcept;
 
-      std::array<char, 16 * 1024> bytes_{};
+      ds::Array<char, 16 * 1024> bytes_{};
       std::size_t start_ = bytes_.size();
     };
 

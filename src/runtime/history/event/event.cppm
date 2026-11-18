@@ -18,6 +18,7 @@ import telar.wire.history;
 import telar.wire.runtime;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
+import telar.base.ds;
 
 // Interface: history/launch_failure.cppm
 export {
@@ -43,7 +44,7 @@ export {
   namespace telar::runtime {
 
     struct HistorySession {
-      std::array<Byte, 16> id{};
+      ds::Array<Byte, 16> id{};
       std::uint64_t pane = 0;
       TabLocation location{};
       std::int64_t started_at_ms = 0;
@@ -60,7 +61,7 @@ export {
     };
 
     struct HistorySessionTitle {
-      std::array<Byte, 16> session{};
+      ds::Array<Byte, 16> session{};
       FixedText<96> title{};
       AgentTitleSource source = AgentTitleSource::telar;
       AgentTitleState state = AgentTitleState::failed;

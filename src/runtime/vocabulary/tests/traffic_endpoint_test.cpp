@@ -28,8 +28,8 @@ namespace {
 
   struct Directory {
     Directory() {
-      std::strcpy(path.data(), "/tmp/telar-traffic-endpoint-XXXXXX");
-      check(::mkdtemp(path.data()) != nullptr);
+      std::strcpy(path.dataMut(), "/tmp/telar-traffic-endpoint-XXXXXX");
+      check(::mkdtemp(path.dataMut()) != nullptr);
     }
 
     ~Directory() {
@@ -40,7 +40,7 @@ namespace {
       return std::string{path.data()} + "/" + std::string{name};
     }
 
-    std::array<char, 64> path{};
+    ds::Array<char, 64> path{};
   };
 
   // A socket bound at `path` with `mode`, listening unless the caller closes it.

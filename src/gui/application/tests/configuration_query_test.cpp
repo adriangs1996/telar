@@ -47,7 +47,7 @@ namespace {
       array.element(nullptr);
       array.element([](JsonWriter& value) {
         value.object([](JsonWriter& object) {
-          constexpr auto text = std::to_array("\"\\\n\0中");
+          constexpr auto text = telar::ds::toArray("\"\\\n\0中");
 
           object.member("escaped", std::string_view{text.data(), text.size() - 1});
         });
@@ -57,8 +57,8 @@ namespace {
 
   void jsonValuesAndNestedContainers() {
     constexpr std::size_t capacity = 512;
-    std::array<char, capacity> storage{};
-    JsonWriter writer{storage};
+    telar::ds::Array<char, capacity> storage{};
+    JsonWriter writer{storage.viewMut()};
 
     writer.object([](JsonWriter& object) {
       object.member("literal", "value");
@@ -83,10 +83,10 @@ namespace {
     constexpr char guard = 'g';
 
     for (std::size_t capacity = 0; capacity <= expected.size(); ++capacity) {
-      std::array<char, expected.size() + 1> storage{};
+      telar::ds::Array<char, expected.size() + 1> storage{};
 
       storage.fill(guard);
-      JsonWriter writer{std::span{storage}.first(capacity)};
+      JsonWriter writer{storage.viewMut().first(capacity)};
       bool failed = false;
 
       try {
@@ -127,9 +127,9 @@ namespace {
       };
 
       application::ConfigurationGeneration generation{memory, source};
-      std::array<char, ConfigurationQuery::capacity> output{};
+      telar::ds::Array<char, ConfigurationQuery::capacity> output{};
       const auto before = budget.allocations();
-      const auto encoded = RuntimeQuery::write(generation.runtimeValues(), output);
+      const auto encoded = RuntimeQuery::write(generation.runtimeValues(), output.viewMut());
 
       check(budget.allocations() == before, "querying adopted runtime values must not allocate through the injected allocator");
       const auto parsed = telar::runtime::JsonValue::parse(encoded);
@@ -141,7 +141,7 @@ namespace {
       const auto& binding = generation.input().configured.front();
 
       check(generation.invoke(binding.action, {}).actions.front().kind == BindingActionKind::new_tab, "the mutation fixture must execute its retained callback");
-      const auto unchanged = telar::runtime::JsonValue::parse(RuntimeQuery::write(generation.runtimeValues(), output));
+      const auto unchanged = telar::runtime::JsonValue::parse(RuntimeQuery::write(generation.runtimeValues(), output.viewMut()));
 
       check(requiredJsonField(unchanged, "history_path").equals("history.db"), "queries must read adopted values rather than mutable Lua tables");
     }
@@ -158,18 +158,18 @@ namespace {
     {
       const application::ConfigurationSourceText source{.source = "return {api_version=2}", .directory = {}, .profile = {}};
       const application::ConfigurationGeneration generation{memory, source};
-      std::array<char, 1> tiny{};
+      telar::ds::Array<char, 1> tiny{};
       bool failed = false;
 
       try {
-        static_cast<void>(RuntimeQuery::write(generation.runtimeValues(), tiny));
+        static_cast<void>(RuntimeQuery::write(generation.runtimeValues(), tiny.viewMut()));
       } catch (const std::length_error& error) {
         failed = std::string_view{error.what()} == "WriteFailed";
       }
 
       check(failed, "an oversized section must fail instead of returning truncated JSON");
-      std::array<char, ConfigurationQuery::capacity> output{};
-      const auto parsed = telar::runtime::JsonValue::parse(RuntimeQuery::write(generation.runtimeValues(), output));
+      telar::ds::Array<char, ConfigurationQuery::capacity> output{};
+      const auto parsed = telar::runtime::JsonValue::parse(RuntimeQuery::write(generation.runtimeValues(), output.viewMut()));
 
       check(requiredJsonField(parsed, "history_path").encoded() == "null" && requiredJsonField(parsed, "session_path").encoded() == "null", "unconfigured paths must be JSON null");
       check(requiredJsonField(parsed, "proxy_intercept_hosts").encoded() == "[]", "default proxy interception must be empty");
@@ -201,11 +201,11 @@ namespace {
       };
 
       const application::ConfigurationGeneration generation{memory, source};
-      std::array<char, ConfigurationQuery::capacity> output{};
+      telar::ds::Array<char, ConfigurationQuery::capacity> output{};
       bool rejected = false;
 
       try {
-        static_cast<void>(RuntimeQuery::write(generation.runtimeValues(), output));
+        static_cast<void>(RuntimeQuery::write(generation.runtimeValues(), output.viewMut()));
       } catch (const std::length_error& error) {
         rejected = std::string_view{error.what()} == "WriteFailed";
       }
@@ -259,8 +259,8 @@ namespace {
     };
 
     const application::ConfigurationGeneration generation{memory, source};
-    std::array<char, ConfigurationQuery::capacity> output{};
-    const auto encoded = RuntimeQuery::write(generation.runtimeValues(), output);
+    telar::ds::Array<char, ConfigurationQuery::capacity> output{};
+    const auto encoded = RuntimeQuery::write(generation.runtimeValues(), output.viewMut());
     const auto parsed = telar::runtime::JsonValue::parse(encoded);
     String<telar::ConcurrentMemory> decoded{AllocatorRef<char, telar::ConcurrentMemory>{memory}};
 
@@ -308,9 +308,9 @@ namespace {
       };
 
       application::ConfigurationGeneration generation{memory, source};
-      std::array<char, ConfigurationQuery::capacity> output{};
+      telar::ds::Array<char, ConfigurationQuery::capacity> output{};
       const auto allocations = budget.allocations();
-      const auto gui = telar::runtime::JsonValue::parse(GuiQuery::write(generation.configuration(), output, false));
+      const auto gui = telar::runtime::JsonValue::parse(GuiQuery::write(generation.configuration(), output.viewMut(), false));
       const auto font = requiredJsonField(gui, "font");
 
       check(requiredJsonField(font, "size").encoded() == "18.25", "GUI queries must retain the selected profile's font size");
@@ -319,14 +319,14 @@ namespace {
       const auto cursor = requiredJsonField(gui, "cursor");
 
       check(requiredJsonField(cursor, "style").equals("hollow") && !requiredJsonField(cursor, "blink").boolean(), "GUI cursor queries must preserve style and blinking preferences");
-      const auto input = telar::runtime::JsonValue::parse(InputQuery::write(generation.input(), output));
+      const auto input = telar::runtime::JsonValue::parse(InputQuery::write(generation.input(), output.viewMut()));
 
       check(requiredJsonField(input, "binding_count").encoded() == "2", "input queries must count configured bindings independently of builtin defaults");
       check(requiredJsonField(input, "sequence_timeout_ns").encoded() == "250000000", "input queries must preserve inherited sequence timing");
       check(requiredJsonField(requiredJsonField(input, "prefix"), "code").encoded() == R"({"char":{"bytes":"中\u0000","len":3}})", "a profile prefix must preserve its UTF-8 bytes and zero-filled suffix");
       check(budget.allocations() == allocations, "GUI and input queries must not allocate from the application allocator");
       static_cast<void>(generation.invoke(generation.input().configured.front().action, {}));
-      const auto unchanged = telar::runtime::JsonValue::parse(GuiQuery::write(generation.configuration(), output, true));
+      const auto unchanged = telar::runtime::JsonValue::parse(GuiQuery::write(generation.configuration(), output.viewMut(), true));
 
       check(requiredJsonField(requiredJsonField(unchanged, "font"), "size").encoded() == "18.25", "callback mutation must not alter the adopted GUI snapshot");
       check(requiredJsonField(requiredJsonField(unchanged, "window"), "titlebar").encoded() == "true", "the same snapshot must accept either platform's titlebar default");
@@ -339,11 +339,11 @@ namespace {
     constexpr std::string_view expected = R"({"value":1.100000023841858})";
 
     for (std::size_t capacity = 0; capacity <= expected.size(); ++capacity) {
-      std::array<char, expected.size() + 1> output{};
+      telar::ds::Array<char, expected.size() + 1> output{};
       constexpr char guard = 'g';
 
       output.fill(guard);
-      JsonWriter writer{std::span{output}.first(capacity)};
+      JsonWriter writer{output.viewMut().first(capacity)};
       bool rejected = false;
 
       try {
@@ -365,8 +365,8 @@ namespace {
     InputConfiguration input;
 
     input.prefix = {.key = KeyChord::Key::back_tab};
-    std::array<char, ConfigurationQuery::capacity> output{};
-    const auto parsed = telar::runtime::JsonValue::parse(InputQuery::write(input, output));
+    telar::ds::Array<char, ConfigurationQuery::capacity> output{};
+    const auto parsed = telar::runtime::JsonValue::parse(InputQuery::write(input, output.viewMut()));
 
     check(requiredJsonField(requiredJsonField(parsed, "prefix"), "code").encoded() == R"({"back_tab":{}})", "named key union payloads must remain empty objects rather than null");
   }
@@ -403,9 +403,9 @@ namespace {
           .view = {.sidebar_visible = true, .sidebar_width = 61, .workspace_list_collapsed = true, .pane_gaps = true, .window_title = "{workspace}"},
       };
 
-      std::array<char, ConfigurationQuery::capacity> output{};
+      telar::ds::Array<char, ConfigurationQuery::capacity> output{};
       const auto allocations = budget.allocations();
-      const std::string before{application::ClientQuery::write(generation.configuration(), context, output)};
+      const std::string before{application::ClientQuery::write(generation.configuration(), context, output.viewMut())};
       const auto parsed = telar::runtime::JsonValue::parse(before);
 
       check(requiredJsonField(parsed, "generation").encoded() == "18446744073709551615", "client queries must preserve the adopted generation's complete identifier");
@@ -416,7 +416,7 @@ namespace {
       check(!requiredJsonField(parsed, "history_enter_runs").boolean() && requiredJsonField(parsed, "history_match_fts").boolean(), "history query flags must retain independent profile overrides");
       check(budget.allocations() == allocations, "client serialization must not allocate through the application allocator");
       static_cast<void>(generation.invoke(generation.input().configured.front().action, {}));
-      check(application::ClientQuery::write(generation.configuration(), context, output) == before, "Lua mutation must not change adopted client policies");
+      check(application::ClientQuery::write(generation.configuration(), context, output.viewMut()) == before, "Lua mutation must not change adopted client policies");
     }
 
     check(budget.liveBytes() == 0, "client policy snapshots must release their generation's allocations");
@@ -425,16 +425,16 @@ namespace {
   void clientMetadataAndResponseBounds() {
     const Configuration configuration;
     application::ClientQueryContext context;
-    std::array<char, ConfigurationQuery::capacity> output{};
-    const auto defaults = telar::runtime::JsonValue::parse(application::ClientQuery::write(configuration, context, output));
+    telar::ds::Array<char, ConfigurationQuery::capacity> output{};
+    const auto defaults = telar::runtime::JsonValue::parse(application::ClientQuery::write(configuration, context, output.viewMut()));
 
     check(requiredJsonField(defaults, "source").encoded() == "null", "an absent source must remain null");
     check(requiredJsonField(defaults, "sound").encoded() == R"({"enabled":true,"ready":true,"needs_input":true})", "sound defaults must match the original policy");
-    constexpr auto source = std::to_array<char>({'x', static_cast<char>(0xff)});
+    constexpr auto source = telar::ds::Array<char, 2>{'x', static_cast<char>(0xff)};
 
     context.source = std::string_view{source.data(), source.size()};
     context.profile = std::string_view{};
-    const std::string complete{application::ClientQuery::write(configuration, context, output)};
+    const std::string complete{application::ClientQuery::write(configuration, context, output.viewMut())};
 
     check(complete.contains(R"("source":[120,255],"profile":"")"), "optional byte metadata must distinguish absence, empty text and invalid UTF-8");
     constexpr char guard = 'g';
@@ -444,7 +444,7 @@ namespace {
       bool failed = false;
 
       try {
-        check(application::ClientQuery::write(configuration, context, std::span{output}.first(capacity)) == complete, "successful client replies must preserve every byte");
+        check(application::ClientQuery::write(configuration, context, output.viewMut().first(capacity)) == complete, "successful client replies must preserve every byte");
       } catch (const std::length_error& error) {
         failed = std::string_view{error.what()} == "WriteFailed";
       }
@@ -454,13 +454,13 @@ namespace {
   }
 
   void unselectedProfilesAreValidated() {
-    constexpr auto invalid_configurations = std::to_array<std::string_view>({
+    constexpr auto invalid_configurations = telar::ds::Array<std::string_view, 5>{
         "return {api_version=2,profiles={unused={runtime={graphics={pane_mib=0}}}}}",
         "return {api_version=2,profiles={unused={client={unknown=true}}}}",
         "return {api_version=2,profiles={['invalid name']={}}}",
         "return {api_version=2,profiles={unused={gui={font={size=0}}}}}",
         "return {api_version=2,profiles={unused={theme={unknown=true}}}}",
-    });
+    };
 
     SystemAllocator system;
     BudgetAllocator budget{system, std::numeric_limits<std::size_t>::max()};

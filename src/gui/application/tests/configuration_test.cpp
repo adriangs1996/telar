@@ -24,6 +24,7 @@ import telar.lua;
 import telar.config.snapshot;
 import telar.gui.application;
 import telar.config.runtime;
+import telar.base.ds;
 
 namespace {
 
@@ -77,7 +78,7 @@ namespace {
     const auto bound = read({.source = R"(return {api_version = 2, client = {prompt = {bindings = {{keys = "ctrl+j", action = "submit"}, {keys = "H", action = "line_start", mode = "normal"}}}}})", .profile = {}});
 
     check(bound.prompt.bindings.size() == 2 && bound.prompt.bindings[0].character == 'j' && bound.prompt.bindings[1].normal && bound.prompt.bindings[1].action == 8, "prompt bindings must be read with their action and mode");
-    constexpr auto invalid_sources = std::to_array<std::string_view>({R"(return {api_version = 2, client = {prompt = {mode = "fancy"}}})", R"(return {api_version = 2, client = {prompt = {max_lines = 0}}})", R"(return {api_version = 2, client = {prompt = {keymap = "helix"}}})", R"(return {api_version = 2, client = {prompt = {skin = "neon"}}})", R"(return {api_version = 2, client = {prompt = {ambient = true}}})", R"(return {api_version = 2, client = {prompt = {bindings = {{keys = "ctrl+j", action = "explode"}}}}})"});
+    constexpr auto invalid_sources = telar::ds::Array<std::string_view, 6>{R"(return {api_version = 2, client = {prompt = {mode = "fancy"}}})", R"(return {api_version = 2, client = {prompt = {max_lines = 0}}})", R"(return {api_version = 2, client = {prompt = {keymap = "helix"}}})", R"(return {api_version = 2, client = {prompt = {skin = "neon"}}})", R"(return {api_version = 2, client = {prompt = {ambient = true}}})", R"(return {api_version = 2, client = {prompt = {bindings = {{keys = "ctrl+j", action = "explode"}}}}})"};
 
     for (const auto source : invalid_sources) {
       bool rejected = false;
@@ -100,7 +101,7 @@ namespace {
 
     check(!defaults.history.show_agent_commands && !defaults.history.enter_runs && !defaults.history.match_fts, "history defaults must keep the human-only fuzzy paste behavior");
 
-    constexpr auto invalid_sources = std::to_array<std::string_view>({R"(return {api_version = 2, client = {history = {enter = "exec"}}})", R"(return {api_version = 2, client = {history = {match = "regex"}}})", R"(return {api_version = 2, client = {history = {show_agent_commands = "yes"}}})"});
+    constexpr auto invalid_sources = telar::ds::Array<std::string_view, 3>{R"(return {api_version = 2, client = {history = {enter = "exec"}}})", R"(return {api_version = 2, client = {history = {match = "regex"}}})", R"(return {api_version = 2, client = {history = {show_agent_commands = "yes"}}})"};
 
     for (const auto source : invalid_sources) {
       bool rejected = false;

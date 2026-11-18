@@ -1,4 +1,5 @@
 #include "bundled_fonts.hpp"
+#include "telar_base/ds/values.hpp"
 #include <QDebug>
 #include <QFontDatabase>
 #include <QString>
@@ -9,7 +10,7 @@
 
 namespace telar::gui::qt {
   namespace {
-    constexpr std::array resources{
+    constexpr ds::Array resources{
         ":/telar/fonts/TelarForma-Regular.ttf",
         ":/telar/fonts/JetBrainsMono-Regular.ttf",
         ":/telar/fonts/SymbolsNerdFontMono-Regular.ttf",

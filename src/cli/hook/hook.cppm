@@ -67,8 +67,8 @@ export {
 
       static tbc::view<ds::Option<std::string_view>, tbc::lt::a> join(std::string_view root, std::string_view suffix, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept;
 
-      std::array<char, PATH_MAX> root_;
-      std::array<char, PATH_MAX> path_;
+      ds::Array<char, PATH_MAX> root_;
+      ds::Array<char, PATH_MAX> path_;
     };
 
   }

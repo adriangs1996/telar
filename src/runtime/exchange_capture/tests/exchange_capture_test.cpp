@@ -14,6 +14,7 @@ import telar.testing;
 import telar.runtime.exchange_capture.pipeline;
 import telar.config.runtime;
 import telar.runtime.vocabulary.exchange;
+import telar.base.ds;
 
 namespace {
 
@@ -46,7 +47,7 @@ namespace {
     MemoryAdapter adapter{synchronized};
     ConcurrentMemory& memory = adapter;
     CaptureQuota quota{600};
-    const std::array<std::uint8_t, 300> fragment{73};
+    const ds::Array<std::uint8_t, 300> fragment{73};
 
     {
       CaptureBuffer buffer{memory, quota, 1024};
@@ -148,9 +149,9 @@ namespace {
 
   void testConcurrentCaptureQuota() {
     CaptureQuota quota{1024};
-    std::array<std::jthread, 4> threads;
+    ds::Array<std::jthread, 4> threads;
 
-    for (auto& thread : threads) {
+    for (auto& thread : threads.viewMut()) {
       thread = std::jthread{[&] {
         for (std::size_t iteration = 0; iteration < 10000; ++iteration) {
           const auto reserved = quota.reserveAtMost(300);
@@ -161,7 +162,7 @@ namespace {
       }};
     }
 
-    for (auto& thread : threads) {
+    for (auto& thread : threads.viewMut()) {
       thread.join();
     }
 

@@ -38,7 +38,7 @@ namespace telar::runtime {
   }
 
   SentDocuments::Item* SentDocuments::find(std::uint64_t id) noexcept {
-    const auto kept = std::span{items}.first(count);
+    const auto kept = items.viewMut().first(count);
     const auto found = std::ranges::find(kept, id, &Item::id);
 
     return found == kept.end() ? nullptr : &*found;
@@ -49,12 +49,12 @@ namespace telar::runtime {
       return nullptr;
     }
 
-    items[count] = Item{.id = id};
-    return &items[count++];
+    items.atMut(count) = Item{.id = id};
+    return &items.atMut(count++);
   }
 
   void SentDocuments::erase(std::size_t index) noexcept {
-    std::move(items.begin() + static_cast<std::ptrdiff_t>(index) + 1, items.begin() + static_cast<std::ptrdiff_t>(count), items.begin() + static_cast<std::ptrdiff_t>(index));
+    std::move(items.dataMut() + static_cast<std::ptrdiff_t>(index) + 1, items.dataMut() + static_cast<std::ptrdiff_t>(count), items.dataMut() + static_cast<std::ptrdiff_t>(index));
     --count;
   }
 
@@ -126,7 +126,7 @@ namespace telar::runtime {
         input(memory, input_limit),
         scrollback_rows(memory),
         cwd(command.cwd(), AllocatorRef<char, ConcurrentMemory>{memory}) {
-    randomBytes(history_session.data(), history_session.size());
+    randomBytes(history_session.dataMut(), history_session.size());
     input.reserve(input_limit);
     launch.capture(command.arguments(), command.restorable());
     const auto executable = std::string_view{command.arguments().front()};
@@ -152,7 +152,7 @@ namespace telar::runtime {
   bool Pane::read(ReadMode mode) {
     constexpr std::size_t batch_byte_limit = 64 * 1024;
     constexpr unsigned batch_read_limit = 8;
-    std::array<Byte, read_buffer_size> buffer;
+    ds::Array<Byte, read_buffer_size> buffer;
     std::size_t batch_bytes = 0;
     const unsigned read_limit = mode == ReadMode::burst ? batch_read_limit : 1;
     // Read the shell's state once per call, after the output that may have changed it.
@@ -175,7 +175,7 @@ namespace telar::runtime {
         return observed(true);
       }
 
-      const auto count = ::read(process->descriptor(), buffer.data(), capacity);
+      const auto count = ::read(process->descriptor(), buffer.dataMut(), capacity);
       if (count > 0 && echo_sent) {
         timeLink(std::chrono::steady_clock::now() - *std::exchange(echo_sent, ds::none));
       }
@@ -349,13 +349,13 @@ namespace telar::runtime {
     ++state.commands;
     state.status = completion.exit_code.valueOr(0);
     if (count != 0 && kept[count - 1].action == 'D') {
-      kept[count - 1].status = completion.exit_code;
+      kept.atMut(count - 1).status = completion.exit_code;
     }
   }
 
   void Pane::ShellCompletions::mark(CommandMark mark) noexcept {
     if (count < kept.size()) {
-      kept[count++] = Mark{.action = mark.action, .end = mark.end, .status = ds::none};
+      kept.atMut(count++) = Mark{.action = mark.action, .end = mark.end, .status = ds::none};
     }
   }
 
@@ -689,7 +689,7 @@ namespace telar::runtime {
       return;
     }
 
-    std::array<ClientTabLayout, maximum_tabs> tabs;
+    ds::Array<ClientTabLayout, maximum_tabs> tabs;
     std::size_t count = 0;
     ds::Option<TabLocation> active;
 
@@ -699,7 +699,7 @@ namespace telar::runtime {
         continue;
       }
 
-      tabs[count++] = tab;
+      tabs.atMut(count++) = tab;
       if (sameLocation(tab.location, record->active_tab)) {
         active = tab.location;
       }
@@ -748,8 +748,8 @@ namespace telar::runtime {
       throw std::bad_alloc{};
     }
 
-    tabs[tab_count++] = StoredTab{tab.location, tab.focused_pane, tab.fullscreen, tab.workspace_active, static_cast<std::uint16_t>(node_count), static_cast<std::uint16_t>(tab.nodes.size())};
-    std::copy(tab.nodes.begin(), tab.nodes.end(), nodes.begin() + node_count);
+    tabs.atMut(tab_count++) = StoredTab{tab.location, tab.focused_pane, tab.fullscreen, tab.workspace_active, static_cast<std::uint16_t>(node_count), static_cast<std::uint16_t>(tab.nodes.size())};
+    std::copy(tab.nodes.begin(), tab.nodes.end(), nodes.dataMut() + node_count);
     node_count += tab.nodes.size();
   }
 

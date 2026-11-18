@@ -198,7 +198,7 @@ namespace telar::gui::features::prompt {
 
     void repeat();
 
-    static std::size_t encode(char32_t value, std::array<char, 4>& output) noexcept;
+    static std::size_t encode(char32_t value, ds::Array<char, 4>& output) noexcept;
 
     Text text_;
     Keymap keymap_;
@@ -206,7 +206,7 @@ namespace telar::gui::features::prompt {
     Clipboard clipboard_;
     std::string kill_ring_;
     Register unnamed_;
-    std::array<Register, 26> registers_;
+    ds::Array<Register, 26> registers_;
     std::vector<Recorded> recorded_;
     std::vector<Recorded> last_change_;
     ds::Option<std::size_t> goal_column_;

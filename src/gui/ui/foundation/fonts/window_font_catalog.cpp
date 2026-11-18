@@ -181,7 +181,7 @@ namespace telar::gui::qt {
 
     auto updated = std::make_shared<FontCollection>(*collection_);
 
-    updated->fallback[updated->count++] = result.source;
+    updated->fallback.atMut(updated->count++) = result.source;
     collection_ = std::move(updated);
     primary_collections_.clear();
 

@@ -33,15 +33,15 @@ namespace {
 
     check(inherited && std::get<CellColor>(*inherited).kind == CellColor::Kind::default_color, "an explicit default remains a default color, rather than an accent alias");
     const auto literal = ColorName::parse("#aBcDeF");
-    const std::array<Byte, 3> expected{0xab, 0xcd, 0xef};
+    const ds::Array<Byte, 3> expected{0xab, 0xcd, 0xef};
 
     check(literal && std::get<CellColor>(*literal).channels == expected, "hexadecimal machine ink preserves every byte");
     const auto separated = ColorName::parse("#ff__ff");
-    const std::array<Byte, 3> cyan{0, 0xff, 0xff};
+    const ds::Array<Byte, 3> cyan{0, 0xff, 0xff};
 
     check(separated && std::get<CellColor>(*separated).channels == cyan, "the original hexadecimal parser accepts internal repeated separators");
     const auto signed_zero = ColorName::parse("#-00000");
-    const std::array<Byte, 3> black{};
+    const ds::Array<Byte, 3> black{};
 
     check(signed_zero && std::get<CellColor>(*signed_zero).channels == black, "unsigned negative zero is a valid literal in the original parser");
     for (const auto* const text : {"", "red ", "#0x00ff", "#-00001", "#_fffff", "#fffff_", "#12345", "#1234567", "palette-red"}) {
@@ -79,12 +79,12 @@ namespace {
 
   void machineListStatusCountsActiveAgents() {
     using Geometry = MachineChromeGeometry;
-    std::array<char, Geometry::list_status_capacity> storage{};
+    ds::Array<char, Geometry::list_status_capacity> storage{};
 
-    check(Geometry::listStatus(false, 3, storage) == "Offline", "a machine whose link is down reads offline, whatever it last reported");
-    check(Geometry::listStatus(true, 0, storage) == "No active agents" && Geometry::listStatus(true, 1, storage) == "1 active agent", "an idle machine and a single agent read in plain words");
-    check(Geometry::listStatus(true, 12, storage) == "12 active agents", "several agents read as their count");
-    check(Geometry::listStatus(true, std::numeric_limits<std::size_t>::max(), storage) == "active agents", "a count that does not fit drops out instead of overrunning the storage");
+    check(Geometry::listStatus(false, 3, storage.viewMut()) == "Offline", "a machine whose link is down reads offline, whatever it last reported");
+    check(Geometry::listStatus(true, 0, storage.viewMut()) == "No active agents" && Geometry::listStatus(true, 1, storage.viewMut()) == "1 active agent", "an idle machine and a single agent read in plain words");
+    check(Geometry::listStatus(true, 12, storage.viewMut()) == "12 active agents", "several agents read as their count");
+    check(Geometry::listStatus(true, std::numeric_limits<std::size_t>::max(), storage.viewMut()) == "active agents", "a count that does not fit drops out instead of overrunning the storage");
   }
 
   void inlineMachineFactsKeepOriginalStateAndGeometry() {
@@ -94,7 +94,7 @@ namespace {
       PaletteRole ink;
     };
 
-    constexpr std::array cases{
+    constexpr ds::Array cases{
         Case{.phase = MachinePhase::connected, .glyph = "●", .ink = PaletteRole::green},
         Case{.phase = MachinePhase::connecting, .glyph = "◌", .ink = PaletteRole::overlay1},
         Case{.phase = MachinePhase::lost, .glyph = "✕", .ink = PaletteRole::peach},
@@ -153,7 +153,7 @@ namespace {
     const auto fractional_fold = Geometry::control(fractional_bounds, chrome, Geometry::Kind::fold, fractional_advance, false);
 
     check(fractional_fold.label.x == centered_origin, "the fold keeps the original gfx layout's floored centering at fractional extents");
-    constexpr std::array<std::array<float, 2>, 2> segments{{{100, 134}, {300, 200}}};
+    constexpr ds::Array<ds::Array<float, 2>, 2> segments{{{100, 134}, {300, 200}}};
 
     for (const auto& segment : segments) {
       check(Geometry::preferredSegment(chrome, segment[0]) == segment[1], "the segment reserves its disc and padding before applying its cap");

@@ -67,7 +67,7 @@ export {
         for (const auto& bytes : sent | std::views::reverse) {
           if (bytes.front() == static_cast<Byte>(MessageSchema<Message>::tag)) {
             storage.fill(0);
-            DecodeStorage decoded{storage};
+            DecodeStorage decoded{storage.viewMut()};
 
             return Codec::decode<Message>(bytes, decoded);
           }
@@ -123,7 +123,7 @@ export {
       ds::Option<std::size_t> reject_input_after;
       ds::Option<std::size_t> reject_detach_after;
       static constexpr std::size_t decode_capacity = 4096;
-      mutable std::array<Byte, decode_capacity> storage{};
+      mutable ds::Array<Byte, decode_capacity> storage{};
 
     private:
       std::vector<Byte> buffer_;
@@ -199,11 +199,11 @@ export {
 
     template <typename Client>
     void deliverSingleCell(Client& client, FrameBody frame) {
-      const std::array cells{Cell{.text = byteView("X")}};
+      const ds::Array cells{Cell{.text = byteView("X")}};
       constexpr std::size_t cell_capacity = 64;
-      std::array<Byte, cell_capacity> encoded{};
-      const std::array spans{FrameSpan{.start = 0, .count = 1, .cells = CellRunCodec::encode(cells, encoded)}};
-      const std::array<Byte, 1> flags{};
+      ds::Array<Byte, cell_capacity> encoded{};
+      const ds::Array spans{FrameSpan{.start = 0, .count = 1, .cells = CellRunCodec::encode(cells, encoded.viewMut())}};
+      const ds::Array<Byte, 1> flags{};
 
       frame.cols = frame.rows = 1;
       frame.text_metadata = TextMetadata{.row_flags = flags};
@@ -222,10 +222,10 @@ export {
       const TabLocation location{.workspace = WorkspaceLocation{.kind = WorkspaceLocation::Kind::workspace, .id = 1}, .tab_id = 1};
 
       deliver(client, PaneOpened{.request_id = open.request_id, .pane_id = 1, .location = location, .created = true, .pane_generation = 1});
-      const std::array<PaneDescriptor, 1> descriptors{{{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}}};
+      const ds::Array<PaneDescriptor, 1> descriptors{{{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}}};
 
       deliver(client, TabSnapshot{.request_id = transport.last<RequestTabSnapshot>().request_id, .location = location, .panes = descriptors});
-      const std::array tabs{TabDescriptor{.tab_id = location.tab_id, .pane_count = 1}};
+      const ds::Array tabs{TabDescriptor{.tab_id = location.tab_id, .pane_count = 1}};
 
       deliver(client, WorkspaceSnapshot{.request_id = transport.last<RequestWorkspaceSnapshot>().request_id, .workspace = location.workspace, .name = "project", .tabs = tabs});
     }

@@ -100,12 +100,12 @@ namespace {
   constexpr auto background_blue = Color::rgb(0x2040dc);
 
   struct BackgroundRow {
-    std::array<Cell, background_columns> cells;
+    ds::Array<Cell, background_columns> cells;
     std::vector<BackgroundRectangle> rectangles;
   };
 
   BackgroundRow backgroundRow(BackgroundPattern pattern, Color first_color) {
-    static constexpr std::array<Byte, 1> space{' '};
+    static constexpr ds::Array<Byte, 1> space{' '};
     constexpr std::size_t inverse_columns = 4;
     constexpr qreal wide_columns = 2;
     const auto wide = pattern == BackgroundPattern::wide_overlap || pattern == BackgroundPattern::translucent_wide_overlap || pattern == BackgroundPattern::clipped_wide;
@@ -113,7 +113,7 @@ namespace {
 
     for (std::size_t column = 0; column < background_columns; ++column) {
       const auto alternate = pattern == BackgroundPattern::alternating && column % 2 != 0;
-      auto& cell = row.cells[column];
+      auto& cell = row.cells.atMut(column);
 
       cell.text = space;
       cell.style.background = {.kind = CellColor::Kind::indexed, .channels = {static_cast<Byte>(alternate)}};
@@ -176,11 +176,11 @@ namespace {
   constexpr std::uint16_t scroll_columns = 8;
   constexpr std::uint16_t scroll_rows = 7;
 
-  std::array<Cell, static_cast<std::size_t>(scroll_columns) * scroll_rows> scrollCells(std::uint32_t offset) {
+  ds::Array<Cell, static_cast<std::size_t>(scroll_columns) * scroll_rows> scrollCells(std::uint32_t offset) {
     constexpr std::size_t palette_size = 16;
-    constexpr std::array<std::string_view, 10> symbols{"M", "g", "A", "f", "j", "e\xcc\x81", "\xe2\x94\x80", "\xe2\x96\x88", "\xce\xa9", " "};
-    static constexpr std::array<Byte, 3> wide_text{0xe7, 0x95, 0x8c};
-    constexpr std::array<std::uint16_t, 5> attributes{
+    constexpr ds::Array<std::string_view, 10> symbols{"M", "g", "A", "f", "j", "e\xcc\x81", "\xe2\x94\x80", "\xe2\x96\x88", "\xce\xa9", " "};
+    static constexpr ds::Array<Byte, 3> wide_text{0xe7, 0x95, 0x8c};
+    constexpr ds::Array<std::uint16_t, 5> attributes{
         0,
         static_cast<std::uint16_t>(CellAttribute::bold),
         static_cast<std::uint16_t>(CellAttribute::italic),
@@ -188,13 +188,13 @@ namespace {
         static_cast<std::uint16_t>(CellAttribute::strikethrough),
     };
 
-    std::array<Cell, static_cast<std::size_t>(scroll_columns) * scroll_rows> cells;
+    ds::Array<Cell, static_cast<std::size_t>(scroll_columns) * scroll_rows> cells;
 
     for (std::size_t row = 0; row < scroll_rows; ++row) {
       const auto identity = offset + row;
 
       for (std::size_t column = 0; column < scroll_columns; ++column) {
-        auto& cell = cells[(row * scroll_columns) + column];
+        auto& cell = cells.atMut((row * scroll_columns) + column);
         const auto text = symbols[(identity + column) % symbols.size()];
 
         cell = Cell{};
@@ -203,11 +203,11 @@ namespace {
         cell.style.background = {.kind = CellColor::Kind::indexed, .channels = {static_cast<Byte>(identity % palette_size)}};
       }
 
-      auto& wide = cells[(row * scroll_columns) + 2];
+      auto& wide = cells.atMut((row * scroll_columns) + 2);
 
       wide.text = wide_text;
       wide.width = CellWidth::wide;
-      auto& continuation = cells[(row * scroll_columns) + 3];
+      auto& continuation = cells.atMut((row * scroll_columns) + 3);
 
       continuation.text = {};
       continuation.width = CellWidth::continuation;
@@ -383,16 +383,16 @@ namespace {
     }
 
     void setCell(CellStyle style, CursorShape shape, bool cursor_visible, std::string_view text = " ") {
-      std::array<Byte, CellValue::text_capacity> bytes{};
+      ds::Array<Byte, CellValue::text_capacity> bytes{};
       if (text.empty() || text.size() > bytes.size()) {
         throw std::length_error{"Scene fixture text exceeds one cell"};
       }
 
       for (std::size_t index = 0; index < text.size(); ++index) {
-        bytes[index] = static_cast<Byte>(text[index]);
+        bytes.atMut(index) = static_cast<Byte>(text[index]);
       }
 
-      const std::array<Cell, 1> cells{{{.style = style, .text = std::span{bytes}.first(text.size())}}};
+      const ds::Array<Cell, 1> cells{{{.style = style, .text = std::span{bytes}.first(text.size())}}};
 
       setCells(cells, {.visible = cursor_visible, .shape = shape});
     }
@@ -408,9 +408,9 @@ namespace {
         throw std::invalid_argument{"Scene fixture requires a complete grid"};
       }
 
-      std::array<Byte, encoded_capacity> encoded{};
-      const auto run = CellRunCodec::encode(cells, encoded);
-      const std::array<FrameSpan, 1> spans{{{.start = 0, .count = static_cast<std::uint32_t>(cells.size()), .cells = run}}};
+      ds::Array<Byte, encoded_capacity> encoded{};
+      const auto run = CellRunCodec::encode(cells, encoded.viewMut());
+      const ds::Array<FrameSpan, 1> spans{{{.start = 0, .count = static_cast<std::uint32_t>(cells.size()), .cells = run}}};
       const std::vector<Byte> flags(cells.size() / columns);
       PaneFrame frame;
 
@@ -570,7 +570,7 @@ namespace {
     }
 
     void setPaletteColor(std::size_t index, Color color) {
-      configuration_.theme.palette.at(index) = color;
+      configuration_.theme.palette.atCheckedMut(index) = color;
       item_.invalidateAppearance();
     }
 
@@ -659,7 +659,7 @@ namespace {
 
       const auto glyph = run.glyph(0);
       // The configured rendering: grid fitting and FreeType dilation (CoreText only draws native thickened glyphs).
-      constexpr std::array hinting{fonts::GlyphHinting::native, fonts::GlyphHinting::light, fonts::GlyphHinting::full};
+      constexpr ds::Array hinting{fonts::GlyphHinting::native, fonts::GlyphHinting::light, fonts::GlyphHinting::full};
       const auto& font = configuration_.font;
       const auto bitmap = face.rasterize({.index = glyph.index, .pixel_height = resolved_.grid.pixel_height, .style = style, .thicken_strength = font.thicken ? font.thicken_strength : std::uint8_t{0}, .hinting = hinting.at(std::to_underlying(font.hinting))});
       const auto left = FontMetrics::roundFixed(glyph.x_offset) + bitmap.left;
@@ -745,11 +745,11 @@ namespace {
       auto expected = cells;
 
       for (std::size_t row = scroll_rows; row-- > lowered + 1;) {
-        std::copy_n(cells.begin() + static_cast<std::ptrdiff_t>((row - 1) * scroll_columns), scroll_columns, expected.begin() + static_cast<std::ptrdiff_t>(row * scroll_columns));
+        std::copy_n(cells.begin() + static_cast<std::ptrdiff_t>((row - 1) * scroll_columns), scroll_columns, expected.dataMut() + static_cast<std::ptrdiff_t>(row * scroll_columns));
       }
 
       for (std::size_t column = 0; column < scroll_columns; ++column) {
-        expected[(lowered * scroll_columns) + column] = Cell{.text = byteView(" ")};
+        expected.atMut((lowered * scroll_columns) + column) = Cell{.text = byteView(" ")};
       }
 
       reference.setGrid(expected, scroll_columns, {}, {.total_rows = 100, .offset = offset});
@@ -777,7 +777,7 @@ namespace {
         last.emplace_back(after[column]);
       }
 
-      const std::array kept{last, last};
+      const ds::Array kept{last, last};
 
       drawn.drawShiftedRows(1, kept);
       QVERIFY2(drawn.capture() == reference.capture(), "rows drawn from their sources must look as the screen holding them does");
@@ -786,7 +786,7 @@ namespace {
     static void checkScrolledRows(bool optical) {
       constexpr std::uint8_t full_strength = 255;
       constexpr std::size_t middle_cell = static_cast<std::size_t>(scroll_columns) * (scroll_rows / 2);
-      constexpr std::array<std::uint32_t, 20> offsets{80, 77, 74, 77, 80, 0, 3, 6, 93, 90, 87, 86, 85, 88, 88, 85, 82, 79, 76, 73};
+      constexpr ds::Array<std::uint32_t, 20> offsets{80, 77, 74, 77, 80, 0, 3, 6, 93, 90, 87, 86, 85, 88, 88, 85, 82, 79, 76, 73};
       SceneFixture retained{CursorShape::block, false};
       SceneFixture reference{CursorShape::block, false};
 
@@ -800,8 +800,8 @@ namespace {
         auto cells = scrollCells(offset);
 
         if (step == static_cast<std::size_t>(ScrollStep::patch) || step == static_cast<std::size_t>(ScrollStep::patch_shifted)) {
-          cells[middle_cell].text = byteView("!");
-          cells[middle_cell].style.background.channels.front() = 1;
+          cells.atMut(middle_cell).text = byteView("!");
+          cells.atMut(middle_cell).style.background.channels.atMut(0) = 1;
         }
 
         applyScrollStep(retained, cells, static_cast<ScrollStep>(step), offset);
@@ -854,7 +854,7 @@ namespace {
 
     Q_SLOT static void changingTextAndInlineDecorationsMatchesFreshRows() {
       QFETCH(bool, optical);
-      constexpr std::array<std::string_view, 5> contents{"ffi!=->M", "ABCDEFGH", "        ", "01234567", "ffi!=->M"};
+      constexpr ds::Array<std::string_view, 5> contents{"ffi!=->M", "ABCDEFGH", "        ", "01234567", "ffi!=->M"};
       constexpr std::size_t columns = 8;
       constexpr unsigned underline_shift = 8;
       SceneFixture fixture{CursorShape::block, false};
@@ -862,11 +862,11 @@ namespace {
       fixture.useWhiteTextOnBlack();
       fixture.setFontRendering(optical, FontConfiguration::maximum_thicken_strength);
       for (std::size_t variant = 0; variant < contents.size(); ++variant) {
-        std::array<Byte, columns> text{};
-        std::array<Cell, columns> cells;
+        ds::Array<Byte, columns> text{};
+        ds::Array<Cell, columns> cells;
 
         for (std::size_t column = 0; column < columns; ++column) {
-          text[column] = static_cast<Byte>(contents[variant][column]);
+          text.atMut(column) = static_cast<Byte>(contents[variant][column]);
           CellStyle style;
 
           if (variant % 2 != 0) {
@@ -875,7 +875,7 @@ namespace {
             style.flags |= static_cast<std::uint16_t>(static_cast<unsigned>(UnderlineStyle::curly) << underline_shift);
           }
 
-          cells[column] = {.style = style, .text = std::span{text}.subspan(column, 1)};
+          cells.atMut(column) = {.style = style, .text = std::span{text}.subspan(column, 1)};
         }
 
         fixture.setCells(cells, {.visible = false, .shape = CursorShape::block});
@@ -891,11 +891,11 @@ namespace {
 
     Q_SLOT static void viewportResizeExcludesHiddenLigatureContextWithoutCellDamage() {
       SceneFixture fixture{CursorShape::block, false};
-      std::array<Byte, 4> text{'=', '=', '=', '='};
-      std::array<Cell, 4> cells;
+      ds::Array<Byte, 4> text{'=', '=', '=', '='};
+      ds::Array<Cell, 4> cells;
 
       for (std::size_t index = 0; index < cells.size(); ++index) {
-        cells[index].text = std::span{text}.subspan(index, 1);
+        cells.atMut(index).text = std::span{text}.subspan(index, 1);
       }
 
       fixture.setCells(cells, {});
@@ -918,11 +918,11 @@ namespace {
 
     Q_SLOT static void blinkingCursorMovesRebuildLigaturesWithoutCellDamage() {
       SceneFixture fixture{CursorShape::block};
-      std::array<Byte, 4> text{'=', '=', '=', ' '};
-      std::array<Cell, 4> cells;
+      ds::Array<Byte, 4> text{'=', '=', '=', ' '};
+      ds::Array<Cell, 4> cells;
 
       for (std::size_t index = 0; index < cells.size(); ++index) {
-        cells[index].text = std::span{text}.subspan(index, 1);
+        cells.atMut(index).text = std::span{text}.subspan(index, 1);
       }
 
       fixture.setCells(cells, {.visible = true, .shape = CursorShape::block});
@@ -946,7 +946,7 @@ namespace {
       fixture.useWhiteTextOnBlack();
       constexpr auto bold_flag = static_cast<std::uint16_t>(CellAttribute::bold);
       constexpr auto italic_flag = static_cast<std::uint16_t>(CellAttribute::italic);
-      constexpr std::array flags{std::uint16_t{0}, bold_flag, italic_flag, static_cast<std::uint16_t>(bold_flag | italic_flag)};
+      constexpr ds::Array flags{std::uint16_t{0}, bold_flag, italic_flag, static_cast<std::uint16_t>(bold_flag | italic_flag)};
 
       for (const auto value : flags) {
         CellStyle style;
@@ -1343,7 +1343,7 @@ namespace {
 
       fixture.resizeCell(expanded_cell);
       constexpr unsigned underline_shift = 8;
-      constexpr std::array<Byte, 3> blue_channels{0x33, 0x66, 0xff};
+      constexpr ds::Array<Byte, 3> blue_channels{0x33, 0x66, 0xff};
 
       for (const auto underline : {UnderlineStyle::single, UnderlineStyle::double_line, UnderlineStyle::curly, UnderlineStyle::dotted, UnderlineStyle::dashed}) {
         CellStyle style;
@@ -1585,7 +1585,7 @@ namespace {
       constexpr qreal cell_height = 21;
       constexpr Color precise_color{.r = 0.12345F, .g = 0.65789F, .b = 0.30001F};
       constexpr float translucent_alpha = 0.5F;
-      constexpr std::array opaque_colors{
+      constexpr ds::Array opaque_colors{
           Color::rgb(0xdc3020),
           Color::rgb(0xdc8020),
           Color::rgb(0x2040dc),
@@ -1595,8 +1595,8 @@ namespace {
       auto colors = opaque_colors;
 
       if (mixed) {
-        colors[1] = precise_color;
-        colors[2].a = translucent_alpha;
+        colors.atMut(1) = precise_color;
+        colors.atMut(2).a = translucent_alpha;
       }
 
       SceneFixture actual{CursorShape::block, false};
@@ -1606,7 +1606,7 @@ namespace {
       for (std::size_t column = 0; column < row.cells.size(); ++column) {
         const auto index = column % colors.size();
 
-        row.cells[column].style.background.channels.front() = static_cast<Byte>(index);
+        row.cells.atMut(column).style.background.channels.atMut(0) = static_cast<Byte>(index);
         row.rectangles[column].color = colors[index];
       }
 
@@ -1643,8 +1643,8 @@ namespace {
       constexpr auto faint = static_cast<std::uint16_t>(CellAttribute::faint);
       constexpr auto inverse = static_cast<std::uint16_t>(CellAttribute::inverse);
       constexpr Color precise_color{.r = 0.12345F, .g = 0.65789F, .b = 0.30001F, .a = 0.7F};
-      constexpr std::array<Byte, 1> text{'M'};
-      constexpr std::array<CellColor, 5> colors{
+      constexpr ds::Array<Byte, 1> text{'M'};
+      constexpr ds::Array<CellColor, 5> colors{
           CellColor{.kind = CellColor::Kind::default_color},
           CellColor{.kind = CellColor::Kind::indexed, .channels = {1}},
           CellColor{.kind = CellColor::Kind::indexed, .channels = {196}},
@@ -1652,8 +1652,8 @@ namespace {
           CellColor{.kind = CellColor::Kind::rgb, .channels = {20, 220, 200}},
       };
 
-      constexpr std::array<std::uint16_t, 4> flags{0, faint, inverse, faint | inverse};
-      constexpr std::array selections{no_selection, CellSelection{.anchor = 1, .head = 4}, CellSelection{.anchor = 0, .head = 7}};
+      constexpr ds::Array<std::uint16_t, 4> flags{0, faint, inverse, faint | inverse};
+      constexpr ds::Array selections{no_selection, CellSelection{.anchor = 1, .head = 4}, CellSelection{.anchor = 0, .head = 7}};
       SceneFixture actual{CursorShape::block, false};
       SceneFixture reference{CursorShape::block, false};
 
@@ -1664,22 +1664,22 @@ namespace {
       theme.foreground = cursor_color;
       theme.background = background_color;
       for (std::size_t variant = 0; variant < colors.size(); ++variant) {
-        theme.palette[1] = variant % 2 == 0 ? precise_color : background_blue;
+        theme.palette.atMut(1) = variant % 2 == 0 ? precise_color : background_blue;
         actual.setPaletteColor(1, theme.palette[1]);
         for (const auto selection : selections) {
-          std::array<Cell, background_columns> cells;
-          std::array<Cell, background_columns> expected;
+          ds::Array<Cell, background_columns> cells;
+          ds::Array<Cell, background_columns> expected;
 
           for (std::size_t column = 0; column < cells.size(); ++column) {
             const auto index = ((column / 2) + variant) % colors.size();
             const CellStyle style{.flags = flags[column / 2], .foreground = colors[index], .background = colors[(index + 1) % colors.size()]};
 
-            cells[column] = {.style = style, .text = text};
+            cells.atMut(column) = {.style = style, .text = text};
             const auto [foreground, background] = resolvedCellColors(theme, style, selection.contains(column));
 
             reference.setPaletteColor(2 * column, foreground);
             reference.setPaletteColor((2 * column) + 1, background);
-            expected[column] = {.style = {.foreground = {.kind = CellColor::Kind::indexed, .channels = {static_cast<Byte>(2 * column)}}, .background = {.kind = CellColor::Kind::indexed, .channels = {static_cast<Byte>((2 * column) + 1)}}}, .text = text};
+            expected.atMut(column) = {.style = {.foreground = {.kind = CellColor::Kind::indexed, .channels = {static_cast<Byte>(2 * column)}}, .background = {.kind = CellColor::Kind::indexed, .channels = {static_cast<Byte>((2 * column) + 1)}}}, .text = text};
           }
 
           actual.setCells(cells, {.visible = false});
@@ -1697,7 +1697,7 @@ namespace {
       };
 
       constexpr qreal cell_height = 21;
-      constexpr std::array steps{
+      constexpr ds::Array steps{
           Step{.count = 0, .color = Color::rgb(0xdc3020)},
           Step{.count = 1, .color = Color::rgb(0xdc3020)},
           Step{.count = 1, .color = Color{.r = 0.12345F, .g = 0.65789F, .b = 0.30001F}},
@@ -1707,7 +1707,7 @@ namespace {
           Step{.count = 2, .color = Color::rgb(0x20dc40)},
       };
 
-      constexpr std::array configurations{
+      constexpr ds::Array configurations{
           std::pair{9.0, 1.0},
           std::pair{9.0, 0.5},
           std::pair{9.2, 1.0},
@@ -1725,7 +1725,7 @@ namespace {
 
           row.rectangles.resize(step.count);
           for (std::size_t column = step.count; column < row.cells.size(); ++column) {
-            row.cells[column].style.background = {};
+            row.cells.atMut(column).style.background = {};
           }
 
           for (auto* fixture : {&actual, &reference}) {
@@ -1776,7 +1776,7 @@ namespace {
           retained.invalidateAppearance();
           QVERIFY2(retained.capture() == expected, "An unchanged background repaint must preserve its pixels");
 
-          for (auto& cell : row.cells) {
+          for (auto& cell : row.cells.viewMut()) {
             cell.style = {};
           }
 

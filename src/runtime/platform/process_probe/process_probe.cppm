@@ -49,7 +49,7 @@ export {
     struct ProcessLineage {
       std::span<const pid_t> ancestors() const noexcept;
 
-      std::array<pid_t, 64> processes{};
+      ds::Array<pid_t, 64> processes{};
       unsigned count = 0;
       bool descends = false;
     };
@@ -86,7 +86,7 @@ export {
 
     // The lowest distinct TCP ports a process group listens on, ascending.
     struct ListeningPorts {
-      std::array<std::uint16_t, max_listed_ports> values{};
+      ds::Array<std::uint16_t, max_listed_ports> values{};
       std::uint8_t count = 0;
 
       void add(std::uint16_t port) noexcept;
@@ -151,7 +151,7 @@ export {
     class TBC_GENERIC DescentProbe {
     public:
       struct Request {
-        std::array<DescentCheck, 32> checks;
+        ds::Array<DescentCheck, 32> checks;
         std::size_t count = 0;
       };
 
@@ -161,7 +161,7 @@ export {
       };
 
       struct Result {
-        std::array<Completion, 32> checks;
+        ds::Array<Completion, 32> checks;
         std::size_t count = 0;
       };
 
@@ -173,7 +173,7 @@ export {
         Result result;
 
         for (const auto& check : std::span{request.checks}.first(request.count)) {
-          result.checks[result.count++] = {check, inspector_.lineage(check.peer, check.root)};
+          result.checks.atMut(result.count++) = {check, inspector_.lineage(check.peer, check.root)};
         }
 
         return result;
@@ -260,12 +260,12 @@ export {
       static constexpr std::size_t batch_capacity = 16;
 
       struct Request {
-        std::array<ProcessProbeRequest, batch_capacity> panes{};
+        ds::Array<ProcessProbeRequest, batch_capacity> panes{};
         std::size_t count = 0;
       };
 
       struct Result {
-        std::array<ProcessProbeResult, batch_capacity> panes;
+        ds::Array<ProcessProbeResult, batch_capacity> panes;
         std::size_t count = 0;
       };
 
@@ -284,7 +284,7 @@ export {
           }
 
           const auto foreground = foreground_group == pane.root ? ds::Option{root->identity} : inspector_.identity(foreground_group);
-          auto& observation = result.panes[result.count];
+          auto& observation = result.panes.atMut(result.count);
 
           observation.request = pane;
           observation.request.foreground = foreground_group;

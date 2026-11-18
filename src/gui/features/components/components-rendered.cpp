@@ -17,7 +17,7 @@ namespace telar::gui::features::components {
         throw std::length_error{"Command tab exceeds its byte capacity"};
       }
 
-      std::ranges::copy(text, bytes_.begin() + static_cast<std::ptrdiff_t>(used));
+      std::ranges::copy(text, bytes_.viewMut().begin() + static_cast<std::ptrdiff_t>(used));
       used += text.size();
 
       return static_cast<std::uint16_t>(text.size());
@@ -25,7 +25,7 @@ namespace telar::gui::features::components {
 
     count_ = view.count;
     for (std::size_t index = 0; index < view.count; ++index) {
-      lengths_[index] = store(view.arguments[index]);
+      lengths_.atMut(index) = store(view.arguments[index]);
     }
 
     label_ = store(view.configured_label);
@@ -38,7 +38,7 @@ namespace telar::gui::features::components {
     std::size_t offset = 0;
 
     for (std::size_t index = 0; index < count_; ++index) {
-      result.arguments[index] = {bytes_.data() + offset, lengths_[index]};
+      result.arguments.atMut(index) = {bytes_.data() + offset, lengths_[index]};
       offset += lengths_[index];
     }
 

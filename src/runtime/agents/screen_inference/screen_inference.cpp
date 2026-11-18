@@ -8,11 +8,12 @@ import telar.base.ds;
 namespace telar::runtime {
 
   bool PromptBudget::spend(std::uint64_t sender, std::uint64_t target, std::chrono::steady_clock::time_point now) noexcept {
-    auto entry = std::ranges::find_if(pairs_, [&](const Pair& pair) {
+    const auto pairs = pairs_.viewMut();
+    auto entry = std::ranges::find_if(pairs, [&](const Pair& pair) {
       return pair.sender == sender && pair.target == target;
     });
-    if (entry == pairs_.end()) {
-      entry = std::ranges::min_element(pairs_, {}, &Pair::started);
+    if (entry == pairs.end()) {
+      entry = std::ranges::min_element(pairs, {}, &Pair::started);
       *entry = Pair{sender, target, now, 0};
     }
 
@@ -64,21 +65,21 @@ namespace telar::runtime {
     return true;
   }
 
-  tbc::view<std::span<const std::string_view>, tbc::lt::a> resumeArguments(tbc::view<const AgentResume&, tbc::lt::a> resume, tbc::view<std::array<std::string_view, 4>&, tbc::lt::a> arguments) noexcept {
+  tbc::view<std::span<const std::string_view>, tbc::lt::a> resumeArguments(tbc::view<const AgentResume&, tbc::lt::a> resume, tbc::view<ds::Array<std::string_view, 4>&, tbc::lt::a> arguments) noexcept {
     if (!validResumeSession(resume.provider, resume.session.view())) {
       return {};
     }
 
-    arguments[0] = resume.provider == AgentProvider::cursor ? "cursor-agent" : describeProvider(resume.provider).name;
-    arguments[1] = resume.provider == AgentProvider::codex ? "resume" : resume.provider == AgentProvider::pi || resume.provider == AgentProvider::opencode ? "--session"
+    arguments.atMut(0) = resume.provider == AgentProvider::cursor ? "cursor-agent" : describeProvider(resume.provider).name;
+    arguments.atMut(1) = resume.provider == AgentProvider::codex ? "resume" : resume.provider == AgentProvider::pi || resume.provider == AgentProvider::opencode ? "--session"
                                                                                                                                                            : "--resume";
     std::size_t count = 2;
 
     if (resume.provider == AgentProvider::codex && resume.in_pane) {
-      arguments[count++] = "--no-daemon";
+      arguments.atMut(count++) = "--no-daemon";
     }
 
-    arguments[count++] = resume.session.view();
+    arguments.atMut(count++) = resume.session.view();
 
     return std::span{arguments}.first(count);
   }
@@ -174,7 +175,7 @@ namespace telar::runtime {
         break;
       }
 
-      result.bytes[result.length++] = codepoint > 0 && codepoint < 128 ? static_cast<char>(codepoint) : ' ';
+      result.bytes.atMut(result.length++) = codepoint > 0 && codepoint < 128 ? static_cast<char>(codepoint) : ' ';
     }
 
     return result;
@@ -381,7 +382,7 @@ namespace telar::runtime {
     }
 
     start_ -= bytes.size();
-    std::memcpy(bytes_.data() + start_, bytes.data(), bytes.size());
+    std::memcpy(bytes_.dataMut() + start_, bytes.data(), bytes.size());
     return true;
   }
 

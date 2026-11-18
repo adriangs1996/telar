@@ -10,6 +10,7 @@ import telar.tbc;
 import telar.base.memory.containers;
 import telar.gui.foundation.core;
 import telar.gui.foundation.text;
+import telar.base.ds;
 
 // Interface: presentation/notification_text.cppm
 export {
@@ -57,7 +58,7 @@ export {
 
       void fitTail(tbc::view<std::string_view, tbc::lt::a> paragraph, bool following_paragraph, float width, Measured& measure);
 
-      tbc::view<std::array<std::string_view, maximum_lines>, tbc::lt::a> lines_{};
+      tbc::view<ds::Array<std::string_view, maximum_lines>, tbc::lt::a> lines_{};
       runtime::FixedText<TextFit::maximum_bytes> tail_;
       std::size_t count_ = 0;
       bool owned_tail_ = false;

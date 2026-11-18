@@ -5,6 +5,7 @@ import telar.tbc;
 import telar.wire.vocabulary;
 import telar.sys.posix;
 import telar.sys.socket;
+import telar.base.ds;
 #if defined(__APPLE__)
 import telar.sys.apple;
 #endif
@@ -33,10 +34,10 @@ namespace telar {
   }
 
   template <typename Message>
-  std::array<Byte, HandshakeSchema<Message>::payload_size> HandshakeCodec::encode(const Message& message) {
+  ds::Array<Byte, HandshakeSchema<Message>::payload_size> HandshakeCodec::encode(const Message& message) {
     using Sch = HandshakeSchema<Message>;
-    std::array<Byte, Sch::payload_size> payload{};
-    std::span<Byte> output = payload;
+    ds::Array<Byte, Sch::payload_size> payload{};
+    std::span<Byte> output = payload.viewMut();
 
     FixedBytes<handshake::magic.size()>::encode(handshake::magic, output);
     u8::encode(static_cast<Byte>(Sch::tag), output);
@@ -101,9 +102,9 @@ namespace telar {
   }
 
   // The three handshake messages are every HandshakeSchema there is.
-  template std::array<Byte, HandshakeSchema<ClientHello>::payload_size> HandshakeCodec::encode(const ClientHello&);
-  template std::array<Byte, HandshakeSchema<ServerAccept>::payload_size> HandshakeCodec::encode(const ServerAccept&);
-  template std::array<Byte, HandshakeSchema<ServerReject>::payload_size> HandshakeCodec::encode(const ServerReject&);
+  template ds::Array<Byte, HandshakeSchema<ClientHello>::payload_size> HandshakeCodec::encode(const ClientHello&);
+  template ds::Array<Byte, HandshakeSchema<ServerAccept>::payload_size> HandshakeCodec::encode(const ServerAccept&);
+  template ds::Array<Byte, HandshakeSchema<ServerReject>::payload_size> HandshakeCodec::encode(const ServerReject&);
   template ClientHello HandshakeCodec::decode(std::span<const Byte>);
   template ServerAccept HandshakeCodec::decode(std::span<const Byte>);
   template ServerReject HandshakeCodec::decode(std::span<const Byte>);
@@ -235,8 +236,8 @@ namespace telar {
 
       sendFrame(HandshakeCodec::encode(request));
 
-      std::array<Byte, HandshakeCodec::max_message_size> buffer{};
-      const auto response = HandshakeCodec::decodeResponse(receiveFrame(buffer));
+      ds::Array<Byte, HandshakeCodec::max_message_size> buffer{};
+      const auto response = HandshakeCodec::decodeResponse(receiveFrame(buffer.viewMut()));
 
       if (const auto* accepted = std::get_if<ServerAccept>(&response)) {
         if (accepted->schema != request.schema) {
@@ -271,9 +272,9 @@ namespace telar {
   }
 
   tbc::view<std::span<const Byte>, tbc::lt::a> Client::receiveFrame(tbc::view<std::span<Byte>, tbc::lt::a> buffer) {
-    std::array<Byte, frame_prefix_size> prefix{};
+    ds::Array<Byte, frame_prefix_size> prefix{};
 
-    readAll(prefix.data(), prefix.size());
+    readAll(prefix.dataMut(), prefix.size());
 
     std::span<const Byte> input = prefix;
     const auto length = u32::decode(input);

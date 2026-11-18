@@ -38,8 +38,8 @@ namespace {
   }
 
   ds::Option<std::string> readFrame(int descriptor) {
-    std::array<unsigned char, 4> prefix{};
-    if (!readExactly(descriptor, reinterpret_cast<char*>(prefix.data()), prefix.size())) {
+    ds::Array<unsigned char, 4> prefix{};
+    if (!readExactly(descriptor, reinterpret_cast<char*>(prefix.dataMut()), prefix.size())) {
       return ds::none;
     }
 

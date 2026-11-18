@@ -23,6 +23,7 @@ import telar.gui.features.configuration;
 import telar.gui.application;
 import telar.base.text.json;
 import telar.plugins;
+import telar.base.ds;
 
 namespace {
 
@@ -34,9 +35,9 @@ namespace {
 
   template <Allocator Memory>
   std::string query(const application::ConfigurationGeneration<Memory>& generation, std::size_t index) {
-    std::array<char, ConfigurationQuery::capacity> output{};
+    telar::ds::Array<char, ConfigurationQuery::capacity> output{};
 
-    return std::string{BindingQuery::write(generation.input(), index, generation.actionDescriptions(), generation.commandTabs(), output)};
+    return std::string{BindingQuery::write(generation.input(), index, generation.actionDescriptions(), generation.commandTabs(), output.viewMut())};
   }
 
   void configuredOrderAndCallbackReferences() {

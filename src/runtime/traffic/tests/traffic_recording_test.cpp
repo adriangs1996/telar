@@ -23,6 +23,7 @@ import telar.runtime.traffic.control_backend;
 import telar.wire.vocabulary;
 import telar.runtime.traffic.control_protocol;
 import telar.runtime.vocabulary.frames;
+import telar.base.ds;
 
 namespace {
 
@@ -62,7 +63,7 @@ namespace {
 
       check(start.id != 0 && start.active && start.count == 0 && recordings.selects(tr::Selection::packets));
       check(!recordings.selects(tr::Selection::flows));
-      constexpr std::array<Byte, 3> bytes{'a', 0, 'b'};
+      constexpr ds::Array<Byte, 3> bytes{'a', 0, 'b'};
 
       for (std::uint64_t index = 1; index <= 6; ++index) {
         recordings.record(packet(index, bytes));
@@ -139,8 +140,8 @@ namespace {
         check(file.good());
       }
 
-      std::array<char, PCAP_ERRBUF_SIZE> error{};
-      const std::unique_ptr<pcap_t, decltype(&pcap_close)> capture{pcap_open_offline(path.c_str(), error.data()), &pcap_close};
+      ds::Array<char, PCAP_ERRBUF_SIZE> error{};
+      const std::unique_ptr<pcap_t, decltype(&pcap_close)> capture{pcap_open_offline(path.c_str(), error.dataMut()), &pcap_close};
 
       check(capture != nullptr && pcap_datalink(capture.get()) == DLT_EN10MB);
       pcap_pkthdr* header = nullptr;
@@ -166,7 +167,7 @@ namespace {
       tr::Recordings recordings{memory};
       SensitiveAllocation output{memory, rec::Limits::page_bytes};
       const auto start = rec::Protocol::page(recordings.handle({.operation = rec::Operation::start, .max_bytes = 512, .max_events = 2, .selection = tr::Selection::packets}, output.bytesMut()));
-      std::array<Byte, 220> body{};
+      ds::Array<Byte, 220> body{};
 
       for (std::uint64_t index = 1; index <= 3; ++index) {
         recordings.record(packet(index, body));
@@ -176,11 +177,11 @@ namespace {
 
       check(page.count == 1 && page.bytes <= 512 && page.evicted == 2);
       const auto scoped = rec::Protocol::page(recordings.handle({.operation = rec::Operation::start, .max_bytes = 4096, .max_events = 4, .selection = tr::Selection::flows, .host = "*.example.test"}, output.bytesMut()));
-      std::array<Byte, 512> flow;
-      auto payload = tr::FlowCodec::encode(flow, {.id = 31, .host = "sub.example.test"});
+      ds::Array<Byte, 512> flow;
+      auto payload = tr::FlowCodec::encode(flow.viewMut(), {.id = 31, .host = "sub.example.test"});
 
       recordings.record({.kind = tr::Kind::flow_open, .bytes = payload});
-      payload = tr::FlowCodec::encode(flow, {.id = 32, .host = "other.test"});
+      payload = tr::FlowCodec::encode(flow.viewMut(), {.id = 32, .host = "other.test"});
       recordings.record({.kind = tr::Kind::flow_open, .bytes = payload});
       auto selected = rec::Protocol::page(recordings.handle({.id = scoped.id, .host = "SUB.EXAMPLE.TEST"}, output.bytesMut()));
 

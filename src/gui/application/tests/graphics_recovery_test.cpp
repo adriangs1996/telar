@@ -23,6 +23,7 @@ import telar.gui.features.terminal.graphics;
 import telar.gui.features.notifications;
 import telar.wire.graphics;
 import telar.wire.runtime;
+import telar.base.ds;
 
 namespace {
 
@@ -68,7 +69,7 @@ namespace {
   constexpr std::uint32_t image_side = 2;
   constexpr std::size_t pixel_bytes = std::size_t{image_side} * image_side * 4;
   constexpr GraphicsHeader header{.pane_id = 1, .revision = 1};
-  constexpr std::array<Byte, pixel_bytes> pixels{};
+  constexpr ds::Array<Byte, pixel_bytes> pixels{};
 
   void windowLimitUsesTheSharedReportAndNotificationLedger() {
     Clock::now_ns = 0;

@@ -11,6 +11,7 @@ import std;
 import telar.testing;
 import telar.base.memory.allocators;
 import telar.cli.worktree;
+import telar.base.ds;
 
 namespace {
 
@@ -29,9 +30,9 @@ namespace {
 
     check(pipe != nullptr, command);
     std::string output;
-    std::array<char, 4096> buffer;
+    ds::Array<char, 4096> buffer;
 
-    while (const auto count = std::fread(buffer.data(), 1, buffer.size(), pipe)) {
+    while (const auto count = std::fread(buffer.dataMut(), 1, buffer.size(), pipe)) {
       output.append(buffer.data(), count);
     }
 
@@ -112,7 +113,7 @@ namespace {
     }}).starts_with('/'));
     check(transfers().empty());
 
-    const auto refused = std::to_array<std::string (*)(std::string_view)>({
+    const auto refused = ds::Array<std::string (*)(std::string_view), 3>{
         [](std::string_view commit) {
           return reply("clones/repo", commit, true);
         },
@@ -122,7 +123,7 @@ namespace {
         [](std::string_view commit) {
           return reply("/srv/clones/repo", commit, false);
         },
-    });
+    };
 
     for (const auto answer : refused) {
       check(prepared(memory, Receiver{answer}) == "InvalidPreparationResult");
@@ -142,10 +143,10 @@ namespace {
         throw std::runtime_error{"tips unavailable"};
       }
 
-      std::array<char, 4096> buffer;
+      ds::Array<char, 4096> buffer;
       ssize_t count;
 
-      while ((count = ::read(input, buffer.data(), buffer.size())) > 0) {
+      while ((count = ::read(input, buffer.dataMut(), buffer.size())) > 0) {
         bundle.append(buffer.data(), static_cast<std::size_t>(count));
       }
 

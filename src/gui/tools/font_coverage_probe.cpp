@@ -23,6 +23,7 @@ static_assert(true);
 import telar.gui.foundation.core;
 import telar.gui.foundation.fonts;
 import telar.platform.fs;
+import telar.base.ds;
 
 namespace {
 
@@ -32,7 +33,7 @@ namespace {
   constexpr std::size_t bits_per_byte = 8;
   constexpr std::size_t unicode_count = Utf8Scalar::maximum_codepoint + 1;
   constexpr std::size_t bitmap_bytes = unicode_count / bits_per_byte;
-  constexpr std::array<char32_t, 3> outside_unicode{unicode_count, 0x1fffff, std::numeric_limits<char32_t>::max()};
+  constexpr telar::ds::Array<char32_t, 3> outside_unicode{unicode_count, 0x1fffff, std::numeric_limits<char32_t>::max()};
 
   fonts::FontMatch matchVariant(std::string_view variant) {
     fonts::FontMatch match{};
@@ -94,7 +95,7 @@ namespace {
     const Vector<std::uint8_t, SystemAllocator> bytes{source.cbegin(), source.cend(), AllocatorRef<std::uint8_t, SystemAllocator>{memory}};
     fonts::Face face{bytes, matchVariant(variant)};
     const auto expected = coverage(face, memory);
-    constexpr std::array<std::uint16_t, 3> heights{9, 13, 31};
+    constexpr telar::ds::Array<std::uint16_t, 3> heights{9, 13, 31};
 
     for (const auto height : heights) {
       exerciseFace(face, height);

@@ -1,12 +1,13 @@
 export module telar.runtime.terminal.control:color_value;
 
 import std;
+import telar.base.ds;
 
 export namespace telar::runtime::control {
 
   // X11 name facts from rgb.txt, frozen at the application reference revision.
   // Only protocol data is shared; its validation is implemented by Telar.
-  inline constexpr std::array<std::string_view, 782> named_colors{
+  inline constexpr ds::Array<std::string_view, 782> named_colors{
       "alice blue",
       "aliceblue",
       "antique white",

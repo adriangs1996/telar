@@ -82,7 +82,7 @@ namespace telar::gui::qt {
 
   private:
     struct Resources {
-      std::array<ImageResource, application::terminal::graphics::image_texture_capacity> images;
+      ds::Array<ImageResource, application::terminal::graphics::image_texture_capacity> images;
       void release(application::terminal::graphics::ImageTextureHandle handle) noexcept;
     };
 
@@ -136,15 +136,15 @@ namespace telar::gui::qt {
     Resources resources_;
     tbc::view<Residency, tbc::lt::self> residency_{resources_};
     application::terminal::graphics::ImagePlacementSelection placements_;
-    std::array<PlacementSourceStamp, cached_source_capacity> placement_sources_{};
+    ds::Array<PlacementSourceStamp, cached_source_capacity> placement_sources_{};
     std::size_t placement_source_count_ = 0;
     bool placement_sources_cached_ = false;
     bool placement_limit_reached_ = false;
-    std::array<bool, Residency::capacity> retained_{};
-    std::array<bool, Residency::capacity> visible_rows_{};
-    std::array<CatalogRows, catalog_bucket_capacity> catalogs_{};
-    std::array<application::terminal::graphics::ImageTextureHandle, Residency::capacity> next_catalog_row_{};
-    std::array<std::uint16_t, Residency::capacity> occupied_catalog_buckets_{};
+    ds::Array<bool, Residency::capacity> retained_{};
+    ds::Array<bool, Residency::capacity> visible_rows_{};
+    ds::Array<CatalogRows, catalog_bucket_capacity> catalogs_{};
+    ds::Array<application::terminal::graphics::ImageTextureHandle, Residency::capacity> next_catalog_row_{};
+    ds::Array<std::uint16_t, Residency::capacity> occupied_catalog_buckets_{};
     std::size_t catalog_count_ = 0;
     GraphicsScene* first_scene_ = nullptr;
     std::uint64_t now_ns_ = 0;

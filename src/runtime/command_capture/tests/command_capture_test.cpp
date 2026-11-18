@@ -447,7 +447,7 @@ namespace {
       blocks.follow();
     }
 
-    std::array<CommandBlock, PaneBlocks::capacity> storage;
+    ds::Array<CommandBlock, PaneBlocks::capacity> storage;
     const auto shown = blocks.message(7, storage).blocks;
 
     check(shown.size() == PaneBlocks::capacity);

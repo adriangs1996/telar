@@ -134,7 +134,7 @@ namespace telar::gui::qt {
     QTimer deadline_;
     application::FrameStream<ApplicationAllocator> stream_;
     Vector<Byte, ApplicationAllocator> output_;
-    std::array<char, read_chunk_size> read_buffer_{};
+    ds::Array<char, read_chunk_size> read_buffer_{};
     application::RuntimeLink link_;
     std::uint64_t read_generation_ = 0;
     QString path_;

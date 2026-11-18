@@ -74,7 +74,7 @@ export {
       std::string_view trace;
       std::string_view config;
       std::string_view profile;
-      std::array<std::string_view, 64> engine_arguments;
+      ds::Array<std::string_view, 64> engine_arguments;
       std::size_t engine_argument_count = 0;
       bool fresh = false;
       bool no_config = false;
@@ -156,7 +156,7 @@ export {
       void append(std::string_view text);
       void validate() const;
 
-      std::array<char, sizeof(sockaddr_un::sun_path)> bytes_{};
+      ds::Array<char, sizeof(sockaddr_un::sun_path)> bytes_{};
       std::size_t length_ = 0;
       std::size_t directory_ = 0;
     };

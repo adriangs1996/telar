@@ -26,13 +26,14 @@ static_assert(true);
 #include <utility>
 
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::qt {
   namespace {
 
     struct ShapeUniforms {
       static constexpr std::size_t matrix_side = 4;
-      std::array<float, matrix_side * matrix_side> matrix{};
+      ds::Array<float, matrix_side * matrix_side> matrix{};
       float opacity = 1;
       float replace_background = 0;
     };
@@ -110,9 +111,9 @@ namespace telar::gui::qt {
       }
 
       [[nodiscard]] QSGMaterialType* type() const override {
-        static std::array<QSGMaterialType, 4> types;
+        static ds::Array<QSGMaterialType, 4> types;
 
-        return &types[static_cast<std::size_t>(physical_coordinates_) + 2 * static_cast<std::size_t>(replace_background_)];
+        return &types.atMut(static_cast<std::size_t>(physical_coordinates_) + 2 * static_cast<std::size_t>(replace_background_));
       }
 
       [[nodiscard]] QSGMaterialShader* createShader([[maybe_unused]] QSGRendererInterface::RenderMode render_mode) const override {
@@ -145,7 +146,7 @@ namespace telar::gui::qt {
     };
 
     constexpr std::size_t triangle_vertices = 6;
-    constexpr std::array<Point, triangle_vertices> corners{{{.x = 0, .y = 0}, {.x = 1, .y = 0}, {.x = 1, .y = 1}, {.x = 0, .y = 0}, {.x = 1, .y = 1}, {.x = 0, .y = 1}}};
+    constexpr ds::Array<Point, triangle_vertices> corners{{{.x = 0, .y = 0}, {.x = 1, .y = 0}, {.x = 1, .y = 1}, {.x = 0, .y = 0}, {.x = 1, .y = 1}, {.x = 0, .y = 1}}};
 
     ShapeVertex shapeVertex(RoundedRectanglePaint paint, Point corner, qreal density) {
       const auto shape = paint.shape;
@@ -155,7 +156,7 @@ namespace telar::gui::qt {
     }
 
     const QSGGeometry::AttributeSet& shapeAttributes() {
-      static const std::array attributes{
+      static const ds::Array attributes{
           QSGGeometry::Attribute::create(0, 2, QSGGeometry::FloatType, true),
           QSGGeometry::Attribute::create(1, 2, QSGGeometry::FloatType),
           QSGGeometry::Attribute::create(2, 2, QSGGeometry::FloatType),

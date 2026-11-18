@@ -99,6 +99,8 @@ namespace telar::gui::qt {
     [[nodiscard]] ds::Option<BindingRepeat> repeat(BindingAction action) const;
     bool apply(const Decision& decision);
     bool forward(const RoutedKey& event);
+    // The recipient a physical key is leased to, or a free one for key 0; null when there is none.
+    Recipient* leaseOf(std::uint64_t physical) noexcept;
     void replay(const RoutedKey& event);
     void deliver(const RoutedKey& event);
     void schedule();
@@ -115,7 +117,7 @@ namespace telar::gui::qt {
     QPointer<QQuickWindow> window_;
     QElapsedTimer clock_;
     QTimer timeout_;
-    std::array<Recipient, BindingLimits::physical_keys> recipients_{};
+    ds::Array<Recipient, BindingLimits::physical_keys> recipients_{};
     bool delivering_ = false;
     bool prefix_shown_ = false;
     QList<RoutedKey> held_;

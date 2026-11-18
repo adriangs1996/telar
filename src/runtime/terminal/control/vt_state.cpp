@@ -257,7 +257,7 @@ namespace telar::runtime::control {
     // Widens an eligible ASCII run in one batch and writes it. Out of line, so that only this path
     // reserves the codepoint scratch on the stack.
     [[gnu::noinline]] std::size_t writeAsciiRun(VtState& state, std::span<const std::uint8_t> input) {
-      std::array<std::uint32_t, ascii_detail::codepoint_capacity> codepoints;
+      ds::Array<std::uint32_t, ascii_detail::codepoint_capacity> codepoints;
 
       TELAR_ASSERT(input.size() >= ascii_detail::gate_bytes);
 
@@ -265,13 +265,13 @@ namespace telar::runtime::control {
       // remaining input needs stop detection; the C bridge still validates all.
 #if (defined(__aarch64__) && defined(__AARCH64EL__)) || defined(__SSE2__)
       for (std::size_t offset = 0; offset < ascii_detail::gate_bytes; offset += styled_detail::vector_bytes) {
-        widenBlock(load(input.data() + offset), codepoints.data() + offset);
+        widenBlock(load(input.data() + offset), codepoints.dataMut() + offset);
       }
 #else
       std::copy_n(input.data(), ascii_detail::gate_bytes, codepoints.data());
 #endif
 
-      const auto count = ascii_detail::gate_bytes + asciiWiden<Isa::vector>(input.subspan(ascii_detail::gate_bytes), std::span{codepoints}.subspan(ascii_detail::gate_bytes));
+      const auto count = ascii_detail::gate_bytes + asciiWiden<Isa::vector>(input.subspan(ascii_detail::gate_bytes), codepoints.viewMut().subspan(ascii_detail::gate_bytes));
 
       state.writeAscii(std::span{codepoints}.first(count));
       return count;
@@ -369,7 +369,7 @@ namespace telar::runtime::control {
 
     checkGhostty(ghostty_terminal_get(terminal_, GHOSTTY_TERMINAL_DATA_VT_GROUND, &ground));
     if (!ground) {
-      constexpr std::array<std::uint8_t, 2> boundary{0x1b, 0x18};
+      constexpr ds::Array<std::uint8_t, 2> boundary{0x1b, 0x18};
 
       write(boundary);
     }
@@ -398,7 +398,7 @@ namespace telar::runtime::control {
   }
 
   bool VtState::mode(std::uint16_t number, bool ansi) const {
-    auto& entry = modes_[(number ^ (ansi ? mode_ansi_hash : 0)) % modes_.size()];
+    auto& entry = modes_.atMut((number ^ (ansi ? mode_ansi_hash : 0)) % modes_.size());
     if (entry.epoch != epoch_ || entry.number != number || entry.ansi != ansi) {
       GhosttyTerminalModeConfig query{.mode = ghostty::mode(number, ansi), .value = false};
 
@@ -480,7 +480,7 @@ namespace telar::runtime::control {
   ds::Option<GhosttyColorRgb> VtState::color(unsigned selector) {
     if (selector < palette_.size()) {
       if (!palette_valid_) {
-        checkGhostty(ghostty_terminal_get(terminal_, GHOSTTY_TERMINAL_DATA_COLOR_PALETTE, palette_.data()));
+        checkGhostty(ghostty_terminal_get(terminal_, GHOSTTY_TERMINAL_DATA_COLOR_PALETTE, palette_.dataMut()));
         palette_valid_ = true;
       }
 
@@ -497,8 +497,8 @@ namespace telar::runtime::control {
                                                                                                                 : GHOSTTY_TERMINAL_DATA_COLOR_CURSOR;
       GhosttyColorRgb result{};
 
-      colors_[index] = ghostty_terminal_get(terminal_, key, &result) == GHOSTTY_SUCCESS ? ds::Option{result} : ds::none;
-      color_valid_[index] = true;
+      colors_.atMut(index) = ghostty_terminal_get(terminal_, key, &result) == GHOSTTY_SUCCESS ? ds::Option{result} : ds::none;
+      color_valid_.atMut(index) = true;
     }
 
     return colors_[index];
@@ -556,7 +556,7 @@ namespace telar::runtime::control {
     keyboard_cache_.reset();
     style_cache_.reset();
     visual_cursor_cache_.reset();
-    for (auto& entry : modes_) {
+    for (auto& entry : modes_.viewMut()) {
       entry.epoch = 0;
     }
   }
@@ -570,7 +570,7 @@ namespace telar::runtime::control {
     const auto& result = snapshot.state;
 
     margin_cache_.store(epoch_, {result.top, result.bottom, result.left, result.right});
-    auto& origin = modes_[origin_mode % modes_.size()];
+    auto& origin = modes_.atMut(origin_mode % modes_.size());
 
     origin = {epoch_, origin_mode, false, result.origin != 0};
     return result;

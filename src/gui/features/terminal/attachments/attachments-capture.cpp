@@ -85,7 +85,7 @@ namespace telar::gui::features::terminal::attachments {
         throw std::length_error{"AttachmentMarkerRemovalInputTooLarge"};
       }
 
-      std::ranges::copy(bytes, bytes_.begin() + static_cast<std::ptrdiff_t>(used_));
+      std::ranges::copy(bytes, bytes_.viewMut().begin() + static_cast<std::ptrdiff_t>(used_));
       used_ += bytes.size();
     }
   }

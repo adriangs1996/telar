@@ -41,9 +41,9 @@ namespace telar::gui::features::configuration {
       throw std::invalid_argument{"GUI theme name exceeds capacity"};
     }
 
-    std::array<char, maximum_name_bytes> lowercase{};
+    ds::Array<char, maximum_name_bytes> lowercase{};
 
-    std::ranges::transform(name, lowercase.begin(), [](char character) {
+    std::ranges::transform(name, lowercase.viewMut().begin(), [](char character) {
       return character >= 'A' && character <= 'Z' ? static_cast<char>(character + 'a' - 'A') : character;
     });
 
@@ -98,7 +98,7 @@ namespace telar::gui::features::configuration {
 
     for (std::size_t index = 0; index < settings->colors.size(); ++index) {
       if (settings->colors[index]) {
-        theme.palette[index] = color(*settings->colors[index]);
+        theme.palette.atMut(index) = color(*settings->colors[index]);
       }
     }
 
@@ -135,7 +135,7 @@ namespace telar::gui::features::configuration {
 
       style.italic = entry->italic.valueOr(style.italic);
       style.bold = entry->bold.valueOr(style.bold);
-      theme.syntax_styles[index] = style;
+      theme.syntax_styles.atMut(index) = style;
     }
   }
 

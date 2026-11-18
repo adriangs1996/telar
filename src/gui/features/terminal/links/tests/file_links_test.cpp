@@ -74,7 +74,7 @@ namespace {
 
     check(relative.text() == "../src/main.cpp" && relative.line() == line && relative.column() == column, "prose positions must remain separate from the path");
 
-    constexpr auto invalid = std::to_array<std::string_view>({"file:/tmp/%", "file:/tmp/%xy", "file:/tmp/%00", "file:/tmp/a?query", "file://user@localhost/a", "file://localhost:3/a", "file:/tmp/a#section"});
+    constexpr auto invalid = telar::ds::Array<std::string_view, 7>{"file:/tmp/%", "file:/tmp/%xy", "file:/tmp/%00", "file:/tmp/a?query", "file://user@localhost/a", "file://localhost:3/a", "file:/tmp/a#section"};
 
     for (const auto uri : invalid) {
       requireFailure([&] {

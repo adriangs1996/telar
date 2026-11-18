@@ -96,7 +96,7 @@ export {
       bool rotate() noexcept;
 
       FileDescriptor file_;
-      std::array<char, PATH_MAX> path_;
+      ds::Array<char, PATH_MAX> path_;
       std::size_t path_length_ = 0;
       std::size_t written_ = 0;
       std::size_t limit_;

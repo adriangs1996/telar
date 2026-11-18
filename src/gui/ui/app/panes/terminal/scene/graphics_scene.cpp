@@ -65,7 +65,7 @@ namespace telar::gui::qt {
       return nullptr;
     }
 
-    auto& entry = resolved_[resolved_count_++];
+    auto& entry = resolved_.atMut(resolved_count_++);
 
     entry = {.image_id = key.image_id, .texture = ds::none};
     entry.texture = images_->resolve(*this, store, key);
@@ -109,11 +109,11 @@ namespace telar::gui::qt {
     waiting_ = false;
     retry_requested_ = false;
 
-    std::array<GraphicsPlacement, application::terminal::graphics::GraphicsStore<Memory>::placement_capacity> placements;
+    ds::Array<GraphicsPlacement, application::terminal::graphics::GraphicsStore<Memory>::placement_capacity> placements;
     const auto count = store.placements().size();
 
-    std::copy(store.placements().begin(), store.placements().end(), placements.begin());
-    std::sort(placements.begin(), placements.begin() + count, application::terminal::graphics::placementOrder);
+    std::copy(store.placements().begin(), store.placements().end(), placements.dataMut());
+    std::sort(placements.dataMut(), placements.dataMut() + count, application::terminal::graphics::placementOrder);
     cell_ = cell;
     scale_ = scale;
     viewport_ = viewport;

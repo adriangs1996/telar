@@ -43,7 +43,7 @@ namespace telar::gui::features::window {
 
       if (previous->pane.pane_id == pane.pane_id) {
         if (!previous->rejects(pane, now_ns)) {
-          inputs_[index] = InputGrace{.pane = pane, .started_ns = now_ns};
+          inputs_.atMut(index) = InputGrace{.pane = pane, .started_ns = now_ns};
         }
 
         return;
@@ -55,7 +55,7 @@ namespace telar::gui::features::window {
       }
     }
 
-    inputs_[vacant.valueOr(oldest)] = InputGrace{.pane = pane, .started_ns = now_ns};
+    inputs_.atMut(vacant.valueOr(oldest)) = InputGrace{.pane = pane, .started_ns = now_ns};
   }
 
   bool FramePacer::canAdvanceInput(Pane pane, std::uint64_t now_ns) const noexcept {
@@ -90,7 +90,7 @@ namespace telar::gui::features::window {
     const bool scheduled = due_ns && *due_ns <= now_ns && now_ns - *due_ns < interval_ns_;
     const bool ordinary_available = ordinaryAvailable(now_ns);
 
-    for (auto& grace : inputs_) {
+    for (auto& grace : inputs_.viewMut()) {
       if (!grace || now_ns < grace->started_ns || (!ordinary_available && !grace->active(now_ns))) {
         continue;
       }

@@ -53,6 +53,7 @@ import telar.gui.features.terminal.graphics;
 import telar.gui.foundation.system;
 import telar.platform.graphics;
 import telar.wire.graphics;
+import telar.base.ds;
 
 namespace {
 
@@ -63,7 +64,7 @@ namespace {
   using namespace telar::gui::application::tests::session_fixture;
 
   constexpr std::uint32_t image_side = 2;
-  constexpr auto pixels = std::to_array<Byte>({0, 255, 127, 0, 255, 1, 128, 255, 229, 191, 17, 152, 40, 80, 120, 128});
+  constexpr auto pixels = ds::Array<Byte, 16>{0, 255, 127, 0, 255, 1, 128, 255, 229, 191, 17, 152, 40, 80, 120, 128};
   constexpr GraphicsHeader header{.pane_id = 1, .revision = 1};
 
   ImageDescription description(std::uint64_t generation = 1) {
@@ -124,11 +125,11 @@ namespace {
     system::SharedImageSource source{published.name()};
 
     check(!published.open() && errno == ENOENT, "adoption must unlink the runtime-owned name immediately");
-    std::array<Byte, pixels.size()> output{};
+    ds::Array<Byte, pixels.size()> output{};
 
-    check(source.read(output) && output == pixels, "shared reads must preserve every color and alpha byte");
+    check(source.read(output.viewMut()) && output == pixels, "shared reads must preserve every color and alpha byte");
     output.fill(0);
-    check(source.read(output) && output == pixels, "the adopted descriptor must remain readable after unlink");
+    check(source.read(output.viewMut()) && output == pixels, "the adopted descriptor must remain readable after unlink");
   }
 
   void unavailableAndUndersizedObjectsFailWithoutPublishing() {
@@ -143,17 +144,17 @@ namespace {
     std::vector<Byte> oversized(static_cast<std::size_t>(status.st_size) + 1);
 
     check(!source.read(oversized), "a read beyond backing storage must fail before copying pixels");
-    std::array<Byte, pixels.size()> output{};
+    ds::Array<Byte, pixels.size()> output{};
 
 #if defined(__APPLE__)
     check(::ftruncate(writer.get(), 0) == -1 && errno == EINVAL, "Darwin must refuse to resize an initialized POSIX shared object");
 #else
     check(::ftruncate(writer.get(), 0) == 0, "the fixture must truncate the adopted object");
-    check(!source.read(output), "truncated storage must fail instead of faulting or returning partial pixels");
+    check(!source.read(output.viewMut()), "truncated storage must fail instead of faulting or returning partial pixels");
 #endif
     system::SharedImageSource missing{published.name()};
 
-    check(!missing.read(output), "a missing shared object must fail without allocating source pixels");
+    check(!missing.read(output.viewMut()), "a missing shared object must fail without allocating source pixels");
   }
 
   void nonPrivateObjectsAndMalformedNamesAreRejected() {
@@ -166,9 +167,9 @@ namespace {
     ::umask(previous_mask);
     check(static_cast<bool>(writer) && ::ftruncate(writer.get(), pixels.size()) == 0, "the fixture must expose an unsafe permission mode");
     system::SharedImageSource source{published.name()};
-    std::array<Byte, pixels.size()> output{};
+    ds::Array<Byte, pixels.size()> output{};
 
-    check(!source.read(output), "public shared storage must not be accepted as private image delivery");
+    check(!source.read(output.viewMut()), "public shared storage must not be accepted as private image delivery");
     check(static_cast<bool>(published.open()), "a rejected nonprivate object must not be unlinked");
 
     for (const auto name : {"", "relative", "/nested/path", "/UPPER", "/abcdefghijklmnopqrstuvwxyz123456"}) {

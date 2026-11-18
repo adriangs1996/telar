@@ -22,6 +22,7 @@ import telar.runtime.traffic.control_protocol;
 import telar.runtime.vocabulary.frames;
 import telar.runtime.vocabulary.traffic;
 import telar.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -56,9 +57,9 @@ namespace {
   }
 
   traffic::Event receiveEvent(int socket, std::vector<Byte>& frame) {
-    std::array<Byte, Protocol::prefix_bytes> prefix;
+    ds::Array<Byte, Protocol::prefix_bytes> prefix;
 
-    receiveAll(socket, prefix);
+    receiveAll(socket, prefix.viewMut());
     plugins::FrameReader reader{prefix};
 
     frame.resize(reader.integer<std::uint32_t>());
@@ -132,10 +133,10 @@ namespace {
     SynchronizedAllocator synchronized{budget};
     MemoryAdapter adapter{synchronized};
     ConcurrentMemory& memory = adapter;
-    std::array<char, 64> directory{};
+    ds::Array<char, 64> directory{};
 
-    std::strcpy(directory.data(), "/tmp/telar-http-service-XXXXXX");
-    check(::mkdtemp(directory.data()) != nullptr);
+    std::strcpy(directory.dataMut(), "/tmp/telar-http-service-XXXXXX");
+    check(::mkdtemp(directory.dataMut()) != nullptr);
     const auto path = std::string{directory.data()} + "/traffic.sock";
     const std::string request = "POST /original HTTP/1.1\r\nHost: fixture.test\r\nContent-Length: 6\r\n\r\nsecret";
 
@@ -154,7 +155,7 @@ namespace {
         connection.advance(child, origin, TunnelReadiness::available());
         const auto [ticket, message] = plugin.request();
         auto view = HttpMessageCodec::decode(message);
-        const std::array<Byte, 6> edited{'e', 'd', 'i', 't', 'e', 'd'};
+        const ds::Array<Byte, 6> edited{'e', 'd', 'i', 't', 'e', 'd'};
 
         check(view.target == "/original" && std::ranges::equal(view.body, std::string_view{"secret"}));
         view.target = "/edited";
@@ -178,7 +179,7 @@ namespace {
         origin.visible = 0;
         connection.advance(child, origin, TunnelReadiness::available());
         const auto [ticket, message] = plugin.request();
-        const std::array<Byte, 3> garbage{1, 2, 3};
+        const ds::Array<Byte, 3> garbage{1, 2, 3};
 
         plugin.replace(ticket, garbage);
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};

@@ -61,7 +61,7 @@ namespace {
     ReporterIdentity reporter{1, 1, AgentProvider::codex};
 
     ReporterFixture() {
-      const std::array<std::string_view, 1> arguments{"/bin/cat"};
+      const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
       Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
 
       model.panes.insert(1, makeOwned<Pane>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits}));
@@ -104,7 +104,7 @@ namespace {
   void testRecheckAndRejection() {
     ReporterFixture fixture;
     auto& client = fixture.first.session();
-    const std::array<Byte, 2> payload{1, 2};
+    const ds::Array<Byte, 2> payload{1, 2};
 
     check(fixture.evaluate(client, payload) == ReportDecision::deferred);
     unsigned answered = 0;
@@ -131,7 +131,7 @@ namespace {
     ReporterFixture fixture;
     auto& first = fixture.first.session();
     auto& second = fixture.second.session();
-    std::array<Byte, 2> payload{3, 4};
+    ds::Array<Byte, 2> payload{3, 4};
 
     fixture.pane().process_recheck_running = true;
     check(fixture.evaluate(second, payload) == ReportDecision::deferred);
@@ -156,7 +156,7 @@ namespace {
   void testTimeoutAndClosedPane() {
     ReporterFixture fixture;
     auto& client = fixture.first.session();
-    const std::array<Byte, 1> payload{7};
+    const ds::Array<Byte, 1> payload{7};
 
     check(fixture.evaluate(client, payload) == ReportDecision::deferred);
     auto now = client.deferred_report.observed;

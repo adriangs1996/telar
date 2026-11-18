@@ -3,6 +3,7 @@ export module telar.runtime.tools.control_clipboard_fixture;
 import std;
 import telar.runtime.runtime.tests.clipboard_task;
 import telar.wire.clipboard;
+import telar.base.ds;
 
 export {
   namespace telar::runtime::control_test {
@@ -91,14 +92,14 @@ export {
 
           clipboard.committed();
           const auto result = executeClipboard(task, consent, *this);
-          std::array<ClipboardRepresentation, 4> representations;
-          std::array<std::string_view, 16> available;
+          ds::Array<ClipboardRepresentation, 4> representations;
+          ds::Array<std::string_view, 16> available;
 
           for (std::size_t index = 0; index < result.contents.size(); ++index) {
-            representations[index] = {result.contents[index].mime, result.contents[index].data};
+            representations.atMut(index) = {result.contents[index].mime, result.contents[index].data};
           }
 
-          std::copy(result.available.begin(), result.available.end(), available.begin());
+          std::copy(result.available.begin(), result.available.end(), available.dataMut());
           if (!clipboard.complete({1, 13}, CompleteClipboardDesktop{
                                                .ticket = task.ticket,
                                                .status = result.status,

@@ -58,7 +58,7 @@ export {
 
         [[nodiscard]] std::span<const ClientLayoutNode> view() const noexcept;
 
-        std::array<ClientLayoutNode, PaneLayout::maximum_nodes> nodes{};
+        ds::Array<ClientLayoutNode, PaneLayout::maximum_nodes> nodes{};
         std::size_t count = 0;
         std::uint64_t focused_pane = 0;
       };
@@ -76,7 +76,7 @@ export {
       void forget(WorkspaceLocation workspace) noexcept;
 
     private:
-      std::array<ds::Option<Bookmark>, capacity> entries_{};
+      ds::Array<ds::Option<Bookmark>, capacity> entries_{};
     };
 
   }
@@ -123,8 +123,8 @@ export {
       [[nodiscard]] ds::Option<std::size_t> row(TabLocation location) const noexcept;
       void remove(std::size_t index) noexcept;
 
-      std::array<Row, capacity> rows_{};
-      std::array<ClientLayoutNode, node_capacity> nodes_{};
+      ds::Array<Row, capacity> rows_{};
+      ds::Array<ClientLayoutNode, node_capacity> nodes_{};
       std::size_t count_ = 0;
       std::size_t node_total_ = 0;
     };

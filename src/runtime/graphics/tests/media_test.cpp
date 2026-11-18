@@ -34,6 +34,7 @@ import telar.runtime.graphics.file_input;
 import telar.runtime.graphics.pane_media;
 import telar.runtime.graphics.prepared_images;
 import telar.runtime.terminal.graphics_storage;
+import telar.base.ds;
 
 namespace {
 
@@ -103,7 +104,7 @@ namespace {
       check(media->seal());
       MediaProcessor::Request request;
 
-      request.entries[request.count++].media = media;
+      request.entries.atMut(request.count++).media = media;
       check(worker.submit(request));
       const std::string continuation(MediaBatch::byte_capacity, 'A');
 
@@ -156,46 +157,46 @@ namespace {
   }
 
   void testBase64() {
-    std::array<Byte, 8> decoded;
-    std::array<char, 12> encoded;
+    ds::Array<Byte, 8> decoded;
+    ds::Array<char, 12> encoded;
 
-    check(base64::decode("", decoded) == 0);
-    check(base64::decode("YQ==", decoded) == 1 && decoded[0] == 'a');
-    check(base64::decode("YWI=", decoded) == 2 && decoded[1] == 'b');
-    check(base64::decode("YWJj", decoded) == 3 && decoded[2] == 'c');
-    check(base64::encode(mediaBytes("abcdefg"), encoded) == 12);
+    check(base64::decode("", decoded.viewMut()) == 0);
+    check(base64::decode("YQ==", decoded.viewMut()) == 1 && decoded[0] == 'a');
+    check(base64::decode("YWI=", decoded.viewMut()) == 2 && decoded[1] == 'b');
+    check(base64::decode("YWJj", decoded.viewMut()) == 3 && decoded[2] == 'c');
+    check(base64::encode(mediaBytes("abcdefg"), encoded.viewMut()) == 12);
     check(std::string_view{encoded.data(), encoded.size()} == "YWJjZGVmZw==");
     for (const auto malformed : {"a", "a===", "YR==", "YWF=", "YWJj=", "YQ==YQ==", "!!!!"}) {
-      check(!base64::decode(malformed, decoded));
+      check(!base64::decode(malformed, decoded.viewMut()));
     }
 
-    check(!base64::decode("YWJj", std::span{decoded}.first(2)));
-    check(!base64::encode(mediaBytes("abcd"), std::span{encoded}.first(7)));
+    check(!base64::decode("YWJj", decoded.viewMut().first(2)));
+    check(!base64::encode(mediaBytes("abcd"), encoded.viewMut().first(7)));
 
-    const std::array<std::string_view, 7> plain{"", "f", "fo", "foo", "foob", "fooba", "foobar"};
-    const std::array<std::string_view, 7> expected{"", "Zg==", "Zm8=", "Zm9v", "Zm9vYg==", "Zm9vYmE=", "Zm9vYmFy"};
+    const ds::Array<std::string_view, 7> plain{"", "f", "fo", "foo", "foob", "fooba", "foobar"};
+    const ds::Array<std::string_view, 7> expected{"", "Zg==", "Zm8=", "Zm9v", "Zm9vYg==", "Zm9vYmE=", "Zm9vYmFy"};
 
     for (std::size_t index = 0; index < plain.size(); ++index) {
-      check(base64::encode(mediaBytes(plain[index]), encoded) == expected[index].size());
+      check(base64::encode(mediaBytes(plain[index]), encoded.viewMut()) == expected[index].size());
       check(std::string_view{encoded.data(), expected[index].size()} == expected[index]);
     }
 
-    std::array<Byte, 512> binary;
-    std::array<Byte, 512> restored;
-    std::array<char, 684> text;
+    ds::Array<Byte, 512> binary;
+    ds::Array<Byte, 512> restored;
+    ds::Array<char, 684> text;
 
     for (std::size_t index = 0; index < binary.size(); ++index) {
-      binary[index] = static_cast<Byte>(index);
+      binary.atMut(index) = static_cast<Byte>(index);
     }
 
     for (std::size_t length = 0; length <= binary.size(); ++length) {
-      const auto written = base64::encode(std::span{binary}.first(length), text);
+      const auto written = base64::encode(std::span{binary}.first(length), text.viewMut());
 
       check(written == (length + 2) / 3 * 4);
-      check(base64::decode({text.data(), *written}, restored) == length);
+      check(base64::decode({text.dataMut(), *written}, restored.viewMut()) == length);
       check(std::equal(binary.begin(), binary.begin() + length, restored.begin()));
       if (*written != 0) {
-        check(!base64::encode(std::span{binary}.first(length), std::span{text}.first(*written - 1)));
+        check(!base64::encode(binary.viewMut().first(length), text.viewMut().first(*written - 1)));
       }
     }
   }
@@ -208,16 +209,16 @@ namespace {
   }
 
   void testFileInput(ConcurrentMemory& memory) {
-    std::array<char, 64> directory;
+    ds::Array<char, 64> directory;
 
-    std::strcpy(directory.data(), "/tmp/telar-media-test-XXXXXX");
-    check(::mkdtemp(directory.data()) != nullptr);
+    std::strcpy(directory.dataMut(), "/tmp/telar-media-test-XXXXXX");
+    check(::mkdtemp(directory.dataMut()) != nullptr);
     const std::filesystem::path root{directory.data()};
     const auto file_path = (root / "pixels").string();
 
     {
       std::ofstream file{file_path, std::ios::binary};
-      const std::array<Byte, 8> pixels{1, 2, 3, 4, 255, 0, 0, 255};
+      const ds::Array<Byte, 8> pixels{1, 2, 3, 4, 255, 0, 0, 255};
 
       file.write(reinterpret_cast<const char*>(pixels.data()), pixels.size());
       check(file.good());
@@ -265,8 +266,8 @@ namespace {
   void testFrozenImages(ConcurrentMemory& memory) {
     MediaBudget budget{1024};
     MediaAllocator allocator{memory, budget, 768};
-    const std::array<Byte, 4> pixels{255, 0, 0, 255};
-    std::array<char, 32> name{};
+    const ds::Array<Byte, 4> pixels{255, 0, 0, 255};
+    ds::Array<char, 32> name{};
 
     {
       FrozenImage frozen{memory, allocator, pixels, false};
@@ -284,7 +285,7 @@ namespace {
       FrozenImage frozen{memory, allocator, pixels, true};
 
       check(!frozen.name().empty() && frozen.pixels().empty());
-      std::copy(frozen.name().begin(), frozen.name().end(), name.begin());
+      std::copy(frozen.name().begin(), frozen.name().end(), name.dataMut());
       FileDescriptor opened{::shm_open(name.data(), O_RDONLY, 0)};
       struct stat metadata{};
 
@@ -297,7 +298,7 @@ namespace {
       FrozenImage frozen{memory, allocator, pixels, true};
 
       name.fill(0);
-      std::copy(frozen.name().begin(), frozen.name().end(), name.begin());
+      std::copy(frozen.name().begin(), frozen.name().end(), name.dataMut());
       frozen.published();
     }
 
@@ -325,11 +326,11 @@ namespace {
   void testTransferPreparation(ConcurrentMemory& memory) {
     MediaBudget budget{1024};
     MediaAllocator allocator{memory, budget, 768};
-    const std::array<Byte, 4> pixels{255, 0, 0, 255};
-    std::array<GraphicsImageView, 5> images;
+    const ds::Array<Byte, 4> pixels{255, 0, 0, 255};
+    ds::Array<GraphicsImageView, 5> images;
 
     for (std::size_t index = 0; index < images.size(); ++index) {
-      images[index] = {.description = {.key = {static_cast<std::uint32_t>(index + 1), 1}, .format = ImageFormat::rgba, .width = 1, .height = 1, .byte_len = pixels.size()}, .pixels = pixels};
+      images.atMut(index) = {.description = {.key = {static_cast<std::uint32_t>(index + 1), 1}, .format = ImageFormat::rgba, .width = 1, .height = 1, .byte_len = pixels.size()}, .pixels = pixels};
     }
 
     {

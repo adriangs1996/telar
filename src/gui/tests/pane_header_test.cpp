@@ -41,6 +41,7 @@ import telar.gui.application;
 import telar.gui.features.terminal.graphics;
 import telar.gui.features.activity;
 import telar.gui.features.workbench;
+import telar.base.ds;
 
 namespace {
 
@@ -124,8 +125,8 @@ namespace {
       pane.attachment_generation = 3;
       pane.title = "Ignore OSC title";
       pane.cwd = "/ignore/cwd";
-      std::array<Agent<Memory>, 1> agents{Agent{memory}};
-      auto& agent = agents.front();
+      ds::Array<Agent<Memory>, 1> agents{Agent{memory}};
+      auto& agent = agents.atMut(0);
 
       agent.pane_id = pane.id;
       agent.location = pane.location;
@@ -162,8 +163,8 @@ namespace {
       pane.title = "Test\n\tresults";
       QCOMPARE(paneChromeRecord(pane, std::span<const Agent<Memory>>{}, 1).value(QStringLiteral("context")).toString(), QStringLiteral("/projects/telar"));
       pane.title.clear();
-      std::array<Agent<Memory>, 1> agents{Agent{memory}};
-      auto& agent = agents.front();
+      ds::Array<Agent<Memory>, 1> agents{Agent{memory}};
+      auto& agent = agents.atMut(0);
 
       agent.pane_id = pane.id;
       agent.pane_generation = pane.generation;

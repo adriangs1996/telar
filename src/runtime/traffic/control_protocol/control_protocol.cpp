@@ -2,6 +2,7 @@ module telar.runtime.traffic.control_protocol;
 
 import telar.native.pcap;
 import telar.base.text.utf8;
+import telar.base.ds;
 
 namespace telar::runtime::traffic {
 
@@ -72,13 +73,13 @@ namespace telar::runtime::traffic {
     return event;
   }
 
-  auto Protocol::prefix(std::size_t bytes, std::uint64_t dropped) -> std::array<Byte, prefix_bytes> {
+  auto Protocol::prefix(std::size_t bytes, std::uint64_t dropped) -> ds::Array<Byte, prefix_bytes> {
     if (bytes > Limits::http_frame_bytes) {
       throw EncodingError{"Traffic frame exceeds its limit"};
     }
 
-    std::array<Byte, prefix_bytes> output{};
-    plugins::FrameWriter writer{output};
+    ds::Array<Byte, prefix_bytes> output{};
+    plugins::FrameWriter writer{output.viewMut()};
 
     writer.integer(static_cast<std::uint32_t>(bytes));
     writer.integer(dropped);
@@ -86,7 +87,7 @@ namespace telar::runtime::traffic {
   }
 
   auto Protocol::name(Kind kind) noexcept -> std::string_view {
-    constexpr std::array names{"ready", "packet", "interface.open", "interface.closed", "interface.error", "statistics", "capture.started", "capture.stopped", "error", "exchange", "flow.open", "stream.data", "flow.close", "flow.error", "flow.gap", "intercept.request", "http.intercept.request", "datagram"};
+    constexpr ds::Array names{"ready", "packet", "interface.open", "interface.closed", "interface.error", "statistics", "capture.started", "capture.stopped", "error", "exchange", "flow.open", "stream.data", "flow.close", "flow.error", "flow.gap", "intercept.request", "http.intercept.request", "datagram"};
 
     return names.at(static_cast<std::size_t>(kind));
   }
@@ -192,13 +193,13 @@ namespace telar::runtime::traffic::recording {
 namespace telar::runtime::traffic::control {
 
   Request Protocol::action(std::string_view name) {
-    constexpr std::array names{"status", "capture.start", "capture.stop", "redirect.start", "redirect.stop", "ca.certificate", "ca.install", "ca.uninstall", "ca.rotate"};
+    constexpr ds::Array names{"status", "capture.start", "capture.stop", "redirect.start", "redirect.stop", "ca.certificate", "ca.install", "ca.uninstall", "ca.rotate"};
     const auto found = std::ranges::find(names, name);
     if (found != names.end()) {
       return {.operation = static_cast<Operation>(found - names.begin())};
     }
 
-    constexpr std::array recordings{"recording.start", "recording.query", "recording.stop", "recording.remove", "recording.export", "recording.list"};
+    constexpr ds::Array recordings{"recording.start", "recording.query", "recording.stop", "recording.remove", "recording.export", "recording.list"};
     const auto recording = std::ranges::find(recordings, name);
     if (recording != recordings.end()) {
       return {.operation = Operation::recording, .recording = recording::Request{.operation = static_cast<recording::Operation>(recording - recordings.begin())}};
@@ -207,13 +208,13 @@ namespace telar::runtime::traffic::control {
     throw EncodingError{"Unknown network control action"};
   }
 
-  auto Protocol::prefix(std::size_t size) -> std::array<Byte, prefix_bytes> {
+  auto Protocol::prefix(std::size_t size) -> ds::Array<Byte, prefix_bytes> {
     if (size == 0 || size > Limits::reply_bytes) {
       throw EncodingError{"Invalid network control frame size"};
     }
 
-    std::array<Byte, prefix_bytes> output;
-    plugins::FrameWriter writer{output};
+    ds::Array<Byte, prefix_bytes> output;
+    plugins::FrameWriter writer{output.viewMut()};
 
     writer.integer(static_cast<std::uint32_t>(size));
     return output;
@@ -269,7 +270,7 @@ namespace telar::runtime::traffic::control {
       throw EncodingError{"Too many redirect targets"};
     }
 
-    for (auto& target : std::span{request.targets}.first(request.target_count)) {
+    for (auto& target : request.targets.viewMut().first(request.target_count)) {
       target = reader.text();
     }
 
@@ -283,7 +284,7 @@ namespace telar::runtime::traffic::control {
         throw EncodingError{"Too many selected processes"};
       }
 
-      for (auto& pid : std::span{request.processes}.first(request.process_count)) {
+      for (auto& pid : request.processes.viewMut().first(request.process_count)) {
         pid = reader.integer<std::uint32_t>();
       }
     }
@@ -366,7 +367,7 @@ namespace telar::runtime::traffic::control {
       throw EncodingError{"Too many authorization arguments"};
     }
 
-    for (auto& argument : std::span{reply.authorization}.first(reply.argument_count)) {
+    for (auto& argument : reply.authorization.viewMut().first(reply.argument_count)) {
       argument = reader.text();
     }
 
@@ -458,7 +459,7 @@ namespace telar::runtime::traffic {
       }
     }
 
-    for (auto& entry : programs_) {
+    for (auto& entry : programs_.viewMut()) {
       if (!entry) {
         entry.emplace();
         entry.getMut().link_type = event.link_type;
@@ -476,9 +477,9 @@ namespace telar::runtime::traffic {
       throw std::runtime_error{"Unable to compile traffic filter for link type"};
     }
 
-    std::array<char, Limits::filter_bytes + 1> expression{};
+    ds::Array<char, Limits::filter_bytes + 1> expression{};
 
-    std::ranges::copy(filter, expression.begin());
+    std::ranges::copy(filter, expression.viewMut().begin());
     if (pcap_compile(dead.get(), &program.value, expression.data(), 1, PCAP_NETMASK_UNKNOWN) < 0) {
       throw std::invalid_argument{pcap_geterr(dead.get())};
     }

@@ -13,7 +13,7 @@ import telar.base.ds;
 namespace telar::gui::features::plugins {
 
   void PluginOverrides::set(const runtime::plugins::ConfiguredPlugin& specification, ds::Option<std::uint64_t> identity) {
-    for (auto& entry : std::span{entries_}.first(count_)) {
+    for (auto& entry : entries_.viewMut().first(count_)) {
       if (entry.specification.path.view() == specification.path.view()) {
         entry.specification = specification;
         if (identity) {
@@ -28,7 +28,7 @@ namespace telar::gui::features::plugins {
       throw std::length_error{"TooManyPluginOverrides"};
     }
 
-    entries_[count_] = {.specification = specification, .identity = identity};
+    entries_.atMut(count_) = {.specification = specification, .identity = identity};
     ++count_;
   }
 
@@ -43,7 +43,7 @@ namespace telar::gui::features::plugins {
   }
 
   void PluginOverrides::apply(runtime::plugins::Specifications& specifications) const noexcept {
-    for (auto& specification : std::span{specifications.entries}.first(specifications.count)) {
+    for (auto& specification : specifications.entries.viewMut().first(specifications.count)) {
       if (const auto enabled = requested(specification.path.view())) {
         specification.enabled = *enabled;
       }
@@ -264,12 +264,12 @@ namespace telar::gui::features::plugins {
     constexpr std::size_t characters_per_byte = 2;
     constexpr unsigned nibble_bits = 4;
     constexpr unsigned nibble_mask = 0xf;
-    std::array<char, runtime::plugins::PackageDigest{}.size() * characters_per_byte> encoded{};
+    ds::Array<char, runtime::plugins::PackageDigest{}.size() * characters_per_byte> encoded{};
     std::size_t offset = 0;
 
     for (const auto byte : digest) {
-      encoded[offset++] = digits[byte >> nibble_bits];
-      encoded[offset++] = digits[byte & nibble_mask];
+      encoded.atMut(offset++) = digits[byte >> nibble_bits];
+      encoded.atMut(offset++) = digits[byte & nibble_mask];
     }
 
     writer.value(std::string_view{encoded.data(), encoded.size()});

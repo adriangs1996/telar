@@ -168,7 +168,7 @@ namespace {
         auto& stream = streams[id];
 
         stream.outgoing = std::move(body);
-        const std::array<std::pair<std::string_view, std::string_view>, 4> fields{{{":method", method}, {":scheme", "https"}, {":authority", "fixture.test"}, {":path", path}}};
+        const ds::Array<std::pair<std::string_view, std::string_view>, 4> fields{{{":method", method}, {":scheme", "https"}, {":authority", "fixture.test"}, {":path", path}}};
         const auto native = nativeFields(fields);
         const nghttp2_data_provider2 provider{.source = {.ptr = &stream}, .read_callback = &read};
 
@@ -210,7 +210,7 @@ namespace {
         stream.sent = 0;
         stream.responded = true;
         const auto length = std::to_string(stream.outgoing.size());
-        const std::array<std::pair<std::string_view, std::string_view>, 2> fields{{{":status", "200"}, {"content-length", length}}};
+        const ds::Array<std::pair<std::string_view, std::string_view>, 2> fields{{{":status", "200"}, {"content-length", length}}};
         const auto native = nativeFields(fields);
         const nghttp2_data_provider2 provider{.source = {.ptr = &stream}, .read_callback = &read};
 
@@ -233,7 +233,7 @@ namespace {
       }
 
       void ping() {
-        constexpr std::array<std::uint8_t, 8> bytes{1, 2, 3, 4, 5, 6, 7, 8};
+        constexpr ds::Array<std::uint8_t, 8> bytes{1, 2, 3, 4, 5, 6, 7, 8};
 
         check(nghttp2_submit_ping(session_, 0, bytes.data()) == 0);
       }
@@ -288,13 +288,13 @@ namespace {
       }
 
       template <std::size_t Size>
-      static auto nativeFields(const std::array<std::pair<std::string_view, std::string_view>, Size>& fields) -> std::array<nghttp2_nv, Size> {
-        std::array<nghttp2_nv, Size> native;
+      static auto nativeFields(const ds::Array<std::pair<std::string_view, std::string_view>, Size>& fields) -> ds::Array<nghttp2_nv, Size> {
+        ds::Array<nghttp2_nv, Size> native;
 
         for (std::size_t index = 0; index < Size; ++index) {
           const auto& [name, value] = fields[index];
 
-          native[index] = {reinterpret_cast<std::uint8_t*>(const_cast<char*>(name.data())), reinterpret_cast<std::uint8_t*>(const_cast<char*>(value.data())), name.size(), value.size(), NGHTTP2_NV_FLAG_NONE};
+          native.atMut(index) = {reinterpret_cast<std::uint8_t*>(const_cast<char*>(name.data())), reinterpret_cast<std::uint8_t*>(const_cast<char*>(value.data())), name.size(), value.size(), NGHTTP2_NV_FLAG_NONE};
         }
 
         return native;
@@ -719,7 +719,7 @@ namespace {
         return !fixture.owner.requests.empty();
       });
 
-      const std::array<Byte, 3> garbage{1, 2, 3};
+      const ds::Array<Byte, 3> garbage{1, 2, 3};
 
       fixture.owner.broker.decide(fixture.owner.requests.front().ticket, Verdict::replace, garbage);
       fixture.owner.requests.clear();

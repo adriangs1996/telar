@@ -15,6 +15,7 @@ import telar.testing;
 import telar.runtime.transport.connection;
 import telar.wire.vocabulary;
 import telar.client;
+import telar.base.ds;
 
 namespace {
 
@@ -25,8 +26,8 @@ namespace {
 
   auto helloFrame(ClientHello hello = {}) {
     const auto payload = HandshakeCodec::encode(hello);
-    std::array<Byte, frame_prefix_size + payload.size()> frame;
-    std::span<Byte> output = frame;
+    ds::Array<Byte, frame_prefix_size + payload.size()> frame;
+    std::span<Byte> output = frame.viewMut();
 
     u32::encode(payload.size(), output);
     std::copy(payload.begin(), payload.end(), output.begin());
@@ -60,9 +61,9 @@ namespace {
     Byte retained = 0;
 
     check(::read(channel.get(), &retained, 1) == 1 && retained == pipelined);
-    std::array<Byte, frame_prefix_size + HandshakeSchema<ServerAccept>::payload_size> response;
+    ds::Array<Byte, frame_prefix_size + HandshakeSchema<ServerAccept>::payload_size> response;
 
-    check(::read(peer.get(), response.data(), response.size()) == static_cast<ssize_t>(response.size()));
+    check(::read(peer.get(), response.dataMut(), response.size()) == static_cast<ssize_t>(response.size()));
     check(HandshakeCodec::decode<ServerAccept>(std::span<const Byte>{response}.subspan(frame_prefix_size)).schema == handshake::schema_id);
   }
 
@@ -81,16 +82,16 @@ namespace {
     check(pending.expired(std::chrono::steady_clock::now() + std::chrono::seconds{3}));
     ClientHello hello;
 
-    hello.schema.front() ^= 1;
+    hello.schema.atMut(0) ^= 1;
     const auto frame = helloFrame(hello);
 
     check(::write(peer.get(), frame.data(), frame.size()) == static_cast<ssize_t>(frame.size()));
     pending.read();
     pending.write();
     check(pending.stage() == ClientHandshake::Stage::rejected);
-    std::array<Byte, frame_prefix_size + HandshakeSchema<ServerReject>::payload_size> response;
+    ds::Array<Byte, frame_prefix_size + HandshakeSchema<ServerReject>::payload_size> response;
 
-    check(::read(peer.get(), response.data(), response.size()) == static_cast<ssize_t>(response.size()));
+    check(::read(peer.get(), response.dataMut(), response.size()) == static_cast<ssize_t>(response.size()));
     const auto rejection = HandshakeCodec::decode<ServerReject>(std::span<const Byte>{response}.subspan(frame_prefix_size));
 
     check(rejection.reason == (capacity_refused ? HandshakeRejectReason::client_limit_reached : HandshakeRejectReason::incompatible_schema));
@@ -108,7 +109,7 @@ namespace {
       ClientHandshake pending{FileDescriptor{descriptors[0]}, false};
       auto frame = helloFrame();
 
-      frame[wrong_length ? 0 : frame_prefix_size] ^= 1;
+      frame.atMut(wrong_length ? 0 : frame_prefix_size) ^= 1;
       check(::write(peer.get(), frame.data(), frame.size()) == static_cast<ssize_t>(frame.size()));
       bool rejected = false;
 

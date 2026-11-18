@@ -41,7 +41,7 @@ namespace telar::gui::qt {
 
   struct ComponentSurfaceState {
     static constexpr std::size_t bar_slots = application::components::Definitions::positions;
-    std::array<ComponentSlotState, bar_slots> bars;
+    ds::Array<ComponentSlotState, bar_slots> bars;
     ComponentSlotState panel;
     ds::Option<std::size_t> open_panel = ds::none;
     QString last_render;

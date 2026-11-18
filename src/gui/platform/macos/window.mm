@@ -1,6 +1,7 @@
 #include "platform/window.hpp"
 #include "blur_radius.hpp"
 #include "blur_symbols.h"
+#include "telar_base/ds/values.hpp"
 #include <AppKit/AppKit.h>
 #include <QGuiApplication>
 #include <QMetaObject>
@@ -155,7 +156,7 @@ namespace telar::gui::platform {
       BlurRadius radius_;
     };
 
-    constexpr std::array control_kinds{NSWindowCloseButton, NSWindowMiniaturizeButton, NSWindowZoomButton};
+    constexpr ds::Array control_kinds{NSWindowCloseButton, NSWindowMiniaturizeButton, NSWindowZoomButton};
 
     // AppKit lays the title bar out again whenever it retiles the window (showing it,
     // resizing it, leaving full screen), putting the buttons back in its own 32-point

@@ -92,8 +92,8 @@ namespace {
     LimitLedger ledger;
 
     for (unsigned index = 0; index <= LimitLedger::capacity; ++index) {
-      std::array<char, 32> name;
-      const int length = std::snprintf(name.data(), name.size(), "limit_%u", index);
+      ds::Array<char, 32> name;
+      const int length = std::snprintf(name.dataMut(), name.size(), "limit_%u", index);
 
       ledger.record(LimitReach{.name = {name.data(), static_cast<std::size_t>(length)}}, 1);
     }
@@ -142,7 +142,7 @@ namespace {
     ExecutionService executions{memory, poller, limits};
     ClientPeer owner{memory, model, clients, ClientRole::control};
     ClientPeer outsider{memory, model, clients, ClientRole::control};
-    const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", "cat; printf error >&2; exit 17"};
+    const ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", "cat; printf error >&2; exit 17"};
     ExecutionRequest request{.request_id = 1, .action = ExecutionAction::start, .execution_id = 73, .stdin_open = true, .cwd = "/tmp", .arguments = arguments};
 
     executions.request(model, owner.session(), request);
@@ -162,7 +162,7 @@ namespace {
     check(conflict);
 
     request = {.request_id = 3, .action = ExecutionAction::input, .execution_id = 73};
-    const std::array<Byte, 6> bytes{'h', 'e', 'l', 'l', 'o', '\n'};
+    const ds::Array<Byte, 6> bytes{'h', 'e', 'l', 'l', 'o', '\n'};
 
     request.bytes = bytes;
     bool refused = false;
@@ -181,11 +181,11 @@ namespace {
     executions.disconnect(owner.session().id);
 
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{3};
-    std::array<Event, decltype(poller)::event_capacity> ready{};
+    ds::Array<Event, decltype(poller)::event_capacity> ready{};
 
     while (executions.refresh(model)) {
       check(std::chrono::steady_clock::now() < deadline);
-      for (const auto& event : poller.wait(std::chrono::milliseconds{10}, ready)) {
+      for (const auto& event : poller.wait(std::chrono::milliseconds{10}, ready.viewMut())) {
         executions.event(event);
       }
     }
@@ -209,8 +209,8 @@ namespace {
     RetainedStream retained{memory, 4};
 
     retained.append(bytes);
-    std::array<Byte, 8> output;
-    const auto tail = retained.read(2, output);
+    ds::Array<Byte, 8> output;
+    const auto tail = retained.read(2, output.viewMut());
 
     check(tail.size() == 4 && tail[0] == 'l' && tail[3] == '\n');
     check(retained.retainedOffset() == 2 && retained.total() == 6);
@@ -242,11 +242,11 @@ namespace {
   template <typename Service, typename Model, typename Poller>
   void settleExecutions(Service& executions, Model& model, Poller& poller) {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
-    std::array<Event, Poller::event_capacity> ready{};
+    ds::Array<Event, Poller::event_capacity> ready{};
 
     while (executions.refresh(model)) {
       check(std::chrono::steady_clock::now() < deadline);
-      for (const auto& event : poller.wait(std::chrono::milliseconds{10}, ready)) {
+      for (const auto& event : poller.wait(std::chrono::milliseconds{10}, ready.viewMut())) {
         executions.event(event);
       }
     }
@@ -262,7 +262,7 @@ namespace {
     NativeEventLoop<ConcurrentMemory> poller{memory};
     ExecutionService executions{memory, poller, limits};
     ClientPeer owner{memory, model, clients, ClientRole::control};
-    const std::array<std::string_view, 1> done{"/usr/bin/true"};
+    const ds::Array<std::string_view, 1> done{"/usr/bin/true"};
     const auto start = [&](std::uint64_t identity) {
       return refusal(executions, model, owner, ExecutionRequest{.request_id = identity, .action = ExecutionAction::start, .execution_id = identity, .cwd = "/tmp", .arguments = done});
     };
@@ -295,15 +295,15 @@ namespace {
     NativeEventLoop<ConcurrentMemory> poller{memory};
     ExecutionService executions{memory, poller, limits};
     ClientPeer owner{memory, model, clients, ClientRole::control};
-    std::array<char, 64> home{};
+    ds::Array<char, 64> home{};
 
-    std::strcpy(home.data(), "/tmp/telar-home-XXXXXX");
-    check(::mkdtemp(home.data()) != nullptr);
+    std::strcpy(home.dataMut(), "/tmp/telar-home-XXXXXX");
+    check(::mkdtemp(home.dataMut()) != nullptr);
     const auto canonical = std::filesystem::canonical(home.data()).string();
 
     // An execution with no workspace and no directory runs in the user's home.
     check(::setenv("HOME", canonical.c_str(), 1) == 0);
-    const std::array<std::string_view, 2> pwd{"/bin/pwd", "-P"};
+    const ds::Array<std::string_view, 2> pwd{"/bin/pwd", "-P"};
 
     check(!refusal(executions, model, owner, ExecutionRequest{.request_id = 1, .action = ExecutionAction::start, .execution_id = 1, .arguments = pwd}));
     settleExecutions(executions, model, poller);
@@ -331,7 +331,7 @@ namespace {
     NativeEventLoop<ConcurrentMemory> poller{memory};
     ExecutionService executions{memory, poller, limits};
     ClientPeer owner{memory, model, clients, ClientRole::control};
-    const std::array<std::string_view, 1> echo{"/bin/cat"};
+    const ds::Array<std::string_view, 1> echo{"/bin/cat"};
 
     executions.request(model, owner.session(), ExecutionRequest{.request_id = 1, .action = ExecutionAction::start, .execution_id = 81, .stdin_open = true, .cwd = "/tmp", .arguments = echo});
     owner.receive<ExecutionReply>();
@@ -348,11 +348,11 @@ namespace {
     check(input(7, 5, "late")->first == FailureCode::invalid_request);
 
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{3};
-    std::array<Event, decltype(poller)::event_capacity> ready{};
+    ds::Array<Event, decltype(poller)::event_capacity> ready{};
 
     while (executions.refresh(model)) {
       check(std::chrono::steady_clock::now() < deadline);
-      for (const auto& event : poller.wait(std::chrono::milliseconds{10}, ready)) {
+      for (const auto& event : poller.wait(std::chrono::milliseconds{10}, ready.viewMut())) {
         executions.event(event);
       }
     }
@@ -364,7 +364,7 @@ namespace {
     check(std::string_view{reinterpret_cast<const char*>(status.stdout_bytes.data()), status.stdout_bytes.size()} == "abcd\n");
 
     // A child that does not read fills its queue; the CLI retries on exactly this refusal.
-    const std::array<std::string_view, 3> stalled{"/bin/sh", "-c", "exec sleep 30"};
+    const ds::Array<std::string_view, 3> stalled{"/bin/sh", "-c", "exec sleep 30"};
 
     executions.request(model, owner.session(), ExecutionRequest{.request_id = 9, .action = ExecutionAction::start, .execution_id = 82, .stdin_open = true, .cwd = "/tmp", .arguments = stalled});
     owner.receive<ExecutionReply>();

@@ -3,6 +3,7 @@ module;
 module telar.cli.hooks.session;
 import telar.sys.posix;
 import telar.wire.pane_io;
+import telar.base.ds;
 
 namespace telar::runtime::cli::hooks {
 
@@ -12,21 +13,21 @@ namespace telar::runtime::cli::hooks {
       return;
     }
 
-    std::array<char, PATH_MAX> terminated;
+    ds::Array<char, PATH_MAX> terminated;
 
-    std::memcpy(terminated.data(), path.data(), path.size());
-    terminated[path.size()] = '\0';
+    std::memcpy(terminated.dataMut(), path.data(), path.size());
+    terminated.atMut(path.size()) = '\0';
     FileDescriptor file{::open(terminated.data(), O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)};
     struct stat status;
     if (!file || ::fstat(file.get(), &status) != 0 || !S_ISREG(status.st_mode) || status.st_uid != ::getuid()) {
       return;
     }
 
-    std::array<char, 64 * 1024> window;
+    ds::Array<char, 64 * 1024> window;
     std::size_t held = 0;
 
     for (;;) {
-      const auto received = ::read(file.get(), window.data() + held, window.size() - held);
+      const auto received = ::read(file.get(), window.dataMut() + held, window.size() - held);
       if (received < 0 && sys::lastError() == EINTR) {
         continue;
       }
@@ -44,7 +45,7 @@ namespace telar::runtime::cli::hooks {
       }
 
       held = filled - consumed;
-      std::memmove(window.data(), window.data() + consumed, held);
+      std::memmove(window.dataMut(), window.data() + consumed, held);
     }
   }
 
@@ -83,12 +84,12 @@ namespace telar::runtime::cli::hooks {
 
     const auto index = find(identifier);
     if (kind == "started" && index == count_ && count_ != identifiers_.size()) {
-      identifiers_[count_++].assign(identifier);
+      identifiers_.atMut(count_++).assign(identifier);
     } else if (kind == "completed" && index != count_) {
       // The last identifier fills the gap; copied first, as one element is read while another is written.
       const auto last = identifiers_[--count_];
 
-      identifiers_[index] = last;
+      identifiers_.atMut(index) = last;
     }
   }
 

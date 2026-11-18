@@ -29,8 +29,8 @@ namespace telar::runtime::config {
         return ds::none;
       }
 
-      std::array<std::string_view, maximum_definitions> names;
-      const auto kept = sortedNames(table, reach, limits, names);
+      ds::Array<std::string_view, maximum_definitions> names;
+      const auto kept = sortedNames(table, reach, limits, names.viewMut());
 
       for (std::size_t index = 0; index < kept; ++index) {
         const auto definition = table.entry(names[index]);
@@ -98,7 +98,7 @@ export {
       static constexpr std::size_t maximum_argument_bytes = 4096;
       static constexpr std::size_t maximum_label_bytes = 32;
 
-      std::array<std::string_view, maximum_arguments> arguments{};
+      ds::Array<std::string_view, maximum_arguments> arguments{};
       std::size_t count = 0;
       std::string_view configured_label;
 
@@ -164,8 +164,8 @@ export {
       [[nodiscard]] std::span<const Byte> rowBytes(std::size_t index) const noexcept;
       void clearRecent() noexcept;
 
-      std::array<Byte, maximum_bytes> bytes_{};
-      std::array<std::uint32_t, maximum_rows> offsets_{};
+      ds::Array<Byte, maximum_bytes> bytes_{};
+      ds::Array<std::uint32_t, maximum_rows> offsets_{};
       std::size_t rows_ = 0;
       std::size_t used_ = 0;
       std::size_t fixed_rows_ = 0;
@@ -247,7 +247,7 @@ export {
     private:
       static NotificationActionSetting notification(const lua::Value& action);
 
-      static constexpr std::array<std::string_view, 4> notification_level_names{"info", "success", "warning", "failure"};
+      static constexpr ds::Array<std::string_view, 4> notification_level_names{"info", "success", "warning", "failure"};
     };
 
   }
@@ -274,7 +274,7 @@ export {
       // "horizontal"} is "split-horizontal".
       static tbc::view<std::string_view, tbc::lt::a> builtinName(const lua::Value& action, tbc::view<std::string_view, tbc::lt::a> kind);
 
-      static constexpr std::array<std::string_view, 45> builtin_names{"next-machine", "previous-machine", "machine-picker", "add-machine", "scroll-pane-up", "scroll-pane-down", "split-horizontal", "split-vertical", "focus-left", "focus-right", "focus-up", "focus-down", "navigate-left", "navigate-right", "navigate-up", "navigate-down", "resize-left", "resize-right", "resize-up", "resize-down", "toggle-pane-fullscreen", "toggle-sidebar", "resize-sidebar-left", "resize-sidebar-right", "toggle-workspace-list", "leave-worktree", "forget-gone-worktrees", "new-workspace", "rename-workspace", "close-pane", "new-tab", "next-tab", "previous-tab", "rename-tab", "close-tab", "move-tab-previous", "move-tab-next", "detach", "copy-mode", "goto-picker", "history-palette", "path-picker", "suggest-command", "close-panel", "refresh-panel"};
+      static constexpr ds::Array<std::string_view, 45> builtin_names{"next-machine", "previous-machine", "machine-picker", "add-machine", "scroll-pane-up", "scroll-pane-down", "split-horizontal", "split-vertical", "focus-left", "focus-right", "focus-up", "focus-down", "navigate-left", "navigate-right", "navigate-up", "navigate-down", "resize-left", "resize-right", "resize-up", "resize-down", "toggle-pane-fullscreen", "toggle-sidebar", "resize-sidebar-left", "resize-sidebar-right", "toggle-workspace-list", "leave-worktree", "forget-gone-worktrees", "new-workspace", "rename-workspace", "close-pane", "new-tab", "next-tab", "previous-tab", "rename-tab", "close-tab", "move-tab-previous", "move-tab-next", "detach", "copy-mode", "goto-picker", "history-palette", "path-picker", "suggest-command", "close-panel", "refresh-panel"};
 
       static void builtin(const lua::Value& value);
       static bool validIndex(std::string_view number) noexcept;
@@ -306,7 +306,7 @@ export {
       telar,
     };
 
-    inline constexpr std::array<std::string_view, 4> ui_mark_names{"claude", "codex", "pi", "telar"};
+    inline constexpr ds::Array<std::string_view, 4> ui_mark_names{"claude", "codex", "pi", "telar"};
 
     enum class ComponentKind : std::uint8_t {
       label,
@@ -381,7 +381,7 @@ export {
 
       static constexpr unsigned rank_count = 256;
       static constexpr Usage staging_capacity{254, 32 * 1024, 64, 2048};
-      std::array<Usage, rank_count> ranked_{};
+      ds::Array<Usage, rank_count> ranked_{};
       Usage offered_;
       Usage taken_;
       Usage staged_;
@@ -437,8 +437,8 @@ export {
       battery,
     };
 
-    inline constexpr std::array<std::string_view, 6> component_tone_names{"neutral", "muted", "accent", "success", "warning", "danger"};
-    inline constexpr std::array<std::string_view, 3> component_metric_names{"cpu", "memory", "battery"};
+    inline constexpr ds::Array<std::string_view, 6> component_tone_names{"neutral", "muted", "accent", "success", "warning", "danger"};
+    inline constexpr ds::Array<std::string_view, 3> component_metric_names{"cpu", "memory", "battery"};
 
     // Turns the colors a configuration names into a client's: `index` takes a 256-color index
     // and `name` a name or "#RRGGBB", or nothing for one it does not know.
@@ -468,7 +468,7 @@ export {
       ds::Option<double> marker;
       bool primary = false;
       // A sparkline's last samples, as percentages of its scale.
-      std::array<std::uint8_t, maximum_samples> samples{};
+      ds::Array<std::uint8_t, maximum_samples> samples{};
       std::size_t sample_count = 0;
     };
 
@@ -589,7 +589,7 @@ export {
         const auto total = values.listLength();
 
         result.sample_count = std::min(total, result.samples.size());
-        std::array<double, Values::maximum_samples> kept{};
+        ds::Array<double, Values::maximum_samples> kept{};
         double largest = 0;
 
         for (std::size_t index = 0; index < result.sample_count; ++index) {
@@ -598,7 +598,7 @@ export {
             sample.fail("must be a number");
           }
 
-          kept[index] = sample.boundedNumber(0, 0, std::numeric_limits<double>::max());
+          kept.atMut(index) = sample.boundedNumber(0, 0, std::numeric_limits<double>::max());
           largest = std::max(largest, kept[index]);
         }
 
@@ -607,7 +607,7 @@ export {
         for (std::size_t index = 0; index < result.sample_count; ++index) {
           const auto fraction = scale > 0 ? std::clamp(kept[index] / scale, 0.0, 1.0) : 0;
 
-          result.samples[index] = static_cast<std::uint8_t>(std::round(fraction * Values::sample_percent));
+          result.samples.atMut(index) = static_cast<std::uint8_t>(std::round(fraction * Values::sample_percent));
         }
       }
     };
@@ -696,7 +696,7 @@ export {
 
       lua_State& state_;
       LimitNotices& limits_;
-      std::array<Frame, maximum_frames> frames_{};
+      ds::Array<Frame, maximum_frames> frames_{};
       std::size_t frame_count_ = 0;
     };
 
@@ -741,10 +741,10 @@ export {
       clock,
     };
 
-    inline constexpr std::array<std::string_view, 13> element_kind_names{"row", "column", "stack", "spacer", "label", "icon", "mark", "badge", "tile", "canvas", "builtin", "elapsed", "clock"};
+    inline constexpr ds::Array<std::string_view, 13> element_kind_names{"row", "column", "stack", "spacer", "label", "icon", "mark", "badge", "tile", "canvas", "builtin", "elapsed", "clock"};
 
     // Native pieces `ui.builtin` can place: every slot plus parts of the two bars.
-    inline constexpr std::array<std::string_view, 27> ui_builtin_names{
+    inline constexpr ds::Array<std::string_view, 27> ui_builtin_names{
         "tab",
         "pane_header",
         "agent_card",
@@ -797,7 +797,7 @@ export {
       std::string_view tooltip;
       std::string_view url;
       // Left, top, right and bottom, in logical pixels like every length below.
-      std::array<float, 4> padding{};
+      ds::Array<float, 4> padding{};
       float gap = 0;
       float width = -1;
       float height = -1;
@@ -844,7 +844,7 @@ export {
     struct CanvasStepSetting {
       std::uint8_t op = 0;
       std::uint8_t count = 0;
-      std::array<float, 6> values{};
+      ds::Array<float, 6> values{};
       ElementColorSetting<Color> color;
       std::string_view text;
     };
@@ -947,7 +947,7 @@ export {
         return sink_.element(element);
       }
 
-      static constexpr std::array<std::string_view, 27> layout_fields{"ui", "id", "width", "height", "min_width", "max_width", "min_height", "max_height", "grow", "align_self", "x", "y", "rotation", "scale", "opacity", "z", "background", "border", "radius", "padding", "shadow", "clip", "on_click", "url", "tooltip", "hover", "transition"};
+      static constexpr ds::Array<std::string_view, 27> layout_fields{"ui", "id", "width", "height", "min_width", "max_width", "min_height", "max_height", "grow", "align_self", "x", "y", "rotation", "scale", "opacity", "z", "background", "border", "radius", "padding", "shadow", "clip", "on_click", "url", "tooltip", "hover", "transition"};
 
       inline void fields(const Value& value, Element& element) {
         switch (element.kind) {
@@ -1137,10 +1137,10 @@ export {
 
         // CSS order: {all}, {vertical, horizontal} or {top, right, bottom, left}.
         const auto count = value.listLength();
-        std::array<float, 4> sides{};
+        ds::Array<float, 4> sides{};
 
         for (std::size_t index = 0; index < std::min<std::size_t>(count, 4); ++index) {
-          sides[index] = length(value.element(static_cast<lua_Integer>(index) + 1), 0);
+          sides.atMut(index) = length(value.element(static_cast<lua_Integer>(index) + 1), 0);
         }
 
         if (count == 1) {
@@ -1163,7 +1163,7 @@ export {
         };
 
         // Matches ElementCanvas::Operation, in order.
-        constexpr std::array<Shape, 21> shapes{{
+        constexpr ds::Array<Shape, 21> shapes{{
             {"move", 2, false, false},
             {"line", 2, false, false},
             {"curve", 6, false, false},
@@ -1223,7 +1223,7 @@ export {
           }
 
           for (std::uint8_t number = 0; number < step.count; ++number) {
-            step.values[number] = static_cast<float>(op.element(next++).boundedNumber(0, -1e6, 1e6));
+            step.values.atMut(number) = static_cast<float>(op.element(next++).boundedNumber(0, -1e6, 1e6));
           }
 
           sink_.step(step);
@@ -1294,7 +1294,7 @@ export {
       }
 
       struct Fields {
-        std::array<std::string_view, 40> names{};
+        ds::Array<std::string_view, 40> names{};
         std::size_t count = 0;
 
         // NOLINTNEXTLINE(google-explicit-constructor): reads like the field lists it joins.
@@ -1308,11 +1308,11 @@ export {
         Fields result;
 
         for (const auto name : base) {
-          result.names[result.count++] = name;
+          result.names.atMut(result.count++) = name;
         }
 
         for (const auto name : extra) {
-          result.names[result.count++] = name;
+          result.names.atMut(result.count++) = name;
         }
 
         return result;
@@ -1393,7 +1393,7 @@ export {
       command,
     };
 
-    inline constexpr std::array<std::string_view, 6> source_kind_names{"tabs", "metrics", "machines", "static", "dynamic", "command"};
+    inline constexpr ds::Array<std::string_view, 6> source_kind_names{"tabs", "metrics", "machines", "static", "dynamic", "command"};
 
     struct SourceSetting {
       static constexpr Bounds<double> every_ms_bounds{100, 3'600'000};
@@ -1453,7 +1453,7 @@ export {
 
         const auto bottom = bars.field("bottom");
         if (bottom.present()) {
-          constexpr std::array names{"left", "center", "right"};
+          constexpr ds::Array names{"left", "center", "right"};
 
           for (std::size_t index = 0; index < names.size(); ++index) {
             visit(static_cast<BarPosition>(index), bottom.field(names[index]));
@@ -1532,7 +1532,7 @@ export {
     class BindingKeymap {
     public:
       struct Sequence {
-        std::array<KeyChord, 2> keys{};
+        ds::Array<KeyChord, 2> keys{};
         std::size_t length = 0;
         bool prefixed = false;
       };
@@ -1546,12 +1546,12 @@ export {
       static constexpr std::size_t maximum_bindings = 256;
 
     private:
-      static constexpr std::array<KeyChord, 43> defaultSuffixes() noexcept {
+      static constexpr ds::Array<KeyChord, 43> defaultSuffixes() noexcept {
         using Key = KeyChord::Key;
         constexpr auto shift = static_cast<unsigned>(KeyChord::Modifier::shift);
         constexpr auto alt = static_cast<unsigned>(KeyChord::Modifier::alt);
 
-        return std::array<KeyChord, 43>{{
+        return ds::Array<KeyChord, 43>{{
             {Key::character, '-'},
             {Key::character, '='},
             {Key::character, '%'},
@@ -1599,7 +1599,7 @@ export {
       }
 
       KeyChord prefix_{KeyChord::Key::character, 'b', static_cast<unsigned>(KeyChord::Modifier::control)};
-      std::array<Sequence, maximum_bindings> bindings_{};
+      ds::Array<Sequence, maximum_bindings> bindings_{};
       std::size_t count_ = 0;
     };
 
@@ -1634,7 +1634,7 @@ export {
     // One `client.keybindings` entry as read; a prefixed binding starts with the prefix.
     struct BindingSetting {
       static constexpr std::size_t maximum_keys = 5;
-      std::array<KeyChord, maximum_keys> keys{};
+      ds::Array<KeyChord, maximum_keys> keys{};
       std::size_t length = 0;
       bool prefixed = false;
       bool expression = false;
@@ -1710,8 +1710,8 @@ export {
         consume(std::string_view{action});
         consume(std::string_view{context.sidebar_visible ? "1" : "0"});
         for (const std::uint64_t value : {std::uint64_t{context.tab_count}, std::uint64_t{context.active_tab_index}, std::uint64_t{context.pane_count}, context.focused_pane_id}) {
-          std::array<char, 20> digits;
-          const auto written = std::to_chars(digits.data(), digits.data() + digits.size(), value);
+          ds::Array<char, 20> digits;
+          const auto written = std::to_chars(digits.dataMut(), digits.dataMut() + digits.size(), value);
 
           consume(std::string_view{digits.data(), static_cast<std::size_t>(written.ptr - digits.data())});
         }
@@ -1759,7 +1759,7 @@ export {
 
       static constexpr std::size_t maximum_keys = 16;
       Kind kind = Kind::consume;
-      std::array<KeyChord, maximum_keys> keys{};
+      ds::Array<KeyChord, maximum_keys> keys{};
       std::size_t length = 0;
       // A view of the result's string, alive while the result is.
       std::string_view text;
@@ -1815,7 +1815,7 @@ export {
 
     // One pick option as listed: a label alone, or a table. The views are the list's strings.
     struct PickItemSetting {
-      using Swatch = std::array<std::uint32_t, 3>;
+      using Swatch = ds::Array<std::uint32_t, 3>;
       std::string_view label;
       ds::Option<std::string_view> value;
       ds::Option<std::string_view> detail;
@@ -1946,7 +1946,7 @@ export {
   namespace telar::runtime::config {
 
     // The actions `client.prompt.bindings` may name, in the order of the GUI editor's Action.
-    inline constexpr std::array<std::string_view, 27> prompt_action_names{
+    inline constexpr ds::Array<std::string_view, 27> prompt_action_names{
         "submit",
         "newline",
         "cancel",
@@ -1998,11 +1998,11 @@ export {
       vim,
     };
 
-    inline constexpr std::array<std::string_view, 2> prompt_mode_names{"classic", "telar"};
-    inline constexpr std::array<std::string_view, 3> prompt_skin_names{"halo", "glass", "ink"};
-    inline constexpr std::array<std::string_view, 3> prompt_motion_names{"spring", "ease", "none"};
-    inline constexpr std::array<std::string_view, 2> prompt_keymap_names{"emacs", "vim"};
-    inline constexpr std::array<std::string_view, 2> prompt_binding_mode_names{"insert", "normal"};
+    inline constexpr ds::Array<std::string_view, 2> prompt_mode_names{"classic", "telar"};
+    inline constexpr ds::Array<std::string_view, 3> prompt_skin_names{"halo", "glass", "ink"};
+    inline constexpr ds::Array<std::string_view, 3> prompt_motion_names{"spring", "ease", "none"};
+    inline constexpr ds::Array<std::string_view, 2> prompt_keymap_names{"emacs", "vim"};
+    inline constexpr ds::Array<std::string_view, 2> prompt_binding_mode_names{"insert", "normal"};
 
     struct PromptBounds {
       static constexpr Bounds<double> max_lines{1, 64};
@@ -2068,7 +2068,7 @@ export {
   namespace telar::runtime::config {
 
     // Interface pieces a configuration may draw with Lua, under `client.components`.
-    inline constexpr std::array<std::string_view, 19> component_slots{
+    inline constexpr ds::Array<std::string_view, 19> component_slots{
         "top_bar",
         "bottom_bar",
         "tab",

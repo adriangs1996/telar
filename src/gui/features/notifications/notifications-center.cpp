@@ -155,7 +155,7 @@ namespace telar::gui::features::notifications {
   NotificationId NotificationCenter::push(std::uint64_t now_ns, NotificationInput input) {
     auto item = NotificationItem::create(now_ns, input);
 
-    for (auto& existing : std::span{items_}.first(count_)) {
+    for (auto& existing : items_.viewMut().first(count_)) {
       if (existing.phase == NotificationItem::Phase::exiting || !existing.same(item)) {
         continue;
       }
@@ -173,8 +173,8 @@ namespace telar::gui::features::notifications {
 
     item.id = NotificationId{next_id_++};
     count_ = std::min(count_, capacity - 1);
-    std::move_backward(items_.begin(), items_.begin() + static_cast<std::ptrdiff_t>(count_), items_.begin() + static_cast<std::ptrdiff_t>(count_ + 1));
-    items_.front() = item;
+    std::move_backward(items_.dataMut(), items_.dataMut() + static_cast<std::ptrdiff_t>(count_), items_.dataMut() + static_cast<std::ptrdiff_t>(count_ + 1));
+    items_.atMut(0) = item;
     ++count_;
 
     return item.id;
@@ -185,13 +185,13 @@ namespace telar::gui::features::notifications {
     std::size_t index = 0;
 
     while (index < count_) {
-      auto& item = items_[index];
+      auto& item = items_.atMut(index);
 
       changed = item.advance(now_ns) || changed;
       if (item.phase == NotificationItem::Phase::exiting && item.transition_position_ns == 0) {
         const auto tail = std::span{items_}.subspan(index + 1, count_ - index - 1);
 
-        std::ranges::move(tail, items_.begin() + static_cast<std::ptrdiff_t>(index));
+        std::ranges::move(tail, items_.viewMut().begin() + static_cast<std::ptrdiff_t>(index));
         --count_;
         changed = true;
       } else {
@@ -203,7 +203,7 @@ namespace telar::gui::features::notifications {
   }
 
   bool NotificationCenter::dismiss(NotificationId id, std::uint64_t now_ns) noexcept {
-    for (auto& item : std::span{items_}.first(count_)) {
+    for (auto& item : items_.viewMut().first(count_)) {
       if (item.id == id) {
         return item.beginExit(now_ns);
       }
@@ -213,7 +213,7 @@ namespace telar::gui::features::notifications {
   }
 
   ds::Option<NotificationTarget> NotificationCenter::activate(NotificationId id, std::uint64_t now_ns) noexcept {
-    for (auto& item : std::span{items_}.first(count_)) {
+    for (auto& item : items_.viewMut().first(count_)) {
       if (item.id == id && item.beginExit(now_ns)) {
         return item.target;
       }

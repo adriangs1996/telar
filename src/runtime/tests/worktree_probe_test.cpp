@@ -22,6 +22,7 @@ import telar.runtime.workspaces.git_probe;
 import telar.runtime.worktrees.git_probe;
 import telar.vocabulary;
 import telar.platform.process;
+import telar.base.ds;
 
 namespace {
 
@@ -31,15 +32,15 @@ namespace {
   using namespace telar::runtime;
 
   void runGit(ConcurrentMemory& memory, const std::string& root, std::initializer_list<std::string_view> arguments) {
-    std::array<std::string_view, 32> complete;
+    ds::Array<std::string_view, 32> complete;
     std::size_t count = 0;
 
     for (const auto prefix : {"git", "-c", "user.name=Runtime Test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null"}) {
-      complete[count++] = prefix;
+      complete.atMut(count++) = prefix;
     }
 
     for (const auto argument : arguments) {
-      complete[count++] = argument;
+      complete.atMut(count++) = argument;
     }
 
     Command command{memory, Launch{.cwd = root, .arguments = std::span{complete}.first(count)}, CommandPurpose::administration};
@@ -51,10 +52,10 @@ namespace {
   // A workspace counts untracked files as uncommitted work, as git status --porcelain lists them,
   // and ignored ones as nothing.
   void untrackedFiles(ConcurrentMemory& memory) {
-    std::array<char, 64> directory{};
+    ds::Array<char, 64> directory{};
 
-    std::strcpy(directory.data(), "/tmp/telar-git-test.XXXXXX");
-    check(::mkdtemp(directory.data()) != nullptr);
+    std::strcpy(directory.dataMut(), "/tmp/telar-git-test.XXXXXX");
+    check(::mkdtemp(directory.dataMut()) != nullptr);
     const std::string root{directory.data()};
 
     runGit(memory, root, {"init", "--quiet", "--initial-branch=main", "--template="});
@@ -79,10 +80,10 @@ namespace {
     ConcurrentMemory& memory = adapter;
 
     untrackedFiles(memory);
-    std::array<char, 64> directory{};
+    ds::Array<char, 64> directory{};
 
-    std::strcpy(directory.data(), "/tmp/telar-git-test.XXXXXX");
-    check(::mkdtemp(directory.data()) != nullptr);
+    std::strcpy(directory.dataMut(), "/tmp/telar-git-test.XXXXXX");
+    check(::mkdtemp(directory.dataMut()) != nullptr);
     const std::string root{directory.data()};
 
     runGit(memory, root, {"init", "--quiet", "--initial-branch=main", "--template="});
@@ -141,10 +142,10 @@ namespace {
     SystemAllocator system;
     MemoryAdapter adapter{system};
     ConcurrentMemory& memory = adapter;
-    std::array<char, 64> directory{};
+    ds::Array<char, 64> directory{};
 
-    std::strcpy(directory.data(), "/tmp/telar-git-test.XXXXXX");
-    check(::mkdtemp(directory.data()) != nullptr);
+    std::strcpy(directory.dataMut(), "/tmp/telar-git-test.XXXXXX");
+    check(::mkdtemp(directory.dataMut()) != nullptr);
     const std::string root{directory.data()};
     const auto main = root + "/main";
     const auto linked = root + "/linked";

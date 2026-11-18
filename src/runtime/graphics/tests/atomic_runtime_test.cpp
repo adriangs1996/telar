@@ -30,6 +30,7 @@ import telar.vocabulary;
 import telar.base.text;
 import telar.platform.graphics;
 import telar.runtime.graphics.file_input;
+import telar.base.ds;
 
 namespace {
 
@@ -54,10 +55,10 @@ namespace {
         std::ranges::copy(pixels, shared.getMut().mapping().bytes().begin());
         name_ = shared.getMut().takeName().data();
       } else {
-        std::array<char, 64> path;
+        ds::Array<char, 64> path;
 
-        std::strcpy(path.data(), "/tmp/telar-atomic-test-XXXXXX");
-        FileDescriptor descriptor{::mkstemp(path.data())};
+        std::strcpy(path.dataMut(), "/tmp/telar-atomic-test-XXXXXX");
+        FileDescriptor descriptor{::mkstemp(path.dataMut())};
 
         check(descriptor && ::write(descriptor.get(), pixels.data(), pixels.size()) == static_cast<ssize_t>(pixels.size()));
         name_ = path.data();
@@ -96,7 +97,7 @@ namespace {
       }
     }
 
-    std::array<Byte, 24> pixels;
+    ds::Array<Byte, 24> pixels;
 
   private:
     GraphicsInputMedium medium_;
@@ -227,9 +228,9 @@ namespace {
 
     check(budget.used() == 0);
 
-    std::array<const Byte*, 64> placeholders;
+    ds::Array<const Byte*, 64> placeholders;
 
-    for (auto& placeholder : placeholders) {
+    for (auto& placeholder : placeholders.viewMut()) {
       ImageAllocation allocation{allocator, 24};
       auto storage = SharedImageStorage::create(24);
 

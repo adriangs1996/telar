@@ -15,6 +15,7 @@ import telar.runtime.http1.head;
 import telar.runtime.proxy.intercepted_relay;
 import telar.runtime.proxy.runtime;
 import telar.runtime.proxy.http2_capture_streams;
+import telar.base.ds;
 
 namespace {
 
@@ -51,7 +52,7 @@ namespace {
   void checkHeadAnalysis() {
     using Kind = Http1Framing::Kind;
     // A sign or digit separator would frame the body differently from a peer that follows RFC 9112.
-    const std::array invalid_lengths = {"", "1,", ",1", "1,2", "-1", "_1", "1_", "0x10", "18446744073709551616", "1 0", "-0", "+0", "+10", "1_0", "1__0", "-0_0"};
+    const ds::Array invalid_lengths = {"", "1,", ",1", "1,2", "-1", "_1", "1_", "0x10", "18446744073709551616", "1 0", "-0", "+0", "+10", "1_0", "1__0", "-0_0"};
 
     for (const auto length : invalid_lengths) {
       check(!Http1Head::analyze("POST / HTTP/1.1\r\nContent-Length: " + std::string{length} + "\r\n\r\n", false));

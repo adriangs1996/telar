@@ -8,6 +8,7 @@ import telar.gui.foundation.agents;
 import telar.gui.foundation.core;
 import telar.gui.foundation.forms;
 import telar.gui.foundation.model;
+import telar.base.ds;
 
 namespace telar::gui::features::peek {
 
@@ -26,7 +27,7 @@ namespace telar::gui::features::peek {
 
     append(result, AgentCardLabels::title({}, agent.display_name));
     append(result, " · ");
-    constexpr std::array statuses{std::string_view{"unknown"}, std::string_view{"working"}, std::string_view{"blocked"}, std::string_view{"ready"}, std::string_view{"failed"}, std::string_view{"done"}};
+    constexpr ds::Array statuses{std::string_view{"unknown"}, std::string_view{"working"}, std::string_view{"blocked"}, std::string_view{"ready"}, std::string_view{"failed"}, std::string_view{"done"}};
     const auto status = static_cast<std::size_t>(agent.status);
 
     append(result, statuses[status < statuses.size() ? status : 0]);
@@ -56,8 +57,8 @@ namespace telar::gui::features::peek {
 
   void PeekLabels::decimal(Facts& storage, std::uint16_t value) {
     constexpr auto capacity = std::numeric_limits<std::uint16_t>::digits10 + 1;
-    std::array<char, capacity> digits{};
-    const auto result = std::to_chars(digits.data(), digits.data() + digits.size(), value);
+    ds::Array<char, capacity> digits{};
+    const auto result = std::to_chars(digits.dataMut(), digits.dataMut() + digits.size(), value);
 
     append(storage, {digits.data(), static_cast<std::size_t>(result.ptr - digits.data())});
   }

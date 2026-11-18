@@ -5,6 +5,7 @@ import telar.ghostty.unicode;
 import telar.lua;
 import telar.tbc;
 import telar.base.diagnostics;
+import telar.base.ds;
 
 // Apart from runtime.cpp because an agent icon is measured with libghostty-vt: only the processes
 // that read the `runtime` table pull this unit in, and the CLI, which reads the manifests, links no
@@ -139,7 +140,7 @@ namespace telar::runtime::config {
     }
 
     inline static unsigned iconWidth(std::string_view text) noexcept {
-      std::array<std::uint32_t, 8> codepoints;
+      ds::Array<std::uint32_t, 8> codepoints;
       std::size_t count = 0;
 
       for (std::size_t offset = 0; offset < text.size();) {
@@ -153,7 +154,7 @@ namespace telar::runtime::config {
           codepoint = (codepoint << 6) | (static_cast<unsigned char>(text[offset++]) & 0x3f);
         }
 
-        codepoints[count++] = codepoint;
+        codepoints.atMut(count++) = codepoint;
       }
 
       unsigned width = 0;
@@ -188,7 +189,7 @@ namespace telar::runtime::config {
 
       const auto policy = printable(attachments);
 
-      for (const auto& [name, kind] : std::array<std::pair<std::string_view, AgentAttachmentMarkers>, 4>{{{"none", AgentAttachmentMarkers::none}, {"ordered", AgentAttachmentMarkers::ordered}, {"stable_number", AgentAttachmentMarkers::stable_number}, {"pasted_path", AgentAttachmentMarkers::pasted_path}}}) {
+      for (const auto& [name, kind] : ds::Array<std::pair<std::string_view, AgentAttachmentMarkers>, 4>{{{"none", AgentAttachmentMarkers::none}, {"ordered", AgentAttachmentMarkers::ordered}, {"stable_number", AgentAttachmentMarkers::stable_number}, {"pasted_path", AgentAttachmentMarkers::pasted_path}}}) {
         if (name == policy) {
           manifest.attachments = kind;
           return;

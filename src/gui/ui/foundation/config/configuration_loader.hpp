@@ -73,7 +73,7 @@ namespace telar::gui::qt {
         : commands(nullptr, AllocationDeleter<runtime::config::RetainedCommandTabRegistry, ApplicationAllocator>{memory}) {}
 
     Owned<runtime::config::RetainedCommandTabRegistry, ApplicationAllocator> commands;
-    std::array<ds::Option<BarRender>, application::components::Definitions::positions> fixed_bars{};
+    ds::Array<ds::Option<BarRender>, application::components::Definitions::positions> fixed_bars{};
     CommandArguments arguments;
   };
 

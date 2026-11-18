@@ -9,6 +9,7 @@ import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
 import :records;
+import telar.base.ds;
 
 // Interface: application/agent_replica.cppm
 export {
@@ -37,7 +38,7 @@ export {
       Memory& memory_;
       Vector<Agent<Memory>, Memory> entries_;
       Vector<Agent<Memory>, Memory> staging_;
-      std::array<AgentStatusChange, capacity> status_changes_;
+      ds::Array<AgentStatusChange, capacity> status_changes_;
       std::size_t status_change_count_ = 0;
       std::uint64_t revision_ = 0;
       std::uint64_t now_ns_ = 0;
@@ -64,7 +65,7 @@ export {
       runtime::FixedText<foreground_capacity> foreground;
       // How long the foreground process has held the terminal, as of its arrival.
       StatusAgeInterval age;
-      std::array<std::uint16_t, max_listed_ports> port_values{};
+      ds::Array<std::uint16_t, max_listed_ports> port_values{};
       std::uint8_t port_count = 0;
       bool shell = false;
 

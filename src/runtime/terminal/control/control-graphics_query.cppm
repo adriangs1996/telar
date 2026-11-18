@@ -156,10 +156,10 @@ export namespace telar::runtime::control {
       constexpr std::size_t maximum_prefix_bytes = image_prefix.size() + number_prefix.size() + placement_prefix.size() + 3 * identifier_digits + 1;
       constexpr std::string_view terminator = "\x1b\\";
       static_assert(maximum_reply_bytes > maximum_prefix_bytes + terminator.size());
-      std::array<char, maximum_reply_bytes> encoded;
-      auto* next = std::copy(image_prefix.begin(), image_prefix.end(), encoded.data());
+      ds::Array<char, maximum_reply_bytes> encoded;
+      auto* next = std::copy(image_prefix.begin(), image_prefix.end(), encoded.dataMut());
       const auto identifier = [&](std::uint32_t value) {
-        const auto formatted = std::to_chars(next, encoded.data() + maximum_prefix_bytes, value);
+        const auto formatted = std::to_chars(next, encoded.dataMut() + maximum_prefix_bytes, value);
 
         TELAR_ASSERT(formatted.ec == std::errc{});
         next = formatted.ptr;
@@ -200,12 +200,12 @@ export namespace telar::runtime::control {
 
       if (request.medium != 'd') {
         ds::Option<GraphicsChildFile> file;
-        std::array<std::uint8_t, PATH_MAX + 1> name;
+        ds::Array<std::uint8_t, PATH_MAX + 1> name;
 
         if (request.medium == 'f' || request.medium == 't') {
           file = GraphicsChildFile::openDecoded(decoded_);
         } else {
-          auto descriptor = GraphicsChildSharedMemory::openDecoded(decoded_, name);
+          auto descriptor = GraphicsChildSharedMemory::openDecoded(decoded_, name.viewMut());
           struct stat metadata{};
           if (descriptor && ::fstat(descriptor.get(), &metadata) == 0 && metadata.st_uid == ::getuid() && metadata.st_size > 0) {
             file = GraphicsChildFile{std::move(descriptor), static_cast<std::uint64_t>(metadata.st_size)};

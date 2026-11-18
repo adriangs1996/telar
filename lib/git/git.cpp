@@ -478,9 +478,9 @@ namespace telar::git {
       return Discovered::not_owned;
     }
 
-    std::array<char, 4096> bytes;
+    ds::Array<char, 4096> bytes;
     std::string_view contents;
-    if (readSmall(current.get(), ".git", std::span{bytes}.first(std::min(bytes.size(), limits_.small_file)), contents) != ReadStatus::ok) {
+    if (readSmall(current.get(), ".git", bytes.viewMut().first(std::min(bytes.size(), limits_.small_file)), contents) != ReadStatus::ok) {
       return Discovered::invalid;
     }
 
@@ -520,9 +520,9 @@ namespace telar::git {
       return Discovered::not_owned;
     }
 
-    std::array<char, 4096> bytes;
+    ds::Array<char, 4096> bytes;
     std::string_view contents;
-    const auto small = std::span{bytes}.first(std::min(bytes.size(), limits_.small_file));
+    const auto small = bytes.viewMut().first(std::min(bytes.size(), limits_.small_file));
     const auto common_file = readSmall(directory, "commondir", small, contents);
     if (common_file == ReadStatus::ok) {
       PathName path;
@@ -724,9 +724,9 @@ namespace telar::git {
     inputs_.upstream = {};
     inputs_.shallow = fingerprintAt(common_.get(), "shallow");
 
-    std::array<char, 4096> bytes;
+    ds::Array<char, 4096> bytes;
     std::string_view contents;
-    const auto small = std::span{bytes}.first(std::min(bytes.size(), limits_.small_file));
+    const auto small = bytes.viewMut().first(std::min(bytes.size(), limits_.small_file));
     const auto packed = fingerprintAt(common_.get(), "packed-refs");
     if (!packed_loaded_ || packed != inputs_.packed_refs) {
       packed_loaded_ = true;
@@ -881,10 +881,10 @@ namespace telar::git {
         return RefLookup::invalid;
       }
 
-      std::array<char, 4096> bytes;
+      ds::Array<char, 4096> bytes;
       std::string_view contents;
       Fingerprint loose;
-      const auto read = readSmall(perWorktreeReference(name) ? gitdir_.get() : common_.get(), path.c_str(), std::span{bytes}.first(std::min(bytes.size(), limits_.small_file)), contents, &loose);
+      const auto read = readSmall(perWorktreeReference(name) ? gitdir_.get() : common_.get(), path.c_str(), bytes.viewMut().first(std::min(bytes.size(), limits_.small_file)), contents, &loose);
 
       if (depth == 0 && identity != nullptr) {
         *identity = read == ReadStatus::ok ? loose : Fingerprint{};

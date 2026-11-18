@@ -152,7 +152,7 @@ export {
 
       MachineRow& requireRemote(Slot slot);
 
-      std::array<MachineRow, capacity> rows_;
+      ds::Array<MachineRow, capacity> rows_;
       std::uint64_t next_generation_ = 1;
       Slot active_ = local_slot;
       std::uint64_t revision_ = 0;

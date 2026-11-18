@@ -25,7 +25,7 @@ namespace {
   using namespace telar;
 
   constexpr TerminalSize size{80, 24, 8, 16};
-  constexpr std::array<std::string_view, 1> cat{"/bin/cat"};
+  constexpr ds::Array<std::string_view, 1> cat{"/bin/cat"};
   constexpr std::string_view session_id = "0123abcd-4567-89ef-0123-456789abcdef";
 
   // A codex the runtime identifies by its executable, running `workload` in a pane: argv is
@@ -95,10 +95,10 @@ namespace {
         ::tcsetattr(STDIN_FILENO, TCSANOW, &mode);
         report(2, AgentReportState::working);
         std::ofstream{result} << "working";
-        std::array<char, 256> input;
+        ds::Array<char, 256> input;
 
         for (;;) {
-          const auto count = ::read(STDIN_FILENO, input.data(), input.size());
+          const auto count = ::read(STDIN_FILENO, input.dataMut(), input.size());
           if (count <= 0) {
             return 0;
           }
@@ -124,9 +124,9 @@ namespace {
     FixtureAgent(const RuntimeHost& host, ProtocolPeer& control, std::string_view workload, std::string_view argument = "-", bool wrapped = false)
         : result(host.directory() + "/agent-" + std::string{workload}) {
       const auto codex = agentExecutable(host, "codex");
-      const std::array<std::string_view, 6> direct{codex, "--wire-agent", host.socket(), result, workload, argument};
+      const ds::Array<std::string_view, 6> direct{codex, "--wire-agent", host.socket(), result, workload, argument};
       const auto command = "exec '" + codex + "' --wire-agent '" + host.socket() + "' '" + result + "' " + std::string{workload} + " '" + std::string{argument} + "'";
-      const std::array<std::string_view, 3> shell{"/bin/sh", "-c", command};
+      const ds::Array<std::string_view, 3> shell{"/bin/sh", "-c", command};
       const auto arguments = wrapped ? std::span<const std::string_view>{shell} : std::span<const std::string_view>{direct};
 
       opened = control.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
@@ -229,7 +229,7 @@ namespace {
     // A pane with no agent working, and one whose process exited.
     const auto workspace = agent.opened.location.workspace;
     const auto plain = control.exchange<TabCreated>(CreateTab{.request_id = 2, .workspace = workspace, .label = "Plain", .size = size, .launch = Launch{.cwd = "/tmp", .arguments = cat}});
-    const std::array<std::string_view, 1> exiting{"/usr/bin/true"};
+    const ds::Array<std::string_view, 1> exiting{"/usr/bin/true"};
     const auto exited = control.exchange<TabCreated>(CreateTab{.request_id = 3, .workspace = workspace, .label = "Exited", .size = size, .launch = Launch{.cwd = "/tmp", .arguments = exiting}});
 
     check(refusal(control, InterruptAgent{4, plain.root_pane_id, plain.pane_generation}) == FailureCode::agent_not_working);
@@ -241,8 +241,8 @@ namespace {
     {
       // A window shows the agent's pane focused: the key would land in what the human types.
       ProtocolPeer window{host.socket()};
-      const std::array<ClientLayoutNode, 1> nodes{ClientLayoutPane{pane}};
-      const std::array<ClientTabLayout, 1> layouts{ClientTabLayout{agent.opened.location, pane, false, true, nodes}};
+      const ds::Array<ClientLayoutNode, 1> nodes{ClientLayoutPane{pane}};
+      const ds::Array<ClientTabLayout, 1> layouts{ClientTabLayout{agent.opened.location, pane, false, true, nodes}};
 
       window.send(RequestRuntimeState{.client_identity = 64, .interactive = true});
       window.send(UpdateClientLayout{true, 29, false, agent.opened.location, layouts});
@@ -352,7 +352,7 @@ namespace {
     const auto helper = agentExecutable(host, "helper");
     const auto result = host.directory() + "/agent-report";
     const auto command = "'" + helper + "' --wire-agent '" + host.socket() + "' '" + result + "' report-exit -\r";
-    const std::array<std::string_view, 2> shell{"/bin/sh", "-i"};
+    const ds::Array<std::string_view, 2> shell{"/bin/sh", "-i"};
     const auto opened = control.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = shell}});
 
     // The user's shell runs a program whose hook reports an agent, and that program exits back to

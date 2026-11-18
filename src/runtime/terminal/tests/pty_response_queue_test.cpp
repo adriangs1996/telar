@@ -8,6 +8,7 @@ import telar.base.memory.allocators;
 import telar.runtime.terminal.control;
 import telar.testing;
 import telar.runtime.terminal.osc_scanner;
+import telar.base.ds;
 
 namespace {
 
@@ -24,14 +25,14 @@ namespace {
     queue.consume(0);
     check(queue.empty());
 
-    std::array<std::uint8_t, PtyResponseQueue::message_byte_capacity + 1> payload;
+    ds::Array<std::uint8_t, PtyResponseQueue::message_byte_capacity + 1> payload;
 
-    std::fill(payload.begin(), payload.end(), 41);
+    std::ranges::fill(payload.viewMut(), 41);
     check(!queue.push(payload) && queue.snapshot().dropped == 1);
     const auto response = std::span{payload}.first(PtyResponseQueue::message_byte_capacity);
 
     for (std::size_t index = 0; index < PtyResponseQueue::message_capacity; ++index) {
-      payload.front() = static_cast<std::uint8_t>(index);
+      payload.atMut(0) = static_cast<std::uint8_t>(index);
       check(queue.push(response));
     }
 
@@ -45,7 +46,7 @@ namespace {
     check(!queue.push(response));
     queue.consume(response.size() - 3);
     check(queue.readable().front() == 1);
-    payload.front() = 99;
+    payload.atMut(0) = 99;
     check(queue.push(response));
     for (std::size_t index = 1; index < PtyResponseQueue::message_capacity; ++index) {
       check(queue.readable().front() == index);
@@ -60,10 +61,10 @@ namespace {
   void testConcurrentResponses() {
     PtyResponseQueue queue;
     constexpr std::uint32_t responses_per_producer = 10000;
-    std::array<std::uint32_t, 2> received{};
+    ds::Array<std::uint32_t, 2> received{};
     const auto produce = [&](std::uint32_t producer) {
       for (std::uint32_t sequence = 0; sequence < responses_per_producer; ++sequence) {
-        const std::array<std::uint32_t, 2> payload{producer, sequence};
+        const ds::Array<std::uint32_t, 2> payload{producer, sequence};
         const auto bytes = std::span{reinterpret_cast<const std::uint8_t*>(payload.data()), sizeof(payload)};
 
         while (!queue.tryPush(bytes)) {
@@ -82,12 +83,12 @@ namespace {
         continue;
       }
 
-      std::array<std::uint32_t, 2> payload;
+      ds::Array<std::uint32_t, 2> payload;
 
       check(response->size() == sizeof(payload));
-      std::memcpy(payload.data(), response->data(), response->size());
+      std::memcpy(payload.dataMut(), response->data(), response->size());
       check(payload[0] < received.size() && payload[1] == received[payload[0]]);
-      ++received[payload[0]];
+      ++received.atMut(payload[0]);
       std::this_thread::yield();
       check(std::memcmp(payload.data(), response->data(), response->size()) == 0);
       queue.consume(response->size());
@@ -162,7 +163,7 @@ namespace {
         std::this_thread::yield();
       }
 
-      const std::array<std::uint8_t, 4> response{27, '[', '0', 'n'};
+      const ds::Array<std::uint8_t, 4> response{27, '[', '0', 'n'};
 
       check(!queue.push(response));
       check(!queue.tryPush(response));
@@ -193,7 +194,7 @@ namespace {
     ConcurrentMemory& memory = adapter;
     const auto shared_queue = std::make_shared<PtyResponseQueue>();
     auto& queue = *shared_queue;
-    const std::array<std::uint8_t, 3> ack{'A', 'C', 'K'};
+    const ds::Array<std::uint8_t, 3> ack{'A', 'C', 'K'};
 
     {
       ResponseOutbox first{memory, shared_queue};
@@ -231,7 +232,7 @@ namespace {
 
     {
       ResponseOutbox outbox{memory, shared_queue};
-      const std::array<std::uint8_t, 1024> message{};
+      const ds::Array<std::uint8_t, 1024> message{};
 
       for (unsigned index = 0; index < 3; ++index) {
         outbox.append(message);
@@ -284,7 +285,7 @@ namespace {
   void testWorkerPriority() {
     const auto shared_queue = std::make_shared<PtyResponseQueue>();
     auto& queue = *shared_queue;
-    const std::array<std::uint8_t, Fixed ? 4 : 1> native_bytes{'N'};
+    const ds::Array<std::uint8_t, Fixed ? 4 : 1> native_bytes{'N'};
     const auto publish = [](PtyResponseQueue::Producer& producer, const auto& bytes) {
       if constexpr (Fixed) {
         return producer.tryPushFixed(bytes);
@@ -293,7 +294,7 @@ namespace {
       }
     };
 
-    const std::array<std::uint8_t, 3> ack{'A', 'C', 'K'};
+    const ds::Array<std::uint8_t, 3> ack{'A', 'C', 'K'};
 
     for (unsigned index = 0; index < PtyResponseQueue::message_capacity; ++index) {
       check(queue.tryPush(native_bytes));
@@ -366,7 +367,7 @@ namespace {
 
   void testBorrowedBatchWrap() {
     PtyResponseQueue queue;
-    const std::array<std::uint8_t, 4> prefix{1, 2, 3, 4};
+    const ds::Array<std::uint8_t, 4> prefix{1, 2, 3, 4};
 
     for (std::size_t index = 0; index < PtyResponseQueue::message_capacity - 2; ++index) {
       check(queue.tryPush(prefix));
@@ -388,7 +389,7 @@ namespace {
     std::atomic<bool> done = false;
     std::jthread producer{[&] {
       for (std::size_t index = batch.count; index < PtyResponseQueue::message_capacity; ++index) {
-        const std::array<std::uint8_t, 1> suffix{9};
+        const ds::Array<std::uint8_t, 1> suffix{9};
 
         check(queue.tryPush(suffix));
       }

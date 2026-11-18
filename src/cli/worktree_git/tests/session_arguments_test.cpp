@@ -7,6 +7,7 @@ import std;
 import telar.testing;
 import telar.wire.vocabulary;
 import telar.cli.worktree_git;
+import telar.base.ds;
 
 namespace {
 
@@ -29,7 +30,7 @@ namespace {
   // session and pane that hear about the worktree.
   void coordinatorReferenceParses() {
     const auto reference = coordinatorReference("0123456789abcdefFEDCBA9876543210:17:29");
-    constexpr std::array<Byte, 16> session{0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10};
+    constexpr ds::Array<Byte, 16> session{0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10};
 
     check(reference.session_id == session);
     check(reference.pane_id == 17 && reference.pane_generation == 29);
@@ -41,7 +42,7 @@ namespace {
 
   // Without `--client` the window a person typed in last; with it, that window or none.
   void chooseClientPicksWindow() {
-    const std::array clients{
+    const ds::Array clients{
         ClientDescriptor{.id = 1, .last_input_sequence = 5},
         ClientDescriptor{.id = 2, .last_input_sequence = 9},
         ClientDescriptor{.id = 4, .last_input_sequence = 7},

@@ -15,6 +15,7 @@ import telar.gui.application;
 import telar.gui.foundation.terminal;
 import telar.wire.content;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -38,7 +39,7 @@ namespace {
     application::FoldMap<> folds;
 
     check(folds.display(any_row) == any_row && folds.row(any_row) == any_row, "without folds rows are their own display index");
-    const std::array<application::FoldMap<>::Span, 3> spans{{{.first = later_fold, .count = later_rows}, {.first = first_fold, .count = fold_rows}, {.first = overlapping, .count = fold_rows}}};
+    const ds::Array<application::FoldMap<>::Span, 3> spans{{{.first = later_fold, .count = later_rows}, {.first = first_fold, .count = fold_rows}, {.first = overlapping, .count = fold_rows}}};
 
     folds.assign(spans);
     check(folds.spans().size() == 2 && folds.spans()[0].first == first_fold && folds.spans()[0].count == joined_rows, "overlapping folds join, in order");
@@ -60,14 +61,14 @@ namespace {
     static constexpr std::size_t letter_count = 26;
 
     std::vector<Cell> cells;
-    std::array<Byte, encoded_capacity> encoded{};
+    ds::Array<Byte, encoded_capacity> encoded{};
     std::vector<Byte> flags;
-    std::array<Byte, letter_count> letters{};
+    ds::Array<Byte, letter_count> letters{};
     PaneRows reply{};
 
     RowsReply(PaneRows header, std::uint16_t rows) {
       for (std::size_t index = 0; index < letters.size(); ++index) {
-        letters[index] = static_cast<Byte>('a' + index);
+        letters.atMut(index) = static_cast<Byte>('a' + index);
       }
 
       for (std::uint16_t row = 0; row < rows; ++row) {
@@ -80,7 +81,7 @@ namespace {
       reply.cols = 1;
       reply.rows = rows;
       reply.text_metadata = TextMetadata{.row_flags = flags};
-      reply.cells = CellRunCodec::encode(cells, encoded);
+      reply.cells = CellRunCodec::encode(cells, encoded.viewMut());
     }
   };
 
@@ -88,7 +89,7 @@ namespace {
   // beside folds that hide theirs.
   void documentsShowTheirOwnRows() {
     application::FoldMap<> folds;
-    const std::array<application::FoldMap<>::Span, 3> spans{{{.first = 40, .count = 10, .shown = 4}, {.first = 10, .count = 5}, {.first = 20, .count = 3, .shown = 6}}};
+    const ds::Array<application::FoldMap<>::Span, 3> spans{{{.first = 40, .count = 10, .shown = 4}, {.first = 10, .count = 5}, {.first = 20, .count = 3, .shown = 6}}};
 
     folds.assign(spans);
     check(folds.display(9) == 9 && folds.display(12) == 10 && folds.display(15) == 10, "a fold still hides its rows");
@@ -99,7 +100,7 @@ namespace {
     check(folds.showing(16) == &folds.spans()[1] && folds.showing(30) == nullptr && folds.showing(10) == nullptr, "a display row knows the document it shows");
     check(!folds.hides(23) && folds.hides(12) && folds.hides(46) && !folds.hides(41), "rows past what a document shows are hidden");
 
-    const std::array<application::FoldMap<>::Span, 2> covered{{{.first = 20, .count = 3, .shown = 6}, {.first = 18, .count = 10}}};
+    const ds::Array<application::FoldMap<>::Span, 2> covered{{{.first = 20, .count = 3, .shown = 6}, {.first = 18, .count = 10}}};
 
     folds.assign(covered);
     check(folds.spans().size() == 1 && folds.spans()[0].shown == 0 && folds.spans()[0].count == 10, "a fold over a document hides it");
@@ -145,14 +146,14 @@ namespace {
     constexpr std::uint16_t linked_column = 1;
     constexpr std::uint32_t linked_cells = 2;
     constexpr std::string_view uri = "https://example.com/";
-    constexpr std::array<Byte, 1> letter{'x'};
+    constexpr ds::Array<Byte, 1> letter{'x'};
     const std::vector<Cell> cells(static_cast<std::size_t>(columns) * rows, Cell{.text = letter});
-    std::array<Byte, RowsReply::encoded_capacity> encoded{};
-    const std::array<Byte, rows> flags{0, static_cast<Byte>(RowFlag::hyperlinks)};
-    const std::array links{MetadataLink{.offset = 0, .len = static_cast<std::uint16_t>(uri.size())}};
-    const std::array runs{MetadataRun{.start = columns + linked_column, .len = linked_cells, .link_index = 0}};
+    ds::Array<Byte, RowsReply::encoded_capacity> encoded{};
+    const ds::Array<Byte, rows> flags{0, static_cast<Byte>(RowFlag::hyperlinks)};
+    const ds::Array links{MetadataLink{.offset = 0, .len = static_cast<std::uint16_t>(uri.size())}};
+    const ds::Array runs{MetadataRun{.start = columns + linked_column, .len = linked_cells, .link_index = 0}};
     const auto uri_bytes = byteView(uri);
-    const PaneRows reply{.request_id = 1, .pane_id = 1, .generation = generation, .from = from, .cols = columns, .rows = rows, .text_metadata = TextMetadata{.row_flags = flags, .links = links, .runs = runs, .uris = uri_bytes}, .cells = CellRunCodec::encode(cells, encoded)};
+    const PaneRows reply{.request_id = 1, .pane_id = 1, .generation = generation, .from = from, .cols = columns, .rows = rows, .text_metadata = TextMetadata{.row_flags = flags, .links = links, .runs = runs, .uris = uri_bytes}, .cells = CellRunCodec::encode(cells, encoded.viewMut())};
     SystemAllocator system;
     telar::MemoryAdapter adapter{system};
     telar::ConcurrentMemory& memory = adapter;
@@ -181,9 +182,9 @@ namespace {
     // The second kept row drawn first, as a folded view may draw it.
     Screen<telar::ConcurrentMemory> drawn{memory};
     const auto row = cache.find(from + 1);
-    const std::array spans{row->cells, std::span<const CellValue>{}};
-    const std::array<Byte, rows> drawn_flags{row->flags, 0};
-    const std::array drawn_runs{MetadataRun{.start = linked_column, .len = linked_cells, .link_index = 0}};
+    const ds::Array spans{row->cells, std::span<const CellValue>{}};
+    const ds::Array<Byte, rows> drawn_flags{row->flags, 0};
+    const ds::Array drawn_runs{MetadataRun{.start = linked_column, .len = linked_cells, .link_index = 0}};
 
     drawn.compose(columns, spans, drawn_flags, TextMetadata{.row_flags = drawn_flags, .links = links, .runs = drawn_runs, .uris = uri_bytes});
     check(drawn.rows() == rows && drawn.scroll().offset == 0 && drawn.linkAt(linked_column) == uri, "a composed screen holds its rows' links");
@@ -250,7 +251,7 @@ namespace {
     deliverSingleCell(client, frame);
     deliver(client, PaneScrollback{.pane_id = 1, .generation = 1, .trimmed = trimmed});
     const auto blocks_at = [](std::uint32_t shift) {
-      return std::array{CommandBlock{.row = first_row - shift, .rows = first_rows, .state = CommandBlockState::succeeded, .command = "ls"}, CommandBlock{.row = second_row - shift, .rows = 1, .state = CommandBlockState::failed, .status = 1, .command = "make"}, CommandBlock{.row = third_row - shift, .rows = 1, .state = CommandBlockState::running, .command = "tail"}};
+      return ds::Array{CommandBlock{.row = first_row - shift, .rows = first_rows, .state = CommandBlockState::succeeded, .command = "ls"}, CommandBlock{.row = second_row - shift, .rows = 1, .state = CommandBlockState::failed, .status = 1, .command = "make"}, CommandBlock{.row = third_row - shift, .rows = 1, .state = CommandBlockState::running, .command = "tail"}};
     };
 
     const auto blocks = blocks_at(0);

@@ -26,7 +26,7 @@ namespace telar::runtime {
       return ds::none;
     }
 
-    std::array<std::uint16_t, maximum_needle> first_matches;
+    ds::Array<std::uint16_t, maximum_needle> first_matches;
     std::size_t offset = 0;
 
     for (std::size_t matched = 0; matched < query.size(); ++matched) {
@@ -40,7 +40,7 @@ namespace telar::runtime {
         return ds::none;
       }
 
-      first_matches[matched] = static_cast<std::uint16_t>(offset);
+      first_matches.atMut(matched) = static_cast<std::uint16_t>(offset);
       if (!positions.empty()) {
         positions[matched] = first_matches[matched];
       }
@@ -56,11 +56,11 @@ namespace telar::runtime {
       return std::numeric_limits<std::int32_t>::max() / 2;
     }
 
-    std::array<std::int32_t, maximum_path> bonuses;
+    ds::Array<std::int32_t, maximum_path> bonuses;
     char previous = '/';
 
     for (std::size_t index = 0; index < path.size(); ++index) {
-      bonuses[index] = bonus(previous, path[index]);
+      bonuses.atMut(index) = bonus(previous, path[index]);
       previous = path[index];
     }
 
@@ -269,7 +269,7 @@ namespace telar::runtime {
   }
 
   bool PathIndexBuilder::insideGit(std::string_view path) noexcept {
-    std::array<char, 4102> marker;
+    ds::Array<char, 4102> marker;
 
     while (!path.empty() && path.ends_with('/')) {
       path.remove_suffix(1);
@@ -280,8 +280,8 @@ namespace telar::runtime {
         return false;
       }
 
-      std::copy(path.begin(), path.end(), marker.begin());
-      std::memcpy(marker.data() + path.size(), "/.git", 6);
+      std::copy(path.begin(), path.end(), marker.dataMut());
+      std::memcpy(marker.dataMut() + path.size(), "/.git", 6);
       if (::access(marker.data(), F_OK) == 0) {
         return true;
       }
@@ -321,7 +321,7 @@ namespace telar::runtime {
       const auto configuration_deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
       GitRepository git{memory_, root, configuration_deadline, storage_.cancelled};
       Directories directories{0, std::hash<std::string_view>{}, std::equal_to<std::string_view>{}, AllocatorRef<std::string_view, ConcurrentMemory>{memory_}};
-      std::array<char, 1024> relative;
+      ds::Array<char, 1024> relative;
       std::size_t length = 0;
       bool oversized = false;
 
@@ -339,7 +339,7 @@ namespace telar::runtime {
             length = 0;
             oversized = false;
           } else if (length < relative.size()) {
-            relative[length++] = static_cast<char>(byte);
+            relative.atMut(length++) = static_cast<char>(byte);
           } else {
             oversized = true;
           }
@@ -358,13 +358,13 @@ namespace telar::runtime {
     while (current && !relative.empty()) {
       const auto separator = relative.find('/');
       const auto name = relative.substr(0, separator);
-      std::array<char, NAME_MAX + 1> component{};
+      ds::Array<char, NAME_MAX + 1> component{};
 
       if (name.empty() || name.size() > NAME_MAX || name == "..") {
         return FileDescriptor{};
       }
 
-      std::copy(name.begin(), name.end(), component.begin());
+      std::copy(name.begin(), name.end(), component.dataMut());
       current.reset(::openat(current.get(), component.data(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
       if (separator == std::string_view::npos) {
         break;
@@ -424,16 +424,16 @@ namespace telar::runtime {
         continue;
       }
 
-      std::array<char, 1024> relative;
+      ds::Array<char, 1024> relative;
       const auto length = prefix.size() + name.size() + child_directory;
       if (length > relative.size()) {
         continue;
       }
 
-      std::copy(prefix.begin(), prefix.end(), relative.begin());
-      std::copy(name.begin(), name.end(), relative.begin() + prefix.size());
+      std::copy(prefix.begin(), prefix.end(), relative.dataMut());
+      std::copy(name.begin(), name.end(), relative.dataMut() + prefix.size());
       if (child_directory) {
-        relative[length - 1] = '/';
+        relative.atMut(length - 1) = '/';
       }
 
       const std::string_view value{relative.data(), length};

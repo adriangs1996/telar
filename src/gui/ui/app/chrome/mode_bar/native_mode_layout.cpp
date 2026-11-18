@@ -29,6 +29,7 @@ static_assert(true);
 
 import telar.gui.foundation.actions;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
   namespace {
@@ -136,12 +137,12 @@ namespace telar::gui::qt {
       }
 
       const auto records = mode_.value(QStringLiteral("hints")).toList();
-      std::array<QByteArray, application::status_bar::ModeHints::capacity> storage;
+      ds::Array<QByteArray, application::status_bar::ModeHints::capacity> storage;
       application::status_bar::ModeHints bound;
       const auto count = std::min(records.size(), static_cast<qsizetype>(storage.size()));
 
       for (qsizetype index = 0; index < count; ++index) {
-        bound.append(readHint(records[index].toMap(), storage[static_cast<std::size_t>(index)]));
+        bound.append(readHint(records[index].toMap(), storage.atMut(static_cast<std::size_t>(index))));
       }
 
       const auto labels = application::status_bar::ModeBarLabels::resolve(static_cast<application::status_bar::StatusMode>(kind), bound);
@@ -176,7 +177,7 @@ namespace telar::gui::qt {
     for (std::size_t index = 0; index < measured.count; ++index) {
       const auto hint = measured_hints[static_cast<qsizetype>(index)].toMap();
 
-      measured.hints[index] = {.key = advance(hint.value(QStringLiteral("key")), density), .word = advance(hint.value(QStringLiteral("word")), density)};
+      measured.hints.atMut(index) = {.key = advance(hint.value(QStringLiteral("key")), density), .word = advance(hint.value(QStringLiteral("word")), density)};
     }
 
     const auto geometry = title_.isEmpty() ? application::status_bar::ModeBarGeometry{} : application::status_bar::ModeBarGeometry::derive({.width = static_cast<float>(width() * density), .height = static_cast<float>(height() * density)}, chrome, measured);

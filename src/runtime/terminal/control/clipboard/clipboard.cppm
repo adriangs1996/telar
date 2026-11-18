@@ -95,7 +95,7 @@ export namespace telar::runtime::control {
       bool once = false;
     };
 
-    std::array<Entry, capacity> entries_;
+    ds::Array<Entry, capacity> entries_;
     std::size_t count_ = 0;
   };
 
@@ -148,14 +148,14 @@ export namespace telar::runtime::control {
     tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
     tbc::view<Vector<std::uint8_t, ConcurrentMemory>, tbc::lt::a> spool_;
     std::size_t limit_;
-    std::array<Entry, maximum_mimes> entries_;
-    std::array<Alias, maximum_aliases> aliases_;
-    tbc::view<std::array<ClipboardContentView, maximum_mimes + maximum_aliases>, tbc::lt::self> contents_;
+    ds::Array<Entry, maximum_mimes> entries_;
+    ds::Array<Alias, maximum_aliases> aliases_;
+    tbc::view<ds::Array<ClipboardContentView, maximum_mimes + maximum_aliases>, tbc::lt::self> contents_;
     std::size_t entry_count_ = 0;
     std::size_t alias_count_ = 0;
     std::size_t content_count_ = 0;
     ds::Option<std::size_t> current_;
-    std::array<char, 4> group_;
+    ds::Array<char, 4> group_;
     std::size_t group_size_ = 0;
   };
 
@@ -217,7 +217,7 @@ export namespace telar::runtime::control {
     template <typename Sink>
     TBC_GENERIC bool publish(Sink& sink) {
       while (reply_count_ != 0) {
-        auto& reply = asynchronous_replies_[reply_head_];
+        auto& reply = asynchronous_replies_.atMut(reply_head_);
         if (!reply.publish(sink)) {
           return false;
         }
@@ -266,9 +266,9 @@ export namespace telar::runtime::control {
       Ending ending = Ending::escape;
       Clock::time_point deadline = Clock::now() + request_timeout;
       std::uint64_t nonce = 0;
-      std::array<FixedText<ClipboardMetadata::maximum_mime>, 4> mimes;
-      tbc::view<std::array<std::string_view, 4>, tbc::lt::self> mime_views;
-      tbc::view<std::array<ClipboardRepresentation, 128>, tbc::lt::self> content_views;
+      ds::Array<FixedText<ClipboardMetadata::maximum_mime>, 4> mimes;
+      tbc::view<ds::Array<std::string_view, 4>, tbc::lt::self> mime_views;
+      tbc::view<ds::Array<ClipboardRepresentation, 128>, tbc::lt::self> content_views;
       std::size_t mime_count = 0;
       Vector<std::uint8_t, ConcurrentMemory> text;
       Owned<ClipboardWrite, ConcurrentMemory> transaction;
@@ -330,11 +330,11 @@ export namespace telar::runtime::control {
     Vector<std::uint8_t, ConcurrentMemory> decoded_;
     Owned<ClipboardWrite, ConcurrentMemory> transaction_;
     Owned<Pending, ConcurrentMemory> pending_;
-    std::array<Reply<ConcurrentMemory>, 2> asynchronous_replies_;
+    ds::Array<Reply<ConcurrentMemory>, 2> asynchronous_replies_;
     std::size_t reply_head_ = 0;
     std::size_t reply_count_ = 0;
     ClipboardGrants grants_;
-    std::array<ClipboardRoute, ClipboardGrants::capacity> routes_;
+    ds::Array<ClipboardRoute, ClipboardGrants::capacity> routes_;
     std::size_t route_count_ = 0;
     ds::Option<ClipboardRoute> preferred_;
     ds::Option<Cancellation> cancellation_;

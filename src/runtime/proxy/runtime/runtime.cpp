@@ -139,12 +139,12 @@ namespace telar::runtime {
   void FlowState::endpoint(int socket, FixedText<traffic::FlowIdentity::endpoint_bytes>& result) noexcept {
     sockaddr_storage address{};
     socklen_t size = sizeof(address);
-    std::array<char, NI_MAXHOST> host{};
-    std::array<char, NI_MAXSERV> port{};
-    if (::getpeername(socket, reinterpret_cast<sockaddr*>(&address), &size) == 0 && ::getnameinfo(reinterpret_cast<sockaddr*>(&address), size, host.data(), host.size(), port.data(), port.size(), NI_NUMERICHOST | NI_NUMERICSERV) == 0) {
-      std::array<char, 128> text{};
+    ds::Array<char, NI_MAXHOST> host{};
+    ds::Array<char, NI_MAXSERV> port{};
+    if (::getpeername(socket, reinterpret_cast<sockaddr*>(&address), &size) == 0 && ::getnameinfo(reinterpret_cast<sockaddr*>(&address), size, host.dataMut(), host.size(), port.dataMut(), port.size(), NI_NUMERICHOST | NI_NUMERICSERV) == 0) {
+      ds::Array<char, 128> text{};
 
-      std::snprintf(text.data(), text.size(), address.ss_family == AF_INET6 ? "[%s]:%s" : "%s:%s", host.data(), port.data());
+      std::snprintf(text.dataMut(), text.size(), address.ss_family == AF_INET6 ? "[%s]:%s" : "%s:%s", host.dataMut(), port.dataMut());
       result.assign(text.data());
     }
   }
@@ -275,7 +275,7 @@ namespace telar::runtime {
 
     const bool h2_prefix = http2.starts_with(head);
     if (!h2_prefix) {
-      constexpr std::array methods{"GET ", "POST ", "PUT ", "HEAD ", "DELETE ", "OPTIONS ", "PATCH ", "CONNECT ", "TRACE "};
+      constexpr ds::Array methods{"GET ", "POST ", "PUT ", "HEAD ", "DELETE ", "OPTIONS ", "PATCH ", "CONNECT ", "TRACE "};
       const bool possible = std::ranges::any_of(methods, [&](std::string_view method) {
         return method.starts_with(head) || head.starts_with(method);
       });
@@ -770,8 +770,8 @@ namespace telar::runtime {
       return false;
     }
 
-    std::array<char, maximum_record_bytes> record;
-    auto* end = std::to_chars(record.data(), record.data() + record.size(), port).ptr;
+    ds::Array<char, maximum_record_bytes> record;
+    auto* end = std::to_chars(record.dataMut(), record.dataMut() + record.size(), port).ptr;
 
     *end++ = '\n';
     end = std::copy(endpoint_.begin(), endpoint_.end(), end);
@@ -807,7 +807,7 @@ namespace telar::runtime {
 
     hash.update(endpoint);
     const auto digest = hash.finish();
-    auto* end = std::copy(file_prefix.begin(), file_prefix.end(), name_.begin());
+    auto* end = std::copy(file_prefix.begin(), file_prefix.end(), name_.dataMut());
 
     for (std::size_t index = 0; index < digest_bytes; ++index) {
       *end++ = hexadecimal[digest[index] >> 4];
@@ -858,14 +858,14 @@ namespace telar::runtime {
     }
 
     const auto separator = endpoint.rfind('/');
-    std::array<char, PATH_MAX + 1> parent;
+    ds::Array<char, PATH_MAX + 1> parent;
     const auto length = std::max<std::size_t>(separator, 1);
     if (length >= parent.size()) {
       return false;
     }
 
-    std::copy_n(endpoint.data(), length, parent.data());
-    parent[length] = '\0';
+    std::copy_n(endpoint.data(), length, parent.dataMut());
+    parent.atMut(length) = '\0';
     struct stat metadata{};
 
     return ::stat(parent.data(), &metadata) != 0 && sys::lastError() == ENOENT;

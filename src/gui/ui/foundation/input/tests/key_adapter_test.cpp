@@ -20,6 +20,7 @@ static_assert(true);
 
 import telar.testing;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace {
 
@@ -64,7 +65,7 @@ namespace {
       char character;
     };
 
-    const std::array cases{
+    const telar::ds::Array cases{
         Case{Qt::Key_H, QStringLiteral("˙"), 'h'},
         Case{Qt::Key_J, QStringLiteral("∆"), 'j'},
         Case{Qt::Key_K, QStringLiteral("˚"), 'k'},

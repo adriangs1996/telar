@@ -191,9 +191,9 @@ namespace telar::git {
       int root_ = -1;
       std::size_t depth_ = 0;
       std::size_t missing_ = no_missing;
-      std::array<FileDescriptor, 128> descriptors_;
-      std::array<std::size_t, 128> ends_{};
-      std::array<char, 4096> path_;
+      ds::Array<FileDescriptor, 128> descriptors_;
+      ds::Array<std::size_t, 128> ends_{};
+      ds::Array<char, 4096> path_;
     };
 
     // git's ce_match_stat, then the content when stat data cannot decide.

@@ -167,7 +167,7 @@ namespace {
     empty_program.append(static_cast<char>(1));
     empty_program.append('\0');
     constexpr qsizetype excessive_payload_bytes = 8192;
-    const auto payloads = std::to_array<QByteArray>({{}, QByteArray{1, '\0'}, QByteArray{1, static_cast<char>(std::numeric_limits<unsigned char>::max())}, unterminated, trailing, empty_program, QByteArray{excessive_payload_bytes, 'a'}});
+    const auto payloads = telar::ds::Array<QByteArray, 7>{{{}, QByteArray{1, '\0'}, QByteArray{1, static_cast<char>(std::numeric_limits<unsigned char>::max())}, unterminated, trailing, empty_program, QByteArray{excessive_payload_bytes, 'a'}}};
 
     for (const auto& payload : payloads) {
       QProcess process;

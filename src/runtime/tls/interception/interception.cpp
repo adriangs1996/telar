@@ -12,7 +12,7 @@ namespace telar::runtime {
   AlpnOffer::AlpnOffer() noexcept {}
 
   auto AlpnOffer::peek(int socket) noexcept -> Read {
-    const auto count = ::recv(socket, bytes_.data(), bytes_.size(), MSG_PEEK);
+    const auto count = ::recv(socket, bytes_.dataMut(), bytes_.size(), MSG_PEEK);
     if (count <= 0) {
       return count < 0 && socketWouldBlock(sys::lastError()) ? Read::pending : Read::ended;
     }
@@ -40,7 +40,7 @@ namespace telar::runtime {
         return incomplete(available);
       }
 
-      std::memmove(bytes_.data() + collected, header + record_header_bytes, length);
+      std::memmove(bytes_.dataMut() + collected, header + record_header_bytes, length);
       collected += length;
       cursor += record_header_bytes + length;
       if (collected >= 4) {
@@ -65,7 +65,7 @@ namespace telar::runtime {
       return;
     }
 
-    std::ranges::copy(handshake, bytes_.begin());
+    std::ranges::copy(handshake, bytes_.viewMut().begin());
     parseStored(handshake.size());
   }
 
@@ -262,7 +262,7 @@ namespace telar::runtime {
       return false;
     }
 
-    std::copy(protocol.begin(), protocol.end(), name_.begin());
+    std::copy(protocol.begin(), protocol.end(), name_.dataMut());
     length_ = static_cast<unsigned char>(protocol.size());
     return true;
   }
@@ -568,9 +568,9 @@ namespace telar::runtime {
     SSL_set_accept_state(child_.get());
     SSL_set_app_data(child_.get(), &selection_);
 
-    std::array<char, ProxyHostname::maximum_bytes + 1> terminated{};
+    ds::Array<char, ProxyHostname::maximum_bytes + 1> terminated{};
 
-    std::copy(hostname_.view().begin(), hostname_.view().end(), terminated.begin());
+    std::copy(hostname_.view().begin(), hostname_.view().end(), terminated.dataMut());
     if (TlsHostname::numeric(hostname_.view())) {
       requireTls(X509_VERIFY_PARAM_set1_ip_asc(SSL_get0_param(origin_.get()), terminated.data()) == 1, "Set TLS origin IP verification");
     } else {

@@ -17,13 +17,13 @@ namespace telar::runtime {
     Result result{State::pending, CapturedExchange{memory_}};
     const auto existing = find(half->key);
     if (existing) {
-      auto& entry = slots_[*existing].getMut();
+      auto& entry = slots_.atMut(*existing).getMut();
       if (entry.half->side == half->side) {
         result.state = State::partial;
       } else {
         result.state = State::complete;
         result.exchange.include(std::move(entry.half));
-        slots_[*existing].reset();
+        slots_.atMut(*existing).reset();
         occupied_.erase(*existing);
       }
 
@@ -41,7 +41,7 @@ namespace telar::runtime {
     const auto maximum_time = std::numeric_limits<std::int64_t>::max();
     const auto deadline = now_ms > maximum_time - timeout_ms_ ? maximum_time : now_ms + timeout_ms_;
 
-    slots_[*available].emplace(std::move(half), deadline);
+    slots_.atMut(*available).emplace(std::move(half), deadline);
     occupied_.insert(*available);
     return result;
   }
@@ -61,8 +61,8 @@ namespace telar::runtime {
 
     CapturedExchange result{memory_};
 
-    result.include(std::move(slots_[*expired].getMut().half));
-    slots_[*expired].reset();
+    result.include(std::move(slots_.atMut(*expired).getMut().half));
+    slots_.atMut(*expired).reset();
     occupied_.erase(*expired);
     return result;
   }

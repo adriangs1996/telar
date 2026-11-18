@@ -3,6 +3,7 @@ module telar.gui.foundation.fonts;
 import std;
 
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::inline foundation::inline fonts::glyphs {
 
@@ -39,7 +40,7 @@ namespace telar::gui::inline foundation::inline fonts::glyphs {
       throw std::length_error{"GlyphRectangleBudgetExceeded"};
     }
 
-    rectangles_[count_++] = rectangle;
+    rectangles_.atMut(count_++) = rectangle;
   }
 
   template <std::size_t Capacity>
@@ -48,7 +49,7 @@ namespace telar::gui::inline foundation::inline fonts::glyphs {
       return;
     }
 
-    for (auto& previous : std::span{rectangles_}.first(count_)) {
+    for (auto& previous : rectangles_.viewMut().first(count_)) {
       if (previous.x == rectangle.x && previous.width == rectangle.width && previous.bottom() == rectangle.y) {
         previous.height += rectangle.height;
 
@@ -61,7 +62,7 @@ namespace telar::gui::inline foundation::inline fonts::glyphs {
 
   template <std::size_t Capacity>
   void Ink<Capacity>::translate(Point origin) noexcept {
-    for (auto& rectangle : std::span{rectangles_}.first(count_)) {
+    for (auto& rectangle : rectangles_.viewMut().first(count_)) {
       rectangle.x += origin.x;
       rectangle.y += origin.y;
     }
@@ -122,7 +123,7 @@ namespace telar::gui::inline foundation::inline fonts::glyphs {
     }
 
     constexpr std::uint32_t first_quadrant = 0x2596;
-    constexpr std::array<std::uint8_t, 10> quadrants{
+    constexpr ds::Array<std::uint8_t, 10> quadrants{
         lower_left,
         lower_right,
         upper_left,
@@ -412,14 +413,14 @@ namespace telar::gui::inline foundation::inline fonts::glyphs {
   }
 
   Box::Paint Box::unite(std::span<const Rect> strokes) {
-    std::array<float, 2 * stroke_capacity> edges{};
+    ds::Array<float, 2 * stroke_capacity> edges{};
 
     for (std::size_t index = 0; index < strokes.size(); ++index) {
-      edges[2 * index] = strokes[index].y;
-      edges[(2 * index) + 1] = strokes[index].bottom();
+      edges.atMut(2 * index) = strokes[index].y;
+      edges.atMut((2 * index) + 1) = strokes[index].bottom();
     }
 
-    const auto rows = std::span{edges}.first(2 * strokes.size());
+    const auto rows = edges.viewMut().first(2 * strokes.size());
 
     std::ranges::sort(rows);
     Paint result;
@@ -436,16 +437,16 @@ namespace telar::gui::inline foundation::inline fonts::glyphs {
   }
 
   void Box::uniteBand(Paint& result, std::span<const Rect> strokes, float top, float bottom) {
-    std::array<Interval, stroke_capacity> storage{};
+    ds::Array<Interval, stroke_capacity> storage{};
     std::size_t count = 0;
 
     for (const auto rectangle : strokes) {
       if (rectangle.y <= top && rectangle.bottom() >= bottom) {
-        storage[count++] = {.left = rectangle.x, .right = rectangle.right()};
+        storage.atMut(count++) = {.left = rectangle.x, .right = rectangle.right()};
       }
     }
 
-    const auto intervals = std::span{storage}.first(count);
+    const auto intervals = storage.viewMut().first(count);
 
     std::ranges::sort(intervals, {}, &Interval::left);
     for (std::size_t index = 0; index < intervals.size();) {
@@ -469,8 +470,8 @@ namespace telar::gui::inline foundation::inline fonts::glyphs {
       return result;
     }
 
-    constexpr std::array<unsigned, dot_count> dot_columns{0, 0, 0, 1, 1, 1, 0, 1};
-    constexpr std::array<unsigned, dot_count> dot_rows{0, 1, 2, 0, 1, 2, 3, 3};
+    constexpr ds::Array<unsigned, dot_count> dot_columns{0, 0, 0, 1, 1, 1, 0, 1};
+    constexpr ds::Array<unsigned, dot_count> dot_rows{0, 1, 2, 0, 1, 2, 3, 3};
 
     for (std::size_t bit = 0; bit < dot_count; ++bit) {
       if ((dots & (1U << bit)) != 0) {
@@ -483,11 +484,11 @@ namespace telar::gui::inline foundation::inline fonts::glyphs {
 
   Braille::Grid Braille::fractionalGrid(Rect cell) noexcept {
     const auto diameter = std::min(cell.width / columns, cell.height / rows);
-    constexpr std::array<float, rows> row_centers{1, 3, 5, 7};
+    constexpr ds::Array<float, rows> row_centers{1, 3, 5, 7};
     Grid result{.x = {cell.x + (cell.width / horizontal_divisions) - (diameter / 2), cell.x + (3 * cell.width / horizontal_divisions) - (diameter / 2)}, .diameter = diameter};
 
     for (std::size_t row = 0; row < result.y.size(); ++row) {
-      result.y[row] = cell.y + (row_centers[row] * cell.height / vertical_divisions) - (diameter / 2);
+      result.y.atMut(row) = cell.y + (row_centers[row] * cell.height / vertical_divisions) - (diameter / 2);
     }
 
     return result;
@@ -546,11 +547,11 @@ namespace telar::gui::inline foundation::inline fonts::glyphs {
     Grid result{.diameter = static_cast<float>(diameter)};
 
     for (std::size_t column = 0; column < result.x.size(); ++column) {
-      result.x[column] = cell.x + static_cast<float>(x_margin + (static_cast<int>(column) * (diameter + x_spacing)));
+      result.x.atMut(column) = cell.x + static_cast<float>(x_margin + (static_cast<int>(column) * (diameter + x_spacing)));
     }
 
     for (std::size_t row = 0; row < result.y.size(); ++row) {
-      result.y[row] = cell.y + static_cast<float>(y_margin + (static_cast<int>(row) * (diameter + y_spacing)));
+      result.y.atMut(row) = cell.y + static_cast<float>(y_margin + (static_cast<int>(row) * (diameter + y_spacing)));
     }
 
     return result;

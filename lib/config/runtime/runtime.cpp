@@ -55,7 +55,7 @@ namespace telar::runtime {
       throw EncodingError{"Agent manifest list exceeds its bounds"};
     }
 
-    entries_[count_++].assign(text);
+    entries_.atMut(count_++).assign(text);
   }
 
   template <std::size_t Capacity, std::size_t TextCapacity>
@@ -78,8 +78,8 @@ namespace telar::runtime {
       throw EncodingError{"Invalid agent command tool"};
     }
 
-    command_tools[tool_count].tool.assign(name);
-    command_tools[tool_count].field.assign(field);
+    command_tools.atMut(tool_count).tool.assign(name);
+    command_tools.atMut(tool_count).field.assign(field);
     ++tool_count;
   }
 
@@ -102,12 +102,12 @@ namespace telar::runtime {
       return placeholder.view();
     }
 
-    std::array<char, 96> bytes{};
+    ds::Array<char, 96> bytes{};
     const auto display = displayName();
 
-    std::memcpy(bytes.data(), "New ", 4);
-    std::memcpy(bytes.data() + 4, display.data(), display.size());
-    std::memcpy(bytes.data() + 4 + display.size(), " session", 8);
+    std::memcpy(bytes.dataMut(), "New ", 4);
+    std::memcpy(bytes.dataMut() + 4, display.data(), display.size());
+    std::memcpy(bytes.dataMut() + 4 + display.size(), " session", 8);
     storage.assign({bytes.data(), display.size() + 12});
     return storage.view();
   }
@@ -130,7 +130,7 @@ namespace telar::runtime {
 
     const auto builtin = providerNamed(name);
 
-    for (auto& entry : std::span{entries_}.first(count_)) {
+    for (auto& entry : entries_.viewMut().first(count_)) {
       if (entry.name.view() == name) {
         if (builtin == AgentProvider::unknown) {
           throw EncodingError{"Duplicate agent manifest"};
@@ -144,7 +144,7 @@ namespace telar::runtime {
       return nullptr;
     }
 
-    auto& entry = entries_[count_++];
+    auto& entry = entries_.atMut(count_++);
 
     entry.provider = builtin == AgentProvider::unknown ? static_cast<AgentProvider>(first_custom_provider + custom_count_++) : builtin;
     entry.name.assign(name);
@@ -312,7 +312,7 @@ namespace telar::runtime {
       throw std::length_error{"History filter exceeds 64 patterns"};
     }
 
-    patterns_[count_].assign(pattern);
+    patterns_.atMut(count_).assign(pattern);
     ++count_;
   }
 
@@ -335,7 +335,7 @@ namespace telar::runtime {
   }
 
   bool HistoryFilters::looksLikeSecret(std::string_view command) noexcept {
-    constexpr std::array tokens{
+    constexpr ds::Array tokens{
         TokenRule{"AKIA", 16},
         TokenRule{"ghp_", 20},
         TokenRule{"gho_", 20},
@@ -357,7 +357,7 @@ namespace telar::runtime {
       return true;
     }
 
-    constexpr std::array<std::string_view, 5> assignments{"password=", "passwd=", "token=", "secret=", "api_key="};
+    constexpr ds::Array<std::string_view, 5> assignments{"password=", "passwd=", "token=", "secret=", "api_key="};
 
     for (const auto marker : assignments) {
       if (matchesAssignment(command, marker)) {
@@ -437,10 +437,10 @@ namespace telar::runtime {
       return false;
     }
 
-    std::array<char, INET6_ADDRSTRLEN> numeric{};
+    ds::Array<char, INET6_ADDRSTRLEN> numeric{};
 
     if (const auto address = ProxyHostname::ipv6(pattern)) {
-      ::inet_ntop(AF_INET6, &*address, numeric.data(), numeric.size());
+      ::inet_ntop(AF_INET6, &*address, numeric.dataMut(), numeric.size());
       pattern = numeric.data();
     }
 
@@ -477,15 +477,15 @@ namespace telar::runtime {
     }
 
     if (const auto address = ProxyHostname::ipv6(hostname)) {
-      std::array<char, INET6_ADDRSTRLEN> numeric{};
+      ds::Array<char, INET6_ADDRSTRLEN> numeric{};
 
-      ::inet_ntop(AF_INET6, &*address, numeric.data(), numeric.size());
+      ::inet_ntop(AF_INET6, &*address, numeric.dataMut(), numeric.size());
       return find(numeric.data());
     }
 
-    std::array<char, maximum_hostname_bytes + wildcard_prefix.size()> canonical;
+    ds::Array<char, maximum_hostname_bytes + wildcard_prefix.size()> canonical;
 
-    std::ranges::transform(hostname, canonical.begin() + wildcard_prefix.size(), asciiLower);
+    std::ranges::transform(hostname, canonical.viewMut().begin() + wildcard_prefix.size(), asciiLower);
     const std::string_view exact{canonical.data() + wildcard_prefix.size(), hostname.size()};
     if (find(exact)) {
       return true;
@@ -494,7 +494,7 @@ namespace telar::runtime {
     for (auto dot = hostname.find('.'); dot != std::string_view::npos; dot = hostname.find('.', dot + 1)) {
       const auto start = dot + 1;
 
-      std::ranges::copy(wildcard_prefix, canonical.data() + start);
+      std::ranges::copy(wildcard_prefix, canonical.dataMut() + start);
       if (find({canonical.data() + start, hostname.size() - start + wildcard_prefix.size()})) {
         return true;
       }
@@ -591,7 +591,7 @@ namespace telar::runtime::config {
         answerback.fail("exceeds 1024 bytes");
       }
 
-      std::copy(text.begin(), text.end(), policy.answerback.begin());
+      std::copy(text.begin(), text.end(), policy.answerback.dataMut());
       policy.answerback_length = static_cast<std::uint16_t>(text.size());
     }
   }
@@ -715,7 +715,7 @@ namespace telar::runtime::config {
     Views views;
 
     for (const auto& argument : arguments) {
-      views.words[views.count++] = argument;
+      views.words.atMut(views.count++) = argument;
     }
 
     return views;

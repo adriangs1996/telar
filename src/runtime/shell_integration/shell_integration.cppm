@@ -28,7 +28,7 @@ namespace telar::runtime::shell_files {
   };
 
   // Each shell's scripts, installed here and sent to the hosts `ssh` reaches.
-  inline constexpr std::array<ScriptFile, 4> shells{{
+  inline constexpr ds::Array<ScriptFile, 4> shells{{
       {"zsh", ".zshenv", shell_scripts::zsh_environment},
       {"zsh", "telar.zsh", shell_scripts::zsh},
       {"bash", "telar.bash", shell_scripts::bash},
@@ -55,12 +55,12 @@ namespace telar::runtime::shell_files {
     return hash;
   }();
 
-  inline constexpr std::array<char, 16> digest_digits = [] {
+  inline constexpr ds::Array<char, 16> digest_digits = [] {
     constexpr std::string_view digits = "0123456789abcdef";
-    std::array<char, 16> text{};
+    ds::Array<char, 16> text{};
 
     for (std::size_t index = 0; index < text.size(); ++index) {
-      text[index] = digits[(digest >> (60 - 4 * index)) & 0x0f];
+      text.atMut(index) = digits[(digest >> (60 - 4 * index)) & 0x0f];
     }
 
     return text;
@@ -138,15 +138,15 @@ namespace telar::runtime::shell_files {
   }
 
   inline constexpr auto remote_command = [] {
-    std::array<char, remoteCommand().size()> text{};
+    ds::Array<char, remoteCommand().size()> text{};
 
-    std::ranges::copy(remoteCommand(), text.begin());
+    std::ranges::copy(remoteCommand(), text.viewMut().begin());
     return text;
   }();
 
   // Everything the runtime installs. The last one is the sentinel: written last, so its presence
   // means every one is there.
-  inline constexpr std::array<ScriptFile, 6> installed{{
+  inline constexpr ds::Array<ScriptFile, 6> installed{{
       shells[0],
       shells[1],
       shells[2],

@@ -27,7 +27,7 @@ namespace telar::runtime {
   }
 
   template <typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
-  std::array<int, 5> BackgroundPool<History, Paths, Editor, Suggestions, Worktrees>::descriptors() const noexcept {
+  ds::Array<int, 5> BackgroundPool<History, Paths, Editor, Suggestions, Worktrees>::descriptors() const noexcept {
     return {history_.descriptor(), path_service_.descriptor(), editor_.descriptor(), suggestions_.descriptor(), worktrees_.descriptor()};
   }
 
@@ -321,7 +321,7 @@ namespace telar::runtime {
       }
 
       if (pane->media->seal()) {
-        request.entries[request.count++] = {pane->id, pane->generation, pane->media};
+        request.entries.atMut(request.count++) = {pane->id, pane->generation, pane->media};
       }
 
       updateReadInterest(*pane);
@@ -383,7 +383,7 @@ namespace telar::runtime {
         }
 
         if (pane != nullptr && pane->media->seal()) {
-          request.entries[request.count++] = {pane->id, pane->generation, pane->media};
+          request.entries.atMut(request.count++) = {pane->id, pane->generation, pane->media};
         }
       }
 
@@ -427,7 +427,7 @@ namespace telar::runtime {
       }
 
       if (media.seal()) {
-        request.entries[request.count++].media = *link;
+        request.entries.atMut(request.count++).media = *link;
       }
 
       link = &media.retired_next;

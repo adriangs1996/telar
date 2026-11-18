@@ -53,7 +53,7 @@ namespace telar::gui::features::activity {
     Plan plan;
 
     plan.count = std::min(agents.size(), maximum_agents);
-    const auto entries = std::span{plan.entries}.first(plan.count);
+    const auto entries = plan.entries.viewMut().first(plan.count);
 
     for (std::size_t index = 0; index < plan.count; ++index) {
       const auto& agent = agents[index];
@@ -200,28 +200,28 @@ namespace telar::gui::features::activity {
       const bool active = source.slot == active_slot;
       const auto fleet = AgentOrder::arrange(source.agents, source.workspaces);
       const auto& worktrees = source.workspaces.worktrees();
-      std::array<bool, WorkspaceReplica<Memory>::maximum_worktrees> represented{};
+      ds::Array<bool, WorkspaceReplica<Memory>::maximum_worktrees> represented{};
 
       for (const auto& entry : fleet.view()) {
         if (!active && AgentOrder::attention(source.agents[entry.agent].status) != AgentOrder::Attention::needs_input) {
           continue;
         }
 
-        auto& node = nodes_[count_++];
+        auto& node = nodes_.atMut(count_++);
 
         node = {.source = source_index, .agent = entry.agent, .project = entry.project, .card = entry.card};
         if (const auto* row = AgentOrder::taskRow(source.workspaces, source.agents[entry.agent])) {
           const auto index = static_cast<std::size_t>(row - worktrees.data());
 
           node.worktree = index;
-          represented[index] = true;
+          represented.atMut(index) = true;
         }
       }
 
       for (std::size_t index = 0; index < worktrees.size() && active; ++index) {
         const auto& row = worktrees[index];
         if (!represented[index] && row.command_state != CommandState::none) {
-          nodes_[count_++] = {.source = source_index, .worktree = index, .project = row.source, .card = ActivityCard::task};
+          nodes_.atMut(count_++) = {.source = source_index, .worktree = index, .project = row.source, .card = ActivityCard::task};
         }
       }
     }
@@ -298,23 +298,23 @@ namespace telar::gui::features::activity {
 
   template <Allocator Memory>
   void ActivityOrder<Memory>::findParents() {
-    std::array<std::size_t, maximum_entries> agents{};
+    ds::Array<std::size_t, maximum_entries> agents{};
     std::size_t agent_count = 0;
 
     for (std::size_t index = 0; index < count_; ++index) {
       if (nodes_[index].agent) {
-        agents[agent_count++] = index;
+        agents.atMut(agent_count++) = index;
       }
     }
 
-    const auto indices = std::span{agents}.first(agent_count);
+    const auto indices = agents.viewMut().first(agent_count);
 
     std::ranges::sort(indices, [this](std::size_t left, std::size_t right) {
       return std::tuple{identityAt(left), left} < std::tuple{identityAt(right), right};
     });
 
     for (std::size_t index = 0; index < count_; ++index) {
-      nodes_[index].parent = parentOf(indices, index);
+      nodes_.atMut(index).parent = parentOf(indices, index);
     }
   }
 
@@ -327,7 +327,7 @@ namespace telar::gui::features::activity {
       const auto index = *current;
       if (visits[index] != Visit::unseen) {
         if (visits[index] == Visit::visiting) {
-          nodes_[index].parent.reset();
+          nodes_.atMut(index).parent.reset();
         }
 
         break;
@@ -345,12 +345,12 @@ namespace telar::gui::features::activity {
 
   template <Allocator Memory>
   void ActivityOrder<Memory>::breakCycles() noexcept {
-    std::array<Visit, maximum_entries> visits{};
-    std::array<std::size_t, maximum_entries> path{};
+    ds::Array<Visit, maximum_entries> visits{};
+    ds::Array<std::size_t, maximum_entries> path{};
 
     for (std::size_t start = 0; start < count_; ++start) {
       if (visits[start] != Visit::finished) {
-        breakChainCycle(start, visits, path);
+        breakChainCycle(start, visits.viewMut(), path.viewMut());
       }
     }
   }
@@ -361,14 +361,14 @@ namespace telar::gui::features::activity {
 
     for (std::size_t index = 0; index < count_; ++index) {
       if (const auto parent = nodes_[index].parent) {
-        nodes_[*parent].coordinator = true;
+        nodes_.atMut(*parent).coordinator = true;
         if (const auto last = children.last[*parent]) {
-          children.next[*last] = index;
+          children.next.atMut(*last) = index;
         } else {
-          children.first[*parent] = index;
+          children.first.atMut(*parent) = index;
         }
 
-        children.last[*parent] = index;
+        children.last.atMut(*parent) = index;
       }
     }
 
@@ -378,7 +378,7 @@ namespace telar::gui::features::activity {
   template <Allocator Memory>
   void ActivityOrder<Memory>::emitForest() noexcept {
     const auto children = linkChildren();
-    std::array<std::size_t, maximum_entries> positions{};
+    ds::Array<std::size_t, maximum_entries> positions{};
     ds::Option<std::size_t> previous_source;
     ds::Option<std::uint64_t> previous_project;
 
@@ -397,9 +397,9 @@ namespace telar::gui::features::activity {
 
         entry.depth = depth;
         entry.parent = entry.parent ? ds::Option{positions[*entry.parent]} : ds::none;
-        positions[current] = output_.count;
+        positions.atMut(current) = output_.count;
         entry.first_in_project = depth == 0 && (output_.count == 0 || previous_source != root.source || previous_project != root.project);
-        output_.entries[output_.count++] = entry;
+        output_.entries.atMut(output_.count++) = entry;
         if (const auto child = children.first[current]) {
           current = *child;
           ++depth;

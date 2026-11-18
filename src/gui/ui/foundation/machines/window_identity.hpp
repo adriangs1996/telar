@@ -1,6 +1,7 @@
 #pragma once
 
 #include "telar_wire/codecs/telar_wire.hpp"
+#include "telar_base/ds/values.hpp"
 #include <QByteArrayView>
 #include <QCryptographicHash>
 #include <array>
@@ -13,12 +14,12 @@ namespace telar::gui::qt {
 
   struct WindowIdentity {
     [[nodiscard]] static std::uint64_t remote(std::uint64_t window, std::string_view destination) {
-      constexpr auto identity_namespace = std::to_array("telar-gui-remote-window-v1");
+      constexpr auto identity_namespace = ds::toArray("telar-gui-remote-window-v1");
       QCryptographicHash hash{QCryptographicHash::Sha256};
 
       hash.addData(QByteArrayView{identity_namespace.data(), static_cast<qsizetype>(identity_namespace.size())});
-      std::array<Byte, sizeof(window)> identity{};
-      std::span<Byte> output{identity};
+      ds::Array<Byte, sizeof(window)> identity{};
+      std::span<Byte> output{identity.viewMut()};
 
       u64::encode(window, output);
       const auto identity_text = textView(identity);

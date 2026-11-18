@@ -150,7 +150,7 @@ namespace telar::gui::qt {
     result.scale = window_->effectiveDevicePixelRatio();
     result.viewport = {.width = static_cast<float>(window_->width() * result.scale), .height = static_cast<float>(window_->height() * result.scale)};
     result.threshold = application::workbench::TabDrag::logical_threshold * ratio * result.scale;
-    result.count = strip_->dropSlots(result.targets);
+    result.count = strip_->dropSlots(result.targets.viewMut());
     const auto origin = strip_->mapToScene(QPointF{});
     const auto create = strip_->plus();
 
@@ -250,12 +250,12 @@ namespace telar::gui::qt {
       return;
     }
 
-    std::array<std::uint64_t, application::workbench::TabDropSlots::capacity> tabs{};
+    ds::Array<std::uint64_t, application::workbench::TabDropSlots::capacity> tabs{};
     std::size_t count = 0;
 
     for (const auto& tab : session.tabs()) {
       if (tab->location.workspace.kind == surface.workspace.kind && tab->location.workspace.id == surface.workspace.id && count < tabs.size()) {
-        tabs[count++] = tab->location.tab_id;
+        tabs.atMut(count++) = tab->location.tab_id;
       }
     }
 

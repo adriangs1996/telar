@@ -83,11 +83,11 @@ namespace telar::gui::application {
       const auto listed = Reader::bindings(client, input.prefix, [&](const runtime::config::BindingSetting& setting, const runtime::lua::Value& value) {
         KeyBinding<BindingAction> binding{.prefixed = setting.prefixed};
 
-        std::ranges::copy(std::span{setting.keys}.first(setting.length), binding.keys.begin());
+        std::ranges::copy(std::span{setting.keys}.first(setting.length), binding.keys.viewMut().begin());
         binding.length = setting.length;
         if (const auto action = actions.read(value, setting.expression)) {
           binding.action = *action;
-          input.configured[input.length++] = binding;
+          input.configured.atMut(input.length++) = binding;
         }
       });
       if (listed) {
@@ -122,7 +122,7 @@ namespace telar::gui::application {
 
   private:
     lua_State* state_;
-    std::array<BindingAction, MaximumReferences> references_{};
+    ds::Array<BindingAction, MaximumReferences> references_{};
     std::size_t count_ = 0;
   };
 
@@ -334,7 +334,7 @@ export namespace telar::gui::application {
 
     lua_State& state_;
     features::components::Definitions definitions_;
-    std::array<BarSnapshot, features::components::Definitions::positions> bars_;
+    ds::Array<BarSnapshot, features::components::Definitions::positions> bars_;
     PanelSnapshot panel_;
     features::components::StagedContent staged_;
     std::uint32_t next_reference_ = 0;

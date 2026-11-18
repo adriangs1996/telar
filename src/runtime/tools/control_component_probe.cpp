@@ -11,6 +11,7 @@ import telar.runtime.terminal.control.engine;
 import telar.runtime.terminal.text_reader;
 import telar.vocabulary;
 import telar.runtime.terminal.ghostty;
+import telar.base.ds;
 
 using namespace telar;
 using namespace telar::runtime;
@@ -83,7 +84,7 @@ static std::uint64_t benchmarkComponent(const Byte* bytes, std::size_t size, std
       }
     }
 
-    std::array<Byte, 65536> output;
+    ds::Array<Byte, 65536> output;
     std::uint64_t observed = 0;
     const auto started = std::chrono::steady_clock::now();
 
@@ -104,7 +105,7 @@ static std::uint64_t benchmarkComponent(const Byte* bytes, std::size_t size, std
             return 0;
           }
 
-          std::copy(response.begin(), response.end(), output.data() + written);
+          std::copy(response.begin(), response.end(), output.dataMut() + written);
           written += response.size();
         }
 

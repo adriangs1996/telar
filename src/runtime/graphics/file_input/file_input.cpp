@@ -269,12 +269,12 @@ namespace telar::runtime {
       return false;
     }
 
-    std::array<std::uint8_t, raw_chunk_bytes * chunks_per_read> raw;
-    std::array<char, chunk_capacity> chunk;
+    ds::Array<std::uint8_t, raw_chunk_bytes * chunks_per_read> raw;
+    ds::Array<char, chunk_capacity> chunk;
     std::uint64_t sent = 0;
 
     while (sent < length) {
-      auto batch = std::span{raw}.first(static_cast<std::size_t>(std::min<std::uint64_t>(raw.size(), length - sent)));
+      auto batch = raw.viewMut().first(static_cast<std::size_t>(std::min<std::uint64_t>(raw.size(), length - sent)));
       if (!file->read(batch, request.range.offset + sent)) {
         batch = batch.first(std::min(batch.size(), raw_chunk_bytes));
         if (!file->read(batch, request.range.offset + sent)) {
@@ -294,7 +294,7 @@ namespace telar::runtime {
         const auto control = sent == 0 ? request.control : std::string_view{};
 
         sent += bytes.size();
-        sink.ingestEncodedChunk(encodeChunk(chunk, control, bytes, sent < length));
+        sink.ingestEncodedChunk(encodeChunk(chunk.viewMut(), control, bytes, sent < length));
         batch = batch.subspan(bytes.size());
       }
     }
@@ -381,19 +381,19 @@ namespace telar::runtime {
       return false;
     }
 
-    auto* previous = event_count_ == 0 ? nullptr : std::get_if<Output>(&events_[event_count_ - 1]);
+    auto* previous = event_count_ == 0 ? nullptr : std::get_if<Output>(&events_.atMut(event_count_ - 1));
     if (previous == nullptr && event_count_ == event_capacity) {
       return false;
     }
 
     if (!bytes.empty()) {
-      std::memcpy(bytes_.data() + byte_count_, bytes.data(), bytes.size());
+      std::memcpy(bytes_.dataMut() + byte_count_, bytes.data(), bytes.size());
     }
 
     if (previous != nullptr) {
       previous->length += bytes.size();
     } else {
-      events_[event_count_++] = Output{byte_count_, bytes.size()};
+      events_.atMut(event_count_++) = Output{byte_count_, bytes.size()};
     }
 
     byte_count_ += bytes.size();
@@ -402,7 +402,7 @@ namespace telar::runtime {
 
   bool MediaBatch::resize(TerminalSize size) noexcept {
     if (event_count_ != 0 && std::holds_alternative<TerminalSize>(events_[event_count_ - 1])) {
-      events_[event_count_ - 1] = size;
+      events_.atMut(event_count_ - 1) = size;
       return true;
     }
 
@@ -410,7 +410,7 @@ namespace telar::runtime {
       return false;
     }
 
-    events_[event_count_++] = size;
+    events_.atMut(event_count_++) = size;
     return true;
   }
 

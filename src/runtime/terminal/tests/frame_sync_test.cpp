@@ -62,8 +62,8 @@ namespace {
     screen.resize(80, 24);
     screen.scroll.total_rows = 24;
     FrameSync sync{memory, 7};
-    std::array<Byte, 128 * 1024> decoded{};
-    DecodeStorage storage{decoded};
+    ds::Array<Byte, 128 * 1024> decoded{};
+    DecodeStorage storage{decoded.viewMut()};
 
     auto payload = sync.prepare(screen);
     auto frame = Codec::decode<PaneFrame>(payload, storage);
@@ -76,12 +76,12 @@ namespace {
     check(!sync.acknowledge(2));
     check(sync.prepare(screen).empty());
 
-    screen.cells[17].text[0] = 'X';
+    screen.cells[17].text.atMut(0) = 'X';
     screen.row_revisions[0] = ++screen.revision;
     check(sync.prepare(screen).empty());
     check(sync.acknowledge(1));
     check(!sync.acknowledge(1));
-    storage = DecodeStorage{decoded};
+    storage = DecodeStorage{decoded.viewMut()};
     frame = Codec::decode<PaneFrame>(sync.prepare(screen), storage);
     check(frame.frame_id == 2);
     check(frame.base_frame_id == 1);
@@ -94,7 +94,7 @@ namespace {
     ++screen.revision;
     check(sync.prepare(screen).empty());
     sync.requestSnapshot();
-    storage = DecodeStorage{decoded};
+    storage = DecodeStorage{decoded.viewMut()};
     frame = Codec::decode<PaneFrame>(sync.prepare(screen), storage);
     check(frame.base_frame_id == 0);
     check(budget.allocations() == allocations);
@@ -102,7 +102,7 @@ namespace {
     for (const bool enabled : {true, false}) {
       screen.input_modes.paste_events = enabled;
       ++screen.revision;
-      storage = DecodeStorage{decoded};
+      storage = DecodeStorage{decoded.viewMut()};
       frame = Codec::decode<PaneFrame>(sync.prepare(screen), storage);
       check(frame.input_modes.paste_events == enabled && frame.spans.empty());
       check(sync.acknowledge(frame.frame_id));

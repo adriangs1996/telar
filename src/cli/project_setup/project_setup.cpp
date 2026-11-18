@@ -23,10 +23,10 @@ namespace telar::runtime::cli::pane_agents {
   constexpr std::uint32_t min_interval_ms = 10;
   constexpr std::uint32_t max_interval_ms = 60000;
 
-  constexpr std::array<std::string_view, 9> report_states{"working", "blocked", "ready", "exited", "settling", "continuing", "waiting", "idle", "released"};
-  constexpr std::array<std::string_view, 5> blocked_reasons{"none", "permission", "question", "plan", "other"};
-  constexpr std::array<std::string_view, 3> session_file_kinds{"claude_transcript", "codex_state", "cursor_meta"};
-  constexpr std::array<std::string_view, 6> status_names{"unknown", "working", "blocked", "ready", "failed", "done"};
+  constexpr ds::Array<std::string_view, 9> report_states{"working", "blocked", "ready", "exited", "settling", "continuing", "waiting", "idle", "released"};
+  constexpr ds::Array<std::string_view, 5> blocked_reasons{"none", "permission", "question", "plan", "other"};
+  constexpr ds::Array<std::string_view, 3> session_file_kinds{"claude_transcript", "codex_state", "cursor_meta"};
+  constexpr ds::Array<std::string_view, 6> status_names{"unknown", "working", "blocked", "ready", "failed", "done"};
 
   bool displayText(std::string_view text) {
     return inspectUtf8(text) == Utf8Validation::valid && std::none_of(text.begin(), text.end(), [](unsigned char byte) {
@@ -143,7 +143,7 @@ namespace telar::runtime::cli::pane_agents {
     Cursor cursor{words};
     Options options{.action = cursor.take("MissingAgentAction")};
     const auto action = options.action;
-    constexpr std::array<std::string_view, 11> actions{"list", "get", "wait", "prompt", "read", "interrupt", "acknowledge", "report-session", "report-title", "report-state", "report-command"};
+    constexpr ds::Array<std::string_view, 11> actions{"list", "get", "wait", "prompt", "read", "interrupt", "acknowledge", "report-session", "report-title", "report-state", "report-command"};
     if (std::find(actions.begin(), actions.end(), action) == actions.end()) {
       usage("UnknownAgentAction");
     }
@@ -153,7 +153,7 @@ namespace telar::runtime::cli::pane_agents {
     }
 
     if (action == "report-command") {
-      constexpr std::array<std::string_view, 2> phases{"started", "finished"};
+      constexpr ds::Array<std::string_view, 2> phases{"started", "finished"};
       const auto phase = cursor.take("MissingCommandReport");
 
       options.command.command = cursor.take("MissingCommandReport");
@@ -383,9 +383,9 @@ namespace telar::runtime::cli::pane_agents {
       out.text("{\"pane_id\":").number(agent.pane_id).text(",\"pane_generation\":").number(agent.pane_generation).text(",\"workspace_id\":").number(agent.location.workspace.id).text(",\"tab_id\":").number(agent.location.tab_id).text(",\"pane_index\":").number(agent.pane_index).text(",\"provider\":").json(provider, JsonEscapes::control).text(",\"provider_index\":").number(static_cast<unsigned>(agent.provider)).text(",\"status\":").json(status, JsonEscapes::control);
       out.text(",\"workspace\":").json(agent.workspace_label, JsonEscapes::control).text(",\"tab\":").json(agent.tab_label, JsonEscapes::control).text(",\"title\":").json(agent.session_title, JsonEscapes::control).text(",\"cwd\":").json(agent.cwd_label, JsonEscapes::control).text(",\"blocked_reason\":").json(blocked_reasons[static_cast<std::size_t>(agent.blocked_reason)], JsonEscapes::control).text(",\"status_age_s\":").number(agent.status_age_s).text(",\"worktree_id\":").number(agent.work_tree).text(",\"last_event\":").json(agent.last_event, JsonEscapes::control);
       out.text(",\"plan\":{\"done\":").number(agent.plan_done).text(",\"total\":").number(agent.plan_total).text(",\"step\":").json(agent.plan_step, JsonEscapes::control).text("},\"final_message\":").json(agent.final_message, JsonEscapes::control).text(",\"session_id\":\"");
-      std::array<char, 2 * sizeof(agent.session_id)> session;
+      ds::Array<char, 2 * sizeof(agent.session_id)> session;
 
-      out.text(encodeLowerHex(agent.session_id, session));
+      out.text(encodeLowerHex(agent.session_id, session.viewMut()));
 
       out.text("\"}");
       return;
@@ -871,7 +871,7 @@ namespace telar::runtime::cli::execution {
   constexpr std::size_t max_chunk = 4096;
 
   std::string_view stateName(ExecutionState state) {
-    constexpr std::array names{"starting", "running", "exited", "failed"};
+    constexpr ds::Array names{"starting", "running", "exited", "failed"};
 
     return names.at(static_cast<std::size_t>(state));
   }
@@ -982,8 +982,8 @@ namespace telar::runtime::cli::execution {
         if (stdin_open && reply.stdin_open && reply.input_available >= max_chunk) {
           pollfd input{.fd = STDIN_FILENO, .events = POLLIN, .revents = 0};
           if (::poll(&input, 1, 0) > 0) {
-            std::array<Byte, max_chunk> bytes;
-            const auto count = ::read(STDIN_FILENO, bytes.data(), bytes.size());
+            ds::Array<Byte, max_chunk> bytes;
+            const auto count = ::read(STDIN_FILENO, bytes.dataMut(), bytes.size());
             if (count < 0) {
               throw std::runtime_error{"ExecutionStdinFailed"};
             }
@@ -1071,8 +1071,8 @@ namespace telar::runtime::cli::execution {
 
 namespace telar::runtime::cli::pane_agents {
 
-  constexpr std::array<std::string_view, 3> focus_outcomes{"focused", "no_neighbor", "source_not_focused"};
-  constexpr std::array<std::string_view, 2> lifecycles{"running", "exited"};
+  constexpr ds::Array<std::string_view, 3> focus_outcomes{"focused", "no_neighbor", "source_not_focused"};
+  constexpr ds::Array<std::string_view, 2> lifecycles{"running", "exited"};
 
   void writePane(Output& out, const PaneRecord& entry, bool json) {
     const auto& pane = entry.pane;
@@ -1123,7 +1123,7 @@ namespace telar::runtime::cli::pane_agents {
   }
 
   void watchPane(ControlSession& session, const Options& options, const PaneDescriptor& pane, Output& out) {
-    ds::Option<std::array<unsigned char, SHA256_DIGEST_LENGTH>> previous;
+    ds::Option<ds::Array<unsigned char, SHA256_DIGEST_LENGTH>> previous;
     bool previous_truncated = false;
     std::uint64_t count = 0;
 
@@ -1133,9 +1133,9 @@ namespace telar::runtime::cli::pane_agents {
         throw Failure{"unexpected reply from the runtime"};
       }
 
-      std::array<unsigned char, SHA256_DIGEST_LENGTH> digest;
+      ds::Array<unsigned char, SHA256_DIGEST_LENGTH> digest;
 
-      SHA256(reinterpret_cast<const unsigned char*>(reply.text.data()), reply.text.size(), digest.data());
+      SHA256(reinterpret_cast<const unsigned char*>(reply.text.data()), reply.text.size(), digest.dataMut());
       if (!previous || digest != *previous || reply.truncated != previous_truncated) {
         out.text("{\"pane_id\":").number(pane.pane_id).text(",\"pane_generation\":").number(pane.pane_generation).text(",\"truncated\":").boolean(reply.truncated).text(",\"text\":").json(reply.text, JsonEscapes::standard).text("}\n");
         out.flush();
@@ -1325,7 +1325,7 @@ namespace telar::runtime::cli::project_setup {
     }
 
     std::reverse(closing.begin(), closing.end());
-    constexpr std::array completions{"", "\"", "0", "null", ":null", "\":null", "\"\":null", "n\"", "0\"", "00\"", "000\"", "0000\"", "rue", "ue", "e", "alse", "lse", "se", "ull", "ll", "l"};
+    constexpr ds::Array completions{"", "\"", "0", "null", ":null", "\":null", "\"\":null", "n\"", "0\"", "00\"", "000\"", "0000\"", "rue", "ue", "e", "alse", "lse", "se", "ull", "ll", "l"};
 
     for (const std::string_view suffix : completions) {
       if (suffix.empty() && closing.empty()) {
@@ -1467,10 +1467,10 @@ namespace telar::runtime::cli::project_setup {
     std::string text;
 
     text.reserve(static_cast<std::size_t>(inode.st_size));
-    std::array<char, max_recipe_bytes> bytes;
+    ds::Array<char, max_recipe_bytes> bytes;
 
     for (;;) {
-      const auto count = ::read(file.get(), bytes.data(), bytes.size());
+      const auto count = ::read(file.get(), bytes.dataMut(), bytes.size());
       if (count < 0 && sys::lastError() == EINTR) {
         continue;
       }
@@ -1526,10 +1526,10 @@ namespace telar::runtime::cli::project_setup {
 
   // Starts a recipe as an execution in `cwd` and, unless `detach`, waits for it to succeed.
   std::uint64_t execute(ControlSession& session, std::string_view cwd, std::span<const std::string> recipe, bool detach) {
-    std::array<std::string_view, ExecutionOptions::max_arguments> argv;
+    ds::Array<std::string_view, ExecutionOptions::max_arguments> argv;
 
     for (std::size_t index = 0; index < recipe.size(); ++index) {
-      argv[index] = recipe[index];
+      argv.atMut(index) = recipe[index];
     }
 
     const auto id = randomIdentity();
@@ -1609,7 +1609,7 @@ namespace telar::runtime::cli {
   ExecutionOptions ExecutionOptions::parse(Arguments words) {
     ExecutionOptions self;
     Cursor cursor{words};
-    constexpr std::array names{"start", "status", "output", "cancel", "forget", "list"};
+    constexpr ds::Array names{"start", "status", "output", "cancel", "forget", "list"};
 
     if (!words.empty()) {
       for (std::size_t action = 0; action < names.size(); ++action) {
@@ -1635,7 +1635,7 @@ namespace telar::runtime::cli {
           throw std::invalid_argument{self.action == Action::start ? "InvalidExecutionArguments" : "InvalidExecutionOptions"};
         }
 
-        std::ranges::copy(command, self.arguments.begin());
+        std::ranges::copy(command, self.arguments.viewMut().begin());
         break;
       }
 

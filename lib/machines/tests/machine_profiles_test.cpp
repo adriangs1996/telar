@@ -15,6 +15,7 @@ static_assert(true);
 
 import telar.testing;
 import telar.machines;
+import telar.base.ds;
 
 namespace {
 
@@ -109,13 +110,13 @@ namespace {
     SystemAllocator system;
     telar::MemoryAdapter adapter{system};
     telar::Memory& memory = adapter;
-    const auto invalid = std::to_array<std::string_view>({
+    const auto invalid = ds::Array<std::string_view, 5>{
         R"({"version":1,"machines":[],"unknown":true})",
         R"({"version":1,"version":1,"machines":[]})",
         R"({"version":1,"machines":[{"id":"m-000000000001","label":"box","destination":"host","enabled":1}]})",
         R"({"version":1,"machines":[{"id":"m-000000000001","label":"box","destination":"host","logins":{"other":"done"}}]})",
         R"({"version":1,"machines":[{"id":"m-000000000001","label":"box","destination":"host","logins":{"codex":"unknown"}}]})",
-    });
+    };
 
     for (const auto source : invalid) {
       rejects(MachineError::invalid_profiles, [&] {

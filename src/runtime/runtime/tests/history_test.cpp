@@ -131,7 +131,7 @@ namespace {
         return std::tuple{entries[left].started_at_ms, left} > std::tuple{entries[right].started_at_ms, right};
       });
 
-      std::array<Byte, 128 * 1024> storage;
+      ds::Array<Byte, 128 * 1024> storage;
 
       // "gb" ranks fuzzily in memory; an empty query pages in SQL, where distinct counts commands.
       for (const std::string_view query : {std::string_view{"gb"}, std::string_view{}}) {
@@ -151,7 +151,7 @@ namespace {
 
           for (std::size_t offset = 0; offset <= expected.size() + page_size; offset += page_size) {
             store.query(QueryHistory{.request_id = 2, .query = query, .match = HistoryMatch::fuzzy, .distinct = distinct, .limit = page_size, .offset = static_cast<std::uint32_t>(offset)}, reply);
-            const auto result = decodeReply<HistoryResults>(reply, storage);
+            const auto result = decodeReply<HistoryResults>(reply, storage.viewMut());
             const auto start = std::min(offset, expected.size());
             const auto size = std::min(page_size, expected.size() - start);
 
@@ -174,8 +174,8 @@ namespace {
   void testHistoryQueries(Memory& memory) {
     HistoryStore store{memory, ":memory:"};
     EncodedReply reply{memory};
-    std::array<Byte, 128 * 1024> storage;
-    const std::array<ImportHistoryEntry, 6> entries{{
+    ds::Array<Byte, 128 * 1024> storage;
+    const ds::Array<ImportHistoryEntry, 6> entries{{
         {100, "git status"},
         {200, "git status"},
         {300, "git status"},
@@ -187,13 +187,13 @@ namespace {
     const ImportHistory import{.request_id = 1, .source = "test-history", .base_sequence = 10, .entries = entries};
 
     store.importEntries(import, reply);
-    check(decodeReply<RequestCompleted>(reply, storage).request_id == 1);
+    check(decodeReply<RequestCompleted>(reply, storage.viewMut()).request_id == 1);
     store.importEntries(import, reply);
 
     QueryHistory query{.request_id = 2, .limit = 2};
 
     store.query(query, reply);
-    auto results = decodeReply<HistoryResults>(reply, storage);
+    auto results = decodeReply<HistoryResults>(reply, storage.viewMut());
 
     check(results.entries.size() == 2 && results.has_more);
     check(results.entries[0].command == "printf 'café'" && results.entries[0].started_at_ms == 600);
@@ -202,46 +202,46 @@ namespace {
     query.snapshot_id = results.snapshot_id;
     query.offset = 2;
 
-    const std::array<ImportHistoryEntry, 1> later{{{700, "newer command"}}};
+    const ds::Array<ImportHistoryEntry, 1> later{{{700, "newer command"}}};
 
     store.importEntries(ImportHistory{.request_id = 3, .source = import.source, .base_sequence = 16, .entries = later}, reply);
     store.query(query, reply);
-    results = decodeReply<HistoryResults>(reply, storage);
+    results = decodeReply<HistoryResults>(reply, storage.viewMut());
     check(results.entries[0].command == "cargo build" && results.entries[0].started_at_ms == 400);
     check(results.snapshot_id == query.snapshot_id);
 
     query = QueryHistory{.request_id = 4, .query = "GST", .match = HistoryMatch::fuzzy, .distinct = true, .limit = 10};
     store.query(query, reply);
-    results = decodeReply<HistoryResults>(reply, storage);
+    results = decodeReply<HistoryResults>(reply, storage.viewMut());
     check(results.entries.size() == 1 && results.entries[0].command == "git status");
     query.query = "café";
     query.match = HistoryMatch::fts;
     store.query(query, reply);
-    results = decodeReply<HistoryResults>(reply, storage);
+    results = decodeReply<HistoryResults>(reply, storage.viewMut());
     check(results.entries.size() == 1 && results.entries[0].id == newest);
 
     query.scope = HistoryScope::cwd;
     query.scope_value = std::string_view{"/not-imported"};
     store.query(query, reply);
-    check(decodeReply<HistoryResults>(reply, storage).entries.empty());
+    check(decodeReply<HistoryResults>(reply, storage.viewMut()).entries.empty());
 
     store.stats(HistoryStatsQuery{.request_id = 5}, reply);
-    const auto stats = decodeReply<HistoryStatsResult>(reply, storage);
+    const auto stats = decodeReply<HistoryStatsResult>(reply, storage.viewMut());
 
     check(stats.total == 7 && stats.unique == 4);
     check(stats.top[0].command == "git status" && stats.top[0].count == 3);
     check(stats.top[1].command == "cargo build" && stats.top[1].count == 2);
 
     store.readOutput(ReadHistoryOutput{.request_id = 6, .id = newest}, reply);
-    check(decodeReply<HistoryOutput>(reply, storage).content.empty());
+    check(decodeReply<HistoryOutput>(reply, storage.viewMut()).content.empty());
     store.remove(DeleteHistory{.request_id = 7, .id = newest}, reply);
-    check(decodeReply<HistoryPruned>(reply, storage).removed == 1);
+    check(decodeReply<HistoryPruned>(reply, storage.viewMut()).removed == 1);
     store.remove(DeleteHistory{.request_id = 7, .id = newest}, reply);
-    check(decodeReply<HistoryPruned>(reply, storage).removed == 0);
+    check(decodeReply<HistoryPruned>(reply, storage.viewMut()).removed == 0);
     store.prune(PruneHistory{.request_id = 8, .before_ms = 400, .match = "git"}, reply);
-    check(decodeReply<HistoryPruned>(reply, storage).removed == 3);
+    check(decodeReply<HistoryPruned>(reply, storage.viewMut()).removed == 3);
     store.stats(HistoryStatsQuery{.request_id = 9}, reply);
-    check(decodeReply<HistoryStatsResult>(reply, storage).total == 3);
+    check(decodeReply<HistoryStatsResult>(reply, storage.viewMut()).total == 3);
   }
 
   template <ConcurrentAllocator Memory>
@@ -266,39 +266,39 @@ namespace {
       entries.front().command = "gb";
       entries[1].command = entries.back().command = "git build";
       store.importEntries(ImportHistory{.request_id = 1, .source = "fuzzy-recency-boundary", .entries = entries}, reply);
-      std::array<Byte, 4096> storage;
+      ds::Array<Byte, 4096> storage;
       QueryHistory query{.request_id = 2, .query = "gb", .match = HistoryMatch::fuzzy, .limit = 10};
 
       store.query(query, reply);
-      auto result = decodeReply<HistoryResults>(reply, storage);
+      auto result = decodeReply<HistoryResults>(reply, storage.viewMut());
 
       check(result.snapshot_id == entry_count && !result.has_more && result.entries.size() == 3);
       check(result.entries[0].id == entry_count && result.entries[1].id == 2 && result.entries[2].id == 3);
 
       query.distinct = true;
       store.query(query, reply);
-      result = decodeReply<HistoryResults>(reply, storage);
+      result = decodeReply<HistoryResults>(reply, storage.viewMut());
       check(result.entries.size() == 2 && result.entries[0].id == entry_count && result.entries[1].id == 3 && !result.has_more);
 
       query.snapshot_id = candidate_limit;
       store.query(query, reply);
-      result = decodeReply<HistoryResults>(reply, storage);
+      result = decodeReply<HistoryResults>(reply, storage.viewMut());
       check(result.snapshot_id == candidate_limit && result.entries.size() == 3 && !result.has_more);
       check(result.entries[0].id == 1 && result.entries[1].id == 2 && result.entries[2].id == 3);
 
       query.limit = 1;
       store.query(query, reply);
-      result = decodeReply<HistoryResults>(reply, storage);
+      result = decodeReply<HistoryResults>(reply, storage.viewMut());
       check(result.entries.size() == 1 && result.entries[0].id == 1 && result.has_more);
 
       query.offset = 1;
       store.query(query, reply);
-      result = decodeReply<HistoryResults>(reply, storage);
+      result = decodeReply<HistoryResults>(reply, storage.viewMut());
       check(result.entries.size() == 1 && result.entries[0].id == 2 && result.has_more);
 
       query.offset = 2;
       store.query(query, reply);
-      result = decodeReply<HistoryResults>(reply, storage);
+      result = decodeReply<HistoryResults>(reply, storage.viewMut());
       check(result.entries.size() == 1 && result.entries[0].id == 3 && !result.has_more);
     }
   }
@@ -307,16 +307,16 @@ namespace {
   void testAgentCommands(Memory& memory) {
     HistoryStore store{memory, ":memory:"};
     EncodedReply reply{memory};
-    std::array<Byte, 128 * 1024> storage;
+    ds::Array<Byte, 128 * 1024> storage;
     RequestContext context{.location = {.workspace = {.id = 1}, .tab_id = 2}, .workspace_path = "/project", .received_at_ms = 1000};
 
-    context.history_session[0] = 1;
+    context.history_session.atMut(0) = 1;
     ReportAgentCommand request{.request_id = 1, .pane_id = 3, .pane_generation = 4, .phase = AgentCommandPhase::started, .provider = "codex", .tool_call_id = "tool-1", .command = "git status", .cwd = "/project"};
 
     store.reportAgentCommand(request, context, reply);
     store.reportAgentCommand(request, context, reply);
     store.query(QueryHistory{.request_id = 2, .limit = 10}, reply);
-    auto result = decodeReply<HistoryResults>(reply, storage);
+    auto result = decodeReply<HistoryResults>(reply, storage.viewMut());
 
     check(result.entries.size() == 1 && result.entries[0].status == HistoryStatus::running && result.entries[0].author == HistoryAuthor::agent);
     const auto identity = result.entries[0].id;
@@ -328,28 +328,28 @@ namespace {
     context.received_at_ms = 1250;
     store.reportAgentCommand(request, context, reply);
     store.query(QueryHistory{.request_id = 3, .limit = 10}, reply);
-    result = decodeReply<HistoryResults>(reply, storage);
+    result = decodeReply<HistoryResults>(reply, storage.viewMut());
     check(result.entries.size() == 1 && result.entries[0].id == identity && result.entries[0].status == HistoryStatus::completed && result.entries[0].exit_code == 9);
     check(result.entries[0].command == request.command && result.entries[0].cwd == request.cwd);
     check(result.entries[0].started_at_ms == 1000 && result.entries[0].duration_ns == 250'000'000);
     request.tool_call_id = "tool-2";
     store.reportAgentCommand(request, context, reply);
     store.query(QueryHistory{.request_id = 4, .limit = 10}, reply);
-    check(decodeReply<HistoryResults>(reply, storage).entries.size() == 2);
+    check(decodeReply<HistoryResults>(reply, storage.viewMut()).entries.size() == 2);
   }
 
   template <ConcurrentAllocator Memory>
   void testHistoryPersistence(Memory& memory) {
-    std::array<char, 64> directory{};
+    ds::Array<char, 64> directory{};
 
-    std::strcpy(directory.data(), "/tmp/telar-history-test-XXXXXX");
-    check(::mkdtemp(directory.data()) != nullptr);
+    std::strcpy(directory.dataMut(), "/tmp/telar-history-test-XXXXXX");
+    check(::mkdtemp(directory.dataMut()) != nullptr);
     const auto path = std::string{directory.data()} + "/history.sqlite3";
     EncodedReply reply{memory};
 
     {
       HistoryStore store{memory, path.c_str()};
-      const std::array<ImportHistoryEntry, 1> entries{{{100, "retained after restart"}}};
+      const ds::Array<ImportHistoryEntry, 1> entries{{{100, "retained after restart"}}};
 
       store.importEntries(ImportHistory{.request_id = 1, .source = "persistence-test", .entries = entries}, reply);
     }
@@ -358,8 +358,8 @@ namespace {
       HistoryStore reopened{memory, path.c_str()};
 
       reopened.query(QueryHistory{.request_id = 2, .limit = 10}, reply);
-      std::array<Byte, 4096> storage;
-      const auto result = decodeReply<HistoryResults>(reply, storage);
+      ds::Array<Byte, 4096> storage;
+      const auto result = decodeReply<HistoryResults>(reply, storage.viewMut());
 
       check(result.entries.size() == 1 && result.entries[0].command == "retained after restart");
     }
@@ -377,8 +377,8 @@ namespace {
   public:
     template <Allocator Memory>
     void process(std::span<const Byte> payload, EncodedReply<Memory>& reply) {
-      std::array<Byte, 64> bytes;
-      DecodeStorage storage{bytes};
+      ds::Array<Byte, 64> bytes;
+      DecodeStorage storage{bytes.viewMut()};
       const auto request = Codec::decode<QueryClients>(payload, storage);
 
       {
@@ -437,8 +437,8 @@ namespace {
 
       check(::poll(&ready, 1, 2000) == 1);
       worker.collect([&](std::uint64_t client, ClientTag, std::span<const Byte> payload) {
-        std::array<Byte, 256> bytes;
-        DecodeStorage storage{bytes};
+        ds::Array<Byte, 256> bytes;
+        DecodeStorage storage{bytes.viewMut()};
 
         if (client == 13) {
           const auto failure = Codec::decode<RequestFailed>(payload, storage);
@@ -475,12 +475,12 @@ namespace {
     }
 
     const QueryHistory request{.request_id = 4, .limit = 10};
-    std::array<Byte, 256> bytes;
+    ds::Array<Byte, 256> bytes;
     EncodedReply reply{memory};
 
-    service.process(Codec::encode(request, bytes), reply);
-    std::array<Byte, 4096> scratch;
-    DecodeStorage storage{scratch};
+    service.process(Codec::encode(request, bytes.viewMut()), reply);
+    ds::Array<Byte, 4096> scratch;
+    DecodeStorage storage{scratch.viewMut()};
     const auto result = Codec::decode<HistoryResults>(reply.payload(), storage);
 
     check(result.entries.size() == 3);
@@ -505,7 +505,7 @@ namespace {
       RequestWorker worker{memory, service};
 
       for (std::uint64_t sequence = 1; sequence <= 3; ++sequence) {
-        const std::array<ImportHistoryEntry, 1> entries{{{100, "retained import"}}};
+        const ds::Array<ImportHistoryEntry, 1> entries{{{100, "retained import"}}};
 
         worker.submit(1, ImportHistory{.request_id = sequence, .source = "disconnected-client", .base_sequence = sequence, .entries = entries});
       }
@@ -514,13 +514,13 @@ namespace {
       service.ready.count_down();
     }
 
-    std::array<Byte, 256> bytes;
+    ds::Array<Byte, 256> bytes;
     EncodedReply reply{memory};
 
-    service.process(Codec::encode(QueryHistory{.request_id = 4, .limit = 10}, bytes), reply);
-    std::array<Byte, 4096> scratch;
+    service.process(Codec::encode(QueryHistory{.request_id = 4, .limit = 10}, bytes.viewMut()), reply);
+    ds::Array<Byte, 4096> scratch;
 
-    check(decodeReply<HistoryResults>(reply, scratch).entries.size() == 3);
+    check(decodeReply<HistoryResults>(reply, scratch.viewMut()).entries.size() == 3);
   }
 
   template <ConcurrentAllocator Memory>
@@ -551,8 +551,8 @@ namespace {
     store.reportAgentCommand(ReportAgentCommand{.request_id = 1, .pane_id = 3, .provider = "codex", .command = "token=synthetic-test-value"}, {}, reply);
     store.record({.kind = HistoryEventKind::command_finished, .session = session, .command = {.command = "echo visible", .directory = "/tmp", .started = {}}});
     store.query(QueryHistory{.request_id = 2, .limit = 10}, reply);
-    std::array<Byte, 4096> storage;
-    const auto result = decodeReply<HistoryResults>(reply, storage);
+    ds::Array<Byte, 4096> storage;
+    const auto result = decodeReply<HistoryResults>(reply, storage.viewMut());
 
     check(result.entries.size() == 1 && result.entries[0].command == "echo visible");
   }
@@ -561,7 +561,7 @@ namespace {
   void testQueuedPaneEvents(Memory& memory) {
     BackgroundService service{memory, ":memory:"};
     HistorySession session{.id = {1}, .pane = 9, .location = {.workspace = {.id = 2}, .tab_id = 3}, .started_at_ms = 100, .workspace_path = "/project", .shell = "/bin/sh"};
-    const std::array<Byte, 5> output{'a', 0, 'b', '\r', '\n'};
+    const ds::Array<Byte, 5> output{'a', 0, 'b', '\r', '\n'};
 
     {
       RequestWorker worker{memory, service};
@@ -582,12 +582,12 @@ namespace {
       worker.cancel(1);
     }
 
-    std::array<Byte, 256> bytes;
+    ds::Array<Byte, 256> bytes;
     EncodedReply reply{memory};
 
-    service.process(Codec::encode(QueryHistory{.request_id = 1, .limit = 10}, bytes), reply);
-    std::array<Byte, 4096> scratch;
-    DecodeStorage storage{scratch};
+    service.process(Codec::encode(QueryHistory{.request_id = 1, .limit = 10}, bytes.viewMut()), reply);
+    ds::Array<Byte, 4096> scratch;
+    DecodeStorage storage{scratch.viewMut()};
     const auto result = Codec::decode<HistoryResults>(reply.payload(), storage);
 
     check(result.entries.size() == 2);
@@ -596,7 +596,7 @@ namespace {
     check(entry.command == "printf retained" && entry.cwd == "/directory with spaces" && entry.author == HistoryAuthor::human);
     check(entry.pane_id == session.pane && entry.workspace_path == session.workspace_path && entry.exit_code == 3);
     check(entry.started_at_ms == 110 && entry.duration_ns == 5'000'000);
-    service.process(Codec::encode(ReadHistoryOutput{.request_id = 2, .id = entry.id}, bytes), reply);
+    service.process(Codec::encode(ReadHistoryOutput{.request_id = 2, .id = entry.id}, bytes.viewMut()), reply);
     const auto captured_output = Codec::decode<HistoryOutput>(reply.payload(), storage);
 
     check(captured_output.truncated && captured_output.observed_bytes == 20 && std::ranges::equal(captured_output.content, output));
@@ -614,7 +614,7 @@ namespace {
     {
       RequestWorker worker{memory, service};
       const auto allocations = budget.allocations();
-      const std::array<Byte, 4096> output{};
+      const ds::Array<Byte, 4096> output{};
 
       for (unsigned index = 0; index < 1024; ++index) {
         for (const auto command : {" filtered command", "filtered command", "export TOKEN=synthetic-test-value"}) {
@@ -628,12 +628,12 @@ namespace {
       worker.submitInternal(HistoryEventView{.kind = HistoryEventKind::command_finished, .session = session, .command = {.command = "echo retained after filtering", .directory = "/tmp", .started = {}}});
     }
 
-    std::array<Byte, 256> bytes;
+    ds::Array<Byte, 256> bytes;
     EncodedReply reply{memory};
 
-    service.process(Codec::encode(QueryHistory{.request_id = 1, .limit = 10}, bytes), reply);
-    std::array<Byte, 4096> scratch;
-    const auto result = decodeReply<HistoryResults>(reply, scratch);
+    service.process(Codec::encode(QueryHistory{.request_id = 1, .limit = 10}, bytes.viewMut()), reply);
+    ds::Array<Byte, 4096> scratch;
+    const auto result = decodeReply<HistoryResults>(reply, scratch.viewMut());
 
     check(result.entries.size() == 1 && result.entries[0].command == "echo retained after filtering");
   }
@@ -648,7 +648,7 @@ namespace {
     {
       BackgroundService service{memory, path.c_str()};
       RequestWorker worker{memory, service};
-      const std::array<ImportHistoryEntry, 1> entries{{{100, "echo imported"}}};
+      const ds::Array<ImportHistoryEntry, 1> entries{{{100, "echo imported"}}};
 
       worker.submit(1, QueryHistory{.request_id = 1, .limit = 10});
       worker.submit(1, HistoryStatsQuery{.request_id = 2});
@@ -667,8 +667,8 @@ namespace {
         check(::poll(&ready, 1, 2000) == 1);
         worker.collect([&](std::uint64_t client, ClientTag, std::span<const Byte> payload) {
           check(client == 1);
-          std::array<Byte, 256> bytes;
-          DecodeStorage storage{bytes};
+          ds::Array<Byte, 256> bytes;
+          DecodeStorage storage{bytes.viewMut()};
 
           ++completed;
 
@@ -764,7 +764,7 @@ namespace {
     SystemAllocator system;
     MemoryAdapter adapter{system};
     ConcurrentMemory& memory = adapter;
-    const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", "cat >/dev/null; echo Fix the parser"};
+    const ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", "cat >/dev/null; echo Fix the parser"};
     RecordedTitles history;
     DescribedAgents agents;
     DescriptionService<ConcurrentMemory, DescribedAgents, RecordedTitles> descriptions{memory, history, DescriptionOptions{arguments, std::chrono::seconds{5}}};

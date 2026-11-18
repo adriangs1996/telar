@@ -89,7 +89,7 @@ namespace telar::runtime::plugins {
 
   bool SessionIo::ready(int descriptor, short events) noexcept {
     for (;;) {
-      std::array watches{
+      ds::Array watches{
           pollfd{descriptor, events, 0},
           pollfd{process_.error(), POLLIN, 0},
           pollfd{cancellation_.descriptor(), POLLIN, 0},
@@ -101,7 +101,7 @@ namespace telar::runtime::plugins {
         return false;
       }
 
-      const auto count = ::poll(watches.data(), watches.size(), timeout);
+      const auto count = ::poll(watches.dataMut(), watches.size(), timeout);
       if (count < 0 && sys::lastError() == EINTR) {
         continue;
       }
@@ -130,11 +130,11 @@ namespace telar::runtime::plugins {
   }
 
   void SessionIo::drainError() noexcept {
-    std::array<char, error_chunk_bytes> bytes;
+    ds::Array<char, error_chunk_bytes> bytes;
     std::size_t drained = 0;
 
     while (process_.error() >= 0 && drained < maximum_error_drain_bytes) {
-      const auto count = ::read(process_.error(), bytes.data(), bytes.size());
+      const auto count = ::read(process_.error(), bytes.dataMut(), bytes.size());
       if (count < 0 && sys::lastError() == EINTR) {
         continue;
       }
@@ -190,22 +190,22 @@ namespace telar::runtime::plugins {
     return options;
   }
 
-  tbc::view<std::array<char*, 7>, tbc::lt::a> TapWorkerOptions::arguments(tbc::view<const TapWorkerOptions&, tbc::lt::a> options, tbc::view<const char*, tbc::lt::a> executable) noexcept {
-    std::array<char*, 7> words{const_cast<char*>(executable), const_cast<char*>(command.data()), const_cast<char*>(options.entry)};
+  tbc::view<ds::Array<char*, 7>, tbc::lt::a> TapWorkerOptions::arguments(tbc::view<const TapWorkerOptions&, tbc::lt::a> options, tbc::view<const char*, tbc::lt::a> executable) noexcept {
+    ds::Array<char*, 7> words{const_cast<char*>(executable), const_cast<char*>(command.data()), const_cast<char*>(options.entry)};
     std::size_t count = 3;
 
     if (options.traffic) {
-      words[count++] = const_cast<char*>("--traffic");
+      words.atMut(count++) = const_cast<char*>("--traffic");
     }
 
 #if TELAR_DEBUG
     if (options.trace_path != nullptr) {
-      words[count++] = const_cast<char*>("--trace");
-      words[count++] = const_cast<char*>(options.trace_path);
+      words.atMut(count++) = const_cast<char*>("--trace");
+      words.atMut(count++) = const_cast<char*>(options.trace_path);
     }
 
 #endif
-    words[count] = nullptr;
+    words.atMut(count) = nullptr;
     return words;
   }
 
@@ -291,7 +291,7 @@ namespace telar::runtime::plugins {
   PipeProcess Session<Memory>::spawn(const SessionOptions& options) {
     const TapWorkerOptions worker{.entry = options.entry, .traffic = options.traffic, .trace_path = options.trace_path};
     auto arguments = TapWorkerOptions::arguments(worker, options.executable);
-    std::array<char*, 1> environment{nullptr};
+    ds::Array<char*, 1> environment{nullptr};
 
     return PipeProcess{SpawnSpec{.executable = options.executable, .cwd = "/", .arguments = arguments.data(), .environment = environment.data(), .size = {}}, ProcessInput::buffered_socket};
   }
@@ -354,7 +354,7 @@ namespace telar::runtime::plugins {
       throw EncodingError{"Invalid traffic package digest"};
     }
 
-    std::ranges::copy(digest, specification.digest.begin());
+    std::ranges::copy(digest, specification.digest.viewMut().begin());
     specification.generation = reader.integer<std::uint64_t>();
     specification.name.assign(reader.text());
     for (const auto capability : {Capability::traffic_observe, Capability::traffic_intercept, Capability::traffic_control, Capability::traffic_record}) {
@@ -470,7 +470,7 @@ namespace telar::runtime::plugins {
       throw EncodingError{"Invalid traffic registration count"};
     }
 
-    for (auto& registration : std::span{reply.registrations}.first(reply.registration_count)) {
+    for (auto& registration : reply.registrations.viewMut().first(reply.registration_count)) {
       registration = read(reader);
     }
 
@@ -481,7 +481,7 @@ namespace telar::runtime::plugins {
       throw EncodingError{"Invalid traffic decision count"};
     }
 
-    for (auto& decision : std::span{outcome.decisions}.first(outcome.decision_count)) {
+    for (auto& decision : outcome.decisions.viewMut().first(outcome.decision_count)) {
       decision.registration = reader.integer<std::uint32_t>();
       decision.payload = reader.bytes();
     }
@@ -549,11 +549,11 @@ namespace telar::runtime::plugins {
         reply_(makeOwned<TrafficReply>(memory)) {}
 
   void TrafficBridge::attach(Session<ConcurrentMemory>& session) {
-    std::array<Byte, 1024> output;
-    auto initialized = session.request(TrafficProtocol::setup(output, specification_), TrafficLimits::reply_bytes);
+    ds::Array<Byte, 1024> output;
+    auto initialized = session.request(TrafficProtocol::setup(output.viewMut(), specification_), TrafficLimits::reply_bytes);
 
     apply(0, initialized.bytes());
-    for (auto& connection : connections_) {
+    for (auto& connection : connections_.viewMut()) {
       if (connection && connection->registration.stage != TrafficStage::control) {
         port_.setPackageAvailable(connection->owner, true);
         connection.getMut().notify_ready = connection->ready;
@@ -562,7 +562,7 @@ namespace telar::runtime::plugins {
   }
 
   void TrafficBridge::detach() noexcept {
-    for (auto& connection : connections_) {
+    for (auto& connection : connections_.viewMut()) {
       if (connection && connection->registration.stage == TrafficStage::control) {
         connection.reset();
       } else if (connection) {
@@ -581,13 +581,13 @@ namespace telar::runtime::plugins {
   }
 
   void TrafficBridge::fail(Connection& connection, const traffic::FlowEvent& flow) {
-    std::array<Byte, 32> decision;
+    ds::Array<Byte, 32> decision;
 
-    enqueue(connection, traffic::InterceptionCodec::decision(decision, flow.ticket, connection.registration.fail_closed ? traffic::Verdict::reject : traffic::Verdict::allow));
+    enqueue(connection, traffic::InterceptionCodec::decision(decision.viewMut(), flow.ticket, connection.registration.fail_closed ? traffic::Verdict::reject : traffic::Verdict::allow));
   }
 
   auto TrafficBridge::find(std::uint32_t id) noexcept -> Connection* {
-    for (auto& connection : connections_) {
+    for (auto& connection : connections_.viewMut()) {
       if (connection && connection->registration.id == id) {
         return &connection.getMut();
       }
@@ -625,7 +625,7 @@ namespace telar::runtime::plugins {
         }
       }
 
-      for (auto& connection : connections_) {
+      for (auto& connection : connections_.viewMut()) {
         if (connection && !std::ranges::any_of(registrations, [&](const auto& registration) {
               return registration.id == connection->registration.id;
             })) {
@@ -643,7 +643,7 @@ namespace telar::runtime::plugins {
           continue;
         }
 
-        for (auto& connection : connections_) {
+        for (auto& connection : connections_.viewMut()) {
           if (connection) {
             continue;
           }
@@ -656,12 +656,12 @@ namespace telar::runtime::plugins {
           }
 
           connection.emplace(secure_, registration, port_.openPackage(specification_, registration.id));
-          std::array<Byte, traffic::Protocol::greeting_bytes + traffic::Limits::filter_bytes> greeting;
-          const auto hello = traffic::Protocol::greeting(greeting, registration.stage == TrafficStage::observe ? traffic::Role::subscribe : traffic::Role::intercept, registration.filter.view(), registration.selection);
+          ds::Array<Byte, traffic::Protocol::greeting_bytes + traffic::Limits::filter_bytes> greeting;
+          const auto hello = traffic::Protocol::greeting(greeting.viewMut(), registration.stage == TrafficStage::observe ? traffic::Role::subscribe : traffic::Role::intercept, registration.filter.view(), registration.selection);
 
           connection.getMut().output.append(hello);
           if (registration.stage != TrafficStage::observe) {
-            const auto rule = traffic::InterceptionCodec::rule(greeting, registration.rule());
+            const auto rule = traffic::InterceptionCodec::rule(greeting.viewMut(), registration.rule());
 
             enqueue(connection.getMut(), rule);
           }
@@ -727,7 +727,7 @@ namespace telar::runtime::plugins {
   tbc::view<ds::Option<SensitiveAllocation<ConcurrentMemory>>, tbc::lt::a> TrafficBridge::read(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, Connection& connection) {
     if (!connection.input) {
       const auto prefix_bytes = connection.registration.stage == TrafficStage::control ? traffic::control::Protocol::prefix_bytes : traffic::Protocol::prefix_bytes;
-      const auto count = ::recv(connection.socket.get(), connection.prefix.data() + connection.prefix_bytes, prefix_bytes - connection.prefix_bytes, 0);
+      const auto count = ::recv(connection.socket.get(), connection.prefix.dataMut() + connection.prefix_bytes, prefix_bytes - connection.prefix_bytes, 0);
       if (count < 0 && socketWouldBlock(sys::lastError())) {
         return ds::none;
       }
@@ -880,8 +880,8 @@ namespace telar::runtime::plugins {
   void Worker<Clock>::runTraffic() noexcept {
     while (!launch_.cancellation.requested() && !cancellation_.requested()) {
       if (disabled_.load(std::memory_order_relaxed)) {
-        std::array watches{pollfd{cancellation_.descriptor(), POLLIN, 0}, pollfd{launch_.cancellation.descriptor(), POLLIN, 0}};
-        if (::poll(watches.data(), watches.size(), -1) < 0 && sys::lastError() != EINTR) {
+        ds::Array watches{pollfd{cancellation_.descriptor(), POLLIN, 0}, pollfd{launch_.cancellation.descriptor(), POLLIN, 0}};
+        if (::poll(watches.dataMut(), watches.size(), -1) < 0 && sys::lastError() != EINTR) {
           return;
         }
 
@@ -1015,8 +1015,8 @@ namespace telar::runtime::plugins {
       return;
     }
 
-    std::array<char, 64> suffix;
-    const auto length = std::snprintf(suffix.data(), suffix.size(), ".tap-%u-%llu.json", static_cast<unsigned>(specification_.package_index), static_cast<unsigned long long>(session_number_++));
+    ds::Array<char, 64> suffix;
+    const auto length = std::snprintf(suffix.dataMut(), suffix.size(), ".tap-%u-%llu.json", static_cast<unsigned>(specification_.package_index), static_cast<unsigned long long>(session_number_++));
 
     trace_path_ = launch_.trace_prefix;
     trace_path_.append(suffix.data(), static_cast<std::size_t>(length));

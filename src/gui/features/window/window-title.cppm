@@ -33,7 +33,7 @@ export {
       void append(std::string_view value) noexcept;
       void filter();
 
-      std::array<char, capacity> bytes_{};
+      ds::Array<char, capacity> bytes_{};
       std::size_t length_ = 0;
     };
 

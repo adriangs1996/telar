@@ -5,6 +5,7 @@ import std;
 import telar.wire.vocabulary;
 import telar.tbc;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::inline foundation::inline drawing {
 
@@ -52,11 +53,11 @@ namespace telar::gui::inline foundation::inline drawing {
     return {.x = static_cast<float>(std::sin(angle)), .y = -static_cast<float>(std::cos(angle))};
   }
 
-  const std::array<Point, ProgressRing::segments> ProgressRing::circle = [] noexcept {
-    std::array<Point, segments> points{};
+  const ds::Array<Point, ProgressRing::segments> ProgressRing::circle = [] noexcept {
+    ds::Array<Point, segments> points{};
 
     for (std::size_t index = 0; index < points.size(); ++index) {
-      points[index] = endpoint(static_cast<float>(index) / segments);
+      points.atMut(index) = endpoint(static_cast<float>(index) / segments);
     }
 
     return points;
@@ -105,11 +106,11 @@ namespace telar::gui::inline foundation::inline drawing {
     geometry.mark_radius = stroke / 2;
     if (state == PaneProgressState::pause) {
       for (const auto offset : pause_offsets) {
-        geometry.marks[geometry.mark_count++] = {.x = center + (offset * stroke), .y = top, .width = stroke, .height = side * pause_height_ratio};
+        geometry.marks.atMut(geometry.mark_count++) = {.x = center + (offset * stroke), .y = top, .width = stroke, .height = side * pause_height_ratio};
       }
     } else if (state == PaneProgressState::error) {
-      geometry.marks[geometry.mark_count++] = {.x = center - (stroke / 2), .y = top, .width = stroke, .height = side * error_height_ratio};
-      geometry.marks[geometry.mark_count++] = {.x = center - (stroke / 2), .y = geometry.ring.y + (side * error_dot_ratio), .width = stroke, .height = stroke};
+      geometry.marks.atMut(geometry.mark_count++) = {.x = center - (stroke / 2), .y = top, .width = stroke, .height = side * error_height_ratio};
+      geometry.marks.atMut(geometry.mark_count++) = {.x = center - (stroke / 2), .y = geometry.ring.y + (side * error_dot_ratio), .width = stroke, .height = stroke};
     }
 
     return geometry;

@@ -63,6 +63,7 @@ static_assert(true);
 #endif
 
 import telar.gui.foundation.fonts;
+import telar.base.ds;
 #if (defined(Q_OS_MACOS))
 #endif
 
@@ -77,7 +78,7 @@ namespace telar::gui::qt {
     AlphaMaskRef mask;
     std::int32_t left = 0;
     std::int32_t top = 0;
-    std::array<ColoredGlyph, 2> colors;
+    ds::Array<ColoredGlyph, 2> colors;
     std::size_t next_color = 0;
   };
 
@@ -92,7 +93,7 @@ namespace telar::gui::qt {
     static constexpr auto font_roles = static_cast<std::size_t>(fonts::FontRole::fallback_7) + 1;
     SystemAllocator memory;
     Vector<std::uint8_t, SystemAllocator> pixels{AllocatorRef<std::uint8_t, SystemAllocator>{memory}};
-    std::array<std::unique_ptr<fonts::GlyphRasterizer>, font_roles> fonts{};
+    ds::Array<std::unique_ptr<fonts::GlyphRasterizer>, font_roles> fonts{};
 #endif
   };
 
@@ -199,7 +200,7 @@ namespace telar::gui::qt {
 
       auto mask = AlphaMaskRef{new AlphaMask{glyph.mask->alpha, createTexture(window, image)}};
 
-      glyph.colors[glyph.next_color] = {.color = color, .mask = mask};
+      glyph.colors.atMut(glyph.next_color) = {.color = color, .mask = mask};
       glyph.next_color = (glyph.next_color + 1) % glyph.colors.size();
 
       return mask;
@@ -263,7 +264,7 @@ namespace telar::gui::qt {
 
 #ifdef Q_OS_MACOS
     [[nodiscard]] fonts::GlyphBitmapView rasterizeOptical(fonts::GlyphRasterRequest request, fonts::FontRole role) {
-      auto& rasterizer = rasterization_.fonts.at(static_cast<std::size_t>(role));
+      auto& rasterizer = rasterization_.fonts.atCheckedMut(static_cast<std::size_t>(role));
       if (!rasterizer) {
         if (rasterization_.pixels.empty()) {
           rasterization_.pixels.resize(fonts::GlyphRasterizer::requiredBytes());

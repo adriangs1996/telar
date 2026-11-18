@@ -31,25 +31,25 @@ namespace {
   std::pair<int, std::string> execute(Command<Memory>& command) {
     PipeProcess process{command.specification(TerminalSize{.cols = 80, .rows = 24})};
     std::string output;
-    std::array<char, 4096> buffer;
+    ds::Array<char, 4096> buffer;
 
-    std::array<int, 2> open{process.output(), process.error()};
+    ds::Array<int, 2> open{process.output(), process.error()};
 
     process.closeInput();
     while (open[0] >= 0 || open[1] >= 0) {
-      std::array<pollfd, 2> streams{{{.fd = open[0], .events = POLLIN}, {.fd = open[1], .events = POLLIN}}};
+      ds::Array<pollfd, 2> streams{{{.fd = open[0], .events = POLLIN}, {.fd = open[1], .events = POLLIN}}};
 
-      check(::poll(streams.data(), streams.size(), 10'000) > 0);
+      check(::poll(streams.dataMut(), streams.size(), 10'000) > 0);
       for (std::size_t index = 0; index < streams.size(); ++index) {
         if (streams[index].fd < 0 || streams[index].revents == 0) {
           continue;
         }
 
-        const auto count = ::read(streams[index].fd, buffer.data(), buffer.size());
+        const auto count = ::read(streams[index].fd, buffer.dataMut(), buffer.size());
         if (count > 0 && index == 0) {
           output.append(buffer.data(), static_cast<std::size_t>(count));
         } else if (count == 0 || (count < 0 && errno != EAGAIN && errno != EINTR)) {
-          open[index] = -1;
+          open.atMut(index) = -1;
         }
       }
     }

@@ -38,6 +38,7 @@ static_assert(true);
 import telar.testing;
 import telar.cli.integration.settings;
 import telar.base.text.json;
+import telar.base.ds;
 
 namespace {
 
@@ -117,9 +118,9 @@ namespace {
 
       check(pipe != nullptr);
       std::string output;
-      std::array<char, 256> buffer;
+      ds::Array<char, 256> buffer;
 
-      while (const auto count = std::fread(buffer.data(), 1, buffer.size(), pipe)) {
+      while (const auto count = std::fread(buffer.dataMut(), 1, buffer.size(), pipe)) {
         output.append(buffer.data(), count);
       }
 
@@ -132,10 +133,10 @@ namespace {
     template <Allocator Memory>
     void testExecutableQuoting(Memory& memory) {
       const auto specification = integration::Provider::describe(AgentProvider::claude);
-      std::array<char, 64> temporary{};
+      ds::Array<char, 64> temporary{};
 
-      std::strcpy(temporary.data(), "/tmp/telar-hook-quote-XXXXXX");
-      check(::mkdtemp(temporary.data()) != nullptr);
+      std::strcpy(temporary.dataMut(), "/tmp/telar-hook-quote-XXXXXX");
+      check(::mkdtemp(temporary.dataMut()) != nullptr);
       const std::string root = temporary.data();
       const auto directory = root + "/a b $(touch ran)";
       const auto executable = directory + "/telar";

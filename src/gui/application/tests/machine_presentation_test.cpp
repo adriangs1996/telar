@@ -26,6 +26,7 @@ import telar.gui.application;
 import telar.wire.agents;
 import telar.wire.layout;
 import telar.wire.runtime;
+import telar.base.ds;
 
 namespace {
 
@@ -38,7 +39,7 @@ namespace {
   template <typename Client>
   void finishSnapshots(Client& client, Transport& transport, TabLocation location, std::span<const PaneDescriptor> panes) {
     deliver(client, TabSnapshot{.request_id = transport.last<RequestTabSnapshot>().request_id, .location = location, .panes = panes});
-    const std::array tabs{TabDescriptor{.tab_id = location.tab_id, .pane_count = static_cast<std::uint16_t>(panes.size())}};
+    const ds::Array tabs{TabDescriptor{.tab_id = location.tab_id, .pane_count = static_cast<std::uint16_t>(panes.size())}};
 
     deliver(client, WorkspaceSnapshot{.request_id = transport.last<RequestWorkspaceSnapshot>().request_id, .workspace = location.workspace, .name = "project", .tabs = tabs});
   }
@@ -51,7 +52,7 @@ namespace {
     const TabLocation location{.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 1}, .tab_id = 1};
 
     deliver(client, PaneOpened{.request_id = open.request_id, .pane_id = 1, .location = location, .pane_generation = 1});
-    const std::array panes{PaneDescriptor{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
+    const ds::Array panes{PaneDescriptor{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
 
     deliver(client, TabSnapshot{.request_id = transport.last<RequestTabSnapshot>().request_id, .location = location, .panes = panes});
     check(client.requestsPending(), "The fixture must retain its real canonical workspace request");
@@ -86,8 +87,8 @@ namespace {
     constexpr std::uint16_t split_ratio = PaneLayout::ratio_half;
     constexpr std::uint64_t restored_tab = 7;
     const TabLocation location{.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 4}, .tab_id = restored_tab};
-    const std::array<ClientLayoutNode, 3> nodes{ClientLayoutSplit{.axis = ClientLayoutAxis::vertical, .ratio = split_ratio}, ClientLayoutPane{first_pane}, ClientLayoutPane{focused_pane}};
-    const std::array tabs{ClientTabLayout{.location = location, .focused_pane = focused_pane, .fullscreen = false, .workspace_active = true, .nodes = nodes}};
+    const ds::Array<ClientLayoutNode, 3> nodes{ClientLayoutSplit{.axis = ClientLayoutAxis::vertical, .ratio = split_ratio}, ClientLayoutPane{first_pane}, ClientLayoutPane{focused_pane}};
+    const ds::Array tabs{ClientTabLayout{.location = location, .focused_pane = focused_pane, .fullscreen = false, .workspace_active = true, .nodes = nodes}};
 
     deliver(client, ClientLayoutSnapshot{.restored = true, .sidebar_visible = false, .sidebar_width = sidebar_columns, .workspace_list_collapsed = true, .active_tab = location, .tabs = tabs});
     deliver(client, PaneTitle{.pane_id = first_pane, .title = "overwrite the decoder storage"});
@@ -98,7 +99,7 @@ namespace {
     check(opening.target.kind == PaneTarget::Kind::pane && opening.target.id == focused_pane && !opening.launch, "presentation must reopen the remembered root before asking for its canonical tabs");
     deliver(client, PaneOpened{.request_id = opening.request_id, .pane_id = focused_pane, .location = location, .pane_generation = 1});
     check(client.activeTab()->layout.nodes().size() == 1, "the restored split must remain staged until canonical membership arrives");
-    const std::array panes{PaneDescriptor{.pane_id = first_pane, .lifecycle = PaneLifecycle::running, .pane_generation = 1}, PaneDescriptor{.pane_id = focused_pane, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
+    const ds::Array panes{PaneDescriptor{.pane_id = first_pane, .lifecycle = PaneLifecycle::running, .pane_generation = 1}, PaneDescriptor{.pane_id = focused_pane, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
 
     finishSnapshots(client, transport, location, panes);
     check(client.activeTab() != nullptr && client.activeTab()->focused_pane == focused_pane, "deferred restoration must retain the original focused pane");
@@ -152,7 +153,7 @@ namespace {
 
       check(restore.target.kind == PaneTarget::Kind::pane && restore.target.id == 1 && !restore.launch, "returning must reopen the remembered focused pane without launching a shell");
       deliver(client, PaneOpened{.request_id = restore.request_id, .pane_id = 1, .location = location, .pane_generation = 1});
-      const std::array panes{PaneDescriptor{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
+      const ds::Array panes{PaneDescriptor{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
 
       finishSnapshots(client, transport, location, panes);
       check(client.activeTab() != nullptr && client.activeTab()->focused_pane == 1 && client.activeTab()->fullscreen, "returning must retain focus and fullscreen layout state");
@@ -174,11 +175,11 @@ namespace {
     deliver(client, PaneOpened{.request_id = open.request_id, .pane_id = 1, .location = location, .pane_generation = 1});
     client.setPresented(false);
     check(client.activeTab() != nullptr && transport.count(ClientTag::detach_pane) == 0, "departure must wait for canonical tab and workspace requests already in flight");
-    const std::array panes{PaneDescriptor{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
+    const ds::Array panes{PaneDescriptor{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
 
     deliver(client, TabSnapshot{.request_id = transport.last<RequestTabSnapshot>().request_id, .location = location, .panes = panes});
     check(!client.settlePresentation() && transport.count(ClientTag::detach_pane) == 0, "a remaining workspace response must keep the departure pending");
-    const std::array tabs{TabDescriptor{.tab_id = 1, .pane_count = 1}};
+    const ds::Array tabs{TabDescriptor{.tab_id = 1, .pane_count = 1}};
 
     deliver(client, WorkspaceSnapshot{.request_id = transport.last<RequestWorkspaceSnapshot>().request_id, .workspace = location.workspace, .name = "project", .tabs = tabs});
     check(client.settlePresentation() && client.panes().empty() && transport.count(ClientTag::detach_pane) == 1, "the last canonical response must allow the hidden workspace to retire");
@@ -191,7 +192,7 @@ namespace {
 
     openFirstPane(client, transport);
     const auto location = client.activeTab()->location;
-    const std::array panes{PaneDescriptor{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}, PaneDescriptor{.pane_id = 2, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
+    const ds::Array panes{PaneDescriptor{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}, PaneDescriptor{.pane_id = 2, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
 
     deliver(client, TabSnapshot{.request_id = 1, .location = location, .panes = panes});
     const auto attach = transport.last<OpenPane>();
@@ -214,10 +215,10 @@ namespace {
 
     client.setPresented(false);
     const auto openings = transport.count(ClientTag::open_pane);
-    const std::array tabs{TabDescriptor{.tab_id = 1, .pane_count = 1}, TabDescriptor{.tab_id = 2, .pane_count = 1}};
+    const ds::Array tabs{TabDescriptor{.tab_id = 1, .pane_count = 1}, TabDescriptor{.tab_id = 2, .pane_count = 1}};
 
     deliver(client, WorkspaceSnapshot{.request_id = 1, .workspace = location.workspace, .name = "updated", .tabs = tabs});
-    const std::array panes{PaneDescriptor{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
+    const ds::Array panes{PaneDescriptor{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
 
     deliver(client, TabSnapshot{.request_id = 1, .location = location, .panes = panes});
     check(client.activeTab() == nullptr && client.panes().empty() && transport.count(ClientTag::open_pane) == openings, "background workspace metadata must not reopen hidden panes");
@@ -229,11 +230,11 @@ namespace {
     TestSession client{memory, transport};
 
     openWithPendingWorkspaceSnapshot(client, transport);
-    std::array entries{agentSnapshotEntry()};
+    ds::Array entries{agentSnapshotEntry()};
 
     deliver(client, AgentSnapshot{.revision = 1, .entries = entries});
     client.setPresented(false);
-    entries.front().status = AgentStatus::done;
+    entries.atMut(0).status = AgentStatus::done;
     deliver(client, AgentSnapshot{.revision = 2, .entries = entries});
     check(client.activeTab() != nullptr && transport.count(ClientTag::acknowledge_agent) == 0, "a hidden machine awaiting departure must retain unseen completions even while its tab remains active");
     client.setPresented(true);
@@ -283,7 +284,7 @@ namespace {
 
     client.setPresented(false);
     client.setPresented(true);
-    const std::array tabs{TabDescriptor{.tab_id = 1, .pane_count = 1}};
+    const ds::Array tabs{TabDescriptor{.tab_id = 1, .pane_count = 1}};
 
     deliver(client, WorkspaceSnapshot{.request_id = transport.last<RequestWorkspaceSnapshot>().request_id, .workspace = location.workspace, .name = "project", .tabs = tabs});
     check(!client.settlePresentation() && client.activeTab() != nullptr && client.findPane(1) != nullptr, "returning before pending requests settle must cancel departure without dropping the workspace");
@@ -317,7 +318,7 @@ namespace {
 
     openFirstPane(client, transport);
     const auto location = client.activeTab()->location;
-    const std::array panes{PaneDescriptor{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}, PaneDescriptor{.pane_id = 2, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
+    const ds::Array panes{PaneDescriptor{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}, PaneDescriptor{.pane_id = 2, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
 
     deliver(client, TabSnapshot{.request_id = 1, .location = location, .panes = panes});
     const auto attach = transport.last<OpenPane>();

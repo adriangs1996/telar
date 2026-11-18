@@ -9,6 +9,7 @@ import telar.testing;
 import telar.platform.paths;
 import telar.config.core;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -18,7 +19,7 @@ namespace {
   using namespace telar::runtime;
 
   struct TestEnvironment final : EnvironmentSource {
-    using Values = std::array<std::pair<std::string_view, std::string_view>, 4>;
+    using Values = ds::Array<std::pair<std::string_view, std::string_view>, 4>;
 
     explicit TestEnvironment(const Values& entries = {}) noexcept
         : values(entries) {}

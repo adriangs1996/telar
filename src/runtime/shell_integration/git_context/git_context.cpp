@@ -2,6 +2,7 @@ module telar.runtime.shell_integration.git_context;
 
 import std;
 import telar.sys.posix;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -24,9 +25,9 @@ namespace telar::runtime {
 
     summary.detached = status.head == git::HeadState::detached;
     if (summary.detached) {
-      std::array<char, 2 * git::maximum_hash_size> digits{};
+      ds::Array<char, 2 * git::maximum_hash_size> digits{};
 
-      summary.branch.assign(status.head_id.hex(digits, 7));
+      summary.branch.assign(status.head_id.hex(digits.viewMut(), 7));
     } else {
       summary.branch.assign(std::string_view{status.branch}.substr(0, 255));
     }

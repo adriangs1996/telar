@@ -72,7 +72,7 @@ export {
 
       tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
       std::int64_t timeout_ms_;
-      tbc::view<std::array<ds::Option<Entry>, capacity>, tbc::lt::a> slots_;
+      tbc::view<ds::Array<ds::Option<Entry>, capacity>, tbc::lt::a> slots_;
       SlotIndexes<capacity> occupied_;
     };
 

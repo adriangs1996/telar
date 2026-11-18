@@ -199,7 +199,7 @@ namespace {
 
     {
       TextLayout layout{memory};
-      constexpr std::array runs{std::string_view{"History AV kerning: "}, std::string_view{"AVATARVAAVATARVAAVATARVAAVATAR"}, std::string_view{"VAAVATARVA"}};
+      constexpr telar::ds::Array runs{std::string_view{"History AV kerning: "}, std::string_view{"AVATARVAAVATARVAAVATARVAAVATAR"}, std::string_view{"VAAVATARVA"}};
       std::string label;
 
       for (const auto run : runs) {

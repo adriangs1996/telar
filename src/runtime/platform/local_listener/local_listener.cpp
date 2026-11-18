@@ -7,6 +7,7 @@ import telar.platform.net;
 import telar.platform.error;
 import telar.platform.fs;
 import telar.sys.posix;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -16,13 +17,13 @@ namespace telar::runtime {
       throw SystemError{"invalid absolute runtime socket path", EINVAL};
     }
 
-    std::copy(path.begin(), path.end(), path_.begin());
+    std::copy(path.begin(), path.end(), path_.dataMut());
     auto parent = openPrivateParent(path);
 
-    std::array<char, sizeof(sockaddr_un::sun_path) + sizeof(".lock")> lock_path{};
+    ds::Array<char, sizeof(sockaddr_un::sun_path) + sizeof(".lock")> lock_path{};
 
-    std::copy(path.begin(), path.end(), lock_path.begin());
-    std::memcpy(lock_path.data() + path.size(), ".lock", sizeof(".lock"));
+    std::copy(path.begin(), path.end(), lock_path.dataMut());
+    std::memcpy(lock_path.dataMut() + path.size(), ".lock", sizeof(".lock"));
     lock_.reset(::open(lock_path.data(), O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0600));
     struct stat lock_info{};
     if (!lock_ || ::fstat(lock_.get(), &lock_info) != 0) {

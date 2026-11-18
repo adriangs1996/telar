@@ -116,8 +116,8 @@ namespace {
       const std::filesystem::path root{directory.path()};
       const auto endpoint = (root / "custom").string();
       const auto active = "other.sock.client-" + std::to_string(::getpid()) + ".log";
-      const std::array removed{"custom.runtime-4294967295.log", "other.sock.client-4294967295.log.1"};
-      const std::array retained{"unrelated.runtime-4294967295.log", "custom.runtime.log", "custom.runtime.start.log", "custom.runtime-0.log", "custom.worker-4294967295.log"};
+      const ds::Array removed{"custom.runtime-4294967295.log", "other.sock.client-4294967295.log.1"};
+      const ds::Array retained{"unrelated.runtime-4294967295.log", "custom.runtime.log", "custom.runtime.start.log", "custom.runtime-0.log", "custom.worker-4294967295.log"};
 
       for (const auto name : removed) {
         writeFile(root / name);
@@ -290,7 +290,7 @@ namespace {
       check(frames.acknowledge(1));
       collect();
       check(counters.ack.count == 1);
-      constexpr std::array<telar::Byte, 1> input{'x'};
+      constexpr ds::Array<telar::Byte, 1> input{'x'};
 
       terminal.feed(input);
       terminal.refresh();

@@ -46,7 +46,7 @@ namespace {
     bool eventFilter([[maybe_unused]] QObject* watched, QEvent* event) override {
       if (event->type() == QEvent::MouseMove || event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonRelease) {
         check(count_ < observations_.size(), "native delivery must retain its bounded event trace");
-        observations_[count_++] = {.type = event->type(), .moving = events_.moving()};
+        observations_.atMut(count_++) = {.type = event->type(), .moving = events_.moving()};
       }
 
       return false;
@@ -58,7 +58,7 @@ namespace {
 
   private:
     static constexpr std::size_t trace_capacity = 8;
-    std::array<Observation, trace_capacity> observations_{};
+    telar::ds::Array<Observation, trace_capacity> observations_{};
     std::size_t count_ = 0;
     const NativePointerEvents& events_;
   };

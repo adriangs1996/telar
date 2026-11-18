@@ -4,6 +4,7 @@ import telar.testing;
 import telar.runtime.agents.screen_inference;
 import telar.runtime.agents.snapshot;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -16,7 +17,7 @@ namespace {
 
   std::vector<std::string> resume(AgentProvider provider, std::string_view session, bool in_pane = false) {
     AgentResume record{.provider = provider, .in_pane = in_pane};
-    std::array<std::string_view, 4> storage;
+    ds::Array<std::string_view, 4> storage;
 
     record.session.assign(session);
     const auto arguments = resumeArguments(record, storage);

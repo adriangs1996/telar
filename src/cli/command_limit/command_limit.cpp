@@ -101,7 +101,7 @@ namespace telar::runtime::cli {
   }
 
   template <typename Enum, std::size_t Size>
-  Enum choice(std::string_view text, const char* error, const std::array<std::string_view, Size>& names) {
+  Enum choice(std::string_view text, const char* error, const ds::Array<std::string_view, Size>& names) {
     const auto found = std::ranges::find(names, text);
     if (found == names.end()) {
       usage(error);
@@ -215,12 +215,12 @@ namespace telar::runtime::cli {
   template long signedNumber<long>(std::string_view text, const char* error);
   template long long signedNumber<long long>(std::string_view text, const char* error);
 
-  template PaneDirection choice<PaneDirection, 4>(std::string_view text, const char* error, const std::array<std::string_view, 4>& names);
-  template AgentStatus choice<AgentStatus, 6>(std::string_view text, const char* error, const std::array<std::string_view, 6>& names);
-  template AgentSessionFileKind choice<AgentSessionFileKind, 3>(std::string_view text, const char* error, const std::array<std::string_view, 3>& names);
-  template AgentReportState choice<AgentReportState, 9>(std::string_view text, const char* error, const std::array<std::string_view, 9>& names);
-  template AgentCommandPhase choice<AgentCommandPhase, 2>(std::string_view text, const char* error, const std::array<std::string_view, 2>& names);
-  template AgentBlockedReason choice<AgentBlockedReason, 5>(std::string_view text, const char* error, const std::array<std::string_view, 5>& names);
+  template PaneDirection choice<PaneDirection, 4>(std::string_view text, const char* error, const ds::Array<std::string_view, 4>& names);
+  template AgentStatus choice<AgentStatus, 6>(std::string_view text, const char* error, const ds::Array<std::string_view, 6>& names);
+  template AgentSessionFileKind choice<AgentSessionFileKind, 3>(std::string_view text, const char* error, const ds::Array<std::string_view, 3>& names);
+  template AgentReportState choice<AgentReportState, 9>(std::string_view text, const char* error, const ds::Array<std::string_view, 9>& names);
+  template AgentCommandPhase choice<AgentCommandPhase, 2>(std::string_view text, const char* error, const ds::Array<std::string_view, 2>& names);
+  template AgentBlockedReason choice<AgentBlockedReason, 5>(std::string_view text, const char* error, const ds::Array<std::string_view, 5>& names);
 
   Cursor::Cursor(tbc::view<Arguments, tbc::lt::a> words) noexcept
       : words_(words) {}

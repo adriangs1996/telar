@@ -27,7 +27,7 @@ export {
       static constexpr float path_gap = 6;
       static constexpr float gap = 0;
       // One card, then each card behind it adds a visible sliver.
-      static constexpr std::array<float, 3> chip_widths{28, 35, 42};
+      static constexpr ds::Array<float, 3> chip_widths{28, 35, 42};
       static constexpr float inactive_maximum = 320;
       static constexpr float selected_maximum = 420;
       static constexpr float selected_share = 0.55F;
@@ -74,8 +74,8 @@ export {
       };
 
       struct Plan {
-        std::array<float, maximum_tabs> widths{};
-        std::array<Fit, maximum_tabs> fits{};
+        ds::Array<float, maximum_tabs> widths{};
+        ds::Array<Fit, maximum_tabs> fits{};
         std::size_t first = 0;
         std::size_t end = 0;
         std::size_t focus = 0;
@@ -93,7 +93,7 @@ export {
       [[nodiscard]] static Plan arrange(std::span<const Measure> sizes, std::size_t focus, const Room& room) noexcept;
 
     private:
-      using Captioned = std::array<bool, maximum_tabs>;
+      using Captioned = ds::Array<bool, maximum_tabs>;
 
       static void naturalWidths(Plan& plan, std::span<const Measure> sizes, const Metrics& metrics) noexcept;
 
@@ -124,7 +124,7 @@ export {
 
     class TabDrag {
     public:
-      using Position = std::array<double, 2>;
+      using Position = ds::Array<double, 2>;
       static constexpr double logical_threshold = 4;
 
       void begin(TabLocation source, Position point) noexcept;
@@ -167,7 +167,7 @@ export {
       [[nodiscard]] std::span<const TabDropSlot> view() const noexcept;
 
     private:
-      std::array<TabDropSlot, capacity> entries_{};
+      ds::Array<TabDropSlot, capacity> entries_{};
       std::size_t count_ = 0;
     };
 
@@ -179,7 +179,7 @@ export {
   namespace telar::gui::features::workbench {
 
     struct TabDropSurface {
-      std::array<TabDropSlot, TabDropSlots::capacity> targets{};
+      ds::Array<TabDropSlot, TabDropSlots::capacity> targets{};
       std::size_t count = 0;
       WorkspaceLocation workspace;
       Rect viewport;

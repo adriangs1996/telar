@@ -152,20 +152,20 @@ namespace telar::gui::qt {
 
       const bool relative = active.isLower();
       const auto origin = relative ? current : QPointF{};
-      const auto read = [&](qsizetype count, std::array<qreal, 6>& values) {
+      const auto read = [&](qsizetype count, ds::Array<qreal, 6>& values) {
         for (qsizetype index = 0; index < count; ++index) {
           const auto value = scanner.number();
           if (!value) {
             return false;
           }
 
-          values[static_cast<std::size_t>(index)] = *value;
+          values.atMut(static_cast<std::size_t>(index)) = *value;
         }
 
         return true;
       };
 
-      std::array<qreal, 6> values{};
+      ds::Array<qreal, 6> values{};
 
       switch (active.toUpper().unicode()) {
       case u'M':

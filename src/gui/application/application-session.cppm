@@ -595,9 +595,9 @@ export {
       tbc::view<String<Memory>, tbc::lt::a> launch_cwd_;
       tbc::view<Vector<String<Memory>, Memory>, tbc::lt::a> argument_storage_;
       // The launch arguments view the strings stored beside them; the protocol allows at most 64.
-      tbc::view<std::array<std::string_view, maximum_launch_arguments>, tbc::lt::self> launch_arguments_{};
+      tbc::view<ds::Array<std::string_view, maximum_launch_arguments>, tbc::lt::self> launch_arguments_{};
       std::size_t launch_argument_count_ = 0;
-      std::array<Pending, maximum_pending> pending_;
+      ds::Array<Pending, maximum_pending> pending_;
       std::size_t pending_count_ = 0;
       ds::Option<TabLocation> active_tab_;
       features::workbench::State workbench_;

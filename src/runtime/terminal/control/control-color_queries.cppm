@@ -134,9 +134,9 @@ export namespace telar::runtime::control {
       constexpr std::string_view introducer = "\x1b]";
       constexpr std::string_view terminator = "\x1b\\";
       static_assert(introducer.size() + std::numeric_limits<unsigned>::digits10 + 2 + terminator.size() <= inline_osc_bytes);
-      std::array<char, inline_osc_bytes> packet;
-      auto* position = std::copy(introducer.begin(), introducer.end(), packet.data());
-      const auto number = std::to_chars(position, packet.data() + packet.size() - 1, operation);
+      ds::Array<char, inline_osc_bytes> packet;
+      auto* position = std::copy(introducer.begin(), introducer.end(), packet.dataMut());
+      const auto number = std::to_chars(position, packet.dataMut() + packet.size() - 1, operation);
 
       TELAR_ASSERT(number.ec == std::errc{});
       *number.ptr = ';';
@@ -163,12 +163,12 @@ export namespace telar::runtime::control {
       // Supported keys are at most ten bytes (numeric selectors use <=3).
       // The longest complete item is 24 bytes, including a present RGB value.
       static_assert(std::string_view{";foreground=rgb:00/00/00"}.size() <= maximum_color_reply);
-      std::array<char, maximum_color_reply> encoded;
-      auto* position = encoded.data();
+      ds::Array<char, maximum_color_reply> encoded;
+      auto* position = encoded.dataMut();
 
       *position++ = ';';
       if (selector < VtState::foreground) {
-        const auto number = std::to_chars(position, encoded.data() + encoded.size(), selector);
+        const auto number = std::to_chars(position, encoded.dataMut() + encoded.size(), selector);
 
         TELAR_ASSERT(number.ec == std::errc{});
         position = number.ptr;
@@ -181,7 +181,7 @@ export namespace telar::runtime::control {
       if (const auto color = context.state.color(selector)) {
         position = std::copy_n("rgb:", 4, position);
         constexpr std::string_view digits = "0123456789abcdef";
-        const std::array components{color->r, color->g, color->b};
+        const ds::Array components{color->r, color->g, color->b};
 
         for (std::size_t index = 0; index < components.size(); ++index) {
           if (index != 0) {
@@ -211,10 +211,10 @@ export namespace telar::runtime::control {
         return;
       }
 
-      std::array<char, maximum_color_reply> encoded;
-      auto* position = std::copy_n("\x1b]", 2, encoded.data());
+      ds::Array<char, maximum_color_reply> encoded;
+      auto* position = std::copy_n("\x1b]", 2, encoded.dataMut());
       const auto number = [&](unsigned value) {
-        const auto formatted = std::to_chars(position, encoded.data() + encoded.size(), value);
+        const auto formatted = std::to_chars(position, encoded.dataMut() + encoded.size(), value);
 
         TELAR_ASSERT(formatted.ec == std::errc{});
         position = formatted.ptr;
@@ -229,7 +229,7 @@ export namespace telar::runtime::control {
 
       position = std::copy_n("rgb:", 4, position);
       constexpr std::string_view digits = "0123456789abcdef";
-      const std::array components{color->r, color->g, color->b};
+      const ds::Array components{color->r, color->g, color->b};
       const bool sixteen_bit = context.policy.color_format == ColorFormat::sixteen_bit;
 
       for (std::size_t component = 0; component < components.size(); ++component) {
@@ -272,7 +272,7 @@ export namespace telar::runtime::control {
 
     // The frozen application bounds the complete transaction at 526 items.
     static constexpr unsigned maximum_keys = 526;
-    static constexpr std::array unsupported_colors{"selection_foreground", "selection_background", "cursor_text", "visual_bell", "second_transparent_background"};
+    static constexpr ds::Array unsupported_colors{"selection_foreground", "selection_background", "cursor_text", "visual_bell", "second_transparent_background"};
 
     static bool validKittyColors(std::string_view remaining) noexcept {
       if (std::count(remaining.begin(), remaining.end(), ';') < maximum_keys) {

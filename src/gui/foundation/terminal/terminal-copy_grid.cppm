@@ -43,7 +43,7 @@ export {
       [[nodiscard]] ds::Option<CopyWordClass> wordClass(CopyPoint point) const noexcept;
       [[nodiscard]] CopyPoint step(CopyPoint point, CopyDirection direction) const noexcept;
       [[nodiscard]] bool blankRow(std::uint32_t absolute_row) const noexcept;
-      [[nodiscard]] std::array<CopyPoint, 2> pointerSpan(CopyPoint point, CopyGranularity granularity) const noexcept;
+      [[nodiscard]] ds::Array<CopyPoint, 2> pointerSpan(CopyPoint point, CopyGranularity granularity) const noexcept;
 
     private:
       [[nodiscard]] bool pointerWord(CopyPoint point) const noexcept;

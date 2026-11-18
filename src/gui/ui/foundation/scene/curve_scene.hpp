@@ -55,7 +55,7 @@ namespace telar::gui::qt {
 
     QQuickWindow& window_;
     Cache masks_;
-    std::array<ds::Option<CurveMaskRef>, glyphs::BoxCurve::shape_count> fallback_{};
+    ds::Array<ds::Option<CurveMaskRef>, glyphs::BoxCurve::shape_count> fallback_{};
   };
 
 }

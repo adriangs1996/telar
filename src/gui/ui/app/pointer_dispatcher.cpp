@@ -114,7 +114,7 @@ namespace telar::gui::qt {
   application::history::HistoryActionCapture* PointerDispatcher::capture(Qt::MouseButton button) noexcept {
     const auto semantic = mouseButton(button);
 
-    return semantic == application::terminal::input::MouseButton::none ? nullptr : &captures_[static_cast<std::size_t>(semantic)];
+    return semantic == application::terminal::input::MouseButton::none ? nullptr : &captures_.atMut(static_cast<std::size_t>(semantic));
   }
 
   bool PointerDispatcher::occupied() const noexcept {
@@ -122,7 +122,7 @@ namespace telar::gui::qt {
   }
 
   void PointerDispatcher::presentHistoryActions(const application::history::HistoryActionSurface& surface) {
-    for (auto& lease : captures_) {
+    for (auto& lease : captures_.viewMut()) {
       if (lease.held()) {
         lease.present(surface);
       }
@@ -133,7 +133,7 @@ namespace telar::gui::qt {
     tabs_.observeHover(ds::none);
     tabs_.cancelDrag();
     history_.retireHover();
-    for (auto& lease : captures_) {
+    for (auto& lease : captures_.viewMut()) {
       lease.cancel();
     }
 

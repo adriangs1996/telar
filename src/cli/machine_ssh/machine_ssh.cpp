@@ -27,11 +27,11 @@ namespace telar::runtime::cli::config_receive {
       return false;
     }
 
-    static constexpr auto roots = std::to_array<std::string_view>({".claude/", ".codex/", ".pi/agent/", ".config/opencode/", ".cursor/", ".agents/skills/"});
-    static constexpr auto session_directories = std::to_array<std::string_view>({"projects", "sessions", "history", "todos", "shell-snapshots", "file-history", "statsig", "logs", "cache", "plans"});
-    static constexpr auto credential_names = std::to_array<std::string_view>({".claude.json", ".credentials.json", "auth.json", "mcp-auth.json", "credentials", ".netrc", ".npmrc", ".pypirc", ".pgpass", ".vault-token", ".git-credentials", "hosts.yml", "models.json", "keys.json", "sa.json"});
-    static constexpr auto extensions = std::to_array<std::string_view>({".pem", ".key", ".p12", ".pfx", ".keychain", ".keychain-db", ".jsonl", ".db", ".sqlite", ".sqlite3", ".log"});
-    static constexpr auto fragments = std::to_array<std::string_view>({"credential", "secret", "token", "password", "passwd"});
+    static constexpr auto roots = ds::Array<std::string_view, 6>{".claude/", ".codex/", ".pi/agent/", ".config/opencode/", ".cursor/", ".agents/skills/"};
+    static constexpr auto session_directories = ds::Array<std::string_view, 10>{"projects", "sessions", "history", "todos", "shell-snapshots", "file-history", "statsig", "logs", "cache", "plans"};
+    static constexpr auto credential_names = ds::Array<std::string_view, 15>{".claude.json", ".credentials.json", "auth.json", "mcp-auth.json", "credentials", ".netrc", ".npmrc", ".pypirc", ".pgpass", ".vault-token", ".git-credentials", "hosts.yml", "models.json", "keys.json", "sa.json"};
+    static constexpr auto extensions = ds::Array<std::string_view, 11>{".pem", ".key", ".p12", ".pfx", ".keychain", ".keychain-db", ".jsonl", ".db", ".sqlite", ".sqlite3", ".log"};
+    static constexpr auto fragments = ds::Array<std::string_view, 5>{"credential", "secret", "token", "password", "passwd"};
     const auto name = asciiLowerCopy(path.substr(path.rfind('/') == std::string_view::npos ? 0 : path.rfind('/') + 1));
     if (std::ranges::find(credential_names, name) != credential_names.end() || std::ranges::any_of(extensions, [&](auto extension) {
           return name.ends_with(extension);
@@ -144,12 +144,12 @@ namespace telar::runtime::cli::config_receive {
           throw fileError(sys::lastError());
         }
 
-        std::array<char, 16 * 1024> buffer;
+        ds::Array<char, 16 * 1024> buffer;
         std::size_t offset = 0;
         bool same = true;
 
         for (;;) {
-          const auto count = ::read(existing.get(), buffer.data(), buffer.size());
+          const auto count = ::read(existing.get(), buffer.dataMut(), buffer.size());
           if (count < 0 && sys::lastError() == EINTR) {
             continue;
           }
@@ -182,9 +182,9 @@ namespace telar::runtime::cli::config_receive {
     std::uint64_t nonce;
 
     randomBytes(&nonce, sizeof(nonce));
-    std::array<char, 64> temporary;
+    ds::Array<char, 64> temporary;
 
-    std::snprintf(temporary.data(), temporary.size(), ".telar-%016llx", static_cast<unsigned long long>(nonce));
+    std::snprintf(temporary.dataMut(), temporary.size(), ".telar-%016llx", static_cast<unsigned long long>(nonce));
     FileDescriptor file{::openat(parent.get(), temporary.data(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, mode)};
     if (!file) {
       throw fileError(sys::lastError());
@@ -239,9 +239,9 @@ namespace telar::runtime::cli::config_receive {
       }
 
       std::string_view fields{header};
-      std::array<std::string_view, 3> prefix;
+      ds::Array<std::string_view, 3> prefix;
 
-      for (auto& field : prefix) {
+      for (auto& field : prefix.viewMut()) {
         const auto end = fields.find(' ');
         if (end == std::string_view::npos) {
           throw CommandError{"InvalidConfigStream"};
@@ -364,7 +364,7 @@ namespace telar::runtime::cli::launch {
     RetainedStream out{memory, output_limit};
     RetainedStream err{memory, error_limit};
     CommandOutput<Memory> process{memory, 0};
-    const std::array pieces{input};
+    const ds::Array pieces{input};
     Output result;
 
     try {
@@ -460,9 +460,9 @@ namespace telar::runtime::cli::machine {
       return std::string{*label};
     }
 
-    std::array<char, 256> name{};
+    ds::Array<char, 256> name{};
 
-    return ::gethostname(name.data(), name.size()) == 0 ? std::string{name.data()} : "localhost";
+    return ::gethostname(name.dataMut(), name.size()) == 0 ? std::string{name.data()} : "localhost";
   }
 
   void requireNotLocal(const MachineProfiles& profiles, std::string_view label) {
@@ -643,9 +643,9 @@ namespace telar::runtime::cli::machine {
 
     paths.prepareSocket();
     const auto directory = std::string_view{paths.socket}.substr(0, paths.socket.rfind('/'));
-    std::array<unsigned char, SHA256_DIGEST_LENGTH> digest;
+    ds::Array<unsigned char, SHA256_DIGEST_LENGTH> digest;
 
-    ::SHA256(reinterpret_cast<const unsigned char*>(destination.data()), destination.size(), digest.data());
+    ::SHA256(reinterpret_cast<const unsigned char*>(destination.data()), destination.size(), digest.dataMut());
     std::uint64_t hash = 0;
     constexpr unsigned bits_per_byte = 8;
     constexpr unsigned control_hash_shift = 16;
@@ -654,9 +654,9 @@ namespace telar::runtime::cli::machine {
       hash |= static_cast<std::uint64_t>(digest[index]) << (index * bits_per_byte);
     }
 
-    std::array<char, 32> name;
+    ds::Array<char, 32> name;
 
-    std::snprintf(name.data(), name.size(), "/ssh-%012llx", static_cast<unsigned long long>(hash >> control_hash_shift));
+    std::snprintf(name.dataMut(), name.size(), "/ssh-%012llx", static_cast<unsigned long long>(hash >> control_hash_shift));
     return {"-o", "BatchMode=yes", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4", "-o", "ForwardAgent=no", "-o", "ControlMaster=auto", "-o", "ControlPersist=600", "-o", "ControlPath=" + std::string{directory} + name.data()};
   }
 
@@ -849,7 +849,7 @@ namespace telar::runtime::cli::machine {
       appendJsonText(output, profile.label(), JsonEscapes::control);
       output += ",\"reachable\":true,\"schema\":\"" + schema + "\",\"local_schema\":\"" + local_schema + "\",\"compatible\":";
       output += found->compatible() ? "true" : "false";
-      for (const auto& [name, value] : std::array<std::pair<std::string_view, std::string_view>, 3>{{{"home", found->home()}, {"shell", found->shell()}, {"socket", found->endpoint()}}}) {
+      for (const auto& [name, value] : ds::Array<std::pair<std::string_view, std::string_view>, 3>{{{"home", found->home()}, {"shell", found->shell()}, {"socket", found->endpoint()}}}) {
         output += ",\"";
         output += name;
         output += "\":";
@@ -886,8 +886,8 @@ namespace telar::runtime::cli::machine::filter {
   };
 
   bool secretKey(std::string_view name, Kind kind) {
-    static constexpr auto dropped = std::to_array<std::string_view>({"env", "environment", "headers", "http_headers", "env_http_headers", "auth", "authInfo", "apiKeyHelper", "awsAuthRefresh", "awsCredentialExport", "otelHeadersHelper", "mcpServers", "mcp", "mcp_servers", "token", "accessToken", "access_token", "refreshToken", "refresh_token", "idToken", "id_token"});
-    static constexpr auto fragments = std::to_array<std::string_view>({"secret", "password", "passphrase", "apikey", "api_key", "api-key", "credential", "bearer", "private_key", "privatekey", "authorization", "cookie"});
+    static constexpr auto dropped = ds::Array<std::string_view, 21>{"env", "environment", "headers", "http_headers", "env_http_headers", "auth", "authInfo", "apiKeyHelper", "awsAuthRefresh", "awsCredentialExport", "otelHeadersHelper", "mcpServers", "mcp", "mcp_servers", "token", "accessToken", "access_token", "refreshToken", "refresh_token", "idToken", "id_token"};
+    static constexpr auto fragments = ds::Array<std::string_view, 12>{"secret", "password", "passphrase", "apikey", "api_key", "api-key", "credential", "bearer", "private_key", "privatekey", "authorization", "cookie"};
     const auto text = asciiLowerCopy(name);
 
     return std::ranges::find(dropped, name) != dropped.end() || std::ranges::any_of(fragments, [&](auto fragment) {
@@ -1112,7 +1112,7 @@ namespace telar::runtime::cli::machine::filter {
       }
     }
 
-    static constexpr auto tables = std::to_array<std::string_view>({"mcp_servers", "projects", "shell_environment_policy"});
+    static constexpr auto tables = ds::Array<std::string_view, 3>{"mcp_servers", "projects", "shell_environment_policy"};
     if (std::ranges::find(tables, components.front()) != tables.end()) {
       return std::string{components.front()};
     }
@@ -1221,9 +1221,9 @@ namespace telar::runtime::cli::machine::filter {
     }
 
     const auto text = asciiLowerCopy(name);
-    static constexpr auto names = std::to_array<std::string_view>({"key", "auth", "pat", "pwd"});
-    static constexpr auto fragments = std::to_array<std::string_view>({"token", "secret", "passw", "api_key", "apikey", "api-key", "access_key", "accesskey", "private_key", "authorization", "credential", "webhook", "cookie"});
-    static constexpr auto suffixes = std::to_array<std::string_view>({"_key", "-key", "_header", "-header", "_app", "-app"});
+    static constexpr auto names = ds::Array<std::string_view, 4>{"key", "auth", "pat", "pwd"};
+    static constexpr auto fragments = ds::Array<std::string_view, 13>{"token", "secret", "passw", "api_key", "apikey", "api-key", "access_key", "accesskey", "private_key", "authorization", "credential", "webhook", "cookie"};
+    static constexpr auto suffixes = ds::Array<std::string_view, 6>{"_key", "-key", "_header", "-header", "_app", "-app"};
 
     return std::ranges::find(names, text) != names.end() || std::ranges::any_of(fragments, [&](auto fragment) {
       return text.contains(fragment);
@@ -1282,14 +1282,14 @@ namespace telar::runtime::cli::machine::filter {
       return "a private key";
     }
 
-    static constexpr auto webhooks = std::to_array<std::string_view>({"hooks.slack.com/services/", "hooks.slack.com/workflows/", "hooks.slack.com/triggers/", "discord.com/api/webhooks/", "discordapp.com/api/webhooks/", ".webhook.office.com/", "outlook.office.com/webhook", "hooks.zapier.com/hooks/", "api.telegram.org/bot", "chat.googleapis.com/v1/spaces/", "ntfy.sh/"});
+    static constexpr auto webhooks = ds::Array<std::string_view, 11>{"hooks.slack.com/services/", "hooks.slack.com/workflows/", "hooks.slack.com/triggers/", "discord.com/api/webhooks/", "discordapp.com/api/webhooks/", ".webhook.office.com/", "outlook.office.com/webhook", "hooks.zapier.com/hooks/", "api.telegram.org/bot", "chat.googleapis.com/v1/spaces/", "ntfy.sh/"};
     if (std::ranges::any_of(webhooks, [&](auto marker) {
           return lowered.contains(marker);
         })) {
       return "a webhook URL, whose path is its key";
     }
 
-    static constexpr auto prefixes = std::to_array<std::pair<std::string_view, std::size_t>>({{"ghp_", 20}, {"gho_", 20}, {"ghu_", 20}, {"ghs_", 20}, {"ghr_", 20}, {"github_pat_", 20}, {"glpat-", 20}, {"sk-", 20}, {"xoxb-", 10}, {"xoxp-", 10}, {"xoxa-", 10}, {"xoxr-", 10}, {"xoxs-", 10}, {"AKIA", 16}, {"ASIA", 16}, {"AIza", 30}, {"npm_", 30}, {"pypi-", 30}, {"hf_", 30}, {"r8_", 30}, {"tvly-", 20}});
+    static constexpr auto prefixes = ds::Array<std::pair<std::string_view, std::size_t>, 21>{{{"ghp_", 20}, {"gho_", 20}, {"ghu_", 20}, {"ghs_", 20}, {"ghr_", 20}, {"github_pat_", 20}, {"glpat-", 20}, {"sk-", 20}, {"xoxb-", 10}, {"xoxp-", 10}, {"xoxa-", 10}, {"xoxr-", 10}, {"xoxs-", 10}, {"AKIA", 16}, {"ASIA", 16}, {"AIza", 30}, {"npm_", 30}, {"pypi-", 30}, {"hf_", 30}, {"r8_", 30}, {"tvly-", 20}}};
 
     for (const auto& [prefix, minimum] : prefixes) {
       for (std::size_t start = 0;;) {
@@ -1544,7 +1544,7 @@ namespace telar::runtime::cli {
     connection.reset();
     std::vector<std::string> arguments{guiProgram(), "--socket", std::string{paths.socket}, "--cwd", std::filesystem::current_path().string()};
 
-    for (const auto& [flag, value] : std::array<std::pair<std::string_view, const ds::Option<std::string>*>, 5>{{{"--config", &options.config}, {"--profile", &options.profile}, {"--theme", &options.theme}, {"--remote", &options.remote}, {"--machine", &options.machine}}}) {
+    for (const auto& [flag, value] : ds::Array<std::pair<std::string_view, const ds::Option<std::string>*>, 5>{{{"--config", &options.config}, {"--profile", &options.profile}, {"--theme", &options.theme}, {"--remote", &options.remote}, {"--machine", &options.machine}}}) {
       if (*value) {
         arguments.emplace_back(flag);
         arguments.push_back(**value);
@@ -1624,7 +1624,7 @@ namespace telar::runtime::cli {
       throw std::invalid_argument{"MissingMachineAction"};
     }
 
-    static constexpr std::array<std::string_view, 9> names{"add", "remove", "rename", "enable", "disable", "list", "check", "setup", "receive-config"};
+    static constexpr ds::Array<std::string_view, 9> names{"add", "remove", "rename", "enable", "disable", "list", "check", "setup", "receive-config"};
     const auto found = std::ranges::find(names, std::string_view{args.front()});
     if (found == names.end()) {
       throw std::invalid_argument{"UnknownMachineAction"};
@@ -1677,11 +1677,11 @@ namespace telar::runtime::cli {
           const auto end = names.find(',');
           const auto name = names.substr(0, end);
           if (name == "agents") {
-            result.skip[0] = true;
+            result.skip.atMut(0) = true;
           } else if (name == "config") {
-            result.skip[1] = true;
+            result.skip.atMut(1) = true;
           } else if (name == "login") {
-            result.skip[2] = true;
+            result.skip.atMut(2) = true;
           } else {
             throw std::invalid_argument{"UnknownSetupSkip"};
           }
@@ -1719,7 +1719,7 @@ namespace telar::runtime::cli {
   std::string WindowOptions::canonicalTheme(std::string_view name) {
     const auto text = asciiLowerCopy(name);
 
-    static constexpr auto aliases = std::to_array<std::pair<std::string_view, std::string_view>>({{"catppuccin-mocha", "catppuccin"}, {"mocha", "catppuccin"}, {"tokyonight", "tokyo-night"}, {"tokyo_night", "tokyo-night"}, {"kanagawa-wave", "kanagawa"}, {"kanagawa_wave", "kanagawa"}, {"kanagawa_dragon", "kanagawa-dragon"}, {"default", "terminal"}});
+    static constexpr auto aliases = ds::Array<std::pair<std::string_view, std::string_view>, 8>{{{"catppuccin-mocha", "catppuccin"}, {"mocha", "catppuccin"}, {"tokyonight", "tokyo-night"}, {"tokyo_night", "tokyo-night"}, {"kanagawa-wave", "kanagawa"}, {"kanagawa_wave", "kanagawa"}, {"kanagawa_dragon", "kanagawa-dragon"}, {"default", "terminal"}}};
 
     for (const auto& [alias, canonical] : aliases) {
       if (text == alias) {
@@ -1727,7 +1727,7 @@ namespace telar::runtime::cli {
       }
     }
 
-    static constexpr auto names = std::to_array<std::string_view>({"shade", "vesper", "catppuccin", "tokyo-night", "pierre-dark", "pierre-dark-soft", "kanagawa", "kanagawa-dragon", "terminal", "cybervenom", "zenburn"});
+    static constexpr auto names = ds::Array<std::string_view, 11>{"shade", "vesper", "catppuccin", "tokyo-night", "pierre-dark", "pierre-dark-soft", "kanagawa", "kanagawa-dragon", "terminal", "cybervenom", "zenburn"};
     if (std::ranges::find(names, text) == names.end()) {
       throw std::invalid_argument{"UnknownTheme"};
     }

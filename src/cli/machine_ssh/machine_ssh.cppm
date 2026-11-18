@@ -23,7 +23,7 @@ export {
     inline constexpr std::size_t max_files = 4096;
 
     // Directories that hold credentials, which no configuration sync reads or writes below.
-    inline constexpr auto credential_directories = std::to_array<std::string_view>({".ssh", ".gnupg", ".aws", ".kube", ".docker", "keychains", "gcloud", ".password-store"});
+    inline constexpr auto credential_directories = ds::Array<std::string_view, 8>{".ssh", ".gnupg", ".aws", ".kube", ".docker", "keychains", "gcloud", ".password-store"};
 
     bool acceptable(std::string_view path);
 
@@ -98,7 +98,7 @@ export {
       bool json = false;
       bool setup = false;
       bool confirm = false;
-      std::array<bool, 3> skip{};
+      ds::Array<bool, 3> skip{};
 
       static MachineOptions parse(std::span<char* const> args);
     };

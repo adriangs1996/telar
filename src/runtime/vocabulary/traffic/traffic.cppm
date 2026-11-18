@@ -18,7 +18,7 @@ export {
   namespace telar::runtime::plugins {
 
     struct EffectBatch {
-      std::array<NotificationBody, Limits::effects> notifications;
+      ds::Array<NotificationBody, Limits::effects> notifications;
       std::uint8_t count = 0;
     };
 
@@ -148,7 +148,7 @@ export {
       bool authorized() const noexcept;
 
       // The capabilities that give a plugin the traffic bridge.
-      static constexpr std::array traffic_capabilities{Capability::traffic_observe, Capability::traffic_intercept, Capability::traffic_control, Capability::traffic_record};
+      static constexpr ds::Array traffic_capabilities{Capability::traffic_observe, Capability::traffic_intercept, Capability::traffic_control, Capability::traffic_record};
 
       bool traffic() const noexcept;
 

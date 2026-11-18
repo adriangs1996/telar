@@ -8,6 +8,7 @@ import telar.platform.fs;
 import telar.platform.process;
 import telar.runtime.shell_integration;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -72,7 +73,7 @@ namespace {
     std::filesystem::remove_all(directory + "/ssh");
     check(::chmod(directory.c_str(), 0500) == 0);
     const auto zsh = standIn(home.path(), "zsh");
-    const std::array<std::string_view, 2> arguments{zsh, "-l"};
+    const ds::Array<std::string_view, 2> arguments{zsh, "-l"};
     Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
 
     command.removeEnvironment("ZDOTDIR");
@@ -95,14 +96,14 @@ namespace {
 
     // A login bash ignores --rcfile, so telar's script reads the login files when told to.
     for (const std::string_view option : {"-l", "--login", "-il", "-li"}) {
-      const std::array<std::string_view, 2> arguments{bash, option};
+      const ds::Array<std::string_view, 2> arguments{bash, option};
       Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
 
       check(integration.apply(command).hasValue(), option);
       check(command.environment("TELAR_BASH_LOGIN") == "1", option);
     }
 
-    const std::array<std::string_view, 2> interactive{bash, "-i"};
+    const ds::Array<std::string_view, 2> interactive{bash, "-i"};
     Command command{memory, Launch{.cwd = "/tmp", .arguments = interactive}};
 
     check(integration.apply(command).hasValue() && !command.environment("TELAR_BASH_LOGIN"));

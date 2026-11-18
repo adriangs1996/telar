@@ -15,6 +15,7 @@ import telar.tbc;
 import telar.base.memory.allocators;
 import telar.platform.primitives;
 import telar.sys.process;
+import telar.base.ds;
 
 // Interface: platform/event_loop.cppm
 export {
@@ -58,7 +59,7 @@ export {
       void change(const struct kevent& event);
 
       FileDescriptor queue_;
-      std::array<struct kevent, event_capacity> kernel_events_{};
+      ds::Array<struct kevent, event_capacity> kernel_events_{};
     };
 
     extern template Kqueue::Kqueue(SystemAllocator&);
@@ -98,7 +99,7 @@ export {
       };
 
       static_assert(std::atomic<int>::is_always_lock_free && std::atomic<unsigned>::is_always_lock_free && std::atomic<bool>::is_always_lock_free);
-      inline std::array<Registration, NSIG> registrations;
+      inline ds::Array<Registration, NSIG> registrations;
 
       void notify(int number) noexcept;
 
@@ -149,9 +150,9 @@ export {
       Vector<Interest, Memory> interests_;
       FileDescriptor signal_reader_;
       FileDescriptor signal_writer_;
-      std::array<struct sigaction, NSIG> previous_signals_{};
-      std::array<bool, NSIG> signals_{};
-      std::array<epoll_event, batch_capacity> kernel_events_{};
+      ds::Array<struct sigaction, NSIG> previous_signals_{};
+      ds::Array<bool, NSIG> signals_{};
+      ds::Array<epoll_event, batch_capacity> kernel_events_{};
       static_assert(event_capacity == batch_capacity * 3);
     };
 

@@ -182,9 +182,9 @@ namespace telar::runtime::redirect {
       throw std::runtime_error{pcap_geterr(capture_.get())};
     }
 
-    const auto frame = normalize({packet, header->caplen}, uid_, bytes_, &metadata_, direction_);
+    const auto frame = normalize({packet, header->caplen}, uid_, bytes_.viewMut(), &metadata_, direction_);
 
-    return std::span{bytes_}.first(frame);
+    return bytes_.viewMut().first(frame);
   }
 
   std::size_t PacketLog::normalize(std::span<const Byte> packet, uid_t uid, std::span<Byte> output, Metadata* metadata, Direction direction) {
@@ -210,9 +210,9 @@ namespace telar::runtime::redirect {
       metadata->pid = header.pid;
       metadata->incoming = incoming;
       metadata->interface.assign({header.interface.data(), end});
-      std::array<char, IFNAMSIZ> name{};
+      ds::Array<char, IFNAMSIZ> name{};
 
-      std::copy(header.interface.begin(), end, name.begin());
+      std::copy(header.interface.begin(), end, name.dataMut());
       metadata->interface_index = ::if_nametoindex(name.data());
     }
 
@@ -268,13 +268,13 @@ namespace telar::runtime::redirect {
     String<Memory> content{endpoint_, AllocatorRef<char, Memory>{memory_}};
 
     content += '\n';
-    std::array<char, 32> value{};
-    const auto result = std::to_chars(value.data(), value.data() + value.size(), token);
+    ds::Array<char, 32> value{};
+    const auto result = std::to_chars(value.dataMut(), value.dataMut() + value.size(), token);
 
     content.append(value.data(), static_cast<std::size_t>(result.ptr - value.data()));
     if (log_index_) {
       content += '\n';
-      const auto log = std::to_chars(value.data(), value.data() + value.size(), *log_index_);
+      const auto log = std::to_chars(value.dataMut(), value.dataMut() + value.size(), *log_index_);
 
       content.append(value.data(), static_cast<std::size_t>(log.ptr - value.data()));
     }

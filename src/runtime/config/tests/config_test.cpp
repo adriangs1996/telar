@@ -33,6 +33,7 @@ import telar.config.client;
 import telar.config.runtime;
 import telar.lua;
 import telar.platform.paths;
+import telar.base.ds;
 
 namespace {
 
@@ -53,10 +54,10 @@ namespace {
     BudgetAllocator budget{system, 32 * 1024 * 1024};
     MemoryAdapter adapter{budget};
     Memory& memory = adapter;
-    std::array<char, 64> temporary{};
+    ds::Array<char, 64> temporary{};
 
-    std::strcpy(temporary.data(), "/tmp/telar-config-test-XXXXXX");
-    check(::mkdtemp(temporary.data()) != nullptr);
+    std::strcpy(temporary.dataMut(), "/tmp/telar-config-test-XXXXXX");
+    check(::mkdtemp(temporary.dataMut()) != nullptr);
     const auto root = std::filesystem::canonical(temporary.data()).string();
     const auto path = root + "/config.lua";
 
@@ -238,10 +239,10 @@ return {api_version=2,plugins=plugins,profiles={selected={plugins={{path='replac
   class Directory {
   public:
     Directory() {
-      std::array<char, 64> temporary{};
+      ds::Array<char, 64> temporary{};
 
-      std::strcpy(temporary.data(), "/tmp/telar-config-test-XXXXXX");
-      check(::mkdtemp(temporary.data()) != nullptr);
+      std::strcpy(temporary.dataMut(), "/tmp/telar-config-test-XXXXXX");
+      check(::mkdtemp(temporary.dataMut()) != nullptr);
       path_ = std::filesystem::canonical(temporary.data()).string();
     }
 

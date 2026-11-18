@@ -50,8 +50,8 @@ export {
 
       template <Allocator Memory>
       inline tbc::view<ds::Option<SensitiveAllocation<Memory>>, tbc::lt::a> receive(tbc::view<Memory&, tbc::lt::a> memory, std::size_t maximum_bytes) {
-        std::array<Byte, Protocol::prefix_bytes> prefix;
-        if (!readExact(prefix)) {
+        ds::Array<Byte, Protocol::prefix_bytes> prefix;
+        if (!readExact(prefix.viewMut())) {
           return ds::none;
         }
 
@@ -74,8 +74,8 @@ export {
           throw EncodingError{"Invalid tap frame length"};
         }
 
-        std::array<Byte, Protocol::prefix_bytes> prefix;
-        std::span<Byte> remaining{prefix};
+        ds::Array<Byte, Protocol::prefix_bytes> prefix;
+        std::span<Byte> remaining{prefix.viewMut()};
 
         LittleEndian<std::uint32_t>::encode(static_cast<std::uint32_t>(payload.size()), remaining);
         stream_.write(prefix, payload);
@@ -262,7 +262,7 @@ export {
 
       // The worker's argv, `executable` first and null last; a trace only in Debug builds.
       // The words view `executable` and the strings `options` names, region `a`.
-      static tbc::view<std::array<char*, 7>, tbc::lt::a> arguments(tbc::view<const TapWorkerOptions&, tbc::lt::a> options, tbc::view<const char*, tbc::lt::a> executable) noexcept;
+      static tbc::view<ds::Array<char*, 7>, tbc::lt::a> arguments(tbc::view<const TapWorkerOptions&, tbc::lt::a> options, tbc::view<const char*, tbc::lt::a> executable) noexcept;
     };
 
     struct SessionOptions {
@@ -364,13 +364,13 @@ export {
     struct TrafficReply {
       std::uint64_t event_id = 0;
       bool changed = false;
-      std::array<TrafficRegistration, TrafficLimits::registrations> registrations;
+      ds::Array<TrafficRegistration, TrafficLimits::registrations> registrations;
       std::size_t registration_count = 0;
     };
 
     // What a reply decides for its event, viewing the reply's bytes for as long as they live.
     struct TrafficOutcome {
-      std::array<TrafficDecision, TrafficLimits::decisions> decisions;
+      ds::Array<TrafficDecision, TrafficLimits::decisions> decisions;
       std::size_t decision_count = 0;
       std::span<const Byte> effects;
     };
@@ -426,7 +426,7 @@ export {
         FileDescriptor socket;
         std::uint64_t owner;
         tbc::view<ByteQueue<Secure>, tbc::lt::a> output;
-        std::array<Byte, traffic::Protocol::prefix_bytes> prefix;
+        ds::Array<Byte, traffic::Protocol::prefix_bytes> prefix;
         std::size_t prefix_bytes = 0;
         std::uint64_t dropped = 0;
         tbc::view<ds::Option<SensitiveAllocation<ConcurrentMemory>>, tbc::lt::a> input;
@@ -455,7 +455,7 @@ export {
       template <typename Consumer>
       TBC_GENERIC void step(Session<ConcurrentMemory>* session, int wake, const CancellationSignal& cancellation, Consumer&& consume, bool immediate = false) {
         for (std::size_t index = 0; index < connections_.size(); ++index) {
-          auto& connection = connections_[index];
+          auto& connection = connections_.atMut(index);
           if (!connection || connection->registration.stage != TrafficStage::control) {
             continue;
           }
@@ -485,31 +485,31 @@ export {
         }
 
         for (std::size_t index = 0; index < connections_.size(); ++index) {
-          auto& connection = connections_[index];
+          auto& connection = connections_.atMut(index);
           if (connection && connection->notify_ready) {
             connection.getMut().notify_ready = false;
             constexpr std::string_view reason = "worker_restarted";
-            std::array<Byte, 128> output;
-            const auto ready = traffic::Protocol::encode(output, {.kind = traffic::Kind::ready, .bytes = {reinterpret_cast<const Byte*>(reason.data()), reason.size()}});
+            ds::Array<Byte, 128> output;
+            const auto ready = traffic::Protocol::encode(output.viewMut(), {.kind = traffic::Kind::ready, .bytes = {reinterpret_cast<const Byte*>(reason.data()), reason.size()}});
 
             dispatch(session, index, ready, connection->dropped, consume);
           }
         }
 
-        std::array<pollfd, TrafficLimits::registrations + 3> descriptors{};
-        std::array<std::uint32_t, TrafficLimits::registrations> identities{};
+        ds::Array<pollfd, TrafficLimits::registrations + 3> descriptors{};
+        ds::Array<std::uint32_t, TrafficLimits::registrations> identities{};
 
-        descriptors[0] = {wake, POLLIN, 0};
-        descriptors[1] = {cancellation.descriptor(), POLLIN, 0};
-        descriptors[2] = {session ? session->outputDescriptor() : -1, POLLIN, 0};
+        descriptors.atMut(0) = {wake, POLLIN, 0};
+        descriptors.atMut(1) = {cancellation.descriptor(), POLLIN, 0};
+        descriptors.atMut(2) = {session ? session->outputDescriptor() : -1, POLLIN, 0};
         for (std::size_t index = 0; index < connections_.size(); ++index) {
           const auto& connection = connections_[index];
 
-          identities[index] = connection ? connection->registration.id : 0;
-          descriptors[index + 3] = {connection ? connection->socket.get() : -1, static_cast<short>(POLLIN | (connection && connection->output.size() ? POLLOUT : 0)), 0};
+          identities.atMut(index) = connection ? connection->registration.id : 0;
+          descriptors.atMut(index + 3) = {connection ? connection->socket.get() : -1, static_cast<short>(POLLIN | (connection && connection->output.size() ? POLLOUT : 0)), 0};
         }
 
-        if (::poll(descriptors.data(), descriptors.size(), immediate ? 0 : 100) < 0) {
+        if (::poll(descriptors.dataMut(), descriptors.size(), immediate ? 0 : 100) < 0) {
           if (sys::lastError() == EINTR) {
             return;
           }
@@ -533,7 +533,7 @@ export {
 
         for (const auto priority : {Priority::intercept, Priority::observe, Priority::control}) {
           for (std::size_t index = 0; index < connections_.size(); ++index) {
-            auto& connection = connections_[index];
+            auto& connection = connections_.atMut(index);
             if (!connection) {
               continue;
             }
@@ -630,7 +630,7 @@ export {
       // A control connection is spent once its event is sent; the callback's reply may change the table.
       template <typename Consumer>
       TBC_GENERIC void dispatchControl(Session<ConcurrentMemory>* session, std::size_t index, std::span<const Byte> frame, std::string_view error, Consumer&& consume) {
-        auto& connection = connections_[index];
+        auto& connection = connections_.atMut(index);
 
         if (!session) {
           connection.reset();
@@ -678,7 +678,7 @@ export {
       // The connection is named by its slot, as the callback's reply may change the table it lives in.
       template <typename Consumer>
       TBC_GENERIC void dispatch(Session<ConcurrentMemory>* session, std::size_t index, std::span<const Byte> frame, std::uint64_t dropped, Consumer&& consume) {
-        auto& connection = connections_[index].getMut();
+        auto& connection = connections_.atMut(index).getMut();
         const auto event = traffic::Protocol::decode(frame);
         const bool control = event.kind == traffic::Kind::intercept_request || event.kind == traffic::Kind::http_intercept_request;
         ds::Option<traffic::FlowEvent> flow;
@@ -711,7 +711,7 @@ export {
 
           ++errors_;
           if (control) {
-            fail(connections_[index].getMut(), *flow);
+            fail(connections_.atMut(index).getMut(), *flow);
             port_.packageFailure(specification_, *flow);
           }
 
@@ -741,7 +741,7 @@ export {
       tbc::view<Secure, tbc::lt::a> secure_;
       ServiceSpec specification_;
       tbc::view<traffic::PackagePort&, tbc::lt::a> port_;
-      tbc::view<std::array<ds::Option<Connection>, TrafficLimits::registrations>, tbc::lt::a> connections_;
+      tbc::view<ds::Array<ds::Option<Connection>, TrafficLimits::registrations>, tbc::lt::a> connections_;
       tbc::view<Owned<TrafficReply, ConcurrentMemory>, tbc::lt::a> reply_;
       std::uint64_t next_event_ = 0;
       std::uint64_t errors_ = 0;

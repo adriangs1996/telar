@@ -19,6 +19,7 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -173,8 +174,8 @@ namespace telar::gui::qt {
         }));
       }
 
-      std::array<char, application::machines::MachineChromeGeometry::list_status_capacity> storage{};
-      const auto status = application::machines::MachineChromeGeometry::listStatus(row.live, active, storage);
+      ds::Array<char, application::machines::MachineChromeGeometry::list_status_capacity> storage{};
+      const auto status = application::machines::MachineChromeGeometry::listStatus(row.live, active, storage.viewMut());
       const auto advance = std::max(measure(toQString(row.label.view()), chrome.body, true), measure(toQString(status), chrome.small, false));
 
       machines_width = std::max(machines_width, application::machines::MachineChromeGeometry::listNaturalWidth(chrome, advance, active != 0));

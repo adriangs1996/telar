@@ -9,6 +9,7 @@ import telar.gui.foundation.drawing;
 import telar.gui.foundation.model;
 import telar.gui.foundation.text;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: presentation/pane_chrome.cppm
 export {
@@ -76,7 +77,7 @@ export {
   namespace telar::gui::features::workbench {
 
     struct WorkspaceMark {
-      static constexpr auto hues = std::to_array<PaletteRole>({PaletteRole::red, PaletteRole::peach, PaletteRole::yellow, PaletteRole::green, PaletteRole::teal, PaletteRole::blue, PaletteRole::mauve});
+      static constexpr auto hues = ds::Array<PaletteRole, 7>{PaletteRole::red, PaletteRole::peach, PaletteRole::yellow, PaletteRole::green, PaletteRole::teal, PaletteRole::blue, PaletteRole::mauve};
 
       Utf8Scalar initial;
       PaletteRole hue = hues.front();
@@ -103,7 +104,7 @@ export {
       Rect outer;
       Rect content;
       Rect frame;
-      std::array<Rect, panel_count> panels;
+      ds::Array<Rect, panel_count> panels;
 
       [[nodiscard]] static PaneDecorationGeometry derive(const PaneLayout::Placement& placement, const WorkbenchGeometry& workbench) noexcept;
     };

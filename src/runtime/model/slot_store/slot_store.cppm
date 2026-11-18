@@ -91,23 +91,23 @@ export {
       }
 
       static constexpr auto roles = [] {
-        std::array<ClientRole, 256> result;
+        ds::Array<ClientRole, 256> result;
 
         result.fill(ClientRole::interactive);
-        ((result[std::to_underlying(Requests::tag)] = Requests::role), ...);
+        ((result.atMut(std::to_underlying(Requests::tag)) = Requests::role), ...);
         return result;
       }();
       static constexpr auto lanes = [] {
-        std::array<RequestLane, 256> result;
+        ds::Array<RequestLane, 256> result;
 
         result.fill(RequestLane::runtime);
-        ((result[std::to_underlying(Requests::tag)] = Requests::lane), ...);
+        ((result.atMut(std::to_underlying(Requests::tag)) = Requests::lane), ...);
         return result;
       }();
       static_assert([] {
-        std::array<bool, 256> seen{};
+        ds::Array<bool, 256> seen{};
 
-        return ((!std::exchange(seen[std::to_underlying(Requests::tag)], true)) && ...);
+        return ((!std::exchange(seen.atMut(std::to_underlying(Requests::tag)), true)) && ...);
       }(),
           "Two requests share a tag");
     };
@@ -219,7 +219,7 @@ export {
         std::uint64_t pane_id = 0;
         std::uint64_t generation = 0;
         std::int32_t exit_code = 0;
-        std::array<char, maximum_bytes> bytes{};
+        ds::Array<char, maximum_bytes> bytes{};
         std::size_t length = 0;
         bool truncated = false;
 
@@ -231,7 +231,7 @@ export {
       const Record* find(std::uint64_t pane_id, std::uint64_t generation) const noexcept;
 
     private:
-      std::array<Record, capacity> entries_{};
+      ds::Array<Record, capacity> entries_{};
       std::size_t next_ = 0;
     };
 
@@ -257,7 +257,7 @@ export {
     private:
       ds::Option<std::size_t> find(TabLocation location) const noexcept;
 
-      std::array<TabLocation, capacity> locations_;
+      ds::Array<TabLocation, capacity> locations_;
       std::size_t count_ = 0;
     };
 
@@ -344,10 +344,10 @@ export {
           throw std::bad_alloc{};
         }
 
-        ++generations_[slot];
-        identities_[slot] = id;
-        lookup_[bucket(id)] = static_cast<std::uint16_t>(slot + 1);
-        items_[slot] = value.release();
+        ++generations_.atMut(slot);
+        identities_.atMut(slot) = id;
+        lookup_.atMut(bucket(id)) = static_cast<std::uint16_t>(slot + 1);
+        items_.atMut(slot) = value.release();
         ++count_;
         return generations_[slot] * Capacity + slot;
       }
@@ -374,8 +374,8 @@ export {
         const auto slot = lookup_[position] - 1;
 
         removeBucket(position);
-        identities_[slot] = 0;
-        items_[slot] = nullptr;
+        identities_.atMut(slot) = 0;
+        items_.atMut(slot) = nullptr;
         --count_;
         AllocationDeleter<Value, Memory>{memory_}(value);
       }
@@ -427,21 +427,21 @@ export {
           const auto distance = (position + lookup_capacity - origin) % lookup_capacity;
           const auto hole_distance = (hole + lookup_capacity - origin) % lookup_capacity;
           if (hole_distance < distance) {
-            lookup_[hole] = lookup_[position];
+            lookup_.atMut(hole) = lookup_[position];
             hole = position;
           }
 
           position = (position + 1) % lookup_capacity;
         }
 
-        lookup_[hole] = 0;
+        lookup_.atMut(hole) = 0;
       }
 
       Memory& memory_;
-      std::array<Value*, Capacity> items_{};
-      std::array<std::uint64_t, Capacity> identities_{};
-      std::array<std::uint64_t, Capacity> generations_{};
-      std::array<std::uint16_t, lookup_capacity> lookup_{};
+      ds::Array<Value*, Capacity> items_{};
+      ds::Array<std::uint64_t, Capacity> identities_{};
+      ds::Array<std::uint64_t, Capacity> generations_{};
+      ds::Array<std::uint16_t, lookup_capacity> lookup_{};
       std::uint64_t next_id_ = 1;
       std::size_t count_ = 0;
     };

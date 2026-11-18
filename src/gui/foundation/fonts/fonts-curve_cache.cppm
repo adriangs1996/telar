@@ -30,7 +30,7 @@ export {
       void translate(Point origin) noexcept;
 
     private:
-      std::array<Rect, Capacity> rectangles_{};
+      ds::Array<Rect, Capacity> rectangles_{};
       std::size_t count_ = 0;
       float coverage_;
     };
@@ -94,7 +94,7 @@ export {
 export {
   namespace telar::gui::inline foundation::inline fonts::glyphs {
 
-    inline constexpr auto box_edge_table = std::to_array<BoxEdges>({
+    inline constexpr auto box_edge_table = ds::Array<BoxEdges, 128>{{
         {.right = BoxWeight::light, .left = BoxWeight::light},
         {.right = BoxWeight::heavy, .left = BoxWeight::heavy},
         {.up = BoxWeight::light, .down = BoxWeight::light},
@@ -223,7 +223,7 @@ export {
         {.up = BoxWeight::light, .down = BoxWeight::heavy},
         {.right = BoxWeight::light, .left = BoxWeight::heavy},
         {.up = BoxWeight::heavy, .down = BoxWeight::light},
-    });
+    }};
 
   }
 }
@@ -342,10 +342,10 @@ export {
       [[nodiscard]] PixelBounds rasterBounds(const AlphaRaster& raster, Point scale) const noexcept;
       [[nodiscard]] float distanceSquared(Point point) const noexcept;
       [[nodiscard]] bool contains(Point point) const noexcept;
-      [[nodiscard]] static float segmentDistance(Point point, const std::array<Point, 2>& segment) noexcept;
+      [[nodiscard]] static float segmentDistance(Point point, const ds::Array<Point, 2>& segment) noexcept;
 
       BoxMetrics metrics_;
-      std::array<Point, point_capacity> points_{};
+      ds::Array<Point, point_capacity> points_{};
       std::size_t count_ = 0;
       bool cross_ = false;
       // Filled shapes close the polygon and cover its interior; the others stroke a polyline.
@@ -373,8 +373,8 @@ export {
       static constexpr int vertical_divisions = 2 * rows;
 
       struct Grid {
-        std::array<float, columns> x{};
-        std::array<float, rows> y{};
+        ds::Array<float, columns> x{};
+        ds::Array<float, rows> y{};
         float diameter = 0;
       };
 
@@ -407,7 +407,7 @@ export {
       [[nodiscard]] Payload* resolve(const BoxMetrics& metrics, BoxCurve::Shape shape, Builder&& build) {
         const Key key{.width_bits = std::bit_cast<std::uint32_t>(metrics.width), .height_bits = std::bit_cast<std::uint32_t>(metrics.height), .thickness_bits = std::bit_cast<std::uint32_t>(metrics.light), .shape = shape};
 
-        for (auto& entry : std::span{entries_}.first(count_)) {
+        for (auto& entry : entries_.viewMut().first(count_)) {
           if (entry.key == key) {
             return entry.payload ? &entry.payload.getMut() : nullptr;
           }
@@ -417,7 +417,7 @@ export {
           return nullptr;
         }
 
-        auto& entry = entries_[count_++];
+        auto& entry = entries_.atMut(count_++);
 
         entry.key = key;
         entry.payload = std::invoke(std::forward<Builder>(build));
@@ -426,7 +426,7 @@ export {
       }
 
       inline void reset() noexcept {
-        for (auto& entry : std::span{entries_}.first(count_)) {
+        for (auto& entry : entries_.viewMut().first(count_)) {
           entry.payload.reset();
         }
 
@@ -452,7 +452,7 @@ export {
         ds::Option<Payload> payload;
       };
 
-      std::array<Entry, capacity> entries_{};
+      ds::Array<Entry, capacity> entries_{};
       std::size_t count_ = 0;
     };
 

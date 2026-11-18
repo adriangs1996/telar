@@ -172,15 +172,15 @@ namespace telar::gui::qt {
         return;
       }
 
-      auto& total = output_bytes_[channel == QProcess::StandardOutput ? 0 : 1];
+      auto& total = output_bytes_.atMut(channel == QProcess::StandardOutput ? 0 : 1);
 
       process_.setReadChannel(channel);
       constexpr auto buffer_limit = std::max(output_limit, stdoutLimit());
       const auto limit = channel == QProcess::StandardOutput ? stdoutLimit() : output_limit;
-      std::array<char, buffer_limit + 1> buffer{};
+      ds::Array<char, buffer_limit + 1> buffer{};
 
       while (process_.bytesAvailable() > 0) {
-        const auto count = process_.read(buffer.data(), static_cast<qint64>(buffer.size()));
+        const auto count = process_.read(buffer.dataMut(), static_cast<qint64>(buffer.size()));
         if (count <= 0) {
           break;
         }
@@ -218,7 +218,7 @@ namespace telar::gui::qt {
     Observer& observer_;
     QProcess process_;
     QTimer deadline_;
-    std::array<std::size_t, 2> output_bytes_{};
+    ds::Array<std::size_t, 2> output_bytes_{};
     ds::Option<CommandFailure> failure_;
     bool running_ = false;
     bool pending_ = false;

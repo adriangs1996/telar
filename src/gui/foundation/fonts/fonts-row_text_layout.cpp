@@ -5,6 +5,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
+import telar.base.ds;
 
 namespace telar::gui::inline foundation::inline fonts {
 
@@ -212,16 +213,16 @@ namespace telar::gui::inline foundation::inline fonts {
 
   template <Allocator Memory>
   bool RowTextLayout<Memory>::appendTogether(Face& face, std::span<const CellValue> cells, std::size_t column, RowTextRequest request) {
-    std::array<char, TextRuns<Memory>::maximum_bytes> bytes{};
-    std::array<std::uint32_t, TextRuns<Memory>::maximum_cells> ends{};
+    ds::Array<char, TextRuns<Memory>::maximum_bytes> bytes{};
+    ds::Array<std::uint32_t, TextRuns<Memory>::maximum_cells> ends{};
     std::size_t length = 0;
 
     for (std::size_t index = 0; index < cells.size(); ++index) {
       const auto text = cells[index].utf8();
 
-      std::ranges::copy(text, bytes.begin() + static_cast<std::ptrdiff_t>(length));
+      std::ranges::copy(text, bytes.viewMut().begin() + static_cast<std::ptrdiff_t>(length));
       length += text.size();
-      ends[index] = static_cast<std::uint32_t>(length);
+      ends.atMut(index) = static_cast<std::uint32_t>(length);
     }
 
     const auto run = face.shape({bytes.data(), length}, request.pixel_height);
@@ -229,10 +230,10 @@ namespace telar::gui::inline foundation::inline fonts {
       return false;
     }
 
-    std::array<ShapedGlyph, TextRuns<Memory>::maximum_glyphs> saved{};
+    ds::Array<ShapedGlyph, TextRuns<Memory>::maximum_glyphs> saved{};
 
     for (std::size_t index = 0; index < run.size(); ++index) {
-      saved[index] = run.glyph(index);
+      saved.atMut(index) = run.glyph(index);
       if (index != 0 && saved[index].cluster < saved[index - 1].cluster) {
         return false;
       }

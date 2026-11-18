@@ -675,7 +675,7 @@ namespace telar::git {
   void UnstagedComparison::Directories::reset(int root) noexcept {
     root_ = root;
     for (std::size_t level = 0; level < depth_; ++level) {
-      descriptors_[level].reset();
+      descriptors_.atMut(level).reset();
     }
 
     depth_ = 0;
@@ -699,7 +699,7 @@ namespace telar::git {
     }
 
     for (auto level = keep; level < depth_; ++level) {
-      descriptors_[level].reset();
+      descriptors_.atMut(level).reset();
     }
 
     depth_ = keep;
@@ -710,7 +710,7 @@ namespace telar::git {
     // The kept prefix is already in path_; the rest, from its separator on, is copied.
     const auto copied = depth_ == 0 ? std::size_t{0} : ends_[depth_ - 1];
 
-    std::copy(directory.begin() + static_cast<std::ptrdiff_t>(copied), directory.end(), path_.begin() + static_cast<std::ptrdiff_t>(copied));
+    std::copy(directory.begin() + static_cast<std::ptrdiff_t>(copied), directory.end(), path_.dataMut() + static_cast<std::ptrdiff_t>(copied));
     auto start = depth_ == 0 ? std::size_t{0} : copied + 1;
 
     while (start < directory.size()) {
@@ -721,7 +721,7 @@ namespace telar::git {
       const auto slash = directory.find('/', start);
       const auto stop = slash == std::string_view::npos ? directory.size() : slash;
 
-      ends_[depth_] = stop;
+      ends_.atMut(depth_) = stop;
       if (missing_ == no_missing) {
         PathName component;
         if (!component.assign({directory.substr(start, stop - start)})) {
@@ -730,7 +730,7 @@ namespace telar::git {
 
         const auto parent = depth_ == 0 ? root_ : descriptors_[depth_ - 1].get();
 
-        descriptors_[depth_].reset(::openat(parent, component.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
+        descriptors_.atMut(depth_).reset(::openat(parent, component.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
         if (!descriptors_[depth_]) {
           if (sys::lastError() != ENOENT && sys::lastError() != ENOTDIR && sys::lastError() != ELOOP) {
             ++depth_;
@@ -817,8 +817,8 @@ namespace telar::git {
   }
 
   ds::Option<ObjectId> UnstagedComparison::hashLink(int parent, const char* name, const struct stat& status) {
-    std::array<char, 4096> target;
-    const auto length = ::readlinkat(parent, name, target.data(), target.size());
+    ds::Array<char, 4096> target;
+    const auto length = ::readlinkat(parent, name, target.dataMut(), target.size());
     if (length < 0 || static_cast<std::size_t>(length) >= target.size() || length != status.st_size) {
       return ds::none;
     }

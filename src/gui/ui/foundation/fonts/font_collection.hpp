@@ -15,12 +15,13 @@ static_assert(true);
 #pragma once
 
 import telar.gui.foundation.fonts;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
   struct FontCollection {
     std::shared_ptr<const FontAsset> primary;
-    std::array<std::shared_ptr<const FontAsset>, fonts::maximum_fallback_faces> fallback{};
+    ds::Array<std::shared_ptr<const FontAsset>, fonts::maximum_fallback_faces> fallback{};
     std::size_t count = 0;
   };
 

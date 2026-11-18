@@ -9,6 +9,7 @@ import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 using telar::testing::check;
 
@@ -18,8 +19,8 @@ struct ExpectedSession {
   std::uint64_t workspace;
   std::uint64_t first_tab;
   std::uint64_t second_tab;
-  std::array<std::uint64_t, 3> panes;
-  std::array<std::uint64_t, 3> generations;
+  ds::Array<std::uint64_t, 3> panes;
+  ds::Array<std::uint64_t, 3> generations;
 };
 
 static constexpr std::uint64_t client_identity = 481;
@@ -47,11 +48,11 @@ static ExpectedSession loadExpected(const char* path) {
   std::ifstream file{path};
 
   file >> expected.workspace >> expected.first_tab >> expected.second_tab;
-  for (auto& identity : expected.panes) {
+  for (auto& identity : expected.panes.viewMut()) {
     file >> identity;
   }
 
-  for (auto& generation : expected.generations) {
+  for (auto& generation : expected.generations.viewMut()) {
     file >> generation;
   }
 
@@ -61,7 +62,7 @@ static ExpectedSession loadExpected(const char* path) {
 
 static void seed(ProtocolPeer& peer, const char* path) {
   peer.send(RequestRuntimeState{.client_identity = client_identity, .interactive = false});
-  const std::array<std::string_view, 1> arguments{"/bin/cat"};
+  const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
   const Launch launch{.cwd = "/tmp", .arguments = arguments};
   const TerminalSize size{80, 24, 0, 0};
   const auto first = peer.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = size, .launch = launch});
@@ -69,8 +70,8 @@ static void seed(ProtocolPeer& peer, const char* path) {
   peer.exchange<WorkspaceSnapshot>(RenameWorkspace{.request_id = 2, .workspace = first.location.workspace, .name = workspace_name});
   const auto second = peer.exchange<PaneOpened>(CreatePane{.request_id = 3, .location = first.location, .size = size, .launch = launch});
   const auto tab = peer.exchange<TabCreated>(CreateTab{.request_id = 4, .workspace = first.location.workspace, .label = tab_name, .size = size, .launch = launch});
-  const std::array<ClientLayoutNode, 1> nodes{ClientLayoutPane{tab.root_pane_id}};
-  const std::array<ClientTabLayout, 1> layouts{ClientTabLayout{tab.location, tab.root_pane_id, false, true, nodes}};
+  const ds::Array<ClientLayoutNode, 1> nodes{ClientLayoutPane{tab.root_pane_id}};
+  const ds::Array<ClientTabLayout, 1> layouts{ClientTabLayout{tab.location, tab.root_pane_id, false, true, nodes}};
 
   peer.send(UpdateClientLayout{true, 29, false, tab.location, layouts});
   saveExpected(path, ExpectedSession{first.location.workspace.id, first.location.tab_id, tab.location.tab_id, {first.pane_id, second.pane_id, tab.root_pane_id}, {first.pane_generation, second.pane_generation, tab.pane_generation}});
@@ -133,7 +134,7 @@ static void verify(ProtocolPeer& peer, const char* path, bool retained_layout = 
 
 static void inspectIdentityBoundaries(ProtocolPeer& peer, const char* path) {
   std::ofstream output{path};
-  const std::array<std::string_view, 1> arguments{"/bin/cat"};
+  const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
 
   for (std::uint64_t request = 1; request <= 3; ++request) {
     peer.send(CreateWorkspace{.request_id = request, .size = {80, 24, 8, 16}, .name = "Identity boundary", .launch = Launch{.cwd = "/tmp", .arguments = arguments}});

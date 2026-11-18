@@ -126,7 +126,7 @@ namespace telar::gui::application {
       throw std::length_error{"Too many component action references"};
     }
 
-    references_[count_++] = action;
+    references_.atMut(count_++) = action;
   }
 
   template <std::size_t MaximumReferences>
@@ -146,7 +146,7 @@ namespace telar::gui::application {
         return action == retained;
       });
       if (used) {
-        references_[kept++] = retained;
+        references_.atMut(kept++) = retained;
       } else {
         luaL_unref(state_, LUA_REGISTRYINDEX, retained.reference);
       }
@@ -158,7 +158,7 @@ namespace telar::gui::application {
   template <std::size_t MaximumReferences>
   void ActionReferences<MaximumReferences>::swap(ActionReferences& other) noexcept {
     std::swap(state_, other.state_);
-    references_.swap(other.references_);
+    std::swap(references_, other.references_);
     std::swap(count_, other.count_);
   }
 
@@ -247,7 +247,7 @@ namespace telar::gui::application {
     }
 
     if (position.parent != features::components::Node::no_parent) {
-      had_children_[position.parent] = true;
+      had_children_.atMut(position.parent) = true;
     }
 
     if (!budget_.admit(shape, rank)) {
@@ -282,12 +282,12 @@ namespace telar::gui::application {
 
   void ContentReader::Builder::report(features::components::Capacity bounds) {
     const bool panel = surface_ == ComponentSurface::panel;
-    const auto reaches = std::to_array<LimitReach>({
+    const auto reaches = ds::Array<LimitReach, 4>{{
         {.name = panel ? "panels.max_panel_nodes" : "bars.max_bar_nodes", .noun = "components", .value = bounds.nodes, .requested = demand_.nodes, .route = {}},
         {.name = panel ? "panels.max_panel_text_bytes" : "bars.max_bar_text_bytes", .noun = "text bytes", .value = bounds.text, .requested = demand_.text, .route = {}},
         {.name = panel ? "panels.max_panel_actions" : "bars.max_bar_actions", .noun = "click actions", .value = bounds.actions, .requested = demand_.actions, .route = {}},
         {.name = panel ? "panels.max_samples" : "bars.max_samples", .noun = "sparkline samples", .value = bounds.samples, .requested = demand_.samples, .route = {}},
-    });
+    }};
 
     for (const auto& reach : reaches) {
       if (reach.requested.valueOr(0) > reach.value) {
@@ -422,13 +422,13 @@ namespace telar::gui::application {
       if (source.kind == features::components::SourceKind::fixed) {
         const auto value = registry.element(source.reference);
 
-        bars_[index].read(runtime::config::BarsReader::content(value), actions, limits, staged_, next_reference_);
+        bars_.atMut(index).read(runtime::config::BarsReader::content(value), actions, limits, staged_, next_reference_);
       }
     }
   }
 
   void ComponentConfiguration::readBarContent(features::components::Position position, const runtime::lua::Value& value, const ComponentActions& actions, runtime::config::LimitNotices& limits) {
-    bars_.at(static_cast<std::size_t>(position)).read(value, actions, limits, staged_, next_reference_);
+    bars_.atCheckedMut(static_cast<std::size_t>(position)).read(value, actions, limits, staged_, next_reference_);
   }
 
   void ComponentConfiguration::readPanelContent(const runtime::lua::Value& value, const ComponentActions& actions, runtime::config::LimitNotices& limits) {
@@ -545,7 +545,7 @@ namespace telar::gui::application {
   }
 
   void PickItemsReader::lines(std::string_view text, features::components::PickItems& output, runtime::config::LimitNotices& limits) {
-    std::array<char, features::components::PickItems::maximum_label_bytes> label{};
+    ds::Array<char, features::components::PickItems::maximum_label_bytes> label{};
 
     output.clear();
     while (!text.empty()) {
@@ -562,7 +562,7 @@ namespace telar::gui::application {
       const auto option = line.substr(first, line.find_last_not_of(blanks) - first + 1);
       const auto shown = runtime::utf8Prefix(option, label.size());
 
-      std::ranges::transform(shown, label.begin(), [](char byte) {
+      std::ranges::transform(shown, label.viewMut().begin(), [](char byte) {
         return byte == '\t' ? ' ' : byte;
       });
 

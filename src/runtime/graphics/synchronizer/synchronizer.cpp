@@ -69,7 +69,7 @@ namespace telar::runtime {
     TELAR_TRACE("media.worker");
     auto result = request;
 
-    for (auto& entry : std::span{result.entries}.first(result.count)) {
+    for (auto& entry : result.entries.viewMut().first(result.count)) {
       entry.reset = entry.media->process();
       TELAR_DIAGNOSTIC(entry.metrics = entry.media->batchMetrics());
     }
@@ -175,7 +175,7 @@ namespace telar::runtime {
       return true;
     }
 
-    for (auto& known : known_images_) {
+    for (auto& known : known_images_.viewMut()) {
       if (known.image_id == 0) {
         continue;
       }
@@ -185,7 +185,7 @@ namespace telar::runtime {
       });
       if (current == storage.images().end() || (!sameImage(known, current->description.key) && knows(current->description.key))) {
         send(connection, GraphicsDeleteImage{.header = header, .key = known});
-        for (auto& placement : known_placements_) {
+        for (auto& placement : known_placements_.viewMut()) {
           if (sameImage(placement.key, known)) {
             placement = {};
           }
@@ -205,7 +205,7 @@ namespace telar::runtime {
       break;
     }
 
-    for (auto& known : known_placements_) {
+    for (auto& known : known_placements_.viewMut()) {
       if (known.virtual_id == 0) {
         continue;
       }
@@ -269,7 +269,7 @@ namespace telar::runtime {
 
       for (const auto& placement : storage.placements()) {
         if (sameImage(placement.key, image.description.key)) {
-          transfer.placements[transfer.placement_count++] = placement;
+          transfer.placements.atMut(transfer.placement_count++) = placement;
         }
       }
 
@@ -352,10 +352,11 @@ namespace telar::runtime {
       return true;
     }
 
-    const auto empty = std::ranges::find_if(known_images_, [](ImageKey key) {
+    const auto images = known_images_.viewMut();
+    const auto empty = std::ranges::find_if(images, [](ImageKey key) {
       return key.image_id == 0;
     });
-    if (empty == known_images_.end()) {
+    if (empty == images.end()) {
       throw std::bad_alloc{};
     }
 
@@ -371,17 +372,18 @@ namespace telar::runtime {
   }
 
   GraphicsPlacement& GraphicsSynchronizer::placementSlot(std::uint64_t identity) {
-    auto existing = std::ranges::find_if(known_placements_, [&](const auto& placement) {
+    const auto placements = known_placements_.viewMut();
+    auto existing = std::ranges::find_if(placements, [&](const auto& placement) {
       return placement.virtual_id == identity;
     });
-    if (existing != known_placements_.end()) {
+    if (existing != placements.end()) {
       return *existing;
     }
 
-    auto empty = std::ranges::find_if(known_placements_, [](const auto& placement) {
+    auto empty = std::ranges::find_if(placements, [](const auto& placement) {
       return placement.virtual_id == 0;
     });
-    if (empty == known_placements_.end()) {
+    if (empty == placements.end()) {
       throw std::bad_alloc{};
     }
 

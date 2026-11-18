@@ -17,6 +17,7 @@ import std;
 import telar.git;
 import telar.base.memory.allocators;
 import telar.testing;
+import telar.base.ds;
 
 namespace {
 
@@ -56,9 +57,9 @@ namespace {
         return output;
       }
 
-      std::array<char, 4096> buffer;
+      telar::ds::Array<char, 4096> buffer;
 
-      while (const auto count = std::fread(buffer.data(), 1, buffer.size(), pipe)) {
+      while (const auto count = std::fread(buffer.dataMut(), 1, buffer.size(), pipe)) {
         output.append(buffer.data(), count);
       }
 
@@ -99,9 +100,9 @@ namespace {
         return contents;
       }
 
-      std::array<char, 4096> buffer;
+      telar::ds::Array<char, 4096> buffer;
 
-      while (const auto count = std::fread(buffer.data(), 1, buffer.size(), file)) {
+      while (const auto count = std::fread(buffer.dataMut(), 1, buffer.size(), file)) {
         contents.append(buffer.data(), count);
       }
 
@@ -122,9 +123,9 @@ namespace {
     }
 
     std::string hex(const git::ObjectId& id) {
-      std::array<char, 64> buffer;
+      telar::ds::Array<char, 64> buffer;
 
-      return std::string{id.hex(buffer)};
+      return std::string{id.hex(buffer.viewMut())};
     }
 
     struct Expected {
@@ -250,8 +251,8 @@ namespace {
     }
 
     // Counts the entries of each type in a packfile, walking it entry by entry.
-    std::array<int, 8> packEntryKinds(const std::string& path) {
-      std::array<int, 8> kinds{};
+    telar::ds::Array<int, 8> packEntryKinds(const std::string& path) {
+      telar::ds::Array<int, 8> kinds{};
       const auto pack = slurp(path);
       if (pack.size() < 32) {
         return kinds;
@@ -278,7 +279,7 @@ namespace {
           position += 20;
         }
 
-        ++kinds[kind];
+        ++kinds.atMut(kind);
         z_stream stream{};
 
         inflateInit(&stream);
@@ -509,9 +510,9 @@ namespace {
       put(entry + 12, static_cast<std::uint32_t>(modified.tv_nsec));
       put(entry + 20, static_cast<std::uint32_t>(status.st_ino));
       put(entry + 36, static_cast<std::uint32_t>(status.st_size));
-      std::array<unsigned char, SHA_DIGEST_LENGTH> digest;
+      telar::ds::Array<unsigned char, SHA_DIGEST_LENGTH> digest;
 
-      SHA1(reinterpret_cast<const unsigned char*>(index.data()), index.size() - digest.size(), digest.data());
+      SHA1(reinterpret_cast<const unsigned char*>(index.data()), index.size() - digest.size(), digest.dataMut());
       std::memcpy(index.data() + index.size() - digest.size(), digest.data(), digest.size());
       write(directory + "/.git/index", index);
     }
@@ -721,9 +722,9 @@ namespace {
     }
 
     std::string sha1(std::string_view bytes) {
-      std::array<unsigned char, SHA_DIGEST_LENGTH> digest{};
+      telar::ds::Array<unsigned char, SHA_DIGEST_LENGTH> digest{};
 
-      SHA1(reinterpret_cast<const unsigned char*>(bytes.data()), bytes.size(), digest.data());
+      SHA1(reinterpret_cast<const unsigned char*>(bytes.data()), bytes.size(), digest.dataMut());
       return {reinterpret_cast<const char*>(digest.data()), digest.size()};
     }
 
@@ -1354,7 +1355,7 @@ namespace {
     }
 
     void setTime(const std::string& path, std::time_t seconds) {
-      const std::array<timespec, 2> times{{{seconds, 0}, {seconds, 0}}};
+      const telar::ds::Array<timespec, 2> times{{{seconds, 0}, {seconds, 0}}};
 
       check(::utimensat(AT_FDCWD, path.c_str(), times.data(), AT_SYMLINK_NOFOLLOW) == 0, "set the time of " + path);
     }

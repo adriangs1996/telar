@@ -37,12 +37,12 @@ export {
           return;
         }
 
-        std::array<char, ProxyHostname::maximum_bytes + 1> terminated{};
+        ds::Array<char, ProxyHostname::maximum_bytes + 1> terminated{};
 
-        std::copy(hostname.begin(), hostname.end(), terminated.begin());
+        std::copy(hostname.begin(), hostname.end(), terminated.dataMut());
         in_addr numeric{};
         if (::inet_pton(AF_INET, terminated.data(), &numeric) == 1) {
-          resolved_.addresses.front() = NetworkAddress::ipv4(numeric);
+          resolved_.addresses.atMut(0) = NetworkAddress::ipv4(numeric);
           resolved_.summary = {.found = 1, .error = 0};
           attemptNext();
           return;
@@ -103,7 +103,7 @@ export {
         const auto count = std::min(resolved_.summary.found, Resolutions::maximum_addresses);
 
         while (next_address_ < count) {
-          auto& address = resolved_.addresses[next_address_++];
+          auto& address = resolved_.addresses.atMut(next_address_++);
 
           address.setPort(port_);
           try {
@@ -177,7 +177,7 @@ export {
         Progress progress;
 
         if (wantsRead()) {
-          const auto received = source.read(bytes_);
+          const auto received = source.read(bytes_.viewMut());
           if (received.state == StreamResult::State::data) {
             length_ = received.bytes;
             progress.read = length_;
@@ -239,7 +239,7 @@ export {
       }
 
     private:
-      std::array<std::uint8_t, capacity> bytes_;
+      ds::Array<std::uint8_t, capacity> bytes_;
       std::size_t offset_ = 0;
       std::size_t length_ = 0;
       StreamReadiness read_waiting_ = StreamReadiness::readable;

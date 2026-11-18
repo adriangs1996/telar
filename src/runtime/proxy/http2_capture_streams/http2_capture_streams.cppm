@@ -178,7 +178,7 @@ export {
     class TBC_SHARED ProxyCounters {
     public:
       static constexpr auto capacity = static_cast<std::size_t>(ProxyCounter::count);
-      static constexpr std::array<std::string_view, capacity> names = {
+      static constexpr ds::Array<std::string_view, capacity> names = {
           "rejected_connection",
           "invalid_authorization_rejection",
           "unknown_credential_rejection",
@@ -210,10 +210,10 @@ export {
 
       std::uint64_t read(ProxyCounter counter) const noexcept;
 
-      std::array<std::uint64_t, capacity> snapshot() const noexcept;
+      ds::Array<std::uint64_t, capacity> snapshot() const noexcept;
 
     private:
-      std::array<std::atomic<std::uint64_t>, capacity> counters_{};
+      ds::Array<std::atomic<std::uint64_t>, capacity> counters_{};
     };
 
   }
@@ -655,7 +655,7 @@ export {
 
       inline void body(const Http2Event& event) noexcept {
         if (const auto index = find(event.stream)) {
-          auto& half = slots_[*index].getMut();
+          auto& half = slots_.atMut(*index).getMut();
 
           half->append(half->bodyPart(), event.bytes);
         }
@@ -698,7 +698,7 @@ export {
           return nullptr;
         }
 
-        slots_[*index].emplace(std::move(half));
+        slots_.atMut(*index).emplace(std::move(half));
         occupied_.insert(*index);
         return slots_[*index]->get();
       }
@@ -716,9 +716,9 @@ export {
       }
 
       inline void publish(std::size_t index, CaptureOutcome outcome) noexcept {
-        auto half = std::move(slots_[index].getMut());
+        auto half = std::move(slots_.atMut(index).getMut());
 
-        slots_[index].reset();
+        slots_.atMut(index).reset();
         occupied_.erase(index);
         half->finish(outcome, Clock::now());
         producer_->publish(std::move(half));
@@ -727,7 +727,7 @@ export {
       CaptureProducer* producer_;
       ProxyCounters& counters_;
       CaptureStart context_;
-      std::array<ds::Option<CaptureProducer::Half>, capacity> slots_;
+      ds::Array<ds::Option<CaptureProducer::Half>, capacity> slots_;
       SlotIndexes<capacity> occupied_;
     };
 
@@ -739,7 +739,7 @@ export {
   namespace telar::runtime {
 
     struct ProxyMetrics {
-      std::array<std::uint64_t, ProxyCounters::capacity> counters{};
+      ds::Array<std::uint64_t, ProxyCounters::capacity> counters{};
       std::uint32_t active_connections = 0;
       std::uint64_t connection_limit_drops = 0;
 

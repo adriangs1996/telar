@@ -6,6 +6,7 @@ import telar.runtime.suggestions.engine;
 import telar.runtime.transport.connection;
 import telar.wire.editor;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -22,8 +23,8 @@ namespace {
 
   SuggestionStatus ask(SuggestionEngine& engine, ConcurrentMemory& memory, std::uint64_t request, std::string* text = nullptr) {
     EncodedReply reply{memory};
-    std::array<Byte, 4096> scratch;
-    DecodeStorage storage{scratch};
+    ds::Array<Byte, 4096> scratch;
+    DecodeStorage storage{scratch.viewMut()};
 
     engine.suggest(SuggestCommand{.request_id = request, .pane_id = 1}, "Prompt", reply);
     const auto suggestion = Codec::decode<CommandSuggestion>(reply.payload(), storage);
@@ -44,7 +45,7 @@ namespace {
     ConcurrentMemory& memory = adapter;
     TemporaryDirectory directory{"/tmp/telar-engine-XXXXXX"};
     const std::string started = std::string{directory.path()} + "/started";
-    const std::array<std::string, 2> first_runs{
+    const ds::Array<std::string, 2> first_runs{
         R"(read -r line; printf '%s\n' '{"type":"response","command":"prompt","success":false}'; sleep 30)",
         "read -r line; exit 0",
     };
@@ -52,7 +53,7 @@ namespace {
     for (const auto& first_run : first_runs) {
       std::filesystem::remove(started);
       const auto script = std::format("if [ -e '{}' ]; then {}; else touch '{}'; {}; fi", started, answering(), started, first_run);
-      const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", script};
+      const ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", script};
       SuggestionEngine engine{memory, SuggestionOptions{.arguments = arguments, .timeout = std::chrono::seconds{10}}};
       const auto asked = std::chrono::steady_clock::now();
       std::string text;
@@ -67,7 +68,7 @@ namespace {
     SystemAllocator system;
     MemoryAdapter adapter{system};
     ConcurrentMemory& memory = adapter;
-    const std::array<std::string_view, 1> arguments{"/nonexistent/telar-suggestion-engine"};
+    const ds::Array<std::string_view, 1> arguments{"/nonexistent/telar-suggestion-engine"};
     SuggestionEngine engine{memory, SuggestionOptions{.arguments = arguments, .timeout = std::chrono::seconds{5}}};
 
     // Not configured on this host, which the GUI tells apart from an engine that broke.
@@ -82,7 +83,7 @@ namespace {
     // the reader drops it as it streams in rather than waiting for its end.
     const auto junk = std::format("head -c {} /dev/zero | tr '\\0' x; printf '\\n';", 200 * 1024);
     const auto script = answering(junk);
-    const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", script};
+    const ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", script};
     SuggestionEngine engine{memory, SuggestionOptions{.arguments = arguments, .timeout = std::chrono::seconds{5}}};
     std::string text;
 
@@ -93,7 +94,7 @@ namespace {
     SystemAllocator system;
     MemoryAdapter adapter{system};
     ConcurrentMemory& memory = adapter;
-    const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", "while read -r line; do :; done"};
+    const ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", "while read -r line; do :; done"};
     SuggestionEngine engine{memory, SuggestionOptions{.arguments = arguments, .timeout = std::chrono::seconds{30}}};
     auto pending = std::async(std::launch::async, [&] {
       return ask(engine, memory, 1);

@@ -168,10 +168,10 @@ export {
 
       void* resources_;
       Release release_;
-      std::array<ImageTextureState, capacity> states_{};
-      std::array<Row, capacity> occupied_{};
-      std::array<Row, capacity> position_{};
-      std::array<Row, capacity> free_{};
+      ds::Array<ImageTextureState, capacity> states_{};
+      ds::Array<Row, capacity> occupied_{};
+      ds::Array<Row, capacity> position_{};
+      ds::Array<Row, capacity> free_{};
       std::size_t count_ = 0;
       std::size_t free_count_ = capacity;
       std::size_t resident_bytes_ = 0;
@@ -264,9 +264,9 @@ export {
       void siftUp(std::size_t index) noexcept;
       void siftDown() noexcept;
 
-      std::array<Candidate, capacity> candidates_{};
-      std::array<Identity, capacity> selected_{};
-      std::array<ImageIdentity, capacity> images_{};
+      ds::Array<Candidate, capacity> candidates_{};
+      ds::Array<Identity, capacity> selected_{};
+      ds::Array<ImageIdentity, capacity> images_{};
       std::size_t candidate_count_ = 0;
       std::size_t selected_count_ = 0;
       std::size_t image_count_ = 0;

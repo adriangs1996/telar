@@ -24,7 +24,7 @@ namespace {
     check(utf8Prefix("\xc3\xa9", 0).empty());
   }
 
-  telar::ds::Option<std::string> decoded(telar::ds::Option<std::size_t> length, const std::array<std::uint8_t, 8>& bytes) {
+  telar::ds::Option<std::string> decoded(telar::ds::Option<std::size_t> length, const telar::ds::Array<std::uint8_t, 8>& bytes) {
     if (!length) {
       return telar::ds::none;
     }
@@ -34,9 +34,9 @@ namespace {
 
   template <base64::Padding Rule>
   telar::ds::Option<std::string> decode(std::string_view encoded) {
-    std::array<std::uint8_t, 8> bytes{};
+    telar::ds::Array<std::uint8_t, 8> bytes{};
 
-    return decoded(base64::decode<Rule>(encoded, bytes), bytes);
+    return decoded(base64::decode<Rule>(encoded, bytes.viewMut()), bytes);
   }
 
   // OSC 52 and the document sequence may leave out the padding, a required rule accepts

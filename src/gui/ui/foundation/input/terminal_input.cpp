@@ -1,6 +1,7 @@
 #include "terminal_input.hpp"
 
 import std;
+import telar.base.ds;
 
 namespace telar::gui::qt {
   namespace {
@@ -125,7 +126,7 @@ namespace telar::gui::qt {
       suffix = '~';
       break;
     default: {
-      constexpr std::array function_codes{11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 23, 24};
+      constexpr ds::Array function_codes{11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 23, 24};
 
       if (event.key() >= Qt::Key_F1 && event.key() <= Qt::Key_F12) {
         const auto index = event.key() - Qt::Key_F1;

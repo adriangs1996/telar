@@ -13,6 +13,7 @@ import telar.gui.foundation.core;
 import telar.gui.foundation.actions;
 import telar.gui.foundation.keys;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -30,7 +31,7 @@ namespace {
       }
     }
 
-    constexpr auto invalid = std::to_array<std::string_view>({"", "ab", "\x80", "\xc0\x80", "\xe0\x80\x80", "\xed\xa0\x80", "\xf4\x90\x80\x80", "\xf0\x80\x80\x80", "\xf0\x9f", "\xf0\x9f\x8c\x20"});
+    constexpr auto invalid = telar::ds::Array<std::string_view, 10>{"", "ab", "\x80", "\xc0\x80", "\xe0\x80\x80", "\xed\xa0\x80", "\xf4\x90\x80\x80", "\xf0\x80\x80\x80", "\xf0\x9f", "\xf0\x9f\x8c\x20"};
 
     for (const auto text : invalid) {
       bool rejected = false;
@@ -98,8 +99,8 @@ namespace {
       digest = (digest ^ 0xffU) * 1099511628211ULL;
     };
 
-    constexpr auto codepoints = std::to_array<std::uint32_t>({'a', 'A', 'c', 'z', '2', '8', ' ', '@', '[', '\\', ']', '^', '_', '/', '?', '~', 0xe9, 0x4e2d, 0x1f600});
-    constexpr auto kitty_flags = std::to_array<telar::Byte>({0, 1, 2, 3, 8, 10, 31});
+    constexpr auto codepoints = telar::ds::Array<std::uint32_t, 19>{'a', 'A', 'c', 'z', '2', '8', ' ', '@', '[', '\\', ']', '^', '_', '/', '?', '~', 0xe9, 0x4e2d, 0x1f600};
+    constexpr auto kitty_flags = telar::ds::Array<telar::Byte, 7>{0, 1, 2, 3, 8, 10, 31};
 
     for (const auto flags : kitty_flags) {
       for (unsigned mode = 0; mode < 8; ++mode) {

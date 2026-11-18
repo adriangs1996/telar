@@ -28,8 +28,9 @@ namespace telar::runtime {
       return false;
     }
 
-    const auto available = std::ranges::find(ids_, 0);
-    if (available == ids_.end()) {
+    const auto ids = ids_.viewMut();
+    const auto available = std::ranges::find(ids, 0);
+    if (available == ids.end()) {
       return false;
     }
 
@@ -44,8 +45,9 @@ namespace telar::runtime {
       return false;
     }
 
-    const auto existing = std::ranges::find(ids_, stream);
-    if (existing == ids_.end()) {
+    const auto ids = ids_.viewMut();
+    const auto existing = std::ranges::find(ids, stream);
+    if (existing == ids.end()) {
       return false;
     }
 
@@ -83,7 +85,7 @@ namespace telar::runtime {
 
     Response* available = nullptr;
 
-    for (auto& entry : responses_) {
+    for (auto& entry : responses_.viewMut()) {
       if (entry.stream == response.stream) {
         entry = response;
         return true;
@@ -118,7 +120,7 @@ namespace telar::runtime {
       return;
     }
 
-    for (auto& entry : responses_) {
+    for (auto& entry : responses_.viewMut()) {
       if (entry.stream == stream) {
         entry = {};
         --response_count_;

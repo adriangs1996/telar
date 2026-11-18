@@ -123,8 +123,8 @@ namespace telar::runtime::config {
 
   template <CommandTabLifetime Lifetime>
   ds::Option<CommandTabReference> CommandTabStorage<Lifetime>::keepReference(std::span<const std::string_view> arguments, std::string_view label, LimitNotices& limits) {
-    std::array<Byte, maximum_encoded_bytes> encoded{};
-    const auto length = encode(arguments, label, encoded);
+    ds::Array<Byte, maximum_encoded_bytes> encoded{};
+    const auto length = encode(arguments, label, encoded.viewMut());
     const auto row = std::span{encoded}.first(length);
 
     for (std::size_t index = 0; index < rows_; ++index) {
@@ -140,8 +140,8 @@ namespace telar::runtime::config {
 
     const auto index = rows_++;
 
-    offsets_[index] = static_cast<std::uint32_t>(used_);
-    std::ranges::copy(row, bytes_.begin() + used_);
+    offsets_.atMut(index) = static_cast<std::uint32_t>(used_);
+    std::ranges::copy(row, bytes_.viewMut().begin() + used_);
     used_ += row.size();
 
     return reference(index);
@@ -164,7 +164,7 @@ namespace telar::runtime::config {
       const auto entry = header_bytes + (argument * argument_length_bytes);
       const auto length = static_cast<std::size_t>(row[entry]) | (static_cast<std::size_t>(row[entry + 1]) << upper_byte_shift);
 
-      result.arguments[argument] = textView(row.subspan(offset, length));
+      result.arguments.atMut(argument) = textView(row.subspan(offset, length));
       offset += length;
     }
 
@@ -335,7 +335,7 @@ namespace telar::runtime::config {
 
     result.level = optionalChoice<NotificationLevel>(action.field("level"), notification_level_names).valueOr(NotificationLevel::info);
     result.duration_ms = static_cast<std::uint32_t>(action.field("duration_ms").boundedInteger(default_notification_duration_ms, min_notification_duration_ms, max_notification_duration_ms));
-    constexpr std::array targets{"pane_id", "tab_id", "workspace_id"};
+    constexpr ds::Array targets{"pane_id", "tab_id", "workspace_id"};
 
     for (std::size_t index = 0; index < targets.size(); ++index) {
       const auto target = action.field(targets[index]);
@@ -464,7 +464,7 @@ namespace telar::runtime::config {
 
     command.count = arguments.listLength();
     for (std::size_t index = 0; index < command.count; ++index) {
-      command.arguments[index] = arguments.element(static_cast<lua_Integer>(index) + 1).string();
+      command.arguments.atMut(index) = arguments.element(static_cast<lua_Integer>(index) + 1).string();
     }
 
     const auto label = action.field("label");
@@ -474,7 +474,7 @@ namespace telar::runtime::config {
 
   template <CommandTabStore Commands>
   tbc::view<std::string_view, tbc::lt::a> BasicActionValidator<Commands>::builtinName(const lua::Value& action, tbc::view<std::string_view, tbc::lt::a> kind) {
-    constexpr auto stems = std::to_array<std::pair<std::string_view, std::string_view>>({
+    constexpr auto stems = ds::Array<std::pair<std::string_view, std::string_view>, 7>{{
         {"scroll-pane", "scroll-pane-"},
         {"split-pane", "split-"},
         {"focus-pane", "focus-"},
@@ -482,7 +482,7 @@ namespace telar::runtime::config {
         {"resize-pane", "resize-"},
         {"resize-sidebar", "resize-sidebar-"},
         {"move-tab", "move-tab-"},
-    });
+    }};
 
     const auto* const found = std::ranges::find(stems, kind, &decltype(stems)::value_type::first);
     if (found == stems.end()) {
@@ -568,13 +568,13 @@ namespace telar::runtime::config {
     }
 
     command.arraySize();
-    std::array<std::string_view, maximum_arguments> arguments;
+    ds::Array<std::string_view, maximum_arguments> arguments;
     std::size_t total_bytes = 0;
 
     for (std::size_t index = 0; index < count; ++index) {
       const auto argument = command.element(index + 1);
 
-      arguments[index] = argument.string();
+      arguments.atMut(index) = argument.string();
       if (arguments[index].empty()) {
         argument.fail("must be nonempty");
       }
@@ -628,9 +628,9 @@ namespace telar::runtime::config {
       action.fail("accepts only one notification target");
     }
 
-    std::array<Byte, 1024> storage;
+    ds::Array<Byte, 1024> storage;
 
-    Codec::encode(ShowNotification{.request_id = 1, .notification = body}, storage);
+    Codec::encode(ShowNotification{.request_id = 1, .notification = body}, storage.viewMut());
   }
 
   template <CommandTabStore Commands>
@@ -659,7 +659,7 @@ namespace telar::runtime::config {
     const auto needed = usage(shape);
 
     offered_ = offered_ + needed;
-    ranked_[rank] = ranked_[rank] + needed;
+    ranked_.atMut(rank) = ranked_[rank] + needed;
   }
 
   void ComponentBudget::prepare() noexcept {
@@ -718,7 +718,7 @@ namespace telar::runtime::config {
   }
 
   void ComponentBudget::report(LimitNotices& limits) const noexcept {
-    const std::array<LimitReach, 4> reaches{{
+    const ds::Array<LimitReach, 4> reaches{{
         {"bars.max_bar_nodes", "components", 64, offered_.nodes, {}},
         {"bars.max_bar_text_bytes", "text bytes", 4096, offered_.text, {}},
         {"bars.max_bar_actions", "click actions", 32, offered_.actions, {}},
@@ -1092,7 +1092,7 @@ namespace telar::runtime::config {
       throw std::length_error{"Component traversal stack exceeded"};
     }
 
-    auto& frame = frames_[frame_count_++];
+    auto& frame = frames_.atMut(frame_count_++);
 
     frame.index = lua_gettop(&state_);
     frame.value.emplace(&state_, frame.index, "component");
@@ -1104,14 +1104,14 @@ namespace telar::runtime::config {
   }
 
   void ComponentTreeWalker::pop() noexcept {
-    auto& frame = frames_[--frame_count_];
+    auto& frame = frames_.atMut(--frame_count_);
 
     frame.value.reset();
     lua_settop(&state_, frame.index - 1);
   }
 
   void ComponentTreeWalker::advance() {
-    auto& frame = frames_[frame_count_ - 1];
+    auto& frame = frames_.atMut(frame_count_ - 1);
 
     switch (frame.phase) {
     case Phase::visit:
@@ -1154,7 +1154,7 @@ namespace telar::runtime::config {
   }
 
   void ComponentTreeWalker::visit() {
-    auto& frame = frames_[frame_count_ - 1];
+    auto& frame = frames_.atMut(frame_count_ - 1);
     const auto& value = frameValue(frame);
     const auto position = frame.position;
 
@@ -1193,7 +1193,7 @@ namespace telar::runtime::config {
   }
 
   void ComponentTreeWalker::component() {
-    auto& frame = frames_[frame_count_ - 1];
+    auto& frame = frames_.atMut(frame_count_ - 1);
     const auto& value = frameValue(frame);
     const auto shape = ComponentShapeReader::read(value, frame.position.priority, limits_);
     const auto parent = node(value, shape, frame.position);
@@ -1547,9 +1547,9 @@ namespace telar::runtime::config {
 
   void BindingKeymap::setPrefix(KeyChord prefix) noexcept {
     prefix_ = prefix;
-    for (auto& binding : std::span{bindings_}.first(count_)) {
+    for (auto& binding : bindings_.viewMut().first(count_)) {
       if (binding.prefixed) {
-        binding.keys[0] = prefix;
+        binding.keys.atMut(0) = prefix;
       }
     }
   }
@@ -1563,7 +1563,7 @@ namespace telar::runtime::config {
   }
 
   void BindingKeymap::append(Sequence sequence) noexcept {
-    bindings_[count_++] = sequence;
+    bindings_.atMut(count_++) = sequence;
   }
 
   void BindingKeymap::report(LimitNotices& limits) const noexcept {
@@ -1712,12 +1712,12 @@ namespace telar::runtime::config {
     }
 
     if (setting.prefixed) {
-      setting.keys[0] = prefix;
+      setting.keys.atMut(0) = prefix;
     }
 
     setting.length = key_count + offset;
     for (std::size_t key = 0; key < key_count; ++key) {
-      setting.keys[key + offset] = KeyChordValidator::parse(keys.element(static_cast<lua_Integer>(key) + 1));
+      setting.keys.atMut(key + offset) = KeyChordValidator::parse(keys.element(static_cast<lua_Integer>(key) + 1));
     }
 
     setting.expression = binding.field("expression").boolean(false);
@@ -1741,7 +1741,7 @@ namespace telar::runtime::config {
     BindingReader::read(bindings, keymap.prefix(), [&](const BindingSetting& binding, const lua::Value& action) {
       BindingKeymap::Sequence sequence{.length = binding.length, .prefixed = binding.prefixed};
 
-      std::ranges::copy(std::span{binding.keys}.first(std::min(binding.length, sequence.keys.size())), sequence.keys.begin());
+      std::ranges::copy(std::span{binding.keys}.first(std::min(binding.length, sequence.keys.size())), sequence.keys.viewMut().begin());
       if (actions.validate(action, binding.expression)) {
         keymap.append(sequence);
       }
@@ -1753,9 +1753,9 @@ namespace telar::runtime::config {
       throw std::invalid_argument{"Expected plugin-worker ENTRY ACTION SIDEBAR TAB_COUNT ACTIVE_TAB_INDEX PANE_COUNT FOCUSED_PANE_ID"};
     }
 
-    std::array<char*, argument_count> fields = {};
+    ds::Array<char*, argument_count> fields = {};
 
-    std::ranges::copy(arguments, fields.begin());
+    std::ranges::copy(arguments, fields.viewMut().begin());
     const auto [entry_arg, action_arg, sidebar_arg, tab_count_arg, active_tab_index_arg, pane_count_arg, focused_pane_id_arg] = fields;
 
     const std::string_view sidebar = {sidebar_arg};
@@ -1855,7 +1855,7 @@ namespace telar::runtime::config {
     }
 
     for (std::size_t index = 0; index < count; ++index) {
-      decision.keys[index] = KeyChordValidator::parse(keys.element(static_cast<lua_Integer>(index) + 1));
+      decision.keys.atMut(index) = KeyChordValidator::parse(keys.element(static_cast<lua_Integer>(index) + 1));
     }
 
     decision.length = count;
@@ -1901,7 +1901,7 @@ namespace telar::runtime::config {
 
       hexadecimalColor(color);
       const auto text = color.string();
-      const auto parsed = std::from_chars(text.data() + 1, text.data() + text.size(), result[index], hexadecimal_base);
+      const auto parsed = std::from_chars(text.data() + 1, text.data() + text.size(), result.atMut(index), hexadecimal_base);
       if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size()) {
         color.fail("must be an RGB color");
       }
@@ -1931,7 +1931,7 @@ namespace telar::runtime::config {
         limits_.add({"picks.max_text_bytes", "option text bytes", maximum_text_bytes, offered_text_bytes_, {}});
       }
 
-      const std::array<LimitReach, 3> text_limits{{
+      const ds::Array<LimitReach, 3> text_limits{{
           {"picks.max_label_bytes", "label bytes", maximum_label_bytes, longest_label_, {}},
           {"picks.max_value_bytes", "value bytes", maximum_value_bytes, longest_value_, {}},
           {"picks.max_detail_bytes", "detail bytes", maximum_detail_bytes, longest_detail_, {}},
@@ -2193,7 +2193,7 @@ namespace telar::runtime::config {
   void ClientReader::notifications(const lua::Value& table, ClientSettings& settings) {
     if (table.present()) {
       table.onlyFields({"delivery"});
-      settings.delivery = optionalChoice<ClientSettings::Delivery>(table.field("delivery"), std::array<std::string_view, 3>{"telar", "system", "terminal"});
+      settings.delivery = optionalChoice<ClientSettings::Delivery>(table.field("delivery"), ds::Array<std::string_view, 3>{"telar", "system", "terminal"});
     }
   }
 
@@ -2201,8 +2201,8 @@ namespace telar::runtime::config {
     if (table.present()) {
       table.onlyFields({"show_agent_commands", "enter", "match"});
       history.show_agent_commands = optionalBoolean(table.field("show_agent_commands"));
-      history.enter = optionalChoice<ClientSettings::HistoryEnter>(table.field("enter"), std::array<std::string_view, 2>{"paste", "run"});
-      history.match = optionalChoice<ClientSettings::HistoryMatch>(table.field("match"), std::array<std::string_view, 2>{"fuzzy", "fts"});
+      history.enter = optionalChoice<ClientSettings::HistoryEnter>(table.field("enter"), ds::Array<std::string_view, 2>{"paste", "run"});
+      history.match = optionalChoice<ClientSettings::HistoryMatch>(table.field("match"), ds::Array<std::string_view, 2>{"fuzzy", "fts"});
     }
   }
 

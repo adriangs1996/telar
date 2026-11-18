@@ -54,6 +54,7 @@ static_assert(true);
 import telar.config.gui;
 import telar.gui.foundation.terminal;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace {
 
@@ -345,7 +346,7 @@ namespace {
       encoded_.resize(CellRunCodec::encodedSize(cells_));
       const auto encoded = CellRunCodec::encode(cells_, encoded_);
       const FrameSpan span{.start = 0, .count = static_cast<std::uint32_t>(cells_.size()), .cells = encoded};
-      const std::array spans{span};
+      const ds::Array spans{span};
       PaneFrame snapshot;
 
       snapshot.pane_id = 1;

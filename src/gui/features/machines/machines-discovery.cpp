@@ -14,19 +14,19 @@ namespace telar::gui::features::machines {
     };
 
     template <std::size_t Count>
-    bool mentionsAny(std::string_view text, const std::array<const char*, Count>& needles) noexcept {
+    bool mentionsAny(std::string_view text, const ds::Array<const char*, Count>& needles) noexcept {
       return std::ranges::any_of(needles, [text](const char* needle) {
         return text.contains(needle);
       });
     }
 
     MachineError sshFailure(std::string_view text) noexcept {
-      static constexpr std::array host_key_texts{"Host key verification failed", "REMOTE HOST IDENTIFICATION HAS CHANGED"};
+      static constexpr ds::Array host_key_texts{"Host key verification failed", "REMOTE HOST IDENTIFICATION HAS CHANGED"};
       if (mentionsAny(text, host_key_texts)) {
         return MachineError::host_key_rejected;
       }
 
-      static constexpr std::array authentication_texts{"Permission denied (", "Too many authentication failures"};
+      static constexpr ds::Array authentication_texts{"Permission denied (", "Too many authentication failures"};
       if (mentionsAny(text, authentication_texts)) {
         return MachineError::authentication_failed;
       }

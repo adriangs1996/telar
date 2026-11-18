@@ -47,7 +47,7 @@ export {
       static void notification(const lua::Value& value, std::span<Byte>& output);
 
       const config::RetainedActionValidator& validator_;
-      std::array<Byte, ActionProtocol::maximum_bytes> storage_;
+      ds::Array<Byte, ActionProtocol::maximum_bytes> storage_;
     };
 
   }
@@ -140,7 +140,7 @@ export {
       }
 
       inline void write(std::span<const std::uint8_t> prefix, std::span<const std::uint8_t> payload) {
-        std::array vectors{
+        ds::Array vectors{
             iovec{const_cast<std::uint8_t*>(prefix.data()), prefix.size()},
             iovec{const_cast<std::uint8_t*>(payload.data()), payload.size()},
         };
@@ -173,8 +173,10 @@ export {
           }
 
           if (first < vectors.size()) {
-            vectors[first].iov_base = static_cast<std::uint8_t*>(vectors[first].iov_base) + consumed;
-            vectors[first].iov_len -= consumed;
+            auto& partial = vectors.atMut(first);
+
+            partial.iov_base = static_cast<std::uint8_t*>(partial.iov_base) + consumed;
+            partial.iov_len -= consumed;
           }
         }
       }
@@ -200,7 +202,7 @@ export {
       bool record(std::chrono::milliseconds now) noexcept;
 
     private:
-      std::array<std::chrono::milliseconds, Limits::restarts> restarts_;
+      ds::Array<std::chrono::milliseconds, Limits::restarts> restarts_;
       std::size_t count_ = 0;
     };
 
@@ -294,7 +296,7 @@ export {
           }
 
           const auto copied = snapshots_.copy(package, count_);
-          auto& specification = specifications_[count_];
+          auto& specification = specifications_.atMut(count_);
 
           specification.package_index = static_cast<std::uint8_t>(count_);
           specification.plugin_id = stableId(copied.manifest.id.view());
@@ -322,7 +324,7 @@ export {
 
       static constexpr std::uint64_t initial_generation = 1;
       PackageSnapshots<Memory> snapshots_;
-      std::array<ServiceSpec, Limits::workers> specifications_;
+      ds::Array<ServiceSpec, Limits::workers> specifications_;
       std::size_t count_ = 0;
     };
 

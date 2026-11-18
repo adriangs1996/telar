@@ -52,7 +52,7 @@ export {
 
       runtime::FileDescriptor parent_;
       runtime::FileDescriptor lock_;
-      std::array<char, PathLimits::component_bytes + 1> name_{};
+      ds::Array<char, PathLimits::component_bytes + 1> name_{};
     };
 
     class ProfileFile {
@@ -66,7 +66,7 @@ export {
       [[nodiscard]] ProfileFileTransaction lock() const;
 
     private:
-      std::array<char, PathLimits::path_bytes> path_{};
+      ds::Array<char, PathLimits::path_bytes> path_{};
       std::size_t path_length_ = 0;
       std::size_t name_offset_ = 0;
       std::stop_token stop_;

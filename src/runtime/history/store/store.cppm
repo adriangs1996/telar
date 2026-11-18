@@ -148,7 +148,7 @@ export {
       // These identifiers must match existing imports, including the pinned Wyhash variant.
       static std::uint64_t hash(std::uint64_t seed, std::string_view input) noexcept;
 
-      std::array<std::uint8_t, 16> session{};
+      ds::Array<std::uint8_t, 16> session{};
       std::uint64_t pane = 0;
 
     private:

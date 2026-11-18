@@ -424,7 +424,7 @@ namespace telar::gui::qt {
   }
 
   bool RuntimeConnection::readChunk() {
-    const auto received = socket_.read(read_buffer_.data(), static_cast<qint64>(read_buffer_.size()));
+    const auto received = socket_.read(read_buffer_.dataMut(), static_cast<qint64>(read_buffer_.size()));
     if (received <= 0) {
       return false;
     }
@@ -507,8 +507,8 @@ namespace telar::gui::qt {
       throw std::length_error{"Runtime output queue capacity reached"};
     }
 
-    std::array<Byte, frame_prefix_size> prefix{};
-    std::span<Byte> output{prefix};
+    ds::Array<Byte, frame_prefix_size> prefix{};
+    std::span<Byte> output{prefix.viewMut()};
 
     u32::encode(static_cast<std::uint32_t>(payload.size()), output);
     const QByteArrayView prefix_view{prefix.data(), static_cast<qsizetype>(prefix.size())};

@@ -13,6 +13,7 @@ import telar.testing;
 import telar.gui.features.terminal.attachments;
 import telar.gui.tests.erasure_allocator;
 import telar.gui.foundation.terminal;
+import telar.base.ds;
 
 namespace {
 
@@ -43,7 +44,7 @@ namespace {
     }
 
     void retire(SlotState state) noexcept {
-      retired[state.index] = true;
+      retired.atMut(state.index) = true;
     }
 
     [[nodiscard]] bool canRelease(SlotState state) const noexcept {
@@ -51,15 +52,15 @@ namespace {
     }
 
     static constexpr std::size_t resource_capacity = AttachmentLimits::maximum_items * 4;
-    std::array<bool, resource_capacity> retired{};
-    std::array<bool, resource_capacity> leased{};
+    telar::ds::Array<bool, resource_capacity> retired{};
+    telar::ds::Array<bool, resource_capacity> leased{};
     std::size_t next = 0;
     bool fail = false;
   };
 
   AttachmentCapture<CheckedMemory> capture(CheckedMemory& memory, std::uint64_t id, AttachmentTarget target = prompt) {
     AttachmentCapture<CheckedMemory> result{.request = {.capture = {.id = id, .target = target}}, .png = SensitiveBytes{memory}, .width = 1, .height = 1};
-    const std::array bytes{sensitive};
+    const telar::ds::Array bytes{sensitive};
 
     result.png.append(bytes, AttachmentLimits::maximum_png_bytes);
 
@@ -71,15 +72,15 @@ namespace {
 
     {
       SensitiveBytes bytes{memory};
-      const std::array first{sensitive};
+      const telar::ds::Array first{sensitive};
 
       bytes.append(first, AttachmentLimits::maximum_png_bytes);
-      const std::array<std::byte, 128> growth{};
+      const telar::ds::Array<std::byte, 128> growth{};
 
       bytes.append(growth, AttachmentLimits::maximum_png_bytes);
       memory.fail = true;
       try {
-        const std::array<std::byte, 256> more{};
+        const telar::ds::Array<std::byte, 256> more{};
 
         bytes.append(more, AttachmentLimits::maximum_png_bytes);
         check(false, "allocation failure must be visible");
@@ -148,7 +149,7 @@ namespace {
       auto incoming = capture(memory, id);
 
       static_cast<void>(catalog.adopt(incoming));
-      delivery.leased[id - 1] = true;
+      delivery.leased.atMut(id - 1) = true;
     }
 
     check(catalog.remove(1), "leased previews may be dismissed");
@@ -163,10 +164,10 @@ namespace {
       check(std::string_view{error.what()} == "AttachmentSelfFull" && fifth.png.size() == 1, "failed adoption must retain the caller's capture");
     }
 
-    delivery.leased[0] = false;
+    delivery.leased.atMut(0) = false;
     check(!catalog.adopt(fifth), "releasing a dismissed slot must not report eviction");
     delivery.fail = true;
-    delivery.leased[1] = false;
+    delivery.leased.atMut(1) = false;
     auto sixth = capture(memory, sixth_id);
 
     try {
@@ -193,11 +194,11 @@ namespace {
     }
 
     constexpr std::uint16_t columns = 80;
-    std::array<CellValue, columns> cells;
+    telar::ds::Array<CellValue, columns> cells;
     const auto put = [&](std::string_view text) {
       cells.fill(CellValue{});
       for (std::size_t index = 0; index < text.size(); ++index) {
-        cells[index].text[0] = static_cast<std::uint8_t>(text[index]);
+        cells.atMut(index).text.atMut(0) = static_cast<std::uint8_t>(text[index]);
       }
     };
 

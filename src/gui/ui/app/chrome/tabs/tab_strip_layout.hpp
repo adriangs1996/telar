@@ -136,7 +136,7 @@ namespace telar::gui::qt {
     ds::Option<std::uint64_t> next_sample_ns_;
     bool frame_requested_ = false;
     QPointer<QAbstractItemModel> model_;
-    std::array<QMetaObject::Connection, model_connection_count> connections_;
+    ds::Array<QMetaObject::Connection, model_connection_count> connections_;
     ListModel items_{this};
     QFont font_;
     std::shared_ptr<ChromeFonts> fonts_;
@@ -148,7 +148,7 @@ namespace telar::gui::qt {
     QRectF selection_bounds_;
     QRectF drop_marker_;
     QRectF dragged_bounds_;
-    std::array<application::workbench::TabDropSlot, application::workbench::TabDropSlots::capacity> drop_slots_{};
+    ds::Array<application::workbench::TabDropSlot, application::workbench::TabDropSlots::capacity> drop_slots_{};
     std::size_t drop_slot_count_ = 0;
     ds::Option<application::workbench::TabDragMove> drag_preview_;
     ds::Option<std::uint64_t> dragged_;

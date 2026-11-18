@@ -44,6 +44,7 @@ static_assert(true);
 
 import telar.wire.content;
 import telar.wire.layout;
+import telar.base.ds;
 
 namespace {
 
@@ -83,10 +84,10 @@ namespace {
     },
                 wait_ms),
         "The client did not ask for its tab");
-    const std::array descriptors{PaneDescriptor{.pane_id = pane_id, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
+    const ds::Array descriptors{PaneDescriptor{.pane_id = pane_id, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
 
     runtime.send(TabSnapshot{.request_id = runtime.last<RequestTabSnapshot>().request_id, .location = location, .panes = descriptors});
-    const std::array tabs{TabDescriptor{.tab_id = location.tab_id, .pane_count = 1}};
+    const ds::Array tabs{TabDescriptor{.tab_id = location.tab_id, .pane_count = 1}};
 
     runtime.send(WorkspaceSnapshot{.request_id = runtime.last<RequestWorkspaceSnapshot>().request_id, .workspace = location.workspace, .name = "project", .tabs = tabs});
   }
@@ -94,8 +95,8 @@ namespace {
   void sendScreen(WireRuntime& runtime) {
     std::vector<Cell> cells(static_cast<std::size_t>(columns) * rows, Cell{.text = byteView(" ")});
     std::vector<Byte> encoded(cells.size() * 16);
-    const std::array spans{FrameSpan{.start = 0, .count = static_cast<std::uint32_t>(cells.size()), .cells = CellRunCodec::encode(cells, encoded)}};
-    std::array<Byte, rows> flags{};
+    const ds::Array spans{FrameSpan{.start = 0, .count = static_cast<std::uint32_t>(cells.size()), .cells = CellRunCodec::encode(cells, encoded)}};
+    ds::Array<Byte, rows> flags{};
 
     runtime.send(PaneFrame{FrameBody{.pane_id = pane_id, .frame_id = 1, .cols = columns, .rows = rows, .cursor = {.visible = true, .x = 0, .y = rows - 1}, .scroll = {.total_rows = rows}, .text_metadata = TextMetadata{.row_flags = flags}, .spans = spans}});
   }
@@ -190,11 +191,11 @@ namespace {
       commands.push_back("make target-" + std::to_string(index));
     }
 
-    std::array<std::vector<CommandBlock>, 2> screens;
+    ds::Array<std::vector<CommandBlock>, 2> screens;
 
     for (unsigned shift = 0; shift < 2; ++shift) {
       for (unsigned index = 0; index < options.blocks; ++index) {
-        screens[shift].push_back(CommandBlock{.row = (index * 2) + shift, .rows = 1, .lines = 0, .state = index % 3 == 0 ? CommandBlockState::failed : CommandBlockState::succeeded, .status = index % 3 == 0 ? 2 : 0, .duration_ms = 100 + index, .command = commands[index]});
+        screens.atMut(shift).push_back(CommandBlock{.row = (index * 2) + shift, .rows = 1, .lines = 0, .state = index % 3 == 0 ? CommandBlockState::failed : CommandBlockState::succeeded, .status = index % 3 == 0 ? 2 : 0, .duration_ms = 100 + index, .command = commands[index]});
       }
     }
 

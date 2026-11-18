@@ -26,6 +26,7 @@ import telar.gui.application;
 import telar.wire.layout;
 import telar.wire.runtime;
 import telar.gui.foundation.model;
+import telar.base.ds;
 
 namespace {
 
@@ -41,12 +42,12 @@ namespace {
   constexpr WorkspaceLocation unknown_workspace{.kind = WorkspaceLocation::Kind::workspace, .id = 78};
   constexpr std::uint64_t first_worktree = 31;
   constexpr std::uint64_t second_worktree = 32;
-  constexpr std::array entries{
+  constexpr ds::Array entries{
       WorkspaceListEntry{.workspace = first_workspace.id, .name = "Current", .path = "/current"},
       WorkspaceListEntry{.workspace = second_workspace.id, .name = "Other", .path = "/other"},
       WorkspaceListEntry{.workspace = project_workspace.id, .name = "Project", .path = "/project"},
   };
-  constexpr std::array worktrees{
+  constexpr ds::Array worktrees{
       WorktreeListEntry{.worktree = first_worktree, .source = project_workspace.id, .workspace = first_workspace.id, .path = "/current", .branch = "current"},
       WorktreeListEntry{.worktree = second_worktree, .source = project_workspace.id, .workspace = second_workspace.id, .path = "/other", .branch = "other"},
   };
@@ -56,10 +57,10 @@ namespace {
     const auto opening = transport.last<OpenPane>();
 
     deliver(client, PaneOpened{.request_id = opening.request_id, .pane_id = pane_id, .location = location, .pane_generation = 1});
-    const std::array panes{PaneDescriptor{.pane_id = pane_id, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
+    const ds::Array panes{PaneDescriptor{.pane_id = pane_id, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
 
     deliver(client, TabSnapshot{.request_id = transport.last<RequestTabSnapshot>().request_id, .location = location, .panes = panes});
-    const std::array tabs{TabDescriptor{.tab_id = location.tab_id, .pane_count = 1}};
+    const ds::Array tabs{TabDescriptor{.tab_id = location.tab_id, .pane_count = 1}};
 
     deliver(client, WorkspaceSnapshot{.request_id = transport.last<RequestWorkspaceSnapshot>().request_id, .workspace = location.workspace, .name = "Visited", .tabs = tabs});
     check(!client.requestsPending(), "The fixture must finish both canonical arrival requests");
@@ -88,7 +89,7 @@ namespace {
     check(returning.target.kind == PaneTarget::Kind::pane && returning.target.id == remembered_pane && !returning.launch, "Returning must reopen the remembered focus instead of selecting the runtime's default tab");
     deliver(client, PaneOpened{.request_id = returning.request_id, .pane_id = remembered_pane, .location = source, .pane_generation = 1});
     check(client.activeTab()->layout.nodes().size() == 1 && !client.activeTab()->fullscreen, "Canonical arrival must stage a single provisional root before restoring remembered presentation");
-    const std::array panes{PaneDescriptor{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}, PaneDescriptor{.pane_id = remembered_pane, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
+    const ds::Array panes{PaneDescriptor{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}, PaneDescriptor{.pane_id = remembered_pane, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
 
     deliver(client, TabSnapshot{.request_id = transport.last<RequestTabSnapshot>().request_id, .location = source, .panes = panes});
     const auto* axis = std::get_if<ClientLayoutSplit>(&client.activeTab()->layout.nodes().front());
@@ -130,9 +131,9 @@ namespace {
     constexpr std::uint64_t remembered_pane = 3;
     constexpr std::uint64_t arrived_pane = 11;
     constexpr std::uint64_t arrived_focus = 12;
-    const std::array<ClientLayoutNode, 1> remembered_nodes{ClientLayoutPane{remembered_pane}};
-    const std::array<ClientLayoutNode, 3> arrived_nodes{ClientLayoutSplit{.axis = ClientLayoutAxis::vertical, .ratio = PaneLayout::ratio_half}, ClientLayoutPane{arrived_pane}, ClientLayoutPane{arrived_focus}};
-    const std::array layouts{
+    const ds::Array<ClientLayoutNode, 1> remembered_nodes{ClientLayoutPane{remembered_pane}};
+    const ds::Array<ClientLayoutNode, 3> arrived_nodes{ClientLayoutSplit{.axis = ClientLayoutAxis::vertical, .ratio = PaneLayout::ratio_half}, ClientLayoutPane{arrived_pane}, ClientLayoutPane{arrived_focus}};
+    const ds::Array layouts{
         ClientTabLayout{.location = remembered, .focused_pane = remembered_pane, .fullscreen = true, .workspace_active = true, .nodes = remembered_nodes},
         ClientTabLayout{.location = arrived, .focused_pane = arrived_focus, .nodes = arrived_nodes},
     };
@@ -143,7 +144,7 @@ namespace {
     check(opening.target.id == remembered_pane, "Bootstrap must first request its remembered pane");
     deliver(client, PaneOpened{.request_id = opening.request_id, .pane_id = arrived_pane, .location = arrived, .pane_generation = 1});
     check(client.activeTab()->layout.nodes().size() == 1 && !client.activeTab()->fullscreen, "A different canonical arrival must still stage a provisional root");
-    const std::array panes{PaneDescriptor{.pane_id = arrived_pane, .lifecycle = PaneLifecycle::running, .pane_generation = 1}, PaneDescriptor{.pane_id = arrived_focus, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
+    const ds::Array panes{PaneDescriptor{.pane_id = arrived_pane, .lifecycle = PaneLifecycle::running, .pane_generation = 1}, PaneDescriptor{.pane_id = arrived_focus, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
 
     deliver(client, TabSnapshot{.request_id = transport.last<RequestTabSnapshot>().request_id, .location = arrived, .panes = panes});
     const auto* axis = std::get_if<ClientLayoutSplit>(&client.activeTab()->layout.nodes().front());
@@ -172,8 +173,8 @@ namespace {
 
     check(!application::workbench::selectWorkspace(client, first_workspace) && transport.sent.size() == messages, "A new connection must wait for a fresh workspace replica");
     const TabLocation current{.workspace = second_workspace, .tab_id = second_workspace.id};
-    const std::array<ClientLayoutNode, 1> current_nodes{ClientLayoutPane{second_workspace.id}};
-    const std::array current_layouts{ClientTabLayout{.location = current, .focused_pane = second_workspace.id, .workspace_active = true, .nodes = current_nodes}};
+    const ds::Array<ClientLayoutNode, 1> current_nodes{ClientLayoutPane{second_workspace.id}};
+    const ds::Array current_layouts{ClientTabLayout{.location = current, .focused_pane = second_workspace.id, .workspace_active = true, .nodes = current_nodes}};
 
     deliver(client, ClientLayoutSnapshot{.restored = true, .sidebar_width = decltype(client)::default_sidebar_columns, .active_tab = current, .tabs = current_layouts});
     finishWorkspaceArrival(client, transport, current, second_workspace.id);
@@ -185,7 +186,7 @@ namespace {
     const TabLocation arrived{.workspace = first_workspace, .tab_id = first_workspace.id};
 
     deliver(client, PaneOpened{.request_id = opening.request_id, .pane_id = 1, .location = arrived, .pane_generation = 2});
-    const std::array panes{PaneDescriptor{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 2}, PaneDescriptor{.pane_id = old_focus, .lifecycle = PaneLifecycle::running, .pane_generation = 2}};
+    const ds::Array panes{PaneDescriptor{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 2}, PaneDescriptor{.pane_id = old_focus, .lifecycle = PaneLifecycle::running, .pane_generation = 2}};
 
     deliver(client, TabSnapshot{.request_id = transport.last<RequestTabSnapshot>().request_id, .location = arrived, .panes = panes});
     const auto* axis = std::get_if<ClientLayoutSplit>(&client.activeTab()->layout.nodes().front());
@@ -204,7 +205,7 @@ namespace {
 
     application::workbench::selectWorkspace(client, second_workspace);
     const auto openings = transport.count(ClientTag::open_pane);
-    const std::array tabs{TabDescriptor{.tab_id = source.tab_id, .pane_count = 1}};
+    const ds::Array tabs{TabDescriptor{.tab_id = source.tab_id, .pane_count = 1}};
 
     deliver(client, WorkspaceSnapshot{.request_id = 1, .workspace = source.workspace, .name = "Late source", .tabs = tabs});
     check(client.activeTab() == nullptr && client.panes().empty() && transport.count(ClientTag::open_pane) == openings, "Late source metadata must not replace an outstanding canonical workspace arrival");
@@ -280,7 +281,7 @@ namespace {
     layouts.retain({.location = rejected, .pane_id = first_identity, .focused_pane = first_identity, .nodes = tree.view()});
     check(layouts.size() == rows_that_fit && layouts.nodeCount() == before_nodes && !layouts.find(historyLocation(1)) && layouts.find(rejected), "Navigation retention must evict only the oldest required complete tree");
     constexpr std::uint64_t replacement_identity = 700;
-    const std::array<ClientLayoutNode, 1> replacement{ClientLayoutPane{replacement_identity}};
+    const ds::Array<ClientLayoutNode, 1> replacement{ClientLayoutPane{replacement_identity}};
 
     layouts.retain({.location = rejected, .pane_id = replacement_identity, .focused_pane = replacement_identity, .fullscreen = true, .nodes = replacement});
     const auto updated = layouts.find(rejected);
@@ -317,7 +318,7 @@ namespace {
   void savedLayoutRowsAreBoundedIndependentlyOfTheirNodePool() {
     SavedLayouts layouts;
     constexpr std::uint64_t pane_id = 1;
-    const std::array<ClientLayoutNode, 1> nodes{ClientLayoutPane{pane_id}};
+    const ds::Array<ClientLayoutNode, 1> nodes{ClientLayoutPane{pane_id}};
 
     for (std::size_t index = 0; index < SavedLayouts::capacity; ++index) {
       check(layouts.remember({.location = historyLocation(index + 1), .pane_id = pane_id, .focused_pane = pane_id, .nodes = nodes}), "Each available row must admit one valid pane");

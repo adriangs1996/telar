@@ -15,6 +15,7 @@ import telar.testing.test_byte_stream;
 import telar.runtime.http.message;
 import telar.runtime.proxy.intercepted_relay;
 import telar.runtime.http.content;
+import telar.base.ds;
 
 namespace {
 
@@ -38,7 +39,7 @@ namespace {
 
   void content(Memory& memory) {
     HttpContentCodec codec{memory};
-    const std::array<std::uint8_t, 11> payload{'b', 'i', 0, 'n', 'a', 'r', 'y', '\r', '\n', 255, 1};
+    const ds::Array<std::uint8_t, 11> payload{'b', 'i', 0, 'n', 'a', 'r', 'y', '\r', '\n', 255, 1};
     constexpr std::size_t limit = 1024;
 
     for (const std::string_view coding : {"", "identity", "gzip", "deflate", "br", "zstd", "gzip, br", "zstd, gzip", "identity, gzip"}) {
@@ -174,7 +175,7 @@ namespace {
 
     check(framing.framing.length == 999);
     request.target = "/edited";
-    const std::array<std::uint8_t, 7> body{'a', 0, 'b', 'o', 'd', 'y', 255};
+    const ds::Array<std::uint8_t, 7> body{'a', 0, 'b', 'o', 'd', 'y', 255};
 
     request.body.assign(body.begin(), body.end());
     auto wire = request.serializeHttp1();

@@ -76,7 +76,7 @@ export {
       std::span<const FixedText<TextCapacity>> entries() const noexcept;
 
     private:
-      std::array<FixedText<TextCapacity>, Capacity> entries_;
+      ds::Array<FixedText<TextCapacity>, Capacity> entries_;
       std::size_t count_ = 0;
     };
 
@@ -114,7 +114,7 @@ export {
       ManifestTextList<16, 64> working;
       ManifestTextList<16, 64> blocked;
       ManifestTextList<16, 64> ready_prompt;
-      std::array<AgentCommandTool, 8> command_tools;
+      ds::Array<AgentCommandTool, 8> command_tools;
       std::size_t tool_count = 0;
     };
 
@@ -134,7 +134,7 @@ export {
 
       static constexpr Byte first_custom_provider = first_custom_agent_provider;
       static constexpr Byte maximum_custom_agents = max_agent_provider_index - first_custom_provider + 1;
-      std::array<AgentManifest, 32> entries_;
+      ds::Array<AgentManifest, 32> entries_;
       std::size_t count_ = 0;
       Byte custom_count_ = 0;
     };
@@ -172,7 +172,7 @@ export {
       bool matches(std::string_view text) const noexcept;
 
     private:
-      std::array<FixedText<256>, 64> patterns_;
+      ds::Array<FixedText<256>, 64> patterns_;
       std::size_t count_ = 0;
     };
 
@@ -305,7 +305,7 @@ export {
 
       // The arguments as views into this value.
       struct Views {
-        std::array<std::string_view, maximum_arguments> words{};
+        ds::Array<std::string_view, maximum_arguments> words{};
         std::size_t count = 0;
 
         [[nodiscard]] std::span<const std::string_view> span() const noexcept;

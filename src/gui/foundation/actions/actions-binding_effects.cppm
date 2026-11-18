@@ -7,6 +7,7 @@ import telar.base.memory.containers;
 import telar.wire.vocabulary;
 import :action;
 import :binding;
+import telar.base.ds;
 
 // Interface: config/callback.cppm
 export {
@@ -16,7 +17,7 @@ export {
 
     struct BindingEffects {
       static constexpr std::size_t maximum_effects = 16;
-      std::array<BindingAction, maximum_effects> actions{};
+      ds::Array<BindingAction, maximum_effects> actions{};
       std::size_t length = 0;
       std::size_t dropped = 0;
     };
@@ -32,7 +33,7 @@ export {
       static constexpr std::size_t maximum_keys = 16;
       static constexpr std::size_t maximum_paste_bytes = 4096;
       Kind kind = Kind::consume;
-      std::array<KeyChord, maximum_keys> keys{};
+      ds::Array<KeyChord, maximum_keys> keys{};
       std::size_t length = 0;
       runtime::FixedText<maximum_paste_bytes> paste;
     };

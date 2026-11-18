@@ -111,7 +111,7 @@ namespace telar::git {
     std::uint64_t data_size = 0;
     std::uint64_t large_offsets = 0;
     std::uint32_t count = 0;
-    std::array<std::uint32_t, 256> fanout{};
+    ds::Array<std::uint32_t, 256> fanout{};
   };
 
   inline constexpr std::size_t pack_index_header = 8 + 256 * 4;
@@ -183,8 +183,8 @@ namespace telar::git {
     String<Memory> base_;
     String<Memory> target_;
     String<Memory> delta_;
-    std::array<std::uint8_t, 8192> block_;
-    std::array<std::uint8_t, 16384> chunk_;
+    ds::Array<std::uint8_t, 8192> block_;
+    ds::Array<std::uint8_t, 16384> chunk_;
   };
 
   // The commit-graph file, or the layers of a split chain. Only each layer's
@@ -204,7 +204,7 @@ namespace telar::git {
       std::uint64_t commits = 0;
       std::uint64_t edges = 0;
       std::uint64_t edges_size = 0;
-      std::array<std::uint32_t, 256> fanout{};
+      ds::Array<std::uint32_t, 256> fanout{};
     };
 
     struct Commit {

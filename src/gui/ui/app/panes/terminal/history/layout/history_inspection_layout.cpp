@@ -29,6 +29,7 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
   namespace {
@@ -151,17 +152,17 @@ namespace telar::gui::qt {
     const auto output = input_.value(QStringLiteral("output")).toString().toUtf8();
     const auto heading = input_.value(QStringLiteral("heading")).toString().toUtf8();
     const auto records = input_.value(QStringLiteral("facts")).toList();
-    std::array<QByteArray, application::history::HistoryInspectionFacts::count> texts;
-    std::array<QByteArray, application::history::HistoryInspectionFacts::count> labels;
-    std::array<application::history::HistoryInspectionLine, application::history::HistoryInspectionFacts::count> facts;
+    ds::Array<QByteArray, application::history::HistoryInspectionFacts::count> texts;
+    ds::Array<QByteArray, application::history::HistoryInspectionFacts::count> labels;
+    ds::Array<application::history::HistoryInspectionLine, application::history::HistoryInspectionFacts::count> facts;
     const auto fact_count = std::min(facts.size(), static_cast<std::size_t>(records.size()));
 
     for (std::size_t index = 0; index < fact_count; ++index) {
       const auto record = records[static_cast<qsizetype>(index)].toMap();
 
-      texts[index] = record.value(QStringLiteral("text")).toString().toUtf8();
-      labels[index] = record.value(QStringLiteral("label")).toString().toUtf8();
-      facts[index] = {.kind = application::history::HistoryInspectionLine::Kind::fact, .text = bytes(texts[index]), .label = bytes(labels[index]), .color = color(record.value(QStringLiteral("color")).toString()), .mono = record.value(QStringLiteral("mono")).toBool()};
+      texts.atMut(index) = record.value(QStringLiteral("text")).toString().toUtf8();
+      labels.atMut(index) = record.value(QStringLiteral("label")).toString().toUtf8();
+      facts.atMut(index) = {.kind = application::history::HistoryInspectionLine::Kind::fact, .text = bytes(texts[index]), .label = bytes(labels[index]), .color = color(record.value(QStringLiteral("color")).toString()), .mono = record.value(QStringLiteral("mono")).toBool()};
     }
 
     application::history::HistoryInspectionLines lines{{.command = bytes(command), .facts = std::span{facts}.first(fact_count), .heading = bytes(heading), .output = bytes(output)}, geometry.columns};
@@ -197,11 +198,11 @@ namespace telar::gui::qt {
   }
 
   QVariantList HistoryInspectionLayout::prepareButtons(const application::history::HistoryInspectionGeometry& geometry, ChromeMetrics chrome) {
-    std::array<float, application::history::HistoryInspectionGeometry::maximum_actions> measured{};
+    ds::Array<float, application::history::HistoryInspectionGeometry::maximum_actions> measured{};
     const auto action_count = std::min(measured.size(), static_cast<std::size_t>(advances_.size()));
 
     for (std::size_t index = 0; index < action_count; ++index) {
-      measured[index] = physical(advances_[static_cast<qsizetype>(index)]);
+      measured.atMut(index) = physical(advances_[static_cast<qsizetype>(index)]);
     }
 
     button_bounds_ = geometry.columns == 0 ? decltype(button_bounds_){} : geometry.buttons(std::span{measured}.first(action_count), chrome);
@@ -219,7 +220,7 @@ namespace telar::gui::qt {
       return 0;
     }
 
-    constexpr std::array actions{application::history::HistoryInspectionAction::submit, application::history::HistoryInspectionAction::alternate, application::history::HistoryInspectionAction::copy, application::history::HistoryInspectionAction::erase, application::history::HistoryInspectionAction::visit};
+    constexpr ds::Array actions{application::history::HistoryInspectionAction::submit, application::history::HistoryInspectionAction::alternate, application::history::HistoryInspectionAction::copy, application::history::HistoryInspectionAction::erase, application::history::HistoryInspectionAction::visit};
     std::size_t count = 0;
 
     for (std::size_t index = 0; index < actions.size() && count < destination.size(); ++index) {

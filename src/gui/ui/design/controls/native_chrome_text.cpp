@@ -271,7 +271,7 @@ namespace telar::gui::qt {
 
     glyphs.shape(fonts, fitted, request);
     advance = glyphs.advance();
-    std::ranges::copy(fitted, text.begin());
+    std::ranges::copy(fitted, text.viewMut().begin());
     bytes = fitted.size();
     dirty = false;
   }

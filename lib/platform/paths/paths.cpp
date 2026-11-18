@@ -87,7 +87,7 @@ namespace telar::runtime::cli {
           throw std::invalid_argument{"Too many engine arguments"};
         }
 
-        options.engine_arguments[options.engine_argument_count++] = value();
+        options.engine_arguments.atMut(options.engine_argument_count++) = value();
       } else if (argument == "--no-session") {
         options.persist_session = false;
       } else if (argument == "--no-resume") {
@@ -190,11 +190,11 @@ namespace telar::runtime::cli {
       location.managed(runtime_directory, "telar");
     } else {
       const auto temporary_directory = environment.lookup("TMPDIR");
-      std::array<char, 32> name;
+      ds::Array<char, 32> name;
       constexpr std::string_view prefix = "telar-";
 
-      std::ranges::copy(prefix, name.begin());
-      const auto converted = std::to_chars(name.data() + prefix.size(), name.data() + name.size(), user);
+      std::ranges::copy(prefix, name.viewMut().begin());
+      const auto converted = std::to_chars(name.dataMut() + prefix.size(), name.dataMut() + name.size(), user);
 
       location.managed(temporary_directory.empty() ? "/tmp" : temporary_directory, {name.data(), converted.ptr});
     }
@@ -235,7 +235,7 @@ namespace telar::runtime::cli {
       throw std::invalid_argument{"Invalid absolute runtime socket path"};
     }
 
-    std::ranges::copy(text, bytes_.data() + length_);
+    std::ranges::copy(text, bytes_.dataMut() + length_);
     length_ += text.size();
   }
 

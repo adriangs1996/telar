@@ -2,6 +2,7 @@
 export module telar.gui.features.terminal.input:mouse_encoder;
 
 import std;
+import telar.base.ds;
 
 // Interface: input/mouse_encoder.cppm
 export {
@@ -25,7 +26,7 @@ export {
 
       void number(unsigned value) noexcept;
 
-      std::array<char, (integer_digits * numeric_fields) + packet_syntax_bytes> buffer_{};
+      ds::Array<char, (integer_digits * numeric_fields) + packet_syntax_bytes> buffer_{};
       std::size_t used_ = 0;
     };
 

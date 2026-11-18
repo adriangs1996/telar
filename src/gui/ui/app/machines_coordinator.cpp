@@ -53,7 +53,7 @@ namespace telar::gui::qt {
       }
 
       const auto path = discovery.shell();
-      const std::array arguments{path, std::string_view{"-l"}, std::string_view{"-i"}};
+      const ds::Array arguments{path, std::string_view{"-l"}, std::string_view{"-i"}};
 
       client.session.setLaunch({.cwd = discovery.home(), .arguments = std::span{arguments}.first(!runtime::loginShellScript(path).empty() ? arguments.size() : 1)});
     }
@@ -80,7 +80,7 @@ namespace telar::gui::qt {
   }
 
   void MachinesCoordinator::shutdown() {
-    for (auto& client : store_.clientsMut()) {
+    for (auto& client : store_.clientsMut().viewMut()) {
       if (client) {
         release(*client.getMut());
       }
@@ -116,7 +116,7 @@ namespace telar::gui::qt {
   }
 
   void MachinesCoordinator::configure() {
-    for (auto& client : store_.clientsMut()) {
+    for (auto& client : store_.clientsMut().viewMut()) {
       if (!client) {
         continue;
       }
@@ -129,7 +129,7 @@ namespace telar::gui::qt {
   }
 
   void MachinesCoordinator::setDisplayRefresh(std::uint16_t fps) {
-    for (auto& client : store_.clientsMut()) {
+    for (auto& client : store_.clientsMut().viewMut()) {
       if (!client) {
         continue;
       }
@@ -166,12 +166,12 @@ namespace telar::gui::qt {
       host_.forgetView();
     }
 
-    if (auto& previous = store_.clientsMut()[slot]) {
+    if (auto& previous = store_.clientsMut().atMut(slot)) {
       release(*previous.getMut());
       previous.reset();
     }
 
-    store_.clientsMut()[slot] = std::move(owned);
+    store_.clientsMut().atMut(slot) = std::move(owned);
     store_.machinesMut().setLive(slot, true);
     connectMachine(slot);
     if (replacing_active) {
@@ -315,7 +315,7 @@ namespace telar::gui::qt {
 
     client.identity_lease.emplace(std::string_view{path.constData(), static_cast<std::size_t>(path.size())});
     QCryptographicHash hash{QCryptographicHash::Sha256};
-    constexpr auto identity_namespace = std::to_array("telar-gui-window-v1");
+    constexpr auto identity_namespace = ds::toArray("telar-gui-window-v1");
     const auto canonical_endpoint = client.identity_lease->endpoint();
 
     hash.addData(QByteArrayView{identity_namespace.data(), static_cast<qsizetype>(identity_namespace.size())});

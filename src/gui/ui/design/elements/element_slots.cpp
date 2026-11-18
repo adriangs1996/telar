@@ -47,7 +47,7 @@ namespace telar::gui::qt {
     }
 
     QString statusName(const QVariant& code) {
-      constexpr std::array names{"unknown", "working", "blocked", "ready", "failed", "done"};
+      constexpr ds::Array names{"unknown", "working", "blocked", "ready", "failed", "done"};
       const auto index = code.toInt();
 
       return QString::fromLatin1(index >= 0 && static_cast<std::size_t>(index) < names.size() ? names[static_cast<std::size_t>(index)] : names.front());
@@ -259,7 +259,7 @@ namespace telar::gui::qt {
   }
 
   QVariantList ElementSlots::project(const Rendered& rendered, const Theme& theme) {
-    constexpr std::array tones{PaletteRole::text, PaletteRole::subtext0, PaletteRole::accent, PaletteRole::green, PaletteRole::yellow, PaletteRole::red};
+    constexpr ds::Array tones{PaletteRole::text, PaletteRole::subtext0, PaletteRole::accent, PaletteRole::green, PaletteRole::yellow, PaletteRole::red};
     QVariantList result;
 
     result.reserve(static_cast<qsizetype>(rendered.elements.size()));

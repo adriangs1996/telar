@@ -7,6 +7,7 @@ import std;
 import telar.base.text;
 import telar.sys.posix;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -87,9 +88,9 @@ namespace telar::runtime {
       return;
     }
 
-    std::array<char, PATH_MAX> directory{};
+    ds::Array<char, PATH_MAX> directory{};
 
-    std::copy(root.begin(), root.end(), directory.begin());
+    std::copy(root.begin(), root.end(), directory.dataMut());
     if (!ownedPath(directory.data(), true)) {
       return;
     }
@@ -116,8 +117,8 @@ namespace telar::runtime {
         continue;
       }
 
-      std::array<char, PATH_MAX> path{};
-      const int count = std::snprintf(path.data(), path.size(), "%s/%s", directory.data(), entry->d_name);
+      ds::Array<char, PATH_MAX> path{};
+      const int count = std::snprintf(path.dataMut(), path.size(), "%s/%s", directory.data(), entry->d_name);
       if (count < 0 || static_cast<std::size_t>(count) >= path.size()) {
         continue;
       }
@@ -142,12 +143,12 @@ namespace telar::runtime {
 
     // A later lookup may overwrite what getenv returned, so the name is copied first.
     const char* found = std::getenv("USER");
-    std::array<char, 256> user{};
+    ds::Array<char, 256> user{};
     if (session.opened != nullptr || found == nullptr || *found == '\0' || std::strchr(found, '/') != nullptr || std::strlen(found) >= user.size()) {
       return;
     }
 
-    std::strcpy(user.data(), found);
+    std::strcpy(user.dataMut(), found);
     const char* temporary = std::getenv("TMPDIR");
 
     for (const char* root : {temporary, "/tmp"}) {
@@ -155,8 +156,8 @@ namespace telar::runtime {
         continue;
       }
 
-      std::array<char, PATH_MAX> directory{};
-      const int count = std::snprintf(directory.data(), directory.size(), "%s/nvim.%s", root, user.data());
+      ds::Array<char, PATH_MAX> directory{};
+      const int count = std::snprintf(directory.dataMut(), directory.size(), "%s/nvim.%s", root, user.data());
       if (count > 0 && static_cast<std::size_t>(count) < directory.size()) {
         scan(session, directory.data(), true);
       }
@@ -164,7 +165,7 @@ namespace telar::runtime {
   }
 
   void RemoteEditor::discoverVim(Session& session) {
-    const std::array<std::string_view, 2> arguments{editor_, "--serverlist"};
+    const ds::Array<std::string_view, 2> arguments{editor_, "--serverlist"};
     String<ConcurrentMemory> names{AllocatorRef<char, ConcurrentMemory>{memory_}};
 
     try {
@@ -223,15 +224,15 @@ namespace telar::runtime {
   }
 
   void RemoteEditor::number(std::uint32_t value) {
-    std::array<char, 16> bytes;
-    const auto result = std::to_chars(bytes.data(), bytes.data() + bytes.size(), value);
+    ds::Array<char, 16> bytes;
+    const auto result = std::to_chars(bytes.dataMut(), bytes.dataMut() + bytes.size(), value);
 
-    expression_.append(bytes.data(), result.ptr);
+    expression_.append(bytes.dataMut(), result.ptr);
   }
 
   void RemoteEditor::vimEndpoint(Session& session, std::string_view endpoint) {
     const std::string_view option = session.kind == EditorKind::neovim ? "--server" : "--servername";
-    const std::array<std::string_view, 5> identity_arguments{editor_, option, endpoint, "--remote-expr", "getpid() . \"\\n\" . hostname()"};
+    const ds::Array<std::string_view, 5> identity_arguments{editor_, option, endpoint, "--remote-expr", "getpid() . \"\\n\" . hostname()"};
     std::string_view identity;
 
     try {
@@ -251,8 +252,8 @@ namespace telar::runtime {
       return;
     }
 
-    std::array<char, 256> host{};
-    if (::gethostname(host.data(), host.size() - 1) != 0 || trimText(identity.substr(split), " \r\n\t") != host.data()) {
+    ds::Array<char, 256> host{};
+    if (::gethostname(host.dataMut(), host.size() - 1) != 0 || trimText(identity.substr(split), " \r\n\t") != host.data()) {
       return;
     }
 
@@ -277,7 +278,7 @@ namespace telar::runtime {
     }
 
     expression_ += ", 1][-1] : 0";
-    const std::array<std::string_view, 5> arguments{editor_, option, endpoint, "--remote-expr", expression_};
+    const ds::Array<std::string_view, 5> arguments{editor_, option, endpoint, "--remote-expr", expression_};
     if (trimText(command(session, arguments), " \r\n\t") != "1") {
       throw RequestError{FailureCode::internal, "Editor rejected open"};
     }
@@ -291,8 +292,8 @@ namespace telar::runtime {
     }
 
     if (const char* root = std::getenv("XDG_RUNTIME_DIR")) {
-      std::array<char, PATH_MAX> path{};
-      const int count = std::snprintf(path.data(), path.size(), "%s/emacs", root);
+      ds::Array<char, PATH_MAX> path{};
+      const int count = std::snprintf(path.dataMut(), path.size(), "%s/emacs", root);
       if (count > 0 && static_cast<std::size_t>(count) < path.size()) {
         scan(session, path.data(), false);
       }
@@ -305,8 +306,8 @@ namespace telar::runtime {
         continue;
       }
 
-      std::array<char, PATH_MAX> path{};
-      const int count = std::snprintf(path.data(), path.size(), "%s/emacs%u", root, ::getuid());
+      ds::Array<char, PATH_MAX> path{};
+      const int count = std::snprintf(path.dataMut(), path.size(), "%s/emacs%u", root, ::getuid());
       if (count > 0 && static_cast<std::size_t>(count) < path.size()) {
         scan(session, path.data(), false);
       }
@@ -322,7 +323,7 @@ namespace telar::runtime {
 
     editor_.assign(slash == std::string_view::npos ? std::string_view{} : session.request.editor.substr(0, slash + 1));
     editor_ += "emacsclient";
-    const std::array<std::string_view, 6> identity_arguments{editor_, "--alternate-editor=/usr/bin/false", "--socket-name", endpoint, "--eval", "(emacs-pid)"};
+    const ds::Array<std::string_view, 6> identity_arguments{editor_, "--alternate-editor=/usr/bin/false", "--socket-name", endpoint, "--eval", "(emacs-pid)"};
     std::string_view identity;
 
     try {
@@ -337,8 +338,8 @@ namespace telar::runtime {
     }
 
     const auto pid = *parsed;
-    std::array<char, 256> host{};
-    if (::gethostname(host.data(), host.size() - 1) != 0) {
+    ds::Array<char, 256> host{};
+    if (::gethostname(host.dataMut(), host.size() - 1) != 0) {
       return;
     }
 
@@ -370,7 +371,7 @@ namespace telar::runtime {
       }
 
       expression_ += " 1) 0)) 0)";
-      const std::array<std::string_view, 6> arguments{editor_, "--alternate-editor=/usr/bin/false", "--socket-name", endpoint, "--eval", expression_};
+      const ds::Array<std::string_view, 6> arguments{editor_, "--alternate-editor=/usr/bin/false", "--socket-name", endpoint, "--eval", expression_};
       const auto result = trimText(command(session, arguments), " \r\n\t");
       if (result == "1") {
         session.opened = &target;

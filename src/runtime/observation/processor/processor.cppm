@@ -64,8 +64,8 @@ export {
 
       static constexpr std::size_t byte_capacity = 128 * 1024;
       static constexpr std::size_t event_capacity = 512;
-      std::array<Byte, byte_capacity> bytes;
-      std::array<ObservationEvent, event_capacity> events;
+      ds::Array<Byte, byte_capacity> bytes;
+      ds::Array<ObservationEvent, event_capacity> events;
       std::size_t byte_count = 0;
       std::size_t event_count = 0;
       bool reset_before = false;
@@ -228,7 +228,7 @@ export {
 
       void drop(std::size_t incoming) noexcept;
 
-      std::array<ObservationBatch, 2> batches_;
+      ds::Array<ObservationBatch, 2> batches_;
       unsigned active_ = 0;
       ds::Option<unsigned> sealed_;
       ds::Option<LimitReach> drop_;
@@ -273,7 +273,7 @@ export {
       };
 
       struct Request {
-        std::array<RequestEntry, 8> entries;
+        ds::Array<RequestEntry, 8> entries;
         std::size_t count = 0;
       };
 
@@ -289,7 +289,7 @@ export {
       };
 
       struct Result {
-        std::array<ResultEntry, 8> entries;
+        ds::Array<ResultEntry, 8> entries;
         std::size_t count = 0;
       };
 
@@ -305,7 +305,7 @@ export {
 
         for (const auto& entry : std::span{request.entries}.first(request.count)) {
           if (entry.probe_process) {
-            process_request.panes[process_request.count++] = entry.process_request;
+            process_request.panes.atMut(process_request.count++) = entry.process_request;
           }
         }
 
@@ -316,7 +316,7 @@ export {
         }
 
         for (const auto& entry : std::span{request.entries}.first(request.count)) {
-          auto& observed = result.entries[result.count++];
+          auto& observed = result.entries.atMut(result.count++);
 
           observed.pane = entry.pane;
           observed.generation = entry.generation;

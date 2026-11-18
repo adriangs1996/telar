@@ -215,10 +215,10 @@ namespace telar::runtime {
       return;
     }
 
-    std::array<std::uint32_t, graphics_image_count> identities;
+    ds::Array<std::uint32_t, graphics_image_count> identities;
     std::size_t count = 0;
 
-    checkGhostty(ghostty_kitty_graphics_image_ids(storage, identities.data(), identities.size(), &count));
+    checkGhostty(ghostty_kitty_graphics_image_ids(storage, identities.dataMut(), identities.size(), &count));
     count = std::min(count, identities.size());
 
     bool changed = false;
@@ -228,7 +228,7 @@ namespace telar::runtime {
       const auto image = readImage(allocator_.memory(), ghostty_kitty_graphics_image(storage, identities[index]));
       if (image) {
         changed |= !sameImage(images_[supported_count].description.key, image->description.key);
-        images_[supported_count++] = *image;
+        images_.atMut(supported_count++) = *image;
       }
     }
 
@@ -248,7 +248,7 @@ namespace telar::runtime {
       const auto placement = readPlacement(iterator, storage, terminal);
       if (placement) {
         changed |= !samePlacement(placements_[placement_count], *placement);
-        placements_[placement_count++] = *placement;
+        placements_.atMut(placement_count++) = *placement;
       }
     }
 
@@ -283,10 +283,10 @@ namespace telar::runtime {
       sample.placements += placements;
       sample.loading_bytes += loading_bytes;
 
-      std::array<std::uint32_t, graphics_image_count> identities;
+      ds::Array<std::uint32_t, graphics_image_count> identities;
       std::size_t count = 0;
 
-      checkGhostty(ghostty_kitty_graphics_image_ids(storage, identities.data(), identities.size(), &count));
+      checkGhostty(ghostty_kitty_graphics_image_ids(storage, identities.dataMut(), identities.size(), &count));
       sample.images += count;
       for (const auto identity : std::span{identities}.first(std::min(count, identities.size()))) {
         const auto image = readImage(allocator_.memory(), ghostty_kitty_graphics_image(storage, identity));

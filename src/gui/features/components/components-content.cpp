@@ -67,17 +67,17 @@ namespace telar::gui::features::components {
     node.detail = copyText(input.detail);
     node.url = copyText(input.url);
     node.samples = {.offset = static_cast<std::uint16_t>(sample_length_), .length = static_cast<std::uint16_t>(input.samples.size())};
-    std::ranges::copy(input.samples, samples_.begin() + static_cast<std::ptrdiff_t>(sample_length_));
+    std::ranges::copy(input.samples, samples_.viewMut().begin() + static_cast<std::ptrdiff_t>(sample_length_));
     sample_length_ += input.samples.size();
     node.action = Node::no_action;
     if (input.action) {
       node.action = static_cast<std::uint8_t>(action_count_);
-      actions_[action_count_++] = *input.action;
+      actions_.atMut(action_count_++) = *input.action;
     }
 
     const auto index = node_count_++;
 
-    nodes_[index] = node;
+    nodes_.atMut(index) = node;
 
     return static_cast<std::uint8_t>(index);
   }
@@ -149,22 +149,22 @@ namespace telar::gui::features::components {
     }
 
     const auto count = source.nodes().size();
-    std::array<unsigned, Node::maximum_nodes> ranks{};
-    std::array<std::uint8_t, Node::maximum_nodes> order{};
+    ds::Array<unsigned, Node::maximum_nodes> ranks{};
+    ds::Array<std::uint8_t, Node::maximum_nodes> order{};
     auto empty_containers = known_children == nullptr ? Parents{} : *known_children;
 
     for (std::size_t index = 0; index < count; ++index) {
       const auto& node = source.nodes()[index];
 
-      ranks[index] = node.effectivePriority();
-      order[index] = static_cast<std::uint8_t>(index);
+      ranks.atMut(index) = node.effectivePriority();
+      order.atMut(index) = static_cast<std::uint8_t>(index);
       if (node.parent != Node::no_parent) {
-        ranks[index] = std::min(ranks[index], ranks[node.parent]);
-        empty_containers[node.parent] = false;
+        ranks.atMut(index) = std::min(ranks[index], ranks[node.parent]);
+        empty_containers.atMut(node.parent) = false;
       }
     }
 
-    const auto sorted = std::span{order}.first(count);
+    const auto sorted = order.viewMut().first(count);
 
     std::ranges::sort(sorted, [&](auto left, auto right) {
       return ranks[left] == ranks[right] ? left < right : ranks[left] > ranks[right];
@@ -181,14 +181,14 @@ namespace telar::gui::features::components {
 
       const auto next = used.with(node);
       if (next.fits(Bounds)) {
-        kept[index] = true;
+        kept.atMut(index) = true;
         used = next;
       }
     }
 
     dropEmpty(source.nodes(), kept, known_children);
     clear();
-    std::array<std::uint8_t, Node::maximum_nodes> copied{};
+    ds::Array<std::uint8_t, Node::maximum_nodes> copied{};
 
     for (std::size_t index = 0; index < count; ++index) {
       if (!kept[index]) {
@@ -200,31 +200,31 @@ namespace telar::gui::features::components {
         input.node.parent = copied[input.node.parent];
       }
 
-      copied[index] = append(input);
+      copied.atMut(index) = append(input);
     }
   }
 
   template <Capacity Bounds>
   void Content<Bounds>::dropEmpty(std::span<const Node> source, Parents& kept, const Parents* known_children) noexcept {
     auto had_children = known_children == nullptr ? Parents{} : *known_children;
-    std::array<std::uint8_t, Node::maximum_nodes> children{};
+    ds::Array<std::uint8_t, Node::maximum_nodes> children{};
 
     for (std::size_t index = 0; index < source.size(); ++index) {
       const auto& node = source[index];
       if (node.parent != Node::no_parent) {
-        had_children[node.parent] = true;
+        had_children.atMut(node.parent) = true;
         if (kept[index]) {
-          ++children[node.parent];
+          ++children.atMut(node.parent);
         }
       }
     }
 
     for (auto index = source.size(); index-- > 0;) {
       if (kept[index] && had_children[index] && children[index] == 0) {
-        kept[index] = false;
+        kept.atMut(index) = false;
         const auto& node = source[index];
         if (node.parent != Node::no_parent) {
-          --children[node.parent];
+          --children.atMut(node.parent);
         }
       }
     }
@@ -276,7 +276,7 @@ namespace telar::gui::features::components {
   Range Content<Bounds>::copyText(std::string_view value) noexcept {
     const Range range{.offset = static_cast<std::uint16_t>(text_length_), .length = static_cast<std::uint16_t>(value.size())};
 
-    std::ranges::copy(value, text_.begin() + static_cast<std::ptrdiff_t>(text_length_));
+    std::ranges::copy(value, text_.viewMut().begin() + static_cast<std::ptrdiff_t>(text_length_));
     text_length_ += value.size();
 
     return range;
@@ -301,12 +301,12 @@ namespace telar::gui::features::components {
   }
 
   runtime::FixedText<Node::maximum_icon_bytes> ValueMapper::iconName(std::string_view name) {
-    std::array<char, Node::maximum_icon_bytes> normalized{};
+    ds::Array<char, Node::maximum_icon_bytes> normalized{};
     if (name.size() > normalized.size()) {
       throw std::invalid_argument{"Component icon name exceeds its limit"};
     }
 
-    std::ranges::transform(name, normalized.begin(), [](char byte) {
+    std::ranges::transform(name, normalized.viewMut().begin(), [](char byte) {
       return byte == '-' ? '_' : runtime::asciiLower(byte);
     });
 

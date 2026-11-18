@@ -24,6 +24,7 @@ import telar.gui.foundation.drawing;
 import telar.gui.features.workbench;
 import telar.gui.foundation.model;
 import telar.gui.features.activity;
+import telar.base.ds;
 
 namespace {
 
@@ -52,9 +53,9 @@ namespace {
     application::Pane pane{memory, 1, budget};
 
     pane.location = location;
-    std::array agents{Agent{memory}, Agent{memory}};
+    ds::Array agents{Agent{memory}, Agent{memory}};
 
-    for (auto& agent : agents) {
+    for (auto& agent : agents.viewMut()) {
       agent.location = location;
       agent.status = AgentStatus::working;
     }
@@ -62,7 +63,7 @@ namespace {
     auto activity = TabActivity::derive(tab, pane.progress_state, std::span<const Agent<Memory>>{agents}, true);
 
     check(activity.kind == TabActivity::Kind::spinner && activity.width() == TabActivity::spinner_side, "working tabs must reserve the original spinner width");
-    agents.front().status = AgentStatus::blocked;
+    agents.atMut(0).status = AgentStatus::blocked;
     activity = TabActivity::derive(tab, pane.progress_state, std::span<const Agent<Memory>>{agents}, true);
     check(activity.kind == TabActivity::Kind::dot && activity.color == PaletteRole::yellow && activity.attention == PaletteRole::yellow, "a request for input must precede another pane's work");
     pane.progress_state = PaneProgressState::set;
@@ -72,7 +73,7 @@ namespace {
     check(TabActivity::derive(tab, pane.progress_state, std::span<const Agent<Memory>>{agents}, false).kind == TabActivity::Kind::dot, "inactive tabs must keep agent status instead of terminal progress");
     tab.layout.add(2, ClientLayoutAxis::horizontal, 1);
     check(TabActivity::derive(tab, pane.progress_state, std::span<const Agent<Memory>>{agents}, true).kind == TabActivity::Kind::dot, "multi-pane tabs must not project one pane's progress as the tab's progress");
-    for (auto& agent : agents) {
+    for (auto& agent : agents.viewMut()) {
       agent.status = AgentStatus::ready;
     }
 

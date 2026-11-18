@@ -18,7 +18,7 @@ namespace telar::gui::platform {
 
     while (true) {
       waitReadable(descriptor, deadline);
-      const auto count = ::read(descriptor, chunk.bytes.data(), chunk.bytes.size());
+      const auto count = ::read(descriptor, chunk.bytes.dataMut(), chunk.bytes.size());
       if (count < 0 && (sys::lastError() == EINTR || sys::lastError() == EAGAIN)) {
         continue;
       }
@@ -52,7 +52,7 @@ namespace telar::gui::platform {
   template SensitiveBytes<telar::ConcurrentMemory> ClipboardImagePipe::read<telar::ConcurrentMemory>(telar::ConcurrentMemory& memory, int descriptor, ClipboardImagePipeLimits limits);
 
   ClipboardImagePipe::Chunk::~Chunk() {
-    eraseSensitiveBytes(bytes);
+    eraseSensitiveBytes(bytes.viewMut());
   }
 
   std::chrono::milliseconds ClipboardImagePipe::now() {

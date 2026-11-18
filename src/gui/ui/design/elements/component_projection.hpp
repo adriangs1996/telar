@@ -63,7 +63,7 @@ namespace telar::gui::qt {
 
   inline application::components::Icon componentIcon(const application::components::Node& node) {
     if (node.mark) {
-      constexpr std::array names{"provider_claude", "provider_codex", "provider_pi", "telar_mark"};
+      constexpr ds::Array names{"provider_claude", "provider_codex", "provider_pi", "telar_mark"};
 
       return application::components::Icon::find(names[static_cast<std::size_t>(*node.mark)]);
     }
@@ -100,9 +100,9 @@ namespace telar::gui::qt {
   template <application::components::Capacity Bounds, typename Resolve>
     requires std::invocable<const Resolve&, BindingAction>
   QVariantList componentRecords(const application::components::Content<Bounds>& content, const Theme& theme, const application::components::Time& time, const Resolve& resolve) {
-    constexpr std::array names{"label", "icon", "mark", "meter", "sparkline", "badge", "clock", "metric", "machines", "group", "heading", "text", "meter_row", "kv", "callout", "actions", "button", "divider"};
-    constexpr std::array tones{PaletteRole::text, PaletteRole::subtext0, PaletteRole::accent, PaletteRole::green, PaletteRole::yellow, PaletteRole::red};
-    std::array<QString, Bounds.nodes> group_names;
+    constexpr ds::Array names{"label", "icon", "mark", "meter", "sparkline", "badge", "clock", "metric", "machines", "group", "heading", "text", "meter_row", "kv", "callout", "actions", "button", "divider"};
+    constexpr ds::Array tones{PaletteRole::text, PaletteRole::subtext0, PaletteRole::accent, PaletteRole::green, PaletteRole::yellow, PaletteRole::red};
+    ds::Array<QString, Bounds.nodes> group_names;
     QVariantList result;
 
     result.reserve(static_cast<qsizetype>(content.nodes().size()));
@@ -112,7 +112,7 @@ namespace telar::gui::qt {
       const auto ink = theme.chromeColor(tones[static_cast<std::size_t>(node.tone)]);
       const auto text = node.kind == application::components::Kind::clock ? componentText(application::components::Clock::format(content.text(node.text), time).view()) : componentText(content.text(node.text));
       if (!node.tooltip && node.parent < index && content.nodes()[node.parent].kind == application::components::Kind::group && !text.isEmpty()) {
-        appendComponentAccessibleName(group_names.at(node.parent), text);
+        appendComponentAccessibleName(group_names.atCheckedMut(node.parent), text);
       }
 
       QVariantList samples;
@@ -161,7 +161,7 @@ namespace telar::gui::qt {
       if (content.nodes()[index].kind == application::components::Kind::group) {
         auto record = result.at(static_cast<qsizetype>(index)).toMap();
 
-        record.insert(QStringLiteral("accessibleName"), std::move(group_names.at(index)));
+        record.insert(QStringLiteral("accessibleName"), std::move(group_names.atCheckedMut(index)));
         result[static_cast<qsizetype>(index)] = record;
       }
     }

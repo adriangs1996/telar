@@ -68,6 +68,7 @@ import telar.gui.features.workbench;
 import telar.gui.features.notifications;
 import telar.gui.features.window;
 import telar.gui.features.status_bar;
+import telar.base.ds;
 
 namespace {
 
@@ -211,7 +212,7 @@ namespace {
       const auto keyword = QStringLiteral("syntax_keyword");
 
       QCOMPARE(themeColors(configuration).value(keyword).value<QColor>(), toQColor(configuration.theme.foreground));
-      configuration.theme.syntax[static_cast<std::size_t>(SyntaxRole::keyword)] = CellColor{.kind = CellColor::Kind::rgb, .channels = {0x95, 0xa7, 0xba}};
+      configuration.theme.syntax.atMut(static_cast<std::size_t>(SyntaxRole::keyword)) = CellColor{.kind = CellColor::Kind::rgb, .channels = {0x95, 0xa7, 0xba}};
       QCOMPARE(themeColors(configuration).value(keyword).value<QColor>(), QColor(0x95, 0xa7, 0xba));
     }
 
@@ -234,7 +235,7 @@ namespace {
       };
 
       const auto status = createChrome(engine, QStringLiteral("StatusBar"), status_properties);
-      const std::array<QQuickItem*, 3> bands{navigation.get(), sidebar.get(), status.get()};
+      const telar::ds::Array<QQuickItem*, 3> bands{navigation.get(), sidebar.get(), status.get()};
 
       for (auto* band : bands) {
         band->setParentItem(window.contentItem());
@@ -250,10 +251,10 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), fixture_wait_ms);
       Configuration configuration;
       constexpr auto explicit_panel = Color::rgb(0x405060);
-      constexpr std::array opacities{0.0F, 0.25F, 0.75F, 1.0F, 0.5F};
+      constexpr telar::ds::Array opacities{0.0F, 0.25F, 0.75F, 1.0F, 0.5F};
 
       for (const bool custom_panel : {false, true}) {
-        configuration.theme.chrome[static_cast<std::size_t>(PaletteRole::panel_bg)] = custom_panel ? CellColor{.kind = CellColor::Kind::rgb, .channels = {0x40, 0x50, 0x60}} : CellColor{};
+        configuration.theme.chrome.atMut(static_cast<std::size_t>(PaletteRole::panel_bg)) = custom_panel ? CellColor{.kind = CellColor::Kind::rgb, .channels = {0x40, 0x50, 0x60}} : CellColor{};
         const auto covering = toQColor(custom_panel ? explicit_panel : configuration.theme.background);
 
         for (const auto opacity : opacities) {
@@ -283,7 +284,7 @@ namespace {
             const auto expected_ink = qPremultiply(band_color.rgba());
 
             QCOMPARE(qAlpha(actual_ink), qAlpha(expected_ink));
-            const std::array differences{qRed(actual_ink) - qRed(expected_ink), qGreen(actual_ink) - qGreen(expected_ink), qBlue(actual_ink) - qBlue(expected_ink)};
+            const telar::ds::Array differences{qRed(actual_ink) - qRed(expected_ink), qGreen(actual_ink) - qGreen(expected_ink), qBlue(actual_ink) - qBlue(expected_ink)};
 
             QVERIFY2(std::ranges::all_of(differences, [](int difference) {
               return difference >= -1 && difference <= 1;
@@ -405,7 +406,7 @@ namespace {
       };
 
       QTRY_COMPARE_WITH_TIMEOUT(selected_caption(), QStringLiteral("tab:0"), fixture_wait_ms);
-      const std::array before{tabBounds(*layout->items(), 0), tabBounds(*layout->items(), 1)};
+      const telar::ds::Array before{tabBounds(*layout->items(), 0), tabBounds(*layout->items(), 1)};
 
       tabs.reconcile(tabRecords({.count = 2, .active = 1}));
       QTRY_COMPARE_WITH_TIMEOUT(selected_caption(), QStringLiteral("tab:1"), fixture_wait_ms);
@@ -752,29 +753,29 @@ namespace {
       pane.location = location;
       pane.cwd = "/work/telar";
       pane.foreground = "Python";
-      std::array agents{Agent{memory}, Agent{memory}};
+      telar::ds::Array agents{Agent{memory}, Agent{memory}};
 
-      agents.front().pane_id = pane.id;
-      agents.back().pane_id = pane.id;
-      agents.front().location = {.workspace = location.workspace, .tab_id = 2};
-      agents.front().title = "Other tab";
-      agents.front().title_state = telar::AgentTitleState::ready;
-      agents.back().location = location;
-      agents.back().title = "Session title";
+      agents.atMut(0).pane_id = pane.id;
+      agents.atMut(agents.size() - 1).pane_id = pane.id;
+      agents.atMut(0).location = {.workspace = location.workspace, .tab_id = 2};
+      agents.atMut(0).title = "Other tab";
+      agents.atMut(0).title_state = telar::AgentTitleState::ready;
+      agents.atMut(agents.size() - 1).location = location;
+      agents.atMut(agents.size() - 1).title = "Session title";
       for (const auto state : {telar::AgentTitleState::placeholder, telar::AgentTitleState::pending, telar::AgentTitleState::ready, telar::AgentTitleState::failed}) {
-        agents.back().title_state = state;
-        const auto record = tabRecord(tab, &pane, std::array<const application::Pane<telar::Memory>*, 1>{&pane}, std::span<const Agent<telar::Memory>>{agents}, true);
+        agents.atMut(agents.size() - 1).title_state = state;
+        const auto record = tabRecord(tab, &pane, telar::ds::Array<const application::Pane<telar::Memory>*, 1>{&pane}, std::span<const Agent<telar::Memory>>{agents}, true);
 
         QCOMPARE(record.value(QStringLiteral("label")).toString(), state == telar::AgentTitleState::placeholder ? QStringLiteral("telar · Python") : QStringLiteral("Session title"));
         QCOMPARE(record.value(QStringLiteral("application")).toString(), QStringLiteral("Python"));
       }
 
-      agents.front().location = location;
-      agents.front().title_state = telar::AgentTitleState::placeholder;
-      QCOMPARE(tabRecord(tab, &pane, std::array<const application::Pane<telar::Memory>*, 1>{&pane}, std::span<const Agent<telar::Memory>>{agents}, true).value(QStringLiteral("label")).toString(), QStringLiteral("telar · Python"));
+      agents.atMut(0).location = location;
+      agents.atMut(0).title_state = telar::AgentTitleState::placeholder;
+      QCOMPARE(tabRecord(tab, &pane, telar::ds::Array<const application::Pane<telar::Memory>*, 1>{&pane}, std::span<const Agent<telar::Memory>>{agents}, true).value(QStringLiteral("label")).toString(), QStringLiteral("telar · Python"));
       tab.label = "Review";
       tab.fullscreen = true;
-      QCOMPARE(tabRecord(tab, &pane, std::array<const application::Pane<telar::Memory>*, 1>{&pane}, std::span<const Agent<telar::Memory>>{agents}, true).value(QStringLiteral("label")).toString(), QStringLiteral("Review ⛶"));
+      QCOMPARE(tabRecord(tab, &pane, telar::ds::Array<const application::Pane<telar::Memory>*, 1>{&pane}, std::span<const Agent<telar::Memory>>{agents}, true).value(QStringLiteral("label")).toString(), QStringLiteral("Review ⛶"));
     }
 
     Q_SLOT static void unloadedTabsShowTheirListedPanes() {
@@ -783,15 +784,15 @@ namespace {
       telar::Memory& memory = adapter;
       const telar::TabLocation location{.workspace = {.kind = telar::WorkspaceLocation::Kind::workspace, .id = 1}, .tab_id = 2};
       Tab tab{memory, location};
-      const std::array panes{telar::TabPane{.pane_id = 4, .foreground = "zsh", .cwd = "/work/telar"}, telar::TabPane{.pane_id = 5, .foreground = "nvim", .cwd = "/work/other"}};
+      const telar::ds::Array panes{telar::TabPane{.pane_id = 4, .foreground = "zsh", .cwd = "/work/telar"}, telar::TabPane{.pane_id = 5, .foreground = "nvim", .cwd = "/work/other"}};
 
       tab.observePanes(panes);
-      std::array agents{Agent{memory}};
+      telar::ds::Array agents{Agent{memory}};
 
-      agents.front().pane_id = 5;
-      agents.front().location = location;
-      agents.front().status = telar::AgentStatus::blocked;
-      const auto record = tabRecord(tab, static_cast<const application::Pane<telar::Memory>*>(nullptr), std::array<const application::Pane<telar::Memory>*, 0>{}, std::span<const Agent<telar::Memory>>{agents}, false);
+      agents.atMut(0).pane_id = 5;
+      agents.atMut(0).location = location;
+      agents.atMut(0).status = telar::AgentStatus::blocked;
+      const auto record = tabRecord(tab, static_cast<const application::Pane<telar::Memory>*>(nullptr), std::span<const application::Pane<telar::Memory>* const>{}, std::span<const Agent<telar::Memory>>{agents}, false);
 
       QCOMPARE(record.value(QStringLiteral("title")).toString(), QStringLiteral("zsh"));
       QCOMPARE(record.value(QStringLiteral("path")).toString(), QStringLiteral("/work/telar"));
@@ -804,7 +805,7 @@ namespace {
       QVERIFY(!cards[1].toMap().value(QStringLiteral("attentionColor")).toString().isEmpty());
 
       tab.loaded = true;
-      QVERIFY(tabRecord(tab, static_cast<const application::Pane<telar::Memory>*>(nullptr), std::array<const application::Pane<telar::Memory>*, 0>{}, std::span<const Agent<telar::Memory>>{agents}, false).value(QStringLiteral("cards")).toList().isEmpty());
+      QVERIFY(tabRecord(tab, static_cast<const application::Pane<telar::Memory>*>(nullptr), std::span<const application::Pane<telar::Memory>* const>{}, std::span<const Agent<telar::Memory>>{agents}, false).value(QStringLiteral("cards")).toList().isEmpty());
     }
 
     Q_SLOT static void transitioningTabsUseAnAlreadyScheduledFrame() {
@@ -904,7 +905,7 @@ namespace {
     Q_SLOT static void tabsUseTheirNaturalWidthsWhenTheyFit() {
       using Geometry = TabStripGeometry;
       const auto metrics = Geometry::Metrics::scaled(1);
-      const std::array sizes{
+      const telar::ds::Array sizes{
           Geometry::Measure{.caption = 180, .chip = Geometry::chip_widths[0]},
           Geometry::Measure{.caption = 20, .chip = Geometry::chip_widths[0]},
       };
@@ -927,7 +928,7 @@ namespace {
     Q_SLOT static void tabsKeepTheirCaptionsBeforeAnyTabCollapses() {
       using Geometry = TabStripGeometry;
       const auto metrics = Geometry::Metrics::scaled(1);
-      std::array<Geometry::Measure, 3> sizes;
+      telar::ds::Array<Geometry::Measure, 3> sizes;
 
       sizes.fill({.caption = 400, .chip = Geometry::chip_widths[0]});
       const auto minimum_room = sizes[0].truncated(metrics) * static_cast<float>(sizes.size()) + metrics.gap * static_cast<float>(sizes.size() - 1);

@@ -13,6 +13,7 @@ static_assert(true);
 
 import std;
 import telar.platform.process;
+import telar.base.ds;
 
 namespace {
 
@@ -32,9 +33,9 @@ namespace {
   }
 
   int launch(std::span<char*> input, const char* const* environment) {
-    std::array<char, PATH_MAX> path{};
+    telar::ds::Array<char, PATH_MAX> path{};
     auto size = static_cast<std::uint32_t>(path.size());
-    if (_NSGetExecutablePath(path.data(), &size) != 0) {
+    if (_NSGetExecutablePath(path.dataMut(), &size) != 0) {
       static_cast<void>(std::fputs("Telar C++: cannot locate application bundle\n", stderr));
 
       return EXIT_FAILURE;

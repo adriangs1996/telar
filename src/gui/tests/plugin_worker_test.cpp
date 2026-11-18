@@ -48,6 +48,7 @@ static_assert(true);
 import telar.gui.features.plugins;
 import telar.platform.fs;
 import telar.plugins;
+import telar.base.ds;
 
 namespace {
 
@@ -99,13 +100,13 @@ namespace {
       }
     }
 
-    std::array<telar::Byte, PluginEffects::maximum_bytes + 1> storage{};
+    telar::ds::Array<telar::Byte, PluginEffects::maximum_bytes + 1> storage{};
 
     if (action == "overflow") {
       return telar::runtime::writeDescriptor(STDOUT_FILENO, storage) == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
     }
 
-    std::span<telar::Byte> output{storage};
+    std::span<telar::Byte> output{storage.viewMut()};
 
     telar::u8::encode(1, output);
     if (action == "snapshot") {
@@ -269,7 +270,7 @@ namespace {
         const char* error;
       };
 
-      constexpr std::array cases{Case{.action = "overflow", .error = "PluginWorkerFailed"}, Case{.action = "malformed", .error = "UnknownWorkerEffect"}, Case{.action = "failure", .error = "PluginWorkerFailed"}, Case{.action = "timeout", .error = "PluginWorkerTimedOut"}};
+      constexpr telar::ds::Array cases{Case{.action = "overflow", .error = "PluginWorkerFailed"}, Case{.action = "malformed", .error = "UnknownWorkerEffect"}, Case{.action = "failure", .error = "PluginWorkerFailed"}, Case{.action = "timeout", .error = "PluginWorkerTimedOut"}};
       std::size_t completed = 0;
 
       for (const auto& entry : cases) {

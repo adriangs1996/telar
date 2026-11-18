@@ -35,15 +35,15 @@ export {
 
     // The addresses of an IP packet and its payload, which views the packet, region `a`.
     struct IpPayload {
-      std::array<Byte, 16> source{};
-      std::array<Byte, 16> destination{};
+      ds::Array<Byte, 16> source{};
+      ds::Array<Byte, 16> destination{};
       tbc::view<std::span<const Byte>, tbc::lt::a> bytes;
       std::size_t original_bytes = 0;
       Byte protocol = 0;
       bool ipv6 = false;
       bool truncated = false;
 
-      static std::array<char, INET6_ADDRSTRLEN> addressText(const std::array<Byte, 16>& address, bool ipv6) noexcept;
+      static ds::Array<char, INET6_ADDRSTRLEN> addressText(const ds::Array<Byte, 16>& address, bool ipv6) noexcept;
 
       static ds::Option<IpPayload> decode(std::span<const Byte> bytes) noexcept;
     };
@@ -64,8 +64,8 @@ export {
     struct DatagramEvent {
       DatagramTransport transport = DatagramTransport::udp;
       bool ipv6 = false;
-      std::array<Byte, 16> source_address{};
-      std::array<Byte, 16> destination_address{};
+      ds::Array<Byte, 16> source_address{};
+      ds::Array<Byte, 16> destination_address{};
       std::uint16_t source_port = 0;
       std::uint16_t destination_port = 0;
       Byte icmp_type = 0;
@@ -105,8 +105,8 @@ export {
         std::uint64_t session = 0;
         std::uint32_t interface = 0;
         std::uint32_t link_type = 0;
-        std::array<char, Limits::interface_bytes> name{};
-        std::array<Byte, 32> addresses{};
+        ds::Array<char, Limits::interface_bytes> name{};
+        ds::Array<Byte, 32> addresses{};
         std::uint32_t identification = 0;
         Byte protocol = 0;
         bool ipv6 = false;
@@ -135,7 +135,7 @@ export {
         Event event;
         Clock::time_point created;
         ds::Option<SensitiveAllocation<ConcurrentMemory>> storage;
-        std::array<Range, 128> ranges;
+        ds::Array<Range, 128> ranges;
         std::size_t count = 0;
         std::size_t received = 0;
         std::size_t prefix = 0;
@@ -166,7 +166,7 @@ export {
         part.key.session = event.session;
         part.key.interface = event.interface_index;
         part.key.link_type = event.link_type;
-        std::ranges::copy(event.interface.substr(0, part.key.name.size()), part.key.name.begin());
+        std::ranges::copy(event.interface.substr(0, part.key.name.size()), part.key.name.viewMut().begin());
         if (!part.error.empty()) {
           report(event, part.error);
           return;
@@ -190,7 +190,7 @@ export {
         const auto now = Clock::now();
         ds::Option<Entry>* slot = nullptr;
 
-        for (auto& entry : entries_) {
+        for (auto& entry : entries_.viewMut()) {
           if (entry && entry->key == part.key) {
             slot = &entry;
             break;
@@ -206,11 +206,12 @@ export {
         }
 
         if (!slot) {
-          const auto free = std::ranges::find_if(entries_, [](const auto& entry) {
+          const auto entries = entries_.viewMut();
+          const auto free = std::ranges::find_if(entries, [](const auto& entry) {
             return !entry;
           });
 
-          slot = free == entries_.end() ? &*std::min_element(entries_.begin(), entries_.end(), [](const auto& first, const auto& second) {
+          slot = free == entries.end() ? &*std::min_element(entries.begin(), entries.end(), [](const auto& first, const auto& second) {
             return first->created < second->created;
           })
                                         : &*free;
@@ -250,7 +251,7 @@ export {
 
       template <typename Report>
       TBC_GENERIC void expire(Report report, bool stop = false, Clock::time_point now = Clock::now()) {
-        for (auto& entry : entries_) {
+        for (auto& entry : entries_.viewMut()) {
           if (entry && (stop || now - entry->created >= lifetime)) {
             if (entry->storage) {
               failure(entry.getMut(), stop ? "ip_fragment_capture_stopped" : "ip_fragment_timeout", report);
@@ -281,7 +282,7 @@ export {
       }
 
       ConcurrentMemory& memory_;
-      std::array<ds::Option<Entry>, maximum_datagrams> entries_;
+      ds::Array<ds::Option<Entry>, maximum_datagrams> entries_;
     };
 
   }
@@ -292,7 +293,7 @@ export {
   namespace telar::runtime::traffic {
 
     struct TcpEndpoint {
-      std::array<Byte, 16> address{};
+      ds::Array<Byte, 16> address{};
       std::uint16_t port = 0;
       bool ipv6 = false;
       auto operator<=>(const TcpEndpoint&) const = default;
@@ -335,7 +336,7 @@ export {
       struct Key {
         std::uint64_t session;
         std::uint32_t interface;
-        std::array<char, Limits::interface_bytes> name{};
+        ds::Array<char, Limits::interface_bytes> name{};
         TcpEndpoint first;
         TcpEndpoint second;
         bool operator==(const Key&) const = default;
@@ -423,7 +424,7 @@ export {
         const bool reverse = packet.destination < packet.source;
         Key key{.session = event.session, .interface = event.interface_index, .first = reverse ? packet.destination : packet.source, .second = reverse ? packet.source : packet.destination};
 
-        std::ranges::copy(event.interface, key.name.begin());
+        std::ranges::copy(event.interface, key.name.viewMut().begin());
         auto found = flows_.find(key);
         if (found != flows_.end() && (packet.flags & syn) && !(packet.flags & ack)) {
           auto& side = reverse == found->second.reverse ? found->second.outbound : found->second.inbound;

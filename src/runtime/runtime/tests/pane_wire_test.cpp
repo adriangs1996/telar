@@ -24,7 +24,7 @@ namespace {
   using namespace telar;
 
   constexpr TerminalSize size{80, 24, 8, 16};
-  constexpr std::array<std::string_view, 1> cat{"/bin/cat"};
+  constexpr ds::Array<std::string_view, 1> cat{"/bin/cat"};
 
   std::span<const Byte> bytes(std::string_view text) {
     return {reinterpret_cast<const Byte*>(text.data()), text.size()};
@@ -90,8 +90,8 @@ namespace {
     ProtocolPeer outsider{host.socket()};
     const std::string line(78, 'x');
     const auto flood = "i=0; while [ $i -lt 15000 ]; do echo " + line + "; i=$((i+1)); done; echo printed-all; exec cat";
-    const std::array<std::string_view, 3> large_arguments{"/bin/sh", "-c", flood};
-    const std::array<std::string_view, 3> small_arguments{"/bin/sh", "-c", "echo small-text; exec cat"};
+    const ds::Array<std::string_view, 3> large_arguments{"/bin/sh", "-c", flood};
+    const ds::Array<std::string_view, 3> small_arguments{"/bin/sh", "-c", "echo small-text; exec cat"};
     const auto large = owner.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = large_arguments}});
     const auto small = owner.exchange<PaneOpened>(CreatePane{.request_id = 2, .location = large.location, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = small_arguments}});
 
@@ -210,7 +210,7 @@ namespace {
     RuntimeHost host;
     ProtocolPeer owner{host.socket()};
     ProtocolPeer window{host.socket()};
-    const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", "echo first; echo needle-here; echo last; exec cat"};
+    const ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", "echo first; echo needle-here; echo last; exec cat"};
     const auto opened = owner.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
 
     screenShowing(owner, opened.pane_id, "last");
@@ -241,7 +241,7 @@ namespace {
     RuntimeHost host;
     ProtocolPeer owner{host.socket()};
     ProtocolPeer window{host.socket()};
-    const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", "echo row-text; exec cat"};
+    const ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", "echo row-text; exec cat"};
     const auto opened = owner.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
 
     screenShowing(owner, opened.pane_id, "row-text");
@@ -267,7 +267,7 @@ namespace {
   void testGraphicsLimitReported() {
     RuntimeHost host;
     ProtocolPeer control{host.socket()};
-    const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", "i=1; while [ $i -le 48 ]; do printf '\\033_Ga=T,i=%d,f=24,s=1,v=1;AAAA\\033\\\\' $i; i=$((i+1)); done; echo images-sent; exec cat"};
+    const ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", "i=1; while [ $i -le 48 ]; do printf '\\033_Ga=T,i=%d,f=24,s=1,v=1;AAAA\\033\\\\' $i; i=$((i+1)); done; echo images-sent; exec cat"};
 
     control.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{20};
@@ -310,7 +310,7 @@ namespace {
   void testSetPaneViewportFollowOrPin() {
     RuntimeHost host;
     ProtocolPeer window{host.socket()};
-    const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", "i=0; while [ $i -lt 100 ]; do echo line-$i; i=$((i+1)); done; echo history-ready; exec cat"};
+    const ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", "i=0; while [ $i -lt 100 ]; do echo line-$i; i=$((i+1)); done; echo history-ready; exec cat"};
 
     window.send(RequestRuntimeState{.client_identity = 71, .interactive = true});
     const auto opened = window.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
@@ -360,7 +360,7 @@ namespace {
     const auto program = agentExecutable(host, "portlistener");
     const auto port_file = host.directory() + "/port";
     const auto command = "'" + program + "' --listen '" + port_file + "'\r";
-    const std::array<std::string_view, 2> arguments{"/bin/sh", "-i"};
+    const ds::Array<std::string_view, 2> arguments{"/bin/sh", "-i"};
 
     window.send(RequestRuntimeState{.client_identity = 72, .interactive = true});
     const auto opened = window.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});

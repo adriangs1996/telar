@@ -33,6 +33,7 @@ import telar.testing;
 import telar.platform.primitives;
 import telar.base.memory.allocators;
 import telar.tls;
+import telar.base.ds;
 
 using telar::testing::check;
 
@@ -46,10 +47,10 @@ export {
   class AuthorityDirectory {
   public:
     AuthorityDirectory() {
-      std::array<char, 64> path{};
+      ds::Array<char, 64> path{};
 
-      std::strcpy(path.data(), "/tmp/telar-tls-test.XXXXXX");
-      check(::mkdtemp(path.data()) != nullptr);
+      std::strcpy(path.dataMut(), "/tmp/telar-tls-test.XXXXXX");
+      check(::mkdtemp(path.dataMut()) != nullptr);
       path_ = path.data();
       descriptor = FileDescriptor{::open(path_.c_str(), O_DIRECTORY | O_CLOEXEC | O_RDONLY)};
       check(static_cast<bool>(descriptor));

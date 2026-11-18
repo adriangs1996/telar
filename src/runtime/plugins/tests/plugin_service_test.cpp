@@ -44,6 +44,7 @@ import telar.runtime.plugins.worker;
 import telar.runtime.platform.signals;
 import telar.runtime.vocabulary.exchange;
 import telar.runtime.vocabulary.traffic;
+import telar.base.ds;
 
 namespace {
 
@@ -199,23 +200,23 @@ namespace {
       constexpr std::size_t producers = 4;
 
       for (unsigned round = 0; round < 16; ++round) {
-        std::array<std::jthread, producers> threads;
+        ds::Array<std::jthread, producers> threads;
 
         for (std::size_t producer = 0; producer < producers; ++producer) {
-          threads[producer] = std::jthread{[&, producer] {
+          threads.atMut(producer) = std::jthread{[&, producer] {
             for (std::size_t index = producer; index < tap::Limits::queue_depth; index += producers) {
               publish(index);
             }
           }};
         }
 
-        std::array<bool, tap::Limits::queue_depth> delivered{};
+        ds::Array<bool, tap::Limits::queue_depth> delivered{};
 
         for (std::size_t index = 0; index < delivered.size(); ++index) {
           check(::poll(&ready, 1, 3000) == 1);
           results.collect([&](const auto& result) {
             check(result.event_id < delivered.size() && !delivered[result.event_id]);
-            delivered[result.event_id] = true;
+            delivered.atMut(result.event_id) = true;
           });
         }
 
@@ -249,10 +250,10 @@ namespace {
       }
 
       for (const bool authorized : {true, false}) {
-        std::array specifications{specification("echo", authorized), specification("echo", authorized)};
+        ds::Array specifications{specification("echo", authorized), specification("echo", authorized)};
 
-        specifications[1].package_index = 1;
-        specifications[1].plugin_id = 18;
+        specifications.atMut(1).package_index = 1;
+        specifications.atMut(1).plugin_id = 18;
         tap::Service service{memory, std::span<const tap::ServiceSpec>{specifications}, executable.c_str()};
 
         check(service.listening() && service.descriptor() >= 0);
@@ -306,7 +307,7 @@ namespace {
       const ExecutablePath executable;
 
       {
-        const std::array specifications{specification("callback-error")};
+        const ds::Array specifications{specification("callback-error")};
         tap::Service service{memory, std::span<const tap::ServiceSpec>{specifications}, executable.c_str()};
         auto first = captured(memory, quota);
 
@@ -333,7 +334,7 @@ namespace {
       }
 
       {
-        const std::array specifications{specification("stale")};
+        const ds::Array specifications{specification("stale")};
         tap::Service service{memory, std::span<const tap::ServiceSpec>{specifications}, executable.c_str()};
 
         for (unsigned attempt = 0; attempt < tap::Limits::restarts; ++attempt) {
@@ -361,7 +362,7 @@ namespace {
       }
 
       {
-        const std::array specifications{specification("timeout")};
+        const ds::Array specifications{specification("timeout")};
         tap::Service service{memory, std::span<const tap::ServiceSpec>{specifications}, executable.c_str()};
         auto exchange = captured(memory, quota);
 
@@ -429,7 +430,7 @@ namespace {
 
       for (const auto& replacement : {std::string{}, grant("trusted", 'b')}) {
         writeTrust(path, grant("trusted"));
-        const std::array specifications{trusted("trusted")};
+        const ds::Array specifications{trusted("trusted")};
         tap::Service service{memory, std::span<const tap::ServiceSpec>{specifications}, executable.c_str()};
 
         service.watchTrust(path);
@@ -472,7 +473,7 @@ namespace {
 
       second.package_index = 1;
       second.plugin_id = 18;
-      const std::array specifications{trusted("first"), second};
+      const ds::Array specifications{trusted("first"), second};
       const auto both = grant("first") + "," + grant("second");
 
       for (const auto damage : {0, 1, 2, 3}) {

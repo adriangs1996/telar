@@ -61,7 +61,7 @@ export {
 
       [[nodiscard]] bool ordinaryAvailable(std::uint64_t now_ns) const noexcept;
 
-      std::array<ds::Option<InputGrace>, capacity> inputs_{};
+      ds::Array<ds::Option<InputGrace>, capacity> inputs_{};
       std::uint64_t interval_ns_ = default_interval_ns;
       ds::Option<std::uint64_t> anchor_ns_;
       ds::Option<std::uint64_t> last_preparation_ns_;

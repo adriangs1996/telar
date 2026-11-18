@@ -45,6 +45,7 @@ import telar.gui.application;
 import telar.gui.features.workbench;
 import telar.gui.foundation.drawing;
 import telar.gui.features.activity;
+import telar.base.ds;
 
 namespace {
 
@@ -291,26 +292,26 @@ namespace {
       SystemAllocator system;
       telar::MemoryAdapter adapter{system};
       telar::ConcurrentMemory& memory = adapter;
-      std::array agents{Agent{memory}, Agent{memory}, Agent{memory}, Agent{memory}};
+      telar::ds::Array agents{Agent{memory}, Agent{memory}, Agent{memory}, Agent{memory}};
       const WorkspaceLocation first{.kind = WorkspaceLocation::Kind::workspace, .id = 1};
       const WorkspaceLocation second{.kind = WorkspaceLocation::Kind::workspace, .id = 2};
       WorkspaceReplica workspaces{memory};
-      const std::array projects{WorkspaceListEntry{.workspace = first.id, .name = "first", .path = "/first"}, WorkspaceListEntry{.workspace = second.id, .name = "second", .path = "/second"}};
+      const telar::ds::Array projects{WorkspaceListEntry{.workspace = first.id, .name = "first", .path = "/first"}, WorkspaceListEntry{.workspace = second.id, .name = "second", .path = "/second"}};
 
       QVERIFY(workspaces.apply({.revision = 1, .entries = projects}));
       for (std::size_t index = 0; index < agents.size(); ++index) {
-        agents[index].pane_id = index + 1;
-        agents[index].location.workspace = first;
+        agents.atMut(index).pane_id = index + 1;
+        agents.atMut(index).location.workspace = first;
       }
 
-      agents[1].status = AgentStatus::working;
-      agents[2].status = AgentStatus::blocked;
-      agents[2].location.workspace = second;
-      agents[3].status = AgentStatus::blocked;
+      agents.atMut(1).status = AgentStatus::working;
+      agents.atMut(2).status = AgentStatus::blocked;
+      agents.atMut(2).location.workspace = second;
+      agents.atMut(3).status = AgentStatus::blocked;
       const auto plan = AgentOrder::arrange(std::span<const Agent<telar::ConcurrentMemory>>{agents}, workspaces);
 
       QCOMPARE(plan.count, agents.size());
-      const std::array<std::size_t, 4> expected{3, 1, 0, 2};
+      const telar::ds::Array<std::size_t, 4> expected{3, 1, 0, 2};
 
       for (std::size_t index = 0; index < expected.size(); ++index) {
         QCOMPARE(plan.entries[index].agent, expected[index]);

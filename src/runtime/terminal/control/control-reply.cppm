@@ -6,6 +6,7 @@ export module telar.runtime.terminal.control:reply;
 import std;
 import telar.base.memory.allocators;
 import :pty_response_queue;
+import telar.base.ds;
 
 export namespace telar::runtime::control {
 
@@ -45,7 +46,7 @@ export namespace telar::runtime::control {
       }
 
       if (size_ + text.size() <= inline_.size()) {
-        std::memcpy(inline_.data() + size_, text.data(), text.size());
+        std::memcpy(inline_.dataMut() + size_, text.data(), text.size());
       } else {
         if (overflow_.empty()) {
           overflow_.reserve(std::max(inline_.size() * 2, size_ + text.size()));
@@ -63,8 +64,8 @@ export namespace telar::runtime::control {
     }
 
     void number(std::uint64_t value) {
-      std::array<char, std::numeric_limits<std::uint64_t>::digits10 + 1> bytes;
-      const auto formatted = std::to_chars(bytes.data(), bytes.data() + bytes.size(), value);
+      ds::Array<char, std::numeric_limits<std::uint64_t>::digits10 + 1> bytes;
+      const auto formatted = std::to_chars(bytes.dataMut(), bytes.dataMut() + bytes.size(), value);
 
       append({bytes.data(), static_cast<std::size_t>(formatted.ptr - bytes.data())});
     }
@@ -72,19 +73,19 @@ export namespace telar::runtime::control {
     void hex(std::uint64_t value, unsigned width, bool upper = false) {
       constexpr std::string_view lower_digits = "0123456789abcdef";
       constexpr std::string_view upper_digits = "0123456789ABCDEF";
-      std::array<char, sizeof(value) * 2> bytes;
+      ds::Array<char, sizeof(value) * 2> bytes;
 
       width = std::min<unsigned>(width, bytes.size());
       const auto digits = upper ? upper_digits : lower_digits;
       auto offset = bytes.size();
 
       do {
-        bytes[--offset] = digits[value & (digits.size() - 1)];
+        bytes.atMut(--offset) = digits[value & (digits.size() - 1)];
         value >>= 4;
       } while (value != 0);
 
       while (bytes.size() - offset < width) {
-        bytes[--offset] = '0';
+        bytes.atMut(--offset) = '0';
       }
 
       append({bytes.data() + offset, bytes.size() - offset});
@@ -131,7 +132,7 @@ export namespace telar::runtime::control {
     }
 
     Memory& memory_;
-    std::array<std::uint8_t, PtyResponseQueue::message_byte_capacity> inline_;
+    ds::Array<std::uint8_t, PtyResponseQueue::message_byte_capacity> inline_;
     Vector<std::uint8_t, Memory> overflow_;
     std::shared_ptr<Storage> owned_;
     std::size_t size_ = 0;

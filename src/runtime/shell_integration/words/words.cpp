@@ -10,6 +10,7 @@ import telar.base.text.json;
 import telar.platform.fs;
 import telar.platform.primitives;
 import telar.ebnf.matcher;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -67,7 +68,7 @@ namespace telar::runtime {
     // passed over.
     template <typename Visit>
     void forEachPathDirectory(std::string_view path, Visit&& visit) {
-      std::array<char, PATH_MAX> name;
+      ds::Array<char, PATH_MAX> name;
 
       while (!path.empty()) {
         const auto separator = path.find(':');
@@ -78,7 +79,7 @@ namespace telar::runtime {
           continue;
         }
 
-        *std::ranges::copy(entry, name.data()).out = '\0';
+        *std::ranges::copy(entry, name.dataMut()).out = '\0';
         FileDescriptor directory{::open(name.data(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
         if (directory && !visit(directory.get())) {
           return;
@@ -216,10 +217,10 @@ namespace telar::runtime {
     // What a shell runs without looking in PATH: its builtins and reserved words.
     template <typename Add>
     void builtins(IntegratedShell shell, Add& add) {
-      static constexpr auto posix = std::to_array<std::string_view>({".", ":", "[", "alias", "bg", "break", "builtin", "case", "cd", "command", "continue", "do", "done", "echo", "elif", "else", "esac", "eval", "exec", "exit", "export", "false", "fc", "fg", "fi", "for", "getopts", "hash", "if", "in", "jobs", "kill", "local", "printf", "pwd", "read", "readonly", "return", "set", "shift", "source", "test", "then", "times", "trap", "true", "type", "typeset", "ulimit", "umask", "unalias", "unset", "until", "wait", "while", "!", "{", "}", "[["});
-      static constexpr auto bash = std::to_array<std::string_view>({"bind", "caller", "compgen", "complete", "compopt", "coproc", "declare", "dirs", "disown", "enable", "function", "help", "history", "let", "logout", "mapfile", "popd", "pushd", "readarray", "select", "shopt", "suspend", "time"});
-      static constexpr auto zsh = std::to_array<std::string_view>({"autoload", "bindkey", "bye", "chdir", "compadd", "compdef", "dirs", "disable", "disown", "emulate", "enable", "float", "foreach", "functions", "history", "integer", "let", "limit", "logout", "noglob", "nocorrect", "popd", "print", "pushd", "pushln", "r", "rehash", "repeat", "sched", "select", "setopt", "time", "unfunction", "unhash", "unlimit", "unsetopt", "vared", "whence", "where", "which", "zcompile", "zle", "zmodload", "zparseopts", "zstyle", "function", "end"});
-      static constexpr auto fish = std::to_array<std::string_view>({"abbr", "and", "argparse", "begin", "bg", "bind", "block", "break", "builtin", "case", "cd", "command", "commandline", "complete", "contains", "continue", "count", "disown", "echo", "else", "emit", "end", "eval", "exec", "exit", "false", "fg", "for", "function", "functions", "history", "if", "in", "jobs", "math", "not", "or", "path", "printf", "pwd", "random", "read", "realpath", "return", "set", "set_color", "source", "status", "string", "switch", "test", "time", "true", "type", "ulimit", "wait", "while", "[", "!"});
+      static constexpr auto posix = ds::Array<std::string_view, 59>{".", ":", "[", "alias", "bg", "break", "builtin", "case", "cd", "command", "continue", "do", "done", "echo", "elif", "else", "esac", "eval", "exec", "exit", "export", "false", "fc", "fg", "fi", "for", "getopts", "hash", "if", "in", "jobs", "kill", "local", "printf", "pwd", "read", "readonly", "return", "set", "shift", "source", "test", "then", "times", "trap", "true", "type", "typeset", "ulimit", "umask", "unalias", "unset", "until", "wait", "while", "!", "{", "}", "[["};
+      static constexpr auto bash = ds::Array<std::string_view, 23>{"bind", "caller", "compgen", "complete", "compopt", "coproc", "declare", "dirs", "disown", "enable", "function", "help", "history", "let", "logout", "mapfile", "popd", "pushd", "readarray", "select", "shopt", "suspend", "time"};
+      static constexpr auto zsh = ds::Array<std::string_view, 47>{"autoload", "bindkey", "bye", "chdir", "compadd", "compdef", "dirs", "disable", "disown", "emulate", "enable", "float", "foreach", "functions", "history", "integer", "let", "limit", "logout", "noglob", "nocorrect", "popd", "print", "pushd", "pushln", "r", "rehash", "repeat", "sched", "select", "setopt", "time", "unfunction", "unhash", "unlimit", "unsetopt", "vared", "whence", "where", "which", "zcompile", "zle", "zmodload", "zparseopts", "zstyle", "function", "end"};
+      static constexpr auto fish = ds::Array<std::string_view, 59>{"abbr", "and", "argparse", "begin", "bg", "bind", "block", "break", "builtin", "case", "cd", "command", "commandline", "complete", "contains", "continue", "count", "disown", "echo", "else", "emit", "end", "eval", "exec", "exit", "false", "fg", "for", "function", "functions", "history", "if", "in", "jobs", "math", "not", "or", "path", "printf", "pwd", "random", "read", "realpath", "return", "set", "set_color", "source", "status", "string", "switch", "test", "time", "true", "type", "ulimit", "wait", "while", "[", "!"};
       const auto each = [&](std::span<const std::string_view> names) {
         for (const auto name : names) {
           add(name);
@@ -257,12 +258,12 @@ namespace telar::runtime {
       }
 
       // No directory holds a file whose name is longer than NAME_MAX.
-      std::array<char, NAME_MAX + 1> file;
+      ds::Array<char, NAME_MAX + 1> file;
       if (found || name.size() >= file.size()) {
         return found;
       }
 
-      *std::ranges::copy(name, file.data()).out = '\0';
+      *std::ranges::copy(name, file.dataMut()).out = '\0';
       forEachPathDirectory(request.path.view(), [&](int directory) {
         struct stat state{};
 
@@ -277,7 +278,7 @@ namespace telar::runtime {
     // aliases.
     template <typename Add>
     void justRecipes(std::string_view directory, Add& add) {
-      static constexpr std::array<std::string_view, 3> names{"justfile", "Justfile", ".justfile"};
+      static constexpr ds::Array<std::string_view, 3> names{"justfile", "Justfile", ".justfile"};
       const auto source = nearest(directory, names);
       std::string_view comment;
       bool hidden = false;
@@ -346,7 +347,7 @@ namespace telar::runtime {
     // The scripts of the nearest package.json, each with the command it runs.
     template <typename Add>
     void packageScripts(SystemAllocator& memory, std::string_view directory, Add& add) {
-      static constexpr std::array<std::string_view, 1> names{"package.json"};
+      static constexpr ds::Array<std::string_view, 1> names{"package.json"};
       const auto source = nearest(directory, names);
       if (source.empty()) {
         return;
@@ -376,7 +377,7 @@ namespace telar::runtime {
     // The services of the compose file in the nearest directory that has one.
     template <typename Add>
     void composeServices(std::string_view directory, Add& add) {
-      static constexpr std::array<std::string_view, 4> names{"compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml"};
+      static constexpr ds::Array<std::string_view, 4> names{"compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml"};
       const auto source = nearest(directory, names);
       bool services = false;
       std::size_t indent = 0;
@@ -538,8 +539,8 @@ namespace telar::runtime {
           continue;
         }
 
-        std::array<char, 2 * MAXCOMLEN + 1> name{};
-        const auto length = ::proc_name(pids[index], name.data(), static_cast<std::uint32_t>(name.size()));
+        ds::Array<char, 2 * MAXCOMLEN + 1> name{};
+        const auto length = ::proc_name(pids[index], name.dataMut(), static_cast<std::uint32_t>(name.size()));
 
         found.emplace_back(pids[index], std::string{name.data(), static_cast<std::size_t>(std::max(0, length))});
       }
@@ -565,11 +566,11 @@ namespace telar::runtime {
           continue;
         }
         // /proc reports its files' size as 0: read the name, at most 16 bytes, directly.
-        std::array<char, 32> command{};
-        std::format_to_n(command.data(), command.size() - 1, "{}/comm", name);
+        ds::Array<char, 32> command{};
+        std::format_to_n(command.dataMut(), command.size() - 1, "{}/comm", name);
         FileDescriptor file{::openat(proc.get(), command.data(), O_RDONLY | O_CLOEXEC)};
-        std::array<char, 64> buffer;
-        const auto count = file ? ::read(file.get(), buffer.data(), buffer.size()) : -1;
+        ds::Array<char, 64> buffer;
+        const auto count = file ? ::read(file.get(), buffer.dataMut(), buffer.size()) : -1;
         std::string_view text{buffer.data(), count > 0 ? static_cast<std::size_t>(count) : 0};
         if (text.ends_with('\n')) {
           text.remove_suffix(1);

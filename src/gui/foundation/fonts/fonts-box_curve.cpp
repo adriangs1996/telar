@@ -21,8 +21,8 @@ namespace telar::gui::inline foundation::inline fonts::glyphs {
     }
 
     if (shape >= Shape::rising_diagonal) {
-      points_[0] = {.y = shape == Shape::rising_diagonal ? metrics_.height : 0};
-      points_[1] = {.x = metrics_.width, .y = shape == Shape::rising_diagonal ? 0 : metrics_.height};
+      points_.atMut(0) = {.y = shape == Shape::rising_diagonal ? metrics_.height : 0};
+      points_.atMut(1) = {.x = metrics_.width, .y = shape == Shape::rising_diagonal ? 0 : metrics_.height};
       count_ = 2;
       cross_ = shape == Shape::diagonal_cross;
 
@@ -37,20 +37,20 @@ namespace telar::gui::inline foundation::inline fonts::glyphs {
     const auto center_y = std::floor((metrics_.height - metrics_.light) / 2) + (metrics_.light / 2);
     const auto radius = std::min(metrics_.width, metrics_.height) / 2;
 
-    points_[0] = {.x = center_x, .y = down ? metrics_.height : 0};
+    points_.atMut(0) = {.x = center_x, .y = down ? metrics_.height : 0};
     constexpr float cubic_control_weight = 0.75F;
 
     for (std::size_t step = 0; step <= curve_segments; ++step) {
       const auto fraction = static_cast<float>(step) / static_cast<float>(curve_segments);
       const auto remaining = 1 - fraction;
 
-      points_[step + 1] = {
+      points_.atMut(step + 1) = {
           .x = center_x + (x_direction * radius * ((cubic_control_weight * remaining * fraction * fraction) + (fraction * fraction * fraction))),
           .y = center_y + (y_direction * radius * ((remaining * remaining * remaining) + (cubic_control_weight * remaining * remaining * fraction))),
       };
     }
 
-    points_.back() = {.x = right ? metrics_.width : 0, .y = center_y};
+    points_.atMut(points_.size() - 1) = {.x = right ? metrics_.width : 0, .y = center_y};
     count_ = points_.size();
   }
 
@@ -60,7 +60,7 @@ namespace telar::gui::inline foundation::inline fonts::glyphs {
     const auto middle = height / 2;
     constexpr Point top_left{};
     const auto set = [this](std::initializer_list<Point> points) noexcept {
-      std::ranges::copy(points, points_.begin());
+      std::ranges::copy(points, points_.viewMut().begin());
       count_ = points.size();
     };
 
@@ -119,11 +119,11 @@ namespace telar::gui::inline foundation::inline fonts::glyphs {
     for (std::size_t step = 0; step <= curve_segments; ++step) {
       const auto angle = (half_turn * static_cast<float>(step) / static_cast<float>(curve_segments)) - (half_turn / 2);
 
-      points_[step] = {.x = edge + (direction * metrics_.width * std::cos(angle)), .y = middle + (middle * std::sin(angle))};
+      points_.atMut(step) = {.x = edge + (direction * metrics_.width * std::cos(angle)), .y = middle + (middle * std::sin(angle))};
     }
 
-    points_[0] = {.x = edge};
-    points_[curve_segments] = {.x = edge, .y = metrics_.height};
+    points_.atMut(0) = {.x = edge};
+    points_.atMut(curve_segments) = {.x = edge, .y = metrics_.height};
     count_ = curve_segments + 1;
   }
 
@@ -225,7 +225,7 @@ namespace telar::gui::inline foundation::inline fonts::glyphs {
     return inside;
   }
 
-  float BoxCurve::segmentDistance(Point point, const std::array<Point, 2>& segment) noexcept {
+  float BoxCurve::segmentDistance(Point point, const ds::Array<Point, 2>& segment) noexcept {
     const auto& first = segment.front();
     const auto& last = segment.back();
     const auto delta_x = last.x - first.x;

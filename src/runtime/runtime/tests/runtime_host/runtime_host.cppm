@@ -23,6 +23,7 @@ import telar.runtime.runtime.media_service;
 import telar.runtime.runtime.runtime;
 import telar.runtime.suggestions.engine;
 import telar.testing;
+import telar.base.ds;
 
 using telar::testing::check;
 
@@ -62,9 +63,9 @@ namespace {
 
     ::fcntl(guard, F_SETFD, FD_CLOEXEC);
     std::thread{[guard] {
-      std::array<char, 1> byte;
+      ds::Array<char, 1> byte;
 
-      while (::read(guard, byte.data(), byte.size()) < 0 && errno == EINTR) {
+      while (::read(guard, byte.dataMut(), byte.size()) < 0 && errno == EINTR) {
       }
 
       ::kill(::getpid(), SIGTERM);
@@ -81,7 +82,7 @@ namespace {
     PathService paths{memory};
     EditorService editor{memory};
     // The suggestion engine, when the test gives one, is the shell script it names.
-    const std::array<std::string_view, 2> engine_arguments{"/bin/sh", engine};
+    const ds::Array<std::string_view, 2> engine_arguments{"/bin/sh", engine};
     SuggestionService suggestions{memory, SuggestionOptions{.arguments = engine.empty() ? std::span<const std::string_view>{} : std::span<const std::string_view>{engine_arguments}}};
     BackgroundPool background{memory, history, paths, editor, suggestions};
     NativeEventLoop<ConcurrentMemory> poller{memory};
@@ -124,10 +125,10 @@ export {
 
     explicit RuntimeHost(RuntimeHostOptions options)
         : options_(options) {
-      std::array<char, 32> directory{};
+      telar::ds::Array<char, 32> directory{};
 
-      std::strcpy(directory.data(), "/tmp/telar-host-XXXXXX");
-      check(::mkdtemp(directory.data()) != nullptr);
+      std::strcpy(directory.dataMut(), "/tmp/telar-host-XXXXXX");
+      check(::mkdtemp(directory.dataMut()) != nullptr);
       directory_ = directory.data();
       socket_ = directory_ + "/runtime.sock";
       start();

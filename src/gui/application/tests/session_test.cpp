@@ -41,6 +41,7 @@ import telar.wire.history;
 import telar.wire.layout;
 import telar.wire.runtime;
 import telar.gui.foundation.model;
+import telar.base.ds;
 
 namespace {
 
@@ -113,8 +114,8 @@ namespace {
       client.connected(1);
       check(client.activeTab() == nullptr && client.panes().empty(), "a new runtime session must discard the former projection before receiving its bootstrap snapshot");
       const TabLocation restored_location{.workspace = created.workspace, .tab_id = 1};
-      const std::array<ClientLayoutNode, 1> restored_nodes{ClientLayoutPane{1}};
-      const std::array restored_tabs{ClientTabLayout{.location = restored_location, .focused_pane = 1, .workspace_active = true, .nodes = restored_nodes}};
+      const ds::Array<ClientLayoutNode, 1> restored_nodes{ClientLayoutPane{1}};
+      const ds::Array restored_tabs{ClientTabLayout{.location = restored_location, .focused_pane = 1, .workspace_active = true, .nodes = restored_nodes}};
 
       deliver(client, ClientLayoutSnapshot{.restored = true, .sidebar_width = decltype(client)::default_sidebar_columns, .active_tab = restored_location, .tabs = restored_tabs});
       check(transport.last<OpenPane>().target.id == 1 && !transport.last<OpenPane>().launch, "reconnect must restore the current pane from the runtime's owned layout snapshot");
@@ -138,9 +139,9 @@ namespace {
       constexpr std::uint64_t unfocused_active_pane = 7;
       constexpr std::uint64_t remembered_detached_pane = 12;
       constexpr std::uint64_t other_detached_pane = 13;
-      const std::array active_names{TabPane{.pane_id = unfocused_active_pane, .foreground = "other"}, TabPane{.pane_id = 1, .foreground = "Python"}};
-      const std::array detached_names{TabPane{.pane_id = remembered_detached_pane, .foreground = "nvim", .cwd = "/projects/detached"}, TabPane{.pane_id = other_detached_pane, .foreground = "git", .cwd = "/projects/other"}};
-      const std::array tabs{
+      const ds::Array active_names{TabPane{.pane_id = unfocused_active_pane, .foreground = "other"}, TabPane{.pane_id = 1, .foreground = "Python"}};
+      const ds::Array detached_names{TabPane{.pane_id = remembered_detached_pane, .foreground = "nvim", .cwd = "/projects/detached"}, TabPane{.pane_id = other_detached_pane, .foreground = "git", .cwd = "/projects/other"}};
+      const ds::Array tabs{
           TabDescriptor{.tab_id = location.tab_id, .position = 0, .pane_count = 2, .panes = active_names},
           TabDescriptor{.tab_id = 2, .position = 1, .pane_count = 2, .panes = detached_names},
       };
@@ -160,7 +161,7 @@ namespace {
       check(application::tabApplicationName(*detached, nullptr) == "vim", "detached reports must update only the remembered foreground pane");
       check(std::string_view{detached->directory} == "/projects/detached", "detached tabs must show the listed directory of their foreground pane");
       check(detached->members.size() == 2 && detached->members[0].foreground.view() == "vim" && detached->members[1].foreground.view() == "lazygit", "detached tabs must list every pane and follow its foreground reports");
-      const std::array agents{AgentSnapshotEntry{.pane_id = 1, .pane_generation = 1, .location = location, .pane_index = 1, .workspace_label = "Copied workspace metadata", .session_title = "Working session", .title_source = AgentTitleSource::agent, .title_state = AgentTitleState::ready, .provider = AgentProvider::codex, .provider_name = "codex", .display_name = "Custom display name", .icon = "?", .status = AgentStatus::blocked, .blocked_reason = AgentBlockedReason::permission, .sequence = 1}};
+      const ds::Array agents{AgentSnapshotEntry{.pane_id = 1, .pane_generation = 1, .location = location, .pane_index = 1, .workspace_label = "Copied workspace metadata", .session_title = "Working session", .title_source = AgentTitleSource::agent, .title_state = AgentTitleState::ready, .provider = AgentProvider::codex, .provider_name = "codex", .display_name = "Custom display name", .icon = "?", .status = AgentStatus::blocked, .blocked_reason = AgentBlockedReason::permission, .sequence = 1}};
 
       deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
       check(client.agents().size() == 1 && client.agents().front().title_state == AgentTitleState::ready && client.agents().front().title == "Working session", "agent snapshots must preserve title eligibility as well as its text");
@@ -187,7 +188,7 @@ namespace {
       check(application::window::title(client, "host").view() == "Telar", "the GUI default title must match the original even without a pane");
       openFirstPane(client, transport);
       const auto location = client.activeTab()->location;
-      const std::array entries{WorkspaceListEntry{.workspace = location.workspace.id, .name = "project", .path = "/project"}};
+      const ds::Array entries{WorkspaceListEntry{.workspace = location.workspace.id, .name = "project", .path = "/project"}};
 
       deliver(client, WorkspaceList{.revision = 1, .entries = entries});
       Configuration configuration;
@@ -196,8 +197,8 @@ namespace {
       application::configuration::configure(client, configuration);
       check(application::window::title(client, "host").view() == "project/shell/@host", "automatic tab labels must default to shell before foreground discovery");
 
-      const std::array metadata_panes{TabPane{.pane_id = 1, .foreground = "Python"}};
-      const std::array metadata_tabs{TabDescriptor{.tab_id = location.tab_id, .position = 0, .pane_count = 1, .panes = metadata_panes}};
+      const ds::Array metadata_panes{TabPane{.pane_id = 1, .foreground = "Python"}};
+      const ds::Array metadata_tabs{TabDescriptor{.tab_id = location.tab_id, .position = 0, .pane_count = 1, .panes = metadata_panes}};
 
       deliver(client, WorkspaceSnapshot{.request_id = 1, .workspace = location.workspace, .name = "project", .tabs = metadata_tabs});
       check(application::window::title(client, "host").view() == "project/Python/@host", "configured titles must use remembered foreground metadata before a pane report arrives");
@@ -209,7 +210,7 @@ namespace {
 
       check(rendered.view() == "project/nvim/compiler@host", "titles must follow current workspace, foreground and pane metadata");
       check(budget.allocations() == allocations, "title projection must not allocate through the session allocator");
-      const std::array tabs{TabDescriptor{.tab_id = location.tab_id, .label = "manual"}};
+      const ds::Array tabs{TabDescriptor{.tab_id = location.tab_id, .label = "manual"}};
 
       deliver(client, WorkspaceSnapshot{.request_id = 1, .workspace = location.workspace, .name = "renamed", .tabs = tabs});
       check(application::window::title(client, "host").view() == "renamed/manual/compiler@host", "manual tab labels and renamed workspaces must replace automatic title tokens");
@@ -237,8 +238,8 @@ namespace {
 
     client.connected(client_identity);
     const TabLocation location{.workspace = WorkspaceLocation{.kind = WorkspaceLocation::Kind::workspace, .id = 4}, .tab_id = 7};
-    const std::array<ClientLayoutNode, 1> nodes{ClientLayoutPane{pane_id}};
-    const std::array<ClientTabLayout, 1> tabs{{{.location = location, .focused_pane = pane_id, .fullscreen = false, .workspace_active = true, .nodes = nodes}}};
+    const ds::Array<ClientLayoutNode, 1> nodes{ClientLayoutPane{pane_id}};
+    const ds::Array<ClientTabLayout, 1> tabs{{{.location = location, .focused_pane = pane_id, .fullscreen = false, .workspace_active = true, .nodes = nodes}}};
 
     deliver(client, ClientLayoutSnapshot{.restored = true, .sidebar_visible = false, .sidebar_width = sidebar_columns, .workspace_list_collapsed = true, .active_tab = location, .tabs = tabs});
     check(!client.configuration().sidebar_visible && client.activeTab() == nullptr, "saved sidebar preferences must restore before the canonical root is received");
@@ -250,7 +251,7 @@ namespace {
     check(client.activeTab()->focused_pane == pane_id, "the authoritative restored root must receive focus");
 
     constexpr std::uint64_t other_pane = pane_id + 1;
-    const std::array panes{PaneDescriptor{.pane_id = pane_id, .lifecycle = PaneLifecycle::running, .pane_generation = 3}, PaneDescriptor{.pane_id = other_pane, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
+    const ds::Array panes{PaneDescriptor{.pane_id = pane_id, .lifecycle = PaneLifecycle::running, .pane_generation = 3}, PaneDescriptor{.pane_id = other_pane, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
 
     deliver(client, TabSnapshot{.request_id = transport.last<RequestTabSnapshot>().request_id, .location = location, .panes = panes});
     const auto attach = transport.last<OpenPane>();
@@ -318,7 +319,7 @@ namespace {
 
     application::history::search(client, "new");
     const auto new_request = transport.last<QueryHistory>().request_id;
-    const std::array<HistoryEntry, 1> rows{{{.id = 1, .pane_id = 1, .command = "echo result", .cwd = "/tmp"}}};
+    const ds::Array<HistoryEntry, 1> rows{{{.id = 1, .pane_id = 1, .command = "echo result", .cwd = "/tmp"}}};
 
     check(deliver(client, HistoryResults{.request_id = old_request, .snapshot_id = 1, .has_more = false, .entries = rows}) == application::Change::none, "stale search results must not replace the current query");
     deliver(client, HistoryResults{.request_id = new_request, .snapshot_id = 1, .has_more = false, .entries = rows});
@@ -470,7 +471,7 @@ namespace {
     deliver(client, command);
     check(transport.last<CompleteClientCommand>().status == ClientCommandStatus::failed && transport.count(ClientTag::copy_selection) == requests, "copying an unknown pane must fail without a runtime request");
 
-    const std::array<Byte, 4> clipboard{'c', 'o', 'p', 'y'};
+    const ds::Array<Byte, 4> clipboard{'c', 'o', 'p', 'y'};
 
     check(deliver(client, PaneClipboard{.pane_id = 1, .bytes = clipboard}) == application::Change::clipboard && client.clipboard() == "copy", "asynchronous runtime clipboard data must be exposed to the platform");
   }
@@ -540,12 +541,12 @@ namespace {
       std::string_view kitty;
     };
 
-    constexpr auto expected = std::to_array<ExpectedKey>({
+    constexpr auto expected = ds::Array<ExpectedKey, 4>{{
         {.direction = PaneDirection::left, .legacy = "\x08", .kitty = "\x1b[104;5u"},
         {.direction = PaneDirection::right, .legacy = "\x0c", .kitty = "\x1b[108;5u"},
         {.direction = PaneDirection::up, .legacy = "\x0b", .kitty = "\x1b[107;5u"},
         {.direction = PaneDirection::down, .legacy = "\x0a", .kitty = "\x1b[106;5u"},
-    });
+    }};
 
     for (const auto& key : expected) {
       const auto first_message = transport.sent.size();
@@ -738,7 +739,7 @@ namespace {
         .nodes = client.activeTab()->layout.nodes(),
     };
 
-    const std::array foreign_tabs{foreign_tab};
+    const ds::Array foreign_tabs{foreign_tab};
     const ClientLayoutSnapshot foreign_snapshot{
         .restored = true,
         .sidebar_visible = true,
@@ -804,7 +805,7 @@ namespace {
 
     check(query.author == HistoryAuthorFilter::human && query.match == HistoryMatch::fuzzy, "default history queries must use human authors and fuzzy search");
     check(query.distinct, "history search must list each command once");
-    const std::array entries{
+    const ds::Array entries{
         HistoryEntry{.id = 1, .pane_id = 1, .command = "echo safe"},
         HistoryEntry{.id = 2, .pane_id = 1, .command = "echo partial", .command_truncated = true},
         HistoryEntry{.id = 3, .pane_id = 1, .command = "echo unsafe\r"},
@@ -877,7 +878,7 @@ namespace {
     application::history::search(client, "unknown directory", {.scope = HistoryScope::cwd});
     check(transport.last<QueryHistory>().scope == HistoryScope::global, "unavailable scopes must use the original global fallback");
     deliver(client, PaneCwd{.pane_id = 1, .cwd = "/work/current"});
-    const std::array workspaces{WorkspaceListEntry{.workspace = 1, .name = "Project", .path = "/work"}};
+    const ds::Array workspaces{WorkspaceListEntry{.workspace = 1, .name = "Project", .path = "/work"}};
 
     deliver(client, WorkspaceList{.revision = 1, .entries = workspaces});
     application::history::search(client, "!   failed", {.scope = HistoryScope::workspace, .author = HistoryAuthorFilter::agent});
@@ -892,7 +893,7 @@ namespace {
 
     check(query.scope == HistoryScope::pane && std::get<std::uint64_t>(query.scope_value) == 1, "pane scope must retain the focused pane identity");
 
-    const std::array entries{HistoryEntry{.id = 1, .pane_id = 1, .command = "copy exact bytes"}, HistoryEntry{.id = 2, .pane_id = 2, .command = "visit existing pane"}};
+    const ds::Array entries{HistoryEntry{.id = 1, .pane_id = 1, .command = "copy exact bytes"}, HistoryEntry{.id = 2, .pane_id = 2, .command = "visit existing pane"}};
 
     deliver(client, HistoryResults{.request_id = query.request_id, .snapshot_id = 1, .entries = entries});
     application::history::copy(client, 1);
@@ -929,7 +930,7 @@ namespace {
     constexpr std::uint64_t destination_id = 2;
     constexpr std::uint64_t destination_generation = 9;
     const TabLocation destination{.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 2}, .tab_id = 2};
-    const std::array agents{AgentSnapshotEntry{.pane_id = destination_id, .pane_generation = destination_generation, .location = destination, .pane_index = 1, .workspace_label = "Remote project", .session_title = "Existing agent", .title_source = AgentTitleSource::agent, .title_state = AgentTitleState::ready, .provider = AgentProvider::codex, .provider_name = "codex", .display_name = "Codex", .icon = ">", .status = AgentStatus::working, .sequence = 1}};
+    const ds::Array agents{AgentSnapshotEntry{.pane_id = destination_id, .pane_generation = destination_generation, .location = destination, .pane_index = 1, .workspace_label = "Remote project", .session_title = "Existing agent", .title_source = AgentTitleSource::agent, .title_state = AgentTitleState::ready, .provider = AgentProvider::codex, .provider_name = "codex", .display_name = "Codex", .icon = ">", .status = AgentStatus::working, .sequence = 1}};
 
     deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
     const auto previous_requests = transport.sent.size();
@@ -942,10 +943,10 @@ namespace {
     check(opening.target.kind == PaneTarget::Kind::pane && opening.target.id == destination_id && !opening.launch, "uncached agent navigation must open its existing pane without launching a process");
     deliver(client, PaneOpened{.request_id = opening.request_id, .pane_id = destination_id, .location = destination, .pane_generation = destination_generation});
     check(client.focusedPane()->id == destination_id && sameTab(client.activeTab()->location, destination), "the authoritative open reply must choose the agent's workspace and tab");
-    const std::array descriptors{PaneDescriptor{.pane_id = destination_id, .lifecycle = PaneLifecycle::running, .pane_generation = destination_generation}};
+    const ds::Array descriptors{PaneDescriptor{.pane_id = destination_id, .lifecycle = PaneLifecycle::running, .pane_generation = destination_generation}};
 
     deliver(client, TabSnapshot{.request_id = transport.last<RequestTabSnapshot>().request_id, .location = destination, .panes = descriptors});
-    const std::array tabs{TabDescriptor{.tab_id = destination.tab_id, .pane_count = 1}};
+    const ds::Array tabs{TabDescriptor{.tab_id = destination.tab_id, .pane_count = 1}};
 
     deliver(client, WorkspaceSnapshot{.request_id = transport.last<RequestWorkspaceSnapshot>().request_id, .workspace = destination.workspace, .name = "Remote project", .tabs = tabs});
     check(!client.requestsPending(), "the first navigation must settle its canonical snapshots before another workspace departure");
@@ -956,7 +957,7 @@ namespace {
 
     auto replacement = agents;
 
-    replacement.front().pane_generation = destination_generation + 1;
+    replacement.atMut(0).pane_generation = destination_generation + 1;
     deliver(client, AgentSnapshot{.revision = 2, .entries = replacement});
     check(!application::activity::chooseAgent(client, destination_id, destination_generation), "a replacement snapshot must retire the previous generation's choice");
     check(application::activity::chooseAgent(client, destination_id, destination_generation + 1), "the replacement agent must remain reachable");
@@ -972,10 +973,10 @@ namespace {
     constexpr auto command_bytes = Browser::maximum_command_bytes;
     constexpr auto cached_entries = Storage::command_cache_bytes / command_bytes;
     const std::string command(command_bytes, 'x');
-    std::array<HistoryEntry, cached_entries + 2> entries{};
+    ds::Array<HistoryEntry, cached_entries + 2> entries{};
 
     for (std::size_t index = 0; index < entries.size(); ++index) {
-      entries[index] = {.id = index + 1, .pane_id = 1, .command = command};
+      entries.atMut(index) = {.id = index + 1, .pane_id = 1, .command = command};
     }
 
     openFirstPane(client, transport);
@@ -1042,11 +1043,11 @@ namespace {
     TestSession client{memory, transport};
 
     openFirstPane(client, transport);
-    const std::array cells{Cell{.text = byteView(" ")}};
+    const ds::Array cells{Cell{.text = byteView(" ")}};
     constexpr std::size_t encoded_cell_capacity = 64;
-    std::array<Byte, encoded_cell_capacity> encoded{};
-    const std::array spans{FrameSpan{.start = 0, .count = 1, .cells = CellRunCodec::encode(cells, encoded)}};
-    const std::array<Byte, 1> flags{};
+    ds::Array<Byte, encoded_cell_capacity> encoded{};
+    const ds::Array spans{FrameSpan{.start = 0, .count = 1, .cells = CellRunCodec::encode(cells, encoded.viewMut())}};
+    const ds::Array<Byte, 1> flags{};
     PaneFrame frame;
 
     frame.pane_id = 1;
@@ -1060,7 +1061,7 @@ namespace {
     deliver(client, frame);
 
     application::history::search(client, {});
-    const std::array entries{HistoryEntry{.id = 1, .pane_id = 1, .command = "echo first\necho\tsecond"}};
+    const ds::Array entries{HistoryEntry{.id = 1, .pane_id = 1, .command = "echo first\necho\tsecond"}};
 
     deliver(client, HistoryResults{.request_id = transport.last<QueryHistory>().request_id, .snapshot_id = 1, .entries = entries});
     const auto first_message = transport.sent.size();
@@ -1132,7 +1133,7 @@ namespace {
     deliver(client, TabCreated{.request_id = created.request_id, .location = second, .position = 1, .label = "Second", .root_pane_id = 2, .pane_generation = 1});
     application::workbench::selectTab(client, {.workspace = created.workspace, .tab_id = 1});
     const auto late_attach = transport.last<OpenPane>();
-    const std::array<TabDescriptor, 1> tabs{{{.tab_id = 2, .position = 0, .pane_count = 1, .label = "Second"}}};
+    const ds::Array<TabDescriptor, 1> tabs{{{.tab_id = 2, .position = 0, .pane_count = 1, .label = "Second"}}};
 
     deliver(client, WorkspaceSnapshot{.request_id = 1, .workspace = created.workspace, .name = "Project", .tabs = tabs});
     check(client.tabs().size() == 1 && client.activeTab()->location.tab_id == 2 && client.findPane(1) == nullptr, "canonical workspace snapshots must remove vanished tabs and their screens");

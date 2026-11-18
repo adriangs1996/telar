@@ -56,7 +56,7 @@ namespace telar::gui::features::window {
     }
 
     if (suffix_length != 0) {
-      std::memmove(bytes_.data() + kept, suffix.data(), suffix_length);
+      std::memmove(bytes_.dataMut() + kept, suffix.data(), suffix_length);
     }
 
     length_ = kept + suffix_length;
@@ -109,7 +109,7 @@ namespace telar::gui::features::window {
   void WindowTitle::append(std::string_view value) noexcept {
     const auto count = std::min(capacity - length_, value.size());
     if (count != 0) {
-      std::memcpy(bytes_.data() + length_, value.data(), count);
+      std::memcpy(bytes_.dataMut() + length_, value.data(), count);
       length_ += count;
     }
   }
@@ -131,7 +131,7 @@ namespace telar::gui::features::window {
       try {
         const auto codepoint = Utf8Scalar::decode({bytes_.data() + position, size});
         if (codepoint >= printable_start && (codepoint < control_start || codepoint > control_end)) {
-          std::memmove(bytes_.data() + written, bytes_.data() + position, size);
+          std::memmove(bytes_.dataMut() + written, bytes_.data() + position, size);
           written += size;
         }
       } catch (const std::invalid_argument&) {

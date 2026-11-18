@@ -117,9 +117,9 @@ namespace telar::runtime::cli {
 
   void runRedirect(Memory& memory, std::span<char* const> arguments, bool cleanup) {
     const char* socket = nullptr;
-    std::array<redirect::Target, redirect::Target::maximum_targets> targets;
+    ds::Array<redirect::Target, redirect::Target::maximum_targets> targets;
     std::size_t count = 0;
-    std::array<ProcessIdentity, redirect::SocketOwners::maximum_processes> processes;
+    ds::Array<ProcessIdentity, redirect::SocketOwners::maximum_processes> processes;
     std::size_t process_count = 0;
     bool dry_run = false;
     auto direction = redirect::Direction::outbound;
@@ -150,7 +150,7 @@ namespace telar::runtime::cli {
           throw std::invalid_argument{"Duplicate redirect destination"};
         }
 
-        targets[count++] = target;
+        targets.atMut(count++) = target;
       } else if (argument == "--direction" && !cleanup && !direction_given) {
         direction = redirect::parseDirection(value);
         direction_given = true;
@@ -163,7 +163,7 @@ namespace telar::runtime::cli {
           throw std::invalid_argument{"Duplicate selected process"};
         }
 
-        processes[process_count++] = process;
+        processes.atMut(process_count++) = process;
       } else {
         throw std::invalid_argument{"Unknown, duplicate or excessive redirect option"};
       }
@@ -218,7 +218,7 @@ namespace telar::runtime::cli {
 
       const auto rules = helper.plan(metadata.st_uid, identity, true);
       redirect::PfCommand command{memory};
-      const std::array<std::string_view, 5> arguments{"-n", "-a", identity.anchor, "-f", "-"};
+      const ds::Array<std::string_view, 5> arguments{"-n", "-a", identity.anchor, "-f", "-"};
 
       command.run(arguments, rules);
       std::fwrite(rules.data(), 1, rules.size(), stdout);

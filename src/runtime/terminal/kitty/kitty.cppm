@@ -146,8 +146,8 @@ export namespace telar::runtime {
     void capture(std::span<const std::uint8_t> bytes) noexcept;
 
     KittyFraming framing_;
-    std::array<char, 256> control_;
-    std::array<char, 64> payload_;
+    ds::Array<char, 256> control_;
+    ds::Array<char, 64> payload_;
     std::size_t control_length_ = 0;
     std::size_t payload_length_ = 0;
     bool in_payload_ = false;
@@ -190,10 +190,10 @@ export namespace telar::runtime {
 
     static ds::Option<Header> parse(const KittyCommandView& command) noexcept;
 
-    static ds::Option<std::array<std::uint32_t, 2>> pngSize(std::string_view encoded) noexcept;
+    static ds::Option<ds::Array<std::uint32_t, 2>> pngSize(std::string_view encoded) noexcept;
 
     static constexpr std::size_t image_capacity = 64;
-    std::array<ImageSize, image_capacity> sizes_{};
+    ds::Array<ImageSize, image_capacity> sizes_{};
     ds::Option<Header> pending_;
     std::size_t next_size_ = 0;
   };
@@ -248,7 +248,7 @@ export namespace telar::runtime {
     };
 
     static constexpr std::size_t capacity = 64;
-    tbc::view<std::array<Entry, capacity>, tbc::lt::a> entries_;
+    tbc::view<ds::Array<Entry, capacity>, tbc::lt::a> entries_;
     mutable std::mutex mutex_;
     std::atomic<std::size_t> count_{0};
   };
@@ -391,7 +391,7 @@ export namespace telar::runtime {
 
   private:
     const GraphicsChildFile& file_;
-    std::array<char, PATH_MAX> path_{};
+    ds::Array<char, PATH_MAX> path_{};
     bool armed_ = false;
   };
 

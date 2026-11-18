@@ -362,10 +362,10 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   void HttpFields<Memory>::remove(std::string_view name) noexcept {
-    std::array<bool, maximum_fields> matching{};
+    ds::Array<bool, maximum_fields> matching{};
 
     for (std::size_t index = 0; index < fields_.size(); ++index) {
-      matching[index] = asciiEqualIgnoreCase(fields_[index].name(), name);
+      matching.atMut(index) = asciiEqualIgnoreCase(fields_[index].name(), name);
     }
 
     for (auto index = fields_.size(); index != 0; --index) {
@@ -463,8 +463,8 @@ namespace telar::runtime {
     message.scheme = reader.text();
     message.authority = reader.text();
     message.status = reader.integer<std::uint16_t>();
-    message.header_count = readFields(reader, message.headers);
-    message.trailer_count = readFields(reader, message.trailers);
+    message.header_count = readFields(reader, message.headers.viewMut());
+    message.trailer_count = readFields(reader, message.trailers.viewMut());
     message.body = reader.bytes();
     reader.finish();
     validate(message);
@@ -885,7 +885,7 @@ namespace telar::runtime {
   template <Allocator Memory>
   void HttpMessage<Memory>::validateTrailers() const {
     for (const auto& field : trailers.fields()) {
-      constexpr std::array forbidden{"host", "content-encoding", "content-type", "content-range", "connection", "authorization", "proxy-authorization", "proxy-authenticate", "www-authenticate", "cookie", "set-cookie", "cache-control", "max-forwards", "te", "upgrade", "range"};
+      constexpr ds::Array forbidden{"host", "content-encoding", "content-type", "content-range", "connection", "authorization", "proxy-authorization", "proxy-authenticate", "www-authenticate", "cookie", "set-cookie", "cache-control", "max-forwards", "te", "upgrade", "range"};
       if (framingField(field.name()) || std::ranges::any_of(forbidden, [&](std::string_view name) {
             return asciiEqualIgnoreCase(field.name(), name);
           })) {
@@ -950,8 +950,8 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   void HttpMessage<Memory>::number(Bytes& output, std::size_t value, int base) {
-    std::array<char, std::numeric_limits<std::size_t>::digits10 + 1> text;
-    const auto result = std::to_chars(text.data(), text.data() + text.size(), value, base);
+    ds::Array<char, std::numeric_limits<std::size_t>::digits10 + 1> text;
+    const auto result = std::to_chars(text.dataMut(), text.dataMut() + text.size(), value, base);
     if (result.ec != std::errc{}) {
       throw std::length_error{"Invalid HTTP length"};
     }

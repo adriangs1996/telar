@@ -6,6 +6,7 @@ export module telar.gui.foundation.text:ranked_matches;
 import std;
 
 import telar.base.history;
+import telar.base.ds;
 
 // Interface: palette/ranked_matches.cppm
 export {
@@ -49,11 +50,11 @@ export {
         auto tail = std::min(length_, Capacity - 1);
 
         while (tail > position) {
-          matches_[tail] = std::move(matches_[tail - 1]);
+          matches_.atMut(tail) = std::move(matches_.atMut(tail - 1));
           --tail;
         }
 
-        matches_[position] = {.target = std::move(target), .score = score};
+        matches_.atMut(position) = {.target = std::move(target), .score = score};
         length_ = std::min(length_ + 1, Capacity);
       }
 
@@ -62,7 +63,7 @@ export {
       }
 
     private:
-      std::array<Match, Capacity> matches_{};
+      ds::Array<Match, Capacity> matches_{};
       std::size_t length_ = 0;
     };
 

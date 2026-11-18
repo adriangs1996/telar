@@ -33,7 +33,7 @@ export {
       void print() const noexcept;
 
     private:
-      tbc::view<std::array<LimitReach, 16>, tbc::lt::a> entries_{};
+      tbc::view<ds::Array<LimitReach, 16>, tbc::lt::a> entries_{};
       std::size_t count_ = 0;
     };
 
@@ -60,7 +60,7 @@ export {
     // The value of `name` in `names` as an enum whose values follow the table. Stays in the
     // interface because it is a template over the caller's enum; the lookup is out of line.
     template <typename Enum, std::size_t Count>
-    [[nodiscard]] TBC_GENERIC ds::Option<Enum> optionalChoice(const lua::Value& value, const std::array<std::string_view, Count>& names) {
+    [[nodiscard]] TBC_GENERIC ds::Option<Enum> optionalChoice(const lua::Value& value, const ds::Array<std::string_view, Count>& names) {
       const auto index = optionalChoiceIndex(value, names);
 
       return index ? ds::Option{static_cast<Enum>(*index)} : ds::none;
@@ -107,7 +107,7 @@ export {
       std::string_view display_name;
       std::string_view placeholder;
       AgentAttachmentMarkers attachments;
-      std::array<std::string_view, 2> process_names;
+      ds::Array<std::string_view, 2> process_names;
     };
 
     ProviderDescription describeProvider(AgentProvider provider) noexcept;
@@ -140,10 +140,10 @@ export {
       String<Memory> root(Memory& memory, const EnvironmentSource& environment, bool legacy = false) const;
 
     private:
-      static constexpr auto claude_events = std::to_array<std::string_view>({"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop", "Notification", "SessionEnd", "CwdChanged"});
-      static constexpr auto claude_worktree_events = std::to_array<std::string_view>({"WorktreeCreate", "WorktreeRemove"});
-      static constexpr auto codex_events = std::to_array<std::string_view>({"SessionStart", "UserPromptSubmit", "PermissionRequest", "PreToolUse", "PostToolUse", "Stop", "Interrupt", "SubagentStop", "SessionEnd"});
-      static constexpr auto cursor_events = std::to_array<std::string_view>({"sessionStart", "beforeSubmitPrompt", "preToolUse", "postToolUse", "postToolUseFailure", "stop", "sessionEnd"});
+      static constexpr auto claude_events = ds::Array<std::string_view, 8>{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop", "Notification", "SessionEnd", "CwdChanged"};
+      static constexpr auto claude_worktree_events = ds::Array<std::string_view, 2>{"WorktreeCreate", "WorktreeRemove"};
+      static constexpr auto codex_events = ds::Array<std::string_view, 9>{"SessionStart", "UserPromptSubmit", "PermissionRequest", "PreToolUse", "PostToolUse", "Stop", "Interrupt", "SubagentStop", "SessionEnd"};
+      static constexpr auto cursor_events = ds::Array<std::string_view, 7>{"sessionStart", "beforeSubmitPrompt", "preToolUse", "postToolUse", "postToolUseFailure", "stop", "sessionEnd"};
     };
 
   }

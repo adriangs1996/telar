@@ -22,6 +22,7 @@ import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 using namespace telar;
 using namespace telar::runtime;
@@ -42,9 +43,9 @@ static void writeAll(int descriptor, std::string_view bytes) {
 }
 
 static std::string marker(unsigned sequence) {
-  std::array<char, 32> buffer{};
+  ds::Array<char, 32> buffer{};
 
-  std::snprintf(buffer.data(), buffer.size(), "::%06u::", sequence);
+  std::snprintf(buffer.dataMut(), buffer.size(), "::%06u::", sequence);
   return buffer.data();
 }
 
@@ -82,7 +83,7 @@ static std::string fixture(std::string_view workload, unsigned sequence) {
   } else if (workload == "links") {
     output += "\x1b[4;1H\x1b]8;;https://example.test/" + std::to_string(sequence) + "\x1b\\link\x1b]8;;\x1b\\";
   } else if (workload == "mixed") {
-    static constexpr std::array<std::string_view, 8> operations{
+    static constexpr ds::Array<std::string_view, 8> operations{
         "\x1b[?1049h\x1b[2J\x1b[4;1Halternate screen",
         "\x1b[?1049l\x1b[2;79H界界\x1b[3;79Habc界",
         "\x1b[5;1H\x1b[41mbackground\x1b[K\x1b[0m",
@@ -95,7 +96,7 @@ static std::string fixture(std::string_view workload, unsigned sequence) {
 
     output += operations[sequence % operations.size()];
   } else if (workload == "graphics-cursor") {
-    static constexpr std::array<std::string_view, 8> operations{
+    static constexpr ds::Array<std::string_view, 8> operations{
         "\x1b[4;3H\x1b_Ga=T,s=32,v=64,i=1,q=2;bad\x1b\\after-image",
         "\x1b[4;3H\x1b_Ga=p,i=1,c=3,q=2;\x1b\\after-put",
         "\x1b[6;3H\x1b_Ga=T,c=4,r=3,q=2,m=1;\x1b\\\x1b_Gm=0;\x1b\\after-chunks",
@@ -167,7 +168,7 @@ public:
   }
 
   void open(const char* executable, std::string_view workload, bool fresh_workspace = false) {
-    const std::array<std::string_view, 3> arguments{executable, "--child", workload};
+    const ds::Array<std::string_view, 3> arguments{executable, "--child", workload};
     const TerminalSize size{80, 24, 8, 16};
     const Launch launch{.cwd = "/tmp", .arguments = arguments};
 
@@ -185,7 +186,7 @@ public:
   }
 
   void next(unsigned sequence) {
-    const std::array<Byte, 1> input{'n'};
+    const ds::Array<Byte, 1> input{'n'};
 
     send(PaneInput{.pane_id = pane_id_, .bytes = input});
     waitForMarker(sequence);
@@ -250,7 +251,7 @@ public:
   }
 
   void finish() {
-    const std::array<Byte, 1> input{'q'};
+    const ds::Array<Byte, 1> input{'q'};
 
     send(PaneInput{.pane_id = pane_id_, .bytes = input});
     while (!exited_) {
@@ -390,7 +391,7 @@ private:
         destination.length = static_cast<Byte>(cell.text.size());
         destination.width = cell.width;
         destination.style = cell.style;
-        std::copy(cell.text.begin(), cell.text.end(), destination.text.begin());
+        std::copy(cell.text.begin(), cell.text.end(), destination.text.dataMut());
       }
     }
 

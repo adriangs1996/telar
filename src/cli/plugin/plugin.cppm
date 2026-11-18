@@ -46,7 +46,7 @@ export {
     struct PluginOptions {
       PluginAction action;
       std::string_view path;
-      std::array<plugins::Capability, static_cast<std::size_t>(plugins::Capability::count)> capabilities{};
+      ds::Array<plugins::Capability, static_cast<std::size_t>(plugins::Capability::count)> capabilities{};
       std::size_t capability_count = 0;
 
       // The plugin command's options, with their error names.
@@ -110,7 +110,7 @@ export {
   namespace telar::runtime::cli {
 
     // Each `ClientAction`'s wire name, in the enum's order.
-    inline constexpr std::array<std::string_view, 34> client_action_names{
+    inline constexpr ds::Array<std::string_view, 34> client_action_names{
         "workspace_select",
         "tab_create",
         "tab_select",
@@ -147,7 +147,7 @@ export {
         "plugin_run"
     };
 
-    inline constexpr std::array<std::string_view, 4> pane_directions{"left", "right", "up", "down"};
+    inline constexpr ds::Array<std::string_view, 4> pane_directions{"left", "right", "up", "down"};
 
     std::string_view clientActionName(ClientAction action);
 

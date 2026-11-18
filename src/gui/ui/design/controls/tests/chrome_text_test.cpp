@@ -176,7 +176,7 @@ namespace {
   class AncestorItem final : public QQuickItem {
   public:
     [[nodiscard]] auto observerCounts() const {
-      return std::array{receivers(SIGNAL(xChanged())), receivers(SIGNAL(yChanged())), receivers(SIGNAL(widthChanged())), receivers(SIGNAL(heightChanged())), receivers(SIGNAL(rotationChanged())), receivers(SIGNAL(scaleChanged())), receivers(SIGNAL(transformOriginChanged(TransformOrigin))), receivers(SIGNAL(parentChanged(QQuickItem*)))};
+      return telar::ds::Array{receivers(SIGNAL(xChanged())), receivers(SIGNAL(yChanged())), receivers(SIGNAL(widthChanged())), receivers(SIGNAL(heightChanged())), receivers(SIGNAL(rotationChanged())), receivers(SIGNAL(scaleChanged())), receivers(SIGNAL(transformOriginChanged(TransformOrigin))), receivers(SIGNAL(parentChanged(QQuickItem*)))};
     }
   };
 
@@ -199,7 +199,7 @@ namespace {
       const auto absent = first.observerCounts();
       auto present = absent;
 
-      for (auto& count : present) {
+      for (auto& count : present.viewMut()) {
         ++count;
       }
 
@@ -815,3 +815,4 @@ namespace {
 }
 
 #include "chrome_text_test.moc"
+#include "telar_base/ds/values.hpp"

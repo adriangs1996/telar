@@ -10,7 +10,7 @@ namespace telar::runtime::plugins {
       : validator_(validator) {}
 
   std::span<const Byte> ActionEncoder::encode(const lua::Value& result) {
-    auto output = std::span{storage_}.subspan(1);
+    auto output = storage_.viewMut().subspan(1);
     Byte count = 0;
 
     if (result.field("kind").present()) {
@@ -23,7 +23,7 @@ namespace telar::runtime::plugins {
       }
     }
 
-    storage_[0] = count;
+    storage_.atMut(0) = count;
     return std::span{storage_}.first(storage_.size() - output.size());
   }
 
@@ -64,13 +64,13 @@ namespace telar::runtime::plugins {
   }
 
   void ActionEncoder::directional(std::string_view name, std::string_view direction, std::span<Byte>& output) {
-    constexpr auto kinds = std::to_array<std::pair<std::string_view, ActionTag>>({
+    constexpr auto kinds = ds::Array<std::pair<std::string_view, ActionTag>, 5>{{
         {"split-pane", ActionTag::split},
         {"focus-pane", ActionTag::focus},
         {"resize-pane", ActionTag::resize},
         {"resize-sidebar", ActionTag::resize_sidebar},
         {"move-tab", ActionTag::move_tab},
-    });
+    }};
 
     const auto* found = std::ranges::find(kinds, name, &decltype(kinds)::value_type::first);
     if (found == kinds.end()) {
@@ -78,7 +78,7 @@ namespace telar::runtime::plugins {
     }
 
     const auto kind = found->second;
-    constexpr std::array directions{"left", "right", "up", "down"};
+    constexpr ds::Array directions{"left", "right", "up", "down"};
     Byte index = 0;
 
     if (kind == ActionTag::split) {
@@ -94,7 +94,7 @@ namespace telar::runtime::plugins {
   }
 
   void ActionEncoder::builtin(std::string_view name, std::span<Byte>& output) {
-    constexpr auto simple = std::to_array<std::pair<std::string_view, ActionTag>>({
+    constexpr auto simple = ds::Array<std::pair<std::string_view, ActionTag>, 11>{{
         {"toggle-sidebar", ActionTag::sidebar},
         {"close-pane", ActionTag::close_pane},
         {"new-tab", ActionTag::new_tab},
@@ -106,7 +106,7 @@ namespace telar::runtime::plugins {
         {"new-workspace", ActionTag::new_workspace},
         {"rename-workspace", ActionTag::rename_workspace},
         {"leave-worktree", ActionTag::leave_worktree},
-    });
+    }};
 
     for (const auto& [known, value] : simple) {
       if (name == known) {
@@ -121,13 +121,13 @@ namespace telar::runtime::plugins {
       return;
     }
 
-    constexpr auto stems = std::to_array<std::pair<std::string_view, std::string_view>>({
+    constexpr auto stems = ds::Array<std::pair<std::string_view, std::string_view>, 5>{{
         {"resize-sidebar-", "resize-sidebar"},
         {"move-tab-", "move-tab"},
         {"split-", "split-pane"},
         {"focus-", "focus-pane"},
         {"resize-", "resize-pane"},
-    });
+    }};
 
     for (const auto& [prefix, kind] : stems) {
       if (name.starts_with(prefix)) {
@@ -166,11 +166,11 @@ namespace telar::runtime::plugins {
   void ActionEncoder::notification(const lua::Value& value, std::span<Byte>& output) {
     tag(ActionTag::notification, output);
     const auto level = value.field("level");
-    constexpr std::array levels{"info", "success", "warning", "failure"};
+    constexpr ds::Array levels{"info", "success", "warning", "failure"};
 
     u8::encode(level.present() ? static_cast<Byte>(std::ranges::find(levels, level.string()) - levels.begin()) : Byte{0}, output);
     u32::encode(static_cast<std::uint32_t>(value.field("duration_ms").boundedInteger(default_notification_duration_ms, min_notification_duration_ms, max_notification_duration_ms)), output);
-    constexpr std::array targets{"pane_id", "tab_id", "workspace_id"};
+    constexpr ds::Array targets{"pane_id", "tab_id", "workspace_id"};
     Byte target_kind = 0;
     std::uint64_t target_id = 0;
 
@@ -203,11 +203,11 @@ namespace telar::runtime::plugins {
       directory_.emplace("/tmp/telar-tap-workers-XXXXXX");
     }
 
-    std::array<char, 32> name;
+    ds::Array<char, 32> name;
     constexpr std::string_view prefix = "package-";
 
-    std::copy(prefix.begin(), prefix.end(), name.begin());
-    const auto suffix = std::to_chars(name.data() + prefix.size(), name.data() + name.size() - 1, index);
+    std::copy(prefix.begin(), prefix.end(), name.dataMut());
+    const auto suffix = std::to_chars(name.dataMut() + prefix.size(), name.dataMut() + name.size() - 1, index);
     if (suffix.ec != std::errc{}) {
       throw std::length_error{"Plugin package index exceeds its limit"};
     }
@@ -232,7 +232,7 @@ namespace telar::runtime::plugins {
 
   bool RestartWindow::record(std::chrono::milliseconds now) noexcept {
     if (count_ < restarts_.size()) {
-      restarts_[count_++] = now;
+      restarts_.atMut(count_++) = now;
       return count_ == restarts_.size() && now - restarts_.front() <= Limits::restart_window;
     }
 
@@ -240,8 +240,8 @@ namespace telar::runtime::plugins {
       return true;
     }
 
-    std::move(restarts_.begin() + 1, restarts_.end(), restarts_.begin());
-    restarts_.back() = now;
+    std::move(restarts_.dataMut() + 1, (restarts_.dataMut() + restarts_.size()), restarts_.dataMut());
+    restarts_.atMut(restarts_.size() - 1) = now;
     return false;
   }
 

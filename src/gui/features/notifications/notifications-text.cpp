@@ -35,7 +35,7 @@ namespace telar::gui::features::notifications {
       const auto prefix = paragraph.substr(0, end);
       const auto last_word = prefix.find_last_not_of(" \t");
 
-      lines_[count_++] = last_word == std::string_view::npos ? std::string_view{} : prefix.substr(0, last_word + 1);
+      lines_.atMut(count_++) = last_word == std::string_view::npos ? std::string_view{} : prefix.substr(0, last_word + 1);
       remaining = trimStart(remaining.substr(end));
     }
   }
@@ -79,7 +79,7 @@ namespace telar::gui::features::notifications {
       tail_.assign(fitted);
     } else {
       // Unless the fit shortens the label into its buffer, it keeps the whole paragraph or nothing.
-      lines_[count_] = fitted.empty() ? std::string_view{} : paragraph;
+      lines_.atMut(count_) = fitted.empty() ? std::string_view{} : paragraph;
     }
 
     ++count_;

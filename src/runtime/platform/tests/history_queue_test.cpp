@@ -21,6 +21,7 @@ import telar.wire.runtime;
 import telar.wire.vocabulary;
 import telar.runtime.transport.connection;
 import telar.runtime.platform.background_executor;
+import telar.base.ds;
 
 namespace {
 
@@ -36,8 +37,8 @@ namespace {
 
     template <Allocator Memory>
     void process(std::span<const Byte> payload, EncodedReply<Memory>& reply) {
-      std::array<Byte, 256> bytes;
-      DecodeStorage storage{bytes};
+      ds::Array<Byte, 256> bytes;
+      DecodeStorage storage{bytes.viewMut()};
       const auto request = payload.front() == static_cast<Byte>(ClientTag::query_history)
                                ? Codec::decode<QueryHistory>(payload, storage).request_id
                                : Codec::decode<QueryClients>(payload, storage).request_id;
@@ -102,8 +103,8 @@ namespace {
           return;
         }
 
-        std::array<Byte, 256> bytes;
-        DecodeStorage storage{bytes};
+        ds::Array<Byte, 256> bytes;
+        DecodeStorage storage{bytes.viewMut()};
         const auto failure = Codec::decode<RequestFailed>(payload, storage);
 
         check(client == 1 && failure.request_id == 1 && failure.code == FailureCode::internal && failure.message == "History query superseded");

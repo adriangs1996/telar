@@ -12,6 +12,7 @@ import telar.testing;
 import telar.testing.erasure_checking_allocator;
 import telar.base.memory.allocators;
 import telar.base.memory.sensitive;
+import telar.base.ds;
 
 namespace {
 
@@ -46,9 +47,9 @@ namespace {
         }
       }
 
-      std::array<void*, 200> blocks;
+      ds::Array<void*, 200> blocks;
 
-      for (auto& block : blocks) {
+      for (auto& block : blocks.viewMut()) {
         block = memory.allocate(4096, alignof(std::max_align_t));
         check(block != nullptr);
         std::memset(block, 0x7c, 4096);

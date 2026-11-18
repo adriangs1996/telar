@@ -59,7 +59,7 @@ namespace {
 
     check(nodes.size() == 4 && nodes.front().kind == features::components::Kind::group && nodes.front().parent == features::components::Node::no_parent, "builtin metrics must retain the original root group");
     check(metrics.text(nodes.front().text) == "system", "builtin metrics must name their summary");
-    constexpr std::array names{BarMetric::battery, BarMetric::cpu, BarMetric::memory};
+    constexpr telar::ds::Array names{BarMetric::battery, BarMetric::cpu, BarMetric::memory};
 
     for (std::size_t index = 0; index < names.size(); ++index) {
       const auto& node = nodes[index + 1];
@@ -158,7 +158,7 @@ return {api_version = 2, client = {
     check(definition && definition->kind == DefinitionActionDescription::Kind::panel && definition->index == 1, "static component actions must resolve sorted panel indices");
     check(bar.text(bar.nodes().front().url) == "https://action-fallback.test", "components with an action must also retain their configured URL");
     std::size_t argument = 0;
-    constexpr auto expected = std::to_array<std::string_view>({"helper", "a b", "$(literal)"});
+    constexpr auto expected = telar::ds::Array<std::string_view, 3>{"helper", "a b", "$(literal)"};
 
     base.visitArguments(definitions.source(features::components::Position::top_right).reference, "command", [&](std::string_view value) {
       check(argument < expected.size() && value == expected[argument], "command argv must retain literal argument boundaries");
@@ -186,7 +186,7 @@ return {api_version = 2, client = {
       std::string_view profile;
     };
 
-    constexpr std::array invalid{
+    constexpr telar::ds::Array invalid{
         InvalidFooter{R"(local t=require('telar'); return {api_version=2,client={bars={sidebar_footer={t.bar.metrics(),t.bar.machines(),t.bar.static('third'),t.bar.static('fourth')}}}})", "config.client.bars.sidebar_footer accepts at most 3 slots", {}},
         InvalidFooter{R"(local t=require('telar'); return {api_version=2,client={bars={sidebar_footer={t.bar.tabs()}}}})", "config.client.bars.sidebar_footer cannot contain tabs", {}},
         InvalidFooter{R"(local t=require('telar'); return {api_version=2,client={bars={sidebar_footer={t.bar.static('first'),t.bar.metrics(),t.bar.tabs()}}}})", "config.client.bars.sidebar_footer cannot contain tabs", {}},
@@ -219,11 +219,11 @@ return {api_version = 2, client = {
       shorter={client={bars={sidebar_footer={t.bar.static('only')}}}},
     }}
   )";
-    constexpr std::array positions{features::components::Position::footer_left, features::components::Position::footer_center, features::components::Position::footer_right};
+    constexpr telar::ds::Array positions{features::components::Position::footer_left, features::components::Position::footer_center, features::components::Position::footer_right};
 
     {
       const application::ConfigurationGeneration generation{memory, application::ConfigurationSourceText{.source = valid, .directory = {}, .profile = "inherited"}};
-      constexpr std::array kinds{features::components::SourceKind::metrics, features::components::SourceKind::machines, features::components::SourceKind::fixed};
+      constexpr telar::ds::Array kinds{features::components::SourceKind::metrics, features::components::SourceKind::machines, features::components::SourceKind::fixed};
 
       for (std::size_t index = 0; index < positions.size(); ++index) {
         check(generation.components().definitions().source(positions[index]).kind == kinds[index], "valid footer must retain all three ordered sources through inheritance");
@@ -389,7 +389,7 @@ return {api_version = 2, client = {
     using Kind = features::components::ElementKind;
 
     check(elements.size() == 9, "an element tree must keep every element in document order");
-    check(elements[0].kind == Kind::row && elements[0].width == 180 && elements[0].padding == std::array<float, 4>{10, 2, 10, 2} && elements[0].background.alpha == 0x80, "boxes must read sizes, CSS-ordered padding and colors with alpha");
+    check(elements[0].kind == Kind::row && elements[0].width == 180 && elements[0].padding == telar::ds::Array<float, 4>{10, 2, 10, 2} && elements[0].background.alpha == 0x80, "boxes must read sizes, CSS-ordered padding and colors with alpha");
     check(elements[1].kind == Kind::stack && elements[2].kind == Kind::tile && elements[2].parent == 1 && rendered->view(elements[2].key) == "nvim" && elements[2].z == -2 && elements[2].transition_ms == 180 && elements[2].easing == 1, "stacks must hold keyed tiles with their poses and transitions");
     check(elements[4].kind == Kind::label && rendered->view(elements[4].text) == "plain 0", "a string inside a container must become a label");
     check(rendered->view(elements[5].text) == "Tab λ" && elements[5].bold && elements[5].grow == 1, "labels must keep the item text and their style");
@@ -438,16 +438,16 @@ return {api_version = 2, client = {
   // Every documented mod must load and render each slot it names.
   template <typename Memory>
   void exampleMods(Memory& memory) {
-    std::array<char, PATH_MAX> directory{};
+    telar::ds::Array<char, PATH_MAX> directory{};
 
-    check(::realpath(TELAR_GUI_EXAMPLES_DIR, directory.data()) != nullptr, "the documented examples must exist");
+    check(::realpath(TELAR_GUI_EXAMPLES_DIR, directory.dataMut()) != nullptr, "the documented examples must exist");
 
     struct Sample {
       features::components::Slot slot;
       std::string_view item;
     };
 
-    constexpr std::array samples{
+    constexpr telar::ds::Array samples{
         Sample{features::components::Slot::tab, R"({"index":1,"key":"4","title":"nvim","label":"nvim","path":"~/src","application":"nvim","selected":true,"attention":true,"panes":[{"key":"1","program":"nvim","focused":false,"attention":true},{"key":"2","program":"git","focused":true,"attention":false}]})"},
         Sample{features::components::Slot::pane_header, R"({"id":"2","index":1,"program":"claude","context":"~/src","focused":true,"fullscreen":false,"images_paused":false,"needs_attention":false,"progress":""})"},
         Sample{features::components::Slot::agent_card, R"({"key":"a","title":"Fix","project":"telar","detail":"","provider":"Claude","status":"working","selected":false,"depth":0,"plan":{"done":1,"total":3,"step":"Test"}})"},

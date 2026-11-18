@@ -17,6 +17,7 @@ import telar.runtime.redirect.direction;
 import telar.runtime.redirect.ingress;
 import telar.runtime.redirect.pf_rules;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -34,9 +35,9 @@ namespace {
     MemoryAdapter adapter{system};
     Memory& memory = adapter;
     redir::PfIdentity identity{memory, "/tmp/fixture.sock.redirect"};
-    const std::array<redir::Mapping, 1> mappings{{{redir::Target::parse("192.0.2.1:443"), 53001, true}}};
-    const std::array covered{redir::FlowKey{.source = redir::Target::parse("192.0.2.2:55001"), .destination = mappings[0].target}};
-    const std::array outside{redir::FlowKey{.source = redir::Target::parse("192.0.2.2:55001"), .destination = redir::Target::parse("192.0.2.9:443")}};
+    const ds::Array<redir::Mapping, 1> mappings{{{redir::Target::parse("192.0.2.1:443"), 53001, true}}};
+    const ds::Array covered{redir::FlowKey{.source = redir::Target::parse("192.0.2.2:55001"), .destination = mappings[0].target}};
+    const ds::Array outside{redir::FlowKey{.source = redir::Target::parse("192.0.2.2:55001"), .destination = redir::Target::parse("192.0.2.9:443")}};
     const redir::PfScope base{.uid = 501, .label = identity.label, .discovery_interface = "utun0", .flows = covered, .direction = redir::Direction::both, .incoming_flows = covered};
 
     auto refused = [&](std::span<const redir::Mapping> scoped, const redir::PfScope& scope) {
@@ -51,7 +52,7 @@ namespace {
 
     check(!refused(mappings, base));
 
-    const std::array<redir::Mapping, 1> loopback{{{redir::Target::parse("127.0.0.1:53001"), 53001, true}}};
+    const ds::Array<redir::Mapping, 1> loopback{{{redir::Target::parse("127.0.0.1:53001"), 53001, true}}};
 
     check(refused(loopback, {.uid = 501, .label = identity.label, .discovery_interface = "utun0", .direction = redir::Direction::both}));
 
@@ -62,8 +63,8 @@ namespace {
 
     // An incoming flow must reach a destination redirected for incoming traffic, not merely one
     // that outgoing traffic is redirected for.
-    const std::array<redir::Mapping, 2> mixed{{mappings[0], {redir::Target::parse("192.0.2.5:443"), 53002, false}}};
-    const std::array outgoing_only{redir::FlowKey{.source = redir::Target::parse("192.0.2.2:55001"), .destination = mixed[1].target}};
+    const ds::Array<redir::Mapping, 2> mixed{{mappings[0], {redir::Target::parse("192.0.2.5:443"), 53002, false}}};
+    const ds::Array outgoing_only{redir::FlowKey{.source = redir::Target::parse("192.0.2.2:55001"), .destination = mixed[1].target}};
     auto incoming = base;
 
     incoming.incoming_flows = outgoing_only;

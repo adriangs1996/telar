@@ -149,15 +149,15 @@ namespace {
       check(clipboard.execution().hasValue());
       clipboard.committed();
       const auto result = executeClipboard(task, consent, provider);
-      std::array<ClipboardRepresentation, 4> contents;
-      std::array<std::string_view, 16> available;
+      ds::Array<ClipboardRepresentation, 4> contents;
+      ds::Array<std::string_view, 16> available;
 
       for (std::size_t index = 0; index < result.contents.size(); ++index) {
-        contents[index] = {result.contents[index].mime, result.contents[index].data};
+        contents.atMut(index) = {result.contents[index].mime, result.contents[index].data};
       }
 
       for (std::size_t index = 0; index < result.available.size(); ++index) {
-        available[index] = result.available[index];
+        available.atMut(index) = result.available[index];
       }
 
       check(terminal.clipboardControl().complete({1, 13}, CompleteClipboardDesktop{
@@ -177,27 +177,27 @@ namespace {
 
       check(request.hasValue());
       std::vector<Byte> wire(Codec::encodedSize(*request));
-      std::array<Byte, 32 * 1024> arena;
-      DecodeStorage storage{arena};
+      ds::Array<Byte, 32 * 1024> arena;
+      DecodeStorage storage{arena.viewMut()};
       OwnedClipboardTask task{Codec::decode<ClipboardDesktopRequest>(Codec::encode(*request, wire), storage)};
 
       std::fill(wire.begin(), wire.end(), 0xff);
-      std::fill(arena.begin(), arena.end(), 0xff);
+      std::ranges::fill(arena.viewMut(), 0xff);
       clipboard.announced();
       return task;
     }
 
     void finishDesktop(auto& panes, auto& client, auto& pane, const OwnedClipboardTask& task, const ClipboardResult& result) {
-      std::array<ClipboardRepresentation, 4> contents;
-      std::array<std::string_view, 16> available;
+      ds::Array<ClipboardRepresentation, 4> contents;
+      ds::Array<std::string_view, 16> available;
 
       check(result.contents.size() <= contents.size() && result.available.size() <= available.size());
       for (std::size_t index = 0; index < result.contents.size(); ++index) {
-        contents[index] = {result.contents[index].mime, result.contents[index].data};
+        contents.atMut(index) = {result.contents[index].mime, result.contents[index].data};
       }
 
       for (std::size_t index = 0; index < result.available.size(); ++index) {
-        available[index] = result.available[index];
+        available.atMut(index) = result.available[index];
       }
 
       check(ClipboardService::complete(panes, client.session(), CompleteClipboardDesktop{
@@ -217,7 +217,7 @@ namespace {
       terminal.feed(bytes(request));
       check(drain(terminal) == "\x1b]5522;type=read:status=EPERM:id=req\a");
       check(provider.inspections == 0 && !clipboard.route());
-      const std::array<control::ClipboardRoute, 1> routes{{{1, 13}}};
+      const ds::Array<control::ClipboardRoute, 1> routes{{{1, 13}}};
 
       clipboard.routes(routes, routes[0]);
       terminal.feed(bytes(request));
@@ -288,7 +288,7 @@ namespace {
     void lifetimeAndPressure(auto& memory) {
       Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
       auto& clipboard = terminal.clipboardControl();
-      const std::array<control::ClipboardRoute, 1> routes{{{1, 13}}};
+      const ds::Array<control::ClipboardRoute, 1> routes{{{1, 13}}};
 
       clipboard.routes(routes, routes[0]);
       constexpr std::string_view request = "\x1b]5522;type=read:id=x;dGV4dC9wbGFpbg==\x1b\\";
@@ -335,7 +335,7 @@ namespace {
     void traditionalEncoding(auto& memory) {
       Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
       auto& clipboard = terminal.clipboardControl();
-      const std::array<control::ClipboardRoute, 1> routes{{{1, 13}}};
+      const ds::Array<control::ClipboardRoute, 1> routes{{{1, 13}}};
 
       clipboard.routes(routes, routes[0]);
       MemoryClipboard provider;
@@ -407,7 +407,7 @@ namespace {
       {
         Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
         auto& clipboard = terminal.clipboardControl();
-        const std::array<control::ClipboardRoute, 1> routes{{{1, 13}}};
+        const ds::Array<control::ClipboardRoute, 1> routes{{{1, 13}}};
 
         clipboard.routes(routes, routes[0]);
         terminal.feed(bytes("\x1b]5522;type=read:id=failure;dGV4dC9wbGFpbg==\x1b\\"));
@@ -422,7 +422,7 @@ namespace {
 
           terminal.feed(bytes(burst));
           const std::string mime(256, 'a');
-          const std::array<std::string_view, 16> available{mime, mime, mime, mime, mime, mime, mime, mime, mime, mime, mime, mime, mime, mime, mime, mime};
+          const ds::Array<std::string_view, 16> available{mime, mime, mime, mime, mime, mime, mime, mime, mime, mime, mime, mime, mime, mime, mime, mime};
 
           check(clipboard.paste(routes[0], false, available));
           terminal.resumeControl();
@@ -449,7 +449,7 @@ namespace {
     void resetBeforeConsent(auto& memory) {
       Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
       auto& clipboard = terminal.clipboardControl();
-      const std::array<control::ClipboardRoute, 1> routes{{{1, 13}}};
+      const ds::Array<control::ClipboardRoute, 1> routes{{{1, 13}}};
 
       clipboard.routes(routes, routes[0]);
       terminal.controlPolicy().clipboard_write = control::Access::ask;
@@ -474,7 +474,7 @@ namespace {
 
       check(responses->tryPushOwned(*filler, filler));
       auto& clipboard = terminal.clipboardControl();
-      const std::array<control::ClipboardRoute, 1> routes{{{1, 13}}};
+      const ds::Array<control::ClipboardRoute, 1> routes{{{1, 13}}};
 
       clipboard.routes(routes, routes[0]);
       terminal.feed(bytes("\x1b]5522;type=read:id=order;dGV4dC9wbGFpbg==\x1b\\"));
@@ -504,8 +504,8 @@ namespace {
           continue;
         }
 
-        std::array<char, 4096> output;
-        const auto count = ::read(descriptor, output.data(), output.size());
+        ds::Array<char, 4096> output;
+        const auto count = ::read(descriptor, output.dataMut(), output.size());
 
         check(count > 0);
         result.append(output.data(), static_cast<std::size_t>(count));
@@ -522,7 +522,7 @@ namespace {
       ::cfmakeraw(&settings);
       check(::tcsetattr(pane.process->descriptor(), TCSANOW, &settings) == 0);
       pane.terminal.feed(bytes("\x1b[?5522h"), *pane.media);
-      const std::array<std::string_view, 1> available{"text/plain"};
+      const ds::Array<std::string_view, 1> available{"text/plain"};
 
       panes.pasteClipboard(model, clients, client.session().id, PastePaneClipboard{.request_id = 4242, .pane_id = pane.id, .pane_generation = pane.generation, .listing_only = true, .text = {}, .available = available});
       check(client.template receive<RequestCompleted>().request_id == 4242);
@@ -545,7 +545,7 @@ namespace {
       WorkspaceService<decltype(poller)> workspaces{memory};
       ClientPeer first{memory, model, clients, ClientRole::interactive};
       ClientPeer second{memory, model, clients, ClientRole::interactive};
-      const std::array<std::string_view, 1> arguments{"/bin/cat"};
+      const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
 
       workspaces.open(model, panes, clients, first.session().id, OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
       const auto opened = first.receive<PaneOpened>();
@@ -582,7 +582,7 @@ namespace {
       ::cfmakeraw(&attributes);
       check(::tcsetattr(descriptor, TCSANOW, &attributes) == 0);
       service.configure(clients, pane);
-      const std::array<std::string_view, 2> available{"text/plain", "text/html"};
+      const ds::Array<std::string_view, 2> available{"text/plain", "text/html"};
       PastePaneClipboard paste{.request_id = 41, .pane_id = pane.id, .pane_generation = pane.generation, .listing_only = true, .text = bytes("must-not-be-pasted"), .available = available};
 
       pane.terminal.feed(bytes("\x1b[?5522h"), *pane.media);
@@ -667,7 +667,7 @@ namespace {
       PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/clipboard-close.sock"}};
       WorkspaceService<decltype(poller)> workspaces{memory};
       ClientPeer client{memory, model, clients, ClientRole::interactive};
-      const std::array<std::string_view, 1> arguments{"/bin/cat"};
+      const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
 
       workspaces.open(model, panes, clients, client.session().id, OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
       auto& pane = panes.require(model.panes, client.receive<PaneOpened>().pane_id);
@@ -709,7 +709,7 @@ namespace {
         committed,
       };
 
-      constexpr std::array<std::string_view, 3> transitions{"\x1b"
+      constexpr ds::Array<std::string_view, 3> transitions{"\x1b"
                                                             "c",
           "\x1b[!p",
           "\x1b[?1049h\x1b[?1049l"};
@@ -723,7 +723,7 @@ namespace {
           PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/clipboard-reset.sock"}};
           WorkspaceService<decltype(poller)> workspaces{memory};
           ClientPeer client{memory, model, clients, ClientRole::interactive};
-          const std::array<std::string_view, 1> arguments{"/bin/cat"};
+          const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
 
           workspaces.open(model, panes, clients, client.session().id, OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
           auto& pane = panes.require(model.panes, client.receive<PaneOpened>().pane_id);
@@ -844,7 +844,7 @@ namespace {
         PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/clipboard-pressure.sock"}};
         WorkspaceService<decltype(poller)> workspaces{memory};
         ClientPeer client{memory, model, clients, ClientRole::interactive};
-        const std::array<std::string_view, 1> arguments{"/bin/cat"};
+        const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
 
         workspaces.open(model, panes, clients, client.session().id, OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
         auto& pane = panes.require(model.panes, client.receive<PaneOpened>().pane_id);
@@ -954,7 +954,7 @@ namespace {
           PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/clipboard-capability.sock"}};
           WorkspaceService<decltype(poller)> workspaces{memory};
           ClientPeer client{memory, model, clients, ClientRole::interactive};
-          const std::array<std::string_view, 1> arguments{"/bin/cat"};
+          const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
           const Launch launch{.cwd = "/tmp", .arguments = arguments};
           constexpr TerminalSize size{80, 24, 9, 18};
 
@@ -1073,7 +1073,7 @@ namespace {
         LimitService limits;
         NativeEventLoop<ConcurrentMemory> poller{memory};
         PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/control-failure.sock"}};
-        const std::array<std::string_view, 1> arguments{"/bin/cat"};
+        const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
         const Launch launch{.cwd = "/tmp", .arguments = arguments};
         const TabLocation location{.workspace = {.id = 7}, .tab_id = 1};
         auto& failed = panes.launch(model, nullptr, false, launch, location, {80, 24, 9, 18});

@@ -83,7 +83,7 @@ namespace telar::gui::qt {
       return *cached;
     }
 
-    auto& reserved = fallback_[index];
+    auto& reserved = fallback_.atMut(index);
     if (!reserved) {
       reserved = createMask(paint.shape, {.width = Cache::fallback_width, .height = Cache::fallback_height}, 1).valueOr(CurveMaskRef{});
     }
@@ -135,7 +135,7 @@ namespace telar::gui::qt {
 
   void CurveScene::reset() noexcept {
     masks_.reset();
-    std::ranges::fill(fallback_, ds::none);
+    fallback_.fill(ds::none);
   }
 
 }

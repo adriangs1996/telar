@@ -14,6 +14,7 @@ import telar.gui.foundation.terminal;
 import telar.gui.features.terminal.links;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -24,8 +25,8 @@ namespace {
 
   template <std::uint16_t Columns, std::uint16_t Rows>
   struct GridFixture {
-    std::array<CellValue, static_cast<std::size_t>(Columns) * Rows> cells;
-    std::array<Byte, Rows> flags{};
+    ds::Array<CellValue, static_cast<std::size_t>(Columns) * Rows> cells;
+    ds::Array<Byte, Rows> flags{};
     Scroll scroll{.total_rows = Rows};
 
     [[nodiscard]] LinkGrid grid() const noexcept {
@@ -34,7 +35,7 @@ namespace {
 
     void write(std::size_t row, std::string_view text) {
       for (std::size_t column = 0; column < std::min<std::size_t>(Columns, text.size()); ++column) {
-        cells[(row * Columns) + column].text[0] = static_cast<Byte>(text[column]);
+        cells.atMut((row * Columns) + column).text.atMut(0) = static_cast<Byte>(text[column]);
       }
     }
   };
@@ -60,16 +61,16 @@ namespace {
   }
 
   void ownedTargets() {
-    std::array source{'h', 't', 't', 'p', ':', '/', '/', 'x'};
+    ds::Array source{'h', 't', 't', 'p', ':', '/', '/', 'x'};
     auto target = LinkTarget::fromUri({source.data(), source.size()});
     const auto expected = LinkTarget::fromUri("http://x");
     if (!target || !expected) {
       throw std::runtime_error{"The fixture must classify as an HTTP target"};
     }
 
-    source.back() = 'y';
+    source.atMut(source.size() - 1) = 'y';
     check(target.get().text() == "http://x", "link targets must own the exact validated bytes");
-    const std::array copies{target.get()};
+    const ds::Array copies{target.get()};
 
     target.reset();
     check(copies.front() == *expected, "owned targets must preserve scheme and byte identity after the original is destroyed");
@@ -109,13 +110,13 @@ namespace {
     fixture.write(0, "http://x/");
     constexpr std::size_t ideograph_column = 9;
 
-    fixture.cells[ideograph_column] = CellValue{Cell{.width = CellWidth::wide, .text = byteView("中")}};
-    fixture.cells[ideograph_column + 1] = CellValue{Cell{.width = CellWidth::continuation}};
+    fixture.cells.atMut(ideograph_column) = CellValue{Cell{.width = CellWidth::wide, .text = byteView("中")}};
+    fixture.cells.atMut(ideograph_column + 1) = CellValue{Cell{.width = CellWidth::continuation}};
     const auto first = CellLinks::match(fixture.grid(), {.x = ideograph_column});
     const auto continuation = CellLinks::match(fixture.grid(), {.x = ideograph_column + 1});
 
     check(first && continuation && *first == *continuation && first->target.text() == "http://x/中" && first->end.x == ideograph_column + 2, "wide-cell continuations must share the leading cell's URI and complete extent");
-    fixture.cells.front().width = CellWidth::continuation;
+    fixture.cells.atMut(0).width = CellWidth::continuation;
     check(!CellLinks::match(fixture.grid(), {}), "an orphan continuation must not resolve to an unrelated cell");
 
     constexpr std::uint16_t padded_columns = 8;
@@ -143,11 +144,11 @@ namespace {
     }
 
     constexpr std::size_t encoded_capacity = 4096;
-    std::array<Byte, encoded_capacity> encoded{};
-    const std::array spans{FrameSpan{.count = static_cast<std::uint32_t>(cells.size()), .cells = CellRunCodec::encode(cells, encoded)}};
-    std::array<Byte, 1> flags{static_cast<Byte>(RowFlag::hyperlinks)};
-    const std::array links{MetadataLink{.len = destination.size()}};
-    const std::array runs{MetadataRun{.len = static_cast<std::uint32_t>(cells.size())}};
+    ds::Array<Byte, encoded_capacity> encoded{};
+    const ds::Array spans{FrameSpan{.count = static_cast<std::uint32_t>(cells.size()), .cells = CellRunCodec::encode(cells, encoded.viewMut())}};
+    ds::Array<Byte, 1> flags{static_cast<Byte>(RowFlag::hyperlinks)};
+    const ds::Array links{MetadataLink{.len = destination.size()}};
+    const ds::Array runs{MetadataRun{.len = static_cast<std::uint32_t>(cells.size())}};
     PaneFrame frame;
 
     frame.pane_id = frame.frame_id = 1;
@@ -169,7 +170,7 @@ namespace {
     static_cast<void>(screen.apply(frame));
     check(!CellLinks::resolve(screen, {.x = 1}), "dropped OSC 8 metadata must not let the displayed label authorize a different destination");
     ++frame.frame_id;
-    flags.front() = 0;
+    flags.atMut(0) = 0;
     frame.text_metadata = TextMetadata{.status = MetadataStatus::omitted, .row_flags = flags};
     static_cast<void>(screen.apply(frame));
     const auto plain = CellLinks::resolve(screen, {.x = 1});

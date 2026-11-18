@@ -60,8 +60,8 @@ export {
       // The links one capture has seen. Their texts view the terminal's hyperlinks, which stay put for
       // that capture only, so the table lives in it.
       struct LinkTable {
-        tbc::view<std::array<Identity, maximum_links>, tbc::lt::a> identities{};
-        std::array<std::uint16_t, maximum_links * 2> slots{};
+        tbc::view<ds::Array<Identity, maximum_links>, tbc::lt::a> identities{};
+        ds::Array<std::uint16_t, maximum_links * 2> slots{};
       };
 
       // The text is the terminal's, which the string only points at, as a raw pointer lends no borrow.
@@ -87,7 +87,7 @@ export {
   namespace telar::runtime {
 
     struct ScreenCell {
-      std::array<Byte, 16> text{' '};
+      ds::Array<Byte, 16> text{' '};
       Byte length = 1;
       CellWidth width = CellWidth::single;
       CellStyle style{};
@@ -144,7 +144,7 @@ export {
       static void writeGrapheme(GhosttyRenderStateRowCells cells, ScreenCell& destination);
 
       GhosttyRenderStateColors colors_ = ghosttySized<GhosttyRenderStateColors>();
-      std::array<Byte, 256> palette_overrides_{};
+      ds::Array<Byte, 256> palette_overrides_{};
       CellStyle default_style_{};
     };
 
@@ -217,8 +217,8 @@ export {
 
       void updateCwd(std::string_view raw);
 
-      std::array<char, 256> title_{};
-      std::array<char, 4096> cwd_{};
+      ds::Array<char, 256> title_{};
+      ds::Array<char, 4096> cwd_{};
       std::size_t title_length_ = 0;
       std::size_t cwd_length_ = 0;
     };
@@ -373,7 +373,7 @@ export {
 
       void configureColors(const ConfigureTerminalColors& colors);
 
-      void configureCursorColor(ds::Option<std::array<Byte, 3>> color);
+      void configureCursorColor(ds::Option<ds::Array<Byte, 3>> color);
 
       bool mode(GhosttyMode mode) const;
 
@@ -513,7 +513,7 @@ export {
       TerminalPurpose purpose_;
       CellProjection projection_;
       TerminalSize size_{};
-      std::array<GhosttyColorRgb, 256> default_palette_{};
+      ds::Array<GhosttyColorRgb, 256> default_palette_{};
       bool dirty_ = true;
       bool force_ = true;
       std::uint64_t content_revision_ = 1;

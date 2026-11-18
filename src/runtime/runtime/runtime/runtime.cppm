@@ -87,8 +87,8 @@ export {
       [[gnu::noinline]] void publish(ClientSession& client, const RuntimeModel& model, const AgentRegistry<ConcurrentMemory>& registry);
 
     private:
-      std::array<FixedText<48>, AgentRegistry<ConcurrentMemory>::capacity> directories_;
-      std::array<FixedText<96>, AgentRegistry<ConcurrentMemory>::capacity> placeholders_;
+      ds::Array<FixedText<48>, AgentRegistry<ConcurrentMemory>::capacity> directories_;
+      ds::Array<FixedText<96>, AgentRegistry<ConcurrentMemory>::capacity> placeholders_;
     };
 
   }
@@ -185,7 +185,7 @@ export {
         void clear() noexcept;
 
       private:
-        std::array<AgentSoundNotification, 32> entries_{};
+        ds::Array<AgentSoundNotification, 32> entries_{};
         std::size_t count_ = 0;
       };
 
@@ -395,7 +395,7 @@ export {
       static constexpr std::size_t maximum_tabs = 64;
       static constexpr std::size_t maximum_panes_per_tab = 64;
       ConcurrentMemory& memory_;
-      std::array<Notice, 64> notices_{};
+      ds::Array<Notice, 64> notices_{};
       std::size_t notice_count_ = 0;
       bool overflowed_ = false;
     };
@@ -465,7 +465,7 @@ export {
 
     template <typename Executor, typename Memory>
     concept BackgroundExecutor = Allocator<Memory> && HistoryEventSink<Executor> && requires(Executor& executor, std::uint64_t client, const RequestContext& context, void (*consume)(std::uint64_t, ClientTag, std::span<const Byte>)) {
-      { executor.descriptors() } noexcept -> std::same_as<std::array<int, 5>>;
+      { executor.descriptors() } noexcept -> std::same_as<ds::Array<int, 5>>;
       { executor.collect(consume) } -> std::same_as<void>;
       { executor.cancel(client) } noexcept -> std::same_as<void>;
       { executor.suggestionsAvailable() } noexcept -> std::same_as<bool>;
@@ -517,7 +517,7 @@ export {
       TBC_GENERIC inline void run(Captures& captures, Plugins& plugins) {
         TELAR_TRACE("runtime.run");
         TELAR_DIAGNOSTIC(AllocationScope allocation_scope{AllocationPath::interactive});
-        std::array<Event, Poller::event_capacity> ready{};
+        ds::Array<Event, Poller::event_capacity> ready{};
         PluginDelivery delivery{limits_};
         const int capture_descriptor = captures.descriptor();
         if (capture_descriptor >= 0) {
@@ -541,7 +541,7 @@ export {
           TELAR_DIAGNOSTIC(model_.metrics.system = metrics_.diagnostics());
           TELAR_DIAGNOSTIC(timeout = std::min(timeout, telemetry_.tick(model_, clients_, memory_, captures, background_, Clock::now())));
 
-          for (const auto& event : poller_.wait(timeout, ready)) {
+          for (const auto& event : poller_.wait(timeout, ready.viewMut())) {
             if (!route(event)) {
               break;
             }

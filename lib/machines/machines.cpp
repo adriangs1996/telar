@@ -17,7 +17,7 @@ namespace telar::runtime::machines {
       length_ = (exponent + hexadecimal_bits - 1) / hexadecimal_bits;
       const auto trailing_bits = exponent % hexadecimal_bits;
 
-      digits_[length_ - 1] = static_cast<std::uint8_t>(trailing_bits == 0 ? 1 : 1U << (hexadecimal_bits - trailing_bits));
+      digits_.atMut(length_ - 1) = static_cast<std::uint8_t>(trailing_bits == 0 ? 1 : 1U << (hexadecimal_bits - trailing_bits));
 
       return;
     }
@@ -51,15 +51,15 @@ namespace telar::runtime::machines {
 
   template <std::size_t MaximumExponent>
   void BinaryFraction<MaximumExponent>::deriveDecimal(std::size_t exponent) {
-    std::array<std::uint32_t, limb_capacity> limbs{};
+    ds::Array<std::uint32_t, limb_capacity> limbs{};
 
-    limbs.front() = 1;
+    limbs.atMut(0) = 1;
     std::size_t count = 1;
 
     for (std::size_t power = 0; power < exponent; ++power) {
       std::uint64_t carry = 0;
 
-      for (auto& limb : std::span{limbs}.first(count)) {
+      for (auto& limb : limbs.viewMut().first(count)) {
         const auto product = (static_cast<std::uint64_t>(limb) * half_decimal_radix) + carry;
 
         limb = static_cast<std::uint32_t>(product % decimal_limb_base);
@@ -67,7 +67,7 @@ namespace telar::runtime::machines {
       }
 
       if (carry != 0) {
-        limbs[count++] = static_cast<std::uint32_t>(carry);
+        limbs.atMut(count++) = static_cast<std::uint32_t>(carry);
       }
     }
 
@@ -75,7 +75,7 @@ namespace telar::runtime::machines {
 
     for (auto limb : std::span{limbs}.first(count)) {
       for (unsigned digit = 0; digit < decimal_limb_digits && position != 0; ++digit) {
-        digits_[--position] = static_cast<std::uint8_t>(limb % decimal_radix);
+        digits_.atMut(--position) = static_cast<std::uint8_t>(limb % decimal_radix);
         limb /= decimal_radix;
       }
     }
@@ -93,7 +93,7 @@ namespace telar::runtime::machines {
   }
 
   const char* MachineFailure::name(MachineError code) {
-    static constexpr std::array names{
+    static constexpr ds::Array names{
         "InvalidMachineId",
         "InvalidMachineLabel",
         "InvalidRemoteDestination",
@@ -169,7 +169,7 @@ namespace telar::runtime::machines {
     }
 
     MachineDiscovery result;
-    const std::array paths{&result.home_, &result.shell_, &result.endpoint_};
+    const ds::Array paths{&result.home_, &result.shell_, &result.endpoint_};
 
     for (auto* const path : paths) {
       const auto end = output.find('\n');
@@ -194,7 +194,7 @@ namespace telar::runtime::machines {
       }
     }
 
-    std::memcpy(result.schema_.data(), output.data(), result.schema_.size());
+    std::memcpy(result.schema_.dataMut(), output.data(), result.schema_.size());
 
     return result;
   }
@@ -351,9 +351,9 @@ namespace telar::runtime::machines {
     constexpr unsigned entropy_bits = sizeof(std::uint64_t) * bits_per_byte;
 
     for (;;) {
-      std::array<std::uint8_t, sizeof(std::uint64_t)> bytes{};
+      ds::Array<std::uint8_t, sizeof(std::uint64_t)> bytes{};
 
-      fill(random, bytes);
+      fill(random, bytes.viewMut());
       std::uint64_t value = 0;
 
       for (std::size_t index = 0; index < bytes.size(); ++index) {
@@ -755,7 +755,7 @@ namespace telar::runtime::machines {
   }
 
   void MachineProfile::recordLogin(MachineAgent agent, ds::Option<MachineLogin> login) {
-    logins_.at(static_cast<std::size_t>(agent)) = login;
+    logins_.atCheckedMut(static_cast<std::size_t>(agent)) = login;
   }
 
   ds::Option<MachineLogin> MachineProfile::login(MachineAgent agent) const {
@@ -807,7 +807,7 @@ namespace telar::runtime::machines {
       }
     }
 
-    rows_[length_] = profile;
+    rows_.atMut(length_) = profile;
     ++length_;
   }
 
@@ -815,7 +815,7 @@ namespace telar::runtime::machines {
     const auto position = require(label);
 
     for (auto index = position; index + 1 < length_; ++index) {
-      rows_[index] = rows_[index + 1];
+      rows_.atMut(index) = rows_[index + 1];
     }
 
     --length_;
@@ -829,19 +829,19 @@ namespace telar::runtime::machines {
     }
 
     requireFreeLabel(replacement);
-    rows_[position].relabel(replacement);
+    rows_.atMut(position).relabel(replacement);
   }
 
   void MachineProfiles::enable(std::string_view label, bool enabled) {
-    rows_[require(label)].enable(enabled);
+    rows_.atMut(require(label)).enable(enabled);
   }
 
   void MachineProfiles::recordLogin(std::string_view label, MachineAgent agent, MachineLogin login) {
-    rows_[require(label)].recordLogin(agent, login);
+    rows_.atMut(require(label)).recordLogin(agent, login);
   }
 
   void MachineProfiles::placeProgram(std::string_view label, std::string_view path) {
-    rows_[require(label)].placeProgram(path);
+    rows_.atMut(require(label)).placeProgram(path);
   }
 
   std::uint16_t MachineProfiles::version() const {

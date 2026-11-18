@@ -9,6 +9,7 @@ import telar.base.memory.containers;
 import telar.wire.editor;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::features::paths {
 
@@ -60,9 +61,9 @@ namespace telar::gui::features::paths {
     runtime::FixedText<PathPickerLimits::root_bytes> root_;
     runtime::FixedText<PathPickerLimits::root_bytes> anchor_;
     runtime::FixedText<PathPickerLimits::error_bytes> error_;
-    std::array<char, PathPickerLimits::page_bytes> page_{};
-    std::array<PathPickerMatch, PathPickerLimits::results> matches_{};
-    std::array<std::uint64_t, PathPickerLimits::tracked_requests> requests_{};
+    ds::Array<char, PathPickerLimits::page_bytes> page_{};
+    ds::Array<PathPickerMatch, PathPickerLimits::results> matches_{};
+    ds::Array<std::uint64_t, PathPickerLimits::tracked_requests> requests_{};
     PathPickerPhase phase_ = PathPickerPhase::idle;
     std::uint64_t pane_id_ = 0;
     std::uint64_t pending_request_ = 0;

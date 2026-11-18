@@ -55,6 +55,7 @@ import telar.gui.tests.agent_fixture;
 import telar.gui.application;
 import telar.gui.foundation.system;
 import telar.gui.features.activity;
+import telar.base.ds;
 
 namespace {
 
@@ -305,7 +306,7 @@ namespace {
       constexpr std::uint32_t reported_age = 58;
 
       QTRY_VERIFY_WITH_TIMEOUT(system::AwakeClock::nowNanoseconds() >= elapsed_before_mount, wait_ms);
-      std::array entries{agentSnapshotEntry(reported_age)};
+      telar::ds::Array entries{agentSnapshotEntry(reported_age)};
 
       QVERIFY(replica.apply({.revision = 1, .entries = entries}, system::AwakeClock::nowNanoseconds() - elapsed_before_mount));
       ListModel model;
@@ -349,8 +350,8 @@ namespace {
       QCOMPARE(status->statusText(), QStringLiteral("Working 1m"));
       QVERIFY(!published_text.contains(QStringLiteral("Working 58s")));
       QVERIFY(!published_text.contains(QStringLiteral("Working 59s")));
-      entries.front().status = AgentStatus::ready;
-      entries.front().status_age_s = 0;
+      entries.atMut(0).status = AgentStatus::ready;
+      entries.atMut(0).status_age_s = 0;
       QVERIFY(replica.apply({.revision = 3, .entries = entries}, system::AwakeClock::nowNanoseconds()));
       publish();
       QTRY_COMPARE_WITH_TIMEOUT(status->statusText(), QStringLiteral("now"), wait_ms);

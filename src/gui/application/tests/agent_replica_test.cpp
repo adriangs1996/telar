@@ -30,6 +30,7 @@ import telar.gui.application;
 import telar.gui.features.activity;
 import telar.gui.foundation.model;
 import telar.wire.agents;
+import telar.base.ds;
 
 namespace {
 
@@ -82,16 +83,16 @@ namespace {
     telar::MemoryAdapter adapter{system};
     telar::ConcurrentMemory& memory = adapter;
     AgentReplica replica{memory};
-    std::array entries{agentSnapshotEntry(initial_age), agentSnapshotEntry(initial_age)};
+    ds::Array entries{agentSnapshotEntry(initial_age), agentSnapshotEntry(initial_age)};
 
-    entries.back().pane_id = 2;
+    entries.atMut(entries.size() - 1).pane_id = 2;
     check(replica.apply({.revision = 1, .entries = entries}, second), "first revision must be accepted");
     check(!replica.apply({.revision = 1, .entries = {}}, stale_delivery_ns), "duplicate revisions must not erase agents");
     check(replica.entries().size() == 2 && replica.revision() == 1, "duplicate revisions must preserve the replica");
-    std::swap(entries.front(), entries.back());
+    std::swap(entries.atMut(0), entries.atMut(entries.size() - 1));
     check(replica.apply({.revision = 2, .entries = entries}, second + (second / 2)), "reordering must commit");
     check(replica.entries().front().pane_id == 2 && replica.entries().front().status_clock.interval().seconds(2 * second) == initial_age + 1, "clocks must follow identity through reordering");
-    entries.back() = entries.front();
+    entries.atMut(entries.size() - 1) = entries.front();
     bool rejected = false;
 
     try {
@@ -103,7 +104,7 @@ namespace {
     check(rejected && replica.revision() == 2 && replica.entries().back().pane_id == 1, "duplicate identities must preserve the entire previous revision");
     replica.resetSource();
     check(replica.entries().size() == 2, "offline presentation must retain the last entries");
-    entries.back().pane_id = 1;
+    entries.atMut(entries.size() - 1).pane_id = 1;
     check(replica.apply({.revision = 1, .entries = entries}, replacement_now_ns), "replacement runtime may restart its revision counter");
     check(replica.entries().front().status_clock.interval().seconds(replacement_now_ns) == initial_age, "replacement runtime must not inherit a retired clock");
   }
@@ -113,21 +114,21 @@ namespace {
     telar::MemoryAdapter adapter{system};
     telar::ConcurrentMemory& memory = adapter;
     AgentReplica replica{memory};
-    std::array entries{agentSnapshotEntry(), agentSnapshotEntry()};
+    ds::Array entries{agentSnapshotEntry(), agentSnapshotEntry()};
 
-    entries[0].attachments = AgentAttachmentMarkers::stable_number;
-    entries[1].pane_id = 2;
-    entries[1].attachments = AgentAttachmentMarkers::pasted_path;
+    entries.atMut(0).attachments = AgentAttachmentMarkers::stable_number;
+    entries.atMut(1).pane_id = 2;
+    entries.atMut(1).attachments = AgentAttachmentMarkers::pasted_path;
     check(replica.apply({.revision = 1, .entries = entries}, second), "initial attachment capabilities must commit");
     check(replica.entries()[0].attachments == AgentAttachmentMarkers::stable_number && replica.entries()[1].attachments == AgentAttachmentMarkers::pasted_path, "each identity must retain the marker policy its manifest reports");
 
-    std::swap(entries[0], entries[1]);
-    entries[1].attachments = AgentAttachmentMarkers::ordered;
+    std::swap(entries.atMut(0), entries.atMut(1));
+    entries.atMut(1).attachments = AgentAttachmentMarkers::ordered;
     check(replica.apply({.revision = 2, .entries = entries}, 2 * second), "reordering and a capability update must commit together");
     check(replica.entries()[0].pane_id == 2 && replica.entries()[0].attachments == AgentAttachmentMarkers::pasted_path && replica.entries()[1].attachments == AgentAttachmentMarkers::ordered, "capabilities must follow snapshot identities through staging reuse");
 
-    ++entries[0].pane_generation;
-    entries[0].attachments = AgentAttachmentMarkers::none;
+    ++entries.atMut(0).pane_generation;
+    entries.atMut(0).attachments = AgentAttachmentMarkers::none;
     check(replica.apply({.revision = 3, .entries = entries}, 3 * second), "a replacement agent must commit");
     check(replica.entries()[0].attachments == AgentAttachmentMarkers::none, "an incapable replacement must not inherit a previous agent's shelf");
   }
@@ -137,21 +138,21 @@ namespace {
     telar::MemoryAdapter adapter{system};
     telar::ConcurrentMemory& memory = adapter;
     AgentReplica replica{memory};
-    std::array entries{agentSnapshotEntry(), agentSnapshotEntry(), agentSnapshotEntry()};
+    ds::Array entries{agentSnapshotEntry(), agentSnapshotEntry(), agentSnapshotEntry()};
 
-    entries[1].pane_id = 2;
-    entries[2].pane_id = 3;
+    entries.atMut(1).pane_id = 2;
+    entries.atMut(2).pane_id = 3;
     replica.apply({.revision = 1, .entries = entries}, second);
     check(replica.statusChanges().empty(), "initial identities must not raise alerts");
 
-    std::swap(entries[0], entries[2]);
-    entries[0].status = AgentStatus::blocked;
+    std::swap(entries.atMut(0), entries.atMut(2));
+    entries.atMut(0).status = AgentStatus::blocked;
     constexpr std::uint16_t changed_pane_index = 9;
 
-    entries[0].pane_index = changed_pane_index;
-    entries[0].provider = AgentProvider::claude;
-    entries[1].status = AgentStatus::done;
-    ++entries[1].pane_generation;
+    entries.atMut(0).pane_index = changed_pane_index;
+    entries.atMut(0).provider = AgentProvider::claude;
+    entries.atMut(1).status = AgentStatus::done;
+    ++entries.atMut(1).pane_generation;
     replica.apply({.revision = 2, .entries = entries}, 2 * second);
     const auto changes = replica.statusChanges();
 
@@ -159,8 +160,8 @@ namespace {
     check(changes.front().pane_id == 3 && changes.front().pane_index == changed_pane_index && changes.front().provider == AgentProvider::claude, "changes must retain new metadata in snapshot order");
     check(changes.front().previous == AgentStatus::working && changes.front().current == AgentStatus::blocked, "changes must name both committed statuses");
 
-    entries[0].status = AgentStatus::failed;
-    entries[2] = entries[0];
+    entries.atMut(0).status = AgentStatus::failed;
+    entries.atMut(2) = entries[0];
     bool rejected = false;
 
     try {
@@ -172,7 +173,7 @@ namespace {
     check(rejected && replica.statusChanges().size() == 1 && replica.statusChanges().front().current == AgentStatus::blocked, "invalid snapshots must not publish partial transitions");
     replica.resetSource();
     check(replica.statusChanges().empty(), "source retirement must clear pending transitions");
-    entries[2].pane_id = 4;
+    entries.atMut(2).pane_id = 4;
     replica.apply({.revision = 1, .entries = entries}, replacement_now_ns);
     check(replica.statusChanges().empty(), "reconnection must not compare new agents with retired source metadata");
     replica.apply({.revision = 2, .entries = entries}, replacement_now_ns);
@@ -211,7 +212,7 @@ namespace {
 
     {
       AgentReplica replica{memory};
-      std::array entries{agentSnapshotEntry(initial_age)};
+      ds::Array entries{agentSnapshotEntry(initial_age)};
 
       replica.apply({.revision = 1, .entries = entries}, second);
       replica.apply({.revision = 2, .entries = entries}, second);
@@ -219,8 +220,8 @@ namespace {
       const auto live_bytes = rejecting.liveBytes();
       const std::string title(80, 'x');
 
-      entries.front().session_title = title;
-      entries.front().status = AgentStatus::blocked;
+      entries.atMut(0).session_title = title;
+      entries.atMut(0).status = AgentStatus::blocked;
       rejecting.setRejecting(true);
       bool rejected = false;
 
@@ -251,13 +252,13 @@ namespace {
     telar::Memory& memory = adapter;
     AgentReplica replica{memory};
     std::string title(title_bytes, 'x');
-    std::array<AgentSnapshotEntry, decltype(replica)::capacity> entries;
+    ds::Array<AgentSnapshotEntry, decltype(replica)::capacity> entries;
 
     for (std::size_t index = 0; index < entries.size(); ++index) {
-      entries[index] = agentSnapshotEntry(initial_age);
-      entries[index].pane_id = index + 1;
-      entries[index].pane_index = static_cast<std::uint16_t>(index + 1);
-      entries[index].session_title = title;
+      entries.atMut(index) = agentSnapshotEntry(initial_age);
+      entries.atMut(index).pane_id = index + 1;
+      entries.atMut(index).pane_index = static_cast<std::uint16_t>(index + 1);
+      entries.atMut(index).session_title = title;
     }
 
     replica.apply({.revision = 1, .entries = entries}, second);
@@ -287,7 +288,7 @@ namespace {
     SystemAllocator memory;
     telar::gui::application::tests::session_fixture::Transport transport;
     TestSession session{memory, transport, &FakeClock::nowNanoseconds};
-    const std::array entries{agentSnapshotEntry(initial_age)};
+    const ds::Array entries{agentSnapshotEntry(initial_age)};
 
     FakeClock::current = second;
     telar::gui::application::tests::session_fixture::deliver(session, AgentSnapshot{.revision = 1, .entries = entries});
@@ -303,8 +304,8 @@ namespace {
     telar::gui::application::tests::session_fixture::Transport transport;
     TestSession session{memory, transport, &FakeClock::nowNanoseconds};
     const TabLocation location{.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 1}, .tab_id = 1};
-    const std::array<std::uint16_t, 2> ports{3000, 9229};
-    std::array entries{
+    const ds::Array<std::uint16_t, 2> ports{3000, 9229};
+    ds::Array entries{
         PaneListEntry{.pane_id = 1, .pane_generation = 1, .location = location, .foreground = "node", .foreground_age_s = initial_age, .ports = ports},
         PaneListEntry{.pane_id = 2, .pane_generation = 1, .location = location, .foreground = "zsh", .shell = true},
     };
@@ -316,11 +317,11 @@ namespace {
     check(session.paneListRevision() == 2 && listed.size() == 2 && listed.front().foreground.view() == "node" && listed.back().shell, "the pane list must replace the replica");
     check(listed.front().age.seconds(2 * second) == initial_age + 1, "a foreground age must advance from its arrival");
     check(std::ranges::equal(listed.front().ports(), ports) && listed.back().ports().empty(), "listening ports must follow their pane");
-    const std::array<std::uint16_t, 2> unordered{9229, 3000};
+    const ds::Array<std::uint16_t, 2> unordered{9229, 3000};
     bool unsorted = false;
 
     try {
-      telar::gui::application::tests::session_fixture::deliver(session, PaneList{.revision = 3, .entries = std::array{PaneListEntry{.pane_id = 1, .pane_generation = 1, .location = location, .foreground = "node", .ports = unordered}}});
+      telar::gui::application::tests::session_fixture::deliver(session, PaneList{.revision = 3, .entries = ds::Array{PaneListEntry{.pane_id = 1, .pane_generation = 1, .location = location, .foreground = "node", .ports = unordered}}});
     } catch (const EncodingError&) {
       unsorted = true;
     }
@@ -328,7 +329,7 @@ namespace {
     check(unsorted && session.paneListRevision() == 2, "unordered ports must be rejected");
     telar::gui::application::tests::session_fixture::deliver(session, PaneList{.revision = 2, .entries = {}});
     check(session.paneList().size() == 2, "a stale revision must not replace the pane list");
-    entries.back().pane_id = 1;
+    entries.atMut(entries.size() - 1).pane_id = 1;
     bool rejected = false;
 
     try {

@@ -1,6 +1,7 @@
 module telar.gui.features.terminal.graphics;
 
 import std;
+import telar.base.ds;
 
 namespace telar::gui::features::terminal::graphics {
 
@@ -18,7 +19,7 @@ namespace telar::gui::features::terminal::graphics {
     return width * channels <= pixels.size() - last_row;
   }
 
-  std::array<std::uint8_t, RgbaImageView::channels> RgbaImageView::pixel(std::size_t x, std::size_t y) const noexcept {
+  ds::Array<std::uint8_t, RgbaImageView::channels> RgbaImageView::pixel(std::size_t x, std::size_t y) const noexcept {
     const auto source = pixels.subspan((y * stride) + (x * channels)).first<channels>();
 
     return {std::to_integer<std::uint8_t>(source[0]), std::to_integer<std::uint8_t>(source[1]), std::to_integer<std::uint8_t>(source[2]), std::to_integer<std::uint8_t>(source[3])};
@@ -120,7 +121,7 @@ namespace telar::gui::features::terminal::graphics {
     alpha += contribution;
     total += weight;
     for (std::size_t channel = 0; channel < colors.size(); ++channel) {
-      colors[channel] += static_cast<float>(pixel[channel]) * contribution;
+      colors.atMut(channel) += static_cast<float>(pixel[channel]) * contribution;
     }
   }
 
@@ -143,7 +144,7 @@ namespace telar::gui::features::terminal::graphics {
       const auto row_weight = rows.weight(row);
 
       for (auto column = columns.first; column < columns.end; ++column) {
-        sample.add(source.pixel(column, row), row_weight * columns.weight(column));
+        sample.add(source.pixel(column, row).view(), row_weight * columns.weight(column));
       }
     }
 
@@ -153,10 +154,10 @@ namespace telar::gui::features::terminal::graphics {
   ArtworkResize::Sample ArtworkResize::linearSample(RgbaImageView source, Tap x, Tap y) noexcept {
     Sample sample;
 
-    sample.add(source.pixel(x.index, y.index), (1 - x.fraction) * (1 - y.fraction));
-    sample.add(source.pixel(x.next, y.index), x.fraction * (1 - y.fraction));
-    sample.add(source.pixel(x.index, y.next), (1 - x.fraction) * y.fraction);
-    sample.add(source.pixel(x.next, y.next), x.fraction * y.fraction);
+    sample.add(source.pixel(x.index, y.index).view(), (1 - x.fraction) * (1 - y.fraction));
+    sample.add(source.pixel(x.next, y.index).view(), x.fraction * (1 - y.fraction));
+    sample.add(source.pixel(x.index, y.next).view(), (1 - x.fraction) * y.fraction);
+    sample.add(source.pixel(x.next, y.next).view(), x.fraction * y.fraction);
     sample.total = 1;
 
     return sample;

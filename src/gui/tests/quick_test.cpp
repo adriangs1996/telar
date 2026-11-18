@@ -488,7 +488,7 @@ return {api_version = 2, client = {
   private:
     void consume(std::span<const telar::Byte> payload) {
       try {
-        telar::DecodeStorage storage{storage_};
+        telar::DecodeStorage storage{storage_.viewMut()};
 
         if (payload.front() == static_cast<telar::Byte>(telar::ServerTag::client_list)) {
           selectClient(telar::Codec::decode<telar::ClientList>(payload, storage));
@@ -516,7 +516,7 @@ return {api_version = 2, client = {
     telar::ClientRoute route_;
     CommandOutcome result_;
     QString error_;
-    std::array<telar::Byte, response_capacity> storage_{};
+    telar::ds::Array<telar::Byte, response_capacity> storage_{};
   };
 
   enum class PluginCatalogRequest : std::uint8_t {
@@ -2846,7 +2846,7 @@ return {api_version=2, client={keybindings={
 
       stale.count = 1;
       stale.create = {};
-      stale.targets.front().bounds = {.x = static_cast<float>(bounds.x() * live.scale), .y = static_cast<float>(bounds.y() * live.scale), .width = static_cast<float>(bounds.width() * live.scale), .height = static_cast<float>(bounds.height() * live.scale)};
+      stale.targets.atMut(0).bounds = {.x = static_cast<float>(bounds.x() * live.scale), .y = static_cast<float>(bounds.y() * live.scale), .width = static_cast<float>(bounds.width() * live.scale), .height = static_cast<float>(bounds.height() * live.scale)};
       client_->tabs()->present(stale);
       held = point;
       sendMouse(*window_, QEvent::MouseButtonPress, Qt::LeftButton, Qt::LeftButton, point);
@@ -3341,7 +3341,7 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void historyPointerSelectionNeverSubmits() {
-      const std::array entries{
+      const telar::ds::Array entries{
           telar::ImportHistoryEntry{.started_at_ms = 100, .command = "echo GUI_HISTORY_POINTER_FIRST"},
           telar::ImportHistoryEntry{.started_at_ms = 101, .command = "echo GUI_HISTORY_POINTER_SECOND"},
       };
@@ -3577,7 +3577,7 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void historyCardPressCannotFollowAReplacedRecord() {
-      const std::array entries{
+      const telar::ds::Array entries{
           telar::ImportHistoryEntry{.started_at_ms = 100, .command = "echo GUI_REUSE_PRESS_A_FIRST"},
           telar::ImportHistoryEntry{.started_at_ms = 101, .command = "echo GUI_REUSE_PRESS_A_SECOND"},
           telar::ImportHistoryEntry{.started_at_ms = 102, .command = "echo GUI_REUSE_PRESS_B_FIRST"},
@@ -3776,7 +3776,7 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void historyFooterRequiresDeliveredChoices() {
-      const std::array entries{
+      const telar::ds::Array entries{
           telar::ImportHistoryEntry{.started_at_ms = 100, .command = "echo GUI_HISTORY_DELIVERY_FIRST"},
           telar::ImportHistoryEntry{.started_at_ms = 101, .command = "echo GUI_HISTORY_DELIVERY_SECOND"},
       };
@@ -3866,7 +3866,7 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void historyRowsRequireTheDeliveredContentRevision() {
-      const std::array entries{
+      const telar::ds::Array entries{
           telar::ImportHistoryEntry{.started_at_ms = 100, .command = "echo GUI_ROW_PRESENTATION_A_FIRST"},
           telar::ImportHistoryEntry{.started_at_ms = 101, .command = "echo GUI_ROW_PRESENTATION_A_SECOND"},
           telar::ImportHistoryEntry{.started_at_ms = 102, .command = "echo GUI_ROW_PRESENTATION_B_FIRST"},
@@ -3968,7 +3968,7 @@ return {api_version=2, client={keybindings={
     }
 
     void verifyHistoryReplacementAfterRestore(bool minimize) {
-      const std::array entries{
+      const telar::ds::Array entries{
           telar::ImportHistoryEntry{.started_at_ms = 100, .command = "echo GUI_HISTORY_RESTORE_FIRST"},
           telar::ImportHistoryEntry{.started_at_ms = 101, .command = "echo GUI_HISTORY_RESTORE_SECOND"},
       };
@@ -4094,7 +4094,7 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(client_->configuration().history.enter_runs, !enter_runs, runtime_wait_ms);
       const auto command = QStringLiteral("printf 'GUI_HISTORY_RENDER_%s_%1\\n' DONE").arg(tag);
       const auto encoded = command.toUtf8();
-      const std::array entries{telar::ImportHistoryEntry{.started_at_ms = 100, .command = std::string_view{encoded.constData(), static_cast<std::size_t>(encoded.size())}}};
+      const telar::ds::Array entries{telar::ImportHistoryEntry{.started_at_ms = 100, .command = std::string_view{encoded.constData(), static_cast<std::size_t>(encoded.size())}}};
       const auto source = QByteArray{"gui-history-render-"} + tag.toUtf8();
 
       importHistory(entries, source.constData());
@@ -4565,7 +4565,7 @@ return {api_version=2, client={keybindings={
         command += "printf GUI_SCROLL_INSPECTION_" + std::to_string(index) + "\n";
       }
 
-      const std::array entries{telar::ImportHistoryEntry{.started_at_ms = 100, .command = command}};
+      const telar::ds::Array entries{telar::ImportHistoryEntry{.started_at_ms = 100, .command = command}};
 
       importHistory(entries, "gui-wheel-inspection");
       client_->commands()->execute(window_actions::Action::history);
@@ -4669,12 +4669,12 @@ return {api_version=2, client={keybindings={
     Q_SLOT void historyWheelStopsAtPageAdmission() {
       constexpr auto page_count = application::history::HistoryLimits::page_entries;
       constexpr auto entry_count = page_count + 2;
-      std::array<std::string, entry_count> commands;
-      std::array<telar::ImportHistoryEntry, entry_count> entries{};
+      telar::ds::Array<std::string, entry_count> commands;
+      telar::ds::Array<telar::ImportHistoryEntry, entry_count> entries{};
 
       for (std::size_t index = 0; index < entries.size(); ++index) {
-        commands[index] = "echo GUI_SCROLL_PAGE_" + std::to_string(index);
-        entries[index] = {.started_at_ms = static_cast<std::int64_t>(index), .command = commands[index]};
+        commands.atMut(index) = "echo GUI_SCROLL_PAGE_" + std::to_string(index);
+        entries.atMut(index) = {.started_at_ms = static_cast<std::int64_t>(index), .command = commands[index]};
       }
 
       importHistory(entries, "gui-wheel-page");
@@ -4807,12 +4807,12 @@ return {api_version=2, client={keybindings={
 
     Q_SLOT void historyEqualSizedReplyUpdatesPendingDelegates() {
       constexpr auto entry_count = application::history::HistoryLimits::page_entries;
-      std::array<std::string, entry_count> commands;
-      std::array<telar::ImportHistoryEntry, entry_count> entries{};
+      telar::ds::Array<std::string, entry_count> commands;
+      telar::ds::Array<telar::ImportHistoryEntry, entry_count> entries{};
 
       for (std::size_t index = 0; index < entries.size(); ++index) {
-        commands[index] = "echo GUI_REPLACEMENT_TARGET_" + std::to_string(index);
-        entries[index] = {.started_at_ms = static_cast<std::int64_t>(index) + 1, .command = commands[index]};
+        commands.atMut(index) = "echo GUI_REPLACEMENT_TARGET_" + std::to_string(index);
+        entries.atMut(index) = {.started_at_ms = static_cast<std::int64_t>(index) + 1, .command = commands[index]};
       }
 
       importHistory(entries, "gui-replacement-target");
@@ -4936,13 +4936,13 @@ return {api_version=2, client={keybindings={
       constexpr std::size_t command_bytes = std::size_t{48} * 1024;
       constexpr auto cached_entries = Storage::command_cache_bytes / command_bytes;
       constexpr auto entry_count = cached_entries + 1;
-      std::array<std::string, entry_count> commands;
-      std::array<telar::ImportHistoryEntry, entry_count> entries{};
+      telar::ds::Array<std::string, entry_count> commands;
+      telar::ds::Array<telar::ImportHistoryEntry, entry_count> entries{};
 
       for (std::size_t index = 0; index < entries.size(); ++index) {
-        commands[index] = "echo GUI_LONG_COMMAND_" + std::to_string(index) + " ";
-        commands[index].resize(command_bytes, 'x');
-        entries[index] = {.started_at_ms = static_cast<std::int64_t>(index) + 1, .command = commands[index]};
+        commands.atMut(index) = "echo GUI_LONG_COMMAND_" + std::to_string(index) + " ";
+        commands.atMut(index).resize(command_bytes, 'x');
+        entries.atMut(index) = {.started_at_ms = static_cast<std::int64_t>(index) + 1, .command = commands[index]};
       }
 
       importHistory(entries, "gui-long-command");
@@ -5126,7 +5126,7 @@ return {api_version=2, client={keybindings={
       auto* background = window_->findChild<QQuickItem*>(QStringLiteral("workspaceBackground"));
 
       QVERIFY(background != nullptr);
-      constexpr std::array opacities{0.25, 0.75, 1.0, 0.25};
+      constexpr telar::ds::Array opacities{0.25, 0.75, 1.0, 0.25};
       constexpr int channel_tolerance = 2;
 
       for (const auto opacity : opacities) {
@@ -5534,11 +5534,11 @@ return {api_version=2, client={keybindings={
         const char* argument;
       };
 
-      constexpr auto cases = std::to_array<CommandCase>({
+      constexpr auto cases = telar::ds::Array<CommandCase, 3>{{
           {.key = Qt::Key_S, .label = "command-static", .marker = "STATIC", .argument = "quoted \"中\" $HOME $(printf IGNORED)"},
           {.key = Qt::Key_C, .label = "command-callback", .marker = "CALLBACK", .argument = "callback 1"},
           {.key = Qt::Key_C, .label = "command-callback", .marker = "CALLBACK", .argument = "callback 2"},
-      });
+      }};
 
       for (const auto& command : cases) {
         auto* terminal = terminalIn(window_->contentItem());
@@ -6849,7 +6849,7 @@ return {api_version=2, client={keybindings={
 
       QVERIFY(directory.isValid());
       const auto path = directory.filePath(QStringLiteral("config.lua"));
-      constexpr std::array configurations{
+      constexpr telar::ds::Array configurations{
           R"(local t=require('telar'); return {api_version=2,client={bars={bottom={left=t.bar.static(t.ui.group({t.ui.label('First λ'),t.ui.label('Second')})),right=t.bar.tabs()}}}})",
           R"(local t=require('telar'); return {api_version=2,client={bars={bottom={left=t.bar.static(t.ui.group({mark='telar',t.ui.label('First λ'),t.ui.label('Second')})),right=t.bar.tabs()}}}})",
           R"(local t=require('telar'); return {api_version=2,client={bars={bottom={left=t.bar.static(t.ui.group({})),right=t.bar.tabs()}}}})",
@@ -7830,7 +7830,7 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void queuedFramesCannotSurviveAWindowBindingChange() {
-      for (const bool restore_before_delivery : std::array{false, true}) {
+      for (const bool restore_before_delivery : telar::ds::Array{false, true}) {
         QQuickWindow replacement;
 
         replacement.setScreen(window_->screen());
@@ -8092,7 +8092,7 @@ return {api_version=2, client={keybindings={
 
     void verifyHistoryDelegateRetirement(const QString& query, int expected_rows) {
       seedHistoryPages();
-      const std::array entries{telar::ImportHistoryEntry{.started_at_ms = QDateTime::currentMSecsSinceEpoch(), .command = "echo GUI_BROWSER_PAGE_DELEGATE_SINGLE_TARGET"}};
+      const telar::ds::Array entries{telar::ImportHistoryEntry{.started_at_ms = QDateTime::currentMSecsSinceEpoch(), .command = "echo GUI_BROWSER_PAGE_DELEGATE_SINGLE_TARGET"}};
 
       importHistory(entries, "gui-delegate-retirement");
       auto* const previous_controller = engine_->incubationController();
@@ -8282,7 +8282,7 @@ return {api_version=2, client={keybindings={
     }
 
     void seedHistoryScroll() {
-      const std::array entries{
+      const telar::ds::Array entries{
           telar::ImportHistoryEntry{.started_at_ms = 100, .command = "echo GUI_SCROLL_HISTORY_A_0"},
           telar::ImportHistoryEntry{.started_at_ms = 101, .command = "echo GUI_SCROLL_HISTORY_A_1"},
           telar::ImportHistoryEntry{.started_at_ms = 102, .command = "echo GUI_SCROLL_HISTORY_A_2"},
@@ -8297,26 +8297,26 @@ return {api_version=2, client={keybindings={
     }
 
     void seedHistory() {
-      const std::array<telar::ImportHistoryEntry, 1> entries{{{.started_at_ms = 100, .command = "echo GUI_HISTORY_FIXTURE"}}};
+      const telar::ds::Array<telar::ImportHistoryEntry, 1> entries{{{.started_at_ms = 100, .command = "echo GUI_HISTORY_FIXTURE"}}};
 
       importHistory(entries, "gui-quick-test");
     }
 
     void seedHistoryPages() {
       constexpr auto entry_count = application::history::HistoryLimits::page_entries + 1;
-      std::array<std::string, entry_count> commands;
-      std::array<telar::ImportHistoryEntry, entry_count> entries{};
+      telar::ds::Array<std::string, entry_count> commands;
+      telar::ds::Array<telar::ImportHistoryEntry, entry_count> entries{};
 
       for (std::size_t index = 0; index < entries.size(); ++index) {
-        commands[index] = "echo GUI_BROWSER_PAGE_" + std::to_string(index);
-        entries[index] = {.started_at_ms = static_cast<std::int64_t>(index) + 1, .command = commands[index]};
+        commands.atMut(index) = "echo GUI_BROWSER_PAGE_" + std::to_string(index);
+        entries.atMut(index) = {.started_at_ms = static_cast<std::int64_t>(index) + 1, .command = commands[index]};
       }
 
       importHistory(entries, "gui-browser-page");
     }
 
     void importRetainedHistory() {
-      const std::array entries{
+      const telar::ds::Array entries{
           telar::ImportHistoryEntry{.started_at_ms = 200, .command = "echo GUI_HISTORY_RETAINED_ONE"},
           telar::ImportHistoryEntry{.started_at_ms = 201, .command = "echo GUI_HISTORY_RETAINED_TWO"},
       };

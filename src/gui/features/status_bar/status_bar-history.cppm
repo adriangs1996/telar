@@ -6,6 +6,7 @@ export module telar.gui.features.status_bar:history;
 
 import std;
 import telar.tbc;
+import telar.base.ds;
 
 // Interface: core/cpu_history.cppm
 export {
@@ -14,7 +15,7 @@ export {
     class CpuHistory {
     public:
       static constexpr std::size_t capacity = 32;
-      using Samples = std::array<std::uint8_t, capacity>;
+      using Samples = ds::Array<std::uint8_t, capacity>;
 
       void push(std::uint8_t percent) noexcept;
 

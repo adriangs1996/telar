@@ -39,8 +39,8 @@ namespace {
     telar::MemoryAdapter adapter{system};
     telar::ConcurrentMemory& memory = adapter;
     WorkspaceReplica replica{memory};
-    const std::array projects{WorkspaceListEntry{.workspace = 2, .name = "task", .path = "/task"}, WorkspaceListEntry{.workspace = 1, .name = "project", .path = "/project", .tab_count = 3}};
-    std::array rows{worktreeEntry()};
+    const ds::Array projects{WorkspaceListEntry{.workspace = 2, .name = "task", .path = "/task"}, WorkspaceListEntry{.workspace = 1, .name = "project", .path = "/project", .tab_count = 3}};
+    ds::Array rows{worktreeEntry()};
 
     check(replica.apply({.revision = 1, .entries = projects, .worktrees = rows}), "workspace snapshots must commit");
     check(replica.entries().size() == 2 && replica.projects().size() == 1 && replica.entries().front().location.id == 1, "project rows must precede worktree workspaces without duplicating them");
@@ -48,7 +48,7 @@ namespace {
     check(replica.worktree(task_worktree_id) == replica.worktreeOfWorkspace(2), "worktree and workspace identities must resolve the same row");
     check(replica.worktree(task_worktree_id)->handle() == "fix" && replica.worktree(task_worktree_id)->displayName() == "Fix the task", "task labels must retain original prefix handling");
     check(!replica.apply({.revision = 1, .entries = {}}) && replica.entries().size() == 2, "stale revisions must preserve the current replica");
-    const std::array duplicates{projects.front(), projects.front()};
+    const ds::Array duplicates{projects.front(), projects.front()};
     bool rejected = false;
 
     try {
@@ -74,15 +74,15 @@ namespace {
       constexpr std::size_t maximum_path_bytes = 4096;
       constexpr std::size_t entry_count = 9;
       const std::string path(maximum_path_bytes, '/');
-      std::array<WorkspaceListEntry, entry_count> projects;
+      ds::Array<WorkspaceListEntry, entry_count> projects;
 
       for (std::size_t index = 0; index < projects.size(); ++index) {
-        projects[index] = {.workspace = index + 1, .name = "project", .path = path};
+        projects.atMut(index) = {.workspace = index + 1, .name = "project", .path = path};
       }
 
-      std::array tasks{worktreeEntry()};
+      ds::Array tasks{worktreeEntry()};
 
-      tasks.front().path = path;
+      tasks.atMut(0).path = path;
       replica.apply({.revision = 1, .entries = projects, .worktrees = tasks});
       replica.apply({.revision = 2, .entries = projects, .worktrees = tasks});
       check(replica.entries().size() == WorkspaceReplica<std::remove_reference_t<std::remove_reference_t<decltype(memory)>>>::path_pool_bytes / maximum_path_bytes && replica.dropped() == 1, "the original path pool keeps only complete paths before its first overflow");
@@ -90,7 +90,7 @@ namespace {
       const auto live = budget.liveBytes();
       const std::string title(80, 'x');
 
-      tasks.front().title = title;
+      tasks.atMut(0).title = title;
       gate.permit(0);
       bool rejected = false;
 
@@ -116,23 +116,23 @@ namespace {
     telar::Memory& memory = adapter;
     WorkspaceReplica workspaces{memory};
     AgentReplica agents{memory};
-    const std::array projects{WorkspaceListEntry{.workspace = 1, .name = "project", .path = "/project"}, WorkspaceListEntry{.workspace = 2, .name = "task", .path = "/task"}};
-    std::array tasks{worktreeEntry(), worktreeEntry()};
+    const ds::Array projects{WorkspaceListEntry{.workspace = 1, .name = "project", .path = "/project"}, WorkspaceListEntry{.workspace = 2, .name = "task", .path = "/task"}};
+    ds::Array tasks{worktreeEntry(), worktreeEntry()};
 
-    tasks.back().worktree = command_worktree_id;
-    tasks.back().workspace.reset();
-    tasks.back().command_state = CommandState::exited;
-    tasks.back().command_label = "test";
+    tasks.atMut(tasks.size() - 1).worktree = command_worktree_id;
+    tasks.atMut(tasks.size() - 1).workspace.reset();
+    tasks.atMut(tasks.size() - 1).command_state = CommandState::exited;
+    tasks.atMut(tasks.size() - 1).command_label = "test";
     check(workspaces.apply({.revision = 1, .entries = projects, .worktrees = tasks}), "activity workspaces must commit");
-    std::array reports{agentSnapshotEntry(), agentSnapshotEntry()};
+    ds::Array reports{agentSnapshotEntry(), agentSnapshotEntry()};
 
-    reports.back().pane_id = 2;
-    reports.back().location.workspace.id = 2;
-    reports.back().work_tree = task_worktree_id;
-    reports.back().status = AgentStatus::blocked;
+    reports.atMut(reports.size() - 1).pane_id = 2;
+    reports.atMut(reports.size() - 1).location.workspace.id = 2;
+    reports.atMut(reports.size() - 1).work_tree = task_worktree_id;
+    reports.atMut(reports.size() - 1).status = AgentStatus::blocked;
     check(agents.apply({.revision = 1, .entries = reports}, 0), "activity agents must commit");
     using Order = ActivityOrder<std::remove_reference_t<std::remove_reference_t<decltype(memory)>>>;
-    const std::array sources{Order::Source{.agents = agents.entries(), .workspaces = workspaces}};
+    const ds::Array sources{Order::Source{.agents = agents.entries(), .workspaces = workspaces}};
     Order::Plan plan;
     const auto allocations = allocator.allocations();
 
@@ -149,29 +149,29 @@ namespace {
     telar::ConcurrentMemory& memory = adapter;
     WorkspaceReplica workspaces{memory};
     AgentReplica agents{memory};
-    const std::array projects{WorkspaceListEntry{.workspace = 1, .name = "project", .path = "/project"}};
-    std::array reports{agentSnapshotEntry(), agentSnapshotEntry()};
+    const ds::Array projects{WorkspaceListEntry{.workspace = 1, .name = "project", .path = "/project"}};
+    ds::Array reports{agentSnapshotEntry(), agentSnapshotEntry()};
 
-    reports.front().work_tree = task_worktree_id;
-    reports.front().session_id = coordinatorReference(1).session_id;
-    reports.back().session_id = coordinatorReference(2).session_id;
-    reports.back().pane_id = 2;
-    reports.back().work_tree = command_worktree_id;
-    std::array tasks{worktreeEntry(), worktreeEntry()};
+    reports.atMut(0).work_tree = task_worktree_id;
+    reports.atMut(0).session_id = coordinatorReference(1).session_id;
+    reports.atMut(reports.size() - 1).session_id = coordinatorReference(2).session_id;
+    reports.atMut(reports.size() - 1).pane_id = 2;
+    reports.atMut(reports.size() - 1).work_tree = command_worktree_id;
+    ds::Array tasks{worktreeEntry(), worktreeEntry()};
 
-    tasks.front().coordinator = coordinatorReference(2);
-    tasks.back().worktree = command_worktree_id;
-    tasks.back().workspace.reset();
-    tasks.back().coordinator = coordinatorReference(1);
+    tasks.atMut(0).coordinator = coordinatorReference(2);
+    tasks.atMut(tasks.size() - 1).worktree = command_worktree_id;
+    tasks.atMut(tasks.size() - 1).workspace.reset();
+    tasks.atMut(tasks.size() - 1).coordinator = coordinatorReference(1);
     check(workspaces.apply({.revision = 1, .entries = projects, .worktrees = tasks}), "cyclic workspaces must be retained");
     check(agents.apply({.revision = 1, .entries = reports}, 0), "cyclic agents must be retained");
     using Order = ActivityOrder<telar::ConcurrentMemory>;
-    const std::array sources{Order::Source{.agents = agents.entries(), .workspaces = workspaces}};
+    const ds::Array sources{Order::Source{.agents = agents.entries(), .workspaces = workspaces}};
     Order::Plan plan;
 
     Order::write(sources, 0, plan);
     check(plan.count == 2 && !plan.entries[0].parent && plan.entries[1].parent == 0 && plan.entries[1].depth == 1, "cyclic attribution must break only its cyclic edge without losing cards");
-    tasks.front().coordinator = coordinatorReference(2, 2);
+    tasks.atMut(0).coordinator = coordinatorReference(2, 2);
     check(workspaces.apply({.revision = 2, .entries = projects, .worktrees = tasks}), "stale coordinator references remain representable");
     Order::write(sources, 0, plan);
     check(!plan.entries[0].parent, "an explicit stale reference must not fall back to a coincident pane id");
@@ -189,22 +189,22 @@ namespace {
     WorkspaceReplica child_workspaces{memory};
     AgentReplica parents{memory};
     AgentReplica children{memory};
-    const std::array projects{WorkspaceListEntry{.workspace = 1, .name = "project", .path = "/project"}};
-    std::array rows{worktreeEntry()};
+    const ds::Array projects{WorkspaceListEntry{.workspace = 1, .name = "project", .path = "/project"}};
+    ds::Array rows{worktreeEntry()};
 
-    rows.front().coordinator = coordinatorReference(1);
-    const std::array parent_reports{agentSnapshotEntry()};
+    rows.atMut(0).coordinator = coordinatorReference(1);
+    const ds::Array parent_reports{agentSnapshotEntry()};
     auto report = parent_reports.front();
 
     // Other machines contribute only the agents that wait on the person.
     report.status = AgentStatus::blocked;
     report.session_id = coordinatorReference(1).session_id;
-    const std::array identified_parents{report};
+    const ds::Array identified_parents{report};
 
     report.pane_id = 2;
     report.work_tree = task_worktree_id;
     report.final_message = "\n A retained answer\n";
-    const std::array child_reports{report};
+    const ds::Array child_reports{report};
 
     parent_workspaces.apply({.revision = 1, .entries = projects});
     child_workspaces.apply({.revision = 1, .entries = projects, .worktrees = rows});
@@ -212,7 +212,7 @@ namespace {
     children.apply({.revision = 1, .entries = child_reports}, 0);
     check(children.entries().front().finalLine() == "A retained answer", "runtime task summaries must retain their owned final message");
     using Order = ActivityOrder<telar::ConcurrentMemory>;
-    const std::array sources{
+    const ds::Array sources{
         Order::Source{.slot = 0, .agents = parents.entries(), .workspaces = parent_workspaces},
         Order::Source{.slot = 1, .agents = parents.entries(), .workspaces = parent_workspaces},
         Order::Source{.slot = 2, .agents = children.entries(), .workspaces = child_workspaces},
@@ -230,24 +230,24 @@ namespace {
     telar::ConcurrentMemory& memory = adapter;
     WorkspaceReplica workspaces{memory};
     AgentReplica agents{memory};
-    const std::array projects{WorkspaceListEntry{.workspace = 1, .name = "project", .path = "/project"}};
-    std::array rows{worktreeEntry()};
+    const ds::Array projects{WorkspaceListEntry{.workspace = 1, .name = "project", .path = "/project"}};
+    ds::Array rows{worktreeEntry()};
 
-    rows.front().worktree = command_worktree_id;
-    rows.front().workspace.reset();
-    rows.front().command_state = CommandState::running;
-    rows.front().command_label = "test";
+    rows.atMut(0).worktree = command_worktree_id;
+    rows.atMut(0).workspace.reset();
+    rows.atMut(0).command_state = CommandState::running;
+    rows.atMut(0).command_label = "test";
     check(workspaces.apply({.revision = 1, .entries = projects, .worktrees = rows}), "workspaces must commit");
-    std::array reports{agentSnapshotEntry(), agentSnapshotEntry(), agentSnapshotEntry()};
+    ds::Array reports{agentSnapshotEntry(), agentSnapshotEntry(), agentSnapshotEntry()};
 
-    reports[0].status = AgentStatus::working;
-    reports[1].pane_id = 2;
-    reports[1].status = AgentStatus::blocked;
-    reports[2].pane_id = 3;
-    reports[2].status = AgentStatus::failed;
+    reports.atMut(0).status = AgentStatus::working;
+    reports.atMut(1).pane_id = 2;
+    reports.atMut(1).status = AgentStatus::blocked;
+    reports.atMut(2).pane_id = 3;
+    reports.atMut(2).status = AgentStatus::failed;
     check(agents.apply({.revision = 1, .entries = reports}, 0), "agents must commit");
     using Order = ActivityOrder<telar::ConcurrentMemory>;
-    const std::array sources{
+    const ds::Array sources{
         Order::Source{.slot = 0, .agents = agents.entries(), .workspaces = workspaces},
         Order::Source{.slot = 1, .agents = agents.entries(), .workspaces = workspaces},
     };
@@ -275,8 +275,8 @@ namespace {
     SystemAllocator memory;
     Transport transport;
     TestSession session{memory, transport};
-    std::array rows{worktreeEntry()};
-    const std::array entries{WorkspaceListEntry{.workspace = 2, .name = "task", .path = "/project/worktree"}};
+    ds::Array rows{worktreeEntry()};
+    const ds::Array entries{WorkspaceListEntry{.workspace = 2, .name = "task", .path = "/project/worktree"}};
 
     deliver(session, WorkspaceList{.revision = 1, .entries = entries, .worktrees = rows});
     check(!application::workbench::openWorktree(session, task_worktree_id), "offline metadata must not navigate to a retired runtime");
@@ -289,7 +289,7 @@ namespace {
     check(request.target.kind == PaneTarget::Kind::workspace && request.target.id == 2 && !request.launch, "command navigation must open the materialized workspace without launching another command");
     deliver(session, RequestFailed{.request_id = request.request_id, .code = FailureCode::permission_denied, .message = "Workspace access was denied"});
     check(!session.requestsPending(), "the detached-worktree check must not be masked by an in-flight navigation request");
-    rows.front().workspace.reset();
+    rows.atMut(0).workspace.reset();
     deliver(session, WorkspaceList{.revision = 2, .entries = entries, .worktrees = rows});
     const auto requests = transport.sent.size();
 

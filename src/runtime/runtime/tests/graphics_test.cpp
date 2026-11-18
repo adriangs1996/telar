@@ -34,6 +34,7 @@ import telar.runtime.model.client_layouts;
 import telar.runtime.model.slot_store;
 import telar.runtime.terminal.graphics_storage;
 import telar.runtime.transport.connection;
+import telar.base.ds;
 
 namespace {
 
@@ -68,9 +69,9 @@ namespace {
     check(first.reserve(768) && !first.reserve(1));
     first.release(768);
 
-    std::array<std::thread, 4> workers;
+    ds::Array<std::thread, 4> workers;
 
-    for (auto& worker : workers) {
+    for (auto& worker : workers.viewMut()) {
       worker = std::thread{[&] {
         for (unsigned iteration = 0; iteration < 1000; ++iteration) {
           if (void* bytes = first.allocate(128, 16)) {
@@ -81,7 +82,7 @@ namespace {
       }};
     }
 
-    for (auto& worker : workers) {
+    for (auto& worker : workers.viewMut()) {
       worker.join();
     }
 
@@ -168,8 +169,8 @@ namespace {
     check(terminal.graphics.images().empty() && terminal.graphics.placements().empty());
 
     for (unsigned identity = 1; identity <= 40; ++identity) {
-      std::array<char, 128> command;
-      const int length = std::snprintf(command.data(), command.size(), "\x1b_Ga=t,f=24,s=1,v=1,i=%u,q=2;/wAA\x1b\\", identity);
+      ds::Array<char, 128> command;
+      const int length = std::snprintf(command.dataMut(), command.size(), "\x1b_Ga=t,f=24,s=1,v=1,i=%u,q=2;/wAA\x1b\\", identity);
 
       feedGraphics(terminal, {command.data(), static_cast<std::size_t>(length)});
     }
@@ -213,9 +214,9 @@ namespace {
     TELAR_DIAGNOSTIC(check(sync.transferBytes() == 4));
     if (shared) {
       const auto message = peer.receive<GraphicsSharedImage>();
-      std::array<char, 32> name{};
+      ds::Array<char, 32> name{};
 
-      std::copy(message.name.begin(), message.name.end(), name.begin());
+      std::copy(message.name.begin(), message.name.end(), name.dataMut());
       FileDescriptor descriptor{::shm_open(name.data(), O_RDONLY, 0)};
 
       check(static_cast<bool>(descriptor));
@@ -348,7 +349,7 @@ namespace {
       check(static_cast<bool>(descriptor));
       MappedRegion mapping{descriptor.get(), 4, PROT_READ};
 
-      check(mapping && std::ranges::equal(mapping.bytes(), std::array<Byte, 4>{255, 0, 0, 255}));
+      check(mapping && std::ranges::equal(mapping.bytes(), ds::Array<Byte, 4>{255, 0, 0, 255}));
       check(::shm_unlink(name.c_str()) == 0);
     } else {
       const auto message = peer.receive<GraphicsImage>();

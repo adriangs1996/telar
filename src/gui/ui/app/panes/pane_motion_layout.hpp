@@ -70,7 +70,7 @@ namespace telar::gui::qt {
     void bindClock();
 
     QPointer<QAbstractItemModel> model_;
-    std::array<QMetaObject::Connection, 6> connections_;
+    ds::Array<QMetaObject::Connection, 6> connections_;
     ListModel items_{this};
     application::workbench::PaneMotions motions_;
     QString context_;

@@ -174,7 +174,7 @@ export namespace telar::render {
   //   cells   u32 first count, u8 align, 3 zero bytes
   //   runs    u32 text offset size, u32 target offset size, u16 style u16 0
   //   text    UTF-8
-  inline constexpr std::array<std::uint8_t, 4> magic{'T', 'R', 'D', 'C'};
+  inline constexpr ds::Array<std::uint8_t, 4> magic{'T', 'R', 'D', 'C'};
   inline constexpr std::uint16_t version = 1;
   inline constexpr std::size_t header_bytes = 24;
   inline constexpr std::size_t block_bytes = 32;

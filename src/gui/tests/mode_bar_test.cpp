@@ -45,6 +45,7 @@ import telar.gui.features.bindings;
 import telar.gui.foundation.keys;
 import telar.gui.features.workbench;
 import telar.gui.features.status_bar;
+import telar.base.ds;
 
 namespace {
 
@@ -88,7 +89,7 @@ namespace {
       constexpr KeyChord first{.key = KeyChord::Key::character, .character = 'z'};
       constexpr KeyChord second{.key = KeyChord::Key::character, .character = 'a'};
       using Binding = KeyBinding<BindingAction>;
-      constexpr std::array bindings{
+      constexpr telar::ds::Array bindings{
           Binding{.keys = {prefix, first}, .length = 2, .action = {.kind = BindingActionKind::new_tab}},
           Binding{.keys = {prefix, second}, .length = 2, .action = {.kind = BindingActionKind::new_tab}},
           Binding{.keys = {prefix, {.key = KeyChord::Key::up}}, .length = 2, .action = {.kind = BindingActionKind::split_horizontal}},

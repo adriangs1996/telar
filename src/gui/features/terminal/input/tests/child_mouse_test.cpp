@@ -9,6 +9,7 @@ import std;
 import telar.testing;
 import telar.gui.features.terminal.input;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -33,20 +34,20 @@ namespace {
   }
 
   void independentButtons() {
-    std::array<ChildMouseGesture, static_cast<std::size_t>(MouseButton::none)> gestures;
+    ds::Array<ChildMouseGesture, static_cast<std::size_t>(MouseButton::none)> gestures;
 
     for (const auto button : {MouseButton::left, MouseButton::middle, MouseButton::right}) {
-      gestures[static_cast<std::size_t>(button)].begin(view(), sample(button));
+      gestures.atMut(static_cast<std::size_t>(button)).begin(view(), sample(button));
     }
 
     auto release = sample();
 
     release.phase = MousePhase::release;
-    check(gestures[0].deliver(view(), release) == ChildMouseReport{.button = 0, .x = 1, .y = 1, .released = true}, "the first release must retain its own button");
+    check(gestures.atMut(0).deliver(view(), release) == ChildMouseReport{.button = 0, .x = 1, .y = 1, .released = true}, "the first release must retain its own button");
     check(!gestures[0].owned() && gestures[1].owned() && gestures[2].owned(), "one release must preserve the other button leases");
-    check(gestures[1].cancel(view()) == ChildMouseReport{.button = 1, .x = 1, .y = 1, .released = true}, "cancellation must release the middle button independently");
-    check(gestures[2].cancel(view()) == ChildMouseReport{.button = 2, .x = 1, .y = 1, .released = true}, "cancellation must release the right button independently");
-    check(!gestures[1].cancel(view()) && !gestures[2].cancel(view()), "completed cancellation must not produce duplicate releases");
+    check(gestures.atMut(1).cancel(view()) == ChildMouseReport{.button = 1, .x = 1, .y = 1, .released = true}, "cancellation must release the middle button independently");
+    check(gestures.atMut(2).cancel(view()) == ChildMouseReport{.button = 2, .x = 1, .y = 1, .released = true}, "cancellation must release the right button independently");
+    check(!gestures.atMut(1).cancel(view()) && !gestures.atMut(2).cancel(view()), "completed cancellation must not produce duplicate releases");
   }
 
   void identityAndModes() {

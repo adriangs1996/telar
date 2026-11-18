@@ -110,10 +110,10 @@ namespace {
     {
       CompletionSignal signal;
       Resolutions::Notifications notifications{signal};
-      std::array<ds::Option<Resolutions::Ticket>, Resolutions::capacity> tickets;
+      ds::Array<ds::Option<Resolutions::Ticket>, Resolutions::capacity> tickets;
 
       for (std::size_t index = 0; index < tickets.size(); ++index) {
-        tickets[index] = Resolutions::request("host" + std::to_string(index) + ".example");
+        tickets.atMut(index) = Resolutions::request("host" + std::to_string(index) + ".example");
         check(tickets[index].hasValue());
       }
 

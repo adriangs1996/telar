@@ -113,7 +113,7 @@ namespace telar::runtime {
     const auto index = (head_ + count_) % message_capacity;
 
     if (!response.empty()) {
-      std::memcpy(bytes_[index].data(), response.data(), response.size());
+      std::memcpy(bytes_.atMut(index).dataMut(), response.data(), response.size());
     }
 
     commit(index, std::span<const std::uint8_t>{bytes_[index]}.first(response.size()));
@@ -131,7 +131,7 @@ namespace telar::runtime {
 
     const auto index = (head_ + count_) % message_capacity;
 
-    owned_[index] = std::move(owner);
+    owned_.atMut(index) = std::move(owner);
     commit(index, response);
     return true;
   }
@@ -193,8 +193,8 @@ namespace telar::runtime {
     offset_ += bytes;
     byte_count_ -= bytes;
     if (offset_ == lengths_[head_]) {
-      owned_[head_].reset();
-      views_[head_] = {};
+      owned_.atMut(head_).reset();
+      views_.atMut(head_) = {};
       head_ = (head_ + 1) % message_capacity;
       offset_ = 0;
       --count_;
@@ -227,7 +227,7 @@ namespace telar::runtime {
   }
 
   void PtyResponseQueue::clearLocked() noexcept {
-    for (auto& owner : owned_) {
+    for (auto& owner : owned_.viewMut()) {
       owner.reset();
     }
 

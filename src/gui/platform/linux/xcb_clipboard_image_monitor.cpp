@@ -97,9 +97,9 @@ namespace telar::gui::platform {
         return;
       }
 
-      constexpr std::array names{std::string_view{"CLIPBOARD"}, std::string_view{"image/png"}, std::string_view{"INCR"}, std::string_view{"_TELAR_CLIPBOARD_IMAGE"}, std::string_view{"_TELAR_CLIPBOARD_TIME"}};
+      constexpr ds::Array names{std::string_view{"CLIPBOARD"}, std::string_view{"image/png"}, std::string_view{"INCR"}, std::string_view{"_TELAR_CLIPBOARD_IMAGE"}, std::string_view{"_TELAR_CLIPBOARD_TIME"}};
       for (std::size_t index = 0; index < names.size(); ++index) {
-        cookies_[index] = xcb_intern_atom(connection_, 0, static_cast<std::uint16_t>(names[index].size()), names[index].data()).sequence;
+        cookies_.atMut(index) = xcb_intern_atom(connection_, 0, static_cast<std::uint16_t>(names[index].size()), names[index].data()).sequence;
       }
 
       QObject::connect(&poller_, &QTimer::timeout, &poller_, [this] {
@@ -130,8 +130,8 @@ namespace telar::gui::platform {
       }
 
       finish(ClipboardImageError::changed);
-      std::array<int, 2> sockets{};
-      if (::socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0, sockets.data()) != 0) {
+      ds::Array<int, 2> sockets{};
+      if (::socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0, sockets.dataMut()) != 0) {
         throw ClipboardImageFailure{ClipboardImageError::read_failed};
       }
 
@@ -223,7 +223,7 @@ namespace telar::gui::platform {
         return atoms_[index] != XCB_ATOM_NONE;
       }
 
-      const auto value = reply(cookies_[index]);
+      const auto value = reply(cookies_.atMut(index));
       if (!value) {
         initialization_failed_ = cookies_[index] == 0;
         if (initialization_failed_) {
@@ -233,7 +233,7 @@ namespace telar::gui::platform {
         return false;
       }
 
-      atoms_[index] = static_cast<const xcb_intern_atom_reply_t*>(value.get())->atom;
+      atoms_.atMut(index) = static_cast<const xcb_intern_atom_reply_t*>(value.get())->atom;
 
       return atoms_[index] != XCB_ATOM_NONE;
     }
@@ -451,8 +451,8 @@ namespace telar::gui::platform {
     ApplicationAllocator& memory_;
     xcb_connection_t* connection_ = nullptr;
     QTimer poller_;
-    std::array<xcb_atom_t, atom_count> atoms_{};
-    std::array<unsigned int, atom_count> cookies_{};
+    ds::Array<xcb_atom_t, atom_count> atoms_{};
+    ds::Array<unsigned int, atom_count> cookies_{};
     std::shared_ptr<ClipboardImageTransfer> status_;
     runtime::FileDescriptor writing_;
     std::unique_ptr<xcb_get_property_reply_t, EraseProperty> property_;

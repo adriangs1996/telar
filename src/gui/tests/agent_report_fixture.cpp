@@ -23,6 +23,7 @@
 #include <string>
 
 import telar.wire.agents;
+import telar.base.ds;
 
 namespace {
 
@@ -45,8 +46,8 @@ namespace {
 
   bool consume(telar::gui::qt::RuntimeConnection& connection, const telar::ReportAgent& report, QByteArrayView payload) {
     try {
-      std::array<telar::Byte, response_capacity> bytes{};
-      telar::DecodeStorage storage{bytes};
+      telar::ds::Array<telar::Byte, response_capacity> bytes{};
+      telar::DecodeStorage storage{bytes.viewMut()};
       const auto message = telar::byteView({payload.data(), static_cast<std::size_t>(payload.size())});
       if (message.front() == static_cast<telar::Byte>(telar::ServerTag::request_failed)) {
         throw std::runtime_error{std::string{telar::Codec::decode<telar::RequestFailed>(message, storage).message}};

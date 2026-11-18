@@ -68,6 +68,7 @@ import telar.runtime.platform.system_certificates;
 import telar.tls;
 import telar.runtime.tls.system_root_bundle;
 import telar.runtime.tls.interception;
+import telar.base.ds;
 
 namespace {
 
@@ -81,11 +82,11 @@ namespace {
   using NativeResource = TlsHandle<std::remove_pointer_t<Reference>, CFRelease>;
 
   NativeResource<SecCertificateRef> nativeCertificate(X509* certificate) {
-    std::array<unsigned char, CertificatePair::maximum_der_bytes> encoded;
+    ds::Array<unsigned char, CertificatePair::maximum_der_bytes> encoded;
     const auto length = i2d_X509(certificate, nullptr);
 
     check(length > 0 && static_cast<std::size_t>(length) <= encoded.size());
-    auto* destination = encoded.data();
+    auto* destination = encoded.dataMut();
 
     check(i2d_X509(certificate, &destination) == length);
     NativeResource<CFDataRef> data{CFDataCreate(kCFAllocatorDefault, encoded.data(), length)};
@@ -136,8 +137,8 @@ namespace {
     check(verification != nullptr && X509_STORE_CTX_init(verification.get(), store.get(), leaf.certificate.get(), nullptr) == 1);
     check(X509_STORE_CTX_set_purpose(verification.get(), X509_PURPOSE_SSL_SERVER) == 1);
     auto* parameters = X509_STORE_CTX_get0_param(verification.get());
-    std::array<unsigned char, sizeof(in6_addr)> address{};
-    const bool numeric = ::inet_pton(AF_INET, hostname, address.data()) == 1 || ::inet_pton(AF_INET6, hostname, address.data()) == 1;
+    ds::Array<unsigned char, sizeof(in6_addr)> address{};
+    const bool numeric = ::inet_pton(AF_INET, hostname, address.dataMut()) == 1 || ::inet_pton(AF_INET6, hostname, address.dataMut()) == 1;
     check((numeric ? X509_VERIFY_PARAM_set1_ip_asc(parameters, hostname) : X509_VERIFY_PARAM_set1_host(parameters, hostname, 0)) == 1);
     return X509_verify_cert(verification.get()) == 1;
   }
@@ -206,8 +207,8 @@ namespace {
     check(trusted(store, legacy));
     check(store.count() == 4);
 
-    std::array<unsigned char, CertificatePair::maximum_der_bytes> encoded;
-    auto* destination = encoded.data();
+    ds::Array<unsigned char, CertificatePair::maximum_der_bytes> encoded;
+    auto* destination = encoded.dataMut();
     const auto length = i2d_X509(first.certificate.get(), &destination);
 
     check(length > 0);

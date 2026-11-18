@@ -55,6 +55,7 @@ static_assert(true);
 
 #ifdef Q_OS_MACOS
 #include "optical_text.hpp"
+#include "telar_base/ds/values.hpp"
 #endif
 
 namespace telar::gui::qt {
@@ -65,7 +66,7 @@ namespace telar::gui::qt {
         row_(adapter_) {}
 
   void TextScene::configure(const FontConfiguration& font, FontGrid grid, const std::shared_ptr<const FontCollection>& collection) {
-    constexpr std::array hinting{fonts::GlyphHinting::native, fonts::GlyphHinting::light, fonts::GlyphHinting::full};
+    constexpr ds::Array hinting{fonts::GlyphHinting::native, fonts::GlyphHinting::light, fonts::GlyphHinting::full};
 
     rasterization_ = {.optical = font.thicken, .strength = font.thicken_strength, .hinting = hinting.at(std::to_underlying(font.hinting))};
 #ifdef Q_OS_MACOS

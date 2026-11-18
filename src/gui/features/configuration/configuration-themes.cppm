@@ -19,7 +19,7 @@ export {
       ThemeValues values;
     };
 
-    inline constexpr std::array<ThemePreset, 11> theme_presets{{
+    inline constexpr ds::Array<ThemePreset, 11> theme_presets{{
         {
             "shade",
             {

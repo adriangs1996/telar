@@ -177,7 +177,7 @@ export {
     public:
       // The clients whose held reports are due, in the order they were held.
       struct Due {
-        std::array<std::uint64_t, client_capacity> clients{};
+        ds::Array<std::uint64_t, client_capacity> clients{};
         std::size_t count = 0;
 
         inline std::span<const std::uint64_t> ids() const noexcept {
@@ -239,7 +239,7 @@ export {
           return due;
         }
 
-        std::array<const ClientSession*, client_capacity> ready;
+        ds::Array<const ClientSession*, client_capacity> ready;
 
         for (auto* client : clients.items()) {
           if (client == nullptr || !client->deferred_report.pending) {
@@ -254,18 +254,18 @@ export {
           const bool accepted = !gone && accepts(agents, report.reporter);
           if (gone || timed_out || rechecked || accepted) {
             report.answer_rechecked = rechecked || accepted;
-            ready[due.count++] = client;
+            ready.atMut(due.count++) = client;
           }
         }
 
-        auto ordered = std::span{ready}.first(due.count);
+        auto ordered = ready.viewMut().first(due.count);
 
         std::ranges::sort(ordered, [](const auto* left, const auto* right) {
           return std::bit_cast<std::int64_t>(left->deferred_report.sequence - right->deferred_report.sequence) < 0;
         });
 
         for (std::size_t index = 0; index < due.count; ++index) {
-          due.clients[index] = ordered[index]->id;
+          due.clients.atMut(index) = ordered[index]->id;
         }
 
         return due;
@@ -391,7 +391,7 @@ export {
 
         for (auto* client : clients.items()) {
           if (client != nullptr && client->pending_descent && !client->descent_running && !client->connection.closing) {
-            request.checks[request.count++] = *client->pending_descent;
+            request.checks.atMut(request.count++) = *client->pending_descent;
           }
         }
 
@@ -648,7 +648,7 @@ export {
 
           for (auto* pane : model.panes.items()) {
             if (pane != nullptr && pane->observer->seal()) {
-              request.entries[request.count++].observer = pane->observer;
+              request.entries.atMut(request.count++).observer = pane->observer;
               if (request.count == request.entries.size()) {
                 break;
               }
@@ -737,7 +737,7 @@ export {
           }
 
           if (observer.seal()) {
-            request.entries[request.count++].observer = *link;
+            request.entries.atMut(request.count++).observer = *link;
           }
 
           link = &observer.retired_next;
@@ -759,8 +759,8 @@ export {
           return;
         }
 
-        request.entries[request.count++] = {.pane = pane.id, .generation = pane.generation, .provider = AgentProvider::unknown, .observer = pane.observer, .probe_process = probe_process};
-        auto& entry = request.entries[request.count - 1];
+        request.entries.atMut(request.count++) = {.pane = pane.id, .generation = pane.generation, .provider = AgentProvider::unknown, .observer = pane.observer, .probe_process = probe_process};
+        auto& entry = request.entries.atMut(request.count - 1);
 
         entry.input_revision = pane.input_revision;
         entry.process_request = {pane.id, pane.generation, pane.cwd_revision, pane.process->processId(), 0};

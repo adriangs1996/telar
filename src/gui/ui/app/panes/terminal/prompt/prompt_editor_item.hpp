@@ -23,6 +23,7 @@ static_assert(true);
 #include <vector>
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -196,7 +197,7 @@ namespace telar::gui::qt {
     QVariantMap colors_;
     // What colors_ gives each style, the accent and the path underline, read once per change of
     // colors_ instead of once per run and frame.
-    std::array<QColor, static_cast<std::size_t>(application::prompt::Style::missing) + 1> style_colors_;
+    ds::Array<QColor, static_cast<std::size_t>(application::prompt::Style::missing) + 1> style_colors_;
     QColor accent_;
     QColor underline_;
     QString preedit_;

@@ -6,6 +6,7 @@ export module telar.base.memory.sensitive;
 import std;
 import telar.tbc;
 import telar.base.memory.allocators;
+import telar.base.ds;
 
 // Interface: telar_base/memory/erase_sensitive.cppm
 export {
@@ -86,7 +87,7 @@ export {
       static constexpr std::size_t block_alignment = alignof(std::max_align_t);
       static constexpr std::size_t maximum_block_bytes = 4096;
       Upstream& upstream_;
-      std::array<Block*, maximum_block_bytes / block_alignment> available_{};
+      ds::Array<Block*, maximum_block_bytes / block_alignment> available_{};
       std::size_t retained_bytes_ = 0;
     };
 
@@ -181,18 +182,18 @@ export {
       inline SensitiveBuffer() noexcept {}
 
       inline ~SensitiveBuffer() {
-        eraseSensitive(bytes_.data(), bytes_.size());
+        eraseSensitive(bytes_.dataMut(), bytes_.size());
       }
 
       SensitiveBuffer(const SensitiveBuffer&) = delete;
       SensitiveBuffer& operator=(const SensitiveBuffer&) = delete;
 
       inline std::span<std::uint8_t, Capacity> bytes() noexcept {
-        return bytes_;
+        return bytes_.viewMut();
       }
 
     private:
-      std::array<std::uint8_t, Capacity> bytes_;
+      ds::Array<std::uint8_t, Capacity> bytes_;
     };
 
   }
@@ -246,14 +247,14 @@ export {
         }
 
         if (!text.empty()) {
-          std::memcpy(bytes_.data() + length_, text.data(), text.size());
+          std::memcpy(bytes_.dataMut() + length_, text.data(), text.size());
           length_ += text.size();
         }
       }
 
       inline void truncate(std::size_t length) noexcept {
         if (length < length_) {
-          eraseSensitive(bytes_.data() + length, length_ - length);
+          eraseSensitive(bytes_.dataMut() + length, length_ - length);
           length_ = length;
         }
       }
@@ -269,10 +270,10 @@ export {
     private:
       inline void copy(const SensitiveText& other) noexcept {
         length_ = other.length_;
-        std::memcpy(bytes_.data(), other.bytes_.data(), length_);
+        std::memcpy(bytes_.dataMut(), other.bytes_.data(), length_);
       }
 
-      std::array<char, Capacity> bytes_;
+      ds::Array<char, Capacity> bytes_;
       std::size_t length_ = 0;
     };
 

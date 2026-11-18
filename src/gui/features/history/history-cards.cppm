@@ -72,7 +72,7 @@ export {
 
       struct Facts {
         static constexpr std::size_t capacity = 3;
-        std::array<Token, capacity> tokens{};
+        ds::Array<Token, capacity> tokens{};
         std::size_t count = 0;
         float width = 0;
 
@@ -115,7 +115,7 @@ export {
       static constexpr float minimum_meta_height = 22;
       static constexpr float meta_padding = 6;
 
-      std::array<HistoryCardLine, maximum_lines> lines{};
+      ds::Array<HistoryCardLine, maximum_lines> lines{};
       std::uint16_t shown = 0;
       std::uint16_t more = 0;
       std::uint16_t line_limit = maximum_lines;
@@ -234,22 +234,22 @@ export {
       static constexpr std::size_t range_capacity = 64;
       using Range = BoundedText<range_capacity>;
 
-      std::array<HistoryFooterHint, capacity> hints{};
+      ds::Array<HistoryFooterHint, capacity> hints{};
       std::size_t count = 0;
 
       [[nodiscard]] static constexpr HistoryFooter resolve(HistoryFooterOptions options) noexcept {
         const bool mac = options.key_style == HistoryKeyStyle::mac;
         HistoryFooter result;
 
-        result.hints.front() = {.key = mac ? "↩" : "Enter", .word = options.enter_runs ? "run" : "paste", .action = HistoryFooterAction::submit};
+        result.hints.atMut(0) = {.key = mac ? "↩" : "Enter", .word = options.enter_runs ? "run" : "paste", .action = HistoryFooterAction::submit};
         if (options.inspecting) {
-          result.hints[1] = {.key = HistoryActions::inspectionKey(options.key_style), .word = "back", .action = HistoryFooterAction::inspect};
-          result.hints[2] = {.key = mac ? "⇞⇟" : "PgUp PgDn", .word = "scroll"};
-          result.hints[3] = {.key = mac ? "⌥↩" : "Alt+Enter", .word = "go to pane", .action = HistoryFooterAction::visit};
+          result.hints.atMut(1) = {.key = HistoryActions::inspectionKey(options.key_style), .word = "back", .action = HistoryFooterAction::inspect};
+          result.hints.atMut(2) = {.key = mac ? "⇞⇟" : "PgUp PgDn", .word = "scroll"};
+          result.hints.atMut(3) = {.key = mac ? "⌥↩" : "Alt+Enter", .word = "go to pane", .action = HistoryFooterAction::visit};
           result.count = inspect_count;
         } else {
-          result.hints[1] = {.key = mac ? "⇧↩" : "Shift+Enter", .word = options.enter_runs ? "paste" : "run", .action = HistoryFooterAction::alternate};
-          result.hints[2] = {.key = HistoryActions::inspectionKey(options.key_style), .word = "details", .action = HistoryFooterAction::inspect};
+          result.hints.atMut(1) = {.key = mac ? "⇧↩" : "Shift+Enter", .word = options.enter_runs ? "paste" : "run", .action = HistoryFooterAction::alternate};
+          result.hints.atMut(2) = {.key = HistoryActions::inspectionKey(options.key_style), .word = "details", .action = HistoryFooterAction::inspect};
           result.count = browse_count;
         }
 
@@ -267,7 +267,7 @@ export {
   namespace telar::gui::features::history {
 
     struct HistoryFooterMeasurements {
-      std::array<HistoryHintMeasurements, HistoryFooter::capacity> hints{};
+      ds::Array<HistoryHintMeasurements, HistoryFooter::capacity> hints{};
       std::size_t count = 0;
       float range = 0;
       bool empty = true;
@@ -281,7 +281,7 @@ export {
       static constexpr float range_gap = 12;
       static constexpr float separator_height = 1;
 
-      std::array<HistoryHintGeometry, HistoryFooter::capacity> hints{};
+      ds::Array<HistoryHintGeometry, HistoryFooter::capacity> hints{};
       std::size_t count = 0;
       Rect separator;
       Rect range;
@@ -300,8 +300,8 @@ export {
   namespace telar::gui::features::history {
 
     struct HistoryMetaMeasurements {
-      std::array<float, HistoryFacts::capacity> facts{};
-      std::array<HistoryHintMeasurements, HistoryActions::count> actions{};
+      ds::Array<float, HistoryFacts::capacity> facts{};
+      ds::Array<HistoryHintMeasurements, HistoryActions::count> actions{};
       std::size_t fact_count = 0;
       bool selected = true;
       bool pane_open = false;
@@ -311,8 +311,8 @@ export {
       static constexpr float action_gap = 2;
       static constexpr float facts_right_inset = 10;
 
-      std::array<Rect, HistoryFacts::capacity> facts{};
-      std::array<HistoryHintGeometry, HistoryActions::count> actions{};
+      ds::Array<Rect, HistoryFacts::capacity> facts{};
+      ds::Array<HistoryHintGeometry, HistoryActions::count> actions{};
       std::size_t fact_count = 0;
       std::size_t action_count = 0;
       Rect facts_area;

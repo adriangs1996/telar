@@ -70,7 +70,7 @@ namespace telar::gui::qt {
 
     // The words the dialog's filter chips show for `value`.
     template <std::size_t Count>
-    QString filterLabel(const std::array<application::history::HistoryFilterLabels::Choice, Count>& choices, const QString& value) {
+    QString filterLabel(const ds::Array<application::history::HistoryFilterLabels::Choice, Count>& choices, const QString& value) {
       for (const auto& choice : choices) {
         if (QLatin1StringView{choice.value.data(), static_cast<qsizetype>(choice.value.size())} == value) {
           return toQString(choice.text);

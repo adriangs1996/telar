@@ -30,7 +30,7 @@ export {
     };
 
     struct HistoryActionSurface {
-      std::array<HistoryActionTarget, HistoryActions::count> targets{};
+      ds::Array<HistoryActionTarget, HistoryActions::count> targets{};
       std::uint64_t generation = 0;
       double scale = 1;
       ds::Option<HistoryChoice> choice = ds::none;

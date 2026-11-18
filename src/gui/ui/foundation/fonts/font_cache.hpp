@@ -78,7 +78,7 @@ namespace telar::gui::qt {
       auto resolved = FontResolver::resolve(replacement->face, font, scale);
 
       generation_ = std::move(replacement);
-      for (auto& entry : entries_) {
+      for (auto& entry : entries_.viewMut()) {
         entry.font.reset();
       }
 
@@ -88,7 +88,7 @@ namespace telar::gui::qt {
     }
 
     ResolvedFont remember(ResolvedFont&& font, qreal scale) {
-      auto& entry = entries_[next_slot_];
+      auto& entry = entries_.atMut(next_slot_);
       const auto& stored = entry.font.emplace(std::move(font));
 
       entry.scale = scale;
@@ -99,7 +99,7 @@ namespace telar::gui::qt {
 
     tbc::view<Memory&, tbc::lt::a> memory_;
     tbc::view<Owned<Generation, Memory>, tbc::lt::a> generation_;
-    std::array<Entry, scale_capacity> entries_{};
+    ds::Array<Entry, scale_capacity> entries_{};
     std::size_t next_slot_ = 0;
   };
 

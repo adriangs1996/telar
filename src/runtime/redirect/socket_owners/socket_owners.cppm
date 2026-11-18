@@ -50,7 +50,7 @@ export {
 
       bool contains(const Target& target) const noexcept;
 
-      static std::array<bool, Target::maximum_targets> selection(std::span<const Target> targets, Direction direction);
+      static ds::Array<bool, Target::maximum_targets> selection(std::span<const Target> targets, Direction direction);
 
     private:
       std::unique_ptr<ifaddrs, decltype(&freeifaddrs)> addresses_;
@@ -150,8 +150,8 @@ export {
         }
 
         loopback_.release();
-        std::array<char, 32> value{};
-        const auto result = std::to_chars(value.data(), value.data() + value.size(), *token_);
+        ds::Array<char, 32> value{};
+        const auto result = std::to_chars(value.dataMut(), value.dataMut() + value.size(), *token_);
 
         if (*token_ != 0) {
           run({"-X", std::string_view{value.data(), static_cast<std::size_t>(result.ptr - value.data())}});
@@ -290,7 +290,7 @@ export {
     // Generic over the caller's visitor.
     template <typename Visitor>
     TBC_GENERIC void visitLinuxTcpSockets(Visitor&& visit) {
-      constexpr std::array families{AF_INET, AF_INET6};
+      constexpr ds::Array families{AF_INET, AF_INET6};
       constexpr std::size_t read_capacity = 4096;
       constexpr std::size_t maximum_line_bytes = 1024;
       constexpr std::size_t maximum_entries = 65536;
@@ -303,13 +303,13 @@ export {
           throw SystemError{"Open TCP socket table"};
         }
 
-        std::array<char, read_capacity> buffer;
-        std::array<char, maximum_line_bytes> line;
+        ds::Array<char, read_capacity> buffer;
+        ds::Array<char, maximum_line_bytes> line;
         std::size_t length = 0;
         std::size_t entries = 0;
         bool header = true;
         for (;;) {
-          const auto count = ::read(file.get(), buffer.data(), buffer.size());
+          const auto count = ::read(file.get(), buffer.dataMut(), buffer.size());
           if (count < 0 && sys::lastError() == EINTR) {
             continue;
           }
@@ -328,7 +328,7 @@ export {
               if (length == line.size()) {
                 throw SystemError{"TCP socket record exceeds its limit", EOVERFLOW};
               }
-              line[length++] = byte;
+              line.atMut(length++) = byte;
               continue;
             }
             if (header) {
@@ -380,10 +380,10 @@ export {
 
     private:
       ProcessInspector inspector_;
-      std::array<ProcessIdentity, maximum_processes> processes_;
+      ds::Array<ProcessIdentity, maximum_processes> processes_;
       std::size_t count_ = 0;
 #if defined(__APPLE__)
-      std::array<proc_fdinfo, maximum_descriptors> descriptors_;
+      ds::Array<proc_fdinfo, maximum_descriptors> descriptors_;
 #endif
     };
 
@@ -460,8 +460,8 @@ export {
       // Generic over the caller's session.
       template <typename Session>
       TBC_GENERIC void discover(Session& session, uid_t uid, const PfIdentity<Memory>& identity) {
-        std::array<Byte, 65540> bytes;
-        auto packet = discovery_.getMut().receive(bytes);
+        ds::Array<Byte, 65540> bytes;
+        auto packet = discovery_.getMut().receive(bytes.viewMut());
         if (packet.empty()) {
           return;
         }
@@ -492,10 +492,11 @@ export {
           return flow && flow->incoming == incoming && flow->key.matches(*key);
         });
         if (found == flows_.end()) {
-          const auto empty = std::ranges::find_if(flows_, [](const auto& flow) {
+          const auto flows = flows_.viewMut();
+          const auto empty = std::ranges::find_if(flows, [](const auto& flow) {
             return !flow;
           });
-          if (empty == flows_.end()) {
+          if (empty == flows.end()) {
             return;
           }
 
@@ -537,16 +538,16 @@ export {
       static constexpr std::size_t pending_offset = 3 + Target::maximum_targets;
       Memory& memory_;
       String<Memory> endpoint_;
-      std::array<ds::Option<Listener>, Target::maximum_targets> listeners_;
-      std::array<Mapping, Target::maximum_targets> mappings_;
-      std::array<ds::Option<Pending>, maximum_pending> pending_;
-      std::array<ds::Option<Flow>, maximum_flows> flows_;
+      ds::Array<ds::Option<Listener>, Target::maximum_targets> listeners_;
+      ds::Array<Mapping, Target::maximum_targets> mappings_;
+      ds::Array<ds::Option<Pending>, maximum_pending> pending_;
+      ds::Array<ds::Option<Flow>, maximum_flows> flows_;
       ds::Option<Discovery> discovery_;
       ds::Option<NatLookup> nat_;
       ds::Option<PacketLog> packet_log_;
       ds::Option<SocketOwners> owners_;
       ds::Option<SocketAccounts> accounts_;
-      std::array<ProcessIdentity, SocketOwners::maximum_processes> selected_processes_;
+      ds::Array<ProcessIdentity, SocketOwners::maximum_processes> selected_processes_;
       std::size_t process_count_ = 0;
       std::size_t count_ = 0;
       Direction direction_ = Direction::outbound;

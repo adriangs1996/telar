@@ -92,7 +92,7 @@ export namespace telar::runtime {
     State state_ = State::ground;
     unsigned parameter_ = 0;
     bool has_parameter_ = false;
-    std::array<char, 255> typed_{};
+    ds::Array<char, 255> typed_{};
     std::size_t typed_count_ = 0;
     bool typed_exact_ = true;
   };
@@ -231,7 +231,7 @@ export namespace telar::runtime {
     IntegratedShell remote_shell_ = IntegratedShell::none;
     ParserState parser_ = ParserState::ground;
     Zone zone_ = Zone::unknown;
-    std::array<char, 16 * 1024> bytes_{};
+    ds::Array<char, 16 * 1024> bytes_{};
     std::size_t length_ = 0;
     bool overflow_ = false;
     bool markers_ready_ = false;
@@ -367,7 +367,7 @@ export namespace telar::runtime {
     void follow(bool reflowed = false);
 
     std::uint64_t revision() const noexcept;
-    PaneBlocks message(std::uint64_t pane_id, std::array<CommandBlock, capacity>& storage) const;
+    PaneBlocks message(std::uint64_t pane_id, ds::Array<CommandBlock, capacity>& storage) const;
 
   protected:
     explicit CommandBlockRing(GhosttyTerminal terminal);
@@ -423,7 +423,7 @@ export namespace telar::runtime {
 
     CommandSelection selection_;
     ds::Option<TrackedReference> prompt_;
-    std::array<Entry, capacity> entries_{};
+    ds::Array<Entry, capacity> entries_{};
     std::size_t first_ = 0;
     std::size_t count_ = 0;
     std::uint64_t revision_ = 0;

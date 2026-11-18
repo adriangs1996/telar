@@ -31,6 +31,7 @@ import telar.runtime.model.client_layouts;
 import telar.runtime.model.slot_store;
 import telar.runtime.runtime.execution_service;
 import telar.runtime.workspaces.git_probe;
+import telar.base.ds;
 
 namespace {
 
@@ -45,10 +46,10 @@ namespace {
     check(GitHead::parse("0123456789abcdef\n") == "01234567");
     check(GitHead::parse(" \r\n").empty());
 
-    std::array<char, 64> pattern;
+    ds::Array<char, 64> pattern;
 
-    std::strcpy(pattern.data(), "/tmp/telar-head-test.XXXXXX");
-    check(::mkdtemp(pattern.data()) != nullptr);
+    std::strcpy(pattern.dataMut(), "/tmp/telar-head-test.XXXXXX");
+    check(::mkdtemp(pattern.dataMut()) != nullptr);
     const std::filesystem::path root{pattern.data()};
 
     std::filesystem::create_directory(root / ".git");

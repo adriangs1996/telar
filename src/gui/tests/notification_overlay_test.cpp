@@ -46,6 +46,7 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.gui.features.notifications;
+import telar.base.ds;
 
 namespace {
 
@@ -252,8 +253,8 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
       activateWindow(window);
       QTRY_VERIFY_WITH_TIMEOUT(window.isActive(), wait_ms);
-      constexpr std::array keys{Qt::Key_Return, Qt::Key_Enter, Qt::Key_Space};
-      const std::array controls{QStringLiteral("notificationBody"), QStringLiteral("notificationClose")};
+      constexpr ds::Array keys{Qt::Key_Return, Qt::Key_Enter, Qt::Key_Space};
+      const ds::Array controls{QStringLiteral("notificationBody"), QStringLiteral("notificationClose")};
 
       for (const auto& control : controls) {
         for (const auto key : keys) {

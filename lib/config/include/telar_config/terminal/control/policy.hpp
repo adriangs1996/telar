@@ -1,5 +1,6 @@
 #pragma once
 
+#include "telar_base/ds/values.hpp"
 #include <array>
 #include <cstdint>
 
@@ -23,7 +24,7 @@ namespace telar::runtime::control {
     ColorFormat color_format = ColorFormat::sixteen_bit;
     bool title_report = false;
     bool checksum_report = false;
-    std::array<char, 1024> answerback{};
+    ds::Array<char, 1024> answerback{};
     std::uint16_t answerback_length = 0;
   };
 

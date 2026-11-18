@@ -19,10 +19,10 @@ namespace telar::gui::features::workbench {
       }
 
       index = count_++;
-      entries_[*index] = {.key = key, .started_ns = now_ns};
+      entries_.atMut(*index) = {.key = key, .started_ns = now_ns};
     }
 
-    seen_[*index] = true;
+    seen_.atMut(*index) = true;
     const auto started = entries_[*index].started_ns;
     if (now_ns < started) {
       return {.alpha = 0, .deadline_ns = started};
@@ -43,7 +43,7 @@ namespace telar::gui::features::workbench {
 
     for (std::size_t index = 0; index < count_; ++index) {
       if (seen_[index]) {
-        entries_[kept++] = entries_[index];
+        entries_.atMut(kept++) = entries_[index];
       }
     }
 
@@ -125,20 +125,20 @@ namespace telar::gui::features::workbench {
   }
 
   void TabCardMotions::begin() noexcept {
-    for (auto& motion : std::span{entries_}.first(count_)) {
+    for (auto& motion : entries_.viewMut().first(count_)) {
       motion.seen = false;
     }
   }
 
   std::size_t TabCardMotions::place(std::span<const TabCardInput> panes, std::span<TabCardPlacement> placed, TabMotionFrame& frame) noexcept {
-    std::array<TabCardMotion*, capacity> ordered{};
+    ds::Array<TabCardMotion*, capacity> ordered{};
     std::size_t known = 0;
 
     for (const auto& pane : panes) {
       auto* motion = find(pane.pane);
       const auto fresh = motion == nullptr;
       if (fresh && count_ < entries_.size()) {
-        motion = &entries_[count_++];
+        motion = &entries_.atMut(count_++);
         *motion = {.pane = pane.pane};
       }
 
@@ -152,14 +152,14 @@ namespace telar::gui::features::workbench {
         motion->used = ++clock_;
       }
 
-      ordered[known++] = motion;
+      ordered.atMut(known++) = motion;
     }
 
     const auto input = [&](const TabCardMotion* motion) {
       return *std::ranges::find(panes, motion->pane, &TabCardInput::pane);
     };
 
-    std::stable_sort(ordered.begin(), ordered.begin() + known, [&](const TabCardMotion* left, const TabCardMotion* right) {
+    std::stable_sort(ordered.dataMut(), ordered.dataMut() + known, [&](const TabCardMotion* left, const TabCardMotion* right) {
       const auto a = input(left);
       const auto b = input(right);
       if (a.focused != b.focused) {
@@ -206,7 +206,7 @@ namespace telar::gui::features::workbench {
     for (std::size_t index = 0; index < count_; ++index) {
       if (entries_[index].seen) {
         if (kept != index) {
-          entries_[kept] = entries_[index];
+          entries_.atMut(kept) = entries_[index];
         }
 
         ++kept;
@@ -217,7 +217,7 @@ namespace telar::gui::features::workbench {
   }
 
   TabCardMotion* TabCardMotions::find(std::uint64_t pane) noexcept {
-    for (auto& motion : std::span{entries_}.first(count_)) {
+    for (auto& motion : entries_.viewMut().first(count_)) {
       if (motion.pane == pane) {
         return &motion;
       }
@@ -248,7 +248,7 @@ namespace telar::gui::features::workbench {
 
     const bool animate = !immediate && shared && placements.size() != count_;
     const auto duration = placements.size() > count_ ? opening_ns : closing_ns;
-    std::array<Motion, PaneLayout::maximum_panes> next;
+    ds::Array<Motion, PaneLayout::maximum_panes> next;
 
     for (std::size_t index = 0; index < placements.size(); ++index) {
       const auto& slot = placements[index];
@@ -259,10 +259,10 @@ namespace telar::gui::features::workbench {
         from = old != nullptr ? old->value(now_ns) : entrance(slot.bounds);
       }
 
-      next[index] = {.id = slot.id, .from = from, .to = slot.bounds, .started = now_ns, .duration = from == slot.bounds ? 0 : duration};
+      next.atMut(index) = {.id = slot.id, .from = from, .to = slot.bounds, .started = now_ns, .duration = from == slot.bounds ? 0 : duration};
     }
 
-    std::copy_n(next.begin(), placements.size(), entries_.begin());
+    std::copy_n(next.begin(), placements.size(), entries_.dataMut());
     count_ = placements.size();
   }
 
@@ -363,21 +363,21 @@ namespace telar::gui::features::workbench {
       workspace_ = workspace;
     }
 
-    for (auto& motion : std::span{entries_}.first(count_)) {
+    for (auto& motion : entries_.viewMut().first(count_)) {
       motion.seen = false;
     }
   }
 
   [[nodiscard, gnu::always_inline]] Rect TabMotions::place(TabMotionSlot slot, TabMotionFrame& frame) noexcept {
     if (slot.immediate && count_ == 1 && entries_[0].id == slot.id) {
-      entries_[0].seen = true;
-      entries_[0].from = slot.bounds;
-      entries_[0].to = slot.bounds;
-      entries_[0].duration = 0;
+      entries_.atMut(0).seen = true;
+      entries_.atMut(0).from = slot.bounds;
+      entries_.atMut(0).to = slot.bounds;
+      entries_.atMut(0).duration = 0;
       return slot.bounds;
     }
 
-    for (auto& motion : std::span{entries_}.first(count_)) {
+    for (auto& motion : entries_.viewMut().first(count_)) {
       if (motion.id != slot.id) {
         continue;
       }
@@ -387,7 +387,7 @@ namespace telar::gui::features::workbench {
     }
 
     if (count_ < entries_.size()) {
-      entries_[count_++] = {.id = slot.id, .from = slot.bounds, .to = slot.bounds, .started = frame.now_ns};
+      entries_.atMut(count_++) = {.id = slot.id, .from = slot.bounds, .to = slot.bounds, .started = frame.now_ns};
     }
 
     return slot.bounds;
@@ -404,7 +404,7 @@ namespace telar::gui::features::workbench {
       const auto& motion = entries_[index];
       if (motion.seen) {
         if (kept != index) {
-          entries_[kept] = motion;
+          entries_.atMut(kept) = motion;
         }
 
         ++kept;

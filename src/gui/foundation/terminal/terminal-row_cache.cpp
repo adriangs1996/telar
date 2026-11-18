@@ -116,7 +116,7 @@ namespace telar::gui::inline foundation::inline terminal {
 
   template <Allocator Memory>
   void RowCache<Memory>::ask(std::uint64_t request_id, std::uint64_t from, std::uint16_t count) noexcept {
-    for (auto& request : pending_) {
+    for (auto& request : pending_.viewMut()) {
       if (request.id == 0) {
         request = {.id = request_id, .from = from, .count = count};
         return;
@@ -126,7 +126,7 @@ namespace telar::gui::inline foundation::inline terminal {
 
   template <Allocator Memory>
   bool RowCache<Memory>::settle(std::uint64_t request_id) noexcept {
-    for (auto& request : pending_) {
+    for (auto& request : pending_.viewMut()) {
       if (request.id == request_id && request_id != 0) {
         request = {};
         return true;

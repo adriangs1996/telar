@@ -37,7 +37,7 @@ export namespace telar::runtime {
 
       // Generic over the reply's length, which the caller fixes, so it stays here.
       template <std::size_t Length>
-      TBC_GENERIC bool tryPushFixed(const std::array<std::uint8_t, Length>& response) noexcept {
+      TBC_GENERIC bool tryPushFixed(const ds::Array<std::uint8_t, Length>& response) noexcept {
         static_assert(Length <= message_byte_capacity);
 
         if (!acquire()) {
@@ -127,21 +127,21 @@ export namespace telar::runtime {
 
     // A fixed reply copies its known length, which the producer's caller fixes, so it stays here.
     template <std::size_t Length>
-    TBC_GENERIC bool appendFixed(const std::array<std::uint8_t, Length>& response) noexcept {
+    TBC_GENERIC bool appendFixed(const ds::Array<std::uint8_t, Length>& response) noexcept {
       if (!admits(Length)) {
         return false;
       }
 
       const auto index = (head_ + count_) % message_capacity;
 
-      std::memcpy(bytes_[index].data(), response.data(), Length);
+      std::memcpy(bytes_.atMut(index).dataMut(), response.data(), Length);
       commit(index, std::span<const std::uint8_t>{bytes_[index]}.first(Length));
       return true;
     }
 
     constexpr void commit(const std::size_t index, std::span<const std::uint8_t> view) noexcept {
-      views_[index] = view;
-      lengths_[index] = static_cast<std::uint32_t>(view.size());
+      views_.atMut(index) = view;
+      lengths_.atMut(index) = static_cast<std::uint32_t>(view.size());
       byte_count_ += view.size();
       ++count_;
     }
@@ -155,10 +155,10 @@ export namespace telar::runtime {
     void clearLocked() noexcept;
 
     mutable std::mutex mutex_;
-    std::array<std::array<std::uint8_t, message_byte_capacity>, message_capacity> bytes_;
-    std::array<std::uint32_t, message_capacity> lengths_;
-    std::array<std::shared_ptr<const void>, message_capacity> owned_;
-    std::array<std::span<const std::uint8_t>, message_capacity> views_;
+    ds::Array<ds::Array<std::uint8_t, message_byte_capacity>, message_capacity> bytes_;
+    ds::Array<std::uint32_t, message_capacity> lengths_;
+    ds::Array<std::shared_ptr<const void>, message_capacity> owned_;
+    ds::Array<std::span<const std::uint8_t>, message_capacity> views_;
     std::size_t head_ = 0;
     std::size_t count_ = 0;
     std::size_t offset_ = 0;

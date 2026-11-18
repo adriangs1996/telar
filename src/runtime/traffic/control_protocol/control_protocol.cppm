@@ -104,7 +104,7 @@ export {
 
       static auto decode(std::span<const Byte> input) -> Event;
 
-      static auto prefix(std::size_t bytes, std::uint64_t dropped = 0) -> std::array<Byte, prefix_bytes>;
+      static auto prefix(std::size_t bytes, std::uint64_t dropped = 0) -> ds::Array<Byte, prefix_bytes>;
 
       static auto name(Kind kind) noexcept -> std::string_view;
 
@@ -251,10 +251,10 @@ export {
 
     struct Request {
       Operation operation = Operation::status;
-      std::array<std::string_view, Limits::targets> targets{};
+      ds::Array<std::string_view, Limits::targets> targets{};
       std::size_t target_count = 0;
       ds::Option<recording::Request> recording;
-      std::array<std::uint32_t, Limits::processes> processes{};
+      ds::Array<std::uint32_t, Limits::processes> processes{};
       std::size_t process_count = 0;
       redirect::Direction direction = redirect::Direction::outbound;
     };
@@ -281,7 +281,7 @@ export {
       std::string_view fingerprint_sha1;
       std::string_view fingerprint_sha256;
       std::span<const Byte> certificate;
-      std::array<std::string_view, Limits::arguments> authorization{};
+      ds::Array<std::string_view, Limits::arguments> authorization{};
       std::size_t argument_count = 0;
       std::span<const Byte> recording;
     };
@@ -296,7 +296,7 @@ export {
 
       static Request action(std::string_view name);
 
-      static std::array<Byte, prefix_bytes> prefix(std::size_t size);
+      static ds::Array<Byte, prefix_bytes> prefix(std::size_t size);
 
       static tbc::view<std::span<const Byte>, tbc::lt::a> encode(tbc::view<std::span<Byte>, tbc::lt::a> output, const Request& request);
 
@@ -352,7 +352,7 @@ export {
 
       FixedText<Limits::filter_bytes> expression_;
       Program validation_;
-      std::array<ds::Option<Entry>, Limits::filter_link_types> programs_;
+      ds::Array<ds::Option<Entry>, Limits::filter_link_types> programs_;
     };
 
   }

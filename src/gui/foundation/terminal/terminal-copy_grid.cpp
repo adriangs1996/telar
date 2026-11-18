@@ -116,7 +116,7 @@ namespace telar::gui::inline foundation::inline terminal {
     return true;
   }
 
-  std::array<CopyPoint, 2> CopyGrid::pointerSpan(CopyPoint point, CopyGranularity granularity) const noexcept {
+  ds::Array<CopyPoint, 2> CopyGrid::pointerSpan(CopyPoint point, CopyGranularity granularity) const noexcept {
     auto first = point;
     auto last = point;
 

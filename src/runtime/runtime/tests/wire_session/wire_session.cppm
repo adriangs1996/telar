@@ -46,10 +46,10 @@ namespace {
     constexpr std::string_view ready = "recording\r\n";
 
     static_cast<void>(::write(STDOUT_FILENO, ready.data(), ready.size()));
-    std::array<char, 4096> input;
+    telar::ds::Array<char, 4096> input;
 
     for (;;) {
-      const auto count = ::read(STDIN_FILENO, input.data(), input.size());
+      const auto count = ::read(STDIN_FILENO, input.dataMut(), input.size());
       if (count <= 0) {
         return 0;
       }
@@ -71,7 +71,7 @@ export {
   // True once the runtime closed the peer's connection, reading and discarding what it sent first.
   bool closedByRuntime(int descriptor, std::chrono::milliseconds limit) {
     const auto deadline = std::chrono::steady_clock::now() + limit;
-    std::array<char, 4096> bytes;
+    telar::ds::Array<char, 4096> bytes;
 
     for (;;) {
       const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - std::chrono::steady_clock::now());
@@ -84,7 +84,7 @@ export {
         continue;
       }
 
-      const auto count = ::recv(descriptor, bytes.data(), bytes.size(), 0);
+      const auto count = ::recv(descriptor, bytes.dataMut(), bytes.size(), 0);
       if (count == 0 || (count < 0 && errno != EINTR && errno != EAGAIN)) {
         return true;
       }
@@ -168,7 +168,7 @@ export {
     Recorder(const RuntimeHost& host, ProtocolPeer& owner, bool bracketed = false)
         : record(host.directory() + "/input") {
       const telar::runtime::ExecutablePath self;
-      const std::array<std::string_view, 4> arguments{self.view(), "--record-input", record, bracketed ? "bracketed" : "plain"};
+      const telar::ds::Array<std::string_view, 4> arguments{self.view(), "--record-input", record, bracketed ? "bracketed" : "plain"};
 
       opened = owner.exchange<telar::PaneOpened>(telar::OpenPane{.request_id = 1, .size = {80, 24, 8, 16}, .launch = telar::Launch{.cwd = "/tmp", .arguments = arguments}});
       screenShowing(owner, opened.pane_id, "recording");

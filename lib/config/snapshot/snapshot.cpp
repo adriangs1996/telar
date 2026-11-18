@@ -4,6 +4,7 @@ import std;
 import telar.lua;
 import telar.config.core;
 import telar.plugins;
+import telar.base.ds;
 
 namespace telar::runtime::config {
 
@@ -31,7 +32,7 @@ namespace telar::runtime::config {
           path_value.fail("is outside its bounds");
         }
 
-        auto& plugin = destination.entries[destination.count];
+        auto& plugin = destination.entries.atMut(destination.count);
 
         plugin.path.assign(path);
         plugin.enabled = specification.field("enabled").boolean(true);
@@ -104,13 +105,13 @@ namespace telar::runtime::config {
       return;
     }
 
-    std::array<char, 65> name{};
+    ds::Array<char, 65> name{};
 
     if (!validProfileName(selected_profile)) {
       profiles.fail("has an invalid selected profile name");
     }
 
-    std::copy(selected_profile.begin(), selected_profile.end(), name.begin());
+    std::copy(selected_profile.begin(), selected_profile.end(), name.dataMut());
     const auto selected = profiles.field(name.data());
     if (!selected.present()) {
       selected.fail("is not defined");

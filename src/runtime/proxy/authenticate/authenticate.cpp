@@ -12,7 +12,7 @@ namespace telar::runtime {
   ProxySecret ProxySecret::generate() noexcept {
     ProxySecret secret;
 
-    randomBytes(secret.bytes_.data(), secret.bytes_.size());
+    randomBytes(secret.bytes_.dataMut(), secret.bytes_.size());
     return secret;
   }
 
@@ -30,14 +30,14 @@ namespace telar::runtime {
         return ds::none;
       }
 
-      secret.bytes_[index] = static_cast<std::uint8_t>((*high << 4) | *low);
+      secret.bytes_.atMut(index) = static_cast<std::uint8_t>((*high << 4) | *low);
     }
 
     return secret;
   }
 
   ProxySecret::~ProxySecret() {
-    eraseSensitive(bytes_.data(), bytes_.size());
+    eraseSensitive(bytes_.dataMut(), bytes_.size());
   }
 
   bool ProxySecret::matches(const ProxySecret& other) const noexcept {

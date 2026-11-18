@@ -13,6 +13,7 @@ import telar.platform.events;
 import telar.platform.process;
 
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: agents/description_capture.cppm
 export {
@@ -75,7 +76,7 @@ export {
     struct DescriptionIdentity {
       std::uint64_t pane = 0;
       std::uint64_t generation = 0;
-      std::array<Byte, 16> session{};
+      ds::Array<Byte, 16> session{};
       std::uint64_t revision = 0;
 
       bool operator==(const DescriptionIdentity&) const = default;

@@ -13,8 +13,8 @@ export namespace telar::runtime::control {
     static constexpr unsigned maximum_digits = 255;
     static constexpr std::uint32_t maximum_value = std::numeric_limits<std::uint16_t>::max();
 
-    std::array<std::uint16_t, capacity> values{};
-    std::array<char, intermediate_capacity> intermediate{};
+    ds::Array<std::uint16_t, capacity> values{};
+    ds::Array<char, intermediate_capacity> intermediate{};
     std::size_t count = 0;
     std::size_t intermediate_count = 0;
     bool colon = false;

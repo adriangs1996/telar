@@ -12,7 +12,7 @@ namespace telar::gui::features::workbench {
   namespace {
 
     // The tabs of the workspace `active` shows, in the order it shows them.
-    std::size_t ordered(Tabs tabs, ds::Option<TabLocation> active, std::array<Tab<Memory>*, maximum_tabs>& output) noexcept {
+    std::size_t ordered(Tabs tabs, ds::Option<TabLocation> active, ds::Array<Tab<Memory>*, maximum_tabs>& output) noexcept {
       std::size_t count = 0;
 
       if (!active) {
@@ -21,11 +21,11 @@ namespace telar::gui::features::workbench {
 
       for (const auto& tab : tabs) {
         if (sameWorkspace(tab->location.workspace, active->workspace)) {
-          output[count++] = tab.get();
+          output.atMut(count++) = tab.get();
         }
       }
 
-      std::sort(output.begin(), output.begin() + count, [](const auto* left, const auto* right) {
+      std::sort(output.dataMut(), output.dataMut() + count, [](const auto* left, const auto* right) {
         return left->position != right->position ? left->position < right->position : left->location.tab_id < right->location.tab_id;
       });
 
@@ -107,14 +107,14 @@ namespace telar::gui::features::workbench {
   }
 
   ds::Option<TabLocation> tabAt(Tabs tabs, ds::Option<TabLocation> active, std::size_t index) noexcept {
-    std::array<Tab<Memory>*, maximum_tabs> sorted{};
+    ds::Array<Tab<Memory>*, maximum_tabs> sorted{};
     const auto count = ordered(tabs, active, sorted);
 
     return index < count ? ds::Option{sorted[index]->location} : ds::none;
   }
 
   ds::Option<TabLocation> tabBeside(Tabs tabs, ds::Option<TabLocation> active, std::int32_t offset) noexcept {
-    std::array<Tab<Memory>*, maximum_tabs> sorted{};
+    ds::Array<Tab<Memory>*, maximum_tabs> sorted{};
     const auto count = ordered(tabs, active, sorted);
     const auto* current = active ? find(tabs, *active) : nullptr;
     const auto found = std::find(sorted.begin(), sorted.begin() + count, current);

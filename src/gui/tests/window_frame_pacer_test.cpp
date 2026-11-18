@@ -112,7 +112,7 @@ namespace {
     }
 
     FramePacer::Pane& pane() noexcept {
-      return panes_.front();
+      return panes_.atMut(0);
     }
 
     [[nodiscard]] std::span<const FramePacer::Pane> panes() const noexcept {
@@ -146,7 +146,7 @@ namespace {
   private:
     ControlledWindow window_;
     telar::ds::Option<TestFramePacer> pacing_;
-    std::array<FramePacer::Pane, 1> panes_{FramePacer::Pane{.pane_id = 1, .frame_id = 1, .attached = true, .attachment_generation = 1}};
+    telar::ds::Array<FramePacer::Pane, 1> panes_{FramePacer::Pane{.pane_id = 1, .frame_id = 1, .attached = true, .attachment_generation = 1}};
   };
 
   class WindowFramePacerTest final : public QObject {
@@ -279,18 +279,18 @@ namespace {
       FramePacer pacing;
 
       pacing.configure(FramePacer::maximum_interval_ns, telar::ds::none);
-      std::array panes{FramePacer::Pane{.pane_id = 1, .frame_id = 1, .attached = true, .attachment_generation = 1}};
+      telar::ds::Array panes{FramePacer::Pane{.pane_id = 1, .frame_id = 1, .attached = true, .attachment_generation = 1}};
 
       pacing.record(panes, started_ns);
       pacing.noteInput(panes.front(), next_input_ns);
       for (std::uint32_t index = 0; index < FramePacer::input_frame_budget; ++index) {
-        ++panes.front().graphics_revision;
+        ++panes.atMut(0).graphics_revision;
         QVERIFY(!pacing.waitUntil(panes, next_input_ns));
         pacing.record(panes, next_input_ns);
         QVERIFY(pacing.waitUntil(panes, next_input_ns));
       }
 
-      ++panes.front().graphics_revision;
+      ++panes.atMut(0).graphics_revision;
       QVERIFY(pacing.waitUntil(panes, next_input_ns));
     }
 
@@ -455,7 +455,7 @@ namespace {
     Q_SLOT static void destroyingTheWindowCancelsThePendingTimer() {
       auto window = std::make_unique<ControlledWindow>();
       TestFramePacer pacing{*window};
-      const std::array panes{FramePacer::Pane{.pane_id = 1, .frame_id = 1, .attached = true, .attachment_generation = 1}};
+      const telar::ds::Array panes{FramePacer::Pane{.pane_id = 1, .frame_id = 1, .attached = true, .attachment_generation = 1}};
 
       pacing.record(panes, ControlledClock::now_ns);
       QVERIFY(pacing.defer(panes));

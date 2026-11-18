@@ -10,6 +10,7 @@ static_assert(true);
 import std;
 import telar.testing;
 import telar.cli.tab;
+import telar.base.ds;
 
 namespace {
 
@@ -29,8 +30,8 @@ namespace {
   class Directory {
   public:
     Directory() {
-      std::strcpy(path_.data(), "/tmp/telar-history-paths.XXXXXX");
-      check(::mkdtemp(path_.data()) != nullptr);
+      std::strcpy(path_.dataMut(), "/tmp/telar-history-paths.XXXXXX");
+      check(::mkdtemp(path_.dataMut()) != nullptr);
     }
 
     ~Directory() {
@@ -44,7 +45,7 @@ namespace {
     }
 
   private:
-    std::array<char, 64> path_{};
+    telar::ds::Array<char, 64> path_{};
   };
 
   // What `historyPaths` makes of the file: the paths it visited, or the error it threw.

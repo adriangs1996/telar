@@ -8,6 +8,7 @@ static_assert(true);
 #include "alpha_mask_vertex.hpp"
 #include "curve_mask.hpp"
 #include "scene_nodes.hpp"
+#include "telar_base/ds/values.hpp"
 #include <QPointF>
 #include <QRectF>
 #include <QSGGeometry>
@@ -27,7 +28,7 @@ namespace telar::gui::qt {
             geometry_(alphaMaskAttributes(), quad_vertices),
             material_(*mask_->texture, foreground) {
         geometry_.setDrawingMode(QSGGeometry::DrawTriangleStrip);
-        constexpr std::array corners{QPointF{0, 0}, QPointF{1, 0}, QPointF{0, 1}, QPointF{1, 1}};
+        constexpr ds::Array corners{QPointF{0, 0}, QPointF{1, 0}, QPointF{0, 1}, QPointF{1, 1}};
         const auto vertices = std::span{static_cast<AlphaMaskVertex*>(geometry_.vertexData()), corners.size()};
 
         for (std::size_t index = 0; index < corners.size(); ++index) {

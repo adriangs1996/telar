@@ -15,7 +15,7 @@ namespace telar::gui::features::notifications {
     const auto name = reach.name.substr(0, name_capacity);
     const auto found = find(name);
     const auto slot = found ? *found : insert(name);
-    auto& row = rows_[slot];
+    auto& row = rows_.atMut(slot);
 
     row.noun.assign(reach.noun.substr(0, noun_capacity));
     row.route.assign(reach.route.substr(0, route_capacity));
@@ -36,7 +36,7 @@ namespace telar::gui::features::notifications {
   }
 
   ds::Option<std::uint32_t> LimitReports::takeReport(Slot slot, std::int64_t awake_ms) noexcept {
-    auto& row = rows_[slot.value];
+    auto& row = rows_.atMut(slot.value);
     if (row.unreported == 0 || (row.reported_ms && !elapsed(awake_ms, *row.reported_ms, report_interval_ms))) {
       return ds::none;
     }
@@ -49,7 +49,7 @@ namespace telar::gui::features::notifications {
   }
 
   void LimitReports::restoreReport(Slot slot, std::uint32_t hits) noexcept {
-    auto& row = rows_[slot.value];
+    auto& row = rows_.atMut(slot.value);
 
     row.unreported = saturatedAdd(row.unreported, hits);
     row.reported_ms.reset();
@@ -131,8 +131,8 @@ namespace telar::gui::features::notifications {
       evicted_ = saturatedAdd(evicted_, std::uint64_t{1});
     }
 
-    rows_[slot] = {};
-    rows_[slot].name.assign(name);
+    rows_.atMut(slot) = {};
+    rows_.atMut(slot).name.assign(name);
 
     return slot;
   }

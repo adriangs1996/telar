@@ -59,7 +59,7 @@ export {
       std::uint8_t* pixels_ = nullptr;
       std::size_t byte_count_ = 0;
       std::size_t reserved_bytes_ = 0;
-      std::array<char, 32> name_{};
+      ds::Array<char, 32> name_{};
       bool owns_name_ = false;
     };
 
@@ -83,7 +83,7 @@ export {
       // Generic over the caller's predicate, so it stays here.
       template <typename Consumer>
       TBC_GENERIC inline void discardUnwanted(const Consumer& wanted) noexcept {
-        for (auto& slot : entries_) {
+        for (auto& slot : entries_.viewMut()) {
           if (slot && !wanted(slot->key, true)) {
             slot.reset();
           }
@@ -115,8 +115,8 @@ export {
       static constexpr std::size_t prepared_capacity = 4;
       ConcurrentMemory& memory_;
       MediaAllocator<ConcurrentMemory>& budget_;
-      std::array<ds::Option<Entry>, prepared_capacity> entries_;
-      std::array<ImageKey, graphics_image_count * 2> frozen_{};
+      ds::Array<ds::Option<Entry>, prepared_capacity> entries_;
+      ds::Array<ImageKey, graphics_image_count * 2> frozen_{};
 #if TELAR_DIAGNOSTICS
       std::uint64_t prepared_count_ = 0;
 #endif
@@ -142,7 +142,7 @@ export {
       // Generic over the caller's predicate, so it stays here.
       template <typename Consumer>
       TBC_GENERIC inline void discardUnwanted(const Consumer& wanted) noexcept {
-        for (auto& entry : entries_) {
+        for (auto& entry : entries_.viewMut()) {
           if (entry && !wanted(entry->key, entry->shared)) {
             entry.reset();
           }
@@ -171,7 +171,7 @@ export {
 
       ConcurrentMemory& memory_;
       MediaAllocator<ConcurrentMemory>& budget_;
-      std::array<ds::Option<Entry>, 8> entries_;
+      ds::Array<ds::Option<Entry>, 8> entries_;
     };
 
   }

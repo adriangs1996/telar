@@ -33,7 +33,7 @@ export {
         ds::Option<std::uint64_t> identity;
       };
 
-      std::array<Entry, runtime::plugins::PackageLimits::configured> entries_{};
+      ds::Array<Entry, runtime::plugins::PackageLimits::configured> entries_{};
       std::size_t count_ = 0;
     };
 

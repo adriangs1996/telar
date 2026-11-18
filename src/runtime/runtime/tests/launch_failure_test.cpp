@@ -60,6 +60,7 @@ import telar.runtime.history.event;
 import telar.runtime.history.store;
 import telar.runtime.model.client_layouts;
 import telar.runtime.platform.event_loop;
+import telar.base.ds;
 
 namespace {
 
@@ -133,7 +134,7 @@ namespace {
       PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/launch-failure.sock"}, history};
       constexpr TabLocation location{.workspace = {.id = 7}, .tab_id = 11};
       constexpr TerminalSize size{80, 24, 0, 0};
-      constexpr std::array<std::string_view, 1> arguments{"/bin/cat"};
+      constexpr ds::Array<std::string_view, 1> arguments{"/bin/cat"};
       const Launch launch{.cwd = "/", .arguments = arguments};
       auto workspace = makeOwned<Workspace>(memory, memory, location.workspace.id, "/workspace with spaces", "Failure fixture");
 
@@ -175,7 +176,7 @@ namespace {
       check(panes.require(model.panes, pane.id).process->processId() == retained_process && ::kill(retained_process, 0) == 0);
       panes.remove(model, clients, pane.id);
 
-      constexpr std::array<std::string_view, 1> missing{"/nonexistent/telar-launch-test"};
+      constexpr ds::Array<std::string_view, 1> missing{"/nonexistent/telar-launch-test"};
       bool missing_rejected = false;
 
       try {

@@ -38,7 +38,7 @@ export {
       static Effect decodeEffect(std::span<const Byte>& input);
       static ds::Option<runtime::plugins::Capability> capability(BindingActionKind kind);
 
-      std::array<Effect, BindingEffects::maximum_effects> effects_{};
+      ds::Array<Effect, BindingEffects::maximum_effects> effects_{};
       std::size_t count_ = 0;
     };
 

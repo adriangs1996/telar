@@ -5,6 +5,7 @@ import telar.sys.posix;
 import telar.sys.socket;
 
 import telar.platform.primitives;
+import telar.base.ds;
 
 // Interface: platform/local_listener.cppm
 export {
@@ -32,7 +33,7 @@ export {
       void removeStaleSocket(const sockaddr_un& address);
       void cleanup() noexcept;
 
-      std::array<char, sizeof(sockaddr_un::sun_path)> path_{};
+      ds::Array<char, sizeof(sockaddr_un::sun_path)> path_{};
       FileDescriptor lock_;
       FileDescriptor socket_;
       dev_t device_ = 0;

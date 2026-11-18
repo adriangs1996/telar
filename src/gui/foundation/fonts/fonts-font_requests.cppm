@@ -34,7 +34,7 @@ export {
           return preferred;
         }
 
-        constexpr std::array fallback{FontRole::primary, FontRole::text, FontRole::symbols};
+        constexpr ds::Array fallback{FontRole::primary, FontRole::text, FontRole::symbols};
 
         for (const auto role : fallback) {
           if (FontCoverage::covers(fonts.face(role), text)) {
@@ -73,8 +73,8 @@ export {
       [[nodiscard]] const char* codepoints() const noexcept;
 
     private:
-      std::array<char, maximum_bytes> text_{};
-      std::array<char, maximum_bytes + 1> codepoints_{};
+      ds::Array<char, maximum_bytes> text_{};
+      ds::Array<char, maximum_bytes + 1> codepoints_{};
       std::uint8_t text_length_ = 0;
       std::uint8_t query_length_ = 0;
     };
@@ -115,13 +115,13 @@ export {
 
         [[nodiscard]] std::span<const std::uint64_t> bucket(std::uint64_t hash) const noexcept;
 
-        std::array<std::uint64_t, capacity> hashes_{};
-        std::array<std::size_t, sets> next_{};
+        ds::Array<std::uint64_t, capacity> hashes_{};
+        ds::Array<std::size_t, sets> next_{};
       };
 
       [[nodiscard]] bool queued(std::string_view text) const;
 
-      std::array<FontQuery, pending_capacity> pending_{};
+      ds::Array<FontQuery, pending_capacity> pending_{};
       ds::Option<FontQuery> in_flight_;
       Misses misses_;
       std::size_t head_ = 0;

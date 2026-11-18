@@ -65,6 +65,7 @@ import telar.runtime.agents.snapshot;
 import telar.runtime.model.slot_store;
 import telar.runtime.platform.event_loop;
 import telar.runtime.runtime.execution_service;
+import telar.base.ds;
 
 namespace {
 
@@ -158,7 +159,7 @@ namespace {
     AgentService<decltype(poller)> agents{memory};
     DescentService<decltype(inspector)> verification{inspector};
     ClientPeer reporter{memory, model, clients, ClientRole::control};
-    const std::array<std::string_view, 1> arguments{"/bin/cat"};
+    const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
 
     workspaces.open(model, panes, clients, reporter.session().id, OpenPane{.request_id = 1, .size = {80, 24, 8, 16}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
     const auto opened = reporter.receive<PaneOpened>();
@@ -295,10 +296,10 @@ namespace {
     DescentService<decltype(inspector)> verification{inspector};
     ClientPeer reporter{memory, model, clients, ClientRole::control};
     ClientPeer other_client{memory, model, clients, ClientRole::control};
-    const std::array<std::string_view, 1> arguments{"/bin/cat"};
-    std::array<std::uint64_t, 2> identities;
+    const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
+    ds::Array<std::uint64_t, 2> identities;
 
-    for (auto& identity : identities) {
+    for (auto& identity : identities.viewMut()) {
       workspaces.createWorkspace(model, panes, clients, reporter.session().id, CreateWorkspace{.request_id = 1, .size = {80, 24, 8, 16}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
       identity = reporter.receive<PaneOpened>().pane_id;
     }
@@ -464,11 +465,11 @@ namespace {
 
     agents.enableDescriptions(true);
     ClientPeer reporter{memory, model, clients, ClientRole::control};
-    const std::array<std::string_view, 1> arguments{"/bin/cat"};
+    const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
     const std::string_view prompt = "Fix parser\r";
-    std::array<std::uint64_t, 9> identities;
+    ds::Array<std::uint64_t, 9> identities;
 
-    for (auto& identity : identities) {
+    for (auto& identity : identities.viewMut()) {
       workspaces.createWorkspace(model, panes, clients, reporter.session().id, CreateWorkspace{.request_id = 1, .size = {80, 24, 8, 16}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
       identity = reporter.receive<PaneOpened>().pane_id;
       auto& pane = panes.require(model.panes, identity);
@@ -496,7 +497,7 @@ namespace {
     ++result.identity.revision;
     check(!agents.completeDescription(result));
     result.identity = request->identity;
-    result.identity.session[0] ^= 1;
+    result.identity.session.atMut(0) ^= 1;
     check(!agents.completeDescription(result));
     result.identity = request->identity;
     const auto title = agents.completeDescription(result);
@@ -564,7 +565,7 @@ namespace {
     AgentService<decltype(poller)> agents{memory};
     DescentService<decltype(inspector)> verification{inspector};
     ClientPeer reporter{memory, model, clients, ClientRole::control};
-    const std::array<std::string_view, 1> arguments{"/bin/cat"};
+    const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
 
     workspaces.open(model, panes, clients, reporter.session().id, OpenPane{.request_id = 1, .size = {80, 24, 8, 16}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
     const auto opened = reporter.receive<PaneOpened>();

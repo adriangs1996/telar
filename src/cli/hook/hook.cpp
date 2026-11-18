@@ -207,7 +207,7 @@ namespace telar::runtime::cli::hooks {
   }
 
   ds::Option<AgentPlanStatus> planStatus(std::string_view text) noexcept {
-    constexpr std::array names{"pending", "in_progress", "completed", "deleted"};
+    constexpr ds::Array names{"pending", "in_progress", "completed", "deleted"};
     const auto found = std::ranges::find(names, text);
 
     return found == names.end() ? ds::none : ds::Option{static_cast<AgentPlanStatus>(found - names.begin())};
@@ -456,8 +456,8 @@ namespace telar::runtime::cli::hooks {
               diagnostics.append(bytes);
             });
         if (status != 0) {
-          std::array<Byte, maximum_output_bytes> buffer;
-          const auto kept = diagnostics.read(diagnostics.retainedOffset(), buffer);
+          ds::Array<Byte, maximum_output_bytes> buffer;
+          const auto kept = diagnostics.read(diagnostics.retainedOffset(), buffer.viewMut());
 
           if (diagnostics.retainedOffset() != 0) {
             std::fprintf(stderr, "(%llu earlier bytes of Git's output omitted)\n", static_cast<unsigned long long>(diagnostics.retainedOffset()));
@@ -513,10 +513,10 @@ namespace telar::runtime::cli::hooks {
     }
 
     void create(Object& input) {
-      std::array<char, PATH_MAX> current;
+      ds::Array<char, PATH_MAX> current;
       auto cwd = input.text("cwd");
       if (cwd.empty()) {
-        if (::getcwd(current.data(), current.size()) == nullptr) {
+        if (::getcwd(current.dataMut(), current.size()) == nullptr) {
           throw SystemError{"Read working directory"};
         }
 
@@ -625,14 +625,14 @@ namespace telar::runtime::cli::hooks {
 
       incoming.resize(max_payload_size);
       decoded.resize(max_payload_size);
-      std::array<Byte, 64> outgoing;
+      ds::Array<Byte, 64> outgoing;
       std::uint64_t identity = 0;
 
       while (identity == 0) {
         randomBytes(&identity, sizeof(identity));
       }
 
-      connection.send(RequestRuntimeState{.client_identity = identity, .interactive = false}, outgoing);
+      connection.send(RequestRuntimeState{.client_identity = identity, .interactive = false}, outgoing.viewMut());
       for (;;) {
         const auto frame = connection.receive(incoming);
         if (frame.front() == static_cast<Byte>(ServerTag::workspace_list)) {
@@ -641,7 +641,7 @@ namespace telar::runtime::cli::hooks {
 
           for (const auto& worktree : catalog.worktrees) {
             if (worktree.path == path_) {
-              connection.send(ForgetWorktree{.request_id = 1, .worktree = worktree.worktree}, outgoing);
+              connection.send(ForgetWorktree{.request_id = 1, .worktree = worktree.worktree}, outgoing.viewMut());
               waitForgotten(connection, incoming);
               return;
             }
@@ -791,10 +791,10 @@ namespace telar::runtime::cli::hooks {
 
   void Input::read(int descriptor) {
     TELAR_TRACE("hooks.readInput");
-    std::array<char, 4096> buffer;
+    ds::Array<char, 4096> buffer;
 
     for (;;) {
-      const auto count = ::read(descriptor, buffer.data(), buffer.size());
+      const auto count = ::read(descriptor, buffer.dataMut(), buffer.size());
       if (count < 0 && sys::lastError() == EINTR) {
         continue;
       }
@@ -912,7 +912,7 @@ namespace telar::runtime::cli::hooks {
   std::string_view SessionFiles::codex(const Environment& environment) noexcept {
     try {
       const auto override = environment.lookup("CODEX_HOME");
-      const auto home = override.empty() ? join(environment.lookup("HOME"), ".codex", root_) : copy(override, root_);
+      const auto home = override.empty() ? join(environment.lookup("HOME"), ".codex", root_.viewMut()) : copy(override, root_.viewMut());
       if (!home) {
         return {};
       }
@@ -937,10 +937,10 @@ namespace telar::runtime::cli::hooks {
         return {};
       }
 
-      std::array<char, 32> filename;
-      const auto length = std::snprintf(filename.data(), filename.size(), "state_%u.sqlite", *best);
+      ds::Array<char, 32> filename;
+      const auto length = std::snprintf(filename.dataMut(), filename.size(), "state_%u.sqlite", *best);
 
-      return join(*home, {filename.data(), static_cast<std::size_t>(length)}, path_).valueOr("");
+      return join(*home, {filename.data(), static_cast<std::size_t>(length)}, path_.viewMut()).valueOr("");
     } catch (const std::exception&) {
       return {};
     }
@@ -967,13 +967,13 @@ namespace telar::runtime::cli::hooks {
 
       const auto digest = input.workspace().empty() ? ds::none : md5(input.workspace());
       if (digest) {
-        std::array<char, 2 * MD5_DIGEST_LENGTH> encoded;
-        if (const auto path = cursorPath(*root, encodeLowerHex(*digest, encoded), chat)) {
+        ds::Array<char, 2 * MD5_DIGEST_LENGTH> encoded;
+        if (const auto path = cursorPath(*root, encodeLowerHex(*digest, encoded.viewMut()), chat)) {
           return *path;
         }
       }
 
-      const auto chats = join(*root, "chats", path_);
+      const auto chats = join(*root, "chats", path_.viewMut());
       if (!chats) {
         return {};
       }
@@ -1002,18 +1002,18 @@ namespace telar::runtime::cli::hooks {
   template <EnvironmentLookup Environment>
   ds::Option<std::string_view> SessionFiles::cursorRoot(const Environment& environment) {
     if (const auto configured = environment.lookup("CURSOR_CONFIG_DIR"); !configured.empty()) {
-      return copy(configured, root_);
+      return copy(configured, root_.viewMut());
     }
 
     if (const auto xdg = environment.lookup("XDG_CONFIG_HOME"); !xdg.empty()) {
-      return join(xdg, "cursor", root_);
+      return join(xdg, "cursor", root_.viewMut());
     }
 
-    return join(environment.lookup("HOME"), ".cursor", root_);
+    return join(environment.lookup("HOME"), ".cursor", root_.viewMut());
   }
 
   ds::Option<std::string_view> SessionFiles::cursorPath(std::string_view root, std::string_view digest, std::string_view chat) {
-    const auto length = std::snprintf(path_.data(), path_.size(), "%.*s/chats/%.*s/%.*s/meta.json", static_cast<int>(root.size()), root.data(), static_cast<int>(digest.size()), digest.data(), static_cast<int>(chat.size()), chat.data());
+    const auto length = std::snprintf(path_.dataMut(), path_.size(), "%.*s/chats/%.*s/%.*s/meta.json", static_cast<int>(root.size()), root.data(), static_cast<int>(digest.size()), digest.data(), static_cast<int>(chat.size()), chat.data());
     if (length < 0 || static_cast<std::size_t>(length) >= path_.size()) {
       return ds::none;
     }

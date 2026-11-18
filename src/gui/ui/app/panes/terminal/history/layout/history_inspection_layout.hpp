@@ -21,6 +21,7 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -67,7 +68,7 @@ namespace telar::gui::qt {
     QVariantMap input_;
     QVariantList advances_;
     QVariantMap layout_;
-    std::array<Rect, application::history::HistoryInspectionGeometry::maximum_actions> button_bounds_{};
+    ds::Array<Rect, application::history::HistoryInspectionGeometry::maximum_actions> button_bounds_{};
     application::history::HistoryChoice choice_;
     bool pane_open_ = false;
     bool ready_ = false;

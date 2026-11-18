@@ -113,7 +113,7 @@ namespace telar::gui::qt {
     // Without it a lane starts when the first item of its type attaches.
     template <typename... Items>
     static void compose() noexcept {
-      static constexpr std::array<WindowAnimationLane::Make, sizeof...(Items)> lanes{&WindowAnimationLane::make<WindowAnimationSet<Items>>...};
+      static constexpr ds::Array<WindowAnimationLane::Make, sizeof...(Items)> lanes{&WindowAnimationLane::make<WindowAnimationSet<Items>>...};
 
       compose(lanes);
     }

@@ -35,7 +35,7 @@ export {
 
     class ModeHints {
     public:
-      static constexpr auto actions = std::to_array<std::pair<BindingActionKind, std::string_view>>({
+      static constexpr auto actions = ds::Array<std::pair<BindingActionKind, std::string_view>, 8>{{
           {BindingActionKind::split_horizontal, "split right"},
           {BindingActionKind::split_vertical, "split down"},
           {BindingActionKind::new_tab, "new tab"},
@@ -44,7 +44,7 @@ export {
           {BindingActionKind::rename_workspace, "rename workspace"},
           {BindingActionKind::close_pane, "close pane"},
           {BindingActionKind::copy_mode, "copy mode"},
-      });
+      }};
       static constexpr std::size_t capacity = actions.size();
 
       // Stays here: generic over the caller's router.
@@ -68,7 +68,7 @@ export {
       [[nodiscard]] tbc::view<std::span<const ModeHint>, tbc::lt::a> items() const noexcept;
 
     private:
-      tbc::view<std::array<ModeHint, capacity>, tbc::lt::a> hints_{};
+      tbc::view<ds::Array<ModeHint, capacity>, tbc::lt::a> hints_{};
       std::size_t count_ = 0;
     };
 
@@ -105,7 +105,7 @@ export {
     // What the bar shows while a mode holds the keyboard: the mode's name and the keys it answers.
     class ModeBarLabels {
     public:
-      static constexpr auto copy_hints = std::to_array<std::pair<std::string_view, std::string_view>>({
+      static constexpr auto copy_hints = ds::Array<std::pair<std::string_view, std::string_view>, 7>{{
           {"h j k l", "move"},
           {"v", "select"},
           {"V", "lines"},
@@ -113,7 +113,7 @@ export {
           {"y", "copy"},
           {"o", "open"},
           {"q", "exit"},
-      });
+      }};
       static constexpr std::string_view cancel_key = "Esc";
       static constexpr std::string_view cancel_word = "cancel";
       static constexpr std::size_t capacity = std::max(copy_hints.size(), 1 + ModeHints::capacity);
@@ -128,7 +128,7 @@ export {
       void append(std::string_view key, std::string_view word);
 
       std::string_view title_;
-      std::array<ModeBarHint, capacity> hints_{};
+      ds::Array<ModeBarHint, capacity> hints_{};
       std::size_t count_ = 0;
     };
 

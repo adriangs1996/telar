@@ -146,8 +146,8 @@ namespace telar::runtime {
   }
 
   void ListeningPorts::add(std::uint16_t port) noexcept {
-    const auto end = values.begin() + count;
-    const auto at = std::lower_bound(values.begin(), end, port);
+    const auto end = values.dataMut() + count;
+    const auto at = std::lower_bound(values.dataMut(), end, port);
     if (port == 0 || (at != end && *at == port) || (count == values.size() && at == end)) {
       return;
     }
@@ -193,7 +193,7 @@ namespace telar::runtime {
 
     result.descends = process.pid == root;
     while (current && result.count < result.processes.size() && current->parent > 0) {
-      result.processes[result.count++] = current->parent;
+      result.processes.atMut(result.count++) = current->parent;
       result.descends |= current->parent == root;
       if (current->parent == 1 || current->parent == current->pid) {
         break;
@@ -216,9 +216,9 @@ namespace telar::runtime {
       return identified;
     }
 
-    std::array<char, maximum_process_argument_bytes> arguments;
+    ds::Array<char, maximum_process_argument_bytes> arguments;
 
-    return readArguments(process, arguments).provider(manifests_, path.view());
+    return readArguments(process, arguments.viewMut()).provider(manifests_, path.view());
   }
 
   IdentifiedProcess ProcessInspector::identifyProcess(pid_t process) const noexcept {
@@ -230,8 +230,8 @@ namespace telar::runtime {
     }
 
     identified.name = name(process);
-    std::array<char, maximum_process_argument_bytes> storage;
-    const auto arguments = readArguments(process, storage);
+    ds::Array<char, maximum_process_argument_bytes> storage;
+    const auto arguments = readArguments(process, storage.viewMut());
 
     identified.provider = arguments.provider(manifests_, identified.name.view());
     identified.session_host = arguments.sessionHost(identified.provider);
@@ -249,8 +249,8 @@ namespace telar::runtime {
       return leader;
     }
 
-    std::array<pid_t, maximum_group_processes> members;
-    const auto count = groupMembers(group, members);
+    ds::Array<pid_t, maximum_group_processes> members;
+    const auto count = groupMembers(group, members.viewMut());
     if (count == 0) {
       return leader;
     }

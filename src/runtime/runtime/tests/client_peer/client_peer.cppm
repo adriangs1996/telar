@@ -77,17 +77,17 @@ export {
     template <typename... Messages>
     std::variant<Messages...> receiveAny() {
       session().connection.write(telar::runtime::ResponseProjection{memory_, model_});
-      std::array<telar::Byte, telar::frame_prefix_size> prefix;
+      telar::ds::Array<telar::Byte, telar::frame_prefix_size> prefix;
 
-      readExact(prefix);
+      readExact(prefix.viewMut());
       std::span<const telar::Byte> encoded_length = prefix;
       const auto length = telar::u32::decode(encoded_length);
 
       check(length <= payload_.size());
-      auto payload = std::span{payload_}.first(length);
+      auto payload = payload_.viewMut().first(length);
 
       readExact(payload);
-      telar::DecodeStorage storage{decode_};
+      telar::DecodeStorage storage{decode_.viewMut()};
       telar::ds::Option<std::variant<Messages...>> result;
 
       ([&] {
@@ -120,7 +120,7 @@ export {
     telar::runtime::ClientStore& clients_;
     std::uint64_t id_;
     telar::runtime::FileDescriptor peer_;
-    std::array<telar::Byte, 64 * 1024 + 1024> payload_;
-    std::array<telar::Byte, 128 * 1024> decode_;
+    telar::ds::Array<telar::Byte, 64 * 1024 + 1024> payload_;
+    telar::ds::Array<telar::Byte, 128 * 1024> decode_;
   };
 }

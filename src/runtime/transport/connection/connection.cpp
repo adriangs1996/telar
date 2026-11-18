@@ -1,5 +1,6 @@
 module;
 #include "telar_base/diagnostics/config.hpp"
+#include "telar_base/ds/values.hpp"
 
 module telar.runtime.transport.connection;
 
@@ -12,7 +13,7 @@ namespace telar::runtime {
   void ClientHandshake::read() {
     for (unsigned attempt = 0; attempt < 2 && (stage_ == Stage::prefix || stage_ == Stage::hello); ++attempt) {
       const auto remaining = expected_bytes_ - used_bytes_;
-      const auto count = ::read(descriptor_.get(), bytes_.data() + used_bytes_, remaining);
+      const auto count = ::read(descriptor_.get(), bytes_.dataMut() + used_bytes_, remaining);
       if (count < 0 && socketWouldBlock(sys::lastError())) {
         return;
       }
@@ -94,7 +95,7 @@ namespace telar::runtime {
   template <typename Message>
   void ClientHandshake::reply(const Message& message) {
     const auto payload = HandshakeCodec::encode(message);
-    std::span<Byte> output = bytes_;
+    std::span<Byte> output = bytes_.viewMut();
 
     u32::encode(payload.size(), output);
     std::copy(payload.begin(), payload.end(), output.begin());
@@ -284,7 +285,7 @@ namespace telar::runtime {
   void OutgoingFrames<Memory>::inserted(DeliveryLane lane) noexcept {
     const auto index = static_cast<std::size_t>(lane);
 
-    ++lane_counts_[index];
+    ++lane_counts_.atMut(index);
     pending_lanes_ |= std::uint32_t{1} << index;
     if (responseLane(lane)) {
       ++response_depth_;
@@ -295,7 +296,7 @@ namespace telar::runtime {
   template <Allocator Memory>
   void OutgoingFrames<Memory>::start(std::size_t offset, Frame frame) noexcept {
     const auto index = static_cast<std::size_t>(frame.lane);
-    if (--lane_counts_[index] == 0) {
+    if (--lane_counts_.atMut(index) == 0) {
       pending_lanes_ &= ~(std::uint32_t{1} << index);
     }
 
@@ -326,8 +327,8 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   bool Connection<Memory>::read() {
-    std::array<Byte, read_batch_size> buffer;
-    const auto count = ::read(descriptor_.get(), buffer.data(), buffer.size());
+    ds::Array<Byte, read_batch_size> buffer;
+    const auto count = ::read(descriptor_.get(), buffer.dataMut(), buffer.size());
     if (count > 0) {
       input_.append(std::span<const Byte>{buffer}.first(static_cast<std::size_t>(count)));
       return true;

@@ -45,6 +45,7 @@ import telar.runtime.tls.interception;
 import telar.platform.net;
 import telar.tls;
 import telar.runtime.platform.tunnel_sockets;
+import telar.base.ds;
 
 namespace {
 
@@ -76,17 +77,17 @@ namespace {
     std::size_t written = 0;
 
     check(SSL_write_ex(source, payload.data(), payload.size(), &written) == 1 && written == payload.size());
-    std::array<std::uint8_t, 1024> buffer;
+    ds::Array<std::uint8_t, 1024> buffer;
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
     StreamResult read{StreamResult::State::blocked};
 
     while (read.state == StreamResult::State::blocked) {
       check(std::chrono::steady_clock::now() < deadline);
-      read = session.peek(incoming, buffer);
+      read = session.peek(incoming, buffer.viewMut());
     }
 
     check(read.state == StreamResult::State::data && read.bytes == payload.size());
-    const auto consumed = session.read(incoming, buffer);
+    const auto consumed = session.read(incoming, buffer.viewMut());
 
     check(consumed.state == StreamResult::State::data && consumed.bytes == read.bytes);
     check(std::string_view{reinterpret_cast<const char*>(buffer.data()), read.bytes} == payload);
@@ -104,7 +105,7 @@ namespace {
     for (;;) {
       check(std::chrono::steady_clock::now() < deadline);
       ERR_clear_error();
-      const int result = SSL_read_ex(destination, buffer.data(), buffer.size(), &received);
+      const int result = SSL_read_ex(destination, buffer.dataMut(), buffer.size(), &received);
       if (result == 1) {
         break;
       }
@@ -157,11 +158,11 @@ namespace {
       }
     }
 
-    constexpr std::array<unsigned char, 12> protocols{2, 'h', '2', 8, 'h', 't', 't', 'p', '/', '1', '.', '1'};
-    constexpr std::array<unsigned char, 2> http2{'h', '2'};
-    constexpr std::array<unsigned char, 8> http11{'h', 't', 't', 'p', '/', '1', '.', '1'};
-    constexpr std::array<unsigned char, 4> other_offer{3, 'f', 'o', 'o'};
-    constexpr std::array<unsigned char, 3> other{'f', 'o', 'o'};
+    constexpr ds::Array<unsigned char, 12> protocols{2, 'h', '2', 8, 'h', 't', 't', 'p', '/', '1', '.', '1'};
+    constexpr ds::Array<unsigned char, 2> http2{'h', '2'};
+    constexpr ds::Array<unsigned char, 8> http11{'h', 't', 't', 'p', '/', '1', '.', '1'};
+    constexpr ds::Array<unsigned char, 4> other_offer{3, 'f', 'o', 'o'};
+    constexpr ds::Array<unsigned char, 3> other{'f', 'o', 'o'};
     AlpnSelection server_selection;
 
     check(server_selection.assign(scenario == SessionCase::http2 ? std::span<const unsigned char>{http2} : scenario == SessionCase::other_alpn ? std::span<const unsigned char>{other}
@@ -268,9 +269,9 @@ namespace {
 
     while (closed.state == StreamResult::State::blocked) {
       check(std::chrono::steady_clock::now() < deadline);
-      std::array<std::uint8_t, 1> buffer;
+      ds::Array<std::uint8_t, 1> buffer;
 
-      closed = session.read(TlsSide::child, buffer);
+      closed = session.read(TlsSide::child, buffer.viewMut());
     }
 
     check(closed.state == StreamResult::State::ended || closed.state == StreamResult::State::failed);

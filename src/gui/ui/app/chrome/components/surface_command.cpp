@@ -195,11 +195,11 @@ namespace telar::gui::qt {
   void SurfaceCommand::drain() {
     constexpr std::size_t chunk_bytes = 4096;
     constexpr std::size_t maximum_chunks = 16;
-    std::array<char, chunk_bytes> buffer{};
+    ds::Array<char, chunk_bytes> buffer{};
     std::size_t chunks = 0;
 
     while (process_.bytesAvailable() > 0 && chunks++ < maximum_chunks) {
-      const auto count = process_.read(buffer.data(), static_cast<qint64>(buffer.size()));
+      const auto count = process_.read(buffer.dataMut(), static_cast<qint64>(buffer.size()));
       if (count <= 0) {
         break;
       }

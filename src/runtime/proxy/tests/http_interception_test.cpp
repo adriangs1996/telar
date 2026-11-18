@@ -152,7 +152,7 @@ namespace {
 
       check(origin.output.empty() && owner.direction == traffic::Direction::outbound);
       check(HttpMessageCodec::decode(owner.input).body.size() == 3);
-      const std::array<Byte, 7> changed{'c', 'h', 0, 'a', 'n', 'g', 'e'};
+      const ds::Array<Byte, 7> changed{'c', 'h', 0, 'a', 'n', 'g', 'e'};
 
       owner.replace(changed, "/edited");
       pump(connection, child, origin, [&] {
@@ -186,7 +186,7 @@ namespace {
       message.headers.append("Host", "fixture.test");
       message.headers.append("Content-Encoding", "gzip");
       message.trailers.append("X-Checksum", "fixture");
-      const std::array<Byte, 3> before{'a', 0, 'b'};
+      const ds::Array<Byte, 3> before{'a', 0, 'b'};
 
       message.body.assign(before.begin(), before.end());
       const auto wire = message.serializeHttp1();
@@ -202,7 +202,7 @@ namespace {
       const auto view = HttpMessageCodec::decode(owner.input);
 
       check(view.trailer_count == 1 && view.trailers[0].name == "X-Checksum" && std::ranges::equal(view.body, before));
-      const std::array<Byte, 9> after{'e', 'x', 'p', 0, 'a', 'n', 'd', 'e', 'd'};
+      const ds::Array<Byte, 9> after{'e', 'x', 'p', 0, 'a', 'n', 'd', 'e', 'd'};
 
       owner.replace(after);
       pump(connection, child, origin, [&] {
@@ -399,10 +399,10 @@ namespace {
         const std::string body(HttpMessageLimits::body_bytes + Http1Head::capacity + 1, 'x');
 
         child.input = "POST /limit HTTP/1.1\r\nHost: fixture.test\r\nTransfer-Encoding: chunked\r\n\r\n";
-        std::array<char, 32> size;
-        const auto formatted = std::to_chars(size.data(), size.data() + size.size(), body.size(), 16);
+        ds::Array<char, 32> size;
+        const auto formatted = std::to_chars(size.dataMut(), size.dataMut() + size.size(), body.size(), 16);
 
-        child.input.append(size.data(), formatted.ptr);
+        child.input.append(size.dataMut(), formatted.ptr);
         child.input += "\r\n" + body + "\r\n0\r\n\r\n";
         child.read_limit = 16384;
         origin.visible = 0;

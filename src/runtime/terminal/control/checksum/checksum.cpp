@@ -2,6 +2,7 @@ module telar.runtime.terminal.control.checksum;
 
 import telar.ghostty.vt;
 import telar.runtime.terminal.ghostty;
+import telar.base.ds;
 
 namespace telar::runtime::control {
 
@@ -13,8 +14,8 @@ namespace telar::runtime::control {
   }
 
   // Defined here, beside accumulate, so that this unit instantiates every specialization it names.
-  const std::array<Checksum::Accumulator, 16> Checksum::accumulators = []<std::size_t... Index>(std::index_sequence<Index...>) {
-    return std::array<Accumulator, sizeof...(Index)>{&Checksum::accumulate<static_cast<unsigned>(Index << 1)>...};
+  const ds::Array<Checksum::Accumulator, 16> Checksum::accumulators = []<std::size_t... Index>(std::index_sequence<Index...>) {
+    return ds::Array<Accumulator, sizeof...(Index)>{&Checksum::accumulate<static_cast<unsigned>(Index << 1)>...};
   }(std::make_index_sequence<16>{});
 
   std::uint16_t Checksum::compute(const VtState& state, const Parameters& request) {
@@ -79,7 +80,7 @@ namespace telar::runtime::control {
 
       const auto begin = std::min<std::size_t>(rectangle.left, cells.len);
       const auto end = std::min<std::size_t>(rectangle.right + 1, cells.len);
-      std::array<std::uint16_t, maximum_batch_columns> grapheme_columns;
+      ds::Array<std::uint16_t, maximum_batch_columns> grapheme_columns;
       std::size_t grapheme_count = 0;
       std::uint16_t previous_attributes = 0;
       bool previous_extended = false;
@@ -99,7 +100,7 @@ namespace telar::runtime::control {
         const auto wide = static_cast<GhosttyCellWide>(cell_layout::wide(cell));
 
         if (no_trim && !full && has_text && content == GHOSTTY_CELL_CONTENT_CODEPOINT_GRAPHEME) {
-          grapheme_columns[grapheme_count++] = static_cast<std::uint16_t>(column);
+          grapheme_columns.atMut(grapheme_count++) = static_cast<std::uint16_t>(column);
           if (grapheme_count == grapheme_columns.size()) {
             sum = static_cast<std::uint16_t>(sum + combiningBatch(*reference, grapheme_columns));
             grapheme_count = 0;
@@ -179,7 +180,7 @@ namespace telar::runtime::control {
   }
 
   std::uint16_t Checksum::combiningBatch(GhosttyGridRef reference, std::span<const std::uint16_t> columns) {
-    std::array<std::uint32_t, batch_points> points;
+    ds::Array<std::uint32_t, batch_points> points;
     std::uint16_t sum = 0;
 
     while (!columns.empty()) {
@@ -189,7 +190,7 @@ namespace telar::runtime::control {
       }
 
       GhosttyGraphemeBatch batch{
-          .points = points.data(),
+          .points = points.dataMut(),
           .capacity = points.size(),
           .length = 0,
           .consumed_columns = 0,
@@ -224,9 +225,9 @@ namespace telar::runtime::control {
   }
 
   std::uint16_t Checksum::combining(const GhosttyGridRef& reference) {
-    std::array<std::uint32_t, 16> inline_points;
+    ds::Array<std::uint32_t, 16> inline_points;
     std::size_t count = 0;
-    auto status = ghostty_grid_ref_graphemes(&reference, inline_points.data(), inline_points.size(), &count);
+    auto status = ghostty_grid_ref_graphemes(&reference, inline_points.dataMut(), inline_points.size(), &count);
     std::span<const std::uint32_t> points = std::span<const std::uint32_t>{inline_points}.first(std::min(count, inline_points.size()));
 
     if (status == GHOSTTY_OUT_OF_SPACE) {

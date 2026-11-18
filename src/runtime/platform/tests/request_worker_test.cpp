@@ -31,8 +31,8 @@ namespace {
   public:
     template <Allocator Memory>
     void process(std::span<const Byte> payload, EncodedReply<Memory>& reply) {
-      std::array<Byte, 256> bytes;
-      DecodeStorage storage{bytes};
+      ds::Array<Byte, 256> bytes;
+      DecodeStorage storage{bytes.viewMut()};
       const auto identity = Codec::decode<QueryClients>(payload, storage).request_id;
 
       if (identity == 1) {
@@ -71,8 +71,8 @@ namespace {
 
       check(::poll(&ready, 1, 2000) == 1);
       worker.collect([&](std::uint64_t, ClientTag, std::span<const Byte> payload) {
-        std::array<Byte, 4096> bytes;
-        DecodeStorage storage{bytes};
+        ds::Array<Byte, 4096> bytes;
+        DecodeStorage storage{bytes.viewMut()};
 
         if (payload.front() == static_cast<Byte>(ServerTag::request_failed)) {
           const auto failed = Codec::decode<RequestFailed>(payload, storage);

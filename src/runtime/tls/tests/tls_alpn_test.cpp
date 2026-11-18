@@ -18,6 +18,7 @@ import telar.tls;
 import telar.runtime.tls.interception;
 import telar.runtime.tls.tests.hello_fixture;
 import telar.platform.net;
+import telar.base.ds;
 
 namespace {
 
@@ -154,15 +155,15 @@ namespace {
   // certificate is minted, so a hello that names two hosts, or a host no resolver accepts, is invalid.
   void testMalformedHellos() {
     AlpnOffer offer;
-    const std::array accepted{serverName("origin.test"), protocols()};
+    const ds::Array accepted{serverName("origin.test"), protocols()};
 
     peekHello(offer, helloRecord(accepted));
     check(offer.valid() && offer.serverName() == "origin.test");
 
-    const std::array<std::string_view, 2> two_names{"origin.test", "other.test"};
+    const ds::Array<std::string_view, 2> two_names{"origin.test", "other.test"};
     // A second server_name extension is refused even when it lists no host_name entry.
     const Extension unnamed{0, {0, 4, 1, 0, 1, 'x'}};
-    const std::array<std::vector<Extension>, 5> malformed{{
+    const ds::Array<std::vector<Extension>, 5> malformed{{
         {serverName("origin.test"), serverName("other.test")},
         {serverName("origin.test"), unnamed},
         {{0, serverNames(two_names)}},
@@ -181,8 +182,8 @@ namespace {
   // An ECH hello names a cover host in its outer server name: interception would act on the wrong
   // host, so the offer says the hello is encrypted.
   void testEncryptedClientHello() {
-    const std::array plain{serverName("cover.test"), protocols()};
-    const std::array encrypted{serverName("cover.test"), protocols(), encryptedHello()};
+    const ds::Array plain{serverName("cover.test"), protocols()};
+    const ds::Array encrypted{serverName("cover.test"), protocols(), encryptedHello()};
     AlpnOffer offer;
 
     peekHello(offer, helloRecord(plain));
@@ -192,11 +193,11 @@ namespace {
   }
 
   void testTlsAlpn() {
-    constexpr std::array<std::uint8_t, 3> http2{2, 'h', '2'};
-    constexpr std::array<std::uint8_t, 9> http11{8, 'h', 't', 't', 'p', '/', '1', '.', '1'};
-    constexpr std::array<std::uint8_t, 12> both{2, 'h', '2', 8, 'h', 't', 't', 'p', '/', '1', '.', '1'};
-    constexpr std::array<std::uint8_t, 12> reversed{8, 'h', 't', 't', 'p', '/', '1', '.', '1', 2, 'h', '2'};
-    constexpr std::array<std::uint8_t, 4> unknown{3, 'f', 'o', 'o'};
+    constexpr ds::Array<std::uint8_t, 3> http2{2, 'h', '2'};
+    constexpr ds::Array<std::uint8_t, 9> http11{8, 'h', 't', 't', 'p', '/', '1', '.', '1'};
+    constexpr ds::Array<std::uint8_t, 12> both{2, 'h', '2', 8, 'h', 't', 't', 'p', '/', '1', '.', '1'};
+    constexpr ds::Array<std::uint8_t, 12> reversed{8, 'h', 't', 't', 'p', '/', '1', '.', '1', 2, 'h', '2'};
+    constexpr ds::Array<std::uint8_t, 4> unknown{3, 'f', 'o', 'o'};
 
     checkOffer(http2, http2);
     checkOffer(http11, http11);
@@ -220,8 +221,8 @@ namespace {
   void testPeekNonHello() {
     const std::string_view plain = "GET / HTTP/1.1\r\n\r\n";
     // A ServerHello that declares more bytes than its record carries.
-    constexpr std::array<std::uint8_t, 4> server_hello{2, 0, 0, 100};
-    const std::array inputs{
+    constexpr ds::Array<std::uint8_t, 4> server_hello{2, 0, 0, 100};
+    const ds::Array inputs{
         std::vector<std::uint8_t>{plain.begin(), plain.end()},
         handshakeRecord(server_hello),
     };

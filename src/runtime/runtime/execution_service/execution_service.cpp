@@ -30,7 +30,7 @@ namespace telar::runtime {
       return;
     }
 
-    auto& copy = reached_[reports_++];
+    auto& copy = reached_.atMut(reports_++);
 
     copy.name.assign(reach.name);
     copy.noun.assign(reach.noun);
@@ -69,7 +69,7 @@ namespace telar::runtime {
 
   void LimitService::queueShow(Ledger ledger, std::size_t slot) noexcept {
     if (shows_ < shown_.size()) {
-      shown_[shows_++] = {ledger, slot};
+      shown_.atMut(shows_++) = {ledger, slot};
     }
   }
 
@@ -90,21 +90,21 @@ namespace telar::runtime {
   }
 
   void LimitService::show(ClientStore& clients, const LimitLedger::Row& row) noexcept {
-    std::array<char, 256> text{};
+    ds::Array<char, 256> text{};
     const auto reach = row.reach();
     const char* separator = reach.noun.empty() ? "" : " ";
     int length = 0;
 
     if (reach.requested) {
-      length = std::snprintf(text.data(), text.size(), "%.*s: %llu%s%.*s; limit %llu", static_cast<int>(reach.name.size()), reach.name.data(), static_cast<unsigned long long>(*reach.requested), separator, static_cast<int>(reach.noun.size()), reach.noun.data(), static_cast<unsigned long long>(reach.value));
+      length = std::snprintf(text.dataMut(), text.size(), "%.*s: %llu%s%.*s; limit %llu", static_cast<int>(reach.name.size()), reach.name.data(), static_cast<unsigned long long>(*reach.requested), separator, static_cast<int>(reach.noun.size()), reach.noun.data(), static_cast<unsigned long long>(reach.value));
     } else if (reach.value == 0) {
-      length = std::snprintf(text.data(), text.size(), "%.*s: limit reached", static_cast<int>(reach.name.size()), reach.name.data());
+      length = std::snprintf(text.dataMut(), text.size(), "%.*s: limit reached", static_cast<int>(reach.name.size()), reach.name.data());
     } else {
-      length = std::snprintf(text.data(), text.size(), "%.*s: limit %llu%s%.*s reached", static_cast<int>(reach.name.size()), reach.name.data(), static_cast<unsigned long long>(reach.value), separator, static_cast<int>(reach.noun.size()), reach.noun.data());
+      length = std::snprintf(text.dataMut(), text.size(), "%.*s: limit %llu%s%.*s reached", static_cast<int>(reach.name.size()), reach.name.data(), static_cast<unsigned long long>(reach.value), separator, static_cast<int>(reach.noun.size()), reach.noun.data());
     }
 
     if (row.hits > 1) {
-      length += std::snprintf(text.data() + length, text.size() - length, " (%llu times)", static_cast<unsigned long long>(row.hits));
+      length += std::snprintf(text.dataMut() + length, text.size() - length, " (%llu times)", static_cast<unsigned long long>(row.hits));
     }
 
     const Notification notification{NotificationBody{.level = NotificationLevel::warning, .duration_ms = 8000, .title = "Limit reached", .message = {text.data(), static_cast<std::size_t>(length)}}};
@@ -145,8 +145,8 @@ namespace telar::runtime {
         continue;
       }
 
-      ++generations_[slot];
-      pending_[slot].emplace(std::move(descriptor), refused);
+      ++generations_.atMut(slot);
+      pending_.atMut(slot).emplace(std::move(descriptor), refused);
       ++count_;
       try {
         poller_.watch(pending_[slot]->descriptor(), token(slot));
@@ -186,7 +186,7 @@ namespace telar::runtime {
   template <EventLoop Poller>
   ds::Option<FileDescriptor> ClientAdmission<Poller>::advance(const Event& event) {
     const auto slot = eventIdentity(event.token) % capacity;
-    auto& pending = pending_[slot];
+    auto& pending = pending_.atMut(slot);
     if (!pending || event.token != token(slot) || event.descriptor != pending->descriptor()) {
       return ds::none;
     }
@@ -234,7 +234,7 @@ namespace telar::runtime {
   template <EventLoop Poller>
   void ClientAdmission<Poller>::drop(std::size_t slot) noexcept {
     poller_.remove(pending_[slot]->descriptor());
-    pending_[slot].reset();
+    pending_.atMut(slot).reset();
     --count_;
   }
 
@@ -411,8 +411,8 @@ namespace telar::runtime {
       return;
     }
 
-    std::array<Byte, 16 * 1024> bytes;
-    const auto count = ::read(descriptor, bytes.data(), bytes.size());
+    ds::Array<Byte, 16 * 1024> bytes;
+    const auto count = ::read(descriptor, bytes.dataMut(), bytes.size());
     if (count > 0) {
       (standard_output ? execution->output : execution->error).append(std::span{bytes}.first(static_cast<std::size_t>(count)));
       return;
@@ -641,8 +641,8 @@ namespace telar::runtime {
   template <EventLoop Poller>
   void ExecutionService<Poller>::send(ClientSession& client, const Execution<ConcurrentMemory>& execution, const ExecutionRequest& request, bool started) {
     const auto state = started && execution.state == ExecutionState::running ? ExecutionState::starting : execution.state;
-    std::array<Byte, 4096> output;
-    std::array<Byte, 4096> error;
+    ds::Array<Byte, 4096> output;
+    ds::Array<Byte, 4096> error;
     const auto output_offset = std::max(request.stdout_offset, execution.output.retainedOffset());
     const auto error_offset = std::max(request.stderr_offset, execution.error.retainedOffset());
     // Output older than the retained megabyte is gone; report that limit.
@@ -664,8 +664,8 @@ namespace telar::runtime {
         .exit_code = execution.exit_code,
         .stdin_open = !execution.eof,
         .failure = {reinterpret_cast<const Byte*>(execution.failure_name.data()), execution.failure_name.size()},
-        .stdout_bytes = execution.output.read(output_offset, output),
-        .stderr_bytes = execution.error.read(error_offset, error),
+        .stdout_bytes = execution.output.read(output_offset, output.viewMut()),
+        .stderr_bytes = execution.error.read(error_offset, error.viewMut()),
     });
   }
 

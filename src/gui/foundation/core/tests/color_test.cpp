@@ -10,16 +10,17 @@ static_assert(true);
 import std;
 import telar.testing;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace {
 
   using telar::testing::check;
   using telar::gui::Color;
-  using ColorBits = std::array<std::uint32_t, 4>;
+  using ColorBits = telar::ds::Array<std::uint32_t, 4>;
 
   constexpr unsigned channel_bits = 8;
   constexpr std::uint32_t channel_mask = std::numeric_limits<std::uint8_t>::max();
-  constexpr std::array<std::uint32_t, 8> alpha_bits{
+  constexpr telar::ds::Array<std::uint32_t, 8> alpha_bits{
       0x00000000,
       0x80000000,
       0x00000001,

@@ -85,8 +85,8 @@ namespace {
     bool received = false;
 
     worker.collect([&](std::uint64_t client, ClientTag, std::span<const Byte> payload) {
-      std::array<Byte, 256> bytes;
-      DecodeStorage storage{bytes};
+      ds::Array<Byte, 256> bytes;
+      DecodeStorage storage{bytes.viewMut()};
       const auto failure = Codec::decode<RequestFailed>(payload, storage);
 
       check(client == 7 && failure.request_id == 42);
@@ -99,11 +99,11 @@ namespace {
 
   static void testSuggestions(ConcurrentMemory& memory) {
     constexpr std::string_view mock = "while IFS= read -r line; do case \"$line\" in *get_last_assistant_text*) printf '%s\\n' '{\"type\":\"response\",\"command\":\"get_last_assistant_text\",\"success\":true,\"data\":{\"text\":\"```sh\\ngit status\\n```\"}}';; *) printf '%s\\n' '{\"type\":\"response\",\"command\":\"prompt\",\"success\":true}' '{\"type\":\"agent_settled\"}';; esac; done";
-    const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", mock};
+    const ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", mock};
     SuggestionEngine engine{memory, SuggestionOptions{.arguments = arguments, .timeout = std::chrono::milliseconds{1000}}};
     EncodedReply reply{memory};
-    std::array<Byte, 4096> scratch;
-    DecodeStorage storage{scratch};
+    ds::Array<Byte, 4096> scratch;
+    DecodeStorage storage{scratch.viewMut()};
 
     for (unsigned index = 0; index < 2; ++index) {
       engine.suggest(SuggestCommand{.request_id = index + 1}, "Prompt with \"quotes\"\n", reply);
@@ -116,7 +116,7 @@ namespace {
 
     unavailable.suggest(SuggestCommand{.request_id = 3}, {}, reply);
     check(Codec::decode<CommandSuggestion>(reply.payload(), storage).status == SuggestionStatus::unavailable);
-    const std::array<std::string_view, 2> sleeping{"/bin/sleep", "5"};
+    const ds::Array<std::string_view, 2> sleeping{"/bin/sleep", "5"};
     SuggestionEngine timeout{memory, SuggestionOptions{.arguments = sleeping, .timeout = std::chrono::milliseconds{50}}};
 
     timeout.suggest(SuggestCommand{.request_id = 4}, "hello", reply);
@@ -127,7 +127,7 @@ namespace {
   // bracketed paste, or a line longer than a command, fails with no text.
   static void testSuggestionControlBytes(ConcurrentMemory& memory) {
     // The answer as the model's JSON carries it, and whether it may reach the prompt.
-    const std::array<std::pair<std::string, bool>, 6> answers{{
+    const ds::Array<std::pair<std::string, bool>, 6> answers{{
         {"git status", true},
         {R"(rm -rf ~\u001b[201~)", false},
         {R"(`rm -rf ~\u001b[201~`)", false},
@@ -139,11 +139,11 @@ namespace {
     for (std::size_t index = 0; index < answers.size(); ++index) {
       const auto& [text, accepted] = answers[index];
       const auto mock = "while IFS= read -r line; do case \"$line\" in *get_last_assistant_text*) printf '%s\\n' '{\"type\":\"response\",\"command\":\"get_last_assistant_text\",\"success\":true,\"data\":{\"text\":\"" + text + "\"}}';; *) printf '%s\\n' '{\"type\":\"response\",\"command\":\"prompt\",\"success\":true}' '{\"type\":\"agent_settled\"}';; esac; done";
-      const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", mock};
+      const ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", mock};
       SuggestionEngine engine{memory, SuggestionOptions{.arguments = arguments, .timeout = std::chrono::milliseconds{2000}}};
       EncodedReply reply{memory};
-      std::array<Byte, 4096> scratch;
-      DecodeStorage storage{scratch};
+      ds::Array<Byte, 4096> scratch;
+      DecodeStorage storage{scratch.viewMut()};
 
       engine.suggest(SuggestCommand{.request_id = index + 1}, "Prompt", reply);
       const auto suggestion = Codec::decode<CommandSuggestion>(reply.payload(), storage);
@@ -157,10 +157,10 @@ namespace {
   }
 
   static void testPaths(ConcurrentMemory& memory) {
-    std::array<char, 64> directory{};
+    ds::Array<char, 64> directory{};
 
-    std::strcpy(directory.data(), "/tmp/telar-path-test.XXXXXX");
-    check(::mkdtemp(directory.data()) != nullptr);
+    std::strcpy(directory.dataMut(), "/tmp/telar-path-test.XXXXXX");
+    check(::mkdtemp(directory.dataMut()) != nullptr);
     const std::filesystem::path root{directory.data()};
 
     std::filesystem::create_directories(root / "src" / "nested");
@@ -175,8 +175,8 @@ namespace {
 
     check(!index.canQueryInline(cached_query));
     EncodedReply reply{memory};
-    std::array<Byte, 32768> scratch;
-    DecodeStorage storage{scratch};
+    ds::Array<Byte, 32768> scratch;
+    DecodeStorage storage{scratch.viewMut()};
 
     index.query(FindPaths{.request_id = 1, .root = directory.data(), .query = "rt", .kind = PathKindFilter::files, .limit = 10}, reply);
     const auto result = Codec::decode<PathResults>(reply.payload(), storage);
@@ -204,15 +204,15 @@ namespace {
     EncodedReply reply{memory};
 
     editor.open(OpenEditor{.request_id = 1, .pane_id = 2, .path = "/nonexistent-telar-editor-fixture", .line = 1, .column = 1}, RequestContext{}, reply);
-    std::array<Byte, 1024> scratch;
-    DecodeStorage storage{scratch};
+    ds::Array<Byte, 1024> scratch;
+    DecodeStorage storage{scratch.viewMut()};
 
     check(Codec::decode<EditorOpened>(reply.payload(), storage).outcome == EditorOutcome::missing);
   }
 
   static void testNeovimEditor(ConcurrentMemory& memory) {
     try {
-      Command locate{memory, Launch{.cwd = "/tmp", .arguments = std::array<std::string_view, 2>{"nvim", "--version"}}, CommandPurpose::administration};
+      Command locate{memory, Launch{.cwd = "/tmp", .arguments = ds::Array<std::string_view, 2>{"nvim", "--version"}}, CommandPurpose::administration};
       CommandOutput version{memory, 16384};
       if (version.run(locate, std::chrono::steady_clock::now() + std::chrono::seconds{3}) != 0) {
         telar::testing::skip("nvim does not run");
@@ -225,10 +225,10 @@ namespace {
       throw;
     }
 
-    std::array<char, 64> directory{};
+    ds::Array<char, 64> directory{};
 
-    std::strcpy(directory.data(), "/tmp/telar-editor-test.XXXXXX");
-    check(::mkdtemp(directory.data()) != nullptr);
+    std::strcpy(directory.dataMut(), "/tmp/telar-editor-test.XXXXXX");
+    check(::mkdtemp(directory.dataMut()) != nullptr);
     const std::filesystem::path root{directory.data()};
     const auto endpoint = (root / "nvim.fixture").string();
     const auto filename = (root / "quote's file.txt").string();
@@ -239,7 +239,7 @@ namespace {
 
     check(::setenv("XDG_RUNTIME_DIR", directory.data(), 1) == 0);
     {
-      const std::array<std::string_view, 8> arguments{"nvim", "--headless", "-u", "NONE", "-i", "NONE", "--listen", endpoint};
+      const ds::Array<std::string_view, 8> arguments{"nvim", "--headless", "-u", "NONE", "-i", "NONE", "--listen", endpoint};
       Command launch{memory, Launch{.cwd = directory.data(), .arguments = arguments}, CommandPurpose::administration};
       PipeProcess process{launch.specification({})};
       const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{3};
@@ -253,25 +253,25 @@ namespace {
       const auto identity = ProcessInspector{}.identity(process.processId());
 
       check(identity.hasValue());
-      context.editor_candidates[0] = {.pane = 7, .generation = 9, .process = *identity};
+      context.editor_candidates.atMut(0) = {.pane = 7, .generation = 9, .process = *identity};
       context.editor_candidate_count = 1;
       RemoteEditor editor{memory};
       EncodedReply reply{memory};
 
       editor.open(OpenEditor{.request_id = 1, .editor = "nvim", .path = filename, .line = 2, .column = 3}, context, reply);
-      std::array<Byte, 1024> scratch;
-      DecodeStorage storage{scratch};
+      ds::Array<Byte, 1024> scratch;
+      DecodeStorage storage{scratch.viewMut()};
       const auto opened = Codec::decode<EditorOpened>(reply.payload(), storage);
 
       check(opened.outcome == EditorOutcome::opened && opened.pane_id == 7 && opened.pane_generation == 9);
-      const std::array<std::string_view, 5> query{"nvim", "--server", endpoint, "--remote-expr", R"(expand('%:p') . "\n" . line('.') . ':' . col('.'))"};
+      const ds::Array<std::string_view, 5> query{"nvim", "--server", endpoint, "--remote-expr", R"(expand('%:p') . "\n" . line('.') . ':' . col('.'))"};
       Command inspect{memory, Launch{.cwd = directory.data(), .arguments = query}, CommandPurpose::administration};
       CommandOutput result{memory, 16384};
 
       check(result.run(inspect, std::chrono::steady_clock::now() + std::chrono::seconds{3}) == 0);
       check(result.text() == filename + "\n2:3");
 
-      ++context.editor_candidates[0].process.started_seconds;
+      ++context.editor_candidates.atMut(0).process.started_seconds;
       editor.open(OpenEditor{.request_id = 2, .editor = "nvim", .path = filename}, context, reply);
       check(Codec::decode<EditorOpened>(reply.payload(), storage).outcome == EditorOutcome::unavailable);
     }

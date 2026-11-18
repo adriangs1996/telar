@@ -2,6 +2,7 @@ export module telar.gui.foundation.system:window_lease;
 
 import std;
 import telar.sys.posix;
+import telar.base.ds;
 
 export {
   namespace telar::gui::inline foundation::inline system {
@@ -21,7 +22,7 @@ export {
       [[nodiscard]] std::string_view endpoint() const noexcept;
 
     private:
-      std::array<char, PATH_MAX> canonical_endpoint_{};
+      ds::Array<char, PATH_MAX> canonical_endpoint_{};
       std::size_t endpoint_length_ = 0;
       unsigned slot_ = 0;
       int descriptor_ = -1;

@@ -27,6 +27,7 @@ import telar.gui.foundation.system;
 import telar.gui.features.notifications;
 import telar.wire.agents;
 import telar.gui.features.window;
+import telar.base.ds;
 
 namespace {
 
@@ -106,7 +107,7 @@ namespace {
     };
 
     static constexpr std::size_t capacity = 16;
-    std::array<Entry, capacity> entries;
+    ds::Array<Entry, capacity> entries;
     std::size_t count = 0;
   };
 
@@ -123,7 +124,7 @@ namespace {
         std::terminate();
       }
 
-      observations.entries[observations.count++] = {.pane = pane, .at_ns = InputClock::nowNanoseconds(), .queued_inputs = transport.count(ClientTag::pane_input)};
+      observations.entries.atMut(observations.count++) = {.pane = pane, .at_ns = InputClock::nowNanoseconds(), .queued_inputs = transport.count(ClientTag::pane_input)};
     }
   };
 
@@ -266,13 +267,13 @@ namespace {
     deliver(client, notice);
     check(recorder.notifications.size() == 1 && recorder.notifications.front().title.view() == "Runtime notice", "wire notifications must reach the configured host once");
 
-    std::array agents{agentSnapshotEntry()};
+    ds::Array agents{agentSnapshotEntry()};
 
-    agents.front().status = AgentStatus::working;
+    agents.atMut(0).status = AgentStatus::working;
     deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
     check(recorder.notifications.size() == 1, "initial agent discovery must not deliver a host alert");
 
-    agents.front().status = AgentStatus::blocked;
+    agents.atMut(0).status = AgentStatus::blocked;
     deliver(client, AgentSnapshot{.revision = 2, .entries = agents});
     check(recorder.notifications.size() == 2, "a committed agent attention transition must deliver a host alert");
     deliver(client, AgentSnapshot{.revision = 2, .entries = agents});
@@ -285,7 +286,7 @@ namespace {
     Transport transport;
     Recorder recorder;
     Client client{memory, transport, Effects{recorder}};
-    const std::array agents{agentSnapshotEntry()};
+    const ds::Array agents{agentSnapshotEntry()};
     const auto& agent = agents.front();
 
     deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
@@ -322,7 +323,7 @@ namespace {
     Transport transport;
     Recorder recorder;
     Client client{memory, transport, Effects{recorder}};
-    const std::array agents{agentSnapshotEntry()};
+    const ds::Array agents{agentSnapshotEntry()};
 
     deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
     const auto& agent = agents.front();

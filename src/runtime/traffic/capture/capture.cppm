@@ -99,7 +99,7 @@ export {
       ErasingAllocator<Memory> memory_;
       FileDescriptor socket_;
       Vector<Byte, ErasingAllocator<Memory>> output_;
-      std::array<ds::Option<Device>, Limits::interfaces> devices_;
+      ds::Array<ds::Option<Device>, Limits::interfaces> devices_;
       std::uint64_t session_ = 0;
       std::uint64_t sequence_ = 0;
       std::uint64_t dropped_ = 0;

@@ -521,7 +521,7 @@ namespace telar::gui::qt {
       }
     };
 
-    std::array<PressedKey, physical_key_capacity> pressed_keys_;
+    ds::Array<PressedKey, physical_key_capacity> pressed_keys_;
     WheelAccumulator wheel_;
     QPointF selection_position_;
     QString preedit_;

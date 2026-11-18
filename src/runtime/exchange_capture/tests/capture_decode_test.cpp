@@ -21,6 +21,7 @@ import telar.runtime.exchange_capture.producer;
 import telar.config.runtime;
 import telar.runtime.vocabulary.exchange;
 import telar.runtime.http.message;
+import telar.base.ds;
 
 namespace {
 
@@ -49,7 +50,7 @@ namespace {
       std::string_view hexadecimal;
     };
 
-    const std::array fixtures{
+    const ds::Array fixtures{
         Fixture{"gzip", "1f8b08000000000002ff4b4e2c28292d4a5548ca4fa904009b1d16120c000000"},
         Fixture{"deflate", "789c4b4e2c28292d4a5548ca4fa904001f2904c3"},
         Fixture{"br", "8b05806361707475726520626f647903"},
@@ -135,7 +136,7 @@ namespace {
   // Text that compresses like a real body: words drawn by a fixed generator, so Huffman coding,
   // literals and matches all take part.
   std::vector<std::uint8_t> bodyText(std::size_t size) {
-    constexpr std::array<std::string_view, 12> words{"capture ", "header ", "stream ", "origin ", "proxy ", "agent ", "terminal ", "pane\n", "{\"id\":", "42,", "\"value\"", "}\n"};
+    constexpr ds::Array<std::string_view, 12> words{"capture ", "header ", "stream ", "origin ", "proxy ", "agent ", "terminal ", "pane\n", "{\"id\":", "42,", "\"value\"", "}\n"};
     std::vector<std::uint8_t> text;
     std::uint32_t state = 0x2545f491;
 
@@ -244,7 +245,7 @@ namespace {
   // limits over the small-output path, the production default among them.
   void testFlateMultiblockLargeLimit() {
     const auto plaintext = bodyText(300 * 1024);
-    const std::array chunks{
+    const ds::Array chunks{
         Chunk{64 * 1024, 6, Z_DEFAULT_STRATEGY},
         Chunk{64 * 1024, 0, Z_DEFAULT_STRATEGY},
         Chunk{64 * 1024, 6, Z_FIXED},
@@ -304,7 +305,7 @@ namespace {
   // fields: the decoder skips them all, and a field cut short leaves the body raw.
   void testGzipEnvelopeFields() {
     const auto plaintext = bodyText(512);
-    const auto plain = deflateChunks(plaintext, 31, std::array{Chunk{0, 6, Z_DEFAULT_STRATEGY}});
+    const auto plain = deflateChunks(plaintext, 31, ds::Array{Chunk{0, 6, Z_DEFAULT_STRATEGY}});
     constexpr std::uint8_t extra = 0x04, name = 0x08, comment = 0x10, header_checksum = 0x02;
     std::vector<std::uint8_t> header{plain.begin(), plain.begin() + 10};
 
@@ -331,7 +332,7 @@ namespace {
       std::size_t kept;
     };
 
-    const std::array cuts{
+    const ds::Array cuts{
         Cut{extra, {4, 0, 'A', 'P', 0, 0}, 4},
         Cut{name, {'b', 'o', 'd', 'y', 0}, 4},
         Cut{header_checksum, {0x12, 0x34}, 1},
@@ -387,7 +388,7 @@ namespace {
   // complete decoded body.
   void testCorruptStreamsFallBackRaw() {
     const auto plaintext = bodyText(512);
-    const std::array chunks{Chunk{256, 6, Z_DEFAULT_STRATEGY}, Chunk{0, 6, Z_DEFAULT_STRATEGY}};
+    const ds::Array chunks{Chunk{256, 6, Z_DEFAULT_STRATEGY}, Chunk{0, 6, Z_DEFAULT_STRATEGY}};
     const auto gzip = deflateChunks(plaintext, 31, chunks);
     const auto zlib = deflateChunks(plaintext, 15, chunks);
 
@@ -395,7 +396,7 @@ namespace {
 
     // The full flush ends the first chunk with an empty stored block, so the next byte starts a block
     // header: block type 3 is reserved.
-    constexpr std::array<std::uint8_t, 4> flush{0, 0, 0xff, 0xff};
+    constexpr ds::Array<std::uint8_t, 4> flush{0, 0, 0xff, 0xff};
     const auto boundary = std::ranges::search(zlib, flush);
 
     check(!boundary.empty() && boundary.end() != zlib.end());
@@ -411,7 +412,7 @@ namespace {
     auto magic = gzip;
 
     magic[0] = 0x1e;
-    const std::array<std::pair<std::string_view, std::vector<std::uint8_t>>, 5> inputs{{
+    const ds::Array<std::pair<std::string_view, std::vector<std::uint8_t>>, 5> inputs{{
         {"gzip", {gzip.begin(), gzip.end() - 8}},
         {"deflate", corrupt},
         {"deflate", method},
@@ -538,9 +539,9 @@ namespace {
       }
     }};
 
-    std::array<std::jthread, 4> producers;
+    ds::Array<std::jthread, 4> producers;
 
-    for (auto& thread : producers) {
+    for (auto& thread : producers.viewMut()) {
       thread = std::jthread{[&] {
         for (std::uint64_t iteration = 1; iteration <= 1000; ++iteration) {
           if (channel.publish(iteration)) {
@@ -550,7 +551,7 @@ namespace {
       }};
     }
 
-    for (auto& thread : producers) {
+    for (auto& thread : producers.viewMut()) {
       thread.join();
     }
 

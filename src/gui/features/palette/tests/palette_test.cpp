@@ -13,6 +13,7 @@ import telar.testing;
 import telar.gui.foundation.core;
 import telar.gui.features.palette;
 import telar.gui.foundation.text;
+import telar.base.ds;
 
 namespace {
 
@@ -96,7 +97,7 @@ namespace {
       const auto tiny = PaletteGeometry::measure({.width = extent, .height = extent}, chrome, {});
 
       check(tiny.bounds.width >= 0 && tiny.bounds.height >= 0 && tiny.results.height >= 0 && tiny.footer.height >= 0, "small windows must never create negative regions");
-      const std::array bands{tiny.heading, tiny.search, tiny.tabs, tiny.results, tiny.footer};
+      const telar::ds::Array bands{tiny.heading, tiny.search, tiny.tabs, tiny.results, tiny.footer};
       const auto tolerance = std::numeric_limits<float>::epsilon() * std::max(1.0F, tiny.bounds.height) * static_cast<float>(bands.size());
       auto bottom = tiny.bounds.y;
 
@@ -114,7 +115,7 @@ namespace {
     constexpr float viewport_width = 900;
     constexpr float viewport_height = 300;
     constexpr std::size_t row_count = 24;
-    std::array<PaletteRowKind, row_count> kinds{};
+    telar::ds::Array<PaletteRowKind, row_count> kinds{};
 
     kinds.fill(PaletteRowKind::agent);
     const auto geometry = PaletteGeometry::measure({.width = viewport_width, .height = viewport_height}, chrome, {});

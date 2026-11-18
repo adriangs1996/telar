@@ -21,18 +21,18 @@ namespace telar::runtime {
     Statistics statistics;
 
     while (const auto first = AtomicFrame::find(text, search_from)) {
-      std::array<SelectedFrame, maximum_placements> selected;
+      ds::Array<SelectedFrame, maximum_placements> selected;
       std::size_t count = 0;
       auto end = first->end;
-      bool overflow = !record(selected, count, *first);
+      bool overflow = !record(selected.viewMut(), count, *first);
 
       while (const auto frame = AtomicFrame::at(text, end)) {
-        overflow |= !record(selected, count, *frame);
+        overflow |= !record(selected.viewMut(), count, *frame);
         end = frame->end;
       }
 
       if (!overflow) {
-        auto entries = std::span{selected}.first(count);
+        auto entries = selected.viewMut().first(count);
 
         for (auto& entry : entries) {
           for (auto recent = entry.recent_count; recent != 0; --recent) {
@@ -93,11 +93,11 @@ namespace telar::runtime {
       }
 
       if (entry.recent_count == entry.recent.size()) {
-        std::move(entry.recent.begin() + 1, entry.recent.end(), entry.recent.begin());
+        std::move(entry.recent.dataMut() + 1, (entry.recent.dataMut() + entry.recent.size()), entry.recent.dataMut());
         --entry.recent_count;
       }
 
-      entry.recent[entry.recent_count++] = frame.start;
+      entry.recent.atMut(entry.recent_count++) = frame.start;
       return true;
     }
 
@@ -108,7 +108,7 @@ namespace telar::runtime {
     auto& entry = entries[count++];
 
     entry.key = frame.control.key;
-    entry.recent[0] = frame.start;
+    entry.recent.atMut(0) = frame.start;
     entry.recent_count = 1;
     entry.selected.reset();
     return true;
@@ -134,7 +134,7 @@ namespace telar::runtime {
     }
   }
 
-  auto GraphicsFrameSource::validate(const AtomicFrameResource& resource, std::array<std::uint8_t, PATH_MAX + 1>& name) noexcept -> ds::Option<Handle> {
+  auto GraphicsFrameSource::validate(const AtomicFrameResource& resource, ds::Array<std::uint8_t, PATH_MAX + 1>& name) noexcept -> ds::Option<Handle> {
     if (resource.byte_count == 0 || resource.byte_count > resource.limit) {
       return ds::none;
     }
@@ -150,7 +150,7 @@ namespace telar::runtime {
       return handle;
     }
 
-    handle.shared = GraphicsChildSharedMemory::open(resource.encoded_name, name);
+    handle.shared = GraphicsChildSharedMemory::open(resource.encoded_name, name.viewMut());
     struct stat metadata{};
     if (!handle.shared || ::fstat(handle.shared.get(), &metadata) != 0 || metadata.st_size < 0 || static_cast<std::uint64_t>(metadata.st_size) < resource.byte_count) {
       return ds::none;
@@ -160,7 +160,7 @@ namespace telar::runtime {
   }
 
   bool GraphicsFrameSource::available(const AtomicFrameResource& resource) noexcept {
-    std::array<std::uint8_t, PATH_MAX + 1> name;
+    ds::Array<std::uint8_t, PATH_MAX + 1> name;
 
     return validate(resource, name).hasValue();
   }
@@ -172,7 +172,7 @@ namespace telar::runtime {
   }
 
   ds::Option<GraphicsFramePixels> GraphicsFramePixels::open(const AtomicFrameResource& resource) noexcept {
-    std::array<std::uint8_t, PATH_MAX + 1> name;
+    ds::Array<std::uint8_t, PATH_MAX + 1> name;
     auto handle = GraphicsFrameSource::validate(resource, name);
     if (!handle) {
       return ds::none;
@@ -220,7 +220,7 @@ namespace telar::runtime {
 
   auto GraphicsUploadLimits::observeEncodedChunk(GhosttyTerminal terminal) -> Observation {
     // Generated control fields and base64 contain no framing transitions. The opening ESC may still terminate an earlier APC.
-    constexpr std::array<std::uint8_t, 5> envelope{0x1b, '_', 'G', 0x1b, '\\'};
+    constexpr ds::Array<std::uint8_t, 5> envelope{0x1b, '_', 'G', 0x1b, '\\'};
 
     return observe(terminal, envelope);
   }
@@ -491,8 +491,8 @@ namespace telar::runtime {
   void MediaTerminal::replyUploadLimit(std::uint32_t image) {
     constexpr std::string_view prefix = "\x1b_Gi=";
     constexpr std::string_view suffix = ";ENOMEM: graphics upload limit exceeded\x1b\\";
-    std::array<char, prefix.size() + 10 + suffix.size()> response;
-    auto* identity = std::copy(prefix.begin(), prefix.end(), response.data());
+    ds::Array<char, prefix.size() + 10 + suffix.size()> response;
+    auto* identity = std::copy(prefix.begin(), prefix.end(), response.dataMut());
     const auto formatted = std::to_chars(identity, identity + 10, image);
     const auto* end = std::copy(suffix.begin(), suffix.end(), formatted.ptr);
 
@@ -563,12 +563,12 @@ namespace telar::runtime {
   }
 
   void AtomicFrameLoader::place(AtomicFrameKey key) {
-    std::array<char, 64> command;
-    auto* end = std::copy_n("\x1b_Ga=p,i=", 9, command.data());
+    ds::Array<char, 64> command;
+    auto* end = std::copy_n("\x1b_Ga=p,i=", 9, command.dataMut());
 
-    end = std::to_chars(end, command.data() + command.size(), key.image_id).ptr;
+    end = std::to_chars(end, command.dataMut() + command.size(), key.image_id).ptr;
     end = std::copy_n(",p=", 3, end);
-    end = std::to_chars(end, command.data() + command.size(), key.placement_id).ptr;
+    end = std::to_chars(end, command.dataMut() + command.size(), key.placement_id).ptr;
     end = std::copy_n(",C=1,q=2\x1b\\", 10, end);
     terminal_.feed({reinterpret_cast<const Byte*>(command.data()), static_cast<std::size_t>(end - command.data())});
   }
@@ -652,7 +652,7 @@ namespace telar::runtime {
     }
 
     const bool kitty = framing_.touches(bytes);
-    auto& batch = batches_[active_];
+    auto& batch = batches_.atMut(active_);
     if (!batch.append(bytes)) {
       if (ordered_input_) {
         ingress_failed_ = true;
@@ -674,7 +674,7 @@ namespace telar::runtime {
     }
 
     current_size_ = size;
-    auto& batch = batches_[active_];
+    auto& batch = batches_.atMut(active_);
     if (!batch.resize(size)) {
       if (ordered_input_) {
         ingress_failed_ = true;
@@ -727,7 +727,7 @@ namespace telar::runtime {
 
   void PaneMedia::complete() noexcept {
     if (!drain_only_) {
-      batches_[sealed_].clear();
+      batches_.atMut(sealed_).clear();
     }
 
     pending_responses_ = progress_.pending_responses;
@@ -817,8 +817,8 @@ namespace telar::runtime {
     cancelled_ = true;
     responses_->close();
     if (!busy_) {
-      batches_[0].clear();
-      batches_[1].clear();
+      batches_.atMut(0).clear();
+      batches_.atMut(1).clear();
       terminal_.reset();
       prepared_.clear();
       requests_.clear();
@@ -929,7 +929,7 @@ namespace telar::runtime {
 #endif
 
   void PaneMedia::dropActive(std::size_t incoming) noexcept {
-    auto& batch = batches_[active_];
+    auto& batch = batches_.atMut(active_);
 
     TELAR_DIAGNOSTIC(diagnostics::accumulate(queue_metrics_.dropped_events, batch.events().size() + 1));
     TELAR_DIAGNOSTIC(diagnostics::accumulate(queue_metrics_.dropped_bytes, batch.byteCount() + incoming));

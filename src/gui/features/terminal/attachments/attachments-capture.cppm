@@ -48,7 +48,7 @@ export {
     private:
       void append(KeyChord::Key code, std::uint16_t count, const InputModes& modes);
 
-      std::array<char, AttachmentLimits::maximum_input_bytes> bytes_{};
+      ds::Array<char, AttachmentLimits::maximum_input_bytes> bytes_{};
       std::size_t used_ = 0;
     };
 

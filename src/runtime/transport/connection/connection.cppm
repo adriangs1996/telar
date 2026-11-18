@@ -17,6 +17,7 @@ import telar.wire.runtime;
 import telar.platform.primitives;
 import telar.platform.error;
 import telar.platform.net;
+import telar.base.ds;
 
 // Interface: transport/client_handshake.cppm
 export {
@@ -55,7 +56,7 @@ export {
       void reply(const Message& message);
 
       FileDescriptor descriptor_;
-      std::array<Byte, frame_prefix_size + HandshakeCodec::max_message_size> bytes_;
+      ds::Array<Byte, frame_prefix_size + HandshakeCodec::max_message_size> bytes_;
       std::size_t used_bytes_ = 0;
       std::size_t expected_bytes_ = frame_prefix_size;
       std::chrono::steady_clock::time_point started_at_ = std::chrono::steady_clock::now();
@@ -324,9 +325,9 @@ export {
       // template here.
       template <typename Message>
       TBC_GENERIC inline void complete(std::size_t offset, const Message& message) {
-        std::array<Byte, MessageSchema<Message>::payload_size> payload;
+        ds::Array<Byte, MessageSchema<Message>::payload_size> payload;
 
-        Codec::encode(message, payload);
+        Codec::encode(message, payload.viewMut());
         bytes_.overwrite(offset, payload);
       }
 
@@ -456,7 +457,7 @@ export {
       static constexpr std::size_t byte_limit = 2 * (max_payload_size + frame_prefix_size);
       ByteQueue<Memory> bytes_;
       DeferredResponses<Memory> deferred_;
-      std::array<std::size_t, static_cast<std::size_t>(DeliveryLane::count)> lane_counts_{};
+      ds::Array<std::size_t, static_cast<std::size_t>(DeliveryLane::count)> lane_counts_{};
       std::uint32_t pending_lanes_ = 0;
       std::size_t response_depth_ = 0;
       std::size_t high_water_ = 0;

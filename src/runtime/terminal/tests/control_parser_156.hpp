@@ -270,7 +270,7 @@ namespace telar::runtime::control {
     static void executeC1(std::uint8_t byte, Consumer& consumer) {
       // C1 controls executed inside a control sequence are not UTF-8 text.
       // Preserve that context for the non-query backend using an ESC prefix.
-      const std::array<std::uint8_t, 2> control{escape, byte};
+      const ds::Array<std::uint8_t, 2> control{escape, byte};
 
       consumer.ordinary(control);
     }
@@ -581,7 +581,7 @@ namespace telar::runtime::control {
       }
 
       if (size_ < inline_.size()) {
-        inline_[size_++] = byte;
+        inline_.atMut(size_++) = byte;
         return true;
       }
 
@@ -604,7 +604,7 @@ namespace telar::runtime::control {
       overflow_.clear();
     }
 
-    std::array<std::uint8_t, inline_bytes> inline_;
+    ds::Array<std::uint8_t, inline_bytes> inline_;
     Vector<std::uint8_t, Memory> overflow_;
     std::size_t size_ = 0;
     Phase phase_ = Phase::ground;

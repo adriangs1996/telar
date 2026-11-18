@@ -11,6 +11,7 @@ static_assert(true);
 
 import telar.testing;
 import telar.gui.features.terminal.graphics;
+import telar.base.ds;
 
 namespace {
 
@@ -21,11 +22,11 @@ namespace {
 
   struct Releases {
     static constexpr std::size_t release_capacity = 1024;
-    std::array<ImageTextureHandle, release_capacity> handles{};
+    telar::ds::Array<ImageTextureHandle, release_capacity> handles{};
     std::size_t count = 0;
 
     void release(ImageTextureHandle handle) noexcept {
-      handles[count++] = handle;
+      handles.atMut(count++) = handle;
     }
   };
 
@@ -209,10 +210,10 @@ namespace {
     const auto pending = images.request({.identity = identity(2), .size = small});
 
     check(pending.upload, "cleanup must include an upload whose pixels may still be in use by the backend");
-    std::array<bool, Residency::capacity> retained{};
+    telar::ds::Array<bool, Residency::capacity> retained{};
 
-    retained[first - 1] = true;
-    images.sweep(std::span{retained});
+    retained.atMut(first - 1) = true;
+    images.sweep(retained.viewMut());
     check(images.state(first)->stage == ImageTextureStage::ready, "indexed retention must preserve the requested stable row");
     images.clear();
     check(images.size() == 0 && images.uploading() == 0 && images.spares() == 0 && images.residentBytes() == 0 && releases.count == 2, "context cleanup must return every charge and handle after abandoning pending uploads");

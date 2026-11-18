@@ -70,7 +70,7 @@ export {
           : command_(command) {}
 
       inline bool skipped() {
-        constexpr std::array<std::string_view, 5> arguments{"-v", "-s", "Interfaces", "-i", "lo0"};
+        constexpr ds::Array<std::string_view, 5> arguments{"-v", "-s", "Interfaces", "-i", "lo0"};
 
         return parse(command_.run(arguments));
       }
@@ -310,8 +310,8 @@ export {
         Byte family;
         Byte action;
         Byte reason;
-        std::array<char, 16> interface;
-        std::array<char, 16> ruleset;
+        ds::Array<char, 16> interface;
+        ds::Array<char, 16> ruleset;
         std::uint32_t rule;
         std::uint32_t subrule;
         uid_t uid;
@@ -319,7 +319,7 @@ export {
         uid_t rule_uid;
         pid_t rule_pid;
         Byte direction;
-        std::array<Byte, 3> padding;
+        ds::Array<Byte, 3> padding;
       };
 
       static_assert(sizeof(Header) == 64 && __builtin_offsetof(Header, uid) == 44 && __builtin_offsetof(Header, direction) == 60);
@@ -353,17 +353,17 @@ export {
           throw;
         }
 
-        std::array<char, 16> name{};
+        ds::Array<char, 16> name{};
 
-        std::snprintf(name.data(), name.size(), "pflog%u", index_);
-        std::array<char, PCAP_ERRBUF_SIZE> error{};
+        std::snprintf(name.dataMut(), name.size(), "pflog%u", index_);
+        ds::Array<char, PCAP_ERRBUF_SIZE> error{};
 
-        capture_.reset(pcap_create(name.data(), error.data()));
+        capture_.reset(pcap_create(name.dataMut(), error.dataMut()));
         if (!capture_) {
           throw std::runtime_error{error.data()};
         }
 
-        if (pcap_set_snaplen(capture_.get(), 65600) != 0 || pcap_set_timeout(capture_.get(), 1) != 0 || pcap_set_immediate_mode(capture_.get(), 1) != 0 || pcap_activate(capture_.get()) < 0 || pcap_datalink(capture_.get()) != DLT_PFLOG || pcap_setnonblock(capture_.get(), 1, error.data()) != 0) {
+        if (pcap_set_snaplen(capture_.get(), 65600) != 0 || pcap_set_timeout(capture_.get(), 1) != 0 || pcap_set_immediate_mode(capture_.get(), 1) != 0 || pcap_activate(capture_.get()) < 0 || pcap_datalink(capture_.get()) != DLT_PFLOG || pcap_setnonblock(capture_.get(), 1, error.dataMut()) != 0) {
           throw std::runtime_error{"Cannot capture private PF discovery log"};
         }
 
@@ -396,7 +396,7 @@ export {
       Direction direction_;
       unsigned index_ = 0;
       std::unique_ptr<pcap_t, decltype(&pcap_close)> capture_;
-      std::array<Byte, 65540> bytes_{};
+      ds::Array<Byte, 65540> bytes_{};
       Metadata metadata_;
     };
 

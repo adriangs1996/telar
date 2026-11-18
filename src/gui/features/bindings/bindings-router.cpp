@@ -28,7 +28,7 @@ namespace telar::gui::features::bindings {
       index = count_++;
     }
 
-    leases_[index] = {.physical = physical, .owner = Owner::binding};
+    leases_.atMut(index) = {.physical = physical, .owner = Owner::binding};
 
     return true;
   }
@@ -36,7 +36,7 @@ namespace telar::gui::features::bindings {
   void KeyLeases::transfer(std::uint64_t physical) noexcept {
     const auto index = find(physical);
     if (index != count_) {
-      leases_[index].owner = Owner::application;
+      leases_.atMut(index).owner = Owner::application;
     }
   }
 
@@ -48,7 +48,7 @@ namespace telar::gui::features::bindings {
 
     const auto owner = leases_[index].owner;
 
-    leases_[index] = leases_[--count_];
+    leases_.atMut(index) = leases_[--count_];
 
     return owner;
   }

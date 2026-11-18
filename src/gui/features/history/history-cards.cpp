@@ -70,14 +70,14 @@ namespace telar::gui::features::history {
   }
 
   void HistoryRowGeometry::Facts::append(Kind kind, float advance, float gap) noexcept {
-    tokens[count++] = {.kind = kind, .width = advance};
+    tokens.atMut(count++) = {.kind = kind, .width = advance};
     width += advance + gap;
   }
 
   void HistoryRowGeometry::Facts::remove(std::size_t index, float gap) noexcept {
     width -= tokens[index].width + gap;
     for (auto next = index + 1; next < count; ++next) {
-      tokens[next - 1] = tokens[next];
+      tokens.atMut(next - 1) = tokens[next];
     }
 
     --count;
@@ -113,7 +113,7 @@ namespace telar::gui::features::history {
       }
 
       if (total < result.line_limit) {
-        result.lines[total] = {.offset = static_cast<std::uint32_t>(line->data() - command.data()), .length = static_cast<std::uint32_t>(line->size())};
+        result.lines.atMut(total) = {.offset = static_cast<std::uint32_t>(line->data() - command.data()), .length = static_cast<std::uint32_t>(line->size())};
       }
 
       ++total;
@@ -254,7 +254,7 @@ namespace telar::gui::features::history {
 
       const Rect bounds{.x = x, .y = area.y + chrome.px(vertical_inset), .width = width, .height = std::max(0.0F, area.height - chrome.px(vertical_inset * 2))};
 
-      result.hints[index] = HistoryHintGeometry::derive(bounds, chrome, measured.hints[index]);
+      result.hints.atMut(index) = HistoryHintGeometry::derive(bounds, chrome, measured.hints[index]);
       ++result.count;
       x += width + chrome.px(hint_gap);
     }
@@ -292,7 +292,7 @@ namespace telar::gui::features::history {
     for (std::size_t index = 0; index < result.action_count; ++index) {
       const auto width = HistoryHintGeometry::width(chrome, measured.actions[index]);
 
-      result.actions[index] = HistoryHintGeometry::derive({.x = x, .y = bounds.y, .width = width, .height = bounds.height}, chrome, measured.actions[index]);
+      result.actions.atMut(index) = HistoryHintGeometry::derive({.x = x, .y = bounds.y, .width = width, .height = bounds.height}, chrome, measured.actions[index]);
       x += width + chrome.px(action_gap);
     }
 
@@ -308,7 +308,7 @@ namespace telar::gui::features::history {
         break;
       }
 
-      result.facts[index] = {.x = x, .y = bounds.y, .width = width, .height = bounds.height};
+      result.facts.atMut(index) = {.x = x, .y = bounds.y, .width = width, .height = bounds.height};
       ++result.fact_count;
       x += width + chrome.px(HistoryRowGeometry::fact_gap);
     }

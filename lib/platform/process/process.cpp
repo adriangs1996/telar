@@ -60,8 +60,8 @@ namespace telar::runtime {
         memory_(memory),
         restorable_(launch.environment_mode == EnvironmentMode::inherit_runtime) {
     if (cwd_.empty()) {
-      std::array<char, PATH_MAX> current{};
-      if (::getcwd(current.data(), current.size()) == nullptr) {
+      ds::Array<char, PATH_MAX> current{};
+      if (::getcwd(current.dataMut(), current.size()) == nullptr) {
         throw SystemError{"resolve working directory"};
       }
 
@@ -232,8 +232,8 @@ namespace telar::runtime {
       }
     }
 
-    std::array<char, PATH_MAX> found;
-    if (!findExecutable(path, program, found, cwd())) {
+    ds::Array<char, PATH_MAX> found;
+    if (!findExecutable(path, program, found.viewMut(), cwd())) {
       throw SystemError{"resolve pane executable", ENOENT};
     }
 
@@ -326,7 +326,7 @@ namespace telar::runtime {
       process.closeInput();
     }
 
-    std::array<Byte, 16 * 1024> bytes;
+    ds::Array<Byte, 16 * 1024> bytes;
 
     while (process.output() >= 0 || process.error() >= 0 || process.input() >= 0) {
       checkCancellation(options.cancelled);
@@ -334,9 +334,9 @@ namespace telar::runtime {
         throw RequestError{FailureCode::resource_limit, "Command deadline exceeded"};
       }
 
-      std::array<pollfd, 3> descriptors{{{process.output(), POLLIN, 0}, {process.error(), POLLIN, 0}, {process.input(), POLLOUT, 0}}};
+      ds::Array<pollfd, 3> descriptors{{{process.output(), POLLIN, 0}, {process.error(), POLLIN, 0}, {process.input(), POLLOUT, 0}}};
       const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - Clock::now()).count();
-      const int result = ::poll(descriptors.data(), descriptors.size(), static_cast<int>(std::clamp<std::int64_t>(remaining, 0, 20)));
+      const int result = ::poll(descriptors.dataMut(), descriptors.size(), static_cast<int>(std::clamp<std::int64_t>(remaining, 0, 20)));
       if (result < 0 && sys::lastError() != EINTR) {
         throw SystemError{"Wait for command output"};
       }
@@ -350,7 +350,7 @@ namespace telar::runtime {
           continue;
         }
 
-        const auto count = ::read(descriptors[index].fd, bytes.data(), bytes.size());
+        const auto count = ::read(descriptors[index].fd, bytes.dataMut(), bytes.size());
         if (count > 0) {
           if (index == 0 && !consume(std::span<const Byte>{bytes}.first(static_cast<std::size_t>(count)))) {
             return 0;
@@ -413,24 +413,24 @@ namespace telar::runtime {
   }
 
   ExecutablePath::ExecutablePath() {
-    std::array<char, PATH_MAX> original;
+    ds::Array<char, PATH_MAX> original;
 #if defined(__APPLE__)
     auto size = static_cast<std::uint32_t>(original.size());
-    if (::_NSGetExecutablePath(original.data(), &size) != 0) {
+    if (::_NSGetExecutablePath(original.dataMut(), &size) != 0) {
       throw SystemError{"Executable path exceeds its limit", ENAMETOOLONG};
     }
 
 #else
-    const auto length = ::readlink("/proc/self/exe", original.data(), original.size());
+    const auto length = ::readlink("/proc/self/exe", original.dataMut(), original.size());
     if (length < 0) {
       throw SystemError{"Read runtime executable path"};
     }
     if (static_cast<std::size_t>(length) >= original.size()) {
       throw SystemError{"Executable path exceeds its limit", ENAMETOOLONG};
     }
-    original[length] = '\0';
+    original.atMut(length) = '\0';
 #endif
-    if (::realpath(original.data(), path_.data()) == nullptr) {
+    if (::realpath(original.data(), path_.dataMut()) == nullptr) {
       throw SystemError{"Resolve runtime executable"};
     }
   }
@@ -443,8 +443,8 @@ namespace telar::runtime {
       throw SystemError{"Executable path exceeds its limit", ENAMETOOLONG};
     }
 
-    name.copy(path_.data() + directory.size(), name.size());
-    path_[directory.size() + name.size()] = '\0';
+    name.copy(path_.dataMut() + directory.size(), name.size());
+    path_.atMut(directory.size() + name.size()) = '\0';
   }
 
   ds::Option<ExecutablePath> ExecutablePath::sibling(std::initializer_list<std::string_view> candidates) {
@@ -453,16 +453,16 @@ namespace telar::runtime {
     const auto directory = own.substr(0, own.rfind('/') + 1);
 
     for (const auto candidate : candidates) {
-      std::array<char, PATH_MAX> path;
+      ds::Array<char, PATH_MAX> path;
       if (directory.size() + candidate.size() >= path.size()) {
         continue;
       }
 
-      std::ranges::copy(candidate, std::ranges::copy(directory, path.data()).out);
-      path[directory.size() + candidate.size()] = '\0';
+      std::ranges::copy(candidate, std::ranges::copy(directory, path.dataMut()).out);
+      path.atMut(directory.size() + candidate.size()) = '\0';
       struct stat info{};
       ExecutablePath found{self};
-      if (::stat(path.data(), &info) == 0 && S_ISREG(info.st_mode) && ::access(path.data(), X_OK) == 0 && exactlyNamed(path.data()) && ::realpath(path.data(), found.path_.data()) != nullptr) {
+      if (::stat(path.data(), &info) == 0 && S_ISREG(info.st_mode) && ::access(path.data(), X_OK) == 0 && exactlyNamed(path.data()) && ::realpath(path.data(), found.path_.dataMut()) != nullptr) {
         return found;
       }
     }
@@ -484,8 +484,8 @@ namespace telar::runtime {
 
     request.bitmapcount = ATTR_BIT_MAP_COUNT;
     request.commonattr = ATTR_CMN_NAME;
-    alignas(attrreference_t) std::array<char, sizeof(std::uint32_t) + sizeof(attrreference_t) + NAME_MAX * 3 + 1> answer{};
-    if (::getattrlist(path, &request, answer.data(), answer.size(), FSOPT_NOFOLLOW) != 0) {
+    alignas(attrreference_t) ds::Array<char, sizeof(std::uint32_t) + sizeof(attrreference_t) + NAME_MAX * 3 + 1> answer{};
+    if (::getattrlist(path, &request, answer.dataMut(), answer.size(), FSOPT_NOFOLLOW) != 0) {
       return false;
     }
 

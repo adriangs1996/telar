@@ -15,15 +15,15 @@ namespace telar::runtime {
     // written to a temporary name and renamed into place.
     void writeScripts(std::string_view root) {
       for (const auto& file : shell_files::installed) {
-        std::array<char, PATH_MAX> path{};
+        ds::Array<char, PATH_MAX> path{};
         const auto length = root.size() + 1 + file.directory.size();
         if (length >= path.size()) {
           throw SystemError{"Shell integration path is too long", ENAMETOOLONG};
         }
 
-        std::ranges::copy(root, path.begin());
-        path[root.size()] = '/';
-        std::ranges::copy(file.directory, path.begin() + root.size() + 1);
+        std::ranges::copy(root, path.viewMut().begin());
+        path.atMut(root.size()) = '/';
+        std::ranges::copy(file.directory, path.viewMut().begin() + root.size() + 1);
         createPrivateDirectory({path.data(), length});
 
         FileDescriptor directory{::open(path.data(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
@@ -31,9 +31,9 @@ namespace telar::runtime {
           throw SystemError{"Open shell integration directory"};
         }
 
-        std::array<char, NAME_MAX + 1> name{};
+        ds::Array<char, NAME_MAX + 1> name{};
 
-        std::ranges::copy(file.name, name.begin());
+        std::ranges::copy(file.name, name.viewMut().begin());
         struct stat state{};
         if (::fstatat(directory.get(), name.data(), &state, AT_SYMLINK_NOFOLLOW) == 0 && S_ISREG(state.st_mode)) {
           continue;
@@ -149,7 +149,7 @@ namespace telar::runtime {
       }
 
       path += "/bash/telar.bash";
-      const std::array<std::string_view, 3> arguments{"--rcfile", path, "-i"};
+      const ds::Array<std::string_view, 3> arguments{"--rcfile", path, "-i"};
 
       command.replaceSpawnArguments(arguments);
       break;

@@ -64,6 +64,7 @@ import telar.testing;
 import telar.wire.clipboard;
 import telar.runtime.model.client_layouts;
 import telar.runtime.model.slot_store;
+import telar.base.ds;
 
 #ifdef TELAR_TEST_NATIVE_CLIPBOARD
 // Defined in runtime_clipboard_native.cpp, which builds only with the native clipboard.
@@ -217,16 +218,16 @@ namespace {
     }
 
     void bounds() {
-      std::array<Byte, 128> wire;
+      ds::Array<Byte, 128> wire;
 
       try {
-        Codec::encode(ReadRuntimeClipboard{.request_id = 1, .offset = 1}, wire);
+        Codec::encode(ReadRuntimeClipboard{.request_id = 1, .offset = 1}, wire.viewMut());
         check(false);
       } catch (const EncodingError&) {
       }
 
       try {
-        Codec::encode(RuntimeClipboardChunk{.request_id = 1, .transfer_id = 1, .offset = 1, .total_bytes = 0, .mime = "image/png"}, wire);
+        Codec::encode(RuntimeClipboardChunk{.request_id = 1, .transfer_id = 1, .offset = 1, .total_bytes = 0, .mime = "image/png"}, wire.viewMut());
         check(false);
       } catch (const EncodingError&) {
       }

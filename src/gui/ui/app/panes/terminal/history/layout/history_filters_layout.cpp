@@ -23,6 +23,7 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -171,7 +172,7 @@ namespace telar::gui::qt {
       destination[count++] = {.identity = {.action = action, .generation = generation}, .bounds = {.x = static_cast<float>(bounds.x() * density_), .y = static_cast<float>(bounds.y() * density_), .width = static_cast<float>(bounds.width() * density_), .height = static_cast<float>(bounds.height() * density_)}};
     };
 
-    constexpr std::array scopes{application::history::HistoryFilterAction::global, application::history::HistoryFilterAction::workspace, application::history::HistoryFilterAction::cwd, application::history::HistoryFilterAction::pane};
+    constexpr ds::Array scopes{application::history::HistoryFilterAction::global, application::history::HistoryFilterAction::workspace, application::history::HistoryFilterAction::cwd, application::history::HistoryFilterAction::pane};
 
     for (std::size_t index = 0; index < scopes.size(); ++index) {
       append(scopes[index], geometry_.scopes[index].bounds);
@@ -179,7 +180,7 @@ namespace telar::gui::qt {
 
     if (geometry_.show_right) {
       append(application::history::HistoryFilterAction::failed, geometry_.failed.bounds);
-      constexpr std::array authors{application::history::HistoryFilterAction::human, application::history::HistoryFilterAction::agent, application::history::HistoryFilterAction::all};
+      constexpr ds::Array authors{application::history::HistoryFilterAction::human, application::history::HistoryFilterAction::agent, application::history::HistoryFilterAction::all};
 
       for (std::size_t index = 0; index < authors.size(); ++index) {
         append(authors[index], geometry_.authors[index].bounds);
@@ -215,15 +216,15 @@ namespace telar::gui::qt {
       const auto widths = scope_widths.value(static_cast<qsizetype>(index)).toMap();
       const auto choice = scope_choices_.value(static_cast<qsizetype>(index)).toMap();
 
-      measured.scopes[index] = {.label = advance(widths.value(QStringLiteral("label"))), .value = advance(widths.value(QStringLiteral("value"))), .has_value = !choice.value(QStringLiteral("detail")).toString().isEmpty()};
+      measured.scopes.atMut(index) = {.label = advance(widths.value(QStringLiteral("label"))), .value = advance(widths.value(QStringLiteral("value"))), .has_value = !choice.value(QStringLiteral("detail")).toString().isEmpty()};
     }
 
     for (std::size_t index = 0; index < measured.authors.size(); ++index) {
-      measured.authors[index].label = advance(author_widths.value(static_cast<qsizetype>(index)));
+      measured.authors.atMut(index).label = advance(author_widths.value(static_cast<qsizetype>(index)));
     }
 
     for (std::size_t index = 0; index < measured.keys.size(); ++index) {
-      measured.keys[index] = advance(key_widths.value(static_cast<qsizetype>(index)));
+      measured.keys.atMut(index) = advance(key_widths.value(static_cast<qsizetype>(index)));
     }
 
     measured.failed = advance(measurements_.value(QStringLiteral("failed")));

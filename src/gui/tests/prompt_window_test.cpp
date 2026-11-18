@@ -175,10 +175,10 @@ namespace {
       return false;
     }
 
-    const std::array descriptors{PaneDescriptor{.pane_id = pane_id, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
+    const ds::Array descriptors{PaneDescriptor{.pane_id = pane_id, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
 
     runtime.send(TabSnapshot{.request_id = runtime.last<RequestTabSnapshot>().request_id, .location = location, .panes = descriptors});
-    const std::array tabs{TabDescriptor{.tab_id = location.tab_id, .pane_count = 1}};
+    const ds::Array tabs{TabDescriptor{.tab_id = location.tab_id, .pane_count = 1}};
 
     runtime.send(WorkspaceSnapshot{.request_id = runtime.last<RequestWorkspaceSnapshot>().request_id, .workspace = location.workspace, .name = "project", .tabs = tabs});
     return true;
@@ -222,7 +222,7 @@ namespace {
   // A screen with some output and the shell's prompt on the last row, flagged as the runtime
   // flags a row its integrated shell marked.
   void sendPromptScreen(WireRuntime& runtime, std::uint64_t frame_id) {
-    constexpr std::array<std::string_view, rows> lines{"$ make", "[1/2] Building runtime", "[2/2] Linking telar", "", "", "adrian@host ~/src/telar % "};
+    constexpr ds::Array<std::string_view, rows> lines{"$ make", "[1/2] Building runtime", "[2/2] Linking telar", "", "", "adrian@host ~/src/telar % "};
     std::vector<Cell> cells;
 
     for (const auto line : lines) {
@@ -232,10 +232,10 @@ namespace {
     }
 
     std::vector<Byte> encoded(cells.size() * 16);
-    const std::array spans{FrameSpan{.start = 0, .count = static_cast<std::uint32_t>(cells.size()), .cells = CellRunCodec::encode(cells, encoded)}};
-    std::array<Byte, rows> flags{};
+    const ds::Array spans{FrameSpan{.start = 0, .count = static_cast<std::uint32_t>(cells.size()), .cells = CellRunCodec::encode(cells, encoded)}};
+    ds::Array<Byte, rows> flags{};
 
-    flags[rows - 1] = static_cast<Byte>(RowFlag::prompt);
+    flags.atMut(rows - 1) = static_cast<Byte>(RowFlag::prompt);
     FrameBody frame{.pane_id = pane_id, .frame_id = frame_id, .cols = columns, .rows = rows, .cursor = {.visible = true, .x = static_cast<std::uint16_t>(lines.back().size()), .y = rows - 1}, .scroll = {.total_rows = rows}, .text_metadata = TextMetadata{.row_flags = flags}, .spans = spans};
 
     frame.input_modes.bracketed_paste = true;
@@ -381,7 +381,7 @@ namespace {
       QCoreApplication::sendEvent(&terminal, &clear);
       // The command's block arrives: its prompt row turns into a separator, which offers the
       // way to its error while the editor waits, and the rail beside the pane gets its dot.
-      const std::array blocks{CommandBlock{.row = 0, .rows = 1, .lines = 0, .state = CommandBlockState::failed, .status = 2, .duration_ms = 1500, .command = "git log --oneline -n 3 | grep fix"}};
+      const ds::Array blocks{CommandBlock{.row = 0, .rows = 1, .lines = 0, .state = CommandBlockState::failed, .status = 2, .duration_ms = 1500, .command = "git log --oneline -n 3 | grep fix"}};
 
       runtime.send(PaneBlocks{.pane_id = pane_id, .blocks = blocks});
       QTRY_COMPARE_WITH_TIMEOUT(terminal.separators().size(), 1, wait_ms);
@@ -439,14 +439,14 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       QTRY_VERIFY_WITH_TIMEOUT(editor->glows().isEmpty(), wait_ms);
 
       // A command that ran without the shell missing it exists, whatever it reported before.
-      const std::array ran{blocks[0], CommandBlock{.row = 2, .rows = 1, .lines = 0, .state = CommandBlockState::succeeded, .status = 0, .duration_ms = 20, .command = "gti status"}};
+      const ds::Array ran{blocks[0], CommandBlock{.row = 2, .rows = 1, .lines = 0, .state = CommandBlockState::succeeded, .status = 0, .duration_ms = 20, .command = "gti status"}};
 
       runtime.send(PaneBlocks{.pane_id = pane_id, .blocks = ran});
       QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->commandPresence(pane_id, "gti"), application::prompt::CommandPresence::found, wait_ms);
 
       // Back at the prompt before the frame that draws it, the last prompt on screen is the
       // command's own: its output is not prompt, and the line waits under the cursor.
-      const std::array pending{ran[0], ran[1], CommandBlock{.row = rows - 1, .rows = 1, .lines = 0, .state = CommandBlockState::succeeded, .status = 0, .duration_ms = 5, .command = "ls"}};
+      const ds::Array pending{ran[0], ran[1], CommandBlock{.row = rows - 1, .rows = 1, .lines = 0, .state = CommandBlockState::succeeded, .status = 0, .duration_ms = 5, .command = "ls"}};
 
       runtime.send(PaneBlocks{.pane_id = pane_id, .blocks = pending});
       QTRY_COMPARE_WITH_TIMEOUT(terminal.promptRow(), -1, wait_ms);
@@ -515,11 +515,11 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       separators->setParentItem(&terminal);
       window.show();
 
-      const std::array running{CommandBlock{.row = 0, .rows = 1, .state = CommandBlockState::running, .command = "make"}};
+      const ds::Array running{CommandBlock{.row = 0, .rows = 1, .state = CommandBlockState::running, .command = "make"}};
 
       runtime.send(PaneBlocks{.pane_id = pane_id, .blocks = running});
       QTRY_VERIFY_WITH_TIMEOUT(separators->property("started").toMap().contains(QStringLiteral("0")), wait_ms);
-      const std::array failed{CommandBlock{.row = 0, .rows = 1, .state = CommandBlockState::failed, .status = 2, .duration_ms = 40, .command = "make"}};
+      const ds::Array failed{CommandBlock{.row = 0, .rows = 1, .state = CommandBlockState::failed, .status = 2, .duration_ms = 40, .command = "make"}};
 
       runtime.send(PaneBlocks{.pane_id = pane_id, .blocks = failed});
       QTRY_COMPARE_WITH_TIMEOUT(separators->property("drawn").toMap().value(QStringLiteral("0")).toString(), QStringLiteral("failed"), wait_ms);
@@ -595,7 +595,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       const auto query = runtime.last<QueryHistory>();
 
       QVERIFY(query.distinct);
-      const std::array entries{
+      const ds::Array entries{
           HistoryEntry{.id = 3, .pane_id = pane_id, .started_at_ms = 1'700'000'300'000, .exit_code = 0, .command = "git status --short", .cwd = "/work"},
           HistoryEntry{.id = 2, .pane_id = pane_id, .started_at_ms = 1'700'000'200'000, .exit_code = 1, .command = "git stash pop", .cwd = "/work"},
           HistoryEntry{.id = 1, .pane_id = pane_id, .started_at_ms = 1'700'000'100'000, .exit_code = 0, .command = "git switch main", .cwd = "/work"},
@@ -636,7 +636,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       const auto find = runtime.last<FindPaths>();
 
       QCOMPARE(find.query, std::string_view{"s"});
-      const std::array paths{PathMatch{.path = "src/main.cpp", .kind = PathKind::file}, PathMatch{.path = "src/", .kind = PathKind::directory}, PathMatch{.path = "scripts/setup.sh", .kind = PathKind::file}};
+      const ds::Array paths{PathMatch{.path = "src/main.cpp", .kind = PathKind::file}, PathMatch{.path = "src/", .kind = PathKind::directory}, PathMatch{.path = "scripts/setup.sh", .kind = PathKind::file}};
 
       runtime.send(PathResults{.request_id = find.request_id, .root = find.root, .complete = true, .matches = paths});
       QTRY_COMPARE_WITH_TIMEOUT(application.paths()->state().value(QStringLiteral("count")).toInt(), 3, wait_ms);
@@ -675,7 +675,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       QKeyEvent close{QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier};
 
       QCoreApplication::sendEvent(&terminal, &close);
-      const std::array session{CommandBlock{.row = 0, .rows = 1, .state = CommandBlockState::session, .command = "ssh box", .nest = CommandBlockNest::opens}, CommandBlock{.row = 3, .rows = 1, .state = CommandBlockState::succeeded, .duration_ms = 40, .command = "ls", .nest = CommandBlockNest::inside}};
+      const ds::Array session{CommandBlock{.row = 0, .rows = 1, .state = CommandBlockState::session, .command = "ssh box", .nest = CommandBlockNest::opens}, CommandBlock{.row = 3, .rows = 1, .state = CommandBlockState::succeeded, .duration_ms = 40, .command = "ls", .nest = CommandBlockNest::inside}};
 
       runtime.send(PaneBlocks{.pane_id = pane_id, .blocks = session});
       QTRY_COMPARE_WITH_TIMEOUT(terminal.separators().size(), 2, wait_ms);
@@ -706,7 +706,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
 
       // The pane's own shell is back: ssh's block ends, and the edge stops at its last command.
       runtime.send(PaneShell{.pane_id = pane_id, .shell = IntegratedShell::zsh, .phase = ShellPhase::prompt, .shell_foreground = true});
-      const std::array closed{CommandBlock{.row = 0, .rows = 1, .state = CommandBlockState::failed, .status = 255, .duration_ms = 9000, .command = "ssh box", .nest = CommandBlockNest::opens}, session[1]};
+      const ds::Array closed{CommandBlock{.row = 0, .rows = 1, .state = CommandBlockState::failed, .status = 255, .duration_ms = 9000, .command = "ssh box", .nest = CommandBlockNest::opens}, session[1]};
 
       runtime.send(PaneBlocks{.pane_id = pane_id, .blocks = closed});
       QTRY_COMPARE_WITH_TIMEOUT(terminal.separators()[0].toMap().value(QStringLiteral("state")).toString(), QStringLiteral("failed"), wait_ms);

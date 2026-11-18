@@ -12,13 +12,13 @@ namespace telar::runtime {
     }
 
     SharedImageStorage storage;
-    std::array<std::uint64_t, 2> nonce;
+    ds::Array<std::uint64_t, 2> nonce;
 
-    randomBytes(nonce.data(), sizeof(nonce));
-    std::snprintf(storage.name_.data(), storage.name_.size(), "/tlr%016llx%08x", static_cast<unsigned long long>(nonce[0]), static_cast<unsigned>(nonce[1]));
+    randomBytes(nonce.dataMut(), sizeof(nonce.viewMut()));
+    std::snprintf(storage.name_.dataMut(), storage.name_.size(), "/tlr%016llx%08x", static_cast<unsigned long long>(nonce[0]), static_cast<unsigned>(nonce[1]));
     FileDescriptor descriptor{::shm_open(storage.name_.data(), O_CREAT | O_EXCL | O_RDWR, 0600)};
     if (!descriptor) {
-      storage.name_[0] = '\0';
+      storage.name_.atMut(0) = '\0';
       return ds::none;
     }
 
@@ -51,7 +51,7 @@ namespace telar::runtime {
   SharedImageStorage::Name SharedImageStorage::takeName() noexcept {
     auto name = name_;
 
-    name_[0] = '\0';
+    name_.atMut(0) = '\0';
     return name;
   }
 

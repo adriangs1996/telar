@@ -712,7 +712,7 @@ namespace telar::gui::qt {
 
   void PromptEditorItem::cacheColors() {
     for (std::size_t index = 0; index < style_colors_.size(); ++index) {
-      style_colors_[index] = roleColor(static_cast<application::prompt::Style>(index));
+      style_colors_.atMut(index) = roleColor(static_cast<application::prompt::Style>(index));
     }
 
     accent_ = colors_.value(QStringLiteral("accent")).value<QColor>();

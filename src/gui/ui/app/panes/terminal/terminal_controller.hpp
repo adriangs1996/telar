@@ -172,7 +172,7 @@ namespace telar::gui::qt {
       Qt::MouseButtons child_buttons;
     };
 
-    using Recipients = std::array<Recipient, static_cast<std::size_t>(application::terminal::input::MouseButton::none)>;
+    using Recipients = ds::Array<Recipient, static_cast<std::size_t>(application::terminal::input::MouseButton::none)>;
 
     [[nodiscard]] Capture* capture(Qt::MouseButton button) noexcept;
     [[nodiscard]] Recipients recipients() const;
@@ -192,7 +192,7 @@ namespace telar::gui::qt {
     qreal chrome_ratio_ = 1;
     Qt::KeyboardModifiers pointer_modifiers_;
     QHash<std::uint64_t, QPointer<TerminalItem>> terminals_;
-    std::array<Capture, static_cast<std::size_t>(application::terminal::input::MouseButton::none)> captures_;
+    ds::Array<Capture, static_cast<std::size_t>(application::terminal::input::MouseButton::none)> captures_;
     QPointer<TerminalItem> scroll_owner_;
   };
 

@@ -47,15 +47,15 @@ namespace telar::runtime::cli::window {
   }
 
   void number(Text& output, std::uint64_t value) {
-    std::array<char, std::numeric_limits<std::uint64_t>::digits10 + 2> buffer;
-    const auto end = std::to_chars(buffer.data(), buffer.data() + buffer.size(), value).ptr;
+    ds::Array<char, std::numeric_limits<std::uint64_t>::digits10 + 2> buffer;
+    const char* const end = std::to_chars(buffer.dataMut(), buffer.dataMut() + buffer.size(), value).ptr;
 
     output.append(buffer.data(), end);
   }
 
   void signedNumber(Text& output, std::int64_t value) {
-    std::array<char, std::numeric_limits<std::int64_t>::digits10 + 3> buffer;
-    const auto end = std::to_chars(buffer.data(), buffer.data() + buffer.size(), value).ptr;
+    ds::Array<char, std::numeric_limits<std::int64_t>::digits10 + 3> buffer;
+    const char* const end = std::to_chars(buffer.dataMut(), buffer.dataMut() + buffer.size(), value).ptr;
 
     output.append(buffer.data(), end);
   }
@@ -346,7 +346,7 @@ namespace telar::runtime::cli::window {
         .text = options.text,
     });
 
-    constexpr std::array statuses{"ready", "unavailable", "timeout", "failed"};
+    constexpr ds::Array statuses{"ready", "unavailable", "timeout", "failed"};
     const auto* const status = statuses.at(static_cast<std::size_t>(reply.status));
 
     if (options.json) {

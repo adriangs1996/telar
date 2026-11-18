@@ -32,9 +32,9 @@ namespace telar::runtime::cli::repository {
     RuntimeConnection connection{socket};
 
     connection.receiveTimeout(30);
-    std::array<Byte, 32> outgoing;
+    ds::Array<Byte, 32> outgoing;
 
-    connection.send(RequestRuntimeState{.client_identity = randomIdentity(), .interactive = false}, outgoing);
+    connection.send(RequestRuntimeState{.client_identity = randomIdentity(), .interactive = false}, outgoing.viewMut());
     Vector<Byte, Memory> incoming(max_payload_size, Byte{}, AllocatorRef<Byte, Memory>{memory});
     Vector<Byte, Memory> decoded(max_payload_size, Byte{}, AllocatorRef<Byte, Memory>{memory});
 
@@ -74,9 +74,9 @@ namespace telar::runtime::cli::repository {
       throw std::runtime_error{"InvalidDataDirectory"};
     }
 
-    std::array<unsigned char, SHA256_DIGEST_LENGTH> digest;
+    ds::Array<unsigned char, SHA256_DIGEST_LENGTH> digest;
 
-    ::SHA256(reinterpret_cast<const unsigned char*>(identity.data()), identity.size(), digest.data());
+    ::SHA256(reinterpret_cast<const unsigned char*>(identity.data()), identity.size(), digest.dataMut());
     auto result = base + "/telar/repositories/";
 
     for (const auto byte : digest) {
@@ -289,11 +289,11 @@ namespace telar::runtime::cli::repository {
   }
 
   void receiveBundle(int descriptor, std::uint64_t expected) {
-    std::array<Byte, file_transfer::copy_buffer_bytes> bytes;
+    ds::Array<Byte, file_transfer::copy_buffer_bytes> bytes;
     std::uint64_t total = 0;
 
     for (;;) {
-      const auto count = ::read(STDIN_FILENO, bytes.data(), bytes.size());
+      const auto count = ::read(STDIN_FILENO, bytes.dataMut(), bytes.size());
       if (count < 0 && sys::lastError() == EINTR) {
         continue;
       }
@@ -625,7 +625,7 @@ namespace telar::runtime::cli::sessions {
 
   // Descriptions of the errors only dispatch raises.
   std::string_view describeDispatchError(std::string_view name) {
-    static constexpr std::array<std::pair<std::string_view, std::string_view>, 12> descriptions{{
+    static constexpr ds::Array<std::pair<std::string_view, std::string_view>, 12> descriptions{{
         {"UnknownMachine", "no saved machine or local label has that name; see `telar machine list`"},
         {"FetchNeedsAnotherMachine", "fetch brings a branch from another machine; this label names this one"},
         {"NoOriginRemote", "the repository has no `origin` remote to find its clone by on the other machine"},
@@ -767,14 +767,14 @@ namespace telar::runtime::cli::sessions {
 
       const auto url = std::format("ssh://{}{}", destination, clone);
       const auto ssh = machine::gitSshCommand(memory_, destination);
-      const std::array<std::pair<std::string_view, std::string_view>, 2> environment{{{"GIT_SSH_COMMAND", ssh}, {"GIT_TERMINAL_PROMPT", "0"}}};
+      const ds::Array<std::pair<std::string_view, std::string_view>, 2> environment{{{"GIT_SSH_COMMAND", ssh}, {"GIT_TERMINAL_PROMPT", "0"}}};
 
       if (direction == GitDirection::push) {
-        const std::array<std::string_view, 8> argv{"git", "-C", root_, "push", "--quiet", "--", url, refspec};
+        const ds::Array<std::string_view, 8> argv{"git", "-C", root_, "push", "--quiet", "--", url, refspec};
 
         git_.run(argv, "GitPushFailed", true, false, environment);
       } else {
-        const std::array<std::string_view, 9> argv{"git", "-C", root_, "fetch", "--quiet", "--no-tags", "--", url, refspec};
+        const ds::Array<std::string_view, 9> argv{"git", "-C", root_, "fetch", "--quiet", "--no-tags", "--", url, refspec};
 
         git_.run(argv, "GitFetchFailed", true, false, environment);
       }
@@ -825,7 +825,7 @@ namespace telar::runtime::cli::sessions {
     std::string root_;
   };
 
-  std::string hexSession(const std::array<Byte, 16>& session) {
+  std::string hexSession(const ds::Array<Byte, 16>& session) {
     return lowerHex(session);
   }
 
@@ -974,8 +974,8 @@ namespace telar::runtime::cli::sessions {
     }
 
     std::fprintf(stderr, "%s? [y/N] ", question);
-    std::array<char, 16> buffer;
-    if (!std::fgets(buffer.data(), buffer.size(), stdin)) {
+    ds::Array<char, 16> buffer;
+    if (!std::fgets(buffer.dataMut(), buffer.size(), stdin)) {
       return false;
     }
 
@@ -1138,7 +1138,7 @@ namespace telar::runtime::cli::sessions {
 
       const auto name = std::filesystem::path{root}.filename().string();
       const auto login = loginShell();
-      const std::array shell{login.view()};
+      const ds::Array shell{login.view()};
       const auto opened = session_.template exchange<PaneOpened>(CreateWorkspace{.size = workspace_size, .name = name, .launch = {.cwd = root, .arguments = shell}});
 
       return opened.location.workspace.id;
@@ -1532,7 +1532,7 @@ namespace telar::runtime::cli::sessions {
 
     // `repository_discovery.find`, with this command's descriptions of its errors.
     void resolve() {
-      static constexpr std::array<std::pair<std::string_view, const char*>, 4> descriptions{{
+      static constexpr ds::Array<std::pair<std::string_view, const char*>, 4> descriptions{{
           {"RepositoryNotInWorkspace", "that workspace holds another repository"},
           {"AmbiguousRepository", "several clones of this repository are open on the machine; pass --workspace PATH"},
           {"WorkspaceNotFound", "workspace not found"},

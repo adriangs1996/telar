@@ -66,7 +66,7 @@ export {
       }
 
       Vector<Byte, Memory> payload_;
-      std::array<Byte, frame_prefix_size> prefix_{};
+      ds::Array<Byte, frame_prefix_size> prefix_{};
       std::size_t prefix_used_ = 0;
       std::size_t expected_ = 0;
       std::size_t maximum_ = max_payload_size;

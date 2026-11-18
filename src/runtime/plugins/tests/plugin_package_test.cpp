@@ -17,6 +17,7 @@ import telar.runtime.plugins.tap_configuration;
 import telar.platform.fs;
 import telar.plugins;
 import telar.platform.paths;
+import telar.base.ds;
 
 namespace {
 
@@ -170,7 +171,7 @@ namespace {
       Memory& memory = adapter;
       const auto source = fixture.package("sample");
       auto package = tap::PackageInspector::inspect(memory, source);
-      const auto specifications = std::to_array({configured("missing", false), configured("./sample")});
+      const auto specifications = ds::Array{configured("missing", false), configured("./sample")};
 
       {
         tap::TapConfiguration configuration{memory, fixture.root, std::span{specifications}, fixture};
@@ -204,7 +205,7 @@ namespace {
         check(configuration.specifications().empty());
       }
 
-      package.digest[0] ^= 1;
+      package.digest.atMut(0) ^= 1;
       fixture.trust(PackageFixture::grant(package, "[\"proxy.tap\"]"));
       {
         tap::TapConfiguration configuration{memory, fixture.root, std::span{specifications}, fixture};
@@ -212,13 +213,13 @@ namespace {
         check(configuration.specifications().empty());
       }
 
-      const auto duplicate = std::to_array({configured("sample"), configured("sample")});
+      const auto duplicate = ds::Array{configured("sample"), configured("sample")};
 
       rejects([&] {
         tap::TapConfiguration configuration{memory, fixture.root, std::span{duplicate}, fixture};
       });
 
-      const auto missing = std::to_array({configured("missing")});
+      const auto missing = ds::Array{configured("missing")};
 
       rejects([&] {
         tap::TapConfiguration configuration{memory, fixture.root, std::span{missing}, fixture};
@@ -244,14 +245,14 @@ namespace {
       BudgetAllocator budget{system, 32 * 1024 * 1024};
       MemoryAdapter adapter{budget};
       Memory& memory = adapter;
-      std::array<tap::ConfiguredPlugin, tap::Limits::workers + 1> specifications;
+      ds::Array<tap::ConfiguredPlugin, tap::Limits::workers + 1> specifications;
       std::string grants;
 
       for (std::size_t index = 0; index < specifications.size(); ++index) {
         const auto name = "plugin-" + std::to_string(index);
         const auto path = fixture.package(name);
 
-        specifications[index] = configured(name);
+        specifications.atMut(index) = configured(name);
         const auto package = tap::PackageInspector::inspect(memory, path);
 
         if (!grants.empty()) {

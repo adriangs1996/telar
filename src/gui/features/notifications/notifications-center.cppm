@@ -94,7 +94,7 @@ export {
       [[nodiscard]] ds::Option<std::uint64_t> nextDeadline(std::uint64_t now_ns, std::uint64_t frame_interval_ns) const;
 
     private:
-      std::array<NotificationItem, capacity> items_;
+      ds::Array<NotificationItem, capacity> items_;
       std::size_t count_ = 0;
       std::uint64_t next_id_;
     };

@@ -4,6 +4,7 @@ import std;
 import telar.config.core;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::features::activity {
 
@@ -45,7 +46,7 @@ namespace telar::gui::features::activity {
     };
 
     // Terminal programs have no operating system icon of their own.
-    static constexpr std::array known{
+    static constexpr ds::Array known{
         Known{"nvim", "", "#5fb095", "#0f1a16"},
         Known{"vim", "", "#5fb095", "#0f1a16"},
         Known{"vi", "", "#5fb095", "#0f1a16"},

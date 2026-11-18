@@ -55,6 +55,7 @@ import telar.runtime.model.slot_store;
 import telar.runtime.platform.event_loop;
 import telar.runtime.runtime.execution_service;
 import telar.runtime.terminal.ghostty;
+import telar.base.ds;
 
 namespace {
 
@@ -64,7 +65,7 @@ namespace {
   using namespace telar::runtime;
 
   constexpr TerminalSize size{80, 24, 0, 0};
-  constexpr std::array<std::string_view, 1> arguments{"/bin/cat"};
+  constexpr ds::Array<std::string_view, 1> arguments{"/bin/cat"};
 
   template <typename Operation>
   void expectFailure(Operation operation, FailureCode code, std::string_view message) {
@@ -263,7 +264,7 @@ namespace {
     WorkspaceService<decltype(poller)> workspaces{memory};
     ClientPeer owner{memory, model, clients, ClientRole::interactive};
 
-    owner.session().colors.foreground = std::array<Byte, 3>{17, 34, 51};
+    owner.session().colors.foreground = ds::Array<Byte, 3>{17, 34, 51};
     const Launch launch{.cwd = "/", .arguments = arguments};
     const OpenPane request{.request_id = 1, .size = size, .launch = launch};
 

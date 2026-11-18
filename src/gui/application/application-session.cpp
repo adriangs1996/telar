@@ -78,7 +78,7 @@ namespace telar::gui::application {
     }
 
     for (const auto& argument : argument_storage_) {
-      launch_arguments_[launch_argument_count_++] = argument;
+      launch_arguments_.atMut(launch_argument_count_++) = argument;
     }
   }
 
@@ -479,7 +479,7 @@ namespace telar::gui::application {
 
     const auto request = nextRequest();
 
-    pending_[pending_count_++] = {.id = request, .kind = kind, .pane_id = pane_id, .axis = axis};
+    pending_.atMut(pending_count_++) = {.id = request, .kind = kind, .pane_id = pane_id, .axis = axis};
 
     return request;
   }
@@ -489,7 +489,7 @@ namespace telar::gui::application {
       if (pending_[index].id == request_id) {
         const auto result = pending_[index];
 
-        pending_[index] = pending_[--pending_count_];
+        pending_.atMut(index) = pending_[--pending_count_];
 
         return result;
       }

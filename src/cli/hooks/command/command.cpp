@@ -265,7 +265,7 @@ namespace telar::runtime::cli::hooks {
 
   AgentBlockedReason Payload::blockedReason() {
     const auto name = fields.value("blocked") ? fields.text("blocked") : "none";
-    constexpr std::array names{"none", "permission", "question", "plan", "other"};
+    constexpr ds::Array names{"none", "permission", "question", "plan", "other"};
     const auto found = std::ranges::find(names, name);
     if (found == names.end()) {
       throw std::invalid_argument{"Unknown hook blocked reason"};
@@ -357,7 +357,7 @@ namespace telar::runtime::cli::hooks {
 
   template <std::size_t Capacity>
   void displayText(FixedText<Capacity>& output, std::string_view text, bool multiline) {
-    std::array<char, Capacity> bytes;
+    ds::Array<char, Capacity> bytes;
     std::size_t length = 0;
 
     for (const unsigned char byte : text) {
@@ -366,7 +366,7 @@ namespace telar::runtime::cli::hooks {
       }
 
       if ((byte >= 0x20 && byte != 0x7f) || (multiline && (byte == '\n' || byte == '\t'))) {
-        bytes[length++] = static_cast<char>(byte);
+        bytes.atMut(length++) = static_cast<char>(byte);
       }
     }
 
@@ -424,12 +424,12 @@ namespace telar::runtime::cli::hooks {
       return;
     }
 
-    std::array<char, 192> buffer;
+    ds::Array<char, 192> buffer;
     std::size_t length = 0;
     const auto append = [&](std::string_view text) {
       const auto count = std::min(text.size(), buffer.size() - length);
 
-      std::memcpy(buffer.data() + length, text.data(), count);
+      std::memcpy(buffer.dataMut() + length, text.data(), count);
       length += count;
     };
 
@@ -530,8 +530,8 @@ namespace telar::runtime::cli::hooks {
   }
 
   void backgroundEvent(FixedText<96>& output, std::size_t count) {
-    std::array<char, 96> buffer;
-    const auto length = std::snprintf(buffer.data(), buffer.size(), "waiting for %zu background %s", count, count == 1 ? "agent" : "agents");
+    ds::Array<char, 96> buffer;
+    const auto length = std::snprintf(buffer.dataMut(), buffer.size(), "waiting for %zu background %s", count, count == 1 ? "agent" : "agents");
 
     output.assign({buffer.data(), static_cast<std::size_t>(length)});
   }

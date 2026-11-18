@@ -1,4 +1,5 @@
 module telar.runtime.platform.background_executor;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -10,8 +11,8 @@ namespace telar::runtime {
   }
 
   void SuggestionService::process(std::span<const Byte> payload, EncodedReply<ConcurrentMemory>& reply, const RequestContext& context) {
-    std::array<Byte, 1024> scratch;
-    DecodeStorage storage{scratch};
+    ds::Array<Byte, 1024> scratch;
+    DecodeStorage storage{scratch.viewMut()};
     const auto request = Codec::decode<SuggestCommand>(payload, storage);
 
     engine_.suggest(request, context.prompt, reply);

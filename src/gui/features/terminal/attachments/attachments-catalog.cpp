@@ -352,7 +352,7 @@ namespace telar::gui::features::terminal::attachments {
         return ds::none;
       }
 
-      uuid[index] = byte;
+      uuid.atMut(index) = byte;
       scan.step();
     }
 

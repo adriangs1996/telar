@@ -50,9 +50,9 @@ namespace telar::runtime {
       return false;
     }
 
-    std::array<char, INET6_ADDRSTRLEN> text{};
+    ds::Array<char, INET6_ADDRSTRLEN> text{};
 
-    std::ranges::copy(host, text.begin());
+    std::ranges::copy(host, text.viewMut().begin());
     in6_addr address{};
 
     return ::inet_pton(AF_INET, text.data(), &address) == 1 || ::inet_pton(AF_INET6, text.data(), &address) == 1;
@@ -118,10 +118,10 @@ namespace telar::runtime {
     extension(leaf.certificate.get(), NID_authority_key_identifier, "keyid,issuer", certificate.get());
 
     const std::string_view prefix = TlsHostname::numeric(hostname) ? "IP:" : "DNS:";
-    std::array<char, 4 + ProxyHostname::maximum_bytes + 1> alternative{};
+    ds::Array<char, 4 + ProxyHostname::maximum_bytes + 1> alternative{};
 
-    std::copy(prefix.begin(), prefix.end(), alternative.begin());
-    std::copy(hostname.begin(), hostname.end(), alternative.begin() + prefix.size());
+    std::copy(prefix.begin(), prefix.end(), alternative.dataMut());
+    std::copy(hostname.begin(), hostname.end(), alternative.dataMut() + prefix.size());
     extension(leaf.certificate.get(), NID_subject_alt_name, alternative.data());
     sign(leaf.certificate, key.get());
     return leaf;
@@ -145,10 +145,10 @@ namespace telar::runtime {
 
   void CertificatePair::validateAuthority(std::string_view name, bool system) const {
     requireTls(EVP_PKEY_is_a(key.get(), "EC") == 1, "TLS authority requires an EC key");
-    std::array<char, 80> group;
+    ds::Array<char, 80> group;
     std::size_t length = 0;
 
-    requireTls(EVP_PKEY_get_group_name(key.get(), group.data(), group.size(), &length) == 1 && std::string_view{group.data(), length} == "prime256v1", "TLS authority requires a P-256 key");
+    requireTls(EVP_PKEY_get_group_name(key.get(), group.dataMut(), group.size(), &length) == 1 && std::string_view{group.dataMut(), length} == "prime256v1", "TLS authority requires a P-256 key");
     requireTls(X509_check_private_key(certificate.get(), key.get()) == 1, "TLS authority key does not match its certificate");
     requireTls(X509_verify(certificate.get(), key.get()) == 1, "TLS authority signature is invalid");
     requireTls(X509_check_ca(certificate.get()) > 0, "TLS certificate is not an authority");
@@ -321,9 +321,9 @@ namespace telar::runtime {
     }
 
     if (const int error = writePrivateFile(directory, files.certificate, certificate.bytes(), PrivateFileMode::create_only)) {
-      std::array<char, NAME_MAX + 1> name{};
+      ds::Array<char, NAME_MAX + 1> name{};
 
-      std::copy(files.key.begin(), files.key.end(), name.begin());
+      std::copy(files.key.begin(), files.key.end(), name.dataMut());
       ::unlinkat(directory, name.data(), 0);
       throw SystemError{"Publish TLS authority certificate", error};
     }
@@ -339,26 +339,26 @@ namespace telar::runtime {
     return pair_.certificate.get();
   }
 
-  std::array<char, 40> CertificateAuthority::fingerprint() const {
+  ds::Array<char, 40> CertificateAuthority::fingerprint() const {
     return fingerprint<20>(EVP_sha1());
   }
 
-  std::array<char, 64> CertificateAuthority::fingerprintSha256() const {
+  ds::Array<char, 64> CertificateAuthority::fingerprintSha256() const {
     return fingerprint<32>(EVP_sha256());
   }
 
   template <std::size_t digest_bytes>
-  std::array<char, digest_bytes * 2> CertificateAuthority::fingerprint(const EVP_MD* algorithm) const {
-    std::array<unsigned char, EVP_MAX_MD_SIZE> digest;
+  ds::Array<char, digest_bytes * 2> CertificateAuthority::fingerprint(const EVP_MD* algorithm) const {
+    ds::Array<unsigned char, EVP_MAX_MD_SIZE> digest;
     unsigned length = 0;
 
-    requireTls(X509_digest(certificate(), algorithm, digest.data(), &length) == 1 && length == digest_bytes, "Compute TLS authority fingerprint");
+    requireTls(X509_digest(certificate(), algorithm, digest.dataMut(), &length) == 1 && length == digest_bytes, "Compute TLS authority fingerprint");
     constexpr std::string_view hexadecimal = "0123456789ABCDEF";
-    std::array<char, digest_bytes * 2> result;
+    ds::Array<char, digest_bytes * 2> result;
 
     for (std::size_t index = 0; index < digest_bytes; ++index) {
-      result[index * 2] = hexadecimal[digest[index] >> 4];
-      result[index * 2 + 1] = hexadecimal[digest[index] & 15];
+      result.atMut(index * 2) = hexadecimal[digest[index] >> 4];
+      result.atMut(index * 2 + 1) = hexadecimal[digest[index] & 15];
     }
 
     return result;
@@ -413,8 +413,8 @@ namespace telar::runtime {
 namespace telar::runtime::proxy_trust {
   namespace {
 
-    void makeName(std::array<char, NAME_MAX + 1>& output, std::string_view base, const char* operation, std::uint64_t nonce) {
-      const int size = std::snprintf(output.data(), output.size(), "%.*s.%s-%016llx", static_cast<int>(base.size()), base.data(), operation, static_cast<unsigned long long>(nonce));
+    void makeName(ds::Array<char, NAME_MAX + 1>& output, std::string_view base, const char* operation, std::uint64_t nonce) {
+      const int size = std::snprintf(output.dataMut(), output.size(), "%.*s.%s-%016llx", static_cast<int>(base.size()), base.data(), operation, static_cast<unsigned long long>(nonce));
       if (size < 0 || static_cast<std::size_t>(size) >= output.size()) {
         throw std::length_error{"Proxy authority temporary filename exceeds its bound"};
       }
@@ -496,7 +496,7 @@ namespace telar::runtime::proxy_trust {
 
   Record Record::parse(ConcurrentMemory& memory, std::string_view source) {
     validateUtf8(source);
-    constexpr auto names = std::to_array<std::string_view>({"version", "backend", "fingerprint", "store_path"});
+    constexpr auto names = ds::Array<std::string_view, 4>{"version", "backend", "fingerprint", "store_path"};
     JsonFields fields{memory, JsonValue::parse(source), names};
     if (!SchemaVersion<ConcurrentMemory>::isOne(memory, fields.required("version"))) {
       throw std::invalid_argument{"Invalid proxy trust record version"};
@@ -522,9 +522,9 @@ namespace telar::runtime::proxy_trust {
     for (std::size_t index = 0; index < fingerprint.size(); ++index) {
       const char byte = fingerprint[index];
       if (byte >= 'a' && byte <= 'f') {
-        record.fingerprint[index] = byte - 'a' + 'A';
+        record.fingerprint.atMut(index) = byte - 'a' + 'A';
       } else if ((byte >= 'A' && byte <= 'F') || (byte >= '0' && byte <= '9')) {
-        record.fingerprint[index] = byte;
+        record.fingerprint.atMut(index) = byte;
       } else {
         throw std::invalid_argument{"Invalid proxy trust fingerprint"};
       }
@@ -907,14 +907,14 @@ namespace telar::runtime::proxy_trust {
   void Service::installAuthority(std::string_view certificate) {
     switch (destination_.backend) {
     case Backend::macos:
-      executor_.run(std::to_array<std::string_view>({"/usr/bin/security", "add-trusted-cert", "-r", "trustRoot", "-k", destination_.store.view(), certificate}));
+      executor_.run(ds::Array<std::string_view, 7>{"/usr/bin/security", "add-trusted-cert", "-r", "trustRoot", "-k", destination_.store.view(), certificate});
       break;
     case Backend::update_ca_certificates:
-      executor_.run(std::to_array<std::string_view>({"/usr/bin/sudo", "--", "/usr/bin/install", "-m", "0644", certificate, destination_.store.view()}));
-      executor_.run(std::to_array<std::string_view>({"/usr/bin/sudo", "--", "/usr/sbin/update-ca-certificates"}));
+      executor_.run(ds::Array<std::string_view, 7>{"/usr/bin/sudo", "--", "/usr/bin/install", "-m", "0644", certificate, destination_.store.view()});
+      executor_.run(ds::Array<std::string_view, 3>{"/usr/bin/sudo", "--", "/usr/sbin/update-ca-certificates"});
       break;
     case Backend::trust:
-      executor_.run(std::to_array<std::string_view>({"/usr/bin/sudo", "--", "/usr/bin/trust", "anchor", certificate}));
+      executor_.run(ds::Array<std::string_view, 5>{"/usr/bin/sudo", "--", "/usr/bin/trust", "anchor", certificate});
       break;
     }
   }
@@ -922,14 +922,14 @@ namespace telar::runtime::proxy_trust {
   void Service::remove(const Record& record) {
     switch (record.backend) {
     case Backend::macos:
-      executor_.run(std::to_array<std::string_view>({"/usr/bin/security", "delete-certificate", "-t", "-Z", {record.fingerprint.data(), record.fingerprint.size()}, record.store.view()}));
+      executor_.run(ds::Array<std::string_view, 6>{"/usr/bin/security", "delete-certificate", "-t", "-Z", {record.fingerprint.data(), record.fingerprint.size()}, record.store.view()});
       break;
     case Backend::update_ca_certificates:
-      executor_.run(std::to_array<std::string_view>({"/usr/bin/sudo", "--", "/usr/bin/rm", "-f", record.store.view()}));
-      executor_.run(std::to_array<std::string_view>({"/usr/bin/sudo", "--", "/usr/sbin/update-ca-certificates"}));
+      executor_.run(ds::Array<std::string_view, 5>{"/usr/bin/sudo", "--", "/usr/bin/rm", "-f", record.store.view()});
+      executor_.run(ds::Array<std::string_view, 3>{"/usr/bin/sudo", "--", "/usr/sbin/update-ca-certificates"});
       break;
     case Backend::trust:
-      executor_.run(std::to_array<std::string_view>({"/usr/bin/sudo", "--", "/usr/bin/trust", "anchor", "--remove", record.store.view()}));
+      executor_.run(ds::Array<std::string_view, 6>{"/usr/bin/sudo", "--", "/usr/bin/trust", "anchor", "--remove", record.store.view()});
       break;
     }
   }

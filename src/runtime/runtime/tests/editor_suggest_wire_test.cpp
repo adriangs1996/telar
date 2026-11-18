@@ -15,7 +15,7 @@ namespace {
   using namespace telar;
 
   constexpr TerminalSize size{80, 24, 8, 16};
-  constexpr std::array<std::string_view, 1> cat{"/bin/cat"};
+  constexpr ds::Array<std::string_view, 1> cat{"/bin/cat"};
 
   void testSuggestUnavailableAndUnknownPane() {
     RuntimeHost host;
@@ -41,7 +41,7 @@ namespace {
     std::ofstream{engine} << "while IFS= read -r line; do printf '%s\\n' \"$line\" >> '" << prompt << "'; case \"$line\" in *get_last_assistant_text*) printf '%s\\n' '{\"type\":\"response\",\"command\":\"get_last_assistant_text\",\"success\":true,\"data\":{\"text\":\"ls\"}}';; *) printf '%s\\n' '{\"type\":\"response\",\"command\":\"prompt\",\"success\":true}' '{\"type\":\"agent_settled\"}';; esac; done\n";
     RuntimeHost host{RuntimeHostOptions{.suggestion_engine = engine}};
     ProtocolPeer control{host.socket()};
-    const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", "echo screen-marker; exec cat"};
+    const ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", "echo screen-marker; exec cat"};
     const auto opened = control.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = directory, .arguments = arguments}});
 
     screenShowing(control, opened.pane_id, "screen-marker");
@@ -72,7 +72,7 @@ namespace {
     };
 
     check(open(1, 9999, 1) == FailureCode::pane_not_found);
-    const std::array<std::string_view, 1> exiting{"/usr/bin/true"};
+    const ds::Array<std::string_view, 1> exiting{"/usr/bin/true"};
     const auto exited = control.exchange<PaneOpened>(OpenPane{.request_id = 2, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = exiting}});
 
     waitExited(control, exited.pane_id);

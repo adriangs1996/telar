@@ -36,6 +36,7 @@ static_assert(true);
 
 import telar.config.client;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -143,7 +144,7 @@ namespace telar::gui::qt {
       });
       if (row.used && row.id.value() != 0 && !profile_exists) {
         retire(slot, Retirement::removed);
-        store_.clientsMut()[slot].reset();
+        store_.clientsMut().atMut(slot).reset();
         store_.machinesMut().setLive(slot, false);
         store_.machinesMut().remove(slot);
       }
@@ -289,10 +290,10 @@ namespace telar::gui::qt {
     title.append(title_prefix);
     title.append(row.label.view());
     const auto name = row.id.value() == 0 ? row.destination.view() : row.label.view();
-    const std::array<std::string_view, 5> arguments{program, "machine", "setup", name, "--confirm"};
+    const ds::Array<std::string_view, 5> arguments{program, "machine", "setup", name, "--confirm"};
     runtime::config::CommandTabView command{.count = arguments.size(), .configured_label = title.view()};
 
-    std::ranges::copy(arguments, command.arguments.begin());
+    std::ranges::copy(arguments, command.arguments.viewMut().begin());
     machines_.select(store_.machines().token(application::machines::Machines::local_slot));
     static_cast<void>(application::workbench::createCommandTab(store_.sessionMut(), command));
   }

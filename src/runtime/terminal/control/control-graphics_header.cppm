@@ -28,7 +28,7 @@ export namespace telar::runtime::control {
 
       Phase phase = Phase::key;
       std::uint8_t key = 0;
-      std::array<char, maximum_field_bytes> temporary;
+      ds::Array<char, maximum_field_bytes> temporary;
       std::size_t length = 0;
       const auto finish = [&]() {
         const bool accepted = process(key, std::string_view{temporary.data(), length});
@@ -42,7 +42,7 @@ export namespace telar::runtime::control {
           phase = overflow;
           length = 0;
         } else {
-          temporary[length++] = byte;
+          temporary.atMut(length++) = byte;
         }
       };
 

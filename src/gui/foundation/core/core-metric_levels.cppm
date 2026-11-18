@@ -4,6 +4,7 @@ import std;
 
 import telar.base.text.json;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: core/metric_levels.cppm
 export {
@@ -61,7 +62,7 @@ export {
         std::uint8_t pending_count = 0;
       };
 
-      std::array<State, 3> states_{};
+      ds::Array<State, 3> states_{};
     };
 
   }

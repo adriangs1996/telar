@@ -224,7 +224,7 @@ namespace {
       QCOMPARE(invocation.action.view(), std::string_view{"run"});
       QCOMPARE(invocation.configuration_generation, source.configurationGeneration());
       constexpr telar::Byte toggle_sidebar_tag = 3;
-      constexpr std::array<telar::Byte, 2> encoded{1, toggle_sidebar_tag};
+      constexpr telar::ds::Array<telar::Byte, 2> encoded{1, toggle_sidebar_tag};
       const auto effects = PluginEffects::decode(encoded);
 
       source.authorizePlugin(invocation, effects);
@@ -237,7 +237,7 @@ namespace {
       stale.package.manifest.id.assign("replacement");
       QVERIFY_THROWS_EXCEPTION(std::runtime_error, source.authorizePlugin(stale, effects));
       stale = invocation;
-      ++stale.package.digest.front();
+      ++stale.package.digest.atMut(0);
       QVERIFY_THROWS_EXCEPTION(std::runtime_error, source.authorizePlugin(stale, effects));
       stale = invocation;
       stale.package_index = std::numeric_limits<std::size_t>::max();

@@ -71,7 +71,7 @@ namespace {
       for (int column = 0; column < actual.width(); ++column) {
         const auto first = actual.pixelColor(column, row);
         const auto second = expected.pixelColor(column, row);
-        const std::array differences{std::abs(first.red() - second.red()), std::abs(first.green() - second.green()), std::abs(first.blue() - second.blue()), std::abs(first.alpha() - second.alpha())};
+        const telar::ds::Array differences{std::abs(first.red() - second.red()), std::abs(first.green() - second.green()), std::abs(first.blue() - second.blue()), std::abs(first.alpha() - second.alpha())};
         if (std::ranges::any_of(differences, [channel_tolerance](int difference) {
               return difference > channel_tolerance;
             })) {
@@ -180,8 +180,8 @@ namespace {
       first->setPosition({first_inset, first_inset});
       second->setPosition({(window_size.width() * half) + second_inset, first_inset});
       QVERIFY(showComponentWindow(window, wait_ms));
-      const std::array first_colors{QColor{255, 0, 0, 191}, QColor{0, 255, 0, 127}};
-      const std::array second_colors{QColor{0, 0, 255, 127}, QColor{255, 255, 0, 191}};
+      const telar::ds::Array first_colors{QColor{255, 0, 0, 191}, QColor{0, 255, 0, 127}};
+      const telar::ds::Array second_colors{QColor{0, 0, 255, 127}, QColor{255, 255, 0, 191}};
 
       for (std::size_t index = 0; index < first_colors.size(); ++index) {
         QVERIFY(first->setProperty("color", first_colors[index]));
@@ -312,3 +312,4 @@ namespace {
 }
 
 #include "chrome_icon_test.moc"
+#include "telar_base/ds/values.hpp"

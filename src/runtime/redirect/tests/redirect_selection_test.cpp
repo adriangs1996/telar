@@ -21,6 +21,7 @@ import telar.testing;
 import telar.runtime.redirect.ingress;
 import telar.platform.net;
 import telar.runtime.platform.name_resolutions;
+import telar.base.ds;
 
 namespace {
 
@@ -93,7 +94,7 @@ namespace {
 
   void resolution() {
     const std::atomic<bool> cancelled{false};
-    const std::array<std::string_view, 3> input{"mixed.test:443", "alias.test:443", "127.0.0.1:80"};
+    const ds::Array<std::string_view, 3> input{"mixed.test:443", "alias.test:443", "127.0.0.1:80"};
     const redirect::Selection<SelectionResolver> selected{input, cancelled, std::chrono::steady_clock::now() + std::chrono::seconds{2}};
 
     check(selected.targets().size() == 3);
@@ -113,14 +114,14 @@ namespace {
     check(v4 && v6 && http);
 
     for (const auto input : {"*.test:443", "invalid..test:443", "host.test:0", "host.test:65536", "host.test", "[host.test]:443", "0.0.0.0:443", "[::]:443", "999.1.1.1:443", "missing.test:443", "truncated.test:443", "overflow.test:443", "multicast.test:443", "scoped.test:443"}) {
-      const std::array<std::string_view, 1> invalid{input};
+      const ds::Array<std::string_view, 1> invalid{input};
 
       rejects([&] {
         const redirect::Selection<SelectionResolver> selected{invalid, cancelled, std::chrono::steady_clock::now() + std::chrono::seconds{2}};
       });
     }
 
-    const std::array<std::string_view, 2> duplicate{"[::1]:443", "[0:0:0:0:0:0:0:1]:443"};
+    const ds::Array<std::string_view, 2> duplicate{"[::1]:443", "[0:0:0:0:0:0:0:1]:443"};
 
     rejects([&] {
       const redirect::Selection<SelectionResolver> selected{duplicate, cancelled, std::chrono::steady_clock::now() + std::chrono::seconds{2}};
@@ -128,7 +129,7 @@ namespace {
   }
 
   void deadlineAndCancellation() {
-    const std::array<std::string_view, 1> input{"blocked.test:443"};
+    const ds::Array<std::string_view, 1> input{"blocked.test:443"};
     std::atomic<bool> cancelled{false};
     const auto started = std::chrono::steady_clock::now();
 
@@ -169,7 +170,7 @@ namespace {
 
   void systemResolver() {
     const std::atomic<bool> cancelled{false};
-    const std::array<std::string_view, 1> input{"localhost:443"};
+    const ds::Array<std::string_view, 1> input{"localhost:443"};
     const redirect::Selection selected{input, cancelled, std::chrono::steady_clock::now() + std::chrono::seconds{3}};
 
     check(!selected.targets().empty());

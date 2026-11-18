@@ -4,6 +4,7 @@ import telar.testing;
 import telar.runtime.http2.direction_observer;
 import telar.runtime.http2.frame_reader;
 import telar.runtime.http2.tests.http2_fixture;
+import telar.base.ds;
 
 namespace {
 
@@ -28,7 +29,7 @@ namespace {
   // Browsers send HEADERS with the PRIORITY flag: its five bytes precede the header block, and
   // decoding them as HPACK would lose every request of the connection.
   void testPriorityFlag() {
-    constexpr std::array<std::pair<std::string_view, std::string_view>, 4> request{{
+    constexpr ds::Array<std::pair<std::string_view, std::string_view>, 4> request{{
         {":method", "GET"},
         {":scheme", "https"},
         {":authority", "fixture.test"},
@@ -41,7 +42,7 @@ namespace {
     constexpr auto end_stream = static_cast<std::uint8_t>(Http2Flag::end_stream);
     constexpr auto padded = static_cast<std::uint8_t>(Http2Flag::padded);
     constexpr auto prioritized = static_cast<std::uint8_t>(Http2Flag::priority);
-    const std::array frames{
+    const ds::Array frames{
         http2Frame(Http2FrameKind::headers, end_headers | end_stream | prioritized, 1, priority + block),
         http2Frame(Http2FrameKind::headers, end_headers | end_stream | prioritized | padded, 1, std::string{"\x03", 1} + priority + block + std::string(3, '\0')),
     };
@@ -84,7 +85,7 @@ namespace {
   // A header block continued on another stream is not that stream's headers: the observer reports a
   // decode failure and attributes no header to either stream.
   void testContinuationOnOtherStream() {
-    constexpr std::array<std::pair<std::string_view, std::string_view>, 4> request{{
+    constexpr ds::Array<std::pair<std::string_view, std::string_view>, 4> request{{
         {":method", "GET"},
         {":scheme", "https"},
         {":authority", "fixture.test"},

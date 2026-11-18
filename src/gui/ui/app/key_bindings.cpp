@@ -192,8 +192,8 @@ namespace telar::gui::qt {
       const auto consumed = apply(decision);
 
       if (input.phase == KeyPhase::release) {
-        auto* const lease = std::ranges::find(recipients_, input.physical, &Recipient::physical);
-        if (lease != recipients_.end()) {
+        auto* const lease = leaseOf(input.physical);
+        if (lease != nullptr) {
           *lease = {};
         }
       }
@@ -237,32 +237,39 @@ namespace telar::gui::qt {
     }
   }
 
+  auto KeyBindings::leaseOf(std::uint64_t physical) noexcept -> Recipient* {
+    const auto recipients = recipients_.viewMut();
+    const auto found = std::ranges::find(recipients, physical, &Recipient::physical);
+
+    return found == recipients.end() ? nullptr : &*found;
+  }
+
   bool KeyBindings::forward(const RoutedKey& event) {
-    auto* lease = std::ranges::find(recipients_, event.physical, &Recipient::physical);
+    auto* lease = leaseOf(event.physical);
 
     if (event.phase == KeyPhase::press) {
-      if (lease == recipients_.end()) {
-        lease = std::ranges::find(recipients_, std::uint64_t{0}, &Recipient::physical);
+      if (lease == nullptr) {
+        lease = leaseOf(0);
       }
 
-      if (lease != recipients_.end()) {
+      if (lease != nullptr) {
         const auto& copy = copy_.state();
         const auto copying = copy && !copy->pointer && store_.dialog().kind == Store::Dialog::none;
 
         *lease = {.physical = event.physical, .item = event.recipient, .owner = copying ? copy->pane_id : event.owner, .copy_mode = copying, .machine_view = store_.machineView()};
       }
 
-    } else if (lease == recipients_.end()) {
+    } else if (lease == nullptr) {
       return true;
     }
 
-    if (lease != recipients_.end() && lease->machine_view != store_.machineView()) {
+    if (lease != nullptr && lease->machine_view != store_.machineView()) {
       *lease = {};
 
       return true;
     }
 
-    if (lease != recipients_.end() && lease->copy_mode) {
+    if (lease != nullptr && lease->copy_mode) {
       if (event.phase != KeyPhase::release) {
         const QKeyEvent key{QEvent::KeyPress, event.key, event.modifiers, event.scan, event.native_key, event.native_modifiers, event.text, event.phase == KeyPhase::repeat};
 
@@ -307,8 +314,8 @@ namespace telar::gui::qt {
         deliver(release);
       }
 
-      auto* const lease = std::ranges::find(recipients_, event.physical, &Recipient::physical);
-      if (lease != recipients_.end()) {
+      auto* const lease = leaseOf(event.physical);
+      if (lease != nullptr) {
         *lease = {};
       }
     }

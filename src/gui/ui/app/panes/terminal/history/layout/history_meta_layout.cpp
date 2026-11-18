@@ -182,7 +182,7 @@ namespace telar::gui::qt {
         }
       }
 
-      result.targets[index] = {.action = labels[index].action, .bounds = {.x = static_cast<float>(bounds.x() * density_), .y = static_cast<float>(bounds.y() * density_), .width = static_cast<float>(bounds.width() * density_), .height = static_cast<float>(bounds.height() * density_)}, .enabled = isEnabled()};
+      result.targets.atMut(index) = {.action = labels[index].action, .bounds = {.x = static_cast<float>(bounds.x() * density_), .y = static_cast<float>(bounds.y() * density_), .width = static_cast<float>(bounds.width() * density_), .height = static_cast<float>(bounds.height() * density_)}, .enabled = isEnabled()};
     }
 
     return result;
@@ -216,13 +216,13 @@ namespace telar::gui::qt {
     measured.selected = input_.value(QStringLiteral("selected"), true).toBool();
     measured.pane_open = input_.value(QStringLiteral("paneOpen")).toBool();
     for (std::size_t index = 0; index < measured.fact_count; ++index) {
-      measured.facts[index] = advance(facts.value(static_cast<qsizetype>(index)));
+      measured.facts.atMut(index) = advance(facts.value(static_cast<qsizetype>(index)));
     }
 
     for (std::size_t index = 0; index < measured.actions.size(); ++index) {
       const auto value = actions.value(static_cast<qsizetype>(index)).toMap();
 
-      measured.actions[index] = {.key = advance(value.value(QStringLiteral("key"))), .word = advance(value.value(QStringLiteral("word")))};
+      measured.actions.atMut(index) = {.key = advance(value.value(QStringLiteral("key"))), .word = advance(value.value(QStringLiteral("word")))};
     }
 
     geometry_ = application::history::HistoryMetaGeometry::derive({.width = static_cast<float>(width() * density_), .height = static_cast<float>(height() * density_)}, chrome, measured);

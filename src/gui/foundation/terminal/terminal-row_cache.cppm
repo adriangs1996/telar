@@ -129,7 +129,7 @@ export namespace telar::gui::inline foundation::inline terminal {
     Vector<Slot, Memory> slots_;
     Vector<Link, Memory> links_;
     Vector<Byte, Memory> uris_;
-    std::array<Pending, maximum_pending> pending_{};
+    ds::Array<Pending, maximum_pending> pending_{};
     std::uint64_t generation_ = 0;
     std::uint64_t revision_ = 0;
     std::uint16_t columns_ = 0;

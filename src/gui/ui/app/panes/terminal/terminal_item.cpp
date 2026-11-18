@@ -678,7 +678,7 @@ namespace telar::gui::qt {
 
       // Each session's rows, from its ssh to the end of its last command's output; the one the
       // pane is in runs on to the live end.
-      std::array<std::pair<std::uint64_t, std::uint64_t>, 8> stretches{};
+      ds::Array<std::pair<std::uint64_t, std::uint64_t>, 8> stretches{};
       std::size_t stretch_count = 0;
       const auto& blocks = current->blocks;
 
@@ -700,11 +700,11 @@ namespace telar::gui::qt {
 
         if (stretch_count == stretches.size()) {
           // The oldest give way to the newest.
-          std::shift_left(stretches.begin(), stretches.end(), 1);
+          std::shift_left(stretches.dataMut(), stretches.dataMut() + stretches.size(), 1);
           --stretch_count;
         }
 
-        stretches[stretch_count++] = {begin, end};
+        stretches.atMut(stretch_count++) = {begin, end};
         index = last + 1;
       }
 
@@ -1044,16 +1044,17 @@ namespace telar::gui::qt {
       return ds::none;
     }
 
-    auto* entry = std::ranges::find_if(pressed_keys_, [&](const auto& key) {
+    const auto keys = pressed_keys_.viewMut();
+    auto entry = std::ranges::find_if(keys, [&](const auto& key) {
       return key.matches(event);
     });
-    if (entry == pressed_keys_.end()) {
-      entry = std::ranges::find_if(pressed_keys_, [](const auto& key) {
+    if (entry == keys.end()) {
+      entry = std::ranges::find_if(keys, [](const auto& key) {
         return key.key == 0;
       });
     }
 
-    if (entry == pressed_keys_.end()) {
+    if (entry == keys.end()) {
       return ds::none;
     }
 
@@ -1079,10 +1080,11 @@ namespace telar::gui::qt {
     }
 
     const auto* current = pane();
-    auto* const entry = std::ranges::find_if(pressed_keys_, [&](const auto& key) {
+    const auto keys = pressed_keys_.viewMut();
+    const auto entry = std::ranges::find_if(keys, [&](const auto& key) {
       return key.matches(*event);
     });
-    if (current != nullptr && entry != pressed_keys_.end() && !event->isAutoRepeat()) {
+    if (current != nullptr && entry != keys.end() && !event->isAutoRepeat()) {
       const auto released = std::exchange(*entry, PressedKey{});
 
       send(released.release(current->screen.modes()), application::PaneInputSource::key_release);
@@ -1207,7 +1209,7 @@ namespace telar::gui::qt {
   void TerminalItem::releaseKeys() {
     const auto* current = pane();
 
-    for (auto& key : pressed_keys_) {
+    for (auto& key : pressed_keys_.viewMut()) {
       if (key.key == 0) {
         continue;
       }

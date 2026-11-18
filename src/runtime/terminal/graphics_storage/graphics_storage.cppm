@@ -116,8 +116,8 @@ export {
       GhosttyAllocatorBridge<Memory> allocator_;
       GraphicsStorageLimits<Memory> limits_;
       GhosttyHandle<GhosttyKittyGraphicsPlacementIterator, ghostty_kitty_graphics_placement_iterator_free> iterator_;
-      std::array<GraphicsImageView, graphics_image_count> images_{};
-      std::array<GraphicsPlacement, graphics_placement_count> placements_{};
+      ds::Array<GraphicsImageView, graphics_image_count> images_{};
+      ds::Array<GraphicsPlacement, graphics_placement_count> placements_{};
       std::size_t image_count_ = 0;
       std::size_t placement_count_ = 0;
       std::uint64_t revision_ = 0;

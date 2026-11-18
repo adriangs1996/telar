@@ -13,6 +13,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.testing;
 import telar.lua;
+import telar.base.ds;
 
 namespace {
 
@@ -179,10 +180,10 @@ return _VERSION == 'Lua 5.5' and utf8.len('café 好') == 6 and io == nil and ta
   // A configuration's `require` loads only a regular file named by a valid module name from its
   // own directory: anything else fails at once, a FIFO included, rather than blocking the load.
   void testRequireFailures() {
-    std::array<char, 64> temporary{};
+    ds::Array<char, 64> temporary{};
 
-    std::strcpy(temporary.data(), "/tmp/telar-lua-require-XXXXXX");
-    check(::mkdtemp(temporary.data()) != nullptr);
+    std::strcpy(temporary.dataMut(), "/tmp/telar-lua-require-XXXXXX");
+    check(::mkdtemp(temporary.dataMut()) != nullptr);
     const auto root = std::filesystem::canonical(temporary.data()).string();
 
     // `.x` and `a..b` would name these files were the names not refused.

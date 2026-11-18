@@ -296,7 +296,7 @@ namespace telar::gui::qt {
     auto& hover = frame.hover.emplace();
     const auto* filters = qobject_cast<const HistoryFiltersLayout*>(filter_layout_.data());
     if (filters != nullptr && filters->window() == window_) {
-      hover.count += filters->hoverTargets(generation, std::span{hover.targets}.subspan(hover.count));
+      hover.count += filters->hoverTargets(generation, hover.targets.viewMut().subspan(hover.count));
     }
 
     const auto surface = scrollSurface(hover);
@@ -307,12 +307,12 @@ namespace telar::gui::qt {
 
     const auto* inspector = qobject_cast<const HistoryInspectionLayout*>(inspector_.data());
     if (inspector != nullptr && inspector->window() == window_) {
-      hover.count += inspector->hoverTargets(generation, std::span{hover.targets}.subspan(hover.count));
+      hover.count += inspector->hoverTargets(generation, hover.targets.viewMut().subspan(hover.count));
     }
 
     const auto* footer = qobject_cast<const HistoryFooterLayout*>(footer_.data());
     if (footer != nullptr && footer->window() == window_) {
-      hover.count += footer->hoverTargets(generation, std::span{hover.targets}.subspan(hover.count));
+      hover.count += footer->hoverTargets(generation, hover.targets.viewMut().subspan(hover.count));
     }
 
     // Only state QML already received is presented: the frame shows what changed() announced.

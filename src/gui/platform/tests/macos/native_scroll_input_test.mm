@@ -1,6 +1,7 @@
 #include "foundation/core/wheel_accumulator.hpp"
 #include "objc_case.hpp"
 #include "platform/scroll_event.hpp"
+#include "telar_base/ds/values.hpp"
 #include <AppKit/AppKit.h>
 #include <QWindow>
 #include <array>
@@ -75,7 +76,7 @@ namespace {
 
     event.delta = fractional_delta;
     event.precise = YES;
-    const auto phases = std::to_array<std::pair<NSEventPhase, ScrollPhase>>({
+    const auto phases = telar::ds::Array<std::pair<NSEventPhase, ScrollPhase>, 8>{{
         {NSEventPhaseNone, ScrollPhase::none},
         {NSEventPhaseBegan, ScrollPhase::begin},
         {NSEventPhaseMayBegin, ScrollPhase::begin},
@@ -84,7 +85,7 @@ namespace {
         {NSEventPhaseEnded, ScrollPhase::end},
         {NSEventPhaseCancelled, ScrollPhase::cancel},
         {static_cast<NSEventPhase>(NSEventPhaseCancelled | NSEventPhaseBegan), ScrollPhase::cancel},
-    });
+    }};
 
     for (const auto& [phase, expected] : phases) {
       event.scrollPhase = phase;

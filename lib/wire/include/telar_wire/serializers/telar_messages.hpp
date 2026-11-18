@@ -410,7 +410,7 @@ namespace telar {
   };
 
   struct CoordinatorReference {
-    std::array<Byte, 16> session_id{};
+    ds::Array<Byte, 16> session_id{};
     std::uint64_t pane_id = 0;
     std::uint64_t pane_generation = 0;
   };
@@ -504,7 +504,7 @@ namespace telar {
     TabLocation location{};
     std::uint16_t pane_index = 0;
     std::uint32_t process_id = 0;
-    std::array<Byte, 16> session_id{};
+    ds::Array<Byte, 16> session_id{};
     std::string_view workspace_label{};
     std::string_view tab_label{};
     std::string_view session_title{};

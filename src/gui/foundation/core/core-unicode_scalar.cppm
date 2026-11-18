@@ -14,12 +14,12 @@ export {
       static constexpr unsigned continuation_bits = 6;
       static constexpr unsigned continuation_prefix = 0x80;
       static constexpr unsigned continuation_mask = 0x3f;
-      static constexpr std::array<unsigned, 4> leading_prefixes{0, 0xc0, 0xe0, 0xf0};
-      static constexpr std::array<unsigned, 4> leading_masks{0x7f, 0x1f, 0x0f, 0x07};
-      static constexpr std::array<std::uint32_t, 4> minimum_codepoints{0, 0x80, 0x800, 0x10000};
-      static constexpr std::array<std::uint32_t, 4> maximum_codepoints{0x7f, 0x7ff, 0xffff, maximum_codepoint};
+      static constexpr ds::Array<unsigned, 4> leading_prefixes{0, 0xc0, 0xe0, 0xf0};
+      static constexpr ds::Array<unsigned, 4> leading_masks{0x7f, 0x1f, 0x0f, 0x07};
+      static constexpr ds::Array<std::uint32_t, 4> minimum_codepoints{0, 0x80, 0x800, 0x10000};
+      static constexpr ds::Array<std::uint32_t, 4> maximum_codepoints{0x7f, 0x7ff, 0xffff, maximum_codepoint};
 
-      std::array<char, 4> bytes{};
+      ds::Array<char, 4> bytes{};
       std::size_t length = 0;
 
       [[nodiscard]] static constexpr std::size_t sequenceLength(unsigned char leading) noexcept {

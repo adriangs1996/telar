@@ -64,7 +64,7 @@ namespace telar::gui::qt {
     fonts::Face primary_;
     fonts::Face text_;
     fonts::Face symbols_;
-    std::array<ds::Option<fonts::Face>, fonts::maximum_fallback_faces> fallbacks_;
+    ds::Array<ds::Option<fonts::Face>, fonts::maximum_fallback_faces> fallbacks_;
   };
 
 }

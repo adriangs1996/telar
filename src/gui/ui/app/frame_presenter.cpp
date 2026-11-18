@@ -63,8 +63,8 @@ namespace telar::gui::qt {
   }
 
   bool FramePresenter::defer() {
-    std::array<application::window::FramePacer::Pane, PaneLayout::maximum_panes> panes;
-    const auto count = collectPacingPanes(panes);
+    ds::Array<application::window::FramePacer::Pane, PaneLayout::maximum_panes> panes;
+    const auto count = collectPacingPanes(panes.viewMut());
 
     return frame_pacer_.getMut().defer(std::span{panes}.first(count));
   }
@@ -88,7 +88,7 @@ namespace telar::gui::qt {
         Qt::DirectConnection);
     connect(&window, &QQuickWindow::afterSynchronizing, this, [this, frames, generation] {
       if (generation == window_generation_) {
-        auto& frame = frames->prepared[frames->current];
+        auto& frame = frames->prepared.atMut(frames->current);
 
         prepareTerminalFrames(frame);
         recordPreparedFrame(frame);
@@ -156,7 +156,7 @@ namespace telar::gui::qt {
 
       const auto& prepared = terminal->preparedFrame();
       if (prepared.pane.attached && prepared.pane.pane_id == pane->id && prepared.pane.attachment_generation == pane->attachment_generation) {
-        frame.panes[frame.pane_count++] = {.frame = prepared, .terminal = terminal};
+        frame.panes.atMut(frame.pane_count++) = {.frame = prepared, .terminal = terminal};
       }
     });
   }
@@ -187,10 +187,10 @@ namespace telar::gui::qt {
       return;
     }
 
-    std::array<application::window::FramePacer::Pane, PaneLayout::maximum_panes> panes;
+    ds::Array<application::window::FramePacer::Pane, PaneLayout::maximum_panes> panes;
 
     for (std::size_t index = 0; index < frame.pane_count; ++index) {
-      panes[index] = frame.panes[index].frame.pane;
+      panes.atMut(index) = frame.panes[index].frame.pane;
     }
 
     frame_pacer_.getMut().record(std::span{panes}.first(frame.pane_count), frame.preparation_ns);
@@ -201,8 +201,8 @@ namespace telar::gui::qt {
       return;
     }
 
-    std::array<application::window::FramePacer::Pane, PaneLayout::maximum_panes> panes;
-    const auto count = collectPacingPanes(panes);
+    ds::Array<application::window::FramePacer::Pane, PaneLayout::maximum_panes> panes;
+    const auto count = collectPacingPanes(panes.viewMut());
 
     frame_pacer_.getMut().reconsider(std::span{panes}.first(count));
   }

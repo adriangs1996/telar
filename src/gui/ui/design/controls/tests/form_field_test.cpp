@@ -301,8 +301,8 @@ namespace {
 
       const auto high = QChar{telar::gui::Utf16Prefix::first_high_surrogate};
       const auto low = QChar{telar::gui::Utf16Prefix::first_low_surrogate};
-      const std::array samples{text, QStringLiteral("aé中🧵z"), QString{high}, QString{low}, QString{high} + low, QString{low} + high, QStringLiteral("a") + high + QStringLiteral("🧵z"), QStringLiteral("a") + low + QStringLiteral("🧵z")};
-      constexpr std::array<std::size_t, 10> capacities{0, 1, 2, 3, 4, 8, 127, 128, 256, 512};
+      const telar::ds::Array samples{text, QStringLiteral("aé中🧵z"), QString{high}, QString{low}, QString{high} + low, QString{low} + high, QStringLiteral("a") + high + QStringLiteral("🧵z"), QStringLiteral("a") + low + QStringLiteral("🧵z")};
+      constexpr telar::ds::Array<std::size_t, 10> capacities{0, 1, 2, 3, 4, 8, 127, 128, 256, 512};
 
       for (const auto& sample : samples) {
         const auto encoded = sample.toUtf8();
@@ -363,3 +363,4 @@ namespace {
 }
 
 #include "form_field_test.moc"
+#include "telar_base/ds/values.hpp"

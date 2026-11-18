@@ -88,7 +88,7 @@ namespace telar::gui::qt {
 
     struct PresentedFrame {
       std::uint64_t machine_view = 0;
-      std::array<PresentedPane, PaneLayout::maximum_panes> panes;
+      ds::Array<PresentedPane, PaneLayout::maximum_panes> panes;
       std::size_t pane_count = 0;
       std::uint64_t preparation_ns = 0;
       application::workbench::TabDropSurface tabs;
@@ -99,15 +99,15 @@ namespace telar::gui::qt {
     // thread presents, and posts the slot and the sequence it prepared there. A slot prepared
     // again before its frame was presented holds a newer frame, whose own post presents it.
     struct PresentedFrames {
-      std::array<PresentedFrame, 2> prepared;
-      std::array<std::uint64_t, 2> sequences{};
+      ds::Array<PresentedFrame, 2> prepared;
+      ds::Array<std::uint64_t, 2> sequences{};
       std::uint64_t sequence = 0;
       std::size_t current = 0;
 
       PresentedFrame& next() noexcept {
         current = ++sequence % prepared.size();
-        sequences[current] = sequence;
-        return prepared[current];
+        sequences.atMut(current) = sequence;
+        return prepared.atMut(current);
       }
     };
 

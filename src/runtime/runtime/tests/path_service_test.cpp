@@ -23,6 +23,7 @@ import telar.wire.editor;
 import telar.wire.vocabulary;
 import telar.runtime.paths.query_task;
 import telar.runtime.transport.connection;
+import telar.base.ds;
 
 namespace {
 
@@ -106,18 +107,18 @@ namespace {
   void testProgressiveQueries() {
     GatedPathMemory memory;
     PathService<GatedPathMemory, GatedPathIndex> paths{memory};
-    std::array<unsigned, 5> partial{};
-    std::array<unsigned, 5> final{};
-    std::array<std::uint64_t, 5> last_request{};
-    std::array<Byte, 8192> scratch;
+    ds::Array<unsigned, 5> partial{};
+    ds::Array<unsigned, 5> final{};
+    ds::Array<std::uint64_t, 5> last_request{};
+    ds::Array<Byte, 8192> scratch;
     const auto consume = [&](std::uint64_t client, ClientTag tag, std::span<const Byte> payload) {
       check(tag == ClientTag::find_paths);
-      DecodeStorage storage{scratch};
+      DecodeStorage storage{scratch.viewMut()};
       const auto reply = Codec::decode<PathResults>(payload, storage);
 
       check(client >= 1 && client <= 5);
-      ++(reply.complete ? final[client - 1] : partial[client - 1]);
-      last_request[client - 1] = reply.request_id;
+      ++(reply.complete ? final.atMut(client - 1) : partial.atMut(client - 1));
+      last_request.atMut(client - 1) = reply.request_id;
     };
 
     const auto collect = [&] {
@@ -179,9 +180,9 @@ namespace {
     PathService<GatedPathMemory, GatedPathIndex> paths{memory};
     unsigned replies = 0;
     bool final = false;
-    std::array<Byte, 8192> scratch;
+    ds::Array<Byte, 8192> scratch;
     const auto consume = [&](std::uint64_t client, ClientTag, std::span<const Byte> payload) {
-      DecodeStorage storage{scratch};
+      DecodeStorage storage{scratch.viewMut()};
       const auto reply = Codec::decode<PathResults>(payload, storage);
 
       ++replies;
@@ -285,7 +286,7 @@ namespace {
     check(storage.count == storage.maximum_entries);
 
     storage.reset();
-    std::array<char, 1024> long_path;
+    ds::Array<char, 1024> long_path;
 
     long_path.fill('x');
     for (std::size_t bytes = 0; bytes < storage.maximum_bytes; bytes += long_path.size()) {

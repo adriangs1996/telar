@@ -11,7 +11,7 @@ export {
 
     class SharedImageStorage {
     public:
-      using Name = std::array<char, 32>;
+      using Name = ds::Array<char, 32>;
 
       static ds::Option<SharedImageStorage> create(std::size_t length) noexcept;
 

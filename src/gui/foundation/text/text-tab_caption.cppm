@@ -3,6 +3,7 @@ export module telar.gui.foundation.text:tab_caption;
 import std;
 
 import telar.tbc;
+import telar.base.ds;
 
 // Interface: presentation/tab_caption.cppm
 export {
@@ -15,7 +16,7 @@ export {
       static constexpr std::string_view fallback_application = "shell";
       static constexpr std::string_view fullscreen_suffix = " ⛶";
       static constexpr std::string_view path_separators = "/\\";
-      using Buffer = std::array<char, capacity>;
+      using Buffer = ds::Array<char, capacity>;
 
       struct Content {
         std::string_view manual;

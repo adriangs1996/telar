@@ -22,6 +22,7 @@ static_assert(true);
 import telar.testing;
 import telar.gui.features.terminal.graphics;
 import telar.wire.graphics;
+import telar.base.ds;
 
 namespace {
 
@@ -33,7 +34,7 @@ namespace {
   constexpr std::uint32_t image_side = 2;
   constexpr std::size_t image_bytes = std::size_t{image_side} * image_side * 4;
   constexpr GraphicsHeader header{.pane_id = 1, .revision = 1};
-  constexpr std::array<Byte, image_bytes> pixels{};
+  constexpr ds::Array<Byte, image_bytes> pixels{};
 
   ImageDescription description(std::uint64_t generation) {
     return {.key = {.image_id = 1, .generation = generation}, .format = ImageFormat::rgba, .width = image_side, .height = image_side, .byte_len = image_bytes};
@@ -106,13 +107,13 @@ namespace {
     const auto previous = description(1);
 
     complete(store, previous);
-    std::array<ImageDescription, 4> invalid;
+    ds::Array<ImageDescription, 4> invalid;
 
     invalid.fill(description(2));
-    invalid[0].key.image_id = 0;
-    invalid[1].key.generation = 0;
-    invalid[2].width = 0;
-    invalid[3].byte_len = 0;
+    invalid.atMut(0).key.image_id = 0;
+    invalid.atMut(1).key.generation = 0;
+    invalid.atMut(2).width = 0;
+    invalid.atMut(3).byte_len = 0;
     for (const auto& image : invalid) {
       bool rejected = false;
 

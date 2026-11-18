@@ -201,7 +201,7 @@ namespace telar::gui::features::history {
     return result;
   }
 
-  auto HistoryInspectionFacts::lines() const noexcept -> std::array<HistoryInspectionLine, count> {
+  auto HistoryInspectionFacts::lines() const noexcept -> ds::Array<HistoryInspectionLine, count> {
     using Kind = HistoryInspectionLine::Kind;
 
     return {
@@ -305,7 +305,7 @@ namespace telar::gui::features::history {
     }
 
     if (entry.author == HistoryAuthor::agent) {
-      constexpr std::array origins{std::string_view{"pane"}, std::string_view{"hook"}, std::string_view{"plugin"}};
+      constexpr ds::Array origins{std::string_view{"pane"}, std::string_view{"hook"}, std::string_view{"plugin"}};
 
       by.append("  ·  ");
       by.append(origins.at(static_cast<std::size_t>(entry.origin)));
@@ -571,8 +571,8 @@ namespace telar::gui::features::history {
     return row;
   }
 
-  auto HistoryInspectionGeometry::buttons(std::span<const float> advances, ChromeMetrics chrome) const noexcept -> std::array<Rect, maximum_actions> {
-    std::array<Rect, maximum_actions> result{};
+  auto HistoryInspectionGeometry::buttons(std::span<const float> advances, ChromeMetrics chrome) const noexcept -> ds::Array<Rect, maximum_actions> {
+    ds::Array<Rect, maximum_actions> result{};
     auto x = actions.x;
 
     for (std::size_t index = 0; index < std::min(advances.size(), result.size()); ++index) {
@@ -581,7 +581,7 @@ namespace telar::gui::features::history {
         break;
       }
 
-      result[index] = {.x = x, .y = actions.y, .width = width, .height = actions.height};
+      result.atMut(index) = {.x = x, .y = actions.y, .width = width, .height = actions.height};
       x += width + chrome.px(button_gap);
     }
 

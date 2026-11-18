@@ -22,6 +22,7 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.foundation.drawing;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -41,14 +42,14 @@ namespace telar::gui::qt {
 
     transform.translate(static_cast<float>(-anchor.x()), static_cast<float>(-anchor.y()));
     root->setMatrix(transform);
-    std::array<RoundedRectanglePaint, Capacity> paints;
+    ds::Array<RoundedRectanglePaint, Capacity> paints;
     std::size_t count = 0;
     const auto append = [&](RoundedRectanglePaint paint) {
       if (count == paints.size()) {
         qFatal("Rounded paint capacity exceeded");
       }
 
-      paints[count++] = paint;
+      paints.atMut(count++) = paint;
     };
 
     draw(append, area);

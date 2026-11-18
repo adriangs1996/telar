@@ -169,19 +169,19 @@ namespace telar::runtime {
       throw Timeout{};
     }
 
-    std::array<pollfd, 3> descriptors{{{process_->output(), POLLIN, 0}, {process_->error(), POLLIN, 0}, {writing ? process_->input() : -1, POLLOUT, 0}}};
-    if (::poll(descriptors.data(), descriptors.size(), 20) < 0 && sys::lastError() != EINTR) {
+    ds::Array<pollfd, 3> descriptors{{{process_->output(), POLLIN, 0}, {process_->error(), POLLIN, 0}, {writing ? process_->input() : -1, POLLOUT, 0}}};
+    if (::poll(descriptors.dataMut(), descriptors.size(), 20) < 0 && sys::lastError() != EINTR) {
       throw SystemError{"Poll suggestion engine"};
     }
 
-    std::array<Byte, 16 * 1024> bytes;
+    ds::Array<Byte, 16 * 1024> bytes;
 
     for (unsigned index = 0; index < 2; ++index) {
       if (descriptors[index].fd < 0 || descriptors[index].revents == 0) {
         continue;
       }
 
-      const auto count = ::read(descriptors[index].fd, bytes.data(), bytes.size());
+      const auto count = ::read(descriptors[index].fd, bytes.dataMut(), bytes.size());
       if (count > 0) {
         if (index == 0) {
           input_.append(std::span{bytes}.first(static_cast<std::size_t>(count)));

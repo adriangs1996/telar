@@ -1,5 +1,6 @@
 #pragma once
 
+#include "telar_base/ds/values.hpp"
 #include <array>
 #include <cstring>
 #include <stdexcept>
@@ -44,13 +45,13 @@ namespace telar::runtime {
   private:
     void copy(std::string_view text) noexcept {
       if (!text.empty()) {
-        std::memmove(bytes_.data(), text.data(), text.size());
+        std::memmove(bytes_.dataMut(), text.data(), text.size());
       }
 
       length_ = text.size();
     }
 
-    std::array<char, Capacity> bytes_;
+    ds::Array<char, Capacity> bytes_;
     std::size_t length_ = 0;
   };
 

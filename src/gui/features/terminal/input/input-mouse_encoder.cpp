@@ -33,16 +33,16 @@ namespace telar::gui::features::terminal::input {
   }
 
   void MouseEncoder::append(std::string_view text) noexcept {
-    std::ranges::copy(text, buffer_.begin() + used_);
+    std::ranges::copy(text, buffer_.viewMut().begin() + used_);
     used_ += text.size();
   }
 
   void MouseEncoder::character(char value) noexcept {
-    buffer_[used_++] = value;
+    buffer_.atMut(used_++) = value;
   }
 
   void MouseEncoder::number(unsigned value) noexcept {
-    const auto result = std::to_chars(buffer_.data() + used_, buffer_.data() + buffer_.size(), value);
+    const auto result = std::to_chars(buffer_.dataMut() + used_, buffer_.dataMut() + buffer_.size(), value);
 
     used_ = static_cast<std::size_t>(result.ptr - buffer_.data());
   }

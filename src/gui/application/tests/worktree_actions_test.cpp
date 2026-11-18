@@ -24,6 +24,7 @@ import telar.gui.application;
 import telar.wire.layout;
 import telar.wire.runtime;
 import telar.wire.worktrees;
+import telar.base.ds;
 
 namespace {
 
@@ -47,8 +48,8 @@ namespace {
     openFirstPane(client, transport);
     check(!application::workbench::leaveWorktree(client), "a project without a worktree must stay selected");
     const auto workspace = client.activeTab()->location.workspace;
-    const std::array entries{WorkspaceListEntry{.workspace = project_id, .name = "Project", .path = "/project"}, WorkspaceListEntry{.workspace = workspace.id, .name = "Checkout", .path = "/project/checkout"}};
-    const std::array worktrees{WorktreeListEntry{.worktree = checkout_id, .source = project_id, .workspace = workspace.id, .path = "/project/checkout", .branch = "checkout"}};
+    const ds::Array entries{WorkspaceListEntry{.workspace = project_id, .name = "Project", .path = "/project"}, WorkspaceListEntry{.workspace = workspace.id, .name = "Checkout", .path = "/project/checkout"}};
+    const ds::Array worktrees{WorktreeListEntry{.worktree = checkout_id, .source = project_id, .workspace = workspace.id, .path = "/project/checkout", .branch = "checkout"}};
 
     deliver(client, WorkspaceList{.revision = 1, .entries = entries, .worktrees = worktrees});
     const auto opening_count = transport.count(ClientTag::open_pane);
@@ -73,7 +74,7 @@ namespace {
       TestSession client{memory, transport};
 
       openFirstPane(client, transport);
-      const std::array worktrees{
+      const ds::Array worktrees{
           gone_checkout,
           WorktreeListEntry{.worktree = 40, .source = project_id, .state = WorktreeState::active, .path = "/project/active", .branch = "active"},
           WorktreeListEntry{.worktree = 41, .source = project_id, .state = WorktreeState::integrated, .path = "/project/integrated", .branch = "integrated"},
@@ -106,15 +107,15 @@ namespace {
     TestSession client{memory, transport};
 
     openFirstPane(client, transport);
-    const std::array worktrees{gone_checkout};
+    const ds::Array worktrees{gone_checkout};
 
     deliver(client, WorkspaceList{.revision = 1, .worktrees = worktrees});
     constexpr auto capacity = decltype(client)::maximum_pending;
-    std::array<std::uint64_t, capacity> requests{};
+    ds::Array<std::uint64_t, capacity> requests{};
 
     for (std::size_t index = 0; index < capacity - 1; ++index) {
       check(application::workbench::forgetGoneWorktrees(client) == 1, "available correlations must admit cleanup");
-      requests[index] = transport.last<ForgetWorktree>().request_id;
+      requests.atMut(index) = transport.last<ForgetWorktree>().request_id;
     }
 
     transport.reject_forget_worktree = true;
@@ -128,11 +129,11 @@ namespace {
 
     check(rejected, "delivery rejection must remain observable to the caller");
     transport.reject_forget_worktree = false;
-    const std::array final_rows{gone_checkout, second_gone_checkout};
+    const ds::Array final_rows{gone_checkout, second_gone_checkout};
 
     deliver(client, WorkspaceList{.revision = 2, .worktrees = final_rows});
     check(application::workbench::forgetGoneWorktrees(client) == 1, "rejected delivery must release its slot and a partially admitted batch must stop at capacity");
-    requests.back() = transport.last<ForgetWorktree>().request_id;
+    requests.atMut(requests.size() - 1) = transport.last<ForgetWorktree>().request_id;
     check(application::workbench::forgetGoneWorktrees(client) == 0 && transport.count(ClientTag::forget_worktree) == capacity, "a full tracker must leave remaining cleanup for the next invocation");
     for (const auto request : requests) {
       check(deliver(client, RequestCompleted{.request_id = request}) == application::Change::none, "each admitted cleanup must retain an independently releasable correlation");

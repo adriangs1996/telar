@@ -18,8 +18,8 @@ export {
         workspace,
         pane,
       };
-      static constexpr std::array<const char*, 5> names{"sidebar", "topbar", "bottombar", "workspace", "pane"};
-      std::array<ds::Option<float>, names.size()> overrides{};
+      static constexpr ds::Array<const char*, 5> names{"sidebar", "topbar", "bottombar", "workspace", "pane"};
+      ds::Array<ds::Option<float>, names.size()> overrides{};
 
       [[nodiscard]] float resolve(Surface surface, float fallback) const noexcept;
 
@@ -90,11 +90,11 @@ export {
       punctuation,
     };
 
-    inline constexpr std::array theme_names{"shade", "vesper", "catppuccin", "tokyo_night", "pierre_dark", "pierre_dark_soft", "kanagawa", "kanagawa_dragon", "terminal", "cybervenom", "zenburn"};
-    inline constexpr std::array palette_names{"accent", "panel_bg", "surface0", "surface1", "surface_dim", "overlay0", "overlay1", "text", "subtext0", "mauve", "green", "yellow", "red", "blue", "teal", "peach"};
-    inline constexpr std::array syntax_names{"plain", "keyword", "string", "number", "comment", "constant", "builtin_constant", "builtin", "func", "type", "parameter", "property", "namespace", "operator", "punctuation"};
+    inline constexpr ds::Array theme_names{"shade", "vesper", "catppuccin", "tokyo_night", "pierre_dark", "pierre_dark_soft", "kanagawa", "kanagawa_dragon", "terminal", "cybervenom", "zenburn"};
+    inline constexpr ds::Array palette_names{"accent", "panel_bg", "surface0", "surface1", "surface_dim", "overlay0", "overlay1", "text", "subtext0", "mauve", "green", "yellow", "red", "blue", "teal", "peach"};
+    inline constexpr ds::Array syntax_names{"plain", "keyword", "string", "number", "comment", "constant", "builtin_constant", "builtin", "func", "type", "parameter", "property", "namespace", "operator", "punctuation"};
 
-    using ThemeRgb = std::array<Byte, 3>;
+    using ThemeRgb = ds::Array<Byte, 3>;
 
     struct TerminalThemeValues {
       ThemeRgb foreground{};
@@ -102,7 +102,7 @@ export {
       ds::Option<ThemeRgb> cursor_color;
       ds::Option<ThemeRgb> cursor_text_color;
       static constexpr std::size_t palette_size = 16;
-      std::array<ThemeRgb, palette_size> palette{};
+      ds::Array<ThemeRgb, palette_size> palette{};
 
       bool operator==(const TerminalThemeValues&) const = default;
     };
@@ -117,9 +117,9 @@ export {
 
     struct ThemeValues {
       ThemeName base = ThemeName::terminal;
-      std::array<CellColor, palette_names.size()> palette{};
+      ds::Array<CellColor, palette_names.size()> palette{};
       TerminalThemeValues terminal;
-      std::array<ds::Option<SyntaxStyleValues>, syntax_names.size()> syntax_styles{};
+      ds::Array<ds::Option<SyntaxStyleValues>, syntax_names.size()> syntax_styles{};
 
       [[nodiscard]] CellColor color(PaletteRole role) const noexcept;
 
@@ -175,7 +175,7 @@ export {
       static constexpr Color warning = Color::rgb(0xf0dfaf);
       static constexpr Color failure = Color::rgb(0xe37170);
       static constexpr std::size_t palette_size = 16;
-      static constexpr std::array<Color, palette_size> palette{
+      static constexpr ds::Array<Color, palette_size> palette{
           Color::rgb(0x4f4f4f),
           Color::rgb(0xcc9393),
           Color::rgb(0x8fb28f),
@@ -210,10 +210,10 @@ export {
       Color success = DefaultTheme::success;
       Color warning = DefaultTheme::warning;
       Color failure = DefaultTheme::failure;
-      std::array<Color, DefaultTheme::palette_size> palette = DefaultTheme::palette;
-      std::array<CellColor, palette_names.size()> chrome{};
+      ds::Array<Color, DefaultTheme::palette_size> palette = DefaultTheme::palette;
+      ds::Array<CellColor, palette_names.size()> chrome{};
       // Syntax colors for text the GUI highlights itself, such as the prompt editor.
-      std::array<CellColor, syntax_names.size()> syntax{};
+      ds::Array<CellColor, syntax_names.size()> syntax{};
 
       [[nodiscard]] Color chromeColor(PaletteRole role) const noexcept;
 

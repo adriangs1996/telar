@@ -129,14 +129,14 @@ export {
         SensitiveText<253> host;
         Verdict verdict = Verdict::pending;
         Vector<Byte, Secure> bytes;
-        std::array<Route, Limits::subscribers> chain;
+        ds::Array<Route, Limits::subscribers> chain;
         std::size_t routes;
         std::size_t step = 0;
         bool replaced = false;
         bool delivered = false;
       };
 
-      using Registrations = std::array<ds::Option<Registration>, Limits::subscribers>;
+      using Registrations = ds::Array<ds::Option<Registration>, Limits::subscribers>;
 
     public:
       explicit Interception(ConcurrentMemory& memory, CompletionSignal* completion = nullptr, CompletionSignal* requests = nullptr);
@@ -168,7 +168,7 @@ export {
       TBC_GENERIC void deliver(Owner owner, Consumer&& consumer) noexcept {
         std::scoped_lock lock{mutex_};
 
-        for (auto& slot : pending_) {
+        for (auto& slot : pending_.viewMut()) {
           if (!slot || slot->verdict != Verdict::pending || slot->chain[slot->step].owner != owner || slot->delivered) {
             continue;
           }
@@ -223,7 +223,7 @@ export {
       Secure memory_;
       std::mutex mutex_;
       Registrations registrations_;
-      std::array<ds::Option<Pending>, 64> pending_;
+      ds::Array<ds::Option<Pending>, 64> pending_;
       CompletionSignal wake_;
       CompletionSignal requests_;
       CompletionSignal& completion_;
@@ -390,7 +390,7 @@ export {
 
         const auto now = Clock::now();
 
-        for (auto& slot : sessions_) {
+        for (auto& slot : sessions_.viewMut()) {
           if (!slot || !slot->active || !slot->owner.authorized() || !selected(slot->selection, event.kind)) {
             continue;
           }
@@ -436,7 +436,7 @@ export {
           return;
         }
 
-        for (auto& session : sessions_) {
+        for (auto& session : sessions_.viewMut()) {
           if (session) {
             session.getMut().expire(Clock::now());
           }
@@ -446,7 +446,7 @@ export {
       inline void revoke(const recording::Owner& owner) noexcept {
         const std::lock_guard lock{mutex_};
 
-        for (auto& session : sessions_) {
+        for (auto& session : sessions_.viewMut()) {
           if (session && owner.matches(session->owner)) {
             session.getMut().active = false;
           }
@@ -461,8 +461,8 @@ export {
           throw EncodingError{"Recording output is too small"};
         }
 
-        std::array<Byte, 8192> validation;
-        plugins::FrameWriter validated{validation};
+        ds::Array<Byte, 8192> validation;
+        plugins::FrameWriter validated{validation.viewMut()};
 
         recording::Protocol::write(validated, request);
         ProxyHostPolicy scope{memory_};
@@ -482,14 +482,14 @@ export {
           plugins::FrameWriter rows{output.subspan(recording::Protocol::page_header_bytes)};
           recording::Page page{.format = recording::Format::list};
 
-          for (auto& slot : sessions_) {
+          for (auto& slot : sessions_.viewMut()) {
             if (!slot || !owner.canRead(slot->owner)) {
               continue;
             }
 
             slot.getMut().expire(Clock::now());
-            std::array<Byte, recording::Protocol::page_header_bytes> bytes;
-            plugins::FrameWriter child{bytes};
+            ds::Array<Byte, recording::Protocol::page_header_bytes> bytes;
+            plugins::FrameWriter child{bytes.viewMut()};
 
             recording::Protocol::header(child, describe(slot.getMut(), contention_drops_.load(std::memory_order_relaxed)));
             rows.bytes(child.finish());
@@ -517,7 +517,7 @@ export {
             throw EncodingError{"Recording runtime budget exhausted"};
           }
 
-          for (auto& slot : sessions_) {
+          for (auto& slot : sessions_.viewMut()) {
             if (slot) {
               continue;
             }
@@ -537,7 +537,7 @@ export {
 
           refreshInterest();
         } else {
-          for (auto& slot : sessions_) {
+          for (auto& slot : sessions_.viewMut()) {
             if (slot && slot->id == request.id && owner.canRead(slot->owner)) {
               session = &slot.getMut();
               break;
@@ -610,7 +610,7 @@ export {
         if (request.operation == recording::Operation::erase) {
           page.active = false;
           page.bytes = 0;
-          for (auto& slot : sessions_) {
+          for (auto& slot : sessions_.viewMut()) {
             if (slot && &*slot == session) {
               slot.reset();
               break;
@@ -680,7 +680,7 @@ export {
       }
 
       tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
-      tbc::view<std::array<ds::Option<Session>, recording::Limits::sessions>, tbc::lt::a> sessions_;
+      tbc::view<ds::Array<ds::Option<Session>, recording::Limits::sessions>, tbc::lt::a> sessions_;
       std::uint64_t next_id_;
       std::mutex mutex_;
       std::atomic<Byte> interest_{0};
@@ -704,7 +704,7 @@ export {
 
       struct Delivery {
         std::shared_ptr<Frame> frame;
-        std::array<Byte, Protocol::prefix_bytes> prefix;
+        ds::Array<Byte, Protocol::prefix_bytes> prefix;
         std::size_t offset = 0;
       };
 
@@ -717,7 +717,7 @@ export {
         ds::Option<Role> role;
         Selection selection = Selection::both;
         ds::Option<Filter> filter;
-        std::array<Delivery, Limits::pending_frames> queue;
+        ds::Array<Delivery, Limits::pending_frames> queue;
         std::size_t head = 0;
         std::size_t count = 0;
         std::size_t expected = Protocol::greeting_bytes;
@@ -850,7 +850,7 @@ export {
       LocalListener listener_;
       CompletionSignal wake_;
       std::atomic<bool> stopping_{false};
-      std::array<ds::Option<Peer>, maximum_peers> peers_{};
+      ds::Array<ds::Option<Peer>, maximum_peers> peers_{};
       std::jthread thread_;
       std::chrono::steady_clock::time_point heartbeat_ = std::chrono::steady_clock::now();
       bool producer_ = false;
@@ -953,7 +953,7 @@ export {
       inline tbc::view<std::span<const Byte>, tbc::lt::a> handle(const Request& request, tbc::view<std::span<Byte>, tbc::lt::a> output, const std::atomic<bool>& cancelled, const plugins::ServiceSpec* package = nullptr) {
         Reply reply;
         ds::Option<SensitiveAllocation<ConcurrentMemory>> recording_output;
-        std::array<char, 1025> error{};
+        ds::Array<char, 1025> error{};
 
         try {
           if (package && !authorized(*package, request)) {
@@ -1038,7 +1038,7 @@ export {
           reply.result = Result::failed;
           const auto message = std::string_view{failure.what()}.substr(0, error.size() - 1);
 
-          std::ranges::copy(message, error.begin());
+          std::ranges::copy(message, error.viewMut().begin());
           reply.message = {error.data(), message.size()};
         }
 
@@ -1112,28 +1112,28 @@ export {
       }
 
       inline void authorization(const Request& request, tbc::view<Reply&, tbc::lt::a> reply, tbc::view<std::string_view, tbc::lt::a> action) const {
-        reply.authorization[0] = "/usr/bin/sudo";
-        reply.authorization[1] = "--";
-        reply.authorization[2] = configuration_.executable;
-        reply.authorization[3] = "traffic";
-        reply.authorization[4] = action;
-        reply.authorization[5] = "--socket";
-        reply.authorization[6] = configuration_.endpoint;
+        reply.authorization.atMut(0) = "/usr/bin/sudo";
+        reply.authorization.atMut(1) = "--";
+        reply.authorization.atMut(2) = configuration_.executable;
+        reply.authorization.atMut(3) = "traffic";
+        reply.authorization.atMut(4) = action;
+        reply.authorization.atMut(5) = "--socket";
+        reply.authorization.atMut(6) = configuration_.endpoint;
         reply.argument_count = 7;
         if (action == "redirect") {
           for (std::size_t index = 0; index < selection_->targets().size(); ++index) {
-            reply.authorization[reply.argument_count++] = "--target";
-            reply.authorization[reply.argument_count++] = selection_->argument(index);
+            reply.authorization.atMut(reply.argument_count++) = "--target";
+            reply.authorization.atMut(reply.argument_count++) = selection_->argument(index);
           }
 
           for (std::size_t index = 0; index < request.process_count; ++index) {
-            reply.authorization[reply.argument_count++] = "--process";
-            reply.authorization[reply.argument_count++] = process_arguments_[index].view();
+            reply.authorization.atMut(reply.argument_count++) = "--process";
+            reply.authorization.atMut(reply.argument_count++) = process_arguments_[index].view();
           }
 
           if (request.direction != redirect::Direction::outbound) {
-            reply.authorization[reply.argument_count++] = "--direction";
-            reply.authorization[reply.argument_count++] = redirect::directionName(request.direction);
+            reply.authorization.atMut(reply.argument_count++) = "--direction";
+            reply.authorization.atMut(reply.argument_count++) = redirect::directionName(request.direction);
           }
         }
       }
@@ -1164,7 +1164,7 @@ export {
               throw std::invalid_argument{"Selected process must be running under the runtime account"};
             }
 
-            process_arguments_[index] = redirect::ProcessToken::format(*process);
+            process_arguments_.atMut(index) = redirect::ProcessToken::format(*process);
           }
 
           selection_.emplace(std::span{request.targets}.first(request.target_count), cancelled, Clock::now() + std::chrono::seconds{3});
@@ -1182,12 +1182,12 @@ export {
 
         (capture ? capture_cancelled_ : redirect_cancelled_) = false;
         authorization(request, reply, capture ? "capture" : "redirect");
-        std::array<std::string_view, Limits::arguments> arguments;
+        ds::Array<std::string_view, Limits::arguments> arguments;
 
-        arguments[0] = "/usr/bin/sudo";
-        arguments[1] = "-n";
-        arguments[2] = "-l";
-        std::ranges::copy(std::span{reply.authorization}.subspan(1, reply.argument_count - 1), arguments.begin() + 3);
+        arguments.atMut(0) = "/usr/bin/sudo";
+        arguments.atMut(1) = "-n";
+        arguments.atMut(2) = "-l";
+        std::ranges::copy(std::span{reply.authorization}.subspan(1, reply.argument_count - 1), arguments.viewMut().begin() + 3);
         const auto count = reply.argument_count + 2;
         Command preflight{memory_, Launch{.arguments = std::span{arguments}.first(count)}, CommandPurpose::administration};
         CommandOutput result{memory_, Limits::reply_bytes, &cancelled};
@@ -1197,8 +1197,8 @@ export {
           return;
         }
 
-        arguments[2] = "--";
-        std::ranges::copy(std::span{reply.authorization}.subspan(2, reply.argument_count - 2), arguments.begin() + 3);
+        arguments.atMut(2) = "--";
+        std::ranges::copy(std::span{reply.authorization}.subspan(2, reply.argument_count - 2), arguments.viewMut().begin() + 3);
         Command command{memory_, Launch{.arguments = std::span{arguments}.first(count - 1)}, CommandPurpose::administration};
         const auto specification = command.specification({});
         SpawnOptions spawn{0};
@@ -1280,7 +1280,7 @@ export {
       static_assert(Limits::processes == redirect::SocketOwners::maximum_processes);
       static_assert(Limits::targets == redirect::Target::maximum_targets);
       tbc::view<ds::Option<redirect::Selection<>>, tbc::lt::a> selection_;
-      tbc::view<std::array<FixedText<redirect::ProcessToken::maximum_bytes>, Limits::processes>, tbc::lt::a> process_arguments_;
+      tbc::view<ds::Array<FixedText<redirect::ProcessToken::maximum_bytes>, Limits::processes>, tbc::lt::a> process_arguments_;
       pid_t capture_child_ = -1;
       pid_t redirect_child_ = -1;
       bool capture_cancelled_ = false;
@@ -1347,8 +1347,8 @@ export {
           throw SystemError{"Package control capability denied", EACCES};
         }
 
-        std::array<int, 2> descriptors;
-        if (::socketpair(AF_UNIX, SOCK_STREAM, 0, descriptors.data()) != 0) {
+        ds::Array<int, 2> descriptors;
+        if (::socketpair(AF_UNIX, SOCK_STREAM, 0, descriptors.dataMut()) != 0) {
           throw SystemError{"Create package control channel"};
         }
 
@@ -1376,17 +1376,17 @@ export {
       }
 
       inline void step() {
-        std::array<pollfd, Limits::peers + 2> descriptors{};
+        ds::Array<pollfd, Limits::peers + 2> descriptors{};
 
-        descriptors[0] = {.fd = listener_.descriptor(), .events = POLLIN, .revents = 0};
-        descriptors[1] = {.fd = wake_.descriptor(), .events = POLLIN, .revents = 0};
+        descriptors.atMut(0) = {.fd = listener_.descriptor(), .events = POLLIN, .revents = 0};
+        descriptors.atMut(1) = {.fd = wake_.descriptor(), .events = POLLIN, .revents = 0};
         for (std::size_t index = 0; index < peers_.size(); ++index) {
           const auto& peer = peers_[index];
 
-          descriptors[index + 2] = {.fd = peer ? peer->socket.get() : -1, .events = static_cast<short>(peer && peer->reply_bytes ? POLLOUT : POLLIN)};
+          descriptors.atMut(index + 2) = {.fd = peer ? peer->socket.get() : -1, .events = static_cast<short>(peer && peer->reply_bytes ? POLLOUT : POLLIN)};
         }
 
-        if (::poll(descriptors.data(), descriptors.size(), 100) < 0 && sys::lastError() != EINTR) {
+        if (::poll(descriptors.dataMut(), descriptors.size(), 100) < 0 && sys::lastError() != EINTR) {
           throw SystemError{"Poll network control"};
         }
 
@@ -1399,7 +1399,7 @@ export {
         if (descriptors[1].revents & POLLIN) {
           wake_.drain();
           while (auto attachment = attachments_.tryReceive()) {
-            for (auto& peer : peers_) {
+            for (auto& peer : peers_.viewMut()) {
               if (!peer) {
                 peer.emplace(memory_, std::move(attachment.getMut().socket));
                 peer.getMut().package = std::move(attachment.getMut().package);
@@ -1410,7 +1410,7 @@ export {
         }
 
         for (std::size_t index = 0; index < peers_.size(); ++index) {
-          auto& peer = peers_[index];
+          auto& peer = peers_.atMut(index);
           if (!peer) {
             continue;
           }
@@ -1437,7 +1437,7 @@ export {
             return;
           }
 
-          for (auto& peer : peers_) {
+          for (auto& peer : peers_.viewMut()) {
             if (!peer) {
               peer.emplace(memory_, std::move(socket));
               break;
@@ -1513,7 +1513,7 @@ export {
       LocalListener listener_;
       Handler& handler_;
       CompletionSignal wake_;
-      std::array<ds::Option<Peer>, Limits::peers> peers_;
+      ds::Array<ds::Option<Peer>, Limits::peers> peers_;
       std::atomic<bool> stopping_{false};
       DropChannel<Attachment, Limits::peers, ChannelPolicy::keep_oldest> attachments_;
       std::thread worker_;

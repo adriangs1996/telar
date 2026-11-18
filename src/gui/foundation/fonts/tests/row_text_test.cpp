@@ -39,12 +39,12 @@ namespace {
   constexpr std::uint16_t pixel_height = 15;
   constexpr std::uint16_t cell_width = 9;
 
-  std::array<CellValue, columns> sourceCells() {
+  telar::ds::Array<CellValue, columns> sourceCells() {
     constexpr std::string_view programming = "=-><=!";
-    std::array<CellValue, columns> cells;
+    telar::ds::Array<CellValue, columns> cells;
 
     for (std::size_t index = 0; index < cells.size(); ++index) {
-      cells[index].text[0] = static_cast<unsigned char>(programming[index % programming.size()]);
+      cells.atMut(index).text.atMut(0) = static_cast<unsigned char>(programming[index % programming.size()]);
     }
 
     return cells;
@@ -83,10 +83,10 @@ namespace {
     telar::MemoryAdapter adapter{system};
     telar::ConcurrentMemory& memory = adapter;
     RowTextLayout layout{memory};
-    std::array<CellValue, 2> cells;
+    telar::ds::Array<CellValue, 2> cells;
 
-    cells[0].text[0] = 'W';
-    cells[1].text[0] = 'W';
+    cells.atMut(0).text.atMut(0) = 'W';
+    cells.atMut(1).text.atMut(0) = 'W';
     constexpr std::uint16_t larger_height = 39;
     constexpr std::uint16_t wider_cell = 33;
 
@@ -110,14 +110,14 @@ namespace {
     telar::MemoryAdapter adapter{system};
     telar::ConcurrentMemory& memory = adapter;
     RowTextLayout layout{memory};
-    constexpr std::array<std::string_view, 9> texts{"á", "ñ", "ß", "λ", "ж", "e\u0301", "→", "漢", "\U0001F600"};
-    std::array<CellValue, texts.size() * 2> cells;
+    constexpr telar::ds::Array<std::string_view, 9> texts{"á", "ñ", "ß", "λ", "ж", "e\u0301", "→", "漢", "\U0001F600"};
+    telar::ds::Array<CellValue, texts.size() * 2> cells;
 
     for (std::size_t column = 0; column < cells.size(); ++column) {
       const auto text = texts[column % texts.size()];
 
-      std::ranges::copy(text, cells[column].text.begin());
-      cells[column].length = static_cast<telar::Byte>(text.size());
+      std::ranges::copy(text, cells.atMut(column).text.viewMut().begin());
+      cells.atMut(column).length = static_cast<telar::Byte>(text.size());
     }
 
     const RowTextRequest request{.pixel_height = pixel_height, .cell_width = cell_width};

@@ -2,6 +2,7 @@ module telar.runtime.redirect.ingress;
 
 import telar.native.pcap;
 import telar.sys.socket;
+import telar.base.ds;
 
 namespace telar::runtime::redirect {
 
@@ -32,9 +33,9 @@ namespace telar::runtime::redirect {
       throw std::invalid_argument{"Redirect target must be a numeric IP address"};
     }
 
-    std::array<char, INET6_ADDRSTRLEN> terminated{};
+    ds::Array<char, INET6_ADDRSTRLEN> terminated{};
 
-    std::ranges::copy(host, terminated.begin());
+    std::ranges::copy(host, terminated.viewMut().begin());
     Target result;
     in_addr v4{};
     in6_addr v6{};
@@ -46,14 +47,14 @@ namespace telar::runtime::redirect {
       }
 
       result.endpoint = NetworkAddress::ipv4(v4);
-      ::inet_ntop(AF_INET, &v4, terminated.data(), terminated.size());
+      ::inet_ntop(AF_INET, &v4, terminated.dataMut(), terminated.size());
     } else if (::inet_pton(AF_INET6, terminated.data(), &v6) == 1) {
       if (IN6_IS_ADDR_UNSPECIFIED(&v6) || IN6_IS_ADDR_MULTICAST(&v6) || IN6_IS_ADDR_LINKLOCAL(&v6) || IN6_IS_ADDR_V4MAPPED(&v6)) {
         throw std::invalid_argument{"Redirect IPv6 target must be unicast without a scope"};
       }
 
       result.endpoint = NetworkAddress::ipv6(v6);
-      ::inet_ntop(AF_INET6, &v6, terminated.data(), terminated.size());
+      ::inet_ntop(AF_INET6, &v6, terminated.dataMut(), terminated.size());
     } else {
       throw std::invalid_argument{"Redirect target must be a numeric IP address"};
     }
@@ -66,9 +67,9 @@ namespace telar::runtime::redirect {
 
   Discovery::Discovery()
       : injection_(nullptr, &pcap_close) {
-    std::array<char, PCAP_ERRBUF_SIZE> error{};
+    ds::Array<char, PCAP_ERRBUF_SIZE> error{};
 
-    injection_.reset(pcap_open_live("lo0", 64, 0, 1, error.data()));
+    injection_.reset(pcap_open_live("lo0", 64, 0, 1, error.dataMut()));
     if (!injection_) {
       throw std::runtime_error{error.data()};
     }
@@ -142,22 +143,22 @@ namespace telar::runtime::redirect {
   }
 
   void Protocol::send(int channel, const Connection& connection) {
-    std::array<Byte, frame_bytes> output;
-    const auto frame = encode(output, Kind::connection, connection.target);
+    ds::Array<Byte, frame_bytes> output;
+    const auto frame = encode(output.viewMut(), Kind::connection, connection.target);
     iovec vector{.iov_base = const_cast<Byte*>(frame.data()), .iov_len = frame.size()};
-    alignas(cmsghdr) std::array<Byte, CMSG_SPACE(descriptor_count * sizeof(int))> control{};
+    alignas(cmsghdr) ds::Array<Byte, CMSG_SPACE(descriptor_count * sizeof(int))> control{};
     msghdr message{};
 
     message.msg_iov = &vector;
     message.msg_iovlen = 1;
-    message.msg_control = control.data();
+    message.msg_control = control.dataMut();
     message.msg_controllen = control.size();
     auto* header = CMSG_FIRSTHDR(&message);
 
     header->cmsg_level = SOL_SOCKET;
     header->cmsg_type = SCM_RIGHTS;
     header->cmsg_len = CMSG_LEN(descriptor_count * sizeof(int));
-    const std::array descriptors{connection.child.get(), connection.origin.get()};
+    const ds::Array descriptors{connection.child.get(), connection.origin.get()};
 
     std::memcpy(CMSG_DATA(header), descriptors.data(), sizeof(descriptors));
     ssize_t written;
@@ -189,13 +190,13 @@ namespace telar::runtime::redirect {
   }
 
   bool Incoming::receive(int channel) {
-    iovec vector{.iov_base = bytes_.data() + size_, .iov_len = bytes_.size() - size_};
-    alignas(cmsghdr) std::array<Byte, CMSG_SPACE(8 * sizeof(int))> control{};
+    iovec vector{.iov_base = bytes_.dataMut() + size_, .iov_len = bytes_.size() - size_};
+    alignas(cmsghdr) ds::Array<Byte, CMSG_SPACE(8 * sizeof(int))> control{};
     msghdr message{};
 
     message.msg_iov = &vector;
     message.msg_iovlen = 1;
-    message.msg_control = control.data();
+    message.msg_control = control.dataMut();
     message.msg_controllen = control.size();
     const auto count = ::recvmsg(channel, &message, 0);
     if (count < 0) {
@@ -225,7 +226,7 @@ namespace telar::runtime::redirect {
         if (received_ == sockets_.size()) {
           invalid = true;
         } else {
-          sockets_[received_++] = std::move(received);
+          sockets_.atMut(received_++) = std::move(received);
         }
       }
     }
@@ -304,8 +305,8 @@ namespace telar::runtime::redirect {
       throw EncodingError{"Invalid redirected host"};
     }
 
-    std::array<char, Protocol::frame_bytes> address{};
-    const auto count = std::snprintf(address.data(), address.size(), host.contains(':') ? "[%.*s]:%u" : "%.*s:%u", static_cast<int>(host.size()), host.data(), port);
+    ds::Array<char, Protocol::frame_bytes> address{};
+    const auto count = std::snprintf(address.dataMut(), address.size(), host.contains(':') ? "[%.*s]:%u" : "%.*s:%u", static_cast<int>(host.size()), host.data(), port);
     if (count < 0 || static_cast<std::size_t>(count) >= address.size()) {
       throw EncodingError{"Invalid redirect destination"};
     }
@@ -337,7 +338,7 @@ namespace telar::runtime::redirect {
       throw EncodingError{"Redirected origin does not match its original destination"};
     }
 
-    return {.child = std::move(sockets_[0]), .origin = std::move(sockets_[1]), .target = target};
+    return {.child = std::move(sockets_.atMut(0)), .origin = std::move(sockets_.atMut(1)), .target = target};
   }
 
   bool PrivilegedPeer::allows(uid_t uid) noexcept {

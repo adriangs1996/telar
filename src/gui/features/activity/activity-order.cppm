@@ -40,7 +40,7 @@ export {
       using Priority = std::tuple<Attention, std::uint32_t, std::uint64_t, std::uint64_t>;
 
       struct Plan {
-        std::array<Entry, maximum_agents> entries{};
+        ds::Array<Entry, maximum_agents> entries{};
         std::size_t count = 0;
 
         [[nodiscard]] std::span<const Entry> view() const noexcept;
@@ -114,7 +114,7 @@ export {
       };
 
       struct Plan {
-        std::array<Entry, maximum_entries> entries;
+        ds::Array<Entry, maximum_entries> entries;
         std::size_t count = 0;
 
         [[nodiscard]] std::span<const Entry> view() const noexcept;
@@ -146,9 +146,9 @@ export {
       void breakCycles() noexcept;
 
       struct Children {
-        std::array<ds::Option<std::size_t>, maximum_entries> first;
-        std::array<ds::Option<std::size_t>, maximum_entries> last;
-        std::array<ds::Option<std::size_t>, maximum_entries> next;
+        ds::Array<ds::Option<std::size_t>, maximum_entries> first;
+        ds::Array<ds::Option<std::size_t>, maximum_entries> last;
+        ds::Array<ds::Option<std::size_t>, maximum_entries> next;
       };
 
       [[nodiscard]] Children linkChildren() noexcept;
@@ -157,7 +157,7 @@ export {
 
       std::span<const Source> sources_;
       Plan& output_;
-      std::array<Entry, maximum_entries> nodes_;
+      ds::Array<Entry, maximum_entries> nodes_;
       std::size_t count_ = 0;
     };
 

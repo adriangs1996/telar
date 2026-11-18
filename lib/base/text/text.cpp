@@ -106,17 +106,17 @@ namespace telar::runtime {
     constexpr std::string_view decimal_lower = "999999999999999999999999999999999951851751390319103673600551435376817036547458794615295119001530110836029052734375";
     constexpr std::string_view decimal_upper = "100000000000000000000000000000000009629649721936179265279889712924636592690508241076940976199693977832794189453125";
     constexpr auto binary_lower = [] {
-      std::array<char, 114> digits;
+      ds::Array<char, 114> digits;
 
       digits.fill('1');
       return digits;
     }();
     constexpr auto binary_upper = [] {
-      std::array<char, 114> digits;
+      ds::Array<char, 114> digits;
 
       digits.fill('0');
-      digits.front() = '1';
-      digits.back() = '1';
+      digits.atMut(0) = '1';
+      digits.atMut(digits.size() - 1) = '1';
       return digits;
     }();
 
@@ -357,9 +357,9 @@ namespace telar::runtime {
       return {};
     }
 
-    std::array<char, INET6_ADDRSTRLEN> text{};
+    ds::Array<char, INET6_ADDRSTRLEN> text{};
 
-    std::ranges::copy(host, text.begin());
+    std::ranges::copy(host, text.viewMut().begin());
     in6_addr address{};
 
     return ::inet_pton(AF_INET6, text.data(), &address) == 1 ? ds::Option{address} : ds::none;

@@ -21,6 +21,7 @@ static_assert(true);
 
 import telar.client;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::test {
 
@@ -74,15 +75,15 @@ namespace telar::gui::test {
         return bytes.front() == static_cast<Byte>(MessageSchema<Message>::tag);
       });
 
-      DecodeStorage storage{decode_};
+      DecodeStorage storage{decode_.viewMut()};
 
       return Codec::decode<Message>(*found, storage);
     }
 
   private:
     void write(std::span<const Byte> payload) {
-      std::array<Byte, frame_prefix_size> prefix{};
-      std::span<Byte> output{prefix};
+      ds::Array<Byte, frame_prefix_size> prefix{};
+      std::span<Byte> output{prefix.viewMut()};
 
       u32::encode(static_cast<std::uint32_t>(payload.size()), output);
       const auto prefix_text = textView(prefix);
@@ -98,7 +99,7 @@ namespace telar::gui::test {
     application::FrameStream<telar::ConcurrentMemory> stream_;
     std::vector<std::vector<Byte>> received_;
     static constexpr std::size_t decode_capacity = 4096;
-    mutable std::array<Byte, decode_capacity> decode_{};
+    mutable ds::Array<Byte, decode_capacity> decode_{};
     bool greeted_ = false;
   };
 

@@ -52,8 +52,8 @@ namespace telar::runtime::cli {
 
     const auto path = std::string{directory.valueOr("/usr/local/bin")} + "/telar";
     const ExecutablePath target;
-    std::array<char, PATH_MAX> buffer;
-    const auto count = ::readlink(path.c_str(), buffer.data(), buffer.size());
+    ds::Array<char, PATH_MAX> buffer;
+    const auto count = ::readlink(path.c_str(), buffer.dataMut(), buffer.size());
     if (count < 0 && sys::lastError() != ENOENT) {
       if (sys::lastError() == EINVAL && action != "status") {
         std::fprintf(stderr, "telar cli: %s exists and is not a symlink; refusing to replace it\n", path.c_str());
@@ -292,7 +292,7 @@ namespace telar::runtime::cli {
         usage("TooManyPluginCapabilities");
       }
 
-      options.capabilities[options.capability_count++] = plugins::Capabilities::parseName(arguments[index + 1]);
+      options.capabilities.atMut(options.capability_count++) = plugins::Capabilities::parseName(arguments[index + 1]);
     }
 
     if (options.action != PluginAction::trust && options.capability_count != 0) {

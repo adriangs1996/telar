@@ -178,7 +178,7 @@ namespace telar::gui::features::terminal::graphics {
     constexpr unsigned continuation_shift = 6;
     constexpr unsigned continuation_prefix_mask = 0xc0;
     constexpr unsigned continuation_prefix = 0x80;
-    constexpr std::array<unsigned, 4> leading_masks{0x7f, 0x1f, 0x0f, 0x07};
+    constexpr ds::Array<unsigned, 4> leading_masks{0x7f, 0x1f, 0x0f, 0x07};
     const auto first_mask = leading_masks[length - 1];
     auto codepoint = first & first_mask;
 

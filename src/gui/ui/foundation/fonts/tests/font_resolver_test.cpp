@@ -122,9 +122,9 @@ namespace {
     Q_SLOT static void preservesFractionalScaleAndLineSpacing() {
       SystemAllocator memory;
       FontConfiguration configuration;
-      constexpr std::array sizes{6.0F, 7.5F, 15.0F, 18.5F, 48.0F, 96.0F};
-      constexpr std::array scales{0.75, 1.0, 1.25, 1.5, 2.0, 4.0, 8.0};
-      constexpr std::array line_heights{0.75F, 1.0F, 1.2F, 1.5F, 3.0F};
+      constexpr telar::ds::Array sizes{6.0F, 7.5F, 15.0F, 18.5F, 48.0F, 96.0F};
+      constexpr telar::ds::Array scales{0.75, 1.0, 1.25, 1.5, 2.0, 4.0, 8.0};
+      constexpr telar::ds::Array line_heights{0.75F, 1.0F, 1.2F, 1.5F, 3.0F};
       const FontSource source{memory, configuration};
       fonts::Face face{source.bytes(), source.match()};
 
@@ -238,8 +238,8 @@ namespace {
         return coverage;
       };
 
-      constexpr std::array<std::uint16_t, 4> heights{13, 26, 39, 96};
-      constexpr std::array styles{fonts::GlyphStyle{}, fonts::GlyphStyle{.bold = true}, fonts::GlyphStyle{.italic = true}, fonts::GlyphStyle{.bold = true, .italic = true}};
+      constexpr telar::ds::Array<std::uint16_t, 4> heights{13, 26, 39, 96};
+      constexpr telar::ds::Array styles{fonts::GlyphStyle{}, fonts::GlyphStyle{.bold = true}, fonts::GlyphStyle{.italic = true}, fonts::GlyphStyle{.bold = true, .italic = true}};
       constexpr std::uint8_t medium_strength = 128;
 
       for (const auto height : heights) {
@@ -307,7 +307,7 @@ namespace {
         const auto initial = cache.resolve(configuration, 1);
         const auto allocations = memory.allocations();
         const auto live_bytes = memory.liveBytes();
-        constexpr std::array scales{1.0, 1.25, 1.5, 2.0, 3.0, 4.0, 6.0, 7.0, 8.0, 1.0};
+        constexpr telar::ds::Array scales{1.0, 1.25, 1.5, 2.0, 3.0, 4.0, 6.0, 7.0, 8.0, 1.0};
 
         for (const auto scale : scales) {
           const auto resolved = cache.resolve(configuration, scale);
@@ -551,3 +551,4 @@ namespace {
 }
 
 #include "font_resolver_test.moc"
+#include "telar_base/ds/values.hpp"

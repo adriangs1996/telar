@@ -18,6 +18,7 @@ import telar.platform.process;
 import telar.wire.vocabulary;
 import telar.cli.hooks.command;
 import telar.cli.hooks.session;
+import telar.base.ds;
 
 namespace {
 
@@ -81,8 +82,8 @@ namespace {
   class Directory {
   public:
     Directory() {
-      std::strcpy(path_.data(), "/tmp/telar-hook-map.XXXXXX");
-      check(::mkdtemp(path_.data()) != nullptr);
+      std::strcpy(path_.dataMut(), "/tmp/telar-hook-map.XXXXXX");
+      check(::mkdtemp(path_.dataMut()) != nullptr);
     }
 
     ~Directory() {
@@ -103,7 +104,7 @@ namespace {
     }
 
   private:
-    std::array<char, 64> path_{};
+    ds::Array<char, 64> path_{};
   };
 
   void git(std::string_view directory, std::initializer_list<std::string_view> arguments) {
@@ -146,7 +147,7 @@ namespace {
   // A title an agent sets with an escape, DEL or a line break reaches the pane: the codec refuses
   // control bytes in a title, so an unfiltered one is lost.
   void titlesStayEncodable() {
-    const std::array titles{
+    const ds::Array titles{
         std::pair{AgentProvider::claude, std::string_view{R"({"hook_event_name":"SessionStart","session_title":"\u001b]0;evil\u0007Fix\nbug\u007f"})"}},
         std::pair{AgentProvider::pi, std::string_view{R"({"event":"session_info_changed","name":"\u001b]0;evil\u0007Fix\nbug\u007f"})"}},
         std::pair{AgentProvider::opencode, std::string_view{R"({"event":"session.updated","title":"\u001b]0;evil\u0007Fix\nbug\u007f"})"}},

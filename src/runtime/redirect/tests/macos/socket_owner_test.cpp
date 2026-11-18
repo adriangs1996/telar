@@ -102,6 +102,7 @@ import telar.wire.vocabulary;
 import telar.runtime.redirect.direction;
 import telar.runtime.redirect.ingress;
 import telar.runtime.platform.process_probe;
+import telar.base.ds;
 
 namespace {
 
@@ -130,9 +131,9 @@ namespace {
 
     target.port = listener.mapping().listener_port;
     target.endpoint.setPort(target.port);
-    std::array<int, 2> control, result;
+    ds::Array<int, 2> control, result;
 
-    check(::pipe(control.data()) == 0 && ::pipe(result.data()) == 0);
+    check(::pipe(control.dataMut()) == 0 && ::pipe(result.dataMut()) == 0);
     FileDescriptor stop_read{control[0]}, stop_write{control[1]}, result_read{result[0]}, result_write{result[1]};
     const auto pid = ::fork();
 
@@ -183,7 +184,7 @@ namespace {
 
     flow.source.port = port;
     flow.source.endpoint.setPort(port);
-    const std::array selected{ProcessIdentity{.pid = pid}};
+    const ds::Array selected{ProcessIdentity{.pid = pid}};
     redirect::SocketOwners owner{::geteuid(), selected};
     const auto identified = owner.find(flow);
 
@@ -194,7 +195,7 @@ namespace {
     const auto token = redirect::ProcessToken::format(pinned);
 
     check(redirect::ProcessToken::parse(token.view()).sameInstance(pinned));
-    const std::array parent{ProcessIdentity{.pid = ::getpid()}};
+    const ds::Array parent{ProcessIdentity{.pid = ::getpid()}};
     redirect::SocketOwners unselected{::geteuid(), parent};
     const auto excluded = unselected.find(flow);
 
@@ -210,7 +211,7 @@ namespace {
     bool replaced = false;
 
     try {
-      const std::array requested{stale};
+      const ds::Array requested{stale};
       redirect::SocketOwners invalid{::geteuid(), requested};
     } catch (const std::invalid_argument&) {
       replaced = true;
@@ -304,7 +305,7 @@ namespace {
     bool rejected_local = false;
 
     try {
-      const std::array targets{redirect::Target::parse("127.0.0.1:443")};
+      const ds::Array targets{redirect::Target::parse("127.0.0.1:443")};
 
       redirect::LocalAddresses::selection(targets, redirect::Direction::inbound);
     } catch (const std::invalid_argument&) {

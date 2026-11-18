@@ -536,7 +536,7 @@ namespace telar::gui::features::prompt {
     if (asks && (wants("file") || wants("directory"))) {
       const auto slash = partial.rfind('/');
       const auto typed = slash == std::string_view::npos ? std::string_view{} : partial.substr(0, slash + 1);
-      auto& question = questions[count];
+      auto& question = questions.atMut(count);
 
       question.root.assign(typed.starts_with('/') ? std::string_view{} : directory);
       if (!typed.starts_with('/') && !question.root.ends_with('/')) {
@@ -560,7 +560,7 @@ namespace telar::gui::features::prompt {
 
     // Commands on the shell's PATH, branches, SSH hosts and make targets come from the runtime.
     // A spec's @ref is a branch name as far as the editor completes it.
-    static constexpr std::array<std::pair<std::string_view, CompletionProvider>, 10> providers{{{"command", CompletionProvider::command}, {"branch", CompletionProvider::branch}, {"ssh_host", CompletionProvider::ssh_host}, {"make_target", CompletionProvider::make_target}, {"remote", CompletionProvider::remote}, {"stash", CompletionProvider::stash}, {"process", CompletionProvider::process}, {"just_recipe", CompletionProvider::just_recipe}, {"package_script", CompletionProvider::package_script}, {"compose_service", CompletionProvider::compose_service}}};
+    static constexpr ds::Array<std::pair<std::string_view, CompletionProvider>, 10> providers{{{"command", CompletionProvider::command}, {"branch", CompletionProvider::branch}, {"ssh_host", CompletionProvider::ssh_host}, {"make_target", CompletionProvider::make_target}, {"remote", CompletionProvider::remote}, {"stash", CompletionProvider::stash}, {"process", CompletionProvider::process}, {"just_recipe", CompletionProvider::just_recipe}, {"package_script", CompletionProvider::package_script}, {"compose_service", CompletionProvider::compose_service}}};
 
     for (const auto& [name, provider] : providers) {
       const bool wanted = context.command_position ? provider == CompletionProvider::command : wants(name) || (provider == CompletionProvider::branch && wants("ref"));
@@ -568,7 +568,7 @@ namespace telar::gui::features::prompt {
         continue;
       }
 
-      auto& question = questions[count++];
+      auto& question = questions.atMut(count++);
 
       question.provider = provider;
       question.query.assign(partial);
@@ -581,7 +581,7 @@ namespace telar::gui::features::prompt {
         return "commands";
       }
 
-      static constexpr std::array<std::pair<std::string_view, std::string_view>, 12> sources{{{"branch", "branches · git"}, {"ref", "branches · git"}, {"remote", "remotes · git"}, {"stash", "stashes · git"}, {"ssh_host", "hosts · ssh"}, {"make_target", "targets · make"}, {"just_recipe", "recipes · just"}, {"package_script", "scripts · package.json"}, {"compose_service", "services · compose"}, {"process", "processes"}, {"file", "files"}, {"directory", "directories"}}};
+      static constexpr ds::Array<std::pair<std::string_view, std::string_view>, 12> sources{{{"branch", "branches · git"}, {"ref", "branches · git"}, {"remote", "remotes · git"}, {"stash", "stashes · git"}, {"ssh_host", "hosts · ssh"}, {"make_target", "targets · make"}, {"just_recipe", "recipes · just"}, {"package_script", "scripts · package.json"}, {"compose_service", "services · compose"}, {"process", "processes"}, {"file", "files"}, {"directory", "directories"}}};
 
       for (const auto& [provider, name] : sources) {
         if (wants(provider)) {
@@ -612,7 +612,7 @@ namespace telar::gui::features::prompt {
   }
 
   void sent(CompletionPlan& plan, std::size_t index, std::uint64_t request_id) noexcept {
-    Access::questions(plan)[index].request_id = request_id;
+    Access::questions(plan).atMut(index).request_id = request_id;
   }
 
   void offer(State& state, PaneLine& line, CompletionPlan plan) {
@@ -620,7 +620,7 @@ namespace telar::gui::features::prompt {
     auto& completions = Access::completions(state);
     std::vector<std::uint64_t> requests;
 
-    for (auto& question : std::span{Access::questions(plan)}.first(Access::count(plan))) {
+    for (auto& question : Access::questions(plan).viewMut().first(Access::count(plan))) {
       if (question.request_id != 0) {
         requests.push_back(question.request_id);
         completions.emplace(question.request_id, PathCompletion{pane_id, std::move(question.base), std::move(question.query)});

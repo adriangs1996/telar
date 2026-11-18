@@ -116,7 +116,7 @@ namespace telar::gui::qt {
     ElementSlots& elements_;
     ApplicationAllocator& memory_;
     ListModel rows_;
-    std::array<ds::Option<SourceVersion>, application::machines::Machines::capacity> versions_;
+    ds::Array<ds::Option<SourceVersion>, application::machines::Machines::capacity> versions_;
     ds::Option<Selection> selection_;
     Vector<RowTarget, ApplicationAllocator> targets_;
     int agent_count_ = 0;

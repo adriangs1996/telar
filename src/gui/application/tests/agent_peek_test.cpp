@@ -77,8 +77,8 @@ namespace {
       }
 
       if (tag == MessageSchema<OpenPane>::tag && reject_open) {
-        std::array<Byte, Transport::decode_capacity> storage{};
-        DecodeStorage decoded{storage};
+        ds::Array<Byte, Transport::decode_capacity> storage{};
+        DecodeStorage decoded{storage.viewMut()};
         const auto open = Codec::decode<OpenPane>(message, decoded);
         if (open.target.kind == PaneTarget::Kind::pane && open.target.id == target.agent.pane_id) {
           throw EncodingError{"Workspace target transport is full"};
@@ -90,7 +90,7 @@ namespace {
   };
 
   void commandsAndVisibleTailPreserveOriginalText() {
-    constexpr std::array cases{
+    constexpr ds::Array cases{
         std::pair{"", PeekCommand::open},
         std::pair{" \t/open\t", PeekCommand::open},
         std::pair{" /stop ", PeekCommand::stop},
@@ -183,7 +183,7 @@ namespace {
     TestSession client{memory, transport};
 
     openFirstPane(client, transport.recorded);
-    const std::array agents{agent()};
+    const ds::Array agents{agent()};
 
     deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
     transport.reject = true;
@@ -233,7 +233,7 @@ namespace {
     TestSession client{memory, transport};
 
     openFirstPane(client, transport);
-    std::array agents{agent()};
+    ds::Array agents{agent()};
 
     deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
     const auto openings = transport.count(ClientTag::open_pane);
@@ -247,13 +247,13 @@ namespace {
     check(client.focusedPane()->id == 1 && client.findPane(target.agent.pane_id) == nullptr && transport.count(ClientTag::open_pane) == openings, "a peek must retain the current tab and create no terminal screen or attachment");
     auto wrong = target;
 
-    ++wrong.session.front();
+    ++wrong.session.atMut(0);
     check(!application::peek::open(client, wrong) && application::peek::text(client) == "Owned recent text", "an invalid replacement cannot erase a live peek");
     deliver(client, AgentSnapshot{.revision = 3, .entries = agents});
     const auto refresh = transport.last<ReadPane>();
 
     check(refresh.request_id != read.request_id, "a later accepted snapshot asks for fresh recent rows");
-    ++agents.front().session_id.front();
+    ++agents.atMut(0).session_id.atMut(0);
     deliver(client, AgentSnapshot{.revision = 4, .entries = agents});
     check(!application::peek::target(client) && !application::peek::submit(client, "/stop"), "reused pane and generation values cannot retain a retired agent session");
     check(deliver(client, PaneText{.request_id = refresh.request_id, .pane_id = read.pane_id, .text = "Retired data", .exit_code = {}}) == application::Change::none && application::peek::text(client).empty(), "a retired session's delayed pane text must stay invisible");
@@ -265,7 +265,7 @@ namespace {
     TestSession client{memory, transport};
 
     openFirstPane(client, transport);
-    const std::array agents{agent()};
+    const ds::Array agents{agent()};
 
     deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
     check(application::peek::open(client, target) && application::peek::submit(client, " \tPlease continue \t"), "a peek may submit its field directly to the owned agent");
@@ -296,8 +296,8 @@ namespace {
     TestSession client{memory, transport};
 
     openFirstPane(client, transport);
-    const std::array agents{agent()};
-    const std::array worktrees{WorktreeListEntry{.worktree = worktree_id, .source = 1, .workspace = location.workspace.id, .path = "/project/checkout", .branch = "feature;touch injected"}};
+    const ds::Array agents{agent()};
+    const ds::Array worktrees{WorktreeListEntry{.worktree = worktree_id, .source = 1, .workspace = location.workspace.id, .path = "/project/checkout", .branch = "feature;touch injected"}};
 
     deliver(client, WorkspaceList{.revision = 1, .worktrees = worktrees});
     deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
@@ -328,7 +328,7 @@ namespace {
     TestSession client{memory, transport};
 
     openFirstPane(client, transport);
-    const std::array agents{agent()};
+    const ds::Array agents{agent()};
 
     deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
     check(application::peek::open(client, target), "a task agent must admit its read");
@@ -363,7 +363,7 @@ namespace {
     TestSession client{memory, transport};
 
     openFirstPane(client, transport);
-    const std::array agents{agent()};
+    const ds::Array agents{agent()};
 
     deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
     check(application::peek::open(client, target), "a task peek read must remain tracked");
@@ -382,7 +382,7 @@ namespace {
     TestSession client{memory, transport};
 
     openFirstPane(client, transport);
-    const std::array agents{agent()};
+    const ds::Array agents{agent()};
 
     deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
     check(application::activity::chooseAgent(client, target.agent.pane_id, target.agent.pane_generation), "the known agent must admit navigation");
@@ -405,7 +405,7 @@ namespace {
 
     openFirstPane(client, transport.recorded);
     const auto source = client.activeTab()->location;
-    const std::array agents{agent()};
+    const ds::Array agents{agent()};
 
     deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
     transport.reject_open = true;
@@ -433,13 +433,13 @@ namespace {
 
     openFirstPane(client, transport);
     const auto source = client.activeTab()->location;
-    const std::array panes{PaneDescriptor{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}, PaneDescriptor{.pane_id = 2, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
+    const ds::Array panes{PaneDescriptor{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}, PaneDescriptor{.pane_id = 2, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
 
     deliver(client, TabSnapshot{.request_id = 1, .location = source, .panes = panes});
     const auto attachment = transport.last<OpenPane>();
 
     deliver(client, PaneOpened{.request_id = attachment.request_id, .pane_id = 2, .location = source, .pane_generation = 1});
-    const std::array agents{agent()};
+    const ds::Array agents{agent()};
 
     deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
     transport.reject_detach_after = 1;
@@ -466,8 +466,8 @@ namespace {
     TestSession client{memory, transport};
 
     openFirstPane(client, transport);
-    const std::array agents{agent()};
-    const std::array worktrees{WorktreeListEntry{.worktree = worktree_id, .source = 1, .workspace = location.workspace.id, .path = "/project/checkout", .branch = "worktree/task"}};
+    const ds::Array agents{agent()};
+    const ds::Array worktrees{WorktreeListEntry{.worktree = worktree_id, .source = 1, .workspace = location.workspace.id, .path = "/project/checkout", .branch = "worktree/task"}};
 
     deliver(client, WorkspaceList{.revision = 1, .worktrees = worktrees});
     deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
@@ -491,7 +491,7 @@ namespace {
     TestSession client{memory, transport};
 
     openFirstPane(client, transport);
-    const std::array agents{agent()};
+    const ds::Array agents{agent()};
 
     deliver(client, AgentSnapshot{.revision = 1, .entries = agents});
     check(application::peek::open(client, target), "a live peek must admit its initial read");

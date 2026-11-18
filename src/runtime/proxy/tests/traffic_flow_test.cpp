@@ -127,8 +127,8 @@ namespace {
 
       gate.open(&control, 1, -1, -1, "fixture.test");
       PartialStream stream;
-      const std::array<Byte, 3> original{'o', 0, 'd'};
-      const std::array<Byte, 7> replacement{'c', 'h', 0, 'n', 'g', 'e', 'd'};
+      const ds::Array<Byte, 3> original{'o', 0, 'd'};
+      const ds::Array<Byte, 7> replacement{'c', 'h', 0, 'n', 'g', 'e', 'd'};
 
       check(gate.write(traffic::Direction::outbound, stream, original).state == StreamResult::State::blocked && stream.output.empty());
       check(gate.deadline().hasValue());
@@ -159,7 +159,7 @@ namespace {
 
       gate.open(&control, 3, -1, -1, "fixture.test");
       PartialStream stream;
-      const std::array<Byte, 3> original{'o', 0, 'd'};
+      const ds::Array<Byte, 3> original{'o', 0, 'd'};
 
       check(gate.write(traffic::Direction::outbound, stream, original).state == StreamResult::State::blocked);
       control.broker.decide(control.ticket, Verdict::replace, {});
@@ -177,7 +177,7 @@ namespace {
 
       gate.open(&control, 2, -1, -1, "fixture.test");
       PartialStream stream;
-      const std::array<Byte, 3> original{'o', 'l', 'd'};
+      const ds::Array<Byte, 3> original{'o', 'l', 'd'};
 
       check(gate.write(traffic::Direction::outbound, stream, original).state == StreamResult::State::blocked);
       control.broker.configure({.host = "fixture.test", .visibility = 3});
@@ -194,18 +194,18 @@ namespace {
 
     broker.configure({.host = "*.fixture.test", .timeout_ms = 1, .fail_closed = true});
     check(broker.begin({.visibility = Visibility::plaintext, .host = "fixture.test"}) == 0);
-    std::array<Byte, FlowControl::chunk_bytes> bytes;
+    ds::Array<Byte, FlowControl::chunk_bytes> bytes;
     const auto ticket = broker.begin({.visibility = Visibility::plaintext, .host = "a.fixture.test"});
 
-    check(ticket != 0 && broker.poll(ticket, bytes).verdict == Verdict::pending);
+    check(ticket != 0 && broker.poll(ticket, bytes.viewMut()).verdict == Verdict::pending);
     std::this_thread::sleep_for(std::chrono::milliseconds{3});
-    check(broker.poll(ticket, bytes).verdict == Verdict::reject);
+    check(broker.poll(ticket, bytes.viewMut()).verdict == Verdict::reject);
     broker.disconnect();
     broker.configure({.host = "*", .visibility = 3, .fail_closed = false});
     const auto disconnected = broker.begin({.host = "fixture.test"});
 
     broker.disconnect();
-    check(broker.poll(disconnected, bytes).verdict == Verdict::allow);
+    check(broker.poll(disconnected, bytes.viewMut()).verdict == Verdict::allow);
   }
 
   void composition(ConcurrentMemory& memory) {
@@ -214,9 +214,9 @@ namespace {
 
     broker.configure(11, rule);
     broker.configure(22, rule);
-    const std::array<Byte, 3> original{'o', 0, 'd'};
-    const std::array<Byte, 5> replacement{'e', 'd', 0, 'i', 't'};
-    std::array<Byte, FlowControl::chunk_bytes> output;
+    const ds::Array<Byte, 3> original{'o', 0, 'd'};
+    const ds::Array<Byte, 5> replacement{'e', 'd', 0, 'i', 't'};
+    ds::Array<Byte, FlowControl::chunk_bytes> output;
     auto take = [&](std::uint64_t owner, std::span<const Byte> expected) {
       std::uint64_t ticket = 0;
 
@@ -234,7 +234,7 @@ namespace {
     check(take(22, original) == 0);
     check(take(11, original) == first && take(11, original) == 0);
     broker.decide(22, first, Verdict::reject, {});
-    check(broker.poll(first, output).verdict == Verdict::pending);
+    check(broker.poll(first, output.viewMut()).verdict == Verdict::pending);
     broker.configure(33, rule);
     broker.decide(11, first, Verdict::replace, replacement);
     const auto second = take(22, replacement);
@@ -242,9 +242,9 @@ namespace {
     check(second != 0 && second != first);
     broker.decide(11, second, Verdict::reject, {});
     broker.decide(22, first, Verdict::reject, {});
-    check(broker.poll(first, output).verdict == Verdict::pending);
+    check(broker.poll(first, output.viewMut()).verdict == Verdict::pending);
     broker.disconnect(22);
-    const auto result = broker.poll(first, output);
+    const auto result = broker.poll(first, output.viewMut());
 
     check(result.verdict == Verdict::replace && std::ranges::equal(std::span{output}.first(result.bytes), replacement));
     check(take(33, original) == 0);
@@ -258,7 +258,7 @@ namespace {
     const auto third = take(33, original);
 
     broker.decide(33, third, Verdict::reject, {});
-    check(broker.poll(ordered, output).verdict == Verdict::reject && take(22, original) == 0);
+    check(broker.poll(ordered, output.viewMut()).verdict == Verdict::reject && take(22, original) == 0);
 
     const auto generation = broker.begin({.host = "fixture.test", .bytes = original});
 
@@ -270,7 +270,7 @@ namespace {
 
     check(last != 0);
     broker.decide(22, last, Verdict::replace, {});
-    check(broker.poll(generation, output).verdict == Verdict::replace);
+    check(broker.poll(generation, output.viewMut()).verdict == Verdict::replace);
 
     broker.disconnect(11);
     broker.disconnect(22);
@@ -280,10 +280,10 @@ namespace {
     const auto timed = broker.begin({.host = "fixture.test", .bytes = original});
 
     std::this_thread::sleep_for(std::chrono::milliseconds{3});
-    check(broker.poll(timed, output).verdict == Verdict::pending);
+    check(broker.poll(timed, output.viewMut()).verdict == Verdict::pending);
     check(take(55, original) != 0);
     broker.disconnect(55);
-    check(broker.poll(timed, output).verdict == Verdict::reject);
+    check(broker.poll(timed, output.viewMut()).verdict == Verdict::reject);
 
     const auto overloaded = broker.begin({.host = "fixture.test", .bytes = original});
 
@@ -291,7 +291,7 @@ namespace {
       return false;
     });
 
-    check(broker.poll(overloaded, output).verdict == Verdict::allow);
+    check(broker.poll(overloaded, output.viewMut()).verdict == Verdict::allow);
     broker.disconnect(44);
     broker.configure(66, {.host = "*", .visibility = 3, .fail_closed = true});
     const auto undeliverable = broker.begin({.host = "fixture.test", .bytes = original});
@@ -300,12 +300,12 @@ namespace {
       throw std::bad_alloc{};
     });
 
-    check(broker.poll(undeliverable, output).verdict == Verdict::reject);
+    check(broker.poll(undeliverable, output.viewMut()).verdict == Verdict::reject);
     const auto canceled = broker.begin({.host = "fixture.test", .bytes = original});
 
     broker.cancel(canceled);
     broker.decide(66, canceled, Verdict::replace, replacement);
-    check(broker.poll(canceled, output).verdict == Verdict::reject && take(66, original) == 0);
+    check(broker.poll(canceled, output.viewMut()).verdict == Verdict::reject && take(66, original) == 0);
 
     for (unsigned count = 0; count < 64; ++count) {
       check(broker.begin({.host = "fixture.test", .bytes = original}) != Interception<>::rejected_ticket);
@@ -487,13 +487,13 @@ namespace {
       return sniffed;
     };
 
-    constexpr std::array<std::pair<std::string_view, std::string_view>, 4> request_fields{{
+    constexpr ds::Array<std::pair<std::string_view, std::string_view>, 4> request_fields{{
         {":method", "GET"},
         {":scheme", "http"},
         {":authority", "fixture.test"},
         {":path", "/prior-knowledge"},
     }};
-    constexpr std::array<std::pair<std::string_view, std::string_view>, 1> response_fields{{{":status", "200"}}};
+    constexpr ds::Array<std::pair<std::string_view, std::string_view>, 1> response_fields{{{":status", "200"}}};
     const auto http2 = std::string{Http2DirectionObserver<SystemAllocator>::client_preface} + http2Frame(Http2FrameKind::settings, 0, 0, {}) + http2Frame(Http2FrameKind::headers, 5, 1, hpackFields(request_fields));
     const auto prior = relayed(http2, http2Frame(Http2FrameKind::settings, 0, 0, {}) + http2Frame(Http2FrameKind::headers, 5, 1, hpackFields(response_fields)));
 

@@ -45,7 +45,7 @@ namespace telar::gui::features::paths {
   }
 
   void PathPicker::expect(std::uint64_t request_id) noexcept {
-    requests_[next_slot_] = request_id;
+    requests_.atMut(next_slot_) = request_id;
     next_slot_ = (next_slot_ + 1) % requests_.size();
     pending_request_ = request_id;
     refresh_ = false;
@@ -62,14 +62,14 @@ namespace telar::gui::features::paths {
     count_ = 0;
     page_used_ = 0;
     for (const auto& match : results.matches) {
-      auto& retained = matches_[count_];
+      auto& retained = matches_.atMut(count_);
 
       retained.offset = static_cast<std::uint16_t>(page_used_);
       retained.length = static_cast<std::uint16_t>(match.path.size());
       retained.kind = match.kind;
       retained.position_count = static_cast<std::uint8_t>(match.positions.size());
-      std::ranges::copy(match.positions, retained.positions.begin());
-      std::memcpy(page_.data() + page_used_, match.path.data(), match.path.size());
+      std::ranges::copy(match.positions, retained.positions.viewMut().begin());
+      std::memcpy(page_.dataMut() + page_used_, match.path.data(), match.path.size());
       page_used_ += match.path.size();
       ++count_;
     }

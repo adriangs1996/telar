@@ -53,15 +53,15 @@ export {
       static constexpr unsigned noon = 12;
       static constexpr unsigned century = 100;
       static constexpr unsigned decimal_base = 10;
-      static constexpr std::array<std::string_view, 7> weekdays{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
-      static constexpr std::array<std::string_view, 7> weekday_names{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
-      static constexpr std::array<std::string_view, 12> months{"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-      static constexpr std::array<std::string_view, 12> month_names{"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
+      static constexpr ds::Array<std::string_view, 7> weekdays{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+      static constexpr ds::Array<std::string_view, 7> weekday_names{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+      static constexpr ds::Array<std::string_view, 12> months{"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+      static constexpr ds::Array<std::string_view, 12> month_names{"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
 
       static void decimal(Text& text, unsigned number, bool padded = true);
 
       template <std::size_t Count>
-      static std::string_view named(const std::array<std::string_view, Count>& names, unsigned index) noexcept;
+      static std::string_view named(const ds::Array<std::string_view, Count>& names, unsigned index) noexcept;
 
       static void directive(Text& text, char code, const Time& time);
     };

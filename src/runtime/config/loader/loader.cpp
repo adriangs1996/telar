@@ -6,6 +6,7 @@ import telar.platform.fs;
 import telar.sys.posix;
 import telar.config.core;
 import telar.config.snapshot;
+import telar.base.ds;
 
 namespace telar::runtime::config {
 
@@ -29,8 +30,8 @@ namespace telar::runtime::config {
       }
     }
 
-    std::array<char, PATH_MAX> canonical;
-    if (::realpath(path.c_str(), canonical.data()) == nullptr) {
+    ds::Array<char, PATH_MAX> canonical;
+    if (::realpath(path.c_str(), canonical.dataMut()) == nullptr) {
       if (sys::lastError() == ENOENT && options.config.empty() && options.profile.empty()) {
         return;
       }

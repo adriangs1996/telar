@@ -14,6 +14,7 @@ import telar.runtime.redirect.ingress;
 import telar.runtime.redirect.pf_rules;
 import telar.runtime.redirect.socket_owners;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -99,7 +100,7 @@ namespace {
   // Inbound discovery reads SYNs from remote peers: one behind IPv6 extension headers still names its
   // flow, while an unbounded chain or a header that runs past the packet names none.
   void testSynExtensionHeaders() {
-    const std::array chain{
+    const ds::Array chain{
         Extension{IPPROTO_HOPOPTS, 8},
         Extension{IPPROTO_ROUTING, 24},
         Extension{IPPROTO_DSTOPTS, 16},
@@ -113,7 +114,7 @@ namespace {
 
     check(!redirect::FlowKey::syn(ipv6Syn(long_chain)));
 
-    auto overrun = ipv6Syn(std::array{Extension{IPPROTO_DSTOPTS, 8}});
+    auto overrun = ipv6Syn(ds::Array{Extension{IPPROTO_DSTOPTS, 8}});
 
     overrun[4 + 40 + 1] = 255;
     check(!redirect::FlowKey::syn(overrun));
@@ -134,7 +135,7 @@ namespace {
   // Redirecting incoming traffic needs a destination this machine serves: with only remote targets
   // it is refused before any rule is planned.
   void testLocalAddressSelection() {
-    const std::array targets{redirect::Target::parse("192.0.2.1:443")};
+    const ds::Array targets{redirect::Target::parse("192.0.2.1:443")};
 
     check(refuses([&] {
       static_cast<void>(redirect::LocalAddresses::selection(targets, redirect::Direction::both));

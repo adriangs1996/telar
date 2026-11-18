@@ -17,6 +17,7 @@ import telar.gui.features.terminal.input;
 import telar.gui.application;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -50,12 +51,12 @@ namespace {
     constexpr unsigned extended_control_lead = 0xc2;
 
     for (unsigned code = first_extended_control; code <= last_extended_control; ++code) {
-      const std::array text{static_cast<char>(extended_control_lead), static_cast<char>(code)};
+      const telar::ds::Array text{static_cast<char>(extended_control_lead), static_cast<char>(code)};
 
       check(!acceptsHistory({text.data(), text.size()}, true), "UTF-8 C1 controls must not bypass history validation");
     }
 
-    constexpr auto malformed = std::to_array<std::string_view>({"\x80", "\xc0\xaf", "\xed\xa0\x80", "\xf4\x90\x80\x80", "\xc2"});
+    constexpr auto malformed = telar::ds::Array<std::string_view, 5>{"\x80", "\xc0\xaf", "\xed\xa0\x80", "\xf4\x90\x80\x80", "\xc2"};
 
     for (const auto text : malformed) {
       check(!acceptsHistory(text, true), "malformed UTF-8 must be rejected before history input");
@@ -94,18 +95,18 @@ namespace {
 
     {
       Screen screen{memory};
-      const std::array<Byte, 1> text{'x'};
-      std::array<Cell, 4> cells;
+      const ds::Array<Byte, 1> text{'x'};
+      ds::Array<Cell, 4> cells;
 
-      for (auto& cell : cells) {
+      for (auto& cell : cells.viewMut()) {
         cell.text = text;
       }
 
       constexpr std::size_t cell_buffer_bytes = 256;
-      std::array<Byte, cell_buffer_bytes> encoded{};
-      const auto run = CellRunCodec::encode(cells, encoded);
-      const std::array<FrameSpan, 1> spans{{{.start = 0, .count = 4, .cells = run}}};
-      const std::array<Byte, 2> flags{};
+      ds::Array<Byte, cell_buffer_bytes> encoded{};
+      const auto run = CellRunCodec::encode(cells, encoded.viewMut());
+      const ds::Array<FrameSpan, 1> spans{{{.start = 0, .count = 4, .cells = run}}};
+      const ds::Array<Byte, 2> flags{};
       PaneFrame frame;
 
       frame.pane_id = 1;
@@ -125,8 +126,8 @@ namespace {
       frame.frame_id = 2;
       frame.base_frame_id = 1;
       frame.text_metadata.reset();
-      const auto delta_run = CellRunCodec::encode(std::span{cells}.first(1), encoded);
-      const std::array<FrameSpan, 1> delta_spans{{{.start = 0, .count = 1, .cells = delta_run}}};
+      const auto delta_run = CellRunCodec::encode(std::span{cells}.first(1), encoded.viewMut());
+      const ds::Array<FrameSpan, 1> delta_spans{{{.start = 0, .count = 1, .cells = delta_run}}};
 
       frame.spans = delta_spans;
       check(screen.apply(frame) == FrameApplication::applied, "delta must apply");
@@ -137,8 +138,8 @@ namespace {
       check(screen.frameId() == 2, "rejected frame must not modify screen");
 
       frame.base_frame_id = 2;
-      const std::array<Byte, 1> malformed{0xff};
-      const std::array<FrameSpan, 1> bad_spans{{{.start = 0, .count = 1, .cells = malformed}}};
+      const ds::Array<Byte, 1> malformed{0xff};
+      const ds::Array<FrameSpan, 1> bad_spans{{{.start = 0, .count = 1, .cells = malformed}}};
 
       frame.spans = bad_spans;
       bool rejected = false;
@@ -151,10 +152,10 @@ namespace {
 
       check(rejected && screen.frameId() == 2, "invalid cells must be rejected before mutation");
 
-      const std::array<Byte, 1> replacement{'y'};
-      const std::array<Cell, 1> changed{{{.text = replacement}}};
-      const auto changed_run = CellRunCodec::encode(changed, encoded);
-      const std::array<FrameSpan, 2> late_bad_spans{{{.start = 0, .count = 1, .cells = changed_run}, {.start = 3, .count = 1, .cells = malformed}}};
+      const ds::Array<Byte, 1> replacement{'y'};
+      const ds::Array<Cell, 1> changed{{{.text = replacement}}};
+      const auto changed_run = CellRunCodec::encode(changed, encoded.viewMut());
+      const ds::Array<FrameSpan, 2> late_bad_spans{{{.start = 0, .count = 1, .cells = changed_run}, {.start = 3, .count = 1, .cells = malformed}}};
 
       frame.spans = late_bad_spans;
       rejected = false;
@@ -166,16 +167,16 @@ namespace {
 
       check(rejected && screen.frameId() == 2 && screen.cells()[0].utf8() == "x", "a malformed later span must not commit an earlier decoded span");
       check(screen.rowRevision(1) == second_row_revision, "a rejected frame must retain row revisions");
-      const std::array<FrameSpan, 2> recovered_spans{{{.start = 0, .count = 1, .cells = changed_run}, {.start = 3, .count = 1, .cells = changed_run}}};
+      const ds::Array<FrameSpan, 2> recovered_spans{{{.start = 0, .count = 1, .cells = changed_run}, {.start = 3, .count = 1, .cells = changed_run}}};
 
       frame.spans = recovered_spans;
       check(screen.apply(frame) == FrameApplication::applied, "valid delta must recover after a rejected frame");
       check(screen.cells()[0].utf8() == "y" && screen.cells()[3].utf8() == "y", "delta spans must commit at their own positions");
       check(screen.cells()[1].utf8() == "x" && screen.cells()[2].utf8() == "x", "delta spans must not overwrite gaps");
 
-      const std::array before_crossing{screen.rowRevision(0), screen.rowRevision(1)};
-      const auto crossing_run = CellRunCodec::encode(std::array<Cell, 2>{changed[0], changed[0]}, encoded);
-      const std::array<FrameSpan, 1> crossing_spans{{{.start = 1, .count = 2, .cells = crossing_run}}};
+      const ds::Array before_crossing{screen.rowRevision(0), screen.rowRevision(1)};
+      const auto crossing_run = CellRunCodec::encode(ds::Array<Cell, 2>{changed[0], changed[0]}, encoded.viewMut());
+      const ds::Array<FrameSpan, 1> crossing_spans{{{.start = 1, .count = 2, .cells = crossing_run}}};
 
       frame.base_frame_id = frame.frame_id++;
       frame.spans = crossing_spans;
@@ -183,8 +184,8 @@ namespace {
       check(screen.cells()[1].utf8() == "y" && screen.cells()[2].utf8() == "y", "a span across rows must commit every cell");
       check(screen.rowRevision(0) != before_crossing[0] && screen.rowRevision(1) != before_crossing[1], "a span across rows must mark each row it touches");
 
-      const std::array prior_rows{screen.rowRevision(0), screen.rowRevision(1)};
-      const std::array<Byte, 2> wrapped_flags{static_cast<Byte>(RowFlag::wrap), 0};
+      const ds::Array prior_rows{screen.rowRevision(0), screen.rowRevision(1)};
+      const ds::Array<Byte, 2> wrapped_flags{static_cast<Byte>(RowFlag::wrap), 0};
 
       frame.base_frame_id = frame.frame_id++;
       frame.spans = {};
@@ -230,7 +231,7 @@ namespace {
     check(layout.nodes().size() == 3 && layout.contains(1) && layout.contains(3), "remove must collapse its parent");
     check(layout.remove(1) && layout.firstPane() == 3, "remove first subtree");
 
-    const std::array<ClientLayoutNode, 2> incomplete{
+    const ds::Array<ClientLayoutNode, 2> incomplete{
         ClientLayoutSplit{.axis = ClientLayoutAxis::horizontal, .ratio = 5000},
         ClientLayoutPane{7},
     };
@@ -307,8 +308,8 @@ namespace {
     SystemAllocator memory;
     telar::MemoryAdapter adapter{memory};
     const auto payload = Codec::encode(PaneExited{.pane_id = 1, .kind = ExitKind::exited, .value = 0});
-    std::array<Byte, frame_prefix_size + payload.size()> bytes{};
-    std::span<Byte> output{bytes};
+    ds::Array<Byte, frame_prefix_size + payload.size()> bytes{};
+    std::span<Byte> output{bytes.viewMut()};
 
     u32::encode(payload.size(), output);
     std::ranges::copy(payload, output.begin());
@@ -327,7 +328,7 @@ namespace {
     }
 
     application::FrameStream<telar::Memory> stream{adapter};
-    const std::array<Byte, frame_prefix_size> invalid{};
+    const ds::Array<Byte, frame_prefix_size> invalid{};
     bool rejected = false;
     const auto ignore_payload = [](std::span<const Byte>) {
     };
@@ -361,8 +362,8 @@ namespace {
 
     {
       application::FrameStream<telar::Memory> stream{adapter};
-      std::array<Byte, (2 * frame_prefix_size) + payload_bytes> bytes{};
-      std::span<Byte> output{bytes};
+      ds::Array<Byte, (2 * frame_prefix_size) + payload_bytes> bytes{};
+      std::span<Byte> output{bytes.viewMut()};
 
       u32::encode(payload_bytes, output);
       output.front() = 'T';

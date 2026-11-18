@@ -55,10 +55,10 @@ namespace telar::runtime::traffic {
     }
   }
 
-  std::array<char, INET6_ADDRSTRLEN> IpPayload::addressText(const std::array<Byte, 16>& address, bool ipv6) noexcept {
-    std::array<char, INET6_ADDRSTRLEN> text{};
+  ds::Array<char, INET6_ADDRSTRLEN> IpPayload::addressText(const ds::Array<Byte, 16>& address, bool ipv6) noexcept {
+    ds::Array<char, INET6_ADDRSTRLEN> text{};
 
-    ::inet_ntop(ipv6 ? AF_INET6 : AF_INET, address.data(), text.data(), text.size());
+    ::inet_ntop(ipv6 ? AF_INET6 : AF_INET, address.data(), text.dataMut(), text.size());
     return text;
   }
 
@@ -83,8 +83,8 @@ namespace telar::runtime::traffic {
       result.truncated = bytes.size() < length;
       result.protocol = bytes[9];
       result.original_bytes = length - head;
-      std::ranges::copy(bytes.subspan(12, 4), result.source.begin());
-      std::ranges::copy(bytes.subspan(16, 4), result.destination.begin());
+      std::ranges::copy(bytes.subspan(12, 4), result.source.viewMut().begin());
+      std::ranges::copy(bytes.subspan(16, 4), result.destination.viewMut().begin());
       result.bytes = bytes.first(std::min(bytes.size(), std::size_t{length})).subspan(head);
     } else if ((bytes[0] >> 4) == 6) {
       if (bytes.size() < 40 || NetworkPacket::word(bytes, 4) == 0) {
@@ -92,8 +92,8 @@ namespace telar::runtime::traffic {
       }
 
       result.ipv6 = true;
-      std::ranges::copy(bytes.subspan(8, 16), result.source.begin());
-      std::ranges::copy(bytes.subspan(24, 16), result.destination.begin());
+      std::ranges::copy(bytes.subspan(8, 16), result.source.viewMut().begin());
+      std::ranges::copy(bytes.subspan(24, 16), result.destination.viewMut().begin());
       const auto length = std::size_t{NetworkPacket::word(bytes, 4)} + 40;
 
       result.truncated = bytes.size() < length;
@@ -128,7 +128,7 @@ namespace telar::runtime::traffic {
   }
 
   std::string_view DatagramCodec::name(DatagramTransport transport) noexcept {
-    constexpr std::array names{std::string_view{"udp"}, std::string_view{"icmp"}, std::string_view{"icmpv6"}};
+    constexpr ds::Array names{std::string_view{"udp"}, std::string_view{"icmp"}, std::string_view{"icmpv6"}};
 
     return names[static_cast<std::size_t>(transport)];
   }
@@ -163,8 +163,8 @@ namespace telar::runtime::traffic {
       throw EncodingError{"Invalid datagram address length"};
     }
 
-    std::ranges::copy(source, event.source_address.begin());
-    std::ranges::copy(destination, event.destination_address.begin());
+    std::ranges::copy(source, event.source_address.viewMut().begin());
+    std::ranges::copy(destination, event.destination_address.viewMut().begin());
     event.source_port = reader.integer<std::uint16_t>();
     event.destination_port = reader.integer<std::uint16_t>();
     event.icmp_type = reader.integer<Byte>();
@@ -251,7 +251,7 @@ namespace telar::runtime::traffic {
       part.more = (flags & 0x2000) != 0;
       part.key.identification = NetworkPacket::word(bytes, 4);
       part.key.protocol = bytes[9];
-      std::copy_n(bytes.begin() + 12, 8, part.key.addresses.begin());
+      std::copy_n(bytes.begin() + 12, 8, part.key.addresses.dataMut());
       const auto head = std::size_t{bytes[0] & 15u} * 4;
       const auto length = NetworkPacket::word(bytes, 2);
       if (head < 20 || head > bytes.size() || length <= head || length > bytes.size() || (flags & 0xc000) != 0) {
@@ -289,7 +289,7 @@ namespace telar::runtime::traffic {
         return part;
       }
 
-      std::copy_n(bytes.begin() + 8, 32, part.key.addresses.begin());
+      std::copy_n(bytes.begin() + 8, 32, part.key.addresses.dataMut());
       part.key.identification = (std::uint32_t{NetworkPacket::word(bytes, offset + 4)} << 16) | NetworkPacket::word(bytes, offset + 6);
       const auto flags = NetworkPacket::word(bytes, offset + 2);
 
@@ -355,7 +355,7 @@ namespace telar::runtime::traffic {
     }
 
     std::ranges::copy(part.payload, entry.storage.getMut().bytesMut().begin() + maximum_prefix + part.offset);
-    entry.ranges[entry.count++] = {part.offset, part.payload.size(), part.more};
+    entry.ranges.atMut(entry.count++) = {part.offset, part.payload.size(), part.more};
     entry.received += part.payload.size();
     if (!part.more) {
       entry.length = end;

@@ -699,8 +699,9 @@ namespace telar::gui::features::history {
 
   template <Allocator Memory>
   void HistoryBrowser<Memory>::track(std::uint64_t request_id) {
-    auto* const slot = std::ranges::find(requests_, std::uint64_t{0});
-    if (request_id == 0 || slot == requests_.end() || owns(request_id)) {
+    const auto requests = requests_.viewMut();
+    const auto slot = std::ranges::find(requests, std::uint64_t{0});
+    if (request_id == 0 || slot == requests.end() || owns(request_id)) {
       state_.phase = HistoryPhase::failed;
       contentChanged();
       throw EncodingError{"History is busy; retry the search"};
@@ -711,7 +712,13 @@ namespace telar::gui::features::history {
 
   template <Allocator Memory>
   void HistoryBrowser<Memory>::retire(std::uint64_t request_id) noexcept {
-    if (auto* const slot = std::ranges::find(requests_, request_id); request_id != 0 && slot != requests_.end()) {
+    if (request_id == 0) {
+      return;
+    }
+
+    const auto requests = requests_.viewMut();
+    const auto slot = std::ranges::find(requests, request_id);
+    if (slot != requests.end()) {
       *slot = 0;
     }
   }

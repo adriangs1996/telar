@@ -78,8 +78,8 @@ namespace telar::runtime {
 
   FixedText<4096> ProcessInspector::executable(pid_t process) noexcept {
     FixedText<4096> result;
-    std::array<char, PROC_PIDPATHINFO_MAXSIZE> path{};
-    const auto length = ::proc_pidpath(process, path.data(), path.size());
+    ds::Array<char, PROC_PIDPATHINFO_MAXSIZE> path{};
+    const auto length = ::proc_pidpath(process, path.dataMut(), path.size());
     if (length > 0) {
       result.assign(path.data());
     }
@@ -92,11 +92,11 @@ namespace telar::runtime {
     // Listening sockets open early; a busy server's later descriptors past this bound are connections.
     constexpr std::size_t maximum_descriptors = 1024;
     ListeningPorts ports;
-    std::array<pid_t, maximum_group_processes> members;
-    std::array<proc_fdinfo, maximum_descriptors> descriptors;
+    ds::Array<pid_t, maximum_group_processes> members;
+    ds::Array<proc_fdinfo, maximum_descriptors> descriptors;
 
-    for (const auto member : std::span{members}.first(groupMembers(group, members))) {
-      const auto bytes = ::proc_pidinfo(member, PROC_PIDLISTFDS, 0, descriptors.data(), static_cast<int>(sizeof(descriptors)));
+    for (const auto member : std::span{members}.first(groupMembers(group, members.viewMut()))) {
+      const auto bytes = ::proc_pidinfo(member, PROC_PIDLISTFDS, 0, descriptors.dataMut(), static_cast<int>(sizeof(descriptors)));
       if (bytes <= 0) {
         continue;
       }
@@ -130,11 +130,11 @@ namespace telar::runtime {
   FixedText<4096> ProcessInspector::terminal(pid_t process) const noexcept {
     FixedText<4096> result;
     proc_bsdinfo information{};
-    std::array<char, 128> name{};
-    if (::proc_pidinfo(process, PROC_PIDTBSDINFO, 0, &information, sizeof(information)) == sizeof(information) && ::devname_r(information.e_tdev, S_IFCHR, name.data(), name.size()) != nullptr) {
-      std::array<char, 4096> path{};
+    ds::Array<char, 128> name{};
+    if (::proc_pidinfo(process, PROC_PIDTBSDINFO, 0, &information, sizeof(information)) == sizeof(information) && ::devname_r(information.e_tdev, S_IFCHR, name.dataMut(), name.size()) != nullptr) {
+      ds::Array<char, 4096> path{};
 
-      std::snprintf(path.data(), path.size(), "/dev/%s", name.data());
+      std::snprintf(path.dataMut(), path.size(), "/dev/%s", name.data());
       result.assign(path.data());
     }
 

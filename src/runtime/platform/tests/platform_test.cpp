@@ -84,20 +84,20 @@ namespace {
   using namespace telar::runtime;
 
   void testSpawn(SystemAllocator& memory) {
-    const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", "printf 'spawn-ok'"};
+    const ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", "printf 'spawn-ok'"};
     Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
     PtyProcess process{command.specification(TerminalSize{80, 24, 0, 0})};
     pollfd ready{.fd = process.descriptor(), .events = POLLIN, .revents = 0};
 
     check(::poll(&ready, 1, 2000) == 1);
-    std::array<char, 64> output{};
-    const auto count = ::read(process.descriptor(), output.data(), output.size());
+    ds::Array<char, 64> output{};
+    const auto count = ::read(process.descriptor(), output.dataMut(), output.size());
 
     check(count == 8);
     check(std::string_view{output.data(), static_cast<std::size_t>(count)} == "spawn-ok");
 
     bool rejected = false;
-    const std::array<std::string_view, 1> missing{"/does/not/exist"};
+    const ds::Array<std::string_view, 1> missing{"/does/not/exist"};
     Command missing_command{memory, Launch{.cwd = "/tmp", .arguments = missing}};
 
     try {
@@ -110,7 +110,7 @@ namespace {
   }
 
   void testForegroundProcessGroup(SystemAllocator& memory) {
-    const std::array<std::string_view, 1> arguments{"/bin/cat"};
+    const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
     Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
     PtyProcess process{command.specification(TerminalSize{80, 24, 0, 0})};
 
@@ -126,7 +126,7 @@ namespace {
     if (child == 0) {
       ::alarm(5);
       SystemAllocator memory;
-      const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", "printf 'unread-output'; exec /bin/cat"};
+      const ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", "printf 'unread-output'; exec /bin/cat"};
       Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
 
       for (unsigned iteration = 0; iteration < 20; ++iteration) {
@@ -172,8 +172,8 @@ namespace {
     setNonblocking(sockets[0]);
     Connection connection{memory, FileDescriptor{sockets[0]}};
     const auto hello = HandshakeCodec::encode(ClientHello{});
-    std::array<Byte, frame_prefix_size> prefix{};
-    std::span<Byte> writer = prefix;
+    ds::Array<Byte, frame_prefix_size> prefix{};
+    std::span<Byte> writer = prefix.viewMut();
 
     u32::encode(hello.size(), writer);
 
@@ -194,12 +194,12 @@ namespace {
     dispatchFrames(memory, connection, dispatch);
     check(received);
     connection.write();
-    std::array<Byte, 64> response{};
-    const auto count = ::read(peer.get(), response.data(), response.size());
+    ds::Array<Byte, 64> response{};
+    const auto count = ::read(peer.get(), response.dataMut(), response.size());
 
     check(count == static_cast<ssize_t>(frame_prefix_size + MessageSchema<RequestCompleted>::payload_size));
-    std::array<Byte, 64> scratch;
-    DecodeStorage storage{scratch};
+    ds::Array<Byte, 64> scratch;
+    DecodeStorage storage{scratch.viewMut()};
     const auto accepted = Codec::decode<RequestCompleted>(std::span<const Byte>{response}.subspan(frame_prefix_size, MessageSchema<RequestCompleted>::payload_size), storage);
 
     check(accepted.request_id == 17);
@@ -284,9 +284,9 @@ namespace {
   // A child spawned with keepStandardStreams sees this process's stdout and stderr, the stdin a
   // redirect placed, and none of the other descriptors this process left open across exec.
   void testStandardStreamsOnly() {
-    std::array<int, 2> pipe{};
+    ds::Array<int, 2> pipe{};
 
-    check(::pipe(pipe.data()) == 0);
+    check(::pipe(pipe.dataMut()) == 0);
 
     FileDescriptor reader{pipe[0]};
     FileDescriptor writer{pipe[1]};
@@ -311,8 +311,8 @@ namespace {
         spawn.keepStandardStreams();
 
         const char* script = "{ true >&9; } 2>/dev/null && exit 2; read -r line && exit 3; echo out; echo err >&2";
-        std::array<char*, 4> arguments{const_cast<char*>("/bin/sh"), const_cast<char*>("-c"), const_cast<char*>(script), nullptr};
-        std::array<char*, 1> environment{nullptr};
+        ds::Array<char*, 4> arguments{const_cast<char*>("/bin/sh"), const_cast<char*>("-c"), const_cast<char*>(script), nullptr};
+        ds::Array<char*, 1> environment{nullptr};
         pid_t started = -1;
         int status = 0;
 
@@ -329,9 +329,9 @@ namespace {
     writer.reset();
 
     std::string output;
-    std::array<char, 64> buffer{};
+    ds::Array<char, 64> buffer{};
 
-    for (ssize_t count; (count = ::read(reader.get(), buffer.data(), buffer.size())) != 0;) {
+    for (ssize_t count; (count = ::read(reader.get(), buffer.dataMut(), buffer.size())) != 0;) {
       if (count < 0 && errno == EINTR) {
         continue;
       }
@@ -350,10 +350,10 @@ namespace {
   }
 
   void testSocketOwnership() {
-    std::array<char, 64> directory{};
+    ds::Array<char, 64> directory{};
 
-    std::strcpy(directory.data(), "/tmp/telar-socket-test-XXXXXX");
-    check(::mkdtemp(directory.data()) != nullptr);
+    std::strcpy(directory.dataMut(), "/tmp/telar-socket-test-XXXXXX");
+    check(::mkdtemp(directory.dataMut()) != nullptr);
     const auto path = std::string{directory.data()} + "/runtime.sock";
 
     {
@@ -395,10 +395,10 @@ namespace {
   }
 
   void testDisconnectedSocketClients() {
-    std::array<char, 64> directory{};
+    ds::Array<char, 64> directory{};
 
-    std::strcpy(directory.data(), "/tmp/telar-disconnected-socket-XXXXXX");
-    check(::mkdtemp(directory.data()) != nullptr);
+    std::strcpy(directory.dataMut(), "/tmp/telar-disconnected-socket-XXXXXX");
+    check(::mkdtemp(directory.dataMut()) != nullptr);
     const auto path = std::string{directory.data()} + "/runtime.sock";
     bool setup_failed = false;
 
@@ -471,7 +471,7 @@ namespace {
       NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
 
       poller.watchSignal(SIGCHLD);
-      std::array<Event, decltype(poller)::event_capacity> ready{};
+      ds::Array<Event, decltype(poller)::event_capacity> ready{};
       const auto child = ::fork();
 
       check(child >= 0);
@@ -483,7 +483,7 @@ namespace {
       bool observed = false;
 
       while (!observed && std::chrono::steady_clock::now() < deadline) {
-        for (const auto& event : poller.wait(std::chrono::milliseconds{100}, ready)) {
+        for (const auto& event : poller.wait(std::chrono::milliseconds{100}, ready.viewMut())) {
           observed |= event.kind == EventKind::signal && event.descriptor == SIGCHLD;
         }
       }
@@ -499,23 +499,23 @@ namespace {
   }
 
   void testCommandHelpers(SystemAllocator& memory) {
-    std::array<char, PATH_MAX> found;
+    ds::Array<char, PATH_MAX> found;
 
-    check(findExecutable("/nonexistent-telar:/bin", "sh", found) && std::string_view{found.data()} == "/bin/sh");
-    check(!findExecutable("/nonexistent-telar", "sh", found));
-    check(findExecutable("bin", "sh", found, "/"));
+    check(findExecutable("/nonexistent-telar:/bin", "sh", found.viewMut()) && std::string_view{found.dataMut()} == "/bin/sh");
+    check(!findExecutable("/nonexistent-telar", "sh", found.viewMut()));
+    check(findExecutable("bin", "sh", found.viewMut(), "/"));
 
     const auto self = ExecutablePath::sibling({"missing-telar-program", "runtime-platform-tests"});
 
     check(self && self->view() == ExecutablePath{}.view());
     check(!ExecutablePath::sibling({"RUNTIME-PLATFORM-TESTS"}));
 
-    const std::array<std::string_view, 3> words{"/bin/sh", "-c", "cat; echo error >&2"};
+    const ds::Array<std::string_view, 3> words{"/bin/sh", "-c", "cat; echo error >&2"};
     Command command{memory, Launch{.cwd = "/tmp", .arguments = words}, CommandPurpose::administration};
     CommandOutput<SystemAllocator> process{memory, 0};
     std::string output;
     std::string error;
-    const std::array<std::string_view, 2> input{"in", "put"};
+    const ds::Array<std::string_view, 2> input{"in", "put"};
     const auto status = process.streamWithInput(
         command,
         std::chrono::steady_clock::now() + std::chrono::seconds{5},
@@ -561,8 +561,8 @@ namespace {
 
     check(Git::honorsLazyFetchControl("git version 2.45.0\n") && Git::honorsLazyFetchControl("git version 3.0") && Git::honorsLazyFetchControl("git version 2.50.1 (Apple Git-155)"));
     check(!Git::honorsLazyFetchControl("git version 2.44.9") && !Git::honorsLazyFetchControl("git version 2") && !Git::honorsLazyFetchControl("version 2.45"));
-    const std::array<EnvironmentEntry, 3> inherited{{{"GIT_DIR", "/elsewhere"}, {"GIT_TERMINAL_PROMPT", "1"}, {"PATH", "/usr/bin:/bin"}}};
-    const std::array<std::string_view, 1> words{"/bin/sh"};
+    const ds::Array<EnvironmentEntry, 3> inherited{{{"GIT_DIR", "/elsewhere"}, {"GIT_TERMINAL_PROMPT", "1"}, {"PATH", "/usr/bin:/bin"}}};
+    const ds::Array<std::string_view, 1> words{"/bin/sh"};
     Command command{memory, Launch{.cwd = "/tmp", .arguments = words, .environment_mode = EnvironmentMode::replace, .environment = inherited}, CommandPurpose::configured_helper};
 
     Git::configure(command);
@@ -583,7 +583,7 @@ namespace {
     ProcessProbe probe{inspector};
     ProcessProbe<ProcessInspector>::Request request;
 
-    request.panes[0] = {1, 2, 3, ::getpid(), ::getpid()};
+    request.panes.atMut(0) = {1, 2, 3, ::getpid(), ::getpid()};
     request.count = 1;
     const auto observed = probe.observe(request);
 
@@ -593,17 +593,17 @@ namespace {
 
     check(name.size() >= 15 && std::string_view{"runtime-platform-tests"}.starts_with(name));
     check(!observed.panes[0].cwd.view().empty() && observed.panes[0].cwd.view().front() == '/');
-    request.panes[0].foreground = -1;
+    request.panes.atMut(0).foreground = -1;
     check(probe.observe(request).count == 0);
   }
 
   // A private directory for a runtime endpoint, removed with what is left in it.
   struct EndpointDirectory {
     EndpointDirectory() {
-      std::array<char, 64> directory{};
+      ds::Array<char, 64> directory{};
 
-      std::strcpy(directory.data(), "/tmp/telar-endpoint-test-XXXXXX");
-      check(::mkdtemp(directory.data()) != nullptr);
+      std::strcpy(directory.dataMut(), "/tmp/telar-endpoint-test-XXXXXX");
+      check(::mkdtemp(directory.dataMut()) != nullptr);
       path = directory.data();
     }
 

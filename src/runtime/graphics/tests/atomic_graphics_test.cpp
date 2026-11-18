@@ -18,6 +18,7 @@ import telar.platform.primitives;
 import telar.testing;
 import telar.runtime.graphics.pane_media;
 import telar.runtime.graphics.file_input;
+import telar.base.ds;
 
 namespace {
 
@@ -193,10 +194,10 @@ namespace {
   }
 
   void testAtomicResources() {
-    std::array<char, 64> path;
+    ds::Array<char, 64> path;
 
-    std::strcpy(path.data(), "/tmp/telar-atomic-file-XXXXXX");
-    FileDescriptor file{::mkstemp(path.data())};
+    std::strcpy(path.dataMut(), "/tmp/telar-atomic-file-XXXXXX");
+    FileDescriptor file{::mkstemp(path.dataMut())};
 
     check(file && ::ftruncate(file.get(), 8) == 0);
     const auto encoded = encodedName(path.data());
@@ -223,9 +224,9 @@ namespace {
     std::filesystem::remove(pipe);
     std::filesystem::remove(path.data());
 
-    std::array<char, 32> shared_name;
+    ds::Array<char, 32> shared_name;
 
-    std::snprintf(shared_name.data(), shared_name.size(), "/tlratom%08x%08x", ::arc4random(), ::arc4random());
+    std::snprintf(shared_name.dataMut(), shared_name.size(), "/tlratom%08x%08x", ::arc4random(), ::arc4random());
     FileDescriptor shared{::shm_open(shared_name.data(), O_CREAT | O_EXCL | O_RDWR, 0600)};
 
     // As large as the upload: available refuses a smaller object, which only macOS's page
@@ -238,11 +239,11 @@ namespace {
     GraphicsFrameSource::release(shared_resource);
     check(!GraphicsFrameSource::available(shared_resource));
 
-    std::array<std::uint8_t, 4> decoded;
+    ds::Array<std::uint8_t, 4> decoded;
 
-    check(decodeGraphicsName("YWJj", decoded) != nullptr && std::strcmp(reinterpret_cast<const char*>(decoded.data()), "abc") == 0);
+    check(decodeGraphicsName("YWJj", decoded.viewMut()) != nullptr && std::strcmp(reinterpret_cast<const char*>(decoded.dataMut()), "abc") == 0);
     for (const auto invalid : {"", "AAAA", "YWJjZA==", "YWJj!"}) {
-      check(decodeGraphicsName(invalid, decoded) == nullptr);
+      check(decodeGraphicsName(invalid, decoded.viewMut()) == nullptr);
     }
   }
 

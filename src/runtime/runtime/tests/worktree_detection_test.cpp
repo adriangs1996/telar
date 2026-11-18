@@ -29,6 +29,7 @@ import telar.platform.process;
 import telar.runtime.model.client_layouts;
 import telar.runtime.worktrees.git_probe;
 import telar.runtime.model.slot_store;
+import telar.base.ds;
 
 namespace {
 
@@ -38,10 +39,10 @@ namespace {
   using namespace telar::runtime;
 
   void testLinkedFiles() {
-    std::array<char, 64> pattern;
+    ds::Array<char, 64> pattern;
 
-    std::strcpy(pattern.data(), "/tmp/telar-linked-test.XXXXXX");
-    check(::mkdtemp(pattern.data()) != nullptr);
+    std::strcpy(pattern.dataMut(), "/tmp/telar-linked-test.XXXXXX");
+    check(::mkdtemp(pattern.dataMut()) != nullptr);
     const std::filesystem::path root{pattern.data()};
     const auto main = root / "main";
     const auto linked = root / "linked";
@@ -134,7 +135,7 @@ namespace {
     ConcurrentMemory& memory = adapter;
     RuntimeModel model{memory};
     ClientStore clients{memory};
-    const std::array<std::string_view, 1> arguments{"/bin/cat"};
+    const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
     Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
 
     model.panes.insert(1, makeOwned<Pane>(memory, memory, 1, TabLocation{.workspace = {.id = 7}, .tab_id = 1}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits}));
@@ -194,7 +195,7 @@ namespace {
     MemoryAdapter adapter{system};
     ConcurrentMemory& memory = adapter;
     RuntimeModel model{memory};
-    const std::array<std::string_view, 1> arguments{"/bin/cat"};
+    const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
     Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
     constexpr std::uint64_t source = 3;
     constexpr std::uint64_t worktree_workspace = 7;

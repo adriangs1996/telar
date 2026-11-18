@@ -76,7 +76,7 @@ export {
 
       struct SelectedFrame {
         AtomicFrameKey key;
-        std::array<std::size_t, recent_frames> recent;
+        ds::Array<std::size_t, recent_frames> recent;
         std::size_t recent_count;
         ds::Option<std::size_t> selected;
       };
@@ -107,7 +107,7 @@ export {
       };
 
       // The upload's handle, or none; a shared memory object's name comes back in `name`.
-      static ds::Option<Handle> validate(const AtomicFrameResource& resource, std::array<std::uint8_t, PATH_MAX + 1>& name) noexcept;
+      static ds::Option<Handle> validate(const AtomicFrameResource& resource, ds::Array<std::uint8_t, PATH_MAX + 1>& name) noexcept;
 
       static bool available(const AtomicFrameResource& resource) noexcept;
 
@@ -399,7 +399,7 @@ export {
       std::shared_ptr<PtyResponseQueue> responses_;
       GraphicsLimits limits_;
       ds::Option<MediaTerminal> terminal_;
-      std::array<MediaBatch, 2> batches_;
+      ds::Array<MediaBatch, 2> batches_;
       KittyFraming framing_;
       TerminalSize current_size_;
       TerminalSize sealed_size_{};

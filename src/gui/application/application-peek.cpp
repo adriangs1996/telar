@@ -49,7 +49,7 @@ namespace telar::gui::application::peek {
 
       constexpr std::string_view script = R"("$TELAR_BIN_PATH" worktree diff "$1" --stat; echo; "$TELAR_BIN_PATH" worktree diff "$1"; exec "${SHELL:-/bin/sh}")";
       constexpr TerminalSize size{.cols = 160, .rows = 48, .cell_width_px = 0, .cell_height_px = 0};
-      const std::array<std::string_view, 5> arguments{"sh", "-c", script, "sh", row->branch};
+      const ds::Array<std::string_view, 5> arguments{"sh", "-c", script, "sh", row->branch};
 
       Access::sendRegistered(session, Access::RequestKind::peek_diff, LaunchWorktree{.worktree = row->id, .label = "diff", .size = size, .launch = {.cwd = row->path.empty() ? std::string_view{"/"} : std::string_view{row->path}, .arguments = arguments}}, agent.pane_id);
     }

@@ -13,6 +13,7 @@ import telar.testing;
 import telar.client;
 import telar.platform.fs;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -83,19 +84,19 @@ namespace {
   private:
     void serve(const std::vector<std::vector<Byte>>& replies) const {
       const int connection = ::accept(listener_, nullptr, nullptr);
-      std::array<Byte, frame_prefix_size + HandshakeCodec::max_message_size> hello{};
-      std::array<Byte, 256> drained{};
+      ds::Array<Byte, frame_prefix_size + HandshakeCodec::max_message_size> hello{};
+      ds::Array<Byte, 256> drained{};
 
       if (connection < 0) {
         return;
       }
 
-      static_cast<void>(readExactly(connection, std::span{hello}.first(frame_prefix_size + HandshakeCodec::encode(ClientHello{}).size())));
+      static_cast<void>(readExactly(connection, hello.viewMut().first(frame_prefix_size + HandshakeCodec::encode(ClientHello{}).size())));
       for (const auto& reply : replies) {
         static_cast<void>(::write(connection, reply.data(), reply.size()));
       }
 
-      while (::read(connection, drained.data(), drained.size()) > 0) {
+      while (::read(connection, drained.dataMut(), drained.size()) > 0) {
       }
 
       ::close(connection);
@@ -133,12 +134,12 @@ namespace {
     const auto accepted = HandshakeCodec::encode(ServerAccept{.schema = handshake::schema_id});
     SchemaId other = handshake::schema_id;
 
-    other.back() = static_cast<Byte>(other.back() + 1);
+    other.atMut(other.size() - 1) = static_cast<Byte>(other.back() + 1);
     auto bad_magic = accepted;
     auto unknown_tag = accepted;
 
-    bad_magic[0] = static_cast<Byte>(bad_magic[0] ^ 0xff);
-    unknown_tag[handshake::magic.size()] = 0x7f;
+    bad_magic.atMut(0) = static_cast<Byte>(bad_magic[0] ^ 0xff);
+    unknown_tag.atMut(handshake::magic.size()) = 0x7f;
 
     check(handshakeRefused(reject(HandshakeRejectReason::incompatible_schema)));
     check(handshakeRefused(reject(HandshakeRejectReason::client_limit_reached)));

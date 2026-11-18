@@ -97,11 +97,11 @@ namespace telar::runtime::cli::file_transfer {
   }
 
   std::uint64_t copy(int input, int output) {
-    std::array<Byte, copy_buffer_bytes> buffer;
+    ds::Array<Byte, copy_buffer_bytes> buffer;
     std::uint64_t total = 0;
 
     for (;;) {
-      const auto count = ::read(input, buffer.data(), buffer.size());
+      const auto count = ::read(input, buffer.dataMut(), buffer.size());
       if (count < 0 && sys::lastError() == EINTR) {
         continue;
       }
@@ -661,7 +661,7 @@ namespace telar::runtime::cli::history {
       throw std::runtime_error{"HistfileNotFound"};
     }
 
-    constexpr std::array candidates{
+    constexpr ds::Array candidates{
         std::pair{Kind::zsh, "/.zsh_history"},
         std::pair{Kind::bash, "/.bash_history"},
         std::pair{Kind::fish, "/.local/share/fish/fish_history"},
@@ -736,7 +736,7 @@ namespace telar::runtime::cli::history {
   }
 
   int importHistory(ControlSession& session, const ImportSource& input) {
-    constexpr std::array kind_names{"auto", "zsh", "bash", "fish"};
+    constexpr ds::Array kind_names{"auto", "zsh", "bash", "fish"};
     const auto source = std::string{kind_names.at(static_cast<std::size_t>(input.kind))} + ":" + input.path;
     std::vector<ImportedLine> batch;
 
@@ -748,10 +748,10 @@ namespace telar::runtime::cli::history {
         return;
       }
 
-      std::array<ImportHistoryEntry, max_import_entries> entries;
+      ds::Array<ImportHistoryEntry, max_import_entries> entries;
 
       for (std::size_t index = 0; index < batch.size(); ++index) {
-        entries[index] = {.started_at_ms = batch[index].started_at_ms, .command = batch[index].command};
+        entries.atMut(index) = {.started_at_ms = batch[index].started_at_ms, .command = batch[index].command};
       }
 
       session.template exchange<RequestCompleted>(ImportHistory{.source = source, .base_sequence = total, .entries = std::span{entries}.first(batch.size())});
@@ -1130,7 +1130,7 @@ namespace telar::runtime::cli {
       return seconds * milliseconds_per_second;
     }
 
-    std::array<std::int64_t, 3> fields{};
+    ds::Array<std::int64_t, 3> fields{};
 
     for (std::size_t at = 0; at < fields.size(); ++at) {
       const auto end = text.find('-');
@@ -1138,7 +1138,7 @@ namespace telar::runtime::cli {
         throw std::invalid_argument{"InvalidHistoryBefore"};
       }
 
-      fields[at] = parseInt<std::int64_t>(text.substr(0, end));
+      fields.atMut(at) = parseInt<std::int64_t>(text.substr(0, end));
       if (end != text.npos) {
         text.remove_prefix(end + 1);
       }

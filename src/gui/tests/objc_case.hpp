@@ -6,6 +6,7 @@
 //   const telar::gui::test::ObjcCase case_phases{"native_scroll_input.phases", phases};
 //
 // objc_case.cpp, a C++ unit of the same program, defines both with telar.testing.
+#include "telar_base/ds/values.hpp"
 #include <array>
 #include <cstddef>
 #include <source_location>
@@ -25,7 +26,7 @@ namespace telar::gui::test {
 
   private:
     // The telar::testing::Case it registers, built in place: a name, a function and a link.
-    alignas(void*) std::array<std::byte, 4 * sizeof(void*)> storage_{};
+    alignas(void*) ds::Array<std::byte, 4 * sizeof(void*)> storage_{};
   };
 
   // telar::testing::fail: writes where the check failed and aborts the process.

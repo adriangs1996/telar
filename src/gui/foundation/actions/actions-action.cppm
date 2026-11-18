@@ -73,7 +73,7 @@ export {
       bool operator==(const BindingAction&) const = default;
     };
 
-    inline constexpr auto builtin_binding_actions = std::to_array<std::pair<std::string_view, BindingActionKind>>({
+    inline constexpr auto builtin_binding_actions = ds::Array<std::pair<std::string_view, BindingActionKind>, 45>{{
         {"scroll-pane-up", BindingActionKind::scroll_pane_up},
         {"scroll-pane-down", BindingActionKind::scroll_pane_down},
         {"split-horizontal", BindingActionKind::split_horizontal},
@@ -119,7 +119,7 @@ export {
         {"previous-machine", BindingActionKind::previous_machine},
         {"machine-picker", BindingActionKind::machine_picker},
         {"add-machine", BindingActionKind::add_machine},
-    });
+    }};
 
     ds::Option<BindingAction> builtinBindingAction(std::string_view name) noexcept;
 

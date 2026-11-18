@@ -14,6 +14,7 @@ import telar.gui.features.workbench;
 import telar.wire.layout;
 import telar.wire.vocabulary;
 import telar.gui.foundation.model;
+import telar.base.ds;
 
 namespace {
 
@@ -27,7 +28,7 @@ namespace {
   constexpr std::uint64_t second_pane = 12;
   constexpr std::uint16_t fixture_ratio = 3500;
   constexpr std::uint16_t sidebar_columns = 53;
-  constexpr std::array<ClientLayoutNode, 3> fixture_nodes{
+  constexpr ds::Array<ClientLayoutNode, 3> fixture_nodes{
       ClientLayoutSplit{.axis = ClientLayoutAxis::vertical, .ratio = fixture_ratio},
       ClientLayoutPane{first_pane},
       ClientLayoutPane{second_pane},
@@ -39,7 +40,7 @@ namespace {
       .workspace_active = true,
       .nodes = fixture_nodes,
   };
-  constexpr std::array fixture_tabs{fixture_tab};
+  constexpr ds::Array fixture_tabs{fixture_tab};
   constexpr ClientLayoutSnapshot fixture_snapshot{
       .restored = true,
       .sidebar_visible = false,
@@ -75,7 +76,7 @@ namespace {
   }
 
   void invalidTokens() {
-    const std::array<std::string_view, 4> invalid{"", "0", "00", "gg"};
+    const ds::Array<std::string_view, 4> invalid{"", "0", "00", "gg"};
 
     for (const auto text : invalid) {
       bool rejected = false;
@@ -151,7 +152,7 @@ namespace {
         .nodes = layout.nodes(),
     };
 
-    const std::array tabs{saved_tab};
+    const ds::Array tabs{saved_tab};
     auto snapshot = fixture_snapshot;
 
     snapshot.tabs = tabs;

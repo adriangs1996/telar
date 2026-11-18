@@ -87,10 +87,10 @@ export namespace telar::runtime::base64 {
   };
 
   inline constexpr auto encoded_pairs = [] {
-    std::array<std::array<char, 2>, alphabet.size() * alphabet.size()> pairs;
+    ds::Array<ds::Array<char, 2>, alphabet.size() * alphabet.size()> pairs;
 
     for (std::size_t index = 0; index < pairs.size(); ++index) {
-      pairs[index] = {alphabet[index / alphabet.size()], alphabet[index % alphabet.size()]};
+      pairs.atMut(index) = {alphabet[index / alphabet.size()], alphabet[index % alphabet.size()]};
     }
 
     return pairs;

@@ -15,9 +15,9 @@ namespace telar::gui::features::components {
 
   Definitions::Definitions() noexcept {
     slots_.fill(no_reference);
-    sources_[static_cast<std::size_t>(Position::bottom_left)].kind = SourceKind::metrics;
-    sources_[static_cast<std::size_t>(Position::bottom_right)].kind = SourceKind::tabs;
-    sources_[static_cast<std::size_t>(Position::footer_left)].kind = SourceKind::metrics;
+    sources_.atMut(static_cast<std::size_t>(Position::bottom_left)).kind = SourceKind::metrics;
+    sources_.atMut(static_cast<std::size_t>(Position::bottom_right)).kind = SourceKind::tabs;
+    sources_.atMut(static_cast<std::size_t>(Position::footer_left)).kind = SourceKind::metrics;
   }
 
   const Source& Definitions::source(Position position) const {
@@ -43,19 +43,19 @@ namespace telar::gui::features::components {
   }
 
   void Definitions::defineSource(Position position, const Source& source) {
-    sources_[std::to_underlying(position)] = source;
+    sources_.atMut(std::to_underlying(position)) = source;
   }
 
   void Definitions::defineSlot(Slot slot, int reference) noexcept {
-    slots_[static_cast<std::size_t>(slot)] = reference;
+    slots_.atMut(static_cast<std::size_t>(slot)) = reference;
   }
 
   void Definitions::definePanel(std::size_t index, const Panel& panel) {
-    panels_[index] = panel;
+    panels_.atMut(index) = panel;
   }
 
   void Definitions::definePick(std::size_t index, const Pick& pick) {
-    picks_[index] = pick;
+    picks_.atMut(index) = pick;
   }
 
   void Definitions::count(ds::Option<std::size_t> panels, ds::Option<std::size_t> picks) noexcept {
@@ -80,7 +80,7 @@ namespace telar::gui::features::components {
       input.text = {};
       input.node.kind = Kind::metric;
       input.node.parent = group;
-      for (const auto metric : std::array{BarMetric::battery, BarMetric::cpu, BarMetric::memory}) {
+      for (const auto metric : ds::Array{BarMetric::battery, BarMetric::cpu, BarMetric::memory}) {
         input.node.metric = metric;
         content.append(input);
       }

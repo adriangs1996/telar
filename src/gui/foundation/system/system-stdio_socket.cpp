@@ -6,6 +6,7 @@ import telar.platform.error;
 import telar.sys.posix;
 import telar.sys.socket;
 import telar.platform.primitives;
+import telar.base.ds;
 #if defined(__linux__)
 import telar.sys.linux_api;
 #endif
@@ -35,13 +36,13 @@ namespace telar::gui::inline foundation::inline system {
   }
 
   StdioSocket openStdioSocket() {
-    std::array<int, 2> descriptors{};
+    ds::Array<int, 2> descriptors{};
 #ifdef __linux__
     constexpr auto flags = SOCK_STREAM | SOCK_CLOEXEC;
 #else
     constexpr auto flags = SOCK_STREAM;
 #endif
-    if (::socketpair(AF_UNIX, flags, 0, descriptors.data()) != 0) {
+    if (::socketpair(AF_UNIX, flags, 0, descriptors.dataMut()) != 0) {
       throw runtime::SystemError{"Create SSH bridge socket"};
     }
 

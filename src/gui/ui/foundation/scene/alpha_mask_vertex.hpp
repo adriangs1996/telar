@@ -1,5 +1,6 @@
 #pragma once
 
+#include "telar_base/ds/values.hpp"
 #include <QPointF>
 #include <QRectF>
 #include <QSGGeometry>
@@ -20,7 +21,7 @@ namespace telar::gui::qt {
   inline constexpr std::size_t alpha_mask_triangle_vertices = 6;
 
   inline void writeAlphaMaskQuad(std::span<AlphaMaskVertex, alpha_mask_triangle_vertices> vertices, const QRectF& bounds, const QRectF& source, float opacity) noexcept {
-    constexpr std::array corners{QPointF{0, 0}, QPointF{1, 0}, QPointF{1, 1}, QPointF{0, 0}, QPointF{1, 1}, QPointF{0, 1}};
+    constexpr ds::Array corners{QPointF{0, 0}, QPointF{1, 0}, QPointF{1, 1}, QPointF{0, 0}, QPointF{1, 1}, QPointF{0, 1}};
 
     for (std::size_t index = 0; index < corners.size(); ++index) {
       const auto corner = corners[index];
@@ -30,7 +31,7 @@ namespace telar::gui::qt {
   }
 
   inline const QSGGeometry::AttributeSet& alphaMaskAttributes() noexcept {
-    static const std::array attributes{
+    static const ds::Array attributes{
         QSGGeometry::Attribute::create(0, 2, QSGGeometry::FloatType, true),
         QSGGeometry::Attribute::create(1, 2, QSGGeometry::FloatType),
         QSGGeometry::Attribute::create(2, 1, QSGGeometry::FloatType),

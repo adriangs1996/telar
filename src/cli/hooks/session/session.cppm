@@ -36,7 +36,7 @@ export {
 
       std::size_t scan(std::string_view bytes, bool at_end) noexcept;
 
-      std::array<FixedText<64>, 32> identifiers_;
+      ds::Array<FixedText<64>, 32> identifiers_;
       std::size_t count_ = 0;
     };
 

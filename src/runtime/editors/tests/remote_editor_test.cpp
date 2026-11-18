@@ -18,6 +18,7 @@ import telar.runtime.platform.process_probe;
 import telar.runtime.transport.connection;
 import telar.wire.editor;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -83,7 +84,7 @@ namespace {
       const auto identity = ProcessInspector{}.identity(process_);
 
       check(identity.hasValue());
-      context.editor_candidates[0] = {.pane = 7, .generation = 9, .process = *identity};
+      context.editor_candidates.atMut(0) = {.pane = 7, .generation = 9, .process = *identity};
       context.editor_candidate_count = 1;
       return context;
     }
@@ -95,8 +96,8 @@ namespace {
   EditorOutcome open(ConcurrentMemory& memory, const RequestContext& context, std::string_view editor, const std::string& file, EditorOpened* opened = nullptr) {
     RemoteEditor remote{memory};
     EncodedReply reply{memory};
-    std::array<Byte, 1024> scratch;
-    DecodeStorage storage{scratch};
+    ds::Array<Byte, 1024> scratch;
+    DecodeStorage storage{scratch.viewMut()};
 
     remote.open(OpenEditor{.request_id = 1, .editor = editor, .path = file, .line = 2, .column = 1}, context, reply);
     const auto result = Codec::decode<EditorOpened>(reply.payload(), storage);
@@ -152,9 +153,9 @@ namespace {
     const auto file = text(directory.path()) + "/file.txt";
     const auto opened_marker = text(directory.path()) + "/opened";
     EditorProcess process;
-    std::array<char, 256> host{};
+    ds::Array<char, 256> host{};
 
-    check(::gethostname(host.data(), host.size() - 1) == 0);
+    check(::gethostname(host.dataMut(), host.size() - 1) == 0);
     std::ofstream{file} << "first\nsecond\n";
     writeScript(vim, std::format(R"(case "$1" in
 --serverlist) printf 'OTHER\nEDITOR\n' ;;

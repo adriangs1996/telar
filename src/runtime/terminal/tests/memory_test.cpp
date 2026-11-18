@@ -28,8 +28,8 @@ namespace {
   void testBufferAllocations() {
     SystemAllocator system;
     BudgetAllocator memory{system, 256};
-    alignas(64) std::array<std::byte, 64> storage;
-    BufferAllocator buffered{memory, std::span{storage}.subspan(1)};
+    alignas(64) ds::Array<std::byte, 64> storage;
+    BufferAllocator buffered{memory, storage.viewMut().subspan(1)};
     ErasingAllocator sensitive{buffered};
     auto* first = static_cast<unsigned char*>(sensitive.allocate(5, 32));
     auto* second = static_cast<unsigned char*>(sensitive.allocate(27, 1));
@@ -80,7 +80,7 @@ namespace {
       indexes.insert(index);
     }
 
-    const std::array<std::size_t, 4> expected{0, 63, 64, 69};
+    const ds::Array<std::size_t, 4> expected{0, 63, 64, 69};
 
     visited = 0;
     indexes.forEach([&](std::size_t index) {
@@ -133,11 +133,11 @@ namespace {
   }
 
   void testSensitiveErasure() {
-    std::array<unsigned char, 128 * 1024 + 2> bytes;
+    ds::Array<unsigned char, 128 * 1024 + 2> bytes;
 
     for (const std::size_t length : {0, 1, 7, 16, 31, 32, 33, 1024, 128 * 1024}) {
       bytes.fill(73);
-      eraseSensitive(bytes.data() + 1, length);
+      eraseSensitive(bytes.dataMut() + 1, length);
       check(bytes.front() == 73 && bytes[length + 1] == 73);
       check(std::all_of(bytes.begin() + 1, bytes.begin() + 1 + length, [](auto value) {
         return value == 0;
@@ -164,7 +164,7 @@ namespace {
     {
       BudgetAllocator limited{system, 8};
       ByteQueue queue{limited, 16};
-      const std::array<std::uint8_t, 4> bytes{1, 2, 3, 4};
+      const ds::Array<std::uint8_t, 4> bytes{1, 2, 3, 4};
 
       queue.reserve(8);
       queue.append(bytes);
@@ -199,7 +199,7 @@ namespace {
 
     {
       ByteQueue queue{memory, 64};
-      const std::array<std::uint8_t, 4> bytes{1, 2, 3, 4};
+      const ds::Array<std::uint8_t, 4> bytes{1, 2, 3, 4};
 
       queue.reserve(64);
       queue.append(bytes);

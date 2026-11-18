@@ -13,6 +13,7 @@ import telar.platform.process;
 import telar.vocabulary;
 import telar.testing;
 import telar.cli.worktree_git;
+import telar.base.ds;
 
 namespace {
 
@@ -25,8 +26,8 @@ namespace {
   class Directory {
   public:
     Directory() {
-      std::strcpy(path_.data(), "/tmp/telar-worktree-git.XXXXXX");
-      check(::mkdtemp(path_.data()) != nullptr);
+      std::strcpy(path_.dataMut(), "/tmp/telar-worktree-git.XXXXXX");
+      check(::mkdtemp(path_.dataMut()) != nullptr);
     }
 
     ~Directory() {
@@ -40,7 +41,7 @@ namespace {
     }
 
   private:
-    std::array<char, 64> path_{};
+    ds::Array<char, 64> path_{};
   };
 
   // Runs Git for a fixture, without the code under test, and returns its trimmed output.

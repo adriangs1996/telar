@@ -11,6 +11,7 @@ import telar.base.text.utf8;
 import telar.wire.vocabulary;
 import telar.sys.posix;
 import telar.sys.socket;
+import telar.base.ds;
 
 // The connection reports request failures with it; the rest of the wire
 // vocabulary stays with telar.wire.vocabulary.
@@ -22,11 +23,11 @@ export namespace telar::runtime {
 export {
   namespace telar {
 
-    using SchemaId = std::array<Byte, 8>;
+    using SchemaId = ds::Array<Byte, 8>;
 
     namespace handshake {
 
-      inline constexpr std::array<Byte, 8> magic{
+      inline constexpr ds::Array<Byte, 8> magic{
           'T',
           'E',
           'L',
@@ -119,7 +120,7 @@ export {
       static constexpr std::size_t max_message_size = HandshakeSchema<ServerReject>::payload_size;
 
       template <typename Message>
-      static std::array<Byte, HandshakeSchema<Message>::payload_size> encode(const Message& message) _throw(EncodingError);
+      static ds::Array<Byte, HandshakeSchema<Message>::payload_size> encode(const Message& message) _throw(EncodingError);
 
       template <typename Message>
       static Message decode(std::span<const Byte> input) _throw(EncodingError);
@@ -222,10 +223,10 @@ export {
       };
 
       template <std::size_t N>
-      TBC_GENERIC inline void sendFrame(const std::array<Byte, N>& payload) _throw(SocketError) {
+      TBC_GENERIC inline void sendFrame(const ds::Array<Byte, N>& payload) _throw(SocketError) {
         static_assert(N > 0 && N <= max_payload_size, "Invalid runtime frame length");
-        std::array<Byte, frame_prefix_size + N> frame{};
-        std::span<Byte> output = frame;
+        ds::Array<Byte, frame_prefix_size + N> frame{};
+        std::span<Byte> output = frame.viewMut();
 
         u32::encode(static_cast<std::uint32_t>(payload.size()), output);
 

@@ -8,9 +8,9 @@ namespace telar::gui::inline foundation::inline keys {
 
   void InputConfiguration::setPrefix(KeyChord key) noexcept {
     prefix = key;
-    for (auto& binding : std::span{configured}.first(length)) {
+    for (auto& binding : configured.viewMut().first(length)) {
       if (binding.prefixed) {
-        binding.keys[0] = key;
+        binding.keys.atMut(0) = key;
       }
     }
   }
@@ -26,7 +26,7 @@ namespace telar::gui::inline foundation::inline keys {
         return configured.conflictsWith(binding);
       });
       if (!overridden && count < resolved.size()) {
-        resolved[count++] = binding;
+        resolved.atMut(count++) = binding;
       }
     }
 

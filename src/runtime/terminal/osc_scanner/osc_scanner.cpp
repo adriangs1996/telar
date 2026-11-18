@@ -70,7 +70,7 @@ namespace telar::runtime {
   }
 
   void InputScanner::clearSensitive() noexcept {
-    eraseSensitive(typed_.data(), typed_.size());
+    eraseSensitive(typed_.dataMut(), typed_.size());
     reset();
   }
 
@@ -100,7 +100,7 @@ namespace telar::runtime {
         }
       } else if (control != ControlByte::clear_screen) {
         if (byte >= ' ' && byte <= '~' && typed_length_ < typed_.size()) {
-          typed_[typed_length_++] = static_cast<char>(byte);
+          typed_.atMut(typed_length_++) = static_cast<char>(byte);
         } else {
           typed_exact_ = false;
         }
@@ -234,8 +234,8 @@ namespace telar::runtime {
     const auto length = static_cast<std::uint16_t>(response.size());
     const auto required = size_ + header_bytes + response.size();
     if (overflow_.empty() && required <= inline_.size()) {
-      std::memcpy(inline_.data() + size_, &length, header_bytes);
-      std::memcpy(inline_.data() + size_ + header_bytes, response.data(), response.size());
+      std::memcpy(inline_.dataMut() + size_, &length, header_bytes);
+      std::memcpy(inline_.dataMut() + size_ + header_bytes, response.data(), response.size());
     } else {
       if (required > overflow_.capacity()) {
         overflow_.reserve(std::min(maximum_bytes, std::max(required, std::max(inline_bytes * 2, overflow_.capacity() * 2))));
@@ -348,7 +348,7 @@ namespace telar::runtime {
   }
 
   PaneMatches TextSearch::result() {
-    std::reverse(matches_.begin(), matches_.begin() + count_);
+    std::reverse(matches_.dataMut(), matches_.dataMut() + count_);
     return PaneMatches{.request_id = request_id, .pane_id = pane_id, .truncated = truncated_, .matches = std::span<const PaneMatch>{matches_}.first(count_)};
   }
 
@@ -376,13 +376,13 @@ namespace telar::runtime {
         codepoint = (codepoint << 6) | (static_cast<Byte>(text[index]) & 0x3f);
       }
 
-      needle_[needle_length_++] = codepoint;
+      needle_.atMut(needle_length_++) = codepoint;
       fold_ascii_ &= codepoint < 'A' || codepoint > 'Z';
       text.remove_prefix(length);
     }
 
     for (std::size_t index = 0; index < needle_length_; ++index) {
-      needle_[index] = normalize(needle_[index]);
+      needle_.atMut(index) = normalize(needle_[index]);
     }
 
     std::size_t matched = 0;
@@ -396,7 +396,7 @@ namespace telar::runtime {
         ++matched;
       }
 
-      prefix_[index] = matched;
+      prefix_.atMut(index) = matched;
     }
   }
 
@@ -406,8 +406,8 @@ namespace telar::runtime {
 
   bool TextSearch::searchRow(GhosttyTerminal terminal, std::uint32_t row) {
     auto reference = gridReference(terminal, GHOSTTY_POINT_TAG_SCREEN, {0, row});
-    std::array<std::uint16_t, maximum_columns> positions;
-    std::array<PaneMatch, maximum_columns> found;
+    ds::Array<std::uint16_t, maximum_columns> positions;
+    ds::Array<PaneMatch, maximum_columns> found;
     std::size_t found_count = 0;
     std::size_t row_length = 0;
     std::size_t matched = 0;
@@ -427,7 +427,7 @@ namespace telar::runtime {
         continue;
       }
 
-      positions[row_length++] = column;
+      positions.atMut(row_length++) = column;
       const auto content = cell_layout::content_tag(cell);
       auto codepoint = content == GHOSTTY_CELL_CONTENT_CODEPOINT || content == GHOSTTY_CELL_CONTENT_CODEPOINT_GRAPHEME ? cell_layout::codepoint(cell) : 0;
 
@@ -443,7 +443,7 @@ namespace telar::runtime {
       if (matched == needle_length_) {
         const auto start = positions[row_length - needle_length_];
 
-        found[found_count++] = PaneMatch{.x = start, .y = row, .len = static_cast<std::uint16_t>(column - start + 1)};
+        found.atMut(found_count++) = PaneMatch{.x = start, .y = row, .len = static_cast<std::uint16_t>(column - start + 1)};
         matched = 0;
       }
     }
@@ -454,7 +454,7 @@ namespace telar::runtime {
         return false;
       }
 
-      matches_[count_++] = found[--found_count];
+      matches_.atMut(count_++) = found[--found_count];
     }
 
     return true;

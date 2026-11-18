@@ -40,8 +40,8 @@ namespace telar::runtime::checkpoint {
 
   template <Allocator Memory>
   FileDescriptor FileStore<Memory>::lock() const {
-    std::array<char, NAME_MAX + 1> name;
-    const auto length = std::snprintf(name.data(), name.size(), "%s.lock", name_.c_str());
+    ds::Array<char, NAME_MAX + 1> name;
+    const auto length = std::snprintf(name.dataMut(), name.size(), "%s.lock", name_.c_str());
     if (length < 0 || static_cast<std::size_t>(length) >= name.size()) {
       throw SystemError{"Session lock path is too long", ENAMETOOLONG};
     }
@@ -72,8 +72,8 @@ namespace telar::runtime::checkpoint {
 
   template <Allocator Memory>
   void FileStore<Memory>::quarantine() noexcept {
-    std::array<char, NAME_MAX + 1> destination;
-    const auto length = std::snprintf(destination.data(), destination.size(), "%s.corrupt", name_.c_str());
+    ds::Array<char, NAME_MAX + 1> destination;
+    const auto length = std::snprintf(destination.dataMut(), destination.size(), "%s.corrupt", name_.c_str());
     if (length >= 0 && static_cast<std::size_t>(length) < destination.size()) {
       ::renameat(parent_.get(), name_.c_str(), parent_.get(), destination.data());
     }
@@ -206,7 +206,7 @@ namespace telar::runtime::checkpoint {
       CoordinatorReference coordinator;
       const auto session = text(coordinator.session_id.size());
 
-      std::copy(session.begin(), session.end(), coordinator.session_id.begin());
+      std::copy(session.begin(), session.end(), coordinator.session_id.dataMut());
       coordinator.pane_id = u64::decode(input_);
       coordinator.pane_generation = u64::decode(input_);
       registration.coordinator = coordinator;

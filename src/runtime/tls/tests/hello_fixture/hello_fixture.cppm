@@ -1,6 +1,7 @@
 export module telar.runtime.tls.tests.hello_fixture;
 
 import std;
+import telar.base.ds;
 
 // ClientHello records built field by field, for the cases a TLS library would never send.
 export namespace telar::runtime::tls_test {
@@ -54,7 +55,7 @@ export namespace telar::runtime::tls_test {
   }
 
   inline Extension serverName(std::string_view name) {
-    const std::array names{name};
+    const ds::Array names{name};
 
     return {0, serverNames(names)};
   }

@@ -138,21 +138,21 @@ namespace telar::gui::inline foundation::inline system {
       static constexpr unsigned hexadecimal_bits = 4;
 
       void generateName() {
-        std::array<std::uint8_t, nonce_bytes> nonce{};
+        ds::Array<std::uint8_t, nonce_bytes> nonce{};
 
-        SecureRandom::fill(nonce);
+        SecureRandom::fill(nonce.viewMut());
 
-        std::ranges::copy(prefix, name_.begin());
+        std::ranges::copy(prefix, name_.viewMut().begin());
         auto position = prefix.size();
 
         for (const auto byte : nonce) {
-          name_[position++] = hexadecimal[byte >> hexadecimal_bits];
-          name_[position++] = hexadecimal[byte % hexadecimal.size()];
+          name_.atMut(position++) = hexadecimal[byte >> hexadecimal_bits];
+          name_.atMut(position++) = hexadecimal[byte % hexadecimal.size()];
         }
       }
 
       int parent_;
-      std::array<char, prefix.size() + (nonce_bytes * 2) + 1> name_{};
+      ds::Array<char, prefix.size() + (nonce_bytes * 2) + 1> name_{};
       runtime::FileDescriptor file_;
       bool committed_ = false;
     };
@@ -211,8 +211,8 @@ namespace telar::gui::inline foundation::inline system {
     BoundedText<PathLimits::path_bytes - 1> absolute;
 
     if (!path.starts_with('/')) {
-      std::array<char, PathLimits::path_bytes> current{};
-      if (::getcwd(current.data(), current.size()) == nullptr) {
+      ds::Array<char, PathLimits::path_bytes> current{};
+      if (::getcwd(current.dataMut(), current.size()) == nullptr) {
         throw runtime::SystemError{"Resolve machine profile directory"};
       }
 
@@ -222,7 +222,7 @@ namespace telar::gui::inline foundation::inline system {
 
     absolute.append(path);
     path_length_ = absolute.view().size();
-    std::ranges::copy(absolute.view(), path_.begin());
+    std::ranges::copy(absolute.view(), path_.viewMut().begin());
     name_offset_ = absolute.view().rfind('/') + 1;
     const auto name = absolute.view().substr(name_offset_);
     if (name == "." || name == ".." || name.size() > PathLimits::component_bytes) {
@@ -235,10 +235,10 @@ namespace telar::gui::inline foundation::inline system {
   }
 
   ProfileFileTransaction ProfileFile::lock() const {
-    std::array<char, PathLimits::path_bytes> parent_path{};
+    ds::Array<char, PathLimits::path_bytes> parent_path{};
     const auto parent_length = std::max<std::size_t>(1, name_offset_ - 1);
 
-    std::copy_n(path_.begin(), parent_length, parent_path.begin());
+    std::copy_n(path_.begin(), parent_length, parent_path.dataMut());
     runtime::createPrivateDirectory({parent_path.data(), parent_length});
     auto parent = runtime::openPrivateParent(path());
     const auto name = path().substr(name_offset_);
@@ -258,7 +258,7 @@ namespace telar::gui::inline foundation::inline system {
   ProfileFileTransaction::ProfileFileTransaction(runtime::FileDescriptor parent, runtime::FileDescriptor lock, std::string_view name)
       : parent_(std::move(parent)),
         lock_(std::move(lock)) {
-    std::ranges::copy(name, name_.begin());
+    std::ranges::copy(name, name_.viewMut().begin());
   }
 
   void ProfileFileTransaction::replace(std::string_view source) const {

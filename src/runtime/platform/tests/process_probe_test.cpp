@@ -14,6 +14,7 @@ import telar.testing;
 import telar.platform.process;
 import telar.runtime.platform.process_probe;
 import telar.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -26,7 +27,7 @@ namespace {
   // a process with no terminal reports none.
   void testControllingTerminal() {
     SystemAllocator memory;
-    const std::array<std::string_view, 1> arguments{"/bin/cat"};
+    const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
     Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
     PtyProcess pane{command.specification(TerminalSize{80, 24, 0, 0})};
     const char* name = ::ptsname(pane.descriptor());

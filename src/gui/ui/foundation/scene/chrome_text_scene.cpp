@@ -17,6 +17,7 @@ static_assert(true);
 #include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/foundation/fonts/font_collection.hpp"
 #include "ui/foundation/fonts/resident_fonts.hpp"
+#include "telar_base/ds/values.hpp"
 #include <QColor>
 #include <QImage>
 #include <QList>
@@ -271,19 +272,19 @@ namespace telar::gui::qt {
         const auto& glyphs = glyphs_;
         const auto count = static_cast<std::size_t>(glyphs.size());
         auto* vertices = static_cast<AlphaMaskVertex*>(geometry_.vertexData());
-        std::array<Rect, batch_glyphs> full;
-        std::array<Rect, batch_glyphs> clipped;
+        ds::Array<Rect, batch_glyphs> full;
+        ds::Array<Rect, batch_glyphs> clipped;
         std::size_t offset = 0;
 
         for (std::size_t first = 0; first < count; first += batch_glyphs) {
           const auto batch = std::min(batch_glyphs, count - first);
 
           for (std::size_t index = 0; index < batch; ++index) {
-            full[index] = glyphs[static_cast<qsizetype>(first + index)].bounds(position.origin);
-            clipped[index] = full[index];
+            full.atMut(index) = glyphs[static_cast<qsizetype>(first + index)].bounds(position.origin);
+            clipped.atMut(index) = full[index];
           }
 
-          Rect::intersectEach(std::span{clipped}.first(batch), position.area);
+          Rect::intersectEach(clipped.viewMut().first(batch), position.area);
 
           for (std::size_t index = 0; index < batch; ++index) {
             const auto& glyph = glyphs[static_cast<qsizetype>(first + index)];

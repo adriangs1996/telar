@@ -202,7 +202,7 @@ export namespace telar::runtime::control {
     bool history_erased_ = false;
     // The last sequence moved the cursor home (CUP).
     bool homed_ = false;
-    std::array<bool, desktop_modes.size()> saved_desktop_modes_{};
+    ds::Array<bool, desktop_modes.size()> saved_desktop_modes_{};
     std::size_t capability_offset_ = 0;
     bool paste_events_ = false;
   };

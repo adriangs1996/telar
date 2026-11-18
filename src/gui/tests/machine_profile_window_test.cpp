@@ -47,6 +47,7 @@ static_assert(true);
 import telar.gui.features.machines;
 import telar.gui.foundation.system;
 import telar.wire.layout;
+import telar.base.ds;
 
 namespace telar::gui::test {
 
@@ -105,12 +106,12 @@ namespace {
     QLocalServer listener;
     std::unique_ptr<QLocalSocket> socket;
     std::unique_ptr<WireRuntime> runtime;
-    static constexpr std::array names{"PATH", "TELAR_SOCKET", "TELAR_SOCKET_PATH"};
-    std::array<QByteArray, names.size()> previous;
+    static constexpr ds::Array names{"PATH", "TELAR_SOCKET", "TELAR_SOCKET_PATH"};
+    ds::Array<QByteArray, names.size()> previous;
 
     ProfileFixture() {
       for (std::size_t index = 0; index < names.size(); ++index) {
-        previous[index] = qgetenv(names[index]);
+        previous.atMut(index) = qgetenv(names[index]);
       }
     }
 
@@ -219,10 +220,10 @@ namespace {
       return false;
     }
 
-    const std::array panes{PaneDescriptor{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
+    const ds::Array panes{PaneDescriptor{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
 
     runtime.send(TabSnapshot{.request_id = runtime.last<RequestTabSnapshot>().request_id, .location = location, .panes = panes});
-    const std::array tabs{TabDescriptor{.tab_id = 1, .pane_count = 1}};
+    const ds::Array tabs{TabDescriptor{.tab_id = 1, .pane_count = 1}};
 
     runtime.send(WorkspaceSnapshot{.request_id = runtime.last<RequestWorkspaceSnapshot>().request_id, .workspace = location.workspace, .name = "local", .tabs = tabs});
 

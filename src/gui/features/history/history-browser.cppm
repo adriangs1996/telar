@@ -188,7 +188,7 @@ namespace telar::gui::features::history {
     runtime::FixedText<maximum_error_bytes> error_;
     Criteria criteria_;
     HistoryViewState state_;
-    std::array<std::uint64_t, maximum_requests> requests_{};
+    ds::Array<std::uint64_t, maximum_requests> requests_{};
     std::uint64_t page_request_ = 0;
     std::uint64_t command_request_ = 0;
     std::uint64_t output_request_ = 0;

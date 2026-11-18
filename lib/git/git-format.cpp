@@ -92,7 +92,7 @@ namespace telar::git {
         return ds::none;
       }
 
-      id.bytes[index] = static_cast<std::uint8_t>(high << 4 | low);
+      id.bytes.atMut(index) = static_cast<std::uint8_t>(high << 4 | low);
     }
 
     return id;
@@ -102,7 +102,7 @@ namespace telar::git {
     ObjectId id;
 
     id.size = static_cast<std::uint8_t>(std::min(raw.size(), maximum_hash_size));
-    std::copy_n(raw.begin(), id.size, id.bytes.begin());
+    std::copy_n(raw.begin(), id.size, id.bytes.dataMut());
     return id;
   }
 
@@ -166,7 +166,7 @@ namespace telar::git {
   }
 
   PathName::PathName() noexcept {
-    bytes_[0] = '\0';
+    bytes_.atMut(0) = '\0';
   }
 
   bool PathName::assign(std::initializer_list<std::string_view> parts) noexcept {
@@ -174,15 +174,15 @@ namespace telar::git {
     for (const auto part : parts) {
       if (part.size() >= bytes_.size() - length_ || part.contains('\0')) {
         length_ = 0;
-        bytes_[0] = '\0';
+        bytes_.atMut(0) = '\0';
         return false;
       }
 
-      std::copy(part.begin(), part.end(), bytes_.begin() + static_cast<std::ptrdiff_t>(length_));
+      std::copy(part.begin(), part.end(), bytes_.dataMut() + static_cast<std::ptrdiff_t>(length_));
       length_ += part.size();
     }
 
-    bytes_[length_] = '\0';
+    bytes_.atMut(length_) = '\0';
     return true;
   }
 
@@ -300,10 +300,10 @@ namespace telar::git {
     SHA1_Update(&context_, bytes.data(), bytes.size());
   }
 
-  std::array<std::uint8_t, SHA_DIGEST_LENGTH> Sha1::finish() noexcept {
-    std::array<std::uint8_t, SHA_DIGEST_LENGTH> digest;
+  ds::Array<std::uint8_t, SHA_DIGEST_LENGTH> Sha1::finish() noexcept {
+    ds::Array<std::uint8_t, SHA_DIGEST_LENGTH> digest;
 
-    SHA1_Final(digest.data(), &context_);
+    SHA1_Final(digest.dataMut(), &context_);
     return digest;
   }
 
@@ -340,13 +340,13 @@ namespace telar::git {
   }
 
   void hashObjectHeader(Hasher& hasher, std::string_view type, std::uint64_t size) noexcept {
-    std::array<char, 48> header;
+    ds::Array<char, 48> header;
 
-    std::copy(type.begin(), type.end(), header.begin());
-    auto* cursor = header.data() + type.size();
+    std::copy(type.begin(), type.end(), header.dataMut());
+    auto* cursor = header.dataMut() + type.size();
 
     *cursor++ = ' ';
-    cursor = std::to_chars(cursor, header.data() + header.size() - 1, size).ptr;
+    cursor = std::to_chars(cursor, header.dataMut() + header.size() - 1, size).ptr;
     *cursor++ = '\0';
     hasher.update(asBytes({header.data(), static_cast<std::size_t>(cursor - header.data())}));
   }

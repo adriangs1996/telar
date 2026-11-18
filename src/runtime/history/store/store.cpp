@@ -94,14 +94,14 @@ namespace telar::runtime {
     const auto high = hash(low, source);
     static_assert(std::endian::native == std::endian::little);
 
-    std::memcpy(session.data(), &low, sizeof(low));
-    std::memcpy(session.data() + sizeof(low), &high, sizeof(high));
+    std::memcpy(session.dataMut(), &low, sizeof(low));
+    std::memcpy(session.dataMut() + sizeof(low), &high, sizeof(high));
     pane = (low & ((std::uint64_t{1} << 62) - 1)) | 1;
   }
 
   std::uint64_t ImportIdentity::hash(std::uint64_t seed, std::string_view input) noexcept {
-    constexpr std::array<std::uint64_t, 4> secret{0xa0761d6478bd642f, 0xe7037ed1a0b428db, 0x8ebc6af09c88c6e3, 0x589965cc75374cc3};
-    std::array<std::uint64_t, 3> state;
+    constexpr ds::Array<std::uint64_t, 4> secret{0xa0761d6478bd642f, 0xe7037ed1a0b428db, 0x8ebc6af09c88c6e3, 0x589965cc75374cc3};
+    ds::Array<std::uint64_t, 3> state;
 
     state.fill(seed ^ mix(seed ^ secret[0], secret[1]));
     std::uint64_t left = 0;
@@ -123,17 +123,17 @@ namespace telar::runtime {
       if (input.size() >= 48) {
         while (offset + 48 < input.size()) {
           for (std::size_t lane = 0; lane < state.size(); ++lane) {
-            state[lane] = mix(read<std::uint64_t>(input.data() + offset + 16 * lane) ^ secret[lane + 1], read<std::uint64_t>(input.data() + offset + 16 * lane + 8) ^ state[lane]);
+            state.atMut(lane) = mix(read<std::uint64_t>(input.data() + offset + 16 * lane) ^ secret[lane + 1], read<std::uint64_t>(input.data() + offset + 16 * lane + 8) ^ state[lane]);
           }
 
           offset += 48;
         }
 
-        state[0] ^= state[1] ^ state[2];
+        state.atMut(0) ^= state[1] ^ state[2];
       }
 
       while (offset + 16 < input.size()) {
-        state[0] = mix(read<std::uint64_t>(input.data() + offset) ^ secret[1], read<std::uint64_t>(input.data() + offset + 8) ^ state[0]);
+        state.atMut(0) = mix(read<std::uint64_t>(input.data() + offset) ^ secret[1], read<std::uint64_t>(input.data() + offset + 8) ^ state[0]);
         offset += 16;
       }
 
@@ -368,7 +368,7 @@ namespace telar::runtime {
       const char* sql;
     };
 
-    constexpr std::array migrations{
+    constexpr ds::Array migrations{
         Migration{"session", "tab_id", "ALTER TABLE session ADD COLUMN tab_id INTEGER NOT NULL DEFAULT 0"},
         Migration{"command", "tab_id", "ALTER TABLE command ADD COLUMN tab_id INTEGER NOT NULL DEFAULT 0"},
         Migration{"session", "title", "ALTER TABLE session ADD COLUMN title TEXT"},
@@ -657,22 +657,22 @@ END;
       top.bind(1, request.since_ms);
     }
 
-    std::array<HistoryStatsEntry, maximum_stats_candidates> groups;
+    ds::Array<HistoryStatsEntry, maximum_stats_candidates> groups;
     std::size_t count = 0;
 
     while (top.next()) {
       const auto group = historyGroup(top.text(0));
       const auto occurrences = static_cast<std::uint64_t>(top.integer(1));
-      const auto existing = std::span{groups}.first(count);
+      const auto existing = groups.viewMut().first(count);
       auto found = std::ranges::find(existing, group, &HistoryStatsEntry::command);
       if (found != existing.end()) {
         found->count += occurrences;
       } else {
-        groups[count++] = HistoryStatsEntry{.count = occurrences, .command = rows_.copy(group)};
+        groups.atMut(count++) = HistoryStatsEntry{.count = occurrences, .command = rows_.copy(group)};
       }
     }
 
-    std::sort(groups.begin(), groups.begin() + count, [](const auto& left, const auto& right) {
+    std::sort(groups.dataMut(), groups.dataMut() + count, [](const auto& left, const auto& right) {
       return left.count == right.count ? left.command < right.command : left.count > right.count;
     });
 

@@ -157,14 +157,14 @@ export namespace telar::runtime::control {
     Cached<std::uint8_t> keyboard_cache_;
     Cached<GhosttyStyle> style_cache_;
     Cached<GhosttyRenderStateCursor> visual_cursor_cache_;
-    mutable std::array<ModeCache, 64> modes_;
-    std::array<ds::Option<GhosttyColorRgb>, 3> colors_;
-    std::array<bool, 3> color_valid_{};
+    mutable ds::Array<ModeCache, 64> modes_;
+    ds::Array<ds::Option<GhosttyColorRgb>, 3> colors_;
+    ds::Array<bool, 3> color_valid_{};
     tbc::view<GhosttyTerminal, tbc::lt::a> terminal_ = nullptr;
     tbc::view<GhosttyRenderState, tbc::lt::a> render_ = nullptr;
     GraphicsCursor graphics_cursor_;
     TerminalSize size_{};
-    std::array<GhosttyColorRgb, 256> palette_;
+    ds::Array<GhosttyColorRgb, 256> palette_;
     bool palette_valid_ = false;
     bool possibly_pending_input_ = false;
     bool separate_media_ = false;

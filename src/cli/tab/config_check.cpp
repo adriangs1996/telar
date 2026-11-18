@@ -11,6 +11,7 @@ import telar.sys.posix;
 import telar.config.client;
 import telar.config.core;
 import telar.config.runtime;
+import telar.base.ds;
 
 namespace telar::runtime::cli {
 
@@ -43,7 +44,7 @@ namespace telar::runtime::cli {
         diagnostic("config.lua must return a table", "InvalidConfig");
       }
 
-      constexpr std::array allowed{"api_version", "theme", "client", "gui", "runtime", "plugins", "profiles"};
+      constexpr ds::Array allowed{"api_version", "theme", "client", "gui", "runtime", "plugins", "profiles"};
 
       root.eachField([&](std::string_view name, const lua::Value&) {
         if (std::ranges::find(allowed, name) == allowed.end()) {
@@ -146,27 +147,27 @@ namespace telar::runtime::cli {
       constexpr std::size_t maximum_keys = 5;
 
       struct Sequence {
-        std::array<config::KeyChord, maximum_keys> keys;
+        ds::Array<config::KeyChord, maximum_keys> keys;
         std::size_t count = 0;
       };
 
-      std::array<Sequence, config::BindingKeymap::maximum_bindings> sequences{};
+      ds::Array<Sequence, config::BindingKeymap::maximum_bindings> sequences{};
       const auto count = std::min(bindings.listLength(), sequences.size());
 
       for (std::size_t index = 0; index < count; ++index) {
         const auto binding = bindings.element(index + 1);
 
         validatePluginAction(binding.field("action"), packages);
-        auto& sequence = sequences[index];
+        auto& sequence = sequences.atMut(index);
 
         if (binding.field("prefixed").boolean(false)) {
-          sequence.keys[sequence.count++] = prefix;
+          sequence.keys.atMut(sequence.count++) = prefix;
         }
 
         const auto keys = binding.field("keys");
 
         for (std::size_t key = 1; key <= keys.listLength(); ++key) {
-          sequence.keys[sequence.count++] = config::KeyChordValidator::parse(keys.element(key));
+          sequence.keys.atMut(sequence.count++) = config::KeyChordValidator::parse(keys.element(key));
         }
 
         for (std::size_t previous = 0; previous < index; ++previous) {
@@ -230,8 +231,8 @@ namespace telar::runtime::cli {
         }
       }
 
-      std::array<char, PATH_MAX> canonical;
-      if (::realpath(path.c_str(), canonical.data()) == nullptr) {
+      ds::Array<char, PATH_MAX> canonical;
+      if (::realpath(path.c_str(), canonical.dataMut()) == nullptr) {
         const auto error = sys::errorName(sys::lastError());
 
         diagnostic("cannot resolve config '" + std::string{path} + "': " + error, error);

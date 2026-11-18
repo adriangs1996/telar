@@ -10,7 +10,7 @@ namespace telar::gui::features::status_bar {
 
   void ModeHints::append(tbc::view<ModeHint, tbc::lt::a> hint) noexcept {
     if (count_ < hints_.size()) {
-      hints_[count_++] = hint;
+      hints_.atMut(count_++) = hint;
     }
   }
 
@@ -117,7 +117,7 @@ namespace telar::gui::features::status_bar {
   }
 
   void ModeBarLabels::append(std::string_view key, std::string_view word) {
-    auto& hint = hints_[count_++];
+    auto& hint = hints_.atMut(count_++);
 
     hint.key.append(key);
     hint.word.append(word);

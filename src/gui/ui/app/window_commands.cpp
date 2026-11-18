@@ -113,7 +113,7 @@ namespace telar::gui::qt {
     ds::Option<window_actions::Action> nativeAction(BindingActionKind kind) noexcept {
       using Native = window_actions::Action;
       using Binding = BindingActionKind;
-      constexpr auto actions = std::to_array<std::pair<Binding, Native>>({
+      constexpr auto actions = ds::Array<std::pair<Binding, Native>, 36>{{
           {Binding::new_tab, Native::new_tab},
           {Binding::next_tab, Native::next_tab},
           {Binding::previous_tab, Native::previous_tab},
@@ -150,7 +150,7 @@ namespace telar::gui::qt {
           {Binding::next_machine, Native::next_machine},
           {Binding::previous_machine, Native::previous_machine},
           {Binding::add_machine, Native::add_machine},
-      });
+      }};
 
       const auto* const found = std::ranges::find(actions, kind, &decltype(actions)::value_type::first);
 
@@ -158,12 +158,12 @@ namespace telar::gui::qt {
     }
 
     ds::Option<PaneDirection> navigationDirection(BindingActionKind kind) noexcept {
-      constexpr auto directions = std::to_array<std::pair<BindingActionKind, PaneDirection>>({
+      constexpr auto directions = ds::Array<std::pair<BindingActionKind, PaneDirection>, 4>{{
           {BindingActionKind::navigate_left, PaneDirection::left},
           {BindingActionKind::navigate_right, PaneDirection::right},
           {BindingActionKind::navigate_up, PaneDirection::up},
           {BindingActionKind::navigate_down, PaneDirection::down},
-      });
+      }};
 
       const auto* const found = std::ranges::find(directions, kind, &decltype(directions)::value_type::first);
 

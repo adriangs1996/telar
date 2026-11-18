@@ -147,7 +147,7 @@ export {
         LinkScheme scheme;
       };
 
-      static constexpr auto prefixes = std::to_array<Prefix>({
+      static constexpr auto prefixes = ds::Array<Prefix, 14>{{
           {.text = "https://", .scheme = LinkScheme::https},
           {.text = "http://", .scheme = LinkScheme::http},
           {.text = "file://", .scheme = LinkScheme::file},
@@ -162,7 +162,7 @@ export {
           {.text = "gemini://", .scheme = LinkScheme::external},
           {.text = "gopher://", .scheme = LinkScheme::external},
           {.text = "news:", .scheme = LinkScheme::external},
-      });
+      }};
 
       [[nodiscard]] static ds::Option<Prefix> prefixAt(std::string_view text);
 

@@ -28,7 +28,7 @@ export namespace telar::runtime::diagnostics {
     void key(std::string_view name);
     void append(std::string_view text);
 
-    std::array<char, capacity> bytes_;
+    ds::Array<char, capacity> bytes_;
     std::size_t length_ = 0;
   };
 

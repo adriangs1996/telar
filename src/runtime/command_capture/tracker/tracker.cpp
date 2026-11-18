@@ -164,7 +164,7 @@ namespace telar::runtime {
       break;
     default:
       if (byte >= 0x20 && byte <= 0x7e && typed_count_ < typed_.size()) {
-        typed_[typed_count_++] = static_cast<char>(byte);
+        typed_.atMut(typed_count_++) = static_cast<char>(byte);
       } else {
         typed_exact_ = false;
       }
@@ -260,7 +260,7 @@ namespace telar::runtime {
         } else if (byte == escape) {
           parser_ = ParserState::osc_escape;
         } else if (length_ < bytes_.size()) {
-          bytes_[length_++] = static_cast<char>(byte);
+          bytes_.atMut(length_++) = static_cast<char>(byte);
         } else {
           overflow_ = true;
         }
@@ -397,10 +397,10 @@ namespace telar::runtime {
       return false;
     }
 
-    std::array<char, path_capacity> decoded;
+    ds::Array<char, path_capacity> decoded;
 
     if (const auto path = option(body, "path="); !path.empty()) {
-      if (const auto count = percentDecode(path, decoded)) {
+      if (const auto count = percentDecode(path, decoded.viewMut())) {
         path_.assign({decoded.data(), *count});
       }
     }
@@ -478,8 +478,8 @@ namespace telar::runtime {
         return;
       }
 
-      std::array<char, directory_capacity> decoded;
-      const auto count = percentDecode(remainder.substr(slash), decoded);
+      ds::Array<char, directory_capacity> decoded;
+      const auto count = percentDecode(remainder.substr(slash), decoded.viewMut());
 
       if (!remote_) {
         if (count) {
@@ -922,18 +922,18 @@ namespace telar::runtime {
     return revision_;
   }
 
-  PaneBlocks CommandBlockRing::message(std::uint64_t pane_id, std::array<CommandBlock, capacity>& storage) const {
+  PaneBlocks CommandBlockRing::message(std::uint64_t pane_id, ds::Array<CommandBlock, capacity>& storage) const {
     for (std::size_t index = 0; index < count_; ++index) {
       const auto& current = entry(index);
 
-      storage[index] = CommandBlock{.row = current.row, .rows = current.rows, .lines = current.lines, .state = current.state, .status = current.status, .duration_ms = current.duration_ms, .command = current.command.view(), .nest = current.nest};
+      storage.atMut(index) = CommandBlock{.row = current.row, .rows = current.rows, .lines = current.lines, .state = current.state, .status = current.status, .duration_ms = current.duration_ms, .command = current.command.view(), .nest = current.nest};
     }
 
     return PaneBlocks{.pane_id = pane_id, .blocks = std::span<const CommandBlock>{storage}.first(count_)};
   }
 
   CommandBlockRing::Entry& CommandBlockRing::entryMut(std::size_t index) noexcept {
-    return entries_[(first_ + index) % capacity];
+    return entries_.atMut((first_ + index) % capacity);
   }
 
   const CommandBlockRing::Entry& CommandBlockRing::entry(std::size_t index) const noexcept {
@@ -1004,10 +1004,10 @@ namespace telar::runtime {
 
     const auto lines = static_cast<std::size_t>(std::ranges::count(text, '\n'));
     // Display text: control bytes the grid may hold become blanks.
-    std::array<char, command_bytes> clean;
+    ds::Array<char, command_bytes> clean;
     const auto kept = utf8Prefix(line, command_bytes);
 
-    std::ranges::transform(kept, clean.begin(), [](char byte) {
+    std::ranges::transform(kept, clean.viewMut().begin(), [](char byte) {
       return static_cast<unsigned char>(byte) < 0x20 || byte == 0x7f ? ' ' : byte;
     });
 

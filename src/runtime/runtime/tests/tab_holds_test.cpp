@@ -54,6 +54,7 @@ import telar.runtime.model.client_layouts;
 import telar.runtime.model.slot_store;
 import telar.runtime.platform.event_loop;
 import telar.runtime.runtime.execution_service;
+import telar.base.ds;
 
 namespace {
 
@@ -99,7 +100,7 @@ namespace {
     WorkspaceService<decltype(poller)> workspaces{memory};
     ClientPeer owner{memory, model, clients, ClientRole::interactive};
     ClientPeer holder{memory, model, clients, ClientRole::control};
-    const std::array<std::string_view, 1> arguments{"/bin/cat"};
+    const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
     const Launch launch{.cwd = "/tmp", .arguments = arguments};
     constexpr TerminalSize size{80, 24, 0, 0};
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tbc/view.hpp"
+#include "telar_base/ds/values.hpp"
 
 #include <QByteArray>
 #include <QStringList>
@@ -24,8 +25,8 @@ namespace telar::gui::qt {
 
       count_ = static_cast<std::size_t>(arguments.size());
       for (std::size_t index = 0; index < count_; ++index) {
-        storage_[index] = arguments[static_cast<qsizetype>(index)].toUtf8();
-        views_[index] = {storage_[index].constData(), static_cast<std::size_t>(storage_[index].size())};
+        storage_.atMut(index) = arguments[static_cast<qsizetype>(index)].toUtf8();
+        views_.atMut(index) = {storage_[index].constData(), static_cast<std::size_t>(storage_[index].size())};
       }
     }
 
@@ -40,9 +41,9 @@ namespace telar::gui::qt {
     }
 
   private:
-    std::array<QByteArray, maximum_arguments> storage_;
+    ds::Array<QByteArray, maximum_arguments> storage_;
     // Each view reads the bytes stored beside it.
-    tbc::view<std::array<std::string_view, maximum_arguments>, tbc::lt::self> views_{};
+    tbc::view<ds::Array<std::string_view, maximum_arguments>, tbc::lt::self> views_{};
     std::size_t count_ = 0;
   };
 

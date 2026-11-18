@@ -186,7 +186,7 @@ export {
       std::uint32_t stream = 0;
       std::string_view method, target, reason, scheme, authority;
       std::uint16_t status = 200;
-      std::array<Field, HttpFields<SystemAllocator>::maximum_fields> headers, trailers;
+      ds::Array<Field, HttpFields<SystemAllocator>::maximum_fields> headers, trailers;
       std::size_t header_count = 0;
       std::size_t trailer_count = 0;
       std::span<const Byte> body;
@@ -204,11 +204,11 @@ export {
         HttpMessageView view{.version = message.version, .response = message.response, .response_to_head = message.response_to_head, .stream = message.stream, .method = message.method, .target = message.target, .reason = message.reason, .scheme = message.scheme, .authority = message.authority, .status = message.status, .body = message.body};
 
         for (const auto& field : message.headers.fields()) {
-          view.headers[view.header_count++] = {field.name(), field.value()};
+          view.headers.atMut(view.header_count++) = {field.name(), field.value()};
         }
 
         for (const auto& field : message.trailers.fields()) {
-          view.trailers[view.trailer_count++] = {field.name(), field.value()};
+          view.trailers.atMut(view.trailer_count++) = {field.name(), field.value()};
         }
 
         return encode(output, view);

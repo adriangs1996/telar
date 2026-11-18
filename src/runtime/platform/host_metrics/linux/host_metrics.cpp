@@ -14,32 +14,32 @@ namespace telar::runtime {
   namespace {
 
     template <std::size_t Capacity>
-    bool readText(const char* path, std::array<char, Capacity>& buffer) noexcept {
+    bool readText(const char* path, ds::Array<char, Capacity>& buffer) noexcept {
       FileDescriptor file{::open(path, O_RDONLY | O_CLOEXEC)};
       if (!file) {
         return false;
       }
 
-      const auto count = ::read(file.get(), buffer.data(), buffer.size() - 1);
+      const auto count = ::read(file.get(), buffer.dataMut(), buffer.size() - 1);
       if (count <= 0) {
         return false;
       }
-      buffer[count] = '\0';
+      buffer.atMut(count) = '\0';
       return true;
     }
 
     ds::Option<std::uint8_t> batteryPercent() noexcept {
       try {
         DirectoryStream directory{FileDescriptor{::open("/sys/class/power_supply", O_RDONLY | O_DIRECTORY | O_CLOEXEC)}};
-        std::array<char, PATH_MAX> path;
-        std::array<char, 64> text;
+        ds::Array<char, PATH_MAX> path;
+        ds::Array<char, 64> text;
         while (const auto* entry = directory.next()) {
-          std::snprintf(path.data(), path.size(), "/sys/class/power_supply/%s/type", entry->d_name);
+          std::snprintf(path.dataMut(), path.size(), "/sys/class/power_supply/%s/type", entry->d_name);
           if (!readText(path.data(), text) || std::string_view{text.data()} != "Battery\n") {
             continue;
           }
 
-          std::snprintf(path.data(), path.size(), "/sys/class/power_supply/%s/capacity", entry->d_name);
+          std::snprintf(path.dataMut(), path.size(), "/sys/class/power_supply/%s/capacity", entry->d_name);
           if (!readText(path.data(), text)) {
             continue;
           }
@@ -59,7 +59,7 @@ namespace telar::runtime {
 
   ds::Option<HostCounters> NativeHostMetrics::read() noexcept {
     TELAR_TRACE("metrics.readHost");
-    std::array<char, 16 * 1024> buffer;
+    ds::Array<char, 16 * 1024> buffer;
     if (!readText("/proc/stat", buffer)) {
       return ds::none;
     }
@@ -75,7 +75,7 @@ namespace telar::runtime {
       stolen,
       count,
     };
-    std::array<unsigned long long, static_cast<std::size_t>(CpuField::count)> ticks{};
+    ds::Array<unsigned long long, static_cast<std::size_t>(CpuField::count)> ticks{};
     const auto found = std::sscanf(buffer.data(), "cpu %llu %llu %llu %llu %llu %llu %llu %llu", &ticks[0], &ticks[1], &ticks[2], &ticks[3], &ticks[4], &ticks[5], &ticks[6], &ticks[7]);
     if (found < static_cast<int>(CpuField::idle) + 1) {
       return ds::none;

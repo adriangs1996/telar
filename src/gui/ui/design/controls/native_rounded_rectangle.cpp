@@ -29,7 +29,7 @@ namespace telar::gui::qt {
     }
 
     ds::Option<Rect> physicalClipBounds(const QRectF& bounds, qreal density) {
-      const std::array values{bounds.x() * density, bounds.y() * density, bounds.width() * density, bounds.height() * density};
+      const ds::Array values{bounds.x() * density, bounds.y() * density, bounds.width() * density, bounds.height() * density};
       constexpr auto maximum = static_cast<qreal>(std::numeric_limits<float>::max());
 
       for (const auto value : values) {

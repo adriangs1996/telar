@@ -148,6 +148,7 @@ import telar.gui.features.notifications;
 import telar.wire.agents;
 import telar.wire.content;
 import telar.wire.layout;
+import telar.base.ds;
 
 namespace telar::gui::test {
 
@@ -231,7 +232,7 @@ namespace telar::gui::test {
 
     static MachineClientKey reuse(qt::ApplicationController& application, Machines::Slot slot) {
       application.roster_.retire(slot, qt::MachineRoster::Retirement::removed);
-      application.store_.clientsMut()[slot].reset();
+      application.store_.clientsMut().atMut(slot).reset();
       application.store_.machinesMut().remove(slot);
       const auto added = application.store_.machinesMut().add({.label = "Replacement", .destination = "dev@replacement"}, slot);
       const auto key = application.machines_.createClient(added).key;
@@ -248,7 +249,7 @@ namespace telar::gui::test {
       const auto* pane = application.session().focusedPane();
       if (pane != nullptr) {
         frame.pane_count = 1;
-        frame.panes[0].frame.pane = {.pane_id = pane->id, .frame_id = pane->screen.frameId(), .attached = pane->attached, .attachment_generation = pane->attachment_generation};
+        frame.panes.atMut(0).frame.pane = {.pane_id = pane->id, .frame_id = pane->screen.frameId(), .attached = pane->attached, .attachment_generation = pane->attachment_generation};
       }
 
       return frame;
@@ -301,10 +302,10 @@ namespace {
       return false;
     }
 
-    const std::array descriptors{PaneDescriptor{.pane_id = pane_id, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
+    const ds::Array descriptors{PaneDescriptor{.pane_id = pane_id, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
 
     runtime.send(TabSnapshot{.request_id = runtime.last<RequestTabSnapshot>().request_id, .location = location, .panes = descriptors});
-    const std::array tabs{TabDescriptor{.tab_id = location.tab_id, .pane_count = 1}};
+    const ds::Array tabs{TabDescriptor{.tab_id = location.tab_id, .pane_count = 1}};
 
     runtime.send(WorkspaceSnapshot{.request_id = runtime.last<RequestWorkspaceSnapshot>().request_id, .workspace = location.workspace, .name = "project", .tabs = tabs});
 
@@ -313,10 +314,10 @@ namespace {
 
   void sendFrame(WireRuntime& runtime) {
     constexpr std::size_t cell_capacity = 64;
-    const std::array cells{Cell{.text = byteView("X")}};
-    std::array<Byte, cell_capacity> encoded{};
-    const std::array spans{FrameSpan{.start = 0, .count = 1, .cells = CellRunCodec::encode(cells, encoded)}};
-    const std::array<Byte, 1> flags{};
+    const ds::Array cells{Cell{.text = byteView("X")}};
+    ds::Array<Byte, cell_capacity> encoded{};
+    const ds::Array spans{FrameSpan{.start = 0, .count = 1, .cells = CellRunCodec::encode(cells, encoded.viewMut())}};
+    const ds::Array<Byte, 1> flags{};
 
     runtime.send(PaneFrame{FrameBody{.pane_id = pane_id, .frame_id = 1, .cols = 1, .rows = 1, .scroll = {.total_rows = 1}, .text_metadata = TextMetadata{.row_flags = flags}, .spans = spans}});
   }
@@ -326,16 +327,16 @@ namespace {
     constexpr std::string_view marker = "[Image #1]";
     constexpr std::size_t columns = 12;
     constexpr std::size_t encoded_capacity = 512;
-    std::array<Cell, columns> cells{};
+    ds::Array<Cell, columns> cells{};
 
     cells.fill(Cell{.text = byteView(" ")});
     for (std::size_t index = 0; index < marker.size(); ++index) {
-      cells[index].text = byteView(marker.substr(index, 1));
+      cells.atMut(index).text = byteView(marker.substr(index, 1));
     }
 
-    std::array<Byte, encoded_capacity> encoded{};
-    const std::array spans{FrameSpan{.start = 0, .count = cells.size(), .cells = CellRunCodec::encode(cells, encoded)}};
-    const std::array<Byte, 1> flags{};
+    ds::Array<Byte, encoded_capacity> encoded{};
+    const ds::Array spans{FrameSpan{.start = 0, .count = cells.size(), .cells = CellRunCodec::encode(cells, encoded.viewMut())}};
+    const ds::Array<Byte, 1> flags{};
 
     runtime.send(PaneFrame{FrameBody{.pane_id = pane_id, .frame_id = 2, .cols = columns, .rows = 1, .cursor = {.visible = true, .x = marker.size()}, .scroll = {.total_rows = 1}, .text_metadata = TextMetadata{.row_flags = flags}, .spans = spans}});
   }
@@ -556,7 +557,7 @@ namespace {
     static void verifyAttachmentBackdropOwnership(ApplicationController& application, QQuickWindow& window, const QString& identity) {
       const auto host = application.attachments()->modalGeometry().value(QStringLiteral("host")).toRectF();
       const auto point = (host.topLeft() + QPointF{1, 1}).toPoint();
-      const std::array buttons{Qt::LeftButton, Qt::RightButton, Qt::MiddleButton};
+      const ds::Array buttons{Qt::LeftButton, Qt::RightButton, Qt::MiddleButton};
 
       for (const auto button : buttons) {
         application.attachments()->shelf()->open(identity);
@@ -588,7 +589,7 @@ namespace {
       auto agent = activityAgent("Clipboard");
 
       agent.attachments = AgentAttachmentMarkers::ordered;
-      const std::array agents{agent};
+      const ds::Array agents{agent};
 
       fixture.local_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
       QTRY_VERIFY_WITH_TIMEOUT(application.attachments()->shelf()->prompt().hasValue(), wait_ms);
@@ -1029,14 +1030,14 @@ namespace {
       fixture.local_runtime->send(ClientLayoutSnapshot{});
       fixture.remote_runtime->send(ClientLayoutSnapshot{});
       QVERIFY(finishOpening(*fixture.local_runtime));
-      std::array agents{activityAgent("Remote waiting"), activityAgent("Remote working"), activityAgent("Remote idle")};
+      ds::Array agents{activityAgent("Remote waiting"), activityAgent("Remote working"), activityAgent("Remote idle")};
 
-      agents[0].status = AgentStatus::blocked;
-      agents[0].blocked_reason = AgentBlockedReason::question;
-      agents[1].status = AgentStatus::working;
-      agents[1].pane_id = 2;
-      agents[2].status = AgentStatus::ready;
-      agents[2].pane_id = 3;
+      agents.atMut(0).status = AgentStatus::blocked;
+      agents.atMut(0).blocked_reason = AgentBlockedReason::question;
+      agents.atMut(1).status = AgentStatus::working;
+      agents.atMut(1).pane_id = 2;
+      agents.atMut(2).status = AgentStatus::ready;
+      agents.atMut(2).pane_id = 3;
       fixture.remote_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
       constexpr qreal row_width = 300;
       constexpr qreal row_height = 32;
@@ -1184,11 +1185,11 @@ namespace {
       window.resize(size);
       fixture.application.setWindow(window);
       QVERIFY(fixture.start());
-      const std::array agents{activityAgent("Remote waiting")};
+      const ds::Array agents{activityAgent("Remote waiting")};
       auto blocked = agents;
 
-      blocked.front().status = AgentStatus::blocked;
-      blocked.front().blocked_reason = AgentBlockedReason::question;
+      blocked.atMut(0).status = AgentStatus::blocked;
+      blocked.atMut(0).blocked_reason = AgentBlockedReason::question;
       fixture.remote_runtime->send(AgentSnapshot{.revision = 1, .entries = blocked});
       constexpr qreal segment_width = 200;
       constexpr qreal segment_height = 26;
@@ -1328,11 +1329,11 @@ namespace {
       auto agent = activityAgent("Remote inspected");
 
       agent.pane_id = inspected_pane;
-      agent.session_id.front() = 1;
+      agent.session_id.atMut(0) = 1;
       // Another machine lists only the agents that wait on the person.
       agent.status = AgentStatus::blocked;
       agent.blocked_reason = AgentBlockedReason::question;
-      std::array agents{agent};
+      ds::Array agents{agent};
 
       fixture.remote_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
       QTRY_COMPARE_WITH_TIMEOUT(application.activity()->rows()->rowCount(), 1, wait_ms);
@@ -1383,7 +1384,7 @@ namespace {
       QTRY_COMPARE_WITH_TIMEOUT(fixture.remote_runtime->count(ClientTag::read_pane), 2, wait_ms);
       const auto retired = fixture.remote_runtime->last<ReadPane>();
 
-      ++agents.front().session_id.front();
+      ++agents.atMut(0).session_id.atMut(0);
       fixture.remote_runtime->send(AgentSnapshot{.revision = 2, .entries = agents});
       QTRY_COMPARE_WITH_TIMEOUT(application.dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none, wait_ms);
       application.peek()->search(QStringLiteral("/stop"));
@@ -1407,7 +1408,7 @@ namespace {
       QVERIFY(fixture.start());
       fixture.local_runtime->send(ClientLayoutSnapshot{});
       QVERIFY(finishOpening(*fixture.local_runtime));
-      const std::array agents{activityAgent("Local inspected")};
+      const ds::Array agents{activityAgent("Local inspected")};
 
       fixture.local_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
       QTRY_COMPARE_WITH_TIMEOUT(application.activity()->rows()->rowCount(), 1, wait_ms);
@@ -1451,10 +1452,10 @@ namespace {
       fixture.local_runtime->send(ClientLayoutSnapshot{});
       fixture.remote_runtime->send(ClientLayoutSnapshot{});
       QVERIFY(finishOpening(*fixture.local_runtime));
-      std::array agents{activityAgent("Remote inspected")};
+      ds::Array agents{activityAgent("Remote inspected")};
 
       // Another machine lists only the agents that wait on the person.
-      agents.front().status = AgentStatus::blocked;
+      agents.atMut(0).status = AgentStatus::blocked;
       fixture.remote_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
       QTRY_COMPARE_WITH_TIMEOUT(application.activity()->rows()->rowCount(), 1, wait_ms);
       application.commands()->peekActivity(activityRow(application, 0).value(QStringLiteral("key")).toString());
@@ -1513,8 +1514,8 @@ namespace {
       auto& runtime = hidden_remote ? *fixture.remote_runtime : *fixture.local_runtime;
       const auto slot = hidden_remote ? fixture.remote.machine.slot : Machines::local_slot;
       auto& session = MachineWindow::client(application, slot).session;
-      const std::array<ClientLayoutNode, 1> nodes{ClientLayoutPane{pane_id}};
-      const std::array layouts{ClientTabLayout{.location = location, .focused_pane = pane_id, .workspace_active = true, .nodes = nodes}};
+      const ds::Array<ClientLayoutNode, 1> nodes{ClientLayoutPane{pane_id}};
+      const ds::Array layouts{ClientTabLayout{.location = location, .focused_pane = pane_id, .workspace_active = true, .nodes = nodes}};
       constexpr std::uint16_t restored_sidebar_columns = 32;
 
       runtime.send(ClientLayoutSnapshot{.restored = true, .sidebar_visible = false, .sidebar_width = restored_sidebar_columns, .active_tab = location, .tabs = layouts});
@@ -1580,14 +1581,14 @@ namespace {
       fixture.local_runtime->send(ClientLayoutSnapshot{});
       fixture.remote_runtime->send(ClientLayoutSnapshot{});
       QVERIFY(finishOpening(*fixture.local_runtime));
-      std::array local_agents{activityAgent("Local hover")};
+      ds::Array local_agents{activityAgent("Local hover")};
 
-      local_agents.front().session_id.front() = 1;
-      std::array remote_agents{activityAgent("Remote hover")};
+      local_agents.atMut(0).session_id.atMut(0) = 1;
+      ds::Array remote_agents{activityAgent("Remote hover")};
 
-      remote_agents.front().session_id.front() = 2;
+      remote_agents.atMut(0).session_id.atMut(0) = 2;
       // Another machine lists only the agents that wait on the person.
-      remote_agents.front().status = AgentStatus::blocked;
+      remote_agents.atMut(0).status = AgentStatus::blocked;
       fixture.local_runtime->send(AgentSnapshot{.revision = 1, .entries = local_agents});
       fixture.remote_runtime->send(AgentSnapshot{.revision = 1, .entries = remote_agents});
       QTRY_COMPARE_WITH_TIMEOUT(application.activity()->rows()->rowCount(), 2, wait_ms);
@@ -1637,9 +1638,9 @@ namespace {
       fixture.local_runtime->send(ClientLayoutSnapshot{});
       fixture.remote_runtime->send(ClientLayoutSnapshot{});
       QVERIFY(finishOpening(*fixture.local_runtime));
-      std::array agents{activityAgent("Pointer geometry")};
+      ds::Array agents{activityAgent("Pointer geometry")};
 
-      agents.front().session_id.front() = 1;
+      agents.atMut(0).session_id.atMut(0) = 1;
       fixture.local_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
       QTRY_COMPARE_WITH_TIMEOUT(application.activity()->rows()->rowCount(), 1, wait_ms);
       const auto identity = activityNamed(application, QStringLiteral("Pointer geometry")).value(QStringLiteral("key")).toString();
@@ -1714,7 +1715,7 @@ namespace {
       QVERIFY(fixture.start());
       fixture.local_runtime->send(ClientLayoutSnapshot{});
       QVERIFY(finishOpening(*fixture.local_runtime));
-      const std::array agents{activityAgent("Local inspected")};
+      const ds::Array agents{activityAgent("Local inspected")};
 
       fixture.local_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
       QTRY_COMPARE_WITH_TIMEOUT(application.activity()->rows()->rowCount(), 1, wait_ms);
@@ -1766,24 +1767,24 @@ namespace {
       fixture.remote_runtime->send(ClientLayoutSnapshot{});
       QVERIFY(finishOpening(*fixture.local_runtime));
       QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane_id) != nullptr && application.pane(pane_id)->attached, wait_ms);
-      std::array local_agents{activityAgent("Local agent")};
+      ds::Array local_agents{activityAgent("Local agent")};
 
-      local_agents.front().session_id.front() = 1;
-      std::array remote_agents{activityAgent("Remote agent")};
+      local_agents.atMut(0).session_id.atMut(0) = 1;
+      ds::Array remote_agents{activityAgent("Remote agent")};
 
-      remote_agents.front().session_id.front() = 2;
+      remote_agents.atMut(0).session_id.atMut(0) = 2;
       // Another machine lists only the agents that wait on the person.
-      remote_agents.front().status = AgentStatus::blocked;
-      const std::array projects{WorkspaceListEntry{.workspace = 1, .name = "project", .path = "/project", .branch = "own-branch"}, WorkspaceListEntry{.workspace = 2, .name = "command", .path = "/command"}};
-      std::array local_tasks{worktreeEntry()};
+      remote_agents.atMut(0).status = AgentStatus::blocked;
+      const ds::Array projects{WorkspaceListEntry{.workspace = 1, .name = "project", .path = "/project", .branch = "own-branch"}, WorkspaceListEntry{.workspace = 2, .name = "command", .path = "/command"}};
+      ds::Array local_tasks{worktreeEntry()};
 
-      local_tasks.front().title = "Local command";
-      local_tasks.front().command_state = CommandState::running;
-      std::array remote_tasks{local_tasks.front()};
+      local_tasks.atMut(0).title = "Local command";
+      local_tasks.atMut(0).command_state = CommandState::running;
+      ds::Array remote_tasks{local_tasks.front()};
 
-      remote_tasks.front().title = "Remote command";
-      remote_tasks.front().created_by.reset();
-      remote_tasks.front().coordinator = coordinatorReference(pane_id);
+      remote_tasks.atMut(0).title = "Remote command";
+      remote_tasks.atMut(0).created_by.reset();
+      remote_tasks.atMut(0).coordinator = coordinatorReference(pane_id);
       fixture.local_runtime->send(WorkspaceList{.revision = 1, .entries = projects, .worktrees = local_tasks});
       fixture.remote_runtime->send(WorkspaceList{.revision = 1, .entries = projects, .worktrees = remote_tasks});
       fixture.local_runtime->send(AgentSnapshot{.revision = 1, .entries = local_agents});
@@ -1810,7 +1811,7 @@ namespace {
         QCOMPARE(MachineWindow::activityRebuilds(application), rebuilds);
       }
 
-      remote_agents.front().session_title = "Remote still waiting";
+      remote_agents.atMut(0).session_title = "Remote still waiting";
       fixture.remote_runtime->send(AgentSnapshot{.revision = 2, .entries = remote_agents});
       QTRY_VERIFY_WITH_TIMEOUT(!activityNamed(application, QStringLiteral("Remote still waiting")).isEmpty(), wait_ms);
       QVERIFY(remote.session.panes().empty());
@@ -1838,17 +1839,17 @@ namespace {
       fixture.remote_runtime->send(ClientLayoutSnapshot{});
       QVERIFY(finishOpening(*fixture.local_runtime));
       constexpr std::uint64_t agent_pane = 9;
-      std::array agents{activityAgent("Remote target")};
+      ds::Array agents{activityAgent("Remote target")};
 
-      agents.front().pane_id = agent_pane;
-      agents.front().session_id.front() = 1;
+      agents.atMut(0).pane_id = agent_pane;
+      agents.atMut(0).session_id.atMut(0) = 1;
       // Another machine lists only the agents that wait on the person.
-      agents.front().status = AgentStatus::blocked;
+      agents.atMut(0).status = AgentStatus::blocked;
       fixture.remote_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
       QTRY_COMPARE_WITH_TIMEOUT(application.activity()->rows()->rowCount(), 1, wait_ms);
       const auto retired = activityRow(application, 0).value(QStringLiteral("key")).toString();
 
-      agents.front().session_id.front() = 2;
+      agents.atMut(0).session_id.atMut(0) = 2;
       fixture.remote_runtime->send(AgentSnapshot{.revision = 2, .entries = agents});
       QTRY_VERIFY_WITH_TIMEOUT(activityRow(application, 0).value(QStringLiteral("key")).toString() != retired, wait_ms);
       application.commands()->execute(window_actions::Action::select_agent, retired);
@@ -1884,13 +1885,13 @@ namespace {
       fixture.local_runtime->send(ClientLayoutSnapshot{});
       fixture.remote_runtime->send(ClientLayoutSnapshot{});
       QVERIFY(finishOpening(*fixture.local_runtime));
-      std::array tasks{worktreeEntry()};
+      ds::Array tasks{worktreeEntry()};
 
-      tasks.front().created_by.reset();
-      tasks.front().command_state = CommandState::running;
-      tasks.front().title = "Remote command";
+      tasks.atMut(0).created_by.reset();
+      tasks.atMut(0).command_state = CommandState::running;
+      tasks.atMut(0).title = "Remote command";
       constexpr std::uint64_t replacement_workspace = 3;
-      const std::array projects{WorkspaceListEntry{.workspace = 1, .name = "project", .path = "/project"}, WorkspaceListEntry{.workspace = 2, .name = "command", .path = "/command"}, WorkspaceListEntry{.workspace = replacement_workspace, .name = "replacement", .path = "/replacement"}};
+      const ds::Array projects{WorkspaceListEntry{.workspace = 1, .name = "project", .path = "/project"}, WorkspaceListEntry{.workspace = 2, .name = "command", .path = "/command"}, WorkspaceListEntry{.workspace = replacement_workspace, .name = "replacement", .path = "/replacement"}};
 
       // Only the active machine lists its tracked commands; the remote one is selected but still opening.
       MachineWindow::select(application, fixture.remote.machine);
@@ -1900,7 +1901,7 @@ namespace {
 
       application.commands()->execute(window_actions::Action::select_agent, retired);
       QVERIFY(MachineWindow::pendingActivity(application));
-      tasks.front().workspace = replacement_workspace;
+      tasks.atMut(0).workspace = replacement_workspace;
       fixture.remote_runtime->send(WorkspaceList{.revision = 2, .entries = projects, .worktrees = tasks});
       QTRY_VERIFY_WITH_TIMEOUT(!MachineWindow::pendingActivity(application), wait_ms);
       QVERIFY(finishOpening(*fixture.remote_runtime));
@@ -1937,9 +1938,9 @@ namespace {
       fixture.local_runtime->send(ClientLayoutSnapshot{});
       fixture.remote_runtime->send(ClientLayoutSnapshot{});
       constexpr std::uint64_t agent_pane = 9;
-      std::array agents{activityAgent("Pending agent")};
+      ds::Array agents{activityAgent("Pending agent")};
 
-      agents.front().pane_id = agent_pane;
+      agents.atMut(0).pane_id = agent_pane;
       fixture.local_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
       QTRY_COMPARE_WITH_TIMEOUT(application.activity()->rows()->rowCount(), 1, wait_ms);
       application.commands()->execute(window_actions::Action::select_agent, activityRow(application, 0).value(QStringLiteral("key")).toString());
@@ -1962,11 +1963,11 @@ namespace {
       fixture.local_runtime->send(ClientLayoutSnapshot{});
       fixture.remote_runtime->send(ClientLayoutSnapshot{});
       QVERIFY(finishOpening(*fixture.local_runtime));
-      std::array agents{activityAgent("Before reconnect")};
+      ds::Array agents{activityAgent("Before reconnect")};
 
       // Another machine lists only the agents that wait on the person, not its tracked commands.
-      agents.front().status = AgentStatus::blocked;
-      const std::array projects{WorkspaceListEntry{.workspace = 1, .name = "project", .path = "/project"}};
+      agents.atMut(0).status = AgentStatus::blocked;
+      const ds::Array projects{WorkspaceListEntry{.workspace = 1, .name = "project", .path = "/project"}};
 
       fixture.remote_runtime->send(WorkspaceList{.revision = 1, .entries = projects});
       fixture.remote_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
@@ -1981,7 +1982,7 @@ namespace {
       fixture.remote_socket_.reset(fixture.remote_listener_.nextPendingConnection());
       fixture.remote_runtime = std::make_unique<WireRuntime>(*fixture.remote_socket_);
       QTRY_VERIFY_WITH_TIMEOUT(remote.session.ready(), wait_ms);
-      agents.front().session_title = "After reconnect";
+      agents.atMut(0).session_title = "After reconnect";
       fixture.remote_runtime->send(ClientLayoutSnapshot{});
       fixture.remote_runtime->send(WorkspaceList{.revision = 1, .entries = projects});
       fixture.remote_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});

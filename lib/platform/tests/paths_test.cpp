@@ -18,7 +18,7 @@ namespace {
   using namespace telar::runtime::cli;
 
   struct TestEnvironment final : EnvironmentSource {
-    using Values = std::array<std::pair<std::string_view, std::string_view>, 8>;
+    using Values = ds::Array<std::pair<std::string_view, std::string_view>, 8>;
 
     explicit TestEnvironment(const Values& entries) noexcept
         : values(entries) {}
@@ -49,11 +49,11 @@ namespace {
     RuntimePaths override_paths{memory, options, environment};
 
     check(override_paths.socket == "/override/runtime.sock" && !override_paths.socket_managed);
-    environment.values[0].second = {};
+    environment.values.atMut(0).second = {};
     RuntimePaths pane_paths{memory, options, environment};
 
     check(pane_paths.socket == "/pane/runtime.sock" && !pane_paths.socket_managed);
-    environment.values[1].second = {};
+    environment.values.atMut(1).second = {};
     RuntimePaths managed_paths{memory, options, environment};
 
     check(managed_paths.socket == "/runtime/telar/runtime.sock" && managed_paths.socket_managed);
@@ -61,13 +61,13 @@ namespace {
     managed_paths.resolveStorage(options, environment);
     check(managed_paths.history == "/data/telar/history.db" && managed_paths.history_managed);
     check(managed_paths.session == "/data/telar/session.ckpt");
-    environment.values[4].second = {};
+    environment.values.atMut(4).second = {};
     RuntimePaths home_paths{memory, options, environment};
 
     home_paths.resolveStorage(options, environment);
     check(home_paths.history == "/home/user/.local/share/telar/history.db");
 
-    environment.values[4] = {"TELAR_HISTORY", "/private/history.db"};
+    environment.values.atMut(4) = {"TELAR_HISTORY", "/private/history.db"};
     options.persist_session = false;
     RuntimePaths custom_paths{memory, options, environment};
 
@@ -84,15 +84,15 @@ namespace {
 
     check(Paths::configHome(memory, environment) == "/config/telar");
     check(Paths::configFile(memory, environment) == "/config/telar/config.lua");
-    environment.values[0].second = "relative";
+    environment.values.atMut(0).second = "relative";
     check(Paths::configHome(memory, environment) == "/home/user/.config/telar");
-    environment.values[0].second = {};
+    environment.values.atMut(0).second = {};
     check(Paths::configHome(memory, environment) == "/home/user/.config/telar");
-    environment.values[1].second = {};
+    environment.values.atMut(1).second = {};
     check(Paths::configHome(memory, environment).empty() && Paths::configFile(memory, environment).empty());
-    environment.values[1].second = "home";
+    environment.values.atMut(1).second = "home";
     check(Paths::configHome(memory, environment).empty());
-    environment.values[2].second = "/repository/dev/config.lua";
+    environment.values.atMut(2).second = "/repository/dev/config.lua";
     check(Paths::configFile(memory, environment) == "/repository/dev/config.lua");
 
     ServerOptions options;
@@ -110,11 +110,11 @@ namespace {
   }
 
   void testArguments() {
-    std::array arguments{const_cast<char*>("server"), const_cast<char*>("endpoint"), const_cast<char*>("--socket"), const_cast<char*>("/tmp/runtime.sock"), const_cast<char*>("--no-config")};
+    ds::Array arguments{const_cast<char*>("server"), const_cast<char*>("endpoint"), const_cast<char*>("--socket"), const_cast<char*>("/tmp/runtime.sock"), const_cast<char*>("--no-config")};
     const auto options = ServerOptions::parse(arguments);
 
     check(options.action == ServerAction::endpoint && options.socket == "/tmp/runtime.sock" && options.no_config);
-    arguments.back() = const_cast<char*>("--fresh");
+    arguments.atMut(arguments.size() - 1) = const_cast<char*>("--fresh");
     bool rejected = false;
 
     try {

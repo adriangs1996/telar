@@ -4,6 +4,7 @@ import std;
 
 import telar.gui.foundation.text;
 import telar.shell.syntax;
+import telar.base.ds;
 
 namespace telar::gui::features::prompt {
 
@@ -13,7 +14,7 @@ namespace telar::gui::features::prompt {
 
     tokens.resize(text.size() + 1);
     const auto lexed = shell::lex(text, syntax, tokens);
-    static constexpr std::array<std::string_view, 7> wrappers{"sudo", "env", "exec", "time", "command", "nohup", "doas"};
+    static constexpr ds::Array<std::string_view, 7> wrappers{"sudo", "env", "exec", "time", "command", "nohup", "doas"};
     std::uint32_t wrapped = shell::no_command;
 
     for (const auto& token : std::span{tokens}.first(lexed.tokens)) {

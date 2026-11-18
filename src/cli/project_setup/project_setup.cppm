@@ -96,7 +96,7 @@ export {
       std::uint64_t workspace = 0;
       std::string_view cwd;
       std::string_view socket;
-      std::array<std::string_view, max_arguments> arguments{};
+      ds::Array<std::string_view, max_arguments> arguments{};
       std::size_t argument_count = 0;
       bool detach = false;
       bool json = false;

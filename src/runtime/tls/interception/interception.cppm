@@ -93,7 +93,7 @@ export {
       static constexpr std::size_t version_bytes = 2;
       static constexpr std::size_t random_bytes = 32;
       static constexpr std::size_t maximum_hello_bytes = 64 * 1024;
-      std::array<std::uint8_t, maximum_hello_bytes> bytes_;
+      ds::Array<std::uint8_t, maximum_hello_bytes> bytes_;
       FixedText<ProxyHostname::maximum_bytes> server_name_;
       bool tls_ = false;
       bool valid_ = false;
@@ -119,7 +119,7 @@ export {
       static int select(SSL* connection, const unsigned char** selected, unsigned char* length, const unsigned char* offered, unsigned offered_length, void*) noexcept;
 
     private:
-      std::array<unsigned char, 255> name_;
+      ds::Array<unsigned char, 255> name_;
       unsigned char length_ = 0;
     };
 

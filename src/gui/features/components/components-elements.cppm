@@ -31,7 +31,7 @@ export {
       clock,
     };
 
-    inline constexpr std::array element_kind_names{"row", "column", "stack", "spacer", "label", "icon", "mark", "badge", "tile", "canvas", "builtin", "elapsed", "clock"};
+    inline constexpr ds::Array element_kind_names{"row", "column", "stack", "spacer", "label", "icon", "mark", "badge", "tile", "canvas", "builtin", "elapsed", "clock"};
 
     struct ElementText {
       std::uint32_t offset = 0;
@@ -58,7 +58,7 @@ export {
       ElementText tooltip;
       ElementText url;
       // Left, top, right and bottom, in logical pixels like every length below.
-      std::array<float, 4> padding{};
+      ds::Array<float, 4> padding{};
       float gap = 0;
       float width = -1;
       float height = -1;
@@ -104,7 +104,7 @@ export {
     struct CanvasStep {
       std::uint8_t op = 0;
       std::uint8_t count = 0;
-      std::array<float, 6> values{};
+      ds::Array<float, 6> values{};
       ElementColor color;
       ElementText text;
     };
@@ -126,10 +126,10 @@ export {
       [[nodiscard]] static tbc::view<Icon, tbc::lt::static_storage> find(std::string_view name) noexcept;
 
     private:
-      static const std::array<Icon, 32> values;
+      static const ds::Array<Icon, 32> values;
     };
 
-    inline constexpr std::array<Icon, 32> Icon::values = std::to_array<Icon>({
+    inline constexpr ds::Array<Icon, 32> Icon::values = ds::Array<Icon, 32>{{
         {.name = "sidebar_collapse", .glyph = ""},
         {.name = "sidebar_expand", .glyph = ""},
         {.name = "workspace_menu", .glyph = ""},
@@ -162,7 +162,7 @@ export {
         {.name = "close", .glyph = ""},
         {.name = "pane_fullscreen", .glyph = ""},
         {.name = "telar_mark", .glyph = "▣", .telar = true},
-    });
+    }};
 
   }
 }

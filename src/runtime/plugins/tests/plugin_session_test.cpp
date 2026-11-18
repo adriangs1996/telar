@@ -66,6 +66,7 @@ import telar.plugins;
 import telar.runtime.platform.signals;
 import telar.runtime.vocabulary.exchange;
 import telar.runtime.vocabulary.traffic;
+import telar.base.ds;
 
 namespace {
 
@@ -92,16 +93,16 @@ namespace {
     }
 
     check(::getenv("HOME") == nullptr);
-    std::array<char, PATH_MAX> cwd;
+    ds::Array<char, PATH_MAX> cwd;
 
-    check(::getcwd(cwd.data(), cwd.size()) != nullptr && std::string_view{cwd.data()} == "/");
+    check(::getcwd(cwd.dataMut(), cwd.size()) != nullptr && std::string_view{cwd.dataMut()} == "/");
     // "timeout-once:MARKER" stalls in the first session only: the marker it creates tells a
     // restarted session to answer.
     constexpr std::string_view stall_once = "timeout-once:";
     const bool stall = mode == "timeout" || (mode.starts_with(stall_once) && FileDescriptor{::open(std::string{mode.substr(stall_once.size())}.c_str(), O_CREAT | O_EXCL | O_WRONLY, 0600)});
     tap::PipeStream stream{STDIN_FILENO, STDOUT_FILENO};
     tap::FrameChannel channel{stream};
-    std::array<Byte, tap::Limits::effect_bytes> output;
+    ds::Array<Byte, tap::Limits::effect_bytes> output;
     unsigned count = 0;
 
     while (auto frame = channel.receive(memory, tap::Limits::frame_bytes)) {
@@ -119,24 +120,24 @@ namespace {
       }
 
       if (mode == "oversized") {
-        const std::array<Byte, 4> prefix{1, 0, 1, 0};
+        const ds::Array<Byte, 4> prefix{1, 0, 1, 0};
 
         check(writeDescriptor(STDOUT_FILENO, prefix) == 0);
         continue;
       }
 
       if (mode == "invalid") {
-        channel.send(std::array<Byte, 1>{255});
+        channel.send(ds::Array<Byte, 1>{255});
         continue;
       }
 
       if (mode == "callback-error" && count == 1) {
-        channel.send(tap::Protocol::encodeError(output, event_id, "callback failed"));
+        channel.send(tap::Protocol::encodeError(output.viewMut(), event_id, "callback failed"));
         continue;
       }
 
       if (mode == "stderr") {
-        std::array<Byte, 4096> bytes;
+        ds::Array<Byte, 4096> bytes;
 
         bytes.fill('e');
         for (unsigned index = 0; index < 256; ++index) {
@@ -147,8 +148,8 @@ namespace {
       tap::EffectBatch effects;
 
       effects.count = 1;
-      effects.notifications[0] = {.level = NotificationLevel::info, .duration_ms = 4000, .title = count == 1 ? "first" : "next", .message = "fixture"};
-      channel.send(tap::Protocol::encodeEffects(output, mode == "stale" ? event_id + 1 : event_id, effects));
+      effects.notifications.atMut(0) = {.level = NotificationLevel::info, .duration_ms = 4000, .title = count == 1 ? "first" : "next", .message = "fixture"};
+      channel.send(tap::Protocol::encodeEffects(output.viewMut(), mode == "stale" ? event_id + 1 : event_id, effects));
     }
 
     return 0;
@@ -185,13 +186,13 @@ namespace {
     const std::string executable_path{executable.view()};
     CancellationSignal cancellation;
     CaptureQuota quota{4096};
-    std::array<Byte, 4096> output;
+    ds::Array<Byte, 4096> output;
     CapturedExchange exchange{memory};
     const ProxyCaptureLimits limits{.part_bytes = 1024, .exchange_bytes = 2048, .total_bytes = 4096, .enabled = true};
 
     exchange.request = makeOwned<CaptureHalf>(memory, memory, quota, limits, CaptureStart{.key = {1, 1}, .side = CaptureSide::request, .protocol = CaptureProtocol::http1, .host = "test", .started_at_ms = 1});
     exchange.request->appendHead("GET / HTTP/1.1\r\n\r\n");
-    const auto frame = tap::Protocol::encodeExchange(output, {73, 1}, exchange);
+    const auto frame = tap::Protocol::encodeExchange(output.viewMut(), {73, 1}, exchange);
     tap::ServiceSpec specification;
 
     specification.plugin_id = 19;
@@ -215,7 +216,7 @@ namespace {
         ++stale.generation;
         check(!first->authorized(stale));
         stale = specification;
-        stale.digest[0] ^= 1;
+        stale.digest.atMut(0) ^= 1;
         check(!first->authorized(stale));
       }
 
@@ -301,13 +302,13 @@ end}
     }
 
     CaptureQuota quota{4096};
-    std::array<Byte, 4096> output;
+    ds::Array<Byte, 4096> output;
     CapturedExchange exchange{memory};
     const ProxyCaptureLimits limits{.part_bytes = 1024, .exchange_bytes = 2048, .total_bytes = 4096, .enabled = true};
 
     exchange.request = makeOwned<CaptureHalf>(memory, memory, quota, limits, CaptureStart{.key = {1, 1}, .side = CaptureSide::request, .protocol = CaptureProtocol::http1, .host = "example.test", .started_at_ms = 1});
     exchange.request->appendHead("GET / HTTP/1.1\r\n\r\n");
-    const auto frame = tap::Protocol::encodeExchange(output, {73, 1}, exchange);
+    const auto frame = tap::Protocol::encodeExchange(output.viewMut(), {73, 1}, exchange);
     tap::ServiceSpec specification;
 
     specification.plugin_id = 19;
@@ -346,8 +347,8 @@ return {}
     observer.granted = observer.declared;
     {
       tap::Session session{memory, tap::SessionOptions{.executable = executable_path.c_str(), .entry = entry.c_str(), .cancellation = cancellation, .traffic = true}};
-      std::array<Byte, 4096> setup;
-      const auto reply = session.request(tap::TrafficProtocol::setup(setup, observer), tap::TrafficLimits::reply_bytes);
+      ds::Array<Byte, 4096> setup;
+      const auto reply = session.request(tap::TrafficProtocol::setup(setup.viewMut(), observer), tap::TrafficLimits::reply_bytes);
       const auto registrations = tap::TrafficProtocol::reply(reply.bytes());
 
       check(registrations.registration_count == 1 && registrations.registrations[0].filter.view() == "udp port 53");

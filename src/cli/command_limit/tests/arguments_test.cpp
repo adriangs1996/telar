@@ -9,6 +9,7 @@ import std;
 import telar.testing;
 import telar.cli.command_limit;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -119,7 +120,7 @@ namespace {
     }
 
     void walksWords() {
-      std::array<const char*, 3> words{"--socket", "path", "--json"};
+      telar::ds::Array<const char*, 3> words{"--socket", "path", "--json"};
       Cursor cursor{{const_cast<char* const*>(words.data()), words.size()}};
 
       check(cursor.next() == "--socket");
@@ -134,7 +135,7 @@ namespace {
     // A word picks the protocol value at its position among the names; any other word is the
     // command's usage error, never a value past the enum's last.
     void choiceMapsWords() {
-      constexpr std::array<std::string_view, 4> directions{"left", "right", "up", "down"};
+      constexpr telar::ds::Array<std::string_view, 4> directions{"left", "right", "up", "down"};
 
       check(choice<telar::PaneDirection, 4>("down", "InvalidPaneDirection", directions) == telar::PaneDirection::down);
       check(choice<telar::PaneDirection, 4>("left", "InvalidPaneDirection", directions) == telar::PaneDirection::left);

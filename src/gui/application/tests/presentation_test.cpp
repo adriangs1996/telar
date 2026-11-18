@@ -16,6 +16,7 @@ import telar.gui.foundation.text;
 import telar.gui.application;
 import telar.gui.foundation.model;
 import telar.gui.features.window;
+import telar.base.ds;
 
 namespace {
 
@@ -109,7 +110,7 @@ namespace {
       check(surfaces.workbench.a == 1 && surfaces.pane.a == 1, "an unconfigured window must be opaque");
       BackgroundOpacity overrides;
 
-      overrides.overrides[static_cast<std::size_t>(BackgroundOpacity::Surface::pane)] = 0.25F;
+      overrides.overrides.atMut(static_cast<std::size_t>(BackgroundOpacity::Surface::pane)) = 0.25F;
       const auto independent = ChromeSurfaces::derive(theme, 1, overrides);
 
       check(independent.pane.a == 0.25F && independent.workbench.a == 1, "a translucent pane must not reduce the workspace opacity or alter header inheritance");
@@ -206,7 +207,7 @@ namespace {
     const auto metrics = Geometry::Metrics::scaled(1);
     constexpr std::size_t tab_count = 4;
     constexpr float caption_width = 100;
-    std::array<Geometry::Measure, tab_count> sizes;
+    telar::ds::Array<Geometry::Measure, tab_count> sizes;
 
     sizes.fill({.caption = caption_width, .chip = Geometry::chip_widths[0], .status = 0});
     constexpr float wide_room = 1000;
@@ -248,42 +249,42 @@ namespace {
 
   void artworkPreservesAlphaWithoutTransparentFringes() {
     using namespace telar::gui;
-    constexpr std::array<std::uint8_t, 8> pixels{255, 0, 0, 0, 0, 0, 255, 255};
+    constexpr telar::ds::Array<std::uint8_t, 8> pixels{255, 0, 0, 0, 0, 0, 255, 255};
     const RgbaImageView source{.pixels = std::as_bytes(std::span{pixels}), .stride = pixels.size(), .width = 2, .height = 1};
-    std::array<std::uint8_t, RgbaImageView::channels> destination{};
+    telar::ds::Array<std::uint8_t, RgbaImageView::channels> destination{};
 
-    check(ArtworkResize::square(source, destination, 1), "valid artwork must resize into caller-owned storage");
-    constexpr std::array<std::uint8_t, RgbaImageView::channels> straight{0, 0, 255, 128};
+    check(ArtworkResize::square(source, destination.viewMut(), 1), "valid artwork must resize into caller-owned storage");
+    constexpr telar::ds::Array<std::uint8_t, RgbaImageView::channels> straight{0, 0, 255, 128};
 
     check(destination == straight, "transparent color must not contaminate an opaque neighbor");
-    ArtworkResize::premultiply(destination);
-    constexpr std::array<std::uint8_t, RgbaImageView::channels> premultiplied{0, 0, 128, 128};
+    ArtworkResize::premultiply(destination.viewMut());
+    constexpr telar::ds::Array<std::uint8_t, RgbaImageView::channels> premultiplied{0, 0, 128, 128};
 
     check(destination == premultiplied, "sprite storage must round premultiplied channels to the nearest byte");
   }
 
   void artworkRejectsInvalidStorageBeforeWriting() {
     using namespace telar::gui;
-    constexpr std::array<std::uint8_t, RgbaImageView::channels> pixel{0, 0, 255, 255};
+    constexpr telar::ds::Array<std::uint8_t, RgbaImageView::channels> pixel{0, 0, 255, 255};
     constexpr auto bytes = pixel.size();
     const auto source = std::as_bytes(std::span{pixel});
-    constexpr std::array<std::uint8_t, bytes> unchanged{1, 2, 3, 4};
+    constexpr telar::ds::Array<std::uint8_t, bytes> unchanged{1, 2, 3, 4};
     auto destination = unchanged;
-    std::array<RgbaImageView, 4> invalid{};
+    telar::ds::Array<RgbaImageView, 4> invalid{};
 
-    invalid[1] = {.pixels = source, .stride = bytes - 1, .width = 1, .height = 1};
-    invalid[2] = {.pixels = source, .stride = bytes, .width = 1, .height = 2};
-    invalid[3] = {.pixels = source, .stride = 0, .width = 1, .height = 1};
+    invalid.atMut(1) = {.pixels = source, .stride = bytes - 1, .width = 1, .height = 1};
+    invalid.atMut(2) = {.pixels = source, .stride = bytes, .width = 1, .height = 2};
+    invalid.atMut(3) = {.pixels = source, .stride = 0, .width = 1, .height = 1};
     for (const auto image : invalid) {
-      check(!ArtworkResize::square(image, destination, 1), "invalid source ranges must be rejected");
+      check(!ArtworkResize::square(image, destination.viewMut(), 1), "invalid source ranges must be rejected");
       check(destination == unchanged, "invalid artwork must preserve the destination");
     }
 
     const RgbaImageView valid{.pixels = source, .stride = bytes, .width = 1, .height = 1};
 
-    check(!ArtworkResize::square(valid, std::span{destination}.first(bytes - 1), 1), "short output storage must be rejected");
-    check(!ArtworkResize::square(valid, destination, std::numeric_limits<std::size_t>::max()), "unrepresentable output dimensions must be rejected");
-    check(!ArtworkResize::square(valid, destination, 0), "empty output dimensions must be rejected");
+    check(!ArtworkResize::square(valid, destination.viewMut().first(bytes - 1), 1), "short output storage must be rejected");
+    check(!ArtworkResize::square(valid, destination.viewMut(), std::numeric_limits<std::size_t>::max()), "unrepresentable output dimensions must be rejected");
+    check(!ArtworkResize::square(valid, destination.viewMut(), 0), "empty output dimensions must be rejected");
     check(destination == unchanged, "invalid output ranges must be detected before any write");
   }
 

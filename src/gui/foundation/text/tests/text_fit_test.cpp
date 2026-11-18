@@ -9,6 +9,7 @@ static_assert(true);
 import std;
 import telar.testing;
 import telar.gui.foundation.text;
+import telar.base.ds;
 
 namespace {
 
@@ -42,7 +43,7 @@ namespace {
     check(TextFit::fit(label, 1, measure, buffer).empty(), "A width smaller than the ellipsis must produce no text");
 
     constexpr std::size_t input_bytes = 4096;
-    std::array<char, input_bytes> long_label{};
+    telar::ds::Array<char, input_bytes> long_label{};
 
     long_label.fill('i');
     constexpr float wide_truncation = 3000;

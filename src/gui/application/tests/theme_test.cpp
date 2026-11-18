@@ -24,6 +24,7 @@ import telar.base.text.utf8;
 import telar.gui.features.configuration;
 import telar.gui.foundation.core;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace {
 
@@ -93,15 +94,15 @@ namespace {
       };
 
       application::ConfigurationGeneration generation{memory, source};
-      std::array<char, ConfigurationQuery::capacity> output{};
+      telar::ds::Array<char, ConfigurationQuery::capacity> output{};
       const auto allocations = budget.allocations();
-      const std::string before{ThemeQuery::write(generation.configuration().themes, output)};
+      const std::string before{ThemeQuery::write(generation.configuration().themes, output.viewMut())};
 
       check(budget.allocations() == allocations, "serializing a retained theme must not allocate through the application allocator");
       check(before.contains(R"("kind":"rgb","value":"\u0001\u0002\u0003")"), "valid RGB UTF-8 storage must serialize as a JSON string");
       check(before.contains(R"("foreground":[255,255,255])"), "invalid RGB UTF-8 storage must serialize as numeric elements");
       static_cast<void>(generation.invoke(generation.input().configured.front().action, {}));
-      check(ThemeQuery::write(generation.configuration().themes, output) == before, "callbacks must not change the adopted theme snapshot");
+      check(ThemeQuery::write(generation.configuration().themes, output.viewMut()) == before, "callbacks must not change the adopted theme snapshot");
       auto all = generation.configuration().themes;
 
       all.light = themeValuesByName("shade");
@@ -109,13 +110,13 @@ namespace {
       bool rejected = false;
 
       try {
-        static_cast<void>(ThemeQuery::write(all, output));
+        static_cast<void>(ThemeQuery::write(all, output.viewMut()));
       } catch (const std::length_error& error) {
         rejected = std::string_view{error.what()} == "WriteFailed";
       }
 
       check(rejected, "complete appearance themes that exceed the original response buffer must fail without truncation");
-      check(ThemeQuery::write(generation.configuration().themes, output) == before, "a rejected oversized query must leave the retained snapshot intact");
+      check(ThemeQuery::write(generation.configuration().themes, output.viewMut()) == before, "a rejected oversized query must leave the retained snapshot intact");
     }
 
     check(budget.liveBytes() == 0, "complete theme snapshots must release all application allocations");
@@ -174,14 +175,14 @@ namespace {
   }
 
   void utf8InspectionPreservesValidationErrors() {
-    constexpr std::array texts{
+    constexpr telar::ds::Array texts{
         std::string_view{"\xff"},
         std::string_view{"\xe2"
                          "AB"},
         std::string_view{"\xe0\x80\x80"},
     };
 
-    constexpr std::array messages{"Invalid UTF-8", "Invalid UTF-8 continuation", "Invalid UTF-8 scalar"};
+    constexpr telar::ds::Array messages{"Invalid UTF-8", "Invalid UTF-8 continuation", "Invalid UTF-8 scalar"};
 
     for (std::size_t index = 0; index < texts.size(); ++index) {
       bool rejected = false;

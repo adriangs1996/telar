@@ -19,6 +19,7 @@ import telar.runtime.traffic.tests.packet_fixture;
 import telar.runtime.vocabulary.frames;
 import telar.runtime.vocabulary.traffic;
 import telar.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -54,9 +55,9 @@ namespace {
   }
 
   std::vector<Byte> receiveFrame(int socket) {
-    std::array<Byte, Protocol::prefix_bytes> prefix;
+    ds::Array<Byte, Protocol::prefix_bytes> prefix;
 
-    receiveAll(socket, prefix);
+    receiveAll(socket, prefix.viewMut());
     plugins::FrameReader reader{prefix};
     const auto length = reader.integer<std::uint32_t>();
 
@@ -79,9 +80,9 @@ namespace {
 
   FileDescriptor greeted(const std::string& path, Role role, Selection selection = Selection::packets) {
     auto socket = connect(path);
-    std::array<Byte, Protocol::greeting_bytes> greeting;
+    ds::Array<Byte, Protocol::greeting_bytes> greeting;
 
-    sendAll(socket.get(), Protocol::greeting(greeting, role, {}, selection));
+    sendAll(socket.get(), Protocol::greeting(greeting.viewMut(), role, {}, selection));
     check(Protocol::decode(receiveFrame(socket.get())).kind == Kind::ready);
     return socket;
   }
@@ -96,8 +97,8 @@ namespace {
 
   struct Socket {
     Socket() {
-      std::strcpy(directory.data(), "/tmp/telar-traffic-service-XXXXXX");
-      check(::mkdtemp(directory.data()) != nullptr);
+      std::strcpy(directory.dataMut(), "/tmp/telar-traffic-service-XXXXXX");
+      check(::mkdtemp(directory.dataMut()) != nullptr);
       path = std::string{directory.data()} + "/traffic.sock";
     }
 
@@ -107,7 +108,7 @@ namespace {
       std::filesystem::remove_all(directory.data(), ignored);
     }
 
-    std::array<char, 64> directory{};
+    ds::Array<char, 64> directory{};
     std::string path;
   };
 
@@ -128,7 +129,7 @@ namespace {
 
     {
       auto forger = greeted(socket.path, Role::offline_capture);
-      const std::array<Byte, 4> forged{'f', 'a', 'k', 'e'};
+      const ds::Array<Byte, 4> forged{'f', 'a', 'k', 'e'};
 
       publish(forger.get(), traffic::Event{.kind = Kind::exchange, .session = 5, .interface = "forged", .bytes = forged});
       closed(forger.get());
@@ -150,7 +151,7 @@ namespace {
       closed(oversized.get());
     }
 
-    const std::array<Byte, 4> body{'s', 'u', 'b', 's'};
+    const ds::Array<Byte, 4> body{'s', 'u', 'b', 's'};
     std::vector<Byte> output(Limits::frame_bytes);
     const auto frame = Protocol::encode(output, traffic::Event{.link_type = DLT_RAW, .original_bytes = body.size(), .interface = "subscriber", .bytes = body});
 
@@ -174,10 +175,10 @@ namespace {
 
     Service disabled{memory.memory, socket.path, false};
     auto peer = connect(socket.path);
-    std::array<Byte, Protocol::greeting_bytes> greeting;
+    ds::Array<Byte, Protocol::greeting_bytes> greeting;
 
     check(disabled.http() == nullptr);
-    sendAll(peer.get(), Protocol::greeting(greeting, Role::intercept));
+    sendAll(peer.get(), Protocol::greeting(greeting.viewMut(), Role::intercept));
     check(receiveSome(peer.get(), 65536).empty());
   }
 

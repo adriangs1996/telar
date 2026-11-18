@@ -2,6 +2,7 @@ module telar.runtime.platform.signals;
 
 import telar.platform.error;
 import telar.sys.posix;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -27,9 +28,9 @@ namespace telar::runtime {
   }
 
   void CompletionSignal::drain() noexcept {
-    std::array<std::uint8_t, 64> bytes;
+    ds::Array<std::uint8_t, 64> bytes;
 
-    while (::read(reader_.get(), bytes.data(), bytes.size()) > 0) {
+    while (::read(reader_.get(), bytes.dataMut(), bytes.size()) > 0) {
     }
   }
 

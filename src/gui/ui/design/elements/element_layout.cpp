@@ -99,7 +99,7 @@ namespace telar::gui::qt {
 
   void ElementLayout::setPadding(const QVariantList& padding) {
     for (qsizetype index = 0; index < 4; ++index) {
-      padding_[index] = index < padding.size() ? padding[index].toReal() : 0;
+      padding_.atMut(index) = index < padding.size() ? padding[index].toReal() : 0;
     }
 
     emit layoutChanged();

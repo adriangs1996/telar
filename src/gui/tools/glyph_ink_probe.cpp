@@ -6,13 +6,14 @@ import std;
 
 import telar.gui.foundation.core;
 import telar.gui.foundation.fonts;
+import telar.base.ds;
 
 namespace {
 
   using namespace telar::gui;
   using namespace telar::gui::glyphs;
 
-  constexpr std::array<std::string_view, 6> workloads{"block", "quadrant", "slab", "box", "braille", "all"};
+  constexpr telar::ds::Array<std::string_view, 6> workloads{"block", "quadrant", "slab", "box", "braille", "all"};
   constexpr std::uint32_t first_quadrant = 0x2596;
   constexpr std::uint64_t maximum_iterations = 100'000'000;
   constexpr float box_thickness = 1.5F;

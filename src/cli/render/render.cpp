@@ -5,6 +5,7 @@ import telar.sys.process;
 import telar.render.document;
 import telar.render.markdown;
 import telar.render.terminal;
+import telar.base.ds;
 
 namespace telar::runtime::cli::render_command {
 
@@ -164,10 +165,10 @@ namespace telar::runtime::cli::render_command {
     // blocking read, as poll() rejects /dev/tty on macOS; the signal handlers are installed
     // without SA_RESTART, so a signal interrupts the read.
     void wait() noexcept {
-      std::array<char, 64> keys;
+      ds::Array<char, 64> keys;
 
       while (stop_signal == 0) {
-        const auto got = ::read(descriptor_, keys.data(), keys.size());
+        const auto got = ::read(descriptor_, keys.dataMut(), keys.size());
         if (got < 0 && (sys::lastError() == EINTR || sys::lastError() == EAGAIN)) {
           continue;
         }

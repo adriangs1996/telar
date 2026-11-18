@@ -69,6 +69,7 @@ import telar.gui.features.workbench;
 import telar.gui.features.activity;
 import telar.gui.features.machines;
 import telar.gui.features.window;
+import telar.base.ds;
 
 namespace {
 
@@ -260,7 +261,7 @@ namespace {
         bool has_page = true;
       };
 
-      const std::array cases{
+      const telar::ds::Array cases{
           Case{.phase = QStringLiteral("loading"), .title = QStringLiteral("Searching your command history…"), .has_page = false},
           Case{.phase = QStringLiteral("failed"), .title = QStringLiteral("Could not load the command history")},
           Case{.title = QStringLiteral("No commands yet"), .action = QStringLiteral("import")},
@@ -508,10 +509,10 @@ namespace {
       const auto* layout = qobject_cast<HistoryFiltersLayout*>(filters.get());
 
       QVERIFY(layout != nullptr);
-      std::array<application::history::HistoryHoverTarget, HistoryFiltersLayout::target_count> targets;
+      telar::ds::Array<application::history::HistoryHoverTarget, HistoryFiltersLayout::target_count> targets;
       constexpr auto generation = std::numeric_limits<std::uint64_t>::max();
 
-      QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets), targets.size(), wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets.viewMut()), targets.size(), wait_ms);
       const auto identity = targets[1].identity;
       const auto* action = std::get_if<application::history::HistoryFilterAction>(&identity.action);
 
@@ -540,21 +541,21 @@ namespace {
       state.insert(QStringLiteral("author"), QStringLiteral("agent"));
       state.insert(QStringLiteral("failedOnly"), true);
       filters->setProperty("state", state);
-      QTRY_VERIFY_WITH_TIMEOUT((layout->hoverTargets(generation, targets) == targets.size() && targets[1].bounds.width > previous_width), wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT((layout->hoverTargets(generation, targets.viewMut()) == targets.size() && targets[1].bounds.width > previous_width), wait_ms);
       QVERIFY(waitForSynchronizedFrame(window, wait_ms));
       QCOMPARE(targets[1].identity, identity);
       QCOMPARE(targets[4].identity, failed_identity);
       verify_bounds();
       filters->setEnabled(false);
-      QCOMPARE(layout->hoverTargets(generation, targets), targets.size());
-      QCOMPARE(layout->hoverTargets(generation, std::span{targets}.first(1)), std::size_t{1});
+      QCOMPARE(layout->hoverTargets(generation, targets.viewMut()), targets.size());
+      QCOMPARE(layout->hoverTargets(generation, targets.viewMut().first(1)), std::size_t{1});
       QCOMPARE(layout->hoverTargets(generation, {}), std::size_t{0});
       filters->setWidth(narrow_width);
       constexpr std::size_t scope_count = 4;
 
-      QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets), scope_count, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets.viewMut()), scope_count, wait_ms);
       filters->setVisible(false);
-      QCOMPARE(layout->hoverTargets(generation, targets), std::size_t{0});
+      QCOMPARE(layout->hoverTargets(generation, targets.viewMut()), std::size_t{0});
     }
 
     Q_SLOT static void filtersWorkWithoutAnApplicationController() {
@@ -1303,10 +1304,10 @@ namespace {
       const auto* layout = qobject_cast<HistoryFooterLayout*>(footer.get());
 
       QVERIFY(layout != nullptr);
-      std::array<application::history::HistoryHoverTarget, application::history::HistoryFooter::capacity> targets;
+      telar::ds::Array<application::history::HistoryHoverTarget, application::history::HistoryFooter::capacity> targets;
       constexpr std::size_t browse_count = 3;
 
-      QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets), browse_count, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets.viewMut()), browse_count, wait_ms);
       const auto* submit = std::get_if<application::history::HistoryFooterIdentity>(&targets.front().identity.action);
 
       QVERIFY(submit != nullptr);
@@ -1329,13 +1330,13 @@ namespace {
       state.insert(QStringLiteral("enterRuns"), true);
       footer->setProperty("state", state);
       QVERIFY(waitForSynchronizedFrame(window, wait_ms));
-      QCOMPARE(layout->hoverTargets(generation, targets), browse_count);
+      QCOMPARE(layout->hoverTargets(generation, targets.viewMut()), browse_count);
       QCOMPARE(targets.front().identity, identity);
       state.insert(QStringLiteral("selection"), 3);
       state.insert(QStringLiteral("revision"), QString::number(revision - 1));
       footer->setProperty("state", state);
       QVERIFY(waitForSynchronizedFrame(window, wait_ms));
-      QCOMPARE(layout->hoverTargets(generation, targets), browse_count);
+      QCOMPARE(layout->hoverTargets(generation, targets.viewMut()), browse_count);
       QVERIFY(targets.front().identity != identity);
       submit = std::get_if<application::history::HistoryFooterIdentity>(&targets.front().identity.action);
       QVERIFY(submit != nullptr);
@@ -1361,27 +1362,27 @@ namespace {
       const auto* layout = qobject_cast<HistoryFooterLayout*>(footer.get());
 
       QVERIFY(layout != nullptr);
-      std::array<application::history::HistoryHoverTarget, application::history::HistoryFooter::capacity> targets;
+      telar::ds::Array<application::history::HistoryHoverTarget, application::history::HistoryFooter::capacity> targets;
       constexpr std::size_t actions = 3;
       constexpr std::uint64_t generation = 41;
 
-      QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets), actions, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets.viewMut()), actions, wait_ms);
       footer->setProperty("interactive", false);
-      QCOMPARE(layout->hoverTargets(generation, targets), actions);
-      QCOMPARE(layout->hoverTargets(generation, std::span{targets}.first(1)), std::size_t{1});
+      QCOMPARE(layout->hoverTargets(generation, targets.viewMut()), actions);
+      QCOMPARE(layout->hoverTargets(generation, targets.viewMut().first(1)), std::size_t{1});
       state.insert(QStringLiteral("inspecting"), true);
       footer->setProperty("state", state);
       QVERIFY(waitForSynchronizedFrame(window, wait_ms));
-      QCOMPARE(layout->hoverTargets(generation, targets), actions);
+      QCOMPARE(layout->hoverTargets(generation, targets.viewMut()), actions);
       const auto* visit = std::get_if<application::history::HistoryFooterIdentity>(&targets[actions - 1].identity.action);
 
       QVERIFY(visit != nullptr);
       QCOMPARE(visit->action, application::history::HistoryFooterAction::visit);
       state.insert(QStringLiteral("error"), QStringLiteral("fixture failure"));
       footer->setProperty("state", state);
-      QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets), std::size_t{0}, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets.viewMut()), std::size_t{0}, wait_ms);
       footer->setVisible(false);
-      QCOMPARE(layout->hoverTargets(generation, targets), std::size_t{0});
+      QCOMPARE(layout->hoverTargets(generation, targets.viewMut()), std::size_t{0});
     }
 
     Q_SLOT static void footerActionsNeedNoApplicationController() {
@@ -1439,7 +1440,7 @@ namespace {
     }
 
     Q_SLOT static void footerSubmissionsKeepCaptureWhenEnterBehaviorChanges() {
-      const std::array actions{QStringLiteral("submit"), QStringLiteral("alternate")};
+      const telar::ds::Array actions{QStringLiteral("submit"), QStringLiteral("alternate")};
 
       for (const auto& action : actions) {
         for (const bool enter_runs : {false, true}) {
@@ -1492,10 +1493,10 @@ namespace {
       const auto* layout = qobject_cast<HistoryInspectionLayout*>(fixture.item.get());
 
       QVERIFY(layout != nullptr);
-      std::array<application::history::HistoryHoverTarget, application::history::history_inspection_action_count> targets;
+      telar::ds::Array<application::history::HistoryHoverTarget, application::history::history_inspection_action_count> targets;
 
-      QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets), targets.size(), wait_ms);
-      const std::array actions{QStringLiteral("submit"), QStringLiteral("alternate"), QStringLiteral("copy"), QStringLiteral("erase"), QStringLiteral("visit")};
+      QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets.viewMut()), targets.size(), wait_ms);
+      const telar::ds::Array actions{QStringLiteral("submit"), QStringLiteral("alternate"), QStringLiteral("copy"), QStringLiteral("erase"), QStringLiteral("visit")};
 
       for (std::size_t index = 0; index < actions.size(); ++index) {
         const auto* identity = std::get_if<application::history::HistoryInspectionIdentity>(&targets[index].identity.action);
@@ -1525,7 +1526,7 @@ namespace {
       fixture.state.insert(QStringLiteral("enterRuns"), true);
       fixture.item->setProperty("browserState", fixture.state);
       QVERIFY(waitForSynchronizedFrame(fixture.window, wait_ms));
-      QCOMPARE(layout->hoverTargets(generation, targets), targets.size());
+      QCOMPARE(layout->hoverTargets(generation, targets.viewMut()), targets.size());
       for (std::size_t index = 0; index < targets.size(); ++index) {
         QCOMPARE(targets[index].identity, previous[index].identity);
       }
@@ -1534,7 +1535,7 @@ namespace {
       fixture.state.insert(QStringLiteral("selection"), 3);
       fixture.item->setProperty("browserState", fixture.state);
       QVERIFY(waitForSynchronizedFrame(fixture.window, wait_ms));
-      QCOMPARE(layout->hoverTargets(generation, targets), targets.size());
+      QCOMPARE(layout->hoverTargets(generation, targets.viewMut()), targets.size());
       for (std::size_t index = 0; index < targets.size(); ++index) {
         const auto* identity = std::get_if<application::history::HistoryInspectionIdentity>(&targets[index].identity.action);
 
@@ -1552,17 +1553,17 @@ namespace {
       const auto* layout = qobject_cast<HistoryInspectionLayout*>(fixture.item.get());
 
       QVERIFY(layout != nullptr);
-      std::array<application::history::HistoryHoverTarget, application::history::history_inspection_action_count> targets;
+      telar::ds::Array<application::history::HistoryHoverTarget, application::history::history_inspection_action_count> targets;
       constexpr std::uint64_t generation = 41;
 
-      QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets), targets.size(), wait_ms);
-      QCOMPARE(layout->hoverTargets(generation, std::span{targets}.first(1)), std::size_t{1});
+      QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets.viewMut()), targets.size(), wait_ms);
+      QCOMPARE(layout->hoverTargets(generation, targets.viewMut().first(1)), std::size_t{1});
       QCOMPARE(layout->hoverTargets(generation, {}), std::size_t{0});
       fixture.state.insert(QStringLiteral("phase"), QStringLiteral("loading"));
       fixture.item->setProperty("browserState", fixture.state);
       constexpr std::size_t disabled_actions = 4;
 
-      QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets), disabled_actions, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets.viewMut()), disabled_actions, wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(inspectionAction(*fixture.item, QStringLiteral("visit")) == nullptr, wait_ms);
       const auto* copy = inspectionAction(*fixture.item, QStringLiteral("copy"));
 
@@ -1570,17 +1571,17 @@ namespace {
       QVERIFY(!copy->property("interactive").toBool());
       fixture.state.insert(QStringLiteral("phase"), QStringLiteral("ready"));
       fixture.item->setProperty("browserState", fixture.state);
-      QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets), targets.size(), wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets.viewMut()), targets.size(), wait_ms);
       fixture.item->setWidth(fact_limited_width);
-      QTRY_VERIFY_WITH_TIMEOUT((layout->hoverTargets(generation, targets) > 0 && layout->hoverTargets(generation, targets) < targets.size()), wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT((layout->hoverTargets(generation, targets.viewMut()) > 0 && layout->hoverTargets(generation, targets.viewMut()) < targets.size()), wait_ms);
       fixture.item->setWidth(0);
-      QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets), std::size_t{0}, wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(layout->hoverTargets(generation, targets.viewMut()), std::size_t{0}, wait_ms);
       fixture.item->setVisible(false);
-      QCOMPARE(layout->hoverTargets(generation, targets), std::size_t{0});
+      QCOMPARE(layout->hoverTargets(generation, targets.viewMut()), std::size_t{0});
     }
 
     Q_SLOT static void inspectionSubmissionsKeepCaptureWhenEnterBehaviorChanges() {
-      const std::array actions{QStringLiteral("submit"), QStringLiteral("alternate")};
+      const telar::ds::Array actions{QStringLiteral("submit"), QStringLiteral("alternate")};
 
       for (const auto& action : actions) {
         for (const bool enter_runs : {false, true}) {
@@ -1609,7 +1610,7 @@ namespace {
     }
 
     Q_SLOT static void inspectionSemanticActionsKeepCaptureAcrossChoiceChanges() {
-      const std::array actions{QStringLiteral("copy"), QStringLiteral("erase"), QStringLiteral("visit")};
+      const telar::ds::Array actions{QStringLiteral("copy"), QStringLiteral("erase"), QStringLiteral("visit")};
 
       for (const auto& action : actions) {
         InspectionFixture fixture;

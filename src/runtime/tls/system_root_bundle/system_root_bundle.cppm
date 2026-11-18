@@ -4,6 +4,7 @@ import std;
 
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
+import telar.base.ds;
 
 // Interface: tls/system_root_bundle.cppm
 export {
@@ -17,7 +18,7 @@ export {
 
     private:
       static constexpr std::size_t maximum_bytes = 4 * 1024 * 1024;
-      static constexpr std::array<std::string_view, 4> paths{
+      static constexpr ds::Array<std::string_view, 4> paths{
           "/etc/ssl/cert.pem",
           "/etc/ssl/certs/ca-certificates.crt",
           "/etc/pki/tls/certs/ca-bundle.crt",

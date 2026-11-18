@@ -120,14 +120,15 @@ namespace telar::gui::features::notifications {
     }
 
     constexpr NotificationId invalid;
-    auto* const vacant = std::ranges::find(motions_, invalid, &Motion::id);
-    if (vacant == motions_.end()) {
+    const auto motions = motions_.viewMut();
+    const auto vacant = std::ranges::find(motions, invalid, &Motion::id);
+    if (vacant == motions.end()) {
       return ds::none;
     }
 
     *vacant = {.id = id, .from = y, .to = y};
 
-    return static_cast<std::size_t>(vacant - motions_.begin());
+    return static_cast<std::size_t>(vacant - motions.begin());
   }
 
 }

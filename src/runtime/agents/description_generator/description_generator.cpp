@@ -9,6 +9,7 @@ import telar.tbc;
 import telar.base.text;
 import telar.platform.error;
 import telar.platform.primitives;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -198,7 +199,7 @@ namespace telar::runtime {
 
     try {
       Command command{memory_, Launch{.cwd = "/", .arguments = options_.arguments}, CommandPurpose::configured_helper};
-      const std::array input{prompt_prefix, request.query.view(), std::string_view{"\n"}};
+      const ds::Array input{prompt_prefix, request.query.view(), std::string_view{"\n"}};
       const int status = output_.runWithInput(command, std::chrono::steady_clock::now() + options_.timeout, input);
 
       if (output_.truncated()) {

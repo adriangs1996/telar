@@ -9,6 +9,7 @@ module telar.render.markdown;
 
 import std;
 import telar.base.text.utf8;
+import telar.base.ds;
 
 namespace telar::render::markdown {
 
@@ -331,8 +332,8 @@ namespace telar::render::markdown {
         target_ = attribute(static_cast<const MD_SPAN_IMG_DETAIL*>(detail)->src);
         break;
       case MD_SPAN_FOOTNOTE_REF: {
-        std::array<char, 16> digits;
-        const auto end = std::to_chars(digits.data(), digits.data() + digits.size(), static_cast<const MD_SPAN_FOOTNOTE_REF_DETAIL*>(detail)->id).ptr;
+        ds::Array<char, 16> digits;
+        const auto end = std::to_chars(digits.dataMut(), digits.dataMut() + digits.size(), static_cast<const MD_SPAN_FOOTNOTE_REF_DETAIL*>(detail)->id).ptr;
 
         appendRun(std::string_view{digits.data(), static_cast<std::size_t>(end - digits.data())}, style::superscript);
         break;
@@ -554,7 +555,7 @@ namespace telar::render::markdown {
     }
 
     static Callout calloutOf(const MD_ATTRIBUTE& type) {
-      constexpr std::array<std::pair<std::string_view, Callout>, 5> names{{
+      constexpr ds::Array<std::pair<std::string_view, Callout>, 5> names{{
           {"note", Callout::note},
           {"tip", Callout::tip},
           {"important", Callout::important},

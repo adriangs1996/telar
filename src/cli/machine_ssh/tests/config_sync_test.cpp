@@ -9,6 +9,7 @@ import std;
 import telar.testing;
 import telar.base.text.json;
 import telar.cli.machine_ssh;
+import telar.base.ds;
 
 namespace {
 
@@ -60,9 +61,9 @@ namespace {
 
     check(pipe != nullptr, command);
     std::string output;
-    std::array<char, 256> buffer;
+    telar::ds::Array<char, 256> buffer;
 
-    while (const auto count = std::fread(buffer.data(), 1, buffer.size(), pipe)) {
+    while (const auto count = std::fread(buffer.dataMut(), 1, buffer.size(), pipe)) {
       output.append(buffer.data(), count);
     }
 
@@ -91,7 +92,7 @@ namespace {
       std::size_t line;
     };
 
-    const auto samples = std::to_array<Sample>({
+    const auto samples = telar::ds::Array<Sample, 9>{{
         {"a\nb\n-----BEGIN OPENSSH PRIVATE KEY-----\n", 3},
         {"remote = ghp_0123456789abcdefghijABCDEFGHIJ012345\n", 1},
         {"x\ngithub_pat_11ABCDEFG0123456789_abcdefghijklmnop\n", 2},
@@ -101,7 +102,7 @@ namespace {
         {"curl -u user:pw https://example.invalid\n", 1},
         {"API_KEY=literal-secret-value\n", 1},
         {"{\n  \"password\": \"hunter22\"\n}\n", 2},
-    });
+    }};
 
     for (const auto& sample : samples) {
       const auto found = machine::filter::findSecret(sample.text);

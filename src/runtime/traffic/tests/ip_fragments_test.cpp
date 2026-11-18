@@ -17,6 +17,7 @@ import telar.tls.tests.tls_fixture;
 import telar.runtime.traffic.capture_analysis;
 import telar.vocabulary;
 import telar.runtime.traffic.control_protocol;
+import telar.base.ds;
 
 namespace {
 
@@ -366,7 +367,7 @@ namespace {
   void conflictingLengths(TlsTestMemory& memory) {
     for (const bool ipv6 : {false, true}) {
       const auto original = traffic_test::tcp(ipv6, false, 1, 16, std::string(64, 'x'));
-      const std::array<std::pair<std::vector<Byte>, std::vector<Byte>>, 3> conflicts{{
+      const ds::Array<std::pair<std::vector<Byte>, std::vector<Byte>>, 3> conflicts{{
           {fragment(original, 40, 16, false), fragment(original, 56, 16, true)},
           {fragment(original, 40, 16, false), fragment(original, 32, 16, false)},
           {fragment(original, 16, 16, true), fragment(original, 8, 8, false)},

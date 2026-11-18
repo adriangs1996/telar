@@ -67,8 +67,8 @@ namespace telar::gui::features::prompt {
     }
 
     std::vector<std::string_view> words{context.words.begin(), context.words.end()};
-    std::array<ebnf::candidate, 128> candidates{};
-    const auto matched = spec->complete(words, context.partial, scratch, candidates);
+    ds::Array<ebnf::candidate, 128> candidates{};
+    const auto matched = spec->complete(words, context.partial, scratch, candidates.viewMut());
     if (matched.status != ebnf::match_status::valid) {
       return result;
     }

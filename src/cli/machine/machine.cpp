@@ -206,8 +206,8 @@ namespace telar::runtime::cli::machine {
     return text == "y" || text == "yes";
   }
 
-  constexpr auto agent_names = std::to_array<std::string_view>({"claude", "codex", "pi", "opencode", "cursor"});
-  constexpr auto agent_commands = std::to_array<std::string_view>({"claude", "codex", "pi", "opencode", "cursor-agent"});
+  constexpr auto agent_names = ds::Array<std::string_view, 5>{"claude", "codex", "pi", "opencode", "cursor"};
+  constexpr auto agent_commands = ds::Array<std::string_view, 5>{"claude", "codex", "pi", "opencode", "cursor-agent"};
 
   std::set<std::string> localAgents() {
     std::set<std::string> found;
@@ -216,10 +216,10 @@ namespace telar::runtime::cli::machine {
       return found;
     }
 
-    std::array<char, PATH_MAX> executable;
+    ds::Array<char, PATH_MAX> executable;
 
     for (std::size_t agent = 0; agent < agent_names.size(); ++agent) {
-      if (findExecutable(path, agent_commands[agent], executable)) {
+      if (findExecutable(path, agent_commands[agent], executable.viewMut())) {
         found.emplace(agent_names[agent]);
       }
     }
@@ -606,7 +606,7 @@ fetch() {
     // machine's telar. `remote` names a file from the home; each path is from an agent's root,
     // or from the parent of a shared root such as .agents/skills.
     bool owned(std::string_view remote) const {
-      static constexpr auto paths = std::to_array<std::string_view>({"skills/telar", "skills/telar-coordinator", "extensions/telar.ts", "plugins/telar.ts"});
+      static constexpr auto paths = ds::Array<std::string_view, 4>{"skills/telar", "skills/telar-coordinator", "extensions/telar.ts", "plugins/telar.ts"};
       const auto matches = [](std::string_view relative) {
         return std::ranges::any_of(paths, [&](auto path) {
           return relative == path || below(relative, path);
@@ -671,10 +671,10 @@ fetch() {
       }
 
       std::string bytes;
-      std::array<char, 16 * 1024> buffer;
+      ds::Array<char, 16 * 1024> buffer;
 
       for (;;) {
-        const auto count = ::read(file.get(), buffer.data(), buffer.size());
+        const auto count = ::read(file.get(), buffer.dataMut(), buffer.size());
         if (count < 0 && sys::lastError() == EINTR) {
           continue;
         }
@@ -1959,10 +1959,10 @@ fetch() {
     }
 
     Sha256 digest;
-    std::array<std::uint8_t, 64 * 1024> buffer;
+    ds::Array<std::uint8_t, 64 * 1024> buffer;
 
     for (;;) {
-      const auto count = ::read(file.get(), buffer.data(), buffer.size());
+      const auto count = ::read(file.get(), buffer.dataMut(), buffer.size());
       if (count < 0 && sys::lastError() == EINTR) {
         continue;
       }

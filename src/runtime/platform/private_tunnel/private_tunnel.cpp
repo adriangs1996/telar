@@ -1,6 +1,7 @@
 module telar.runtime.platform.private_tunnel;
 
 import telar.platform.error;
+import telar.base.ds;
 
 #if defined(__APPLE__)
 import telar.sys.apple;
@@ -59,7 +60,7 @@ namespace telar::runtime {
     tun_pi header{};
     header.proto = htons(family == AF_INET ? ETH_P_IP : ETH_P_IPV6);
     const auto payload = bytes.subspan(family_bytes);
-    const std::array buffers{iovec{&header, sizeof(header)}, iovec{const_cast<std::uint8_t*>(payload.data()), payload.size()}};
+    const ds::Array buffers{iovec{&header, sizeof(header)}, iovec{const_cast<std::uint8_t*>(payload.data()), payload.size()}};
     return ::writev(tunnel_.get(), buffers.data(), buffers.size());
   }
 
@@ -107,9 +108,9 @@ namespace telar::runtime {
       throw SystemError{"Create redirect discovery interface"};
     }
 
-    std::array<char, IFNAMSIZ> interface{};
+    ds::Array<char, IFNAMSIZ> interface{};
     socklen_t length = interface.size();
-    if (::getsockopt(tunnel_.get(), SYSPROTO_CONTROL, UTUN_OPT_IFNAME, interface.data(), &length) != 0 || interface.back() != '\0') {
+    if (::getsockopt(tunnel_.get(), SYSPROTO_CONTROL, UTUN_OPT_IFNAME, interface.dataMut(), &length) != 0 || interface.back() != '\0') {
       throw SystemError{"Read redirect discovery interface"};
     }
 

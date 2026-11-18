@@ -5,6 +5,7 @@ import telar.tbc;
 import telar.base.text;
 import telar.platform.error;
 import telar.sys.posix;
+import telar.base.ds;
 #if defined(__APPLE__)
 import telar.sys.apple;
 #else
@@ -198,8 +199,8 @@ namespace telar::runtime {
   }
 
   void GraphicsChildSharedMemory::release(std::string_view encoded_name) noexcept {
-    std::array<std::uint8_t, PATH_MAX + 1> name;
-    const auto descriptor = open(encoded_name, name);
+    ds::Array<std::uint8_t, PATH_MAX + 1> name;
+    const auto descriptor = open(encoded_name, name.viewMut());
     if (descriptor) {
       ::shm_unlink(reinterpret_cast<const char*>(name.data()));
     }

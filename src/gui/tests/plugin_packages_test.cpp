@@ -48,6 +48,7 @@ import telar.gui.tests.plugin_catalog_cases;
 import telar.gui.tests.plugin_effect_cases;
 import telar.platform.fs;
 import telar.plugins;
+import telar.base.ds;
 #if (defined(__APPLE__))
 #endif
 
@@ -108,7 +109,7 @@ namespace {
 
     auto stale = package;
 
-    stale.digest.front() ^= 1U;
+    stale.digest.atMut(0) ^= 1U;
     const telar::runtime::TemporaryDirectory changed{"/tmp/telar-gui-plugin-stale-XXXXXX"};
 
     rejects([&] {
@@ -166,11 +167,11 @@ namespace {
 #endif
     digest.clear();
     {
-      std::array<plugins::ConfiguredPlugin, 2> specs{};
+      telar::ds::Array<plugins::ConfiguredPlugin, 2> specs{};
 
-      specs[0].path.assign("missing-disabled");
-      specs[0].enabled = false;
-      specs[1].path.assign("example");
+      specs.atMut(0).path.assign("missing-disabled");
+      specs.atMut(0).enabled = false;
+      specs.atMut(1).path.assign("example");
       const plugins::PackageRegistryStorage<telar::Memory, Inspector> registry{memory, {directory.constData(), static_cast<std::size_t>(directory.size())}, specs};
 
       require(registry.packages().size() == 1 && registry.packages().front().digest == inspected.digest, "configured registry must skip disabled packages and resolve relative paths");
@@ -179,7 +180,7 @@ namespace {
 
       require(native.packages().size() == 1 && native.packages().front().digest == inspected.digest, "runtime registry API must preserve its native package identities");
 #endif
-      specs[0] = specs[1];
+      specs.atMut(0) = specs[1];
       rejects([&] {
         const plugins::PackageRegistryStorage<telar::Memory, Inspector> duplicate{memory, {directory.constData(), static_cast<std::size_t>(directory.size())}, specs};
       });

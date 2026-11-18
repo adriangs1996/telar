@@ -25,7 +25,7 @@ namespace telar::gui::features::status_bar {
         break;
       }
 
-      result.hints[index] = HistoryHintGeometry::derive({.x = x, .y = area.y, .width = width, .height = area.height}, chrome, measured.hints[index]);
+      result.hints.atMut(index) = HistoryHintGeometry::derive({.x = x, .y = area.y, .width = width, .height = area.height}, chrome, measured.hints[index]);
       ++result.count;
       x += width + chrome.px(hint_gap);
     }

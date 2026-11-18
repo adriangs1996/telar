@@ -18,7 +18,7 @@ namespace telar::gui::inline foundation::inline keys {
   Utf8Scalar KeyCharacter::text(std::uint32_t storage) noexcept {
     Utf8Scalar result;
 
-    result.bytes = std::bit_cast<std::array<char, sizeof(storage)>>(storage);
+    result.bytes = std::bit_cast<ds::Array<char, sizeof(storage)>>(storage);
     const auto* const terminator = std::ranges::find(result.bytes, '\0');
 
     result.length = std::max<std::size_t>(1, static_cast<std::size_t>(terminator - result.bytes.begin()));
@@ -110,7 +110,7 @@ namespace telar::gui::inline foundation::inline keys {
     }
 
     for (const auto byte : text) {
-      bytes_[used_++] = byte;
+      bytes_.atMut(used_++) = byte;
     }
   }
 
@@ -119,7 +119,7 @@ namespace telar::gui::inline foundation::inline keys {
   }
 
   void KeyEncoder::number(std::uint32_t value) {
-    const auto encoded = std::to_chars(bytes_.data() + used_, bytes_.data() + bytes_.size(), value);
+    const auto encoded = std::to_chars(bytes_.dataMut() + used_, bytes_.dataMut() + bytes_.size(), value);
     if (encoded.ec != std::errc{}) {
       throw std::length_error{"Encoded key number exceeds its byte capacity"};
     }
@@ -248,7 +248,7 @@ namespace telar::gui::inline foundation::inline keys {
       return static_cast<char>(codepoint & control_mask);
     }
 
-    constexpr auto controls = std::to_array<std::pair<std::uint32_t, char>>({
+    constexpr auto controls = ds::Array<std::pair<std::uint32_t, char>, 17>{{
         {' ', '\0'},
         {'@', '\0'},
         {'2', '\0'},
@@ -266,7 +266,7 @@ namespace telar::gui::inline foundation::inline keys {
         {'7', '\x1f'},
         {'?', erase},
         {'8', erase},
-    });
+    }};
 
     for (const auto& [known, value] : controls) {
       if (codepoint == known) {

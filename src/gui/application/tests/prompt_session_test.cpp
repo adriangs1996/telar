@@ -30,6 +30,7 @@ import telar.wire.history;
 import telar.wire.runtime;
 import telar.gui.foundation.core;
 import telar.config.client;
+import telar.base.ds;
 
 namespace {
 
@@ -149,10 +150,10 @@ namespace {
   // One row of two cells, the cursor at `column`.
   template <typename Client>
   void deliverRow(Client& client, std::uint64_t frame_id, std::uint16_t column) {
-    const std::array cells{Cell{.text = byteView("$")}, Cell{.text = byteView(" ")}};
-    std::array<Byte, 64> encoded{};
-    const std::array spans{FrameSpan{.start = 0, .count = 2, .cells = CellRunCodec::encode(cells, encoded)}};
-    const std::array<Byte, 1> flags{};
+    const ds::Array cells{Cell{.text = byteView("$")}, Cell{.text = byteView(" ")}};
+    ds::Array<Byte, 64> encoded{};
+    const ds::Array spans{FrameSpan{.start = 0, .count = 2, .cells = CellRunCodec::encode(cells, encoded.viewMut())}};
+    const ds::Array<Byte, 1> flags{};
     FrameBody frame;
 
     frame.pane_id = 1;
@@ -208,7 +209,7 @@ namespace {
     check(prompt::commandPresence(client, 1, "g") == prompt::CommandPresence::pending, "the first letter asks the runtime");
     const auto asked = transport.last<CompleteWords>();
     const auto requests = transport.count(ClientTag::complete_words);
-    const std::array words{CompletionWord{.text = "git"}, CompletionWord{.text = "gzip"}};
+    const ds::Array words{CompletionWord{.text = "git"}, CompletionWord{.text = "gzip"}};
 
     deliver(client, CompletionWords{.request_id = asked.request_id, .truncated = false, .words = words});
     check(prompt::commandPresence(client, 1, "g") == prompt::CommandPresence::missing, "no command is named g");
@@ -329,7 +330,7 @@ namespace {
 
     deliver(client, PaneExited{.pane_id = 1, .kind = ExitKind::exited});
     check(!prompt::line(client, 1), "the line goes with its pane");
-    const std::array words{CompletionWord{.text = "git"}};
+    const ds::Array words{CompletionWord{.text = "git"}};
 
     check(deliver(client, CompletionWords{.request_id = checked.request_id, .words = words}) == application::Change::none, "an answer for a pane that left finds nothing waiting");
   }
@@ -416,7 +417,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     const auto find = transport.last<FindPaths>();
 
     check(find.root.starts_with("/") && find.query == "sr" && prompt::line(client, 1)->pending(find.request_id), "paths are asked from the runtime");
-    const std::array matches{PathMatch{.path = "src/", .kind = PathKind::directory}, PathMatch{.path = "src/main.cpp", .kind = PathKind::file}, PathMatch{.path = "README", .kind = PathKind::file}};
+    const ds::Array matches{PathMatch{.path = "src/", .kind = PathKind::directory}, PathMatch{.path = "src/main.cpp", .kind = PathKind::file}, PathMatch{.path = "README", .kind = PathKind::file}};
 
     check(deliver(client, PathResults{.request_id = find.request_id, .root = find.root, .complete = true, .matches = matches}) == application::Change::terminal, "the answer repaints the line");
     check(prompt::line(client, 1)->text() == "cat src/", "the only child that matches is written, a directory without a space");
@@ -431,7 +432,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     const auto commands = transport.last<CompleteWords>();
 
     check(commands.provider == CompletionProvider::command && commands.prefix == "tel" && commands.pane_id == 1, "the runtime is asked for commands");
-    const std::array found{CompletionWord{.text = "telar"}, CompletionWord{.text = "telnet"}};
+    const ds::Array found{CompletionWord{.text = "telar"}, CompletionWord{.text = "telnet"}};
 
     deliver(client, CompletionWords{.request_id = commands.request_id, .words = found});
     check(prompt::line(client, 1)->menu() && prompt::line(client, 1)->menu()->choices.size() == 2, "the runtime's commands fill the menu");
@@ -447,7 +448,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     const auto wider = transport.last<CompleteWords>();
 
     check(transport.count(ClientTag::complete_words) == asked_words + 1 && wider.prefix == "te", "erasing past it asks again");
-    const std::array widened{CompletionWord{.text = "tee"}};
+    const ds::Array widened{CompletionWord{.text = "tee"}};
 
     deliver(client, CompletionWords{.request_id = wider.request_id, .words = widened});
     check(prompt::line(client, 1)->text() == "te" && prompt::line(client, 1)->menu() && prompt::line(client, 1)->menu()->choices.size() == 1, "a single answer to a refined menu is not written");
@@ -474,7 +475,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     const auto branches = transport.last<CompleteWords>();
 
     check(branches.provider == CompletionProvider::branch && branches.prefix == "fe", "branches are asked for where the spec expects one");
-    const std::array branch{CompletionWord{.text = "feature/island", .description = ""}};
+    const ds::Array branch{CompletionWord{.text = "feature/island", .description = ""}};
 
     deliver(client, CompletionWords{.request_id = branches.request_id, .words = branch});
     check(prompt::line(client, 1)->text() == "git switch feature/island ", "the only branch is written");
@@ -483,7 +484,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     const auto query = transport.last<QueryHistory>();
 
     check(query.distinct && query.author == HistoryAuthorFilter::human, "the line loads the commands people typed");
-    const std::array entries{HistoryEntry{.id = 2, .pane_id = 1, .command = "make test-runtime", .cwd = "/"}, HistoryEntry{.id = 1, .pane_id = 1, .command = "make install", .cwd = "/"}};
+    const ds::Array entries{HistoryEntry{.id = 2, .pane_id = 1, .command = "make test-runtime", .cwd = "/"}, HistoryEntry{.id = 1, .pane_id = 1, .command = "make install", .cwd = "/"}};
 
     check(deliver(client, HistoryResults{.request_id = query.request_id, .snapshot_id = 1, .entries = entries}) == application::Change::none, "the editor's history does not touch the history panel");
     prompt::key(client, 1, prompt::KeyPress{prompt::Key::character, 'u', {.control = true}});
@@ -589,7 +590,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     configuration.prompt.keymap = PromptKeymap::vim;
     application::configuration::configure(client, configuration);
     deliver(client, atPrompt(3));
-    const std::array blocks{
+    const ds::Array blocks{
         CommandBlock{.row = 0, .rows = 1, .lines = 0, .state = CommandBlockState::succeeded, .status = 0, .duration_ms = 5, .command = "ls"},
         CommandBlock{.row = 4, .rows = 2, .lines = 0, .state = CommandBlockState::failed, .status = 1, .duration_ms = 9, .command = "make test"},
         CommandBlock{.row = 10, .rows = 1, .lines = 0, .state = CommandBlockState::succeeded, .status = 0, .duration_ms = 3, .command = "git status"},
@@ -672,7 +673,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     configuration.prompt.keymap = PromptKeymap::vim;
     application::configuration::configure(client, configuration);
     deliver(client, atPrompt(3));
-    const std::array blocks{
+    const ds::Array blocks{
         CommandBlock{.row = 10, .rows = 1, .state = CommandBlockState::succeeded, .command = "ls"},
         CommandBlock{.row = 40, .rows = 1, .state = CommandBlockState::failed, .status = 1, .command = "make"},
         CommandBlock{.row = 70, .rows = 1, .state = CommandBlockState::succeeded, .command = "git log"},
@@ -735,7 +736,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     check(scoped.first_row == 41 && scoped.last_row == 69, "the search reads only the block's output");
     // Typed a letter at a time: the matches the runtime found, the cursor on the first after
     // where the search began, n and N between them, and back to the start with nothing to find.
-    const std::array found{PaneMatch{.x = 2, .y = 50, .len = 5}, PaneMatch{.x = 0, .y = 60, .len = 5}};
+    const ds::Array found{PaneMatch{.x = 2, .y = 50, .len = 5}, PaneMatch{.x = 0, .y = 60, .len = 5}};
 
     deliver(client, PaneMatches{.request_id = scoped.request_id, .pane_id = 1, .matches = found});
     check(application::terminal::copy_mode::searchState(client).count == 2 && application::terminal::copy_mode::searchState(client).index == 0 && application::terminal::copy_mode::view(client).state()->cursor.y == 50, "the first match after where the search began is the current one");
@@ -789,7 +790,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     check(application::paths::open(client), "the path search opens over the line");
     check(application::paths::seed(client) == "src/ma" && transport.last<FindPaths>().query == "src/ma", "the path search starts from the word before the caret");
     auto request = transport.last<FindPaths>();
-    std::array matches{PathMatch{.path = "src/main.cpp", .kind = PathKind::file}};
+    ds::Array matches{PathMatch{.path = "src/main.cpp", .kind = PathKind::file}};
 
     deliver(client, PathResults{.request_id = request.request_id, .root = request.root, .complete = true, .matches = matches});
     auto before = transport.sent.size();
@@ -800,7 +801,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     typeKeys(client, " ~/x");
     check(application::paths::open(client) && application::paths::seed(client).empty() && transport.last<FindPaths>().query.empty(), "a word that is not a plain relative path starts the search empty");
     request = transport.last<FindPaths>();
-    matches[0] = PathMatch{.path = "a.txt", .kind = PathKind::file};
+    matches.atMut(0) = PathMatch{.path = "a.txt", .kind = PathKind::file};
     deliver(client, PathResults{.request_id = request.request_id, .root = request.root, .complete = true, .matches = matches});
     check(application::paths::insert(client, 0, false) && prompt::line(client, 1)->text() == "cat src/main.cpp ~/xa.txt", "without a word the path goes in at the caret");
 

@@ -91,14 +91,14 @@ namespace telar::gui::qt {
     };
 
     struct HoverFrame {
-      std::array<application::history::HistoryHoverTarget, application::history::HistoryLimits::page_entries + application::history::HistoryActions::count + application::history::HistoryFooter::capacity + application::history::history_filter_target_count + application::history::history_inspection_action_count> targets;
+      ds::Array<application::history::HistoryHoverTarget, application::history::HistoryLimits::page_entries + application::history::HistoryActions::count + application::history::HistoryFooter::capacity + application::history::history_filter_target_count + application::history::history_inspection_action_count> targets;
       std::size_t count = 0;
       std::uint64_t generation = 0;
       double scale = 1;
 
       void append(application::history::HistoryHoverTarget target) {
         if (count < targets.size() && !target.bounds.empty()) {
-          targets[count++] = target;
+          targets.atMut(count++) = target;
         }
       }
 

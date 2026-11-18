@@ -28,7 +28,7 @@ namespace telar::gui::features::terminal::graphics {
       : resources_(resources),
         release_(release) {
     for (std::size_t index = 0; index < capacity; ++index) {
-      free_[index] = static_cast<Row>(capacity - 1 - index);
+      free_.atMut(index) = static_cast<Row>(capacity - 1 - index);
     }
   }
 
@@ -69,7 +69,7 @@ namespace telar::gui::features::terminal::graphics {
       return {};
     }
 
-    auto& state = states_[*row];
+    auto& state = states_.atMut(*row);
 
     if (size.width > maximum_side || size.height > maximum_side) {
       return {.handle = handleOf(*row)};
@@ -112,7 +112,7 @@ namespace telar::gui::features::terminal::graphics {
 
   void ImageResidencyTable::abandon() noexcept {
     for (const auto row : rows()) {
-      auto& state = states_[row];
+      auto& state = states_.atMut(row);
       if (state.stage == ImageTextureStage::uploading) {
         state.stage = ImageTextureStage::failed;
         --uploading_;
@@ -266,7 +266,7 @@ namespace telar::gui::features::terminal::graphics {
   }
 
   ImageTextureState* ImageResidencyTable::findState(ImageTextureHandle handle) noexcept {
-    return validHandle(handle) && states_[handle - 1].stage != ImageTextureStage::free ? &states_[handle - 1] : nullptr;
+    return validHandle(handle) && states_[handle - 1].stage != ImageTextureStage::free ? &states_.atMut(handle - 1) : nullptr;
   }
 
   std::size_t ImageResidencyTable::byteSize(ImageTextureSize size) noexcept {
@@ -314,17 +314,17 @@ namespace telar::gui::features::terminal::graphics {
 
     const auto row = free_[--free_count_];
 
-    position_[row] = static_cast<Row>(count_);
-    occupied_[count_++] = row;
+    position_.atMut(row) = static_cast<Row>(count_);
+    occupied_.atMut(count_++) = row;
     assign(row, identity);
-    states_[row].size = size;
-    states_[row].bytes = 0;
+    states_.atMut(row).size = size;
+    states_.atMut(row).bytes = 0;
 
     return row;
   }
 
   void ImageResidencyTable::assign(Row row, ImageTextureIdentity identity) noexcept {
-    auto& state = states_[row];
+    auto& state = states_.atMut(row);
 
     state.stage = ImageTextureStage::failed;
     state.identity = identity;
@@ -362,7 +362,7 @@ namespace telar::gui::features::terminal::graphics {
   }
 
   void ImageResidencyTable::retire(Row row) noexcept {
-    auto& state = states_[row];
+    auto& state = states_.atMut(row);
     if (state.stage == ImageTextureStage::ready && spares_ < maximum_spares) {
       state.stage = ImageTextureStage::spare;
       ++spares_;
@@ -375,7 +375,7 @@ namespace telar::gui::features::terminal::graphics {
 
   void ImageResidencyTable::discard(Row row) noexcept {
     release_(resources_, handleOf(row));
-    auto& state = states_[row];
+    auto& state = states_.atMut(row);
     if (state.stage == ImageTextureStage::spare) {
       --spares_;
     }
@@ -386,9 +386,9 @@ namespace telar::gui::features::terminal::graphics {
     const auto index = position_[row];
     const auto last = occupied_[--count_];
 
-    occupied_[index] = last;
-    position_[last] = index;
-    free_[free_count_++] = row;
+    occupied_.atMut(index) = last;
+    position_.atMut(last) = index;
+    free_.atMut(free_count_++) = row;
     ++revision_;
   }
 
@@ -399,20 +399,20 @@ namespace telar::gui::features::terminal::graphics {
 
   void ImagePlacementSelection::keep(Candidate candidate) noexcept {
     if (candidate_count_ < capacity) {
-      candidates_[candidate_count_] = candidate;
+      candidates_.atMut(candidate_count_) = candidate;
       siftUp(candidate_count_++);
       return;
     }
 
     ++dropped_;
     if (paintsBelow(candidates_.front(), candidate)) {
-      candidates_.front() = candidate;
+      candidates_.atMut(0) = candidate;
       siftDown();
     }
   }
 
   bool ImagePlacementSelection::finish() noexcept {
-    const auto candidates = std::span{candidates_}.first(candidate_count_);
+    const auto candidates = candidates_.viewMut().first(candidate_count_);
 
     std::ranges::sort(candidates, {}, [](const Candidate& candidate) {
       return identityKey(candidate.identity);
@@ -427,11 +427,11 @@ namespace telar::gui::features::terminal::graphics {
     selected_count_ = candidate_count_;
     image_count_ = candidate_count_;
     for (std::size_t index = 0; index < selected_count_; ++index) {
-      selected_[index] = candidates_[index].identity;
-      images_[index] = imageKey(selected_[index]);
+      selected_.atMut(index) = candidates_[index].identity;
+      images_.atMut(index) = imageKey(selected_[index]);
     }
 
-    const auto images = std::span{images_}.first(image_count_);
+    const auto images = images_.viewMut().first(image_count_);
 
     std::ranges::sort(images);
     image_count_ = static_cast<std::size_t>(std::ranges::unique(images).begin() - images.begin());
@@ -496,7 +496,7 @@ namespace telar::gui::features::terminal::graphics {
         return;
       }
 
-      std::swap(candidates_[index], candidates_[parent]);
+      std::swap(candidates_.atMut(index), candidates_.atMut(parent));
       index = parent;
     }
   }
@@ -521,7 +521,7 @@ namespace telar::gui::features::terminal::graphics {
         return;
       }
 
-      std::swap(candidates_[index], candidates_[lowest]);
+      std::swap(candidates_.atMut(index), candidates_.atMut(lowest));
       index = lowest;
     }
   }

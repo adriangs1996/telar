@@ -182,13 +182,13 @@ namespace telar::runtime {
         return false;
       }
 
-      tasks_[count_].subject.assign(report.plan_text);
-      tasks_[count_++].status = AgentPlanStatus::pending;
+      tasks_.atMut(count_).subject.assign(report.plan_text);
+      tasks_.atMut(count_++).status = AgentPlanStatus::pending;
       uses_tasks_ = true;
       break;
     case AgentPlanOp::mark:
       if (report.plan_index < count_) {
-        tasks_[report.plan_index].status = report.plan_status;
+        tasks_.atMut(report.plan_index).status = report.plan_status;
       }
 
       break;

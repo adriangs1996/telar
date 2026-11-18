@@ -7,6 +7,7 @@ import telar.runtime.terminal.text_reader;
 import telar.wire.clipboard;
 import telar.wire.vocabulary;
 import telar.testing;
+import telar.base.ds;
 
 namespace {
 
@@ -48,7 +49,7 @@ namespace {
     Terminal terminal{adapter, TerminalSize{80, 24, 9, 18}};
 
     RoutedTerminal() {
-      const std::array<control::ClipboardRoute, 1> routes{route};
+      const ds::Array<control::ClipboardRoute, 1> routes{route};
 
       terminal.clipboardControl().routes(routes, route);
     }
@@ -201,8 +202,8 @@ namespace {
   // that one, and goes with it when that client leaves.
   void grantsFollowRoutes() {
     constexpr control::ClipboardRoute other{2, 13};
-    const std::array<control::ClipboardRoute, 2> both{route, other};
-    const std::array<control::ClipboardRoute, 1> remaining{other};
+    const ds::Array<control::ClipboardRoute, 2> both{route, other};
+    const ds::Array<control::ClipboardRoute, 1> remaining{other};
 
     {
       RoutedTerminal routed;
@@ -253,7 +254,7 @@ namespace {
 
     {
       RoutedTerminal routed;
-      const std::array<ClipboardRepresentation, 1> contents{{{"text/plain", text}}};
+      const ds::Array<ClipboardRepresentation, 1> contents{{{"text/plain", text}}};
 
       routed.terminal.feed(bytes(read));
       deliver(routed.terminal, contents);
@@ -261,7 +262,7 @@ namespace {
     }
 
     RoutedTerminal routed;
-    const std::array<ClipboardRepresentation, 1> contents{{{"text/plain", std::span{text}.first(16)}}};
+    const ds::Array<ClipboardRepresentation, 1> contents{{{"text/plain", std::span{text}.first(16)}}};
 
     routed.terminal.feed(bytes(read));
     deliver(routed.terminal, contents);
@@ -330,7 +331,7 @@ namespace {
     }
 
     RoutedTerminal routed;
-    const std::array<ClipboardRepresentation, 1> contents{{{"text/plain", bytes("hello")}}};
+    const ds::Array<ClipboardRepresentation, 1> contents{{{"text/plain", bytes("hello")}}};
 
     routed.terminal.feed(bytes("\x1b]5522;type=read:loc=primary:id=p;" + encode("text/plain") + "\x1b\\"));
     check(routed.terminal.clipboardControl().request(7, 11)->primary);

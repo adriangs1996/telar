@@ -123,9 +123,9 @@ export {
       static SplitGeometry partition(CellRectangle bounds, const ClientLayoutSplit& split, std::uint16_t gap) noexcept;
       void arrangeNodes(CellRectangle bounds, Metrics metrics) noexcept;
 
-      std::array<ClientLayoutNode, maximum_nodes> nodes_;
-      std::array<Placement, maximum_panes> placements_;
-      std::array<Divider, maximum_panes - 1> dividers_;
+      ds::Array<ClientLayoutNode, maximum_nodes> nodes_;
+      ds::Array<Placement, maximum_panes> placements_;
+      ds::Array<Divider, maximum_panes - 1> dividers_;
       ds::Option<PaneBottomReservation> reservation_;
       CellRectangle reserved_;
       std::size_t count_ = 0;

@@ -9,6 +9,7 @@ module telar.gui.foundation.fonts;
 import std;
 
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::inline foundation::inline fonts {
   namespace {
@@ -48,7 +49,7 @@ namespace telar::gui::inline foundation::inline fonts {
   }
 
   LigatureCoverage::LigatureCoverage(FT_Face face, hb_font_t* font) {
-    constexpr std::array features{HB_TAG('l', 'i', 'g', 'a'), HB_TAG('c', 'l', 'i', 'g'), HB_TAG('c', 'a', 'l', 't'), HB_TAG('r', 'l', 'i', 'g'), HB_TAG('r', 'c', 'l', 't'), hb_tag_t{0}};
+    constexpr ds::Array features{HB_TAG('l', 'i', 'g', 'a'), HB_TAG('c', 'l', 'i', 'g'), HB_TAG('c', 'a', 'l', 't'), HB_TAG('r', 'l', 'i', 'g'), HB_TAG('r', 'c', 'l', 't'), hb_tag_t{0}};
     constexpr auto substitutions = HB_TAG('G', 'S', 'U', 'B');
     auto* layout = hb_font_get_face(font);
     const auto lookups = createSet();
@@ -87,7 +88,7 @@ namespace telar::gui::inline foundation::inline fonts {
 
       hb_set_add(found == LigatureRole::input ? input_.get() : context_.get(), codepoint);
       if (codepoint < ascii_count) {
-        ascii_[codepoint] = found;
+        ascii_.atMut(codepoint) = found;
       }
     }
 

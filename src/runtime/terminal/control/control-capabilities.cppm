@@ -1,6 +1,7 @@
 export module telar.runtime.terminal.control:capabilities;
 
 import std;
+import telar.base.ds;
 
 export namespace telar::runtime::control {
 
@@ -13,7 +14,7 @@ export namespace telar::runtime::control {
   // Capability facts: Ghostty df1c99c8a5ec32c73963e5dc3fad3c9df7a3d137.
   // MIT attribution: vendor/ghostty-query-data.LICENSE. Query parsing
   // and hex serialization are implemented by Telar. TN follows the child TERM.
-  inline constexpr auto capabilities = std::to_array<Capability>({
+  inline constexpr auto capabilities = ds::Array<Capability, 273>{{
       {"AX", "", false},
       {"BD", "\033[?2004l", true},
       {"BE", "\033[?2004h", true},
@@ -287,10 +288,10 @@ export namespace telar::runtime::control {
       {"xenl", "", false},
       {"xm", "\134E[<%i%p3%d;%p1%d;%p2%d;%?%p4%tM%em%;", true},
       {"xr", "\033P>\134\134|[ -~]+a\033\134\134", true},
-  });
+  }};
 
   struct EncodedCapability {
-    std::array<std::uint8_t, 256> bytes{};
+    ds::Array<std::uint8_t, 256> bytes{};
     std::size_t size = 0;
 
     constexpr std::span<const std::uint8_t> view() const noexcept {
@@ -299,18 +300,18 @@ export namespace telar::runtime::control {
   };
 
   consteval auto encodeCapabilities() {
-    std::array<EncodedCapability, capabilities.size()> result;
+    ds::Array<EncodedCapability, capabilities.size()> result;
     constexpr std::string_view digits = "0123456789ABCDEF";
 
     for (std::size_t index = 0; index < capabilities.size(); ++index) {
-      auto& output = result[index];
+      auto& output = result.atMut(index);
       const auto append = [&](std::string_view value, bool hex) {
         for (const auto byte : value) {
           if (hex) {
-            output.bytes.at(output.size++) = digits[static_cast<unsigned char>(byte) >> 4];
-            output.bytes.at(output.size++) = digits[static_cast<unsigned char>(byte) & 15];
+            output.bytes.atCheckedMut(output.size++) = digits[static_cast<unsigned char>(byte) >> 4];
+            output.bytes.atCheckedMut(output.size++) = digits[static_cast<unsigned char>(byte) & 15];
           } else {
-            output.bytes.at(output.size++) = byte;
+            output.bytes.atCheckedMut(output.size++) = byte;
           }
         }
       };

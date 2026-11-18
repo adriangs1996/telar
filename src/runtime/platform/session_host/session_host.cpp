@@ -4,6 +4,7 @@ import telar.sys.posix;
 import telar.config.core;
 import telar.platform.paths;
 import telar.platform.primitives;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -15,13 +16,13 @@ namespace telar::runtime {
 
   bool codexHooksInstalled(const char* override_directory, std::string_view home) noexcept {
     const auto provider = config::IntegrationProvider::describe(AgentProvider::codex);
-    std::array<char, PATH_MAX> path;
+    ds::Array<char, PATH_MAX> path;
     int length = 0;
 
     if (override_directory != nullptr && *override_directory != '\0') {
-      length = std::snprintf(path.data(), path.size(), "%s%.*s/%.*s", override_directory, static_cast<int>(provider.environment_suffix.size()), provider.environment_suffix.data(), static_cast<int>(provider.file.size()), provider.file.data());
+      length = std::snprintf(path.dataMut(), path.size(), "%s%.*s/%.*s", override_directory, static_cast<int>(provider.environment_suffix.size()), provider.environment_suffix.data(), static_cast<int>(provider.file.size()), provider.file.data());
     } else if (!home.empty()) {
-      length = std::snprintf(path.data(), path.size(), "%.*s/%.*s/%.*s", static_cast<int>(home.size()), home.data(), static_cast<int>(provider.home_directory.size()), provider.home_directory.data(), static_cast<int>(provider.file.size()), provider.file.data());
+      length = std::snprintf(path.dataMut(), path.size(), "%.*s/%.*s/%.*s", static_cast<int>(home.size()), home.data(), static_cast<int>(provider.home_directory.size()), provider.home_directory.data(), static_cast<int>(provider.file.size()), provider.file.data());
     } else {
       return false;
     }
@@ -37,8 +38,8 @@ namespace telar::runtime {
     }
 
     constexpr std::size_t maximum_settings_bytes = 32 * 1024;
-    std::array<char, maximum_settings_bytes> bytes;
-    const auto count = ::read(file.get(), bytes.data(), bytes.size());
+    ds::Array<char, maximum_settings_bytes> bytes;
+    const auto count = ::read(file.get(), bytes.dataMut(), bytes.size());
 
     return count > 0 && std::string_view{bytes.data(), static_cast<std::size_t>(count)}.contains(" hook codex");
   }

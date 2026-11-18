@@ -32,7 +32,7 @@ namespace telar::gui::application {
   template <typename Request, typename Fill>
   void Session::sendRegistered(RequestKind kind, Request request, std::uint64_t pane_id, Fill&& fill) {
     request.request_id = pending(kind, pane_id);
-    fill(pending_[pending_count_ - 1], std::as_const(request));
+    fill(pending_.atMut(pending_count_ - 1), std::as_const(request));
     try {
       send(request);
     } catch (...) {
@@ -368,7 +368,7 @@ namespace telar::gui::application {
   }
 
   Launch Session::defaultLaunch() const noexcept {
-    static constexpr std::array<std::string_view, 1> default_shell{"/bin/sh"};
+    static constexpr ds::Array<std::string_view, 1> default_shell{"/bin/sh"};
     const auto arguments = launch_argument_count_ == 0 ? std::span<const std::string_view>{default_shell} : std::span<const std::string_view>{launch_arguments_}.first(launch_argument_count_);
 
     return {.cwd = launch_cwd_.empty() ? std::string_view{"/"} : std::string_view{launch_cwd_}, .arguments = arguments};
@@ -563,7 +563,7 @@ namespace telar::gui::application {
     tab.loaded = true;
     tab.loading = false;
     ++chrome_revision_;
-    std::array<std::uint64_t, PaneLayout::maximum_panes> removed{};
+    ds::Array<std::uint64_t, PaneLayout::maximum_panes> removed{};
     std::size_t removed_count = 0;
 
     for (const auto& node : tab.layout.nodes()) {
@@ -571,7 +571,7 @@ namespace telar::gui::application {
       if (leaf != nullptr && std::none_of(message.panes.begin(), message.panes.end(), [&](const auto& pane) {
             return pane.pane_id == leaf->pane_id;
           })) {
-        removed[removed_count++] = leaf->pane_id;
+        removed.atMut(removed_count++) = leaf->pane_id;
       }
     }
 
@@ -608,14 +608,14 @@ namespace telar::gui::application {
     const bool current_workspace = active_tab_ && sameWorkspace(active_tab_->workspace, message.workspace);
 
     completeRequest(RequestKind::workspace_snapshot, message.request_id);
-    std::array<TabLocation, maximum_tabs> removed;
+    ds::Array<TabLocation, maximum_tabs> removed;
     std::size_t removed_count = 0;
 
     for (const auto& tab : tabs_) {
       if (sameWorkspace(tab->location.workspace, message.workspace) && std::none_of(message.tabs.begin(), message.tabs.end(), [&](const auto& entry) {
             return entry.tab_id == tab->location.tab_id;
           })) {
-        removed[removed_count++] = tab->location;
+        removed.atMut(removed_count++) = tab->location;
       }
     }
 
@@ -874,12 +874,12 @@ namespace telar::gui::application {
   Change Session::apply(const ResyncRequired& message) {
     if (message.workspace_closed) {
       const auto active_closed = active_tab_ && sameWorkspace(active_tab_->workspace, message.workspace);
-      std::array<TabLocation, maximum_tabs> removed;
+      ds::Array<TabLocation, maximum_tabs> removed;
       std::size_t removed_count = 0;
 
       for (const auto& tab : tabs_) {
         if (sameWorkspace(tab->location.workspace, message.workspace)) {
-          removed[removed_count++] = tab->location;
+          removed.atMut(removed_count++) = tab->location;
         }
       }
 

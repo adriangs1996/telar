@@ -32,6 +32,7 @@ import telar.runtime.traffic.control_protocol;
 import telar.runtime.vocabulary.exchange;
 import telar.runtime.vocabulary.frames;
 import telar.runtime.vocabulary.traffic;
+import telar.base.ds;
 
 namespace {
 
@@ -64,9 +65,9 @@ namespace {
   };
 
   Received receive(int socket) {
-    std::array<Byte, Protocol::prefix_bytes> prefix;
+    ds::Array<Byte, Protocol::prefix_bytes> prefix;
 
-    receiveAll(socket, prefix);
+    receiveAll(socket, prefix.viewMut());
     plugins::FrameReader reader{prefix};
     const auto length = reader.integer<std::uint32_t>();
 
@@ -79,8 +80,8 @@ namespace {
 
   FileDescriptor subscriber(const std::string& path, std::string_view filter, Selection selection = Selection::packets) {
     auto socket = traffic::connect(path);
-    std::array<Byte, Protocol::greeting_bytes + Limits::filter_bytes> output;
-    const auto greeting = Protocol::greeting(output, Role::subscribe, filter, selection);
+    ds::Array<Byte, Protocol::greeting_bytes + Limits::filter_bytes> output;
+    const auto greeting = Protocol::greeting(output.viewMut(), Role::subscribe, filter, selection);
 
     for (const auto& byte : greeting) {
       sendAll(socket.get(), {&byte, 1});
@@ -91,8 +92,8 @@ namespace {
   }
 
   void publish(int socket, traffic::Event event) {
-    std::array<Byte, Limits::frame_bytes> output;
-    const auto body = Protocol::encode(output, event);
+    ds::Array<Byte, Limits::frame_bytes> output;
+    const auto body = Protocol::encode(output.viewMut(), event);
 
     sendAll(socket, Protocol::prefix(body.size()));
     sendAll(socket, body);
@@ -134,8 +135,8 @@ namespace {
     const auto udp = packet(17, std::string_view{"a\0b", 3});
     const auto tcp = packet(6, "ignored");
     traffic::Event original{.session = UINT64_MAX, .sequence = UINT64_MAX, .timestamp_us = 1234567, .interface_index = 7, .link_type = DLT_EN10MB, .original_bytes = static_cast<std::uint32_t>(udp.size() + 1), .kernel_drops = UINT64_MAX - 1, .capture_drops = 12, .runtime_drops = 34, .interface = "en0", .bytes = udp};
-    std::array<Byte, Limits::frame_bytes> output;
-    const auto encoded = Protocol::encode(output, original);
+    ds::Array<Byte, Limits::frame_bytes> output;
+    const auto encoded = Protocol::encode(output.viewMut(), original);
     const auto decoded = Protocol::decode(encoded);
 
     check(decoded.session == UINT64_MAX && decoded.sequence == UINT64_MAX);
@@ -168,7 +169,7 @@ namespace {
     bool rejected = false;
 
     try {
-      Protocol::encode(output, original);
+      Protocol::encode(output.viewMut(), original);
     } catch (const std::exception&) {
       rejected = true;
     }
@@ -263,9 +264,9 @@ namespace {
 
     check(::setsockopt(slow.get(), SOL_SOCKET, SO_RCVBUF, &small, sizeof(small)) == 0);
     auto producer = traffic::connect(path);
-    std::array<Byte, Protocol::greeting_bytes> greeting;
+    ds::Array<Byte, Protocol::greeting_bytes> greeting;
 
-    sendAll(producer.get(), Protocol::greeting(greeting, Role::offline_capture));
+    sendAll(producer.get(), Protocol::greeting(greeting.viewMut(), Role::offline_capture));
     check(receive(producer.get()).event().kind == Kind::ready);
 
     std::vector<Byte> body(64 * 1024, 0xab);
@@ -277,7 +278,7 @@ namespace {
     // An unread subscriber must not prevent new subscriptions or valid control replies.
     auto healthy = subscriber(path, "udp");
     auto malicious = traffic::connect(path);
-    std::array<Byte, Protocol::greeting_bytes> invalid{};
+    ds::Array<Byte, Protocol::greeting_bytes> invalid{};
 
     sendAll(malicious.get(), invalid);
 
@@ -293,7 +294,7 @@ namespace {
     if (::geteuid() != 0) {
       auto forged = traffic::connect(path);
 
-      sendAll(forged.get(), Protocol::greeting(greeting, Role::live_capture));
+      sendAll(forged.get(), Protocol::greeting(greeting.viewMut(), Role::live_capture));
       pollfd descriptor{.fd = forged.get(), .events = POLLIN, .revents = 0};
 
       check(::poll(&descriptor, 1, 5000) > 0);
@@ -352,18 +353,18 @@ namespace {
 
   void interceptionDelivery(Service& service, const std::string& path) {
     auto owner = traffic::connect(path);
-    std::array<Byte, Limits::frame_bytes> output;
+    ds::Array<Byte, Limits::frame_bytes> output;
 
-    sendAll(owner.get(), Protocol::greeting(output, Role::intercept));
+    sendAll(owner.get(), Protocol::greeting(output.viewMut(), Role::intercept));
     check(receive(owner.get()).event().kind == Kind::ready);
     auto send = [&](std::span<const Byte> bytes) {
       sendAll(owner.get(), Protocol::prefix(bytes.size()));
       sendAll(owner.get(), bytes);
     };
 
-    send(InterceptionCodec::rule(output, {.host = "fixture.test", .visibility = 3, .timeout_ms = 5000}));
+    send(InterceptionCodec::rule(output.viewMut(), {.host = "fixture.test", .visibility = 3, .timeout_ms = 5000}));
     check(receive(owner.get()).event().kind == Kind::ready);
-    const std::array<Byte, 3> original{'a', 0, 'b'};
+    const ds::Array<Byte, 3> original{'a', 0, 'b'};
 
     struct Request {
       Service& service;
@@ -403,13 +404,13 @@ namespace {
       break;
     }
 
-    const std::array<Byte, 5> replacement{'c', 0, 'd', 'e', 'f'};
+    const ds::Array<Byte, 5> replacement{'c', 0, 'd', 'e', 'f'};
 
-    send(InterceptionCodec::decision(output, ticket, Verdict::replace, replacement));
+    send(InterceptionCodec::decision(output.viewMut(), ticket, Verdict::replace, replacement));
     FlowControl::Decision decision{Verdict::pending};
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
 
-    while ((decision = service.poll(ticket, output)).verdict == Verdict::pending) {
+    while ((decision = service.poll(ticket, output.viewMut())).verdict == Verdict::pending) {
       check(std::chrono::steady_clock::now() < deadline);
       std::this_thread::sleep_for(std::chrono::milliseconds{1});
     }
@@ -418,19 +419,19 @@ namespace {
     check(std::ranges::equal(std::span{output}.first(decision.bytes), replacement));
     auto second = traffic::connect(path);
 
-    sendAll(second.get(), Protocol::greeting(output, Role::intercept));
+    sendAll(second.get(), Protocol::greeting(output.viewMut(), Role::intercept));
     check(receive(second.get()).event().kind == Kind::ready);
     auto send_second = [&](std::span<const Byte> bytes) {
       sendAll(second.get(), Protocol::prefix(bytes.size()));
       sendAll(second.get(), bytes);
     };
 
-    send_second(InterceptionCodec::rule(output, {.host = "fixture.test", .visibility = 3, .timeout_ms = 5000}));
+    send_second(InterceptionCodec::rule(output.viewMut(), {.host = "fixture.test", .visibility = 3, .timeout_ms = 5000}));
     check(receive(second.get()).event().kind == Kind::ready);
     const auto pending = service.intercept({.id = 18, .host = "fixture.test", .bytes = original});
 
     check(pending != 0);
-    send_second(InterceptionCodec::decision(output, pending, Verdict::reject));
+    send_second(InterceptionCodec::decision(output.viewMut(), pending, Verdict::reject));
     for (;;) {
       const auto frame = receive(owner.get());
       if (frame.event().kind == Kind::intercept_request) {
@@ -438,8 +439,8 @@ namespace {
       }
     }
 
-    check(service.poll(pending, output).verdict == Verdict::pending);
-    send(InterceptionCodec::decision(output, pending, Verdict::replace, replacement));
+    check(service.poll(pending, output.viewMut()).verdict == Verdict::pending);
+    send(InterceptionCodec::decision(output.viewMut(), pending, Verdict::replace, replacement));
     std::uint64_t second_ticket = 0;
 
     for (;;) {
@@ -455,11 +456,11 @@ namespace {
       break;
     }
 
-    send(InterceptionCodec::decision(output, second_ticket, Verdict::reject));
-    send_second(InterceptionCodec::decision(output, second_ticket, Verdict::allow));
+    send(InterceptionCodec::decision(output.viewMut(), second_ticket, Verdict::reject));
+    send_second(InterceptionCodec::decision(output.viewMut(), second_ticket, Verdict::allow));
     const auto composed_deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
 
-    while ((decision = service.poll(pending, output)).verdict == Verdict::pending) {
+    while ((decision = service.poll(pending, output.viewMut())).verdict == Verdict::pending) {
       check(std::chrono::steady_clock::now() < composed_deadline);
       std::this_thread::sleep_for(std::chrono::milliseconds{1});
     }
@@ -469,7 +470,7 @@ namespace {
     const auto abandoned = service.intercept({.id = 19, .host = "fixture.test", .bytes = original});
 
     owner.reset();
-    while ((decision = service.poll(abandoned, output)).verdict == Verdict::pending) {
+    while ((decision = service.poll(abandoned, output.viewMut())).verdict == Verdict::pending) {
       check(std::chrono::steady_clock::now() < composed_deadline);
       std::this_thread::sleep_for(std::chrono::milliseconds{1});
     }
@@ -484,10 +485,10 @@ namespace {
     SynchronizedAllocator synchronized{budget};
     MemoryAdapter adapter{synchronized};
     ConcurrentMemory& memory = adapter;
-    std::array<char, 64> temporary{};
+    ds::Array<char, 64> temporary{};
 
-    std::strcpy(temporary.data(), "/tmp/telar-traffic-XXXXXX");
-    check(::mkdtemp(temporary.data()) != nullptr);
+    std::strcpy(temporary.dataMut(), "/tmp/telar-traffic-XXXXXX");
+    check(::mkdtemp(temporary.dataMut()) != nullptr);
     const auto directory = std::filesystem::canonical(temporary.data()).string();
     const auto path = directory + "/traffic.sock";
 

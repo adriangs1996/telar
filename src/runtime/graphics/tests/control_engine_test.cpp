@@ -28,6 +28,7 @@ import telar.vocabulary;
 import telar.config.core;
 import telar.runtime.terminal.ghostty;
 import telar.testing;
+import telar.base.ds;
 
 namespace {
 
@@ -209,7 +210,7 @@ namespace {
         check(position.column == snapshot.x && position.row == snapshot.y);
         check(margins.top == snapshot.top && margins.bottom == snapshot.bottom && margins.left == snapshot.left && margins.right == snapshot.right);
         check(origin_mode == (snapshot.origin != 0));
-        const std::array<std::uint16_t, 6> fields{snapshot.x, snapshot.y, snapshot.top, snapshot.bottom, snapshot.left, snapshot.right};
+        const ds::Array<std::uint16_t, 6> fields{snapshot.x, snapshot.y, snapshot.top, snapshot.bottom, snapshot.left, snapshot.right};
         const auto by_value = ghostty_terminal_cursor_snapshot(terminal.get());
         static_assert(sizeof(GhosttyTerminalCursorSnapshot) == 16);
         static_assert(offsetof(GhosttyTerminalCursorSnapshot, valid) == 14);
@@ -217,10 +218,10 @@ namespace {
 
         check(by_value.valid && by_value.reserved == 0);
         check(by_value.state.origin == snapshot.origin && by_value.state.reserved == 0);
-        const std::array<std::uint16_t, 6> returned_fields{by_value.state.x, by_value.state.y, by_value.state.top, by_value.state.bottom, by_value.state.left, by_value.state.right};
+        const ds::Array<std::uint16_t, 6> returned_fields{by_value.state.x, by_value.state.y, by_value.state.top, by_value.state.bottom, by_value.state.left, by_value.state.right};
 
         check(returned_fields == fields);
-        constexpr std::array keys{GHOSTTY_TERMINAL_DATA_CURSOR_X, GHOSTTY_TERMINAL_DATA_CURSOR_Y, GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_TOP, GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_BOTTOM, GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_LEFT, GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_RIGHT};
+        constexpr ds::Array keys{GHOSTTY_TERMINAL_DATA_CURSOR_X, GHOSTTY_TERMINAL_DATA_CURSOR_Y, GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_TOP, GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_BOTTOM, GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_LEFT, GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_RIGHT};
 
         for (std::size_t index = 0; index < keys.size(); ++index) {
           std::uint16_t scalar = UINT16_MAX;
@@ -281,9 +282,9 @@ namespace {
 
       check(!invalid.valid && invalid.reserved == 0);
       check(invalid.state.origin == 0 && invalid.state.reserved == 0);
-      const std::array<std::uint16_t, 6> invalid_fields{invalid.state.x, invalid.state.y, invalid.state.top, invalid.state.bottom, invalid.state.left, invalid.state.right};
+      const ds::Array<std::uint16_t, 6> invalid_fields{invalid.state.x, invalid.state.y, invalid.state.top, invalid.state.bottom, invalid.state.left, invalid.state.right};
 
-      check(invalid_fields == std::array<std::uint16_t, 6>{});
+      check(invalid_fields == ds::Array<std::uint16_t, 6>{});
     }
 
     void saturation(ConcurrentMemory& memory) {
@@ -583,8 +584,8 @@ namespace {
           const control::Position position{static_cast<std::uint16_t>(maximum - value), static_cast<std::uint16_t>(value)};
 
           control::cursorReport(reply, position, extended);
-          std::array<char, 64> expected;
-          const auto size = std::snprintf(expected.data(), expected.size(), extended ? "\x1b[?%u;%u;1R" : "\x1b[%u;%uR", value + 1, maximum - value + 1);
+          ds::Array<char, 64> expected;
+          const auto size = std::snprintf(expected.dataMut(), expected.size(), extended ? "\x1b[?%u;%u;1R" : "\x1b[%u;%uR", value + 1, maximum - value + 1);
 
           check(size > 0 && static_cast<std::size_t>(size) < expected.size());
           check(reply.publish(queue));
@@ -610,10 +611,10 @@ namespace {
           const unsigned blue = sample ^ 0x55;
 
           for (const unsigned operation : {4u, 10u, 11u, 12u}) {
-            std::array<char, 64> input;
+            ds::Array<char, 64> input;
             const int setter = operation == 4
-                                   ? std::snprintf(input.data(), input.size(), "\x1b]4;%u;#%02x%02x%02x\x1b\\", sample, sample, green, blue)
-                                   : std::snprintf(input.data(), input.size(), "\x1b]%u;#%02x%02x%02x\x1b\\", operation, sample, green, blue);
+                                   ? std::snprintf(input.dataMut(), input.size(), "\x1b]4;%u;#%02x%02x%02x\x1b\\", sample, sample, green, blue)
+                                   : std::snprintf(input.dataMut(), input.size(), "\x1b]%u;#%02x%02x%02x\x1b\\", operation, sample, green, blue);
 
             check(setter > 0 && static_cast<std::size_t>(setter) < input.size());
             terminal.feed(bytes({input.data(), static_cast<std::size_t>(setter)}));
@@ -621,8 +622,8 @@ namespace {
 
             for (const auto* ending : {"\a", "\x1b\\"}) {
               const int query = operation == 4
-                                    ? std::snprintf(input.data(), input.size(), "\x1b]4;%u;?%s", sample, ending)
-                                    : std::snprintf(input.data(), input.size(), "\x1b]%u;?%s", operation, ending);
+                                    ? std::snprintf(input.dataMut(), input.size(), "\x1b]4;%u;?%s", sample, ending)
+                                    : std::snprintf(input.dataMut(), input.size(), "\x1b]%u;?%s", operation, ending);
 
               check(query > 0 && static_cast<std::size_t>(query) < input.size());
               terminal.feed(bytes({input.data(), static_cast<std::size_t>(query)}));
@@ -631,10 +632,10 @@ namespace {
                 continue;
               }
 
-              std::array<char, 64> expected;
+              ds::Array<char, 64> expected;
               const int count = operation == 4
-                                    ? std::snprintf(expected.data(), expected.size(), "\x1b]4;%u;rgb:%0*x/%0*x/%0*x%s", sample, width, sample * factor, width, green * factor, width, blue * factor, ending)
-                                    : std::snprintf(expected.data(), expected.size(), "\x1b]%u;rgb:%0*x/%0*x/%0*x%s", operation, width, sample * factor, width, green * factor, width, blue * factor, ending);
+                                    ? std::snprintf(expected.dataMut(), expected.size(), "\x1b]4;%u;rgb:%0*x/%0*x/%0*x%s", sample, width, sample * factor, width, green * factor, width, blue * factor, ending)
+                                    : std::snprintf(expected.dataMut(), expected.size(), "\x1b]%u;rgb:%0*x/%0*x/%0*x%s", operation, width, sample * factor, width, green * factor, width, blue * factor, ending);
 
               check(count > 0 && static_cast<std::size_t>(count) < expected.size());
               check(drain(terminal) == std::string_view{expected.data(), static_cast<std::size_t>(count)});
@@ -648,7 +649,7 @@ namespace {
       Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media};
       constexpr std::string_view prepare = "\x1b]21;0=#123456;1=#123456;255=#123456\x1b\\";
       constexpr std::string_view reply = "\x1b]21;1=rgb:12/34/56\x1b\\";
-      constexpr std::array invalid_keys{"+0", "+1", "+001", "+255", "-0", "-1", "++1", "1_0", "+", "256", "65535", "999999999999999999999", "\xff"};
+      constexpr ds::Array invalid_keys{"+0", "+1", "+001", "+255", "-0", "-1", "++1", "1_0", "+", "256", "65535", "999999999999999999999", "\xff"};
 
       for (const std::string_view key : invalid_keys) {
         const auto query = "\x1b]21;"s + std::string{key} + "=?;1=?\x1b\\";
@@ -688,7 +689,7 @@ namespace {
         check(drain(terminal) == reply);
       }
 
-      constexpr std::array invalid_hex{"#+00000", "#00+000", "#0000+0", "rgb:+0/0/0", "rgb:0/+0/0", "rgb:0/0/+0"};
+      constexpr ds::Array invalid_hex{"#+00000", "#00+000", "#0000+0", "rgb:+0/0/0", "rgb:0/+0/0", "rgb:0/0/+0"};
 
       for (const std::string_view value : invalid_hex) {
         std::string query = "\x1b]21;";
@@ -782,15 +783,15 @@ namespace {
     void normalizedGraphemeBatches(ConcurrentMemory& memory) {
       Terminal terminal{memory, TerminalSize{80, 2, 9, 18}, TerminalPurpose::separate_media};
       std::string input;
-      std::array<std::vector<std::uint32_t>, 80> expected;
-      const std::array<std::string_view, 3> marks{"́", "̧", "\xf0\x9d\x86\x85"};
-      constexpr std::array<std::uint32_t, 3> codepoints{0x301, 0x327, 0x1d185};
+      ds::Array<std::vector<std::uint32_t>, 80> expected;
+      const ds::Array<std::string_view, 3> marks{"́", "̧", "\xf0\x9d\x86\x85"};
+      constexpr ds::Array<std::uint32_t, 3> codepoints{0x301, 0x327, 0x1d185};
 
       for (unsigned column = 0; column < expected.size(); ++column) {
         input.push_back('A');
         for (unsigned point = 0; point < column % 6; ++point) {
           input.append(marks[point % marks.size()]);
-          expected[column].push_back(codepoints[point % codepoints.size()]);
+          expected.atMut(column).push_back(codepoints[point % codepoints.size()]);
         }
       }
 
@@ -799,22 +800,22 @@ namespace {
       const GhosttyPoint origin{.tag = GHOSTTY_POINT_TAG_ACTIVE, .value = {.coordinate = {0, 0}}};
 
       checkGhostty(ghostty_terminal_grid_ref(terminal.handle(), origin, &reference));
-      std::array<std::uint16_t, 80> ascending;
+      ds::Array<std::uint16_t, 80> ascending;
 
       for (unsigned index = 0; index < ascending.size(); ++index) {
-        ascending[index] = static_cast<std::uint16_t>(index);
+        ascending.atMut(index) = static_cast<std::uint16_t>(index);
       }
 
-      const std::array<std::uint16_t, 7> arbitrary{63, 1, 70, 8, 0, 1, 79};
+      const ds::Array<std::uint16_t, 7> arbitrary{63, 1, 70, 8, 0, 1, 79};
       constexpr std::uint32_t canary = 0xdeadbeef;
 
       for (const auto columns : {std::span<const std::uint16_t>{ascending}, std::span<const std::uint16_t>{arbitrary}}) {
         for (const auto capacity : {0u, 1u, 2u, 3u, 4u, 8u, 255u, 256u}) {
-          std::array<std::uint32_t, 258> storage;
+          ds::Array<std::uint32_t, 258> storage;
 
           storage.fill(canary);
           GhosttyGraphemeBatch batch{
-              .points = storage.data() + 1,
+              .points = storage.dataMut() + 1,
               .capacity = capacity,
               .length = SIZE_MAX,
               .consumed_columns = SIZE_MAX,
@@ -843,9 +844,9 @@ namespace {
         }
       }
 
-      std::array<std::uint32_t, 16> points;
-      GhosttyGraphemeBatch batch{.points = points.data(), .capacity = points.size(), .length = 0, .consumed_columns = 0};
-      const std::array<std::uint16_t, 1> invalid_column{80};
+      ds::Array<std::uint32_t, 16> points;
+      GhosttyGraphemeBatch batch{.points = points.dataMut(), .capacity = points.size(), .length = 0, .consumed_columns = 0};
+      const ds::Array<std::uint16_t, 1> invalid_column{80};
 
       check(ghostty_grid_ref_grapheme_batch(&reference, invalid_column.data(), invalid_column.size(), &batch) == GHOSTTY_INVALID_VALUE);
       check(ghostty_grid_ref_grapheme_batch(&reference, nullptr, 1, &batch) == GHOSTTY_INVALID_VALUE);
@@ -884,14 +885,14 @@ namespace {
               }
             }
 
-            std::array<char, 64> request;
-            const auto request_size = std::snprintf(request.data(), request.size(), "\x1b[7#y\x1b[9;1;1;1;1;%u*y", columns);
+            ds::Array<char, 64> request;
+            const auto request_size = std::snprintf(request.dataMut(), request.size(), "\x1b[7#y\x1b[9;1;1;1;1;%u*y", columns);
 
             check(request_size > 0 && static_cast<std::size_t>(request_size) < request.size());
             input.append(request.data(), static_cast<std::size_t>(request_size));
             terminal.feed(bytes(input));
-            std::array<char, 32> reply;
-            const auto reply_size = std::snprintf(reply.data(), reply.size(), "\x1bP9!~%04X\x1b\\", expected & UINT16_MAX);
+            ds::Array<char, 32> reply;
+            const auto reply_size = std::snprintf(reply.dataMut(), reply.size(), "\x1bP9!~%04X\x1b\\", expected & UINT16_MAX);
 
             check(reply_size > 0);
             const auto actual = drain(terminal, 3);
@@ -927,8 +928,8 @@ namespace {
           const auto expected = plain + (styled && flags == 5 ? 100 * (128 + 4) : 0);
 
           terminal.feed(bytes(flags == 5 ? "\x1b[5#y\x1b[7;1;1;1;1;100*y" : "\x1b[7#y\x1b[7;1;1;1;1;100*y"));
-          std::array<char, 32> reply;
-          const auto size = std::snprintf(reply.data(), reply.size(), "\x1bP7!~%04X\x1b\\", expected & UINT16_MAX);
+          ds::Array<char, 32> reply;
+          const auto size = std::snprintf(reply.dataMut(), reply.size(), "\x1bP7!~%04X\x1b\\", expected & UINT16_MAX);
 
           check(size > 0 && drain(terminal, 3) == std::string_view{reply.data(), static_cast<std::size_t>(size)});
         }
@@ -967,8 +968,8 @@ namespace {
 
       input.append("\x1b[7#y\x1b[19;1;1;1;3;256*y");
       terminal.feed(bytes(input));
-      std::array<char, 32> reply;
-      const auto size = std::snprintf(reply.data(), reply.size(), "\x1bP19!~%04X\x1b\\", expected & UINT16_MAX);
+      ds::Array<char, 32> reply;
+      const auto size = std::snprintf(reply.dataMut(), reply.size(), "\x1bP19!~%04X\x1b\\", expected & UINT16_MAX);
 
       check(size > 0 && drain(terminal, 3) == std::string_view{reply.data(), static_cast<std::size_t>(size)});
     }
@@ -1043,7 +1044,7 @@ namespace {
         terminal.controlPolicy().clipboard_write = control::Access::deny;
         checkGhostty(ghostty_terminal_set(terminal.handle(), GHOSTTY_TERMINAL_OPT_WRITE_PTY, reinterpret_cast<const void*>(&foreignReply)));
         checkGhostty(ghostty_terminal_set(terminal.handle(), GHOSTTY_TERMINAL_OPT_CLIPBOARD_WRITE, reinterpret_cast<const void*>(&foreignClipboard)));
-        const std::array<std::string_view, 11> requests{
+        const ds::Array<std::string_view, 11> requests{
             "\x1b[5n\x1b[c\x1b]10;?\x1b\\\x1bP+q544E\x1b\\",
             "\x1b_Ga=q,i=1,s=1,v=1;AAAAAA==\x1b\\",
             "\x1b_Gab=1,a=q,i=1,s=1,v=1;AAAAAA==\x1b\\",
@@ -1095,14 +1096,14 @@ namespace {
 
     void sizeEncodings(ConcurrentMemory& memory) {
       using control::SizeReport;
-      constexpr std::array<std::uint16_t, 7> dimensions{0, 1, 9, 10, 99, 100, UINT16_MAX};
+      constexpr ds::Array<std::uint16_t, 7> dimensions{0, 1, 9, 10, 99, 100, UINT16_MAX};
       PtyResponseQueue queue;
       const auto verify = [&]<SizeReport Kind>(TerminalSize size) {
         control::Reply reply{memory};
 
         control::sizeReport<Kind>(reply, size);
         check(reply.publish(queue));
-        std::array<char, 80> expected;
+        ds::Array<char, 80> expected;
         const auto rows = static_cast<unsigned>(size.rows);
         const auto cols = static_cast<unsigned>(size.cols);
         const auto height = static_cast<unsigned>(size.cell_height_px);
@@ -1110,9 +1111,9 @@ namespace {
         int count;
 
         if constexpr (Kind == SizeReport::event) {
-          count = std::snprintf(expected.data(), expected.size(), "\x1b[48;%u;%u;%u;%ut", rows, cols, rows * height, cols * width);
+          count = std::snprintf(expected.dataMut(), expected.size(), "\x1b[48;%u;%u;%u;%ut", rows, cols, rows * height, cols * width);
         } else {
-          count = std::snprintf(expected.data(), expected.size(), "\x1b[%u;%u;%ut", static_cast<unsigned>(Kind), Kind == SizeReport::pixels ? rows * height : Kind == SizeReport::cell ? height
+          count = std::snprintf(expected.dataMut(), expected.size(), "\x1b[%u;%u;%ut", static_cast<unsigned>(Kind), Kind == SizeReport::pixels ? rows * height : Kind == SizeReport::cell ? height
                                                                                                                                                                                        : rows,
               Kind == SizeReport::pixels ? cols * width : Kind == SizeReport::cell ? width
                                                                                    : cols);
@@ -1296,10 +1297,10 @@ namespace {
       checkGhostty(ghostty_terminal_get(candidate.get(), GHOSTTY_TERMINAL_DATA_VT_GROUND, &actual_ground));
       checkGhostty(ghostty_terminal_get(reference.get(), GHOSTTY_TERMINAL_DATA_VT_GROUND, &expected_ground));
       check(actual_ground == expected_ground);
-      std::array<std::uint8_t, 64> actual_continuation{}, expected_continuation{};
+      ds::Array<std::uint8_t, 64> actual_continuation{}, expected_continuation{};
       std::size_t actual_written = 0, expected_written = 0;
-      const auto actual_result = ghostty_terminal_continuation_buf(candidate.get(), actual_continuation.data(), actual_continuation.size(), &actual_written);
-      const auto expected_result = ghostty_terminal_continuation_buf(reference.get(), expected_continuation.data(), expected_continuation.size(), &expected_written);
+      const auto actual_result = ghostty_terminal_continuation_buf(candidate.get(), actual_continuation.dataMut(), actual_continuation.size(), &actual_written);
+      const auto expected_result = ghostty_terminal_continuation_buf(reference.get(), expected_continuation.dataMut(), expected_continuation.size(), &expected_written);
 
       check(actual_result == GHOSTTY_SUCCESS && actual_result == expected_result && actual_written == expected_written && actual_continuation == expected_continuation);
       for (std::uint16_t row = 0; row < 24; ++row) {
@@ -1317,7 +1318,7 @@ namespace {
       }
     };
 
-    std::array<std::uint32_t, 35> codepoints;
+    ds::Array<std::uint32_t, 35> codepoints;
 
     for (const auto prefix : {std::string_view{}, std::string_view{"\xe2\x82"}}) {
       for (unsigned value = 0; value < 256; ++value) {
@@ -1330,7 +1331,7 @@ namespace {
           write(reference.get(), prefix);
           compare();
           codepoints.fill('A');
-          codepoints[position] = value;
+          codepoints.atMut(position) = value;
           const bool accepted = value < 0x80 && value != 0x05 && value != 0x1b;
           const auto expected_consumed = accepted ? codepoints.size() : position;
           std::size_t consumed = SIZE_MAX;
@@ -1352,7 +1353,7 @@ namespace {
       write(reference.get(), "\x1b"
                              "c");
       codepoints.fill('A');
-      codepoints[16] = invalid;
+      codepoints.atMut(16) = invalid;
       std::size_t consumed = 0;
 
       check(ghostty_terminal_vt_write_ascii(candidate.get(), codepoints.data(), codepoints.size(), &consumed) == GHOSTTY_INVALID_VALUE && consumed == 16);
@@ -1395,11 +1396,11 @@ namespace {
         "\x1b[?2027h\x1b[?69h\x1b[3;40s"
     };
 
-    std::array<std::uint32_t, GHOSTTY_TELAR_ASCII_CODEPOINT_LIMIT> printable;
-    constexpr std::array<std::uint32_t, 4> pattern{'A', 'q', 0x7f, '~'};
+    ds::Array<std::uint32_t, GHOSTTY_TELAR_ASCII_CODEPOINT_LIMIT> printable;
+    constexpr ds::Array<std::uint32_t, 4> pattern{'A', 'q', 0x7f, '~'};
 
     for (std::size_t index = 0; index < printable.size(); ++index) {
-      printable[index] = pattern[index % pattern.size()];
+      printable.atMut(index) = pattern[index % pattern.size()];
     }
 
     for (const auto context : print_contexts) {
@@ -1437,7 +1438,7 @@ namespace {
       }
     }
 
-    std::array<std::uint32_t, GHOSTTY_TELAR_ASCII_CODEPOINT_LIMIT + 1> large;
+    ds::Array<std::uint32_t, GHOSTTY_TELAR_ASCII_CODEPOINT_LIMIT + 1> large;
 
     large.fill('L');
     for (const auto count : {GHOSTTY_TELAR_ASCII_CODEPOINT_LIMIT - 1, GHOSTTY_TELAR_ASCII_CODEPOINT_LIMIT}) {
@@ -1567,7 +1568,7 @@ namespace {
     constexpr std::string_view answerback = "telar";
     auto& policy = terminal.controlPolicy();
 
-    std::ranges::copy(answerback, policy.answerback.begin());
+    std::ranges::copy(answerback, policy.answerback.viewMut().begin());
     policy.answerback_length = static_cast<std::uint16_t>(answerback.size());
     terminal.feed(bytes("\x05"));
     check(drain(terminal) == answerback);

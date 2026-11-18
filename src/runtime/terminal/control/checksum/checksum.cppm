@@ -5,6 +5,7 @@ import telar.base.memory.allocators;
 import telar.ghostty.vt;
 import telar.runtime.terminal.control;
 import telar.runtime.terminal.grid;
+import telar.base.ds;
 
 export namespace telar::runtime::control {
 
@@ -54,7 +55,7 @@ export namespace telar::runtime::control {
     std::uint16_t accumulate(const VtState& state, Rectangle rectangle);
 
     using Accumulator = std::uint16_t (Checksum::*)(const VtState&, Rectangle);
-    static const std::array<Accumulator, 16> accumulators;
+    static const ds::Array<Accumulator, 16> accumulators;
 
     // Gather only selected grapheme columns. The state port normalizes a
     // bounded prefix; C++ owns the checksum arithmetic and guarantees progress.

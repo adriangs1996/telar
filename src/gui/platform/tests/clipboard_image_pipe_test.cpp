@@ -26,6 +26,7 @@ static_assert(true);
 import telar.testing;
 import telar.gui.tests.erasure_allocator;
 import telar.gui.platform;
+import telar.base.ds;
 
 namespace {
 
@@ -64,7 +65,7 @@ namespace {
     telar::runtime::FileDescriptor writing;
   };
 
-  constexpr std::array binary{std::byte{0xff}, std::byte{0}, std::byte{0x5a}, std::byte{0x80}, std::byte{0x17}, std::byte{0x23}};
+  constexpr telar::ds::Array binary{std::byte{0xff}, std::byte{0}, std::byte{0x5a}, std::byte{0x80}, std::byte{0x17}, std::byte{0x23}};
 
   void expectFailure(const Pipe& pipe, ErasureMemory& memory, ClipboardImagePipeLimits limits, ClipboardImageError expected) {
     try {
@@ -80,7 +81,7 @@ namespace {
   void binaryEofKeepsExactLimitsAndDescriptorOwnership() {
     constexpr std::size_t larger_png_limit = 64;
 
-    for (const auto png_limit : std::array{binary.size(), larger_png_limit}) {
+    for (const auto png_limit : telar::ds::Array{binary.size(), larger_png_limit}) {
       Pipe pipe;
       ErasureMemory memory;
 
@@ -101,8 +102,8 @@ namespace {
 
   void overflowAndEmptyTransfersNeverReturnPartialData() {
     constexpr auto below_payload = binary.size() - 1;
-    constexpr std::array limits{ClipboardImagePipeLimits{.source_bytes = below_payload, .png_bytes = binary.size()}, ClipboardImagePipeLimits{.source_bytes = binary.size(), .png_bytes = below_payload}, ClipboardImagePipeLimits{.source_bytes = below_payload, .png_bytes = below_payload}};
-    constexpr std::array failures{ClipboardImageError::source_bytes, ClipboardImageError::png_bytes, ClipboardImageError::source_bytes};
+    constexpr telar::ds::Array limits{ClipboardImagePipeLimits{.source_bytes = below_payload, .png_bytes = binary.size()}, ClipboardImagePipeLimits{.source_bytes = binary.size(), .png_bytes = below_payload}, ClipboardImagePipeLimits{.source_bytes = below_payload, .png_bytes = below_payload}};
+    constexpr telar::ds::Array failures{ClipboardImageError::source_bytes, ClipboardImageError::png_bytes, ClipboardImageError::source_bytes};
 
     for (std::size_t index = 0; index < limits.size(); ++index) {
       Pipe pipe;

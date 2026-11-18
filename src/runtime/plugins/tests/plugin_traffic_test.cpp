@@ -74,6 +74,7 @@ import telar.config.runtime;
 import telar.runtime.vocabulary.exchange;
 import telar.runtime.vocabulary.frames;
 import telar.runtime.vocabulary.traffic;
+import telar.base.ds;
 
 namespace {
 
@@ -241,24 +242,24 @@ return {}
     {
       traffic::Service service{memory, path, true};
       const auto observe = specification(false);
-      std::array<Byte, traffic::Protocol::greeting_bytes> greeting;
+      ds::Array<Byte, traffic::Protocol::greeting_bytes> greeting;
 
       for (const auto role : {traffic::Role::intercept, traffic::Role::offline_capture}) {
         auto unauthorized = service.openPackage(observe);
 
-        traffic::sendAll(unauthorized.get(), traffic::Protocol::greeting(greeting, role));
+        traffic::sendAll(unauthorized.get(), traffic::Protocol::greeting(greeting.viewMut(), role));
         check(closed(unauthorized.get()));
       }
 
       auto approved = service.openPackage(observe);
 
-      traffic::sendAll(approved.get(), traffic::Protocol::greeting(greeting, traffic::Role::subscribe));
+      traffic::sendAll(approved.get(), traffic::Protocol::greeting(greeting.viewMut(), traffic::Role::subscribe));
       pollfd ready{approved.get(), POLLIN, 0};
 
       check(::poll(&ready, 1, 5000) > 0);
-      std::array<Byte, traffic::Protocol::prefix_bytes> prefix;
+      ds::Array<Byte, traffic::Protocol::prefix_bytes> prefix;
 
-      check(::recv(approved.get(), prefix.data(), prefix.size(), MSG_WAITALL) == static_cast<ssize_t>(prefix.size()));
+      check(::recv(approved.get(), prefix.dataMut(), prefix.size(), MSG_WAITALL) == static_cast<ssize_t>(prefix.size()));
       app::FrameReader reader{prefix};
       const auto length = reader.integer<std::uint32_t>();
       std::vector<Byte> reply(length);
@@ -283,19 +284,19 @@ return {}
       broker.configure(1, {.host = "example.test", .visibility = 3, .fail_closed = true});
       const traffic::FlowEvent event{.id = 31, .host = "example.test"};
       const auto original = broker.begin(event);
-      std::array<Byte, 64> output;
+      ds::Array<Byte, 64> output;
 
       check(broker.pending(1, original));
       broker.setAvailable(1, false);
       check(!broker.pending(1, original));
-      check(broker.poll(original, output).verdict == traffic::Verdict::reject);
+      check(broker.poll(original, output.viewMut()).verdict == traffic::Verdict::reject);
       check(broker.begin(event) == decltype(broker)::rejected_ticket);
       broker.setAvailable(1, true);
       const auto fresh = broker.begin(event);
 
       check(fresh != original && broker.pending(1, fresh));
       broker.decide(1, original, traffic::Verdict::allow, {});
-      check(broker.poll(fresh, output).verdict == traffic::Verdict::pending);
+      check(broker.poll(fresh, output.viewMut()).verdict == traffic::Verdict::pending);
       broker.cancel(fresh);
       broker.disconnect(1);
 
@@ -305,10 +306,10 @@ return {}
 
       broker.setAvailable(2, false);
       broker.setAvailable(2, true);
-      constexpr std::array<Byte, 3> replacement{'a', 0, 'b'};
+      constexpr ds::Array<Byte, 3> replacement{'a', 0, 'b'};
 
       broker.decide(1, chain, traffic::Verdict::replace, replacement);
-      const auto result = broker.poll(chain, output);
+      const auto result = broker.poll(chain, output.viewMut());
 
       check(result.verdict == traffic::Verdict::replace && result.bytes == replacement.size());
       check(std::ranges::equal(std::span{output}.first(result.bytes), replacement));
@@ -421,29 +422,29 @@ return {}
       const auto identity = specification(false);
       app::Host host{memory, entry.c_str(), &identity};
       SensitiveAllocation output{memory, app::TrafficLimits::reply_bytes};
-      std::array<Byte, 256> payload;
+      ds::Array<Byte, 256> payload;
       auto setup = makeOwned<app::TrafficReply>(memory);
 
       app::TrafficProtocol::readReply(host.trafficSetup(output.bytesMut()), *setup);
       check(setup->registration_count == 1 && setup->registrations[0].selection == traffic::Selection::datagrams);
       const auto registration = setup->registrations[0].id;
-      constexpr std::array<Byte, 3> body{'a', 0, 'b'};
+      constexpr ds::Array<Byte, 3> body{'a', 0, 'b'};
       traffic::DatagramEvent item{.source_port = 1234, .destination_port = 53, .original_bytes = body.size(), .bytes = body};
 
-      item.source_address[0] = item.destination_address[0] = 127;
-      item.source_address[3] = 1;
-      item.destination_address[3] = 2;
-      app::TrafficEvent incoming{.event_id = 1, .registration = registration, .event = {.kind = traffic::Kind::datagram, .offline = true, .interface = "fixture", .bytes = traffic::DatagramCodec::encode(payload, item)}};
+      item.source_address.atMut(0) = item.destination_address.atMut(0) = 127;
+      item.source_address.atMut(3) = 1;
+      item.destination_address.atMut(3) = 2;
+      app::TrafficEvent incoming{.event_id = 1, .registration = registration, .event = {.kind = traffic::Kind::datagram, .offline = true, .interface = "fixture", .bytes = traffic::DatagramCodec::encode(payload.viewMut(), item)}};
 
       app::TrafficProtocol::readReply(host.invokeTraffic(incoming, output.bytesMut()), *setup);
       check(setup->registration_count == 0 && !setup->changed);
-      constexpr std::array<Byte, 8> echo{128, 0, 0, 0, 0, 22, 0, 33};
+      constexpr ds::Array<Byte, 8> echo{128, 0, 0, 0, 0, 22, 0, 33};
 
       item = {.transport = traffic::DatagramTransport::icmpv6, .ipv6 = true, .icmp_type = 128, .original_bytes = echo.size(), .bytes = echo};
-      item.source_address[15] = 1;
-      item.destination_address[15] = 2;
+      item.source_address.atMut(15) = 1;
+      item.destination_address.atMut(15) = 2;
       incoming.event_id = 2;
-      incoming.event.bytes = traffic::DatagramCodec::encode(payload, item);
+      incoming.event.bytes = traffic::DatagramCodec::encode(payload.viewMut(), item);
       app::TrafficProtocol::readReply(host.invokeTraffic(incoming, output.bytesMut()), *setup);
       check(setup->changed && setup->registration_count == 0);
     }
@@ -656,7 +657,7 @@ return {}
       identity.entry.assign(entry);
       identity.declared.insert(app::Capability::notifications);
       identity.granted.insert(app::Capability::notifications);
-      const std::array specifications{identity};
+      const ds::Array specifications{identity};
       app::Service plugins{memory, std::span<const app::ServiceSpec>{specifications}, executable.c_str(), {}, &network};
       const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10};
       std::uint64_t ticket = 0;
@@ -670,13 +671,13 @@ return {}
         }
       }
 
-      std::array<Byte, 64> replacement;
-      auto decision = network.poll(ticket, replacement);
+      ds::Array<Byte, 64> replacement;
+      auto decision = network.poll(ticket, replacement.viewMut());
 
       while (decision.verdict == traffic::Verdict::pending) {
         check(std::chrono::steady_clock::now() < deadline);
         std::this_thread::sleep_for(std::chrono::milliseconds{10});
-        decision = network.poll(ticket, replacement);
+        decision = network.poll(ticket, replacement.viewMut());
       }
 
       check(decision.verdict == (policy == "reject" ? traffic::Verdict::reject : traffic::Verdict::allow));
@@ -817,8 +818,8 @@ return {}
 
       exchange.request = makeOwned<CaptureHalf>(memory, memory, quota, limits, CaptureStart{.key = {connection, 1}, .side = CaptureSide::request, .protocol = CaptureProtocol::http1, .host = "example.test", .started_at_ms = 1});
       exchange.request->appendHead("GET / HTTP/1.1\r\n\r\n");
-      std::array<Byte, 4096> encoded;
-      const auto bytes = app::Protocol::encodeExchange(encoded, {identity, 1}, exchange);
+      ds::Array<Byte, 4096> encoded;
+      const auto bytes = app::Protocol::encodeExchange(encoded.viewMut(), {identity, 1}, exchange);
       const auto spec = specification(false);
       Memory& host_memory = adapter;
       app::Host host{host_memory, entry.c_str(), &spec};
@@ -999,7 +1000,7 @@ return {}
     check(rejected(forge({.decision_count = static_cast<Byte>(app::TrafficLimits::decisions + 1), .decisions = app::TrafficLimits::decisions + 1})));
     check(rejected(forge({.decision_count = 255, .decisions = 255})));
 
-    const std::array<ForgedRegistration, 13> invalid{
+    const ds::Array<ForgedRegistration, 13> invalid{
         ForgedRegistration{.id = 0},
         ForgedRegistration{.selection = 0},
         ForgedRegistration{.stage = app::TrafficStage::observe, .filter = std::string{"tcp\0port", 8}},

@@ -2,6 +2,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.testing;
 import telar.runtime.vocabulary.exchange;
+import telar.base.ds;
 
 namespace {
 
@@ -18,7 +19,7 @@ namespace {
     ConcurrentMemory& memory = adapter;
     CaptureQuota quota{4096};
     constexpr std::size_t limit = 1000;
-    constexpr std::array<std::uint8_t, 1> byte{'x'};
+    constexpr ds::Array<std::uint8_t, 1> byte{'x'};
 
     {
       CaptureBuffer buffer{memory, quota, limit};

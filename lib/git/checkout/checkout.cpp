@@ -46,10 +46,10 @@ namespace telar::runtime {
   }
 
   tbc::view<ds::Option<std::string_view>, tbc::lt::a> GitFiles::directory(std::string_view root, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept {
-    std::array<char, PATH_MAX> path;
-    const auto dot_git = join(root, ".git", path);
-    std::array<char, PATH_MAX + 16> bytes;
-    const auto pointer = dot_git ? readRegularFile(*dot_git, bytes) : ds::none;
+    ds::Array<char, PATH_MAX> path;
+    const auto dot_git = join(root, ".git", path.viewMut());
+    ds::Array<char, PATH_MAX + 16> bytes;
+    const auto pointer = dot_git ? readRegularFile(*dot_git, bytes.viewMut()) : ds::none;
     if (!pointer) {
       return ds::none;
     }
@@ -64,23 +64,23 @@ namespace telar::runtime {
   }
 
   ds::Option<std::string_view> GitHead::read(std::string_view root) noexcept {
-    const auto direct = GitFiles::join(root, ".git/HEAD", path_);
+    const auto direct = GitFiles::join(root, ".git/HEAD", path_.viewMut());
     if (!direct) {
       return ds::none;
     }
 
-    if (const auto contents = readRegularFile(*direct, head_)) {
+    if (const auto contents = readRegularFile(*direct, head_.viewMut())) {
       return parse(*contents);
     }
 
-    std::array<char, PATH_MAX> resolved;
-    const auto directory = GitFiles::directory(root, resolved);
+    ds::Array<char, PATH_MAX> resolved;
+    const auto directory = GitFiles::directory(root, resolved.viewMut());
     if (!directory) {
       return ds::none;
     }
 
-    const auto linked = GitFiles::join(*directory, "HEAD", path_);
-    const auto head = linked ? readRegularFile(*linked, head_) : ds::none;
+    const auto linked = GitFiles::join(*directory, "HEAD", path_.viewMut());
+    const auto head = linked ? readRegularFile(*linked, head_.viewMut()) : ds::none;
 
     return head ? ds::Option{parse(*head)} : ds::none;
   }
@@ -156,7 +156,7 @@ namespace telar::runtime {
           return ds::none;
         }
 
-        facts.drivers[facts.driver_count++] = driver;
+        facts.drivers.atMut(facts.driver_count++) = driver;
       }
     }
 
@@ -248,7 +248,7 @@ namespace telar::runtime {
     constexpr unsigned maximum_depth = 64;
 
     for (unsigned depth = 0; depth < maximum_depth; ++depth) {
-      const auto dot_git = GitFiles::join(directory, ".git", path_);
+      const auto dot_git = GitFiles::join(directory, ".git", path_.viewMut());
       if (!dot_git) {
         return ds::none;
       }
@@ -280,19 +280,19 @@ namespace telar::runtime {
   }
 
   ds::Option<std::string_view> LinkedWorktree::mainBranch(std::string_view root) noexcept {
-    std::array<char, PATH_MAX> git_directory;
-    const auto directory = GitFiles::directory(root, git_directory);
+    ds::Array<char, PATH_MAX> git_directory;
+    const auto directory = GitFiles::directory(root, git_directory.viewMut());
     if (!directory) {
       return ds::none;
     }
 
-    const auto common_path = GitFiles::join(*directory, "commondir", path_);
-    std::array<char, PATH_MAX> contents;
-    const auto common = common_path ? readRegularFile(*common_path, contents) : ds::none;
-    std::array<char, PATH_MAX> resolved;
-    const auto common_directory = common ? GitFiles::resolve(*directory, trimText(*common, " \t\r\n"), resolved) : ds::none;
-    const auto head_path = common_directory ? GitFiles::join(*common_directory, "HEAD", path_) : ds::none;
-    const auto head = head_path ? readRegularFile(*head_path, head_) : ds::none;
+    const auto common_path = GitFiles::join(*directory, "commondir", path_.viewMut());
+    ds::Array<char, PATH_MAX> contents;
+    const auto common = common_path ? readRegularFile(*common_path, contents.viewMut()) : ds::none;
+    ds::Array<char, PATH_MAX> resolved;
+    const auto common_directory = common ? GitFiles::resolve(*directory, trimText(*common, " \t\r\n"), resolved.viewMut()) : ds::none;
+    const auto head_path = common_directory ? GitFiles::join(*common_directory, "HEAD", path_.viewMut()) : ds::none;
+    const auto head = head_path ? readRegularFile(*head_path, head_.viewMut()) : ds::none;
     if (!head) {
       return ds::none;
     }
@@ -304,20 +304,20 @@ namespace telar::runtime {
   }
 
   ds::Option<std::string_view> LinkedWorktree::linkedBranch(std::string_view root) noexcept {
-    std::array<char, PATH_MAX> git_directory;
-    const auto directory = GitFiles::directory(root, git_directory);
+    ds::Array<char, PATH_MAX> git_directory;
+    const auto directory = GitFiles::directory(root, git_directory.viewMut());
     if (!directory) {
       return ds::none;
     }
 
-    const auto common_path = GitFiles::join(*directory, "commondir", path_);
-    std::array<char, PATH_MAX> common;
-    if (!common_path || !readRegularFile(*common_path, common)) {
+    const auto common_path = GitFiles::join(*directory, "commondir", path_.viewMut());
+    ds::Array<char, PATH_MAX> common;
+    if (!common_path || !readRegularFile(*common_path, common.viewMut())) {
       return ds::none;
     }
 
-    const auto head_path = GitFiles::join(*directory, "HEAD", path_);
-    const auto head = head_path ? readRegularFile(*head_path, head_) : ds::none;
+    const auto head_path = GitFiles::join(*directory, "HEAD", path_.viewMut());
+    const auto head = head_path ? readRegularFile(*head_path, head_.viewMut()) : ds::none;
     if (!head) {
       return ds::none;
     }

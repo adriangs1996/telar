@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../serializers/telar_serializer.hpp"
+#include "telar_base/ds/values.hpp"
 
 #ifdef TELAR_DEBUG
 #include <optional>
@@ -179,9 +180,9 @@ namespace telar {
       }
 
       const auto tag_bytes = input.first(u8::width);
-      std::array<char, sizeof("0x00")> tag_value{};
+      ds::Array<char, sizeof("0x00")> tag_value{};
 
-      std::snprintf(tag_value.data(), tag_value.size(), "0x%02x", static_cast<unsigned>(u8::decode(input)));
+      std::snprintf(tag_value.dataMut(), tag_value.size(), "0x%02x", static_cast<unsigned>(u8::decode(input)));
       printColumn<Row>(tag_bytes, "tag", tag_value.data(), output, !input.empty());
 
       if constexpr (Row == FrameRow::bytes) {
@@ -206,8 +207,8 @@ namespace telar {
 
     template <typename Sch>
     void printFrame(std::span<const Byte> payload, std::FILE* output) {
-      std::array<Byte, frame_prefix_size> prefix{};
-      std::span<Byte> prefix_output = prefix;
+      ds::Array<Byte, frame_prefix_size> prefix{};
+      std::span<Byte> prefix_output = prefix.viewMut();
 
       u32::encode(static_cast<std::uint32_t>(payload.size()), prefix_output);
 
@@ -263,8 +264,8 @@ namespace telar {
     static void pretty_print(const Message& message, std::FILE* output = stderr) {
       std::vector<Byte> buffer(encodedSize(message));
       const auto payload = encode(message, buffer);
-      std::array<Byte, frame_prefix_size> prefix{};
-      auto prefix_output = std::span<Byte>{prefix};
+      ds::Array<Byte, frame_prefix_size> prefix{};
+      auto prefix_output = std::span<Byte>{prefix.viewMut()};
 
       u32::encode(static_cast<std::uint32_t>(payload.size()), prefix_output);
       std::vector<debug::Column> columns;
@@ -306,9 +307,9 @@ namespace telar {
       static_assert(Sch::fixed_size, "Variable messages require Codec::encode(message, buffer)");
       static_assert(Sch::payload_size <= max_payload_size);
 
-      std::array<Byte, Sch::payload_size> bytes{};
+      ds::Array<Byte, Sch::payload_size> bytes{};
 
-      encode(message, bytes);
+      encode(message, bytes.viewMut());
 
       return bytes;
     }

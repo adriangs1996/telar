@@ -61,7 +61,7 @@ namespace {
     check(copy.endpoint() == "/run/telar.sock" && discovery.endpoint() == "/run/other.sock", "replacing the source discovery must preserve the copied endpoint");
     auto changed = telar::handshake::schema_id;
 
-    changed.front() = 'x';
+    changed.atMut(0) = 'x';
     check(!discovery.compatible(changed), "another schema must remain incompatible");
   }
 

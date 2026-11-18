@@ -9,6 +9,7 @@ import telar.tbc;
 import :notification_payload;
 import telar.gui.foundation.text;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: platform/command_line.cppm
 export {
@@ -18,16 +19,16 @@ export {
       static constexpr std::size_t maximum_arguments = 5;
 
       std::string_view executable;
-      std::array<std::string_view, maximum_arguments> values{};
+      ds::Array<std::string_view, maximum_arguments> values{};
       std::size_t count = 0;
 
       // The command views the executable and the texts the arguments view, region `a`.
       template <std::size_t Count>
-      [[nodiscard]] static constexpr tbc::view<CommandLine, tbc::lt::a> withArguments(tbc::view<std::string_view, tbc::lt::a> executable, tbc::view<std::array<std::string_view, Count>, tbc::lt::a> arguments) noexcept {
+      [[nodiscard]] static constexpr tbc::view<CommandLine, tbc::lt::a> withArguments(tbc::view<std::string_view, tbc::lt::a> executable, tbc::view<ds::Array<std::string_view, Count>, tbc::lt::a> arguments) noexcept {
         static_assert(Count <= maximum_arguments);
         CommandLine command{.executable = executable, .count = Count};
 
-        std::copy(arguments.begin(), arguments.end(), command.values.begin());
+        std::copy(arguments.begin(), arguments.end(), command.values.dataMut());
 
         return command;
       }
@@ -115,7 +116,7 @@ export {
         ffmpeg,
         mpv,
       };
-      static constexpr std::array backends{Backend::canberra, Backend::pulse, Backend::pipewire, Backend::ffmpeg, Backend::mpv};
+      static constexpr ds::Array backends{Backend::canberra, Backend::pulse, Backend::pipewire, Backend::ffmpeg, Backend::mpv};
     };
 
 #ifdef __APPLE__

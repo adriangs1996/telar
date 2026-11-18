@@ -115,14 +115,14 @@ namespace telar::gui::qt {
 
   void PaneMotionLayout::updatePolish() {
     QList<QVariantMap> records;
-    std::array<application::workbench::PaneMotionSlot, PaneLayout::maximum_panes> placements;
+    ds::Array<application::workbench::PaneMotionSlot, PaneLayout::maximum_panes> placements;
     const auto count = model_ ? std::clamp(model_->rowCount(), 0, static_cast<int>(placements.size())) : 0;
 
     records.reserve(count);
     for (int index = 0; index < count; ++index) {
       auto record = model_->data(model_->index(index, 0), ListModel::record_role).toMap();
 
-      placements[static_cast<std::size_t>(index)] = {
+      placements.atMut(static_cast<std::size_t>(index)) = {
           .id = record.value(QStringLiteral("key")).toString().toULongLong(),
           .bounds = {.x = record.value(QStringLiteral("x")).toFloat(), .y = record.value(QStringLiteral("y")).toFloat(), .width = record.value(QStringLiteral("width")).toFloat(), .height = record.value(QStringLiteral("height")).toFloat()},
       };

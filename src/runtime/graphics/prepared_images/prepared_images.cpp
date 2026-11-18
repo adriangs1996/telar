@@ -99,7 +99,7 @@ namespace telar::runtime {
       ::shm_unlink(name_.data());
     }
 
-    name_[0] = '\0';
+    name_.atMut(0) = '\0';
     owns_name_ = false;
   }
 
@@ -124,7 +124,7 @@ namespace telar::runtime {
     byte_count_ = std::exchange(other.byte_count_, 0);
     reserved_bytes_ = std::exchange(other.reserved_bytes_, 0);
     name_ = other.name_;
-    other.name_[0] = '\0';
+    other.name_.atMut(0) = '\0';
     owns_name_ = std::exchange(other.owns_name_, false);
   }
 
@@ -161,7 +161,7 @@ namespace telar::runtime {
   }
 
   ds::Option<FrozenImage> PreparedImages::take(ImageKey key) noexcept {
-    for (auto& slot : entries_) {
+    for (auto& slot : entries_.viewMut()) {
       if (slot && sameImage(slot->key, key)) {
         auto frozen = std::move(slot.getMut().frozen);
 
@@ -185,7 +185,7 @@ namespace telar::runtime {
   }
 
   void PreparedImages::clear() noexcept {
-    for (auto& slot : entries_) {
+    for (auto& slot : entries_.viewMut()) {
       slot.reset();
     }
 
@@ -213,7 +213,7 @@ namespace telar::runtime {
 #endif
 
   void PreparedImages::retain(std::span<const GraphicsImageView> images) noexcept {
-    for (auto& slot : entries_) {
+    for (auto& slot : entries_.viewMut()) {
       if (slot && std::ranges::none_of(images, [&](const auto& image) {
             return sameImage(slot->key, image.description.key);
           })) {
@@ -221,7 +221,7 @@ namespace telar::runtime {
       }
     }
 
-    for (auto& key : frozen_) {
+    for (auto& key : frozen_.viewMut()) {
       if (key.image_id != 0 && std::ranges::none_of(images, [&](const auto& image) {
             return key.image_id == image.description.key.image_id;
           })) {
@@ -239,7 +239,7 @@ namespace telar::runtime {
   auto PreparedImages::availableSlot(std::uint32_t identity) noexcept -> ds::Option<Entry>* {
     ds::Option<Entry>* free = nullptr;
 
-    for (auto& slot : entries_) {
+    for (auto& slot : entries_.viewMut()) {
       if (slot && slot->key.image_id == identity) {
         return &slot;
       }
@@ -253,16 +253,17 @@ namespace telar::runtime {
   }
 
   void PreparedImages::remember(ImageKey key) noexcept {
-    auto found = std::ranges::find_if(frozen_, [&](auto known) {
+    const auto frozen = frozen_.viewMut();
+    auto found = std::ranges::find_if(frozen, [&](auto known) {
       return known.image_id == key.image_id;
     });
-    if (found == frozen_.end()) {
-      found = std::ranges::find_if(frozen_, [](auto known) {
+    if (found == frozen.end()) {
+      found = std::ranges::find_if(frozen, [](auto known) {
         return known.image_id == 0;
       });
     }
 
-    if (found != frozen_.end()) {
+    if (found != frozen.end()) {
       *found = key;
     }
   }
@@ -274,7 +275,7 @@ namespace telar::runtime {
   bool TransferRequests::request(ImageKey key, bool shared) noexcept {
     ds::Option<Entry>* free = nullptr;
 
-    for (auto& entry : entries_) {
+    for (auto& entry : entries_.viewMut()) {
       if (entry && entry->shared == shared && sameImage(entry->key, key)) {
         return false;
       }
@@ -293,7 +294,7 @@ namespace telar::runtime {
   }
 
   ds::Option<FrozenImage> TransferRequests::take(ImageKey key, bool shared) {
-    for (auto& entry : entries_) {
+    for (auto& entry : entries_.viewMut()) {
       if (!entry || entry->shared != shared || !sameImage(entry->key, key) || entry->state == State::pending) {
         continue;
       }
@@ -314,7 +315,7 @@ namespace telar::runtime {
 
   void TransferRequests::process(std::span<const GraphicsImageView> images) noexcept {
     TELAR_TRACE("media.prepareTransfers");
-    for (auto& entry : entries_) {
+    for (auto& entry : entries_.viewMut()) {
       if (!entry) {
         continue;
       }
@@ -343,7 +344,7 @@ namespace telar::runtime {
   }
 
   void TransferRequests::clear() noexcept {
-    for (auto& entry : entries_) {
+    for (auto& entry : entries_.viewMut()) {
       entry.reset();
     }
   }

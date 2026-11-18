@@ -51,7 +51,7 @@ export {
       static constexpr std::size_t maximum_addresses = 32;
 
       struct Result {
-        std::array<NetworkAddress, maximum_addresses> addresses;
+        ds::Array<NetworkAddress, maximum_addresses> addresses;
         ResolutionSummary summary;
       };
 
@@ -64,7 +64,7 @@ export {
 
       struct Row {
         Phase phase = Phase::free;
-        std::array<char, ProxyHostname::maximum_bytes + 1> hostname{};
+        ds::Array<char, ProxyHostname::maximum_bytes + 1> hostname{};
         std::size_t length = 0;
         std::size_t waiters = 0;
         Result result;
@@ -74,8 +74,8 @@ export {
 
       struct State {
         pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-        std::array<Row, capacity> rows;
-        std::array<CompletionSignal*, maximum_subscribers> subscribers{};
+        ds::Array<Row, capacity> rows;
+        ds::Array<CompletionSignal*, maximum_subscribers> subscribers{};
       };
 
       class Lock {
@@ -125,7 +125,7 @@ export {
 
           result.summary = stored.summary;
           if (stored.summary.error == 0) {
-            std::copy_n(stored.addresses.begin(), std::min(stored.summary.found, maximum_addresses), result.addresses.begin());
+            std::copy_n(stored.addresses.begin(), std::min(stored.summary.found, maximum_addresses), result.addresses.dataMut());
           }
 
           return true;
@@ -137,7 +137,7 @@ export {
           }
 
           const Lock lock;
-          auto& row = state_.rows[std::exchange(index_, capacity)];
+          auto& row = state_.rows.atMut(std::exchange(index_, capacity));
           if (--row.waiters == 0 && row.phase == Phase::resolved) {
             row.phase = Phase::free;
           }
@@ -156,19 +156,20 @@ export {
       public:
         inline explicit Notifications(CompletionSignal& signal) {
           const Lock lock;
-          const auto available = std::ranges::find(state_.subscribers, nullptr);
-          if (available == state_.subscribers.end()) {
+          const auto subscribers = state_.subscribers.viewMut();
+          const auto available = std::ranges::find(subscribers, nullptr);
+          if (available == subscribers.end()) {
             throw SystemError{"Too many proxy resolver subscribers", ENOSPC};
           }
 
           *available = &signal;
-          index_ = static_cast<std::size_t>(available - state_.subscribers.begin());
+          index_ = static_cast<std::size_t>(available - subscribers.begin());
         }
 
         inline ~Notifications() {
           const Lock lock;
 
-          state_.subscribers[index_] = nullptr;
+          state_.subscribers.atMut(index_) = nullptr;
         }
 
         Notifications(const Notifications&) = delete;
@@ -187,7 +188,7 @@ export {
         ds::Option<std::size_t> available;
 
         for (std::size_t index = 0; index < state_.rows.size(); ++index) {
-          auto& row = state_.rows[index];
+          auto& row = state_.rows.atMut(index);
           if (row.phase == Phase::free) {
             if (!available) {
               available = index;
@@ -202,12 +203,12 @@ export {
           return ds::none;
         }
 
-        auto& row = state_.rows[*available];
+        auto& row = state_.rows.atMut(*available);
 
         row.phase = Phase::resolving;
         row.length = hostname.size();
-        std::copy(hostname.begin(), hostname.end(), row.hostname.begin());
-        row.hostname[row.length] = '\0';
+        std::copy(hostname.begin(), hostname.end(), row.hostname.dataMut());
+        row.hostname.atMut(row.length) = '\0';
         row.waiters = 1;
         if (const auto error = start(row); error != 0) {
           row.result.summary = {.error = EAI_MEMORY};
@@ -255,7 +256,7 @@ export {
 #if TELAR_DEBUG
         const auto started = trace::now();
 #endif
-        const auto summary = Resolver::resolve(row.hostname.data(), row.result.addresses);
+        const auto summary = Resolver::resolve(row.hostname.data(), row.result.addresses.viewMut());
         const Lock lock;
 
         if (row.waiters == 0) {

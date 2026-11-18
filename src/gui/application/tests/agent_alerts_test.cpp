@@ -30,6 +30,7 @@ import telar.testing;
 import telar.gui.application;
 import telar.gui.foundation.model;
 import telar.gui.features.notifications;
+import telar.base.ds;
 
 namespace {
 
@@ -41,7 +42,7 @@ namespace {
   constexpr std::uint64_t now_ns = 1'000'000'000;
 
   void individualAlertsOwnMetadataAndDurations() {
-    constexpr std::array statuses{AgentStatus::unknown, AgentStatus::working, AgentStatus::ready, AgentStatus::blocked, AgentStatus::done, AgentStatus::failed};
+    constexpr ds::Array statuses{AgentStatus::unknown, AgentStatus::working, AgentStatus::ready, AgentStatus::blocked, AgentStatus::done, AgentStatus::failed};
 
     for (const auto status : statuses) {
       const AgentStatusChange change{.pane_id = 42, .pane_index = 7, .current = status};
@@ -76,17 +77,17 @@ namespace {
   }
 
   void oversizedBatchesFoldWithoutEvictingTheirOwnAlerts() {
-    std::array<AgentStatusChange, AgentReplica<telar::ConcurrentMemory>::capacity> changes;
+    ds::Array<AgentStatusChange, AgentReplica<telar::ConcurrentMemory>::capacity> changes;
 
     for (std::size_t index = 0; index < changes.size(); ++index) {
-      changes[index] = {.pane_id = index + 1, .pane_index = static_cast<std::uint16_t>(index + 1), .current = AgentStatus::blocked};
+      changes.atMut(index) = {.pane_id = index + 1, .pane_index = static_cast<std::uint16_t>(index + 1), .current = AgentStatus::blocked};
     }
 
-    changes[0].current = AgentStatus::working;
-    changes[4].current = AgentStatus::done;
+    changes.atMut(0).current = AgentStatus::working;
+    changes.atMut(4).current = AgentStatus::done;
     constexpr std::size_t failed_index = 5;
 
-    changes[failed_index].current = AgentStatus::failed;
+    changes.atMut(failed_index).current = AgentStatus::failed;
     NotificationCenter center;
     const auto count = AgentAlerts::publish(changes, [](const AgentStatusChange&) {
       return std::string_view{"Agent"};
@@ -105,10 +106,10 @@ namespace {
   }
 
   void exactCapacityKeepsAllIndividuals() {
-    std::array<AgentStatusChange, NotificationCenter::capacity> changes;
+    ds::Array<AgentStatusChange, NotificationCenter::capacity> changes;
 
     for (std::size_t index = 0; index < changes.size(); ++index) {
-      changes[index] = {.pane_id = index + 1, .current = AgentStatus::done};
+      changes.atMut(index) = {.pane_id = index + 1, .current = AgentStatus::done};
     }
 
     NotificationCenter center;

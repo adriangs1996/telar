@@ -11,6 +11,7 @@ import std;
 import telar.testing;
 import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
+import telar.base.ds;
 
 namespace {
 
@@ -75,7 +76,7 @@ namespace {
   void invalidGeometry() {
     FontConfiguration configuration;
     constexpr FontMetrics metrics;
-    constexpr std::array scales{0.0F, -1.0F, Viewport::maximum_scale + 1, std::numeric_limits<float>::infinity(), std::numeric_limits<float>::quiet_NaN()};
+    constexpr telar::ds::Array scales{0.0F, -1.0F, Viewport::maximum_scale + 1, std::numeric_limits<float>::infinity(), std::numeric_limits<float>::quiet_NaN()};
 
     for (const auto scale : scales) {
       rejects<std::invalid_argument>([&] {
@@ -83,7 +84,7 @@ namespace {
       });
     }
 
-    constexpr std::array invalid_values{0.0F, -1.0F, std::numeric_limits<float>::infinity(), std::numeric_limits<float>::quiet_NaN()};
+    constexpr telar::ds::Array invalid_values{0.0F, -1.0F, std::numeric_limits<float>::infinity(), std::numeric_limits<float>::quiet_NaN()};
 
     for (const auto value : invalid_values) {
       configuration.size = value;

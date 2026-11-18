@@ -28,7 +28,7 @@ namespace telar::gui::inline foundation::inline core {
 
   SyntaxStyleValues ThemeValues::syntaxStyle(SyntaxRole role) const noexcept {
     const auto index = static_cast<std::size_t>(role);
-    constexpr std::array defaults{PaletteRole::text, PaletteRole::mauve, PaletteRole::green, PaletteRole::peach, PaletteRole::subtext0, PaletteRole::peach, PaletteRole::peach, PaletteRole::teal, PaletteRole::blue, PaletteRole::yellow, PaletteRole::text, PaletteRole::text, PaletteRole::mauve, PaletteRole::subtext0, PaletteRole::subtext0};
+    constexpr ds::Array defaults{PaletteRole::text, PaletteRole::mauve, PaletteRole::green, PaletteRole::peach, PaletteRole::subtext0, PaletteRole::peach, PaletteRole::peach, PaletteRole::teal, PaletteRole::blue, PaletteRole::yellow, PaletteRole::text, PaletteRole::text, PaletteRole::mauve, PaletteRole::subtext0, PaletteRole::subtext0};
 
     return syntax_styles[index].valueOr(SyntaxStyleValues{.color = color(defaults[index])});
   }
@@ -181,12 +181,12 @@ namespace telar::gui::inline foundation::inline core {
     result.name = values.base;
     result.foreground = themeRgb(values.terminal.foreground);
     result.background = themeRgb(values.terminal.background);
-    std::ranges::transform(values.terminal.palette, result.palette.begin(), themeRgb);
+    std::ranges::transform(values.terminal.palette, result.palette.viewMut().begin(), themeRgb);
     result.cursor = values.terminal.cursor_color ? themeRgb(*values.terminal.cursor_color) : result.foreground;
     result.cursor_text = values.terminal.cursor_text_color ? ds::Option{themeRgb(*values.terminal.cursor_text_color)} : ds::none;
     result.chrome = values.palette;
     for (std::size_t index = 0; index < result.syntax.size(); ++index) {
-      result.syntax[index] = values.syntaxStyle(static_cast<SyntaxRole>(index)).color;
+      result.syntax.atMut(index) = values.syntaxStyle(static_cast<SyntaxRole>(index)).color;
     }
 
     result.surface = result.resolve(values.color(PaletteRole::surface0), result.background);

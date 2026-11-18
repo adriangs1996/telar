@@ -20,7 +20,7 @@ namespace telar::gui::qt {
   struct MachineClient;
 
   // The client of each window slot, as the store holds them.
-  using MachineClients = std::array<ds::Option<Owned<MachineClient, ApplicationAllocator>>, application::machines::Machines::capacity>;
+  using MachineClients = ds::Array<ds::Option<Owned<MachineClient, ApplicationAllocator>>, application::machines::Machines::capacity>;
 
   // What one machine's session asks of the desktop. Only the client the window holds for the
   // active machine reaches it: the others' notifications, sounds and input are dropped.

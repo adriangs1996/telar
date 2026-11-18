@@ -3,6 +3,7 @@ export module telar.gui.foundation.keys:configuration;
 import std;
 
 import telar.gui.foundation.actions;
+import telar.base.ds;
 
 // Interface: config/default_bindings.cppm
 export {
@@ -13,7 +14,7 @@ export {
       BindingAction action;
     };
 
-    inline constexpr auto default_bindings = std::to_array<DefaultBinding>({
+    inline constexpr auto default_bindings = ds::Array<DefaultBinding, 43>{{
         {.suffix = KeyChord{.key = KeyChord::Key::character, .character = '-'}, .action = BindingAction{.kind = BindingActionKind::scroll_pane_up}},
         {.suffix = KeyChord{.key = KeyChord::Key::character, .character = '='}, .action = BindingAction{.kind = BindingActionKind::scroll_pane_down}},
         {.suffix = KeyChord{.key = KeyChord::Key::character, .character = '%'}, .action = BindingAction{.kind = BindingActionKind::split_horizontal}},
@@ -57,7 +58,7 @@ export {
         {.suffix = KeyChord{.key = KeyChord::Key::character, .character = 'X'}, .action = BindingAction{.kind = BindingActionKind::close_tab}},
         {.suffix = KeyChord{.key = KeyChord::Key::character, .character = ','}, .action = BindingAction{.kind = BindingActionKind::move_tab_previous}},
         {.suffix = KeyChord{.key = KeyChord::Key::character, .character = '.'}, .action = BindingAction{.kind = BindingActionKind::move_tab_next}},
-    });
+    }};
 
   }
 }
@@ -71,7 +72,7 @@ export {
 
       KeyChord prefix{.key = KeyChord::Key::character, .character = 'b', .modifiers = static_cast<unsigned>(KeyChord::Modifier::control)};
       std::uint64_t sequence_timeout_ns = BindingLimits::sequence_timeout_ns;
-      std::array<Binding, BindingLimits::bindings> configured{};
+      ds::Array<Binding, BindingLimits::bindings> configured{};
       std::size_t length = 0;
       std::size_t dropped = 0;
 

@@ -8,12 +8,12 @@ import telar.base.ds;
 namespace telar::runtime {
 
   ShellToken ShellToken::generate() noexcept {
-    std::array<unsigned char, length / 2> random;
+    ds::Array<unsigned char, length / 2> random;
 
-    randomBytes(random.data(), random.size());
+    randomBytes(random.dataMut(), random.size());
     ShellToken token;
 
-    static_cast<void>(encodeLowerHex(random, token.text_));
+    static_cast<void>(encodeLowerHex(random.view(), token.text_.viewMut()));
     return token;
   }
 
@@ -26,7 +26,7 @@ namespace telar::runtime {
 
     ShellToken token;
 
-    std::ranges::copy(text, token.text_.begin());
+    std::ranges::copy(text, token.text_.viewMut().begin());
     return token;
   }
 

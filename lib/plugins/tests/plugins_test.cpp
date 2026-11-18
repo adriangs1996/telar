@@ -11,6 +11,7 @@ import telar.testing;
 import telar.platform.fs;
 import telar.platform.paths;
 import telar.plugins;
+import telar.base.ds;
 
 namespace {
 
@@ -150,7 +151,7 @@ namespace {
   // its own capability and is written back the same.
   void testCapabilityNamesAreStable() {
     using plugins::Capability;
-    const std::array<std::pair<std::string_view, Capability>, 15> names{{
+    const ds::Array<std::pair<std::string_view, Capability>, 15> names{{
         {"workspace.read", Capability::workspace_read},
         {"workspace.write", Capability::workspace_write},
         {"process.spawn", Capability::process_spawn},

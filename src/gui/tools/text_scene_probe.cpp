@@ -12,6 +12,7 @@ static_assert(true);
 #include "ui/foundation/scene/alpha_mask_vertex.hpp"
 #include "ui/foundation/scene/chrome_glyph_images.hpp"
 #include "ui/foundation/scene/chrome_text_scene.hpp"
+#include "telar_base/ds/values.hpp"
 #include <QByteArray>
 #include <QByteArrayView>
 #include <QColor>
@@ -53,7 +54,7 @@ namespace {
   using namespace telar::gui::qt;
 
   constexpr std::uint16_t pixel_height = 15;
-  constexpr std::array text_lengths{32U, 128U, 512U};
+  constexpr telar::ds::Array text_lengths{32U, 128U, 512U};
   constexpr int window_side = 64;
   constexpr int timeout_ms = 30'000;
   constexpr unsigned measured_iterations = 2000;
@@ -91,7 +92,7 @@ namespace {
 
   template <typename Value>
   void hashValue(QCryptographicHash& hash, const Value& value) {
-    const auto bytes = std::bit_cast<std::array<char, sizeof(Value)>>(value);
+    const auto bytes = std::bit_cast<telar::ds::Array<char, sizeof(Value)>>(value);
 
     hash.addData(QByteArrayView{bytes.data(), static_cast<qsizetype>(bytes.size())});
   }
@@ -263,7 +264,7 @@ namespace {
     }
 
     const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - started).count();
-    const auto name = std::array{QStringLiteral("create"), QStringLiteral("rebuild"), QStringLiteral("repaint")}[std::to_underlying(operation)];
+    const auto name = telar::ds::Array{QStringLiteral("create"), QStringLiteral("rebuild"), QStringLiteral("repaint")}[std::to_underlying(operation)];
     const QJsonObject row{{QStringLiteral("operation"), name}, {QStringLiteral("glyphs"), static_cast<qint64>(text.paint().glyphs.size())}, {QStringLiteral("iterations"), static_cast<qint64>(options.iterations)}, {QStringLiteral("warmup"), static_cast<qint64>(options.warmup)}, {QStringLiteral("elapsed_ns"), static_cast<qint64>(elapsed)}, {QStringLiteral("scene_sha256"), QString::fromLatin1(scene.digest())}};
 
     std::cout << QJsonDocument{row}.toJson(QJsonDocument::Compact).constData() << '\n';

@@ -44,7 +44,7 @@ namespace telar::gui::inline foundation::inline fonts {
 
     FontQuery query;
 
-    std::ranges::copy(text, query.text_.begin());
+    std::ranges::copy(text, query.text_.viewMut().begin());
     query.text_length_ = static_cast<std::uint8_t>(text.size());
     while (!text.empty()) {
       const auto length = Utf8Scalar::sequenceLength(static_cast<unsigned char>(text.front()));
@@ -54,7 +54,7 @@ namespace telar::gui::inline foundation::inline fonts {
 
       const auto scalar = text.substr(0, length);
       if (!FontCoverage::isSelectorOrJoiner(Utf8Scalar::decode(scalar))) {
-        std::ranges::copy(scalar, query.codepoints_.begin() + query.query_length_);
+        std::ranges::copy(scalar, query.codepoints_.viewMut().begin() + query.query_length_);
         query.query_length_ = static_cast<std::uint8_t>(query.query_length_ + length);
       }
 
@@ -88,7 +88,7 @@ namespace telar::gui::inline foundation::inline fonts {
       return;
     }
 
-    pending_[(head_ + count_) % pending_.size()] = *query;
+    pending_.atMut((head_ + count_) % pending_.size()) = *query;
     ++count_;
   }
 
@@ -148,7 +148,7 @@ namespace telar::gui::inline foundation::inline fonts {
       }
     }
 
-    auto& next = next_[hash % sets];
+    auto& next = next_.atMut(hash % sets);
 
     entries[next] = hash;
     next = (next + 1) % ways;
@@ -159,7 +159,7 @@ namespace telar::gui::inline foundation::inline fonts {
   }
 
   std::span<std::uint64_t> FontRequests::Misses::bucketMut(std::uint64_t hash) noexcept {
-    return std::span{hashes_}.subspan((hash % sets) * ways, ways);
+    return hashes_.viewMut().subspan((hash % sets) * ways, ways);
   }
 
   std::span<const std::uint64_t> FontRequests::Misses::bucket(std::uint64_t hash) const noexcept {

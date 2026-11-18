@@ -240,17 +240,17 @@ namespace telar::gui::qt {
       matches.add(NavigationTarget{workspace.location}, label.view(), query);
     }
 
-    std::array<const Tab<Memory>*, GuiSession::maximum_workspace_tabs> tabs{};
+    ds::Array<const Tab<Memory>*, GuiSession::maximum_workspace_tabs> tabs{};
     std::size_t count = 0;
     const auto* active = session.activeTab();
 
     for (const auto& tab : session.tabs()) {
       if (active != nullptr && sameWorkspace(tab->location.workspace, active->location.workspace) && count < tabs.size()) {
-        tabs[count++] = tab.get();
+        tabs.atMut(count++) = tab.get();
       }
     }
 
-    const auto ordered = std::span{tabs}.first(count);
+    const auto ordered = tabs.viewMut().first(count);
 
     std::ranges::sort(ordered, {}, &Tab<Memory>::position);
     for (const auto* tab : ordered) {
@@ -303,8 +303,8 @@ namespace telar::gui::qt {
     }
 
     for (std::size_t index = 0; index < matches.rows().size(); ++index) {
-      targets_[index] = matches.rows()[index].target;
-      kinds_[index] = static_cast<application::palette::PaletteRowKind>(rows[static_cast<qsizetype>(index)].toMap().value(QStringLiteral("kind")).toInt());
+      targets_.atMut(index) = matches.rows()[index].target;
+      kinds_.atMut(index) = static_cast<application::palette::PaletteRowKind>(rows[static_cast<qsizetype>(index)].toMap().value(QStringLiteral("kind")).toInt());
     }
 
     rows_ = std::move(rows);
@@ -330,14 +330,14 @@ namespace telar::gui::qt {
     }
 
     for (std::size_t index = 0; index < matches.rows().size(); ++index) {
-      targets_[index] = application::machines::MachinePickerTarget{.machine = matches.rows()[index].target};
-      kinds_[index] = application::palette::PaletteRowKind::machine;
+      targets_.atMut(index) = application::machines::MachinePickerTarget{.machine = matches.rows()[index].target};
+      kinds_.atMut(index) = application::palette::PaletteRowKind::machine;
     }
 
     const auto last = matches.rows().size();
 
-    targets_[last] = application::machines::MachinePickerTarget{.machine = ds::none};
-    kinds_[last] = application::palette::PaletteRowKind::machine;
+    targets_.atMut(last) = application::machines::MachinePickerTarget{.machine = ds::none};
+    kinds_.atMut(last) = application::palette::PaletteRowKind::machine;
     rows_ = std::move(rows);
     selection_ = std::min(selection_, static_cast<std::size_t>(rows_.size() - 1));
     ++revision_;

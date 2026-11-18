@@ -41,9 +41,9 @@ export {
     struct SetupReport {
       static constexpr std::size_t max_text_bytes = 512;
       static constexpr std::size_t max_notes = 96;
-      static constexpr auto titles = std::to_array<const char*>({"SSH access", "Platform", "telar", "Runtime", "Profile", "Agents", "Integrations", "Configuration", "Logins", "Check"});
-      static constexpr auto steps = std::to_array<const char*>({"ssh", "platform", "telar", "runtime", "profile", "agents", "integrations", "configuration", "logins", "check"});
-      static constexpr auto statuses = std::to_array<const char*>({"ok", "changed", "skipped", "failed", "pending"});
+      static constexpr auto titles = ds::Array<const char*, 10>{"SSH access", "Platform", "telar", "Runtime", "Profile", "Agents", "Integrations", "Configuration", "Logins", "Check"};
+      static constexpr auto steps = ds::Array<const char*, 10>{"ssh", "platform", "telar", "runtime", "profile", "agents", "integrations", "configuration", "logins", "check"};
+      static constexpr auto statuses = ds::Array<const char*, 5>{"ok", "changed", "skipped", "failed", "pending"};
 
       struct Result {
         ds::Option<Status> status;
@@ -52,7 +52,7 @@ export {
       };
 
       bool json;
-      std::array<Result, static_cast<std::size_t>(Step::count)> results;
+      ds::Array<Result, static_cast<std::size_t>(Step::count)> results;
       std::size_t note_count = 0;
       std::size_t omitted_notes = 0;
 

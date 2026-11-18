@@ -176,7 +176,7 @@ namespace telar::gui::qt {
 
       if (request.edit) {
         system::SecureRandom random;
-        const std::array edits{request.edit->view()};
+        const ds::Array edits{request.edit->view()};
 
         result.profiles = store.change(edits, random, textView(request.local_label));
       } else {

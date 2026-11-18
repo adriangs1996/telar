@@ -533,7 +533,7 @@ export {
         auto& face = fonts.face(FontRole::primary);
 
         if (text.size() == 1 && static_cast<unsigned char>(text.front()) < ascii_.size()) {
-          auto& cached = ascii_[static_cast<unsigned char>(text.front())];
+          auto& cached = ascii_.atMut(static_cast<unsigned char>(text.front()));
           if (cached) {
             appendPrimary(std::span{&*cached, std::size_t{1}}, column, request);
             return;
@@ -553,7 +553,7 @@ export {
         // a cell repeats on every row painted again: kept as that span's single glyph.
         static_assert(!fittedFont(FontRole::primary));
         const auto key = clusterKey(text);
-        auto* entry = key != 0 ? &clusters_[clusterSlot(key)] : nullptr;
+        auto* entry = key != 0 ? &clusters_.atMut(clusterSlot(key)) : nullptr;
         if (entry != nullptr && entry->key != key) {
           *entry = {.key = key};
           if (FontCoverage::covers(face, text)) {
@@ -614,8 +614,8 @@ export {
       Vector<ShapedGlyph, Memory> glyphs_;
       Vector<TextSpan, Memory> spans_;
       Vector<CellTextRange, Memory> cells_;
-      std::array<ds::Option<ShapedGlyph>, LigatureCoverage::ascii_count> ascii_{};
-      std::array<Cluster, std::size_t{1} << cluster_bits> clusters_{};
+      ds::Array<ds::Option<ShapedGlyph>, LigatureCoverage::ascii_count> ascii_{};
+      ds::Array<Cluster, std::size_t{1} << cluster_bits> clusters_{};
       const Face* cached_face_ = nullptr;
       std::uint16_t cached_height_ = 0;
     };

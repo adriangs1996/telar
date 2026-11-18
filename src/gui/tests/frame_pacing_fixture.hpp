@@ -18,6 +18,7 @@ static_assert(true);
 import telar.gui.foundation.model;
 import telar.gui.foundation.system;
 import telar.gui.features.window;
+import telar.base.ds;
 
 namespace telar::gui::test {
 
@@ -31,8 +32,8 @@ namespace telar::gui::test {
         throw std::logic_error{"The application has no window frame pacer"};
       }
 
-      std::array<features::window::FramePacer::Pane, PaneLayout::maximum_panes> panes;
-      const auto count = application.frames_.collectPacingPanes(panes);
+      ds::Array<features::window::FramePacer::Pane, PaneLayout::maximum_panes> panes;
+      const auto count = application.frames_.collectPacingPanes(panes.viewMut());
 
       application.frames_.frame_pacer_.getMut().record(std::span{panes}.first(count), now_ns);
     }

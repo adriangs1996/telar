@@ -33,9 +33,9 @@ export {
       static constexpr std::int64_t epoch_weekday = 4;
       static constexpr int last_calendar_year = 9999;
       static constexpr std::int64_t last_calendar_day = std::chrono::sys_days{std::chrono::year{last_calendar_year} / std::chrono::December / 31}.time_since_epoch().count();
-      static constexpr std::array<std::string_view, 12> month_names{"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-      static constexpr std::array<std::string_view, 7> weekday_names{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
-      static constexpr std::array<std::string_view, 7> short_weekday_names{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+      static constexpr ds::Array<std::string_view, 12> month_names{"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+      static constexpr ds::Array<std::string_view, 7> weekday_names{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+      static constexpr ds::Array<std::string_view, 7> short_weekday_names{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
       using Text = BoundedText<text_capacity>;
 
       struct Status {
@@ -143,7 +143,7 @@ export {
       // The facts view the entry's directory, region `a`.
       [[nodiscard]] static tbc::view<HistoryInspectionFacts, tbc::lt::a> derive(tbc::view<HistoryInspectionEntry, tbc::lt::a> entry, CalendarSample sampled);
 
-      [[nodiscard]] std::array<HistoryInspectionLine, count> lines() const noexcept;
+      [[nodiscard]] ds::Array<HistoryInspectionLine, count> lines() const noexcept;
 
       [[nodiscard]] static BoundedText<text_capacity> outputHeading(HistoryPhase phase, bool truncated, std::size_t bytes);
 
@@ -314,7 +314,7 @@ export {
       [[nodiscard]] static HistoryInspectionGeometry derive(Rect area, ChromeMetrics chrome, Point cell) noexcept;
       [[nodiscard]] Rect row(std::size_t index) const noexcept;
       [[nodiscard]] Rect text(Rect row, HistoryInspectionLine::Kind kind) const noexcept;
-      [[nodiscard]] std::array<Rect, maximum_actions> buttons(std::span<const float> advances, ChromeMetrics chrome) const noexcept;
+      [[nodiscard]] ds::Array<Rect, maximum_actions> buttons(std::span<const float> advances, ChromeMetrics chrome) const noexcept;
     };
 
   }

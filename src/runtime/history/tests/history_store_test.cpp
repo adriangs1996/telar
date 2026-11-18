@@ -33,10 +33,10 @@ namespace {
   class Directory {
   public:
     Directory() {
-      std::array<char, 64> path{};
+      ds::Array<char, 64> path{};
 
-      std::strcpy(path.data(), "/tmp/telar-history-store-XXXXXX");
-      check(::mkdtemp(path.data()) != nullptr);
+      std::strcpy(path.dataMut(), "/tmp/telar-history-store-XXXXXX");
+      check(::mkdtemp(path.dataMut()) != nullptr);
       path_ = path.data();
     }
 
@@ -190,7 +190,7 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
     ConcurrentMemory& memory = adapter;
     HistoryStore store{memory, ":memory:"};
     EncodedReply reply{memory};
-    std::array<Byte, 4096> storage;
+    ds::Array<Byte, 4096> storage;
     const auto owner = session(1, "/tmp");
 
     finished(store, owner, "succeeded", "/tmp", 0);
@@ -198,7 +198,7 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
     finished(store, owner, "unknown exit", "/tmp", ds::none);
     finished(store, owner, "also failed", "/tmp", 1);
     store.prune(PruneHistory{.request_id = 1, .failed_only = true}, reply);
-    check(decodeReply<HistoryPruned>(reply, storage).removed == 2);
+    check(decodeReply<HistoryPruned>(reply, storage.viewMut()).removed == 2);
     check(commands(store, reply, QueryHistory{.request_id = 2, .limit = 10}) == std::vector<std::string>{"succeeded", "unknown exit"});
   }
 
@@ -208,7 +208,7 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
     ConcurrentMemory& memory = adapter;
     HistoryStore store{memory, ":memory:"};
     EncodedReply reply{memory};
-    std::array<Byte, 4096> storage;
+    ds::Array<Byte, 4096> storage;
 
     // Commands run in a subdirectory still belong to their workspace.
     finished(store, session(1, "/project-a"), "in a", "/project-a/src");
@@ -218,9 +218,9 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
 
     check(commands(store, reply, QueryHistory{.request_id = 1, .scope = HistoryScope::workspace, .scope_value = project_a, .limit = 10}) == std::vector<std::string>{"also in a", "in a"});
     store.stats(HistoryStatsQuery{.request_id = 2, .scope = HistoryScope::workspace, .scope_value = project_a}, reply);
-    check(decodeReply<HistoryStatsResult>(reply, storage).total == 2);
+    check(decodeReply<HistoryStatsResult>(reply, storage.viewMut()).total == 2);
     store.prune(PruneHistory{.request_id = 3, .scope = HistoryScope::workspace, .scope_value = project_a}, reply);
-    check(decodeReply<HistoryPruned>(reply, storage).removed == 2);
+    check(decodeReply<HistoryPruned>(reply, storage.viewMut()).removed == 2);
     check(commands(store, reply, QueryHistory{.request_id = 4, .limit = 10}) == std::vector<std::string>{"in b"}, "pruning one workspace removed another's commands");
   }
 
@@ -310,7 +310,7 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
     EncodedReply reply{memory};
     RequestContext context{.location = {.workspace = {.id = 1}, .tab_id = 1}, .workspace_path = "/tmp"};
 
-    context.history_session[0] = 2;
+    context.history_session.atMut(0) = 2;
     finished(store, session(1, "/tmp"), "typed by a human", "/tmp");
     store.reportAgentCommand(ReportAgentCommand{.request_id = 1, .pane_id = 1, .pane_generation = 1, .phase = AgentCommandPhase::finished, .provider = "codex", .tool_call_id = "tool", .command = "run by an agent", .cwd = "/tmp", .exit_code = 0}, context, reply);
 
@@ -419,7 +419,7 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
     std::vector<Byte> storage(64 * 1024);
     RequestContext context{.location = {.workspace = {.id = 1}, .tab_id = 1}, .workspace_path = "/tmp"};
 
-    context.history_session[0] = 1;
+    context.history_session.atMut(0) = 1;
     ReportAgentCommand request{.request_id = 1, .pane_id = 1, .pane_generation = 1, .phase = AgentCommandPhase::started, .provider = "codex", .command = "make", .cwd = "/tmp"};
 
     // A start nothing could later finish leaves no row running forever.
@@ -455,7 +455,7 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
     check(requestFailure(read) == FailureCode::invalid_request);
 
     // An import whose last sequence would pass the largest database integer.
-    const std::array<ImportHistoryEntry, 2> entries{ImportHistoryEntry{1, "first imported"}, ImportHistoryEntry{2, "second imported"}};
+    const ds::Array<ImportHistoryEntry, 2> entries{ImportHistoryEntry{1, "first imported"}, ImportHistoryEntry{2, "second imported"}};
 
     for (const auto base : {static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()), beyond}) {
       const auto importing = [&] {

@@ -152,8 +152,8 @@ namespace {
   // A frame or a peer can be cut anywhere: every proper prefix of a message with text, bytes,
   // lists and an optional value is refused, and never read past.
   void testTruncatedPayloadIsRejectedAtEveryCut() {
-    const std::array<std::string_view, 3> arguments{"sh", "-c", "echo hi"};
-    const std::array<EnvironmentEntry, 2> environment{{{"A", "1"}, {"PATH", "/bin"}}};
+    const ds::Array<std::string_view, 3> arguments{"sh", "-c", "echo hi"};
+    const ds::Array<EnvironmentEntry, 2> environment{{{"A", "1"}, {"PATH", "/bin"}}};
     const OpenPane message{
         .request_id = 7,
         .target = {},
@@ -177,7 +177,7 @@ namespace {
   // Decoded lists live in storage the caller sized: a list that does not fit is refused rather
   // than written past it.
   void testDecodeStorageExhaustionIsRefused() {
-    const std::array<LimitListEntry, 3> entries{{
+    const ds::Array<LimitListEntry, 3> entries{{
         {.reach = {.name = "a.one", .noun = "things", .value = 1}, .hits = 1},
         {.reach = {.name = "a.two", .noun = "things", .value = 2}, .hits = 2},
         {.reach = {.name = "a.three", .noun = "things", .value = 3}, .hits = 3},
@@ -208,8 +208,8 @@ namespace {
 
   // An enum byte past its last value is refused: the CLI indexes its names by the status.
   void testEnumBytesBeyondRangeAreRejected() {
-    const std::array done{agent(AgentStatus::done)};
-    const std::array failed{agent(AgentStatus::failed)};
+    const ds::Array done{agent(AgentStatus::done)};
+    const ds::Array failed{agent(AgentStatus::failed)};
     const auto last = encoded(AgentSnapshot{.revision = 1, .entries = done});
     const auto status = differingByte(last, encoded(AgentSnapshot{.revision = 1, .entries = failed}));
     auto beyond = last;
@@ -255,10 +255,10 @@ namespace {
   // A snapshot of a 4x2 grid with two hyperlinks over three runs.
   struct FrameFixture {
     FrameFixture() {
-      std::array<Cell, 8> grid;
-      const std::array<Byte, 1> letter{'a'};
+      ds::Array<Cell, 8> grid;
+      const ds::Array<Byte, 1> letter{'a'};
 
-      for (auto& cell : grid) {
+      for (auto& cell : grid.viewMut()) {
         cell.text = letter;
       }
 
@@ -266,7 +266,7 @@ namespace {
       static_cast<void>(CellRunCodec::encode(grid, std::span<Byte>{cells}));
       half.resize(CellRunCodec::encodedSize(std::span{grid}.first(4)));
       static_cast<void>(CellRunCodec::encode(std::span{grid}.first(4), std::span<Byte>{half}));
-      spans[0] = {.start = 0, .count = 8, .cells = cells};
+      spans.atMut(0) = {.start = 0, .count = 8, .cells = cells};
     }
 
     TextMetadata metadata() const {
@@ -288,11 +288,11 @@ namespace {
 
     Bytes cells;
     Bytes half;
-    std::array<FrameSpan, 1> spans;
-    std::array<Byte, 2> row_flags{static_cast<Byte>(RowFlag::hyperlinks), static_cast<Byte>(RowFlag::hyperlinks)};
-    std::array<MetadataLink, 2> links{{{.offset = 0, .len = 5}, {.offset = 5, .len = 7}}};
-    std::array<MetadataRun, 3> runs{{{.start = 0, .len = 2, .link_index = 0}, {.start = 2, .len = 1, .link_index = 1}, {.start = 4, .len = 3, .link_index = 1}}};
-    std::array<Byte, 12> uris{'h', 't', 't', 'p', 's', 'e', 'x', 'a', 'm', 'p', 'l', 'e'};
+    ds::Array<FrameSpan, 1> spans;
+    ds::Array<Byte, 2> row_flags{static_cast<Byte>(RowFlag::hyperlinks), static_cast<Byte>(RowFlag::hyperlinks)};
+    ds::Array<MetadataLink, 2> links{{{.offset = 0, .len = 5}, {.offset = 5, .len = 7}}};
+    ds::Array<MetadataRun, 3> runs{{{.start = 0, .len = 2, .link_index = 0}, {.start = 2, .len = 1, .link_index = 1}, {.start = 4, .len = 3, .link_index = 1}}};
+    ds::Array<Byte, 12> uris{'h', 't', 't', 'p', 's', 'e', 'x', 'a', 'm', 'p', 'l', 'e'};
   };
 
   // The runtime encodes a frame's hyperlinks and the GUI decodes them: links, runs, URIs and row
@@ -328,9 +328,9 @@ namespace {
       auto links = fixture.links;
       auto runs = fixture.runs;
       auto row_flags = fixture.row_flags;
-      std::array<Byte, 13> longer_uris{};
+      ds::Array<Byte, 13> longer_uris{};
 
-      std::ranges::copy(fixture.uris, longer_uris.begin());
+      std::ranges::copy(fixture.uris, longer_uris.viewMut().begin());
       metadata.links = links;
       metadata.runs = runs;
       metadata.row_flags = row_flags;
@@ -343,17 +343,17 @@ namespace {
 
     check(!refused<PaneFrame>(unchecked(fixture.snapshot())));
     check(refusedWith([](TextMetadata&, auto& links, auto&, auto&, auto&) {
-      links[0] = {.offset = 1, .len = 4};
+      links.atMut(0) = {.offset = 1, .len = 4};
     }));
 
     check(refusedWith([](TextMetadata&, auto& links, auto&, auto&, auto&) {
-      links[1] = {.offset = 5, .len = 8};
+      links.atMut(1) = {.offset = 5, .len = 8};
     }));
 
     // Lengths that add up to the URI bytes, but the second link starts past the first's end, so
     // its bytes run off the end of the URIs.
     check(refusedWith([](TextMetadata&, auto& links, auto&, auto&, auto&) {
-      links[1] = {.offset = 6, .len = 7};
+      links.atMut(1) = {.offset = 6, .len = 7};
     }));
 
     check(refusedWith([](TextMetadata& metadata, auto&, auto&, auto&, auto& longer_uris) {
@@ -361,15 +361,15 @@ namespace {
     }));
 
     check(refusedWith([](TextMetadata&, auto&, auto& runs, auto&, auto&) {
-      runs[2].link_index = 2;
+      runs.atMut(2).link_index = 2;
     }));
 
     check(refusedWith([](TextMetadata&, auto&, auto& runs, auto&, auto&) {
-      runs[2] = {.start = 3, .len = 2, .link_index = 1};
+      runs.atMut(2) = {.start = 3, .len = 2, .link_index = 1};
     }));
 
     check(refusedWith([](TextMetadata&, auto&, auto&, auto& row_flags, auto&) {
-      row_flags[1] = 0x40;
+      row_flags.atMut(1) = 0x40;
     }));
   }
 
@@ -388,9 +388,9 @@ namespace {
       return frame;
     };
 
-    const std::array<FrameSpan, 1> first_row{{{.start = 0, .count = 4, .cells = fixture.half}}};
-    const std::array<FrameSpan, 2> overlapping{{{.start = 0, .count = 4, .cells = fixture.half}, {.start = 2, .count = 4, .cells = fixture.half}}};
-    const std::array<FrameSpan, 1> past_grid{{{.start = 6, .count = 4, .cells = fixture.half}}};
+    const ds::Array<FrameSpan, 1> first_row{{{.start = 0, .count = 4, .cells = fixture.half}}};
+    const ds::Array<FrameSpan, 2> overlapping{{{.start = 0, .count = 4, .cells = fixture.half}, {.start = 2, .count = 4, .cells = fixture.half}}};
+    const ds::Array<FrameSpan, 1> past_grid{{{.start = 6, .count = 4, .cells = fixture.half}}};
 
     check(!refused<PaneFrame>(unchecked(snapshot)));
     check(!refused<PaneFrame>(unchecked(delta(first_row))));
@@ -475,10 +475,10 @@ namespace {
   // decoded: complete, with each pane once, the focus in it and at most 127 nodes.
   void testClientLayoutRejectsMalformedTrees() {
     const ClientLayoutNode split = ClientLayoutSplit{.axis = ClientLayoutAxis::vertical, .ratio = 5000};
-    const std::array nodes{split, pane(1), pane(2)};
+    const ds::Array nodes{split, pane(1), pane(2)};
     const TabLocation location{.workspace = {.id = 1}, .tab_id = 1};
     const auto layout = [&](std::uint64_t focused) {
-      const std::array tabs{ClientTabLayout{.location = location, .focused_pane = focused, .workspace_active = true, .nodes = nodes}};
+      const ds::Array tabs{ClientTabLayout{.location = location, .focused_pane = focused, .workspace_active = true, .nodes = nodes}};
 
       return encoded(UpdateClientLayout{.sidebar_visible = true, .sidebar_width = 30, .active_tab = location, .tabs = tabs});
     };
@@ -557,7 +557,7 @@ namespace {
   // Launch text reaches execve as C strings, so an argument or cwd with an embedded NUL is
   // refused on decode rather than cut short there.
   void testLaunchTextRejectsEmbeddedNul() {
-    const std::array<std::string_view, 2> arguments{"sh", "nul-sentinel"};
+    const ds::Array<std::string_view, 2> arguments{"sh", "nul-sentinel"};
     const auto bytes = encoded(openPane(Launch{.cwd = "/nul-cwd-sentinel", .arguments = arguments}));
 
     check(!refused<OpenPane>(bytes));
@@ -585,8 +585,8 @@ namespace {
     check(refused<ReportAgentSession>(patched(session, text("zession_a"), text("-ession_a"))));
     check(refused<ReportAgentSession>(patched(session, text("zession_a"), text("zession/a"))));
 
-    const std::array<std::string_view, 2> arguments{"argv0-sentinel", "-c"};
-    const std::array<EnvironmentEntry, 1> environment{{{"ENVQNAME", "1"}}};
+    const ds::Array<std::string_view, 2> arguments{"argv0-sentinel", "-c"};
+    const ds::Array<EnvironmentEntry, 1> environment{{{"ENVQNAME", "1"}}};
     const auto pane = encoded(openPane(Launch{.cwd = "/", .arguments = arguments, .environment_mode = EnvironmentMode::replace, .environment = environment}));
     const Bytes empty_argument{0, 0};
 
@@ -594,7 +594,7 @@ namespace {
     check(refused<OpenPane>(patched(pane, text("ENVQNAME"), text("ENV=NAME"))));
     check(refused<OpenPane>(patched(pane, concatenated({{14, 0}, text("argv0-sentinel")}), empty_argument)));
 
-    const std::array<std::string_view, 1> command{"exec-sentinel"};
+    const ds::Array<std::string_view, 1> command{"exec-sentinel"};
     const auto execution = encoded(ExecutionRequest{.request_id = 1, .action = ExecutionAction::start, .execution_id = 1, .cwd = "/", .arguments = command});
 
     check(!refused<ExecutionRequest>(execution));

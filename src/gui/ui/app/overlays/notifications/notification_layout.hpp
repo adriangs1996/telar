@@ -123,7 +123,7 @@ namespace telar::gui::qt {
     QMetaObject::Connection font_connection_;
     ListModel cards_;
     application::notifications::NotificationStack stack_;
-    tbc::view<std::array<Content, application::notifications::NotificationCenter::capacity>, tbc::lt::self> contents_;
+    tbc::view<ds::Array<Content, application::notifications::NotificationCenter::capacity>, tbc::lt::self> contents_;
     std::shared_ptr<const FontCollection> collection_;
     std::shared_ptr<ResidentFonts> fonts_;
     ChromeMetrics chrome_;

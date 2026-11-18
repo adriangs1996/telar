@@ -24,7 +24,7 @@ namespace telar::gui::features::plugins {
     }
 
     for (std::size_t index = 0; index < count; ++index) {
-      result.effects_[index] = decodeEffect(input);
+      result.effects_.atMut(index) = decodeEffect(input);
     }
 
     if (!input.empty()) {
@@ -85,7 +85,7 @@ namespace telar::gui::features::plugins {
 
   PluginEffects::Effect PluginEffects::decodeEffect(std::span<const Byte>& input) {
     using Kind = BindingActionKind;
-    constexpr auto simple = std::to_array<std::pair<Tag, Kind>>({
+    constexpr auto simple = ds::Array<std::pair<Tag, Kind>, 11>{{
         {Tag::sidebar, Kind::toggle_sidebar},
         {Tag::close_pane, Kind::close_pane},
         {Tag::new_tab, Kind::new_tab},
@@ -97,7 +97,7 @@ namespace telar::gui::features::plugins {
         {Tag::new_workspace, Kind::new_workspace},
         {Tag::rename_workspace, Kind::rename_workspace},
         {Tag::leave_worktree, Kind::leave_worktree},
-    });
+    }};
 
     const auto tag = static_cast<Tag>(u8::decode(input));
     const auto* found = std::ranges::find(simple, tag, &decltype(simple)::value_type::first);
@@ -105,11 +105,11 @@ namespace telar::gui::features::plugins {
       return BindingAction{.kind = found->second};
     }
 
-    constexpr std::array split{Kind::split_horizontal, Kind::split_vertical};
-    constexpr std::array focus{Kind::focus_left, Kind::focus_right, Kind::focus_up, Kind::focus_down};
-    constexpr std::array resize{Kind::resize_left, Kind::resize_right, Kind::resize_up, Kind::resize_down};
-    constexpr std::array move{Kind::move_tab_previous, Kind::move_tab_next};
-    constexpr std::array sidebar{Kind::resize_sidebar_left, Kind::resize_sidebar_right};
+    constexpr ds::Array split{Kind::split_horizontal, Kind::split_vertical};
+    constexpr ds::Array focus{Kind::focus_left, Kind::focus_right, Kind::focus_up, Kind::focus_down};
+    constexpr ds::Array resize{Kind::resize_left, Kind::resize_right, Kind::resize_up, Kind::resize_down};
+    constexpr ds::Array move{Kind::move_tab_previous, Kind::move_tab_next};
+    constexpr ds::Array sidebar{Kind::resize_sidebar_left, Kind::resize_sidebar_right};
 
     switch (tag) {
     case Tag::split:

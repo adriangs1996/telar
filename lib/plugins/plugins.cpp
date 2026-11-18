@@ -28,10 +28,10 @@ namespace telar::runtime::plugins {
     }
 
     void hashLength(PackageHashing hashing, std::uint64_t length) {
-      std::array<char, sizeof(length)> encoded;
+      ds::Array<char, sizeof(length)> encoded;
 
       for (std::size_t index = 0; index < encoded.size(); ++index) {
-        encoded[index] = static_cast<char>(length & std::numeric_limits<std::uint8_t>::max());
+        encoded.atMut(index) = static_cast<char>(length & std::numeric_limits<std::uint8_t>::max());
         length >>= std::numeric_limits<std::uint8_t>::digits;
       }
 
@@ -230,7 +230,7 @@ namespace telar::runtime::plugins {
           }
         }
 
-        manifest.actions[manifest.action_count++].assign(name);
+        manifest.actions.atMut(manifest.action_count++).assign(name);
       }
 
       for (const auto& name : capabilities) {
@@ -506,12 +506,12 @@ namespace telar::runtime::plugins {
       throw std::invalid_argument{"Invalid plugin package path"};
     }
 
-    std::array<char, PATH_MAX> terminated;
+    ds::Array<char, PATH_MAX> terminated;
 
-    std::copy(path.begin(), path.end(), terminated.begin());
-    terminated[path.size()] = '\0';
-    std::array<char, PATH_MAX> canonical;
-    if (::realpath(terminated.data(), canonical.data()) == nullptr) {
+    std::copy(path.begin(), path.end(), terminated.dataMut());
+    terminated.atMut(path.size()) = '\0';
+    ds::Array<char, PATH_MAX> canonical;
+    if (::realpath(terminated.data(), canonical.dataMut()) == nullptr) {
       throw SystemError{"Resolve plugin package"};
     }
 
@@ -683,7 +683,7 @@ namespace telar::runtime::plugins {
       }
 
       JsonFields fields{memory, value, grant_fields};
-      auto& grant = store.grants_[store.count_];
+      auto& grant = store.grants_.atMut(store.count_);
 
       grant.plugin.assign(fields.string("plugin"));
       if (!validIdentifier(grant.plugin.view())) {
@@ -715,7 +715,7 @@ namespace telar::runtime::plugins {
   }
 
   void TrustStore::upsert(const Manifest& manifest, const PackageDigest& digest, Capabilities capabilities) {
-    for (auto& entry : std::span{grants_}.first(count_)) {
+    for (auto& entry : grants_.viewMut().first(count_)) {
       if (entry.plugin.view() == manifest.id.view()) {
         entry.digest = digest;
         entry.capabilities = capabilities;
@@ -727,7 +727,7 @@ namespace telar::runtime::plugins {
       throw std::invalid_argument{"Too many plugin trust grants"};
     }
 
-    auto& entry = grants_[count_++];
+    auto& entry = grants_.atMut(count_++);
 
     entry.plugin = manifest.id;
     entry.digest = digest;
@@ -745,7 +745,7 @@ namespace telar::runtime::plugins {
       }
 
       for (std::size_t next = index + 1; next < count_; ++next) {
-        grants_[next - 1] = grants_[next];
+        grants_.atMut(next - 1) = grants_[next];
       }
 
       --count_;
@@ -802,7 +802,7 @@ namespace telar::runtime::plugins {
     }
 
     for (std::size_t index = 0; index < digest.size(); ++index) {
-      digest[index] = static_cast<std::uint8_t>((hex(text[2 * index]) << 4) | hex(text[2 * index + 1]));
+      digest.atMut(index) = static_cast<std::uint8_t>((hex(text[2 * index]) << 4) | hex(text[2 * index + 1]));
     }
 
     return digest;

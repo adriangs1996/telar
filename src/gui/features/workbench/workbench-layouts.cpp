@@ -13,8 +13,8 @@ namespace telar::gui::features::workbench {
 
   template <Allocator Memory>
   tbc::view<std::string_view, tbc::lt::a> LayoutToken::write(const ClientLayoutSnapshot& snapshot, tbc::view<String<Memory>&, tbc::lt::a> output) {
-    std::array<Byte, binary_capacity> binary{};
-    const auto encoded = Codec::encode(snapshot, binary);
+    ds::Array<Byte, binary_capacity> binary{};
+    const auto encoded = Codec::encode(snapshot, binary.viewMut());
 
     output.clear();
     output.reserve(encoded.size() * digits_per_byte);
@@ -24,11 +24,11 @@ namespace telar::gui::features::workbench {
   }
 
   TabLayoutPreset LayoutToken::read(std::string_view text) {
-    std::array<Byte, binary_capacity> binary{};
-    const auto bytes = decodeHexadecimal(text, binary);
+    ds::Array<Byte, binary_capacity> binary{};
+    const auto bytes = decodeHexadecimal(text, binary.viewMut());
     constexpr auto storage_capacity = (PaneLayout::maximum_nodes * sizeof(ClientLayoutNode)) + sizeof(ClientTabLayout) + alignof(ClientLayoutNode) + alignof(ClientTabLayout);
-    std::array<Byte, storage_capacity> elements{};
-    DecodeStorage storage{elements};
+    ds::Array<Byte, storage_capacity> elements{};
+    DecodeStorage storage{elements.viewMut()};
     const auto snapshot = Codec::decode<ClientLayoutSnapshot>(bytes, storage);
     if (!snapshot.restored || !snapshot.active_tab || snapshot.tabs.size() != 1) {
       throw EncodingError{"Layout token must describe one restored tab"};
@@ -79,7 +79,7 @@ namespace telar::gui::features::workbench {
   NavigationHistory::Layout::Layout(const PaneLayout& layout, std::uint64_t focus) noexcept
       : count(layout.nodes().size()),
         focused_pane(focus) {
-    std::ranges::copy(layout.nodes(), nodes.begin());
+    std::ranges::copy(layout.nodes(), nodes.viewMut().begin());
   }
 
   NavigationHistory::Layout::Layout(std::span<const ClientLayoutNode> input, std::uint64_t focus)
@@ -89,7 +89,7 @@ namespace telar::gui::features::workbench {
       throw std::length_error{"Navigation layout exceeds capacity"};
     }
 
-    std::ranges::copy(input, nodes.begin());
+    std::ranges::copy(input, nodes.viewMut().begin());
   }
 
   std::span<const ClientLayoutNode> NavigationHistory::Layout::view() const noexcept {
@@ -97,7 +97,7 @@ namespace telar::gui::features::workbench {
   }
 
   void NavigationHistory::clear() noexcept {
-    for (auto& entry : entries_) {
+    for (auto& entry : entries_.viewMut()) {
       entry.reset();
     }
   }
@@ -105,7 +105,7 @@ namespace telar::gui::features::workbench {
   void NavigationHistory::remember(const Bookmark& bookmark) noexcept {
     ds::Option<Bookmark>* free = nullptr;
 
-    for (auto& entry : entries_) {
+    for (auto& entry : entries_.viewMut()) {
       if (entry) {
         if (sameWorkspace(entry->location.workspace, bookmark.location.workspace)) {
           entry = bookmark;
@@ -133,7 +133,7 @@ namespace telar::gui::features::workbench {
   }
 
   void NavigationHistory::forget(WorkspaceLocation workspace) noexcept {
-    for (auto& entry : entries_) {
+    for (auto& entry : entries_.viewMut()) {
       if (entry && sameWorkspace(entry->location.workspace, workspace)) {
         entry.reset();
 
@@ -179,15 +179,15 @@ namespace telar::gui::features::workbench {
       return false;
     }
 
-    std::array<ClientLayoutNode, PaneLayout::maximum_nodes> captured{};
+    ds::Array<ClientLayoutNode, PaneLayout::maximum_nodes> captured{};
 
-    std::ranges::copy(saved.nodes, captured.begin());
+    std::ranges::copy(saved.nodes, captured.viewMut().begin());
     if (existing) {
       remove(*existing);
     }
 
-    rows_[count_] = {.location = saved.location, .pane_id = saved.pane_id, .focused_pane = saved.focused_pane, .workspace_active = saved.workspace_active, .fullscreen = saved.fullscreen, .start = node_total_, .count = saved.nodes.size()};
-    std::copy_n(captured.begin(), saved.nodes.size(), nodes_.begin() + node_total_);
+    rows_.atMut(count_) = {.location = saved.location, .pane_id = saved.pane_id, .focused_pane = saved.focused_pane, .workspace_active = saved.workspace_active, .fullscreen = saved.fullscreen, .start = node_total_, .count = saved.nodes.size()};
+    std::copy_n(captured.begin(), saved.nodes.size(), nodes_.dataMut() + node_total_);
     node_total_ += saved.nodes.size();
     ++count_;
 
@@ -199,9 +199,9 @@ namespace telar::gui::features::workbench {
       return;
     }
 
-    std::array<ClientLayoutNode, PaneLayout::maximum_nodes> captured{};
+    ds::Array<ClientLayoutNode, PaneLayout::maximum_nodes> captured{};
 
-    std::ranges::copy(saved.nodes, captured.begin());
+    std::ranges::copy(saved.nodes, captured.viewMut().begin());
     saved.nodes = std::span{captured}.first(saved.nodes.size());
     while (!remember(saved)) {
       if (count_ == 0) {
@@ -232,11 +232,11 @@ namespace telar::gui::features::workbench {
     const auto start = rows_[index].start;
     const auto count = rows_[index].count;
 
-    std::move(nodes_.begin() + start + count, nodes_.begin() + node_total_, nodes_.begin() + start);
+    std::move(nodes_.dataMut() + start + count, nodes_.dataMut() + node_total_, nodes_.dataMut() + start);
     node_total_ -= count;
-    std::move(rows_.begin() + index + 1, rows_.begin() + count_, rows_.begin() + index);
+    std::move(rows_.dataMut() + index + 1, rows_.dataMut() + count_, rows_.dataMut() + index);
     --count_;
-    for (auto& moved : std::span{rows_}.subspan(index, count_ - index)) {
+    for (auto& moved : rows_.viewMut().subspan(index, count_ - index)) {
       moved.start -= count;
     }
   }

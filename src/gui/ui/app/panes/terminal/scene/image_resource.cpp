@@ -50,6 +50,7 @@ static_assert(true);
 #endif
 
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -61,7 +62,7 @@ namespace telar::gui::qt {
 
     // Alpha stays unchanged; the other lanes use Qt's exact integer rounding.
     uint8x16_t premultiplied(uint8x16_t pixels) noexcept {
-      constexpr std::array<std::uint8_t, vector_bytes> alpha_indices{3, 3, 3, 16, 7, 7, 7, 16, 11, 11, 11, 16, 15, 15, 15, 16};
+      constexpr ds::Array<std::uint8_t, vector_bytes> alpha_indices{3, 3, 3, 16, 7, 7, 7, 16, 11, 11, 11, 16, 15, 15, 15, 16};
       constexpr int channel_bits = 8;
       const auto alphas = vorrq_u8(vqtbl1q_u8(pixels, vld1q_u8(alpha_indices.data())), vreinterpretq_u8_u32(vdupq_n_u32(alpha_mask)));
       auto low = vmull_u8(vget_low_u8(pixels), vget_low_u8(alphas));
@@ -80,16 +81,16 @@ namespace telar::gui::qt {
       int column = 0;
 
       for (; column + static_cast<int>(block_pixels) <= width; column += block_pixels) {
-        std::array<uint8x16_t, block_pixels / vector_pixels> vectors{};
+        ds::Array<uint8x16_t, block_pixels / vector_pixels> vectors{};
         auto all = vdupq_n_u8(channel_maximum);
 
         for (std::size_t index = 0; index < vectors.size(); ++index) {
-          vectors[index] = vld1q_u8(input + (column * sizeof(QRgb)) + (index * vector_bytes));
+          vectors.atMut(index) = vld1q_u8(input + (column * sizeof(QRgb)) + (index * vector_bytes));
           all = vandq_u8(all, vectors[index]);
         }
 
         if (vminvq_u32(vreinterpretq_u32_u8(all)) < alpha_mask) {
-          for (auto& pixels : vectors) {
+          for (auto& pixels : vectors.viewMut()) {
             pixels = premultiplied(pixels);
           }
         }

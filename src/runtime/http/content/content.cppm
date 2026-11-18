@@ -10,6 +10,7 @@ import telar.tbc;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.base.memory.sensitive;
+import telar.base.ds;
 
 // Interface: http/content_codings.cppm
 export {
@@ -36,7 +37,7 @@ export {
       };
       static constexpr std::size_t maximum = 2;
 
-      std::array<ContentCoding, maximum> codings{};
+      ds::Array<ContentCoding, maximum> codings{};
       std::size_t count = 0;
       Failure failure = Failure::none;
 

@@ -9,6 +9,7 @@ import telar.platform.error;
 import telar.platform.fs;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -24,11 +25,11 @@ namespace telar::runtime {
     throw RequestError{FailureCode::internal, sqlite3_errstr(result)};
   }
 
-  static std::array<char, PATH_MAX> prepareDatabaseFile(const char* path) {
-    std::array<char, PATH_MAX> canonical{};
+  static ds::Array<char, PATH_MAX> prepareDatabaseFile(const char* path) {
+    ds::Array<char, PATH_MAX> canonical{};
 
     if (std::string_view{path} == ":memory:") {
-      std::memcpy(canonical.data(), path, sizeof(":memory:"));
+      std::memcpy(canonical.dataMut(), path, sizeof(":memory:"));
       return canonical;
     }
 
@@ -56,14 +57,14 @@ namespace telar::runtime {
       throw SystemError{"history database path is too long", ENAMETOOLONG};
     }
 
-    canonical[parent_length] = '/';
-    std::memcpy(canonical.data() + parent_length + 1, filename.data(), filename.size());
+    canonical.atMut(parent_length) = '/';
+    std::memcpy(canonical.dataMut() + parent_length + 1, filename.data(), filename.size());
     return canonical;
   }
 
   Database::Database(const char* path, DatabaseAccess access) {
     const bool read_only = access == DatabaseAccess::read_only;
-    const auto canonical = read_only ? std::array<char, PATH_MAX>{} : prepareDatabaseFile(path);
+    const auto canonical = read_only ? ds::Array<char, PATH_MAX>{} : prepareDatabaseFile(path);
     const int flags = read_only ? SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX : SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX | SQLITE_OPEN_NOFOLLOW;
     const int result = sqlite3_open_v2(read_only ? path : canonical.data(), &database_, flags, nullptr);
     if (result != SQLITE_OK) {

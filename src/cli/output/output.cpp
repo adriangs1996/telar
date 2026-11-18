@@ -6,7 +6,7 @@ import telar.base.ds;
 namespace telar::runtime::cli {
 
   // Each family as it is typed, in the order of `Family`.
-  constexpr std::array<std::string_view, static_cast<std::size_t>(Family::count)> family_names{
+  constexpr ds::Array<std::string_view, static_cast<std::size_t>(Family::count)> family_names{
       "workspace",
       "tab",
       "pane",
@@ -92,8 +92,8 @@ namespace telar::runtime::cli {
 
   template <typename Integer>
   Output& Output::number(Integer value) {
-    std::array<char, 32> buffer;
-    const auto end = std::to_chars(buffer.data(), buffer.data() + buffer.size(), value).ptr;
+    ds::Array<char, 32> buffer;
+    const char* const end = std::to_chars(buffer.dataMut(), buffer.dataMut() + buffer.size(), value).ptr;
 
     data.append(buffer.data(), end);
     return *this;

@@ -196,12 +196,12 @@ export {
 
       CertificatePair mint(std::string_view hostname) const;
       X509* certificate() const noexcept;
-      std::array<char, 40> fingerprint() const;
-      std::array<char, 64> fingerprintSha256() const;
+      ds::Array<char, 40> fingerprint() const;
+      ds::Array<char, 64> fingerprintSha256() const;
 
     private:
       template <std::size_t digest_bytes>
-      std::array<char, digest_bytes * 2> fingerprint(const EVP_MD* algorithm) const;
+      ds::Array<char, digest_bytes * 2> fingerprint(const EVP_MD* algorithm) const;
 
     public:
       bool expiresWithin(std::chrono::seconds duration) const;
@@ -282,7 +282,7 @@ export {
       static constexpr std::size_t maximum_bytes = 4096;
 
       Backend backend = Backend::macos;
-      std::array<char, 40> fingerprint;
+      ds::Array<char, 40> fingerprint;
       FixedText<PATH_MAX> store;
 
       static Record parse(ConcurrentMemory& memory, std::string_view source);
@@ -410,7 +410,7 @@ export {
       void commit() noexcept;
 
     private:
-      using Filename = std::array<char, NAME_MAX + 1>;
+      using Filename = ds::Array<char, NAME_MAX + 1>;
 
       // The file operations change the directory, not the authority, so they lend nothing of it.
       void rename(const char* source, const char* destination) const;

@@ -33,7 +33,7 @@ namespace telar::gui::inline foundation::inline model {
 
     std::size_t pending = 1;
     std::size_t panes = 0;
-    std::array<std::uint64_t, maximum_panes> identities{};
+    ds::Array<std::uint64_t, maximum_panes> identities{};
 
     for (const auto& node : nodes) {
       if (pending == 0) {
@@ -46,7 +46,7 @@ namespace telar::gui::inline foundation::inline model {
           throw EncodingError{"Invalid pane layout identity"};
         }
 
-        identities[panes++] = pane->pane_id;
+        identities.atMut(panes++) = pane->pane_id;
       } else {
         const auto& split = std::get<ClientLayoutSplit>(node);
         if (split.ratio < ratio_minimum || split.ratio > ratio_maximum_split || (split.axis != ClientLayoutAxis::horizontal && split.axis != ClientLayoutAxis::vertical)) {
@@ -61,7 +61,7 @@ namespace telar::gui::inline foundation::inline model {
       throw EncodingError{"Incomplete pane layout"};
     }
 
-    std::ranges::copy(nodes, nodes_.begin());
+    std::ranges::copy(nodes, nodes_.viewMut().begin());
     count_ = nodes.size();
   }
 
@@ -71,7 +71,7 @@ namespace telar::gui::inline foundation::inline model {
     }
 
     if (count_ == 0) {
-      nodes_[count_++] = ClientLayoutPane{pane_id};
+      nodes_.atMut(count_++) = ClientLayoutPane{pane_id};
 
       return true;
     }
@@ -81,10 +81,10 @@ namespace telar::gui::inline foundation::inline model {
       return false;
     }
 
-    std::move_backward(nodes_.begin() + *target + 1, nodes_.begin() + count_, nodes_.begin() + count_ + 2);
-    nodes_[*target] = ClientLayoutSplit{.axis = axis, .ratio = ratio_half};
-    nodes_[*target + 1] = ClientLayoutPane{beside};
-    nodes_[*target + 2] = ClientLayoutPane{pane_id};
+    std::move_backward(nodes_.dataMut() + *target + 1, nodes_.dataMut() + count_, nodes_.dataMut() + count_ + 2);
+    nodes_.atMut(*target) = ClientLayoutSplit{.axis = axis, .ratio = ratio_half};
+    nodes_.atMut(*target + 1) = ClientLayoutPane{beside};
+    nodes_.atMut(*target + 2) = ClientLayoutPane{pane_id};
     count_ += 2;
 
     return true;
@@ -117,8 +117,8 @@ namespace telar::gui::inline foundation::inline model {
       const auto survivor_end = subtreeEnd(survivor);
       const auto parent_end = subtreeEnd(parent);
 
-      std::move(nodes_.begin() + survivor, nodes_.begin() + survivor_end, nodes_.begin() + parent);
-      std::move(nodes_.begin() + parent_end, nodes_.begin() + count_, nodes_.begin() + parent_end - 2);
+      std::move(nodes_.dataMut() + survivor, nodes_.dataMut() + survivor_end, nodes_.dataMut() + parent);
+      std::move(nodes_.dataMut() + parent_end, nodes_.dataMut() + count_, nodes_.dataMut() + parent_end - 2);
       count_ -= 2;
 
       return true;
@@ -140,7 +140,7 @@ namespace telar::gui::inline foundation::inline model {
     divider_count_ = 0;
     reserved_ = {};
     if (fullscreen && contains(*fullscreen)) {
-      placements_[placement_count_++] = {.pane_id = *fullscreen, .bounds = bounds, .display_index = displayIndex(*fullscreen), .content = metrics.content(bounds), .framed = hasBorders(metrics)};
+      placements_.atMut(placement_count_++) = {.pane_id = *fullscreen, .bounds = bounds, .display_index = displayIndex(*fullscreen), .content = metrics.content(bounds), .framed = hasBorders(metrics)};
     } else if (count_ != 0) {
       arrangeNodes(bounds, metrics);
     }
@@ -189,7 +189,7 @@ namespace telar::gui::inline foundation::inline model {
       return false;
     }
 
-    auto* split = std::get_if<ClientLayoutSplit>(&nodes_[position.node_index]);
+    auto* split = std::get_if<ClientLayoutSplit>(&nodes_.atMut(position.node_index));
     if (split == nullptr) {
       return false;
     }
@@ -301,7 +301,7 @@ namespace telar::gui::inline foundation::inline model {
       return;
     }
 
-    for (auto& placement : std::span{placements_}.first(placement_count_)) {
+    for (auto& placement : placements_.viewMut().first(placement_count_)) {
       if (placement.pane_id != reservation_->pane_id) {
         continue;
       }
@@ -405,7 +405,7 @@ namespace telar::gui::inline foundation::inline model {
   }
 
   std::uint16_t PaneLayout::minimumExtent(std::size_t root, ClientLayoutAxis axis, Metrics metrics) const noexcept {
-    std::array<std::uint16_t, maximum_panes> pending{};
+    ds::Array<std::uint16_t, maximum_panes> pending{};
     std::size_t count = 0;
 
     for (auto index = subtreeEnd(root); index-- > root;) {
@@ -413,9 +413,9 @@ namespace telar::gui::inline foundation::inline model {
         const auto first = pending[--count];
         const auto second = pending[--count];
 
-        pending[count++] = split->axis == axis ? static_cast<std::uint16_t>(first + metrics.gap + second) : std::max(first, second);
+        pending.atMut(count++) = split->axis == axis ? static_cast<std::uint16_t>(first + metrics.gap + second) : std::max(first, second);
       } else {
-        pending[count++] = metrics.minimumPaneExtent(axis);
+        pending.atMut(count++) = metrics.minimumPaneExtent(axis);
       }
     }
 
@@ -476,16 +476,16 @@ namespace telar::gui::inline foundation::inline model {
   }
 
   void PaneLayout::arrangeNodes(CellRectangle bounds, Metrics metrics) noexcept {
-    std::array<CellRectangle, maximum_panes> pending;
+    ds::Array<CellRectangle, maximum_panes> pending;
     std::size_t pending_count = 1;
 
-    pending[0] = bounds;
+    pending.atMut(0) = bounds;
 
     for (std::size_t index = 0; index < count_; ++index) {
       const auto current = pending[--pending_count];
       const auto& node = nodes_[index];
       if (const auto* pane = std::get_if<ClientLayoutPane>(&node)) {
-        placements_[placement_count_] = {.pane_id = pane->pane_id, .bounds = current, .display_index = static_cast<std::uint16_t>(placement_count_ + 1), .content = hasBorders(metrics) ? metrics.content(current) : current, .framed = hasBorders(metrics)};
+        placements_.atMut(placement_count_) = {.pane_id = pane->pane_id, .bounds = current, .display_index = static_cast<std::uint16_t>(placement_count_ + 1), .content = hasBorders(metrics) ? metrics.content(current) : current, .framed = hasBorders(metrics)};
         ++placement_count_;
 
         continue;
@@ -494,9 +494,9 @@ namespace telar::gui::inline foundation::inline model {
       if (const auto* split = std::get_if<ClientLayoutSplit>(&node)) {
         const auto geometry = partition(current, *split, metrics.gap);
 
-        dividers_[divider_count_++] = {.node_index = index, .axis = split->axis, .bounds = geometry.divider, .parent_bounds = current};
-        pending[pending_count++] = geometry.second;
-        pending[pending_count++] = geometry.first;
+        dividers_.atMut(divider_count_++) = {.node_index = index, .axis = split->axis, .bounds = geometry.divider, .parent_bounds = current};
+        pending.atMut(pending_count++) = geometry.second;
+        pending.atMut(pending_count++) = geometry.first;
       }
     }
   }

@@ -44,8 +44,8 @@ namespace telar::runtime::redirect {
     return false;
   }
 
-  std::array<bool, Target::maximum_targets> LocalAddresses::selection(std::span<const Target> targets, Direction direction) {
-    std::array<bool, Target::maximum_targets> selected{};
+  ds::Array<bool, Target::maximum_targets> LocalAddresses::selection(std::span<const Target> targets, Direction direction) {
+    ds::Array<bool, Target::maximum_targets> selected{};
     if (targets.size() > selected.size() || (!allowsIncoming(direction) && !allowsOutgoing(direction))) {
       throw std::invalid_argument{"Invalid redirect address scope"};
     }
@@ -58,7 +58,7 @@ namespace telar::runtime::redirect {
     bool incoming = false;
 
     for (std::size_t index = 0; index < targets.size(); ++index) {
-      selected[index] = local.contains(targets[index]);
+      selected.atMut(index) = local.contains(targets[index]);
       if (direction == Direction::inbound && !selected[index]) {
         throw std::invalid_argument{"Incoming redirect targets must be assigned to an active non-loopback interface"};
       }
@@ -84,11 +84,11 @@ namespace telar::runtime::redirect {
       throw std::invalid_argument{"Too many PF command arguments"};
     }
 
-    std::array<std::string_view, maximum_arguments> argv{};
+    ds::Array<std::string_view, maximum_arguments> argv{};
 
-    argv[0] = "/sbin/pfctl";
-    std::ranges::copy(arguments, argv.begin() + 1);
-    const std::array<EnvironmentEntry, 2> environment{{{"LC_ALL", "C"}, {"PATH", "/usr/bin:/bin:/usr/sbin:/sbin"}}};
+    argv.atMut(0) = "/sbin/pfctl";
+    std::ranges::copy(arguments, argv.viewMut().begin() + 1);
+    const ds::Array<EnvironmentEntry, 2> environment{{{"LC_ALL", "C"}, {"PATH", "/usr/bin:/bin:/usr/sbin:/sbin"}}};
     Command command{memory_, Launch{.cwd = "/", .arguments = std::span{argv}.first(arguments.size() + 1), .environment_mode = EnvironmentMode::replace, .environment = environment}, CommandPurpose::administration};
     // pfctl reports some results, the token `-E` hands out among them, on its standard error,
     // so both streams make one output in the order they arrive.
@@ -103,7 +103,7 @@ namespace telar::runtime::redirect {
       return true;
     };
 
-    const std::array pieces{input};
+    const ds::Array pieces{input};
     CommandOutput<Memory> process{memory_, 0};
     int status = 0;
 
@@ -154,8 +154,8 @@ namespace telar::runtime::redirect {
       throw std::invalid_argument{"Process identity is not pinned"};
     }
 
-    std::array<char, maximum_bytes> text;
-    const auto count = std::snprintf(text.data(), text.size(), "%d@%llu.%06llu", process.pid, static_cast<unsigned long long>(process.started_seconds), static_cast<unsigned long long>(process.started_microseconds));
+    ds::Array<char, maximum_bytes> text;
+    const auto count = std::snprintf(text.dataMut(), text.size(), "%d@%llu.%06llu", process.pid, static_cast<unsigned long long>(process.started_seconds), static_cast<unsigned long long>(process.started_microseconds));
     if (count <= 0 || static_cast<std::size_t>(count) >= text.size()) {
       throw std::invalid_argument{"Process identity is too long"};
     }
@@ -334,8 +334,8 @@ namespace telar::runtime::redirect {
 
   ds::Option<LinuxTcpSocket> LinuxTcpSocket::parse(std::string_view line, int family) noexcept {
     constexpr std::size_t required_fields = 10;
-    std::array<std::string_view, required_fields> fields;
-    for (auto& field : fields) {
+    ds::Array<std::string_view, required_fields> fields;
+    for (auto& field : fields.viewMut()) {
       const auto first = line.find_first_not_of(" \t");
       if (first == std::string_view::npos) {
         return ds::none;
@@ -373,9 +373,9 @@ namespace telar::runtime::redirect {
     if (!number(input.substr(address_digits + 1), port, 16)) {
       return false;
     }
-    std::array<std::uint32_t, 4> words{};
+    ds::Array<std::uint32_t, 4> words{};
     for (std::size_t index = 0; index < address_digits / word_digits; ++index) {
-      if (!number(input.substr(index * word_digits, word_digits), words[index], 16)) {
+      if (!number(input.substr(index * word_digits, word_digits), words.atMut(index), 16)) {
         return false;
       }
     }
@@ -427,7 +427,7 @@ namespace telar::runtime::redirect {
         throw std::invalid_argument{"Duplicate selected process"};
       }
 
-      processes_[count_++] = *current;
+      processes_.atMut(count_++) = *current;
     }
   }
 
@@ -477,7 +477,7 @@ namespace telar::runtime::redirect {
         continue;
       }
 
-      const auto bytes = ::proc_pidinfo(selected.pid, PROC_PIDLISTFDS, 0, descriptors_.data(), sizeof(descriptors_));
+      const auto bytes = ::proc_pidinfo(selected.pid, PROC_PIDLISTFDS, 0, descriptors_.dataMut(), sizeof(descriptors_));
       if (bytes <= 0 || bytes >= static_cast<int>(sizeof(descriptors_)) || bytes % sizeof(proc_fdinfo) != 0) {
         result.complete = false;
         continue;
@@ -545,8 +545,8 @@ namespace telar::runtime::redirect {
           continue;
         }
 
-        std::array<char, PATH_MAX> path;
-        std::snprintf(path.data(), path.size(), "/proc/%d/fd", selected.pid);
+        ds::Array<char, PATH_MAX> path;
+        std::snprintf(path.dataMut(), path.size(), "/proc/%d/fd", selected.pid);
         DirectoryStream directory{FileDescriptor{::open(path.data(), O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW)}};
         std::size_t count = 0;
         while (const auto* entry = directory.next()) {
@@ -554,8 +554,8 @@ namespace telar::runtime::redirect {
             result.complete = false;
             break;
           }
-          std::array<char, 64> target;
-          const auto length = ::readlinkat(directory.descriptor(), entry->d_name, target.data(), target.size());
+          ds::Array<char, 64> target;
+          const auto length = ::readlinkat(directory.descriptor(), entry->d_name, target.dataMut(), target.size());
           if (length < 0 && sys::lastError() == ENOENT) {
             continue;
           }
@@ -684,31 +684,31 @@ namespace telar::runtime::redirect {
 
     const auto incoming = LocalAddresses::selection(targets, direction);
 
-    std::ranges::copy(processes, selected_processes_.begin());
+    std::ranges::copy(processes, selected_processes_.viewMut().begin());
     process_count_ = processes.size();
     endpoint_ += socket_suffix;
     for (const auto& target : targets) {
-      listeners_[count_].emplace(target, incoming[count_]);
-      mappings_[count_] = listeners_[count_]->mapping();
+      listeners_.atMut(count_).emplace(target, incoming[count_]);
+      mappings_.atMut(count_) = listeners_[count_]->mapping();
       ++count_;
     }
   }
 
   String<Memory> Helper::plan(uid_t uid, const PfIdentity<Memory>& identity, bool dry_run) {
-    std::array<FlowKey, maximum_flows> keys;
-    std::array<FlowKey, maximum_flows> incoming;
-    std::array<Bypass, maximum_flows> bypasses;
+    ds::Array<FlowKey, maximum_flows> keys;
+    ds::Array<FlowKey, maximum_flows> incoming;
+    ds::Array<Bypass, maximum_flows> bypasses;
     std::size_t size = 0;
     std::size_t bypass_size = 0;
     std::size_t incoming_size = 0;
 
     for (const auto& flow : flows_) {
       if (flow && flow->bypass) {
-        bypasses[bypass_size++] = {.key = flow->key, .route = *flow->bypass};
+        bypasses.atMut(bypass_size++) = {.key = flow->key, .route = *flow->bypass};
       } else if (flow && flow->incoming) {
-        incoming[incoming_size++] = flow->key;
+        incoming.atMut(incoming_size++) = flow->key;
       } else if (flow) {
-        keys[size++] = flow->key;
+        keys.atMut(size++) = flow->key;
       }
     }
 
@@ -744,12 +744,12 @@ namespace telar::runtime::redirect {
       accounts_.getMut().validate();
     }
 
-    std::array<Byte, Protocol::frame_bytes> hello;
+    ds::Array<Byte, Protocol::frame_bytes> hello;
 
-    traffic::sendAll(monitor.get(), Protocol::encode(hello, Kind::monitor, {}));
-    std::array<Byte, sizeof(std::uint32_t)> reply;
+    traffic::sendAll(monitor.get(), Protocol::encode(hello.viewMut(), Kind::monitor, {}));
+    ds::Array<Byte, sizeof(std::uint32_t)> reply;
 
-    readAll(monitor.get(), reply);
+    readAll(monitor.get(), reply.viewMut());
     plugins::FrameReader reader{reply};
     if (reader.integer<std::uint32_t>() != uid) {
       throw EncodingError{"Redirect runtime account does not match its socket credentials"};
@@ -777,25 +777,25 @@ namespace telar::runtime::redirect {
 
     traffic::sendAll(monitor.get(), {&active, 1});
     while (!signals.stopping()) {
-      std::array<pollfd, pending_offset + maximum_pending + maximum_flows> descriptors{};
+      ds::Array<pollfd, pending_offset + maximum_pending + maximum_flows> descriptors{};
 
-      descriptors[0] = {.fd = monitor.get(), .events = POLLIN, .revents = 0};
-      descriptors[1] = {.fd = discovery_->descriptor(), .events = POLLIN, .revents = 0};
-      descriptors[2] = {.fd = packet_log_ ? packet_log_->descriptor() : -1, .events = POLLIN, .revents = 0};
+      descriptors.atMut(0) = {.fd = monitor.get(), .events = POLLIN, .revents = 0};
+      descriptors.atMut(1) = {.fd = discovery_->descriptor(), .events = POLLIN, .revents = 0};
+      descriptors.atMut(2) = {.fd = packet_log_ ? packet_log_->descriptor() : -1, .events = POLLIN, .revents = 0};
       for (std::size_t index = 0; index < Target::maximum_targets; ++index) {
-        descriptors[index + 3] = {.fd = listeners_[index] ? listeners_[index]->descriptor() : -1, .events = POLLIN, .revents = 0};
+        descriptors.atMut(index + 3) = {.fd = listeners_[index] ? listeners_[index]->descriptor() : -1, .events = POLLIN, .revents = 0};
       }
 
       for (std::size_t index = 0; index < pending_.size(); ++index) {
-        descriptors[pending_offset + index] = {.fd = pending_[index] ? pending_[index]->connection.origin.get() : -1, .events = POLLOUT, .revents = 0};
+        descriptors.atMut(pending_offset + index) = {.fd = pending_[index] ? pending_[index]->connection.origin.get() : -1, .events = POLLOUT, .revents = 0};
       }
 
       for (std::size_t index = 0; index < flows_.size(); ++index) {
-        descriptors[pending_offset + maximum_pending + index] = {.fd = flows_[index] ? flows_[index]->lifetime.get() : -1, .events = POLLIN, .revents = 0};
+        descriptors.atMut(pending_offset + maximum_pending + index) = {.fd = flows_[index] ? flows_[index]->lifetime.get() : -1, .events = POLLIN, .revents = 0};
       }
 
       constexpr int poll_ms = 100;
-      if (::poll(descriptors.data(), descriptors.size(), poll_ms) < 0 && sys::lastError() != EINTR) {
+      if (::poll(descriptors.dataMut(), descriptors.size(), poll_ms) < 0 && sys::lastError() != EINTR) {
         throw SystemError{"Poll transparent TCP helper"};
       }
 
@@ -817,7 +817,7 @@ namespace telar::runtime::redirect {
 
       for (std::size_t index = 0; index < flows_.size(); ++index) {
         if (flows_[index] && ((descriptors[pending_offset + maximum_pending + index].revents & (POLLIN | POLLHUP | POLLERR | POLLNVAL)) || std::chrono::steady_clock::now() >= flows_[index]->deadline)) {
-          flows_[index].reset();
+          flows_.atMut(index).reset();
           changed = true;
         }
       }
@@ -833,7 +833,7 @@ namespace telar::runtime::redirect {
       }
 
       for (std::size_t index = 0; index < pending_.size(); ++index) {
-        auto& pending = pending_[index];
+        auto& pending = pending_.atMut(index);
         if (!pending) {
           continue;
         }
@@ -870,7 +870,7 @@ namespace telar::runtime::redirect {
 
       if (packet_log_) {
         // A logged packet and its metadata are copied out of the log before discovery updates the flows.
-        std::array<Byte, 65540> copied;
+        ds::Array<Byte, 65540> copied;
 
         for (std::size_t count = 0; count < maximum_accept_batch; ++count) {
           const auto logged = packet_log_.getMut().receive();
@@ -882,10 +882,10 @@ namespace telar::runtime::redirect {
             continue;
           }
 
-          std::ranges::copy(logged, copied.begin());
+          std::ranges::copy(logged, copied.viewMut().begin());
           const auto metadata = packet_log_->metadata();
 
-          discovered(session, uid, identity, std::span{copied}.first(logged.size()), &metadata);
+          discovered(session, uid, identity, copied.viewMut().first(logged.size()), &metadata);
         }
       }
     }
@@ -925,23 +925,25 @@ namespace telar::runtime::redirect {
         return;
       }
 
-      auto slot = std::ranges::find_if(pending_, [](const auto& value) {
+      const auto pending = pending_.viewMut();
+      auto slot = std::ranges::find_if(pending, [](const auto& value) {
         return !value;
       });
-      if (slot == pending_.end()) {
+      if (slot == pending.end()) {
         continue;
       }
 
       const auto target = listeners_[listener]->mapping().target;
-      const auto flow = std::ranges::find_if(flows_, [&](const auto& value) {
+      const auto flows = flows_.viewMut();
+      const auto flow = std::ranges::find_if(flows, [&](const auto& value) {
         return value && !value->bypass && !value->accepted && FlowKey::same(value->key.destination, target) && NatLookup::peerMatches(child.get(), value->key);
       });
-      if (flow == flows_.end() || !nat_->matches(child.get(), (*flow)->key)) {
+      if (flow == flows.end() || !nat_->matches(child.get(), (*flow)->key)) {
         std::fprintf(stderr, "telar redirect: rejected connection without selected NAT state\n");
         continue;
       }
 
-      const auto index = static_cast<std::size_t>(flow - flows_.begin());
+      const auto index = static_cast<std::size_t>(flow - flows.begin());
 
       if (owners_ && !owners_.getMut().find((*flow)->key).process) {
         std::fprintf(stderr, "telar redirect: selected process no longer owns the accepted socket\n");
@@ -967,23 +969,23 @@ namespace telar::runtime::redirect {
   void Helper::handoff(const Connection& connection, std::size_t flow, uid_t uid) {
     if (flows_[flow]->incoming && (!accounts_ || accounts_.getMut().peer(connection.origin.get()) != uid)) {
       std::fprintf(stderr, "telar redirect: rejected incoming origin without the runtime account\n");
-      flows_[flow].getMut().deadline = std::chrono::steady_clock::now();
+      flows_.atMut(flow).getMut().deadline = std::chrono::steady_clock::now();
       return;
     }
 
     auto channel = traffic::connect(endpoint_);
 
     Protocol::send(channel.get(), connection);
-    std::array<Byte, 1> admitted{};
+    ds::Array<Byte, 1> admitted{};
 
-    readAll(channel.get(), admitted);
+    readAll(channel.get(), admitted.viewMut());
     if (admitted[0] != 1) {
       std::fprintf(stderr, "telar redirect: runtime connection capacity reached\n");
       return;
     }
 
-    flows_[flow].getMut().lifetime = std::move(channel);
-    flows_[flow].getMut().deadline = std::chrono::steady_clock::time_point::max();
+    flows_.atMut(flow).getMut().lifetime = std::move(channel);
+    flows_.atMut(flow).getMut().deadline = std::chrono::steady_clock::time_point::max();
     if (flows_[flow]->incoming) {
       std::fprintf(stderr, "telar redirect: handed incoming TCP to runtime for destination port %u\n", connection.target.port);
     }

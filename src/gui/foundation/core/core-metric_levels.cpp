@@ -55,7 +55,7 @@ namespace telar::gui::inline foundation::inline core {
   void MetricAlerts::update(const SystemMetrics& sample) noexcept {
     for (std::size_t index = 0; index < states_.size(); ++index) {
       const auto metric = static_cast<BarMetric>(index);
-      auto& state = states_[index];
+      auto& state = states_.atMut(index);
 
       if (!MetricLevels::available(metric, sample)) {
         state = {};

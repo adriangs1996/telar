@@ -14,6 +14,7 @@ static_assert(true);
 #include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/models/list_model.hpp"
 #include "ui/foundation/scene/window_animation_clock.hpp"
+#include "telar_base/ds/values.hpp"
 #include <QCommandLineParser>
 #include <QGuiApplication>
 #include <QJsonDocument>
@@ -115,9 +116,9 @@ int main(int argc, char** argv) {
   strip.setModel(&tabs);
   strip.setContext(1, telar::WorkspaceLocation{.id = 1});
   strip.setVisible(mode == QStringLiteral("tabs"));
-  std::array<std::unique_ptr<NativeRoundedRectangle>, 4> boxes;
+  telar::ds::Array<std::unique_ptr<NativeRoundedRectangle>, 4> boxes;
 
-  for (auto& box : boxes) {
+  for (auto& box : boxes.viewMut()) {
     box = std::make_unique<NativeRoundedRectangle>(window.contentItem());
     box->setSize(QSizeF{60, 30});
     box->setColor(QColor{QStringLiteral("#aa87f5")});

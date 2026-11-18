@@ -49,10 +49,10 @@ namespace {
   }
 
   void testPortMemory(Memory& memory) {
-    std::array<char, 64> path;
+    ds::Array<char, 64> path;
 
-    std::strcpy(path.data(), "/tmp/telar-proxy-ports-XXXXXX");
-    check(::mkdtemp(path.data()) != nullptr);
+    std::strcpy(path.dataMut(), "/tmp/telar-proxy-ports-XXXXXX");
+    check(::mkdtemp(path.dataMut()) != nullptr);
     FileDescriptor directory{::open(path.data(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
 
     check(static_cast<bool>(directory));
@@ -105,7 +105,7 @@ namespace {
       check(!invalid.preferred());
     }
 
-    const std::array<std::uint8_t, 3> contents{'n', 'e', 'w'};
+    const ds::Array<std::uint8_t, 3> contents{'n', 'e', 'w'};
 
     check(writePrivateFile(directory.get(), moved.filename(), contents, PrivateFileMode::create_only) == EEXIST);
     for (const auto& entry : std::filesystem::directory_iterator{root}) {

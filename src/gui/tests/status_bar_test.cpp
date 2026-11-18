@@ -271,9 +271,9 @@ namespace {
       QQuickWindow window;
       QQmlEngine engine;
       BarContent content;
-      std::array<std::uint8_t, 60> samples{};
+      telar::ds::Array<std::uint8_t, 60> samples{};
 
-      samples.back() = 100;
+      samples.atMut(samples.size() - 1) = 100;
       features::components::Input input{};
 
       input.node.kind = features::components::Kind::sparkline;

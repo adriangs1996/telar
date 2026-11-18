@@ -119,11 +119,11 @@ namespace telar::runtime::lua {
         return luaL_error(state, "os.date time is out of range");
       }
 
-      std::array<char, maximum_format_bytes + 1> pattern{};
+      ds::Array<char, maximum_format_bytes + 1> pattern{};
 
-      std::ranges::copy(format, pattern.begin());
-      std::array<char, maximum_output_bytes> output{};
-      const auto written = format.empty() ? 0 : std::strftime(output.data(), output.size(), pattern.data(), &calendar);
+      std::ranges::copy(format, pattern.viewMut().begin());
+      ds::Array<char, maximum_output_bytes> output{};
+      const auto written = format.empty() ? 0 : std::strftime(output.dataMut(), output.size(), pattern.data(), &calendar);
 
       lua_pushlstring(state, output.data(), written);
 
@@ -131,7 +131,7 @@ namespace telar::runtime::lua {
     }
 
     int openSandbox(lua_State* state) {
-      constexpr std::array libraries{
+      constexpr ds::Array libraries{
           luaL_Reg{"_G", luaopen_base},
           luaL_Reg{LUA_COLIBNAME, luaopen_coroutine},
           luaL_Reg{LUA_MATHLIBNAME, luaopen_math},
@@ -151,7 +151,7 @@ namespace telar::runtime::lua {
       }
 
       // Only the clock: the standard os library also spawns processes and reads the environment.
-      constexpr std::array clock{
+      constexpr ds::Array clock{
           luaL_Reg{"time", &osTime},
           luaL_Reg{"clock", &osClock},
           luaL_Reg{"date", &osDate},
@@ -173,10 +173,10 @@ namespace telar::runtime::lua {
   Error::Error(std::string_view message) noexcept {
     const auto size = std::min(message.size(), message_.size() - 1);
     if (size != 0) {
-      std::memcpy(message_.data(), message.data(), size);
+      std::memcpy(message_.dataMut(), message.data(), size);
     }
 
-    message_[size] = '\0';
+    message_.atMut(size) = '\0';
   }
 
   const char* Error::what() const noexcept {
@@ -546,27 +546,27 @@ namespace telar::runtime::lua {
     lua_pop(state, 1);
 
     const auto directory = modules.directory_.view();
-    std::array<char, PATH_MAX> path;
+    ds::Array<char, PATH_MAX> path;
     if (directory.size() + name.size() + sizeof("/init.lua") > path.size()) {
       return raise(state, "Local module path is too long", "module path too long");
     }
 
-    std::memcpy(path.data(), directory.data(), directory.size());
-    path[directory.size()] = '/';
-    auto* suffix = path.data() + directory.size() + 1;
+    std::memcpy(path.dataMut(), directory.data(), directory.size());
+    path.atMut(directory.size()) = '/';
+    auto* suffix = path.dataMut() + directory.size() + 1;
 
     std::transform(name.begin(), name.end(), suffix, [](char byte) {
       return byte == '.' ? '/' : byte;
     });
 
-    std::array<char, PATH_MAX> canonical;
+    ds::Array<char, PATH_MAX> canonical;
     // A folder module, such as mods/tabs/init.lua, answers to the folder's name.
     bool found = false;
 
     for (const std::string_view ending : {std::string_view{".lua"}, std::string_view{"/init.lua"}}) {
       std::memcpy(suffix + name.size(), ending.data(), ending.size());
       suffix[name.size() + ending.size()] = '\0';
-      if (::realpath(path.data(), canonical.data()) != nullptr) {
+      if (::realpath(path.data(), canonical.dataMut()) != nullptr) {
         found = true;
         break;
       }
@@ -628,8 +628,8 @@ namespace telar::runtime::lua {
   }
 
   void setDecimal(lua_State* state, const char* name, std::uint64_t value) {
-    std::array<char, 32> text;
-    const auto result = std::to_chars(text.data(), text.data() + text.size(), value);
+    ds::Array<char, 32> text;
+    const auto result = std::to_chars(text.dataMut(), text.dataMut() + text.size(), value);
 
     setField(state, name, std::string_view{text.data(), result.ptr});
   }
@@ -827,9 +827,9 @@ namespace telar::runtime::lua {
   }
 
   void Value::fail(const char* message) const {
-    std::array<char, 512> description;
+    ds::Array<char, 512> description;
 
-    std::snprintf(description.data(), description.size(), "%s %s", label_.c_str(), message);
+    std::snprintf(description.dataMut(), description.size(), "%s %s", label_.c_str(), message);
     throw Error{description.data()};
   }
 

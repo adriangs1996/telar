@@ -59,6 +59,7 @@ import telar.runtime.model.client_layouts;
 import telar.runtime.model.slot_store;
 import telar.runtime.platform.event_loop;
 import telar.runtime.runtime.execution_service;
+import telar.base.ds;
 
 namespace {
 
@@ -127,8 +128,8 @@ namespace {
           continue;
         }
 
-        std::array<char, 4096> bytes;
-        const auto count = ::read(input.fd, bytes.data(), bytes.size());
+        ds::Array<char, 4096> bytes;
+        const auto count = ::read(input.fd, bytes.dataMut(), bytes.size());
         if (count < 0 && (errno == EINTR || errno == EAGAIN)) {
           continue;
         }
@@ -158,7 +159,7 @@ namespace {
       PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/control-notifications.sock"}};
       WorkspaceService<decltype(poller)> workspaces{memory};
       ClientPeer client{memory, model, clients, ClientRole::interactive};
-      const std::array<std::string_view, 1> arguments{"/bin/cat"};
+      const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
 
       workspaces.open(model, panes, clients, client.session().id, OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
       auto& pane = panes.require(model.panes, client.receive<PaneOpened>().pane_id);
@@ -173,8 +174,8 @@ namespace {
       query(pane.terminal, "\x1b[?2031h", *pane.media);
       ptyReports(pane, panes, "");
 
-      desktop.palette = std::array<Byte, 48>{};
-      (desktop.palette.getMut())[0] = 17;
+      desktop.palette = ds::Array<Byte, 48>{};
+      (desktop.palette.getMut()).atMut(0) = 17;
       panes.configureDesktop(model, clients, client.session().id, desktop);
       ptyReports(pane, panes, "\x1b[?997;2n");
       check(query(pane.terminal, "\x1b]4;0;#112233\x1b\\\x1b]10;#223344\x1b\\\x1b]21;foreground=#334455\x1b\\", *pane.media).empty());
@@ -191,7 +192,7 @@ namespace {
       WorkspaceService<decltype(poller)> workspaces{memory};
       ClientPeer first{memory, model, clients, ClientRole::interactive};
       ClientPeer second{memory, model, clients, ClientRole::interactive};
-      const std::array<std::string_view, 1> arguments{"/bin/cat"};
+      const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
 
       workspaces.open(model, panes, clients, first.session().id, OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
       auto& pane = panes.require(model.panes, first.receive<PaneOpened>().pane_id);
@@ -263,7 +264,7 @@ namespace {
       panes.resize(model, reconnected.session(), PaneResize{.pane_id = pane.id, .size = {120, 60, 8, 16}});
       ptyReports(pane, panes, "");
       check(query(pane.terminal, "\x1b[?2031h", *pane.media).empty());
-      ConfigureTerminalColors colors{.foreground = std::array<Byte, 3>{22, 33, 44}};
+      ConfigureTerminalColors colors{.foreground = ds::Array<Byte, 3>{22, 33, 44}};
 
       panes.configureColors(model, reconnected.session(), colors);
       ptyReports(pane, panes, "\x1b[?997;1n");
@@ -280,7 +281,7 @@ namespace {
       PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/control-interrupted-writes.sock"}};
       WorkspaceService<decltype(poller)> workspaces{memory};
       ClientPeer client{memory, model, clients, ClientRole::interactive};
-      const std::array<std::string_view, 1> arguments{"/bin/cat"};
+      const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
 
       workspaces.open(model, panes, clients, client.session().id, OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
       auto& pane = panes.require(model.panes, client.receive<PaneOpened>().pane_id);
@@ -322,7 +323,7 @@ namespace {
         drain,
       };
 
-      constexpr std::array results{Result::interrupted, Result::short_header, Result::would_block, Result::across_boundary, Result::interrupted_again, Result::drain};
+      constexpr ds::Array results{Result::interrupted, Result::short_header, Result::would_block, Result::across_boundary, Result::interrupted_again, Result::drain};
       std::size_t calls = 0;
       bool crossed_message = false;
       const auto writer = [&](int descriptor, std::span<const iovec> vectors) -> ssize_t {
@@ -336,13 +337,13 @@ namespace {
 
         auto remaining = result == Result::short_header ? 2 : result == Result::across_boundary ? owned_bytes + 7
                                                                                                 : SIZE_MAX;
-        std::array<iovec, PtyResponseQueue::message_capacity> prefix;
+        ds::Array<iovec, PtyResponseQueue::message_capacity> prefix;
         std::size_t count = 0;
 
         for (const auto vector : vectors) {
           const auto length = std::min(remaining, vector.iov_len);
 
-          prefix[count++] = {vector.iov_base, length};
+          prefix.atMut(count++) = {vector.iov_base, length};
           remaining -= length;
           if (remaining == 0) {
             break;
@@ -397,7 +398,7 @@ namespace {
       ClientPeer first{memory, model, clients, ClientRole::interactive};
       ClientPeer second{memory, model, clients, ClientRole::interactive};
       ClientPeer outsider{memory, model, clients, ClientRole::interactive};
-      const std::array<std::string_view, 1> arguments{"/bin/cat"};
+      const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
       const Launch launch{.cwd = "/tmp", .arguments = arguments};
 
       workspaces.open(model, panes, clients, first.session().id, OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = launch});
@@ -411,11 +412,11 @@ namespace {
       workspace->geometry_client = second.session().id;
 
       check(query(pane.terminal, "\x1b[?998n", *pane.media) == "\x1b[?999;2n");
-      ConfigurePaneDesktop one{.pane_id = pane.id, .pane_generation = pane.generation, .visible = true, .focused = false, .light = true, .foreground = std::array<Byte, 3>{0, 0, 0}, .background = std::array<Byte, 3>{255, 255, 255}, .cursor = std::array<Byte, 3>{1, 2, 3}};
-      std::array<Byte, 256> encoded;
-      std::array<Byte, 512> arena;
-      DecodeStorage storage{arena};
-      const auto decoded = Codec::decode<ConfigurePaneDesktop>(Codec::encode(one, encoded), storage);
+      ConfigurePaneDesktop one{.pane_id = pane.id, .pane_generation = pane.generation, .visible = true, .focused = false, .light = true, .foreground = ds::Array<Byte, 3>{0, 0, 0}, .background = ds::Array<Byte, 3>{255, 255, 255}, .cursor = ds::Array<Byte, 3>{1, 2, 3}};
+      ds::Array<Byte, 256> encoded;
+      ds::Array<Byte, 512> arena;
+      DecodeStorage storage{arena.viewMut()};
+      const auto decoded = Codec::decode<ConfigurePaneDesktop>(Codec::encode(one, encoded.viewMut()), storage);
 
       check(decoded == one);
       panes.configureDesktop(model, clients, first.session().id, decoded);
@@ -423,7 +424,7 @@ namespace {
 
       two.light = false;
       two.focused = true;
-      two.cursor = std::array<Byte, 3>{4, 5, 6};
+      two.cursor = ds::Array<Byte, 3>{4, 5, 6};
       panes.configureDesktop(model, clients, second.session().id, two);
       check(query(pane.terminal, "\x1b[?996n\x1b[?998n\x1b]12;?\x1b\\", *pane.media) == "\x1b[?997;2n\x1b[?999;1n\x1b]12;rgb:0101/0202/0303\x1b\\");
 

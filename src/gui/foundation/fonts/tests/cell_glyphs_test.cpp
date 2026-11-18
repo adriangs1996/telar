@@ -86,7 +86,7 @@ namespace {
 
   void invalidBounds() {
     constexpr float extent_limit = std::numeric_limits<std::uint16_t>::max();
-    const std::array<Rect, 4> invalid{{{.width = -1}, {.width = std::numeric_limits<float>::infinity()}, {.x = std::numeric_limits<float>::quiet_NaN()}, {.height = extent_limit + 1}}};
+    const telar::ds::Array<Rect, 4> invalid{{{.width = -1}, {.width = std::numeric_limits<float>::infinity()}, {.x = std::numeric_limits<float>::quiet_NaN()}, {.height = extent_limit + 1}}};
 
     for (const auto cell : invalid) {
       bool rejected = false;
@@ -110,7 +110,7 @@ namespace {
   }
 
   void boxGeometry() {
-    constexpr std::array<float, 5> extents{0, 0.5F, 2, 9, 17};
+    constexpr telar::ds::Array<float, 5> extents{0, 0.5F, 2, 9, 17};
 
     for (const auto extent : extents) {
       const Rect cell{.x = 10, .y = 20, .width = extent, .height = 2 * extent};
@@ -154,13 +154,13 @@ namespace {
     constexpr std::size_t stride = width + 4;
     constexpr std::size_t guard_bytes = 13;
     constexpr std::uint8_t guard = 0xa5;
-    std::array<std::uint8_t, (stride * height) + guard_bytes> pixels{};
+    telar::ds::Array<std::uint8_t, (stride * height) + guard_bytes> pixels{};
 
     for (std::size_t index = 0; index < BoxCurve::shape_count; ++index) {
       pixels.fill(guard);
       const BoxCurve curve{static_cast<BoxCurve::Shape>(index), {.width = width, .height = height}, 1};
 
-      curve.rasterize({.pixels = pixels, .stride = stride, .width = width, .height = height});
+      curve.rasterize({.pixels = pixels.viewMut(), .stride = stride, .width = width, .height = height});
       bool ink = false;
 
       for (std::size_t row = 0; row < height; ++row) {
@@ -191,11 +191,11 @@ namespace {
   void powerlineSpansTallCells() {
     constexpr std::uint16_t width = 14;
     constexpr std::uint16_t height = 42;
-    using Raster = std::array<std::uint8_t, std::size_t{width} * height>;
+    using Raster = telar::ds::Array<std::uint8_t, std::size_t{width} * height>;
     const auto raster = [](std::uint32_t codepoint) {
       Raster pixels{};
 
-      BoxCurve{*BoxCurve::shape(codepoint), {.width = width, .height = height}, 1}.rasterize({.pixels = pixels, .stride = width, .width = width, .height = height});
+      BoxCurve{*BoxCurve::shape(codepoint), {.width = width, .height = height}, 1}.rasterize({.pixels = pixels.viewMut(), .stride = width, .width = width, .height = height});
       return pixels;
     };
 
@@ -226,11 +226,11 @@ namespace {
   void invalidRasters() {
     constexpr std::uint8_t guard = 0xa5;
     constexpr std::size_t storage_capacity = 16;
-    std::array<std::uint8_t, storage_capacity> pixels{};
+    telar::ds::Array<std::uint8_t, storage_capacity> pixels{};
 
     pixels.fill(guard);
     const BoxCurve curve{BoxCurve::Shape::diagonal_cross, {.width = 8, .height = 16}, 1};
-    const std::array<AlphaRaster, 3> invalid{{{.pixels = pixels, .stride = 0, .width = 1, .height = 1}, {.pixels = pixels, .stride = 17, .width = 17, .height = 1}, {.pixels = pixels, .stride = std::numeric_limits<std::size_t>::max(), .width = 1, .height = 2}}};
+    const telar::ds::Array<AlphaRaster, 3> invalid{{{.pixels = pixels.viewMut(), .stride = 0, .width = 1, .height = 1}, {.pixels = pixels.viewMut(), .stride = 17, .width = 17, .height = 1}, {.pixels = pixels.viewMut(), .stride = std::numeric_limits<std::size_t>::max(), .width = 1, .height = 2}}};
 
     for (const auto raster : invalid) {
       bool rejected = false;
@@ -255,14 +255,14 @@ namespace {
     constexpr std::uint16_t width = 2;
     constexpr std::uint16_t height = 2;
     constexpr std::size_t stride = width + 1;
-    std::array<std::uint8_t, storage_capacity> pixels{};
+    telar::ds::Array<std::uint8_t, storage_capacity> pixels{};
     constexpr auto smallest = std::numeric_limits<float>::denorm_min();
 
     for (const auto extent : {0.0F, smallest}) {
       pixels.fill(guard);
       const BoxCurve curve{BoxCurve::Shape::diagonal_cross, {.width = extent, .height = extent}, 1};
 
-      curve.rasterize({.pixels = pixels, .stride = stride, .width = width, .height = height});
+      curve.rasterize({.pixels = pixels.viewMut(), .stride = stride, .width = width, .height = height});
       check(pixels[0] == 0 && pixels[1] == 0 && pixels[stride] == 0 && pixels[stride + 1] == 0, "empty or underflowed geometry must clear only the active raster");
       check(pixels[width] == guard && pixels[stride + width] == guard && pixels.back() == guard, "empty curves must preserve padding and trailing storage");
     }

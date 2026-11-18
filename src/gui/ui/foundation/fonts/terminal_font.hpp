@@ -1,5 +1,6 @@
 #pragma once
 
+#include "telar_base/ds/values.hpp"
 #include <QFont>
 #include <QSizeF>
 #include <QVariantMap>
@@ -9,7 +10,7 @@
 namespace telar::gui::qt {
   struct TerminalFont {
     static constexpr std::size_t face_count = 4;
-    std::array<QFont, face_count> faces;
+    ds::Array<QFont, face_count> faces;
     QSizeF cell;
     qreal baseline = 0;
     bool fixed_pitch = true;

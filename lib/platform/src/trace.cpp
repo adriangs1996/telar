@@ -1,3 +1,4 @@
+#include "telar_base/ds/values.hpp"
 #if TELAR_DEBUG
 // Outside the module: the sink imports telar.platform.fs and .thread, which import
 // telar.platform.primitives, whose interface declares these functions in the global module.
@@ -50,7 +51,7 @@ namespace telar::runtime::trace {
     }
 
     void format(std::span<const Record> records) noexcept {
-      std::array<char, 1024> buffer;
+      ds::Array<char, 1024> buffer;
 
       for (const auto& entry : records) {
         if (sink.written > maximum_trace_bytes - buffer.size()) {
@@ -60,7 +61,7 @@ namespace telar::runtime::trace {
 
         const auto start = static_cast<long long>(entry.start - sink.origin);
         const auto duration = static_cast<long long>(entry.duration);
-        const int length = std::snprintf(buffer.data(), buffer.size(), "{\"name\":\"%s\",\"ph\":\"X\",\"pid\":%d,\"tid\":%llu,\"ts\":%lld.%03lld,\"dur\":%lld.%03lld},\n", entry.name, ::getpid(), static_cast<unsigned long long>(entry.thread), start / 1000, start % 1000, duration / 1000, duration % 1000);
+        const int length = std::snprintf(buffer.dataMut(), buffer.size(), "{\"name\":\"%s\",\"ph\":\"X\",\"pid\":%d,\"tid\":%llu,\"ts\":%lld.%03lld,\"dur\":%lld.%03lld},\n", entry.name, ::getpid(), static_cast<unsigned long long>(entry.thread), start / 1000, start % 1000, duration / 1000, duration % 1000);
         if (length > 0 && static_cast<std::size_t>(length) < buffer.size()) {
           if (!writeAll({buffer.data(), static_cast<std::size_t>(length)})) {
             return;
@@ -152,8 +153,8 @@ namespace telar::runtime::trace {
 
     sink.wake.notify_one();
     pthread_join(sink.writer, nullptr);
-    std::array<char, 256> footer;
-    const int length = std::snprintf(footer.data(), footer.size(), "{\"name\":\"process_name\",\"ph\":\"M\",\"pid\":%d,\"args\":{\"name\":\"telar-runtime\",\"dropped_records\":%llu}}\n]\n", ::getpid(), static_cast<unsigned long long>(sink.dropped));
+    ds::Array<char, 256> footer;
+    const int length = std::snprintf(footer.dataMut(), footer.size(), "{\"name\":\"process_name\",\"ph\":\"M\",\"pid\":%d,\"args\":{\"name\":\"telar-runtime\",\"dropped_records\":%llu}}\n]\n", ::getpid(), static_cast<unsigned long long>(sink.dropped));
 
     writeAll({footer.data(), static_cast<std::size_t>(length)});
     sink.file.reset();

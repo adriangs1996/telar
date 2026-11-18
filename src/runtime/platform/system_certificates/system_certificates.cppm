@@ -4,6 +4,7 @@ module;
 export module telar.runtime.platform.system_certificates;
 
 import std;
+import telar.base.ds;
 
 #if defined(__linux__)
 // Interface: platform/linux/system_certificates.cppm
@@ -17,7 +18,7 @@ export {
 
       // telar links its own OpenSSL, whose default bundle path matches only some
       // distributions. These are the bundles Go's crypto/x509 looks for, in order.
-      static constexpr std::array bundles{
+      static constexpr ds::Array bundles{
           "/etc/ssl/certs/ca-certificates.crt",                // Debian, Ubuntu, Gentoo and others
           "/etc/pki/tls/certs/ca-bundle.crt",                  // Fedora, RHEL 6
           "/etc/ssl/ca-bundle.pem",                            // openSUSE
@@ -72,7 +73,7 @@ export {
       // Reads one keychain and hands each certificate to `consume`, which calls the caller's consumer at `target`.
       static void readKeychain(const char* path, void* target, void (*consume)(void*, std::span<const std::uint8_t>));
 
-      static constexpr std::array<const char*, 2> keychains{
+      static constexpr ds::Array<const char*, 2> keychains{
           "/System/Library/Keychains/SystemRootCertificates.keychain",
           "/Library/Keychains/System.keychain"
       };

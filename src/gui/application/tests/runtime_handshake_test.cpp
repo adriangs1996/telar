@@ -34,6 +34,7 @@ import telar.testing;
 import telar.gui.features.machines;
 import telar.client;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace {
 
@@ -102,21 +103,21 @@ namespace {
     for (std::size_t index = 0; index < handshake::magic.size(); ++index) {
       auto bad = valid;
 
-      bad[index] ^= 1U;
+      bad.atMut(index) ^= 1U;
       check(application::RuntimeHandshake::inspect(bad).detail.view() == "InvalidMagic", "Every magic byte must be validated");
     }
 
     auto bad = valid;
 
-    bad[handshake::magic.size()] = 0;
+    bad.atMut(handshake::magic.size()) = 0;
     check(application::RuntimeHandshake::inspect(bad).detail.view() == "UnknownMessage", "An unknown message tag must retain its original error");
     check(application::RuntimeHandshake::inspect(HandshakeCodec::encode(ClientHello{})).detail.view() == "UnexpectedMessage", "A client hello cannot be accepted as a server response");
     bad = valid;
-    bad[handshake::magic.size() + 1] = 0;
+    bad.atMut(handshake::magic.size() + 1) = 0;
     check(application::RuntimeHandshake::inspect(bad).detail.view() == "UnknownRejectReason", "An unknown refusal reason must be rejected");
-    std::array<Byte, HandshakeCodec::max_message_size + 1> oversized{};
+    ds::Array<Byte, HandshakeCodec::max_message_size + 1> oversized{};
 
-    std::ranges::copy(valid, oversized.begin());
+    std::ranges::copy(valid, oversized.viewMut().begin());
     check(application::RuntimeHandshake::inspect(oversized).detail.view() == "BufferTooSmall", "An oversized response must fail the original bounded receive before decoding");
   }
 
@@ -151,8 +152,8 @@ namespace {
       application::FrameStream<telar::Memory> stream{forbidden_memory};
 
       stream.setMaximum(HandshakeCodec::max_message_size);
-      std::array<Byte, frame_prefix_size> prefix{};
-      std::span<Byte> output{prefix};
+      ds::Array<Byte, frame_prefix_size> prefix{};
+      std::span<Byte> output{prefix.viewMut()};
 
       u32::encode(HandshakeCodec::max_message_size + 1, output);
       const auto forbidden_consumer = [](std::span<const Byte>) {
@@ -180,8 +181,8 @@ namespace {
       application::FrameStream<telar::Memory> stream{adapter};
 
       stream.setMaximum(first_payload_bytes);
-      std::array<Byte, (2 * frame_prefix_size) + first_payload_bytes + next_payload_bytes> bytes{};
-      std::span<Byte> output{bytes};
+      ds::Array<Byte, (2 * frame_prefix_size) + first_payload_bytes + next_payload_bytes> bytes{};
+      std::span<Byte> output{bytes.viewMut()};
 
       u32::encode(first_payload_bytes, output);
       output.front() = 'H';

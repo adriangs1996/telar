@@ -51,9 +51,9 @@ namespace telar::runtime {
       throw SystemError{"Invalid absolute private directory", EINVAL};
     }
 
-    std::array<char, PATH_MAX> name{};
+    ds::Array<char, PATH_MAX> name{};
 
-    std::copy(path.begin(), path.end(), name.begin());
+    std::copy(path.begin(), path.end(), name.dataMut());
     for (std::size_t index = 1; index <= path.size(); ++index) {
       if (index != path.size() && name[index] != '/') {
         continue;
@@ -61,12 +61,12 @@ namespace telar::runtime {
 
       const auto separator = name[index];
 
-      name[index] = '\0';
+      name.atMut(index) = '\0';
       if (::mkdir(name.data(), 0700) != 0 && sys::lastError() != EEXIST) {
         throw SystemError{"Create private directory"};
       }
 
-      name[index] = separator;
+      name.atMut(index) = separator;
     }
 
     FileDescriptor directory{::open(name.data(), O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW)};
@@ -90,9 +90,9 @@ namespace telar::runtime {
       throw SystemError{"invalid absolute runtime file path", EINVAL};
     }
 
-    std::array<char, PATH_MAX> directory{};
+    ds::Array<char, PATH_MAX> directory{};
 
-    std::copy_n(file_path.data(), std::max<std::size_t>(separator, 1), directory.data());
+    std::copy_n(file_path.data(), std::max<std::size_t>(separator, 1), directory.dataMut());
     FileDescriptor parent{::open(directory.data(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
     struct stat state{};
     if (!parent || ::fstat(parent.get(), &state) != 0) {
@@ -152,13 +152,13 @@ namespace telar::runtime {
   }
 
   tbc::view<ds::Option<std::string_view>, tbc::lt::a> readRegularFile(std::string_view path, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept {
-    std::array<char, PATH_MAX> terminated;
+    ds::Array<char, PATH_MAX> terminated;
     if (path.size() >= terminated.size() || path.contains('\0')) {
       return ds::none;
     }
 
-    std::memcpy(terminated.data(), path.data(), path.size());
-    terminated[path.size()] = '\0';
+    std::memcpy(terminated.dataMut(), path.data(), path.size());
+    terminated.atMut(path.size()) = '\0';
     FileDescriptor file{::open(terminated.data(), O_RDONLY | O_NONBLOCK | O_CLOEXEC | O_NOCTTY)};
     struct stat status{};
     if (!file || ::fstat(file.get(), &status) != 0 || !S_ISREG(status.st_mode)) {
@@ -187,7 +187,7 @@ namespace telar::runtime {
     }
 
     FileDescriptor parent;
-    std::array<char, PATH_MAX> name;
+    ds::Array<char, PATH_MAX> name;
 
     for (;;) {
       const auto separator = path.find('/');
@@ -196,8 +196,8 @@ namespace telar::runtime {
         throw SystemError{"Invalid package-relative component", EINVAL};
       }
 
-      std::copy(component.begin(), component.end(), name.begin());
-      name[component.size()] = '\0';
+      std::copy(component.begin(), component.end(), name.dataMut());
+      name.atMut(component.size()) = '\0';
 
       const auto selected_flags = separator == std::string_view::npos ? flags : O_RDONLY | O_DIRECTORY;
       FileDescriptor selected{::openat(parent ? parent.get() : root, name.data(), selected_flags | O_NOFOLLOW | O_NONBLOCK | O_NOCTTY | O_CLOEXEC, permissions)};
@@ -219,10 +219,10 @@ namespace telar::runtime {
       throw SystemError{"Invalid private file path", EINVAL};
     }
 
-    std::array<char, PATH_MAX> terminated;
+    ds::Array<char, PATH_MAX> terminated;
 
-    std::copy(name.begin(), name.end(), terminated.begin());
-    terminated[name.size()] = '\0';
+    std::copy(name.begin(), name.end(), terminated.dataMut());
+    terminated.atMut(name.size()) = '\0';
     FileDescriptor file{::openat(directory, terminated.data(), O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)};
     if (!file) {
       if (sys::lastError() == ENOENT) {
@@ -403,9 +403,9 @@ namespace telar::runtime {
       return;
     }
 
-    std::array<char, PATH_MAX> directory;
+    ds::Array<char, PATH_MAX> directory;
 
-    resolveRelativePath(path, workingDirectory(directory));
+    resolveRelativePath(path, workingDirectory(directory.viewMut()));
   }
 
   template void resolveRelativePath<Memory>(String<Memory>& path, std::string_view directory);
@@ -422,9 +422,9 @@ namespace telar::runtime {
       throw SystemError{"Invalid temporary directory pattern", EINVAL};
     }
 
-    std::copy(pattern.begin(), pattern.end(), path_.begin());
-    path_[pattern.size()] = '\0';
-    if (::mkdtemp(path_.data()) == nullptr) {
+    std::copy(pattern.begin(), pattern.end(), path_.dataMut());
+    path_.atMut(pattern.size()) = '\0';
+    if (::mkdtemp(path_.dataMut()) == nullptr) {
       throw SystemError{"Create temporary directory"};
     }
 
@@ -494,19 +494,19 @@ namespace telar::runtime {
       return EINVAL;
     }
 
-    std::array<char, NAME_MAX + 1> destination;
+    ds::Array<char, NAME_MAX + 1> destination;
 
-    std::copy(name.begin(), name.end(), destination.begin());
-    destination[name.size()] = '\0';
+    std::copy(name.begin(), name.end(), destination.dataMut());
+    destination.atMut(name.size()) = '\0';
     constexpr unsigned maximum_attempts = 8;
 
     for (unsigned attempt = 0; attempt < maximum_attempts; ++attempt) {
       std::uint64_t nonce;
 
       randomBytes(&nonce, sizeof(nonce));
-      std::array<char, 64> temporary;
+      ds::Array<char, 64> temporary;
 
-      std::snprintf(temporary.data(), temporary.size(), ".telar-write-%016llx.tmp", static_cast<unsigned long long>(nonce));
+      std::snprintf(temporary.dataMut(), temporary.size(), ".telar-write-%016llx.tmp", static_cast<unsigned long long>(nonce));
       FileDescriptor file{::openat(directory, temporary.data(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600)};
       if (!file) {
         if (sys::lastError() == EEXIST) {

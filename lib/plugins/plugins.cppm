@@ -15,6 +15,7 @@ import telar.wire.vocabulary;
 import telar.base.text;
 import telar.sys.posix;
 import telar.base.memory.allocators;
+import telar.base.ds;
 
 // Interface: telar_plugins/action_protocol.cppm
 export {
@@ -105,7 +106,7 @@ export {
         return std::uint16_t{1} << static_cast<unsigned>(capability);
       }
 
-      static constexpr auto names_ = std::to_array<std::string_view>({
+      static constexpr auto names_ = ds::Array<std::string_view, 15>{
           "workspace.read",
           "workspace.write",
           "process.spawn",
@@ -121,7 +122,7 @@ export {
           "traffic.intercept",
           "traffic.control",
           "traffic.record",
-      });
+      };
       static_assert(names_.size() == static_cast<std::size_t>(Capability::count));
       static_assert(names_.size() <= 16);
       std::uint16_t bits_ = 0;
@@ -137,7 +138,7 @@ export {
 export {
   namespace telar::runtime::plugins {
 
-    using PackageDigest = std::array<std::uint8_t, 32>;
+    using PackageDigest = ds::Array<std::uint8_t, 32>;
 
     constexpr std::uint64_t stableId(std::string_view name) noexcept {
       return fnv1a64(name);
@@ -186,7 +187,7 @@ export {
       FixedText<PackageLimits::entry_bytes> entry;
       FixedText<PackageLimits::source_bytes> source;
       FixedText<PackageLimits::revision_bytes> revision;
-      std::array<FixedText<PackageLimits::action_bytes>, PackageLimits::actions> actions;
+      ds::Array<FixedText<PackageLimits::action_bytes>, PackageLimits::actions> actions;
       std::size_t action_count = 0;
       Capabilities capabilities;
 
@@ -202,8 +203,8 @@ export {
       static const char* syntaxFailure(std::string_view text) noexcept;
       static const char* fieldFailure(std::string_view message) noexcept;
 
-      static constexpr auto field_names = std::to_array<std::string_view>({"api_version", "id", "version", "entry", "source", "actions", "capabilities"});
-      static constexpr auto source_names = std::to_array<std::string_view>({"url", "revision"});
+      static constexpr auto field_names = ds::Array<std::string_view, 7>{"api_version", "id", "version", "entry", "source", "actions", "capabilities"};
+      static constexpr auto source_names = ds::Array<std::string_view, 2>{"url", "revision"};
     };
 
     extern template Manifest Manifest::parse<Memory>(Memory& memory, std::string_view bytes);
@@ -450,7 +451,7 @@ export {
     };
 
     struct Specifications {
-      std::array<ConfiguredPlugin, PackageLimits::configured> entries;
+      ds::Array<ConfiguredPlugin, PackageLimits::configured> entries;
       std::size_t count = 0;
 
       std::span<const ConfiguredPlugin> configured() const noexcept;
@@ -572,9 +573,9 @@ export {
       static PackageDigest parseDigest(std::string_view text);
 
     private:
-      static constexpr auto root_fields = std::to_array<std::string_view>({"version", "grants"});
-      static constexpr auto grant_fields = std::to_array<std::string_view>({"plugin", "digest", "capabilities"});
-      std::array<TrustGrant, PackageLimits::grants> grants_;
+      static constexpr auto root_fields = ds::Array<std::string_view, 2>{"version", "grants"};
+      static constexpr auto grant_fields = ds::Array<std::string_view, 3>{"plugin", "digest", "capabilities"};
+      ds::Array<TrustGrant, PackageLimits::grants> grants_;
       std::size_t count_ = 0;
     };
 

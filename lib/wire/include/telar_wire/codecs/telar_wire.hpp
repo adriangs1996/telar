@@ -27,6 +27,7 @@
 #include "telar_base/text/utf8.hpp"
 #include "telar_vocabulary/vocabulary.hpp"
 #include "telar_wire/codecs/telar_annotations.hpp"
+#include "telar_base/ds/values.hpp"
 
 namespace telar {
 
@@ -63,30 +64,30 @@ namespace telar {
   namespace debug {
 
     template <std::size_t N>
-    auto valueText(const std::array<Byte, N>& value) {
-      std::array<char, N * 4 + 3> text{};
+    auto valueText(const ds::Array<Byte, N>& value) {
+      ds::Array<char, N * 4 + 3> text{};
       std::size_t position = 0;
 
-      text[position++] = '"';
+      text.atMut(position++) = '"';
 
       for (const auto byte : value) {
         if (byte >= 0x20 && byte <= 0x7e && byte != '"' && byte != '\\') {
-          text[position++] = static_cast<char>(byte);
+          text.atMut(position++) = static_cast<char>(byte);
         } else {
-          std::snprintf(text.data() + position, text.size() - position, "\\x%02x", static_cast<unsigned>(byte));
+          std::snprintf(text.dataMut() + position, text.size() - position, "\\x%02x", static_cast<unsigned>(byte));
           position += 4;
         }
       }
 
-      text[position++] = '"';
-      text[position] = '\0';
+      text.atMut(position++) = '"';
+      text.atMut(position) = '\0';
       return text;
     }
 
     template <typename Value>
     auto valueText(Value value) {
       if constexpr (std::same_as<Value, bool>) {
-        std::array<char, sizeof("false")> text{};
+        ds::Array<char, sizeof("false")> text{};
 
         std::snprintf(text.data(), text.size(), "%s", value ? "true" : "false");
         return text;
@@ -95,9 +96,9 @@ namespace telar {
       } else {
         static_assert(std::unsigned_integral<Value>, "Add a formatter for this field type");
 
-        std::array<char, std::numeric_limits<Value>::digits10 + 2> text{};
+        ds::Array<char, std::numeric_limits<Value>::digits10 + 2> text{};
 
-        std::snprintf(text.data(), text.size(), "%llu", static_cast<unsigned long long>(value));
+        std::snprintf(text.dataMut(), text.size(), "%llu", static_cast<unsigned long long>(value));
         return text;
       }
     }
@@ -198,10 +199,10 @@ namespace telar {
 
   template <std::size_t N>
   struct FixedBytes {
-    using value_type = std::array<Byte, N>;
+    using value_type = ds::Array<Byte, N>;
     static constexpr std::size_t width = N;
 
-    static void encode(const std::array<Byte, N>& value, std::span<Byte>& output) _throw(EncodingError) {
+    static void encode(const ds::Array<Byte, N>& value, std::span<Byte>& output) _throw(EncodingError) {
       if (output.size() < width) {
         throw EncodingError{"Output buffer too small"};
       }
@@ -213,15 +214,15 @@ namespace telar {
       output = output.subspan(width);
     }
 
-    static std::array<Byte, N> decode(std::span<const Byte>& input) _throw(EncodingError) {
+    static ds::Array<Byte, N> decode(std::span<const Byte>& input) _throw(EncodingError) {
       if (input.size() < width) {
         throw EncodingError{"Input buffer is too small"};
       }
 
-      std::array<Byte, N> value{};
+      ds::Array<Byte, N> value{};
 
       for (std::size_t i = 0; i < width; ++i) {
-        value[i] = input[i];
+        value.atMut(i) = input[i];
       }
 
       input = input.subspan(width);

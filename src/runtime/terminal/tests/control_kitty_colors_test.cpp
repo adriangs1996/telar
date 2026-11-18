@@ -19,6 +19,7 @@ import telar.testing.one_shot_allocator;
 import telar.runtime.terminal.text_reader;
 import telar.vocabulary;
 import telar.testing;
+import telar.base.ds;
 
 namespace {
 
@@ -84,15 +85,15 @@ namespace {
         for (unsigned sample = 0; sample <= UINT8_MAX; ++sample) {
           const unsigned green = UINT8_MAX - sample;
           const unsigned blue = sample ^ 0x55;
-          std::array<char, 64> setter;
-          const auto length = std::snprintf(setter.data(), setter.size(), "\x1b]4;0;#%02x%02x%02x\x1b\\", sample, green, blue);
+          ds::Array<char, 64> setter;
+          const auto length = std::snprintf(setter.dataMut(), setter.size(), "\x1b]4;0;#%02x%02x%02x\x1b\\", sample, green, blue);
 
           check(length > 0 && static_cast<std::size_t>(length) < setter.size());
           state.write(bytes({setter.data(), static_cast<std::size_t>(length)}));
           for (const auto ending : {control::Ending::bell, control::Ending::escape}) {
             const auto suffix = ending == control::Ending::bell ? "\a" : "\x1b\\";
-            std::array<char, 64> answer;
-            const auto count = std::snprintf(answer.data(), answer.size(), "\x1b]21;0=rgb:%02x/%02x/%02x%s", sample, green, blue, suffix);
+            ds::Array<char, 64> answer;
+            const auto count = std::snprintf(answer.dataMut(), answer.size(), "\x1b]21;0=rgb:%02x/%02x/%02x%s", sample, green, blue, suffix);
 
             check(count > 0 && static_cast<std::size_t>(count) < answer.size());
             check(colors.handle({state, reply, policy}, sequence("\x1b]21;0=?", ending), true));

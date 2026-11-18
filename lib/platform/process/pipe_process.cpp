@@ -16,14 +16,14 @@ import telar.platform.net;
 namespace telar::runtime {
   namespace {
 
-    std::array<FileDescriptor, 2> makePipe(ProcessInput input = ProcessInput::pipe) {
-      std::array<int, 2> raw{};
-      const auto result = input == ProcessInput::pipe ? ::pipe(raw.data()) : ::socketpair(AF_UNIX, SOCK_STREAM, 0, raw.data());
+    ds::Array<FileDescriptor, 2> makePipe(ProcessInput input = ProcessInput::pipe) {
+      ds::Array<int, 2> raw{};
+      const auto result = input == ProcessInput::pipe ? ::pipe(raw.dataMut()) : ::socketpair(AF_UNIX, SOCK_STREAM, 0, raw.dataMut());
       if (result != 0) {
         throw SystemError{"Create process pipe"};
       }
 
-      std::array<FileDescriptor, 2> ends{FileDescriptor{raw[0]}, FileDescriptor{raw[1]}};
+      ds::Array<FileDescriptor, 2> ends{FileDescriptor{raw[0]}, FileDescriptor{raw[1]}};
 
       if (input == ProcessInput::buffered_socket) {
         constexpr int capacity = 256 * 1024;
@@ -32,7 +32,7 @@ namespace telar::runtime {
         }
       }
 
-      for (auto& end : ends) {
+      for (auto& end : ends.viewMut()) {
         if (end.get() <= STDERR_FILENO) {
           const int relocated = ::fcntl(end.get(), F_DUPFD_CLOEXEC, STDERR_FILENO + 1);
           if (relocated < 0) {
@@ -76,9 +76,9 @@ namespace telar::runtime {
     options.closeOthers();
     checkSpawn(posix_spawn(&process_id_, specification.executable, &options.actions, &options.attributes, specification.arguments, specification.environment));
 
-    input_ = std::move(input[1]);
-    output_ = std::move(output[0]);
-    error_ = std::move(error[0]);
+    input_ = std::move(input.atMut(1));
+    output_ = std::move(output.atMut(0));
+    error_ = std::move(error.atMut(0));
   }
 
   PipeProcess::~PipeProcess() {

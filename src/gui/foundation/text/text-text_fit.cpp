@@ -11,7 +11,7 @@ namespace telar::gui::inline foundation::inline text {
       ++result.graphemes;
       bytes += cluster->size();
       if (bytes <= maximum_bytes - ellipsis.size()) {
-        result.bytes[++result.stored] = bytes;
+        result.bytes.atMut(++result.stored) = bytes;
       }
     }
 

@@ -53,7 +53,7 @@ namespace telar::gui::qt {
 
     void registerComponentFonts() {
       static const bool ready = [] {
-        constexpr std::array paths{":/telar/fonts/IBMPlexSans-Regular.ttf", ":/telar/fonts/IBMPlexSans-SemiBold.ttf", ":/telar/fonts/SymbolsNerdFontMono-Regular.ttf", ":/telar/fonts/JetBrainsMono-Regular.ttf", ":/telar/fonts/TelarForma-Regular.ttf"};
+        constexpr ds::Array paths{":/telar/fonts/IBMPlexSans-Regular.ttf", ":/telar/fonts/IBMPlexSans-SemiBold.ttf", ":/telar/fonts/SymbolsNerdFontMono-Regular.ttf", ":/telar/fonts/JetBrainsMono-Regular.ttf", ":/telar/fonts/TelarForma-Regular.ttf"};
 
         for (const auto* const path : paths) {
           if (QFontDatabase::addApplicationFont(QString::fromLatin1(path)) < 0) {
@@ -68,7 +68,7 @@ namespace telar::gui::qt {
     }
 
     ComponentSlotState& surfaceState(ComponentSurfaceState& state, std::size_t index, bool panel) {
-      return panel ? state.panel : state.bars.at(index);
+      return panel ? state.panel : state.bars.atCheckedMut(index);
     }
 
     const ComponentSlotState& surfaceState(const ComponentSurfaceState& state, std::size_t index, bool panel) {
@@ -235,7 +235,7 @@ namespace telar::gui::qt {
   void ComponentsController::pickCommitted() {
     const auto now = ComponentSlotState::Clock::now();
 
-    for (auto& state : surfaces_.bars) {
+    for (auto& state : surfaces_.bars.viewMut()) {
       state.next = now;
     }
 
@@ -407,7 +407,7 @@ namespace telar::gui::qt {
     const auto* definitions = configuration_.definitions();
     if (definitions != nullptr) {
       for (std::size_t index = 0; index < surfaces_.bars.size(); ++index) {
-        auto& state = surfaces_.bars[index];
+        auto& state = surfaces_.bars.atMut(index);
 
         state.revision = ++next_revision_;
         state.identity = state.revision;
@@ -701,8 +701,8 @@ namespace telar::gui::qt {
   }
 
   QVariantMap ComponentsController::bars() const {
-    constexpr std::array names{"left", "center", "right", "top", "footerLeft", "footerCenter", "footerRight"};
-    constexpr std::array kinds{"empty", "tabs", "metrics", "machines", "content", "content", "content"};
+    constexpr ds::Array names{"left", "center", "right", "top", "footerLeft", "footerCenter", "footerRight"};
+    constexpr ds::Array kinds{"empty", "tabs", "metrics", "machines", "content", "content", "content"};
     const application::components::Definitions defaults;
     const auto* configured = configuration_.definitions();
     const auto& definitions = configured == nullptr ? defaults : *configured;

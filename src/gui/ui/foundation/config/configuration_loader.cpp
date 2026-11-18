@@ -169,7 +169,7 @@ namespace telar::gui::qt {
       const auto position = static_cast<application::components::Position>(index);
       const auto& source = definitions.source(position);
       if (source.kind == application::components::SourceKind::fixed) {
-        result.fixed_bars.at(index).emplace(generation.copied(memory, generation.components().bar(position)));
+        result.fixed_bars.atCheckedMut(index).emplace(generation.copied(memory, generation.components().bar(position)));
       } else if (source.kind == application::components::SourceKind::command) {
         store(source.reference, "command");
       }

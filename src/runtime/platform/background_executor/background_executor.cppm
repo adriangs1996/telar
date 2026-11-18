@@ -8,6 +8,7 @@ import telar.runtime.transport.connection;
 import telar.wire.vocabulary;
 import telar.wire.editor;
 import telar.base.memory.allocators;
+import telar.base.ds;
 
 // Interface: runtime/request_context.cppm
 export {
@@ -21,11 +22,11 @@ export {
 
     struct RequestContext {
       TabLocation location{};
-      std::array<Byte, 16> history_session{};
+      ds::Array<Byte, 16> history_session{};
       std::string_view workspace_path{};
       std::string_view prompt{};
       std::int64_t received_at_ms = 0;
-      std::array<EditorCandidate, 64> editor_candidates{};
+      ds::Array<EditorCandidate, 64> editor_candidates{};
       std::size_t editor_candidate_count = 0;
       const std::atomic<bool>* cancelled = nullptr;
       bool persistent_client = false;

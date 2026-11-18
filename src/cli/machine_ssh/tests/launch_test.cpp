@@ -13,6 +13,7 @@ import telar.base.memory.allocators;
 import telar.testing;
 import telar.cli.machine_ssh;
 import telar.machines;
+import telar.base.ds;
 
 namespace {
 
@@ -30,9 +31,9 @@ namespace {
 
     check(pipe != nullptr, script);
     std::string output;
-    std::array<char, 256> buffer;
+    ds::Array<char, 256> buffer;
 
-    while (const auto count = std::fread(buffer.data(), 1, buffer.size(), pipe)) {
+    while (const auto count = std::fread(buffer.dataMut(), 1, buffer.size(), pipe)) {
       output.append(buffer.data(), count);
     }
 
@@ -97,10 +98,10 @@ namespace {
   // Git reaches a machine over the same SSH options as the dispatch, each one a single word
   // to the shell Git runs it with; an option the quoting cannot hold is refused.
   void gitSshCommandQuotesOptions() {
-    std::array<char, 64> directory{};
+    ds::Array<char, 64> directory{};
 
-    std::strcpy(directory.data(), "/tmp/telar-git-ssh-XXXXXX");
-    check(::mkdtemp(directory.data()) != nullptr);
+    std::strcpy(directory.dataMut(), "/tmp/telar-git-ssh-XXXXXX");
+    check(::mkdtemp(directory.dataMut()) != nullptr);
     const std::string socket = std::string{directory.data()} + "/runtime.sock";
 
     check(::setenv("TELAR_SOCKET", socket.c_str(), 1) == 0);
@@ -129,10 +130,10 @@ namespace {
   // A remote command that fails, or whose output overflows what is kept, is the caller's
   // failure, never its output.
   void remoteCaptureFailsOnStatusOrOverflow() {
-    std::array<char, 64> directory{};
+    ds::Array<char, 64> directory{};
 
-    std::strcpy(directory.data(), "/tmp/telar-remote-capture-XXXXXX");
-    check(::mkdtemp(directory.data()) != nullptr);
+    std::strcpy(directory.dataMut(), "/tmp/telar-remote-capture-XXXXXX");
+    check(::mkdtemp(directory.dataMut()) != nullptr);
     const std::string root = directory.data();
     const auto path = root + ":/usr/bin:/bin";
 

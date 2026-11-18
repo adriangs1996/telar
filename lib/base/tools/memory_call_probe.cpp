@@ -17,6 +17,7 @@
 #include <vector>
 
 import telar.base.memory.allocators;
+import telar.base.ds;
 
 namespace telar::probe {
 
@@ -52,12 +53,12 @@ namespace {
   // A run of live allocations released together, as a message or a frame does.
   template <telar::Allocator Memory>
   [[gnu::noinline]] std::uintptr_t batches(Memory& memory, Sizes sizes) noexcept {
-    std::array<void*, batch> pointers;
+    telar::ds::Array<void*, batch> pointers;
     std::uintptr_t checksum = 0;
 
     for (std::size_t first = 0; first + batch <= sizes.size(); first += batch) {
       for (std::size_t index = 0; index < batch; ++index) {
-        pointers[index] = memory.allocate(sizes[first + index], alignment);
+        pointers.atMut(index) = memory.allocate(sizes[first + index], alignment);
         checksum ^= reinterpret_cast<std::uintptr_t>(pointers[index]);
       }
 

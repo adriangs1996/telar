@@ -194,7 +194,7 @@ namespace telar::gui::qt {
     for (std::size_t index = 0; index < measured.count; ++index) {
       const auto hint = hints.value(static_cast<qsizetype>(index)).toMap();
 
-      measured.hints[index] = {.key = advance(hint.value(QStringLiteral("key"))), .word = advance(hint.value(QStringLiteral("word")))};
+      measured.hints.atMut(index) = {.key = advance(hint.value(QStringLiteral("key"))), .word = advance(hint.value(QStringLiteral("word")))};
     }
 
     geometry_ = application::history::HistoryFooterGeometry::derive({.width = static_cast<float>(width() * density_), .height = static_cast<float>(height() * density_)}, chrome, measured);

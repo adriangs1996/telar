@@ -179,7 +179,7 @@ export {
       static constexpr std::uint64_t motion_duration_ns = 180'000'000;
 
       struct Cards {
-        std::array<NotificationPlacement, maximum_visible> placements;
+        ds::Array<NotificationPlacement, maximum_visible> placements;
         std::size_t count = 0;
 
         [[nodiscard]] std::span<const NotificationPlacement> items() const noexcept;
@@ -196,10 +196,10 @@ export {
           return result;
         }
 
-        std::array<bool, NotificationCenter::capacity> used{};
+        ds::Array<bool, NotificationCenter::capacity> used{};
         auto y = request.host.y + margin;
         std::size_t painted = 0;
-        std::array<NotificationPlacement, maximum_visible> cards;
+        ds::Array<NotificationPlacement, maximum_visible> cards;
 
         for (std::size_t index = 0; index < request.items.size() && painted < maximum_visible; ++index) {
           const auto& item = request.items[index];
@@ -218,26 +218,26 @@ export {
           }
 
           if (const auto slot = motion(item.id, y)) {
-            used[*slot] = true;
-            bounds.y = motions_[*slot].position(y, request);
+            used.atMut(*slot) = true;
+            bounds.y = motions_.atMut(*slot).position(y, request);
           }
 
           bounds.x += NotificationMetrics::enter_shift_x * request.ratio * (1 - opacity);
           bounds.y += NotificationMetrics::enter_shift_y * request.ratio * (1 - opacity);
           y += bounds.height + (NotificationMetrics::stack_gap * request.ratio);
-          cards[painted++] = {.index = index, .id = item.id, .bounds = bounds, .opacity = opacity};
+          cards.atMut(painted++) = {.index = index, .id = item.id, .bounds = bounds, .opacity = opacity};
         }
 
         while (painted > 0) {
           const auto& card = cards[--painted];
           if (card.opacity > 0) {
-            result.placements[result.count++] = card;
+            result.placements.atMut(result.count++) = card;
           }
         }
 
         for (std::size_t index = 0; index < motions_.size(); ++index) {
           if (!used[index]) {
-            motions_[index] = {};
+            motions_.atMut(index) = {};
           }
         }
 
@@ -259,7 +259,7 @@ export {
 
       [[nodiscard]] ds::Option<std::size_t> motion(NotificationId id, float y) noexcept;
 
-      std::array<Motion, NotificationCenter::capacity> motions_{};
+      ds::Array<Motion, NotificationCenter::capacity> motions_{};
     };
 
   }

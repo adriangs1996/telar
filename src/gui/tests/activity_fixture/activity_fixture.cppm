@@ -15,7 +15,7 @@ export {
     inline CoordinatorReference coordinatorReference(std::uint64_t pane, std::uint64_t generation = 1) {
       CoordinatorReference reference{.pane_id = pane, .pane_generation = generation};
 
-      reference.session_id.front() = 1;
+      reference.session_id.atMut(0) = 1;
 
       return reference;
     }

@@ -129,9 +129,9 @@ namespace telar {
       : Schema<Direction::client, ClientTag::send_pane_text, Field<&SendPaneText::request_id, NonzeroU64, "request_id">, Field<&SendPaneText::pane_id, NonzeroU64, "pane_id">, Field<&SendPaneText::pane_generation, u64, "pane_generation">, Field<&SendPaneText::mode, EnumByte<PaneTextMode, 2>, "mode">, Field<&SendPaneText::text, Text32<65536>, "text">, Field<&SendPaneText::sender, OptionalValue<NonzeroU64>, "sender">> {};
 
   struct ConfigureTerminalColors {
-    ds::Option<std::array<Byte, 3>> foreground{};
-    ds::Option<std::array<Byte, 3>> background{};
-    ds::Option<std::array<Byte, 48>> palette{};
+    ds::Option<ds::Array<Byte, 3>> foreground{};
+    ds::Option<ds::Array<Byte, 3>> background{};
+    ds::Option<ds::Array<Byte, 48>> palette{};
   };
 
   template <>
@@ -150,10 +150,10 @@ namespace telar {
     bool focused{};
     bool light{};
     bool clipboard{};
-    ds::Option<std::array<Byte, 3>> foreground{};
-    ds::Option<std::array<Byte, 3>> background{};
-    ds::Option<std::array<Byte, 3>> cursor{};
-    ds::Option<std::array<Byte, 48>> palette{};
+    ds::Option<ds::Array<Byte, 3>> foreground{};
+    ds::Option<ds::Array<Byte, 3>> background{};
+    ds::Option<ds::Array<Byte, 3>> cursor{};
+    ds::Option<ds::Array<Byte, 48>> palette{};
 
     void validate() const;
 

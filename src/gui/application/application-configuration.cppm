@@ -248,7 +248,7 @@ export {
       BindingMap<BindingAction> keymap_;
       std::uint64_t number_;
       int root_reference_ = LUA_NOREF;
-      std::array<int, BindingEffects::maximum_effects> transient_references_{};
+      ds::Array<int, BindingEffects::maximum_effects> transient_references_{};
       std::size_t transient_count_ = 0;
       tbc::view<Vector<ElementHandlers, Memory>, tbc::lt::a> element_handlers_{AllocatorRef<ElementHandlers, Memory>{memory_}};
     };

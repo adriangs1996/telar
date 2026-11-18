@@ -5,6 +5,7 @@ static_assert(true);
 
 #include "alpha_mask_material.hpp"
 #include "physical_pixel_matrix.hpp"
+#include "telar_base/ds/values.hpp"
 #include <QByteArray>
 #include <QSGMaterial>
 #include <QSGMaterialShader>
@@ -24,8 +25,8 @@ namespace telar::gui::qt {
   namespace {
     struct MaskUniforms {
       static constexpr std::size_t matrix_side = 4;
-      std::array<float, matrix_side * matrix_side> matrix{};
-      std::array<float, 4> foreground{};
+      ds::Array<float, matrix_side * matrix_side> matrix{};
+      ds::Array<float, 4> foreground{};
       float opacity = 1;
     };
 
@@ -73,11 +74,11 @@ namespace telar::gui::qt {
       const auto& material = dynamic_cast<const AlphaMaskMaterial&>(*new_material);
       const auto color = material.foreground();
       const auto alpha = material.blend() == AlphaMaskBlend::straight ? 1 : color.a;
-      const std::array<float, 4> foreground{color.r * alpha, color.g * alpha, color.b * alpha, color.a};
-      std::array<float, 4> previous_foreground{};
+      const ds::Array<float, 4> foreground{color.r * alpha, color.g * alpha, color.b * alpha, color.a};
+      ds::Array<float, 4> previous_foreground{};
       const auto material_changed = new_material != old_material || state.dirtyStates().testFlag(RenderState::DirtyCachedMaterialData);
       if (!material_changed) {
-        std::memcpy(previous_foreground.data(), buffer.constData() + offsetof(MaskUniforms, foreground), sizeof(previous_foreground));
+        std::memcpy(previous_foreground.dataMut(), buffer.constData() + offsetof(MaskUniforms, foreground), sizeof(previous_foreground));
       }
 
       if (material_changed || previous_foreground != foreground) {
@@ -124,9 +125,9 @@ namespace telar::gui::qt {
   QSGMaterialType* AlphaMaskMaterial::type() const {
     constexpr std::size_t sampling_modes = 3;
     constexpr std::size_t blend_modes = 2;
-    static std::array<QSGMaterialType, sampling_modes * blend_modes> material_types;
+    static ds::Array<QSGMaterialType, sampling_modes * blend_modes> material_types;
 
-    return &material_types[(static_cast<std::size_t>(blend_) * sampling_modes) + static_cast<std::size_t>(sampling_)];
+    return &material_types.atMut((static_cast<std::size_t>(blend_) * sampling_modes) + static_cast<std::size_t>(sampling_));
   }
 
   QSGMaterialShader* AlphaMaskMaterial::createShader([[maybe_unused]] QSGRendererInterface::RenderMode render_mode) const {

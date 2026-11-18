@@ -373,13 +373,13 @@ namespace telar::gui::features::terminal::links {
     constexpr std::string_view openers{"([{"};
     constexpr std::string_view closers{")]}"};
     constexpr std::size_t pair_count = 3;
-    std::array<std::ptrdiff_t, pair_count> balance{};
+    ds::Array<std::ptrdiff_t, pair_count> balance{};
 
     for (const auto byte : text) {
       if (const auto index = openers.find(byte); index < balance.size()) {
-        --balance[index];
+        --balance.atMut(index);
       } else if (const auto index = closers.find(byte); index != std::string_view::npos) {
-        ++balance[index];
+        ++balance.atMut(index);
       }
     }
 
@@ -398,7 +398,7 @@ namespace telar::gui::features::terminal::links {
         break;
       }
 
-      --balance[pair];
+      --balance.atMut(pair);
       --end;
     }
 
@@ -684,8 +684,8 @@ namespace telar::gui::features::terminal::links {
       return {};
     }
 
-    std::array<char, window_bytes> storage{};
-    const auto window = readWindow(grid, *first, *cursor, storage);
+    ds::Array<char, window_bytes> storage{};
+    const auto window = readWindow(grid, *first, *cursor, storage.viewMut());
     if (!window) {
       return {};
     }

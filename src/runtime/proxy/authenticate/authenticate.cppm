@@ -39,7 +39,7 @@ export {
       static ds::Option<unsigned> digit(char character) noexcept;
 
       static constexpr std::string_view hexadecimal = "0123456789abcdef";
-      std::array<std::uint8_t, byte_count> bytes_;
+      ds::Array<std::uint8_t, byte_count> bytes_;
     };
 
   }

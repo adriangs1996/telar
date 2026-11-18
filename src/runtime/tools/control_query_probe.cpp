@@ -28,6 +28,7 @@ import telar.wire.pane_io;
 import telar.wire.vocabulary;
 import telar.runtime.terminal.ghostty;
 import telar.runtime.runtime.tests.clipboard_task;
+import telar.base.ds;
 
 using namespace telar;
 using namespace telar::runtime;
@@ -136,7 +137,7 @@ extern "C" std::size_t query_probe_drain(void* context, Byte* destination, std::
 extern "C" std::uint64_t query_probe_benchmark(const Byte* bytes, std::size_t size, std::size_t iterations, std::size_t fragment) noexcept {
   try {
     Probe probe{TerminalSize{80, 24, 9, 18}};
-    std::array<Byte, 65536> output;
+    ds::Array<Byte, 65536> output;
     const Probe::Active active{probe};
     std::uint64_t observed = 0;
     const auto started = std::chrono::steady_clock::now();
@@ -147,7 +148,7 @@ extern "C" std::uint64_t query_probe_benchmark(const Byte* bytes, std::size_t si
 
         probe.terminal.feed({bytes + offset, count});
         offset += count;
-        const auto written = query_probe_drain(&probe, output.data(), output.size());
+        const auto written = query_probe_drain(&probe, output.dataMut(), output.size());
         if (written != 0) {
           observed += output.front() + output[written - 1];
         }
@@ -175,7 +176,7 @@ extern "C" bool query_probe_policy(void* context, std::uint32_t flags, const cha
                                                                                               : control::ColorFormat::sixteen_bit;
   policy.clipboard_write = (flags & 16) != 0 ? control::Access::deny : control::Access::allow;
   if (length != 0) {
-    std::copy_n(answerback, length, policy.answerback.begin());
+    std::copy_n(answerback, length, policy.answerback.dataMut());
   }
 
   policy.answerback_length = static_cast<std::uint16_t>(length);
@@ -204,7 +205,7 @@ extern "C" bool query_probe_clipboard_config(void* context, std::uint32_t flags)
     auto& probe = *static_cast<Probe*>(context);
     if (!probe.clipboard) {
       probe.clipboard = std::make_unique<control_test::MemoryClipboard>();
-      constexpr std::array<control::ClipboardRoute, 1> routes{{{1, 13}}};
+      constexpr ds::Array<control::ClipboardRoute, 1> routes{{{1, 13}}};
 
       probe.terminal.clipboardControl().routes(routes, routes[0]);
     }
@@ -272,7 +273,7 @@ extern "C" bool query_probe_clipboard_paste(void* context, bool primary) noexcep
     }
 
     if (probe.terminal.pasteEvents()) {
-      std::array<std::string_view, 16> available;
+      ds::Array<std::string_view, 16> available;
       std::size_t count = 0;
 
       for (const auto& content : probe.clipboard->contents) {
@@ -280,7 +281,7 @@ extern "C" bool query_probe_clipboard_paste(void* context, bool primary) noexcep
           break;
         }
 
-        available[count++] = content.mime;
+        available.atMut(count++) = content.mime;
       }
 
       if (!probe.terminal.clipboardControl().paste({1, 13}, primary, std::span{available}.first(count))) {

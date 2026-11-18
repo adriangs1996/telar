@@ -11,7 +11,7 @@ namespace telar::runtime::diagnostics {
   void Line::field(std::string_view name, std::uint64_t value) {
     key(name);
 
-    const auto result = std::to_chars(bytes_.data() + length_, bytes_.data() + bytes_.size(), value);
+    const auto result = std::to_chars(bytes_.dataMut() + length_, bytes_.dataMut() + bytes_.size(), value);
     if (result.ec != std::errc{}) {
       throw std::length_error{"Diagnostics line capacity exceeded"};
     }
@@ -53,7 +53,7 @@ namespace telar::runtime::diagnostics {
       throw std::length_error{"Diagnostics line capacity exceeded"};
     }
 
-    std::ranges::copy(text, bytes_.begin() + length_);
+    std::ranges::copy(text, bytes_.viewMut().begin() + length_);
     length_ += text.size();
   }
 

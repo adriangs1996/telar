@@ -30,7 +30,7 @@ namespace telar::runtime {
   }
 
   LimitLedger::Recorded LimitLedger::record(const LimitReach& reach, std::uint32_t hits) {
-    auto rows = std::span{rows_}.first(count_);
+    auto rows = rows_.viewMut().first(count_);
     auto found = std::find_if(rows.begin(), rows.end(), [&](const Row& row) {
       return row.name.view() == reach.name;
     });
@@ -38,7 +38,7 @@ namespace telar::runtime {
     Row* row = found == rows.end() ? nullptr : &*found;
     if (row == nullptr) {
       if (count_ < capacity) {
-        row = &rows_[count_++];
+        row = &rows_.atMut(count_++);
       } else {
         row = &*std::min_element(rows.begin(), rows.end(), [](const Row& left, const Row& right) {
           return left.last_ms < right.last_ms;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "telar_base/ds/values.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -296,7 +297,7 @@ namespace telar::gui {
 
     // The last `sample_capacity` deltas of a gesture, oldest overwritten first.
     void sample(double delta, ScrollTime now) noexcept {
-      history_[history_next_] = {.time = now, .delta = delta};
+      history_.atMut(history_next_) = {.time = now, .delta = delta};
       history_next_ = (history_next_ + 1) % sample_capacity;
       history_size_ = std::min(history_size_ + 1, sample_capacity);
     }
@@ -337,7 +338,7 @@ namespace telar::gui {
     double duration_ms_ = 0;
     ScrollTime start_;
     ScrollTime last_;
-    std::array<Sample, sample_capacity> history_{};
+    ds::Array<Sample, sample_capacity> history_{};
     std::size_t history_size_ = 0;
     std::size_t history_next_ = 0;
     Kind kind_ = Kind::rest;

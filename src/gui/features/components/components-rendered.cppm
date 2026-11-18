@@ -26,8 +26,8 @@ export {
       [[nodiscard]] View view() const noexcept;
 
     private:
-      std::array<char, View::maximum_argument_bytes + View::maximum_label_bytes> bytes_{};
-      std::array<std::uint16_t, View::maximum_arguments> lengths_{};
+      ds::Array<char, View::maximum_argument_bytes + View::maximum_label_bytes> bytes_{};
+      ds::Array<std::uint16_t, View::maximum_arguments> lengths_{};
       std::size_t count_ = 0;
       std::uint16_t label_ = 0;
     };

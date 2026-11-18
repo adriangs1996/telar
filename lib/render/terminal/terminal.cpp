@@ -1,6 +1,7 @@
 module telar.render.terminal;
 
 import std;
+import telar.base.ds;
 
 namespace telar::render::terminal {
 
@@ -165,11 +166,11 @@ namespace telar::render::terminal {
         return used + list_indent;
       }
 
-      std::array<char, 24> text{};
+      ds::Array<char, 24> text{};
       std::size_t length = 0;
       std::size_t shown = 0;
       const auto put = [&](std::string_view value, std::size_t width) {
-        std::copy(value.begin(), value.end(), text.data() + length);
+        std::copy(value.begin(), value.end(), text.dataMut() + length);
         length += value.size();
         shown += width;
       };
@@ -186,7 +187,7 @@ namespace telar::render::terminal {
         break;
       case Marker::ordered:
       case Marker::footnote: {
-        const auto end = std::to_chars(text.data() + length, text.data() + text.size() - 2, block.number).ptr;
+        const auto end = std::to_chars(text.dataMut() + length, text.dataMut() + text.size() - 2, block.number).ptr;
 
         shown += static_cast<std::size_t>(end - (text.data() + length));
         length = static_cast<std::size_t>(end - text.data());
@@ -441,13 +442,13 @@ namespace telar::render::terminal {
     void table(const Block& block) {
       const auto cells = document_.cellsOf(block);
       const std::size_t columns_count = block.columns;
-      std::array<std::size_t, 64> widths{};
+      ds::Array<std::size_t, 64> widths{};
       const auto shown = std::min<std::size_t>(columns_count, widths.size());
 
       for (std::size_t index = 0; index < cells.size(); ++index) {
         const auto column = index % columns_count;
         if (column < shown) {
-          widths[column] = std::max(widths[column], cellWidth(cells[index]));
+          widths.atMut(column) = std::max(widths[column], cellWidth(cells[index]));
         }
       }
 
@@ -460,13 +461,13 @@ namespace telar::render::terminal {
       std::size_t total = 0;
 
       for (std::size_t column = 0; column < shown; ++column) {
-        widths[column] = std::max<std::size_t>(widths[column], 1);
+        widths.atMut(column) = std::max<std::size_t>(widths[column], 1);
         total += widths[column];
       }
 
       // Shrink the widest columns until the table fits.
       while (total + borders > room && total > shown) {
-        auto widest = std::max_element(widths.begin(), widths.begin() + static_cast<std::ptrdiff_t>(shown));
+        auto widest = std::max_element(widths.viewMut().begin(), widths.viewMut().begin() + static_cast<std::ptrdiff_t>(shown));
 
         --*widest;
         --total;

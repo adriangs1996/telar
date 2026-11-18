@@ -104,7 +104,7 @@ namespace {
     check(sameTab(refresh.location, request.location), "identity refresh must stay in the split's tab");
     const auto attachment = client.findPane(2)->attachment_generation;
     constexpr std::uint64_t runtime_generation = 7;
-    const std::array<PaneDescriptor, 2> descriptors{{{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}, {.pane_id = 2, .lifecycle = PaneLifecycle::running, .pane_generation = runtime_generation}}};
+    const ds::Array<PaneDescriptor, 2> descriptors{{{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}, {.pane_id = 2, .lifecycle = PaneLifecycle::running, .pane_generation = runtime_generation}}};
 
     deliver(client, TabSnapshot{.request_id = refresh.request_id, .location = request.location, .panes = descriptors});
     check(client.findPane(2)->generation == runtime_generation && client.findPane(2)->attachment_generation == attachment, "runtime identity resolution must preserve the existing client attachment");
@@ -125,7 +125,7 @@ namespace {
     constexpr auto infinity = std::numeric_limits<double>::infinity();
     constexpr auto invalid_number = std::numeric_limits<double>::quiet_NaN();
 
-    for (const auto invalid : std::array{0.0, -1.0, infinity, invalid_number}) {
+    for (const auto invalid : ds::Array{0.0, -1.0, infinity, invalid_number}) {
       check(!grid.fit(invalid, height) && !grid.fit(width, invalid), "non-finite and non-positive extents must not produce terminal requests");
       auto invalid_grid = grid;
 
@@ -165,10 +165,10 @@ namespace {
       std::uint16_t rows;
     };
 
-    constexpr auto cases = std::to_array<SplitCase>({
+    constexpr auto cases = ds::Array<SplitCase, 2>{{
         {.axis = ClientLayoutAxis::horizontal, .columns = 48, .rows = 40},
         {.axis = ClientLayoutAxis::vertical, .columns = 99, .rows = 19},
-    });
+    }};
 
     for (const auto& entry : cases) {
       SystemAllocator memory;
@@ -197,7 +197,7 @@ namespace {
   }
 
   void splitDeliveryFailuresRestoreTheSourceAndReleaseOwnership() {
-    for (const bool reject_resize : std::array{false, true}) {
+    for (const bool reject_resize : ds::Array{false, true}) {
       SystemAllocator memory;
       Transport transport;
       TestSession client{memory, transport};

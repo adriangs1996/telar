@@ -4,6 +4,7 @@ export module telar.gui.features.paths:page;
 import std;
 
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::features::paths {
 
@@ -46,7 +47,7 @@ export {
       std::uint16_t offset = 0;
       std::uint16_t length = 0;
       PathKind kind = PathKind::file;
-      std::array<std::uint16_t, PathPickerLimits::query_bytes> positions{};
+      ds::Array<std::uint16_t, PathPickerLimits::query_bytes> positions{};
       std::uint8_t position_count = 0;
 
       [[nodiscard]] std::span<const std::uint16_t> highlights() const noexcept;

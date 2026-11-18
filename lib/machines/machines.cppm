@@ -50,7 +50,7 @@ export {
 
       void deriveDecimal(std::size_t exponent);
 
-      std::array<std::uint8_t, MaximumExponent> digits_{};
+      ds::Array<std::uint8_t, MaximumExponent> digits_{};
       std::size_t length_ = 0;
     };
 
@@ -72,14 +72,14 @@ export {
         }
 
         if (!text.empty()) {
-          std::memmove(storage_.data() + length_, text.data(), text.size());
+          std::memmove(storage_.dataMut() + length_, text.data(), text.size());
           length_ += text.size();
         }
       }
 
       template <std::unsigned_integral Number>
       inline void appendDecimal(Number number) {
-        const auto result = std::to_chars(storage_.data() + length_, storage_.data() + Capacity, number);
+        const auto result = std::to_chars(storage_.dataMut() + length_, storage_.dataMut() + Capacity, number);
         if (result.ec != std::errc{}) {
           throw std::length_error{"Text capacity exceeded"};
         }
@@ -100,7 +100,7 @@ export {
       }
 
     private:
-      std::array<char, Capacity> storage_{};
+      ds::Array<char, Capacity> storage_{};
       std::size_t length_ = 0;
     };
 
@@ -383,9 +383,9 @@ export {
       opencode,
     };
 
-    inline constexpr std::array machine_agents{MachineAgent::claude, MachineAgent::codex, MachineAgent::pi, MachineAgent::cursor, MachineAgent::opencode};
-    inline constexpr std::array<std::string_view, machine_agents.size()> machine_agent_names{"claude", "codex", "pi", "cursor", "opencode"};
-    inline constexpr auto machine_login_names = std::to_array<std::string_view>({"pending", "done", "failed"});
+    inline constexpr ds::Array machine_agents{MachineAgent::claude, MachineAgent::codex, MachineAgent::pi, MachineAgent::cursor, MachineAgent::opencode};
+    inline constexpr ds::Array<std::string_view, machine_agents.size()> machine_agent_names{"claude", "codex", "pi", "cursor", "opencode"};
+    inline constexpr auto machine_login_names = ds::Array<std::string_view, 3>{"pending", "done", "failed"};
 
     struct MachineProfileFields {
       std::string_view label;
@@ -420,7 +420,7 @@ export {
       runtime::FixedText<MachineLimits::destination_bytes> destination_;
       runtime::FixedText<MachineLimits::color_bytes> color_;
       runtime::FixedText<MachineLimits::program_bytes> program_;
-      std::array<ds::Option<MachineLogin>, machine_agents.size()> logins_{};
+      ds::Array<ds::Option<MachineLogin>, machine_agents.size()> logins_{};
       bool enabled_ = true;
     };
 
@@ -453,7 +453,7 @@ export {
       [[nodiscard]] std::size_t require(std::string_view label) const;
       void requireFreeLabel(std::string_view label) const;
 
-      std::array<MachineProfile, MachineLimits::profiles> rows_;
+      ds::Array<MachineProfile, MachineLimits::profiles> rows_;
       runtime::FixedText<MachineLimits::label_bytes> local_label_;
       std::size_t length_ = 0;
     };
@@ -473,8 +473,8 @@ export {
       [[nodiscard]] static String<Memory> format(Memory& memory, const MachineProfiles& profiles);
 
     private:
-      static constexpr auto file_fields = std::to_array<std::string_view>({"version", "local_label", "machines"});
-      static constexpr auto profile_fields = std::to_array<std::string_view>({"id", "label", "destination", "color", "enabled", "telar_path", "logins"});
+      static constexpr auto file_fields = ds::Array<std::string_view, 3>{"version", "local_label", "machines"};
+      static constexpr auto profile_fields = ds::Array<std::string_view, 7>{"id", "label", "destination", "color", "enabled", "telar_path", "logins"};
 
       static bool isNull(const runtime::JsonValue& value) noexcept;
 

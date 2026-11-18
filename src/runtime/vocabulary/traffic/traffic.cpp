@@ -75,7 +75,7 @@ namespace telar::runtime::plugins {
       throw EncodingError{"Tap returned too many effects"};
     }
 
-    for (auto& notification : std::span{result.batch.notifications}.first(result.batch.count)) {
+    for (auto& notification : result.batch.notifications.viewMut().first(result.batch.count)) {
       reader.require(EffectKind::notification);
       notification.level = reader.tag(NotificationLevel::failure);
       notification.duration_ms = reader.integer<std::uint32_t>();

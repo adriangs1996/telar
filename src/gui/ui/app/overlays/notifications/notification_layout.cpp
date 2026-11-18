@@ -179,7 +179,7 @@ namespace telar::gui::qt {
   }
 
   void NotificationLayout::invalidate() {
-    for (auto& content : contents_) {
+    for (auto& content : contents_.viewMut()) {
       content.id = {};
     }
 
@@ -227,18 +227,19 @@ namespace telar::gui::qt {
   }
 
   NotificationLayout::Content& NotificationLayout::content(const application::notifications::NotificationItem& item, float width) {
-    auto* found = std::ranges::find(contents_, item.id, &Content::id);
-    if (found == contents_.end()) {
+    const auto contents = contents_.viewMut();
+    auto found = std::ranges::find(contents, item.id, &Content::id);
+    if (found == contents.end()) {
       const auto retained = controller_->center().items();
 
-      found = std::ranges::find_if(contents_, [&](const auto& candidate) {
+      found = std::ranges::find_if(contents, [&](const auto& candidate) {
         return candidate.id.value == 0 || std::ranges::none_of(retained, [&](const auto& existing) {
           return existing.id == candidate.id;
         });
       });
     }
 
-    if (found == contents_.end()) {
+    if (found == contents.end()) {
       throw std::logic_error{"NotificationContentCapacityExceeded"};
     }
 
@@ -317,7 +318,7 @@ namespace telar::gui::qt {
     const auto machine_view = controller_ ? controller_->machineView() : 0;
     if (machine_view != machine_view_) {
       machine_view_ = machine_view;
-      for (auto& content : contents_) {
+      for (auto& content : contents_.viewMut()) {
         content.clear();
       }
 

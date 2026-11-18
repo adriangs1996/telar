@@ -14,6 +14,7 @@ import telar.gui.foundation.terminal;
 import telar.gui.features.terminal.graphics;
 import telar.wire.graphics;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -46,7 +47,7 @@ namespace {
 
       store.image({.header = header, .image = description});
       check(budget.used == description.byte_len && !store.findImage({.image_id = 1, .generation = 1})->ready(), "image storage must count incomplete pixels");
-      constexpr auto pixels = std::to_array<Byte>({1, 2, 3, 4, 5, 6, 7, 8});
+      constexpr auto pixels = ds::Array<Byte, 8>{1, 2, 3, 4, 5, 6, 7, 8};
 
       check(!store.chunk({.header = header, .key = {.image_id = 1, .generation = 1}, .offset = 0, .bytes = pixels}), "partial image must not be published");
       check(store.chunk({.header = header, .key = {.image_id = 1, .generation = 1}, .offset = pixels.size(), .bytes = pixels}), "complete image must become drawable");
@@ -110,7 +111,7 @@ namespace {
     CellValue cell;
     const std::string_view text = "\xf4\x8e\xbb\xae\xcc\x85\xcc\x8d";
 
-    std::ranges::copy(text, cell.text.begin());
+    std::ranges::copy(text, cell.text.viewMut().begin());
     cell.length = static_cast<Byte>(text.size());
     cell.style.foreground = {.kind = CellColor::Kind::rgb, .channels = {0, 0, image_id}};
     const auto parsed = parsePlaceholder(cell);

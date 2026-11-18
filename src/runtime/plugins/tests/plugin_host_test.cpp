@@ -50,6 +50,7 @@ import telar.platform.fs;
 import telar.plugins;
 import telar.runtime.vocabulary.exchange;
 import telar.runtime.vocabulary.traffic;
+import telar.base.ds;
 
 namespace {
 
@@ -103,13 +104,13 @@ namespace {
     BudgetAllocator budget{system, 80 * 1024 * 1024};
     MemoryAdapter adapter{budget};
     Memory& memory = adapter;
-    std::array<char, 64> temporary;
+    ds::Array<char, 64> temporary;
 
-    std::strcpy(temporary.data(), "/tmp/telar-plugin-host-XXXXXX");
-    check(::mkdtemp(temporary.data()) != nullptr);
+    std::strcpy(temporary.dataMut(), "/tmp/telar-plugin-host-XXXXXX");
+    check(::mkdtemp(temporary.dataMut()) != nullptr);
     const auto root = std::filesystem::canonical(temporary.data()).string();
     const auto path = root + "/main.lua";
-    std::array<Byte, tap::Limits::effect_bytes> output;
+    ds::Array<Byte, tap::Limits::effect_bytes> output;
     auto exchange = sampleExchange();
 
     writePlugin(root + "/helper.lua", "loads = (loads or 0) + 1; return {value = 73}");
@@ -156,7 +157,7 @@ end}
       tap::Host host{memory, path.c_str()};
 
       for (int index = 1; index <= 50; ++index) {
-        const auto reply = tap::Protocol::decodeEffects(host.invoke(exchange, output));
+        const auto reply = tap::Protocol::decodeEffects(host.invoke(exchange, output.viewMut()));
 
         check(reply.event_id == 21 && reply.batch.count == 1);
         const auto& notification = reply.batch.notifications[0];
@@ -172,21 +173,21 @@ end}
     {
       tap::Host host{memory, path.c_str()};
 
-      tap::Protocol::decodeError(host.invoke(exchange, output));
-      check(tap::Protocol::decodeEffects(host.invoke(exchange, output)).batch.count == 0);
+      tap::Protocol::decodeError(host.invoke(exchange, output.viewMut()));
+      check(tap::Protocol::decodeEffects(host.invoke(exchange, output.viewMut())).batch.count == 0);
     }
 
     for (const auto result : {"nil", "{}", "{extra=true}"}) {
       writePlugin(path, std::string{"return {on_exchange = function() return "} + result + " end}");
       tap::Host host{memory, path.c_str()};
 
-      check(tap::Protocol::decodeEffects(host.invoke(exchange, output)).batch.count == 0);
+      check(tap::Protocol::decodeEffects(host.invoke(exchange, output.viewMut())).batch.count == 0);
     }
 
     for (const auto result : {"true", "{{}}", "{telar.effect.notification{title='x',level='invalid'}}", "{telar.effect.notification{title=false}}"}) {
       writePlugin(path, std::string{"return {on_exchange = function() return "} + result + " end}");
       tap::Host host{memory, path.c_str()};
-      const auto error = tap::Protocol::decodeError(host.invoke(exchange, output));
+      const auto error = tap::Protocol::decodeError(host.invoke(exchange, output.viewMut()));
 
       check(error.event_id == 21);
     }
@@ -195,8 +196,8 @@ end}
     {
       tap::Host host{memory, path.c_str()};
 
-      tap::Protocol::decodeError(host.invoke(exchange, output));
-      check(tap::Protocol::decodeEffects(host.invoke(exchange, output)).batch.count == 0);
+      tap::Protocol::decodeError(host.invoke(exchange, output.viewMut()));
+      check(tap::Protocol::decodeEffects(host.invoke(exchange, output.viewMut())).batch.count == 0);
     }
 
     writePlugin(path, "return {on_exchange=function() return {telar.effect.notification{title=string.rep('x', 65536)}} end}");
@@ -205,7 +206,7 @@ end}
       bool rejected = false;
 
       try {
-        host.invoke(exchange, output);
+        host.invoke(exchange, output.viewMut());
       } catch (const EncodingError&) {
         rejected = true;
       }
@@ -221,7 +222,7 @@ end}
     {
       tap::Host host{memory, path.c_str()};
 
-      check(tap::Protocol::decodeEffects(host.invoke(exchange, output)).batch.count == 0);
+      check(tap::Protocol::decodeEffects(host.invoke(exchange, output.viewMut())).batch.count == 0);
     }
 
     check(budget.liveBytes() == 0);
@@ -236,13 +237,13 @@ end}
     Memory& memory = adapter;
     TemporaryDirectory directory{"/tmp/telar-plugin-effects.XXXXXX"};
     const auto path = std::string{directory.path()} + "/main.lua";
-    std::array<Byte, tap::Limits::effect_bytes> output;
+    ds::Array<Byte, tap::Limits::effect_bytes> output;
     const auto exchange = sampleExchange();
 
     for (const std::size_t count : {tap::Limits::effects, tap::Limits::effects + 1, std::size_t{200}}) {
       writePlugin(path, "local telar = require('telar') return {on_exchange = function() local effects = {} for index = 1, " + std::to_string(count) + " do effects[index] = telar.effect.notification{title = tostring(index)} end return effects end}");
       tap::Host host{memory, path.c_str()};
-      const auto reply = host.invoke(exchange, output);
+      const auto reply = host.invoke(exchange, output.viewMut());
 
       if (count <= tap::Limits::effects) {
         const auto effects = tap::Protocol::decodeEffects(reply);

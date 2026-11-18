@@ -50,7 +50,7 @@ namespace {
       std::vector<ExpectedFrame> pending;
       ds::Option<ExpectedFrame> active;
       std::mt19937 random{0x525350};
-      const std::array tags{ServerTag::request_completed, ServerTag::history_results, ServerTag::pane_frame, ServerTag::pane_title, ServerTag::graphics_image, ServerTag::runtime_stopping};
+      const ds::Array tags{ServerTag::request_completed, ServerTag::history_results, ServerTag::pane_frame, ServerTag::pane_title, ServerTag::graphics_image, ServerTag::runtime_stopping};
 
       std::string current_text;
       const auto project = [&](const DeferredResponse& request, auto&& send) {
@@ -208,8 +208,8 @@ namespace {
       queue.complete(offset, reply);
       const auto batch = queue.prepare(4096);
       auto payload = batch.subspan(frame_prefix_size, MessageSchema<NotificationShown>::payload_size);
-      std::array<Byte, 64> scratch;
-      DecodeStorage storage{scratch};
+      ds::Array<Byte, 64> scratch;
+      DecodeStorage storage{scratch.viewMut()};
 
       check(Codec::decode<NotificationShown>(payload, storage).delivered_clients == 7);
       queue.consume(batch.size());

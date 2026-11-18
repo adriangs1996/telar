@@ -73,7 +73,7 @@ namespace telar::runtime {
     timeout = std::max(timeout, std::chrono::nanoseconds::zero());
     const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(timeout);
     const timespec duration{.tv_sec = seconds.count(), .tv_nsec = (timeout - seconds).count()};
-    const int count = ::kevent(queue_.get(), nullptr, 0, kernel_events_.data(), static_cast<int>(kernel_events_.size()), &duration);
+    const int count = ::kevent(queue_.get(), nullptr, 0, kernel_events_.dataMut(), static_cast<int>(kernel_events_.size()), &duration);
 
     if (count < 0) {
       if (sys::lastError() == EINTR) {

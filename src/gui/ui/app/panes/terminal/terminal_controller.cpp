@@ -161,7 +161,7 @@ namespace telar::gui::qt {
     }
 
     auto& session = store_.sessionMut();
-    std::array<ImagePlacementSource, PaneLayout::maximum_panes> sources;
+    ds::Array<ImagePlacementSource, PaneLayout::maximum_panes> sources;
     std::size_t count = 0;
     const auto* tab = session.activeTab();
     if (tab != nullptr) {
@@ -169,7 +169,7 @@ namespace telar::gui::qt {
         const auto* pane = session.findPane(leaf.pane_id);
         const auto terminal = terminals_.constFind(leaf.pane_id);
         if (pane != nullptr && pane->attached && terminal != terminals_.cend() && *terminal != nullptr && (*terminal)->window() == window_ && (*terminal)->isVisible()) {
-          sources[count++] = {.owner = *terminal, .store = &pane->graphics, .cell = (*terminal)->cellSize()};
+          sources.atMut(count++) = {.owner = *terminal, .store = &pane->graphics, .cell = (*terminal)->cellSize()};
         }
       });
     }
@@ -188,7 +188,7 @@ namespace telar::gui::qt {
   TerminalController::Capture* TerminalController::capture(Qt::MouseButton button) noexcept {
     const auto semantic = mouseButton(button);
 
-    return semantic == application::terminal::input::MouseButton::none ? nullptr : &captures_[static_cast<std::size_t>(semantic)];
+    return semantic == application::terminal::input::MouseButton::none ? nullptr : &captures_.atMut(static_cast<std::size_t>(semantic));
   }
 
   void TerminalController::acquire(TerminalItem& terminal, Qt::MouseButton button) {
@@ -202,7 +202,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    auto& lease = captures_[static_cast<std::size_t>(sample.button)];
+    auto& lease = captures_.atMut(static_cast<std::size_t>(sample.button));
 
     lease.child.begin(view, sample);
     report(lease.pane_id, application::terminal::input::ChildMouseProjection::project(view, sample));
@@ -215,7 +215,7 @@ namespace telar::gui::qt {
   }
 
   void TerminalController::abandon(TerminalItem& terminal) {
-    for (auto& lease : captures_) {
+    for (auto& lease : captures_.viewMut()) {
       if (lease.terminal == &terminal) {
         lease.terminal.clear();
       }
@@ -259,7 +259,7 @@ namespace telar::gui::qt {
   }
 
   void TerminalController::cancelPane(std::uint64_t pane_id) {
-    for (auto& lease : captures_) {
+    for (auto& lease : captures_.viewMut()) {
       if (lease.pane_id == pane_id) {
         if (lease.child.owned()) {
           report(pane_id, lease.child.cancel(view(lease)));
@@ -273,7 +273,7 @@ namespace telar::gui::qt {
   void TerminalController::cancelPointer() {
     const auto previous_recipients = recipients();
 
-    for (auto& lease : captures_) {
+    for (auto& lease : captures_.viewMut()) {
       const auto pane_id = lease.pane_id;
       const auto outcome = lease.child.owned() ? ds::Option{lease.child.cancel(view(lease))} : ds::none;
 
@@ -299,10 +299,11 @@ namespace telar::gui::qt {
         continue;
       }
 
-      auto* recipient = std::ranges::find(result, lease.terminal, &Recipient::terminal);
-      if (recipient == result.end()) {
-        recipient = std::ranges::find(result, QPointer<TerminalItem>{}, &Recipient::terminal);
-        if (recipient == result.end()) {
+      const auto recipients = result.viewMut();
+      auto recipient = std::ranges::find(recipients, lease.terminal, &Recipient::terminal);
+      if (recipient == recipients.end()) {
+        recipient = std::ranges::find(recipients, QPointer<TerminalItem>{}, &Recipient::terminal);
+        if (recipient == recipients.end()) {
           continue;
         }
 
@@ -338,7 +339,7 @@ namespace telar::gui::qt {
     }
 
     for (const auto& [native, semantic] : mouse_buttons) {
-      auto& lease = captures_[static_cast<std::size_t>(semantic)];
+      auto& lease = captures_.atMut(static_cast<std::size_t>(semantic));
       if (lease.held && lease.child.owned() && event.buttons().testFlag(native)) {
         report(lease.pane_id, lease.child.deliver(view(lease), sample(event, application::terminal::input::MousePhase::drag, semantic)));
       }

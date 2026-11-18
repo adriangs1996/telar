@@ -9,7 +9,7 @@ import telar.base.ds;
 namespace telar::runtime::config {
 
   void LimitNotices::add(tbc::view<const LimitReach&, tbc::lt::a> reach) noexcept {
-    for (auto& entry : std::span{entries_}.first(count_)) {
+    for (auto& entry : entries_.viewMut().first(count_)) {
       if (entry.name == reach.name) {
         if (reach.requested) {
           entry.requested = std::max(entry.requested.valueOr(0), *reach.requested);
@@ -23,7 +23,7 @@ namespace telar::runtime::config {
       return;
     }
 
-    entries_[count_++] = reach;
+    entries_.atMut(count_++) = reach;
   }
 
   std::span<const LimitReach> LimitNotices::entries() const noexcept {

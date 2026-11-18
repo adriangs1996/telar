@@ -24,6 +24,7 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -56,10 +57,10 @@ namespace telar::gui::qt {
 
     static constexpr unsigned failure_limit = 3;
     // The slot families, each projected by its own pass.
-    static constexpr std::array tab_slots{application::components::Slot::tab, application::components::Slot::tab_cards, application::components::Slot::tab_title, application::components::Slot::tab_path, application::components::Slot::tab_activity};
-    static constexpr std::array pane_slots{application::components::Slot::pane_header, application::components::Slot::pane_mark, application::components::Slot::pane_program, application::components::Slot::pane_context, application::components::Slot::pane_status, application::components::Slot::pane_progress, application::components::Slot::pane_actions};
-    static constexpr std::array agent_slots{application::components::Slot::agent_card, application::components::Slot::agent_mark, application::components::Slot::agent_title, application::components::Slot::agent_project, application::components::Slot::agent_status};
-    static constexpr std::array bar_slots{application::components::Slot::top_bar, application::components::Slot::bottom_bar};
+    static constexpr ds::Array tab_slots{application::components::Slot::tab, application::components::Slot::tab_cards, application::components::Slot::tab_title, application::components::Slot::tab_path, application::components::Slot::tab_activity};
+    static constexpr ds::Array pane_slots{application::components::Slot::pane_header, application::components::Slot::pane_mark, application::components::Slot::pane_program, application::components::Slot::pane_context, application::components::Slot::pane_status, application::components::Slot::pane_progress, application::components::Slot::pane_actions};
+    static constexpr ds::Array agent_slots{application::components::Slot::agent_card, application::components::Slot::agent_mark, application::components::Slot::agent_title, application::components::Slot::agent_project, application::components::Slot::agent_status};
+    static constexpr ds::Array bar_slots{application::components::Slot::top_bar, application::components::Slot::bottom_bar};
 
     ElementSlots(ConfigurationSource& source, Context context, QObject* parent = nullptr);
     [[nodiscard]] bool configured(application::components::Slot slot) const noexcept;

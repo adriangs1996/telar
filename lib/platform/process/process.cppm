@@ -275,7 +275,7 @@ export {
     private:
       static bool exactlyNamed(const char* path) noexcept;
 
-      std::array<char, PATH_MAX> path_;
+      ds::Array<char, PATH_MAX> path_;
     };
 
   }

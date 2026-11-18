@@ -3,10 +3,11 @@
 module telar.gui.features.terminal.graphics:placeholder_diacritics;
 
 import std;
+import telar.base.ds;
 
 namespace telar::gui::features::terminal::graphics {
 
-  inline constexpr std::array<std::uint32_t, 297> placeholder_diacritics{
+  inline constexpr ds::Array<std::uint32_t, 297> placeholder_diacritics{
       0x0305,
       0x030D,
       0x030E,

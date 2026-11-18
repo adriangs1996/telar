@@ -13,6 +13,7 @@ static_assert(true);
 
 import telar.testing;
 import telar.gui.foundation.system;
+import telar.base.ds;
 
 namespace {
 
@@ -35,7 +36,7 @@ namespace {
   }
 
   void soundBackendsKeepTheOriginalProgramsFilesAndOrder() {
-    constexpr std::array executables{"canberra-gtk-play", "paplay", "pw-play", "ffplay", "mpv"};
+    constexpr telar::ds::Array executables{"canberra-gtk-play", "paplay", "pw-play", "ffplay", "mpv"};
 
     for (const auto sound : {AgentSound::ready, AgentSound::needs_input}) {
       const auto apple = system::AppleSoundCommands::prepare({.sound = sound});

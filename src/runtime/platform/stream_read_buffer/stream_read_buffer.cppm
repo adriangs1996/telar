@@ -8,6 +8,7 @@ import telar.tbc;
 
 import telar.base.memory.sensitive;
 import telar.platform.net;
+import telar.base.ds;
 
 // Interface: platform/byte_stream.cppm
 export {
@@ -56,8 +57,8 @@ export {
     // Generic over the caller's stream, so it stays a template here.
     template <ByteStream Stream>
     TBC_GENERIC inline bool drainEnded(Stream& stream) noexcept {
-      std::array<std::uint8_t, 4096> discarded;
-      const auto read = stream.read(discarded);
+      ds::Array<std::uint8_t, 4096> discarded;
+      const auto read = stream.read(discarded.viewMut());
 
       return read.state == StreamResult::State::ended || read.state == StreamResult::State::failed;
     }

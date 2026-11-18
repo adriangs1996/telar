@@ -43,13 +43,13 @@ namespace {
   KeyBinding<TestAction> binding(std::initializer_list<KeyChord> keys, TestAction action) {
     KeyBinding<TestAction> result{.length = keys.size(), .action = action};
 
-    std::ranges::copy(keys, result.keys.begin());
+    std::ranges::copy(keys, result.keys.viewMut().begin());
 
     return result;
   }
 
   void prefixesAndMisses() {
-    const std::array bindings{binding({prefix, character('s')}, TestAction::first), binding({character('g'), character('g')}, TestAction::second)};
+    const telar::ds::Array bindings{binding({prefix, character('s')}, TestAction::first), binding({character('g'), character('g')}, TestAction::second)};
     Router router{BindingMap<TestAction>{bindings}, prefix};
 
     require(router.route({.chord = prefix, .physical = 1}, 0).outcome == Outcome::pending, "the prefix must hold its first press");
@@ -72,7 +72,7 @@ namespace {
   }
 
   void timeoutsAndCapture() {
-    const std::array bindings{binding({prefix, character('s')}, TestAction::first), binding({character('g'), character('g')}, TestAction::second)};
+    const telar::ds::Array bindings{binding({prefix, character('s')}, TestAction::first), binding({character('g'), character('g')}, TestAction::second)};
     Router router{BindingMap<TestAction>{bindings}, prefix};
     constexpr std::uint64_t timeout_ns = 100;
     constexpr std::uint64_t started_ns = 10;
@@ -95,7 +95,7 @@ namespace {
   }
 
   void physicalRepeatsAndReload() {
-    const std::array bindings{binding({character('s')}, TestAction::first)};
+    const telar::ds::Array bindings{binding({character('s')}, TestAction::first)};
     Router router{BindingMap<TestAction>{bindings}};
     constexpr std::uint64_t repeat_interval_ns = 100;
     constexpr BindingRepeat policy{.interval_ns = repeat_interval_ns, .owner = 1};
@@ -133,7 +133,7 @@ namespace {
     require(router.route({.chord = character('x'), .physical = overflow_identity}, 0).outcome == Outcome::discard && router.overflowCount() == 1, "saturated physical ownership must drop a press without reallocating");
     static_cast<void>(router.route({.chord = character('x'), .phase = KeyPhase::release, .physical = 1}, 0));
     require(router.route({.chord = character('x'), .physical = overflow_identity}, 0).outcome == Outcome::forward, "a released physical key must restore capacity");
-    const std::array bindings{binding({character('g')}, TestAction::first), binding({character('g'), character('g')}, TestAction::second)};
+    const telar::ds::Array bindings{binding({character('g')}, TestAction::first), binding({character('g'), character('g')}, TestAction::second)};
     bool rejected = false;
 
     try {
@@ -149,7 +149,7 @@ namespace {
     InputConfiguration configuration;
 
     require(configuration.compile().size() == default_bindings.size(), "all declarative defaults must compile into the binding map");
-    configuration.configured[0] = {.keys = {prefix, character('c')}, .length = 2, .action = {.kind = BindingActionKind::history_palette}, .prefixed = true};
+    configuration.configured.atMut(0) = {.keys = {prefix, character('c')}, .length = 2, .action = {.kind = BindingActionKind::history_palette}, .prefixed = true};
     configuration.length = 1;
     const auto compiled = configuration.compile();
     KeyRouter<BindingAction> router{compiled, configuration.prefix};
@@ -175,7 +175,7 @@ namespace {
     constexpr features::history::HistoryChoice original{.index = 0, .revision = std::numeric_limits<std::uint64_t>::max() - 1};
     features::history::HistoryActionSurface surface{.generation = 1, .choice = original};
 
-    surface.targets[0] = {.action = features::history::HistoryCardAction::copy, .bounds = {.width = extent, .height = extent}, .enabled = true};
+    surface.targets.atMut(0) = {.action = features::history::HistoryCardAction::copy, .bounds = {.width = extent, .height = extent}, .enabled = true};
     features::history::HistoryActionCapture capture;
 
     require(capture.begin(surface, position, true), "a visible history action must consume its press");
@@ -190,9 +190,9 @@ namespace {
     --surface.choice.getMut().index;
     require(!capture.release(surface, position), "returning to the original selection must not revive a cancelled press");
 
-    surface.targets[0].enabled = false;
+    surface.targets.atMut(0).enabled = false;
     require(capture.begin(surface, position, true), "disabled actions must still consume their press");
-    surface.targets[0].enabled = true;
+    surface.targets.atMut(0).enabled = true;
     require(!capture.release(surface, position), "enabling an action must not revive a press that began disabled");
     require(capture.begin(surface, position, false), "secondary buttons must retain ownership");
     require(!capture.release(surface, position), "secondary buttons must not activate history actions");

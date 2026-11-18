@@ -43,6 +43,7 @@ import telar.gui.features.terminal.graphics;
 import telar.gui.features.notifications;
 import telar.wire.graphics;
 import telar.wire.layout;
+import telar.base.ds;
 
 namespace {
 
@@ -106,7 +107,7 @@ namespace {
       const TabLocation location{.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 1}, .tab_id = 1};
 
       runtime.send(PaneOpened{.request_id = opening.request_id, .pane_id = 1, .location = location, .created = true, .pane_generation = 1});
-      const std::array<PaneDescriptor, 1> descriptors{{{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}}};
+      const ds::Array<PaneDescriptor, 1> descriptors{{{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}}};
 
       runtime.send(TabSnapshot{.request_id = 1, .location = location, .panes = descriptors});
       runtime.send(PaneForeground{.pane_id = 1, .name = "nvim"});
@@ -163,7 +164,7 @@ namespace {
 
       const QSignalSpy connection_changes{application.status(), &WindowStatus::diagnosticChanged};
 
-      runtime.send(GraphicsImageChunk{.header = resumed, .key = {.image_id = 1, .generation = 1}, .bytes = std::array<Byte, pixel_bytes>{}});
+      runtime.send(GraphicsImageChunk{.header = resumed, .key = {.image_id = 1, .generation = 1}, .bytes = ds::Array<Byte, pixel_bytes>{}});
       QTRY_VERIFY_WITH_TIMEOUT(!application.status()->connected(), wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(socket->state(), QLocalSocket::UnconnectedState, wait_ms);
       QVERIFY(connection_changes.count() > 0);

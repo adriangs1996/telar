@@ -493,7 +493,7 @@ namespace telar::gui::qt {
 
   QVariantList TabStripLayout::placeCards(const QVariantMap& tab, application::workbench::TabMotionFrame& frame) {
     const auto source = tab.value(QStringLiteral("cards")).toList();
-    std::array<application::workbench::TabCardInput, PaneLayout::maximum_panes> inputs{};
+    ds::Array<application::workbench::TabCardInput, PaneLayout::maximum_panes> inputs{};
     std::size_t count = 0;
 
     for (const auto& entry : source) {
@@ -503,14 +503,14 @@ namespace telar::gui::qt {
 
       const auto card = entry.toMap();
 
-      inputs[count++] = {.pane = card.value(QStringLiteral("key")).toString().toULongLong(), .focused = card.value(QStringLiteral("focused")).toBool(), .attention = !card.value(QStringLiteral("attentionColor")).toString().isEmpty()};
+      inputs.atMut(count++) = {.pane = card.value(QStringLiteral("key")).toString().toULongLong(), .focused = card.value(QStringLiteral("focused")).toBool(), .attention = !card.value(QStringLiteral("attentionColor")).toString().isEmpty()};
     }
 
-    std::array<application::workbench::TabCardPlacement, application::workbench::TabCardMotions::maximum_cards> placed{};
-    const auto written = card_motions_.place(std::span{inputs}.first(count), placed, frame);
+    ds::Array<application::workbench::TabCardPlacement, application::workbench::TabCardMotions::maximum_cards> placed{};
+    const auto written = card_motions_.place(std::span{inputs}.first(count), placed.viewMut(), frame);
 
     // Delegates follow pane order, so a card keeps its item while its pose moves.
-    std::sort(placed.begin(), placed.begin() + written, [](const application::workbench::TabCardPlacement& left, const application::workbench::TabCardPlacement& right) {
+    std::sort(placed.dataMut(), placed.dataMut() + written, [](const application::workbench::TabCardPlacement& left, const application::workbench::TabCardPlacement& right) {
       return left.pane < right.pane;
     });
 
@@ -536,7 +536,7 @@ namespace telar::gui::qt {
   }
 
   void TabStripLayout::raiseDraggedSlot() {
-    const auto delivered = std::span{drop_slots_}.first(drop_slot_count_);
+    const auto delivered = drop_slots_.viewMut().first(drop_slot_count_);
     const auto lifted = std::ranges::find(delivered, dragged_, [](const application::workbench::TabDropSlot& slot) {
       return ds::Option{slot.id};
     });
@@ -574,20 +574,20 @@ namespace telar::gui::qt {
     const auto density = window() == nullptr ? qreal{1} : window()->effectiveDevicePixelRatio();
     const auto top = static_cast<float>(std::floor((this->height() - height) * density / 2) / density);
     QList<QVariantMap> records;
-    std::array<Geometry::Measure, Geometry::maximum_tabs> sizes;
+    ds::Array<Geometry::Measure, Geometry::maximum_tabs> sizes;
     const Geometry::Room room{.width = available, .metrics = metrics};
-    const auto plan = measureTabs(records, sizes, room);
+    const auto plan = measureTabs(records, sizes.viewMut(), room);
     const auto count = records.size();
 
-    std::array<std::size_t, Geometry::maximum_tabs> order{};
+    ds::Array<std::size_t, Geometry::maximum_tabs> order{};
     const auto shown = plan.end - plan.first;
 
     for (std::size_t index = 0; index < shown; ++index) {
-      order[index] = plan.first + index;
+      order.atMut(index) = plan.first + index;
     }
 
     if (drag_preview_) {
-      previewOrder(std::span{order}.first(shown), records, *drag_preview_);
+      previewOrder(order.viewMut().first(shown), records, *drag_preview_);
     }
 
     QList<QVariantMap> positioned;
@@ -626,7 +626,7 @@ namespace telar::gui::qt {
       entry.insert(QStringLiteral("cards"), placeCards(record, frame));
       entry.insert(QStringLiteral("separator"), position + 1 < shown && !record.value(QStringLiteral("selected")).toBool() && !records[static_cast<qsizetype>(order[position + 1])].value(QStringLiteral("selected")).toBool());
       positioned.append(std::move(entry));
-      drop_slots_[drop_slot_count_++] = {.id = id, .bounds = {.x = static_cast<float>(bounds.x()), .y = static_cast<float>(bounds.y()), .width = static_cast<float>(bounds.width()), .height = static_cast<float>(bounds.height())}};
+      drop_slots_.atMut(drop_slot_count_++) = {.id = id, .bounds = {.x = static_cast<float>(bounds.x()), .y = static_cast<float>(bounds.y()), .width = static_cast<float>(bounds.width()), .height = static_cast<float>(bounds.height())}};
       left += plan.widths[index];
     }
 
@@ -647,7 +647,7 @@ namespace telar::gui::qt {
 
       const auto id = records[static_cast<qsizetype>(*nearest)].value(QStringLiteral("key")).toString().toULongLong();
 
-      drop_slots_[drop_slot_count_++] = {.id = id, .bounds = {.x = left, .y = top, .width = counter_width, .height = height}};
+      drop_slots_.atMut(drop_slot_count_++) = {.id = id, .bounds = {.x = left, .y = top, .width = counter_width, .height = height}};
       left += counter_width;
     }
 

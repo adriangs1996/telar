@@ -10,7 +10,7 @@ import telar.base.ds;
 export {
   namespace telar::gui::features::components {
 
-    using PickSwatch = std::array<std::uint32_t, 3>;
+    using PickSwatch = ds::Array<std::uint32_t, 3>;
 
     struct PickInput {
       std::string_view label;
@@ -80,8 +80,8 @@ export {
 
       [[nodiscard]] std::string_view text(Range range) const noexcept;
 
-      std::array<char, maximum_text_bytes> bytes_{};
-      std::array<Row, maximum_items> rows_{};
+      ds::Array<char, maximum_text_bytes> bytes_{};
+      ds::Array<Row, maximum_items> rows_{};
       std::size_t count_ = 0;
       std::size_t used_ = 0;
       Offered offered_;
@@ -106,7 +106,7 @@ export {
       [[nodiscard]] std::span<const Match> rows() const noexcept;
 
     private:
-      std::array<Match, PickItems::maximum_items> matches_{};
+      ds::Array<Match, PickItems::maximum_items> matches_{};
       std::size_t count_ = 0;
     };
 

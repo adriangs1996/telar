@@ -109,7 +109,7 @@ namespace {
 
     check(store.load().rows().empty(), "a missing profile file must load as an empty list");
     Random random;
-    const std::array edits{
+    const telar::ds::Array edits{
         MachineEdit{.kind = MachineEditKind::add, .label = "build", .value = "dev@build", .color = "accent"},
         MachineEdit{.kind = MachineEditKind::rename, .label = "build", .value = "gpu"},
         MachineEdit{.kind = MachineEditKind::place_program, .label = "gpu", .value = "/opt/bin/telar"},
@@ -139,7 +139,7 @@ namespace {
     telar::MemoryAdapter erased{memory};
     MachineProfileStore<telar::Memory, MemoryFile> store{erased, file};
     Random random;
-    const std::array invalid{
+    const telar::ds::Array invalid{
         MachineEdit{.kind = MachineEditKind::add, .label = "valid", .value = "dev@valid"},
         MachineEdit{.kind = MachineEditKind::add, .label = "invalid", .value = "bad host"},
     };
@@ -155,7 +155,7 @@ namespace {
 
     check(rejected && file.source.view() == original.view() && file.replacements == 0 && !file.locked, "a rejected later edit must leave the complete saved file untouched and unlock");
     file.fail_replace = true;
-    const std::array valid{invalid.front()};
+    const telar::ds::Array valid{invalid.front()};
     bool failed = false;
 
     try {
@@ -173,15 +173,15 @@ namespace {
     telar::MemoryAdapter erased{memory};
     MachineProfileStore<telar::Memory, MemoryFile> store{erased, file};
     Random random;
-    const std::array first{MachineEdit{.kind = MachineEditKind::add, .label = "build", .value = "dev@build"}};
+    const telar::ds::Array first{MachineEdit{.kind = MachineEditKind::add, .label = "build", .value = "dev@build"}};
 
     static_cast<void>(store.change(first, random, "hostname"));
     file.source.assign("{\"version\":1,\"local_label\":\"local-alias\",\"machines\":[]}\n");
-    const std::array second{MachineEdit{.kind = MachineEditKind::add, .label = "hostname", .value = "dev@other"}};
+    const telar::ds::Array second{MachineEdit{.kind = MachineEditKind::add, .label = "hostname", .value = "dev@other"}};
     const auto profiles = store.change(second, random, "hostname");
 
     check(profiles.rows().size() == 1 && profiles.rows().front().label() == "hostname", "an external local alias must replace the hostname and external file changes must be reloaded under lock");
-    const std::array rename{MachineEdit{.kind = MachineEditKind::rename, .label = "hostname", .value = "local-alias"}};
+    const telar::ds::Array rename{MachineEdit{.kind = MachineEditKind::rename, .label = "hostname", .value = "local-alias"}};
     bool rejected = false;
 
     try {

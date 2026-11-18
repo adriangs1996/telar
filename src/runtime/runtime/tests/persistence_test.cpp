@@ -67,6 +67,7 @@ import telar.platform.process;
 import telar.runtime.model.client_layouts;
 import telar.runtime.platform.event_loop;
 import telar.runtime.platform.stream_read_buffer;
+import telar.base.ds;
 
 namespace {
 
@@ -79,7 +80,7 @@ namespace {
 
   void testMonotonicIdentities(ConcurrentMemory& memory) {
     SlotStore<std::uint64_t, 32, ConcurrentMemory> store{memory};
-    std::array<std::uint64_t, 32> identities{};
+    ds::Array<std::uint64_t, 32> identities{};
     std::uint64_t counter = 63;
     std::minstd_rand random{71};
 
@@ -90,7 +91,7 @@ namespace {
         check(store.find(identities[slot]) == nullptr);
       }
 
-      identities[slot] = counter;
+      identities.atMut(slot) = counter;
       store.insert(counter, makeOwned<std::uint64_t>(memory, counter));
       counter += 64;
       for (const auto identity : identities) {
@@ -166,8 +167,8 @@ namespace {
   }
 
   void testCheckpointValidation() {
-    std::array<Byte, 4096> buffer;
-    const auto fixture = checkpointFixture(buffer);
+    ds::Array<Byte, 4096> buffer;
+    const auto fixture = checkpointFixture(buffer.viewMut());
     std::size_t count = 0;
     checkpoint::Reader reader{fixture};
 
@@ -191,7 +192,7 @@ namespace {
       check(rejected);
     }
 
-    buffer[fixture.size()] = 0;
+    buffer.atMut(fixture.size()) = 0;
     bool trailing_rejected = false;
 
     try {
@@ -205,7 +206,7 @@ namespace {
     check(trailing_rejected);
 
     for (std::size_t capacity = 43; capacity < fixture.size(); ++capacity) {
-      checkpoint::Writer bounded{std::span{buffer}.first(capacity), {}};
+      checkpoint::Writer bounded{buffer.viewMut().first(capacity), {}};
 
       bounded.append(checkpoint::WorkspaceRecord{1, "/tmp", "Example", 1, ""});
       const auto encoded = bounded.finish();
@@ -219,7 +220,7 @@ namespace {
       bool rejected = false;
 
       try {
-        checkpoint::Writer tiny{std::span{buffer}.first(capacity), {}};
+        checkpoint::Writer tiny{buffer.viewMut().first(capacity), {}};
       } catch (const EncodingError&) {
         rejected = true;
       }
@@ -229,8 +230,8 @@ namespace {
   }
 
   void testRestore(ConcurrentMemory& memory) {
-    std::array<Byte, 4096> buffer;
-    const auto fixture = checkpointFixture(buffer);
+    ds::Array<Byte, 4096> buffer;
+    const auto fixture = checkpointFixture(buffer.viewMut());
     RuntimeModel model{memory};
     ClientStore clients{memory};
     LimitService limits;
@@ -256,17 +257,17 @@ namespace {
   }
 
   void testAtomicFile(ConcurrentMemory& memory) {
-    std::array<char, 64> directory{};
+    ds::Array<char, 64> directory{};
 
-    std::strcpy(directory.data(), "/tmp/telar-checkpoint-test-XXXXXX");
-    check(::mkdtemp(directory.data()) != nullptr);
+    std::strcpy(directory.dataMut(), "/tmp/telar-checkpoint-test-XXXXXX");
+    check(::mkdtemp(directory.dataMut()) != nullptr);
     const auto path = std::string{directory.data()} + "/session.ckpt";
     checkpoint::FileStore file{memory, path};
     Vector<Byte, ConcurrentMemory> loaded{AllocatorRef<Byte, ConcurrentMemory>{memory}};
 
     check(!file.load(loaded));
-    std::array<Byte, 4096> buffer;
-    const auto fixture = checkpointFixture(buffer);
+    ds::Array<Byte, 4096> buffer;
+    const auto fixture = checkpointFixture(buffer.viewMut());
 
     {
       ObservationWorker<decltype(file)&> worker{std::in_place, file};
@@ -333,10 +334,10 @@ namespace {
 
     expect(true);
 
-    std::array<Byte, 4096> buffer;
+    ds::Array<Byte, 4096> buffer;
     checkpoint::Restore restore{memory, model, panes, layouts, false};
 
-    restore.apply(checkpointFixture(buffer));
+    restore.apply(checkpointFixture(buffer.viewMut()));
     expect(true);
     auto* pane = model.panes.find(257);
 
@@ -348,7 +349,7 @@ namespace {
     pane->resize(TerminalSize{.cols = 91, .rows = 31, .cell_width_px = 0, .cell_height_px = 0});
     expect(true);
 
-    constexpr std::array<Byte, 4> output{'t', 'e', 's', 't'};
+    constexpr ds::Array<Byte, 4> output{'t', 'e', 's', 't'};
 
     pane->terminal.feed(output, *pane->media);
     expect(false);
@@ -376,7 +377,7 @@ namespace {
     model.panes.erase(257);
     expect(true);
 
-    constexpr std::array<std::string_view, 3> arguments{"/bin/sh", "-c", "read value"};
+    constexpr ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", "read value"};
     Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
     const auto first = panes.launch(model, nullptr, false, command, location, TerminalSize{.cols = 80, .rows = 24, .cell_width_px = 0, .cell_height_px = 0}).id;
 
@@ -392,8 +393,8 @@ namespace {
 
   void testLargePaneIdentity(ConcurrentMemory& memory) {
     constexpr std::uint64_t identity = UINT64_MAX - 2;
-    std::array<Byte, 4096> buffer;
-    checkpoint::Writer writer{buffer, checkpoint::Counters{2, 2, identity + 1, 10}};
+    ds::Array<Byte, 4096> buffer;
+    checkpoint::Writer writer{buffer.viewMut(), checkpoint::Counters{2, 2, identity + 1, 10}};
 
     writer.append(checkpoint::WorkspaceRecord{1, "/tmp", "Large identity", 1, ""});
     constexpr char arguments[] = "/bin/sh\0-c\0printf 'restored'; read value\0";
@@ -413,8 +414,8 @@ namespace {
     check(pane != nullptr && pane->id == identity);
     check(model.panes.nextId() == identity + 1);
 
-    std::array<Event, decltype(poller)::event_capacity> ready{};
-    const auto events = poller.wait(std::chrono::seconds{2}, ready);
+    ds::Array<Event, decltype(poller)::event_capacity> ready{};
+    const auto events = poller.wait(std::chrono::seconds{2}, ready.viewMut());
 
     check(!events.empty());
     check(pane->read());
@@ -424,8 +425,8 @@ namespace {
     SystemAllocator system;
     MemoryAdapter adapter{system};
     ConcurrentMemory& memory = adapter;
-    std::array<Byte, 4096> buffer;
-    checkpoint::Writer writer{buffer, checkpoint::Counters{10, 10, 10, 10}};
+    ds::Array<Byte, 4096> buffer;
+    checkpoint::Writer writer{buffer.viewMut(), checkpoint::Counters{10, 10, 10, 10}};
     constexpr char arguments[] = "/bin/cat\0";
     CoordinatorReference coordinator{.pane_id = 3, .pane_generation = 4};
 
@@ -458,8 +459,8 @@ namespace {
     SystemAllocator system;
     MemoryAdapter adapter{system};
     ConcurrentMemory& memory = adapter;
-    std::array<Byte, 4096> fixture_buffer;
-    const auto fixture = checkpointFixture(fixture_buffer);
+    ds::Array<Byte, 4096> fixture_buffer;
+    const auto fixture = checkpointFixture(fixture_buffer.viewMut());
     std::vector<std::vector<Byte>> corrupt;
 
     corrupt.emplace_back(fixture.begin(), fixture.end());
@@ -469,10 +470,10 @@ namespace {
     corrupt.emplace_back(fixture.begin(), fixture.end() - 7);
 
     for (const auto& bytes : corrupt) {
-      std::array<char, 64> directory{};
+      ds::Array<char, 64> directory{};
 
-      std::strcpy(directory.data(), "/tmp/telar-quarantine-test-XXXXXX");
-      check(::mkdtemp(directory.data()) != nullptr);
+      std::strcpy(directory.dataMut(), "/tmp/telar-quarantine-test-XXXXXX");
+      check(::mkdtemp(directory.dataMut()) != nullptr);
       const std::filesystem::path root{directory.data()};
       const auto path = (root / "session.ckpt").string();
 
@@ -572,10 +573,10 @@ namespace {
     SystemAllocator system;
     MemoryAdapter adapter{system};
     ConcurrentMemory& memory = adapter;
-    std::array<char, 64> directory{};
+    ds::Array<char, 64> directory{};
 
-    std::strcpy(directory.data(), "/tmp/telar-resume-test-XXXXXX");
-    check(::mkdtemp(directory.data()) != nullptr);
+    std::strcpy(directory.dataMut(), "/tmp/telar-resume-test-XXXXXX");
+    check(::mkdtemp(directory.dataMut()) != nullptr);
     const std::string root{directory.data()};
     constexpr std::string_view first_session = "0123abcd-4567-89ef-0123-456789abcdef";
     constexpr std::string_view direct_session = "fedcba98-7654-3210-fedc-ba9876543210";
@@ -589,8 +590,8 @@ namespace {
 
     {
       // Three panes: two shells whose agents share a session, and the agent itself as a program.
-      std::array<Byte, 4096> base_buffer;
-      checkpoint::Writer writer{base_buffer, checkpoint::Counters{10, 10, 10, 10}};
+      ds::Array<Byte, 4096> base_buffer;
+      checkpoint::Writer writer{base_buffer.viewMut(), checkpoint::Counters{10, 10, 10, 10}};
       const auto typed = [&](std::string_view name) {
         return "/bin/sh\0-c\0read -r line; printf %s \"$line\" > '"s + root + "/" + std::string{name} + "'; exec cat\0"s;
       };
@@ -670,17 +671,17 @@ namespace {
     SystemAllocator system;
     MemoryAdapter adapter{system};
     ConcurrentMemory& memory = adapter;
-    std::array<char, 64> directory{};
+    ds::Array<char, 64> directory{};
 
-    std::strcpy(directory.data(), "/tmp/telar-retry-test-XXXXXX");
-    check(::mkdtemp(directory.data()) != nullptr);
+    std::strcpy(directory.dataMut(), "/tmp/telar-retry-test-XXXXXX");
+    check(::mkdtemp(directory.dataMut()) != nullptr);
     const std::string root{directory.data()};
     const auto path = root + "/session.ckpt";
     RestoredSession session{memory};
-    std::array<Byte, 4096> buffer;
+    ds::Array<Byte, 4096> buffer;
     SnapshotAgents agents;
 
-    session.restore(memory, checkpointFixture(buffer), false);
+    session.restore(memory, checkpointFixture(buffer.viewMut()), false);
     checkpoint::SessionStore<SnapshotAgents> store{memory};
 
     store.configure(session.model, session.panes, session.layouts, checkpoint::Options{.path = path});
@@ -720,8 +721,8 @@ namespace {
     SystemAllocator system;
     MemoryAdapter adapter{system};
     ConcurrentMemory& memory = adapter;
-    std::array<Byte, 4096> buffer;
-    checkpoint::Writer writer{buffer, checkpoint::Counters{10, 10, 10, 10}};
+    ds::Array<Byte, 4096> buffer;
+    checkpoint::Writer writer{buffer.viewMut(), checkpoint::Counters{10, 10, 10, 10}};
     constexpr char arguments[] = "/bin/cat\0";
 
     writer.append(checkpoint::WorkspaceRecord{5, "/tmp", "Kept", 6, "Shell"});
@@ -749,8 +750,8 @@ namespace {
     SystemAllocator system;
     MemoryAdapter adapter{system};
     ConcurrentMemory& memory = adapter;
-    std::array<Byte, 4096> buffer;
-    checkpoint::Writer writer{buffer, checkpoint::Counters{10, 10, 10, 10}};
+    ds::Array<Byte, 4096> buffer;
+    checkpoint::Writer writer{buffer.viewMut(), checkpoint::Counters{10, 10, 10, 10}};
     constexpr char arguments[] = "/bin/cat\0";
 
     writer.append(checkpoint::WorkspaceRecord{5, "/tmp", "Kept", 6, "Shell"});

@@ -106,6 +106,7 @@ import telar.runtime.vocabulary.frames;
 import telar.runtime.vocabulary.traffic;
 import telar.runtime.platform.name_resolutions;
 import telar.tls;
+import telar.base.ds;
 
 namespace {
 
@@ -152,8 +153,8 @@ namespace {
   }
 
   std::vector<Byte> request(int socket, traffic_control::Request request) {
-    std::array<Byte, traffic_control::Limits::request_bytes> output;
-    const auto body = traffic_control::Protocol::encode(output, request);
+    ds::Array<Byte, traffic_control::Limits::request_bytes> output;
+    const auto body = traffic_control::Protocol::encode(output.viewMut(), request);
     const auto prefix = traffic_control::Protocol::prefix(body.size());
 
     for (const auto byte : prefix) {
@@ -164,9 +165,9 @@ namespace {
       traffic::sendAll(socket, {&byte, 1});
     }
 
-    std::array<Byte, traffic_control::Protocol::prefix_bytes> header;
+    ds::Array<Byte, traffic_control::Protocol::prefix_bytes> header;
 
-    receiveAll(socket, header);
+    receiveAll(socket, header.viewMut());
     plugins::FrameReader reader{header};
     const auto size = reader.integer<std::uint32_t>();
 
@@ -184,32 +185,32 @@ namespace {
   }
 
   void codec() {
-    std::array<Byte, traffic_control::Limits::reply_bytes> output;
+    ds::Array<Byte, traffic_control::Limits::reply_bytes> output;
     traffic_control::Request redirect{.operation = traffic_control::Operation::redirect_start, .targets = {"127.0.0.1:443", "[::1]:80"}, .target_count = 2};
-    const auto encoded = traffic_control::Protocol::encode(output, redirect);
+    const auto encoded = traffic_control::Protocol::encode(output.viewMut(), redirect);
     const std::vector<Byte> bytes{encoded.begin(), encoded.end()};
     const auto decoded = traffic_control::Protocol::request(bytes);
 
     check(decoded.operation == redirect.operation && decoded.target_count == 2 && decoded.targets[1] == "[::1]:80");
-    redirect.processes[0] = static_cast<std::uint32_t>(::getpid());
+    redirect.processes.atMut(0) = static_cast<std::uint32_t>(::getpid());
     redirect.process_count = 1;
-    const auto process_selection = traffic_control::Protocol::request(traffic_control::Protocol::encode(output, redirect));
+    const auto process_selection = traffic_control::Protocol::request(traffic_control::Protocol::encode(output.viewMut(), redirect));
 
     check(process_selection.process_count == 1 && process_selection.processes[0] == static_cast<std::uint32_t>(::getpid()));
-    redirect.processes[1] = redirect.processes[0];
+    redirect.processes.atMut(1) = redirect.processes[0];
     redirect.process_count = 2;
     rejects([&] {
-      traffic_control::Protocol::encode(output, redirect);
+      traffic_control::Protocol::encode(output.viewMut(), redirect);
     });
 
     redirect.process_count = 0;
     redirect.direction = telar::runtime::redirect::Direction::inbound;
-    check(traffic_control::Protocol::request(traffic_control::Protocol::encode(output, redirect)).direction == telar::runtime::redirect::Direction::inbound);
+    check(traffic_control::Protocol::request(traffic_control::Protocol::encode(output.viewMut(), redirect)).direction == telar::runtime::redirect::Direction::inbound);
     redirect.direction = telar::runtime::redirect::Direction::both;
-    check(traffic_control::Protocol::request(traffic_control::Protocol::encode(output, redirect)).direction == telar::runtime::redirect::Direction::both);
+    check(traffic_control::Protocol::request(traffic_control::Protocol::encode(output.viewMut(), redirect)).direction == telar::runtime::redirect::Direction::both);
     redirect.process_count = 1;
     rejects([&] {
-      traffic_control::Protocol::encode(output, redirect);
+      traffic_control::Protocol::encode(output.viewMut(), redirect);
     });
 
     redirect.process_count = 0;
@@ -228,20 +229,20 @@ namespace {
     });
 
     rejects([&] {
-      traffic_control::Protocol::encode(output, traffic_control::Request{.operation = traffic_control::Operation::redirect_start});
+      traffic_control::Protocol::encode(output.viewMut(), traffic_control::Request{.operation = traffic_control::Operation::redirect_start});
     });
 
     rejects([&] {
-      traffic_control::Protocol::encode(output, traffic_control::Request{.targets = {"127.0.0.1:80"}, .target_count = 1});
+      traffic_control::Protocol::encode(output.viewMut(), traffic_control::Request{.targets = {"127.0.0.1:80"}, .target_count = 1});
     });
 
-    redirect.targets[0] = std::string_view{"127.0.0.1:8\0bad", 14};
+    redirect.targets.atMut(0) = std::string_view{"127.0.0.1:8\0bad", 14};
     rejects([&] {
-      traffic_control::Protocol::encode(output, redirect);
+      traffic_control::Protocol::encode(output.viewMut(), redirect);
     });
 
     traffic_control::Reply response{.result = traffic_control::Result::authorization_required, .status = {.capture = traffic_control::CaptureState::live, .redirect = traffic_control::RedirectState::active, .interfaces = 2}, .message = "fixture", .authorization = {"/usr/bin/sudo", "--", "/fixture/runtime"}, .argument_count = 3};
-    const auto reply = traffic_control::Protocol::reply(traffic_control::Protocol::encode(output, response));
+    const auto reply = traffic_control::Protocol::reply(traffic_control::Protocol::encode(output.viewMut(), response));
 
     check(reply.result == response.result && reply.status.interfaces == 2 && reply.authorization[2] == "/fixture/runtime");
   }
@@ -262,9 +263,9 @@ namespace {
     check(traffic_control::Protocol::reply(disabled).result == traffic_control::Result::disabled);
 
     auto producer = traffic::connect(base + ".traffic");
-    std::array<Byte, traffic::Protocol::greeting_bytes> greeting;
+    ds::Array<Byte, traffic::Protocol::greeting_bytes> greeting;
 
-    traffic::sendAll(producer.get(), traffic::Protocol::greeting(greeting, traffic::Role::offline_capture));
+    traffic::sendAll(producer.get(), traffic::Protocol::greeting(greeting.viewMut(), traffic::Role::offline_capture));
     await([&] {
       return capture.captureStatus().state == decltype(capture)::CaptureState::offline;
     });
@@ -273,9 +274,9 @@ namespace {
 
     check(traffic_control::Protocol::reply(active).status.capture == traffic_control::CaptureState::offline);
     traffic_control::Backend read_only{memory, proxy, &capture, traffic_control::Configuration{.endpoint = base, .executable = "/fixture/runtime"}};
-    std::array<Byte, traffic_control::Limits::reply_bytes> denied;
+    ds::Array<Byte, traffic_control::Limits::reply_bytes> denied;
     const std::atomic<bool> cancelled{false};
-    const auto forbidden = traffic_control::Protocol::reply(read_only.handle({.operation = traffic_control::Operation::capture_stop}, denied, cancelled));
+    const auto forbidden = traffic_control::Protocol::reply(read_only.handle({.operation = traffic_control::Operation::capture_stop}, denied.viewMut(), cancelled));
 
     check(forbidden.result == traffic_control::Result::disabled && !forbidden.status.administration);
     check(capture.captureStatus().state == decltype(capture)::CaptureState::offline);
@@ -283,14 +284,14 @@ namespace {
 
     check(traffic_control::Protocol::reply(stopped).result == traffic_control::Result::ok);
     check(traffic_control::Protocol::reply(stopped).status.capture == traffic_control::CaptureState::idle);
-    std::array<Byte, 1024> incoming;
+    ds::Array<Byte, 1024> incoming;
 
     await([&] {
-      return ::recv(producer.get(), incoming.data(), incoming.size(), MSG_DONTWAIT) == 0;
+      return ::recv(producer.get(), incoming.dataMut(), incoming.size(), MSG_DONTWAIT) == 0;
     });
 
     auto malformed = traffic::connect(base + ".network");
-    std::array<Byte, traffic_control::Protocol::prefix_bytes> excessive{0xff, 0xff, 0xff, 0x7f};
+    ds::Array<Byte, traffic_control::Protocol::prefix_bytes> excessive{0xff, 0xff, 0xff, 0x7f};
 
     traffic::sendAll(malformed.get(), excessive);
     await([&] {
@@ -422,12 +423,12 @@ namespace {
 
   FileDescriptor monitor(const std::string& path) {
     auto channel = traffic::connect(path);
-    std::array<Byte, redirect::Protocol::frame_bytes> output;
+    ds::Array<Byte, redirect::Protocol::frame_bytes> output;
 
-    traffic::sendAll(channel.get(), redirect::Protocol::encode(output, redirect::Kind::monitor, {}));
-    std::array<Byte, sizeof(std::uint32_t)> uid;
+    traffic::sendAll(channel.get(), redirect::Protocol::encode(output.viewMut(), redirect::Kind::monitor, {}));
+    ds::Array<Byte, sizeof(std::uint32_t)> uid;
 
-    receiveAll(channel.get(), uid);
+    receiveAll(channel.get(), uid.viewMut());
     return channel;
   }
 
@@ -471,7 +472,7 @@ namespace {
     helper = monitor(path);
     ingress.stop();
     receiveAll(helper.get(), {&stop, 1});
-    const std::array updates{active, stopped};
+    const ds::Array updates{active, stopped};
 
     traffic::sendAll(helper.get(), updates);
     helper.reset();

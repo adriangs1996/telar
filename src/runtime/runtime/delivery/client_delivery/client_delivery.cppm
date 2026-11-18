@@ -105,7 +105,7 @@ export {
 
       static bool publishGraphics(Connection<ConcurrentMemory>& connection, Attachment& attachment, Pane& pane, std::chrono::nanoseconds& timeout);
 
-      std::array<Slot, ClientSession::attachment_capacity> slots_;
+      ds::Array<Slot, ClientSession::attachment_capacity> slots_;
       std::uint64_t occupied_ = 0;
     };
 
@@ -159,12 +159,12 @@ export {
 
       // Kept here: `send` is the connection's callable, an open set no unit can instantiate ahead.
       TBC_GENERIC inline void project(const RequestTabSnapshot& request, auto& send) const {
-        std::array<PaneDescriptor, 64> descriptors;
+        ds::Array<PaneDescriptor, 64> descriptors;
         std::size_t count = 0;
 
         for (const auto* pane : model_.panes.items()) {
           if (pane != nullptr && matchesSnapshot(*pane, request.location)) {
-            descriptors[count++] = PaneDescriptor{.pane_id = pane->id, .lifecycle = PaneLifecycle::running, .pane_generation = pane->generation};
+            descriptors.atMut(count++) = PaneDescriptor{.pane_id = pane->id, .lifecycle = PaneLifecycle::running, .pane_generation = pane->generation};
           }
         }
 
@@ -179,8 +179,8 @@ export {
           return;
         }
 
-        std::array<TabDescriptor, 64> descriptors;
-        std::array<TabPane, 256> panes;
+        ds::Array<TabDescriptor, 64> descriptors;
+        ds::Array<TabPane, 256> panes;
         std::size_t pane_count = 0;
         std::size_t count = 0;
 
@@ -192,13 +192,13 @@ export {
             if (pane != nullptr && matchesSnapshot(*pane, location)) {
               const auto name = pane->foreground.view();
 
-              panes[pane_count++] = TabPane{.pane_id = pane->id, .foreground = name.empty() ? "shell" : name, .cwd = snapshotDirectory(pane->cwd)};
+              panes.atMut(pane_count++) = TabPane{.pane_id = pane->id, .foreground = name.empty() ? "shell" : name, .cwd = snapshotDirectory(pane->cwd)};
             }
           }
 
           const auto members = std::span{panes}.subspan(first, pane_count - first);
 
-          descriptors[count] = TabDescriptor{.tab_id = tab.id, .position = static_cast<std::uint16_t>(count), .pane_count = static_cast<std::uint16_t>(members.size()), .label = tab.label, .panes = members};
+          descriptors.atMut(count) = TabDescriptor{.tab_id = tab.id, .position = static_cast<std::uint16_t>(count), .pane_count = static_cast<std::uint16_t>(members.size()), .label = tab.label, .panes = members};
           ++count;
         }
 
@@ -207,15 +207,15 @@ export {
 
       // Kept here: `send` is the connection's callable, an open set no unit can instantiate ahead.
       TBC_GENERIC inline void project(const QueryLimits& request, auto& send) const {
-        std::array<LimitListEntry, 2 * LimitLedger::capacity> entries;
+        ds::Array<LimitListEntry, 2 * LimitLedger::capacity> entries;
         std::size_t count = 0;
 
         for (const auto& row : model_.limits.runtime.rows()) {
-          entries[count++] = {row.reach(), LimitOrigin::runtime, row.hits, row.last_ms};
+          entries.atMut(count++) = {row.reach(), LimitOrigin::runtime, row.hits, row.last_ms};
         }
 
         for (const auto& row : model_.limits.clients.rows()) {
-          entries[count++] = {row.reach(), LimitOrigin::client, row.hits, row.last_ms};
+          entries.atMut(count++) = {row.reach(), LimitOrigin::client, row.hits, row.last_ms};
         }
 
         send(LimitList{request.request_id, model_.limits.runtime.evicted(), model_.limits.clients.evicted(), model_.limits.refused_reports, std::span{entries}.first(count)});

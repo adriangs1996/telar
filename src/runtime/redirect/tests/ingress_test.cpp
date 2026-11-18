@@ -17,6 +17,7 @@ import telar.testing;
 import telar.platform.primitives;
 import telar.runtime.redirect.ingress;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -45,10 +46,10 @@ namespace {
 
   struct EndpointDirectory {
     EndpointDirectory() {
-      std::array<char, 64> directory{};
+      ds::Array<char, 64> directory{};
 
-      std::strcpy(directory.data(), "/tmp/telar-ingress-test-XXXXXX");
-      check(::mkdtemp(directory.data()) != nullptr);
+      std::strcpy(directory.dataMut(), "/tmp/telar-ingress-test-XXXXXX");
+      check(::mkdtemp(directory.dataMut()) != nullptr);
       path = directory.data();
     }
 
@@ -82,12 +83,12 @@ namespace {
   // Sends `frame` with `descriptors` attached, as a helper hands sockets over.
   void sendFrame(int channel, std::span<const Byte> frame, std::span<const int> descriptors) {
     iovec vector{.iov_base = const_cast<Byte*>(frame.data()), .iov_len = frame.size()};
-    std::array<char, CMSG_SPACE(sizeof(int) * redirect::Protocol::descriptor_count)> control{};
+    ds::Array<char, CMSG_SPACE(sizeof(int) * redirect::Protocol::descriptor_count)> control{};
     msghdr message{};
 
     message.msg_iov = &vector;
     message.msg_iovlen = 1;
-    message.msg_control = control.data();
+    message.msg_control = control.dataMut();
     message.msg_controllen = static_cast<socklen_t>(CMSG_SPACE(sizeof(int) * descriptors.size()));
     auto* header = CMSG_FIRSTHDR(&message);
 
@@ -137,14 +138,14 @@ namespace {
     const auto path = directory.path + "/redirect";
     CountingSink sink;
     Endpoint ingress{path, sink};
-    std::array<Byte, redirect::Protocol::frame_bytes> output;
+    ds::Array<Byte, redirect::Protocol::frame_bytes> output;
 
     {
       // Real sockets for a real target, under a magic number from another protocol.
       const TcpPair carried;
-      const auto valid = redirect::Protocol::encode(output, redirect::Kind::connection, carried.target);
+      const auto valid = redirect::Protocol::encode(output.viewMut(), redirect::Kind::connection, carried.target);
       std::vector<Byte> wrong_magic{valid.begin(), valid.end()};
-      const std::array descriptors{carried.child.get(), carried.origin.get()};
+      const ds::Array descriptors{carried.child.get(), carried.origin.get()};
       auto channel = connectEndpoint(path);
 
       wrong_magic[0] ^= 0xff;
@@ -155,13 +156,13 @@ namespace {
     {
       // A connection frame with one socket where two belong: the runtime must close the one it got.
       const TcpPair carried;
-      const auto frame = redirect::Protocol::encode(output, redirect::Kind::connection, carried.target);
-      std::array<int, 2> pair;
+      const auto frame = redirect::Protocol::encode(output.viewMut(), redirect::Kind::connection, carried.target);
+      ds::Array<int, 2> pair;
 
-      check(::socketpair(AF_UNIX, SOCK_STREAM, 0, pair.data()) == 0);
+      check(::socketpair(AF_UNIX, SOCK_STREAM, 0, pair.dataMut()) == 0);
       FileDescriptor passed{pair[0]};
       FileDescriptor kept{pair[1]};
-      const std::array descriptors{passed.get()};
+      const ds::Array descriptors{passed.get()};
       auto channel = connectEndpoint(path);
 
       sendFrame(channel.get(), frame, descriptors);
@@ -184,15 +185,15 @@ namespace {
   // descriptor when it closes instead.
   FileDescriptor monitor(const std::string& path) {
     auto channel = connectEndpoint(path);
-    std::array<Byte, redirect::Protocol::frame_bytes> output;
-    const auto hello = redirect::Protocol::encode(output, redirect::Kind::monitor, {});
+    ds::Array<Byte, redirect::Protocol::frame_bytes> output;
+    const auto hello = redirect::Protocol::encode(output.viewMut(), redirect::Kind::monitor, {});
 
     check(::send(channel.get(), hello.data(), hello.size(), 0) == static_cast<ssize_t>(hello.size()));
-    std::array<Byte, sizeof(std::uint32_t)> uid;
+    ds::Array<Byte, sizeof(std::uint32_t)> uid;
     pollfd ready{.fd = channel.get(), .events = POLLIN, .revents = 0};
 
     check(::poll(&ready, 1, 5000) == 1);
-    if (::recv(channel.get(), uid.data(), uid.size(), MSG_WAITALL) != static_cast<ssize_t>(uid.size())) {
+    if (::recv(channel.get(), uid.dataMut(), uid.size(), MSG_WAITALL) != static_cast<ssize_t>(uid.size())) {
       return FileDescriptor{};
     }
 

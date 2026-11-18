@@ -18,6 +18,7 @@ import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -26,7 +27,7 @@ namespace {
   using namespace telar;
 
   constexpr TerminalSize size{80, 24, 8, 16};
-  constexpr std::array<std::string_view, 1> cat{"/bin/cat"};
+  constexpr ds::Array<std::string_view, 1> cat{"/bin/cat"};
 
   void testUnknownTagDropsOnlySender() {
     RuntimeHost host;
@@ -36,7 +37,7 @@ namespace {
     check(bystander.exchange<ClientList>(QueryClients{.request_id = 1}).request_id == 1);
 
     // A frame of one byte whose tag no request has.
-    constexpr std::array<Byte, 5> frame{1, 0, 0, 0, 0xee};
+    constexpr ds::Array<Byte, 5> frame{1, 0, 0, 0, 0xee};
 
     check(::send(sender.descriptor(), frame.data(), frame.size(), 0) == static_cast<ssize_t>(frame.size()));
     check(closedByRuntime(sender.descriptor(), std::chrono::seconds{5}), "the runtime kept the client that sent an unknown tag");
@@ -93,17 +94,17 @@ namespace {
   HandshakeResponse hello(const char* socket) {
     const int descriptor = connectRaw(socket);
     const auto payload = HandshakeCodec::encode(ClientHello{});
-    std::array<Byte, 4 + payload.size()> frame{};
-    std::span<Byte> output = frame;
+    ds::Array<Byte, 4 + payload.size()> frame{};
+    std::span<Byte> output = frame.viewMut();
 
     u32::encode(payload.size(), output);
     std::ranges::copy(payload, output.begin());
     check(::send(descriptor, frame.data(), frame.size(), 0) == static_cast<ssize_t>(frame.size()));
-    std::array<Byte, 4 + HandshakeCodec::max_message_size> reply{};
+    ds::Array<Byte, 4 + HandshakeCodec::max_message_size> reply{};
     std::size_t received = 0;
 
     while (received < 4 || received < 4 + (reply[0] | reply[1] << 8 | reply[2] << 16 | reply[3] << 24)) {
-      const auto count = ::recv(descriptor, reply.data() + received, reply.size() - received, 0);
+      const auto count = ::recv(descriptor, reply.dataMut() + received, reply.size() - received, 0);
 
       check(count > 0, "the runtime closed the handshake without answering");
       received += static_cast<std::size_t>(count);
@@ -163,7 +164,7 @@ namespace {
   void testPaneIdentityEnvironment() {
     RuntimeHost host;
     ProtocolPeer peer{host.socket()};
-    const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", "env | grep '^TELAR_' | sort; echo identity-done; exec cat"};
+    const ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", "env | grep '^TELAR_' | sort; echo identity-done; exec cat"};
     const auto opened = peer.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
     const auto screen = screenShowing(peer, opened.pane_id, "identity-done");
     const auto expect = [&](std::string_view name, const std::string& value) {
@@ -186,8 +187,8 @@ namespace {
     {
       // A window shows the pane focused, so text an agent sends would land in what the human types.
       ProtocolPeer window{host.socket()};
-      const std::array<ClientLayoutNode, 1> nodes{ClientLayoutPane{opened.pane_id}};
-      const std::array<ClientTabLayout, 1> layouts{ClientTabLayout{opened.location, opened.pane_id, false, true, nodes}};
+      const ds::Array<ClientLayoutNode, 1> nodes{ClientLayoutPane{opened.pane_id}};
+      const ds::Array<ClientTabLayout, 1> layouts{ClientTabLayout{opened.location, opened.pane_id, false, true, nodes}};
 
       window.send(RequestRuntimeState{.client_identity = 71, .interactive = true});
       window.send(UpdateClientLayout{true, 29, false, opened.location, layouts});
@@ -212,7 +213,7 @@ namespace {
 
     // A pane whose process exited takes no text: it refuses it as exited, or as gone once the
     // runtime retired the pane.
-    const std::array<std::string_view, 1> exiting{"/usr/bin/true"};
+    const ds::Array<std::string_view, 1> exiting{"/usr/bin/true"};
     const auto exited = control.exchange<PaneOpened>(CreatePane{.request_id = 20, .location = opened.location, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = exiting}});
 
     waitExited(control, exited.pane_id);
@@ -226,7 +227,7 @@ namespace {
     ProtocolPeer control{host.socket()};
     const auto result = host.directory() + "/agent-result";
     const auto codex = agentExecutable(host, "codex");
-    const std::array<std::string_view, 5> arguments{codex, "--pane-agent", host.socket(), result, "blocked"};
+    const ds::Array<std::string_view, 5> arguments{codex, "--pane-agent", host.socket(), result, "blocked"};
     const auto opened = control.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10};
 
@@ -250,7 +251,7 @@ namespace {
     const auto codex = agentExecutable(host, "codex");
 
     agentExecutable(host, "claude");
-    const std::array<std::string_view, 5> arguments{codex, "--pane-agent", host.socket(), result, workload};
+    const ds::Array<std::string_view, 5> arguments{codex, "--pane-agent", host.socket(), result, workload};
     const auto opened = control.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
 
     waitExited(control, opened.pane_id);
@@ -284,7 +285,7 @@ namespace {
       // A restorable launch the wire admits, whose arguments with their separators exceed the
       // 128 KiB a checkpoint records.
       const std::string argument((128 * 1024 - 9) / 3, 'x');
-      const std::array<std::string_view, 5> arguments{"/bin/echo", argument, argument, argument, std::string_view{"xx"}.substr(0, (128 * 1024 - 9) % 3)};
+      const ds::Array<std::string_view, 5> arguments{"/bin/echo", argument, argument, argument, std::string_view{"xx"}.substr(0, (128 * 1024 - 9) % 3)};
 
       try {
         control.exchange<PaneOpened>(CreatePane{.request_id = 2, .location = opened.location, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});

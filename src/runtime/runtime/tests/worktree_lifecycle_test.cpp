@@ -56,6 +56,7 @@ import telar.runtime.model.client_layouts;
 import telar.runtime.model.slot_store;
 import telar.runtime.platform.event_loop;
 import telar.runtime.runtime.execution_service;
+import telar.base.ds;
 
 namespace {
 
@@ -65,21 +66,21 @@ namespace {
   using namespace telar::runtime;
 
   void testProgramLabels() {
-    const std::array<std::string_view, 1> direct{"/usr/bin/command"};
-    const std::array<std::string_view, 3> script{"/bin/sh", "-c", "exec /bin/cat"};
-    std::array<std::string_view, 6> wrapped{"/bin/zsh", "-l", "-i", "-c", "exec -- \"$0\" \"$@\"", "/bin/cat"};
+    const ds::Array<std::string_view, 1> direct{"/usr/bin/command"};
+    const ds::Array<std::string_view, 3> script{"/bin/sh", "-c", "exec /bin/cat"};
+    ds::Array<std::string_view, 6> wrapped{"/bin/zsh", "-l", "-i", "-c", "exec -- \"$0\" \"$@\"", "/bin/cat"};
 
     check(launchedProgram({}).empty());
     check(launchedProgram(direct) == direct.front());
     check(launchedProgram(script) == script.front());
     check(launchedProgram(wrapped) == wrapped.back());
     check(launchedProgram(std::span{wrapped}.first(5)) == wrapped.front());
-    wrapped[4] = "echo \"$0\"";
+    wrapped.atMut(4) = "echo \"$0\"";
     check(launchedProgram(wrapped) == wrapped.front());
-    wrapped[0] = "/bin/fish";
-    wrapped[4] = "exec $argv";
+    wrapped.atMut(0) = "/bin/fish";
+    wrapped.atMut(4) = "exec $argv";
     check(launchedProgram(wrapped) == wrapped.back());
-    wrapped[1] = "-li";
+    wrapped.atMut(1) = "-li";
     check(launchedProgram(wrapped) == wrapped.front());
   }
 
@@ -96,7 +97,7 @@ namespace {
     ClientPeer owner{memory, model, clients, ClientRole::interactive};
     ClientPeer observer{memory, model, clients, ClientRole::interactive};
     constexpr TerminalSize size{80, 24, 0, 0};
-    const std::array<std::string_view, 1> arguments{"/bin/cat"};
+    const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
 
     workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/", .arguments = arguments}});
     const auto opened = owner.receive<PaneOpened>();

@@ -17,6 +17,7 @@ import telar.platform.daemon;
 import telar.platform.fs;
 import telar.platform.paths;
 import telar.platform.process;
+import telar.base.ds;
 
 namespace {
 
@@ -111,9 +112,9 @@ namespace {
 
     std::ofstream{base + "/config.lua"} << "return {api_version = 2}\n";
     check(::chdir(base.c_str()) == 0);
-    std::array<char, PATH_MAX> canonical{};
+    ds::Array<char, PATH_MAX> canonical{};
 
-    check(::realpath("config.lua", canonical.data()) != nullptr);
+    check(::realpath("config.lua", canonical.dataMut()) != nullptr);
     const auto socket = base + "/runtime.sock";
     cli::ServerOptions options;
 
@@ -123,8 +124,8 @@ namespace {
     options.trace = "/state/trace.json";
     options.config = "config.lua";
     options.profile = "work";
-    options.engine_arguments[0] = "--one";
-    options.engine_arguments[1] = "two words";
+    options.engine_arguments.atMut(0) = "--one";
+    options.engine_arguments.atMut(1) = "two words";
     options.engine_argument_count = 2;
     options.persist_session = false;
     options.resume_agents = false;

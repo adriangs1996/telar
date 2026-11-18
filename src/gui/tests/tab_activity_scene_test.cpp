@@ -299,7 +299,7 @@ namespace {
       const auto density = window.effectiveDevicePixelRatio();
       constexpr qreal physical_ratio = 2.5;
       constexpr qreal physical_top = 15;
-      constexpr std::array<qreal, 2> physical_heights{105, 106};
+      constexpr ds::Array<qreal, 2> physical_heights{105, 106};
 
       layout.setRatio(physical_ratio / density);
       layout.setContext(1, WorkspaceLocation{});
@@ -473,8 +473,8 @@ namespace {
 
       QCOMPARE(activity_items.size(), 1);
       QCOMPARE(activity_items.front()->width(), TabActivity::spinner_side);
-      std::array<TabDropSlot, TabDropSlots::capacity> targets{};
-      const auto target_count = layout->dropSlots(targets);
+      ds::Array<TabDropSlot, TabDropSlots::capacity> targets{};
+      const auto target_count = layout->dropSlots(targets.viewMut());
 
       QCOMPARE(target_count, std::size_t{2});
       QCOMPARE(targets[target_count - 1].id, layout->counter().value(QStringLiteral("key")).toString().toULongLong());

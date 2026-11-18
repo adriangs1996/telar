@@ -44,8 +44,8 @@ namespace telar::runtime {
   [[gnu::noinline]] ds::Option<std::size_t> decodeBrotli(Memory& memory, std::span<const std::uint8_t> input, std::span<std::uint8_t> output) noexcept {
     // Isolate scratch storage from the stack frames of the other content decoders.
     constexpr std::size_t decoder_scratch_capacity = 32 * 1024;
-    alignas(std::max_align_t) std::array<std::byte, decoder_scratch_capacity> storage;
-    BufferAllocator buffered{memory, storage};
+    alignas(std::max_align_t) ds::Array<std::byte, decoder_scratch_capacity> storage;
+    BufferAllocator buffered{memory, storage.viewMut()};
     BrotliDecoder decoder{buffered};
 
     return decoder.decode(input, output);

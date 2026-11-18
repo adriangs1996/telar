@@ -30,9 +30,9 @@ namespace {
       bool active = false;
       bool accepting = false;
       proxy_trust::Status trust = proxy_trust::Status::absent;
-      std::array<char, 40> fingerprint_sha1{};
-      std::array<char, 64> fingerprint_sha256{};
-      std::array<Byte, 1> certificate{};
+      ds::Array<char, 40> fingerprint_sha1{};
+      ds::Array<char, 64> fingerprint_sha256{};
+      ds::Array<Byte, 1> certificate{};
       std::size_t certificate_bytes = 0;
     };
 
@@ -75,13 +75,13 @@ namespace {
     MemoryAdapter<SynchronizedAllocator<SystemAllocator>> adapter{synchronized};
     ConcurrentMemory& memory = adapter;
     FakeProxy proxy;
-    std::array<Byte, control::Limits::reply_bytes> output;
+    ds::Array<Byte, control::Limits::reply_bytes> output;
     const std::atomic<bool> cancelled{false};
 
     control::Reply handle(control::Configuration configuration, const control::Request& request) {
       control::Backend backend{memory, proxy, nullptr, configuration};
 
-      return control::Protocol::reply(backend.handle(request, output, cancelled));
+      return control::Protocol::reply(backend.handle(request, output.viewMut(), cancelled));
     }
   };
 
@@ -122,7 +122,7 @@ namespace {
     Fixture fixture;
     const auto marker = std::filesystem::temp_directory_path() / ("telar-trust-" + std::to_string(::getpid()));
     const auto script = "touch " + marker.string();
-    const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", script};
+    const ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", script};
     control::TrustCommand command{fixture.memory, fixture.cancelled};
     bool refused = false;
 

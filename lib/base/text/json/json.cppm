@@ -148,11 +148,11 @@ export {
         emit(text.substr(plain, index - plain));
         plain = index + 1;
         if (shorthand != 0) {
-          const std::array escaped{'\\', shorthand};
+          const ds::Array escaped{'\\', shorthand};
 
           emit(std::string_view{escaped.data(), escaped.size()});
         } else {
-          const std::array escaped{'\\', 'u', '0', '0', hex[byte >> 4], hex[byte & 15]};
+          const ds::Array escaped{'\\', 'u', '0', '0', hex[byte >> 4], hex[byte & 15]};
 
           emit(std::string_view{escaped.data(), escaped.size()});
         }
@@ -192,12 +192,12 @@ export {
     class TBC_GENERIC JsonFields {
     public:
       // The fields view the object's text and the names, and allocate scratch text, all in region `a`.
-      inline explicit JsonFields(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<const JsonValue&, tbc::lt::a> object, tbc::view<const std::array<std::string_view, Count>&, tbc::lt::a> names)
+      inline explicit JsonFields(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<const JsonValue&, tbc::lt::a> object, tbc::view<const ds::Array<std::string_view, Count>&, tbc::lt::a> names)
           : names_(names),
             text_(AllocatorRef<char, Memory>{memory}) {
         object.eachMember([&](const JsonValue& key, const JsonValue& value) {
           key.string(text_);
-          values_[unsetJsonFieldPosition(names_, values_, text_)] = value;
+          values_.atMut(unsetJsonFieldPosition(names_, values_, text_)) = value;
         });
       }
 
@@ -215,13 +215,13 @@ export {
       }
 
     private:
-      tbc::view<std::array<std::string_view, Count>, tbc::lt::a> names_;
-      tbc::view<std::array<ds::Option<JsonValue>, Count>, tbc::lt::a> values_;
+      tbc::view<ds::Array<std::string_view, Count>, tbc::lt::a> names_;
+      tbc::view<ds::Array<ds::Option<JsonValue>, Count>, tbc::lt::a> values_;
       tbc::view<String<Memory>, tbc::lt::a> text_;
     };
 
     template <Allocator Memory, std::size_t Count>
-    JsonFields(Memory& memory, const JsonValue& object, const std::array<std::string_view, Count>& names) -> JsonFields<Memory, Count>;
+    JsonFields(Memory& memory, const JsonValue& object, const ds::Array<std::string_view, Count>& names) -> JsonFields<Memory, Count>;
 
   }
 }

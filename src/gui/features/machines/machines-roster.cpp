@@ -22,7 +22,7 @@ namespace telar::gui::features::machines {
       throw MachineFailure{MachineError::too_many};
     }
 
-    auto& row = rows_.at(*slot);
+    auto& row = rows_.atCheckedMut(*slot);
     if (row.used) {
       throw std::logic_error{"MachineSlotAlreadyUsed"};
     }
@@ -141,7 +141,7 @@ namespace telar::gui::features::machines {
   }
 
   void Machines::setLive(Slot slot, bool live) {
-    rows_.at(slot).live = live;
+    rows_.atCheckedMut(slot).live = live;
   }
 
   void Machines::pin(Slot slot) {
@@ -209,7 +209,7 @@ namespace telar::gui::features::machines {
   }
 
   MachineRow& Machines::require(Slot slot) {
-    auto& row = rows_.at(slot);
+    auto& row = rows_.atCheckedMut(slot);
     if (!row.used) {
       throw std::logic_error{"MachineSlotNotUsed"};
     }

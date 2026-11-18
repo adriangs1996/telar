@@ -86,7 +86,7 @@ namespace {
 
     require(store.load().rows().empty(), "missing profile files and missing parent directories must load as empty");
     Random random;
-    const std::array edit{MachineEdit{.kind = MachineEditKind::add, .label = "build", .value = "dev@build"}};
+    const telar::ds::Array edit{MachineEdit{.kind = MachineEditKind::add, .label = "build", .value = "dev@build"}};
 
     static_cast<void>(store.change(edit, random, "local"));
     struct stat file_state{};
@@ -100,7 +100,7 @@ namespace {
     constexpr mode_t directory_mode = 0700;
 
     require((file_state.st_mode & permission_mask) == file_mode && (lock_before.st_mode & permission_mask) == file_mode && (parent_state.st_mode & permission_mask) == directory_mode, "profile data and locks must remain owner-only inside an owner-only directory");
-    const std::array rename{MachineEdit{.kind = MachineEditKind::rename, .label = "build", .value = "renamed"}};
+    const telar::ds::Array rename{MachineEdit{.kind = MachineEditKind::rename, .label = "build", .value = "renamed"}};
 
     static_cast<void>(store.change(rename, random, "local"));
     struct stat lock_after{};
@@ -204,11 +204,11 @@ namespace {
     const auto directory = temporaryDirectory();
     const auto path = (std::filesystem::path{directory.path()} / "machines.json").string();
     constexpr std::size_t writers = 8;
-    std::array<std::exception_ptr, writers> errors{};
-    std::array<std::jthread, writers> threads;
+    telar::ds::Array<std::exception_ptr, writers> errors{};
+    telar::ds::Array<std::jthread, writers> threads;
 
     for (std::size_t index = 0; index < writers; ++index) {
-      threads[index] = std::jthread{[&, index] {
+      threads.atMut(index) = std::jthread{[&, index] {
         try {
           SystemAllocator memory;
           ProfileFile file{path};
@@ -217,16 +217,16 @@ namespace {
           Random random{.next = static_cast<std::uint8_t>(index + 1)};
           const auto label = "machine" + std::to_string(index);
           const auto destination = "dev@host" + std::to_string(index);
-          const std::array edits{MachineEdit{.kind = MachineEditKind::add, .label = label, .value = destination}};
+          const telar::ds::Array edits{MachineEdit{.kind = MachineEditKind::add, .label = label, .value = destination}};
 
           static_cast<void>(store.change(edits, random, "local"));
         } catch (...) {
-          errors[index] = std::current_exception();
+          errors.atMut(index) = std::current_exception();
         }
       }};
     }
 
-    for (auto& thread : threads) {
+    for (auto& thread : threads.viewMut()) {
       thread.join();
     }
 

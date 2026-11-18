@@ -71,8 +71,8 @@ namespace {
   }
 
   std::string receiveBytes(int socket) {
-    std::array<char, 32768> bytes;
-    const auto count = ::recv(socket, bytes.data(), bytes.size(), 0);
+    ds::Array<char, 32768> bytes;
+    const auto count = ::recv(socket, bytes.dataMut(), bytes.size(), 0);
     if (count < 0 && socketWouldBlock(errno)) {
       return {};
     }
@@ -264,10 +264,10 @@ namespace {
   }
 
   std::string authorization(const ProxySecret& secret) {
-    std::array<char, ProxySecret::hexadecimal_bytes> hexadecimal;
-    const auto user = "telar:" + std::string{*secret.formatHexadecimal(hexadecimal)};
-    std::array<char, 128> encoded;
-    const auto count = base64::encode({reinterpret_cast<const std::uint8_t*>(user.data()), user.size()}, encoded);
+    ds::Array<char, ProxySecret::hexadecimal_bytes> hexadecimal;
+    const auto user = "telar:" + std::string{*secret.formatHexadecimal(hexadecimal.viewMut())};
+    ds::Array<char, 128> encoded;
+    const auto count = base64::encode({reinterpret_cast<const std::uint8_t*>(user.data()), user.size()}, encoded.viewMut());
 
     check(count.hasValue());
     return "Proxy-Authorization: Basic " + std::string{encoded.data(), *count} + "\r\n";
@@ -387,52 +387,52 @@ namespace {
   void testSocketWatch() {
     SystemAllocator memory;
     NativeEventLoop<std::remove_reference_t<decltype(memory)>> poller{memory};
-    std::array<Event, NativeEventLoop<std::remove_reference_t<decltype(memory)>>::event_capacity> ready{};
+    ds::Array<Event, NativeEventLoop<std::remove_reference_t<decltype(memory)>>::event_capacity> ready{};
     SocketPair sockets;
     SocketWatch watch;
 
     watch.update(poller, sockets.local.get(), 512, {.readable = true});
     sendBytes(sockets.remote.get(), "event");
-    const auto first = poller.wait(std::chrono::seconds{1}, ready);
+    const auto first = poller.wait(std::chrono::seconds{1}, ready.viewMut());
 
     check(first.size() == 1 && watch.matches(first.front()));
     const auto stale = first.front();
 
     watch.update(poller, sockets.local.get(), 1024, {.readable = true});
     check(!watch.matches(stale));
-    const auto second = poller.wait(std::chrono::seconds{1}, ready);
+    const auto second = poller.wait(std::chrono::seconds{1}, ready.viewMut());
 
     check(second.size() == 1 && watch.matches(second.front()) && second.front().token == 1024);
 
     watch.update(poller, sockets.local.get(), 1024, {.readable = true, .writable = true});
-    const auto both = poller.wait(std::chrono::seconds{1}, ready);
+    const auto both = poller.wait(std::chrono::seconds{1}, ready.viewMut());
 
     check(both.size() == 2);
     check(both[0].kind != both[1].kind && watch.matches(both[0]) && watch.matches(both[1]));
 
     watch.update(poller, sockets.local.get(), 1024, {.readable = true});
-    const auto readable = poller.wait(std::chrono::seconds{1}, ready);
+    const auto readable = poller.wait(std::chrono::seconds{1}, ready.viewMut());
 
     check(readable.size() == 1 && watch.matches(readable.front()) && readable.front().kind == EventKind::readable);
     check(receiveBytes(sockets.local.get()) == "event");
 
     watch.update(poller, sockets.local.get(), 1024, {.writable = true});
-    const auto writable = poller.wait(std::chrono::seconds{1}, ready);
+    const auto writable = poller.wait(std::chrono::seconds{1}, ready.viewMut());
 
     check(writable.size() == 1 && watch.matches(writable.front()) && writable.front().kind == EventKind::writable);
     watch.remove(poller);
-    check(poller.wait(std::chrono::nanoseconds{0}, ready).empty() && !watch.matches(stale));
+    check(poller.wait(std::chrono::nanoseconds{0}, ready.viewMut()).empty() && !watch.matches(stale));
 
     watch.update(poller, sockets.local.get(), 2048, {.readable = true});
     sendBytes(sockets.remote.get(), "retiring");
-    const auto retiring = poller.wait(std::chrono::seconds{1}, ready).front();
+    const auto retiring = poller.wait(std::chrono::seconds{1}, ready.viewMut()).front();
     SocketPair replacement;
     const int reused_descriptor = sockets.local.get();
 
     watch.remove(poller);
     sockets.local.reset();
     check(!watch.matches(retiring));
-    check(poller.wait(std::chrono::nanoseconds{0}, ready).empty());
+    check(poller.wait(std::chrono::nanoseconds{0}, ready.viewMut()).empty());
     check(::dup2(replacement.local.get(), reused_descriptor) == reused_descriptor);
     sockets.local.reset(reused_descriptor);
     replacement.local.reset();
@@ -440,13 +440,13 @@ namespace {
     watch.update(poller, reused_descriptor, 4096, {.readable = true});
     check(!watch.matches(retiring));
     sendBytes(replacement.remote.get(), "replacement");
-    const auto replaced = poller.wait(std::chrono::seconds{1}, ready);
+    const auto replaced = poller.wait(std::chrono::seconds{1}, ready.viewMut());
 
     check(replaced.size() == 1 && watch.matches(replaced.front()) && replaced.front().token == 4096);
     check(receiveBytes(reused_descriptor) == "replacement");
     watch.remove(poller);
     sockets.local.reset();
-    check(poller.wait(std::chrono::nanoseconds{0}, ready).empty());
+    check(poller.wait(std::chrono::nanoseconds{0}, ready.viewMut()).empty());
     bool rejected = false;
 
     try {
@@ -457,7 +457,7 @@ namespace {
 
     check(rejected);
     watch.remove(poller);
-    check(poller.wait(std::chrono::nanoseconds{0}, ready).empty());
+    check(poller.wait(std::chrono::nanoseconds{0}, ready.viewMut()).empty());
   }
 
   void testProxyTransport() {
@@ -514,23 +514,23 @@ namespace {
       return Inspected{handshake.state(), std::string{handshake.failure()}, handshake.intercept(), receiveBytes(origin.remote.get())};
     };
 
-    const auto accepted = inspect(helloRecord(std::array{serverName("origin.test"), protocols()}));
+    const auto accepted = inspect(helloRecord(ds::Array{serverName("origin.test"), protocols()}));
 
     check(accepted.state == State::established && accepted.intercept);
 
-    const auto unread = inspect(helloRecord(std::array{serverName("other.test"), protocols(), encryptedHello()}));
+    const auto unread = inspect(helloRecord(ds::Array{serverName("other.test"), protocols(), encryptedHello()}));
 
     check(unread.state == State::established && !unread.intercept);
 
-    const auto encrypted = inspect(helloRecord(std::array{serverName("origin.test"), protocols(), encryptedHello()}));
+    const auto encrypted = inspect(helloRecord(ds::Array{serverName("origin.test"), protocols(), encryptedHello()}));
 
     check(encrypted.state == State::closed && encrypted.failure == "tls_ech_not_supported" && encrypted.forwarded.empty());
 
-    const auto invalid = inspect(helloRecord(std::array{serverName("origin.test"), protocols(), protocols()}));
+    const auto invalid = inspect(helloRecord(ds::Array{serverName("origin.test"), protocols(), protocols()}));
 
     check(invalid.state == State::closed && invalid.failure == "tls_client_hello_invalid" && invalid.forwarded.empty());
 
-    const auto hello = helloRecord(std::array{serverName("origin.test"), protocols()});
+    const auto hello = helloRecord(ds::Array{serverName("origin.test"), protocols()});
     const auto partial = std::span{hello}.first(10);
     const auto waiting = inspect(partial, {std::chrono::milliseconds{2900}});
 
@@ -634,10 +634,10 @@ namespace {
     ProxyOptions options{memory};
     const auto secret = ProxySecret::generate();
     ProxyCounters counters;
-    std::array<ds::Option<Resolutions::Ticket>, Resolutions::capacity> tickets;
+    ds::Array<ds::Option<Resolutions::Ticket>, Resolutions::capacity> tickets;
 
     for (std::size_t index = 0; index < tickets.size(); ++index) {
-      tickets[index] = Resolutions::request("host" + std::to_string(index) + ".test");
+      tickets.atMut(index) = Resolutions::request("host" + std::to_string(index) + ".test");
       check(tickets[index].hasValue());
     }
 
@@ -651,7 +651,7 @@ namespace {
       check(counters.read(ProxyCounter::resolution_refusal) == 1);
     }
 
-    for (auto& ticket : tickets) {
+    for (auto& ticket : tickets.viewMut()) {
       ticket.reset();
     }
 

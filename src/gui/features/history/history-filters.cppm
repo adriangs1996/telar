@@ -11,6 +11,7 @@ import telar.tbc;
 import telar.gui.foundation.core;
 import telar.gui.foundation.text;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 // Interface: presentation/history_actions.cppm
 export {
@@ -46,7 +47,7 @@ export {
     struct HistoryActions {
       static constexpr std::size_t count = 3;
 
-      [[nodiscard]] static constexpr std::array<HistoryActionLabel, count> labels(HistoryKeyStyle style) noexcept {
+      [[nodiscard]] static constexpr ds::Array<HistoryActionLabel, count> labels(HistoryKeyStyle style) noexcept {
         if (style == HistoryKeyStyle::mac) {
           return {
               HistoryActionLabel{.key = "⌘C", .word = "copy", .action = HistoryCardAction::copy},
@@ -176,13 +177,13 @@ export {
         std::string_view text;
       };
 
-      static constexpr std::array scopes{
+      static constexpr ds::Array scopes{
           Choice{.value = "global", .text = "All"},
           Choice{.value = "workspace", .text = "Workspace"},
           Choice{.value = "cwd", .text = "Directory"},
           Choice{.value = "pane", .text = "Pane"},
       };
-      static constexpr std::array authors{
+      static constexpr ds::Array authors{
           Choice{.value = "human", .text = "You"},
           Choice{.value = "agent", .text = "Agents"},
           Choice{.value = "all", .text = "Both"},
@@ -190,8 +191,8 @@ export {
       static constexpr std::size_t key_count = 3;
       static constexpr std::string_view failed = "Failed";
 
-      [[nodiscard]] static constexpr std::array<std::string_view, key_count> keys(HistoryKeyStyle style) noexcept {
-        return style == HistoryKeyStyle::mac ? std::array<std::string_view, key_count>{"⇥", "⇧⇥", "!"} : std::array<std::string_view, key_count>{"Tab", "Shift+Tab", "!"};
+      [[nodiscard]] static constexpr ds::Array<std::string_view, key_count> keys(HistoryKeyStyle style) noexcept {
+        return style == HistoryKeyStyle::mac ? ds::Array<std::string_view, key_count>{"⇥", "⇧⇥", "!"} : ds::Array<std::string_view, key_count>{"Tab", "Shift+Tab", "!"};
       }
     };
 
@@ -203,9 +204,9 @@ export {
   namespace telar::gui::features::history {
 
     struct HistoryFilterMeasurements {
-      std::array<HistoryFilterChipMeasurements, HistoryFilterLabels::scopes.size()> scopes{};
-      std::array<HistoryFilterChipMeasurements, HistoryFilterLabels::authors.size()> authors{};
-      std::array<float, HistoryFilterLabels::key_count> keys{};
+      ds::Array<HistoryFilterChipMeasurements, HistoryFilterLabels::scopes.size()> scopes{};
+      ds::Array<HistoryFilterChipMeasurements, HistoryFilterLabels::authors.size()> authors{};
+      ds::Array<float, HistoryFilterLabels::key_count> keys{};
       float failed = 0;
     };
 
@@ -220,9 +221,9 @@ export {
       static constexpr float key_gap = 8;
       static constexpr float separator_height = 1;
 
-      std::array<HistoryFilterChipGeometry, HistoryFilterLabels::scopes.size()> scopes{};
-      std::array<HistoryFilterChipGeometry, HistoryFilterLabels::authors.size()> authors{};
-      std::array<Rect, HistoryFilterLabels::key_count> keys{};
+      ds::Array<HistoryFilterChipGeometry, HistoryFilterLabels::scopes.size()> scopes{};
+      ds::Array<HistoryFilterChipGeometry, HistoryFilterLabels::authors.size()> authors{};
+      ds::Array<Rect, HistoryFilterLabels::key_count> keys{};
       HistoryFilterChipGeometry failed;
       Rect scope_group;
       Rect author_group;
@@ -235,7 +236,7 @@ export {
 
     private:
       template <std::size_t Count>
-      static float placeGroup(std::array<HistoryFilterChipGeometry, Count>& destination, Rect group, ChromeMetrics chrome, const std::array<HistoryFilterChipMeasurements, Count>& measured) noexcept;
+      static float placeGroup(ds::Array<HistoryFilterChipGeometry, Count>& destination, Rect group, ChromeMetrics chrome, const ds::Array<HistoryFilterChipMeasurements, Count>& measured) noexcept;
     };
 
   }

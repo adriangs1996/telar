@@ -214,7 +214,7 @@ export {
     private:
       static void removeContents(int directory) noexcept;
 
-      std::array<char, PATH_MAX> path_;
+      ds::Array<char, PATH_MAX> path_;
       std::size_t length_ = 0;
       FileDescriptor directory_;
       struct stat identity_{};

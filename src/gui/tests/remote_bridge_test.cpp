@@ -203,7 +203,7 @@ printf '/home/test\n/bin/sh\n/run/test/socket\n%s\n' "$3"
     }
 
     Q_SLOT static void errors() {
-      const std::array cases{
+      const telar::ds::Array cases{
           std::pair{"missing", MachineError::remote_program_missing},
           std::pair{"authentication", MachineError::authentication_failed},
           std::pair{"host-key", MachineError::host_key_rejected},

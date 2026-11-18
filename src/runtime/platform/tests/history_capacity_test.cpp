@@ -24,6 +24,7 @@ import telar.wire.runtime;
 import telar.wire.vocabulary;
 import telar.runtime.platform.background_executor;
 import telar.runtime.transport.connection;
+import telar.base.ds;
 
 namespace {
 
@@ -32,7 +33,7 @@ namespace {
   using namespace telar;
   using namespace telar::runtime;
 
-  constexpr std::array<ImportHistoryEntry, 1> history_entries{{{1, "queued import"}}};
+  constexpr ds::Array<ImportHistoryEntry, 1> history_entries{{{1, "queued import"}}};
 
   class ControlledHistoryService {
   public:
@@ -46,8 +47,8 @@ namespace {
 
     template <Allocator Memory>
     void process(std::span<const Byte> payload, EncodedReply<Memory>& reply, const RequestContext& context = {}) {
-      std::array<Byte, 256> bytes;
-      DecodeStorage storage{bytes};
+      ds::Array<Byte, 256> bytes;
+      DecodeStorage storage{bytes.viewMut()};
       const auto identity = payload.front() == static_cast<Byte>(ClientTag::import_history)
                                 ? Codec::decode<ImportHistory>(payload, storage).request_id
                                 : Codec::decode<QueryClients>(payload, storage).request_id;
@@ -137,8 +138,8 @@ namespace {
 
       check(::poll(&ready, 1, 2000) == 1);
       worker.collect([&](std::uint64_t, ClientTag, std::span<const Byte> payload) {
-        std::array<Byte, 256> bytes;
-        DecodeStorage storage{bytes};
+        ds::Array<Byte, 256> bytes;
+        DecodeStorage storage{bytes.viewMut()};
 
         identities.push_back(Codec::decode<RequestCompleted>(payload, storage).request_id);
       });

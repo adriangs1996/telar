@@ -115,7 +115,7 @@ export {
 
     public:
       static constexpr auto capacity = Bounds;
-      using Parents = std::array<bool, Node::maximum_nodes>;
+      using Parents = ds::Array<bool, Node::maximum_nodes>;
 
       // Validate and reserve the complete node before changing any owned storage.
       std::uint8_t append(const Input& input);
@@ -162,10 +162,10 @@ export {
 
       Range copyText(std::string_view value) noexcept;
 
-      std::array<Node, Bounds.nodes> nodes_{};
-      std::array<char, Bounds.text> text_{};
-      std::array<std::uint8_t, Bounds.samples> samples_{};
-      std::array<BindingAction, Bounds.actions> actions_{};
+      ds::Array<Node, Bounds.nodes> nodes_{};
+      ds::Array<char, Bounds.text> text_{};
+      ds::Array<std::uint8_t, Bounds.samples> samples_{};
+      ds::Array<BindingAction, Bounds.actions> actions_{};
       std::size_t node_count_ = 0;
       std::size_t text_length_ = 0;
       std::size_t sample_length_ = 0;

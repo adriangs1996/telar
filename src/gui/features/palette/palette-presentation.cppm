@@ -90,7 +90,7 @@ export {
         Rect bounds;
       };
 
-      std::array<Row, capacity> rows{};
+      ds::Array<Row, capacity> rows{};
       std::size_t count = 0;
       std::size_t first = 0;
 

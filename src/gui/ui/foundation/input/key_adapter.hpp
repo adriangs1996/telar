@@ -131,7 +131,7 @@ namespace telar::gui::qt {
     using Code = KeyChord::Key;
     using Modifier = KeyChord::Modifier;
 
-    static constexpr auto named_keys = std::to_array<std::pair<int, Code>>({
+    static constexpr auto named_keys = ds::Array<std::pair<int, Code>, 15>{{
         {Qt::Key_Up, Code::up},
         {Qt::Key_Down, Code::down},
         {Qt::Key_Left, Code::left},
@@ -147,7 +147,7 @@ namespace telar::gui::qt {
         {Qt::Key_Backspace, Code::backspace},
         {Qt::Key_Tab, Code::tab},
         {Qt::Key_Backtab, Code::tab},
-    });
+    }};
 
     static void normalizeTab(TerminalKey& key, bool backwards) noexcept {
       if (key.code != Code::tab) {

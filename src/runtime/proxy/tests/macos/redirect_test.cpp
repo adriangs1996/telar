@@ -236,8 +236,8 @@ namespace {
         }
       }
 
-      std::array<char, 16384> bytes;
-      const auto count = ::recv(destination, bytes.data(), bytes.size(), 0);
+      ds::Array<char, 16384> bytes;
+      const auto count = ::recv(destination, bytes.dataMut(), bytes.size(), 0);
 
       check(count >= 0 || socketWouldBlock(errno));
       if (count > 0) {
@@ -257,9 +257,9 @@ namespace {
       });
     }
 
-    const std::array<redir::Mapping, 2> mappings{{{redir::Target::parse("192.0.2.1:443"), 53001}, {redir::Target::parse("[::1]:80"), 53002}}};
+    const ds::Array<redir::Mapping, 2> mappings{{{redir::Target::parse("192.0.2.1:443"), 53001}, {redir::Target::parse("[::1]:80"), 53002}}};
     redir::PfIdentity identity{memory, "/tmp/fixture.sock.redirect"};
-    const std::array<redir::FlowKey, 2> flows{{{.source = redir::Target::parse("192.0.2.2:55001"), .destination = mappings[0].target}, {.source = redir::Target::parse("[2001:db8::2]:55002"), .destination = mappings[1].target}}};
+    const ds::Array<redir::FlowKey, 2> flows{{{.source = redir::Target::parse("192.0.2.2:55001"), .destination = mappings[0].target}, {.source = redir::Target::parse("[2001:db8::2]:55002"), .destination = mappings[1].target}}};
     redir::PfScope scope{.uid = 501, .label = identity.label, .discovery_interface = "utun0", .flows = flows, .log_interface = 15};
     const auto rules = redir::pfRules(memory, mappings, scope);
 
@@ -281,7 +281,7 @@ namespace {
     check(std::string_view{scoped_rules}.contains("route-to (en0 192.0.2.254) inet proto tcp from 192.0.2.3 port 55003"));
     check(!std::string_view{scoped_rules}.contains("rdr on lo0 inet proto tcp from 192.0.2.3"));
     redir::PfCommand command{memory};
-    const std::array<std::string_view, 5> arguments{"-n", "-a", identity.anchor, "-f", "-"};
+    const ds::Array<std::string_view, 5> arguments{"-n", "-a", identity.anchor, "-f", "-"};
 
     command.run(arguments, rules);
     command.run(arguments, scoped_rules);
@@ -293,8 +293,8 @@ namespace {
     scope.bypasses = {};
     auto incoming_mappings = mappings;
 
-    incoming_mappings[0].incoming = true;
-    const std::array incoming_flows{flows[0]};
+    incoming_mappings.atMut(0).incoming = true;
+    const ds::Array incoming_flows{flows[0]};
     auto incoming_scope = scope;
 
     incoming_scope.direction = redir::Direction::inbound;
@@ -309,8 +309,8 @@ namespace {
     check(std::string_view{incoming_rules}.contains("to 192.0.2.1 port 53001 flags S/SA keep state"));
     check(!std::string_view{incoming_rules}.contains("-> 127.0.0.1"));
     command.run(arguments, incoming_rules);
-    const std::array<redir::Mapping, 1> incoming_v6{{{redir::Target::parse("[2001:db8::1]:443"), 53003, true}}};
-    const std::array<redir::FlowKey, 1> incoming_v6_flow{{{.source = redir::Target::parse("[2001:db8::2]:55003"), .destination = incoming_v6[0].target}}};
+    const ds::Array<redir::Mapping, 1> incoming_v6{{{redir::Target::parse("[2001:db8::1]:443"), 53003, true}}};
+    const ds::Array<redir::FlowKey, 1> incoming_v6_flow{{{.source = redir::Target::parse("[2001:db8::2]:55003"), .destination = incoming_v6[0].target}}};
     auto v6_scope = incoming_scope;
 
     v6_scope.incoming_flows = incoming_v6_flow;
@@ -365,9 +365,9 @@ namespace {
         continue;
       }
 
-      std::array<char, INET_ADDRSTRLEN> text{};
+      ds::Array<char, INET_ADDRSTRLEN> text{};
 
-      check(::inet_ntop(AF_INET, &address.sin_addr, text.data(), text.size()) != nullptr);
+      check(::inet_ntop(AF_INET, &address.sin_addr, text.dataMut(), text.size()) != nullptr);
       target = redir::Target::parse(std::string{text.data()} + ":1");
       break;
     }
@@ -378,10 +378,10 @@ namespace {
       socklen_t size = bound.length;
 
       check(::getsockname(listener.descriptor(), reinterpret_cast<sockaddr*>(&bound.storage), &size) == 0);
-      std::array<char, INET_ADDRSTRLEN> host{};
+      ds::Array<char, INET_ADDRSTRLEN> host{};
       const auto& address = reinterpret_cast<const sockaddr_in&>(bound.storage);
 
-      check(::inet_ntop(AF_INET, &address.sin_addr, host.data(), host.size()) != nullptr);
+      check(::inet_ntop(AF_INET, &address.sin_addr, host.dataMut(), host.size()) != nullptr);
       const auto mapping = listener.mapping();
 
       check(mapping.incoming == incoming && mapping.listenerAddress() == host.data());
@@ -453,26 +453,26 @@ namespace {
 
       std::memcpy(logged.data() + 48, &process, sizeof(process));
       std::copy(frame.begin() + sizeof(family), frame.end(), logged.begin() + 64);
-      std::array<Byte, 128> normalized{};
-      const auto length = redir::PacketLog::normalize(logged, owner, normalized);
+      ds::Array<Byte, 128> normalized{};
+      const auto length = redir::PacketLog::normalize(logged, owner, normalized.viewMut());
 
       check(length == frame.size() && std::equal(frame.begin(), frame.end(), normalized.begin()));
       redir::PacketLog::Metadata metadata;
 
-      check(redir::PacketLog::normalize(logged, owner, normalized, &metadata) == frame.size());
+      check(redir::PacketLog::normalize(logged, owner, normalized.viewMut(), &metadata) == frame.size());
       check(!metadata.incoming);
-      check(redir::PacketLog::normalize(logged, owner, normalized, &metadata, redir::Direction::inbound) == 0);
+      check(redir::PacketLog::normalize(logged, owner, normalized.viewMut(), &metadata, redir::Direction::inbound) == 0);
       logged[60] = 1;
-      check(redir::PacketLog::normalize(logged, owner, normalized, &metadata, redir::Direction::inbound) == frame.size() && metadata.incoming);
-      check(redir::PacketLog::normalize(logged, owner, normalized, &metadata, redir::Direction::both) == frame.size());
-      check(redir::PacketLog::normalize(logged, owner, normalized) == 0);
+      check(redir::PacketLog::normalize(logged, owner, normalized.viewMut(), &metadata, redir::Direction::inbound) == frame.size() && metadata.incoming);
+      check(redir::PacketLog::normalize(logged, owner, normalized.viewMut(), &metadata, redir::Direction::both) == frame.size());
+      check(redir::PacketLog::normalize(logged, owner, normalized.viewMut()) == 0);
       logged[60] = 2;
       check(metadata.pid == process && metadata.interface.view() == "lo0" && metadata.interface_index == ::if_nametoindex("lo0"));
-      check(redir::PacketLog::normalize(logged, 0, normalized) == 0);
-      check(redir::PacketLog::normalize(std::span{logged}.first(63), owner, normalized) == 0);
-      check(redir::PacketLog::normalize(logged, owner, std::span{normalized}.first(3)) == 0);
+      check(redir::PacketLog::normalize(logged, 0, normalized.viewMut()) == 0);
+      check(redir::PacketLog::normalize(std::span{logged}.first(63), owner, normalized.viewMut()) == 0);
+      check(redir::PacketLog::normalize(logged, owner, normalized.viewMut().first(3)) == 0);
       logged[0] = 60;
-      check(redir::PacketLog::normalize(logged, owner, normalized) == 0);
+      check(redir::PacketLog::normalize(logged, owner, normalized.viewMut()) == 0);
       for (std::size_t length = 0; length < frame.size(); ++length) {
         check(!redir::FlowKey::syn(std::span{frame}.first(length)));
       }
@@ -850,15 +850,15 @@ namespace {
     {
       redir::Ingress<decltype(service), SameUser> ingress{path, service};
       auto monitor = traffic::connect(path);
-      std::array<Byte, redir::Protocol::frame_bytes> greeting{};
+      ds::Array<Byte, redir::Protocol::frame_bytes> greeting{};
 
-      traffic::sendAll(monitor.get(), redir::Protocol::encode(greeting, redir::Kind::monitor, {}));
+      traffic::sendAll(monitor.get(), redir::Protocol::encode(greeting.viewMut(), redir::Kind::monitor, {}));
       pollfd ready{monitor.get(), POLLIN, 0};
 
       check(::poll(&ready, 1, 5000) > 0);
-      std::array<Byte, sizeof(std::uint32_t)> reply{};
+      ds::Array<Byte, sizeof(std::uint32_t)> reply{};
 
-      check(::recv(monitor.get(), reply.data(), reply.size(), MSG_WAITALL) == static_cast<ssize_t>(reply.size()));
+      check(::recv(monitor.get(), reply.dataMut(), reply.size(), MSG_WAITALL) == static_cast<ssize_t>(reply.size()));
       plugins::FrameReader identity{reply};
 
       check(identity.integer<std::uint32_t>() == ::geteuid());
@@ -1062,7 +1062,7 @@ namespace {
       check(event.visibility == traffic::Visibility::plaintext);
       auto message = HttpMessageCodec::decode(event.bytes);
       if (message.response) {
-        static constexpr std::array<Byte, 10> body{'t', 'l', 's', 0, 'e', 'd', 'i', 't', 'e', 'd'};
+        static constexpr ds::Array<Byte, 10> body{'t', 'l', 's', 0, 'e', 'd', 'i', 't', 'e', 'd'};
 
         message.body = body;
         message.status = 202;
@@ -1115,7 +1115,7 @@ namespace {
   };
 
   void exchangeHttp2Tls(TlsTestMemory& memory, SSL* client, SSL* server) {
-    const std::array<std::pair<std::string_view, std::string_view>, 4> headers{{{":method", "GET"}, {":scheme", "https"}, {":authority", "origin.test"}, {":path", "/transparent"}}};
+    const ds::Array<std::pair<std::string_view, std::string_view>, 4> headers{{{":method", "GET"}, {":scheme", "https"}, {":authority", "origin.test"}, {":path", "/transparent"}}};
     constexpr auto end = static_cast<std::uint8_t>(Http2Flag::end_stream);
     constexpr auto complete_headers = end | static_cast<std::uint8_t>(Http2Flag::end_headers);
     const auto request = std::string{Http2DirectionObserver<TlsTestMemory>::client_preface} + http2Frame(Http2FrameKind::settings, 0, 0, {}) + http2Frame(Http2FrameKind::headers, complete_headers, 1, hpackFields(headers));
@@ -1153,11 +1153,11 @@ namespace {
 
     Http2DirectionObserver request_observer{memory, Http2Direction::request};
     Http2DirectionObserver response_observer{memory, Http2Direction::response};
-    std::array<std::uint8_t, 4096> bytes;
+    ds::Array<std::uint8_t, 4096> bytes;
     std::size_t received = 0;
 
     await([&] {
-      if (SSL_read_ex(server, bytes.data(), bytes.size(), &received) == 1) {
+      if (SSL_read_ex(server, bytes.dataMut(), bytes.size(), &received) == 1) {
         request_observer.observe(std::span{bytes}.first(received), request_sink);
       }
 
@@ -1165,7 +1165,7 @@ namespace {
     });
 
     check(request_sink.path == "/edited-tls");
-    const std::array<std::pair<std::string_view, std::string_view>, 1> response_headers{{{":status", "200"}}};
+    const ds::Array<std::pair<std::string_view, std::string_view>, 1> response_headers{{{":status", "200"}}};
     const auto response = http2Frame(Http2FrameKind::headers, static_cast<std::uint8_t>(Http2Flag::end_headers), 1, hpackFields(response_headers)) + http2Frame(Http2FrameKind::data, end, 1, "yes");
 
     await([&] {
@@ -1173,7 +1173,7 @@ namespace {
     });
 
     await([&] {
-      if (SSL_read_ex(client, bytes.data(), bytes.size(), &received) == 1) {
+      if (SSL_read_ex(client, bytes.dataMut(), bytes.size(), &received) == 1) {
         response_observer.observe(std::span{bytes}.first(received), response_sink);
       }
 
@@ -1234,7 +1234,7 @@ namespace {
     AlpnSelection selection;
 
     if (http2) {
-      constexpr std::array<unsigned char, 2> name{'h', '2'};
+      constexpr ds::Array<unsigned char, 2> name{'h', '2'};
 
       check(selection.assign(name));
       SSL_CTX_set_alpn_select_cb(server_context.get(), &AlpnSelection::select, nullptr);
@@ -1251,7 +1251,7 @@ namespace {
 
     if (http2) {
       SSL_set_app_data(server.get(), &selection);
-      constexpr std::array<unsigned char, 3> offer{2, 'h', '2'};
+      constexpr ds::Array<unsigned char, 3> offer{2, 'h', '2'};
 
       check(SSL_set_alpn_protos(client.get(), offer.data(), offer.size()) == 0);
     }
@@ -1320,11 +1320,11 @@ namespace {
       return SSL_write_ex(client.get(), request.data(), request.size(), &sent) == 1;
     });
 
-    std::array<char, 1024> bytes;
+    ds::Array<char, 1024> bytes;
     std::size_t received = 0;
 
     await([&] {
-      return SSL_read_ex(server.get(), bytes.data(), bytes.size(), &received) == 1;
+      return SSL_read_ex(server.get(), bytes.dataMut(), bytes.size(), &received) == 1;
     });
 
     if (edit) {
@@ -1343,7 +1343,7 @@ namespace {
     const auto expected = edit ? std::string{"HTTP/1.1 202 Edited\r\nContent-Length: 10\r\n\r\n"} + std::string{"tls\0edited", 10} : std::string{response};
 
     await([&] {
-      if (SSL_read_ex(client.get(), bytes.data(), bytes.size(), &received) == 1) {
+      if (SSL_read_ex(client.get(), bytes.dataMut(), bytes.size(), &received) == 1) {
         result.append(bytes.data(), received);
       }
 
@@ -1381,10 +1381,10 @@ namespace {
     SynchronizedAllocator synchronized{budget};
     MemoryAdapter adapter{synchronized};
     TlsTestMemory& memory = adapter;
-    std::array<char, 64> temporary{};
+    ds::Array<char, 64> temporary{};
 
-    std::strcpy(temporary.data(), "/tmp/telar-redirect-XXXXXX");
-    check(::mkdtemp(temporary.data()) != nullptr);
+    std::strcpy(temporary.dataMut(), "/tmp/telar-redirect-XXXXXX");
+    check(::mkdtemp(temporary.dataMut()) != nullptr);
     const auto root = std::filesystem::canonical(temporary.data()).string();
 
     {

@@ -98,7 +98,7 @@ namespace telar::gui::qt {
       const auto advance = QFontMetricsF(variant).horizontalAdvance(QLatin1Char('M'));
 
       variant.setLetterSpacing(QFont::AbsoluteSpacing, result.cell.width() - advance);
-      result.faces[index] = variant;
+      result.faces.atMut(index) = variant;
     }
 
     result.fixed_pitch = QFontInfo(base).fixedPitch();

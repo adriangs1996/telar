@@ -27,7 +27,7 @@ export {
       const char* what() const noexcept override;
 
     private:
-      std::array<char, 1024> message_;
+      ds::Array<char, 1024> message_;
     };
 
     struct Limits {

@@ -2,6 +2,7 @@ import std;
 import telar.testing;
 import telar.runtime.vocabulary.frames;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -14,10 +15,10 @@ namespace {
   // A writer never copies past the buffer it was given: bytes that do not fit are refused whole, and
   // the frame keeps none of them.
   void testAppendBeyondBuffer() {
-    std::array<Byte, 32> storage{};
-    const auto buffer = std::span{storage}.first(8);
+    ds::Array<Byte, 32> storage{};
+    const auto buffer = storage.viewMut().first(8);
     tap::FrameWriter writer{buffer};
-    constexpr std::array<Byte, 10> bytes{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    constexpr ds::Array<Byte, 10> bytes{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
     bool rejected = false;
 
     try {

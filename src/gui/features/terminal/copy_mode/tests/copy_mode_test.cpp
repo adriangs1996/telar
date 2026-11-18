@@ -108,7 +108,7 @@ namespace {
     static constexpr std::uint16_t separator_column = 5;
     static constexpr std::uint16_t last_text_column = 8;
     static constexpr std::size_t cell_count = static_cast<std::size_t>(columns) * rows;
-    std::array<CellValue, cell_count> cells{};
+    telar::ds::Array<CellValue, cell_count> cells{};
 
     GridFixture() {
       constexpr std::string_view text = "  foo/bar "
@@ -117,7 +117,7 @@ namespace {
                                         "last row  ";
 
       for (std::size_t index = 0; index < cells.size(); ++index) {
-        cells[index].text[0] = static_cast<telar::Byte>(text[index]);
+        cells.atMut(index).text.atMut(0) = static_cast<telar::Byte>(text[index]);
       }
     }
 
@@ -191,7 +191,7 @@ namespace {
     const auto search = mode.key({.codepoint = '?'}, grid);
 
     check(search && mode.commit(requiredValue(search)), "backward search must request input");
-    const std::array matches{telar::PaneMatch{.x = 1, .y = match_row, .len = 2}};
+    const telar::ds::Array matches{telar::PaneMatch{.x = 1, .y = match_row, .len = 2}};
     const auto found = mode.search(matches, grid);
 
     check(found && mode.commit(requiredValue(found)), "a match far above the view must apply");
@@ -202,7 +202,7 @@ namespace {
     const auto select = mode.key({.codepoint = 'v'}, grid);
 
     check(select && mode.commit(requiredValue(select)), "a selection must start at the match");
-    const std::array later{telar::PaneMatch{.x = 0, .y = match_row - 2, .len = 2}};
+    const telar::ds::Array later{telar::PaneMatch{.x = 0, .y = match_row - 2, .len = 2}};
     const auto stretched = mode.search(later, grid);
 
     check(stretched && mode.commit(requiredValue(stretched)) && requiredValue(mode.state()).anchor == CopyPoint{.x = 1, .y = match_row}, "a search stretches a selection under way to its match");
@@ -227,7 +227,7 @@ namespace {
     const auto search = mode.key({.codepoint = '/'}, grid);
 
     check(search && requiredValue(search).effect.search == CopyDirection::forward && mode.commit(requiredValue(search)), "forward search must request input even when its direction is unchanged");
-    const std::array matches{telar::PaneMatch{.x = 2, .y = 0, .len = 3}, telar::PaneMatch{.x = 0, .y = 1, .len = 3}};
+    const telar::ds::Array matches{telar::PaneMatch{.x = 2, .y = 0, .len = 3}, telar::PaneMatch{.x = 0, .y = 1, .len = 3}};
     const auto found = mode.search(matches, grid);
 
     check(found && mode.matches().empty(), "planning search results must preserve existing match ownership");

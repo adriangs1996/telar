@@ -13,6 +13,7 @@ import telar.gui.foundation.actions;
 import telar.plugins;
 import telar.gui.features.plugins;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 export {
   namespace telar::gui::test {
@@ -38,7 +39,7 @@ export {
       }
 
       struct Bytes {
-        std::array<Byte, features::plugins::PluginEffects::maximum_bytes + 1> data{};
+        ds::Array<Byte, features::plugins::PluginEffects::maximum_bytes + 1> data{};
         std::size_t length = 0;
 
         [[nodiscard]] std::span<const Byte> view() const noexcept {
@@ -57,7 +58,7 @@ export {
           const auto low = digits.find(hex[(index * 2) + 1]);
 
           require(high != std::string_view::npos && low != std::string_view::npos, "hex fixture must be valid");
-          result.data[index] = static_cast<Byte>((high * digits.size()) + low);
+          result.data.atMut(index) = static_cast<Byte>((high * digits.size()) + low);
         }
 
         return result;
@@ -70,7 +71,7 @@ export {
           int parameter;
         };
 
-        constexpr auto cases = std::to_array<Case>({
+        constexpr auto cases = ds::Array<Case, 29>{{
             {.original_hex = "0103", .kind = BindingActionKind::toggle_sidebar, .parameter = 0},
             {.original_hex = "010d", .kind = BindingActionKind::toggle_pane_fullscreen, .parameter = 0},
             {.original_hex = "010e", .kind = BindingActionKind::toggle_workspace_list, .parameter = 0},
@@ -100,7 +101,7 @@ export {
             {.original_hex = "011101", .kind = BindingActionKind::select_workspace, .parameter = 1},
             {.original_hex = "010601", .kind = BindingActionKind::select_tab_offset, .parameter = 1},
             {.original_hex = "0106ff", .kind = BindingActionKind::select_tab_offset, .parameter = -1},
-        });
+        }};
 
         for (const auto& entry : cases) {
           const auto input = bytes(entry.original_hex);
@@ -162,7 +163,7 @@ export {
         mixed.authorize(package, trust);
         auto changed = package;
 
-        changed.digest.front() ^= 1U;
+        changed.digest.atMut(0) ^= 1U;
         rejects([&] {
           mixed.authorize(changed, trust);
         });

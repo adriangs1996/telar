@@ -42,6 +42,7 @@ static_assert(true);
 
 import telar.testing;
 import telar.gui.foundation.fonts;
+import telar.base.ds;
 
 extern "C" {
 }
@@ -74,7 +75,7 @@ namespace {
           .font_len = font_.size(),
           .postscript = nullptr,
           .face_index = 0,
-          .pixels = pixels_.data(),
+          .pixels = pixels_.dataMut(),
           .side = atlas_side,
           .thicken = 1,
           .strength = strength,
@@ -139,7 +140,7 @@ namespace {
     std::vector<std::uint8_t> native_reference_;
     std::unique_ptr<telar_glyph_rasterizer, decltype(&telarGlyphRasterizerDestroy)> native_handle_{nullptr, telarGlyphRasterizerDestroy};
     std::uint16_t pixel_height_ = 0;
-    std::array<std::uint8_t, static_cast<std::size_t>(atlas_side) * atlas_side> pixels_{};
+    telar::ds::Array<std::uint8_t, static_cast<std::size_t>(atlas_side) * atlas_side> pixels_{};
     telar_font_variation variation_{};
     std::unique_ptr<telar_glyph_rasterizer, decltype(&telarGlyphRasterizerDestroy)> handle_{nullptr, telarGlyphRasterizerDestroy};
   };
@@ -242,7 +243,7 @@ namespace {
 
   void verifyInvalidDimensions() {
     const auto optical = telar::gui::qt::OpticalText::create();
-    constexpr std::array invalid_extents{0.0, -1.0, std::numeric_limits<qreal>::infinity(), std::numeric_limits<qreal>::quiet_NaN()};
+    constexpr telar::ds::Array invalid_extents{0.0, -1.0, std::numeric_limits<qreal>::infinity(), std::numeric_limits<qreal>::quiet_NaN()};
 
     for (const auto extent : invalid_extents) {
       bool rejected = false;
@@ -258,8 +259,8 @@ namespace {
   }
 
   std::size_t compareSize(telar::gui::qt::OpticalText& optical, OriginalRasterizer& original, std::uint8_t strength, int scale, int pixel_height) {
-    constexpr std::array texts{"M", "g", "@"};
-    constexpr std::array styles{GlyphStyle::regular, GlyphStyle::bold, GlyphStyle::italic, GlyphStyle::bold_italic};
+    constexpr telar::ds::Array texts{"M", "g", "@"};
+    constexpr telar::ds::Array styles{GlyphStyle::regular, GlyphStyle::bold, GlyphStyle::italic, GlyphStyle::bold_italic};
     std::size_t comparisons = 0;
 
     original.select(static_cast<std::uint32_t>(pixel_height * scale));
@@ -286,9 +287,9 @@ namespace {
     const auto optical = telar::gui::qt::OpticalText::create();
 
     check(optical != nullptr, "macOS optical text is unavailable");
-    constexpr std::array<std::uint8_t, 3> strengths{0, 128, opaque_channel};
-    constexpr std::array pixel_heights{8, 12, 15, 32, 60, 96};
-    constexpr std::array scales{1, 2};
+    constexpr telar::ds::Array<std::uint8_t, 3> strengths{0, 128, opaque_channel};
+    constexpr telar::ds::Array pixel_heights{8, 12, 15, 32, 60, 96};
+    constexpr telar::ds::Array scales{1, 2};
     std::size_t comparisons = 0;
 
     for (const auto strength : strengths) {

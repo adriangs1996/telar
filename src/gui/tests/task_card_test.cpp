@@ -54,6 +54,7 @@ import telar.gui.application;
 import telar.gui.foundation.system;
 import telar.gui.features.activity;
 import telar.gui.features.workbench;
+import telar.base.ds;
 
 namespace {
 
@@ -315,20 +316,20 @@ namespace {
       telar::ConcurrentMemory& memory = adapter;
       WorkspaceReplica workspaces{memory};
       AgentReplica agents{memory};
-      const std::array projects{WorkspaceListEntry{.workspace = 1, .name = "project", .path = "/project"}};
-      std::array tasks{worktreeEntry(), worktreeEntry()};
+      const ds::Array projects{WorkspaceListEntry{.workspace = 1, .name = "project", .path = "/project"}};
+      ds::Array tasks{worktreeEntry(), worktreeEntry()};
 
-      tasks.back().worktree = command_worktree_id;
-      tasks.back().workspace.reset();
-      tasks.back().command_state = CommandState::running;
+      tasks.atMut(tasks.size() - 1).worktree = command_worktree_id;
+      tasks.atMut(tasks.size() - 1).workspace.reset();
+      tasks.atMut(tasks.size() - 1).command_state = CommandState::running;
       QVERIFY(workspaces.apply({.revision = 1, .entries = projects, .worktrees = tasks}));
-      std::array reports{agentSnapshotEntry(), agentSnapshotEntry()};
+      ds::Array reports{agentSnapshotEntry(), agentSnapshotEntry()};
 
-      reports.back().pane_id = 2;
-      reports.back().work_tree = task_worktree_id;
+      reports.atMut(reports.size() - 1).pane_id = 2;
+      reports.atMut(reports.size() - 1).work_tree = task_worktree_id;
       QVERIFY(agents.apply({.revision = 1, .entries = reports}, system::AwakeClock::nowNanoseconds()));
       using Order = ActivityOrder<telar::ConcurrentMemory>;
-      const std::array sources{Order::Source{.agents = agents.entries(), .workspaces = workspaces}};
+      const ds::Array sources{Order::Source{.agents = agents.entries(), .workspaces = workspaces}};
       Order::Plan plan;
 
       Order::write(sources, 0, plan);

@@ -229,7 +229,7 @@ namespace {
 
     application::workbench::split(fixture.client, ClientLayoutAxis::horizontal);
     const auto split = fixture.transport.last<CreatePane>();
-    const std::array<PaneDescriptor, 2> panes{{{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}, {.pane_id = 2, .lifecycle = PaneLifecycle::running, .pane_generation = 1}}};
+    const ds::Array<PaneDescriptor, 2> panes{{{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}, {.pane_id = 2, .lifecycle = PaneLifecycle::running, .pane_generation = 1}}};
 
     deliver(fixture.client, TabSnapshot{.request_id = 1, .location = split.location, .panes = panes});
     const auto attach = fixture.transport.last<OpenPane>();

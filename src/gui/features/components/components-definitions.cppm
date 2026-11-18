@@ -146,12 +146,12 @@ export {
       void count(ds::Option<std::size_t> panels, ds::Option<std::size_t> picks) noexcept;
 
     private:
-      std::array<Source, positions> sources_{};
-      std::array<Panel, maximum_definitions> panels_{};
-      std::array<Pick, maximum_definitions> picks_{};
+      ds::Array<Source, positions> sources_{};
+      ds::Array<Panel, maximum_definitions> panels_{};
+      ds::Array<Pick, maximum_definitions> picks_{};
       std::size_t panel_count_ = 0;
       std::size_t pick_count_ = 0;
-      std::array<int, static_cast<std::size_t>(Slot::count)> slots_{};
+      ds::Array<int, static_cast<std::size_t>(Slot::count)> slots_{};
     };
 
   }

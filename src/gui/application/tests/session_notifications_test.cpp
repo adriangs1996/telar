@@ -22,6 +22,7 @@ import telar.gui.application;
 import telar.gui.features.notifications;
 import telar.wire.agents;
 import telar.wire.layout;
+import telar.base.ds;
 
 namespace {
 
@@ -80,16 +81,16 @@ namespace {
     SystemAllocator memory;
     Transport transport;
     Client client{memory, transport};
-    std::array entries{agentSnapshotEntry()};
+    ds::Array entries{agentSnapshotEntry()};
 
-    entries.front().display_name = "Custom provider";
-    entries.front().status = AgentStatus::blocked;
+    entries.atMut(0).display_name = "Custom provider";
+    entries.atMut(0).status = AgentStatus::blocked;
     Clock::now_ns = second;
     deliver(client, AgentSnapshot{.revision = 1, .entries = entries});
     check(application::notifications::center(client).items().empty(), "an initial blocked agent must not invent a transition");
-    entries.front().status = AgentStatus::working;
+    entries.atMut(0).status = AgentStatus::working;
     deliver(client, AgentSnapshot{.revision = 2, .entries = entries});
-    entries.front().status = AgentStatus::blocked;
+    entries.atMut(0).status = AgentStatus::blocked;
     Clock::now_ns = 2 * second;
     deliver(client, AgentSnapshot{.revision = 3, .entries = entries});
     check(application::notifications::center(client).items().size() == 1 && application::notifications::center(client).items().front().message.view() == "Custom provider in pane 1 is waiting for input", "committed transitions must use current provider metadata");
@@ -98,7 +99,7 @@ namespace {
     deliver(client, AgentSnapshot{.revision = 3, .entries = entries});
     check(application::notifications::revision(client) == revision, "stale snapshots must not extend alert lifetimes");
     client.disconnected();
-    entries.front().status = AgentStatus::failed;
+    entries.atMut(0).status = AgentStatus::failed;
     deliver(client, AgentSnapshot{.revision = 1, .entries = entries});
     check(application::notifications::revision(client) == revision, "source replacement must retain old notices without comparing retired agent identities");
   }
@@ -138,13 +139,13 @@ namespace {
     Client client{memory, transport};
 
     openFirstPane(client, transport);
-    const std::array workspaces{WorkspaceListEntry{.workspace = 1, .name = "First", .path = "/first"}, WorkspaceListEntry{.workspace = 2, .name = "Second", .path = "/second"}};
+    const ds::Array workspaces{WorkspaceListEntry{.workspace = 1, .name = "First", .path = "/first"}, WorkspaceListEntry{.workspace = 2, .name = "Second", .path = "/second"}};
 
     deliver(client, WorkspaceList{.revision = 1, .entries = workspaces});
-    std::array entries{agentSnapshotEntry()};
+    ds::Array entries{agentSnapshotEntry()};
 
-    entries.front().pane_id = 2;
-    entries.front().location = {.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 2}, .tab_id = 2};
+    entries.atMut(0).pane_id = 2;
+    entries.atMut(0).location = {.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 2}, .tab_id = 2};
     deliver(client, AgentSnapshot{.revision = 1, .entries = entries});
     Clock::now_ns = second;
     application::notifications::publish(client, {.target = {.kind = NotificationTarget::Kind::pane, .id = 2}, .title = "Open pane", .message = {}, .link = {}});
@@ -152,7 +153,7 @@ namespace {
 
     check(application::notifications::activate(client, pane_notice) && client.activeTab()->location.tab_id == 2 && client.activeTab()->focused_pane == 2, "an alert for an unseen agent must select its actual pane and workspace");
     const auto destination = entries.front().location;
-    const std::array destination_panes{PaneDescriptor{.pane_id = 2, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
+    const ds::Array destination_panes{PaneDescriptor{.pane_id = 2, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
 
     deliver(client, TabSnapshot{.request_id = transport.last<RequestTabSnapshot>().request_id, .location = destination, .panes = destination_panes});
     const auto arrival = transport.last<OpenPane>();
@@ -177,7 +178,7 @@ namespace {
     check(opening.target.kind == PaneTarget::Kind::workspace && opening.target.id == destination.workspace.id, "workspace activation must request the canonical destination through the normal selection flow");
     deliver(client, PaneOpened{.request_id = opening.request_id, .pane_id = 2, .location = destination, .pane_generation = 1});
     deliver(client, TabSnapshot{.request_id = transport.last<RequestTabSnapshot>().request_id, .location = destination, .panes = destination_panes});
-    const std::array destination_tabs{TabDescriptor{.tab_id = destination.tab_id, .pane_count = 1}};
+    const ds::Array destination_tabs{TabDescriptor{.tab_id = destination.tab_id, .pane_count = 1}};
 
     deliver(client, WorkspaceSnapshot{.request_id = transport.last<RequestWorkspaceSnapshot>().request_id, .workspace = destination.workspace, .name = "Second", .tabs = destination_tabs});
     check(!client.requestsPending() && client.activeTab()->location.workspace.id == destination.workspace.id, "canonical workspace arrival must complete before presenting the notification's target");

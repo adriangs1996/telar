@@ -36,19 +36,19 @@ namespace {
           },
       };
 
-      std::array<std::string, config::PluginWorkerOptions::argument_count + 1> words;
+      ds::Array<std::string, config::PluginWorkerOptions::argument_count + 1> words;
       std::size_t count = 0;
 
       written.eachArgument([&](std::string_view word) {
         check(count < words.size());
-        words[count++].assign(word);
+        words.atMut(count++).assign(word);
       });
 
       check(count == config::PluginWorkerOptions::argument_count);
-      std::array<char*, config::PluginWorkerOptions::argument_count> argv{};
+      ds::Array<char*, config::PluginWorkerOptions::argument_count> argv{};
 
       for (std::size_t index = 0; index < argv.size(); ++index) {
-        argv[index] = words[index].data();
+        argv.atMut(index) = words.atMut(index).data();
       }
 
       const auto read = config::PluginWorkerOptions::parse(argv);
@@ -67,11 +67,11 @@ namespace {
   // made of letters, digits, `_`, `-` and `.`.
   void testPluginWorkerRejectsInvalidActions() {
     const auto parsed = [](std::string action) {
-      std::array<std::string, config::PluginWorkerOptions::argument_count> words{"/plugins/demo/main.lua", std::move(action), "1", "1", "0", "1", "1"};
-      std::array<char*, config::PluginWorkerOptions::argument_count> argv{};
+      ds::Array<std::string, config::PluginWorkerOptions::argument_count> words{"/plugins/demo/main.lua", std::move(action), "1", "1", "0", "1", "1"};
+      ds::Array<char*, config::PluginWorkerOptions::argument_count> argv{};
 
       for (std::size_t index = 0; index < argv.size(); ++index) {
-        argv[index] = words[index].data();
+        argv.atMut(index) = words.atMut(index).data();
       }
 
       try {
@@ -105,7 +105,7 @@ namespace {
         long_argument[index] = static_cast<char>('a' + (index % 26));
       }
 
-      const std::array<std::string_view, 3> arguments{"sh", long_argument, "-c"};
+      const ds::Array<std::string_view, 3> arguments{"sh", long_argument, "-c"};
       const std::string_view label = "a label of exactly thirty-two by";
       const auto reference = commands->keepReference(arguments, label, limits);
 
@@ -154,7 +154,7 @@ namespace {
   // Spellings of one keystroke read as the same chord, and a malformed chord is refused rather
   // than read as another key, which would fire a binding on the wrong keystroke.
   void testKeyChordSpellings() {
-    const std::array<std::pair<std::string_view, std::string_view>, 4> same{{
+    const ds::Array<std::pair<std::string_view, std::string_view>, 4> same{{
         {"ctrl+A", "ctrl+a"},
         {"shift+a", "A"},
         {"shift+tab", "backtab"},

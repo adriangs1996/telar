@@ -11,6 +11,7 @@ import telar.testing;
 import telar.config.client;
 import telar.config.core;
 import telar.base.text.utf8;
+import telar.base.ds;
 
 namespace {
 
@@ -26,7 +27,7 @@ namespace {
     {
       auto commands = makeOwned<config::CommandTabRegistry>(memory);
       config::LimitNotices limits;
-      const std::array<std::string_view, 2> arguments{"echo", "value"};
+      const ds::Array<std::string_view, 2> arguments{"echo", "value"};
 
       check(commands->keep(arguments, {}, limits));
       const auto saved = commands->checkpoint();
@@ -38,10 +39,10 @@ namespace {
       commands->restore(saved);
       check(commands->checkpoint().rows == 1);
 
-      std::array<char, 16> label;
+      ds::Array<char, 16> label;
 
       for (std::size_t index = saved.rows; index < 768; ++index) {
-        const auto length = std::snprintf(label.data(), label.size(), "%zu", index);
+        const auto length = std::snprintf(label.dataMut(), label.size(), "%zu", index);
 
         check(commands->keep(arguments, {label.data(), static_cast<std::size_t>(length)}, limits));
       }
@@ -51,13 +52,13 @@ namespace {
       check(commands->keep(arguments, {}, limits));
 
       commands->restore(saved);
-      std::array<char, 4096> bytes;
+      ds::Array<char, 4096> bytes;
 
       bytes.fill('x');
-      const std::array<std::string_view, 1> large{std::string_view{bytes.data(), bytes.size()}};
+      const ds::Array<std::string_view, 1> large{std::string_view{bytes.data(), bytes.size()}};
 
       for (std::size_t index = 0; index < 19; ++index) {
-        const auto length = std::snprintf(label.data(), label.size(), "%zu", index);
+        const auto length = std::snprintf(label.dataMut(), label.size(), "%zu", index);
 
         check(commands->keep(large, {label.data(), static_cast<std::size_t>(length)}, limits));
       }
@@ -81,17 +82,17 @@ namespace {
     {
       auto commands = makeOwned<config::CommandTabRegistry>(memory);
       config::LimitNotices limits;
-      const std::array<std::string_view, 1> kept{"echo"};
+      const ds::Array<std::string_view, 1> kept{"echo"};
 
       check(commands->keep(kept, {}, limits));
       const auto saved = commands->checkpoint();
-      const std::array<std::string_view, 33> too_many{"a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a"};
+      const ds::Array<std::string_view, 33> too_many{"a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a"};
       const std::string long_label(33, 'l');
-      const std::array<std::string_view, 2> empty_argument{"echo", ""};
-      const std::array<std::string_view, 2> nul_argument{"echo", std::string_view{"a\0b", 3}};
+      const ds::Array<std::string_view, 2> empty_argument{"echo", ""};
+      const ds::Array<std::string_view, 2> nul_argument{"echo", std::string_view{"a\0b", 3}};
       const std::string half(2048, 'x');
       const std::string other_half(2049, 'y');
-      const std::array<std::string_view, 2> too_long{half, other_half};
+      const ds::Array<std::string_view, 2> too_long{half, other_half};
 
       const auto refused = [&](std::span<const std::string_view> arguments, std::string_view label) {
         try {
@@ -112,7 +113,7 @@ namespace {
       check(refused(nul_argument, {}));
       check(refused(too_long, {}));
       check(commands->keep(std::span{too_many}.first(32), std::string_view{long_label}.substr(1), limits));
-      const std::array<std::string_view, 2> fits{half, std::string_view{other_half}.substr(1)};
+      const ds::Array<std::string_view, 2> fits{half, std::string_view{other_half}.substr(1)};
 
       check(commands->keep(fits, {}, limits));
     }

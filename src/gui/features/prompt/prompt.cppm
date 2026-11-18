@@ -240,7 +240,7 @@ export namespace telar::gui::features::prompt {
     Completion completion_;
     std::string label_;
     shell::Dialect dialect_ = shell::Dialect::posix;
-    std::array<Question, maximum_questions> questions_;
+    ds::Array<Question, maximum_questions> questions_;
     std::size_t count_ = 0;
   };
 

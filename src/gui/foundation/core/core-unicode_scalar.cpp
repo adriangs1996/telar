@@ -22,11 +22,11 @@ namespace telar::gui::inline foundation::inline core {
 
     const auto continuation_count = result.length;
 
-    result.bytes[0] = static_cast<char>(leading_prefixes[continuation_count] | (codepoint >> (continuation_bits * continuation_count)));
+    result.bytes.atMut(0) = static_cast<char>(leading_prefixes[continuation_count] | (codepoint >> (continuation_bits * continuation_count)));
     for (std::size_t index = 0; index < continuation_count; ++index) {
       const auto shift = continuation_bits * (continuation_count - index - 1);
 
-      result.bytes[index + 1] = static_cast<char>(continuation_prefix | ((codepoint >> shift) & continuation_mask));
+      result.bytes.atMut(index + 1) = static_cast<char>(continuation_prefix | ((codepoint >> shift) & continuation_mask));
     }
 
     ++result.length;

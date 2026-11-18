@@ -143,10 +143,10 @@ namespace {
   }
 
   std::string request(const ProxySecret& secret, std::uint16_t port, std::string_view hostname) {
-    std::array<char, ProxySecret::hexadecimal_bytes> hexadecimal;
-    const auto user = "telar:" + std::string{*secret.formatHexadecimal(hexadecimal)};
-    std::array<char, 128> encoded;
-    const auto count = base64::encode({reinterpret_cast<const std::uint8_t*>(user.data()), user.size()}, encoded);
+    ds::Array<char, ProxySecret::hexadecimal_bytes> hexadecimal;
+    const auto user = "telar:" + std::string{*secret.formatHexadecimal(hexadecimal.viewMut())};
+    ds::Array<char, 128> encoded;
+    const auto count = base64::encode({reinterpret_cast<const std::uint8_t*>(user.data()), user.size()}, encoded.viewMut());
 
     check(count.hasValue());
     return "CONNECT " + std::string{hostname} + ":" + std::to_string(port) + " HTTP/1.1\r\nProxy-Authorization: Basic " + std::string{encoded.data(), *count} + "\r\n\r\n";
@@ -160,8 +160,8 @@ namespace {
     std::string head;
 
     await([&] {
-      std::array<char, 4096> bytes;
-      const auto read = ::recv(socket, bytes.data(), bytes.size(), 0);
+      ds::Array<char, 4096> bytes;
+      const auto read = ::recv(socket, bytes.dataMut(), bytes.size(), 0);
 
       check(read > 0 || (read < 0 && socketWouldBlock(errno)));
       if (read > 0) {
@@ -194,8 +194,8 @@ namespace {
         }
       }
 
-      std::array<char, 32768> buffer;
-      const auto read = ::recv(destination, buffer.data(), buffer.size(), 0);
+      ds::Array<char, 32768> buffer;
+      const auto read = ::recv(destination, buffer.dataMut(), buffer.size(), 0);
 
       check(read > 0 || (read < 0 && socketWouldBlock(errno)));
       if (read > 0) {
@@ -228,11 +228,11 @@ namespace {
         }
       }
 
-      std::array<char, 32768> buffer;
+      ds::Array<char, 32768> buffer;
 
       ERR_clear_error();
       std::size_t read = 0;
-      const int result = SSL_read_ex(destination, buffer.data(), buffer.size(), &read);
+      const int result = SSL_read_ex(destination, buffer.dataMut(), buffer.size(), &read);
       if (result == 1) {
         received.append(buffer.data(), read);
       } else {
@@ -352,7 +352,7 @@ namespace {
     AlpnSelection server_selection;
 
     if (http2) {
-      constexpr std::array<unsigned char, 2> name{'h', '2'};
+      constexpr ds::Array<unsigned char, 2> name{'h', '2'};
 
       check(server_selection.assign(name));
       SSL_CTX_set_alpn_select_cb(server_context.get(), &AlpnSelection::select, nullptr);
@@ -362,7 +362,7 @@ namespace {
     auto server = createTlsPeer(server_context.get(), origin.get(), true);
 
     if (http2) {
-      constexpr std::array<unsigned char, 3> offer{2, 'h', '2'};
+      constexpr ds::Array<unsigned char, 3> offer{2, 'h', '2'};
 
       check(SSL_set_alpn_protos(client.get(), offer.data(), offer.size()) == 0);
       SSL_set_app_data(server.get(), &server_selection);
@@ -459,9 +459,9 @@ namespace {
     ds::Option<ProxyService<NativeEventLoop<TlsTestMemory>, ServiceResolver>> service;
 
     service.emplace(memory, options, secret, interception, ProxyListener::bind(ds::none, {}));
-    std::array<FileDescriptor, ProxyConnectionPolicy::maximum_unauthenticated> silent;
+    ds::Array<FileDescriptor, ProxyConnectionPolicy::maximum_unauthenticated> silent;
 
-    for (auto& socket : silent) {
+    for (auto& socket : silent.viewMut()) {
       socket = connectLocal(service->port());
     }
 
@@ -474,7 +474,7 @@ namespace {
     writeText(refused.get(), "CONNECT origin.test:443 HTTP/1.1\r\n");
     check(readHead(refused.get()) == "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
     check(service->counters().read(ProxyCounter::unauthenticated_refusal) == 1);
-    for (auto& socket : silent) {
+    for (auto& socket : silent.viewMut()) {
       socket.reset();
     }
 
@@ -516,14 +516,14 @@ namespace {
     const auto secret = ProxySecret::generate();
     auto origin_listener = ProxyListener::bind(ds::none, {});
     ProxyService<NativeEventLoop<TlsTestMemory>, ServiceResolver> service{memory, options, secret, interception, ProxyListener::bind(ds::none, {})};
-    std::array<FileDescriptor, ProxyConnectionPolicy::maximum_unauthenticated> silent;
+    ds::Array<FileDescriptor, ProxyConnectionPolicy::maximum_unauthenticated> silent;
 
-    silent.front() = connectLocal(service.port());
+    silent.atMut(0) = connectLocal(service.port());
     await([&] {
       return service.active() == 1;
     });
 
-    for (auto& socket : std::span{silent}.subspan(1)) {
+    for (auto& socket : silent.viewMut().subspan(1)) {
       socket = connectLocal(service.port());
     }
 

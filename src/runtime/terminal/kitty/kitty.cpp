@@ -176,12 +176,12 @@ namespace telar::runtime {
         if (byte == ';') {
           in_payload_ = true;
         } else if (control_length_ < control_.size()) {
-          control_[control_length_++] = static_cast<char>(byte);
+          control_.atMut(control_length_++) = static_cast<char>(byte);
         } else {
           truncated_ = true;
         }
       } else if (payload_length_ < payload_.size()) {
-        payload_[payload_length_++] = static_cast<char>(byte);
+        payload_.atMut(payload_length_++) = static_cast<char>(byte);
       } else {
         return;
       }
@@ -221,7 +221,7 @@ namespace telar::runtime {
     if (header.transmits() && header.width != 0 && header.height != 0 && (header.image_id != 0 || header.image_number != 0)) {
       auto* slot = find(header);
       if (slot == nullptr) {
-        slot = &sizes_[next_size_];
+        slot = &sizes_.atMut(next_size_);
         next_size_ = (next_size_ + 1) % sizes_.size();
       }
 
@@ -269,7 +269,7 @@ namespace telar::runtime {
   }
 
   KittyCursor::ImageSize* KittyCursor::find(const Header& header) noexcept {
-    for (auto& size : sizes_) {
+    for (auto& size : sizes_.viewMut()) {
       if ((header.image_id != 0 && size.image_id == header.image_id) || (header.image_id == 0 && header.image_number != 0 && size.image_number == header.image_number)) {
         return &size;
       }
@@ -375,14 +375,14 @@ namespace telar::runtime {
     return header;
   }
 
-  ds::Option<std::array<std::uint32_t, 2>> KittyCursor::pngSize(std::string_view encoded) noexcept {
+  ds::Option<ds::Array<std::uint32_t, 2>> KittyCursor::pngSize(std::string_view encoded) noexcept {
     constexpr std::string_view signature = "\x89PNG\r\n\x1a\n";
     constexpr std::size_t encoded_header_size = 32;
     constexpr std::size_t width_offset = 16;
     constexpr std::size_t height_offset = 20;
     constexpr std::size_t chunk_type_offset = 12;
-    std::array<std::uint8_t, 24> bytes;
-    if (encoded.size() < encoded_header_size || base64::decode(encoded.substr(0, encoded_header_size), bytes) != bytes.size() ||
+    ds::Array<std::uint8_t, 24> bytes;
+    if (encoded.size() < encoded_header_size || base64::decode(encoded.substr(0, encoded_header_size), bytes.viewMut()) != bytes.size() ||
         std::memcmp(bytes.data(), signature.data(), signature.size()) != 0 || std::memcmp(bytes.data() + chunk_type_offset, "IHDR", 4) != 0) {
       return ds::none;
     }
@@ -391,7 +391,7 @@ namespace telar::runtime {
       return (static_cast<std::uint32_t>(bytes[offset]) << 24) | (static_cast<std::uint32_t>(bytes[offset + 1]) << 16) | (static_cast<std::uint32_t>(bytes[offset + 2]) << 8) | bytes[offset + 3];
     };
 
-    return std::array{bigEndian(width_offset), bigEndian(height_offset)};
+    return ds::Array{bigEndian(width_offset), bigEndian(height_offset)};
   }
 
   [[gnu::noinline]] void GraphicsCursor::feed(GhosttyTerminal terminal, std::span<const Byte> bytes, TerminalSize size) {
@@ -451,16 +451,16 @@ namespace telar::runtime {
   }
 
   ds::Option<GraphicsChildFile> GraphicsChildFile::open(std::string_view encoded_path) noexcept {
-    std::array<std::uint8_t, PATH_MAX + 1> path;
-    const auto* decoded = decodeGraphicsName(encoded_path, path);
+    ds::Array<std::uint8_t, PATH_MAX + 1> path;
+    const auto* decoded = decodeGraphicsName(encoded_path, path.viewMut());
 
     return openPath(decoded);
   }
 
   ds::Option<GraphicsChildFile> GraphicsChildFile::openDecoded(std::span<const std::uint8_t> decoded_path) noexcept {
-    std::array<std::uint8_t, PATH_MAX + 1> path;
+    ds::Array<std::uint8_t, PATH_MAX + 1> path;
 
-    return openPath(copyGraphicsName(decoded_path, path));
+    return openPath(copyGraphicsName(decoded_path, path.viewMut()));
   }
 
   ds::Option<GraphicsChildFile> GraphicsChildFile::openPath(const char* decoded) noexcept {
@@ -509,7 +509,7 @@ namespace telar::runtime {
 
     Entry* available = nullptr;
 
-    for (auto& entry : entries_) {
+    for (auto& entry : entries_.viewMut()) {
       if (entry.placeholder == placeholder) {
         return false;
       }
@@ -536,7 +536,7 @@ namespace telar::runtime {
 
     const std::lock_guard lock{mutex_};
 
-    for (auto& entry : entries_) {
+    for (auto& entry : entries_.viewMut()) {
       if (entry.placeholder == placeholder) {
         entry.placeholder = nullptr;
         count_.fetch_sub(1, std::memory_order_release);
@@ -636,8 +636,8 @@ namespace telar::runtime {
     if (!temporary) {
       const auto* environment = std::getenv("TMPDIR");
       if (environment != nullptr && ::strnlen(environment, PATH_MAX + 1) <= PATH_MAX) {
-        std::array<char, PATH_MAX + 1> canonical;
-        if (::realpath(environment, canonical.data()) != nullptr) {
+        ds::Array<char, PATH_MAX + 1> canonical;
+        if (::realpath(environment, canonical.dataMut()) != nullptr) {
           temporary = inside(canonical.data(), path);
         }
       }

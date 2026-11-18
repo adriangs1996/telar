@@ -138,7 +138,7 @@ export {
 
       [[nodiscard]] std::uint16_t columnsBetween(std::size_t first, std::size_t last) const;
 
-      std::array<char, Capacity> bytes_{};
+      ds::Array<char, Capacity> bytes_{};
       std::size_t length_ = 0;
       std::size_t head_ = 0;
       std::size_t anchor_ = 0;
@@ -171,7 +171,7 @@ export {
 
       GraphemeCursor cursor_;
       std::size_t bytes_;
-      std::array<char, maximum_bytes> storage_{};
+      ds::Array<char, maximum_bytes> storage_{};
     };
 
   }

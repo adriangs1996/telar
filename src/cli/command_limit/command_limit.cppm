@@ -74,7 +74,7 @@ export {
     // The word among `names` that `text` is, as the enum value at its position. The
     // implementation unit instantiates it for the protocol enums that commands parse.
     template <typename Enum, std::size_t Size>
-    Enum choice(std::string_view text, const char* error, const std::array<std::string_view, Size>& names);
+    Enum choice(std::string_view text, const char* error, const ds::Array<std::string_view, Size>& names);
 
     // Consumes words left to right; `take` keeps each command's own missing-value
     // error.

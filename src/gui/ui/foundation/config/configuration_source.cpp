@@ -515,7 +515,7 @@ namespace telar::gui::qt {
         .view = view,
     };
 
-    return application::configuration::query(*generation_, *commands_, query, context, platform::defaultTitlebar(), query_buffer_);
+    return application::configuration::query(*generation_, *commands_, query, context, platform::defaultTitlebar(), query_buffer_.viewMut());
   }
 
   application::plugins::PluginPage ConfigurationSource::queryPlugins(const ClientCommand& request) {
@@ -530,10 +530,10 @@ namespace telar::gui::qt {
     const application::plugins::PluginCatalog catalog{generation_->number(), generation_->runtimeValues().plugins.configured(), plugins_->packages(), &plugin_overrides_};
 
     if (request.action == ClientAction::plugin_list) {
-      return application::plugins::PluginQuery::list(catalog, request, query_buffer_);
+      return application::plugins::PluginQuery::list(catalog, request, query_buffer_.viewMut());
     }
 
-    return application::plugins::PluginQuery::get(catalog, request, query_buffer_);
+    return application::plugins::PluginQuery::get(catalog, request, query_buffer_.viewMut());
   }
 
   void ConfigurationSource::setPluginEnabled(const ClientCommand& request, bool enabled) {

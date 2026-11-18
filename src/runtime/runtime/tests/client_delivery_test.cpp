@@ -66,6 +66,7 @@ import telar.runtime.proxy.runtime;
 import telar.runtime.runtime.execution_service;
 import telar.runtime.terminal.ghostty;
 import telar.runtime.transport.connection;
+import telar.base.ds;
 
 namespace {
 
@@ -108,11 +109,11 @@ namespace {
       MemoryAdapter adapter{synchronized};
       ConcurrentMemory& memory = adapter;
       PendingClipboard clipboard{memory};
-      const std::array<Byte, 4> initial{'t', 'e', 'x', 't'};
+      const ds::Array<Byte, 4> initial{'t', 'e', 'x', 't'};
 
       clipboard.replace(1, initial);
       try {
-        clipboard.replace(2, std::array<Byte, 5>{});
+        clipboard.replace(2, ds::Array<Byte, 5>{});
         check(false);
       } catch (const std::bad_alloc&) {
       }
@@ -165,8 +166,8 @@ namespace {
       delivery.write(client, source, now);
       check(peer.receive<RequestCompleted>().request_id == 1);
 
-      client.clipboard.replace(1, std::array<Byte, 1>{'a'});
-      client.clipboard.replace(2, std::array<Byte, 1>{'b'});
+      client.clipboard.replace(1, ds::Array<Byte, 1>{'a'});
+      client.clipboard.replace(2, ds::Array<Byte, 1>{'b'});
       client.workspace_resync = ResyncRequired{.workspace = WorkspaceLocation{.id = 42}};
       delivery.write(client, source, now);
       check(peer.receive<ResyncRequired>().workspace_closed);
@@ -207,7 +208,7 @@ namespace {
       const int capacity = 4096;
 
       check(::setsockopt(descriptor, SOL_SOCKET, SO_SNDBUF, &capacity, sizeof(capacity)) == 0);
-      std::array<Byte, 1024> bytes{};
+      ds::Array<Byte, 1024> bytes{};
       std::size_t written = 0;
 
       for (;;) {
@@ -223,10 +224,10 @@ namespace {
     }
 
     void drainSocket(int descriptor, std::size_t bytes) {
-      std::array<Byte, 1024> buffer;
+      ds::Array<Byte, 1024> buffer;
 
       while (bytes != 0) {
-        const auto count = ::read(descriptor, buffer.data(), std::min(bytes, buffer.size()));
+        const auto count = ::read(descriptor, buffer.dataMut(), std::min(bytes, buffer.size()));
 
         check(count > 0);
         bytes -= count;
@@ -248,7 +249,7 @@ namespace {
       WorkspaceService<decltype(poller)> workspaces{memory};
       ClientPeer peer{memory, model, clients, ClientRole::interactive};
       auto& client = peer.session();
-      const std::array<std::string_view, 1> arguments{"/bin/cat"};
+      const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
 
       workspaces.open(model, panes, clients, client.id, OpenPane{.request_id = 1, .size = {80, 24, 0, 0}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
       auto& pane = panes.require(model.panes, peer.receive<PaneOpened>().pane_id);
@@ -282,7 +283,7 @@ namespace {
       WorkspaceService<decltype(poller)> workspaces{memory};
       ClientPeer peer{memory, model, clients, ClientRole::interactive};
       auto& client = peer.session();
-      const std::array<std::string_view, 1> arguments{"/bin/cat"};
+      const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
 
       workspaces.open(model, panes, clients, client.id, OpenPane{.request_id = 1, .size = {40, 5, 0, 0}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
       auto& pane = panes.require(model.panes, peer.receive<PaneOpened>().pane_id);
@@ -338,7 +339,7 @@ namespace {
       WorkspaceService<decltype(poller)> workspaces{memory};
       ClientPeer peer{memory, model, clients, ClientRole::interactive};
       auto& client = peer.session();
-      const std::array<std::string_view, 1> arguments{"/bin/cat"};
+      const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
 
       workspaces.open(model, panes, clients, client.id, OpenPane{.request_id = 1, .size = {40, 5, 0, 0}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
       auto& pane = panes.require(model.panes, peer.receive<PaneOpened>().pane_id);
@@ -359,7 +360,7 @@ namespace {
             check(pane.media->seal());
             MediaProcessor::Request request;
 
-            request.entries[request.count++].media = pane.media;
+            request.entries.atMut(request.count++).media = pane.media;
             check(worker.submit(request));
             worker.wait([&](const auto&) {
               pane.media->complete();
@@ -476,16 +477,16 @@ namespace {
       WorkspaceService<decltype(poller)> workspaces{memory};
       ClientPeer peer{memory, model, clients, ClientRole::interactive};
       auto& client = peer.session();
-      const std::array<std::string_view, 1> arguments{"/bin/cat"};
+      const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
       const Launch launch{.cwd = "/tmp", .arguments = arguments};
 
       workspaces.open(model, panes, clients, client.id, OpenPane{.request_id = 1, .size = {80, 24, 0, 0}, .launch = launch});
       const auto first = peer.receive<PaneOpened>();
-      std::array<std::uint64_t, 3> ids{first.pane_id};
+      ds::Array<std::uint64_t, 3> ids{first.pane_id};
 
       for (unsigned index = 1; index < ids.size(); ++index) {
         workspaces.createPane(model, panes, clients, client.id, CreatePane{.request_id = index + 1, .location = first.location, .size = {80, 24, 0, 0}, .launch = launch});
-        ids[index] = peer.receive<PaneOpened>().pane_id;
+        ids.atMut(index) = peer.receive<PaneOpened>().pane_id;
       }
 
       const auto now = std::chrono::steady_clock::now();
@@ -597,7 +598,7 @@ namespace {
       WorkspaceService<decltype(poller)> workspaces{memory};
       ClientPeer peer{memory, model, clients, ClientRole::interactive};
       auto& client = peer.session();
-      const std::array<std::string_view, 1> arguments{"/bin/cat"};
+      const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
 
       workspaces.open(model, panes, clients, client.id, OpenPane{.request_id = 1, .size = {80, 24, 0, 0}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
       const auto opened = peer.receive<PaneOpened>();
@@ -637,7 +638,7 @@ namespace {
       WorkspaceService<decltype(poller)> workspaces{memory};
       ClientPeer owner{memory, model, clients, ClientRole::interactive};
       ClientPeer observer{memory, model, clients, ClientRole::interactive};
-      const std::array<std::string_view, 1> arguments{"/bin/cat"};
+      const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
       const Launch launch{.cwd = "/tmp", .arguments = arguments};
 
       workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 1, .size = {80, 24, 0, 0}, .launch = launch});

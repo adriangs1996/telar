@@ -164,8 +164,8 @@ namespace telar::gui::qt {
     EditorPosition editor_restore_;
     QVariantList rows_;
     QVariantList commands_;
-    std::array<PaletteTarget, capacity> targets_{};
-    std::array<application::palette::PaletteRowKind, capacity> kinds_{};
+    ds::Array<PaletteTarget, capacity> targets_{};
+    ds::Array<application::palette::PaletteRowKind, capacity> kinds_{};
     std::size_t selection_ = 0;
     std::uint64_t revision_ = 0;
     std::uint64_t rebuilds_ = 0;

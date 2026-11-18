@@ -10,12 +10,14 @@ export module telar.base.ds;
 export namespace telar::ds {
   using telar::ds::Array;
   using telar::ds::Function;
+  using telar::ds::get;
   using telar::ds::Hash;
   using telar::ds::Map;
   using telar::ds::None;
   using telar::ds::none;
   using telar::ds::Option;
   using telar::ds::String;
+  using telar::ds::toArray;
   using telar::ds::Vec;
   using telar::ds::operator==;
   using telar::ds::operator<=>;

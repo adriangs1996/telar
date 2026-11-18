@@ -61,9 +61,9 @@ namespace telar::runtime::control {
     };
 
     struct GraphicsBase64Tables {
-      std::array<std::uint8_t, 16> high{};
-      std::array<std::uint8_t, 16> low{};
-      std::array<std::uint8_t, 16> offset{};
+      ds::Array<std::uint8_t, 16> high{};
+      ds::Array<std::uint8_t, 16> low{};
+      ds::Array<std::uint8_t, 16> offset{};
     };
 
     alignas(16) constexpr auto graphics_base64_tables = [] {
@@ -76,10 +76,10 @@ namespace telar::runtime::control {
         const auto low = byte & 15;
         const auto group = static_cast<std::uint8_t>(1u << (high - first_group));
 
-        tables.high[high] = group;
-        tables.low[low] |= group;
+        tables.high.atMut(high) = group;
+        tables.low.atMut(low) |= group;
         if (byte != '/') {
-          tables.offset[high] = static_cast<std::uint8_t>(index - byte);
+          tables.offset.atMut(high) = static_cast<std::uint8_t>(index - byte);
         }
       }
 
@@ -130,11 +130,11 @@ namespace telar::runtime::control {
     }
 
     constexpr auto graphics_base64_digits = [] {
-      std::array<std::uint8_t, 256> digits;
+      ds::Array<std::uint8_t, 256> digits;
 
       digits.fill(std::numeric_limits<std::uint8_t>::max());
       for (std::size_t index = 0; index < base64::alphabet.size(); ++index) {
-        digits[static_cast<std::uint8_t>(base64::alphabet[index])] = static_cast<std::uint8_t>(index);
+        digits.atMut(static_cast<std::uint8_t>(base64::alphabet[index])) = static_cast<std::uint8_t>(index);
       }
 
       return digits;
@@ -143,7 +143,7 @@ namespace telar::runtime::control {
   }
 
   ds::Option<std::size_t> decodeGraphicsPayload(std::string_view encoded, std::span<std::uint8_t> output) noexcept {
-    std::array<unsigned, 4> group;
+    ds::Array<unsigned, 4> group;
     unsigned count = 0;
     unsigned padding = 0;
     std::size_t written = 0;
@@ -200,7 +200,7 @@ namespace telar::runtime::control {
         return ds::none;
       }
 
-      group[count++] = static_cast<unsigned>(digit);
+      group.atMut(count++) = static_cast<unsigned>(digit);
       if (count == group.size()) {
         if (!emit(3)) {
           return ds::none;

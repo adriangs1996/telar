@@ -22,6 +22,7 @@ import telar.gui.application.tests.session_fixture;
 import telar.gui.application;
 import telar.wire.editor;
 import telar.wire.runtime;
+import telar.base.ds;
 
 namespace {
 
@@ -52,7 +53,7 @@ namespace {
   template <typename Client>
   void publishPaths(Client& client, const PathTransport& transport, std::string_view path, PathKind kind = PathKind::file) {
     const auto request = transport.last<FindPaths>();
-    const std::array matches{PathMatch{.path = path, .kind = kind}};
+    const ds::Array matches{PathMatch{.path = path, .kind = kind}};
 
     check(deliver(client, PathResults{.request_id = request.request_id, .root = request.root, .complete = true, .matches = matches}) == application::Change::paths, "the current wire page must update the picker");
   }
@@ -76,7 +77,7 @@ namespace {
     const auto query = transport.last<FindPaths>();
 
     check(query.query == prefix && !query.refresh, "wire queries must stop before an incomplete UTF-8 scalar without rebuilding the index");
-    const std::array stale{PathMatch{.path = "stale"}};
+    const ds::Array stale{PathMatch{.path = "stale"}};
 
     check(deliver(client, PathResults{.request_id = initial.request_id, .root = "/work", .complete = true, .matches = stale}) == application::Change::none, "a superseded wire response must leave the current page untouched");
     check(deliver(client, RequestFailed{.request_id = initial.request_id, .code = FailureCode::invalid_request, .message = "obsolete"}) == application::Change::none && client.error().empty(), "a tracked obsolete failure must not produce a notification or repaint");

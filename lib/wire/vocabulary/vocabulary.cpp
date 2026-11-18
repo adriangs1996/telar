@@ -290,7 +290,7 @@ namespace telar {
       throw EncodingError{"Invalid layout node count"};
     }
 
-    std::array<std::uint64_t, 64> panes{};
+    ds::Array<std::uint64_t, 64> panes{};
     std::size_t pane_count = 0;
     std::size_t pending = 1;
     bool focused = false;
@@ -312,7 +312,7 @@ namespace telar {
           }
         }
 
-        panes[pane_count++] = pane->pane_id;
+        panes.atMut(pane_count++) = pane->pane_id;
         focused = focused || pane->pane_id == value.focused_pane;
       } else {
         pending += 2;
@@ -599,7 +599,7 @@ namespace telar {
   void BodySchema<CellColor>::decodeBody(std::span<const Byte>& input, CellColor& value, DecodeStorage&) {
     value.kind = EnumByte<CellColor::Kind, 2>::decode(input);
     for (std::size_t i = 0; i < encodedSize(value) - 1; ++i) {
-      value.channels[i] = u8::decode(input);
+      value.channels.atMut(i) = u8::decode(input);
     }
   }
 

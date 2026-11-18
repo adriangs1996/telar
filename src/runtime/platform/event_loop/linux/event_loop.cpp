@@ -7,13 +7,14 @@ import telar.sys.posix;
 import telar.sys.process;
 import telar.sys.linux_api;
 import telar.platform.error;
+import telar.base.ds;
 
 namespace telar::runtime {
   namespace linux_signals {
 
     void notify(int number) noexcept {
       const int saved_error = sys::lastError();
-      auto& registration = registrations[number];
+      auto& registration = registrations.atMut(number);
       registration.writers.fetch_add(1);
       const auto destination = registration.destination.load();
       if (destination > 0 && !registration.pending.exchange(true)) {
@@ -42,7 +43,7 @@ namespace telar::runtime {
   Epoll<Memory>::~Epoll() {
     for (int number = 1; number < NSIG; ++number) {
       if (signals_[number]) {
-        auto& registration = linux_signals::registrations[number];
+        auto& registration = linux_signals::registrations.atMut(number);
         registration.destination.store(0);
         ::sigaction(number, &previous_signals_[number], nullptr);
         while (registration.writers.load() != 0) {
@@ -93,7 +94,7 @@ namespace telar::runtime {
     if (signals_[number]) {
       return;
     }
-    auto& registration = linux_signals::registrations[number];
+    auto& registration = linux_signals::registrations.atMut(number);
     if (registration.destination.load() != 0) {
       throw SystemError{"Runtime signal already has an event queue", EBUSY};
     }
@@ -117,11 +118,11 @@ namespace telar::runtime {
       throw SystemError{"Runtime signal already has an event queue", EBUSY};
     }
     registration.pending.store(false);
-    if (::sigaction(number, &action, &previous_signals_[number]) != 0) {
+    if (::sigaction(number, &action, &previous_signals_.atMut(number)) != 0) {
       registration.destination.store(0);
       throw SystemError{"Register runtime signal"};
     }
-    signals_[number] = true;
+    signals_.atMut(number) = true;
   }
 
   template <Allocator Memory>
@@ -149,11 +150,11 @@ namespace telar::runtime {
         continue;
       }
       if (signal_reader_ && descriptor == signal_reader_.get()) {
-        std::array<unsigned char, batch_capacity> pending;
-        const auto ignored = ::read(descriptor, pending.data(), pending.size());
+        ds::Array<unsigned char, batch_capacity> pending;
+        const auto ignored = ::read(descriptor, pending.dataMut(), pending.size());
         (void)ignored;
         for (int number = 1; number < NSIG; ++number) {
-          if (signals_[number] && linux_signals::registrations[number].pending.exchange(false)) {
+          if (signals_[number] && linux_signals::registrations.atMut(number).pending.exchange(false)) {
             events[produced++] = {EventKind::signal, number, 0, false};
           }
         }

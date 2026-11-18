@@ -10,6 +10,7 @@ import telar.testing;
 import telar.runtime.shell_integration.token;
 import telar.runtime.shell_integration.words;
 import telar.wire.editor;
+import telar.base.ds;
 
 namespace {
 
@@ -19,10 +20,10 @@ namespace {
   using namespace telar::runtime;
 
   void testReplyCap() {
-    std::array<char, 64> directory{};
+    ds::Array<char, 64> directory{};
 
-    std::strcpy(directory.data(), "/tmp/telar-word-cap-XXXXXX");
-    check(::mkdtemp(directory.data()) != nullptr);
+    std::strcpy(directory.dataMut(), "/tmp/telar-word-cap-XXXXXX");
+    check(::mkdtemp(directory.dataMut()) != nullptr);
     const std::string root{directory.data()};
 
     // More commands on PATH than one reply carries.
@@ -67,10 +68,10 @@ namespace {
   // A FIFO named like a makefile, as a cloned repository can hold, and a package.json past the
   // size the reader takes: neither blocks the completion worker nor is read.
   void testIgnoresSpecialAndOversizedFiles() {
-    std::array<char, 64> directory{};
+    ds::Array<char, 64> directory{};
 
-    std::strcpy(directory.data(), "/tmp/telar-word-files-XXXXXX");
-    check(::mkdtemp(directory.data()) != nullptr);
+    std::strcpy(directory.dataMut(), "/tmp/telar-word-files-XXXXXX");
+    check(::mkdtemp(directory.dataMut()) != nullptr);
     const std::string root{directory.data()};
     const auto observe = [&](CompletionProvider provider) {
       WordReader reader;

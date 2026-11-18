@@ -4,6 +4,7 @@ module;
 export module telar.runtime.http2.frame_reader;
 
 import std;
+import telar.base.ds;
 
 // Interface: http2/frame.cppm
 export {
@@ -74,7 +75,7 @@ export {
           if (header_length_ != header_.size()) {
             const auto count = std::min(header_.size() - header_length_, input.size());
 
-            std::memcpy(header_.data() + header_length_, input.data(), count);
+            std::memcpy(header_.dataMut() + header_length_, input.data(), count);
             header_length_ += count;
             input = input.subspan(count);
             if (header_length_ != header_.size()) {
@@ -105,7 +106,7 @@ export {
       void decodeHeader() noexcept;
 
       static constexpr std::uint8_t stream_high_mask = 0x7f;
-      std::array<std::uint8_t, Http2Frame::header_bytes> header_;
+      ds::Array<std::uint8_t, Http2Frame::header_bytes> header_;
       Http2Frame frame_;
       std::size_t header_length_ = 0;
       std::size_t payload_offset_ = 0;
@@ -130,7 +131,7 @@ export {
       std::uint32_t size() const noexcept;
 
     private:
-      std::array<std::uint32_t, Capacity> ids_{};
+      ds::Array<std::uint32_t, Capacity> ids_{};
       std::uint32_t count_ = 0;
     };
 
@@ -169,7 +170,7 @@ export {
 
     private:
       Http2StreamIds<capacity> requests_;
-      std::array<Response, capacity> responses_{};
+      ds::Array<Response, capacity> responses_{};
       std::size_t response_count_ = 0;
     };
 

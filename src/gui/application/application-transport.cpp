@@ -34,7 +34,7 @@ namespace telar::gui::application {
       if (prefix_used_ < prefix_.size()) {
         const auto count = std::min(input.size(), prefix_.size() - prefix_used_);
 
-        std::copy_n(input.begin(), count, prefix_.begin() + prefix_used_);
+        std::copy_n(input.begin(), count, prefix_.dataMut() + prefix_used_);
         prefix_used_ += count;
         input = input.subspan(count);
 
@@ -153,7 +153,7 @@ namespace telar::gui::application {
   }
 
   std::string_view RuntimeHandshake::decodingFailure(std::string_view message) noexcept {
-    constexpr std::array names{
+    constexpr ds::Array names{
         std::pair{"Invalid handshake response length", "InvalidLength"},
         std::pair{"Invalid handshake magic", "InvalidMagic"},
         std::pair{"Unknown handshake message tag", "UnknownMessage"},
@@ -188,12 +188,12 @@ namespace telar::gui::application {
 
     const auto last = text.find_last_not_of(" \t\r\n");
     const auto kept = validPrefix(text.substr(first, last - first + 1), failure_bytes);
-    std::array<char, failure_bytes> cleaned{};
+    ds::Array<char, failure_bytes> cleaned{};
 
     for (std::size_t index = 0; index < kept.size(); ++index) {
       const auto byte = static_cast<unsigned char>(kept[index]);
 
-      cleaned[index] = byte < static_cast<unsigned char>(' ') || byte == static_cast<unsigned char>(ControlByte::delete_character) ? ' ' : kept[index];
+      cleaned.atMut(index) = byte < static_cast<unsigned char>(' ') || byte == static_cast<unsigned char>(ControlByte::delete_character) ? ' ' : kept[index];
     }
 
     failure_storage.append({cleaned.data(), kept.size()});

@@ -130,7 +130,7 @@ namespace telar::gui::features::terminal::copy_mode {
     [[nodiscard]] CopyPlan plan(CopyState next, const CopyGrid& grid, CopyEffect effect = {}) const noexcept;
 
     ds::Option<CopyState> state_;
-    std::array<PaneMatch, maximum_matches> matches_{};
+    ds::Array<PaneMatch, maximum_matches> matches_{};
     std::size_t match_count_ = 0;
     std::uint64_t revision_ = 0;
     ClickTracker clicks_;

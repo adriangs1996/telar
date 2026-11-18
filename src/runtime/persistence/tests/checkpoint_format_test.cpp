@@ -3,6 +3,7 @@ import telar.testing;
 import telar.runtime.persistence.session_store;
 import telar.wire.vocabulary;
 import telar.wire.worktrees;
+import telar.base.ds;
 
 namespace {
 
@@ -138,8 +139,8 @@ namespace {
   }
 
   void testWorktreeRoundTrip() {
-    std::array<Byte, 4096> buffer;
-    checkpoint::Writer writer{buffer, checkpoint::Counters{}};
+    ds::Array<Byte, 4096> buffer;
+    checkpoint::Writer writer{buffer.viewMut(), checkpoint::Counters{}};
     CoordinatorReference coordinator{.pane_id = 3, .pane_generation = 4};
 
     coordinator.session_id.fill(9);

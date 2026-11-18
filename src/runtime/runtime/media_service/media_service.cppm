@@ -62,7 +62,7 @@ export {
     public:
       explicit BackgroundPool(ConcurrentMemory& memory, History& history, Paths& paths, Editor& editor, Suggestions& suggestions);
 
-      std::array<int, 5> descriptors() const noexcept;
+      ds::Array<int, 5> descriptors() const noexcept;
 
       bool suggestionsAvailable() const noexcept;
 
@@ -383,7 +383,7 @@ export {
       template <typename Consumer>
       inline void collect(Consumer&& consume) {
         completion_.drain();
-        for (auto& owned : slots_) {
+        for (auto& owned : slots_.viewMut()) {
           if (!owned) {
             continue;
           }
@@ -477,7 +477,7 @@ export {
 
         Owned<Slot, Memory>* selected = nullptr;
 
-        for (auto& slot : slots_) {
+        for (auto& slot : slots_.viewMut()) {
           if (!slot) {
             selected = &slot;
             break;
@@ -518,7 +518,7 @@ export {
 
       Memory& memory_;
       CompletionSignal completion_;
-      std::array<Owned<Slot, Memory>, 4> slots_;
+      ds::Array<Owned<Slot, Memory>, 4> slots_;
       std::uint64_t clock_ = 0;
     };
 

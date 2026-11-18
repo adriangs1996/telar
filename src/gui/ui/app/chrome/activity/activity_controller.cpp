@@ -189,13 +189,13 @@ namespace telar::gui::qt {
       return slot == active ? std::string_view{} : version.label.view();
     };
 
-    std::array<ds::Option<SourceVersion>, application::machines::Machines::capacity> versions;
+    ds::Array<ds::Option<SourceVersion>, application::machines::Machines::capacity> versions;
 
     for (std::size_t index = 0; index < store_.clients().size(); ++index) {
       const auto& client = store_.clients()[index];
       const auto& row = store_.machines().row(static_cast<application::machines::Machines::Slot>(index));
       if (row.used && row.live && client) {
-        versions[index] = SourceVersion{.source = (*client)->key, .runtime_generation = (*client)->runtime_generation, .agents = (*client)->session.agentRevision(), .workspaces = (*client)->session.workspaceList().revision(), .panes = (*client)->session.paneListRevision(), .connected = row.enabled && (*client)->phase == application::machines::MachinePhase::connected && (*client)->session.ready(), .label = row.label};
+        versions.atMut(index) = SourceVersion{.source = (*client)->key, .runtime_generation = (*client)->runtime_generation, .agents = (*client)->session.agentRevision(), .workspaces = (*client)->session.workspaceList().revision(), .panes = (*client)->session.paneListRevision(), .connected = row.enabled && (*client)->phase == application::machines::MachinePhase::connected && (*client)->session.ready(), .label = row.label};
       }
     }
 

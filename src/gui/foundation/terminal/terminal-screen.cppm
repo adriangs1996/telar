@@ -4,6 +4,7 @@ import std;
 
 import telar.wire.vocabulary;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 export namespace telar::gui::inline foundation::inline terminal {
 
@@ -22,19 +23,19 @@ export namespace telar::gui::inline foundation::inline terminal {
     static constexpr std::size_t text_capacity = 16;
 
     CellStyle style;
-    std::array<Byte, text_capacity> text{};
+    ds::Array<Byte, text_capacity> text{};
     CellWidth width = CellWidth::single;
     Byte length = 1;
 
     inline CellValue() noexcept {
-      text[0] = ' ';
+      text.atMut(0) = ' ';
     }
 
     inline explicit CellValue(const Cell& source) noexcept
         : style(source.style),
           width(source.width),
           length(static_cast<Byte>(source.text.size())) {
-      std::ranges::copy(source.text, text.begin());
+      std::ranges::copy(source.text, text.viewMut().begin());
     }
 
     [[nodiscard]] inline std::string_view utf8() const noexcept {

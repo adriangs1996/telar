@@ -274,10 +274,10 @@ namespace telar::gui::qt {
 
     void drain(QProcess::ProcessChannel channel) {
       process_.setReadChannel(channel);
-      std::array<char, read_chunk_bytes> chunk{};
+      ds::Array<char, read_chunk_bytes> chunk{};
 
       while (process_.bytesAvailable() > 0) {
-        const auto received = process_.read(chunk.data(), static_cast<qint64>(chunk.size()));
+        const auto received = process_.read(chunk.dataMut(), static_cast<qint64>(chunk.size()));
         if (received <= 0) {
           return;
         }

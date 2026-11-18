@@ -360,7 +360,7 @@ namespace {
       check(log != nullptr);
       proxy_trust::SystemCommand command{memory, log};
       const auto probe = "test -e /dev/fd/0 && test ! -e /dev/fd/" + std::to_string(high.get());
-      const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", probe};
+      const ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", probe};
 
       command.run(arguments);
       std::fclose(log);

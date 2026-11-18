@@ -16,14 +16,14 @@ export {
       Sha256() noexcept;
 
       void update(std::string_view bytes) noexcept;
-      std::array<std::uint8_t, SHA256_DIGEST_LENGTH> finish() noexcept;
+      ds::Array<std::uint8_t, SHA256_DIGEST_LENGTH> finish() noexcept;
 
     private:
       SHA256_CTX context_;
     };
 
     // The MD5 digest of `bytes`, or nothing if OpenSSL could not compute it.
-    ds::Option<std::array<std::uint8_t, MD5_DIGEST_LENGTH>> md5(std::string_view bytes) noexcept;
+    ds::Option<ds::Array<std::uint8_t, MD5_DIGEST_LENGTH>> md5(std::string_view bytes) noexcept;
 
   }
 }

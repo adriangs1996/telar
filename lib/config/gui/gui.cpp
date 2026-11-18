@@ -106,14 +106,14 @@ namespace telar::runtime::config {
     }
   }
 
-  void GuiReader::opacity(const lua::Value& table, std::array<ds::Option<double>, surface_names.size()>& opacity) {
+  void GuiReader::opacity(const lua::Value& table, ds::Array<ds::Option<double>, surface_names.size()>& opacity) {
     if (!table.present()) {
       return;
     }
 
     table.onlyFields(surface_names);
     for (std::size_t index = 0; index < surface_names.size(); ++index) {
-      opacity[index] = optionalNumber(table.field(surface_names[index].data()), GuiBounds::opacity);
+      opacity.atMut(index) = optionalNumber(table.field(surface_names[index].data()), GuiBounds::opacity);
     }
   }
 
@@ -212,7 +212,7 @@ namespace telar::runtime::config {
           value.fail("contains an invalid hexadecimal digit");
         }
 
-        rgb[channel] = static_cast<std::uint8_t>((rgb[channel] << 4) | (decimal ? lower - '0' : lower - 'a' + 10));
+        rgb.atMut(channel) = static_cast<std::uint8_t>((rgb[channel] << 4) | (decimal ? lower - '0' : lower - 'a' + 10));
       }
     }
 
@@ -223,7 +223,7 @@ namespace telar::runtime::config {
     return value.present() ? color(value, false).rgb : ds::none;
   }
 
-  void ThemeReader::colors(const lua::Value& table, std::array<ds::Option<ThemeColor>, theme_color_names.size()>& colors) {
+  void ThemeReader::colors(const lua::Value& table, ds::Array<ds::Option<ThemeColor>, theme_color_names.size()>& colors) {
     if (!table.present()) {
       return;
     }
@@ -232,7 +232,7 @@ namespace telar::runtime::config {
     for (std::size_t index = 0; index < theme_color_names.size(); ++index) {
       const auto value = table.field(theme_color_names[index].data());
       if (value.present()) {
-        colors[index] = color(value, true);
+        colors.atMut(index) = color(value, true);
       }
     }
   }
@@ -259,11 +259,11 @@ namespace telar::runtime::config {
     auto& entries = terminal.palette.emplace();
 
     for (std::size_t index = 0; index < entries.size(); ++index) {
-      entries[index] = *color(palette.element(static_cast<lua_Integer>(index) + 1), false).rgb;
+      entries.atMut(index) = *color(palette.element(static_cast<lua_Integer>(index) + 1), false).rgb;
     }
   }
 
-  void ThemeReader::syntax(const lua::Value& table, std::array<ds::Option<ThemeSettings::Syntax>, theme_syntax_names.size()>& syntax) {
+  void ThemeReader::syntax(const lua::Value& table, ds::Array<ds::Option<ThemeSettings::Syntax>, theme_syntax_names.size()>& syntax) {
     if (!table.present()) {
       return;
     }
@@ -275,7 +275,7 @@ namespace telar::runtime::config {
         continue;
       }
 
-      auto& result = syntax[index].emplace();
+      auto& result = syntax.atMut(index).emplace();
 
       if (style.is(LUA_TTABLE)) {
         style.onlyFields({"fg", "italic", "bold"});

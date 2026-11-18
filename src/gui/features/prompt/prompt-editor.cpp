@@ -820,7 +820,7 @@ namespace telar::gui::features::prompt {
   }
 
   Editor::Motion Editor::findMotion(char kind, char32_t target, std::size_t repeat, bool repeated) const {
-    std::array<char, 4> encoded{};
+    ds::Array<char, 4> encoded{};
     const auto bytes = encode(target, encoded);
     const auto needle = std::string_view{encoded.data(), bytes};
     const auto view = text_.view();
@@ -1183,7 +1183,7 @@ namespace telar::gui::features::prompt {
         clipboard_.write(text);
       }
     } else if (register_ != '_') {
-      auto& target = register_ >= 'a' && register_ <= 'z' ? registers_[register_ - 'a'] : unnamed_;
+      auto& target = register_ >= 'a' && register_ <= 'z' ? registers_.atMut(register_ - 'a') : unnamed_;
 
       target.text.assign(text);
       target.linewise = linewise;
@@ -1584,29 +1584,29 @@ namespace telar::gui::features::prompt {
     --replaying_;
   }
 
-  std::size_t Editor::encode(char32_t value, std::array<char, 4>& output) noexcept {
+  std::size_t Editor::encode(char32_t value, ds::Array<char, 4>& output) noexcept {
     if (value < 0x80) {
-      output[0] = static_cast<char>(value);
+      output.atMut(0) = static_cast<char>(value);
       return 1;
     }
 
     if (value < 0x800) {
-      output[0] = static_cast<char>(0xc0 | (value >> 6));
-      output[1] = static_cast<char>(0x80 | (value & 0x3f));
+      output.atMut(0) = static_cast<char>(0xc0 | (value >> 6));
+      output.atMut(1) = static_cast<char>(0x80 | (value & 0x3f));
       return 2;
     }
 
     if (value < 0x10000) {
-      output[0] = static_cast<char>(0xe0 | (value >> 12));
-      output[1] = static_cast<char>(0x80 | ((value >> 6) & 0x3f));
-      output[2] = static_cast<char>(0x80 | (value & 0x3f));
+      output.atMut(0) = static_cast<char>(0xe0 | (value >> 12));
+      output.atMut(1) = static_cast<char>(0x80 | ((value >> 6) & 0x3f));
+      output.atMut(2) = static_cast<char>(0x80 | (value & 0x3f));
       return 3;
     }
 
-    output[0] = static_cast<char>(0xf0 | (value >> 18));
-    output[1] = static_cast<char>(0x80 | ((value >> 12) & 0x3f));
-    output[2] = static_cast<char>(0x80 | ((value >> 6) & 0x3f));
-    output[3] = static_cast<char>(0x80 | (value & 0x3f));
+    output.atMut(0) = static_cast<char>(0xf0 | (value >> 18));
+    output.atMut(1) = static_cast<char>(0x80 | ((value >> 12) & 0x3f));
+    output.atMut(2) = static_cast<char>(0x80 | ((value >> 6) & 0x3f));
+    output.atMut(3) = static_cast<char>(0x80 | (value & 0x3f));
     return 4;
   }
 

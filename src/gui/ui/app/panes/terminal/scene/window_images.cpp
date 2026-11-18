@@ -40,7 +40,7 @@ import telar.base.ds;
 namespace telar::gui::qt {
 
   void WindowImages::Resources::release(application::terminal::graphics::ImageTextureHandle handle) noexcept {
-    images[handle - 1].clear();
+    images.atMut(handle - 1).clear();
   }
 
   WindowImages::WindowImages(QQuickWindow& window)
@@ -144,7 +144,7 @@ namespace telar::gui::qt {
       const auto stamp = placementStamp(sources[index]);
 
       changed = changed || placement_sources_[index] != stamp;
-      placement_sources_[index] = stamp;
+      placement_sources_.atMut(index) = stamp;
     }
 
     placement_source_count_ = sources.size();
@@ -233,7 +233,7 @@ namespace telar::gui::qt {
 
       const auto* image = store.findImage({.image_id = state->identity.image_id, .generation = state->identity.generation});
 
-      retained_[row] = image != nullptr && !image->retired();
+      retained_.atMut(row) = image != nullptr && !image->retired();
     }
   }
 
@@ -251,7 +251,7 @@ namespace telar::gui::qt {
 
   void WindowImages::indexCatalogs() noexcept {
     for (const auto bucket : std::span{occupied_catalog_buckets_}.first(catalog_count_)) {
-      catalogs_[bucket] = {};
+      catalogs_.atMut(bucket) = {};
     }
 
     catalog_count_ = 0;
@@ -262,12 +262,12 @@ namespace telar::gui::qt {
       }
 
       const auto bucket = catalogBucket(state->identity.catalog);
-      auto& catalog = catalogs_[bucket];
+      auto& catalog = catalogs_.atMut(bucket);
       if (catalog.first_row == 0) {
-        occupied_catalog_buckets_[catalog_count_++] = static_cast<std::uint16_t>(bucket);
+        occupied_catalog_buckets_.atMut(catalog_count_++) = static_cast<std::uint16_t>(bucket);
       }
 
-      next_catalog_row_[row] = catalog.first_row;
+      next_catalog_row_.atMut(row) = catalog.first_row;
       catalog = {.lifetime = state->identity.catalog, .first_row = Residency::handleOf(row)};
     }
   }
@@ -315,10 +315,10 @@ namespace telar::gui::qt {
       return;
     }
 
-    std::array<bool, Residency::capacity> visible{};
+    ds::Array<bool, Residency::capacity> visible{};
 
     visitVisibleTextures([&](application::terminal::graphics::ImageTextureHandle handle) noexcept {
-      visible[handle - 1] = true;
+      visible.atMut(handle - 1) = true;
       use(handle);
     });
 
@@ -342,7 +342,7 @@ namespace telar::gui::qt {
 
     const auto revision = residency_.revision();
 
-    residency_.sweep(std::span{retained_});
+    residency_.sweep(retained_.viewMut());
 
     if (residency_.revision() != revision) {
       wakeWaitingScenes();
@@ -351,7 +351,7 @@ namespace telar::gui::qt {
     for (const auto row : residency_.rows()) {
       const auto* state = residency_.state(Residency::handleOf(row));
       if (state != nullptr && state->stage == application::terminal::graphics::ImageTextureStage::spare) {
-        resources_.images[row].detachNodes();
+        resources_.images.atMut(row).detachNodes();
       }
     }
 
@@ -533,7 +533,7 @@ namespace telar::gui::qt {
     const auto channels = description.format == ImageFormat::rgba ? rgba_channels : rgb_channels;
     const QImage pixels{image.pixels().data(), static_cast<int>(description.width), static_cast<int>(description.height), static_cast<qsizetype>(description.width) * channels, format};
 
-    return resources_.images[handle - 1].upload(window_, pixels);
+    return resources_.images.atMut(handle - 1).upload(window_, pixels);
   }
 
   bool WindowImages::canRetry(const Image& image, std::size_t retained_bytes) const noexcept {
@@ -548,10 +548,10 @@ namespace telar::gui::qt {
       return false;
     }
 
-    std::array<bool, Residency::capacity> visible{};
+    ds::Array<bool, Residency::capacity> visible{};
 
     visitVisibleTextures([&visible](application::terminal::graphics::ImageTextureHandle handle) noexcept {
-      visible[handle - 1] = true;
+      visible.atMut(handle - 1) = true;
     });
 
     return std::ranges::any_of(residency_.rows(), [this, &visible](auto row) {
@@ -592,7 +592,7 @@ namespace telar::gui::qt {
     const application::terminal::graphics::ImageTextureIdentity identity{.catalog = store.lifetime(), .image_id = description.key.image_id, .generation = description.key.generation};
     const auto admission = residency_.request({.identity = identity, .size = {.width = description.width, .height = description.height}, .retained_bytes = store.globalRetainedBytes(), .now_ns = now_ns_});
     if (admission.handle != 0) {
-      retained_[admission.handle - 1] = !image.retired();
+      retained_.atMut(admission.handle - 1) = !image.retired();
     }
 
     if (admission.upload) {
@@ -621,7 +621,7 @@ namespace telar::gui::qt {
   }
 
   void WindowImages::append(GraphicsScene& scene, QSGNode& parent, application::terminal::graphics::ImageTextureHandle handle, const application::terminal::graphics::ImageGeometry& geometry) {
-    resources_.images[handle - 1].append(window_, parent, scene, handle, geometry);
+    resources_.images.atMut(handle - 1).append(window_, parent, scene, handle, geometry);
   }
 
 }

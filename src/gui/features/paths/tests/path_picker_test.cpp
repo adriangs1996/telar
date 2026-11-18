@@ -35,9 +35,9 @@ namespace {
     check(features::paths::page(state).root() == "/work" && features::paths::page(state).anchor() == "/work" && features::paths::search(state, {}, 1).refresh, "opening must retain the pane directory and request an index rebuild");
     features::paths::wait(state, 1);
     features::paths::wait(state, 2);
-    const std::array highlights{std::uint16_t{1}};
+    const ds::Array highlights{std::uint16_t{1}};
     std::string path = "src/main.cpp";
-    const std::array matches{PathMatch{.path = path, .positions = highlights}};
+    const ds::Array matches{PathMatch{.path = path, .positions = highlights}};
 
     check(!features::paths::receive(state, {.request_id = 1, .root = "/work", .matches = matches}), "a late page must not replace the latest query");
     check(!features::paths::receive(state, {.request_id = 2, .root = "/other", .matches = matches}), "a current request must still match the current root");
@@ -81,13 +81,13 @@ namespace {
     check(!PathInsertion::relativeTo("/work", "/worktree/file"), "a path sharing a name prefix must not become relative");
     check(PathInsertion::relativeTo("/", "/file") == ds::Option<std::string_view>{"file"}, "the filesystem root must not require a second separator");
     features::paths::State state;
-    const std::array directories{PathMatch{.path = "sub/", .kind = PathKind::directory}};
+    const ds::Array directories{PathMatch{.path = "sub/", .kind = PathKind::directory}};
 
     features::paths::open(state, 1, "/work", {});
     features::paths::wait(state, 1);
     check(features::paths::receive(state, {.request_id = 1, .root = "/work", .complete = true, .matches = directories}) && features::paths::descend(state, 0), "the insertion fixture must browse into its directory");
     features::paths::wait(state, 2);
-    const std::array matches{PathMatch{.path = "a b.txt"}};
+    const ds::Array matches{PathMatch{.path = "a b.txt"}};
 
     check(features::paths::receive(state, {.request_id = 2, .root = "/work/sub", .complete = true, .matches = matches}), "the insertion fixture must adopt its result");
     const auto relative = features::paths::insertion(state, {});
@@ -119,7 +119,7 @@ namespace {
     PathLabel label;
     constexpr std::uint16_t wide_columns = 80;
     constexpr std::uint16_t compact_columns = 10;
-    const std::array positions{std::uint16_t{5}};
+    const ds::Array positions{std::uint16_t{5}};
 
     label.layout("src/main.cpp", positions, wide_columns);
     check(label.runs().size() == 4 && label.runs()[0].text == "src/" && label.runs()[0].tone == PathLabelTone::directory && label.runs()[2].text == "a" && label.runs()[2].tone == PathLabelTone::match, "path labels must separate directory, name and highlighted characters");

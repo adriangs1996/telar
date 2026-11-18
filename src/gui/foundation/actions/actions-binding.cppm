@@ -6,6 +6,7 @@ export module telar.gui.foundation.actions:binding;
 import std;
 
 import telar.config.client;
+import telar.base.ds;
 
 // Interface: input/binding.cppm
 export {
@@ -24,7 +25,7 @@ export {
 
     template <typename Action>
     struct TBC_GENERIC KeyBinding {
-      std::array<KeyChord, BindingLimits::keys> keys{};
+      ds::Array<KeyChord, BindingLimits::keys> keys{};
       std::size_t length = 0;
       Action action{};
       bool prefixed = false;
@@ -58,12 +59,12 @@ export {
             throw std::invalid_argument{"A binding must contain one to five keys"};
           }
 
-          bindings_[length_] = binding;
-          order_[length_] = static_cast<std::uint16_t>(length_);
+          bindings_.atMut(length_) = binding;
+          order_.atMut(length_) = static_cast<std::uint16_t>(length_);
           ++length_;
         }
 
-        const auto ordered = std::span{order_}.first(length_);
+        const auto ordered = order_.viewMut().first(length_);
 
         std::ranges::sort(ordered, [this](auto left, auto right) {
           return std::lexicographical_compare(bindings_[left].sequence().begin(), bindings_[left].sequence().end(), bindings_[right].sequence().begin(), bindings_[right].sequence().end(), [](KeyChord first, KeyChord second) {
@@ -112,8 +113,8 @@ export {
         return range.begin;
       }
 
-      std::array<KeyBinding<Action>, BindingLimits::bindings> bindings_{};
-      std::array<std::uint16_t, BindingLimits::bindings> order_{};
+      ds::Array<KeyBinding<Action>, BindingLimits::bindings> bindings_{};
+      ds::Array<std::uint16_t, BindingLimits::bindings> order_{};
       std::size_t length_ = 0;
     };
 

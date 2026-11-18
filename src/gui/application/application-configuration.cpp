@@ -81,7 +81,7 @@ namespace telar::gui::application {
     window(gui.window, configuration);
     for (std::size_t index = 0; index < gui.opacity.size(); ++index) {
       if (gui.opacity[index]) {
-        configuration.opacity.overrides[index] = static_cast<float>(*gui.opacity[index]);
+        configuration.opacity.overrides.atMut(index) = static_cast<float>(*gui.opacity[index]);
       }
     }
 
@@ -791,10 +791,10 @@ namespace telar::gui::application {
 
     decision.kind = static_cast<InputExpression::Kind>(std::to_underlying(setting.kind));
     if (decision.kind == InputExpression::Kind::forward) {
-      std::ranges::copy(binding.sequence(), decision.keys.begin());
+      std::ranges::copy(binding.sequence(), decision.keys.viewMut().begin());
       decision.length = binding.length;
     } else if (decision.kind == InputExpression::Kind::keys) {
-      std::ranges::copy(std::span{setting.keys}.first(setting.length), decision.keys.begin());
+      std::ranges::copy(std::span{setting.keys}.first(setting.length), decision.keys.viewMut().begin());
       decision.length = setting.length;
     } else if (decision.kind == InputExpression::Kind::paste) {
       decision.paste.assign(setting.text);
@@ -918,7 +918,7 @@ namespace telar::gui::application {
         }
       }
 
-      input_.configured[retained] = binding;
+      input_.configured.atMut(retained) = binding;
       ++retained;
     }
 
@@ -998,10 +998,10 @@ namespace telar::gui::application {
     const auto past = runtime::config::CallbackResultReader::actions(result, BindingEffects::maximum_effects, [&](const runtime::lua::Value& value) {
       if (auto action = reader.read(value)) {
         if (action->kind == BindingActionKind::extended) {
-          transient_references_[transient_count_++] = action->reference;
+          transient_references_.atMut(transient_count_++) = action->reference;
         }
 
-        batch.actions[batch.length++] = *action;
+        batch.actions.atMut(batch.length++) = *action;
       } else {
         ++batch.dropped;
       }

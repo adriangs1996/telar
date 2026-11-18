@@ -85,7 +85,7 @@ export {
       std::string_view label;
     };
 
-    inline constexpr auto palette_actions = std::to_array<PaletteAction>({
+    inline constexpr auto palette_actions = ds::Array<PaletteAction, 29>{{
         {.action = BindingActionKind::split_horizontal, .label = "Split right"},
         {.action = BindingActionKind::split_vertical, .label = "Split down"},
         {.action = BindingActionKind::focus_left, .label = "Focus pane left"},
@@ -115,7 +115,7 @@ export {
         {.action = BindingActionKind::next_machine, .label = "Next machine"},
         {.action = BindingActionKind::previous_machine, .label = "Previous machine"},
         {.action = BindingActionKind::add_machine, .label = "Add machine"},
-    });
+    }};
 
   }
 }

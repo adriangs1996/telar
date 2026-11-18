@@ -71,7 +71,7 @@ export {
         AgentPlanStatus status = AgentPlanStatus::pending;
       };
 
-      std::array<Task, task_capacity> tasks_{};
+      ds::Array<Task, task_capacity> tasks_{};
       std::size_t count_ = 0;
       bool uses_tasks_ = false;
       std::uint16_t done_ = 0;
@@ -150,7 +150,7 @@ export {
       Byte confidence = 0;
       AgentTitleSource title_source = AgentTitleSource::telar;
       AgentTitleState title_state = AgentTitleState::placeholder;
-      std::array<Byte, 16> session_id{};
+      ds::Array<Byte, 16> session_id{};
       FixedText<64> session;
       SessionFileWatch file_watch;
       FixedText<96> event;

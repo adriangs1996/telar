@@ -88,7 +88,7 @@ namespace telar::runtime::traffic {
     server.append(event.server);
     host.append(event.host);
     reason.append(event.reason);
-    std::ranges::copy(matches, chain.begin());
+    std::ranges::copy(matches, chain.viewMut().begin());
   }
 
   template <std::size_t maximum_bytes>
@@ -138,7 +138,7 @@ namespace telar::runtime::traffic {
       throw EncodingError{"Interception owner already registered"};
     }
 
-    for (auto& slot : registrations_) {
+    for (auto& slot : registrations_.viewMut()) {
       if (!slot) {
         slot.emplace(upstream_, owner, rule, ++generation_, order);
         active_.fetch_add(1, std::memory_order_release);
@@ -153,14 +153,14 @@ namespace telar::runtime::traffic {
   void Interception<maximum_bytes>::disconnect(Owner owner) noexcept {
     std::scoped_lock lock{mutex_};
 
-    for (auto& slot : registrations_) {
+    for (auto& slot : registrations_.viewMut()) {
       if (slot && slot->route.owner == owner) {
         slot.reset();
         active_.fetch_sub(1, std::memory_order_release);
       }
     }
 
-    for (auto& slot : pending_) {
+    for (auto& slot : pending_.viewMut()) {
       if (slot && slot->verdict == Verdict::pending && slot->chain[slot->step].owner == owner) {
         advance(slot.getMut(), failure(*slot), registrations_, next_, completion_, request_signal_);
       }
@@ -176,7 +176,7 @@ namespace telar::runtime::traffic {
     }
 
     entry->available = false;
-    for (auto& pending : pending_) {
+    for (auto& pending : pending_.viewMut()) {
       if (pending && pending->verdict == Verdict::pending && pending->chain[pending->step].owner == owner) {
         advance(pending.getMut(), failure(*pending), registrations_, next_, completion_, request_signal_);
       }
@@ -212,7 +212,7 @@ namespace telar::runtime::traffic {
     }
 
     std::scoped_lock lock{mutex_};
-    std::array<Route, Limits::subscribers> matches;
+    ds::Array<Route, Limits::subscribers> matches;
     std::size_t count = 0;
     bool fail_closed = false;
 
@@ -226,7 +226,7 @@ namespace telar::runtime::traffic {
           continue;
         }
 
-        matches[count++] = entry->route;
+        matches.atMut(count++) = entry->route;
         fail_closed |= entry->route.fail_closed;
       }
     }
@@ -235,11 +235,11 @@ namespace telar::runtime::traffic {
       return 0;
     }
 
-    std::ranges::sort(std::span{matches}.first(count), [](const auto& left, const auto& right) {
+    std::ranges::sort(matches.viewMut().first(count), [](const auto& left, const auto& right) {
       return left.order < right.order || (left.order == right.order && left.generation < right.generation);
     });
 
-    for (auto& slot : pending_) {
+    for (auto& slot : pending_.viewMut()) {
       if (!slot) {
         try {
           if (event.bytes.size() > maximum_bytes) {
@@ -273,7 +273,7 @@ namespace telar::runtime::traffic {
 
     std::scoped_lock lock{mutex_};
 
-    for (auto& slot : pending_) {
+    for (auto& slot : pending_.viewMut()) {
       if (slot && slot->decision_ticket == ticket && slot->verdict == Verdict::pending && slot->chain[slot->step].owner == owner) {
         if (std::chrono::steady_clock::now() >= slot->deadline) {
           advance(slot.getMut(), failure(*slot), registrations_, next_, completion_, request_signal_);
@@ -300,7 +300,7 @@ namespace telar::runtime::traffic {
 
     std::scoped_lock lock{mutex_};
 
-    for (auto& slot : pending_) {
+    for (auto& slot : pending_.viewMut()) {
       if (slot && slot->ticket == ticket) {
         if (slot->verdict == Verdict::pending && std::chrono::steady_clock::now() >= slot->deadline) {
           advance(slot.getMut(), failure(*slot), registrations_, next_, completion_, request_signal_);
@@ -366,7 +366,7 @@ namespace telar::runtime::traffic {
   void Interception<maximum_bytes>::cancel(std::uint64_t ticket) noexcept {
     std::scoped_lock lock{mutex_};
 
-    for (auto& slot : pending_) {
+    for (auto& slot : pending_.viewMut()) {
       if (slot && slot->ticket == ticket) {
         slot.reset();
         return;
@@ -399,7 +399,7 @@ namespace telar::runtime::traffic {
 
   template <std::size_t maximum_bytes>
   auto Interception<maximum_bytes>::registration(Owner owner) noexcept -> Registration* {
-    for (auto& slot : registrations_) {
+    for (auto& slot : registrations_.viewMut()) {
       if (slot && slot->route.owner == owner) {
         return &slot.getMut();
       }
@@ -541,8 +541,8 @@ namespace telar::runtime::traffic {
       throw EncodingError{"Package has no granted traffic capability"};
     }
 
-    std::array<int, 2> descriptors;
-    if (::socketpair(AF_UNIX, SOCK_STREAM, 0, descriptors.data()) != 0) {
+    ds::Array<int, 2> descriptors;
+    if (::socketpair(AF_UNIX, SOCK_STREAM, 0, descriptors.dataMut()) != 0) {
       throw SystemError{"Create package traffic channel"};
     }
 
@@ -570,9 +570,9 @@ namespace telar::runtime::traffic {
   }
 
   void Service::packageFailure(const plugins::ServiceSpec& specification, FlowEvent event) noexcept {
-    std::array<char, 128> reason;
+    ds::Array<char, 128> reason;
     const auto name = specification.name.view();
-    const auto length = std::snprintf(reason.data(), reason.size(), "app_callback_error:%.*s", static_cast<int>(name.size()), name.data());
+    const auto length = std::snprintf(reason.dataMut(), reason.size(), "app_callback_error:%.*s", static_cast<int>(name.size()), name.data());
 
     event.reason = {reason.data(), length > 0 ? std::min(static_cast<std::size_t>(length), reason.size() - 1) : 0};
     event.bytes = {};
@@ -695,19 +695,19 @@ namespace telar::runtime::traffic {
   }
 
   void Service::step() {
-    std::array<pollfd, maximum_peers + 3> descriptors{};
+    ds::Array<pollfd, maximum_peers + 3> descriptors{};
 
-    descriptors[0] = {.fd = listener_.descriptor(), .events = POLLIN, .revents = 0};
-    descriptors[1] = {.fd = wake_.descriptor(), .events = POLLIN, .revents = 0};
-    descriptors[2] = {.fd = interception_.requestDescriptor(), .events = POLLIN, .revents = 0};
+    descriptors.atMut(0) = {.fd = listener_.descriptor(), .events = POLLIN, .revents = 0};
+    descriptors.atMut(1) = {.fd = wake_.descriptor(), .events = POLLIN, .revents = 0};
+    descriptors.atMut(2) = {.fd = interception_.requestDescriptor(), .events = POLLIN, .revents = 0};
     for (std::size_t index = 0; index < peers_.size(); ++index) {
       const auto& peer = peers_[index];
 
-      descriptors[index + 3] = {.fd = peer ? peer->socket.get() : -1, .events = static_cast<short>(POLLIN | (peer && peer->count ? POLLOUT : 0)), .revents = 0};
+      descriptors.atMut(index + 3) = {.fd = peer ? peer->socket.get() : -1, .events = static_cast<short>(POLLIN | (peer && peer->count ? POLLOUT : 0)), .revents = 0};
     }
 
     constexpr int heartbeat_ms = 1000;
-    const auto result = ::poll(descriptors.data(), descriptors.size(), heartbeat_ms);
+    const auto result = ::poll(descriptors.dataMut(), descriptors.size(), heartbeat_ms);
     if (result < 0 && sys::lastError() != EINTR) {
       throw SystemError{"Poll traffic sockets"};
     }
@@ -718,7 +718,7 @@ namespace telar::runtime::traffic {
 
     const auto stop_capture = capture_stop_.load(std::memory_order_acquire);
     if (stop_capture != capture_stopped_.load(std::memory_order_relaxed)) {
-      for (auto& peer : peers_) {
+      for (auto& peer : peers_.viewMut()) {
         if (peer && (peer->role == Role::live_capture || peer->role == Role::offline_capture)) {
           peer.getMut().failed = true;
         }
@@ -728,7 +728,7 @@ namespace telar::runtime::traffic {
     if (descriptors[1].revents & POLLIN) {
       wake_.drain();
       while (auto attachment = attachments_.tryReceive()) {
-        for (auto& slot : peers_) {
+        for (auto& slot : peers_.viewMut()) {
           if (!slot) {
             slot.emplace(memory_, std::move(attachment.getMut().socket), ::geteuid());
             slot.getMut().package = attachment->package;
@@ -750,7 +750,7 @@ namespace telar::runtime::traffic {
     }
 
     for (std::size_t index = 0; index < peers_.size(); ++index) {
-      auto& peer = peers_[index];
+      auto& peer = peers_.atMut(index);
       if (!peer) {
         continue;
       }
@@ -815,7 +815,7 @@ namespace telar::runtime::traffic {
       accept();
     }
 
-    for (auto& peer : peers_) {
+    for (auto& peer : peers_.viewMut()) {
       if (!peer || peer->failed || !peer->configured || peer->role != Role::intercept) {
         continue;
       }
@@ -863,7 +863,7 @@ namespace telar::runtime::traffic {
       return;
     }
 
-    for (auto& slot : peers_) {
+    for (auto& slot : peers_.viewMut()) {
       if (!slot) {
         slot.emplace(memory_, std::move(socket), credentials->user);
         return;
@@ -1100,7 +1100,7 @@ namespace telar::runtime::traffic {
 
   void Service::publish(const Event& event, std::shared_ptr<Frame> shared) {
     shared = recordings_.record(event, std::move(shared));
-    for (auto& peer : peers_) {
+    for (auto& peer : peers_.viewMut()) {
       if (!peer || peer->failed) {
         continue;
       }
@@ -1135,7 +1135,7 @@ namespace telar::runtime::traffic {
       return;
     }
 
-    auto& delivery = peer.queue[(peer.head + peer.count) % peer.queue.size()];
+    auto& delivery = peer.queue.atMut((peer.head + peer.count) % peer.queue.size());
 
     delivery.prefix = Protocol::prefix(frame->bytes.bytes().size(), peer.dropped);
     delivery.frame = std::move(frame);
@@ -1145,7 +1145,7 @@ namespace telar::runtime::traffic {
 
   void Service::write(Peer& peer) {
     for (std::size_t round = 0; round < Limits::pending_frames && peer.count != 0; ++round) {
-      auto& delivery = peer.queue[peer.head];
+      auto& delivery = peer.queue.atMut(peer.head);
       const auto prefix = std::span<const Byte>{delivery.prefix};
       const auto body = std::span<const Byte>{delivery.frame->bytes.bytes()};
       const auto bytes = delivery.offset < prefix.size() ? prefix.subspan(delivery.offset) : body.subspan(delivery.offset - prefix.size());
@@ -1177,7 +1177,7 @@ namespace telar::runtime::traffic::control {
   void TrustCommand::run(std::span<const std::string_view> arguments) {
     bool allowed = !arguments.empty() && arguments.front() == "/usr/bin/security";
 #if defined(__linux__)
-    constexpr std::array executables{"/usr/bin/trust", "/usr/bin/install", "/usr/bin/rm", "/usr/sbin/update-ca-certificates"};
+    constexpr ds::Array executables{"/usr/bin/trust", "/usr/bin/install", "/usr/bin/rm", "/usr/sbin/update-ca-certificates"};
     allowed = arguments.size() >= 3 && arguments[0] == "/usr/bin/sudo" && arguments[1] == "--" && std::ranges::find(executables, arguments[2]) != executables.end();
 #endif
     if (!allowed) {

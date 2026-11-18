@@ -59,21 +59,21 @@ namespace telar::runtime::cli::integration {
 
   template <Allocator Memory>
   void createParents(const String<Memory>& path) {
-    std::array<char, PATH_MAX> directory;
+    ds::Array<char, PATH_MAX> directory;
     if (path.size() >= directory.size() || path.contains('\0')) {
       throw std::length_error{"Invalid integration file path"};
     }
 
-    std::copy(path.begin(), path.end(), directory.begin());
-    directory[path.size()] = '\0';
+    std::copy(path.begin(), path.end(), directory.dataMut());
+    directory.atMut(path.size()) = '\0';
     for (std::size_t index = 1; index < path.size(); ++index) {
       if (directory[index] == '/') {
-        directory[index] = '\0';
+        directory.atMut(index) = '\0';
         if (::mkdir(directory.data(), 0777) != 0 && sys::lastError() != EEXIST) {
           throw SystemError{"Create integration directory"};
         }
 
-        directory[index] = '/';
+        directory.atMut(index) = '/';
       }
     }
   }
@@ -84,8 +84,8 @@ namespace telar::runtime::cli::integration {
     ds::Option<mode_t> permissions;
 
     if (preserve_settings) {
-      std::array<char, PATH_MAX> resolved;
-      if (::realpath(path.c_str(), resolved.data()) != nullptr) {
+      ds::Array<char, PATH_MAX> resolved;
+      if (::realpath(path.c_str(), resolved.dataMut()) != nullptr) {
         target = resolved.data();
       }
 
@@ -151,10 +151,10 @@ name: telar-coordinator
 description: Delegate tasks to agents in their own Git worktrees and steer them through telar. Use when the user asks to implement, fix or build something in a separate worktree, or asks about, stops, redirects or reviews agents working in worktrees.
 ---
 )";
-  constexpr auto skills = std::to_array<Skill>({
+  constexpr auto skills = ds::Array<Skill, 2>{{
       {.name = "telar", .header = telar_header, .marker = "<!-- telar-integration: skill telar -->\n", .text = assets::telar_skill},
       {.name = "telar-coordinator", .header = coordinator_header, .marker = "<!-- telar-integration: skill telar-coordinator -->\n", .text = assets::coordinator_skill, .legacy_header = true},
-  });
+  }};
 
   template <Allocator Memory>
   String<Memory> skillPath(Memory& memory, std::string_view root, const Skill& skill) {
@@ -171,8 +171,8 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
       return sys::lastError() == ENOENT ? Ownership::absent : Ownership::foreign;
     }
 
-    std::array<char, 1024> buffer;
-    const auto contents = readRegularFile(path, buffer);
+    ds::Array<char, 1024> buffer;
+    const auto contents = readRegularFile(path, buffer.viewMut());
     if (!contents) {
       return Ownership::foreign;
     }
@@ -328,14 +328,14 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
 
     const auto current = joinPath(memory, provider.root(memory, environment), provider.file);
     auto legacy = joinPath(memory, provider.root(memory, environment, true), provider.file);
-    std::array<char, PATH_MAX> legacy_path;
-    std::array<char, PATH_MAX> current_path;
+    ds::Array<char, PATH_MAX> legacy_path;
+    ds::Array<char, PATH_MAX> current_path;
 
-    if (::realpath(legacy.c_str(), legacy_path.data()) == nullptr) {
+    if (::realpath(legacy.c_str(), legacy_path.dataMut()) == nullptr) {
       return ds::none;
     }
 
-    if (::realpath(current.c_str(), current_path.data()) != nullptr && std::string_view{legacy_path.data()} == current_path.data()) {
+    if (::realpath(current.c_str(), current_path.dataMut()) != nullptr && std::string_view{legacy_path.data()} == current_path.data()) {
       return ds::none;
     }
 

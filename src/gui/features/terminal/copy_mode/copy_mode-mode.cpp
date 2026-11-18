@@ -93,7 +93,7 @@ namespace telar::gui::features::terminal::copy_mode {
       }
     }
 
-    constexpr auto characters = std::to_array<std::pair<std::uint32_t, Command>>({
+    constexpr auto characters = ds::Array<std::pair<std::uint32_t, Command>, 24>{{
         {'h', Command::left},
         {'j', Command::down},
         {'k', Command::up},
@@ -118,7 +118,7 @@ namespace telar::gui::features::terminal::copy_mode {
         {'V', Command::select_lines},
         {'y', Command::copy},
         {'q', Command::leave},
-    });
+    }};
 
     const auto* const found = std::ranges::find(characters, key.codepoint, &decltype(characters)::value_type::first);
 
@@ -504,7 +504,7 @@ namespace telar::gui::features::terminal::copy_mode {
 
     state_ = plan.next;
     if (plan.replacement_matches) {
-      std::ranges::copy(*plan.replacement_matches, matches_.begin());
+      std::ranges::copy(*plan.replacement_matches, matches_.viewMut().begin());
       match_count_ = plan.replacement_matches->size();
     }
 

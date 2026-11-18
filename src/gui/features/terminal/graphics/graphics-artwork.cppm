@@ -2,6 +2,7 @@
 export module telar.gui.features.terminal.graphics:artwork;
 
 import std;
+import telar.base.ds;
 
 // Interface: graphics/artwork_resize.cppm
 export {
@@ -17,7 +18,7 @@ export {
       std::size_t height = 0;
 
       [[nodiscard]] bool valid(std::size_t extent_limit = maximum_extent) const noexcept;
-      [[nodiscard]] std::array<std::uint8_t, channels> pixel(std::size_t x, std::size_t y) const noexcept;
+      [[nodiscard]] ds::Array<std::uint8_t, channels> pixel(std::size_t x, std::size_t y) const noexcept;
     };
 
     class ArtworkResize {
@@ -54,7 +55,7 @@ export {
       };
 
       struct Sample {
-        std::array<float, color_channels> colors{};
+        ds::Array<float, color_channels> colors{};
         float alpha = 0;
         float total = 0;
 

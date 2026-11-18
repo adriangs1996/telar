@@ -93,7 +93,7 @@ namespace {
       const ShellIntegration<ConcurrentMemory> integration{memory, directory};
 
       {
-        const std::array<std::string_view, 3> arguments{"/bin/zsh", "-l", "-i"};
+        const ds::Array<std::string_view, 3> arguments{"/bin/zsh", "-l", "-i"};
         Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
 
         command.setEnvironment("ZDOTDIR", "/custom");
@@ -108,7 +108,7 @@ namespace {
 
       {
         const auto bash = stand_in(home.path(), "bash");
-        const std::array<std::string_view, 3> arguments{bash, "-l", "-i"};
+        const ds::Array<std::string_view, 3> arguments{bash, "-l", "-i"};
         Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
 
         check(integration.apply(command).hasValue());
@@ -119,7 +119,7 @@ namespace {
 
       {
         const auto fish = stand_in(home.path(), "fish");
-        const std::array<std::string_view, 1> arguments{fish};
+        const ds::Array<std::string_view, 1> arguments{fish};
         Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
 
         command.removeEnvironment("XDG_DATA_DIRS");
@@ -132,7 +132,7 @@ namespace {
       }
 
       {
-        const std::array<std::string_view, 1> arguments{"/bin/cat"};
+        const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
         Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
 
         command.setEnvironment("TELAR_SHELL_TOKEN", "inherited");
@@ -142,7 +142,7 @@ namespace {
       }
 
       {
-        const std::array<std::string_view, 1> arguments{"/bin/zsh"};
+        const ds::Array<std::string_view, 1> arguments{"/bin/zsh"};
         Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
 
         check(!ShellIntegration<ConcurrentMemory>{memory, ""}.apply(command));
@@ -153,7 +153,7 @@ namespace {
       const auto sentinel = text(directory) + "/ssh/remote";
 
       check(::unlink(sentinel.c_str()) == 0);
-      const std::array<std::string_view, 1> arguments{"/bin/zsh"};
+      const ds::Array<std::string_view, 1> arguments{"/bin/zsh"};
       Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
 
       check(integration.apply(command).hasValue());
@@ -218,7 +218,7 @@ namespace {
     // marks the way the runtime does: only signed ones count. With `bare`, telar's editor stands in
     // for the prompt, so the shell draws none of the user's.
     void signsCommands(ConcurrentMemory& memory, const ShellIntegration<ConcurrentMemory>& integration, const std::string& shell, std::string_view home, bool bare = false) {
-      const std::array<std::string_view, 3> arguments{shell, "-l", "-i"};
+      const ds::Array<std::string_view, 3> arguments{shell, "-l", "-i"};
       Command command{memory, Launch{.cwd = home, .arguments = arguments}};
 
       command.setEnvironment("HOME", home);
@@ -243,8 +243,8 @@ namespace {
             continue;
           }
 
-          std::array<char, 4096> output;
-          const auto count = ::read(process.descriptor(), output.data(), output.size());
+          ds::Array<char, 4096> output;
+          const auto count = ::read(process.descriptor(), output.dataMut(), output.size());
 
           check(count > 0);
           answerTerminal(process.descriptor(), {output.data(), static_cast<std::size_t>(count)});
@@ -308,8 +308,8 @@ namespace {
           continue;
         }
 
-        std::array<char, 4096> output;
-        const auto count = ::read(process.descriptor(), output.data(), output.size());
+        ds::Array<char, 4096> output;
+        const auto count = ::read(process.descriptor(), output.dataMut(), output.size());
         if (count <= 0) {
           return;
         }
@@ -343,7 +343,7 @@ namespace {
         std::vector<std::string_view> arguments{"/bin/sh", helper};
 
         arguments.insert(arguments.end(), options.begin(), options.end());
-        const std::array<std::pair<std::string_view, std::string_view>, 5> environment{{{"PATH", path}, {"TELAR_SHELL_TOKEN", token.text()}, {"TELAR_TEST_RECORD", record}, {"TELAR_TEST_CONFIG", configuration}, {"TELAR_PROMPT_MODE", mode}}};
+        const ds::Array<std::pair<std::string_view, std::string_view>, 5> environment{{{"PATH", path}, {"TELAR_SHELL_TOKEN", token.text()}, {"TELAR_TEST_RECORD", record}, {"TELAR_TEST_CONFIG", configuration}, {"TELAR_PROMPT_MODE", mode}}};
         CommandZones zones{"/", token};
 
         ::unlink(record.c_str());
@@ -384,7 +384,7 @@ namespace {
       const auto token = ShellToken::generate();
       const auto nonce = ShellToken::generate();
       const auto remote = readText(text(directory) + "/ssh/remote") + " " + text(nonce.text()) + (bare ? " telar" : "");
-      const std::array<std::string_view, 3> arguments{shell, "-c", remote};
+      const ds::Array<std::string_view, 3> arguments{shell, "-c", remote};
       Command command{memory, Launch{.cwd = home.path(), .arguments = arguments}};
 
       command.setEnvironment("HOME", home.path());
@@ -409,8 +409,8 @@ namespace {
             continue;
           }
 
-          std::array<char, 4096> output;
-          const auto count = ::read(process.descriptor(), output.data(), output.size());
+          ds::Array<char, 4096> output;
+          const auto count = ::read(process.descriptor(), output.dataMut(), output.size());
 
           check(count > 0);
           answerTerminal(process.descriptor(), {output.data(), static_cast<std::size_t>(count)});
@@ -512,7 +512,7 @@ namespace {
 
     TemporaryDirectory home{"/tmp/telar-shell-XXXXXX"};
     const ShellIntegration<ConcurrentMemory> integration{memory, ShellIntegration<ConcurrentMemory>::install(memory, home.path())};
-    const std::array<std::string_view, 3> arguments{*zsh, "-l", "-i"};
+    const ds::Array<std::string_view, 3> arguments{*zsh, "-l", "-i"};
     Command command{memory, Launch{.cwd = home.path(), .arguments = arguments}};
 
     command.setEnvironment("HOME", home.path());
@@ -592,7 +592,7 @@ namespace {
     check(pane.shell_zones->names() != nullptr && pane.shell_zones->names()->find("which-command") != std::string::npos);
 
     // Each command is a block anchored to its prompt's row, in order, with how it ended.
-    std::array<CommandBlock, PaneBlocks::capacity> storage;
+    ds::Array<CommandBlock, PaneBlocks::capacity> storage;
     const auto blocks = pane.blocks->message(7, storage).blocks;
 
     check(blocks.size() == 4);
@@ -643,7 +643,7 @@ namespace {
 
     TemporaryDirectory home{"/tmp/telar-shell-XXXXXX"};
     const ShellIntegration<ConcurrentMemory> integration{memory, ShellIntegration<ConcurrentMemory>::install(memory, home.path()), true};
-    const std::array<std::string_view, 3> arguments{*zsh, "-l", "-i"};
+    const ds::Array<std::string_view, 3> arguments{*zsh, "-l", "-i"};
     Command command{memory, Launch{.cwd = home.path(), .arguments = arguments}};
 
     command.setEnvironment("HOME", home.path());
@@ -681,7 +681,7 @@ namespace {
     });
 
     check(pane.shell_state.shell != IntegratedShell::none && !pane.shell_state.shell_foreground);
-    std::array<CommandBlock, PaneBlocks::capacity> storage;
+    ds::Array<CommandBlock, PaneBlocks::capacity> storage;
     const auto last = [&] {
       return pane.blocks->message(7, storage).blocks.back();
     };
@@ -728,7 +728,7 @@ namespace {
       blocks.mark('C', now);
     };
 
-    std::array<CommandBlock, PaneBlocks::capacity> storage;
+    ds::Array<CommandBlock, PaneBlocks::capacity> storage;
     const auto shown = [&] {
       return blocks.message(7, storage).blocks;
     };
@@ -778,7 +778,7 @@ namespace {
         blocks.follow();
       };
 
-      std::array<CommandBlock, PaneBlocks::capacity> storage;
+      ds::Array<CommandBlock, PaneBlocks::capacity> storage;
       const auto shown = [&] {
         return blocks.message(7, storage).blocks;
       };

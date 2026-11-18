@@ -23,7 +23,7 @@ export namespace telar::runtime {
     bool signs(std::string_view candidate) const noexcept;
 
   private:
-    std::array<char, length> text_{};
+    ds::Array<char, length> text_{};
   };
 
   // A shell telar integrated with, and the token its marks carry.

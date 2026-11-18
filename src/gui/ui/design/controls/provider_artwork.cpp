@@ -23,13 +23,14 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
   namespace {
 
     constexpr int source_side = 64;
-    constexpr std::array providers{AgentProvider::claude, AgentProvider::codex, AgentProvider::pi, AgentProvider::cursor, AgentProvider::opencode};
+    constexpr ds::Array providers{AgentProvider::claude, AgentProvider::codex, AgentProvider::pi, AgentProvider::cursor, AgentProvider::opencode};
     constexpr auto source_stride = providers.size() * source_side * application::terminal::graphics::RgbaImageView::channels;
     constexpr auto sheet_bytes = source_stride * source_side;
 
@@ -59,7 +60,7 @@ namespace telar::gui::qt {
         QStringView source;
       };
 
-      static constexpr std::array marks{
+      static constexpr ds::Array marks{
           ThemedMark{.theme = ThemeName::shade, .source = u":/telar/fonts/telar-mark-shade.svg"},
           ThemedMark{.theme = ThemeName::vesper, .source = u":/telar/fonts/telar-mark-vesper.svg"},
           ThemedMark{.theme = ThemeName::catppuccin, .source = u":/telar/fonts/telar-mark-catppuccin.svg"},
@@ -115,7 +116,7 @@ namespace telar::gui::qt {
   }
 
   QImage ProviderArtwork::symbol(QStringView name, int side) {
-    static constexpr std::array<QStringView, 6> names{u"bot", u"chevron-down", u"chevron-right", u"git-branch", u"server", u"square-terminal"};
+    static constexpr ds::Array<QStringView, 6> names{u"bot", u"chevron-down", u"chevron-right", u"git-branch", u"server", u"square-terminal"};
     const auto* const found = std::ranges::find(names, name);
 
     return found == names.end() ? QImage{} : vector(QStringLiteral(":/telar/icons/%1.svg").arg(name), side);

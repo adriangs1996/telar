@@ -23,7 +23,7 @@ namespace telar::runtime::cli {
       std::string_view text;
     };
 
-    constexpr std::array help_texts{
+    constexpr ds::Array help_texts{
 #include "help_texts.inc"
     };
 

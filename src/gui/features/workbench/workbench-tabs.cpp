@@ -90,8 +90,8 @@ namespace telar::gui::features::workbench {
           return size.whole(metrics) <= equal;
         })) {
       for (std::size_t index = 0; index < sizes.size(); ++index) {
-        result.widths[index] = equal;
-        result.fits[index] = Fit::full;
+        result.widths.atMut(index) = equal;
+        result.fits.atMut(index) = Fit::full;
       }
 
       return result;
@@ -124,8 +124,8 @@ namespace telar::gui::features::workbench {
       width = std::clamp(width, minimum, caption_room);
     }
 
-    result.widths[focus] = std::min(width, room.width);
-    result.fits[focus] = width >= whole ? Fit::full : Fit::truncated;
+    result.widths.atMut(focus) = std::min(width, room.width);
+    result.fits.atMut(focus) = width >= whole ? Fit::full : Fit::truncated;
     const auto budget = room.width - width - gaps;
     if (natural <= budget) {
       return result;
@@ -151,8 +151,8 @@ namespace telar::gui::features::workbench {
     for (std::size_t index = 0; index < sizes.size(); ++index) {
       const auto maximum = index == plan.focus ? metrics.selected_maximum : metrics.inactive_maximum;
 
-      plan.widths[index] = std::min(sizes[index].whole(metrics), maximum);
-      plan.fits[index] = sizes[index].whole(metrics) <= maximum ? Fit::full : Fit::truncated;
+      plan.widths.atMut(index) = std::min(sizes[index].whole(metrics), maximum);
+      plan.fits.atMut(index) = sizes[index].whole(metrics) <= maximum ? Fit::full : Fit::truncated;
     }
   }
 
@@ -161,7 +161,7 @@ namespace telar::gui::features::workbench {
 
     if (all_fit) {
       captioned.fill(true);
-      captioned[focus] = false;
+      captioned.atMut(focus) = false;
 
       return captioned;
     }
@@ -175,7 +175,7 @@ namespace telar::gui::features::workbench {
     }
 
     for (std::size_t distance = 1; distance < sizes.size(); ++distance) {
-      const std::array<ds::Option<std::size_t>, 2> candidates{focus >= distance ? ds::Option{focus - distance} : ds::none, focus + distance < sizes.size() ? ds::Option{focus + distance} : ds::none};
+      const ds::Array<ds::Option<std::size_t>, 2> candidates{focus >= distance ? ds::Option{focus - distance} : ds::none, focus + distance < sizes.size() ? ds::Option{focus + distance} : ds::none};
 
       for (const auto candidate : candidates) {
         if (!candidate) {
@@ -185,7 +185,7 @@ namespace telar::gui::features::workbench {
         const auto index = *candidate;
         const auto extra = std::min(sizes[index].truncated(metrics), metrics.inactive_maximum) - sizes[index].compact(metrics);
         if (used + extra <= budget) {
-          captioned[index] = true;
+          captioned.atMut(index) = true;
           used += extra;
         }
       }
@@ -223,8 +223,8 @@ namespace telar::gui::features::workbench {
 
     for (std::size_t index = 0; index < sizes.size(); ++index) {
       if (index != plan.focus && !captioned[index]) {
-        plan.widths[index] = sizes[index].compact(metrics);
-        plan.fits[index] = Fit::compact;
+        plan.widths.atMut(index) = sizes[index].compact(metrics);
+        plan.fits.atMut(index) = Fit::compact;
         fixed += sizes[index].compact(metrics);
       }
     }
@@ -236,8 +236,8 @@ namespace telar::gui::features::workbench {
         const auto minimum = std::min(sizes[index].truncated(metrics), metrics.inactive_maximum);
         const auto width = std::floor(std::max(minimum, std::min({sizes[index].whole(metrics), metrics.inactive_maximum, cap})));
 
-        plan.widths[index] = width;
-        plan.fits[index] = width >= sizes[index].whole(metrics) ? Fit::full : Fit::truncated;
+        plan.widths.atMut(index) = width;
+        plan.fits.atMut(index) = width >= sizes[index].whole(metrics) ? Fit::full : Fit::truncated;
       }
     }
   }
@@ -306,7 +306,7 @@ namespace telar::gui::features::workbench {
 
   void TabDropSlots::capture(std::span<const TabDropSlot> delivered) noexcept {
     count_ = std::min(delivered.size(), entries_.size());
-    std::copy_n(delivered.begin(), count_, entries_.begin());
+    std::copy_n(delivered.begin(), count_, entries_.dataMut());
   }
 
   ds::Option<TabDropTarget> TabDropSlots::at(TabDrag::Position point) const noexcept {

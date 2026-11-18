@@ -16,6 +16,7 @@ import telar.platform.process;
 import telar.runtime.proxy.runtime;
 import telar.vocabulary;
 import telar.runtime.proxy.authenticate;
+import telar.base.ds;
 
 namespace {
 
@@ -80,7 +81,7 @@ namespace {
 
       identity->certificate.assign("/authority/ca-cert.pem");
       identity->bundle.assign("/authority/ca-bundle.pem");
-      const std::array<std::string_view, 1> arguments{"/bin/sh"};
+      const ds::Array<std::string_view, 1> arguments{"/bin/sh"};
       Command command{memory, Launch{.cwd = "/", .arguments = arguments}};
 
       for (const auto name : {"HTTPS_PROXY", "https_proxy", "NODE_USE_ENV_PROXY"}) {

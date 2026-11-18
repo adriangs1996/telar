@@ -16,6 +16,7 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -24,7 +25,7 @@ namespace telar::gui::qt {
   }
 
   inline QVariantMap metricRecord(BarMetric metric, const application::status_bar::HostMetrics& metrics) {
-    constexpr std::array names{"cpu", "memory", "battery"};
+    constexpr ds::Array names{"cpu", "memory", "battery"};
     const auto& sample = metrics.sample();
     const auto severity = metrics.severity(metric);
     const auto ink = application::status_bar::BarMetrics::ink(severity);

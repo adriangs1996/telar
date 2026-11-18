@@ -194,7 +194,7 @@ namespace telar::gui::qt {
     }
 
     void commandOutput(std::span<const char> bytes) noexcept {
-      std::memcpy(output_.data() + output_length_, bytes.data(), bytes.size());
+      std::memcpy(output_.dataMut() + output_length_, bytes.data(), bytes.size());
       output_length_ += bytes.size();
     }
 
@@ -246,7 +246,7 @@ namespace telar::gui::qt {
     QFutureWatcher<PluginWorkerPreparation> preparation_;
     PreparedPluginWorker snapshot_;
     ds::Option<application::plugins::PluginInvocation> invocation_;
-    std::array<Byte, application::plugins::PluginEffects::maximum_bytes> output_{};
+    ds::Array<Byte, application::plugins::PluginEffects::maximum_bytes> output_{};
     std::size_t output_length_ = 0;
     std::uint64_t execution_ = 0;
     // The process reports back to this worker.

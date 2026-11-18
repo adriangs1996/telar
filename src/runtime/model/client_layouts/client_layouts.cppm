@@ -96,7 +96,7 @@ export {
 
       void settle(std::uint64_t at_revision, std::uint64_t at_generation, std::uint64_t at_trimmed) noexcept;
 
-      std::array<Item, ::telar::render::max_pane_documents> items{};
+      ds::Array<Item, ::telar::render::max_pane_documents> items{};
       std::size_t count = 0;
       // The terminal's inline documents and scrollback numbering the client is up to date with.
       std::uint64_t revision = std::numeric_limits<std::uint64_t>::max();
@@ -204,7 +204,7 @@ export {
       std::uint64_t pane_revision = 0;
       std::uint64_t pane_workspace_revision = 0;
       ds::Option<ResyncRequired> workspace_resync;
-      std::array<ForegroundStamp, 256> foregrounds;
+      ds::Array<ForegroundStamp, 256> foregrounds;
       ds::Option<TextSearch> search;
       ConfigureTerminalColors colors{};
       // The client draws telar's editor in place of the shell's prompt: shells it starts print none.
@@ -262,12 +262,12 @@ export {
         const auto count = [&] {
           TELAR_DIAGNOSTIC(diagnostics::TimedScope timing{counters == nullptr ? nullptr : &counters->input_write});
           if (response) {
-            std::array<iovec, PtyResponseQueue::message_capacity> vectors;
+            ds::Array<iovec, PtyResponseQueue::message_capacity> vectors;
 
             for (std::size_t index = 0; index < batch.count; ++index) {
               const auto message = batch.message(index);
 
-              vectors[index] = {const_cast<Byte*>(message.data()), message.size()};
+              vectors.atMut(index) = {const_cast<Byte*>(message.data()), message.size()};
             }
 
             return write_responses(process->descriptor(), std::span<const iovec>{vectors}.first(batch.count));
@@ -328,7 +328,7 @@ export {
       std::uint64_t event_identity = 0;
       ds::Option<ConfigurePaneDesktop> desktop_theme;
       std::uint64_t generation = 1;
-      std::array<Byte, 16> history_session;
+      ds::Array<Byte, 16> history_session;
       TabLocation location;
       LaunchRecord<ConcurrentMemory> launch;
       ds::Option<AgentResume> restored_agent;
@@ -401,7 +401,7 @@ export {
         };
 
         PaneShell& state;
-        std::array<Mark, 16> kept{};
+        ds::Array<Mark, 16> kept{};
         std::size_t count = 0;
 
         void complete(CommandCompletion completion) noexcept;
@@ -648,7 +648,7 @@ export {
       // Generic over the caller's consumer, which each record is handed to.
       template <typename Consumer>
       TBC_GENERIC inline void exportRecords(const RuntimeModel& model, Consumer&& consume) const {
-        std::array<ClientTabLayout, maximum_tabs> tabs;
+        ds::Array<ClientTabLayout, maximum_tabs> tabs;
 
         for (const auto& record : records_) {
           std::size_t count = 0;
@@ -660,7 +660,7 @@ export {
               continue;
             }
 
-            tabs[count++] = tab;
+            tabs.atMut(count++) = tab;
             active_valid |= sameLocation(tab.location, record.active_tab);
           }
 
@@ -693,8 +693,8 @@ export {
         std::uint16_t sidebar_width = 0;
         bool workspace_list_collapsed = false;
         TabLocation active_tab{};
-        std::array<StoredTab, maximum_tabs> tabs{};
-        std::array<ClientLayoutNode, maximum_nodes> nodes{};
+        ds::Array<StoredTab, maximum_tabs> tabs{};
+        ds::Array<ClientLayoutNode, maximum_nodes> nodes{};
         std::size_t tab_count = 0;
         std::size_t node_count = 0;
 

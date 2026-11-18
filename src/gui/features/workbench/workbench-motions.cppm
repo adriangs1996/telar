@@ -49,8 +49,8 @@ export {
 
       [[nodiscard]] ds::Option<std::size_t> find(PaneAttentionKey key) const noexcept;
 
-      std::array<Entry, capacity> entries_{};
-      std::array<bool, capacity> seen_{};
+      ds::Array<Entry, capacity> entries_{};
+      ds::Array<bool, capacity> seen_{};
       std::size_t count_ = 0;
     };
 
@@ -108,7 +108,7 @@ export {
       static constexpr std::uint64_t settle_ns = duration_ns - lift_ns;
       // The focused card clears the stack before it lands in front.
       static constexpr TabCardPose lift{.x = 9.1F, .y = -5.5F, .rotation = -8, .scale = 1.06F};
-      static constexpr std::array<TabCardPose, 3> rest{{
+      static constexpr ds::Array<TabCardPose, 3> rest{{
           {.x = 0, .y = 0, .rotation = -5, .scale = 1},
           {.x = 7, .y = 0, .rotation = -3, .scale = 0.93F},
           {.x = 14.3F, .y = 0, .rotation = -1, .scale = 0.83F},
@@ -147,7 +147,7 @@ export {
     private:
       [[nodiscard]] TabCardMotion* find(std::uint64_t pane) noexcept;
 
-      std::array<TabCardMotion, capacity> entries_{};
+      ds::Array<TabCardMotion, capacity> entries_{};
       std::size_t count_ = 0;
       std::uint64_t clock_ = 0;
     };
@@ -182,7 +182,7 @@ export {
 
       [[nodiscard]] Rect entrance(Rect target) const noexcept;
 
-      std::array<Motion, PaneLayout::maximum_panes> entries_{};
+      ds::Array<Motion, PaneLayout::maximum_panes> entries_{};
       std::size_t count_ = 0;
     };
 
@@ -226,7 +226,7 @@ export {
       [[nodiscard]] std::size_t size() const noexcept;
 
     private:
-      std::array<TabMotion, TabStripGeometry::maximum_tabs> entries_{};
+      ds::Array<TabMotion, TabStripGeometry::maximum_tabs> entries_{};
       std::size_t count_ = 0;
       ds::Option<WorkspaceLocation> workspace_;
     };

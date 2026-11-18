@@ -80,7 +80,7 @@ static constexpr std::size_t family_bytes = sizeof(std::uint32_t);
 static constexpr std::size_t ipv4_bytes = 20;
 static constexpr std::size_t udp_bytes = 8;
 static constexpr std::uint16_t fixture_port = 53535;
-using Packet = std::array<Byte, family_bytes + ipv4_bytes + udp_bytes + payload_bytes>;
+using Packet = ds::Array<Byte, family_bytes + ipv4_bytes + udp_bytes + payload_bytes>;
 
 static std::uint16_t checksum(std::span<const Byte> bytes) {
   std::uint32_t sum = 0;
@@ -100,8 +100,8 @@ static Packet packet() {
   Packet frame{};
   const std::uint32_t family = htonl(AF_INET);
 
-  std::memcpy(frame.data(), &family, sizeof(family));
-  const auto ip = std::span{frame}.subspan(family_bytes);
+  std::memcpy(frame.dataMut(), &family, sizeof(family));
+  const auto ip = frame.viewMut().subspan(family_bytes);
   const auto word = [&](std::size_t offset, std::uint16_t value) {
     ip[offset] = value >> 8;
     ip[offset + 1] = value;
@@ -120,7 +120,7 @@ static Packet packet() {
   word(ipv4_bytes + 2, fixture_port);
   word(ipv4_bytes + 4, udp_bytes + payload_bytes);
   randomBytes(ip.data() + ipv4_bytes + udp_bytes, payload_bytes);
-  ip.back() = 0;
+  ip[ip.size() - 1] = 0;
 
   return frame;
 }
@@ -152,8 +152,8 @@ static int run() {
       return 0;
     }
 
-    std::array<char, 16> command{};
-    if (!std::fgets(command.data(), command.size(), stdin)) {
+    ds::Array<char, 16> command{};
+    if (!std::fgets(command.dataMut(), command.size(), stdin)) {
       return 0;
     }
 

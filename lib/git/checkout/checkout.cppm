@@ -38,8 +38,8 @@ export {
       static std::string_view parse(std::string_view contents) noexcept;
 
     private:
-      std::array<char, PATH_MAX> path_;
-      std::array<char, 4096> head_;
+      ds::Array<char, PATH_MAX> path_;
+      ds::Array<char, 4096> head_;
     };
 
   }
@@ -51,14 +51,14 @@ export {
 
     struct GitRepositoryFacts {
       static constexpr std::size_t maximum_drivers = 8;
-      std::array<std::string_view, maximum_drivers> drivers;
+      ds::Array<std::string_view, maximum_drivers> drivers;
       std::size_t driver_count = 0;
       bool may_fetch = false;
 
       static ds::Option<GitRepositoryFacts> parse(std::string_view listing) noexcept;
     };
 
-    inline constexpr auto git_observation_options = std::to_array<std::string_view>({
+    inline constexpr auto git_observation_options = ds::Array<std::string_view, 53>{
         "git",
         "-c",
         "core.fsmonitor=false",
@@ -112,7 +112,7 @@ export {
         "hook.fsmonitor-watchman.enabled=false",
         "-c",
         "hook.post-index-change.enabled=false",
-    });
+    };
 
     // Git run against a repository that may be hostile: no hooks, fsmonitor or prompts, no lazy
     // fetch, no inherited GIT_* environment, and every filter driver the repository configures
@@ -206,8 +206,8 @@ export {
     private:
       ds::Option<std::string_view> linkedBranch(std::string_view root) noexcept;
 
-      std::array<char, PATH_MAX> path_;
-      std::array<char, 256> head_;
+      ds::Array<char, PATH_MAX> path_;
+      ds::Array<char, 256> head_;
     };
 
   }

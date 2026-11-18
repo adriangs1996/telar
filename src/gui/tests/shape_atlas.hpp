@@ -1,5 +1,6 @@
 #pragma once
 
+#include "telar_base/ds/values.hpp"
 #include <QColor>
 #include <QImage>
 #include <QJsonArray>
@@ -58,7 +59,7 @@ namespace telar::gui::test {
       for (int column = 0; column < first.width(); ++column) {
         const auto a = first.pixel(column, row);
         const auto b = second.pixel(column, row);
-        const std::array channels{std::abs(qRed(a) - qRed(b)), std::abs(qGreen(a) - qGreen(b)), std::abs(qBlue(a) - qBlue(b)), std::abs(qAlpha(a) - qAlpha(b))};
+        const ds::Array channels{std::abs(qRed(a) - qRed(b)), std::abs(qGreen(a) - qGreen(b)), std::abs(qBlue(a) - qBlue(b)), std::abs(qAlpha(a) - qAlpha(b))};
         const auto maximum = std::ranges::max(channels);
 
         result.pixels += maximum != 0 ? 1 : 0;

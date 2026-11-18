@@ -8,6 +8,7 @@
 import telar.testing;
 import telar.gui.features.terminal.attachments;
 import telar.gui.foundation.terminal;
+import telar.base.ds;
 
 namespace {
 
@@ -20,11 +21,11 @@ namespace {
 
   constexpr std::uint16_t columns = 80;
   constexpr std::uint16_t rows = 4;
-  using Cells = std::array<CellValue, static_cast<std::size_t>(columns) * rows>;
+  using Cells = telar::ds::Array<CellValue, static_cast<std::size_t>(columns) * rows>;
 
   void text(Cells& cells, CellPosition point, std::string_view value) {
     for (std::size_t index = 0; index < value.size(); ++index) {
-      cells[(static_cast<std::size_t>(point.y) * columns) + point.x + index].text[0] = static_cast<std::uint8_t>(value[index]);
+      cells.atMut((static_cast<std::size_t>(point.y) * columns) + point.x + index).text.atMut(0) = static_cast<std::uint8_t>(value[index]);
     }
   }
 
@@ -82,10 +83,10 @@ namespace {
 
     text(cells, origin, path);
     constexpr std::size_t capacity = 8;
-    std::array<PathAttachmentMarker, capacity> found{};
+    telar::ds::Array<PathAttachmentMarker, capacity> found{};
     const AttachmentMarkerScreen screen{.cells = cells, .columns = columns, .rows = rows, .cursor = {.visible = true, .x = static_cast<std::uint16_t>(path.size())}};
 
-    check(PathAttachmentMarkers::collect(screen, found) == 1, "a UUID image path must be recognized");
+    check(PathAttachmentMarkers::collect(screen, found.viewMut()) == 1, "a UUID image path must be recognized");
     check(found[0].start == CellPosition{} && found[0].end.x == path.size() && found[0].cells == path.size(), "the marker must include the complete path before its file name");
     check(PathAttachmentMarkers::find(screen, found[0].uuid).hasValue() && PathAttachmentMarkers::cursorAt(screen, found[0].end), "path identity and cursor boundary must agree");
   }

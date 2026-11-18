@@ -164,7 +164,7 @@ namespace telar::gui::qt {
     tbc::view<BindingMap<BindingAction>, tbc::lt::self> default_keymap_;
     tbc::view<Owned<Generation, ApplicationAllocator>, tbc::lt::a> generation_;
     tbc::view<Owned<runtime::config::RetainedCommandTabRegistry, ApplicationAllocator>, tbc::lt::a> commands_;
-    tbc::view<std::array<ds::Option<BarRender>, application::components::Definitions::positions>, tbc::lt::a> fixed_bars_{};
+    tbc::view<ds::Array<ds::Option<BarRender>, application::components::Definitions::positions>, tbc::lt::a> fixed_bars_{};
     ConfigurationSnapshot::CommandArguments arguments_;
     tbc::view<ds::Option<PluginPackages>, tbc::lt::a> plugins_;
     application::plugins::PluginOverrides plugin_overrides_;
@@ -185,7 +185,7 @@ namespace telar::gui::qt {
     bool pending_reload_ = false;
     bool pending_poll_ = false;
     QFutureWatcher<PreparedConfiguration> task_;
-    std::array<char, application::configuration::ConfigurationQuery::capacity> query_buffer_{};
+    ds::Array<char, application::configuration::ConfigurationQuery::capacity> query_buffer_{};
     // Declared last so it stops, finishing its current call, before the generation it runs dies.
     LuaHost lua_;
   };

@@ -84,10 +84,10 @@ export {
       static void show(ClientStore& clients, const LimitLedger::Row& row) noexcept;
 
       static constexpr unsigned reports_per_second = 32;
-      std::array<Reached, 32> reached_{};
+      ds::Array<Reached, 32> reached_{};
       std::size_t reports_ = 0;
       std::uint64_t dropped_ = 0;
-      std::array<std::pair<Ledger, std::size_t>, 64> shown_{};
+      ds::Array<std::pair<Ledger, std::size_t>, 64> shown_{};
       std::size_t shows_ = 0;
     };
 
@@ -134,8 +134,8 @@ export {
       void drop(std::size_t slot) noexcept;
 
       static constexpr std::size_t capacity = 16;
-      std::array<ds::Option<ClientHandshake>, capacity> pending_;
-      std::array<std::uint64_t, capacity> generations_{};
+      ds::Array<ds::Option<ClientHandshake>, capacity> pending_;
+      ds::Array<std::uint64_t, capacity> generations_{};
       std::size_t count_ = 0;
       Poller& poller_;
       LimitService& limits_;
@@ -337,14 +337,14 @@ export {
         }
 
         const auto bit = client->observerBit();
-        std::array<std::uint64_t, ClientSession::attachment_capacity> detached{};
+        ds::Array<std::uint64_t, ClientSession::attachment_capacity> detached{};
         std::size_t count = 0;
 
         for (const auto& attachment : client->attachments) {
           attachment->desktop.reset();
           if (auto* pane = model.panes.find(attachment->pane_id)) {
             pane->observers &= ~bit;
-            detached[count++] = pane->id;
+            detached.atMut(count++) = pane->id;
           }
         }
 
@@ -590,8 +590,8 @@ export {
         }
 
         const bool paste = pane.terminal.mode(GHOSTTY_MODE_BRACKETED_PASTE);
-        std::array<Byte, 128> encoded_enter;
-        const auto enter = pane.terminal.encodeKey(GHOSTTY_KEY_ENTER, 0, encoded_enter);
+        ds::Array<Byte, 128> encoded_enter;
+        const auto enter = pane.terminal.encodeKey(GHOSTTY_KEY_ENTER, 0, encoded_enter.viewMut());
         if (admitInput(pane, typedSize(paste, request.text, enter))) {
           pane.submitCommand(request.text);
           type(pane, paste, {}, request.text, enter, observe);
@@ -612,12 +612,12 @@ export {
 
         const auto text = std::span<const Byte>{reinterpret_cast<const Byte*>(request.text.data()), request.text.size()};
         const bool paste = request.mode == PaneTextMode::prompt && pane.terminal.mode(GHOSTTY_MODE_BRACKETED_PASTE);
-        std::array<Byte, 128> encoded_enter;
-        const auto enter = request.mode == PaneTextMode::raw ? std::span<const Byte>{} : pane.terminal.encodeKey(GHOSTTY_KEY_ENTER, 0, encoded_enter);
+        ds::Array<Byte, 128> encoded_enter;
+        const auto enter = request.mode == PaneTextMode::raw ? std::span<const Byte>{} : pane.terminal.encodeKey(GHOSTTY_KEY_ENTER, 0, encoded_enter.viewMut());
         const auto required = prefix.size() + typedSize(paste, text, enter);
         if (!admitInput(pane, required)) {
-          std::array<char, 160> message;
-          const auto length = std::snprintf(message.data(), message.size(), "the pane's input queue holds its limit of %zu bytes; the program in it is not reading input", Pane::input_limit);
+          ds::Array<char, 160> message;
+          const auto length = std::snprintf(message.dataMut(), message.size(), "the pane's input queue holds its limit of %zu bytes; the program in it is not reading input", Pane::input_limit);
 
           client.connection.send(RequestFailed{.request_id = request.request_id, .code = FailureCode::resource_limit, .message = {message.data(), static_cast<std::size_t>(length)}});
           return;
@@ -801,8 +801,8 @@ export {
 
       inline tbc::view<Pane&, tbc::lt::a> launchPrepared(tbc::view<RuntimeModel&, tbc::lt::a> model, const ConfigureTerminalColors* owner_colors, bool bare_prompt, Command<ConcurrentMemory>& command, TabLocation location, TerminalSize size, Identity identity) {
         const auto setIdentity = [&](std::string_view name, std::uint64_t value) {
-          std::array<char, 32> text{};
-          const auto converted = std::to_chars(text.data(), text.data() + text.size(), value);
+          ds::Array<char, 32> text{};
+          const auto converted = std::to_chars(text.dataMut(), text.dataMut() + text.size(), value);
 
           command.setEnvironment(name, {text.data(), converted.ptr});
         };

@@ -1,6 +1,7 @@
 module;
 
 module telar.runtime.proxy.http2_capture_streams;
+import telar.base.ds;
 
 namespace telar::runtime {
 
@@ -79,18 +80,18 @@ namespace telar::runtime {
   }
 
   void ProxyCounters::record(ProxyCounter counter, std::uint64_t count) noexcept {
-    counters_[static_cast<std::size_t>(counter)].fetch_add(count, std::memory_order_relaxed);
+    counters_.atMut(static_cast<std::size_t>(counter)).fetch_add(count, std::memory_order_relaxed);
   }
 
   std::uint64_t ProxyCounters::read(ProxyCounter counter) const noexcept {
     return counters_[static_cast<std::size_t>(counter)].load(std::memory_order_relaxed);
   }
 
-  auto ProxyCounters::snapshot() const noexcept -> std::array<std::uint64_t, capacity> {
-    std::array<std::uint64_t, capacity> result;
+  auto ProxyCounters::snapshot() const noexcept -> ds::Array<std::uint64_t, capacity> {
+    ds::Array<std::uint64_t, capacity> result;
 
     for (std::size_t index = 0; index != capacity; ++index) {
-      result[index] = counters_[index].load(std::memory_order_relaxed);
+      result.atMut(index) = counters_[index].load(std::memory_order_relaxed);
     }
 
     return result;
