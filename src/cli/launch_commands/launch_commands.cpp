@@ -41,7 +41,8 @@ namespace telar::runtime::cli {
       throw std::invalid_argument{"MissingMachineLabel"};
     }
 
-    const std::string label{separate ? std::string_view{words[1]} : flag.substr(std::string_view{"--machine="}.size())};
+    // The label views the command line, which outlives the command.
+    const std::string_view label = separate ? std::string_view{words[1]} : flag.substr(std::string_view{"--machine="}.size());
     if (label.empty()) {
       throw std::invalid_argument{"MissingMachineLabel"};
     }
@@ -107,7 +108,7 @@ namespace telar::runtime::cli {
     try {
       target = machine::resolve(memory, label);
     } catch (const std::exception& error) {
-      std::fprintf(stderr, "telar --machine: %s: %s\n", label.c_str(), std::string_view{error.what()} == "UnknownMachine" ? "no saved machine or local label has that name; see `telar machine list`" : error.what());
+      std::fprintf(stderr, "telar --machine: %.*s: %s\n", static_cast<int>(label.size()), label.data(), std::string_view{error.what()} == "UnknownMachine" ? "no saved machine or local label has that name; see `telar machine list`" : error.what());
       return 1;
     }
 

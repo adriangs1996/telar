@@ -23,42 +23,48 @@ namespace telar::runtime::cli {
       using std::runtime_error::runtime_error;
     };
 
-    [[noreturn]] void diagnostic(std::string_view message, const char* code) {
-      std::fprintf(stderr, "telar config: %.*s\n", static_cast<int>(message.size()), message.data());
+    // Prints the formatted message, cut to one line's buffer, and fails with `code`.
+    template <typename... Arguments>
+    [[noreturn]] void diagnostic(const char* code, std::format_string<Arguments...> format, Arguments&&... arguments) {
+      ds::Array<char, 1024> line;
+      const auto written = std::format_to_n(line.dataMut(), line.size(), format, std::forward<Arguments>(arguments)...);
+      const auto size = std::min(static_cast<std::size_t>(written.size), line.size());
+
+      std::fprintf(stderr, "telar config: %.*s\n", static_cast<int>(size), line.data());
       throw ConfigurationFailure{code};
     }
 
     void executeSource(lua_State* state, std::string_view source) {
       const auto loaded = luaL_loadbufferx(state, source.data(), source.size(), "@config.lua", "t");
       if (loaded != LUA_OK) {
-        diagnostic(lua_tostring(state, -1) == nullptr ? "unknown Lua error" : lua_tostring(state, -1), "LuaLoadFailed");
+        diagnostic("LuaLoadFailed", "{}", lua_tostring(state, -1) == nullptr ? "unknown Lua error" : lua_tostring(state, -1));
       }
 
       if (lua_pcall(state, 0, 1, 0) != LUA_OK) {
-        diagnostic(lua_tostring(state, -1) == nullptr ? "unknown Lua error" : lua_tostring(state, -1), "LuaRuntimeFailed");
+        diagnostic("LuaRuntimeFailed", "{}", lua_tostring(state, -1) == nullptr ? "unknown Lua error" : lua_tostring(state, -1));
       }
     }
 
     void validateRoot(const lua::Value& root) {
       if (!root.is(LUA_TTABLE)) {
-        diagnostic("config.lua must return a table", "InvalidConfig");
+        diagnostic("InvalidConfig", "config.lua must return a table");
       }
 
       constexpr ds::Array allowed{"api_version", "theme", "client", "gui", "runtime", "plugins", "profiles"};
 
       root.eachField([&](std::string_view name, const lua::Value&) {
         if (std::ranges::find(allowed, name) == allowed.end()) {
-          diagnostic(std::string{"unknown field config."} + std::string{name}, "InvalidConfig");
+          diagnostic("InvalidConfig", "unknown field config.{}", name);
         }
       });
 
       const auto version = root.field("api_version").asInteger();
       if (!version) {
-        diagnostic("config.api_version must be an integer", "InvalidConfig");
+        diagnostic("InvalidConfig", "config.api_version must be an integer");
       }
 
       if (*version != 2) {
-        diagnostic("config.api_version is " + std::to_string(*version) + "; this Telar accepts 2", "IncompatibleConfigApi");
+        diagnostic("IncompatibleConfigApi", "config.api_version is {}; this Telar accepts 2", *version);
       }
     }
 
@@ -68,32 +74,33 @@ namespace telar::runtime::cli {
         return;
       }
 
-      std::vector<std::string_view> paths;
+      ds::Array<std::string_view, 4> paths{};
+      std::size_t count = 0;
       const auto sidebar = client.field("sidebar");
       if (sidebar.present() && sidebar.field("renderer").present()) {
-        paths.push_back("client.sidebar.renderer");
+        paths.atMut(count++) = "client.sidebar.renderer";
       }
 
       const auto notifications = client.field("notifications");
       if (notifications.present() && notifications.field("delivery").present() && notifications.field("delivery").string() == "terminal") {
-        paths.push_back("client.notifications.delivery = \"terminal\"");
+        paths.atMut(count++) = "client.notifications.delivery = \"terminal\"";
       }
 
       const auto input = client.field("input");
       if (input.present() && input.field("escape_timeout_ms").present()) {
-        paths.push_back("client.input.escape_timeout_ms");
+        paths.atMut(count++) = "client.input.escape_timeout_ms";
       }
 
       if (client.field("icons").present()) {
-        paths.push_back("client.icons");
+        paths.atMut(count++) = "client.icons";
       }
 
-      if (paths.empty()) {
+      if (count == 0) {
         return;
       }
 
       std::fputs("telar config: warning: Ignored ", stderr);
-      for (std::size_t index = 0; index < paths.size(); ++index) {
+      for (std::size_t index = 0; index < count; ++index) {
         if (index != 0) {
           std::fputs(", ", stderr);
         }
@@ -227,7 +234,7 @@ namespace telar::runtime::cli {
       } else {
         path = RuntimePaths<Memory>::configFile(memory, environment);
         if (path.empty()) {
-          diagnostic("cannot resolve config: Home directory unavailable for configuration", "HomeUnavailable");
+          diagnostic("HomeUnavailable", "cannot resolve config: Home directory unavailable for configuration");
         }
       }
 
@@ -235,10 +242,12 @@ namespace telar::runtime::cli {
       if (::realpath(path.data(), canonical.dataMut()) == nullptr) {
         const auto error = sys::errorName(sys::lastError());
 
-        diagnostic("cannot resolve config '" + std::string{path} + "': " + error, error);
+        diagnostic(error, "cannot resolve config '{}': {}", std::string_view{path}, error);
       }
 
-      const auto directory = std::filesystem::path{canonical.data()}.parent_path().string();
+      // The configuration's directory: the canonical path up to its last separator.
+      const std::string_view canonical_path{canonical.data()};
+      const auto directory = canonical_path.substr(0, std::max<std::size_t>(canonical_path.rfind('/'), 1));
       constexpr std::size_t maximum_source_bytes = 1024 * 1024;
       const auto source = readFile(memory, canonical.data(), maximum_source_bytes);
       lua::Vm vm{memory};

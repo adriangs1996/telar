@@ -86,23 +86,18 @@ namespace telar::runtime::cli {
     return HelpTopic{.family = familyName(*family), .command = knownCommand(*family, second)};
   }
 
-  std::string helpReference(std::span<char* const> words) {
+  ErrorText<127> helpReference(std::span<char* const> words) {
     const auto family = words.empty() ? ds::none : parseFamily(words.front());
     if (!family) {
-      return "telar --help";
+      return ErrorText<127>{"telar --help"};
     }
 
-    std::string reference{"telar "};
-
-    reference += familyName(*family);
     const auto command = knownCommand(*family, words.size() > 1 ? words[1] : "");
-    if (!command.empty()) {
-      reference += ' ';
-      reference += command;
+    if (command.empty()) {
+      return ErrorText<127>{"telar ", familyName(*family), " --help"};
     }
 
-    reference += " --help";
-    return reference;
+    return ErrorText<127>{"telar ", familyName(*family), " ", command, " --help"};
   }
 
   bool connectExisting(ds::Option<RuntimeConnection>& connection, const char* path) {

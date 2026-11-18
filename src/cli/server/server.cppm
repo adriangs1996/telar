@@ -9,6 +9,7 @@ import telar.cli.output;
 import telar.platform.paths;
 import telar.cli.control_session;
 import telar.base.memory.allocators;
+import telar.base.memory.containers;
 import telar.base.ds;
 
 // Interface: help.cppm
@@ -35,7 +36,8 @@ export {
     ds::Option<HelpTopic> findHelp(std::span<char* const> words) noexcept;
 
     // The words a usage error points at, as in "see `telar pane read --help`".
-    std::string helpReference(std::span<char* const> words);
+    // The help to read after an argument error, as `telar FAMILY COMMAND --help`.
+    ErrorText<127> helpReference(std::span<char* const> words);
 
   }
 }

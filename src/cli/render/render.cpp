@@ -24,9 +24,9 @@ namespace telar::runtime::cli::render_command {
 
     for (std::size_t index = 1; index < words.size(); ++index) {
       const std::string_view word = words[index];
-      const auto value = [&](std::string_view missing) -> std::string_view {
+      const auto value = [&](const char* missing) -> std::string_view {
         if (index + 1 >= words.size()) {
-          throw std::invalid_argument{std::string{missing}};
+          throw std::invalid_argument{missing};
         }
 
         return words[++index];
@@ -258,7 +258,14 @@ namespace telar::runtime::cli::render_command {
     ds::String<Memory> source{memory};
 
     {
-      const auto descriptor = from_stdin ? STDIN_FILENO : ::open(std::string{options.path}.c_str(), O_RDONLY | O_CLOEXEC);
+      ds::Array<char, PATH_MAX> path{};
+      if (!from_stdin && options.path.size() >= path.size()) {
+        std::fprintf(stderr, "telar render: %.*s: %s\n", static_cast<int>(options.path.size()), options.path.data(), std::strerror(ENAMETOOLONG));
+        return 1;
+      }
+
+      std::ranges::copy(options.path, path.dataMut());
+      const auto descriptor = from_stdin ? STDIN_FILENO : ::open(path.data(), O_RDONLY | O_CLOEXEC);
       if (descriptor < 0) {
         std::fprintf(stderr, "telar render: %.*s: %s\n", static_cast<int>(options.path.size()), options.path.data(), std::strerror(sys::lastError()));
         return 1;

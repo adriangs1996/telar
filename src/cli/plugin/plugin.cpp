@@ -50,13 +50,19 @@ namespace telar::runtime::cli {
     const auto action = options.action;
     const auto directory = options.directory;
 
-    const auto path = std::string{directory.valueOr("/usr/local/bin")} + "/telar";
+    ds::Array<char, PATH_MAX> path_text{};
+    const auto written = std::format_to_n(path_text.dataMut(), path_text.size() - 1, "{}/telar", directory.valueOr("/usr/local/bin"));
+    if (static_cast<std::size_t>(written.size) >= path_text.size()) {
+      throw std::invalid_argument{"PathTooLong"};
+    }
+
+    const char* const path = path_text.data();
     const ExecutablePath target;
     ds::Array<char, PATH_MAX> buffer;
-    const auto count = ::readlink(path.c_str(), buffer.dataMut(), buffer.size());
+    const auto count = ::readlink(path, buffer.dataMut(), buffer.size());
     if (count < 0 && sys::lastError() != ENOENT) {
       if (sys::lastError() == EINVAL && action != "status") {
-        std::fprintf(stderr, "telar cli: %s exists and is not a symlink; refusing to replace it\n", path.c_str());
+        std::fprintf(stderr, "telar cli: %s exists and is not a symlink; refusing to replace it\n", path);
       }
 
       throw fileError(sys::lastError());
@@ -64,31 +70,31 @@ namespace telar::runtime::cli {
 
     if (action == "status") {
       if (count < 0) {
-        std::printf("telar cli: %s is not installed\n", path.c_str());
+        std::printf("telar cli: %s is not installed\n", path);
       } else {
-        std::printf("telar cli: %s -> %.*s\n", path.c_str(), static_cast<int>(count), buffer.data());
+        std::printf("telar cli: %s -> %.*s\n", path, static_cast<int>(count), buffer.data());
       }
 
       return 0;
     }
 
-    if (count >= 0 && ::unlink(path.c_str()) != 0) {
+    if (count >= 0 && ::unlink(path) != 0) {
       throw fileError(sys::lastError());
     }
 
     if (action == "install") {
-      if (::symlink(target.c_str(), path.c_str()) != 0) {
+      if (::symlink(target.c_str(), path) != 0) {
         const auto failure = sys::lastError();
         if (failure == EACCES || failure == EPERM) {
-          std::fprintf(stderr, "telar cli: cannot write %s; rerun with sudo or pass --dir ~/.local/bin\n", path.c_str());
+          std::fprintf(stderr, "telar cli: cannot write %s; rerun with sudo or pass --dir ~/.local/bin\n", path);
         }
 
         throw fileError(failure);
       }
 
-      std::printf("telar cli: installed %s -> %s\n", path.c_str(), target.c_str());
+      std::printf("telar cli: installed %s -> %s\n", path, target.c_str());
     } else {
-      std::printf("telar cli: removed %s\n", path.c_str());
+      std::printf("telar cli: removed %s\n", path);
     }
 
     return 0;
@@ -392,21 +398,16 @@ namespace telar::runtime::cli {
 
   auto RoutedOptions::parseAction(std::string_view group, std::string_view verb, std::string_view nested) -> ds::Option<ClientAction> {
     constexpr std::size_t name_limit = 64;
-    std::string name{group};
-
-    name += '_';
-    name += verb;
-    if (!nested.empty()) {
-      name += '_';
-      name += nested;
-    }
-
-    if (name.size() > name_limit) {
+    ds::Array<char, name_limit> bytes;
+    const auto written = nested.empty() ? std::format_to_n(bytes.dataMut(), bytes.size(), "{}_{}", group, verb) : std::format_to_n(bytes.dataMut(), bytes.size(), "{}_{}_{}", group, verb, nested);
+    if (static_cast<std::size_t>(written.size) > name_limit) {
       return ds::none;
     }
 
+    const auto name = bytes.viewMut().first(static_cast<std::size_t>(written.size));
+
     std::ranges::replace(name, '-', '_');
-    const auto found = std::ranges::find(client_action_names, name);
+    const auto found = std::ranges::find(client_action_names, std::string_view{name.data(), name.size()});
     if (found == client_action_names.end()) {
       return ds::none;
     }
