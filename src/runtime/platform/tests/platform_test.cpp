@@ -596,6 +596,118 @@ namespace {
     check(probe.observe(request).count == 0);
   }
 
+  // A private directory for a runtime endpoint, removed with what is left in it.
+  struct EndpointDirectory {
+    EndpointDirectory() {
+      std::array<char, 64> directory{};
+
+      std::strcpy(directory.data(), "/tmp/telar-endpoint-test-XXXXXX");
+      check(::mkdtemp(directory.data()) != nullptr);
+      path = directory.data();
+    }
+
+    ~EndpointDirectory() {
+      std::filesystem::remove_all(path);
+    }
+
+    std::string path;
+  };
+
+  sockaddr_un endpointAddress(const std::string& path) {
+    sockaddr_un address{};
+
+    address.sun_family = AF_UNIX;
+    check(path.size() < sizeof(address.sun_path));
+    std::memcpy(address.sun_path, path.c_str(), path.size() + 1);
+    return address;
+  }
+
+  bool reachable(const sockaddr_un& address) {
+    FileDescriptor client{::socket(AF_UNIX, SOCK_STREAM, 0)};
+
+    return client && ::connect(client.get(), reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0;
+  }
+
+  // A runtime that crashed leaves its socket behind, and the next one replaces it. A socket something
+  // still listens on is left in place, and the new runtime refuses to start.
+  void testListenerStaleSocket() {
+    EndpointDirectory directory;
+    const auto path = directory.path + "/runtime.sock";
+    const auto address = endpointAddress(path);
+
+    {
+      FileDescriptor orphan{::socket(AF_UNIX, SOCK_STREAM, 0)};
+
+      check(::bind(orphan.get(), reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0);
+    }
+
+    struct stat state{};
+
+    check(::lstat(path.c_str(), &state) == 0 && S_ISSOCK(state.st_mode) && !reachable(address));
+    {
+      LocalListener listener{path};
+
+      check(reachable(address));
+    }
+
+    FileDescriptor live{::socket(AF_UNIX, SOCK_STREAM, 0)};
+
+    check(::bind(live.get(), reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0 && ::listen(live.get(), 4) == 0);
+    bool in_use = false;
+
+    try {
+      LocalListener listener{path};
+    } catch (const SystemError& error) {
+      in_use = error.code() == EADDRINUSE;
+    }
+
+    check(in_use && reachable(address));
+  }
+
+  // The lock decides which runtime owns the endpoint: a lock others can read, one with a second
+  // name, or a symlink is refused, and no socket is created.
+  void testListenerUnsafeLock() {
+    EndpointDirectory directory;
+    const auto path = directory.path + "/runtime.sock";
+    const auto lock = path + ".lock";
+    const auto other = directory.path + "/other";
+
+    auto refused = [&] {
+      bool rejected = false;
+
+      try {
+        LocalListener listener{path};
+      } catch (const SystemError&) {
+        rejected = true;
+      }
+
+      struct stat state{};
+
+      return rejected && ::lstat(path.c_str(), &state) != 0;
+    };
+
+    auto create = [](const std::string& file, mode_t mode) {
+      FileDescriptor descriptor{::open(file.c_str(), O_WRONLY | O_CREAT | O_EXCL, 0600)};
+
+      check(static_cast<bool>(descriptor) && ::fchmod(descriptor.get(), mode) == 0);
+    };
+
+    create(lock, 0644);
+    check(refused());
+    check(::unlink(lock.c_str()) == 0);
+
+    create(other, 0600);
+    check(::link(other.c_str(), lock.c_str()) == 0);
+    check(refused());
+    check(::unlink(lock.c_str()) == 0);
+
+    check(::symlink(other.c_str(), lock.c_str()) == 0);
+    check(refused());
+    check(::unlink(lock.c_str()) == 0);
+
+    LocalListener listener{path};
+  }
+
   const telar::testing::Case case_platform{"platform.platform", testPlatform};
   const telar::testing::Case case_disconnected_socket_clients{"platform.disconnected_socket_clients", testDisconnectedSocketClients};
   const telar::testing::Case case_unread_output_shutdown{"platform.unread_output_shutdown", testUnreadOutputShutdown};
@@ -604,5 +716,7 @@ namespace {
   const telar::testing::Case case_standard_streams_only{"platform.standard_streams_only", testStandardStreamsOnly};
   const telar::testing::Case case_socket_ownership{"platform.socket_ownership", testSocketOwnership};
   const telar::testing::Case case_child_exit_notification{"platform.child_exit_notification", testChildExitNotification};
+  const telar::testing::Case case_listener_stale_socket{"platform.listener_stale_socket", testListenerStaleSocket};
+  const telar::testing::Case case_listener_unsafe_lock{"platform.listener_unsafe_lock", testListenerUnsafeLock};
 
 }
