@@ -49,12 +49,15 @@ namespace {
       check(::write(STDOUT_FILENO, clear.data(), clear.size()) == static_cast<ssize_t>(clear.size()));
       ProtocolPeer peer{socket};
 
-      waitProvider(peer, pane, AgentProvider::codex);
-      if (workload == "exit") {
+      // A helper the runtime does not know as an agent reports one through the pane's hook, then exits.
+      if (workload == "report-exit") {
+        peer.exchange<RequestCompleted>(VerifyPaneDescent{1, pane, generation});
+        peer.exchange<RequestCompleted>(ReportAgent{.request_id = 2, .pane_id = pane, .pane_generation = generation, .provider = AgentProvider::codex, .state = AgentReportState::working, .event = "Fixture"});
         std::ofstream{result} << "seen";
         return 0;
       }
 
+      waitProvider(peer, pane, AgentProvider::codex);
       if (workload == "titled" && std::filesystem::exists(argument)) {
         std::ofstream{result} << "idle";
         for (;;) {
@@ -345,18 +348,19 @@ namespace {
   void testShellForegroundRemovesAgent() {
     RuntimeHost host;
     ProtocolPeer control{host.socket()};
-    const auto codex = agentExecutable(host, "codex");
-    const auto result = host.directory() + "/agent-exit";
-    const auto command = "'" + codex + "' --wire-agent '" + host.socket() + "' '" + result + "' exit -\r";
+    const auto helper = agentExecutable(host, "helper");
+    const auto result = host.directory() + "/agent-report";
+    const auto command = "'" + helper + "' --wire-agent '" + host.socket() + "' '" + result + "' report-exit -\r";
     const std::array<std::string_view, 2> shell{"/bin/sh", "-i"};
     const auto opened = control.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = shell}});
 
-    // The user's shell runs the agent, which exits back to the shell's prompt.
+    // The user's shell runs a program whose hook reports an agent, and that program exits back to
+    // the shell's prompt.
     control.send(PaneInput{opened.pane_id, {reinterpret_cast<const Byte*>(command.data()), command.size()}});
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10};
 
     while (readFile(result) != "seen") {
-      check(std::chrono::steady_clock::now() < deadline, "the agent never ran");
+      check(std::chrono::steady_clock::now() < deadline, "the agent never reported");
       std::this_thread::sleep_for(std::chrono::milliseconds{10});
     }
 
