@@ -3,6 +3,7 @@
 static_assert(true);
 #endif
 
+#include <climits>
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
@@ -43,11 +44,32 @@ namespace {
     }
   };
 
+  // The listing crosses to a worker and back through a QFuture, which copies its result.
+  static_assert(std::is_nothrow_default_constructible_v<DirectoryCompletion> && std::is_copy_constructible_v<DirectoryCompletion>);
+
+  // Whether the listing holds exactly `expected`, in order.
+  bool lists(const DirectoryCompletion& completion, std::initializer_list<std::string_view> expected) {
+    return std::ranges::equal(completion.entries(), expected, {}, &DirectoryCompletion::Name::view);
+  }
+
   void queriesAskForChildrenOnlyAfterASeparator() {
-    check(DirectoryCompletion::query({.text = "", .expanded = "/work"}) == "/work/", "an empty field lists the base directory");
-    check(DirectoryCompletion::query({.text = "projects/", .expanded = "/work/projects"}) == "/work/projects/", "a trailing separator lists children");
-    check(DirectoryCompletion::query({.text = "proj", .expanded = "/work/proj"}) == "/work/proj", "a partial name filters its parent");
-    check(DirectoryCompletion::query({.text = "/", .expanded = "/"}) == "/", "the root keeps one separator");
+    check(DirectoryCompletion::query({.text = "", .expanded = "/work"}).view() == "/work/", "an empty field lists the base directory");
+    check(DirectoryCompletion::query({.text = "projects/", .expanded = "/work/projects"}).view() == "/work/projects/", "a trailing separator lists children");
+    check(DirectoryCompletion::query({.text = "proj", .expanded = "/work/proj"}).view() == "/work/proj", "a partial name filters its parent");
+    check(DirectoryCompletion::query({.text = "/", .expanded = "/"}).view() == "/", "the root keeps one separator");
+
+    // A path one byte too long for a path, once its separator is added, is refused whole.
+    const std::string longest(PATH_MAX, 'x');
+    bool refused = false;
+
+    try {
+      static_cast<void>(DirectoryCompletion::query({.text = "", .expanded = longest}));
+    } catch (const std::length_error&) {
+      refused = true;
+    }
+
+    check(refused, "a directory longer than a path is refused, not cut");
+    check(DirectoryCompletion::list("/" + longest).entries().empty(), "and lists nothing");
   }
 
   void listsMatchingDirectoriesOnly() {
@@ -62,21 +84,25 @@ namespace {
 
     const auto prefix = DirectoryCompletion::list(fixture.path("t"));
 
-    check(prefix.base == fixture.root.string(), "the base is the directory listed");
-    check(prefix.entries == std::vector<std::string>{"telar", "terminal", "tools"}, "directories and links to them, sorted, files left out");
+    check(prefix.base.view() == fixture.root.string(), "the base is the directory listed");
+    check(lists(prefix, {"telar", "terminal", "tools"}), "directories and links to them, sorted, files left out");
     check(!prefix.exact_exists, "a partial name is not a directory");
 
     const auto children = DirectoryCompletion::list(fixture.path("") + "/");
 
-    check(children.entries == std::vector<std::string>{"notes", "telar", "terminal", "tools"}, "hidden directories stay out without a leading dot");
+    check(lists(children, {"notes", "telar", "terminal", "tools"}), "hidden directories stay out without a leading dot");
     check(children.exact_exists, "the listed directory exists");
 
     const auto hidden = DirectoryCompletion::list(fixture.path(".t"));
 
-    check(hidden.entries == std::vector<std::string>{".tooling"}, "a leading dot lists hidden directories");
+    check(lists(hidden, {".tooling"}), "a leading dot lists hidden directories");
 
     check(DirectoryCompletion::list(fixture.path("telar")).exact_exists, "an exact name is a directory");
-    check(prefix.join(0) == fixture.path("telar") + "/", "joined paths end in a separator");
+    check(prefix.join(0).view() == fixture.path("telar") + "/", "joined paths end in a separator");
+
+    const auto copied = prefix;
+
+    check(lists(copied, {"telar", "terminal", "tools"}) && copied.base.view() == prefix.base.view(), "a copy holds the same listing");
   }
 
   void keepsTheFirstNamesOfALargeDirectory() {
@@ -90,15 +116,15 @@ namespace {
     const auto result = DirectoryCompletion::list(fixture.path("") + "/");
 
     check(result.matched == total, "every match is counted");
-    check(result.entries.size() == DirectoryCompletion::maximum_entries, "the result is bounded");
-    check(result.entries.front() == "d001" && result.entries.back() == "d064", "the first names by order are kept");
+    check(result.entries().size() == DirectoryCompletion::maximum_entries, "the result is bounded");
+    check(result.entries().front().view() == "d001" && result.entries().back().view() == "d064", "the first names by order are kept");
   }
 
   void rejectsRelativeAndMissingQueries() {
-    check(DirectoryCompletion::list("relative/path").entries.empty(), "relative queries list nothing");
+    check(DirectoryCompletion::list("relative/path").entries().empty(), "relative queries list nothing");
     const auto missing = DirectoryCompletion::list("/telar-missing-directory/child");
 
-    check(missing.entries.empty() && !missing.exact_exists, "a missing directory lists nothing");
+    check(missing.entries().empty() && !missing.exact_exists, "a missing directory lists nothing");
   }
 
   void basenamesIgnoreTrailingSeparators() {

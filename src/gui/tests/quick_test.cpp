@@ -5664,7 +5664,7 @@ return {api_version=2, client={keybindings={
     }
 
     Q_SLOT void routedPluginWorker() {
-      const auto program = QStandardPaths::findExecutable(QString::fromStdString(system::runtime_endpoint::program()));
+      const auto program = QStandardPaths::findExecutable(QString::fromUtf8(system::runtime_endpoint::program().view()));
 
       QVERIFY(!program.isEmpty());
       QCOMPARE(QFileInfo{program}.canonicalFilePath(), QFileInfo{qEnvironmentVariable("TELAR_GUI_TEST_RUNTIME")}.canonicalFilePath());

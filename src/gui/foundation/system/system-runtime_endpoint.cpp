@@ -8,6 +8,8 @@ import telar.client;
 import telar.vocabulary;
 import telar.platform.process;
 import telar.base.memory.allocators;
+import telar.base.memory.containers;
+import telar.base.ds;
 import telar.gui.foundation.core;
 
 namespace telar::gui::inline foundation::inline system {
@@ -21,36 +23,38 @@ namespace telar::gui::inline foundation::inline system {
     // What a failure keeps of telar's standard error.
     constexpr std::size_t error_limit = 4096;
 
+    using Text = ds::String<telar::SystemAllocator>;
+
     struct Answer {
-      std::string output;
-      std::string errors;
+      Text output;
+      Text errors;
       int status = 0;
       bool timed_out = false;
     };
 
     // The telar in the application bundle that holds this executable, or installed beside it;
     // otherwise the one the login shell finds on PATH, as a terminal would.
-    std::string telarProgram() {
+    runtime_endpoint::Path telarProgram() {
       const auto found = telar::runtime::ExecutablePath::sibling({"../Resources/bin/telar", "telar"});
+      runtime_endpoint::Path program;
 
-      return found ? std::string{found->view()} : std::string{"telar"};
+      program.assign(found ? found->view() : std::string_view{"telar"});
+      return program;
     }
 
-    void keep(std::string& buffer, std::span<const telar::Byte> bytes, std::size_t limit) {
+    void keep(Text& buffer, std::span<const telar::Byte> bytes, std::size_t limit) {
       const auto kept = std::min(bytes.size(), limit - buffer.size());
 
-      buffer.append(reinterpret_cast<const char*>(bytes.data()), kept);
+      buffer.append({reinterpret_cast<const char*>(bytes.data()), kept});
     }
 
     // Reads both streams until telar closes them, then waits for it to exit, all within one
     // deadline; a telar still running at the deadline is killed with its process group. Only the
     // standard streams reach telar, never another descriptor of this process.
-    Answer ask(const std::vector<std::string>& arguments) {
-      telar::SystemAllocator memory;
-      const std::vector<std::string_view> words(arguments.begin(), arguments.end());
+    Answer ask(telar::SystemAllocator& memory, std::span<const std::string_view> words) {
       telar::runtime::Command command{memory, telar::Launch{.arguments = words}, telar::runtime::CommandPurpose::configured_helper};
       telar::runtime::CommandOutput<telar::SystemAllocator> process{memory, 0};
-      Answer answer;
+      Answer answer{.output = Text{memory}, .errors = Text{memory}};
 
       try {
         // One byte past the answer's limit tells an oversized answer from one that fits.
@@ -80,9 +84,8 @@ namespace telar::gui::inline foundation::inline system {
 
     // Exactly the socket path and the schema, each ending its line. Anything else, such as what a
     // shell startup file prints, is refused rather than guessed around.
-    std::string parse(std::string_view answer) {
-      const auto unreadable =
-          std::runtime_error("telar answered with something other than the runtime endpoint");
+    runtime_endpoint::Path parse(std::string_view answer) {
+      const runtime_endpoint::Failure unreadable{"telar answered with something other than the runtime endpoint"};
       const auto end = answer.find('\n');
 
       if (end == std::string_view::npos) {
@@ -110,44 +113,41 @@ namespace telar::gui::inline foundation::inline system {
       if (!std::ranges::equal(schema.substr(0, expected.size()), expected, {}, [](char byte) {
             return static_cast<telar::Byte>(byte);
           })) {
-        throw std::runtime_error(
-            "telar speaks wire schema " + std::string(schema.substr(0, expected.size())) +
-            "; the GUI speaks " + std::string(expected.begin(), expected.end()) +
-            ". Update one of them"
-        );
+        throw runtime_endpoint::Failure{"telar speaks wire schema ", schema.substr(0, expected.size()), "; the GUI speaks ", std::string_view{reinterpret_cast<const char*>(expected.data()), expected.size()}, ". Update one of them"};
       }
 
-      return std::string(path);
+      runtime_endpoint::Path endpoint;
+
+      endpoint.assign(path);
+      return endpoint;
     }
   }
 
   namespace runtime_endpoint {
-    std::string program() {
+    Path program() {
       return telarProgram();
     }
 
-    std::string resolve() {
-      const std::string shell{telar::runtime::loginShell().view()};
+    Path resolve() {
+      telar::SystemAllocator memory;
+      const auto login = telar::runtime::loginShell();
+      const auto shell = login.view();
       const auto program = telarProgram();
-      std::vector<std::string> arguments;
-
-      if (const auto line = telar::runtime::loginShellScript(shell); !line.empty()) {
-        arguments = {shell, "-l", "-c", std::string{line}, program, "server", "endpoint"};
-      } else {
-        arguments = {program, "server", "endpoint"};
-      }
-
-      const auto answer = ask(arguments);
+      const auto line = telar::runtime::loginShellScript(shell);
+      const ds::Array<std::string_view, 7> through_shell{shell, "-l", "-c", line, program.view(), "server", "endpoint"};
+      // Without a login shell to go through, telar's own words: the last three.
+      const auto arguments = line.empty() ? through_shell.view().last(3) : through_shell.view();
+      const auto answer = ask(memory, arguments);
 
       if (answer.timed_out) {
-        throw std::runtime_error("telar did not report the runtime endpoint in time");
+        throw Failure{"telar did not report the runtime endpoint in time"};
       }
 
       if (answer.status != 0) {
-        throw std::runtime_error("`telar server endpoint` failed: " + std::string(trimmed(answer.errors)));
+        throw Failure{"`telar server endpoint` failed: ", trimmed(answer.errors.view())};
       }
 
-      return parse(answer.output);
+      return parse(answer.output.view());
     }
   }
 }

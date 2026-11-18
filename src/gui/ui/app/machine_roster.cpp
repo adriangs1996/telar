@@ -290,7 +290,7 @@ namespace telar::gui::qt {
     title.append(title_prefix);
     title.append(row.label.view());
     const auto name = row.id.value() == 0 ? row.destination.view() : row.label.view();
-    const ds::Array<std::string_view, 5> arguments{program, "machine", "setup", name, "--confirm"};
+    const ds::Array<std::string_view, 5> arguments{program.view(), "machine", "setup", name, "--confirm"};
     runtime::config::CommandTabView command{.count = arguments.size(), .configured_label = title.view()};
 
     std::ranges::copy(arguments, command.arguments.viewMut().begin());

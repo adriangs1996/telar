@@ -1,6 +1,12 @@
+module;
+#include <climits>
+
 export module telar.gui.foundation.system:directory_completion;
 
 import std;
+
+import telar.base.ds;
+import telar.base.memory.containers;
 
 // Interface: paths/directory_completion.cppm
 export {
@@ -18,14 +24,24 @@ export {
       static constexpr std::size_t maximum_entries = 64;
       static constexpr std::size_t maximum_name_bytes = 255;
 
-      std::string base;
-      std::vector<std::string> entries;
+      using Name = runtime::FixedText<maximum_name_bytes>;
+      using Path = runtime::FixedText<PATH_MAX>;
+      // A listed directory's path with the entry's name and a '/' after each.
+      using Joined = runtime::FixedText<PATH_MAX + maximum_name_bytes + 2>;
+
+      // A value of fixed size, so a worker hands it back without the heap.
+      Path base;
       std::size_t matched = 0;
       bool exact_exists = false;
 
+      [[nodiscard]] std::span<const Name> entries() const noexcept {
+        return names_.view().first(count_);
+      }
+
       // The query for what the user typed: a field that is empty or ends with
       // '/' asks for the children of the expanded directory.
-      [[nodiscard]] static std::string query(TypedDirectory typed);
+      // Throws when the path is longer than a path can be.
+      [[nodiscard]] static Path query(TypedDirectory typed);
 
       // Splits the query at its last '/': the part before is listed and the rest
       // filters names by prefix. Hidden directories are listed only when the
@@ -37,12 +53,15 @@ export {
 
       // The directory an entry names, ending in '/' so the next listing shows
       // its children.
-      [[nodiscard]] std::string join(std::size_t index) const;
+      [[nodiscard]] Joined join(std::size_t index) const;
 
     private:
       // Keeps the first maximum_entries names whatever order the listing finds
       // them in: a full result gives up its last name for one that sorts before.
-      void keep(const std::string& name);
+      void keep(std::string_view name);
+
+      ds::Array<Name, maximum_entries> names_;
+      std::size_t count_ = 0;
     };
 
   }

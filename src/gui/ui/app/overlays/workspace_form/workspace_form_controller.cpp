@@ -45,8 +45,8 @@ namespace telar::gui::qt {
     QStringList entries;
 
     if (listingCurrent()) {
-      for (const auto& name : completion_.entries) {
-        entries.append(QString::fromStdString(name));
+      for (const auto& name : completion_.entries()) {
+        entries.append(QString::fromUtf8(name.view().data(), static_cast<qsizetype>(name.view().size())));
       }
     }
 
@@ -83,7 +83,9 @@ namespace telar::gui::qt {
         const auto typed = text.toUtf8();
         const auto expanded = expand(text).toUtf8();
 
-        wanted_ = QString::fromStdString(DirectoryCompletion::query({.text = view(typed), .expanded = view(expanded)}));
+        const auto query = DirectoryCompletion::query({.text = view(typed), .expanded = view(expanded)});
+
+        wanted_ = QString::fromUtf8(query.view().data(), static_cast<qsizetype>(query.view().size()));
       } catch (const std::exception&) {
         // An unexpandable path lists nothing; submitting it reports why.
         wanted_.clear();
@@ -98,7 +100,7 @@ namespace telar::gui::qt {
   }
 
   void WorkspaceFormController::move(int delta) {
-    const auto count = listingCurrent() ? completion_.entries.size() : 0;
+    const auto count = listingCurrent() ? completion_.entries().size() : 0;
     if (!isOpen() || count == 0) {
       return;
     }
@@ -110,7 +112,7 @@ namespace telar::gui::qt {
   }
 
   QString WorkspaceFormController::accept() {
-    if (!isOpen() || !listingCurrent() || completion_.entries.empty()) {
+    if (!isOpen() || !listingCurrent() || completion_.entries().empty()) {
       return {};
     }
 
@@ -118,12 +120,14 @@ namespace telar::gui::qt {
   }
 
   QString WorkspaceFormController::choose(int index) {
-    const auto& entries = completion_.entries;
+    const auto entries = completion_.entries();
     if (!isOpen() || !listingCurrent() || index < 0 || static_cast<std::size_t>(index) >= entries.size()) {
       return {};
     }
 
-    return QString::fromStdString(completion_.join(static_cast<std::size_t>(index)));
+    const auto path = completion_.join(static_cast<std::size_t>(index));
+
+    return QString::fromUtf8(path.view().data(), static_cast<qsizetype>(path.view().size()));
   }
 
   bool WorkspaceFormController::listingCurrent() const {
@@ -146,8 +150,8 @@ namespace telar::gui::qt {
     }
 
     listing_ = wanted_;
-    lister_.setFuture(QtConcurrent::run([query = listing_.toStdString()] {
-      return DirectoryCompletion::list(query);
+    lister_.setFuture(QtConcurrent::run([query = listing_.toUtf8()] {
+      return DirectoryCompletion::list(std::string_view{query.constData(), static_cast<std::size_t>(query.size())});
     }));
   }
 

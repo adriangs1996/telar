@@ -1,7 +1,12 @@
+module;
+#include <climits>
+
 export module telar.gui.foundation.system:login_shell;
 
 import std;
 import telar.tbc;
+import telar.base.ds;
+import telar.base.memory.containers;
 
 // Interface: platform/external_links.cppm
 export {
@@ -54,10 +59,10 @@ export {
       [[nodiscard]] std::span<const std::string_view> arguments() const;
 
     private:
-      std::string shell_;
-      std::vector<std::string> storage_;
-      // The arguments view the strings stored beside them.
-      tbc::view<std::vector<std::string_view>, tbc::lt::self> arguments_;
+      runtime::FixedText<PATH_MAX> shell_;
+      // The shell, then its flags, which are literals; the shell's view borrows shell_.
+      tbc::view<ds::Array<std::string_view, 3>, tbc::lt::self> arguments_;
+      std::size_t count_ = 0;
     };
   }
 }

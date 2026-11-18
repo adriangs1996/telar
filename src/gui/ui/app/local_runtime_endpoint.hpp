@@ -21,7 +21,9 @@ namespace telar::gui::qt {
 
   struct NativeRuntimeStartup {
     [[nodiscard]] static QString resolve() {
-      return QString::fromStdString(system::runtime_endpoint::resolve());
+      const auto endpoint = system::runtime_endpoint::resolve();
+
+      return QString::fromUtf8(endpoint.view().data(), static_cast<qsizetype>(endpoint.view().size()));
     }
   };
 

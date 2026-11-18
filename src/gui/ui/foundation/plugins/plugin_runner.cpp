@@ -34,7 +34,9 @@ namespace telar::gui::qt {
 
     owner_ = Owner{.source = client.key, .runtime_generation = client.runtime_generation, .execution = execution};
     try {
-      worker_.start(invocation, execution, QString::fromStdString(system::runtime_endpoint::program()));
+      const auto program = system::runtime_endpoint::program();
+
+      worker_.start(invocation, execution, QString::fromUtf8(program.view().data(), static_cast<qsizetype>(program.view().size())));
     } catch (...) {
       owner_.reset();
       throw;
