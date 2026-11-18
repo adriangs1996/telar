@@ -95,6 +95,10 @@ namespace {
     std::array<char, PATH_MAX> cwd;
 
     check(::getcwd(cwd.data(), cwd.size()) != nullptr && std::string_view{cwd.data()} == "/");
+    // "timeout-once:MARKER" stalls in the first session only: the marker it creates tells a
+    // restarted session to answer.
+    constexpr std::string_view stall_once = "timeout-once:";
+    const bool stall = mode == "timeout" || (mode.starts_with(stall_once) && FileDescriptor{::open(std::string{mode.substr(stall_once.size())}.c_str(), O_CREAT | O_EXCL | O_WRONLY, 0600)});
     tap::PipeStream stream{STDIN_FILENO, STDOUT_FILENO};
     tap::FrameChannel channel{stream};
     std::array<Byte, tap::Limits::effect_bytes> output;
@@ -109,7 +113,7 @@ namespace {
         return 0;
       }
 
-      if (mode == "timeout") {
+      if (stall) {
         ::pause();
         return 0;
       }

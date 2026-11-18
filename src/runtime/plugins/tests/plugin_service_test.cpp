@@ -41,6 +41,7 @@ import telar.config.runtime;
 import telar.plugins;
 import telar.runtime.plugins.tap_configuration;
 import telar.runtime.plugins.worker;
+import telar.runtime.platform.signals;
 import telar.runtime.vocabulary.exchange;
 import telar.runtime.vocabulary.traffic;
 
@@ -546,6 +547,60 @@ namespace {
     check(budget.liveBytes() == 0);
   }
 
+  // A plugin that stops answering costs one timeout: the worker counts it, starts a new
+  // session, and the next exchange gets its result.
+  void testTimeoutRestartsSession() {
+    SystemAllocator system;
+    BudgetAllocator budget{system, 8 * 1024 * 1024};
+    SynchronizedAllocator synchronized{budget};
+    MemoryAdapter adapter{synchronized};
+    ConcurrentMemory& memory = adapter;
+    CaptureQuota quota{65536};
+    const ExecutablePath executable;
+    TemporaryDirectory directory{"/tmp/tlr-timeout-once.XXXXXX"};
+    const auto mode = "timeout-once:" + std::string{directory.path()} + "/stalled";
+    const auto identity = specification(mode.c_str());
+    tap::ResultQueue<ConcurrentMemory> results;
+    tap::TapBudget held;
+    CancellationSignal cancellation;
+
+    results.activate();
+    {
+      tap::Worker<> worker{memory, identity, results, held, tap::WorkerLaunch{.executable = executable.c_str(), .cancellation = cancellation, .timeout = std::chrono::milliseconds{100}}};
+      const auto submit = [&](std::uint64_t event_id) {
+        auto exchange = captured(memory, quota);
+        auto charge = held.charge(tap::SharedExchange::capturedBytes(exchange));
+
+        check(charge.has_value());
+        worker.submit(std::make_shared<tap::SharedExchange>(std::move(*charge), event_id, std::move(exchange)));
+      };
+
+      submit(1);
+      awaitCondition([&] {
+        return worker.metrics().timeouts == 1;
+      });
+
+      submit(2);
+      unsigned delivered = 0;
+
+      awaitCondition([&] {
+        results.collect([&](const auto& result) {
+          check(result.event_id == 2);
+          ++delivered;
+        });
+
+        return delivered == 1;
+      });
+
+      const auto metrics = worker.metrics();
+
+      check(metrics.timeouts == 1 && !metrics.disabled);
+      worker.stop();
+    }
+
+    check(quota.used() == 0);
+  }
+
   void testPluginService() {
     testQueuePolicy();
     testResultDeliveryBound();
@@ -558,5 +613,6 @@ namespace {
   const telar::testing::Case case_trust_revocation_stops_worker{"plugin_service.trust_revocation_stops_worker", testTrustRevocationStopsWorker};
   const telar::testing::Case case_unreadable_trust_revokes_all{"plugin_service.unreadable_trust_revokes_all", testUnreadableTrustRevokesAll};
   const telar::testing::Case case_trust_narrowing{"plugin_service.trust_narrowing_stops_plugin", testTrustNarrowingStopsPlugin};
+  const telar::testing::Case case_timeout_restarts_session{"plugin_service.timeout_restarts_session", testTimeoutRestartsSession};
 
 }
