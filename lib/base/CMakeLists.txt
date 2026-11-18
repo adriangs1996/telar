@@ -51,6 +51,12 @@ if(BUILD_TESTING)
   target_compile_definitions(memory-call-probe-single PRIVATE MEMORY_CALL_IMPLEMENTATIONS=1)
   set_target_properties(memory-call-probe memory-call-probe-single PROPERTIES EXCLUDE_FROM_ALL ON)
   add_custom_target(base-probes DEPENDS memory-call-probe memory-call-probe-single)
+
+  # telar::ds against the standard containers, run by hand in a Release tree, never by CTest.
+  add_executable(ds-bench tools/ds_bench.cpp)
+  target_link_libraries(ds-bench PRIVATE telar::base)
+  target_compile_options(ds-bench PRIVATE ${TELAR_WARNINGS})
+  set_target_properties(ds-bench PROPERTIES EXCLUDE_FROM_ALL ON)
 endif()
 
 include(CMakePackageConfigHelpers)

@@ -200,6 +200,7 @@
     "lib/tls/tls.cppm": "telar.tls",
     "lib/base/memory/allocators/allocators.cppm": "telar.base.memory.allocators",
     "lib/base/memory/containers/containers.cppm": "telar.base.memory.containers",
+    "lib/base/ds/ds.cppm": "telar.base.ds",
     "lib/base/memory/sensitive/sensitive.cppm": "telar.base.memory.sensitive",
     "lib/base/editors/editors.cppm": "telar.base.editors",
     "lib/shell/syntax/syntax.cppm": "telar.shell.syntax",
