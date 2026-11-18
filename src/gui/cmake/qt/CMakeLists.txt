@@ -88,8 +88,28 @@ telar_qt_module(qtbase ARGUMENTS ${base_arguments}
     "-DDOWNLOAD_DIR=${TELAR_DOWNLOAD_DIR}"
     "-DPATCH_EXECUTABLE=${TELAR_QT_PATCH}"
     -P "${CMAKE_CURRENT_SOURCE_DIR}/patch.cmake")
+# The GUI loads Qt Quick Controls with the Basic style only and imports no
+# Labs, Dialogs, Particles or design-tool module, so none of them is built.
+set(declarative_arguments
+  -DFEATURE_quickcontrols2_fusion:BOOL=OFF
+  -DFEATURE_quickcontrols2_imagine:BOOL=OFF
+  -DFEATURE_quickcontrols2_material:BOOL=OFF
+  -DFEATURE_quickcontrols2_universal:BOOL=OFF
+  -DFEATURE_quickcontrols2_fluentwinui3:BOOL=OFF
+  -DFEATURE_quickcontrols2_stylekit:BOOL=OFF
+  -DFEATURE_quickcontrols2_macos:BOOL=OFF
+  -DFEATURE_quickcontrols2_ios:BOOL=OFF
+  -DFEATURE_quickcontrols2_windows:BOOL=OFF
+  -DFEATURE_quick_designer:BOOL=OFF
+  -DFEATURE_quick_dialogs:BOOL=OFF
+  -DFEATURE_quick_particles:BOOL=OFF
+  -DFEATURE_quickshapes_designhelpers:BOOL=OFF
+  -DFEATURE_qml_designsupport:BOOL=OFF
+  -DFEATURE_qml_labs:BOOL=OFF
+  -DFEATURE_qml_xmllistmodel:BOOL=OFF)
+
 telar_qt_module(qtshadertools DEPENDS qtbase)
-telar_qt_module(qtdeclarative DEPENDS qtshadertools)
+telar_qt_module(qtdeclarative DEPENDS qtshadertools ARGUMENTS ${declarative_arguments})
 telar_qt_module(qtsvg DEPENDS qtbase)
 set(qt_modules qtbase qtshadertools qtdeclarative qtsvg)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
