@@ -37,6 +37,36 @@ namespace {
     check(escaped(memory, "", JsonEscapes::control) == "\"\"");
   }
 
+  // A \u escape of a character outside ASCII, as agents send CJK text, unescapes to its
+  // UTF-8 bytes beside the other escapes.
+  void unescapesCodepoints() {
+    SystemAllocator memory;
+    String<SystemAllocator> text{AllocatorRef<char, SystemAllocator>{memory}};
+
+    JsonValue::parse(R"("\u4e2d\u00e9\r\/")").string(text);
+    check(text == "\xe4\xb8\xad\xc3\xa9\r/");
+  }
+
+  // A field the object does not hold reads as absent, wherever the lookup stops: optional
+  // fields are read this way. Looking a field up in anything but an object is an error.
+  void missingFieldsAreAbsent() {
+    check(!JsonValue::parse(R"({"a":1,"b":2})").field("c").has_value());
+    check(!JsonValue::parse("{}").field("a").has_value());
+    check(JsonValue::parse(R"({"a":1,"b":2})").field("b").has_value());
+
+    bool refused = false;
+
+    try {
+      static_cast<void>(JsonValue::parse("[1]").field("a"));
+    } catch (const JsonError&) {
+      refused = true;
+    }
+
+    check(refused);
+  }
+
   const telar::testing::Case case_escapes{"json_text.escapes", escapes};
+  const telar::testing::Case case_unescapes{"json_text.unescapes_codepoints", unescapesCodepoints};
+  const telar::testing::Case case_missing_fields{"json_text.missing_fields_are_absent", missingFieldsAreAbsent};
 
 }
