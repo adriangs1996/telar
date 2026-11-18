@@ -246,9 +246,31 @@ namespace {
     }
   }
 
+  // Output that looks like an atomic frame but is not one is the program's output: it
+  // passes through byte for byte and no frame is taken from it.
+  void testMalformedEnvelopePassthrough() {
+    const std::string control = "a=T,t=s,f=32,s=2,v=3,i=1,p=2,C=1,q=2";
+
+    for (const auto& frame : {
+             std::string{AtomicFrame::prefix} + control + std::string{AtomicFrame::suffix},
+             std::string{AtomicFrame::prefix} + control + ";" + std::string{AtomicFrame::suffix},
+             std::string{AtomicFrame::prefix} + "a=T,t=s,f=100,s=2,v=3,i=1,p=2,C=1,q=2;first" + std::string{AtomicFrame::suffix},
+         }) {
+      const auto input = "before" + frame + "after";
+      AtomicSourceFixture source{std::set<std::string>{"first"}};
+      AtomicSinkFixture sink;
+
+      sink.accept = true;
+      AtomicFrameFilter::feed(atomicBytes(input), 24, source, sink);
+      check(sink.output_bytes == input);
+      check(sink.frames.empty());
+    }
+  }
+
   const telar::testing::Case case_atomic_parsing{"atomic_graphics.atomic_parsing", testAtomicParsing};
   const telar::testing::Case case_atomic_selection{"atomic_graphics.atomic_selection", testAtomicSelection};
   const telar::testing::Case case_atomic_bounds_and_transport{"atomic_graphics.atomic_bounds_and_transport", testAtomicBoundsAndTransport};
   const telar::testing::Case case_atomic_resources{"atomic_graphics.atomic_resources", testAtomicResources};
+  const telar::testing::Case case_malformed_envelope_passthrough{"atomic_graphics.malformed_envelope_passthrough", testMalformedEnvelopePassthrough};
 
 }

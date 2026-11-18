@@ -164,6 +164,21 @@ namespace {
     check(std::ranges::all_of(echoed, idCharacter));
   }
 
+  // Pastes into the pane from `from`, and returns the password the paste grants.
+  std::string pastePassword(Terminal& terminal, control::ClipboardRoute from) {
+    check(terminal.clipboardControl().paste(from, false, {}));
+    terminal.resumeControl();
+    const auto reply = drain(terminal);
+    const auto start = reply.find(":pw=");
+
+    check(start != std::string::npos);
+    return reply.substr(start + 4, reply.find_first_of(":;\x1b", start + 4) - start - 4);
+  }
+
+  std::string grantedRead(std::string_view password) {
+    return "\x1b]5522;type=read:id=r:name=" + encode("App") + ":pw=" + std::string{password} + ";" + encode("text/plain") + "\x1b\\";
+  }
+
   // Each paste grants a password a pane may read the clipboard with once. Pastes past the
   // table's capacity keep the newest grant usable and stay inside the table.
   void grantTableBounded() {
@@ -172,25 +187,164 @@ namespace {
     std::string password;
 
     for (std::size_t index = 0; index <= control::ClipboardGrants::capacity + 1; ++index) {
-      check(clipboard.paste(route, false, {}));
-      routed.terminal.resumeControl();
-      const auto reply = drain(routed.terminal);
-      const auto start = reply.find(":pw=");
-
-      check(start != std::string::npos);
-      password = reply.substr(start + 4, reply.find_first_of(":;\x1b", start + 4) - start - 4);
+      password = pastePassword(routed.terminal, route);
     }
 
-    routed.terminal.feed(bytes("\x1b]5522;type=read:id=r:name=" + encode("App") + ":pw=" + password + ";" + encode("text/plain") + "\x1b\\"));
+    routed.terminal.feed(bytes(grantedRead(password)));
     const auto request = clipboard.request(7, 11);
 
     check(request && !request->write && !request->prompt);
     check(clipboard.route() == route);
   }
 
+  // A grant belongs to the client that pasted: it survives a change of clients that keeps
+  // that one, and goes with it when that client leaves.
+  void grantsFollowRoutes() {
+    constexpr control::ClipboardRoute other{2, 13};
+    const std::array<control::ClipboardRoute, 2> both{route, other};
+    const std::array<control::ClipboardRoute, 1> remaining{other};
+
+    {
+      RoutedTerminal routed;
+      auto& clipboard = routed.terminal.clipboardControl();
+      const auto password = pastePassword(routed.terminal, route);
+
+      clipboard.routes(both, other);
+      routed.terminal.feed(bytes(grantedRead(password)));
+      const auto request = clipboard.request(7, 11);
+
+      check(request && !request->prompt);
+      check(clipboard.route() == route);
+    }
+
+    RoutedTerminal routed;
+    auto& clipboard = routed.terminal.clipboardControl();
+    const auto password = pastePassword(routed.terminal, route);
+
+    clipboard.routes(remaining, other);
+    routed.terminal.feed(bytes(grantedRead(password)));
+    const auto request = clipboard.request(7, 11);
+
+    check(request && request->prompt);
+    check(clipboard.route() == other);
+  }
+
+  // Answers the pane's pending request from the desktop with `contents`.
+  void deliver(Terminal& terminal, std::span<const ClipboardRepresentation> contents) {
+    auto& clipboard = terminal.clipboardControl();
+    const auto request = clipboard.request(7, 11);
+
+    check(request.has_value());
+    const auto ticket = request->ticket;
+
+    clipboard.announced();
+    check(clipboard.complete(route, CompleteClipboardDesktop{.ticket = ticket, .status = ClipboardDesktopStatus::success, .prepared = true}));
+    clipboard.committed();
+    check(clipboard.complete(route, CompleteClipboardDesktop{.ticket = ticket, .status = ClipboardDesktopStatus::success, .contents = contents}));
+    terminal.resumeControl();
+  }
+
+  // A read reply carries at most the clipboard's content limit to the pane. Two text
+  // types the pane asks for are both answered from the desktop's one text, so a text
+  // inside the limit can still make a reply past it.
+  void readReplyBudget() {
+    const std::string read = "\x1b]5522;type=read:id=r;" + encode("text/plain UTF8_STRING") + "\x1b\\";
+    const std::vector<Byte> text(control::Clipboard::maximum_bytes / 2 + 1, 'x');
+
+    {
+      RoutedTerminal routed;
+      const std::array<ClipboardRepresentation, 1> contents{{{"text/plain", text}}};
+
+      routed.terminal.feed(bytes(read));
+      deliver(routed.terminal, contents);
+      check(drain(routed.terminal) == "\x1b]5522;type=read:status=EFBIG:id=r\x1b\\");
+    }
+
+    RoutedTerminal routed;
+    const std::array<ClipboardRepresentation, 1> contents{{{"text/plain", std::span{text}.first(16)}}};
+
+    routed.terminal.feed(bytes(read));
+    deliver(routed.terminal, contents);
+    const auto reply = drain(routed.terminal);
+
+    check(reply.starts_with("\x1b]5522;type=read:status=OK:id=r\x1b\\"));
+    check(reply.contains("status=DATA") && reply.ends_with("\x1b]5522;type=read:status=DONE:id=r\x1b\\"));
+  }
+
+  // A malformed record inside a write fails the whole write: the pane gets EINVAL, and
+  // what it sent before never reaches the desktop. A record telar cannot parse at all is
+  // not part of any write and leaves it alone.
+  void kittyMalformedAbortsWrite() {
+    constexpr std::string_view invalid = "\x1b]5522;type=write:status=EINVAL:id=w\x1b\\";
+    const std::string malformed[]{
+        "\x1b]5522;type=wdata:mime=!!!!;" + encode("x") + "\x1b\\",
+        "\x1b]5522;type=wdata:mime=" + encode("\xff\xfe") + ";" + encode("x") + "\x1b\\",
+        "\x1b]5522;type=wdata:mime=" + encode(std::string_view{"text\0plain", 10}) + ";" + encode("x") + "\x1b\\",
+        "\x1b]5522;type=wdata:mime=" + encode("text/plain") + ";YQ!=\x1b\\",
+        "\x1b]5522;type=wdata:mime=" + encode("text/plain") + ";YQ==YQ==\x1b\\",
+    };
+
+    for (const auto& record : malformed) {
+      RoutedTerminal routed;
+
+      routed.terminal.feed(bytes(kittyWrite("w") + kittyData("text/plain", "kept") + record));
+      check(drain(routed.terminal) == invalid);
+      routed.terminal.feed(bytes(kitty_commit));
+      check(drain(routed.terminal).empty());
+      check(!routed.terminal.clipboardControl().request(7, 11));
+    }
+
+    RoutedTerminal routed;
+
+    routed.terminal.feed(bytes(kittyWrite("w") + kittyData("text/plain", "kept") + "\x1b]5522;type=wdata:mime\x1b\\\x1b]5522;type=wfoo:mime=" + encode("text/plain") + ";" + encode("x") + "\x1b\\"));
+    check(drain(routed.terminal).empty());
+    routed.terminal.feed(bytes(kitty_commit));
+    const auto request = routed.terminal.clipboardControl().request(7, 11);
+
+    check(request && request->write && request->contents.size() == 1);
+    check(std::ranges::equal(request->contents[0].data, bytes("kept")));
+  }
+
+  // One desktop request at a time: a second read or write while one is pending is
+  // answered EBUSY. `loc=primary` reaches the desktop as the primary selection, and a
+  // read reply names it.
+  void busyAndPrimary() {
+    {
+      RoutedTerminal routed;
+
+      routed.terminal.feed(bytes("\x1b]5522;type=read:id=a;" + encode("text/plain") + "\x1b\\"));
+      check(routed.terminal.clipboardControl().request(7, 11).has_value());
+      routed.terminal.feed(bytes("\x1b]5522;type=read:id=b;" + encode("text/plain") + "\x1b\\"));
+      check(drain(routed.terminal) == "\x1b]5522;type=read:status=EBUSY:id=b\x1b\\");
+      routed.terminal.feed(bytes(kittyWrite("c") + kittyData("text/plain", "x") + std::string{kitty_commit}));
+      check(drain(routed.terminal) == "\x1b]5522;type=write:status=EBUSY:id=c\x1b\\");
+    }
+
+    {
+      RoutedTerminal routed;
+
+      routed.terminal.feed(bytes("\x1b]5522;type=write:loc=primary:id=p\x1b\\" + kittyData("text/plain", "x") + std::string{kitty_commit}));
+      const auto request = routed.terminal.clipboardControl().request(7, 11);
+
+      check(request && request->write && request->primary);
+    }
+
+    RoutedTerminal routed;
+    const std::array<ClipboardRepresentation, 1> contents{{{"text/plain", bytes("hello")}}};
+
+    routed.terminal.feed(bytes("\x1b]5522;type=read:loc=primary:id=p;" + encode("text/plain") + "\x1b\\"));
+    check(routed.terminal.clipboardControl().request(7, 11)->primary);
+    deliver(routed.terminal, contents);
+    check(drain(routed.terminal).starts_with("\x1b]5522;type=read:status=OK:loc=primary:id=p\x1b\\"));
+  }
+
   const telar::testing::Case case_osc52_oversized_write_ignored{"clipboard.osc52_oversized_write_ignored", osc52OversizedWriteIgnored};
   const telar::testing::Case case_kitty_write_budget{"clipboard.kitty_write_budget", kittyWriteBudget};
   const telar::testing::Case case_kitty_id_sanitized{"clipboard.kitty_id_sanitized", kittyIdSanitized};
   const telar::testing::Case case_grant_table_bounded{"clipboard.grant_table_bounded", grantTableBounded};
+  const telar::testing::Case case_grants_follow_routes{"clipboard.grants_follow_routes", grantsFollowRoutes};
+  const telar::testing::Case case_read_reply_budget{"clipboard.read_reply_budget", readReplyBudget};
+  const telar::testing::Case case_kitty_malformed_aborts_write{"clipboard.kitty_malformed_aborts_write", kittyMalformedAbortsWrite};
+  const telar::testing::Case case_busy_and_primary{"clipboard.busy_and_primary", busyAndPrimary};
 
 }

@@ -66,8 +66,12 @@ import telar.plugins;
 import telar.runtime.http.message;
 import telar.runtime.plugins.service;
 import telar.runtime.plugins.worker;
+import telar.runtime.plugins.tap_configuration;
+import telar.runtime.platform.signals;
 import telar.platform.process;
 import telar.runtime.traffic.control_protocol;
+import telar.config.runtime;
+import telar.runtime.vocabulary.exchange;
 import telar.runtime.vocabulary.frames;
 import telar.runtime.vocabulary.traffic;
 
@@ -690,6 +694,221 @@ return {}
     check(budget.liveBytes() == 0);
   }
 
+  // The registrations a plugin entry leaves after it runs, read as the host reads them.
+  std::size_t registered(Memory& memory, const std::string& entry, const app::ServiceSpec& identity) {
+    app::Host host{memory, entry.c_str(), &identity};
+    SensitiveAllocation output{memory, app::TrafficLimits::reply_bytes};
+    auto setup = makeOwned<app::TrafficReply>(memory);
+
+    app::TrafficProtocol::readReply(host.trafficSetup(output.bytes()), *setup);
+    return setup->registration_count;
+  }
+
+  app::ServiceSpec controlSpecification() {
+    auto identity = specification(false);
+
+    identity.declared = {};
+    identity.granted = {};
+    identity.declared.insert(app::Capability::traffic_control);
+    identity.granted.insert(app::Capability::traffic_control);
+    return identity;
+  }
+
+  // A package holds at most 32 registrations and 8 pending control requests. One more is
+  // an error the plugin can catch, and the ones it already holds stay registered.
+  void registrationLimits() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    Memory& memory = adapter;
+    TemporaryDirectory directory{"/tmp/tlr-app-limits.XXXXXX"};
+    const auto entry = std::string{directory.path()} + "/main.lua";
+
+    write(entry, R"lua(
+local traffic = require('telar.traffic')
+for index = 1, )lua" +
+                     std::to_string(app::TrafficLimits::registrations) +
+                     R"lua( do
+  assert(pcall(traffic.subscribe, {events={packet=true}}, function() end))
+end
+local allowed, message = pcall(traffic.subscribe, {events={packet=true}}, function() end)
+assert(not allowed and message:find('limit'))
+return {}
+)lua");
+    check(registered(memory, entry, specification(false)) == app::TrafficLimits::registrations);
+
+    write(entry, R"lua(
+local traffic = require('telar.traffic')
+for index = 1, )lua" +
+                     std::to_string(app::TrafficLimits::controls) +
+                     R"lua( do
+  assert(pcall(traffic.status, function() end))
+end
+local allowed, message = pcall(traffic.status, function() end)
+assert(not allowed and message:find('limit'))
+return {}
+)lua");
+    check(registered(memory, entry, controlSpecification()) == app::TrafficLimits::controls);
+  }
+
+  // Options the traffic API cannot honour are refused with an error and register nothing,
+  // never read as a default: a misspelt failure policy must not turn a fail-closed rule
+  // into fail-open.
+  void optionValidation() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    Memory& memory = adapter;
+    TemporaryDirectory directory{"/tmp/tlr-app-options.XXXXXX"};
+    const auto entry = std::string{directory.path()} + "/main.lua";
+
+    write(entry, R"lua(
+local traffic = require('telar.traffic')
+local function refused(register, options)
+  local allowed = pcall(register, options, function() end)
+  assert(not allowed)
+end
+refused(traffic.subscribe, {events={packet=true}, filter=string.rep('a', )lua" +
+                     std::to_string(traffic::Limits::filter_bytes + 1) + R"lua()})
+refused(traffic.subscribe, {events={packet=true}, filter='tcp\0port 80'})
+refused(traffic.subscribe, {events={}})
+refused(traffic.intercept, {host='bad host'})
+refused(traffic.intercept, {host='example.test', stage='packet'})
+refused(traffic.intercept, {host='example.test', direction='sideways'})
+refused(traffic.intercept, {host='example.test', visibility='hidden'})
+refused(traffic.intercept, {host='example.test', failure='rejct'})
+traffic.subscribe({events={packet=true}}, function() end)
+return {}
+)lua");
+    check(registered(memory, entry, specification(true)) == 1);
+  }
+
+  // An exchange reaches a traffic plugin with its ids as decimal strings, exact past 2^53,
+  // and each half's own status, outcome and timing.
+  void exchangeEvent() {
+    SystemAllocator system;
+    BudgetAllocator budget{system, 80 * 1024 * 1024};
+    SynchronizedAllocator synchronized{budget};
+    MemoryAdapter adapter{synchronized};
+    ConcurrentMemory& memory = adapter;
+    TemporaryDirectory directory{"/tmp/tlr-app-exchange.XXXXXX"};
+    const auto entry = std::string{directory.path()} + "/main.lua";
+    constexpr std::uint64_t identity = (std::uint64_t{1} << 60) + 1;
+    constexpr std::uint64_t connection = (std::uint64_t{1} << 62) + 3;
+
+    write(entry, R"lua(
+local telar = require('telar')
+local traffic = require('telar.traffic')
+traffic.subscribe({events={exchange=true}}, function(err, event)
+  assert(not err, err)
+  local exchange = event.exchange
+  assert(event.kind == 'exchange')
+  assert(exchange.id == ')lua" +
+                     std::to_string(identity) + R"lua(' and exchange.connection_id == ')lua" + std::to_string(connection) + R"lua(')
+  local request = exchange.request
+  assert(request.head_truncated == false and request.status == 0)
+  assert(type(request.outcome) == 'string' and math.type(request.finished_at_ms) == 'integer')
+  return {telar.effect.notification{title='exchange verified'}}
+end)
+return {}
+)lua");
+    {
+      CaptureQuota quota{4096};
+      const ProxyCaptureLimits limits{.part_bytes = 1024, .exchange_bytes = 2048, .total_bytes = 4096, .enabled = true};
+      CapturedExchange exchange{memory};
+
+      exchange.request = makeOwned<CaptureHalf>(memory, memory, quota, limits, CaptureStart{.key = {connection, 1}, .side = CaptureSide::request, .protocol = CaptureProtocol::http1, .host = "example.test", .started_at_ms = 1});
+      exchange.request->appendHead("GET / HTTP/1.1\r\n\r\n");
+      std::array<Byte, 4096> encoded;
+      const auto bytes = app::Protocol::encodeExchange(encoded, {identity, 1}, exchange);
+      const auto spec = specification(false);
+      Memory& host_memory = adapter;
+      app::Host host{host_memory, entry.c_str(), &spec};
+      SensitiveAllocation output{host_memory, app::TrafficLimits::reply_bytes};
+      auto setup = makeOwned<app::TrafficReply>(host_memory);
+
+      app::TrafficProtocol::readReply(host.trafficSetup(output.bytes()), *setup);
+      check(setup->registration_count == 1);
+      app::TrafficEvent event{.event_id = 1, .registration = setup->registrations[0].id, .dropped = 0, .event = {.kind = traffic::Kind::exchange, .bytes = bytes}};
+      const auto reply = app::TrafficProtocol::readReply(host.invokeTraffic(event, output.bytes()), *setup);
+      const auto effects = app::Protocol::decodeEffects(reply.effects);
+
+      check(effects.batch.count == 1 && effects.batch.notifications[0].title == "exchange verified");
+      exchange.request.reset();
+      check(quota.used() == 0);
+    }
+
+    check(budget.liveBytes() == 0);
+  }
+
+  // A traffic worker whose session dies, here by a callback outliving the reply deadline
+  // (yet inside the Lua time budget), comes back with its registrations rebuilt, and the
+  // plugin hears `ready` with reason `worker_restarted` on them.
+  void workerRestartReportsReady() {
+    SystemAllocator system;
+    BudgetAllocator budget{system, 64 * 1024 * 1024};
+    SynchronizedAllocator synchronized{budget};
+    MemoryAdapter adapter{synchronized};
+    ConcurrentMemory& memory = adapter;
+    TemporaryDirectory directory{"/tmp/tlr-app-restart.XXXXXX"};
+    const auto entry = std::string{directory.path()} + "/main.lua";
+    const ExecutablePath executable;
+
+    write(entry, R"lua(
+local telar = require('telar')
+local traffic = require('telar.traffic')
+traffic.subscribe({events={flow=true}}, function(err, event)
+  if event and event.kind == 'ready' and event.reason == 'worker_restarted' then
+    return {telar.effect.notification{title='restarted'}}
+  end
+end)
+traffic.intercept({stage='stream', host='example.test', visibility='both', timeout_ms=30000, failure='allow'}, function()
+  local started = os.clock()
+  while os.clock() - started < 1.5 do
+    local filler = string.rep('x', 1 << 20)
+  end
+end)
+return {}
+)lua");
+    {
+      traffic::Service network{memory, std::string{directory.path()} + "/traffic", true};
+      auto identity = specification(true);
+
+      identity.entry.assign(entry);
+      identity.declared.insert(app::Capability::notifications);
+      identity.granted.insert(app::Capability::notifications);
+      app::ResultQueue<ConcurrentMemory> results;
+      app::TapBudget held;
+      CancellationSignal cancellation;
+
+      results.activate();
+      app::Worker<> worker{memory, identity, results, held, app::WorkerLaunch{.executable = executable.c_str(), .cancellation = cancellation, .timeout = std::chrono::milliseconds{1000}, .traffic = &network}};
+      const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{20};
+      std::uint64_t ticket = 0;
+
+      while (ticket == 0) {
+        check(std::chrono::steady_clock::now() < deadline);
+        ticket = network.intercept({.id = 31, .visibility = traffic::Visibility::plaintext, .host = "example.test"});
+        if (ticket == 0) {
+          std::this_thread::sleep_for(std::chrono::milliseconds{10});
+        }
+      }
+
+      bool restarted = false;
+
+      while (!restarted) {
+        check(std::chrono::steady_clock::now() < deadline);
+        results.collect([&](const auto& result) {
+          restarted |= result.batch().count == 1 && result.batch().notifications[0].title == "restarted";
+        });
+        std::this_thread::sleep_for(std::chrono::milliseconds{10});
+      }
+
+      check(worker.metrics().timeouts >= 1);
+      worker.stop();
+    }
+
+    check(budget.liveBytes() == 0);
+  }
+
   // A registration as a traffic worker writes it into a reply, valid unless a field is changed.
   struct ForgedRegistration {
     std::uint32_t id = 1;
@@ -836,5 +1055,9 @@ return {}
   const telar::testing::Case case_http_replace_bounded{"plugin_traffic.http_replace_bounded", httpReplaceBounded};
   const telar::testing::Case case_redirect_bounds{"plugin_traffic.redirect_bounds", redirectBounds};
   const telar::testing::Case case_worker_crash_applies_failure_policy{"plugin_traffic.worker_crash_applies_failure_policy", workerCrashAppliesFailurePolicy};
+  const telar::testing::Case case_registration_limits{"plugin_traffic.registration_limits", registrationLimits};
+  const telar::testing::Case case_worker_restart_reports_ready{"plugin_traffic.worker_restart_reports_ready", workerRestartReportsReady};
+  const telar::testing::Case case_option_validation{"plugin_traffic.option_validation", optionValidation};
+  const telar::testing::Case case_exchange_event{"plugin_traffic.exchange_event", exchangeEvent};
 
 }
