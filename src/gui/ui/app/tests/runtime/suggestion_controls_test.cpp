@@ -1,6 +1,7 @@
 #include "foundation/core/application_memory.hpp"
 #include "frame_fixture.hpp"
 #include "qml_fixture.hpp"
+#include "qt_case.hpp"
 #include "screen_fixture.hpp"
 #include "ui/app/application_controller.hpp"
 #include "ui/app/panes/terminal/terminal_item.hpp"
@@ -282,7 +283,13 @@ namespace {
     std::uint64_t pane_id_ = 0;
   };
 
+  using telar::gui::test::QtCase;
+
+  const QtCase<SuggestionControlsTest, "defaultShortcutOpensTheSuggestionEditor"> case_default_shortcut_opens_the_suggestion_editor{"suggestion_controls.default_shortcut_opens_the_suggestion_editor"};
+  const QtCase<SuggestionControlsTest, "replacementRequestsDiscardTheEarlierCommandAndPasteOnlyOnConfirmation"> case_replacement_requests_discard_the_earlier_command_and_paste_only_on_confirmation{"suggestion_controls.replacement_requests_discard_the_earlier_command_and_paste_only_on_confirmation"};
+  const QtCase<SuggestionControlsTest, "providerFailureAndTimeoutCanRetryWithoutClosingTheComponent"> case_provider_failure_and_timeout_can_retry_without_closing_the_component{"suggestion_controls.provider_failure_and_timeout_can_retry_without_closing_the_component"};
+  const QtCase<SuggestionControlsTest, "shortenedPreviewsKeepTheEntirePaste"> case_shortened_previews_keep_the_entire_paste{"suggestion_controls.shortened_previews_keep_the_entire_paste"};
+
 }
 
-QTEST_MAIN(SuggestionControlsTest)
 #include "suggestion_controls_test.moc"

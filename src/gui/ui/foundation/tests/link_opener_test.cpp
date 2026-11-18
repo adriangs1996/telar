@@ -3,6 +3,7 @@
 static_assert(true);
 #endif
 
+#include "qt_case.hpp"
 #include "ui/foundation/links/external_link_opener.hpp"
 #include "ui/foundation/models/projection.hpp"
 #include "ui/foundation/process/environment.hpp"
@@ -288,13 +289,16 @@ printf '%s' "$1"
     }
   };
 
-}
+  using telar::gui::test::QtCase;
 
-int main(int argc, char** argv) {
-  const QCoreApplication application{argc, argv};
-  LinkOpenerTest test;
+  const QtCase<LinkOpenerTest, "lastPendingWins"> case_last_pending_wins{"link_opener.last_pending_wins"};
+  const QtCase<LinkOpenerTest, "completionsKeepTheirOriginalContext"> case_completions_keep_their_original_context{"link_opener.completions_keep_their_original_context"};
+  const QtCase<LinkOpenerTest, "failuresAndRecovery"> case_failures_and_recovery{"link_opener.failures_and_recovery"};
+  const QtCase<LinkOpenerTest, "outputLimits"> case_output_limits{"link_opener.output_limits"};
+  const QtCase<LinkOpenerTest, "timeoutAndShutdown"> case_timeout_and_shutdown{"link_opener.timeout_and_shutdown"};
+  const QtCase<LinkOpenerTest, "argumentAuthority"> case_argument_authority{"link_opener.argument_authority"};
+  const QtCase<LinkOpenerTest, "environmentAuthority"> case_environment_authority{"link_opener.environment_authority"};
 
-  return QTest::qExec(&test, argc, argv);
 }
 
 #include "link_opener_test.moc"

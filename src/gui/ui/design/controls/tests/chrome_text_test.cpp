@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 #include "frame_fixture.hpp"
+#include "qt_case.hpp"
 #include "ui/design/controls/native_cell_text.hpp"
 #include "ui/design/controls/native_chrome_text.hpp"
 #include "ui/foundation/fonts/bundled_fonts.hpp"
@@ -183,6 +184,10 @@ namespace {
     Q_OBJECT
 
   private:
+    Q_SLOT static void initTestCase() {
+      bundledFonts();
+    }
+
     Q_SLOT static void ancestorConnectionsFollowTheCurrentChain() {
       AncestorItem first;
       AncestorItem second;
@@ -788,15 +793,25 @@ namespace {
     }
   };
 
-}
+  using telar::gui::test::QtCase;
 
-int main(int argc, char** argv) {
-  const QGuiApplication application{argc, argv};
+  const QtCase<ChromeTextTest, "ancestorConnectionsFollowTheCurrentChain"> case_ancestor_connections_follow_the_current_chain{"chrome_text.ancestor_connections_follow_the_current_chain"};
+  const QtCase<ChromeTextTest, "reparentedAncestorsKeepChromePixelsExact"> case_reparented_ancestors_keep_chrome_pixels_exact{"chrome_text.reparented_ancestors_keep_chrome_pixels_exact"};
+  const QtCase<ChromeTextTest, "failedFontCollectionReleasesPreviousScene"> case_failed_font_collection_releases_previous_scene{"chrome_text.failed_font_collection_releases_previous_scene"};
+  const QtCase<ChromeTextTest, "cellTextDiscoversTheContinuationGlyph"> case_cell_text_discovers_the_continuation_glyph{"chrome_text.cell_text_discovers_the_continuation_glyph"};
+  const QtCase<ChromeTextTest, "cellTextPreservesItsPrimaryAcrossCatalogChanges"> case_cell_text_preserves_its_primary_across_catalog_changes{"chrome_text.cell_text_preserves_its_primary_across_catalog_changes"};
+  const QtCase<ChromeTextTest, "cellTextNotificationsMayRetireTheItem"> case_cell_text_notifications_may_retire_the_item{"chrome_text.cell_text_notifications_may_retire_the_item"};
+  const QtCase<ChromeTextTest, "cellTextLayoutObserversMayRetireTheItem"> case_cell_text_layout_observers_may_retire_the_item{"chrome_text.cell_text_layout_observers_may_retire_the_item"};
+  const QtCase<ChromeTextTest, "centeredChromeUsesOriginalWholePixelInset"> case_centered_chrome_uses_original_whole_pixel_inset{"chrome_text.centered_chrome_uses_original_whole_pixel_inset"};
+  const QtCase<ChromeTextTest, "centeredFormChromeKeepsOriginalFractionalInset"> case_centered_form_chrome_keeps_original_fractional_inset{"chrome_text.centered_form_chrome_keeps_original_fractional_inset"};
+  const QtCase<ChromeTextTest, "regularMasksAndPositionsMatchOriginalFace"> case_regular_masks_and_positions_match_original_face{"chrome_text.regular_masks_and_positions_match_original_face"};
+  const QtCase<ChromeTextTest, "emphasizedMasksAndPositionsMatchOriginalFace"> case_emphasized_masks_and_positions_match_original_face{"chrome_text.emphasized_masks_and_positions_match_original_face"};
+  const QtCase<ChromeTextTest, "mixedLabelsRetainPreferredInkDuringDiscovery"> case_mixed_labels_retain_preferred_ink_during_discovery{"chrome_text.mixed_labels_retain_preferred_ink_during_discovery"};
+  const QtCase<ChromeTextTest, "replacementFontSetRejectsInFlightDiscovery"> case_replacement_font_set_rejects_in_flight_discovery{"chrome_text.replacement_font_set_rejects_in_flight_discovery"};
+  const QtCase<ChromeTextTest, "destroyingWindowJoinsItsDiscovery"> case_destroying_window_joins_its_discovery{"chrome_text.destroying_window_joins_its_discovery"};
+  const QtCase<ChromeTextTest, "discoveryCallbacksMayDestroyTheirWindow"> case_discovery_callbacks_may_destroy_their_window{"chrome_text.discovery_callbacks_may_destroy_their_window"};
+  const QtCase<ChromeTextTest, "fittedLabelsKeepNativeMasksAndFullMeasurement"> case_fitted_labels_keep_native_masks_and_full_measurement{"chrome_text.fitted_labels_keep_native_masks_and_full_measurement"};
 
-  bundledFonts();
-  ChromeTextTest test;
-
-  return QTest::qExec(&test, argc, argv);
 }
 
 #include "chrome_text_test.moc"

@@ -1,5 +1,6 @@
 #include "foundation/core/application_memory.hpp"
 #include "platform/window.hpp"
+#include "qt_case.hpp"
 #include "ui/app/application_controller.hpp"
 #include "ui/app/panes/terminal/terminal_item.hpp"
 #include "ui/foundation/fonts/bundled_fonts.hpp"
@@ -34,6 +35,10 @@ namespace {
     Q_OBJECT
 
   private:
+    Q_SLOT static void initTestCase() {
+      bundledFonts();
+    }
+
     Q_SLOT static void readingControlsDoesNotCreateNativeResources() {
       const QWindow window;
 
@@ -257,15 +262,19 @@ namespace {
     }
   };
 
-}
+  using telar::gui::test::QtCase;
 
-int main(int argc, char** argv) {
-  const QGuiApplication application{argc, argv};
+  const QtCase<WindowTest, "readingControlsDoesNotCreateNativeResources"> case_reading_controls_does_not_create_native_resources{"window.reading_controls_does_not_create_native_resources"};
+  const QtCase<WindowTest, "rebindingTheCurrentWindowPreservesConnections"> case_rebinding_the_current_window_preserves_connections{"window.rebinding_the_current_window_preserves_connections"};
+  const QtCase<WindowTest, "aPreviousWindowCannotPublishScreenChanges"> case_a_previous_window_cannot_publish_screen_changes{"window.a_previous_window_cannot_publish_screen_changes"};
+  const QtCase<WindowTest, "destroyingAPreviousWindowPreservesTheCurrentBinding"> case_destroying_a_previous_window_preserves_the_current_binding{"window.destroying_a_previous_window_preserves_the_current_binding"};
+  const QtCase<WindowTest, "onlyTheCurrentWindowPublishesDensityChanges"> case_only_the_current_window_publishes_density_changes{"window.only_the_current_window_publishes_density_changes"};
+  const QtCase<WindowTest, "aWindowCanBeDestroyedBeforeItsApplication"> case_a_window_can_be_destroyed_before_its_application{"window.a_window_can_be_destroyed_before_its_application"};
+  const QtCase<WindowTest, "chromeBandsAndRowsFollowTheRenderTargetDensity"> case_chrome_bands_and_rows_follow_the_render_target_density{"window.chrome_bands_and_rows_follow_the_render_target_density"};
+  const QtCase<WindowTest, "nativeWindowDimensionsNeedNoQmlObserver"> case_native_window_dimensions_need_no_qml_observer{"window.native_window_dimensions_need_no_qml_observer"};
+  const QtCase<WindowTest, "densityChangesRemeasureAnIndependentTerminal"> case_density_changes_remeasure_an_independent_terminal{"window.density_changes_remeasure_an_independent_terminal"};
+  const QtCase<WindowTest, "anApplicationCanBeDestroyedBeforeItsWindow"> case_an_application_can_be_destroyed_before_its_window{"window.an_application_can_be_destroyed_before_its_window"};
 
-  bundledFonts();
-  WindowTest test;
-
-  return QTest::qExec(&test, argc, argv);
 }
 
 #include "window_test.moc"

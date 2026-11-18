@@ -10,7 +10,7 @@ from fontTools.varLib import build
 def main():
     root = Path(__file__).resolve().parents[3]
     original = root / 'assets/JetBrainsMono-Regular.ttf'
-    output = root / 'src/gui/tests/fixtures/metrics-variable.ttf'
+    output = root / 'src/gui/ui/foundation/fonts/tests/fixtures/metrics-variable.ttf'
     family = 'Telar Metrics Fixture'
     font = TTFont(original, recalcTimestamp=False)
     subsetter = subset.Subsetter()

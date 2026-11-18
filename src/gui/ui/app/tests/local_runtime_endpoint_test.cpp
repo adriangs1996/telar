@@ -1,4 +1,5 @@
 #include "foundation/core/memory.hpp"
+#include "qt_case.hpp"
 #include "ui/app/local_runtime_endpoint.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
@@ -129,13 +130,13 @@ namespace {
     }
   };
 
-}
+  using telar::gui::test::QtCase;
 
-int main(int argc, char** argv) {
-  const QCoreApplication application{argc, argv};
-  LocalRuntimeEndpointTest test;
+  const QtCase<LocalRuntimeEndpointTest, "existingManagedSocketAvoidsRuntimeStartup"> case_existing_managed_socket_avoids_runtime_startup{"local_runtime_endpoint.existing_managed_socket_avoids_runtime_startup"};
+  const QtCase<LocalRuntimeEndpointTest, "explicitAndPaneEndpointsKeepTheirPrecedence"> case_explicit_and_pane_endpoints_keep_their_precedence{"local_runtime_endpoint.explicit_and_pane_endpoints_keep_their_precedence"};
+  const QtCase<LocalRuntimeEndpointTest, "missingSocketUsesTheConfiguredStartup"> case_missing_socket_uses_the_configured_startup{"local_runtime_endpoint.missing_socket_uses_the_configured_startup"};
+  const QtCase<LocalRuntimeEndpointTest, "invalidPathsCannotLaunchARuntime"> case_invalid_paths_cannot_launch_a_runtime{"local_runtime_endpoint.invalid_paths_cannot_launch_a_runtime"};
 
-  return QTest::qExec(&test, argc, argv);
 }
 
 #include "local_runtime_endpoint_test.moc"

@@ -7,6 +7,7 @@ static_assert(true);
 #include "frame_fixture.hpp"
 #include "platform/window_activation.hpp"
 #include "qml_fixture.hpp"
+#include "qt_case.hpp"
 #include "telar_base/text/utf8.hpp"
 #include "ui/design/controls/form_input_context.hpp"
 #include "ui/design/controls/native_form_field.hpp"
@@ -348,7 +349,17 @@ namespace {
     }
   };
 
+  using telar::gui::test::QtCase;
+
+  const QtCase<FormFieldTest, "formGeometryUsesTheBodyCellGrid"> case_form_geometry_uses_the_body_cell_grid{"form_field.form_geometry_uses_the_body_cell_grid"};
+  const QtCase<FormFieldTest, "keyboardMovesAndDeletesWholeGraphemes"> case_keyboard_moves_and_deletes_whole_graphemes{"form_field.keyboard_moves_and_deletes_whole_graphemes"};
+  const QtCase<FormFieldTest, "compositionKeepsCommittedTextUntilCommit"> case_composition_keeps_committed_text_until_commit{"form_field.composition_keeps_committed_text_until_commit"};
+  const QtCase<FormFieldTest, "inputContextProjectsSelectionAndProvisionalReplacement"> case_input_context_projects_selection_and_provisional_replacement{"form_field.input_context_projects_selection_and_provisional_replacement"};
+  const QtCase<FormFieldTest, "cancellationAndFocusLossPreserveCommittedSelection"> case_cancellation_and_focus_loss_preserve_committed_selection{"form_field.cancellation_and_focus_loss_preserve_committed_selection"};
+  const QtCase<FormFieldTest, "pasteNormalizesLinesAndBoundsUtf8Bytes"> case_paste_normalizes_lines_and_bounds_utf8_bytes{"form_field.paste_normalizes_lines_and_bounds_utf8_bytes"};
+  const QtCase<FormFieldTest, "utf16PrefixMatchesQtEncodingAndScalarBoundaries"> case_utf16_prefix_matches_qt_encoding_and_scalar_boundaries{"form_field.utf16_prefix_matches_qt_encoding_and_scalar_boundaries"};
+  const QtCase<FormFieldTest, "pointerUsesCellMidpointsAndPreservesWholeGraphemes"> case_pointer_uses_cell_midpoints_and_preserves_whole_graphemes{"form_field.pointer_uses_cell_midpoints_and_preserves_whole_graphemes"};
+
 }
 
-QTEST_MAIN(FormFieldTest)
 #include "form_field_test.moc"
