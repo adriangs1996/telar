@@ -337,6 +337,25 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
     check(commands(store, reply, QueryHistory{.request_id = 2, .query = "é", .limit = 10}) == std::vector<std::string>{"echo café"});
   }
 
+  // A distinct listing names each command once, however often it ran.
+  void testDistinctListsEachCommandOnce() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& memory = adapter;
+    HistoryStore store{memory, ":memory:"};
+    EncodedReply reply{memory};
+    const auto owner = session(1, "/tmp");
+
+    finished(store, owner, "git status", "/tmp");
+    finished(store, owner, "ls", "/tmp");
+    finished(store, owner, "git status", "/tmp");
+    finished(store, owner, "make", "/tmp");
+    finished(store, owner, "ls", "/tmp");
+
+    check(commands(store, reply, QueryHistory{.request_id = 1, .limit = 10}).size() == 5, "every run is listed without distinct");
+    check(commands(store, reply, QueryHistory{.request_id = 2, .distinct = true, .limit = 10}) == std::vector<std::string>{"git status", "ls", "make"}, "a distinct listing names each command once");
+  }
+
   void testQueryWithDoubleQuote() {
     SystemAllocator system;
     MemoryAdapter adapter{system};
@@ -477,6 +496,7 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
   const telar::testing::Case case_tightens_existing_database_mode{"history_store.tightens_existing_database_mode", testTightensExistingDatabaseMode};
   const telar::testing::Case case_author_filter{"history_store.author_filter", testAuthorFilter};
   const telar::testing::Case case_short_query_substring{"history_store.short_query_substring", testShortQuerySubstring};
+  const telar::testing::Case case_distinct_lists_each_command_once{"history_store.distinct_lists_each_command_once", testDistinctListsEachCommandOnce};
   const telar::testing::Case case_query_with_double_quote{"history_store.query_with_double_quote", testQueryWithDoubleQuote};
   const telar::testing::Case case_exact_entry_query{"history_store.exact_entry_query", testExactEntryQuery};
   const telar::testing::Case case_rejects_corrupt_rows{"history_store.rejects_corrupt_rows", testRejectsCorruptRows};

@@ -126,7 +126,8 @@ export {
       void build(const char* root) noexcept;
 
     private:
-      using Directories = std::unordered_set<std::string_view, std::hash<std::string_view>, std::equal_to<std::string_view>, AllocatorRef<std::string_view, ConcurrentMemory>>;
+      // A set of the directories appended, viewing the storage: each maps to nothing.
+      using Directories = ds::Map<std::string_view, bool, ConcurrentMemory>;
 
       static bool acceptable(std::string_view relative) noexcept;
 

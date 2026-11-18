@@ -550,13 +550,13 @@ END;
       statement.bind(8, request.offset);
     }
 
-    HashSet seen{0, std::hash<std::uint64_t>{}, std::equal_to<std::uint64_t>{}, AllocatorRef<std::uint64_t, ConcurrentMemory>{memory_}};
+    HashSet seen{memory_};
     std::uint32_t skipped = 0;
     bool more = false;
 
     while (statement.next()) {
       if (distinct) {
-        if (!seen.insert(ImportIdentity::hash(command_hash_seed, statement.text(6))).second) {
+        if (!seen.insert(ImportIdentity::hash(command_hash_seed, statement.text(6)), true)) {
           continue;
         }
 
@@ -696,7 +696,7 @@ END;
     ds::Vec<RankedEntry, ConcurrentMemory> ranked{memory_};
 
     ranked.reserve(maximum_fuzzy_candidates);
-    HashSet seen{0, std::hash<std::uint64_t>{}, std::equal_to<std::uint64_t>{}, AllocatorRef<std::uint64_t, ConcurrentMemory>{memory_}};
+    HashSet seen{memory_};
 
     ds::Vec<FuzzyCandidate, ConcurrentMemory> candidates{memory_};
 
@@ -716,7 +716,7 @@ END;
     std::uint32_t order = 0;
 
     for (const auto& candidate : candidates) {
-      if (request.distinct && !seen.insert(candidate.command_hash).second) {
+      if (request.distinct && !seen.insert(candidate.command_hash, true)) {
         continue;
       }
 

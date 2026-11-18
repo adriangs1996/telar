@@ -372,7 +372,8 @@ export {
       static_assert(maximum_fuzzy_candidates == 10'000 && fuzzy_candidate_limit == "10000");
       static constexpr std::size_t maximum_stats_candidates = 400;
       static constexpr std::size_t maximum_stats_results = 10;
-      using HashSet = std::unordered_set<std::uint64_t, std::hash<std::uint64_t>, std::equal_to<std::uint64_t>, AllocatorRef<std::uint64_t, ConcurrentMemory>>;
+      // A set: each command hash maps to nothing.
+      using HashSet = ds::Map<std::uint64_t, bool, ConcurrentMemory>;
 
       struct RankedEntry {
         std::int64_t id;

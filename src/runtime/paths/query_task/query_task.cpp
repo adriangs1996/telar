@@ -310,7 +310,7 @@ namespace telar::runtime {
         return false;
       }
 
-      directories.insert(storage_.path(storage_.entry(storage_.count - 1)));
+      static_cast<void>(directories.insert(storage_.path(storage_.entry(storage_.count - 1)), true));
     }
 
     return storage_.append(relative, PathKind::file);
@@ -320,7 +320,7 @@ namespace telar::runtime {
     try {
       const auto configuration_deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
       GitRepository git{memory_, root, configuration_deadline, storage_.cancelled};
-      Directories directories{0, std::hash<std::string_view>{}, std::equal_to<std::string_view>{}, AllocatorRef<std::string_view, ConcurrentMemory>{memory_}};
+      Directories directories{memory_};
       ds::Array<char, 1024> relative;
       std::size_t length = 0;
       bool oversized = false;
