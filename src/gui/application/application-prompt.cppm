@@ -51,7 +51,7 @@ export namespace telar::gui::application::prompt {
   [[nodiscard]] std::string_view suggestion(const Session& session, std::uint64_t pane_id) noexcept;
 
   // The commands people typed, most recent first and each once, which the suggestions read.
-  [[nodiscard]] std::span<const std::string> history(const Session& session) noexcept;
+  [[nodiscard]] features::prompt::History history(const Session& session) noexcept;
 
   // A key for the pane's editor or queue. `terminal` hands it back to the terminal.
   Outcome key(Session& session, std::uint64_t pane_id, const KeyPress& key);

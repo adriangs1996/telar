@@ -5,6 +5,8 @@ export module telar.gui.features.prompt:specs;
 import std;
 
 import telar.ebnf.matcher;
+import telar.base.ds;
+import telar.base.memory.allocators;
 
 namespace telar::gui::features::prompt {
 
@@ -13,6 +15,9 @@ namespace telar::gui::features::prompt {
   class Specs {
   public:
     static constexpr std::size_t capacity = 256;
+
+    // The specs and the matcher's scratch live in `memory`.
+    explicit Specs(Memory& memory);
 
     const ebnf::command_spec* find(std::string_view command) const;
 
@@ -27,17 +32,12 @@ namespace telar::gui::features::prompt {
   private:
     struct Entry {
       std::uint64_t digest = 0;
-      std::unique_ptr<ebnf::command_spec> spec;
+      Owned<ebnf::command_spec, Memory> spec;
     };
 
-    struct Hash {
-      using is_transparent = void;
-
-      std::size_t operator()(std::string_view text) const noexcept;
-    };
-
-    std::unordered_map<std::string, Entry, Hash, std::equal_to<>> entries_;
-    std::unique_ptr<ebnf::match_scratch> scratch_;
+    Memory& memory_;
+    ds::Map<ds::String<Memory>, Entry, Memory> entries_;
+    ds::Option<Owned<ebnf::match_scratch, Memory>> scratch_;
   };
 
 }

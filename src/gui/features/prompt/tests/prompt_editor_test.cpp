@@ -12,18 +12,34 @@ import telar.gui.foundation.core;
 import telar.shell.syntax;
 import telar.wire.vocabulary;
 import telar.wire.pane_io;
+import telar.base.ds;
+import telar.base.memory.allocators;
 
 using namespace telar::gui::features::prompt;
 
 namespace {
 
   namespace feature = telar::gui::features::prompt;
+  using telar::Memory;
+
+  // The memory a test's prompt lives in, counted so a test can tell it all came back.
+  struct Arena {
+    Arena() = default;
+    Arena(const Arena&) = delete;
+    Arena& operator=(const Arena&) = delete;
+
+    telar::SystemAllocator system;
+    telar::BudgetAllocator<telar::SystemAllocator> budget{system, std::numeric_limits<std::size_t>::max()};
+    telar::MemoryAdapter<telar::BudgetAllocator<telar::SystemAllocator>> memory{budget};
+  };
 
   // The editor the assertions drive: one pane's line at the shell's prompt, through the feature's
-  // use cases, with no bindings of the user's; every read goes through its LineView.
-  class Editor {
+  // use cases, with no bindings of the user's; every read goes through its LineView. It stays
+  // where it is made: its state points at its arena.
+  class Editor : Arena {
   public:
-    explicit Editor(Keymap keymap = Keymap::emacs) {
+    explicit Editor(Keymap keymap = Keymap::emacs)
+        : state_(memory) {
       static_cast<void>(feature::open(state_, pane_id, keymap));
     }
 
@@ -156,10 +172,12 @@ namespace {
     require(cursor(lines) < 4, "counts lines");
 
     // The text a line holds stops at 256 KiB, as Text::capacity says.
-    const std::string huge(std::size_t{256} * 1024 + 1, 'x');
+    Arena arena;
+    telar::ds::String<Memory> huge{arena.memory};
     Editor bounded;
 
-    bounded.insert(huge);
+    huge.resize(std::size_t{256} * 1024 + 1, 'x');
+    bounded.insert(huge.view());
     require(text(bounded).empty(), "refuses text beyond the capacity");
   }
 
@@ -212,16 +230,16 @@ namespace {
     require(control(editor, 'r') == Outcome::search_history, "Ctrl-R searches the history");
   }
 
-  Editor vim(std::string_view initial) {
-    Editor editor{Keymap::vim};
-
+  // A vim line holding `initial`, back in normal mode.
+  void start(Editor& editor, std::string_view initial) {
     type(editor, initial);
     type(editor, "\x1b");
-    return editor;
   }
 
   void vimBasics() {
-    auto editor = vim("git switch main");
+    Editor editor{Keymap::vim};
+
+    start(editor, "git switch main");
 
     require(editor.view().mode() == Mode::normal && cursor(editor) == 14, "Escape enters normal mode on the last character");
     type(editor, "0");
@@ -247,7 +265,9 @@ namespace {
   }
 
   void vimOperators() {
-    auto editor = vim("git switch main");
+    Editor editor{Keymap::vim};
+
+    start(editor, "git switch main");
 
     type(editor, "0dw");
     require(text(editor) == "switch main", "dw deletes a word and its blanks");
@@ -276,7 +296,9 @@ namespace {
   }
 
   void vimObjects() {
-    auto editor = vim("echo \"hello world\" (a (b) c)");
+    Editor editor{Keymap::vim};
+
+    start(editor, "echo \"hello world\" (a (b) c)");
 
     type(editor, "0fwci\"bye\x1b");
     require(text(editor) == "echo \"bye\" (a (b) c)", "ci\" changes inside quotes");
@@ -313,23 +335,26 @@ namespace {
   }
 
   void vimVisual() {
-    auto editor = vim("git log --oneline");
+    Editor editor{Keymap::vim};
+
+    start(editor, "git log --oneline");
 
     type(editor, "0wviwd");
     require(text(editor) == "git  --oneline", "v with a text object selects and deletes");
     type(editor, "0vey$p");
     require(text(editor) == "git  --onelinegit", "visual y yanks the selection");
-    std::string clipboard;
+    Arena arena;
+    telar::ds::String<Memory> clipboard{arena.memory};
 
-    editor.setClipboard({.read = [&] {
-                           return std::string{"pasted"};
+    editor.setClipboard({.read = [](telar::ds::String<Memory>& text) {
+                           text.assign("pasted");
                          },
         .write = [&](std::string_view text) {
           clipboard.assign(text);
         }});
 
     type(editor, "0\"+yiw");
-    require(clipboard == "git", "the + register writes the system clipboard");
+    require(clipboard.view() == "git", "the + register writes the system clipboard");
     type(editor, "$\"+p");
     require(text(editor).ends_with("pasted"), "the + register reads it");
   }
@@ -368,14 +393,27 @@ namespace {
     require(PendingPrompt::likely(14, 400ms) && !PendingPrompt::likely(0, 400ms) && !PendingPrompt::likely(14, 100ms), "a quiet unfinished line looks like a prompt");
   }
 
-  std::vector<Style> styled(std::string_view text) {
-    std::vector<Style> styles(text.size());
+  telar::ds::Vec<Style, Memory> styleOf(Memory& memory, std::string_view text) {
+    telar::ds::Vec<Style, Memory> styles{memory};
+    telar::ds::Vec<telar::shell::Token, Memory> tokens{memory};
 
-    classify(text, styles);
+    styles.resize(text.size());
+    classify(text, styles.viewMut(), tokens);
     return styles;
   }
 
   void layoutAndStyles() {
+    Arena arena;
+    auto& memory = arena.memory;
+    const auto styled = [&memory](std::string_view text) {
+      return styleOf(memory, text);
+    };
+    const auto layout = [&memory](std::string_view text, std::span<const Style> styles, std::size_t cursor, std::size_t anchor, std::uint32_t columns, std::span<const std::uint8_t> groups = {}) {
+      Layout result{memory};
+
+      feature::layout(result, text, styles, cursor, anchor, columns, groups);
+      return result;
+    };
     const std::string_view command = "sudo git commit -m \"wip $USER\" | tee log # done";
     const auto styles = styled(command);
 
@@ -393,17 +431,18 @@ namespace {
     require(paths[7] == Style::path && paths[13] == Style::path && paths[19] == Style::plain && paths[3] == Style::option, "arguments naming files are paths");
 
     // An animation group splits runs where it starts and ends, even within one style.
-    const std::string grouped = "git status";
-    std::vector<std::uint8_t> groups(grouped.size(), 0);
+    const std::string_view grouped = "git status";
+    telar::ds::Vec<std::uint8_t, Memory> groups{memory};
 
-    groups[5] = 1;
-    const auto split = layout(grouped, styled(grouped), grouped.size(), grouped.size(), 80, groups);
+    groups.resize(grouped.size(), 0);
+    groups.atMut(5) = 1;
+    const auto split = layout(grouped, styled(grouped).view(), grouped.size(), grouped.size(), 80, groups.view());
 
     require(split.runs.size() == 4 && split.runs[2].group == 1 && split.runs[2].start == 5 && split.runs[2].end == 6, "a group is a run of its own");
 
     // Wraps at the width, never cutting, and continues under the text.
-    const std::string text = "echo abcdefghij";
-    const auto wrapped = layout(text, styled(text), text.size(), text.size(), 10);
+    const std::string_view text = "echo abcdefghij";
+    const auto wrapped = layout(text, styled(text).view(), text.size(), text.size(), 10);
 
     require(wrapped.rows == 2 && wrapped.runs.back().row == 1 && wrapped.runs.back().column == Layout::indent, "long lines wrap under the text");
     std::uint32_t cells = 0;
@@ -415,18 +454,44 @@ namespace {
     require(cells == text.size(), "every character is laid out");
     require(wrapped.caret_row == 1 && wrapped.caret_column == Layout::indent + 7, "the caret follows the text");
 
-    const std::string lines = "for f in *; do\n  echo $f\ndone";
-    const auto multiline = layout(lines, styled(lines), 0, lines.size(), 80);
+    const std::string_view lines = "for f in *; do\n  echo $f\ndone";
+    const auto multiline = layout(lines, styled(lines).view(), 0, lines.size(), 80);
 
     require(multiline.rows == 3 && multiline.caret_row == 0 && multiline.caret_column == Layout::indent, "newlines start rows");
     require(multiline.selection.size() == 3, "a selection spans rows");
 
-    const std::string wide = "echo 日本";
-    const auto cjk = layout(wide, styled(wide), wide.size(), wide.size(), 80);
+    const std::string_view wide = "echo 日本";
+    const auto cjk = layout(wide, styled(wide).view(), wide.size(), wide.size(), 80);
 
     require(cjk.caret_column == Layout::indent + 5 + 4, "wide characters take two cells");
   }
 
+  // What the line holds (its text, undo, registers and the commands it ran) lives in the memory
+  // it was given, and all of it goes back once the state is gone.
+  void memoryReturns() {
+    Arena arena;
+
+    {
+      State state{arena.memory};
+      auto& line = feature::open(state, 1, Keymap::vim).line;
+      const telar::gui::PromptConfiguration configuration;
+
+      for (const char byte : std::string_view{"iecho one two\x1b" "0dwP\"ayiwu\x12" "A three\r"}) {
+        const KeyPress key = byte == '\x1b' ? KeyPress{Key::escape} : byte == '\r' ? KeyPress{Key::enter} : byte == '\x12' ? KeyPress{Key::character, U'r', {.control = true}} : KeyPress{Key::character, static_cast<char32_t>(byte), {}, std::string_view{&byte, 1}};
+
+        static_cast<void>(feature::press(state, line, Surface::editor, key, configuration, telar::shell::Dialect::posix));
+      }
+
+      feature::remember(state, feature::delivery(line));
+      feature::remember(state, "git status");
+      require(feature::history(state).size() == 2, "the commands it ran are remembered");
+      require(arena.budget.liveBytes() > 0, "the line lives in the memory it was given");
+    }
+
+    require(arena.budget.liveBytes() == 0, "the line gives all of it back");
+  }
+
+  const telar::testing::Case case_memory_returns{"prompt_editor.memory_returns", memoryReturns};
   const telar::testing::Case case_layout_and_styles{"prompt_editor.layout_and_styles", layoutAndStyles};
   const telar::testing::Case case_routing{"prompt_editor.routing", routing};
   const telar::testing::Case case_text_model{"prompt_editor.text_model", textModel};

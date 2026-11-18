@@ -3,6 +3,8 @@ export module telar.gui.features.prompt:layout;
 import std;
 
 import telar.shell.syntax;
+import telar.base.ds;
+import telar.base.memory.allocators;
 
 // Places the command on the line's cell grid: runs of one style per row, wrapping at the
 // line's width so nothing is ever cut, and where the caret and the selection fall. Pure, so
@@ -49,8 +51,12 @@ export namespace telar::gui::features::prompt {
     static constexpr std::uint32_t indent = 2;
     static constexpr std::size_t maximum_runs = 4096;
 
-    std::vector<Run> runs;
-    std::vector<CellRange> selection;
+    explicit Layout(Memory& memory)
+        : runs(memory),
+          selection(memory) {}
+
+    ds::Vec<Run, Memory> runs;
+    ds::Vec<CellRange, Memory> selection;
     std::uint32_t rows = 1;
     // The widest row, in cells, the mark included.
     std::uint32_t width = indent;
@@ -63,13 +69,16 @@ export namespace telar::gui::features::prompt {
   // simple command (and the one a wrapper such as sudo runs), options, quoted strings,
   // variables, operators, keywords and comments. A command is one while it is still being typed,
   // as the shell's own highlighting shows it: whether it exists is the editor's to mark.
-  void classify(std::string_view text, std::span<Style> styles, shell::Syntax syntax = {});
+  // `tokens` is the lexer's scratch, kept by the caller so a redraw allocates nothing.
+  void classify(std::string_view text, std::span<Style> styles, ds::Vec<shell::Token, Memory>& tokens, shell::Syntax syntax = {});
 
-  // Whether the shell would read more lines before running `text`.
-  bool incomplete(std::string_view text, shell::Syntax syntax = {});
+  // Whether the shell would read more lines before running `text`. The lexer's tokens live in
+  // `memory` for the call.
+  bool incomplete(Memory& memory, std::string_view text, shell::Syntax syntax = {});
 
-  // Lays out `text` in rows of `columns` cells. `styles` holds one style per byte and `groups`,
-  // when given, the animation each byte takes part in: a run never spans two.
-  Layout layout(std::string_view text, std::span<const Style> styles, std::size_t cursor, std::size_t anchor, std::uint32_t columns, std::span<const std::uint8_t> groups = {});
+  // Lays out `text` in rows of `columns` cells into `result`, replacing what it held. `styles`
+  // holds one style per byte and `groups`, when given, the animation each byte takes part in: a
+  // run never spans two.
+  void layout(Layout& result, std::string_view text, std::span<const Style> styles, std::size_t cursor, std::size_t anchor, std::uint32_t columns, std::span<const std::uint8_t> groups = {});
 
 }

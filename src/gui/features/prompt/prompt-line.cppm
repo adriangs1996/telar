@@ -16,6 +16,7 @@ import :completion;
 import :menu;
 import telar.shell.syntax;
 import telar.base.ds;
+import telar.base.memory.allocators;
 
 namespace telar::gui::features::prompt {
 
@@ -51,7 +52,8 @@ namespace telar::gui::features::prompt {
   public:
     static constexpr std::size_t recent_capacity = 512;
 
-    explicit Line(Keymap keymap = Keymap::emacs);
+    // The line, its menu and the commands it sent live in `memory`.
+    explicit Line(Memory& memory, Keymap keymap = Keymap::emacs);
 
     Editor& editorMut() noexcept;
 
@@ -70,18 +72,18 @@ namespace telar::gui::features::prompt {
 
     [[nodiscard]] std::uint32_t secretKeys() const noexcept;
 
-    [[nodiscard]] const std::vector<std::string>& recent() const noexcept;
+    [[nodiscard]] History recent() const noexcept;
 
     void setKeymap(Keymap keymap);
 
     // The rest of a command this one starts, from what this line sent (newest first) and then
     // `history`, newest first. Only while typing at the end of a non-empty line.
-    [[nodiscard]] std::string_view suggestion(std::span<const std::string> history) const noexcept;
+    [[nodiscard]] std::string_view suggestion(History history) const noexcept;
 
     // A key in the editor or the queue. `incomplete` tells whether the shell would wait for more
     // of the command, so Enter continues it on a new line.
     template <typename Incomplete>
-    TBC_GENERIC Outcome press(Surface surface, const KeyPress& key, Incomplete&& incomplete, std::span<const std::string> history = {}) {
+    TBC_GENERIC Outcome press(Surface surface, const KeyPress& key, Incomplete&& incomplete, History history = {}) {
       const ContinuationOf<std::remove_reference_t<Incomplete>> continuation{incomplete};
 
       return pressKey(surface, key, continuation, history);
@@ -89,16 +91,16 @@ namespace telar::gui::features::prompt {
 
     // A key the user bound to an action; the rest of the line answers it as for any key.
     template <typename Incomplete>
-    TBC_GENERIC Outcome perform(Surface surface, Action action, Incomplete&& incomplete, std::span<const std::string> history = {}) {
+    TBC_GENERIC Outcome perform(Surface surface, Action action, Incomplete&& incomplete, History history = {}) {
       const ContinuationOf<std::remove_reference_t<Incomplete>> continuation{incomplete};
 
       return performAction(surface, action, continuation, history);
     }
 
     // press and perform, with the caller's callable behind Continuation.
-    Outcome pressKey(Surface surface, const KeyPress& key, const Continuation& incomplete, std::span<const std::string> history = {});
+    Outcome pressKey(Surface surface, const KeyPress& key, const Continuation& incomplete, History history = {});
 
-    Outcome performAction(Surface surface, Action action, const Continuation& incomplete, std::span<const std::string> history = {});
+    Outcome performAction(Surface surface, Action action, const Continuation& incomplete, History history = {});
 
     void insertText(std::string_view text);
 
@@ -109,7 +111,7 @@ namespace telar::gui::features::prompt {
 
     // Offers `choices` for the word in [begin, end): one is written at once, more open the
     // menu. While `requests` are still looking for more, even one choice waits for them.
-    void offer(std::vector<Choice> choices, std::size_t begin, std::size_t end, std::vector<std::uint64_t> requests, shell::Dialect dialect, std::string label = {});
+    void offer(Choices choices, std::size_t begin, std::size_t end, ds::Vec<std::uint64_t, Memory> requests, shell::Dialect dialect, std::string_view label = {});
 
     // What a pending request found, added to the menu it was asked for.
     bool receive(std::uint64_t request, std::span<const Choice> paths, bool truncated = false);
@@ -158,9 +160,9 @@ namespace telar::gui::features::prompt {
     Outcome travel(int direction);
 
     Editor editor_;
-    std::vector<std::string> recent_;
-    std::string draft_;
-    std::string delivery_;
+    ds::Vec<ds::String<Memory>, Memory> recent_;
+    ds::String<Memory> draft_;
+    ds::String<Memory> delivery_;
     ds::Option<std::size_t> history_index_;
     ds::Option<Menu> menu_;
     std::uint64_t revision_ = 0;

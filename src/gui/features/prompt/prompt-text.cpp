@@ -4,8 +4,13 @@ import std;
 
 namespace telar::gui::features::prompt {
 
+  Text::Text(Memory& memory)
+      : bytes_(memory),
+        undo_(memory),
+        redo_(memory) {}
+
   std::string_view Text::view() const noexcept {
-    return bytes_;
+    return bytes_.view();
   }
 
   std::size_t Text::size() const noexcept {
@@ -133,23 +138,23 @@ namespace telar::gui::features::prompt {
   }
 
   std::size_t Text::lineStart(std::size_t offset) const noexcept {
-    const auto found = bytes_.rfind('\n', offset == 0 ? std::string::npos : offset - 1);
+    const auto found = view().rfind('\n', offset == 0 ? std::string_view::npos : offset - 1);
 
-    return offset == 0 || found == std::string::npos ? 0 : found + 1;
+    return offset == 0 || found == std::string_view::npos ? 0 : found + 1;
   }
 
   std::size_t Text::lineEnd(std::size_t offset) const noexcept {
-    const auto found = bytes_.find('\n', offset);
+    const auto found = view().find('\n', offset);
 
-    return found == std::string::npos ? bytes_.size() : found;
+    return found == std::string_view::npos ? bytes_.size() : found;
   }
 
   std::size_t Text::lineCount() const noexcept {
-    return static_cast<std::size_t>(std::ranges::count(bytes_, '\n')) + 1;
+    return static_cast<std::size_t>(std::ranges::count(view(), '\n')) + 1;
   }
 
   std::size_t Text::lineOf(std::size_t offset) const noexcept {
-    return static_cast<std::size_t>(std::count(bytes_.begin(), bytes_.begin() + static_cast<std::ptrdiff_t>(std::min(offset, bytes_.size())), '\n'));
+    return static_cast<std::size_t>(std::ranges::count(view().substr(0, offset), '\n'));
   }
 
   std::size_t Text::column(std::size_t offset) const noexcept {
@@ -187,21 +192,22 @@ namespace telar::gui::features::prompt {
 
   void Text::record() {
     if (undo_.size() == undo_capacity) {
-      undo_.erase(undo_.begin());
+      static_cast<void>(undo_.remove(0));
     }
 
-    undo_.push_back({bytes_, cursor_});
+    undo_.push(Snapshot{bytes_.clone(), cursor_});
   }
 
-  bool Text::swap(std::vector<Snapshot>& from, std::vector<Snapshot>& to) {
+  bool Text::swap(ds::Vec<Snapshot, Memory>& from, ds::Vec<Snapshot, Memory>& to) {
     if (from.empty()) {
       return false;
     }
 
-    to.push_back({bytes_, cursor_});
-    bytes_ = std::move(from.back().bytes);
-    cursor_ = anchor_ = std::min(from.back().cursor, bytes_.size());
-    from.pop_back();
+    auto snapshot = from.remove(from.size() - 1);
+
+    to.push(Snapshot{std::move(bytes_), cursor_});
+    bytes_ = std::move(snapshot.bytes);
+    cursor_ = anchor_ = std::min(snapshot.cursor, bytes_.size());
     group_ = Group::none;
     ++revision_;
     return true;

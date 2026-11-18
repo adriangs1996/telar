@@ -5,24 +5,40 @@ import std;
 import telar.ebnf.matcher;
 import telar.shell.syntax;
 import telar.base.ds;
+import telar.base.memory.allocators;
 
 namespace telar::gui::features::prompt {
 
-  ds::Option<CompletionContext> completionContext(std::string_view text, std::size_t cursor, shell::Syntax syntax) {
-    std::vector<shell::Token> tokens(text.size() + 1);
-    const auto lexed = shell::lex(text, syntax, tokens, cursor);
+  CompletionContext::CompletionContext(Memory& memory)
+      : command(memory),
+        words(memory),
+        partial(memory) {}
+
+  Completion::Completion(Memory& memory)
+      : choices(memory),
+        providers(memory),
+        provider_prefix(memory) {}
+
+  ds::Option<CompletionContext> completionContext(Memory& memory, std::string_view text, std::size_t cursor, shell::Syntax syntax) {
+    ds::Vec<shell::Token, Memory> tokens{memory};
+
+    tokens.resize(text.size() + 1);
+    const auto lexed = shell::lex(text, syntax, tokens.viewMut(), cursor);
     if (!lexed.cursor_completable) {
       return ds::none;
     }
 
-    std::vector<shell::Word> words(text.size() + 1);
-    std::vector<char> unquoted(2 * text.size() + 2);
-    const auto at = shell::commandAt(text, syntax, std::span{tokens}.first(lexed.tokens), lexed, words, unquoted);
+    ds::Vec<shell::Word, Memory> words{memory};
+    ds::Vec<char, Memory> unquoted{memory};
+
+    words.resize(text.size() + 1);
+    unquoted.resize(2 * text.size() + 2);
+    const auto at = shell::commandAt(text, syntax, tokens.view().first(lexed.tokens), lexed, words.viewMut(), unquoted.viewMut());
     if (at.overflow || at.current == shell::no_word) {
       return ds::none;
     }
 
-    CompletionContext context;
+    CompletionContext context{memory};
 
     context.partial.assign(at.prefix);
     context.replace_begin = at.replace.begin;
@@ -33,26 +49,26 @@ namespace telar::gui::features::prompt {
 
       context.command.assign(name.substr(name.rfind('/') + 1));
       for (auto index = at.command_word + 1; index < at.current && index < at.words; ++index) {
-        context.words.emplace_back(words[index].text);
+        context.words.emplace(memory, words[index].text);
       }
     }
 
-    return context;
+    return std::move(context);
   }
 
-  Completion complete(const CompletionContext& context, const ebnf::command_spec* spec, ebnf::match_scratch& scratch, std::span<const std::string> history) {
-    Completion result;
+  Completion complete(Memory& memory, const CompletionContext& context, const ebnf::command_spec* spec, ebnf::match_scratch& scratch, History history) {
+    Completion result{memory};
     const auto add = [&](std::string_view text, std::string_view description) {
-      if (text.starts_with(context.partial) && std::ranges::none_of(result.choices, [&](const Choice& choice) {
+      if (text.starts_with(context.partial.view()) && std::ranges::none_of(result.choices, [&](const Choice& choice) {
             return choice.text == text;
           })) {
-        result.choices.push_back({std::string{text}, std::string{description}});
+        result.choices.push(Choice{ds::String<Memory>{memory, text}, ds::String<Memory>{memory, description}});
       }
     };
 
     if (context.command_position) {
       for (auto entry = history.rbegin(); entry != history.rend() && result.choices.size() < 64; ++entry) {
-        const auto line = std::string_view{*entry};
+        const auto line = entry->view();
         const auto end = line.find_first_of(" \t\n|;&");
 
         add(line.substr(0, end), {});
@@ -62,25 +78,28 @@ namespace telar::gui::features::prompt {
     }
 
     if (spec == nullptr) {
-      result.providers.emplace_back("file");
+      result.providers.emplace(memory, "file");
       return result;
     }
 
-    std::vector<std::string_view> words{context.words.begin(), context.words.end()};
+    ds::Vec<std::string_view, Memory> words{memory};
+
+    words.reserve(context.words.size());
+    for (const auto& word : context.words) {
+      words.push(word.view());
+    }
+
     ds::Array<ebnf::candidate, 128> candidates{};
-    const auto matched = spec->complete(words, context.partial, scratch, candidates.viewMut());
+    const auto matched = spec->complete(words.view(), context.partial, scratch, candidates.viewMut());
     if (matched.status != ebnf::match_status::valid) {
       return result;
     }
 
     for (const auto& candidate : std::span{candidates}.first(matched.count)) {
       if (candidate.kind == ebnf::candidate_kind::literal) {
-        std::string text{candidate.prefix};
-
-        text.append(candidate.text);
-        add(text, candidate.description);
+        add(ds::format(memory, "{}{}", candidate.prefix, candidate.text), candidate.description);
       } else if (std::ranges::find(result.providers, candidate.text) == result.providers.end()) {
-        result.providers.emplace_back(candidate.text);
+        result.providers.emplace(memory, candidate.text);
         result.provider_prefix.assign(candidate.prefix);
       }
     }
@@ -88,16 +107,16 @@ namespace telar::gui::features::prompt {
     return result;
   }
 
-  std::string quoteWord(std::string_view text, shell::Dialect dialect) {
+  ds::String<Memory> quoteWord(Memory& memory, std::string_view text, shell::Dialect dialect) {
     constexpr std::string_view special = " \t\n'\"\\$`;&|<>()[]{}*?!#";
-    std::string result;
+    ds::String<Memory> result{memory};
 
     for (const auto byte : text) {
       if (special.find(byte) != std::string_view::npos && !(dialect == shell::Dialect::fish && (byte == '!' || byte == '#'))) {
-        result.push_back('\\');
+        result.push('\\');
       }
 
-      result.push_back(byte);
+      result.push(byte);
     }
 
     return result;

@@ -2,11 +2,30 @@ module telar.gui.features.prompt;
 
 import std;
 import telar.base.ds;
+import telar.base.memory.allocators;
 
 namespace telar::gui::features::prompt {
 
-  Editor::Editor(Keymap keymap)
-      : keymap_(keymap) {}
+  Editor::Editor(Memory& memory, Keymap keymap)
+      : text_(memory),
+        keymap_(keymap),
+        kill_ring_(memory),
+        pasted_(memory),
+        unnamed_{ds::String<Memory>{memory}},
+        registers_(memory),
+        recorded_(memory),
+        last_change_(memory) {
+    constexpr std::size_t named_registers = 26;
+
+    registers_.reserve(named_registers);
+    for (std::size_t index = 0; index < named_registers; ++index) {
+      registers_.push(Register{ds::String<Memory>{memory}});
+    }
+  }
+
+  Memory& Editor::memory() const noexcept {
+    return kill_ring_.memory();
+  }
 
   Text& Editor::textMut() noexcept {
     return text_;
@@ -375,7 +394,7 @@ namespace telar::gui::features::prompt {
     const auto before = text_.previous(cursor);
     const auto after = text_.next(cursor);
     const auto view = text_.view();
-    std::string swapped{view.substr(cursor, after - cursor)};
+    ds::String<Memory> swapped{memory(), view.substr(cursor, after - cursor)};
 
     swapped.append(view.substr(before, cursor - before));
     text_.replace(before, after, swapped);
@@ -1133,25 +1152,25 @@ namespace telar::gui::features::prompt {
     const auto first = text_.lineStart(start);
     const auto last = text_.lineEnd(end > first ? end - 1 : first);
     const auto view = text_.view();
-    std::string result;
+    ds::String<Memory> result{memory()};
 
     for (auto line = first;;) {
       const auto line_end = text_.lineEnd(line);
       auto content = view.substr(line, line_end - line);
       if (right && !content.empty()) {
-        result += "  ";
+        result.append("  ");
       } else if (!right) {
         const auto spaces = std::min<std::size_t>(content.find_first_not_of(' ') == std::string_view::npos ? content.size() : content.find_first_not_of(' '), 2);
 
         content.remove_prefix(spaces);
       }
 
-      result += content;
+      result.append(content);
       if (line_end >= last) {
         break;
       }
 
-      result += '\n';
+      result.push('\n');
       line = line_end + 1;
     }
 
@@ -1160,9 +1179,9 @@ namespace telar::gui::features::prompt {
   }
 
   void Editor::changeCase(std::size_t start, std::size_t end, char action) {
-    std::string changed{text_.view().substr(start, end - start)};
+    ds::String<Memory> changed{memory(), text_.view().substr(start, end - start)};
 
-    for (auto& byte : changed) {
+    for (auto& byte : changed.viewMut()) {
       const bool lower = byte >= 'a' && byte <= 'z';
       const bool upper = byte >= 'A' && byte <= 'Z';
 
@@ -1188,21 +1207,25 @@ namespace telar::gui::features::prompt {
       target.text.assign(text);
       target.linewise = linewise;
       if (register_ != '"') {
-        unnamed_ = target;
+        unnamed_.text.assign(target.text);
+        unnamed_.linewise = target.linewise;
       }
     }
   }
 
-  Editor::Register Editor::load() const {
+  Editor::Loaded Editor::load() {
     if (register_ == '+' || register_ == '*') {
-      return {clipboard_.read ? clipboard_.read() : std::string{}, false};
+      pasted_.clear();
+      if (clipboard_.read) {
+        clipboard_.read(pasted_);
+      }
+
+      return {pasted_.view(), false};
     }
 
-    if (register_ >= 'a' && register_ <= 'z') {
-      return registers_[register_ - 'a'];
-    }
+    const auto& source = register_ >= 'a' && register_ <= 'z' ? registers_[register_ - 'a'] : unnamed_;
 
-    return unnamed_;
+    return {source.text.view(), source.linewise};
   }
 
   void Editor::put(bool before) {
@@ -1211,17 +1234,17 @@ namespace telar::gui::features::prompt {
       return;
     }
 
-    std::string text;
+    ds::String<Memory> text{memory()};
 
     for (std::size_t index = 0; index < count(); ++index) {
-      text += value.text;
+      text.append(value.text);
     }
 
     const auto cursor = text_.cursor();
 
     if (value.linewise) {
-      if (!text.ends_with('\n')) {
-        text += '\n';
+      if (!text.view().ends_with('\n')) {
+        text.push('\n');
       }
 
       if (before) {
@@ -1232,8 +1255,8 @@ namespace telar::gui::features::prompt {
       } else {
         const auto end = text_.lineEnd(cursor);
         if (end == text_.size()) {
-          text.pop_back();
-          text.insert(text.begin(), '\n');
+          text.truncate(text.size() - 1);
+          text.insert(0, "\n");
           text_.replace(end, end, text);
           text_.moveTo(firstNonBlank(end + 1));
         } else {
@@ -1265,10 +1288,10 @@ namespace telar::gui::features::prompt {
       end = text_.next(end);
     }
 
-    std::string text;
+    ds::String<Memory> text{memory()};
 
     for (std::size_t index = 0; index < count(); ++index) {
-      text += typed;
+      text.append(typed);
     }
 
     text_.replace(cursor, end, text);
@@ -1540,8 +1563,11 @@ namespace telar::gui::features::prompt {
     recording_ = true;
     recorded_.clear();
     if (count_ != 0) {
-      for (const auto digit : std::to_string(count_)) {
-        recorded_.push_back({KeyPress{Key::character, static_cast<char32_t>(digit)}, {}});
+      ds::Array<char, 24> digits;
+      const auto end = std::to_chars(digits.dataMut(), digits.dataMut() + digits.size(), count_).ptr;
+
+      for (const auto digit : std::string_view{digits.data(), end}) {
+        recorded_.push(Recorded{KeyPress{Key::character, static_cast<char32_t>(digit)}, ds::String<Memory>{recorded_.memory()}});
       }
     }
 
@@ -1555,18 +1581,19 @@ namespace telar::gui::features::prompt {
       return;
     }
 
-    recorded_.push_back({key, std::string{key.text}});
+    recorded_.push(Recorded{key, ds::String<Memory>{recorded_.memory(), key.text}});
   }
 
   void Editor::finishRecording() noexcept {
     if (replaying_ == 0 && recording_) {
       recording_ = false;
-      last_change_ = recorded_;
+      last_change_ = recorded_.clone();
     }
   }
 
   void Editor::repeat() {
-    const auto changes = last_change_;
+    // Copied: pressing the keys records them again.
+    const auto changes = last_change_.clone();
 
     ++replaying_;
     reset();

@@ -372,13 +372,15 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     tab(client);
     const auto& menu = prompt::line(client, 1)->menu();
 
-    check(menu && menu->choices.size() > 1 && menu->choices[0].text.starts_with("s"), "several choices open the menu");
+    check(menu && menu->choices.size() > 1 && menu->choices[0].text.view().starts_with("s"), "several choices open the menu");
     check(!menu->choices[0].description.empty(), "choices carry the spec's description");
-    const auto second = menu->choices[1].text;
+    const auto second = menu->choices[1].text.clone();
 
     tab(client);
     enter(client);
-    check(prompt::line(client, 1)->text() == "git " + second + " " && !prompt::line(client, 1)->menu(), "Tab moves through the menu and Enter takes the choice");
+    const auto taken = prompt::line(client, 1)->text();
+
+    check(taken.starts_with("git ") && taken.substr(4) == std::format("{} ", second) && !prompt::line(client, 1)->menu(), "Tab moves through the menu and Enter takes the choice");
 
     // An alias completes as the words it stands for, with its command's spec.
     prompt::key(client, 1, prompt::KeyPress{prompt::Key::character, 'u', {.control = true}});

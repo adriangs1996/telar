@@ -5,6 +5,8 @@ import std;
 
 import :completion;
 import telar.shell.syntax;
+import telar.base.ds;
+import telar.base.memory.allocators;
 
 export namespace telar::gui::features::prompt {
 
@@ -32,18 +34,24 @@ export namespace telar::gui::features::prompt {
   struct Menu {
     static constexpr std::size_t capacity = 256;
 
-    std::vector<Choice> choices;
+    explicit Menu(Memory& memory)
+        : choices(memory),
+          requests(memory),
+          label(memory),
+          all(memory) {}
+
+    Choices choices;
     std::size_t selected = 0;
     std::size_t begin = 0;
     std::size_t end = 0;
     // Requests to the runtime whose answers join the choices.
-    std::vector<std::uint64_t> requests;
+    ds::Vec<std::uint64_t, Memory> requests;
     shell::Dialect dialect = shell::Dialect::posix;
     // What the choices are, for the menu's heading: "commands", "branches · git".
-    std::string label;
+    ds::String<Memory> label;
     // Every choice offered for the word, and the cursor it was offered at: typing narrows them
     // down; erasing past that cursor asks for them again.
-    std::vector<Choice> all;
+    Choices all;
     std::size_t floor = 0;
     // Every choice for the word arrived: a cut list asks again as typing narrows it.
     bool whole = true;

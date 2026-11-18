@@ -5,6 +5,8 @@
 export module telar.gui.features.prompt:text;
 
 import std;
+import telar.base.memory.allocators;
+import telar.base.ds;
 
 namespace telar::gui::features::prompt {
 
@@ -14,6 +16,9 @@ namespace telar::gui::features::prompt {
     // limits of the same order.
     static constexpr std::size_t capacity = 256 * 1024;
     static constexpr std::size_t undo_capacity = 256;
+
+    // The text and its undo history live in `memory`.
+    explicit Text(Memory& memory);
 
     std::string_view view() const noexcept;
 
@@ -85,7 +90,7 @@ namespace telar::gui::features::prompt {
     };
 
     struct Snapshot {
-      std::string bytes;
+      ds::String<Memory> bytes;
       std::size_t cursor;
     };
 
@@ -93,11 +98,11 @@ namespace telar::gui::features::prompt {
 
     void record();
 
-    bool swap(std::vector<Snapshot>& from, std::vector<Snapshot>& to);
+    bool swap(ds::Vec<Snapshot, Memory>& from, ds::Vec<Snapshot, Memory>& to);
 
-    std::string bytes_;
-    std::vector<Snapshot> undo_;
-    std::vector<Snapshot> redo_;
+    ds::String<Memory> bytes_;
+    ds::Vec<Snapshot, Memory> undo_;
+    ds::Vec<Snapshot, Memory> redo_;
     std::size_t cursor_ = 0;
     std::size_t anchor_ = 0;
     std::uint64_t revision_ = 0;

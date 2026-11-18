@@ -532,13 +532,13 @@ namespace telar::gui::qt {
 
     track(text, moving && composing.isEmpty() && static_cast<application::prompt::Surface>(surface_) == application::prompt::Surface::editor);
     display_.assign(text.substr(0, cursor));
-    display_.append(composing.constData(), static_cast<std::size_t>(composing.size()));
+    display_.append(std::string_view{composing.constData(), static_cast<std::size_t>(composing.size())});
     display_.append(text.substr(cursor));
     const auto typed = display_.size();
     const auto ghost = composing.isEmpty() && controller_->configuration().prompt.ghost ? controller_->suggestion(pane_id_) : std::string_view{};
     // A new suggestion fades in; one that still fits what was typed stays as it was.
-    if (ghost != std::string_view{ghost_}) {
-      const bool continues = !ghost.empty() && std::string_view{ghost_}.ends_with(ghost);
+    if (ghost != ghost_.view()) {
+      const bool continues = !ghost.empty() && ghost_.view().ends_with(ghost);
       if (!continues) {
         ghost_started_ms_ = moving && !ghost.empty() ? clock_.elapsed() : -1;
       }
@@ -547,12 +547,14 @@ namespace telar::gui::qt {
     }
 
     display_.append(ghost);
-    styles_.assign(display_.size(), application::prompt::Style::plain);
+    styles_.clear();
+    styles_.resize(display_.size(), application::prompt::Style::plain);
+    const auto styles = styles_.viewMut();
     // What was typed alone: the word at its end is still being typed, whatever the suggestion
     // after it would make of it.
-    application::prompt::classify(std::string_view{display_}.substr(0, typed), std::span{styles_}.first(typed), shell::Syntax{.dialect = pane != nullptr && pane->shell.shell == IntegratedShell::fish ? shell::Dialect::fish : shell::Dialect::posix});
-    std::fill_n(styles_.begin() + static_cast<std::ptrdiff_t>(cursor), composing.size(), application::prompt::Style::pending);
-    std::fill(styles_.begin() + static_cast<std::ptrdiff_t>(typed), styles_.end(), application::prompt::Style::ghost);
+    application::prompt::classify(display_.view().substr(0, typed), styles.first(typed), tokens_, shell::Syntax{.dialect = pane != nullptr && pane->shell.shell == IntegratedShell::fish ? shell::Dialect::fish : shell::Dialect::posix});
+    std::ranges::fill(styles.subspan(cursor, static_cast<std::size_t>(composing.size())), application::prompt::Style::pending);
+    std::ranges::fill(styles.subspan(typed), application::prompt::Style::ghost);
     // A command the shell does not run is marked; one the runtime is still looking for waits.
     for (std::size_t start = 0; start < typed;) {
       if (styles_[start] != application::prompt::Style::command) {
@@ -566,20 +568,25 @@ namespace telar::gui::qt {
         ++end;
       }
 
-      const auto presence = controller_->commandPresence(pane_id_, std::string_view{display_}.substr(start, end - start));
+      const auto presence = controller_->commandPresence(pane_id_, display_.view().substr(start, end - start));
       if (presence == application::prompt::CommandPresence::missing || presence == application::prompt::CommandPresence::pending) {
-        std::fill(styles_.begin() + static_cast<std::ptrdiff_t>(start), styles_.begin() + static_cast<std::ptrdiff_t>(end), presence == application::prompt::CommandPresence::missing ? application::prompt::Style::missing : application::prompt::Style::pending);
+        std::ranges::fill(styles.subspan(start, end - start), presence == application::prompt::CommandPresence::missing ? application::prompt::Style::missing : application::prompt::Style::pending);
       }
 
       start = end;
     }
 
-    groups_.assign(display_.size(), 0);
+    groups_.clear();
+    groups_.resize(display_.size(), 0);
     if (composing.isEmpty()) {
+      const auto groups = groups_.viewMut();
+
       for (std::size_t index = 0; index < fresh_.size(); ++index) {
         const auto& fresh = fresh_[index];
+        const auto begin = std::min(fresh.start, typed);
+        const auto end = std::min(fresh.end, typed);
 
-        std::fill(groups_.begin() + static_cast<std::ptrdiff_t>(std::min(fresh.start, typed)), groups_.begin() + static_cast<std::ptrdiff_t>(std::min(fresh.end, typed)), static_cast<std::uint8_t>(index + 1));
+        std::ranges::fill(groups.subspan(begin, end - begin), static_cast<std::uint8_t>(index + 1));
       }
     }
 
@@ -589,7 +596,7 @@ namespace telar::gui::qt {
 
     const auto caret = shifted(cursor);
     const auto mark = shifted(anchor);
-    const bool unchanged = reuse_layout && !cell_changed && !animating(clock_.elapsed()) && display_ == laid_.display && styles_ == laid_.styles && groups_ == laid_.groups && caret == laid_.caret && mark == laid_.anchor && maximum_columns_ == laid_.columns && maximum_rows_ == laid_.rows;
+    const bool unchanged = reuse_layout && !cell_changed && !animating(clock_.elapsed()) && display_.view() == laid_.display.view() && std::ranges::equal(styles_.view(), laid_.styles.view()) && std::ranges::equal(groups_.view(), laid_.groups.view()) && caret == laid_.caret && mark == laid_.anchor && maximum_columns_ == laid_.columns && maximum_rows_ == laid_.rows;
     if (unchanged) {
       if (previous_surface != surface_ || previous_failed != failed_ || previous_cursor_hidden != cursor_hidden_ || line.hasValue()) {
         emit stateChanged();
@@ -598,10 +605,12 @@ namespace telar::gui::qt {
       return;
     }
 
-    layout_ = application::prompt::layout(display_, styles_, caret, mark, static_cast<std::uint32_t>(maximum_columns_), groups_);
-    laid_.display.assign(display_);
-    laid_.styles.assign(styles_.begin(), styles_.end());
-    laid_.groups.assign(groups_.begin(), groups_.end());
+    application::prompt::layout(layout_, display_.view(), styles_.view(), caret, mark, static_cast<std::uint32_t>(maximum_columns_), groups_.view());
+    laid_.display.assign(display_.view());
+    laid_.styles.clear();
+    laid_.styles.extend(styles_.view());
+    laid_.groups.clear();
+    laid_.groups.extend(groups_.view());
     laid_.caret = caret;
     laid_.anchor = mark;
     laid_.columns = maximum_columns_;
@@ -642,7 +651,7 @@ namespace telar::gui::qt {
       if (used == runs_.size()) {
         auto* item = new NativeCellText(this);
 
-        runs_.push_back(item);
+        runs_.push(item);
       }
 
       auto* item = runs_[used++];
@@ -764,12 +773,12 @@ namespace telar::gui::qt {
   // Follows what the editor holds: text inserted at one place animates in, text removed
   // cancels what animated there, and the rest moves with the edit.
   void PromptEditorItem::track(std::string_view text, bool animate) {
-    const std::string_view previous{typed_};
+    const auto previous = typed_.view();
     const auto now = clock_.elapsed();
 
-    std::erase_if(fresh_, [&](const Fresh& fresh) {
-      return now - fresh.started_ms >= (fresh.motion == Motion::rise ? rise_ms : sweep_ms);
-    });
+    static_cast<void>(fresh_.retain([&](const Fresh& fresh) {
+      return now - fresh.started_ms < (fresh.motion == Motion::rise ? rise_ms : sweep_ms);
+    }));
 
     if (text == previous) {
       return;
@@ -806,11 +815,11 @@ namespace telar::gui::qt {
 
     typed_.assign(text);
 
-    std::erase_if(fresh_, [&](const Fresh& fresh) {
-      return fresh.end > prefix && fresh.start < prefix + std::max<std::size_t>(removed, 1);
-    });
+    static_cast<void>(fresh_.retain([&](const Fresh& fresh) {
+      return !(fresh.end > prefix && fresh.start < prefix + std::max<std::size_t>(removed, 1));
+    }));
 
-    for (auto& fresh : fresh_) {
+    for (auto& fresh : fresh_.viewMut()) {
       if (fresh.start >= prefix + removed) {
         fresh.start = fresh.start + inserted - removed;
         fresh.end = fresh.end + inserted - removed;
@@ -833,7 +842,7 @@ namespace telar::gui::qt {
     }
 
     if (characters == 1) {
-      fresh_.push_back({.start = prefix, .end = prefix + inserted, .motion = Motion::rise, .started_ms = now});
+      fresh_.push({.start = prefix, .end = prefix + inserted, .motion = Motion::rise, .started_ms = now});
       return;
     }
 
@@ -846,7 +855,7 @@ namespace telar::gui::qt {
         continue;
       }
 
-      fresh_.push_back({.start = start, .end = prefix + offset, .motion = Motion::sweep, .started_ms = now + delay});
+      fresh_.push({.start = start, .end = prefix + offset, .motion = Motion::sweep, .started_ms = now + delay});
       start = prefix + offset;
       delay += sweep_step_ms;
     }

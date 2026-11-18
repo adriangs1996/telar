@@ -84,7 +84,7 @@ namespace telar::gui::application::prompt {
     void complete(Session& session, std::uint64_t pane_id, features::prompt::PaneLine& line, shell::Dialect dialect) {
       using features::prompt::SpecState;
       const auto* pane = session.findPane(pane_id);
-      auto context = features::prompt::completing(line, dialect);
+      auto context = features::prompt::completing(Access::prompt(session), line, dialect);
       if (pane == nullptr || !context) {
         return;
       }
@@ -145,10 +145,10 @@ namespace telar::gui::application::prompt {
         break;
       case Outcome::answer: {
         features::history::HistoryText::validate(text.empty() ? std::string_view{" "} : text, false);
-        std::string answer{text};
+        ds::String<Memory> answer{Access::memory(session), text};
 
-        answer.push_back('\r');
-        session.input(pane_id, answer);
+        answer.push('\r');
+        session.input(pane_id, answer.view());
         break;
       }
       case Outcome::bytes:
@@ -162,8 +162,8 @@ namespace telar::gui::application::prompt {
     // An answer about a command the editor marks: a command found may have a spec, asked now so it
     // is there by the first Tab.
     Change settle(Session& session, const features::prompt::Settled& settled) {
-      if (settled.presence == CommandPresence::found && settled.word.find('/') == std::string::npos) {
-        static_cast<void>(specState(session, settled.pane_id, settled.word));
+      if (settled.presence == CommandPresence::found && settled.word.view().find('/') == std::string_view::npos) {
+        static_cast<void>(specState(session, settled.pane_id, settled.word.view()));
       }
 
       return changed(session, features::prompt::settle(Access::prompt(session), settled) ? settled.pane_id : 0);
@@ -230,7 +230,7 @@ namespace telar::gui::application::prompt {
     return typed ? typed->suggestion() : std::string_view{};
   }
 
-  std::span<const std::string> history(const Session& session) noexcept {
+  features::prompt::History history(const Session& session) noexcept {
     return features::prompt::history(Access::prompt(session));
   }
 

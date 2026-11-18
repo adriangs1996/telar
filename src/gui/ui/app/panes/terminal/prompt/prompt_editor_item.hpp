@@ -6,6 +6,7 @@ static_assert(true);
 #pragma once
 
 #include "prompt_controller.hpp"
+#include "foundation/core/memory.hpp"
 #include "ui/design/controls/cell_text_grid.hpp"
 #include "ui/foundation/scene/ancestor_geometry.hpp"
 #include <QColor>
@@ -20,10 +21,10 @@ static_assert(true);
 #include <QtQml/qqmlregistration.h>
 #include <cstddef>
 #include <cstdint>
-#include <vector>
 
 import telar.gui.application;
 import telar.base.ds;
+import telar.shell.syntax;
 
 namespace telar::gui::qt {
 
@@ -188,11 +189,14 @@ namespace telar::gui::qt {
     [[nodiscard]] QColor roleColor(application::prompt::Style style) const;
     void cacheColors();
 
+    // QML makes the item, so it owns the memory its buffers live in.
+    SystemAllocator memory_;
+    MemoryAdapter<SystemAllocator> adapter_{memory_};
     // Glyphs snap to the scene's pixels, so moving any ancestor repaints them.
     AncestorGeometry ancestors_;
     QPointer<PromptController> controller_;
     CellTextGrid resolved_;
-    std::vector<NativeCellText*> runs_;
+    ds::Vec<NativeCellText*, Memory> runs_{adapter_};
     QVariantMap grid_;
     QVariantMap colors_;
     // What colors_ gives each style, the accent and the path underline, read once per change of
@@ -201,18 +205,20 @@ namespace telar::gui::qt {
     QColor accent_;
     QColor underline_;
     QString preedit_;
-    std::string display_;
-    std::string typed_;
-    std::string ghost_;
-    std::vector<application::prompt::Style> styles_;
-    std::vector<std::uint8_t> groups_;
-    std::vector<Fresh> fresh_;
+    ds::String<Memory> display_{adapter_};
+    ds::String<Memory> typed_{adapter_};
+    ds::String<Memory> ghost_{adapter_};
+    ds::Vec<application::prompt::Style, Memory> styles_{adapter_};
+    ds::Vec<std::uint8_t, Memory> groups_{adapter_};
+    ds::Vec<Fresh, Memory> fresh_{adapter_};
+    // The lexer's scratch for classify, kept across refreshes.
+    ds::Vec<shell::Token, Memory> tokens_{adapter_};
     QVariantList glows_;
     qint64 ghost_started_ms_ = -1;
     QElapsedTimer clock_;
     // Drives frames while text animates, in step with the window's animations.
     QVariantAnimation ticker_;
-    application::prompt::Layout layout_;
+    application::prompt::Layout layout_{adapter_};
     std::uint64_t pane_id_ = 0;
     std::uint64_t revision_ = 0;
     qreal scale_ = 1;
@@ -227,16 +233,21 @@ namespace telar::gui::qt {
 
     // What the current layout was built from.
     struct Laid {
-      std::string display;
-      std::vector<application::prompt::Style> styles;
-      std::vector<std::uint8_t> groups;
+      explicit Laid(Memory& memory)
+          : display(memory),
+            styles(memory),
+            groups(memory) {}
+
+      ds::String<Memory> display;
+      ds::Vec<application::prompt::Style, Memory> styles;
+      ds::Vec<std::uint8_t, Memory> groups;
       std::size_t caret = 0;
       std::size_t anchor = 0;
       int columns = 0;
       int rows = 0;
     };
 
-    Laid laid_;
+    Laid laid_{adapter_};
     // The menu's choices as QML last read them, for the line and revision they came from.
     mutable QVariantList choices_;
     mutable const void* choices_line_ = nullptr;

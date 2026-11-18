@@ -3,6 +3,8 @@
 export module telar.gui.features.prompt:keys;
 
 import std;
+import telar.base.memory.allocators;
+import telar.base.ds;
 
 export namespace telar::gui::features::prompt {
 
@@ -85,8 +87,9 @@ export namespace telar::gui::features::prompt {
 
   // The system clipboard behind vim's "+ and "* registers.
   struct Clipboard {
-    std::function<std::string()> read;
-    std::function<void(std::string_view)> write;
+    // Replaces `text` with what the clipboard holds.
+    ds::Function<void(ds::String<Memory>& text)> read;
+    ds::Function<void(std::string_view text)> write;
   };
 
 }

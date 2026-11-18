@@ -7,8 +7,11 @@ import telar.base.ds;
 
 namespace telar::gui::features::prompt {
 
-  Line::Line(Keymap keymap)
-      : editor_(keymap) {}
+  Line::Line(Memory& memory, Keymap keymap)
+      : editor_(memory, keymap),
+        recent_(memory),
+        draft_(memory),
+        delivery_(memory) {}
 
   Editor& Line::editorMut() noexcept {
     return editor_;
@@ -19,7 +22,7 @@ namespace telar::gui::features::prompt {
   }
 
   std::string_view Line::delivery() const noexcept {
-    return delivery_;
+    return delivery_.view();
   }
 
   std::uint64_t Line::revision() const noexcept {
@@ -38,8 +41,8 @@ namespace telar::gui::features::prompt {
     return secret_keys_;
   }
 
-  const std::vector<std::string>& Line::recent() const noexcept {
-    return recent_;
+  History Line::recent() const noexcept {
+    return recent_.view();
   }
 
   void Line::setKeymap(Keymap keymap) {
@@ -49,7 +52,7 @@ namespace telar::gui::features::prompt {
     }
   }
 
-  std::string_view Line::suggestion(std::span<const std::string> history) const noexcept {
+  std::string_view Line::suggestion(History history) const noexcept {
     const auto& text = editor_.text();
 
     if (textIsSmallAndInVimMode(text)) {
@@ -60,20 +63,20 @@ namespace telar::gui::features::prompt {
 
     for (const auto& entry : std::views::reverse(recent_)) {
       if (isCommandExtendedBy(entry, view)) {
-        return std::string_view{entry}.substr(view.size());
+        return entry.view().substr(view.size());
       }
     }
 
     for (const auto& command : history) {
       if (isCommandExtendedBy(command, view)) {
-        return std::string_view{command}.substr(view.size());
+        return command.view().substr(view.size());
       }
     }
 
     return {};
   }
 
-  Outcome Line::pressKey(Surface surface, const KeyPress& key, const Continuation& incomplete, std::span<const std::string> history) {
+  Outcome Line::pressKey(Surface surface, const KeyPress& key, const Continuation& incomplete, History history) {
     delivery_.clear();
     const auto rest = suggestion(history);
     // → and Ctrl-E at the end take the whole suggestion, Alt-F its next word, as fish does.
@@ -91,7 +94,8 @@ namespace telar::gui::features::prompt {
           taken = taken.substr(0, end == std::string_view::npos ? taken.size() : end + (taken[end] == '/' ? 1 : 0));
         }
 
-        const std::string copy{taken};
+        // Copied: the suggestion views the history the insert may change.
+        const ds::String<Memory> copy{draft_.memory(), taken};
 
         editor_.textMut().insert(copy);
         return Outcome::edited;
@@ -119,12 +123,12 @@ namespace telar::gui::features::prompt {
     return refining && menu_ ? refine(outcome) : outcome;
   }
 
-  Outcome Line::performAction(Surface surface, Action action, const Continuation& incomplete, std::span<const std::string> history) {
+  Outcome Line::performAction(Surface surface, Action action, const Continuation& incomplete, History history) {
     delivery_.clear();
     closeMenu();
     if (action == Action::accept_suggestion) {
       if (const auto rest = suggestion(history); !rest.empty()) {
-        const std::string copy{rest};
+        const ds::String<Memory> copy{draft_.memory(), rest};
 
         editor_.textMut().insert(copy);
       }
@@ -149,21 +153,33 @@ namespace telar::gui::features::prompt {
     return menu_;
   }
 
-  void Line::offer(std::vector<Choice> choices, std::size_t begin, std::size_t end, std::vector<std::uint64_t> requests, shell::Dialect dialect, std::string label) {
+  void Line::offer(Choices choices, std::size_t begin, std::size_t end, ds::Vec<std::uint64_t, Memory> requests, shell::Dialect dialect, std::string_view label) {
     const bool whole = choices.size() <= Menu::capacity;
     if (!whole) {
-      choices.resize(Menu::capacity);
+      choices.truncate(Menu::capacity);
     }
 
-    auto all = choices;
+    Menu menu{draft_.memory()};
 
-    menu_ = Menu{.choices = std::move(choices), .begin = begin, .end = end, .requests = std::move(requests), .dialect = dialect, .label = std::move(label), .all = std::move(all), .floor = end, .whole = whole, .refined = std::exchange(refining_, false)};
+    menu.all = choices.clone();
+    menu.choices = std::move(choices);
+    menu.begin = begin;
+    menu.end = end;
+    menu.requests = std::move(requests);
+    menu.dialect = dialect;
+    menu.label.assign(label);
+    menu.floor = end;
+    menu.whole = whole;
+    menu.refined = std::exchange(refining_, false);
+    menu_ = std::move(menu);
     settle();
     ++revision_;
   }
 
   bool Line::receive(std::uint64_t request, std::span<const Choice> paths, bool truncated) {
-    if (!menu_ || std::erase(menu_.getMut().requests, request) == 0) {
+    if (!menu_ || menu_.getMut().requests.retain([request](std::uint64_t waiting) {
+          return waiting != request;
+        }) == 0) {
       return false;
     }
 
@@ -175,9 +191,9 @@ namespace telar::gui::features::prompt {
       if (menu_->all.size() < Menu::capacity && std::ranges::none_of(menu_->all, [&](const Choice& choice) {
             return choice.text == path.text;
           })) {
-        menu_.getMut().all.push_back(path);
-        if (path.text.starts_with(word)) {
-          menu_.getMut().choices.push_back(path);
+        menu_.getMut().all.push(path.clone());
+        if (path.text.view().starts_with(word)) {
+          menu_.getMut().choices.push(path.clone());
         }
       }
     }
@@ -229,10 +245,10 @@ namespace telar::gui::features::prompt {
     }
 
     if (recent_.size() == recent_capacity) {
-      recent_.erase(recent_.begin());
+      static_cast<void>(recent_.remove(0));
     }
 
-    recent_.emplace_back(command);
+    recent_.emplace(recent_.memory(), command);
   }
 
   bool Line::textIsSmallAndInVimMode(const Text& text) const {
@@ -307,10 +323,10 @@ namespace telar::gui::features::prompt {
   void Line::accept() {
     const auto& menu = *menu_;
     const auto& choice = menu.choices[menu.selected];
-    auto word = quoteWord(choice.text, menu.dialect);
+    auto word = quoteWord(draft_.memory(), choice.text, menu.dialect);
 
     if (!choice.directory) {
-      word.push_back(' ');
+      word.push(' ');
     }
 
     const auto begin = menu.begin;
@@ -385,8 +401,8 @@ namespace telar::gui::features::prompt {
 
     menu.choices.clear();
     for (const auto& choice : menu.all) {
-      if (choice.text.starts_with(word)) {
-        menu.choices.push_back(choice);
+      if (choice.text.view().starts_with(word)) {
+        menu.choices.push(choice.clone());
       }
     }
 

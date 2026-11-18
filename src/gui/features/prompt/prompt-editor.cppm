@@ -8,6 +8,7 @@ import std;
 import :keys;
 import :text;
 import telar.base.ds;
+import telar.base.memory.allocators;
 
 namespace telar::gui::features::prompt {
 
@@ -31,7 +32,8 @@ namespace telar::gui::features::prompt {
 
   class Editor {
   public:
-    explicit Editor(Keymap keymap = Keymap::emacs);
+    // The text, its registers and its recorded keys live in `memory`.
+    explicit Editor(Memory& memory, Keymap keymap = Keymap::emacs);
 
     Text& textMut() noexcept;
 
@@ -79,8 +81,15 @@ namespace telar::gui::features::prompt {
 
     struct Recorded {
       KeyPress key;
-      std::string text;
+      ds::String<Memory> text;
+
+      Recorded clone() const {
+        return {key, text.clone()};
+      }
     };
+
+    // The allocator the editor's texts come from.
+    Memory& memory() const noexcept;
 
     // ---- shared editing --------------------------------------------------------------------
 
@@ -174,11 +183,17 @@ namespace telar::gui::features::prompt {
     void store(std::string_view text, bool linewise);
 
     struct Register {
-      std::string text;
+      ds::String<Memory> text;
       bool linewise = false;
     };
 
-    Register load() const;
+    // The text a put inserts: the register's, or the clipboard's read into `pasted_`.
+    struct Loaded {
+      std::string_view text;
+      bool linewise = false;
+    };
+
+    Loaded load();
 
     void put(bool before);
 
@@ -204,11 +219,13 @@ namespace telar::gui::features::prompt {
     Keymap keymap_;
     Mode mode_ = Mode::insert;
     Clipboard clipboard_;
-    std::string kill_ring_;
+    ds::String<Memory> kill_ring_;
+    ds::String<Memory> pasted_;
     Register unnamed_;
-    ds::Array<Register, 26> registers_;
-    std::vector<Recorded> recorded_;
-    std::vector<Recorded> last_change_;
+    // vim's named registers, a to z.
+    ds::Vec<Register, Memory> registers_;
+    ds::Vec<Recorded, Memory> recorded_;
+    ds::Vec<Recorded, Memory> last_change_;
     ds::Option<std::size_t> goal_column_;
     std::pair<char, char32_t> last_find_{'f', 0};
     std::size_t count_ = 0;

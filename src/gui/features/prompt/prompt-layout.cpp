@@ -8,16 +8,14 @@ import telar.base.ds;
 
 namespace telar::gui::features::prompt {
 
-  void classify(std::string_view text, std::span<Style> styles, shell::Syntax syntax) {
+  void classify(std::string_view text, std::span<Style> styles, ds::Vec<shell::Token, Memory>& tokens, shell::Syntax syntax) {
     std::ranges::fill(styles, Style::plain);
-    thread_local std::vector<shell::Token> tokens;
-
     tokens.resize(text.size() + 1);
-    const auto lexed = shell::lex(text, syntax, tokens);
+    const auto lexed = shell::lex(text, syntax, tokens.viewMut());
     static constexpr ds::Array<std::string_view, 7> wrappers{"sudo", "env", "exec", "time", "command", "nohup", "doas"};
     std::uint32_t wrapped = shell::no_command;
 
-    for (const auto& token : std::span{tokens}.first(lexed.tokens)) {
+    for (const auto& token : tokens.view().first(lexed.tokens)) {
       Style style = Style::plain;
       const auto word = text.substr(token.begin, token.end - token.begin);
 
@@ -68,15 +66,21 @@ namespace telar::gui::features::prompt {
     }
   }
 
-  bool incomplete(std::string_view text, shell::Syntax syntax) {
-    thread_local std::vector<shell::Token> tokens;
+  bool incomplete(Memory& memory, std::string_view text, shell::Syntax syntax) {
+    ds::Vec<shell::Token, Memory> tokens{memory};
 
     tokens.resize(text.size() + 1);
-    return shell::lex(text, syntax, tokens).completeness != shell::Completeness::complete;
+    return shell::lex(text, syntax, tokens.viewMut()).completeness != shell::Completeness::complete;
   }
 
-  Layout layout(std::string_view text, std::span<const Style> styles, std::size_t cursor, std::size_t anchor, std::uint32_t columns, std::span<const std::uint8_t> groups) {
-    Layout result;
+  void layout(Layout& result, std::string_view text, std::span<const Style> styles, std::size_t cursor, std::size_t anchor, std::uint32_t columns, std::span<const std::uint8_t> groups) {
+    result.runs.clear();
+    result.selection.clear();
+    result.rows = 1;
+    result.width = Layout::indent;
+    result.caret_row = 0;
+    result.caret_column = Layout::indent;
+    result.caret_columns = 1;
 
     columns = std::max<std::uint32_t>(columns, Layout::indent + 1);
     std::uint32_t row = 0;
@@ -97,9 +101,9 @@ namespace telar::gui::features::prompt {
       }
 
       if (!result.selection.empty() && result.selection.back().row == at_row && result.selection.back().column + result.selection.back().columns == at_column) {
-        result.selection.back().columns += width;
+        result.selection.backMut().columns += width;
       } else if (result.selection.size() < Layout::maximum_runs) {
-        result.selection.push_back({at_row, at_column, width});
+        result.selection.push({at_row, at_column, width});
       }
     };
 
@@ -134,10 +138,10 @@ namespace telar::gui::features::prompt {
       const auto group = start < groups.size() ? groups[start] : std::uint8_t{0};
       auto& runs = result.runs;
       if (!runs.empty() && runs.back().row == row && runs.back().style == style && runs.back().group == group && runs.back().end == start) {
-        runs.back().end = offset;
-        runs.back().columns += width;
+        runs.backMut().end = offset;
+        runs.backMut().columns += width;
       } else if (runs.size() < Layout::maximum_runs) {
-        runs.push_back({row, column, width, start, offset, style, group});
+        runs.push({row, column, width, start, offset, style, group});
       }
 
       column += width;
@@ -157,7 +161,6 @@ namespace telar::gui::features::prompt {
 
     result.rows = row + 1;
     result.width = std::max(result.width, std::min(columns, result.caret_column + 1));
-    return result;
   }
 
 }

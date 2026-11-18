@@ -65,38 +65,36 @@ export namespace telar::gui::features::prompt {
 namespace telar::gui::features::prompt {
 
   // What State keeps for each question in flight and each pane's commands.
+  using Name = ds::String<Memory>;
+
   struct PathCompletion {
     std::uint64_t pane_id;
-    std::string base;
-    std::string query;
+    Name base;
+    Name query;
   };
 
   struct CommandRequest {
     std::uint64_t pane_id;
-    std::string word;
-  };
-
-  struct StringHash {
-    using is_transparent = void;
-
-    std::size_t operator()(std::string_view text) const noexcept;
+    Name word;
   };
 
   struct CommandChecks {
+    explicit CommandChecks(Memory& memory);
+
     std::uint32_t commands = 0;
-    std::string directory;
-    std::unordered_map<std::string, CommandPresence, StringHash, std::equal_to<>> words;
+    Name directory;
+    ds::Map<Name, CommandPresence, Memory> words;
     // Every command that starts with a prefix, from an answer that listed them all: a longer
     // word typed under it is found or missing at once, without asking again.
-    std::unordered_map<std::string, std::vector<std::string>, StringHash, std::equal_to<>> listed;
-    // Commands seen running, kept across commands.
-    std::unordered_set<std::string, StringHash, std::equal_to<>> learned;
+    ds::Map<Name, ds::Vec<Name, Memory>, Memory> listed;
+    // Commands seen running, kept across commands; a set, so each maps to nothing.
+    ds::Map<Name, bool, Memory> learned;
     // Whether the runtime has a spec for each command asked about, and what each alias
     // among them stands for.
-    std::unordered_map<std::string, SpecState, StringHash, std::equal_to<>> specs;
-    std::unordered_map<std::string, std::string, StringHash, std::equal_to<>> aliases;
+    ds::Map<Name, SpecState, Memory> specs;
+    ds::Map<Name, Name, Memory> aliases;
     // The command each alias last stood for, kept across commands for the digest it asks with.
-    std::unordered_map<std::string, std::string, StringHash, std::equal_to<>> alias_targets;
+    ds::Map<Name, Name, Memory> alias_targets;
   };
 
 }
@@ -110,9 +108,10 @@ export namespace telar::gui::features::prompt {
     friend struct Access;
 
   public:
-    inline PaneLine(std::uint64_t pane_id, Keymap keymap)
-        : line_(keymap),
-          pane_id_(pane_id) {}
+    inline PaneLine(Memory& memory, std::uint64_t pane_id, Keymap keymap)
+        : line_(memory, keymap),
+          pane_id_(pane_id),
+          jumps_(memory) {}
 
   private:
     Line line_;
@@ -126,7 +125,7 @@ export namespace telar::gui::features::prompt {
     char chord_ = 0;
     // Where jumps left from, by stable row at the view's top, oldest first, and which of them
     // Ctrl-O went back to: the list's end while it has not.
-    std::vector<std::uint64_t> jumps_;
+    ds::Vec<std::uint64_t, Memory> jumps_;
     std::size_t jump_ = 0;
   };
 
@@ -134,7 +133,7 @@ export namespace telar::gui::features::prompt {
   // until a use case changes them. Inline, as a line's view reads it whenever it draws.
   class LineView {
   public:
-    inline LineView(const Line& line, std::span<const std::string> history) noexcept
+    inline LineView(const Line& line, History history) noexcept
         : line_(&line),
           history_(history) {}
 
@@ -189,7 +188,7 @@ export namespace telar::gui::features::prompt {
     }
 
     // The commands sent from this line, oldest first.
-    [[nodiscard]] TBC_HOT_PATH inline const std::vector<std::string>& recent() const noexcept {
+    [[nodiscard]] TBC_HOT_PATH inline History recent() const noexcept {
       return line_->recent();
     }
 
@@ -211,7 +210,7 @@ export namespace telar::gui::features::prompt {
 
   private:
     const Line* line_;
-    std::span<const std::string> history_;
+    History history_;
   };
 
   // The questions Tab asks the runtime, and the choices known at once. Opaque: application asks
@@ -223,25 +222,32 @@ export namespace telar::gui::features::prompt {
     // Files or directories under the directory typed, then each provider the spec names.
     static constexpr std::size_t maximum_questions = 11;
 
-  private:
+    explicit CompletionPlan(Memory& memory);
+
     struct Question {
+      explicit Question(Memory& memory)
+          : root(memory),
+            query(memory),
+            base(memory) {}
+
       bool paths = false;
       PathKindFilter kind = PathKindFilter::any;
       CompletionProvider provider = CompletionProvider::command;
       // The directory a path search reads, or the prefix a provider's words start with.
-      std::string root;
-      std::string query;
+      Name root;
+      Name query;
       // What the answers are written after: the word's text before the part searched for.
-      std::string base;
+      Name base;
       std::uint64_t request_id = 0;
     };
 
+  private:
     CompletionContext context_;
     Completion completion_;
-    std::string label_;
+    Name label_;
     shell::Dialect dialect_ = shell::Dialect::posix;
-    ds::Array<Question, maximum_questions> questions_;
-    std::size_t count_ = 0;
+    // At most maximum_questions.
+    ds::Vec<Question, Memory> questions_;
   };
 
   // A pane's line, and whether it was made while no history arrived: the history is to be asked
@@ -254,7 +260,7 @@ export namespace telar::gui::features::prompt {
   // What an answer about a command the line marks found, once its question is settled.
   struct Settled {
     std::uint64_t pane_id = 0;
-    std::string word;
+    Name word;
     CommandPresence presence = CommandPresence::unknown;
   };
 
@@ -268,20 +274,25 @@ export namespace telar::gui::features::prompt {
     // replace the oldest instead of growing it for as long as the client lives.
     static constexpr std::uint16_t history_limit = 1000;
 
+    // Every line and what it asks for live in `memory`.
+    explicit State(Memory& memory);
+
   private:
+    Memory& memory_;
     Specs specs_;
-    std::vector<std::string> history_;
+    ds::Vec<Name, Memory> history_;
     std::uint64_t history_request_ = 0;
-    std::unordered_map<std::uint64_t, PathCompletion> completions_;
-    std::unordered_map<std::uint64_t, CommandRequest> command_requests_;
-    std::unordered_map<std::uint64_t, CommandChecks> command_checks_;
-    std::unordered_map<std::uint64_t, CommandRequest> spec_requests_;
+    ds::Map<std::uint64_t, PathCompletion, Memory> completions_;
+    ds::Map<std::uint64_t, CommandRequest, Memory> command_requests_;
+    ds::Map<std::uint64_t, CommandChecks, Memory> command_checks_;
+    ds::Map<std::uint64_t, CommandRequest, Memory> spec_requests_;
     // Tab pressed while a pane waited for a spec: the line it completes, by pane.
-    std::unordered_map<std::uint64_t, std::string> spec_completions_;
+    ds::Map<std::uint64_t, Name, Memory> spec_completions_;
     // The directory a question about a command named by its path reads, while it is sent.
-    std::string command_root_;
+    Name command_root_;
     std::uint64_t written_ = 0;
-    std::unordered_map<std::uint64_t, PaneLine> lines_;
+    // Each pane's line in an allocation of its own, so it stays where it is as others come and go.
+    ds::Map<std::uint64_t, Owned<PaneLine, Memory>, Memory> lines_;
   };
 
   // ---- lines ------------------------------------------------------------------------------------
@@ -296,7 +307,7 @@ export namespace telar::gui::features::prompt {
   [[nodiscard]] TBC_HOT_PATH inline LineView view(const State& state, const PaneLine& line) noexcept;
 
   // The commands people typed, most recent first and each once, which the suggestions read.
-  [[nodiscard]] TBC_HOT_PATH inline std::span<const std::string> history(const State& state) noexcept;
+  [[nodiscard]] TBC_HOT_PATH inline History history(const State& state) noexcept;
 
   // Pane `pane_id` printed now, as `now` reads the clock, only for a pane with a line: a program
   // quiet since may be asking a question.
@@ -408,7 +419,7 @@ export namespace telar::gui::features::prompt {
 
   // Tab in the line: the word under the caret and the command it belongs to, as the `dialect`'s
   // shell reads them; none where nothing completes.
-  [[nodiscard]] ds::Option<CompletionContext> completing(const PaneLine& line, shell::Dialect dialect);
+  [[nodiscard]] ds::Option<CompletionContext> completing(State& state, const PaneLine& line, shell::Dialect dialect);
 
   // Tab waits for the spec of the line's command, and completes once it arrives (resume).
   void awaitSpec(State& state, const PaneLine& line);
@@ -518,7 +529,7 @@ namespace telar::gui::features::prompt {
       return state.lines_;
     }
 
-    [[nodiscard]] static constexpr std::vector<std::uint64_t>& jumps(PaneLine& line) noexcept {
+    [[nodiscard]] static constexpr ds::Vec<std::uint64_t, Memory>& jumps(PaneLine& line) noexcept {
       return line.jumps_;
     }
 
@@ -546,12 +557,16 @@ namespace telar::gui::features::prompt {
       return line.chord_;
     }
 
-    [[nodiscard]] static constexpr std::vector<std::string>& history(State& state) noexcept {
+    [[nodiscard]] static constexpr ds::Vec<Name, Memory>& history(State& state) noexcept {
       return state.history_;
     }
 
-    [[nodiscard]] static constexpr const std::vector<std::string>& history(const State& state) noexcept {
+    [[nodiscard]] static constexpr const ds::Vec<Name, Memory>& history(const State& state) noexcept {
       return state.history_;
+    }
+
+    [[nodiscard]] static constexpr Memory& memory(const State& state) noexcept {
+      return state.memory_;
     }
 
     [[nodiscard]] static constexpr std::uint64_t& historyRequest(State& state) noexcept {
@@ -594,7 +609,7 @@ namespace telar::gui::features::prompt {
       return state.spec_completions_;
     }
 
-    [[nodiscard]] static constexpr std::string& commandRoot(State& state) noexcept {
+    [[nodiscard]] static constexpr Name& commandRoot(State& state) noexcept {
       return state.command_root_;
     }
 
@@ -610,14 +625,6 @@ namespace telar::gui::features::prompt {
       return plan.questions_;
     }
 
-    [[nodiscard]] static constexpr std::size_t& count(CompletionPlan& plan) noexcept {
-      return plan.count_;
-    }
-
-    [[nodiscard]] static constexpr std::size_t count(const CompletionPlan& plan) noexcept {
-      return plan.count_;
-    }
-
     [[nodiscard]] static constexpr CompletionContext& context(CompletionPlan& plan) noexcept {
       return plan.context_;
     }
@@ -626,7 +633,7 @@ namespace telar::gui::features::prompt {
       return plan.completion_;
     }
 
-    [[nodiscard]] static constexpr std::string& label(CompletionPlan& plan) noexcept {
+    [[nodiscard]] static constexpr Name& label(CompletionPlan& plan) noexcept {
       return plan.label_;
     }
 
@@ -636,28 +643,26 @@ namespace telar::gui::features::prompt {
   };
 
   inline PaneLine* find(State& state, std::uint64_t pane_id) noexcept {
-    auto& lines = Access::lines(state);
-    const auto found = lines.find(pane_id);
+    auto* found = Access::lines(state).findMut(pane_id);
 
-    return found == lines.end() ? nullptr : &found->second;
+    return found == nullptr ? nullptr : found->get();
   }
 
   inline LineView view(const State& state, const PaneLine& line) noexcept {
-    return LineView{Access::line(line), Access::history(state)};
+    return LineView{Access::line(line), Access::history(state).view()};
   }
 
   inline ds::Option<LineView> line(const State& state, std::uint64_t pane_id) noexcept {
-    const auto& lines = Access::lines(state);
-    const auto found = lines.find(pane_id);
-    if (found == lines.end()) {
+    const auto* found = Access::lines(state).find(pane_id);
+    if (found == nullptr) {
       return ds::none;
     }
 
-    return view(state, found->second);
+    return view(state, **found);
   }
 
-  inline std::span<const std::string> history(const State& state) noexcept {
-    return Access::history(state);
+  inline History history(const State& state) noexcept {
+    return Access::history(state).view();
   }
 
   template <typename Now>
@@ -674,12 +679,12 @@ namespace telar::gui::features::prompt {
   inline Outcome press(const State& state, PaneLine& line, Surface surface, const KeyPress& key, const PromptConfiguration& configuration, shell::Dialect dialect) {
     auto& edited = Access::line(line);
     const auto syntax = shell::Syntax{.dialect = dialect};
-    const auto incomplete = [syntax](std::string_view text) {
-      return prompt::incomplete(text, syntax);
+    const auto incomplete = [&memory = Access::memory(state), syntax](std::string_view text) {
+      return prompt::incomplete(memory, text, syntax);
     };
     const auto action = bound(key, edited.editor(), configuration);
 
-    return action ? edited.perform(surface, *action, incomplete, Access::history(state)) : edited.press(surface, key, incomplete, Access::history(state));
+    return action ? edited.perform(surface, *action, incomplete, history(state)) : edited.press(surface, key, incomplete, history(state));
   }
 
   template <typename Now>
