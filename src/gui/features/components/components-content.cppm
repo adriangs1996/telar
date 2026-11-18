@@ -6,7 +6,6 @@ export module telar.gui.features.components:content;
 import std;
 
 import telar.base.memory.containers;
-import telar.base.text;
 import telar.config.client;
 import telar.config.core;
 import telar.gui.foundation.actions;

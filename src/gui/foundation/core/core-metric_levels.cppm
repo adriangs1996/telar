@@ -2,7 +2,6 @@ export module telar.gui.foundation.core:metric_levels;
 
 import std;
 
-import telar.base.text.json;
 import telar.wire.vocabulary;
 import telar.base.ds;
 

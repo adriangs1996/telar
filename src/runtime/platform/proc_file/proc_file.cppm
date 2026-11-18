@@ -3,7 +3,6 @@ export module telar.runtime.platform.proc_file;
 import std;
 import telar.sys.posix;
 
-import telar.base.text;
 import telar.platform.primitives;
 import telar.base.ds;
 

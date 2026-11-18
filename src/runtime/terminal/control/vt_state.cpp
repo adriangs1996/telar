@@ -1,6 +1,5 @@
 module;
 #include "telar_base/diagnostics/config.hpp"
-#include "telar_base/ds/values.hpp"
 
 #if defined(__aarch64__) && defined(__AARCH64EL__)
 #include <arm_neon.h>
@@ -9,6 +8,8 @@ module;
 #endif
 
 module telar.runtime.terminal.control;
+
+import telar.base.ds;
 
 namespace telar::runtime::control {
 

@@ -3,6 +3,7 @@ module telar.config.gui;
 import std;
 import telar.lua;
 import telar.base.ds;
+import telar.base.text;
 
 namespace telar::runtime::config {
 

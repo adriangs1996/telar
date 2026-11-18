@@ -13,6 +13,7 @@ import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
 import telar.base.ds;
+import telar.base.text;
 
 namespace telar::runtime::cli {
 

@@ -9,6 +9,7 @@ import telar.platform.error;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.base.ds;
+import telar.base.text;
 
 namespace telar::runtime::cli::repository {
 

@@ -15,6 +15,8 @@ import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.base.ds;
 import telar.base.memory.containers;
+import telar.base.text;
+import telar.base.text.json;
 
 namespace telar::runtime::cli::pane_agents {
 

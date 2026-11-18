@@ -5,6 +5,7 @@ import telar.tbc;
 import telar.sys.posix;
 import telar.base.text.utf8;
 import telar.base.ds;
+import telar.base.text;
 
 namespace telar::runtime::config {
 

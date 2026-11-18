@@ -8,6 +8,7 @@ import telar.render.document;
 import telar.base.text.utf8;
 import telar.runtime.terminal.control.glyph;
 import telar.base.ds;
+import telar.base.text;
 
 namespace telar::runtime::control {
 

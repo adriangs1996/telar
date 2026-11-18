@@ -14,7 +14,6 @@ import telar.platform.process;
 import telar.cli.output;
 
 import telar.base.memory.allocators;
-import telar.base.text;
 import telar.base.text.json;
 import telar.wire.vocabulary;
 import telar.wire.layout;

@@ -10,7 +10,6 @@ import telar.base.memory.allocators;
 import telar.base.memory.sensitive;
 
 import telar.config.runtime;
-import telar.base.text;
 import telar.base.ds;
 
 // Interface: exchange_capture/quota.cppm

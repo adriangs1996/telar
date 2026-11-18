@@ -1,5 +1,6 @@
 module telar.runtime.http1.head;
 import telar.base.ds;
+import telar.base.text;
 
 namespace telar::runtime {
 

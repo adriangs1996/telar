@@ -6,7 +6,6 @@ export module telar.gui.features.components:definitions;
 import std;
 
 import :content;
-import telar.base.text;
 import telar.config.client;
 import telar.base.ds;
 

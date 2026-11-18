@@ -5,7 +5,6 @@ import telar.gui.foundation.core;
 import telar.gui.foundation.model;
 import telar.tbc;
 import telar.gui.features.terminal.graphics;
-import telar.wire.vocabulary;
 import telar.base.memory.allocators;
 
 namespace telar::gui::application {

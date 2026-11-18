@@ -7,7 +7,6 @@ import std;
 import telar.config.client;
 import telar.plugins;
 import telar.base.memory.containers;
-import telar.base.text.json;
 import telar.wire.vocabulary;
 import telar.gui.foundation.actions;
 import telar.gui.foundation.core;

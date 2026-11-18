@@ -6,6 +6,7 @@ import telar.tbc;
 import telar.sys.process;
 import telar.platform.error;
 import telar.base.ds;
+import telar.base.text;
 #if defined(__APPLE__)
 import telar.sys.apple;
 #endif

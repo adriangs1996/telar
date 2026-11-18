@@ -10,7 +10,6 @@ import telar.sys.posix;
 
 import telar.runtime.redirect.pf_rules;
 import telar.base.memory.containers;
-import telar.base.text;
 import telar.platform.primitives;
 import telar.platform.process;
 import telar.vocabulary;

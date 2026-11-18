@@ -2,7 +2,6 @@ export module telar.cli.render;
 
 import std;
 import telar.base.memory.allocators;
-import telar.base.text;
 import telar.base.ds;
 
 // `telar render KIND [FILE]`: renders content into a document. Inside a Telar

@@ -8,7 +8,6 @@ import telar.client;
 import telar.vocabulary;
 import telar.platform.process;
 import telar.base.memory.allocators;
-import telar.base.memory.containers;
 import telar.base.ds;
 import telar.gui.foundation.core;
 

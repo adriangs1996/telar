@@ -11,8 +11,6 @@ import telar.cli.hooks.session;
 
 import telar.base.memory.allocators;
 import telar.cli.worktree_git;
-import telar.base.text;
-import telar.base.text.json;
 import telar.base.ds;
 
 // Interface: hooks/input.cppm

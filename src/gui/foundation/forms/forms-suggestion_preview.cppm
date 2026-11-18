@@ -2,7 +2,6 @@ export module telar.gui.foundation.forms:suggestion_preview;
 
 import std;
 
-import telar.base.text;
 import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
 import telar.gui.foundation.text;

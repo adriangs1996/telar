@@ -1,8 +1,9 @@
 module;
 #include "telar_base/diagnostics/config.hpp"
-#include "telar_base/ds/values.hpp"
 
 module telar.runtime.diagnostics.runtime_counters;
+
+import telar.base.ds;
 
 namespace telar::runtime::diagnostics {
 

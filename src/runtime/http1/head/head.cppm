@@ -2,7 +2,6 @@ export module telar.runtime.http1.head;
 
 import std;
 
-import telar.base.text;
 import telar.base.ds;
 
 // Interface: http1/framing.cppm

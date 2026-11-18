@@ -4,7 +4,6 @@ import std;
 
 import telar.plugins;
 import telar.tbc;
-import telar.base.text.json;
 import telar.wire.vocabulary;
 import telar.gui.foundation.actions;
 import telar.gui.foundation.core;

@@ -11,8 +11,6 @@ import telar.wire.vocabulary;
 import telar.wire.agents;
 import telar.wire.content;
 import telar.wire.execution;
-import telar.base.text;
-import telar.base.text.json;
 import telar.cli.history;
 import telar.cli.plugin;
 import telar.cli.runtime_observer;

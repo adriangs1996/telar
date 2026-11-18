@@ -1,5 +1,6 @@
 module telar.runtime.graphics.file_input;
 import telar.base.ds;
+import telar.base.text;
 
 namespace telar::runtime {
 

@@ -1,8 +1,8 @@
-#include "telar_base/ds/values.hpp"
 #if TELAR_DEBUG
 // Outside the module: the sink imports telar.platform.fs and .thread, which import
 // telar.platform.primitives, whose interface declares these functions in the global module.
 import std;
+import telar.base.ds;
 import telar.platform.error;
 import telar.platform.fs;
 import telar.platform.primitives;

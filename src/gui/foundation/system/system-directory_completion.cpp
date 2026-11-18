@@ -3,7 +3,6 @@ module telar.gui.foundation.system;
 import std;
 
 import telar.base.ds;
-import telar.base.memory.containers;
 
 namespace telar::gui::inline foundation::inline system {
 

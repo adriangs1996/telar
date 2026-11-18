@@ -1,9 +1,8 @@
-module;
-#include <climits>
-
 export module telar.gui.foundation.system:login_shell;
 
 import std;
+
+import telar.sys.posix;
 import telar.tbc;
 import telar.base.ds;
 import telar.base.memory.containers;

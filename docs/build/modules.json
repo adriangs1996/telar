@@ -666,6 +666,8 @@
     "lib/base/include/telar_base/diagnostics/config.hpp": "Project macro header: TELAR_DIAGNOSTIC, TELAR_DIAGNOSTICS and TELAR_ASSERT; includes nothing",
     "lib/base/include/telar_base/diagnostics/limit_reach.hpp": "Included by other textual headers and tests; module units import its owner module",
     "lib/base/include/telar_base/diagnostics/timing.hpp": "Objective-C++ ABI",
+    "lib/base/include/telar_base/ds/containers.hpp": "Qt adapters and Objective-C++ include it; module units import its owner module",
+    "lib/base/include/telar_base/ds/values.hpp": "Qt adapters and Objective-C++ include it; module units import its owner module",
     "lib/base/include/telar_base/memory/allocation_statistics.hpp": "Objective-C++ ABI",
     "lib/base/include/telar_base/memory/allocator.hpp": "Objective-C++ ABI",
     "lib/base/include/telar_base/memory/fixed_text.hpp": "Qt adapters include it; module units import its owner module",
@@ -698,8 +700,12 @@
     "lib/tbc/include/tbc/lifetime.hpp": "Consumer-side preprocessor annotations inspected by Clang AST tooling",
     "lib/tbc/include/tbc/view.hpp": "Lifetime vocabulary for sources that cannot import telar.tbc, which owns it",
     "lib/tbc/linter/blank_lines.hpp": "Private Clang AST adapter; must use the SDK declarations of the selected linter toolchain",
+    "lib/tbc/linter/checked_definitions.hpp": "Private Clang AST adapter; must use the SDK declarations of the selected linter toolchain",
+    "lib/tbc/linter/const_overloads.hpp": "Private Clang AST adapter; must use the SDK declarations of the selected linter toolchain",
     "lib/tbc/linter/interface_bodies.hpp": "Private Clang AST adapter; must use the SDK declarations of the selected linter toolchain",
     "lib/tbc/linter/lifetime_analysis.hpp": "Private Clang AST adapter; must use the SDK declarations of the selected linter toolchain",
+    "lib/tbc/linter/shared_access.hpp": "Private Clang AST adapter; must use the SDK declarations of the selected linter toolchain",
+    "lib/tbc/linter/standard_containers.hpp": "Private Clang AST adapter; must use the SDK declarations of the selected linter toolchain",
     "lib/tbc/linter/view_type.hpp": "Private Clang AST adapter; must use the SDK declarations of the selected linter toolchain",
     "lib/tbc/tests/spec/elision.hpp": "Textual test fixture, including compiler diagnostic and macro expansion locations",
     "lib/tbc/tests/spec/support.hpp": "Textual test fixture, including compiler diagnostic and macro expansion locations",
@@ -2869,6 +2875,10 @@
     "telar.runtime.model.launch_record": "telar.runtime.model.client_layouts"
   },
   "header_owners": {
+    "lib/base/ds/ds.cppm": [
+      "lib/base/include/telar_base/ds/containers.hpp",
+      "lib/base/include/telar_base/ds/values.hpp"
+    ],
     "lib/base/diagnostics/diagnostics.cppm": [
       "lib/base/include/telar_base/diagnostics/limit_reach.hpp",
       "lib/base/include/telar_base/diagnostics/timing.hpp"

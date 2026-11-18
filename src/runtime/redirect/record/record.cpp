@@ -5,6 +5,7 @@ import telar.sys.socket;
 import telar.platform.error;
 import telar.platform.fs;
 import telar.base.ds;
+import telar.base.text;
 #if defined(__APPLE__)
 import telar.sys.apple;
 #endif

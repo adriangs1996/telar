@@ -6,6 +6,7 @@ import telar.render.document;
 import telar.render.markdown;
 import telar.render.terminal;
 import telar.base.ds;
+import telar.base.text;
 
 namespace telar::runtime::cli::render_command {
 

@@ -1,8 +1,10 @@
 module;
 #include "telar_base/diagnostics/config.hpp"
-#include "telar_base/ds/values.hpp"
 
 module telar.runtime.vocabulary.exchange;
+
+import telar.base.ds;
+import telar.base.text;
 
 namespace telar::runtime {
 

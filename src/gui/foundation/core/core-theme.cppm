@@ -2,7 +2,6 @@ export module telar.gui.foundation.core:theme;
 
 import std;
 
-import telar.base.text;
 import telar.wire.vocabulary;
 import telar.base.ds;
 

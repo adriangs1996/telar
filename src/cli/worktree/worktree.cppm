@@ -8,8 +8,6 @@ import telar.cli.command_limit;
 
 import telar.cli.machine_ssh;
 import telar.cli.project_setup;
-import telar.base.text;
-import telar.base.text.json;
 import telar.cli.history;
 import telar.platform.paths;
 import telar.machines;

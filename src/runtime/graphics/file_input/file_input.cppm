@@ -4,7 +4,6 @@ import std;
 import telar.tbc;
 
 import telar.base.memory.allocators;
-import telar.base.text;
 import telar.vocabulary;
 import telar.platform.primitives;
 import telar.runtime.terminal.kitty;

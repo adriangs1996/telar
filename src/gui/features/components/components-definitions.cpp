@@ -2,7 +2,6 @@ module telar.gui.features.components;
 
 import std;
 
-import telar.base.text;
 import telar.gui.foundation.core;
 import telar.base.ds;
 

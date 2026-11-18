@@ -14,7 +14,6 @@ import telar.gui.features.paths;
 import telar.gui.features.palette;
 import telar.config.client;
 import telar.config.runtime;
-import telar.base.text;
 import telar.wire.agents;
 import telar.wire.clipboard;
 import telar.wire.editor;

@@ -1,8 +1,9 @@
 module;
 #include "telar_base/diagnostics/config.hpp"
-#include "telar_base/ds/values.hpp"
 
 module telar.runtime.transport.connection;
+
+import telar.base.ds;
 
 namespace telar::runtime {
 

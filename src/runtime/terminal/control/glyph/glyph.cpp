@@ -1,5 +1,6 @@
 module telar.runtime.terminal.control.glyph;
 import telar.base.ds;
+import telar.base.text;
 
 namespace telar::runtime::control {
 

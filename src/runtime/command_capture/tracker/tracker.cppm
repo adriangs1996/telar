@@ -7,7 +7,6 @@ export module telar.runtime.command_capture.tracker;
 import std;
 import telar.ghostty.vt;
 import telar.tbc;
-import telar.base.text;
 import telar.wire.vocabulary;
 import telar.wire.content;
 import telar.platform.primitives;

@@ -5,7 +5,6 @@ import telar.sys.posix;
 import telar.tbc;
 
 import telar.base.diagnostics;
-import telar.base.text;
 import telar.base.text.json;
 import telar.vocabulary;
 import telar.cli.output;

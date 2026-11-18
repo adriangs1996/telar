@@ -1,9 +1,8 @@
-module;
-#include <climits>
-
 export module telar.gui.foundation.system:runtime_endpoint;
 
 import std;
+
+import telar.sys.posix;
 
 import telar.base.memory.containers;
 

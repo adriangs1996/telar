@@ -4,7 +4,6 @@ import std;
 import telar.ghostty.vt;
 import telar.tbc;
 import telar.base.memory.allocators;
-import telar.base.text;
 import telar.config.runtime;
 import telar.vocabulary;
 import telar.runtime.terminal.control;

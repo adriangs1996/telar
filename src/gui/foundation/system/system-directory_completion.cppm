@@ -1,9 +1,8 @@
-module;
-#include <climits>
-
 export module telar.gui.foundation.system:directory_completion;
 
 import std;
+
+import telar.sys.posix;
 
 import telar.base.ds;
 import telar.base.memory.containers;

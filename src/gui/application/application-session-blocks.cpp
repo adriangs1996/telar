@@ -7,7 +7,6 @@ import telar.gui.features.prompt;
 import telar.gui.features.terminal.graphics;
 import telar.config.client;
 import telar.config.runtime;
-import telar.base.text;
 import telar.wire.clipboard;
 import telar.wire.content;
 import telar.wire.editor;

@@ -3,7 +3,6 @@ export module telar.gui.foundation.core:configuration;
 import std;
 
 import telar.base.memory.containers;
-import telar.base.text;
 import telar.wire.vocabulary;
 import :theme;
 import telar.base.ds;

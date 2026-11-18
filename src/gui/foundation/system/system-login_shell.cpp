@@ -4,8 +4,6 @@ module telar.gui.foundation.system;
 
 import std;
 import telar.platform.process;
-import telar.base.ds;
-import telar.base.memory.containers;
 
 namespace telar::gui::inline foundation::inline system::login_shell {
   Command::Command()

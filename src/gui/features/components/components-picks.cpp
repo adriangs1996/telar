@@ -4,7 +4,6 @@ import std;
 
 import telar.base.diagnostics;
 import telar.base.history;
-import telar.base.text;
 import telar.base.text.utf8;
 import telar.wire.vocabulary;
 import telar.gui.foundation.core;

@@ -4,7 +4,6 @@ import std;
 
 import telar.cli.command_limit;
 
-import telar.base.text;
 import telar.platform.paths;
 import telar.base.memory.allocators;
 import telar.base.ds;

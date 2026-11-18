@@ -6,6 +6,7 @@ import telar.wire.vocabulary;
 import telar.platform.error;
 import telar.platform.primitives;
 import telar.base.ds;
+import telar.base.text;
 
 namespace telar::runtime::cli {
 

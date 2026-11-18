@@ -18,7 +18,6 @@ import telar.base.memory.containers;
 import telar.platform.paths;
 
 import telar.base.text;
-import telar.base.text.json;
 import telar.platform.primitives;
 import telar.sys.posix;
 import telar.base.ds;

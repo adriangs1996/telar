@@ -10,7 +10,6 @@ import telar.tbc;
 import telar.lua;
 import telar.platform.paths;
 import telar.base.diagnostics;
-import telar.base.text;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;
 import telar.base.ds;

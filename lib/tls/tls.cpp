@@ -20,6 +20,7 @@ import telar.platform.error;
 import telar.platform.fs;
 import telar.platform.process;
 import telar.base.ds;
+import telar.base.text.json;
 
 namespace telar::runtime {
 
