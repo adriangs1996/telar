@@ -47,7 +47,7 @@ namespace telar::gui::qt {
         timer_(this) {
     lanes_.reserve(composition().size());
     for (const auto make : composition()) {
-      lanes_.push_back(make());
+      lanes_.push(make(adapter_));
     }
 
     timer_.setObjectName(QStringLiteral("agentStatusAnimation"));

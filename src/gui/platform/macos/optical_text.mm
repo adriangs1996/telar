@@ -1,7 +1,9 @@
 #include "ui/foundation/scene/optical_text.hpp"
 #include "cf_reference.hpp"
 #include "font_smoothing.h"
+#include "foundation/core/memory.hpp"
 #include "tbc/view.hpp"
+#include "telar_base/ds/containers.hpp"
 #include <CoreText/CoreText.h>
 #include <QFontMetricsF>
 #include <QGlyphRun>
@@ -19,7 +21,6 @@
 #include <memory>
 #include <span>
 #include <stdexcept>
-#include <vector>
 
 namespace telar::gui::qt {
   namespace {
@@ -92,9 +93,14 @@ namespace telar::gui::qt {
     QImage mask;
     QImage image;
     platform::NativeReference<CGContextRef> context;
-    std::vector<Font> fonts;
-    std::vector<CGGlyph> indexes;
-    std::vector<CGPoint> positions;
+    // What it keeps between runs lives in memory of its own.
+    SystemAllocator memory;
+    MemoryAdapter<SystemAllocator> adapter{memory};
+    // In place: a QRawFont may throw as it moves, so the fonts never move.
+    ds::Array<ds::Option<Font>, maximum_fonts> fonts;
+    std::size_t font_count = 0;
+    ds::Vec<CGGlyph, Memory> indexes{adapter};
+    ds::Vec<CGPoint, Memory> positions{adapter};
     qreal scale = 0;
     std::uint8_t strength = 0;
     QRect ink;
@@ -107,23 +113,22 @@ namespace telar::gui::qt {
 
     ~State() = default;
 
-    Font* font(const QRawFont& source) {
+    // The slot of the font that draws `source`, made the first time; none when Core Text cannot.
+    ds::Option<std::size_t> font(const QRawFont& source) {
       if (!source.isValid()) {
-        return nullptr;
+        return ds::none;
       }
 
-      const auto found = std::ranges::find_if(fonts, [&source](const Font& font) {
-        return font.source == source;
-      });
-
-      if (found != fonts.end()) {
-        return &*found;
+      for (std::size_t index = 0; index < font_count; ++index) {
+        if (fonts[index]->source == source) {
+          return index;
+        }
       }
 
       const auto* engine = QRawFontPrivate::get(source)->fontEngine;
 
       if (engine == nullptr || engine->type() != QFontEngine::Mac || engine->handle() == nullptr) {
-        return nullptr;
+        return ds::none;
       }
 
       const auto synthesized = static_cast<unsigned>(engine->synthesized());
@@ -136,20 +141,27 @@ namespace telar::gui::qt {
       );
 
       if (native == nullptr) {
-        return nullptr;
+        return ds::none;
       }
 
-      if (fonts.size() == maximum_fonts) {
-        fonts.clear();
+      if (font_count == maximum_fonts) {
+        clearFonts();
       }
 
-      fonts.push_back({
+      fonts.atMut(font_count).emplace(Font{
           .source = source,
           .native = {native, CFRelease},
           .synthesized = synthesized,
       });
+      return font_count++;
+    }
 
-      return &fonts.back();
+    void clearFonts() noexcept {
+      for (std::size_t index = 0; index < font_count; ++index) {
+        fonts.atMut(index).reset();
+      }
+
+      font_count = 0;
     }
 
     void positionGlyphs(const QGlyphRun& run, QPointF origin) {
@@ -168,8 +180,8 @@ namespace telar::gui::qt {
 
         const auto offset = static_cast<std::size_t>(index);
 
-        indexes[offset] = static_cast<CGGlyph>(glyphs[index]);
-        positions[offset] = {
+        indexes.atMut(offset) = static_cast<CGGlyph>(glyphs[index]);
+        positions.atMut(offset) = {
             .x = (origin.x() + points[index].x()) * scale,
             .y = mask.height() - ((origin.y() + points[index].y()) * scale),
         };
@@ -226,7 +238,7 @@ namespace telar::gui::qt {
     const auto pixels = physicalSize(size, scale);
 
     if (self.scale != scale) {
-      self.fonts.clear();
+      self.clearFonts();
     }
 
     if (!self.context || self.mask.size() != pixels || self.strength != strength || self.scale != scale) {
@@ -282,9 +294,9 @@ namespace telar::gui::qt {
     auto bounds = CGRectNull;
 
     for (const auto& run : layout.glyphRuns()) {
-      const auto* font = self.font(run.rawFont());
+      const auto font_index = self.font(run.rawFont());
 
-      if (font == nullptr) {
+      if (!font_index) {
         QPainter painter(&self.image);
 
         painter.setPen(color);
@@ -296,14 +308,12 @@ namespace telar::gui::qt {
       }
 
       // Positioning reuses the state's buffers, so the font is found again by its index.
-      const auto font_index = static_cast<std::size_t>(font - self.fonts.data());
-
       self.positionGlyphs(run, position);
-      const auto& positioned = self.fonts[font_index];
+      const auto& positioned = *self.fonts[*font_index];
       const bool bold = (positioned.synthesized & static_cast<unsigned>(QFontEngine::SynthesizedBold)) != 0;
 
       // The context is a Core Graphics object the state retains; drawing reaches it by address.
-      bounds = CGRectUnion(bounds, drawGlyphs(tbc::raw(self.context.get()), positioned.native.get(), self.indexes, self.positions, bold));
+      bounds = CGRectUnion(bounds, drawGlyphs(tbc::raw(self.context.get()), positioned.native.get(), self.indexes.view(), self.positions.view(), bold));
     }
 
     CGContextFlush(self.context.get());

@@ -14,6 +14,7 @@ import telar.gui.foundation.core;
 import telar.gui.foundation.keys;
 import telar.wire.vocabulary;
 import telar.base.ds;
+import telar.base.memory.allocators;
 
 namespace {
 
@@ -23,9 +24,16 @@ namespace {
 
   namespace feature = telar::gui::features::terminal::copy_mode;
 
-  // The copy mode the assertions drive, through the feature's use cases.
+  // The copy mode the assertions drive, through the feature's use cases. It stays where it is
+  // made: its state points at its memory.
   class CopyMode {
   public:
+    CopyMode()
+        : state_(memory_) {}
+
+    CopyMode(const CopyMode&) = delete;
+    CopyMode& operator=(const CopyMode&) = delete;
+
     bool enter(std::uint64_t pane_id, const CopyGrid& grid, const telar::Cursor& cursor) noexcept {
       return feature::enter(state_, pane_id, grid, cursor);
     }
@@ -92,6 +100,8 @@ namespace {
     }
 
   private:
+    telar::SystemAllocator system_;
+    telar::MemoryAdapter<telar::SystemAllocator> memory_{system_};
     feature::State state_;
   };
 

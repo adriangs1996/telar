@@ -88,10 +88,10 @@ namespace telar::gui::features::terminal::copy_mode {
 
     search.request = request_id;
     if (search.rows && search.scoped && reads_rows) {
-      return SearchPaneRows{.request_id = request_id, .pane_id = pane_id, .needle = search.query, .first_row = search.rows->first, .last_row = search.rows->last};
+      return SearchPaneRows{.request_id = request_id, .pane_id = pane_id, .needle = search.query.view(), .first_row = search.rows->first, .last_row = search.rows->last};
     }
 
-    return SearchPane{.request_id = request_id, .pane_id = pane_id, .needle = search.query};
+    return SearchPane{.request_id = request_id, .pane_id = pane_id, .needle = search.query.view()};
   }
 
   void fail(State& state, std::uint64_t request_id) noexcept {
@@ -127,7 +127,7 @@ namespace telar::gui::features::terminal::copy_mode {
     const auto& search = Access::search(state);
     const auto& current = mode.state();
 
-    return {.query = search.query, .searching = search.request != 0, .count = mode.matches().size(), .index = current ? std::size_t{current->match_index} : std::size_t{0}, .truncated = search.truncated};
+    return {.query = search.query.view(), .searching = search.request != 0, .count = mode.matches().size(), .index = current ? std::size_t{current->match_index} : std::size_t{0}, .truncated = search.truncated};
   }
 
   ds::Option<std::size_t> searchBlock(const State& state) noexcept {

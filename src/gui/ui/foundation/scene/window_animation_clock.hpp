@@ -3,6 +3,8 @@
 static_assert(true);
 #endif
 
+#include "foundation/core/memory.hpp"
+#include "telar_base/ds/containers.hpp"
 #include "telar_base/ds/values.hpp"
 #include <QList>
 #include <QObject>
@@ -16,7 +18,6 @@ static_assert(true);
 #include <optional>
 #include <span>
 #include <typeinfo>
-#include <vector>
 
 #pragma once
 
@@ -27,15 +28,26 @@ namespace telar::gui::qt {
   // The items of one type in one window: the clock samples a lane per type, and each lane
   // walks its items with static calls.
   struct WindowAnimationLane {
-    using Make = WindowAnimationLane (*)();
+    using Make = WindowAnimationLane (*)(Memory& memory);
     using Sample = bool (*)(void* items, std::uint64_t timestamp, bool window_exposed, const QPointer<WindowAnimationClock>& alive);
     using Deadline = ds::Option<std::uint64_t> (*)(const void* items, std::uint64_t timestamp);
 
+    // Gives the lane's items back to the memory they were made in.
+    struct Release {
+      Memory* memory;
+      void (*destroy)(Memory& memory, void* items);
+
+      void operator()(void* items) const noexcept {
+        destroy(*memory, items);
+      }
+    };
+
+    // A lane whose items live in `memory`.
     template <typename Items>
-    static WindowAnimationLane make();
+    static WindowAnimationLane make(Memory& memory);
 
     const std::type_info* tag;
-    std::unique_ptr<void, void (*)(void*)> items;
+    std::unique_ptr<void, Release> items;
     Sample sample;
     Deadline deadline;
   };
@@ -160,7 +172,7 @@ namespace telar::gui::qt {
         return *items;
       }
 
-      return *static_cast<Items*>(lanes_.emplace_back(WindowAnimationLane::make<Items>()).items.get());
+      return *static_cast<Items*>(lanes_.push(WindowAnimationLane::make<Items>(adapter_)).items.get());
     }
 
     bool sampleVisible(std::uint64_t timestamp);
@@ -168,7 +180,10 @@ namespace telar::gui::qt {
 
     QQuickWindow& window_;
     QTimer timer_;
-    std::vector<WindowAnimationLane> lanes_;
+    // The lanes' items live in the clock's own memory: a window makes its clock.
+    SystemAllocator memory_;
+    MemoryAdapter<SystemAllocator> adapter_{memory_};
+    ds::Vec<WindowAnimationLane, Memory> lanes_{adapter_};
     std::uint64_t now_ns_ = 0;
     ds::Option<std::uint64_t> deadline_ns_;
     ds::Option<std::uint16_t> maximum_fps_;
@@ -176,14 +191,14 @@ namespace telar::gui::qt {
   };
 
   template <typename Items>
-  WindowAnimationLane WindowAnimationLane::make() {
-    const auto release = [](void* items) {
-      const std::unique_ptr<Items> owned{static_cast<Items*>(items)};
+  WindowAnimationLane WindowAnimationLane::make(Memory& memory) {
+    const auto destroy = [](Memory& owner, void* items) {
+      const Owned<Items, Memory> owned{static_cast<Items*>(items), AllocationDeleter<Items, Memory>{owner}};
     };
 
     return {
         .tag = &typeid(Items),
-        .items = {new Items{}, release},
+        .items = {makeOwned<Items>(memory).release(), Release{&memory, destroy}},
         .sample = [](void* items, std::uint64_t timestamp, bool window_exposed, const QPointer<WindowAnimationClock>& alive) {
           return static_cast<Items*>(items)->sample(timestamp, window_exposed, alive);
         },

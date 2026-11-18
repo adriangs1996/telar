@@ -16,6 +16,7 @@ import telar.gui.foundation.terminal;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
 import telar.base.ds;
+import telar.base.memory.allocators;
 
 namespace telar::gui::features::terminal::copy_mode {
 
@@ -142,10 +143,13 @@ namespace telar::gui::features::terminal::copy_mode {
   // where the search being typed began, what it looks for, and whether its answer kept fewer
   // matches than it found.
   struct CopySearch {
+    explicit CopySearch(Memory& memory)
+        : query(memory) {}
+
     std::uint64_t request = 0;
     ds::Option<CopySearchRows> rows;
     ds::Option<CopyPoint> origin;
-    std::string query;
+    ds::String<Memory> query;
     bool truncated = false;
     bool scoped = false;
     // A command asked for the scrollback search.

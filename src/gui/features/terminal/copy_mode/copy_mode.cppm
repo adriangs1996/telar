@@ -19,6 +19,7 @@ import telar.gui.foundation.terminal;
 import telar.wire.content;
 import telar.wire.vocabulary;
 import telar.base.ds;
+import telar.base.memory.allocators;
 
 namespace telar::gui::features::terminal::copy_mode {
 
@@ -33,6 +34,12 @@ export namespace telar::gui::features::terminal::copy_mode {
   class State {
     friend struct Access;
 
+  public:
+    // The search's query lives in `memory`.
+    explicit State(Memory& memory)
+        : search_(memory) {}
+
+  private:
     CopyMode mode_;
     CopySearch search_;
   };

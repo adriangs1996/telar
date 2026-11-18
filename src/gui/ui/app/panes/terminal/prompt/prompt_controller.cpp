@@ -14,9 +14,10 @@ static_assert(true);
 
 namespace telar::gui::qt {
 
-  PromptController::PromptController(Store& store, QObject* parent)
+  PromptController::PromptController(Store& store, Memory& memory, QObject* parent)
       : QObject(parent),
-        store_(store) {}
+        store_(store),
+        editors_(memory) {}
 
   application::prompt::Surface PromptController::surface(std::uint64_t pane_id) const noexcept {
     return application::prompt::surface(store_.session(), pane_id);
@@ -122,16 +123,17 @@ namespace telar::gui::qt {
   }
 
   void PromptController::attach(PromptEditorItem& editor) {
-    const auto free = std::ranges::find(editors_, nullptr);
-    if (free == editors_.end()) {
-      editors_.push_back(&editor);
+    const auto attached = editors_.viewMut();
+    const auto free = std::ranges::find(attached, nullptr);
+    if (free == attached.end()) {
+      editors_.push(&editor);
     } else {
       *free = &editor;
     }
   }
 
   void PromptController::detach(PromptEditorItem& editor) {
-    std::ranges::replace(editors_, &editor, nullptr);
+    std::ranges::replace(editors_.viewMut(), &editor, nullptr);
   }
 
   void PromptController::refresh(qulonglong pane_id) {

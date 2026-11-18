@@ -48,6 +48,7 @@ namespace telar::gui::application {
 
   Session::Session(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<RuntimeTransport&, tbc::lt::a> transport, tbc::view<HostEffects&, tbc::lt::a> effects, tbc::view<MonotonicNow, tbc::lt::static_storage> now)
       : prompt_(memory),
+        copy_mode_(memory),
         memory_(memory),
         transport_(transport),
         effects_(effects),

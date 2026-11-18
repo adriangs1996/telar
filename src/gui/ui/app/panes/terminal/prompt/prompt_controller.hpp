@@ -11,7 +11,7 @@ static_assert(true);
 #include <cstdint>
 #include <optional>
 #include <string_view>
-#include <vector>
+#include "foundation/core/memory.hpp"
 
 #pragma once
 
@@ -36,7 +36,8 @@ namespace telar::gui::qt {
     QML_UNCREATABLE("Use the window's prompt")
 
   public:
-    explicit PromptController(Store& store, QObject* parent = nullptr);
+    // The editors it serves are listed in `memory`.
+    PromptController(Store& store, Memory& memory, QObject* parent = nullptr);
     ~PromptController() override = default;
     PromptController(const PromptController&) = delete;
     PromptController& operator=(const PromptController&) = delete;
@@ -89,7 +90,7 @@ namespace telar::gui::qt {
     Store& store_;
     // An editor that detaches leaves its slot empty, so one that attaches or detaches while the
     // others refresh neither moves nor skips them.
-    std::vector<PromptEditorItem*> editors_;
+    ds::Vec<PromptEditorItem*, Memory> editors_;
   };
 
 }
