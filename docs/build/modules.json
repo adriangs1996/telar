@@ -421,6 +421,7 @@
     "lib/testing/socket_pair/socket_pair.cppm": "telar.testing.socket_pair",
     "lib/testing/erasure_checking_allocator/erasure_checking_allocator.cppm": "telar.testing.erasure_checking_allocator",
     "lib/testing/one_shot_allocator/one_shot_allocator.cppm": "telar.testing.one_shot_allocator",
+    "lib/testing/test_memory/test_memory.cppm": "telar.testing.test_memory",
     "src/runtime/terminal/control/control-capabilities.cppm": "telar.runtime.terminal.control:capabilities",
     "src/runtime/terminal/control/control-classification.cppm": "telar.runtime.terminal.control:classification",
     "src/runtime/terminal/control/control-color_queries.cppm": "telar.runtime.terminal.control:color_queries",

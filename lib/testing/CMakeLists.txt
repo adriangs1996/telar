@@ -12,3 +12,7 @@ add_library(telar-testing-main STATIC main.cpp)
 add_library(telar::testing-main ALIAS telar-testing-main)
 target_link_libraries(telar-testing-main PUBLIC telar::testing)
 telar_register_checks(telar-testing-main CHECKS lint blank_lines)
+
+if(BUILD_TESTING)
+  telar_add_tests(telar-testing-tests LABEL lib.testing)
+endif()
