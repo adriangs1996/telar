@@ -5,12 +5,14 @@ static_assert(true);
 
 #include <cstdio>
 #include <stdlib.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 import std;
 import telar.base.memory.allocators;
 import telar.testing;
 import telar.cli.machine_ssh;
+import telar.machines;
 
 namespace {
 
@@ -124,6 +126,43 @@ namespace {
     std::filesystem::remove_all(directory.data());
   }
 
+  // A remote command that fails, or whose output overflows what is kept, is the caller's
+  // failure, never its output.
+  void remoteCaptureFailsOnStatusOrOverflow() {
+    std::array<char, 64> directory{};
+
+    std::strcpy(directory.data(), "/tmp/telar-remote-capture-XXXXXX");
+    check(::mkdtemp(directory.data()) != nullptr);
+    const std::string root = directory.data();
+    const auto path = root + ":/usr/bin:/bin";
+
+    check(::setenv("PATH", path.c_str(), 1) == 0 && ::setenv("TELAR_SOCKET", (root + "/runtime.sock").c_str(), 1) == 0);
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    Memory& memory = adapter;
+    const auto profiles = machines::MachineProfileCodec::parse(memory, R"({"version":2,"local_label":"local","machines":[{"id":"m-0123456789ab","label":"box","destination":"dev@host","enabled":true}]})");
+    const auto& profile = profiles.rows().front();
+    const std::vector<std::string> words{"worktree", "list"};
+
+    const auto capture = [&](std::string_view body) {
+      const auto ssh = root + "/ssh";
+      FILE* script = std::fopen(ssh.c_str(), "w");
+
+      check(script != nullptr);
+      std::fprintf(script, "#!/bin/sh\n%.*s\n", static_cast<int>(body.size()), body.data());
+      std::fclose(script);
+      check(::chmod(ssh.c_str(), 0700) == 0);
+      return failure([&] {
+        check(machine::capture(memory, profile, words, "RemoteFailed") == "listed\n");
+      });
+    };
+
+    check(capture("echo listed") == "");
+    check(capture("echo listed; exit 1") == "RemoteFailed");
+    check(capture("head -c 300000 /dev/zero") == "RemoteFailed");
+    std::filesystem::remove_all(root);
+  }
+
   WindowOptions windowOptions(std::vector<std::string> words, bool gui = false) {
     std::vector<char*> pointers;
 
@@ -162,6 +201,7 @@ namespace {
   const telar::testing::Case case_capture_tail{"launch.capture_keeps_tail_and_counts_dropped", captureKeepsTailAndCountsDropped};
   const telar::testing::Case case_inherit_signal{"launch.inherit_signal_is_failure", inheritSignalIsFailure};
   const telar::testing::Case case_git_ssh{"launch.git_ssh_command_quotes_options", gitSshCommandQuotesOptions};
+  const telar::testing::Case case_remote_capture{"launch.remote_capture_fails_on_status_or_overflow", remoteCaptureFailsOnStatusOrOverflow};
   const telar::testing::Case case_window_options{"launch.window_options_command_after_separator", windowOptionsCommandAfterSeparator};
 
 }
