@@ -29,6 +29,7 @@ import telar.runtime.shell_integration.token;
 import telar.runtime.terminal.text_reader;
 import telar.runtime.model.slot_store;
 import telar.base.ds;
+import telar.base.text;
 
 namespace {
 
@@ -816,7 +817,7 @@ namespace {
 
     run("git init -q -b trunk . && git -c user.name=t -c user.email=t@t commit -q --allow-empty -m first && touch new && echo x > tracked && git add tracked");
 
-    ShellGitService service;
+    ShellGitService service{memory};
 
     service.request(7, 1, repository.path());
     ds::Option<ShellGitResult> result;

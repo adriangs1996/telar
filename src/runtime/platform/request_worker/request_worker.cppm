@@ -214,6 +214,9 @@ export {
     template <typename Request>
     class TBC_GENERIC SerialQueue {
     public:
+      inline explicit SerialQueue(ConcurrentMemory& memory)
+          : waiting_(memory) {}
+
       // Starts `request` on `worker` when it is idle, else queues it behind the waiting ones.
       template <typename Worker>
       inline void request(Worker& worker, const Request& request) {
@@ -222,16 +225,18 @@ export {
           return;
         }
 
-        waiting_.push_back(request);
+        waiting_.push(request);
       }
 
       inline std::span<const Request> waiting() const noexcept {
-        return waiting_;
+        return waiting_.view();
       }
 
       template <typename Predicate>
       inline void dropWaiting(Predicate&& matches) {
-        std::erase_if(waiting_, std::forward<Predicate>(matches));
+        waiting_.retain([&](const Request& entry) {
+          return !matches(entry);
+        });
       }
 
       template <typename Worker, typename Consumer>
@@ -242,15 +247,14 @@ export {
         });
 
         while (!busy_ && !waiting_.empty()) {
-          const auto next = waiting_.front();
+          const auto next = waiting_.remove(0);
 
-          waiting_.erase(waiting_.begin());
           busy_ = worker.submit(next);
         }
       }
 
     private:
-      std::vector<Request> waiting_;
+      ds::Vec<Request, ConcurrentMemory> waiting_;
       bool busy_ = false;
     };
 

@@ -1679,6 +1679,7 @@ namespace telar::runtime {
         session_(memory),
         metrics_(Clock::now()),
         workspace_git_(limits_, memory),
+        shell_git_(memory),
         words_(memory, options.configuration_directory),
         agent_files_(memory),
         descriptions_(memory, background_, options.descriptions),

@@ -67,7 +67,7 @@ export namespace telar::runtime {
   // One read at a time: while one runs, the latest request of each other pane waits.
   class ShellGitService {
   public:
-    ShellGitService();
+    explicit ShellGitService(ConcurrentMemory& memory);
 
     void request(std::uint64_t pane, std::uint64_t generation, std::string_view directory);
 

@@ -46,8 +46,9 @@ namespace telar::runtime {
 
   void ShellGitReader::stop() noexcept {}
 
-  ShellGitService::ShellGitService()
-      : worker_(std::in_place) {}
+  ShellGitService::ShellGitService(ConcurrentMemory& memory)
+      : worker_(std::in_place),
+        queue_(memory) {}
 
   void ShellGitService::request(std::uint64_t pane, std::uint64_t generation, std::string_view directory) {
     if (directory.empty() || directory.front() != '/' || directory.size() >= PATH_MAX) {

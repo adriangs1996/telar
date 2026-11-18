@@ -825,7 +825,8 @@ namespace telar::runtime {
   }
 
   WordService::WordService(ConcurrentMemory& memory, std::string_view configuration_directory)
-      : worker_(std::in_place, memory, configuration_directory) {}
+      : worker_(std::in_place, memory, configuration_directory),
+        queue_(memory) {}
 
   void WordService::request(const WordRequest& request) {
     if (std::ranges::count(queue_.waiting(), request.client, &WordRequest::client) >= 4) {

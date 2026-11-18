@@ -114,7 +114,7 @@ namespace telar::runtime::redirect {
     }
 
     if (status != 0) {
-      throw std::runtime_error{std::string{output.data(), output.size()}};
+      throw PfCommandError{output.view()};
     }
 
     return output;
