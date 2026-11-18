@@ -249,11 +249,14 @@ namespace telar::gui::qt {
     qreal scale_ = 0;
     // The layers' offset as last set: the rows' shift.
     qreal shift_ = 0;
+    // What the node keeps between frames lives in memory of its own.
+    SystemAllocator memory_;
+    MemoryAdapter<SystemAllocator> adapter_{memory_};
     // The cells of each row drawn, for the images their placeholders show.
-    std::vector<std::span<const CellValue>> drawn_cells_;
+    ds::Vec<std::span<const CellValue>, Memory> drawn_cells_{adapter_};
     // The matches as last lit, with the row offsets they were lit at.
-    std::vector<MatchMark> lit_matches_;
-    std::vector<float> lit_offsets_;
+    ds::Vec<MatchMark, Memory> lit_matches_{adapter_};
+    ds::Vec<float, Memory> lit_offsets_{adapter_};
     QRectF lit_bounds_;
   };
 }

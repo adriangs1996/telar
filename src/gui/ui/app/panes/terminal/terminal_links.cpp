@@ -110,8 +110,8 @@ namespace telar::gui::qt {
       appendDrawnRow(index);
     }
 
-    std::ranges::sort(drawn_runs_, {}, &MetadataRun::start);
-    drawn_screen_.getMut().compose(screen.columns(), drawn_spans_, drawn_flags_, TextMetadata{.status = screen.metadataStatus(), .row_flags = drawn_flags_, .links = drawn_links_, .runs = drawn_runs_, .uris = drawn_uris_});
+    std::ranges::sort(drawn_runs_.viewMut(), {}, &MetadataRun::start);
+    drawn_screen_.getMut().compose(screen.columns(), drawn_spans_.view(), drawn_flags_.view(), TextMetadata{.status = screen.metadataStatus(), .row_flags = drawn_flags_.view(), .links = drawn_links_.view(), .runs = drawn_runs_.view(), .uris = drawn_uris_.view()});
     drawn_screen_key_ = key;
     return &*drawn_screen_;
   }
@@ -125,17 +125,17 @@ namespace telar::gui::qt {
     const auto link = [&](std::uint32_t column, std::uint32_t length, std::string_view uri) {
       const auto offset = drawn_uris_.size();
 
-      drawn_uris_.insert(drawn_uris_.end(), uri.begin(), uri.end());
-      drawn_links_.push_back({.offset = static_cast<std::uint32_t>(offset), .len = static_cast<std::uint16_t>(uri.size())});
-      drawn_runs_.push_back({.start = static_cast<std::uint32_t>(index * columns) + column, .len = length, .link_index = static_cast<std::uint16_t>(drawn_links_.size() - 1)});
+      drawn_uris_.extend({reinterpret_cast<const Byte*>(uri.data()), uri.size()});
+      drawn_links_.push({.offset = static_cast<std::uint32_t>(offset), .len = static_cast<std::uint16_t>(uri.size())});
+      drawn_runs_.push({.start = static_cast<std::uint32_t>(index * columns) + column, .len = length, .link_index = static_cast<std::uint16_t>(drawn_links_.size() - 1)});
     };
 
     const auto& view = view_rows_[index];
     if (view.exists && view.screen_row >= 0) {
       const auto row = static_cast<std::uint32_t>(view.screen_row);
 
-      drawn_spans_.push_back(screen.row(row));
-      drawn_flags_.push_back(screen.rowFlags(row));
+      drawn_spans_.push(screen.row(row));
+      drawn_flags_.push(screen.rowFlags(row));
       for (const auto& run : screen.linkRuns()) {
         if (run.start >= row * columns && run.start < (row + 1) * columns) {
           link(run.start - (row * columns), run.len, screen.linkAt(run.start));
@@ -147,8 +147,8 @@ namespace telar::gui::qt {
 
     const auto stable = current->scrollback_trimmed + view.row;
     if (const auto kept = view.exists ? current->rows.find(stable) : ds::none) {
-      drawn_spans_.push_back(kept->cells);
-      drawn_flags_.push_back(kept->flags);
+      drawn_spans_.push(kept->cells);
+      drawn_flags_.push(kept->flags);
       current->rows.links(stable, [&](const auto& kept_link) {
         link(kept_link.column, kept_link.length, kept_link.uri);
       });
@@ -156,8 +156,8 @@ namespace telar::gui::qt {
       return;
     }
 
-    drawn_spans_.emplace_back();
-    drawn_flags_.push_back(0);
+    drawn_spans_.push({});
+    drawn_flags_.push(0);
   }
 
   ds::Option<CellPosition> TerminalItem::visibleCellAt(QPointF position) const noexcept {

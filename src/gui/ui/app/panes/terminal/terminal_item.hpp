@@ -3,6 +3,7 @@
 static_assert(true);
 #endif
 
+#include "foundation/core/memory.hpp"
 #include "foundation/core/wheel_accumulator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_wire/codecs/telar_value_codec.hpp"
@@ -409,9 +410,12 @@ namespace telar::gui::qt {
       bool operator==(const LinkStamp&) const = default;
     };
 
+    // QML makes the item, so it owns the memory its row buffers live in.
+    SystemAllocator memory_;
+    MemoryAdapter<SystemAllocator> adapter_{memory_};
     TerminalController* controller_ = nullptr;
     std::uint64_t pane_id_ = 0;
-    std::vector<std::uint8_t> hidden_rows_;
+    ds::Vec<std::uint8_t, Memory> hidden_rows_{adapter_};
     QVariantList separators_;
     ListModel separator_rows_;
     QVariantList documents_;
@@ -434,7 +438,7 @@ namespace telar::gui::qt {
     std::uint64_t top_row_ = 0;
     qreal shift_ = 0;
     std::uint64_t fold_revision_ = 0;
-    std::vector<ViewRow> view_rows_;
+    ds::Vec<ViewRow, Memory> view_rows_{adapter_};
     // Whether the motion is the user's, which moves the runtime's view after it; else the
     // runtime's view moved first and the motion catches up.
     bool driven_ = false;
@@ -443,14 +447,14 @@ namespace telar::gui::qt {
     // Since the view left the live end: the scrollback's stable rows then, and the commands
     // running then.
     ds::Option<std::uint64_t> away_rows_;
-    std::vector<std::uint64_t> away_running_;
+    ds::Vec<std::uint64_t, Memory> away_running_{adapter_};
     int rows_arrived_ = 0;
     QVariantList finished_below_;
     QVariantMap sticky_block_;
     QVariantList rail_segments_;
     qreal rail_top_ = 0;
     qreal rail_height_ = 1;
-    std::vector<TerminalRow> drawn_rows_;
+    ds::Vec<TerminalRow, Memory> drawn_rows_{adapter_};
 
     // A command's output folding or unfolding in view: its rows from `first`, how tall the part
     // in view is at its fullest, and since when it moves.
@@ -470,23 +474,23 @@ namespace telar::gui::qt {
     double fold_height_ = 0;
     int fold_fade_row_ = -1;
     float fold_fade_ = 1;
-    std::vector<application::FoldMap<>::Span> shown_folds_;
+    ds::Vec<application::FoldMap<>::Span, Memory> shown_folds_{adapter_};
     // The row at the view's top, counted from the top of the scrollback, as the view last placed
     // itself: what stays in place when folds change.
     ds::Option<std::uint64_t> top_anchor_;
-    std::vector<float> row_offsets_;
-    std::vector<MatchMark> match_marks_;
+    ds::Vec<float, Memory> row_offsets_{adapter_};
+    ds::Vec<MatchMark, Memory> match_marks_{adapter_};
     QVariantList rail_matches_;
     int fold_from_ = -1;
     qreal fold_offset_ = 0;
     mutable ds::Option<Screen<Memory>> drawn_screen_;
     mutable std::uint64_t drawn_screen_key_ = 0;
-    mutable std::vector<std::span<const CellValue>> drawn_spans_;
-    mutable std::vector<Byte> drawn_flags_;
-    mutable std::vector<MetadataLink> drawn_links_;
-    mutable std::vector<MetadataRun> drawn_runs_;
-    mutable std::vector<Byte> drawn_uris_;
-    std::vector<float> revealed_rows_;
+    mutable ds::Vec<std::span<const CellValue>, Memory> drawn_spans_{adapter_};
+    mutable ds::Vec<Byte, Memory> drawn_flags_{adapter_};
+    mutable ds::Vec<MetadataLink, Memory> drawn_links_{adapter_};
+    mutable ds::Vec<MetadataRun, Memory> drawn_runs_{adapter_};
+    mutable ds::Vec<Byte, Memory> drawn_uris_{adapter_};
+    ds::Vec<float, Memory> revealed_rows_{adapter_};
     TerminalFont font_;
     FontGrid font_grid_;
     std::shared_ptr<const FontCollection> font_collection_;

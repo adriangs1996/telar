@@ -417,12 +417,12 @@ namespace telar::gui::qt {
       // A view's own rows: from its top shown row, through its folds.
       drawn_cells_.clear();
       for (std::size_t index = 0; index < frame.rowCount(); ++index) {
-        drawn_cells_.push_back(frame.row(index));
+        drawn_cells_.push(frame.row(index));
       }
 
       image_rows.top = frame.top_row;
       image_rows.folds = frame.folds;
-      image_rows.rows = drawn_cells_;
+      image_rows.rows = drawn_cells_.view();
       image_rows.revision = frame.view_revision;
     }
 
@@ -439,13 +439,15 @@ namespace telar::gui::qt {
 
   // Every match lit, the current one more, only when they or where they are drawn changed.
   void TerminalScene::paintMatches(const TerminalPresentation& frame) {
-    const bool same_offsets = std::ranges::equal(lit_offsets_, frame.row_offsets);
-    if (std::ranges::equal(lit_matches_, frame.matches) && same_offsets && lit_bounds_ == frame.bounds) {
+    const bool same_offsets = std::ranges::equal(lit_offsets_.view(), frame.row_offsets);
+    if (std::ranges::equal(lit_matches_.view(), frame.matches) && same_offsets && lit_bounds_ == frame.bounds) {
       return;
     }
 
-    lit_matches_.assign(frame.matches.begin(), frame.matches.end());
-    lit_offsets_.assign(frame.row_offsets.begin(), frame.row_offsets.end());
+    lit_matches_.clear();
+    lit_matches_.extend(frame.matches);
+    lit_offsets_.clear();
+    lit_offsets_.extend(frame.row_offsets);
     lit_bounds_ = frame.bounds;
     clearSceneChildren(matches_);
     constexpr float match_alpha = 0.32F;

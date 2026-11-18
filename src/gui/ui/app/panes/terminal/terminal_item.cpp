@@ -588,13 +588,15 @@ namespace telar::gui::qt {
         return ds::none;
       };
 
-      hidden_rows_.assign(drawn, 0);
+      hidden_rows_.clear();
+
+      hidden_rows_.resize(drawn, 0);
       const bool editing = controller_->prompt().surface(pane_id_) == application::prompt::Surface::editor;
       const auto [first, count, cursor] = promptRows(screen, editing, liveFrom(current->blocks));
 
       for (auto row = first; row < first + count && row < rows; ++row) {
         if (const auto index = drawnRow(row)) {
-          hidden_rows_[*index] = 1;
+          hidden_rows_.atMut(*index) = 1;
         }
       }
 
@@ -603,7 +605,7 @@ namespace telar::gui::qt {
       if (mapped && editing && current->live_prompt_row && *current->live_prompt_row >= liveFrom(current->blocks)) {
         for (std::size_t index = 0; index < drawn; ++index) {
           if (view_rows_[index].exists && view_rows_[index].screen_row < 0 && view_rows_[index].row >= *current->live_prompt_row) {
-            hidden_rows_[index] = 1;
+            hidden_rows_.atMut(index) = 1;
           }
         }
       }
@@ -652,7 +654,7 @@ namespace telar::gui::qt {
             continue;
           }
 
-          hidden_rows_[drawn_index] = 1;
+          hidden_rows_.atMut(drawn_index) = 1;
           // On the command's last row: the prompt's other rows stay empty above it, as a margin.
           if (*row == end - 1) {
             const auto [output_first, output_end] = GuiSession::blockRows(*current, index);
@@ -748,7 +750,7 @@ namespace telar::gui::qt {
         const auto end = start + document.view_rows;
 
         for (auto index = std::max<std::int64_t>(start, 0); index < std::min<std::int64_t>(end, static_cast<std::int64_t>(drawn)); ++index) {
-          hidden_rows_[static_cast<std::size_t>(index)] = 1;
+          hidden_rows_.atMut(static_cast<std::size_t>(index)) = 1;
         }
 
         document_rows.insert(QString::number(id), static_cast<int>(std::clamp<std::int64_t>(start, -1'000'000, 1'000'000)));
@@ -874,15 +876,15 @@ namespace telar::gui::qt {
 
       for (const auto& view : view_rows_) {
         if (!view.exists) {
-          drawn_rows_.push_back({.source = missing_source});
+          drawn_rows_.push({.source = missing_source});
         } else if (view.screen_row >= 0 && view.screen_row < screen.rows()) {
           const auto row = static_cast<std::size_t>(view.screen_row);
 
-          drawn_rows_.push_back({.cells = screen.row(row), .revision = screen.rowRevision(row), .source = row, .screen_row = view.screen_row});
+          drawn_rows_.push({.cells = screen.row(row), .revision = screen.rowRevision(row), .source = row, .screen_row = view.screen_row});
         } else if (const auto kept = current->rows.find(current->scrollback_trimmed + view.row)) {
-          drawn_rows_.push_back({.cells = kept->cells, .revision = kept->revision, .source = kept_source | (current->scrollback_trimmed + view.row)});
+          drawn_rows_.push({.cells = kept->cells, .revision = kept->revision, .source = kept_source | (current->scrollback_trimmed + view.row)});
         } else {
-          drawn_rows_.push_back({.source = missing_source | view.row});
+          drawn_rows_.push({.source = missing_source | view.row});
         }
       }
     }
@@ -892,17 +894,19 @@ namespace telar::gui::qt {
     // crosses fading under it.
     row_offsets_.clear();
     if (mapped && fold_motion_ && fold_from_ >= 0) {
-      row_offsets_.assign(view_rows_.size(), 0.0F);
+      row_offsets_.clear();
+      row_offsets_.resize(view_rows_.size(), 0.0F);
       for (auto row = static_cast<std::size_t>(fold_from_); row < row_offsets_.size(); ++row) {
-        row_offsets_[row] = static_cast<float>(fold_offset_);
+        row_offsets_.atMut(row) = static_cast<float>(fold_offset_);
       }
 
       if (fold_fade_row_ >= 0 && std::cmp_less(fold_fade_row_, view_rows_.size())) {
         if (revealed_rows_.empty()) {
-          revealed_rows_.assign(view_rows_.size(), 1.0F);
+          revealed_rows_.clear();
+          revealed_rows_.resize(view_rows_.size(), 1.0F);
         }
 
-        auto& revealed = revealed_rows_[static_cast<std::size_t>(fold_fade_row_)];
+        auto& revealed = revealed_rows_.atMut(static_cast<std::size_t>(fold_fade_row_));
 
         revealed = std::min(revealed, fold_fade_);
       }
@@ -929,15 +933,15 @@ namespace telar::gui::qt {
         .hovered_link = link_hover_.current() ? &link_hover_.current()->match : nullptr,
         .owner = this,
         .background_provided = background_provided_,
-        .hidden_rows = hidden_rows_,
-        .revealed_rows = revealed_rows_,
-        .rows = drawn_rows_,
+        .hidden_rows = hidden_rows_.view(),
+        .revealed_rows = revealed_rows_.view(),
+        .rows = drawn_rows_.view(),
         .shift = mapped ? shift_ : 0,
         .top_row = top_row_,
         .folds = &viewFolds(),
         .view_revision = mapped ? viewRevision(*current) : 0,
-        .row_offsets = row_offsets_,
-        .matches = match_marks_,
+        .row_offsets = row_offsets_.view(),
+        .matches = match_marks_.view(),
         .link_screen = mapped && link_hover_.current() ? drawnScreen() : nullptr,
     };
 

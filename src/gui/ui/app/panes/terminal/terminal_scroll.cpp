@@ -237,11 +237,13 @@ namespace telar::gui::qt {
     // One fold opened or closed, its first row the same before and after, moves what is below
     // its separator; several at once, or one that only grew, simply show their rows.
     // Only folds move; documents drawn in place of their rows simply show them.
-    std::vector<application::FoldMap<>::Span> spans;
+    ds::Vec<application::FoldMap<>::Span, Memory> spans{adapter_};
 
-    std::ranges::copy_if(current->folds.spans(), std::back_inserter(spans), [](const application::FoldMap<>::Span& span) {
-      return span.shown == 0;
-    });
+    for (const auto& span : current->folds.spans()) {
+      if (span.shown == 0) {
+        spans.push(span);
+      }
+    }
 
     ds::Option<application::FoldMap<>::Span> changed;
     bool closed = false;
@@ -253,21 +255,21 @@ namespace telar::gui::qt {
     };
 
     for (const auto& span : shown_folds_) {
-      if (!has(spans, span.first)) {
+      if (!has(spans.view(), span.first)) {
         changed = span;
         ++changes;
       }
     }
 
     for (const auto& span : spans) {
-      if (!has(shown_folds_, span.first)) {
+      if (!has(shown_folds_.view(), span.first)) {
         changed = span;
         closed = true;
         ++changes;
       }
     }
 
-    shown_folds_.assign(spans.begin(), spans.end());
+    shown_folds_ = std::move(spans);
     // The row at the top as the view last drew it under the old folds; the rows laid out since
     // may already count the new ones.
     if (!top_anchor_) {
@@ -368,11 +370,11 @@ namespace telar::gui::qt {
     const auto rows = std::min<std::size_t>(fold_motion_->count, static_cast<std::size_t>(std::ceil((shown / cell) - whole)));
 
     // The pane's folds, this one hiding only what is past the edge.
-    std::vector<application::FoldMap<>::Span> spans;
+    ds::Vec<application::FoldMap<>::Span, Memory> spans{adapter_};
 
     for (const auto& span : current->folds.spans()) {
       if (span.first != fold_motion_->first) {
-        spans.push_back(span);
+        spans.push(span);
       }
     }
 
@@ -383,10 +385,10 @@ namespace telar::gui::qt {
     }()
                                              : fold_motion_->count;
     if (count > rows) {
-      spans.push_back({.first = fold_motion_->first + static_cast<std::uint32_t>(rows), .count = count - static_cast<std::uint32_t>(rows)});
+      spans.push({.first = fold_motion_->first + static_cast<std::uint32_t>(rows), .count = count - static_cast<std::uint32_t>(rows)});
     }
 
-    transit_folds_.assign(spans);
+    transit_folds_.assign(spans.view());
     fold_shown_ = rows;
 
     fold_height_ = shown;
@@ -542,7 +544,7 @@ namespace telar::gui::qt {
 
     view_rows_.resize(rows + 1);
     for (std::size_t index = 0; index < view_rows_.size(); ++index) {
-      auto& view = view_rows_[index];
+      auto& view = view_rows_.atMut(index);
       const auto display = top_row_ + index;
 
       view.exists = display < shown;
@@ -890,7 +892,7 @@ namespace telar::gui::qt {
       away_running_.clear();
       for (std::size_t index = 0; index < blocks.size(); ++index) {
         if (going(blocks[index].state)) {
-          away_running_.push_back(GuiSession::blockKey(*current, index));
+          away_running_.push(GuiSession::blockKey(*current, index));
         }
       }
     }
@@ -929,7 +931,7 @@ namespace telar::gui::qt {
 
         rail.push_back(static_cast<qreal>(mapped ? current->folds.display(match.y) : match.y) / static_cast<qreal>(shown));
         if (const auto row = drawnRowOf(match.y, first)) {
-          match_marks_.push_back({.row = *row, .column = match.x, .length = match.len, .current = index == copy->match_index});
+          match_marks_.push({.row = *row, .column = match.x, .length = match.len, .current = index == copy->match_index});
         }
       }
     }

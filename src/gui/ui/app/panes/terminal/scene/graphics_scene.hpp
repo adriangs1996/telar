@@ -26,7 +26,6 @@ static_assert(true);
 #include <span>
 #include <string_view>
 #include <utility>
-#include <vector>
 
 #pragma once
 
@@ -50,16 +49,16 @@ namespace telar::gui::qt {
     std::uint64_t revision = 0;
 
     // A screen's own rows, as it shows them; `cells` keeps their spans.
-    [[nodiscard]] static ImageRows of(const Screen<Memory>& screen, std::vector<std::span<const CellValue>>& cells) {
+    [[nodiscard]] static ImageRows of(const Screen<Memory>& screen, ds::Vec<std::span<const CellValue>, Memory>& cells) {
       cells.clear();
       for (std::size_t row = 0; row < screen.rows(); ++row) {
-        cells.push_back(screen.row(row));
+        cells.push(screen.row(row));
       }
 
       const auto& scroll = screen.scroll();
       const auto rows = static_cast<std::uint64_t>(screen.rows());
 
-      return {.live_top = scroll.total_rows > rows ? scroll.total_rows - rows : 0, .top = scroll.offset, .rows = cells, .revision = screen.revision()};
+      return {.live_top = scroll.total_rows > rows ? scroll.total_rows - rows : 0, .top = scroll.offset, .rows = cells.view(), .revision = screen.revision()};
     }
 
     // The drawn row of `row`, counted from the top of the scrollback; nothing when a fold hides it.

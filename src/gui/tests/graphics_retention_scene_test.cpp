@@ -96,7 +96,9 @@ namespace {
     }
 
   private:
-    std::vector<std::span<const CellValue>> rows_;
+    SystemAllocator memory_;
+    MemoryAdapter<SystemAllocator> adapter_{memory_};
+    ds::Vec<std::span<const CellValue>, Memory> rows_{adapter_};
     QSGTransformNode& below_background_;
     QSGTransformNode& below_text_;
     QSGTransformNode& above_text_;
