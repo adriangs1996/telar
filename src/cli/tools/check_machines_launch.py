@@ -7,6 +7,7 @@ from pathlib import Path
 import pty
 import re
 import select
+import shutil
 import subprocess
 import socket
 import tempfile
@@ -296,8 +297,63 @@ def concurrent_edits(binary):
             assert race([['remove', label] for label in labels]) == set()
 
 
+def receive_config_bounds(binary):
+    """The receiving end of a sync applies what a whole stream carries: a stream cut before
+    its end fails, one past the size or file caps is refused, and a changed file of the same
+    size and mode is rewritten."""
+    with tempfile.TemporaryDirectory(prefix='telar-machines-', dir='/tmp') as temporary:
+        root = Path(temporary).resolve()
+        env = environment(root)
+
+        def receive(data):
+            return subprocess.run([str(binary), 'machine', 'receive-config'], input=data, env=env, cwd=root, capture_output=True, timeout=60)
+
+        cut = receive(b'telar-config 1\nfile 644 1 .claude/a\nx\n')
+        assert cut.returncode == 1 and b'InvalidConfigStream' in cut.stderr and b'written' not in cut.stdout, cut
+        megabyte = 1024 * 1024
+        files = b''.join(f'file 644 {megabyte} .claude/big{index}\n'.encode() + b'x' * megabyte + b'\n' for index in range(16))
+        large = receive(b'telar-config 1\n' + files + b'file 644 1 .claude/over\nx\nend\n')
+        assert large.returncode == 1 and b'ConfigStreamTooLarge' in large.stderr, (large.returncode, large.stderr)
+        many = receive(b'telar-config 1\n' + b''.join(f'file 644 0 .claude/many/{index}\n\n'.encode() for index in range(4097)) + b'end\n')
+        assert many.returncode == 1 and b'ConfigStreamTooLarge' in many.stderr, (many.returncode, many.stderr)
+        target = root / 'home/.claude/same'
+        target.parent.mkdir(exist_ok=True)
+        target.write_bytes(b'xy')
+        target.chmod(0o644)
+        changed = receive(b'telar-config 1\nfile 644 2 .claude/same\nyz\nend\n')
+        assert changed.returncode == 0 and b'written .claude/same' in changed.stdout and target.read_bytes() == b'yz', changed
+
+
+def dispatch_refusals(binary):
+    """What dispatch refuses reaches neither SSH nor a window: a command too long for the
+    remote shell, and a window asked to show a second machine."""
+    with tempfile.TemporaryDirectory(prefix='telar-machines-', dir='/tmp') as temporary:
+        root = Path(temporary).resolve()
+        env = environment(root)
+        bindir = root / 'bin'
+        bindir.mkdir()
+        calls = root / 'calls'
+        # A copy of telar beside its runtime and a window that records being opened.
+        shutil.copy2(binary, bindir / 'telar')
+        (bindir / 'telar-runtime').symlink_to(binary.resolve().parent / 'telar-runtime')
+        for name in ('ssh', 'telar-gui'):
+            (bindir / name).write_text(f'#!/bin/sh\necho {name} "$@" >> "{calls}"\nexit 0\n')
+            (bindir / name).chmod(0o700)
+        env['PATH'] = f'{bindir}:/usr/bin:/bin'
+        telar = bindir / 'telar'
+        subprocess.run([str(telar), 'machine', 'add', 'box', 'host'], env=env, cwd=root, check=True, capture_output=True, timeout=15)
+        try:
+            for words in (['pane', 'list', '--workspace', 'w' * 70 * 1024], ['--remote', 'user@host'], ['gui', '--machine', 'other']):
+                result = subprocess.run([str(telar), '--machine', 'box', *words], env=env, cwd=root, stdin=subprocess.DEVNULL, capture_output=True, timeout=15)
+                assert result.returncode == 1 and not calls.exists(), (words[0], result.returncode, result.stderr[-300:], calls.exists() and calls.read_text()[:300])
+        finally:
+            subprocess.run([str(telar), 'server', 'stop'], env=env, cwd=root, capture_output=True, timeout=15)
+
+
 def contracts(binary):
     """Machine contracts asserted on their effects alone, beside the recorded outputs."""
     incompatible_runtime_kept(binary)
     concurrent_edits(binary)
-    return 3
+    receive_config_bounds(binary)
+    dispatch_refusals(binary)
+    return 5
