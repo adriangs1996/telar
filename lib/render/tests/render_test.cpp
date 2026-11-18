@@ -336,6 +336,102 @@ Footnote[^1].
       check(std::string_view{end} == "\x1b]7780;end\x1b\\", "end framing");
     }
 
+    // Numeric character references decode to their character, and a reference to NUL, a
+    // surrogate or past U+10FFFF to U+FFFD, so the document stays valid UTF-8 and decodes.
+    void numericEntities() {
+      const auto document = parse("&#233; &#x1F600; &#0; &#xD800; &#x110000;\n");
+      const auto* paragraph = find(document, BlockKind::paragraph);
+      const std::string replacement = "\xef\xbf\xbd";
+      const std::string expected = std::string{"\xc3\xa9 \xf0\x9f\x98\x80 "} + replacement + " " + replacement + " " + replacement;
+
+      check(paragraph != nullptr && text(document, document.runsOf(*paragraph)) == expected, "numeric references decoded");
+      Doc decoded{memory};
+
+      check(decode(encoded(document), decoded) == DecodeError::none, "the document decodes");
+    }
+
+    // The columns `text` takes on a terminal, escapes left out: two for the CJK ideographs and
+    // none for the combining acute accent these cases use, one for anything else.
+    std::size_t columns(std::string_view text) {
+      std::size_t width = 0;
+
+      for (std::size_t index = 0; index < text.size();) {
+        const auto lead = static_cast<unsigned char>(text[index]);
+        if (lead == 0x1b) {
+          index = text.find('m', index) + 1;
+          continue;
+        }
+
+        const std::size_t length = lead < 0x80 ? 1 : lead < 0xe0 ? 2
+                                                 : lead < 0xf0   ? 3
+                                                                 : 4;
+        char32_t value = length == 1 ? lead : lead & (0x7f >> length);
+
+        for (std::size_t offset = 1; offset < length; ++offset) {
+          value = (value << 6) | (static_cast<unsigned char>(text[index + offset]) & 0x3f);
+        }
+
+        index += length;
+        width += value >= 0x4e00 && value <= 0x9fff ? 2 : value == 0x0301 ? 0
+                                                                          : 1;
+      }
+
+      return width;
+    }
+
+    std::vector<std::string> lines(std::string_view text) {
+      std::vector<std::string> result;
+
+      for (std::size_t start = 0; start < text.size();) {
+        const auto end = std::min(text.find('\n', start), text.size());
+
+        if (columns(text.substr(start, end - start)) != 0) {
+          result.emplace_back(text.substr(start, end - start));
+        }
+
+        start = end + 1;
+      }
+
+      return result;
+    }
+
+    std::vector<std::string> rendered(std::string_view source, std::uint16_t width) {
+      String<Memory> output{AllocatorRef<char, Memory>{memory}};
+
+      terminal::render(parse(source), width, output);
+      return lines(output);
+    }
+
+    // Wrapping counts a wide character as two columns and a combining mark as none, so lines of
+    // CJK text fit the width and a table with CJK cells keeps its borders aligned.
+    void terminalWideCharacters() {
+      std::string ideographs;
+
+      for (int index = 0; index < 15; ++index) {
+        ideographs += "\xe4\xb8\xad\xe6\x96\x87";
+      }
+
+      for (const auto& line : rendered(ideographs + "\n", 20)) {
+        check(columns(line) <= 20, std::format("CJK line {:?} fits 20 columns", line));
+      }
+
+      // Three words of five accented letters take 17 columns: one line.
+      std::string word;
+
+      for (int index = 0; index < 5; ++index) {
+        word += "e\xcc\x81";
+      }
+
+      check(rendered(word + " " + word + " " + word + "\n", 20).size() == 1, "combining marks take no column");
+
+      const auto table = rendered("| \xe4\xb8\xad\xe6\x96\x87 | b |\n| --- | --- |\n| \xe4\xb8\xad\xe6\x96\x87\xe5\xad\x97 | \xe4\xb8\xad |\n", 40);
+
+      check(table.size() >= 3, "table rendered");
+      for (const auto& line : table) {
+        check(columns(line) == columns(table.front()), std::format("table line {:?} is as wide as the border", line));
+      }
+    }
+
     void terminalText() {
       const auto document = parse(std::string{sample} + "\nInjected \x1b]52;c;evil\x07 text\n");
       String<Memory> output{AllocatorRef<char, Memory>{memory}};
@@ -402,5 +498,7 @@ Footnote[^1].
   const telar::testing::Case case_limits{"render.limits", limits};
   const telar::testing::Case case_sequence{"render.sequence", sequence};
   const telar::testing::Case case_terminal_text{"render.terminal_text", terminalText};
+  const telar::testing::Case case_numeric_entities{"render.markdown_numeric_entities", numericEntities};
+  const telar::testing::Case case_wide_characters{"render.terminal_wide_characters", terminalWideCharacters};
 
 }
