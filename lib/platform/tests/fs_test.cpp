@@ -134,8 +134,64 @@ namespace {
     check(std::filesystem::file_size(inner + "/" + std::string(NAME_MAX, 'a')) == bytes.size());
   }
 
+  // A private file is read only as the regular file it names: a link planted in its place,
+  // even to a private file, is refused, and so is a file over the caller's limit.
+  void testPrivateFileRefusesLinkAndOversize() {
+    TemporaryDirectory temporary{"/tmp/telar-private-read-XXXXXX"};
+    const std::string base{temporary.path()};
+
+    write(base + "/target", "0123456789");
+    check(::chmod((base + "/target").c_str(), 0600) == 0);
+    check(::symlink((base + "/target").c_str(), (base + "/link").c_str()) == 0);
+    check(openFailure([&] {
+      return openPrivateFile(temporary.descriptor(), "link", 64).file;
+    }) == ELOOP);
+    check(openFailure([&] {
+      return openPrivateFile(temporary.descriptor(), "target", 9).file;
+    }) == EFBIG);
+    check(openPrivateFile(temporary.descriptor(), "target", 10).size == 10);
+  }
+
+  // Processes that edit one locked file at once each create its lock when none exists yet:
+  // all of them get it, so no edit fails for having raced another to the first one.
+  void testLockFileCreatedAtOnce() {
+    TemporaryDirectory temporary{"/tmp/telar-lock-file-XXXXXX"};
+    constexpr int rounds = 20;
+    constexpr int openers = 8;
+
+    for (int round = 0; round < rounds; ++round) {
+      const auto name = "edit-" + std::to_string(round) + ".lock";
+      std::atomic<int> waiting{openers};
+      std::atomic<int> failures{0};
+      std::vector<std::thread> threads;
+
+      for (int index = 0; index < openers; ++index) {
+        threads.emplace_back([&] {
+          waiting.fetch_sub(1);
+          while (waiting.load() > 0) {
+          }
+
+          if (!openLockFile(temporary.descriptor(), name.c_str())) {
+            failures.fetch_add(1);
+          }
+        });
+      }
+
+      for (auto& thread : threads) {
+        thread.join();
+      }
+
+      struct stat state{};
+
+      check(failures.load() == 0, "a lock file created at once failed to open");
+      check(::fstatat(temporary.descriptor(), name.c_str(), &state, AT_SYMLINK_NOFOLLOW) == 0 && S_ISREG(state.st_mode) && (state.st_mode & 0077) == 0);
+    }
+  }
+
   const telar::testing::Case case_private_directory{"fs.private_directory", testPrivateDirectory};
   const telar::testing::Case case_open_beneath{"fs.open_beneath_refuses_escape", testOpenBeneathRefusesEscape};
   const telar::testing::Case case_write_private_file{"fs.write_private_file_rejects_path_names", testWritePrivateFileRejectsPathNames};
+  const telar::testing::Case case_private_file_refuses{"fs.private_file_refuses_link_and_oversize", testPrivateFileRefusesLinkAndOversize};
+  const telar::testing::Case case_lock_file_created_at_once{"fs.lock_file_created_at_once", testLockFileCreatedAtOnce};
 
 }

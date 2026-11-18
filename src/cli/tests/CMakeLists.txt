@@ -35,15 +35,20 @@ if(APPLE)
     LABELS cli.e2e TIMEOUT 90)
   telar_add_test(machine-setup-cli-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/machine_setup_test.py"
     --telar "$<TARGET_FILE:telar>"
-    LABELS cli.e2e TIMEOUT 120)
+    LABELS cli.e2e TIMEOUT 400)
+endif()
+if(APPLE AND TARGET telar-runtime)
+  telar_add_test(window-launch-cli-tests COMMAND Python3::Interpreter -B "${TELAR_PROCESS_SOURCE_DIR}/tools/check_window_launch.py"
+    --telar "$<TARGET_FILE:telar>" --runtime "$<TARGET_FILE:telar-runtime>" --output "${CMAKE_CURRENT_BINARY_DIR}/window-launch.json"
+    LABELS cli.e2e TIMEOUT 60)
 endif()
 telar_add_test(exec-runtime-offline-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/exec_runtime_test.py"
   --telar "$<TARGET_FILE:telar>" --offline
-  LABELS cli.e2e)
+  LABELS cli.e2e TIMEOUT 120)
 if(TARGET telar-runtime)
   telar_add_test(exec-runtime-cli-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/exec_runtime_test.py"
     --telar "$<TARGET_FILE:telar>" --prepare-probe "$<TARGET_FILE:repository-prepare-probe>"
-    LABELS cli.e2e TIMEOUT 90)
+    LABELS cli.e2e TIMEOUT 180)
 endif()
 telar_add_test(integration-cli-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/integration_cli_test.py"
   --telar "$<TARGET_FILE:telar>"
@@ -51,6 +56,9 @@ telar_add_test(integration-cli-tests COMMAND Python3::Interpreter -B "${CMAKE_CU
 telar_add_test(render-cli-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/render_test.py"
   --telar "$<TARGET_FILE:telar>"
   LABELS cli.e2e TIMEOUT 30)
+telar_add_test(completions-cli-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/completions_test.py"
+  --telar "$<TARGET_FILE:telar>"
+  LABELS cli.e2e)
 telar_add_test(cli-window-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/window_test.py"
   --telar "$<TARGET_FILE:telar>"
   LABELS cli.e2e)

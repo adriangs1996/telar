@@ -39,11 +39,11 @@ class Fixture:
         self.socket = self.root / "s"
         self.results = {}
 
-    def invoke(self, name, *args, data=b"", code=0, cwd=None, socket=False):
+    def invoke(self, name, *args, data=b"", code=0, cwd=None, socket=False, timeout=20):
         argv = [str(self.binary), *map(str, args)]
         if socket:
             argv += ["--socket", str(self.socket)]
-        result = subprocess.run(argv, env=self.env, input=data, capture_output=True, cwd=cwd or self.root, timeout=20)
+        result = subprocess.run(argv, env=self.env, input=data, capture_output=True, cwd=cwd or self.root, timeout=timeout)
         if code is not None:
             assert result.returncode == code, (name, argv, result.returncode, result.stdout, result.stderr)
         self.results[name] = (result.returncode, result.stdout, result.stderr)
@@ -77,7 +77,9 @@ class Fixture:
                 self.env.pop("TELAR_SOCKET", None)
 
 
-def fixture_query(f, name, arguments, frames, code=0):
+def fixture_query(f, name, arguments, frames, code=0, hold=False, timeout=20):
+    """Answers the runtime state request with `frames`; with `hold`, keeps the connection
+    open after them until the client leaves, as a runtime that sends nothing more."""
     def receive(connection):
         def exact(length):
             data = bytearray()
@@ -100,6 +102,10 @@ def fixture_query(f, name, arguments, frames, code=0):
             assert request[0] == 0x14 and request[-1] == 0
             for frame in frames:
                 connection.sendall(struct.pack("<I", len(frame)) + frame)
+            if hold:
+                connection.settimeout(timeout)
+                while connection.recv(4096):
+                    pass
 
     f.socket.unlink(missing_ok=True)
     try:
@@ -108,7 +114,7 @@ def fixture_query(f, name, arguments, frames, code=0):
             listener.listen()
             listener.settimeout(5)
             future = worker.submit(serve, listener)
-            result = f.invoke(name, *arguments, socket=True, code=code)
+            result = f.invoke(name, *arguments, socket=True, code=code, timeout=timeout)
             future.result()
             return result
     finally:
@@ -138,7 +144,15 @@ def fixed_runtime_outputs(f):
     events = fixture_query(f, "fixture/watch", ["runtime", "watch", "--count", "4"], [proxy, metrics, workspace, agents]).stdout.splitlines()
     sample = next(event["data"] for event in map(json.loads, events) if event["type"] == "system_metrics")
     assert sample["has_battery"] is True and sample["battery_percent"] == 81, sample
-    fixture_query(f, "fixture/proxy-filter", ["proxy", "watch", "--count", "1"], [metrics, workspace, agents, proxy])
+    events = fixture_query(f, "fixture/proxy-filter", ["proxy", "watch", "--count", "1"], [metrics, workspace, agents, proxy]).stdout.splitlines()
+    assert [json.loads(event)["type"] for event in events] == ["proxy_status"], events
+    # A refusal or a stopping runtime ends a query at once, not at its reply timeout.
+    refused = bytes([0x84]) + struct.pack("<QH", 1, 2) + b"refused"
+    fixture_query(f, "fixture/status-refused", ["runtime", "status"], [refused], code=1, hold=True)
+    fixture_query(f, "fixture/status-stopping", ["runtime", "status"], [metrics, bytes([0x85])], code=1, hold=True)
+    fixture_query(f, "fixture/metrics-stopping", ["runtime", "metrics"], [proxy, bytes([0x85])], code=1, hold=True)
+    # A runtime that never answers is a timeout, exit 3, which scripts tell from an error.
+    fixture_query(f, "fixture/status-timeout", ["runtime", "status"], [], code=3, hold=True, timeout=45)
     fixture_query(f, "fixture/proxy-stop", ["proxy", "watch"], [metrics, proxy, bytes([0x85])])
     resync = bytes([0x93]) + struct.pack("<BQBB", 0, 7, 0, 0)
     fixture_query(f, "fixture/resync", ["runtime", "watch"], [proxy, resync], code=1)
@@ -307,6 +321,11 @@ def execution(f):
     output = f.invoke("exec/offset", "exec", "output", "1001", "--stdout-offset", "3", "--stderr-offset", "5", socket=True)
     assert output.stdout == data[3:] and output.stderr == data[::-1][5:]
     f.invoke("exec/missing", "exec", "status", "9999", socket=True, code=125)
+    # Not the runtime's own directory nor HOME, which a lost --cwd falls back to.
+    directory = f.root / "exec-cwd"
+    directory.mkdir(mode=0o700)
+    result = f.invoke("exec/cwd", "exec", "--id", "1006", "--no-stdin", "--cwd", directory, *common, "--", "/bin/pwd")
+    assert result.stdout == f"{directory}\n".encode(), result.stdout
     f.invoke("exec/spawn-failure", "exec", "--id", "1002", "--no-stdin", *common, "--", "/no-such-telar-fixture", code=125)
     f.invoke("exec/detach", "exec", "--id", "1003", "--detach", "--json", *common, "--", sys.executable, "-c", "import time;time.sleep(20)")
     f.invoke("exec/retry", "exec", "--id", "1003", "--detach", *common, "--", sys.executable, "-c", "import time;time.sleep(20)")
@@ -504,6 +523,10 @@ def projects(f):
     f.invoke("project/detach", "project", "setup", "--cwd", root, "--detach")
     recipe.write_text('{"version":1,"argv":["/bin/sh","-c","exit 9"]}')
     f.invoke("project/failure", "project", "setup", "--cwd", root, code=1)
+    # Output the runtime no longer holds when the CLI asks for it is reported, not skipped.
+    recipe.write_text(json.dumps({"version": 1, "argv": [sys.executable, "-c", "import sys;sys.stdout.buffer.write(b'x'*(8<<20))"]}))
+    result = f.invoke("project/retention-exceeded", "project", "setup", "--cwd", root, "--json", code=1, timeout=60)
+    assert b"SetupOutputRetentionExceeded" in result.stderr and b'"ready"' not in result.stdout, result.stderr[-300:]
 
 
 def project_recipe_gate(f):
@@ -525,6 +548,13 @@ def project_recipe_gate(f):
     (directory / "setup.json").write_text(recipe(65))
     assert b"InvalidProjectRecipe" in f.invoke("project/argv-over-limit", "project", "setup", "--cwd", root, code=1).stderr
     assert not marker.exists()
+    # A recipe file over 32 KiB is refused unread; one of exactly 32 KiB runs.
+    for size, code in ((32 * 1024 + 1, 1), (32 * 1024, 0)):
+        source = recipe(4)
+        (directory / "setup.json").write_text(source[:-1] + " " * (size - len(source)) + "}")
+        f.invoke(f"project/recipe-size-{size}", "project", "setup", "--cwd", root, code=code)
+        assert marker.exists() == (code == 0)
+        marker.unlink(missing_ok=True)
     (directory / "setup.json").write_text(recipe(4))
     link = f.root / "gated-link"
     os.link(directory / "setup.json", link)

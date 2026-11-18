@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""`telar integration` and `telar plugin trust` through the executable, in private homes:
+"""`telar integration`, `telar plugin trust` and `telar proxy trust status` through the executable, in private homes:
 the files they write, keep and remove, and the output other telar commands parse."""
 import argparse
 import json
@@ -125,6 +125,45 @@ def extensions(home):
         path.unlink()
 
 
+def linked_settings(home):
+    """Settings kept as a link into a dotfiles checkout stay a link, and the file it names
+    gets the hooks with its own permissions; settings under missing directories get them."""
+    dotfiles = home.home / 'dotfiles/settings.json'
+    dotfiles.parent.mkdir()
+    dotfiles.write_text('{"theme":"dark"}')
+    dotfiles.chmod(0o640)
+    settings = home.home / '.claude/settings.json'
+    settings.parent.mkdir()
+    settings.symlink_to(dotfiles)
+    home.run('integration', 'install', 'claude')
+    assert settings.is_symlink() and os.readlink(settings) == str(dotfiles)
+    installed = json.loads(dotfiles.read_text())
+    assert installed['theme'] == 'dark' and 'Stop' in installed['hooks'], installed
+    assert dotfiles.stat().st_mode & 0o777 == 0o640, oct(dotfiles.stat().st_mode)
+    nested = home.root / 'missing/parents/settings.json'
+    home.run('integration', 'install', 'claude', '--settings', nested)
+    assert 'Stop' in json.loads(nested.read_text())['hooks']
+
+
+def legacy_settings(home):
+    """With CLAUDE_CONFIG_DIR set, hooks left in ~/.claude are reported, and --legacy removes
+    them there without touching the settings in use."""
+    old = home.home / '.claude/settings.json'
+    home.run('integration', 'install', 'claude')
+    current = home.root / 'claude-config'
+    home.env['CLAUDE_CONFIG_DIR'] = str(current)
+    home.run('integration', 'install', 'claude')
+    in_use = (current / 'settings.json').read_text()
+    assert b'hooks remain in' in home.run('integration', 'status', 'claude').stdout
+    home.run('integration', 'uninstall', 'claude', '--legacy')
+    assert 'Stop' not in json.loads(old.read_text()).get('hooks', {}), old.read_text()
+    assert (current / 'settings.json').read_text() == in_use
+    assert b'hooks remain in' not in home.run('integration', 'status', 'claude').stdout
+    # The variable naming the home's own directory leaves no other settings to clean.
+    home.env['CLAUDE_CONFIG_DIR'] = str(home.home / '.claude')
+    home.run('integration', 'uninstall', 'claude', '--legacy', status=1)
+
+
 def trusted(home):
     store = Path(home.env['XDG_CONFIG_HOME']) / 'telar/trust.json'
     return {grant['plugin']: sorted(grant['capabilities']) for grant in json.loads(store.read_text())['grants']} if store.exists() else {}
@@ -148,13 +187,27 @@ def plugin_trust(home):
     assert trusted(home) == {}
 
 
+def proxy_trust_status(home):
+    """`proxy trust status` reports an unreadable trust record as a failure, never as a
+    store without telar's CA (an install would then add a second one). Status only: an
+    install would change the system trust store."""
+    authority = home.root / 'ca'
+    home.run('proxy', 'trust', 'status', '--ca-dir', authority)
+    authority.mkdir(mode=0o700)
+    record = authority / 'trust-install.json'
+    record.write_text('{broken')
+    record.chmod(0o600)
+    home.run('proxy', 'trust', 'status', '--ca-dir', authority, status=1)
+    home.run('proxy', 'trust', 'status', '--ca-dir', 'relative/ca', status=1)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--telar', type=Path, required=True)
     parser.add_argument('--scratch', type=Path)
     args = parser.parse_args()
     count = 0
-    for check in (install_output, unparseable_settings, skills, extensions, plugin_trust):
+    for check in (install_output, unparseable_settings, skills, extensions, plugin_trust, linked_settings, legacy_settings, proxy_trust_status):
         with tempfile.TemporaryDirectory(prefix='integration-', dir=args.scratch) as directory:
             home = Home(args.telar.resolve(), Path(directory).resolve())
             check(home)

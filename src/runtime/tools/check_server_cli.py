@@ -2,11 +2,14 @@
 import os
 from pathlib import Path
 import select
+import shutil
 import signal
+import socket as sockets
 import stat
 import struct
 import subprocess
 import tempfile
+import threading
 import time
 
 
@@ -134,6 +137,86 @@ def check_unwritable_shell_integration(binary, checkpoint_probe):
                 invoke("stop", "--socket", socket)
 
 
+def bridge_relays_large_frames(binary, root, environment):
+    """The bridge carries what a window sends over SSH byte for byte both ways, far past one
+    read of its relay, and ends with status 0 when the runtime closes its side."""
+    path = root / "echo.sock"
+    payload = os.urandom(200 * 1024)
+    with sockets.socket(sockets.AF_UNIX) as listener:
+        listener.bind(str(path))
+        listener.listen()
+        listener.settimeout(10)
+
+        def echo():
+            connection, _ = listener.accept()
+            with connection:
+                connection.settimeout(10)
+                echoed = 0
+                while echoed < len(payload):
+                    part = connection.recv(65536)
+                    if not part:
+                        break
+                    connection.sendall(part)
+                    echoed += len(part)
+
+        server = threading.Thread(target=echo)
+        server.start()
+        bridge = subprocess.Popen([str(binary), "server", "bridge", "--socket", str(path)], env=environment,
+                                  stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            writer = threading.Thread(target=bridge.stdin.write, args=(payload,))
+            writer.start()
+            received = b""
+            deadline = time.monotonic() + 10
+            while len(received) < len(payload):
+                ready, _, _ = select.select([bridge.stdout], [], [], max(0, deadline - time.monotonic()))
+                assert ready, len(received)
+                part = os.read(bridge.stdout.fileno(), 65536)
+                if not part:
+                    break
+                received += part
+            writer.join(10)
+            server.join(10)
+            assert received == payload, (len(received), len(payload))
+            assert bridge.wait(timeout=5) == 0
+        finally:
+            if bridge.poll() is None:
+                bridge.kill()
+                bridge.wait()
+            bridge.stdin.close()
+            bridge.stdout.close()
+            bridge.stderr.close()
+
+
+def stale_socket_is_not_running(binary, root, invoke, stop):
+    """A socket file left by a runtime that crashed is no runtime: stop says so and endpoint
+    starts one in its place, without anyone deleting the file by hand."""
+    stale = root / "stale.sock"
+    with sockets.socket(sockets.AF_UNIX) as listener:
+        listener.bind(str(stale))
+    assert stale.exists()
+    result = invoke("stop", "--socket", stale)
+    assert result.returncode == 0 and result.stdout == "telar runtime is not running\n", result
+    try:
+        assert invoke("endpoint", "--socket", stale).stdout.splitlines()[0] == str(stale)
+    finally:
+        stop(stale)
+
+
+def endpoint_reports_runtime_start_failure(binary, root, environment):
+    """A runtime that exits as it starts is reported at once, not after the ten seconds a
+    slow start may take."""
+    directory = root / "failing-runtime"
+    directory.mkdir()
+    shutil.copy2(binary, directory / "telar")
+    (directory / "telar-runtime").write_text("#!/bin/sh\nexit 1\n")
+    (directory / "telar-runtime").chmod(0o700)
+    started = time.monotonic()
+    result = subprocess.run([str(directory / "telar"), "server", "endpoint", "--socket", str(root / "failing.sock")],
+                            env=environment, capture_output=True, text=True, timeout=30)
+    assert result.returncode != 0 and time.monotonic() - started < 5, (result, time.monotonic() - started)
+
+
 def check_runtime(binary, checkpoint_probe):
     with tempfile.TemporaryDirectory(prefix="telar-cli-", dir="/tmp") as directory:
         root = Path(directory).resolve()
@@ -148,6 +231,9 @@ def check_runtime(binary, checkpoint_probe):
 
         try:
             assert stop(socket) == "telar runtime is not running\n"
+            bridge_relays_large_frames(binary, root, environment)
+            stale_socket_is_not_running(binary, root, invoke, stop)
+            endpoint_reports_runtime_start_failure(binary, root, environment)
             endpoint = invoke("endpoint", "--socket", socket).stdout
             lines = endpoint.splitlines()
             assert len(lines) == 2 and lines[0] == str(socket)

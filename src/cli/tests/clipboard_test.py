@@ -12,6 +12,9 @@ import threading
 
 from pane_agent_test import environment, integer, receive, send, text
 
+CHANGED_CHUNKS = ('repeat', 'transfer', 'total', 'mime')
+FOREIGN = b'F' * 65536
+
 
 def check(binary, root):
     env = environment(root)
@@ -50,11 +53,16 @@ def check(binary, root):
                             if mode == 'disconnect':
                                 return
                             part = payload[offset:offset + 65536]
-                            reply = (b'\xba' + integer(request) + integer(transfer) + integer(offset + (mode == 'offset'))
-                                     + integer(len(payload) if mode != 'oversize' else 33554433)
-                                     + text(mime) + text(part, 'I'))
+                            # A second chunk that belongs to another transfer, or repeats the first.
+                            changed = offset > 0 and mode in CHANGED_CHUNKS
+                            if changed:
+                                part = FOREIGN[:len(part)]
+                            reply = (b'\xba' + integer(request) + integer(transfer + (changed and mode == 'transfer'))
+                                     + integer(0 if changed and mode == 'repeat' else offset + (mode == 'offset'))
+                                     + integer(len(payload) + (changed and mode == 'total') if mode != 'oversize' else 33554433)
+                                     + text('image/jpeg' if changed and mode == 'mime' else mime) + text(part, 'I'))
                             send(connection, reply)
-                            if mode in ('offset', 'oversize'):
+                            if mode in ('offset', 'oversize') or changed:
                                 return
                             offset += len(part)
                             if offset == len(payload):
@@ -78,6 +86,12 @@ def check(binary, root):
         result = run(b'image', 'image/png', mode)
         assert result.returncode != 0 and result.stdout == b'' and result.stderr, (mode, result)
     assert b'No graphical session' in run(mode='refused').stderr
+    # A chunk out of sequence, or from a transfer whose id, size or type changed, ends the
+    # read: none of its bytes are spliced into the output.
+    first = b'A' * 65536
+    for mode in CHANGED_CHUNKS:
+        result = run(first + b'B' * 1000, 'image/png', mode)
+        assert result.returncode != 0 and result.stdout == first, (mode, result.returncode, result.stdout[-16:], result.stderr)
     for words in [[], ['put'], ['get', '--json'], ['get', '--socket']]:
         result = subprocess.run([str(binary), 'clipboard', *words], env=env, capture_output=True, timeout=5)
         assert result.returncode != 0 and result.stdout == b''

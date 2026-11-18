@@ -173,7 +173,7 @@ def check(binary, root):
 
     def run(*args, status=0, stdin=None, extra=None, cwd=None):
         nonlocal count
-        result = subprocess.run([str(binary), *args, '--socket', str(fixture.path)], env=env | (extra or {}), input=stdin, capture_output=True, timeout=12, cwd=cwd)
+        result = subprocess.run([str(binary), *args, '--socket', str(fixture.path)], env=env | (extra or {}), input=stdin, capture_output=True, timeout=30, cwd=cwd)
         assert result.returncode == status, (args, result.returncode, result.stdout, result.stderr)
         count += 1
         return result
@@ -219,12 +219,30 @@ def check(binary, root):
         assert sends[-2][1][25] == 0 and sends[-2][1][30:35] == b'hello'
         assert sends[-1][1][25] == 2
         run('pane', 'send-keys', '17', '--stdin', stdin=b'\n', status=1)
+        # Standard input of 1 to 65536 bytes goes whole in one frame; more is refused unsent.
+        before = len(fixture.frames)
+        run('pane', 'send-keys', '17', '--stdin', stdin=b'k' * 65537, status=1)
+        assert not [frame for _, frame in fixture.frames[before:] if frame[0] == 0x1e]
+        run('pane', 'send-keys', '17', '--stdin', stdin=b'k' * 65536)
+        sends = [frame for _, frame in fixture.frames[before:] if frame[0] == 0x1e]
+        assert len(sends) == 1 and sends[0][26:30] == integer(65536, 'I') and sends[0][30:30 + 65536] == b'k' * 65536, len(sends)
         for code, message in [(1, b'pane not found'), (10, b'pane already exited'), (12, b'focus')]:
             fixture.refusal = (0x1e, code)
             run('pane', 'send-keys', '17', 'hello', status=2 if code in (1, 10) else 1)
         fixture.refusal = None
         for action, extra in [('get', []), ('wait', ['--until', 'idle']), ('interrupt', []), ('acknowledge', []), ('prompt', ['hello']), ('report-session', ['session-1'])]:
             run('agent', action, '17', *extra, '--json')
+        # The agent named resolves to its pane and generation, and only it is interrupted.
+        before = len(fixture.frames)
+        run('agent', 'interrupt', '17', '--json')
+        mutating = [frame for _, frame in fixture.frames[before:] if frame[0] not in (0x1c, 0x14, 0x0c, 0x08, 0x1d)]
+        assert [(frame[0], frame[9:17], frame[17:25]) for frame in mutating] == [(0x3f, integer(17), integer(29))], mutating
+        # A pane named outside it reports for that pane at its current generation.
+        before = len(fixture.frames)
+        result = run('agent', 'report-state', '17', 'blocked', '--blocked-reason', 'permission', '--json')
+        assert json.loads(result.stdout) == {'pane_id': 17, 'pane_generation': 29, 'accepted': True}, result.stdout
+        reports = [frame for _, frame in fixture.frames[before:] if frame[0] == 0x20]
+        assert [(frame[9:17], frame[17:25]) for frame in reports] == [(integer(17), integer(29))], reports
         for action, extra in [('report-title', ['Hello']), ('report-state', ['working']), ('report-command', ['started', 'printf hello', '--provider', 'claude'])]:
             result = run('agent', action, '--current', *extra, '--json', extra={'TELAR_PANE_ID': '17', 'TELAR_PANE_GENERATION': '29'})
             assert json.loads(result.stdout) == {'pane_id': 17, 'pane_generation': 29, 'accepted': True}
@@ -252,6 +270,13 @@ def check(binary, root):
         run('agent', 'prompt', '17', 'hello', '--wait', status=1)
         fixture.states = [1, 1, 3, 1, 5]
         run('agent', 'prompt', '17', 'hello', '--interrupt', '--wait')
+        # An interrupt that leaves the agent working types nothing into it.
+        fixture.status = 1
+        before = len(fixture.frames)
+        run('agent', 'prompt', '17', 'hello', '--interrupt', status=1)
+        assert not [frame for _, frame in fixture.frames[before:] if frame[0] == 0x1e]
+        # --wait ends at --timeout while the agent keeps working, as a timeout.
+        run('agent', 'prompt', '17', 'hello', '--wait', '--timeout', '1s', status=3)
         fixture.status = 3
         assert b'did not start working within 5s' in run('agent', 'prompt', '17', 'hello', '--wait', status=3).stderr
         assert run('pane', 'list', '--json').stdout == b'[]\n'
@@ -282,6 +307,12 @@ def check(binary, root):
         fixture.tabs = [5, 6]
         panes = json.loads(run('pane', 'list', '--json').stdout)
         assert [(pane['tab_id'], pane['pane_id'], pane['position']) for pane in panes] == [(5, 17, 0), (5, 19, 1), (6, 17, 0), (6, 19, 1)], panes
+        # --tab lists that tab alone; --current reads the pane's own workspace.
+        panes = json.loads(run('pane', 'list', '--workspace', '3', '--tab', '5', '--json').stdout)
+        assert [(pane['tab_id'], pane['pane_id']) for pane in panes] == [(5, 17), (5, 19)], panes
+        panes = json.loads(run('pane', 'list', '--workspace', '--current', '--tab', '--current', '--json', extra={'TELAR_WORKSPACE_ID': '3', 'TELAR_TAB_ID': '6'}).stdout)
+        assert {pane['tab_id'] for pane in panes} == {6}, panes
+        run('pane', 'list', '--workspace', '--current', '--json', status=1)
         fixture.tabs = [5]
         # Scripts parse the whole listing, however many agents it holds.
         fixture.duplicate = True

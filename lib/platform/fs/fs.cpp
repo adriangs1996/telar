@@ -539,4 +539,20 @@ namespace telar::runtime {
     return EEXIST;
   }
 
+  FileDescriptor openLockFile(int directory, const char* name) noexcept {
+    // XNU can fail openat(O_CREAT) with ENOENT while another process creates the same name;
+    // the name exists by then, so the next attempt opens it.
+    constexpr unsigned maximum_attempts = 8;
+    FileDescriptor file;
+
+    for (unsigned attempt = 0; attempt < maximum_attempts && !file; ++attempt) {
+      file.reset(::openat(directory, name, O_RDWR | O_CREAT | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC, 0600));
+      if (!file && sys::lastError() != ENOENT && sys::lastError() != EINTR) {
+        break;
+      }
+    }
+
+    return file;
+  }
+
 }
