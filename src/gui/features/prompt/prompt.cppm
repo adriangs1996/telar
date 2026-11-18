@@ -275,24 +275,25 @@ export namespace telar::gui::features::prompt {
     static constexpr std::uint16_t history_limit = 1000;
 
     // Every line and what it asks for live in `memory`.
-    explicit State(Memory& memory);
+    explicit State(tbc::view<Memory&, tbc::lt::a> memory);
 
   private:
-    Memory& memory_;
-    Specs specs_;
-    ds::Vec<Name, Memory> history_;
+    // Everything below lives in memory_'s region.
+    tbc::view<Memory&, tbc::lt::a> memory_;
+    tbc::view<Specs, tbc::lt::a> specs_;
+    tbc::view<ds::Vec<Name, Memory>, tbc::lt::a> history_;
     std::uint64_t history_request_ = 0;
-    ds::Map<std::uint64_t, PathCompletion, Memory> completions_;
-    ds::Map<std::uint64_t, CommandRequest, Memory> command_requests_;
-    ds::Map<std::uint64_t, CommandChecks, Memory> command_checks_;
-    ds::Map<std::uint64_t, CommandRequest, Memory> spec_requests_;
+    tbc::view<ds::Map<std::uint64_t, PathCompletion, Memory>, tbc::lt::a> completions_;
+    tbc::view<ds::Map<std::uint64_t, CommandRequest, Memory>, tbc::lt::a> command_requests_;
+    tbc::view<ds::Map<std::uint64_t, CommandChecks, Memory>, tbc::lt::a> command_checks_;
+    tbc::view<ds::Map<std::uint64_t, CommandRequest, Memory>, tbc::lt::a> spec_requests_;
     // Tab pressed while a pane waited for a spec: the line it completes, by pane.
-    ds::Map<std::uint64_t, Name, Memory> spec_completions_;
+    tbc::view<ds::Map<std::uint64_t, Name, Memory>, tbc::lt::a> spec_completions_;
     // The directory a question about a command named by its path reads, while it is sent.
-    Name command_root_;
+    tbc::view<Name, tbc::lt::a> command_root_;
     std::uint64_t written_ = 0;
     // Each pane's line in an allocation of its own, so it stays where it is as others come and go.
-    ds::Map<std::uint64_t, Owned<PaneLine, Memory>, Memory> lines_;
+    tbc::view<ds::Map<std::uint64_t, Owned<PaneLine, Memory>, Memory>, tbc::lt::a> lines_;
   };
 
   // ---- lines ------------------------------------------------------------------------------------
@@ -565,7 +566,8 @@ namespace telar::gui::features::prompt {
       return state.history_;
     }
 
-    [[nodiscard]] static constexpr Memory& memory(const State& state) noexcept {
+    // The memory the state lives in, which outlives it: no borrow of the state itself.
+    [[nodiscard]] static constexpr tbc::view<Memory&, tbc::lt::a> memory(const State& state) noexcept {
       return state.memory_;
     }
 

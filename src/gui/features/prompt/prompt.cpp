@@ -14,6 +14,7 @@ import telar.wire.pane_io;
 import telar.wire.vocabulary;
 import telar.base.ds;
 import telar.base.memory.allocators;
+import telar.tbc;
 
 namespace telar::gui::features::prompt {
 
@@ -95,7 +96,7 @@ namespace telar::gui::features::prompt {
         label_(memory),
         questions_(memory) {}
 
-  State::State(Memory& memory)
+  State::State(tbc::view<Memory&, tbc::lt::a> memory)
       : memory_(memory),
         specs_(memory),
         history_(memory),
@@ -110,6 +111,7 @@ namespace telar::gui::features::prompt {
   // ---- lines ------------------------------------------------------------------------------------
 
   Opened open(State& state, std::uint64_t pane_id, Keymap keymap) {
+    const bool wants_history = Access::history(state).empty();
     auto& lines = Access::lines(state);
     auto* found = lines.findMut(pane_id);
     const bool inserted = found == nullptr;
@@ -124,7 +126,7 @@ namespace telar::gui::features::prompt {
     auto& line = **found;
 
     Access::line(line).setKeymap(keymap);
-    return {.line = line, .wants_history = inserted && Access::history(state).empty()};
+    return {.line = line, .wants_history = inserted && wants_history};
   }
 
   void forget(State& state, std::uint64_t pane_id) noexcept {
