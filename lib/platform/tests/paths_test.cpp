@@ -125,8 +125,82 @@ namespace {
     check(rejected);
   }
 
+  // Whether the runtime at `socket` is the one every process finds by default, which decides
+  // whether it starts the proxy: the socket overrides of the caller's environment do not count.
+  void testIsDefaultSocketIgnoresSocketOverrides() {
+    SystemAllocator memory;
+    const TestEnvironment environment{{{{"TELAR_SOCKET", "/x"}, {"TELAR_SOCKET_PATH", "/y"}, {"XDG_RUNTIME_DIR", "/r"}}}};
+    ServerOptions options;
+
+    options.socket = "/r/telar/runtime.sock";
+    check(RuntimePaths{memory, options, environment}.isDefaultSocket(environment));
+    options.socket = "/other.sock";
+    check(!RuntimePaths{memory, options, environment}.isDefaultSocket(environment));
+    options.socket = {};
+    check(!RuntimePaths{memory, options, environment}.isDefaultSocket(environment));
+  }
+
+  // Parses `words` as `telar server` does, or returns nothing when it refuses them. What it
+  // returns views `words`.
+  std::optional<ServerOptions> serverOptions(std::vector<std::string>& words) {
+    std::vector<char*> arguments;
+
+    arguments.reserve(words.size());
+    for (auto& word : words) {
+      arguments.push_back(word.data());
+    }
+
+    try {
+      return ServerOptions::parse(arguments);
+    } catch (const std::invalid_argument&) {
+      return std::nullopt;
+    }
+  }
+
+  // Every `telar server` flag lands in its own field, and conflicting, repeated, empty or
+  // unknown flags are refused rather than silently dropped.
+  void testServerOptionErrorsAndValues() {
+    const std::vector<std::vector<std::string>> refused{
+        {"--config", "a", "--no-config"},
+        {"--no-config", "--config", "a"},
+        {"--background", "--daemonized"},
+        {"stop", "--background"},
+        {"--no-config", "--profile", "p"},
+        {"--socket", "a", "--socket", "b"},
+        {"--socket", ""},
+        {"--history"},
+        {"--bogus"},
+    };
+
+    for (auto words : refused) {
+      check(!serverOptions(words).has_value(), words.front());
+    }
+
+    std::vector<std::string> engine;
+
+    for (std::size_t index = 0; index <= ServerOptions{}.engine_arguments.size(); ++index) {
+      engine.insert(engine.end(), {"--engine-arg", "e"});
+    }
+
+    check(!serverOptions(engine).has_value());
+    engine.resize(engine.size() - 2);
+    check(serverOptions(engine).has_value());
+
+    std::vector<std::string> words{"server", "--history", "h", "--session", "s", "--trace", "t", "--config", "c", "--profile", "p", "--engine-arg", "e", "--no-session", "--no-resume", "--help"};
+    const auto options = serverOptions(words);
+
+    check(options.has_value());
+    check(options->action == ServerAction::help && options->mode == ServerMode::foreground);
+    check(options->history == "h" && options->session == "s" && options->trace == "t");
+    check(options->config == "c" && options->profile == "p" && !options->no_config);
+    check(options->engine_argument_count == 1 && options->engine_arguments[0] == "e");
+    check(!options->persist_session && !options->resume_agents);
+  }
+
   const telar::testing::Case case_paths{"paths.runtime_paths", testPaths};
   const telar::testing::Case case_config_home{"paths.config_home", testConfigHome};
   const telar::testing::Case case_arguments{"paths.server_arguments", testArguments};
+  const telar::testing::Case case_default_socket{"paths.is_default_socket_ignores_socket_overrides", testIsDefaultSocketIgnoresSocketOverrides};
+  const telar::testing::Case case_server_options{"paths.server_option_errors_and_values", testServerOptionErrorsAndValues};
 
 }
