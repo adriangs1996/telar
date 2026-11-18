@@ -159,7 +159,86 @@ namespace {
     check(!pacer.deadline(start + interval));
   }
 
+  // A reader smaller than the text keeps its end, the part a user saw last, cut at a line
+  // start, or at a character start when the end is one long line.
+  void testTruncatedTail() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& memory = adapter;
+
+    {
+      Terminal terminal{memory, TerminalSize{.cols = 20, .rows = 4, .cell_width_px = 0, .cell_height_px = 0}};
+
+      terminal.feed(bytes("first\r\nsecond\r\nthird\r\nfourth\r\nfifth"));
+      TextReader reader{memory, terminal, 10};
+
+      reader.read(PaneTextSource::screen, 10);
+      check(reader.truncated());
+      check(reader.text() == "fifth");
+    }
+
+    Terminal terminal{memory, TerminalSize{.cols = 20, .rows = 4, .cell_width_px = 0, .cell_height_px = 0}};
+
+    terminal.feed(bytes("\xe7\x95\x8c\xe7\x95\x8c\xe7\x95\x8c\xe7\x95\x8c\xe7\x95\x8c\xe7\x95\x8c"));
+    TextReader reader{memory, terminal, 10};
+
+    reader.read(PaneTextSource::screen, 10);
+    check(reader.truncated());
+    check(reader.text() == "\xe7\x95\x8c\xe7\x95\x8c\xe7\x95\x8c");
+  }
+
+  std::vector<PaneMatch> search(Terminal& terminal, const auto& request, bool* truncated = nullptr) {
+    TextSearch search{request, terminal.contentRevision()};
+
+    while (!search.advance(terminal.handle(), terminal.contentRevision())) {
+    }
+
+    const auto result = search.result();
+
+    if (truncated != nullptr) {
+      *truncated = result.truncated;
+    }
+
+    return {result.matches.begin(), result.matches.end()};
+  }
+
+  // Search finds a needle that starts inside a partial match, needles with characters past
+  // ASCII on wide cells, only the rows a client asks for, and says when it kept fewer
+  // matches than there are.
+  void testSearchOverlapUnicodeRanges() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& memory = adapter;
+    Terminal terminal{memory, TerminalSize{.cols = 20, .rows = 6, .cell_width_px = 0, .cell_height_px = 0}};
+
+    terminal.feed(bytes("aaab\r\ncaf\xc3\xa9\r\na\xe7\x95\x8c"
+                        "b\r\nthe\r\nthe\r\nthe"));
+    const auto overlap = search(terminal, SearchPane{.request_id = 1, .pane_id = 1, .needle = "aab"});
+
+    check(overlap.size() == 1 && overlap[0].x == 1 && overlap[0].y == 0 && overlap[0].len == 3);
+    const auto accented = search(terminal, SearchPane{.request_id = 2, .pane_id = 1, .needle = "\xc3\xa9"});
+
+    check(accented.size() == 1 && accented[0].x == 3 && accented[0].y == 1 && accented[0].len == 1);
+    const auto wide = search(terminal, SearchPane{.request_id = 3, .pane_id = 1, .needle = "\xe7\x95\x8c"
+                                                                                           "b"});
+
+    check(wide.size() == 1 && wide[0].x == 1 && wide[0].y == 2 && wide[0].len == 3);
+    const auto ranged = search(terminal, SearchPaneRows{.request_id = 4, .pane_id = 1, .needle = "the", .first_row = 3, .last_row = 4});
+
+    check(ranged.size() == 2 && ranged[0].y == 3 && ranged[1].y == 4);
+
+    Terminal full{memory, TerminalSize{.cols = 20, .rows = 20, .cell_width_px = 0, .cell_height_px = 0}};
+
+    full.feed(bytes(std::string(20 * 20, 'x')));
+    bool truncated = false;
+    const auto many = search(full, SearchPane{.request_id = 5, .pane_id = 1, .needle = "x"}, &truncated);
+
+    check(truncated && many.size() == 256);
+  }
+
   const telar::testing::Case case_text{"text.text", testText};
   const telar::testing::Case case_input_scanning{"text.input_scanning", testInputScanning};
+  const telar::testing::Case case_truncated_tail{"text.truncated_tail_on_boundary", testTruncatedTail};
+  const telar::testing::Case case_search_overlap_unicode_ranges{"text.search_overlap_unicode_ranges", testSearchOverlapUnicodeRanges};
 
 }
