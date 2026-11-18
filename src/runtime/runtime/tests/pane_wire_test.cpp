@@ -255,6 +255,72 @@ namespace {
     }
   }
 
+  // The next frame of `pane`, acknowledged.
+  PaneFrame nextFrame(ProtocolPeer& window, std::uint64_t pane) {
+    for (;;) {
+      const auto frame = window.receive<PaneFrame>();
+
+      window.send(FrameAck{frame.pane_id, frame.frame_id});
+      if (frame.pane_id == pane) {
+        return frame;
+      }
+    }
+  }
+
+  // A frame of `pane` once its scrollback holds more than `rows` rows.
+  PaneFrame frameAfterGrowth(ProtocolPeer& window, std::uint64_t pane, std::uint32_t rows) {
+    for (;;) {
+      const auto frame = nextFrame(window, pane);
+      if (frame.scroll.total_rows > rows) {
+        return frame;
+      }
+    }
+  }
+
+  void testSetPaneViewportFollowOrPin() {
+    RuntimeHost host;
+    ProtocolPeer window{host.socket()};
+    const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", "i=0; while [ $i -lt 100 ]; do echo line-$i; i=$((i+1)); done; echo history-ready; exec cat"};
+
+    window.send(RequestRuntimeState{.client_identity = 71, .interactive = true});
+    const auto opened = window.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
+
+    screenShowing(window, opened.pane_id, "history-ready");
+    window.deadline(std::chrono::seconds{15});
+
+    // Scrolled up to row 10, the window keeps showing row 10 while output grows.
+    window.send(SetPaneViewport{opened.pane_id, 10});
+    auto pinned = nextFrame(window, opened.pane_id);
+
+    while (pinned.scroll.offset != 10) {
+      pinned = nextFrame(window, opened.pane_id);
+    }
+
+    const auto pinned_rows = pinned.scroll.total_rows;
+
+    window.send(PaneInput{opened.pane_id, bytes("more\r")});
+    check(frameAfterGrowth(window, opened.pane_id, pinned_rows).scroll.offset == 10, "a scrolled-up view followed new output");
+
+    // Past the bottom, it follows the output again.
+    window.send(SetPaneViewport{opened.pane_id, 1'000'000});
+    const auto bottom = [](const PaneFrame& frame) {
+      return frame.scroll.total_rows - frame.rows;
+    };
+
+    auto following = nextFrame(window, opened.pane_id);
+
+    while (following.scroll.offset != bottom(following)) {
+      following = nextFrame(window, opened.pane_id);
+    }
+
+    const auto following_rows = following.scroll.total_rows;
+
+    window.send(PaneInput{opened.pane_id, bytes("again\r")});
+    const auto grown = frameAfterGrowth(window, opened.pane_id, following_rows);
+
+    check(grown.scroll.offset == bottom(grown), "a view at the bottom stopped following the output");
+  }
+
   const telar::testing::Case case_copy_selection_clipboard_limit{"pane_wire.copy_selection_clipboard_limit", testCopySelectionClipboardLimit};
   const telar::testing::Case case_attach_second_workspace_refused{"pane_wire.attach_second_workspace_refused", testAttachSecondWorkspaceRefused};
   const telar::testing::Case case_command_types_bracketed_and_requires_attachment{"pane_wire.command_types_bracketed_and_requires_attachment", testCommandTypesBracketedAndRequiresAttachment};
@@ -262,5 +328,6 @@ namespace {
   const telar::testing::Case case_search_supersedes_and_requires_attachment{"pane_wire.search_supersedes_and_requires_attachment", testSearchSupersedesAndRequiresAttachment};
   const telar::testing::Case case_read_rows_requires_attachment{"pane_wire.read_rows_requires_attachment", testReadRowsRequiresAttachment};
   const telar::testing::Case case_graphics_limit_reported{"pane_wire.graphics_limit_reported", testGraphicsLimitReported};
+  const telar::testing::Case case_set_pane_viewport_follow_or_pin{"pane_wire.set_pane_viewport_follow_or_pin", testSetPaneViewportFollowOrPin};
 
 }
