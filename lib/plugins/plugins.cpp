@@ -1,5 +1,6 @@
 module telar.plugins;
 
+import telar.tbc;
 import std;
 import telar.sys.posix;
 import telar.base.text.utf8;

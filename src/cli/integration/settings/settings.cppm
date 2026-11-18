@@ -47,7 +47,7 @@ export {
 export {
   namespace telar::runtime::cli::integration {
 
-    ds::Option<ds::String<Memory>> read(Memory& memory, const ds::String<Memory>& path, std::size_t maximum_bytes);
+    tbc::view<ds::Option<ds::String<Memory>>, tbc::lt::a> read(tbc::view<Memory&, tbc::lt::a> memory, const ds::String<Memory>& path, std::size_t maximum_bytes);
 
   }
 }

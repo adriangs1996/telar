@@ -394,7 +394,7 @@ namespace telar::runtime {
       : memory_(memory),
         pair_(std::move(pair)) {}
 
-  ds::String<ConcurrentMemory> proxyAuthorityDirectoryFrom(ConcurrentMemory& memory, const void* environment, std::string_view (*lookup)(const void*, const char*)) {
+  tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> proxyAuthorityDirectoryFrom(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const void* environment, std::string_view (*lookup)(const void*, const char*)) {
     ds::String<ConcurrentMemory> path{memory, lookup(environment, "XDG_DATA_HOME")};
     if (path.empty() || path.view().front() != '/') {
       path.assign(lookup(environment, "HOME"));
@@ -495,7 +495,7 @@ namespace telar::runtime::proxy_trust {
     std::unreachable();
   }
 
-  Record Record::parse(ConcurrentMemory& memory, std::string_view source) {
+  tbc::view<Record, tbc::lt::a> Record::parse(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, std::string_view source) {
     validateUtf8(source);
     constexpr auto names = ds::Array<std::string_view, 4>{"version", "backend", "fingerprint", "store_path"};
     JsonFields fields{memory, JsonValue::parse(source), names};
@@ -540,7 +540,7 @@ namespace telar::runtime::proxy_trust {
     return record;
   }
 
-  ds::Option<Record> Record::read(ConcurrentMemory& memory, int directory) {
+  tbc::view<ds::Option<Record>, tbc::lt::a> Record::read(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, int directory) {
     ds::Vec<unsigned char, ConcurrentMemory> source{memory};
     if (!readPrivateFile(directory, filename, source, maximum_bytes - 1)) {
       return ds::none;
@@ -626,7 +626,7 @@ namespace telar::runtime::proxy_trust {
     }
   }
 
-  ds::String<ConcurrentMemory> Paths::keychainFrom(ConcurrentMemory& memory, const void* environment, Lookup lookup) {
+  tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> Paths::keychainFrom(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const void* environment, Lookup lookup) {
     const auto home = lookup(environment, "HOME");
     ds::String<ConcurrentMemory> result{memory, home};
 

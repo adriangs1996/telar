@@ -4,6 +4,7 @@ module;
 export module telar.plugins;
 
 import std;
+import telar.tbc;
 
 import telar.base.memory.containers;
 import telar.base.text.json;
@@ -99,7 +100,7 @@ export {
       static std::string_view name(Capability capability) noexcept;
 
       template <Allocator Memory>
-      static Capabilities parse(Memory& memory, const JsonValue& value);
+      static tbc::view<Capabilities, tbc::lt::a> parse(tbc::view<Memory&, tbc::lt::a> memory, const JsonValue& value);
 
     private:
       static constexpr std::uint16_t bit(Capability capability) noexcept {
@@ -194,7 +195,7 @@ export {
       // The typed JSON read first, then each field's check in a fixed order,
       // failing with the manifest error names.
       template <Allocator Memory>
-      static Manifest parse(Memory& memory, std::string_view bytes);
+      static tbc::view<Manifest, tbc::lt::a> parse(tbc::view<Memory&, tbc::lt::a> memory, std::string_view bytes);
 
     private:
       template <Allocator Memory>
@@ -521,13 +522,13 @@ export {
     public:
       // Generic over the caller's environment, so it stays here and hands the path to trustFile.
       template <Allocator Memory, EnvironmentLookup Environment>
-      TBC_GENERIC static ds::String<Memory> trust(Memory& memory, const Environment& environment) {
+      TBC_GENERIC static tbc::view<ds::String<Memory>, tbc::lt::a> trust(tbc::view<Memory&, tbc::lt::a> memory, const Environment& environment) {
         return trustFile(cli::RuntimePaths<Memory>::configHome(memory, environment));
       }
 
       // Generic over the caller's environment, so it stays here and hands the path to installationDirectory.
       template <Allocator Memory, EnvironmentLookup Environment>
-      TBC_GENERIC static ds::String<Memory> installation(Memory& memory, const Environment& environment, const Package& package) {
+      TBC_GENERIC static tbc::view<ds::String<Memory>, tbc::lt::a> installation(tbc::view<Memory&, tbc::lt::a> memory, const Environment& environment, const Package& package) {
         return installationDirectory(cli::xdgDirectory(memory, environment, "XDG_DATA_HOME", "/.local/share"), package);
       }
 
@@ -562,7 +563,7 @@ export {
       static TrustStore load(Memory& memory, std::string_view path);
 
       template <Allocator Memory>
-      static TrustStore parse(Memory& memory, std::string_view bytes);
+      static tbc::view<TrustStore, tbc::lt::a> parse(tbc::view<Memory&, tbc::lt::a> memory, std::string_view bytes);
 
       Capabilities granted(std::string_view id, const PackageDigest& digest) const noexcept;
       void upsert(const Manifest& manifest, const PackageDigest& digest, Capabilities capabilities);

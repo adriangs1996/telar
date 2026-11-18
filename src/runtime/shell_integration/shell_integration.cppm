@@ -4,6 +4,7 @@ module;
 export module telar.runtime.shell_integration;
 
 import std;
+import telar.tbc;
 
 import telar.platform.process;
 import telar.runtime.shell_integration.token;
@@ -217,7 +218,7 @@ export namespace telar::runtime {
 
     // Writes the scripts beneath `data_home` and returns their directory. It is named after
     // their content, so runtimes of different versions never overwrite each other's.
-    static ds::String<Memory> install(Memory& memory, std::string_view data_home);
+    static tbc::view<ds::String<Memory>, tbc::lt::a> install(tbc::view<Memory&, tbc::lt::a> memory, std::string_view data_home);
 
     // Points an integrable shell at the scripts and returns the token its marks are signed
     // with. Leaves every other command untouched, and a shell too if the scripts are gone and

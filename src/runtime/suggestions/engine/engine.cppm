@@ -1,6 +1,7 @@
 export module telar.runtime.suggestions.engine;
 
 import std;
+import telar.tbc;
 
 import telar.runtime.transport.connection;
 import telar.platform.process;
@@ -60,7 +61,7 @@ export {
 export {
   namespace telar::runtime {
 
-    ds::String<ConcurrentMemory> suggestionPrompt(ConcurrentMemory& memory, std::string_view cwd, std::string_view screen, std::string_view request);
+    tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> suggestionPrompt(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, std::string_view cwd, std::string_view screen, std::string_view request);
 
   }
 }

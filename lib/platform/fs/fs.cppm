@@ -135,7 +135,7 @@ export {
     ds::String<Memory> readFileContents(Memory& memory, int descriptor, std::size_t maximum_bytes);
 
     template <Allocator Memory>
-    ds::String<Memory> readFile(Memory& memory, const char* path, std::size_t maximum_bytes);
+    tbc::view<ds::String<Memory>, tbc::lt::a> readFile(tbc::view<Memory&, tbc::lt::a> memory, const char* path, std::size_t maximum_bytes);
 
     extern template ds::String<Memory> readFileContents<Memory>(Memory& memory, int descriptor, std::size_t maximum_bytes);
     extern template ds::String<ConcurrentMemory> readFileContents<ConcurrentMemory>(ConcurrentMemory& memory, int descriptor, std::size_t maximum_bytes);

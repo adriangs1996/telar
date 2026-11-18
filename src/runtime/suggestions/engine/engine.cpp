@@ -3,6 +3,7 @@ module;
 
 module telar.runtime.suggestions.engine;
 
+import telar.tbc;
 import std;
 import telar.sys.posix;
 import telar.base.text;
@@ -245,7 +246,7 @@ namespace telar::runtime {
     }
   }
 
-  ds::String<ConcurrentMemory> suggestionPrompt(ConcurrentMemory& memory, std::string_view cwd, std::string_view screen, std::string_view request) {
+  tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> suggestionPrompt(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, std::string_view cwd, std::string_view screen, std::string_view request) {
     ds::String<ConcurrentMemory> prompt{memory};
 
     prompt.reserve(9 * 1024);

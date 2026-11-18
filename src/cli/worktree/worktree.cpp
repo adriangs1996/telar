@@ -31,7 +31,7 @@ namespace telar::runtime::cli::repository {
   };
 
   template <Allocator Memory>
-  Catalog catalog(Memory& memory, const char* socket) {
+  tbc::view<Catalog, tbc::lt::a> catalog(tbc::view<Memory&, tbc::lt::a> memory, const char* socket) {
     RuntimeConnection connection{socket};
 
     connection.receiveTimeout(30);
@@ -67,7 +67,7 @@ namespace telar::runtime::cli::repository {
     }
   }
 
-  Text managedPath(Memory& memory, std::string_view identity) {
+  tbc::view<Text, tbc::lt::a> managedPath(tbc::view<Memory&, tbc::lt::a> memory, std::string_view identity) {
     const ProcessEnvironment environment;
     // A later lookup may overwrite the storage an earlier one returned.
     const Text home{memory, environment.lookup("HOME")};
@@ -89,7 +89,7 @@ namespace telar::runtime::cli::repository {
   }
 
   template <Allocator Memory>
-  Text mainRoot(Memory& memory, std::string_view path) {
+  tbc::view<Text, tbc::lt::a> mainRoot(tbc::view<Memory&, tbc::lt::a> memory, std::string_view path) {
     Git git{memory, path};
     const auto common = git.read({"rev-parse", "--path-format=absolute", "--git-common-dir"});
     auto trimmed = common.view();
@@ -112,7 +112,7 @@ namespace telar::runtime::cli::repository {
   }
 
   template <Allocator Memory>
-  ds::Option<Text> matching(Memory& memory, std::string_view path, std::string_view identity) {
+  tbc::view<ds::Option<Text>, tbc::lt::a> matching(tbc::view<Memory&, tbc::lt::a> memory, std::string_view path, std::string_view identity) {
     if (path.contains('\0') || path.size() >= PATH_MAX) {
       return ds::none;
     }
@@ -143,7 +143,7 @@ namespace telar::runtime::cli::repository {
   // `identity` among the runtime's workspaces and worktrees, the workspaces
   // history recorded and the managed clone. It starts the runtime if needed.
   template <Allocator Memory>
-  ds::Option<Text> find(Memory& memory, std::string_view identity, ds::Option<std::string_view> selected, ds::Option<std::string_view> socket = ds::none) {
+  tbc::view<ds::Option<Text>, tbc::lt::a> find(tbc::view<Memory&, tbc::lt::a> memory, std::string_view identity, ds::Option<std::string_view> selected, ds::Option<std::string_view> socket = ds::none) {
     const ProcessEnvironment environment;
     ServerOptions server;
 
@@ -179,7 +179,8 @@ namespace telar::runtime::cli::repository {
     // Keeps the one main checkout with `identity` among the paths it is shown.
     class Consider final : public HistoryPathVisitor {
     public:
-      Consider(Memory& memory, std::string_view identity)
+      // What it finds lives in `memory`; it only reads `identity`.
+      Consider(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<std::string_view, tbc::lt::b> identity)
           : memory_(memory),
             identity_(identity) {}
 
@@ -196,11 +197,11 @@ namespace telar::runtime::cli::repository {
         result = std::move(candidate);
       }
 
-      ds::Option<Text> result;
+      tbc::view<ds::Option<Text>, tbc::lt::a> result;
 
     private:
-      Memory& memory_;
-      std::string_view identity_;
+      tbc::view<Memory&, tbc::lt::a> memory_;
+      tbc::view<std::string_view, tbc::lt::b> identity_;
     };
 
     Consider consider{memory, identity};
@@ -219,7 +220,11 @@ namespace telar::runtime::cli::repository {
     historyPaths(storage_paths.history.data(), consider);
 
     consider(managedPath(memory, identity));
-    return std::move(consider.result);
+    if (!consider.result) {
+      return ds::none;
+    }
+
+    return Text{memory, consider.result->view()};
   }
 
   class StagingDirectory {
@@ -322,7 +327,7 @@ namespace telar::runtime::cli::repository {
   }
 
   template <Allocator Memory>
-  PreparedRepository receive(Memory& memory, const RepositoryOptions& options) {
+  tbc::view<PreparedRepository, tbc::lt::a> receive(tbc::view<Memory&, tbc::lt::a> memory, const RepositoryOptions& options) {
     if (normalize(memory, options.transport) != options.identity || !validCommit(options.commit) || !options.ref.starts_with("refs/telar/transfer/") || options.bytes == 0 || options.bytes > max_bundle_bytes) {
       throw std::runtime_error{"InvalidRepositoryTransfer"};
     }
@@ -389,13 +394,13 @@ namespace telar::runtime::cli::repository {
       }
     }
 
-    return {.path = existing ? existing->clone() : managed.clone(), .commit = Text{memory, options.commit}, .repository = Text{memory, options.identity}, .reused = existing.hasValue()};
+    return {.path = Text{memory, existing ? existing->view() : managed.view()}, .commit = Text{memory, options.commit}, .repository = Text{memory, options.identity}, .reused = existing.hasValue()};
   }
 
   constexpr std::size_t max_transfer_tips = 256;
 
   template <Allocator Memory>
-  Text tips(Memory& memory, const RepositoryOptions& options) {
+  tbc::view<Text, tbc::lt::a> tips(tbc::view<Memory&, tbc::lt::a> memory, const RepositoryOptions& options) {
     Text listing{memory};
     const auto found = find(memory, options.identity, options.workspace);
     if (!found) {
@@ -429,7 +434,7 @@ namespace telar::runtime::cli::repository {
   // What the bundle leaves out: the machine's tips, which its clone holds with
   // all their history. When they already reach `commit`, its parents instead,
   // since Git refuses an empty bundle. Only hashes pass, never an option.
-  ds::Vec<Text, Memory> exclusions(Memory& memory, Git& git, std::string_view commit, std::string_view listing) {
+  tbc::view<ds::Vec<Text, Memory>, tbc::lt::a> exclusions(tbc::view<Memory&, tbc::lt::a> memory, Git& git, std::string_view commit, std::string_view listing) {
     ds::Vec<Text, Memory> tips{memory};
 
     appendHashes(tips, listing);
@@ -455,7 +460,7 @@ namespace telar::runtime::cli::repository {
   }
 
   template <Allocator Memory>
-  PreparedRepository parsePrepared(Memory& memory, std::string_view output, std::string_view commit, std::string_view identity) {
+  tbc::view<PreparedRepository, tbc::lt::a> parsePrepared(tbc::view<Memory&, tbc::lt::a> memory, std::string_view output, std::string_view commit, std::string_view identity) {
     const auto result = JsonNode<Memory>::parse(memory, output);
     const auto* path = result.find("path");
     const auto* received_commit = result.find("commit");
@@ -469,7 +474,7 @@ namespace telar::runtime::cli::repository {
     return {.path = Text{memory, path->text()}, .commit = Text{memory, commit}, .repository = Text{memory, identity}, .reused = reused->text() == "true"};
   }
 
-  PreparedRepository prepare(Memory& memory, const RepositoryOptions& options, std::string_view remote_program, RepositoryCapture& capture) {
+  tbc::view<PreparedRepository, tbc::lt::a> prepare(tbc::view<Memory&, tbc::lt::a> memory, const RepositoryOptions& options, std::string_view remote_program, RepositoryCapture& capture) {
     const auto cwd = sessions::realDirectory(memory, ".");
     const auto root = mainRoot(memory, cwd);
     Git git{memory, root};
@@ -599,7 +604,7 @@ namespace telar::runtime::cli::repository {
     const machines::MachineProfile& profile_;
   };
 
-  PreparedRepository prepare(Memory& memory, const RepositoryOptions& options, const machines::MachineProfile& profile) {
+  tbc::view<PreparedRepository, tbc::lt::a> prepare(tbc::view<Memory&, tbc::lt::a> memory, const RepositoryOptions& options, const machines::MachineProfile& profile) {
     ProfileCapture capture{memory, profile};
 
     return prepare(memory, options, profile.program().valueOr("telar"), capture);

@@ -36,7 +36,7 @@ namespace telar::runtime::cli::machine {
   // Rewrites the profiles at `path` under an exclusive lock: `edit` changes what
   // was loaded, and the result replaces the file.
   // `path` from the working directory when it is relative.
-  Text absolutePath(Memory& memory, std::string_view path) {
+  tbc::view<Text, tbc::lt::a> absolutePath(tbc::view<Memory&, tbc::lt::a> memory, std::string_view path) {
     if (path.starts_with('/')) {
       return Text{memory, path};
     }
@@ -114,7 +114,7 @@ namespace telar::runtime::cli::machine {
       return target.view().substr(0, slash == 0 ? 1 : slash);
     }
 
-    static Platform parse(Memory& memory, std::string_view output) {
+    static tbc::view<Platform, tbc::lt::a> parse(tbc::view<Memory&, tbc::lt::a> memory, std::string_view output) {
       constexpr std::size_t max_output = 8 * 1024;
       if (output.size() > max_output) {
         throw CommandError{"MachineProbeUnreadable"};
@@ -195,7 +195,9 @@ namespace telar::runtime::cli::machine {
           }
 
           // The key is the static name, so it outlives the probe's output.
-          static_cast<void>(result.agents.assign(*agent, Text{memory, value.substr(colon + 1)}));
+          const auto index = static_cast<std::size_t>(agent - machine_agent_names.begin());
+
+          static_cast<void>(result.agents.assign(machine_agent_names[index], Text{memory, value.substr(colon + 1)}));
         } else {
           throw CommandError{"MachineProbeUnreadable"};
         }
@@ -219,7 +221,7 @@ namespace telar::runtime::cli::machine {
     }
   };
 
-  launch::Output runScript(Memory& memory, std::string_view destination, std::string_view script, std::chrono::seconds timeout = probe_timeout) {
+  tbc::view<launch::Output, tbc::lt::a> runScript(tbc::view<Memory&, tbc::lt::a> memory, std::string_view destination, std::string_view script, std::chrono::seconds timeout = probe_timeout) {
     return launch::capture(memory, ssh(memory, destination, "exec /bin/sh -s").view(), script, timeout);
   }
 
@@ -562,7 +564,7 @@ fetch() {
     return ".cursor";
   }
 
-  Text localRoot(Memory& memory, std::string_view agent, std::string_view home) {
+  tbc::view<Text, tbc::lt::a> localRoot(tbc::view<Memory&, tbc::lt::a> memory, std::string_view agent, std::string_view home) {
     const auto* variable = agent == "claude" ? "CLAUDE_CONFIG_DIR" : agent == "codex"  ? "CODEX_HOME"
                                                                  : agent == "pi"       ? "PI_CODING_AGENT_DIR"
                                                                  : agent == "opencode" ? "XDG_CONFIG_HOME"
@@ -595,7 +597,7 @@ fetch() {
     }
   }
 
-  ds::Option<Text> homePath(Memory& memory, std::string_view token, std::string_view home) {
+  tbc::view<ds::Option<Text>, tbc::lt::a> homePath(tbc::view<Memory&, tbc::lt::a> memory, std::string_view token, std::string_view home) {
     for (const auto prefix : {"~/", "$HOME/", "${HOME}/"}) {
       if (token.starts_with(prefix)) {
         return ds::format(memory, "{}/{}", home, token.substr(std::string_view{prefix}.size()));
@@ -1395,7 +1397,7 @@ fetch() {
     ds::Option<Text> code;
   };
 
-  ds::Option<LoginLink> findLoginLink(Memory& memory, std::string_view text, const LoginPlan& plan) {
+  tbc::view<ds::Option<LoginLink>, tbc::lt::a> findLoginLink(tbc::view<Memory&, tbc::lt::a> memory, std::string_view text, const LoginPlan& plan) {
     std::string_view url;
 
     for (std::size_t start = 0;;) {
@@ -2102,7 +2104,7 @@ fetch() {
     }
   };
 
-  Target resolve(Memory& memory, const MachineProfiles& profiles, const MachineOptions& options) {
+  tbc::view<Target, tbc::lt::a> resolve(tbc::view<Memory&, tbc::lt::a> memory, const MachineProfiles& profiles, const MachineOptions& options) {
     for (const auto& profile : profiles.rows()) {
       if (profile.label() == options.label || profile.destination() == options.label) {
         return {.label = Text{memory, profile.label()}, .destination = Text{memory, profile.destination()}, .saved = profile};
@@ -2198,7 +2200,7 @@ fetch() {
     return slash == std::string_view::npos ? std::string_view{"."} : path.substr(0, slash == 0 ? 1 : slash);
   }
 
-  ds::Option<Platform> reach(Memory& memory, SetupReport& report, const Target& target, std::string_view directory) {
+  tbc::view<ds::Option<Platform>, tbc::lt::a> reach(tbc::view<Memory&, tbc::lt::a> memory, SetupReport& report, const Target& target, std::string_view directory) {
     launch::Output probe{memory};
     bool confirmed = false;
     const auto run = [&] {
@@ -2400,7 +2402,7 @@ cat > "$temporary" && [ "$(hash "$temporary")" = "$expected" ] && chmod 755 "$te
     return changed;
   }
 
-  bool install(Memory& memory, SetupReport& report, const Target& target, const Platform& platform, const Install& build) {
+  tbc::view<bool, tbc::lt::a> install(tbc::view<Memory&, tbc::lt::a> memory, SetupReport& report, const Target& target, const Platform& platform, const Install& build) {
     try {
       MachineFieldRules::program(platform.target);
     } catch (const MachineFailure&) {

@@ -1,5 +1,6 @@
 module telar.cli.worktree_git;
 
+import telar.tbc;
 import telar.cli.control_session;
 import telar.client;
 import telar.sys.posix;
@@ -13,7 +14,7 @@ import telar.base.text;
 
 namespace telar::runtime::cli::repository {
 
-  Text normalize(Memory& memory, std::string_view url) {
+  tbc::view<Text, tbc::lt::a> normalize(tbc::view<Memory&, tbc::lt::a> memory, std::string_view url) {
     url = trimText(url, " \t\r\n");
     std::string_view scheme = "ssh";
     std::string_view authority;
@@ -86,7 +87,7 @@ namespace telar::runtime::cli::repository {
     return ds::format(memory, "{}/{}", AsciiLower{host}, path);
   }
 
-  Text sanitized(Memory& memory, std::string_view origin) {
+  tbc::view<Text, tbc::lt::a> sanitized(tbc::view<Memory&, tbc::lt::a> memory, std::string_view origin) {
     if (origin.find_first_of("?#\r\n\t ") != origin.npos) {
       throw std::runtime_error{"UnsupportedOrigin"};
     }
@@ -216,7 +217,7 @@ namespace telar::runtime::cli::sessions {
     field = value;
   }
 
-  Text realDirectory(Memory& memory, std::string_view path) {
+  tbc::view<Text, tbc::lt::a> realDirectory(tbc::view<Memory&, tbc::lt::a> memory, std::string_view path) {
     const Text given{memory, path};
     ds::Array<char, PATH_MAX> resolved{};
     if (::realpath(given.data(), resolved.dataMut()) == nullptr) {

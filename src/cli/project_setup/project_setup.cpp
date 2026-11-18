@@ -1,5 +1,6 @@
 module telar.cli.project_setup;
 
+import telar.tbc;
 import telar.cli.base.command_error;
 import telar.cli.control_session;
 import telar.client;
@@ -1391,7 +1392,7 @@ namespace telar::runtime::cli::project_setup {
   }
 
   template <Allocator Memory>
-  ds::Vec<ds::String<Memory>, Memory> recipeArguments(Memory& memory, std::string_view text) {
+  tbc::view<ds::Vec<ds::String<Memory>, Memory>, tbc::lt::a> recipeArguments(tbc::view<Memory&, tbc::lt::a> memory, std::string_view text) {
     auto recipe = [&] {
       try {
         return JsonNode<Memory>::parse(memory, text);
@@ -1451,7 +1452,7 @@ namespace telar::runtime::cli::project_setup {
   }
 
   template <Allocator Memory>
-  ds::Option<ds::Vec<ds::String<Memory>, Memory>> loadRecipe(Memory& memory, std::string_view cwd, bool authorized) {
+  tbc::view<ds::Option<ds::Vec<ds::String<Memory>, Memory>>, tbc::lt::a> loadRecipe(tbc::view<Memory&, tbc::lt::a> memory, std::string_view cwd, bool authorized) {
     const auto path = ds::format(memory, "{}/.telar/setup.json", cwd);
     FileDescriptor parent;
     FileDescriptor file;
@@ -1557,7 +1558,7 @@ namespace telar::runtime::cli::project_setup {
     return id;
   }
 
-  ds::Option<std::uint64_t> prepare(Memory& memory, ControlSession& session, std::string_view cwd, bool authorized, bool detach) {
+  tbc::view<ds::Option<std::uint64_t>, tbc::lt::a> prepare(tbc::view<Memory&, tbc::lt::a> memory, ControlSession& session, std::string_view cwd, bool authorized, bool detach) {
     const auto recipe = loadRecipe(memory, cwd, authorized);
     if (!recipe) {
       return ds::none;
@@ -1566,7 +1567,7 @@ namespace telar::runtime::cli::project_setup {
     return execute(session, cwd, recipe->view(), detach);
   }
 
-  ds::Option<std::uint64_t> prepare(Memory& memory, std::string_view cwd, bool authorized, bool detach, std::string_view socket) {
+  tbc::view<ds::Option<std::uint64_t>, tbc::lt::a> prepare(tbc::view<Memory&, tbc::lt::a> memory, std::string_view cwd, bool authorized, bool detach, std::string_view socket) {
     const auto recipe = loadRecipe(memory, cwd, authorized);
     if (!recipe) {
       return ds::none;

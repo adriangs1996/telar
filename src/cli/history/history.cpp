@@ -1,5 +1,6 @@
 module telar.cli.history;
 
+import telar.tbc;
 import telar.cli.control_session;
 import telar.sys.posix;
 import telar.base.diagnostics;
@@ -217,7 +218,7 @@ namespace telar::runtime::cli::diagnostics {
     std::uint32_t pid;
   };
 
-  ds::Option<Log> parseLog(Memory& memory, std::string_view name, std::string_view base) {
+  tbc::view<ds::Option<Log>, tbc::lt::a> parseLog(tbc::view<Memory&, tbc::lt::a> memory, std::string_view name, std::string_view base) {
     if (!name.starts_with(base) || !name.ends_with(".log")) {
       return ds::none;
     }
@@ -260,7 +261,7 @@ namespace telar::runtime::cli::diagnostics {
     return bytes;
   }
 
-  ds::Vec<Log, Memory> findLogs(Memory& memory, DIR* directory, std::string_view base, const DiagnosticsOptions& options) {
+  tbc::view<ds::Vec<Log, Memory>, tbc::lt::a> findLogs(tbc::view<Memory&, tbc::lt::a> memory, DIR* directory, std::string_view base, const DiagnosticsOptions& options) {
     ds::Vec<Log, Memory> logs{memory};
     std::size_t visited = 0;
     std::size_t skipped = 0;
@@ -660,7 +661,7 @@ namespace telar::runtime::cli::history {
     bool active_ = false;
   };
 
-  std::pair<HistoryOptions::ImportKind, Text> resolveImport(Memory& memory, const HistoryOptions& options) {
+  tbc::view<std::pair<HistoryOptions::ImportKind, Text>, tbc::lt::a> resolveImport(tbc::view<Memory&, tbc::lt::a> memory, const HistoryOptions& options) {
     using Kind = HistoryOptions::ImportKind;
 
     if (options.import_file) {
@@ -697,7 +698,7 @@ namespace telar::runtime::cli::history {
     throw std::runtime_error{"HistfileNotFound"};
   }
 
-  std::pair<Text, bool> newestLines(Memory& memory, const Text& path) {
+  tbc::view<std::pair<Text, bool>, tbc::lt::a> newestLines(tbc::view<Memory&, tbc::lt::a> memory, const Text& path) {
     FileDescriptor file{::open(path.data(), O_RDONLY | O_CLOEXEC)};
     struct stat inode{};
     if (!file || ::fstat(file.get(), &inode) != 0) {
@@ -745,7 +746,7 @@ namespace telar::runtime::cli::history {
     bool truncated;
   };
 
-  ImportSource loadImport(Memory& memory, const HistoryOptions& options) {
+  tbc::view<ImportSource, tbc::lt::a> loadImport(tbc::view<Memory&, tbc::lt::a> memory, const HistoryOptions& options) {
     auto [kind, path] = resolveImport(memory, options);
     auto [text, truncated] = newestLines(memory, path);
 

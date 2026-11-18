@@ -221,11 +221,11 @@ export {
   namespace telar::runtime {
 
     // The directory without the caller's environment type: lookup reads a variable from environment.
-    ds::String<ConcurrentMemory> proxyAuthorityDirectoryFrom(ConcurrentMemory& memory, const void* environment, std::string_view (*lookup)(const void*, const char*));
+    tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> proxyAuthorityDirectoryFrom(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const void* environment, std::string_view (*lookup)(const void*, const char*));
 
     // Generic over the caller's environment, so it stays here and hands the lookup to proxyAuthorityDirectoryFrom.
     template <Allocator Memory, EnvironmentLookup Environment>
-    TBC_GENERIC ds::String<Memory> proxyAuthorityDirectory(Memory& memory, const Environment& environment) {
+    TBC_GENERIC tbc::view<ds::String<Memory>, tbc::lt::a> proxyAuthorityDirectory(tbc::view<Memory&, tbc::lt::a> memory, const Environment& environment) {
       return proxyAuthorityDirectoryFrom(memory, std::addressof(environment), [](const void* target, const char* name) {
         return static_cast<const Environment*>(target)->lookup(name);
       });
@@ -284,9 +284,9 @@ export {
       ds::Array<char, 40> fingerprint;
       FixedText<PATH_MAX> store;
 
-      static Record parse(ConcurrentMemory& memory, std::string_view source);
+      static tbc::view<Record, tbc::lt::a> parse(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, std::string_view source);
 
-      static ds::Option<Record> read(ConcurrentMemory& memory, int directory);
+      static tbc::view<ds::Option<Record>, tbc::lt::a> read(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, int directory);
 
       void write(ConcurrentMemory& memory, int directory) const;
     };
@@ -351,7 +351,7 @@ export {
     private:
       using Lookup = std::string_view (*)(const void*, const char*);
 
-      static ds::String<ConcurrentMemory> keychainFrom(ConcurrentMemory& memory, const void* environment, Lookup lookup);
+      static tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> keychainFrom(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const void* environment, Lookup lookup);
       Destination nativeDestinationFrom(ConcurrentMemory& memory, ds::Option<Backend> selected, const void* environment, Lookup lookup) const;
 
       ds::String<ConcurrentMemory> directory_;

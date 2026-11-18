@@ -1,6 +1,7 @@
 export module telar.cli.machine;
 
 import std;
+import telar.tbc;
 
 import telar.cli.machine_ssh;
 
@@ -21,7 +22,7 @@ export {
       ds::Option<MachineProfile> saved;
     };
 
-    Target resolve(Memory& memory, const MachineProfiles& profiles, const MachineOptions& options);
+    tbc::view<Target, tbc::lt::a> resolve(tbc::view<Memory&, tbc::lt::a> memory, const MachineProfiles& profiles, const MachineOptions& options);
 
   }
 }

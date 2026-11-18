@@ -1,6 +1,7 @@
 export module telar.gui.features.prompt:completion;
 
 import std;
+import telar.tbc;
 
 import telar.shell.syntax;
 import telar.ebnf.matcher;
@@ -42,7 +43,7 @@ export namespace telar::gui::features::prompt {
     bool command_position = false;
   };
 
-  ds::Option<CompletionContext> completionContext(Memory& memory, std::string_view text, std::size_t cursor, shell::Syntax syntax);
+  tbc::view<ds::Option<CompletionContext>, tbc::lt::a> completionContext(tbc::view<Memory&, tbc::lt::a> memory, std::string_view text, std::size_t cursor, shell::Syntax syntax);
 
   struct Completion {
     explicit Completion(Memory& memory);
@@ -57,9 +58,9 @@ export namespace telar::gui::features::prompt {
   // The literal choices and the providers for `context`, from the command's `spec` when the
   // runtime has one for it. At a command's position, the commands in `history` whose names start
   // with the partial word; the runtime adds the ones the shell runs.
-  Completion complete(Memory& memory, const CompletionContext& context, const ebnf::command_spec* spec, ebnf::match_scratch& scratch, History history);
+  tbc::view<Completion, tbc::lt::a> complete(tbc::view<Memory&, tbc::lt::a> memory, const CompletionContext& context, const ebnf::command_spec* spec, ebnf::match_scratch& scratch, History history);
 
   // Writes `text` as one shell word: characters the shell would read specially are escaped.
-  ds::String<Memory> quoteWord(Memory& memory, std::string_view text, shell::Dialect dialect);
+  tbc::view<ds::String<Memory>, tbc::lt::a> quoteWord(tbc::view<Memory&, tbc::lt::a> memory, std::string_view text, shell::Dialect dialect);
 
 }

@@ -28,10 +28,10 @@ export {
   namespace telar::runtime::cli::repository {
 
     // The origin as `host/path`, lowercase host, default port, `.git` and slashes dropped.
-    Text normalize(Memory& memory, std::string_view url);
+    tbc::view<Text, tbc::lt::a> normalize(tbc::view<Memory&, tbc::lt::a> memory, std::string_view url);
 
     // The origin without the credentials an authority may carry.
-    Text sanitized(Memory& memory, std::string_view origin);
+    tbc::view<Text, tbc::lt::a> sanitized(tbc::view<Memory&, tbc::lt::a> memory, std::string_view origin);
 
   }
 }
@@ -150,7 +150,7 @@ export {
   namespace telar::runtime::cli::sessions {
 
     // The canonical path of a directory that exists.
-    Text realDirectory(Memory& memory, std::string_view path);
+    tbc::view<Text, tbc::lt::a> realDirectory(tbc::view<Memory&, tbc::lt::a> memory, std::string_view path);
 
     void wireTabLabel(std::string_view value, bool empty = false);
 

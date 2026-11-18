@@ -1,5 +1,6 @@
 module telar.cli.integration.settings;
 import telar.sys.posix;
+import telar.tbc;
 import telar.cli.base.command_error;
 import telar.platform.error;
 import telar.platform.fs;
@@ -27,7 +28,7 @@ namespace telar::runtime::cli::integration {
   }
 
   template <Allocator Memory>
-  ds::String<Memory> joinPath(Memory& memory, std::string_view directory, std::string_view name) {
+  tbc::view<ds::String<Memory>, tbc::lt::a> joinPath(tbc::view<Memory&, tbc::lt::a> memory, std::string_view directory, std::string_view name) {
     ds::String<Memory> path{memory, directory};
 
     path.push('/');
@@ -39,7 +40,7 @@ namespace telar::runtime::cli::integration {
     return path;
   }
 
-  ds::Option<ds::String<Memory>> read(Memory& memory, const ds::String<Memory>& path, std::size_t maximum_bytes) {
+  tbc::view<ds::Option<ds::String<Memory>>, tbc::lt::a> read(tbc::view<Memory&, tbc::lt::a> memory, const ds::String<Memory>& path, std::size_t maximum_bytes) {
     FileDescriptor file{::open(path.data(), O_RDONLY | O_CLOEXEC | O_NONBLOCK | O_NOCTTY)};
     if (!file) {
       if (sys::lastError() == ENOENT) {
@@ -157,7 +158,7 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
   }};
 
   template <Allocator Memory>
-  ds::String<Memory> skillPath(Memory& memory, std::string_view root, const Skill& skill) {
+  tbc::view<ds::String<Memory>, tbc::lt::a> skillPath(tbc::view<Memory&, tbc::lt::a> memory, std::string_view root, const Skill& skill) {
     auto path = joinPath(memory, root, "skills");
 
     path = joinPath(memory, path, skill.name);
@@ -321,7 +322,7 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
   constexpr std::size_t maximum_settings_bytes = 4 * 1024 * 1024;
 
   template <Allocator Memory, EnvironmentLookup Environment>
-  ds::Option<ds::String<Memory>> legacySettings(Memory& memory, Provider provider, const Environment& environment) {
+  tbc::view<ds::Option<ds::String<Memory>>, tbc::lt::a> legacySettings(tbc::view<Memory&, tbc::lt::a> memory, Provider provider, const Environment& environment) {
     if (provider.environment == nullptr || environment.lookup(provider.environment).empty() || environment.lookup("HOME").empty()) {
       return ds::none;
     }

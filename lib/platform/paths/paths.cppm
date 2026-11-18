@@ -130,7 +130,7 @@ export {
     // Joins the pieces into a string of the caller's allocator; built in paths.cpp for the
     // allocators of telar.base.memory.allocators.
     template <Allocator Memory>
-    ds::String<Memory> xdgDirectory(Memory& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
+    tbc::view<ds::String<Memory>, tbc::lt::a> xdgDirectory(tbc::view<Memory&, tbc::lt::a> memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
 
     extern template ds::String<Memory> xdgDirectory<Memory>(Memory& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
     extern template ds::String<ConcurrentMemory> xdgDirectory<ConcurrentMemory>(ConcurrentMemory& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
@@ -171,11 +171,11 @@ export {
       bool isDefaultSocket(const EnvironmentSource& environment) const;
 
       // telar's configuration directory: XDG_CONFIG_HOME/telar, else ~/.config/telar; empty without either.
-      [[nodiscard]] static ds::String<Memory> configHome(Memory& memory, const EnvironmentSource& environment);
+      [[nodiscard]] static tbc::view<ds::String<Memory>, tbc::lt::a> configHome(tbc::view<Memory&, tbc::lt::a> memory, const EnvironmentSource& environment);
 
       // The configuration a process started without --config reads: TELAR_DEVELOPMENT_CONFIG, else
       // config.lua in the configuration directory; empty without either.
-      [[nodiscard]] static ds::String<Memory> configFile(Memory& memory, const EnvironmentSource& environment);
+      [[nodiscard]] static tbc::view<ds::String<Memory>, tbc::lt::a> configFile(tbc::view<Memory&, tbc::lt::a> memory, const EnvironmentSource& environment);
 
       void prepareStorage() const;
 

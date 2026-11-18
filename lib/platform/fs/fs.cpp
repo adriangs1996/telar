@@ -315,7 +315,7 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  ds::String<Memory> readFile(Memory& memory, const char* path, std::size_t maximum_bytes) {
+  tbc::view<ds::String<Memory>, tbc::lt::a> readFile(tbc::view<Memory&, tbc::lt::a> memory, const char* path, std::size_t maximum_bytes) {
     const auto file = openSourceFile(path);
 
     return readFileContents(memory, file.get(), maximum_bytes);

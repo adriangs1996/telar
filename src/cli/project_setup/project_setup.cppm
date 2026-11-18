@@ -147,10 +147,10 @@ export {
     };
 
     // `project setup` and `worktree create --setup` share the authorization gate and execution semantics.
-    ds::Option<std::uint64_t> prepare(Memory& memory, ControlSession& session, std::string_view cwd, bool authorized, bool detach = false);
+    tbc::view<ds::Option<std::uint64_t>, tbc::lt::a> prepare(tbc::view<Memory&, tbc::lt::a> memory, ControlSession& session, std::string_view cwd, bool authorized, bool detach = false);
 
     // Starts the runtime only when the checkout declares a recipe.
-    ds::Option<std::uint64_t> prepare(Memory& memory, std::string_view cwd, bool authorized, bool detach, std::string_view socket);
+    tbc::view<ds::Option<std::uint64_t>, tbc::lt::a> prepare(tbc::view<Memory&, tbc::lt::a> memory, std::string_view cwd, bool authorized, bool detach, std::string_view socket);
 
     int run(Memory& memory, const Options& options);
 

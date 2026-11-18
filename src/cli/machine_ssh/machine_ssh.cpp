@@ -1,5 +1,6 @@
 module telar.cli.machine_ssh;
 
+import telar.tbc;
 import telar.cli.base.command_error;
 import telar.cli.control_session;
 import telar.platform.sha256;
@@ -325,7 +326,7 @@ namespace telar::runtime::cli::launch {
 
   constexpr std::size_t error_limit = 64 * 1024;
 
-  Argv words(Memory& memory, std::initializer_list<std::string_view> words) {
+  tbc::view<Argv, tbc::lt::a> words(tbc::view<Memory&, tbc::lt::a> memory, std::initializer_list<std::string_view> words) {
     Argv result{memory};
 
     result.reserve(words.size());
@@ -384,7 +385,7 @@ namespace telar::runtime::cli::launch {
     return WIFEXITED(status) ? WEXITSTATUS(status) : ssh_failure;
   }
 
-  Text retained(Memory& memory, const RetainedStream<Memory>& stream) {
+  tbc::view<Text, tbc::lt::a> retained(tbc::view<Memory&, tbc::lt::a> memory, const RetainedStream<Memory>& stream) {
     Text text{memory};
 
     text.resizeForOverwrite(static_cast<std::size_t>(stream.total() - stream.retainedOffset()));
@@ -396,7 +397,7 @@ namespace telar::runtime::cli::launch {
       : out(memory),
         err(memory) {}
 
-  Output capture(Memory& memory, std::span<const Text> arguments, std::string_view input, std::chrono::seconds timeout) {
+  tbc::view<Output, tbc::lt::a> capture(tbc::view<Memory&, tbc::lt::a> memory, std::span<const Text> arguments, std::string_view input, std::chrono::seconds timeout) {
     ds::Vec<std::string_view, Memory> words{memory};
 
     words.reserve(arguments.size());
@@ -434,7 +435,7 @@ namespace telar::runtime::cli::launch {
     return result;
   }
 
-  Output captureFile(Memory& memory, std::span<const Text> arguments, int file, std::chrono::seconds timeout) {
+  tbc::view<Output, tbc::lt::a> captureFile(tbc::view<Memory&, tbc::lt::a> memory, std::span<const Text> arguments, int file, std::chrono::seconds timeout) {
     if (file < 0) {
       return capture(memory, arguments, {}, timeout);
     }
@@ -652,7 +653,7 @@ namespace telar::runtime::cli::machine {
     }
   }
 
-  Text decode(Memory& memory, std::string_view word) {
+  tbc::view<Text, tbc::lt::a> decode(tbc::view<Memory&, tbc::lt::a> memory, std::string_view word) {
     if (word.empty() || word.front() != 'a') {
       throw CommandError{"InvalidDispatchArgument"};
     }
@@ -721,7 +722,7 @@ namespace telar::runtime::cli::machine {
     argv.push(ds::format(memory, "ControlPath={}{}", directory, std::string_view{name.data()}));
   }
 
-  Argv ssh(Memory& memory, std::string_view destination, std::string_view command, bool terminal) {
+  tbc::view<Argv, tbc::lt::a> ssh(tbc::view<Memory&, tbc::lt::a> memory, std::string_view destination, std::string_view command, bool terminal) {
     auto argv = launch::words(memory, {"ssh", terminal ? "-t" : "-T"});
 
     appendSshOptions(memory, argv, destination);
@@ -731,7 +732,7 @@ namespace telar::runtime::cli::machine {
     return argv;
   }
 
-  Text gitSshCommand(Memory& memory, std::string_view destination) {
+  tbc::view<Text, tbc::lt::a> gitSshCommand(tbc::view<Memory&, tbc::lt::a> memory, std::string_view destination) {
     Argv options{memory};
     Text command{memory, "ssh"};
 
@@ -748,7 +749,7 @@ namespace telar::runtime::cli::machine {
   }
 
   template <typename Words>
-  Text remoteCommand(Memory& memory, const MachineProfile& profile, const Words& words) {
+  tbc::view<Text, tbc::lt::a> remoteCommand(tbc::view<Memory&, tbc::lt::a> memory, const MachineProfile& profile, const Words& words) {
     auto command = ds::format(memory, "{} dispatch-argv", profile.program().valueOr("telar"));
 
     for (const std::string_view word : words) {
@@ -773,7 +774,7 @@ namespace telar::runtime::cli::machine {
   }
 
   template <typename Words>
-  Text capture(Memory& memory, const MachineProfile& profile, const Words& words, const char* failure, int input) {
+  tbc::view<Text, tbc::lt::a> capture(tbc::view<Memory&, tbc::lt::a> memory, const MachineProfile& profile, const Words& words, const char* failure, int input) {
     constexpr auto capture_timeout = std::chrono::seconds{900};
     auto result = launch::captureFile(memory, ssh(memory, profile.destination(), remoteCommand(memory, profile, words)).view(), input, capture_timeout);
 
@@ -785,7 +786,7 @@ namespace telar::runtime::cli::machine {
     return std::move(result.out);
   }
 
-  ds::Option<MachineProfile> resolve(Memory& memory, std::string_view label) {
+  tbc::view<ds::Option<MachineProfile>, tbc::lt::a> resolve(tbc::view<Memory&, tbc::lt::a> memory, std::string_view label) {
     const auto profiles = load(memory, profilesPath(memory));
     if (const auto index = profiles.find(label)) {
       return profiles.rows()[*index];
@@ -963,7 +964,7 @@ namespace telar::runtime::cli::machine::filter {
     }) || (kind != Kind::scalar && (asciiContainsIgnoreCase(name, "token") || asciiContainsIgnoreCase(name, "auth")));
   }
 
-  Text rewriteHome(Memory& memory, std::string_view bytes, std::string_view from, std::string_view to) {
+  tbc::view<Text, tbc::lt::a> rewriteHome(tbc::view<Memory&, tbc::lt::a> memory, std::string_view bytes, std::string_view from, std::string_view to) {
     if (from.empty()) {
       throw CommandError{"HomeUnavailable"};
     }
@@ -986,7 +987,7 @@ namespace telar::runtime::cli::machine::filter {
     }
   }
 
-  Text stripJsonc(Memory& memory, std::string_view bytes) {
+  tbc::view<Text, tbc::lt::a> stripJsonc(tbc::view<Memory&, tbc::lt::a> memory, std::string_view bytes) {
     Text result{memory};
     bool string = false;
 
@@ -1196,7 +1197,7 @@ namespace telar::runtime::cli::machine::filter {
     return ds::none;
   }
 
-  Text toml(Memory& memory, std::string_view bytes, Notes& dropped) {
+  tbc::view<Text, tbc::lt::a> toml(tbc::view<Memory&, tbc::lt::a> memory, std::string_view bytes, Notes& dropped) {
     bool skipping_table = false;
     bool dropping_value = false;
     bool first = true;

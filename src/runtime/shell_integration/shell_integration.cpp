@@ -1,5 +1,6 @@
 module telar.runtime.shell_integration;
 
+import telar.tbc;
 import std;
 import telar.sys.posix;
 import telar.platform.error;
@@ -93,7 +94,7 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  ds::String<Memory> ShellIntegration<Memory>::install(Memory& memory, std::string_view data_home) {
+  tbc::view<ds::String<Memory>, tbc::lt::a> ShellIntegration<Memory>::install(tbc::view<Memory&, tbc::lt::a> memory, std::string_view data_home) {
     ds::String<Memory> directory{memory, data_home};
 
     directory.append("/telar/shell-integration/");

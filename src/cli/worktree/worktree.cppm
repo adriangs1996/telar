@@ -1,6 +1,7 @@
 export module telar.cli.worktree;
 
 import std;
+import telar.tbc;
 
 import telar.cli.worktree_git;
 
@@ -56,7 +57,7 @@ export {
     };
 
     template <Allocator Memory>
-    PreparedRepository receive(Memory& memory, const RepositoryOptions& options);
+    tbc::view<PreparedRepository, tbc::lt::a> receive(tbc::view<Memory&, tbc::lt::a> memory, const RepositoryOptions& options);
 
   }
 }
@@ -69,7 +70,7 @@ export {
     // tips of the clone `receive` would update, one per line, or nothing without
     // a clone. A clone `receive` published has only its detached HEAD.
     template <Allocator Memory>
-    Text tips(Memory& memory, const RepositoryOptions& options);
+    tbc::view<Text, tbc::lt::a> tips(tbc::view<Memory&, tbc::lt::a> memory, const RepositoryOptions& options);
 
     // Runs the given telar words on the other machine with the descriptor as
     // stdin (-1 for none) and returns their stdout.
@@ -84,10 +85,10 @@ export {
     // Repository preparation: bundles `options.from`, less what the other
     // machine's clone already holds, and has that machine's telar receive it
     // through `capture`.
-    PreparedRepository prepare(Memory& memory, const RepositoryOptions& options, std::string_view remote_program, RepositoryCapture& capture);
+    tbc::view<PreparedRepository, tbc::lt::a> prepare(tbc::view<Memory&, tbc::lt::a> memory, const RepositoryOptions& options, std::string_view remote_program, RepositoryCapture& capture);
 
     // Shared by `repository prepare` and `worktree create --machine`.
-    PreparedRepository prepare(Memory& memory, const RepositoryOptions& options, const machines::MachineProfile& profile);
+    tbc::view<PreparedRepository, tbc::lt::a> prepare(tbc::view<Memory&, tbc::lt::a> memory, const RepositoryOptions& options, const machines::MachineProfile& profile);
 
     int run(Memory& memory, const RepositoryOptions& options);
 

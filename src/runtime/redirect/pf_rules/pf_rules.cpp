@@ -1,5 +1,6 @@
 module telar.runtime.redirect.pf_rules;
 
+import telar.tbc;
 import telar.base.text.utf8;
 import telar.platform.error;
 import telar.platform.net;
@@ -363,7 +364,7 @@ namespace telar::runtime::redirect {
   }
 
   template <Allocator Memory>
-  ds::String<Memory> pfRules(Memory& memory, std::span<const Mapping> mappings, const PfScope& scope) {
+  tbc::view<ds::String<Memory>, tbc::lt::a> pfRules(tbc::view<Memory&, tbc::lt::a> memory, std::span<const Mapping> mappings, const PfScope& scope) {
     const auto uid = scope.uid;
     const auto label = scope.label;
     const auto interface = scope.discovery_interface;
