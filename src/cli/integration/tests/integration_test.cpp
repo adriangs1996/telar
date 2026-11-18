@@ -16,6 +16,7 @@ static_assert(true);
 #include <cstdlib>
 #include <exception>
 #include <fcntl.h>
+#include <filesystem>
 #include <limits.h>
 #include <optional>
 #include <span>
@@ -67,6 +68,15 @@ namespace {
           check(hook.find("command")->text() == expected);
         }
 
+        // Worktree hooks answer Claude outside telar too: they carry no pane guard.
+        for (const auto event : specification.worktree_events) {
+          check(hooks.installed(settings, event));
+          const auto& entry = settings.find("hooks")->find(event)->children().front();
+          const auto command = entry.find("hooks")->children().front().find("command")->text();
+
+          check(command.contains("'/fixture/telar'") && !command.contains("TELAR_PANE_ID"));
+        }
+
         const integration::HookSettings upgraded{memory, specification, "/new path/telar"};
 
         check(upgraded.install(settings) && !upgraded.install(settings));
@@ -98,6 +108,73 @@ namespace {
       check(entries.size() == 2 && entries[0].find("matcher")->text() == "*");
       check(entries[0].find("hooks")->children().size() == 1 && entries[0].find("hooks")->children()[0].find("command")->text() == "keep me");
       check(settings.find("custom")->find("keep")->children().size() == 4);
+    }
+
+    // What /bin/sh prints running `command`, with a pane's identity set.
+    std::string ranInPane(std::string_view command) {
+      check(::setenv("TELAR_PANE_ID", "1", 1) == 0 && ::setenv("TELAR_PANE_GENERATION", "1", 1) == 0 && ::unsetenv("TELAR_BIN_PATH") == 0);
+      FILE* pipe = ::popen(std::string{command}.c_str(), "r");
+
+      check(pipe != nullptr);
+      std::string output;
+      std::array<char, 256> buffer;
+
+      while (const auto count = std::fread(buffer.data(), 1, buffer.size(), pipe)) {
+        output.append(buffer.data(), count);
+      }
+
+      ::pclose(pipe);
+      return output;
+    }
+
+    // The executable reaches the shell as one quoted word: spaces and `$(…)` in its path run
+    // nothing, and a quote, which would close the word, is refused.
+    template <Allocator Memory>
+    void testExecutableQuoting(Memory& memory) {
+      const auto specification = integration::Provider::describe(AgentProvider::claude);
+      std::array<char, 64> temporary{};
+
+      std::strcpy(temporary.data(), "/tmp/telar-hook-quote-XXXXXX");
+      check(::mkdtemp(temporary.data()) != nullptr);
+      const std::string root = temporary.data();
+      const auto directory = root + "/a b $(touch ran)";
+      const auto executable = directory + "/telar";
+
+      check(::mkdir(directory.c_str(), 0700) == 0);
+      {
+        FILE* script = std::fopen(executable.c_str(), "w");
+
+        check(script != nullptr);
+        std::fputs("#!/bin/sh\nprintf '%s ' \"$@\"\n", script);
+        std::fclose(script);
+      }
+
+      check(::chmod(executable.c_str(), 0700) == 0);
+      {
+        const integration::HookSettings hooks{memory, specification, executable};
+        auto settings = JsonNode<Memory>::parse(memory, "{}");
+
+        check(hooks.install(settings));
+        const auto& entry = settings.find("hooks")->find("Stop")->children().front();
+        const auto command = entry.find("hooks")->children().front().find("command")->text();
+
+        check(::chdir(root.c_str()) == 0);
+        const auto ran = ranInPane(command);
+
+        check(ran == "hook claude ", ran);
+        check(::access((root + "/ran").c_str(), F_OK) != 0);
+      }
+
+      bool refused = false;
+
+      try {
+        const integration::HookSettings quoted{memory, specification, root + "/it's/telar"};
+      } catch (const std::exception&) {
+        refused = true;
+      }
+
+      check(refused);
+      std::filesystem::remove_all(root);
     }
 
     template <Allocator Memory>
@@ -144,6 +221,12 @@ namespace {
       "integration.mixed_hooks",
       budgeted<[](auto& memory) {
         testMixedHooks(memory);
+      }>,
+  };
+  static const telar::testing::Case case_executable_quoting{
+      "integration.executable_quoting",
+      budgeted<[](auto& memory) {
+        testExecutableQuoting(memory);
       }>,
   };
   static const telar::testing::Case case_json_document{
