@@ -343,6 +343,7 @@
     "src/runtime/runtime/tests/client_peer/client_peer.cppm": "telar.runtime.runtime.tests.client_peer",
     "src/runtime/runtime/tests/clipboard_task/clipboard_task.cppm": "telar.runtime.runtime.tests.clipboard_task",
     "src/runtime/runtime/tests/runtime_host/runtime_host.cppm": "telar.runtime.runtime.tests.runtime_host",
+    "src/runtime/runtime/tests/wire_session/wire_session.cppm": "telar.runtime.runtime.tests.wire_session",
     "src/runtime/tools/control_clipboard_fixture/control_clipboard_fixture.cppm": "telar.runtime.tools.control_clipboard_fixture",
     "src/runtime/tools/control_png_pty_inputs/control_png_pty_inputs.cppm": "telar.runtime.tools.control_png_pty_inputs",
     "src/runtime/http2/tests/http2_fixture/http2_fixture.cppm": "telar.runtime.http2.tests.http2_fixture",

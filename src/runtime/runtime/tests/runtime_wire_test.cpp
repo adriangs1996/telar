@@ -8,12 +8,12 @@
 
 import std;
 import telar.testing;
-import telar.platform.process;
+import telar.client;
 import telar.runtime.runtime.tests.protocol_peer;
 import telar.runtime.runtime.tests.runtime_host;
+import telar.runtime.runtime.tests.wire_session;
 import telar.wire.agents;
 import telar.wire.clients;
-import telar.wire.content;
 import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.runtime;
@@ -27,81 +27,6 @@ namespace {
 
   constexpr TerminalSize size{80, 24, 8, 16};
   constexpr std::array<std::string_view, 1> cat{"/bin/cat"};
-
-  // True once the runtime closed the peer's connection, reading and discarding what it sent first.
-  bool closedByRuntime(int descriptor, std::chrono::milliseconds limit) {
-    const auto deadline = std::chrono::steady_clock::now() + limit;
-    std::array<char, 4096> bytes;
-
-    for (;;) {
-      const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - std::chrono::steady_clock::now());
-      if (remaining.count() <= 0) {
-        return false;
-      }
-
-      pollfd ready{.fd = descriptor, .events = POLLIN, .revents = 0};
-      if (::poll(&ready, 1, static_cast<int>(remaining.count())) <= 0) {
-        continue;
-      }
-
-      const auto count = ::recv(descriptor, bytes.data(), bytes.size(), 0);
-      if (count == 0 || (count < 0 && errno != EINTR && errno != EAGAIN)) {
-        return true;
-      }
-    }
-  }
-
-  // The code a request failed with, or nothing when the runtime completed it.
-  template <typename Request>
-  std::optional<FailureCode> refusal(ProtocolPeer& peer, const Request& request) {
-    try {
-      peer.exchange<RequestCompleted>(request);
-      return std::nullopt;
-    } catch (const ProtocolFailure& failure) {
-      return failure.code;
-    }
-  }
-
-  // The pane's screen once it shows `marker`.
-  std::string screenShowing(ProtocolPeer& peer, std::uint64_t pane, std::string_view marker) {
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
-
-    for (std::uint64_t request = 1000;; ++request) {
-      const auto text = peer.exchange<PaneText>(ReadPane{.request_id = request, .pane_id = pane, .rows = 200});
-      if (text.text.contains(marker)) {
-        return std::string{text.text};
-      }
-
-      check(std::chrono::steady_clock::now() < deadline, "the pane never showed the expected text");
-      std::this_thread::sleep_for(std::chrono::milliseconds{10});
-    }
-  }
-
-  // Waits for the pane's PaneExited, which the client that opened the pane receives.
-  void waitExited(ProtocolPeer& peer, std::uint64_t pane) {
-    peer.deadline(std::chrono::seconds{30});
-    while (peer.receive<PaneExited>().pane_id != pane) {
-    }
-  }
-
-  // The process a pane runs under an agent's executable name: the test binary, copied as `name`
-  // into the host's directory, in the --pane-agent mode below.
-  std::string agentExecutable(const RuntimeHost& host, std::string_view name) {
-    const telar::runtime::ExecutablePath self;
-    const auto path = host.directory() + "/" + std::string{name};
-
-    if (!std::filesystem::exists(path)) {
-      std::filesystem::copy_file(self.c_str(), path);
-    }
-
-    return path;
-  }
-
-  std::string readFile(const std::string& path) {
-    std::ifstream file{path};
-
-    return {std::istreambuf_iterator<char>{file}, {}};
-  }
 
   void testUnknownTagDropsOnlySender() {
     RuntimeHost host;
@@ -144,6 +69,95 @@ namespace {
     ProtocolPeer peer{host.socket()};
 
     check(peer.exchange<ClientList>(QueryClients{.request_id = 1}).request_id == 1);
+  }
+
+  // A connection to the runtime that has not said hello.
+  int connectRaw(const char* socket) {
+    const int descriptor = ::socket(AF_UNIX, SOCK_STREAM, 0);
+    sockaddr_un address{};
+
+    address.sun_family = AF_UNIX;
+    std::strncpy(address.sun_path, socket, sizeof(address.sun_path) - 1);
+    check(::connect(descriptor, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0);
+    return descriptor;
+  }
+
+  // Whether the runtime still holds the connection open: it neither closed it nor wrote to it.
+  bool heldOpen(int descriptor) {
+    pollfd ready{.fd = descriptor, .events = POLLIN, .revents = 0};
+
+    return ::poll(&ready, 1, 0) == 0;
+  }
+
+  // Says hello on a fresh connection and returns the runtime's answer.
+  HandshakeResponse hello(const char* socket) {
+    const int descriptor = connectRaw(socket);
+    const auto payload = HandshakeCodec::encode(ClientHello{});
+    std::array<Byte, 4 + payload.size()> frame{};
+    std::span<Byte> output = frame;
+
+    u32::encode(payload.size(), output);
+    std::ranges::copy(payload, output.begin());
+    check(::send(descriptor, frame.data(), frame.size(), 0) == static_cast<ssize_t>(frame.size()));
+    std::array<Byte, 4 + HandshakeCodec::max_message_size> reply{};
+    std::size_t received = 0;
+
+    while (received < 4 || received < 4 + (reply[0] | reply[1] << 8 | reply[2] << 16 | reply[3] << 24)) {
+      const auto count = ::recv(descriptor, reply.data() + received, reply.size() - received, 0);
+
+      check(count > 0, "the runtime closed the handshake without answering");
+      received += static_cast<std::size_t>(count);
+    }
+
+    ::close(descriptor);
+    return HandshakeCodec::decodeResponse(std::span{reply}.subspan(4, received - 4));
+  }
+
+  void testPendingCapacityRefusesSeventeenth() {
+    RuntimeHost host;
+    std::vector<int> pending;
+
+    // Every handshake slot is taken by a connection that has not said hello yet.
+    for (std::size_t index = 0; index < 16; ++index) {
+      pending.push_back(connectRaw(host.socket()));
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds{200});
+    const int extra = connectRaw(host.socket());
+
+    // The connection past them is refused at once, and none of the waiting ones loses its place.
+    check(closedByRuntime(extra, std::chrono::seconds{1}), "a handshake past the pending capacity was kept");
+    check(std::ranges::all_of(pending, heldOpen), "a waiting handshake was dropped for a later one");
+    ::close(extra);
+    for (const int descriptor : pending) {
+      ::close(descriptor);
+    }
+  }
+
+  void testClientLimitRejectsWithReason() {
+    RuntimeHost host;
+    std::vector<std::unique_ptr<ProtocolPeer>> clients;
+
+    // One client short of the limit, and a handshake on its way that holds the last place.
+    for (std::size_t index = 0; index + 1 < 32; ++index) {
+      clients.push_back(std::make_unique<ProtocolPeer>(host.socket()));
+    }
+
+    const int reserving = connectRaw(host.socket());
+
+    std::this_thread::sleep_for(std::chrono::milliseconds{200});
+    const auto refused = hello(host.socket());
+
+    check(std::holds_alternative<ServerReject>(refused) && std::get<ServerReject>(refused).reason == HandshakeRejectReason::client_limit_reached, "a client past the limit was not refused for it");
+
+    // Once that handshake goes, the place is free again.
+    ::close(reserving);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{3};
+
+    while (!std::holds_alternative<ServerAccept>(hello(host.socket()))) {
+      check(std::chrono::steady_clock::now() < deadline, "the client limit counted a handshake that was gone");
+      std::this_thread::sleep_for(std::chrono::milliseconds{20});
+    }
   }
 
   void testPaneIdentityEnvironment() {
@@ -353,26 +367,6 @@ namespace {
     check(resync.workspace.id == opened.location.workspace.id && !resync.workspace_closed);
   }
 
-  // The fixture side runs in a pane, so the runtime names its agent by the executable.
-  void waitProvider(ProtocolPeer& peer, std::uint64_t pane, AgentProvider provider) {
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
-
-    for (std::uint64_t request = 100;; ++request) {
-      const auto snapshot = peer.exchange<AgentSnapshot>(QueryAgents{request});
-      if (std::ranges::any_of(snapshot.entries, [&](const auto& entry) {
-            return entry.pane_id == pane && entry.provider == provider;
-          })) {
-        return;
-      }
-
-      if (std::chrono::steady_clock::now() >= deadline) {
-        throw std::runtime_error{"the runtime never named the pane's agent"};
-      }
-
-      std::this_thread::sleep_for(std::chrono::milliseconds{5});
-    }
-  }
-
   std::string reportOutcome(ProtocolPeer& peer, const ReportAgent& report) {
     try {
       peer.exchange<RequestCompleted>(report);
@@ -454,6 +448,8 @@ namespace {
 
   const telar::testing::Case case_unknown_tag_drops_only_sender{"runtime_wire.unknown_tag_drops_only_sender", testUnknownTagDropsOnlySender};
   const telar::testing::Case case_idle_handshakes_expire{"runtime_wire.idle_handshakes_expire", testIdleHandshakesExpire};
+  const telar::testing::Case case_pending_capacity_refuses_seventeenth{"runtime_wire.pending_capacity_refuses_seventeenth", testPendingCapacityRefusesSeventeenth};
+  const telar::testing::Case case_client_limit_rejects_with_reason{"runtime_wire.client_limit_rejects_with_reason", testClientLimitRejectsWithReason};
   const telar::testing::Case case_pane_identity_environment{"runtime_wire.pane_identity_environment", testPaneIdentityEnvironment};
   const telar::testing::Case case_send_text_refusals{"runtime_wire.send_text_refusals", testSendTextRefusals};
   const telar::testing::Case case_blocked_agent_refuses_prompt{"runtime_wire.blocked_agent_refuses_prompt", testBlockedAgentRefusesPrompt};

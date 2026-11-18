@@ -47,6 +47,7 @@ static_assert(true);
 #endif
 #include <ghostty/vt.h>
 #include <new>
+#include <poll.h>
 #include <pthread.h>
 
 import std;
@@ -70,6 +71,8 @@ import telar.runtime.platform.stream_read_buffer;
 namespace {
 
   using telar::testing::check;
+
+  using namespace std::string_literals;
 
   using namespace telar;
   using namespace telar::runtime;
@@ -503,6 +506,268 @@ namespace {
     }
   }
 
+  // Restores `bytes` into a model of its own, with the panes the services launch.
+  struct RestoredSession {
+    explicit RestoredSession(ConcurrentMemory& memory)
+        : model(memory),
+          poller(memory),
+          panes(memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/unused-checkpoint-test.sock"}),
+          layouts(memory) {}
+
+    void restore(ConcurrentMemory& memory, std::span<const Byte> bytes, bool resume_agents) {
+      checkpoint::Restore restore{memory, model, panes, layouts, resume_agents};
+
+      restore.apply(bytes);
+    }
+
+    RuntimeModel model;
+    LimitService limits;
+    NativeEventLoop<ConcurrentMemory> poller;
+    PaneService<NativeEventLoop<ConcurrentMemory>> panes;
+    ClientLayouts layouts;
+  };
+
+  // The agents a snapshot reads: one per pane in `agents`, by pane identity.
+  struct LiveAgents {
+    const Agent* find(std::uint64_t pane, std::uint64_t) const noexcept {
+      for (const auto& agent : agents) {
+        if (agent->pane == pane) {
+          return agent.get();
+        }
+      }
+
+      return nullptr;
+    }
+
+    std::uint64_t revision() const noexcept {
+      return 1;
+    }
+
+    std::vector<std::unique_ptr<Agent>> agents;
+  };
+
+  std::string fileText(const std::string& path) {
+    std::ifstream file{path};
+
+    return {std::istreambuf_iterator<char>{file}, {}};
+  }
+
+  // The text in `path` once a pane wrote it, or empty when none did within `limit`.
+  std::string written(const std::string& path, std::chrono::milliseconds limit) {
+    const auto deadline = std::chrono::steady_clock::now() + limit;
+
+    while (std::chrono::steady_clock::now() < deadline) {
+      if (std::filesystem::exists(path)) {
+        std::this_thread::sleep_for(std::chrono::milliseconds{20});
+        return fileText(path);
+      }
+
+      std::this_thread::sleep_for(std::chrono::milliseconds{10});
+    }
+
+    return {};
+  }
+
+  void testAgentResume() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& memory = adapter;
+    std::array<char, 64> directory{};
+
+    std::strcpy(directory.data(), "/tmp/telar-resume-test-XXXXXX");
+    check(::mkdtemp(directory.data()) != nullptr);
+    const std::string root{directory.data()};
+    constexpr std::string_view first_session = "0123abcd-4567-89ef-0123-456789abcdef";
+    constexpr std::string_view direct_session = "fedcba98-7654-3210-fedc-ba9876543210";
+    const auto claude = root + "/claude";
+
+    // An agent run as the pane's program records how it was started.
+    std::ofstream{claude} << "#!/bin/sh\nprintf '%s ' \"$@\" > '" << root << "/direct'\nexec cat\n";
+    check(::chmod(claude.c_str(), 0700) == 0);
+    std::vector<Byte> buffer(64 * 1024);
+    std::span<const Byte> session;
+
+    {
+      // Three panes: two shells whose agents share a session, and the agent itself as a program.
+      std::array<Byte, 4096> base_buffer;
+      checkpoint::Writer writer{base_buffer, checkpoint::Counters{10, 10, 10, 10}};
+      const auto typed = [&](std::string_view name) {
+        return "/bin/sh\0-c\0read -r line; printf %s \"$line\" > '"s + root + "/" + std::string{name} + "'; exec cat\0"s;
+      };
+
+      const auto first = typed("typed-first");
+      const auto second = typed("typed-second");
+      const auto direct = claude + '\0';
+
+      writer.append(checkpoint::WorkspaceRecord{5, "/tmp", "Agents", 6, "Shells"});
+      writer.append(checkpoint::PaneRecord{1, 5, 6, "/tmp", 80, 24, 3, first});
+      writer.append(checkpoint::PaneRecord{2, 5, 6, "/tmp", 80, 24, 3, second});
+      writer.append(checkpoint::PaneRecord{3, 5, 6, "/tmp", 80, 24, 1, direct});
+      RestoredSession live{memory};
+
+      live.restore(memory, writer.finish(), false);
+      check(live.model.panes.size() == 3);
+      LiveAgents agents;
+
+      for (const auto& [pane, session_id] : {std::pair{1, first_session}, std::pair{2, first_session}, std::pair{3, direct_session}}) {
+        auto agent = std::make_unique<Agent>(pane, live.model.panes.find(pane)->generation);
+
+        agent->provider = AgentProvider::claude;
+        agent->setSession(session_id);
+        check(agent->reportTitle("Fix the parser"));
+        agent->title_source = AgentTitleSource::manual;
+        agents.agents.push_back(std::move(agent));
+      }
+
+      std::size_t dropped = 0;
+
+      session = checkpoint::Snapshot<LiveAgents>::encode(live.model, live.layouts, agents, buffer, dropped);
+      check(dropped == 0);
+    }
+
+    for (const auto name : {"typed-first", "typed-second", "direct"}) {
+      std::filesystem::remove(root + "/" + name);
+    }
+
+    // Without resuming, the shells get no input and the agent starts as it was.
+    {
+      RestoredSession restored{memory};
+
+      restored.restore(memory, session, false);
+      check(written(root + "/direct", std::chrono::seconds{5}) == " ", "the agent program did not start as it was");
+      check(!std::filesystem::exists(root + "/typed-first") && !std::filesystem::exists(root + "/typed-second"), "a resume was typed although resuming is off");
+    }
+
+    std::filesystem::remove(root + "/direct");
+    RestoredSession restored{memory};
+
+    restored.restore(memory, session, true);
+    check(written(root + "/typed-first", std::chrono::seconds{5}) == "claude --resume " + std::string{first_session}, "the shell's agent was not resumed");
+    check(written(root + "/direct", std::chrono::seconds{5}) == "--resume " + std::string{direct_session} + " ", "the agent program was not relaunched on its session");
+    check(written(root + "/typed-second", std::chrono::milliseconds{500}).empty(), "one session was resumed twice");
+
+    // The next checkpoint keeps what the restored panes resume, before their agents report again.
+    std::vector<Byte> again(64 * 1024);
+    std::size_t dropped = 0;
+    std::vector<std::tuple<std::uint64_t, std::string, std::string>> kept;
+    checkpoint::Reader reader{checkpoint::Snapshot<SnapshotAgents>::encode(restored.model, restored.layouts, SnapshotAgents{}, again, dropped)};
+
+    reader.read([&]<typename Record>(const Record& record) {
+      if constexpr (std::same_as<Record, checkpoint::PaneRecord>) {
+        if (!record.session.empty()) {
+          kept.emplace_back(record.id, std::string{record.session}, std::string{record.title});
+        }
+      }
+    });
+
+    check(std::ranges::count(kept, std::tuple<std::uint64_t, std::string, std::string>{1, std::string{first_session}, "Fix the parser"}) == 1);
+    check(std::ranges::count(kept, std::tuple<std::uint64_t, std::string, std::string>{3, std::string{direct_session}, "Fix the parser"}) == 1);
+    std::filesystem::remove_all(root);
+  }
+
+  // A checkpoint write that fails, as on a full disk, is tried again without the session changing.
+  void testWriteFailureRetried() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& memory = adapter;
+    std::array<char, 64> directory{};
+
+    std::strcpy(directory.data(), "/tmp/telar-retry-test-XXXXXX");
+    check(::mkdtemp(directory.data()) != nullptr);
+    const std::string root{directory.data()};
+    const auto path = root + "/session.ckpt";
+    RestoredSession session{memory};
+    std::array<Byte, 4096> buffer;
+    SnapshotAgents agents;
+
+    session.restore(memory, checkpointFixture(buffer), false);
+    checkpoint::SessionStore<SnapshotAgents> store{memory};
+
+    store.configure(session.model, session.panes, session.layouts, checkpoint::Options{.path = path});
+    check(::mkdir(path.c_str(), 0700) == 0);
+    const auto start = std::chrono::steady_clock::now();
+    const auto settle = [&] {
+      pollfd done{.fd = store.descriptor(), .events = POLLIN, .revents = 0};
+
+      check(::poll(&done, 1, 5000) == 1);
+      store.collect();
+    };
+
+    // The first write, once the session settled, finds a directory where the file goes.
+    store.tick(session.model, session.layouts, agents, start);
+    store.tick(session.model, session.layouts, agents, start + std::chrono::seconds{10});
+    settle();
+    check(!std::filesystem::is_regular_file(path));
+    check(::rmdir(path.c_str()) == 0);
+
+    store.tick(session.model, session.layouts, agents, start + std::chrono::seconds{20});
+    settle();
+    check(std::filesystem::is_regular_file(path), "the failed checkpoint was never written again");
+    const auto bytes = fileText(path);
+    std::size_t panes = 0;
+    checkpoint::Reader reader{std::span{reinterpret_cast<const Byte*>(bytes.data()), bytes.size()}};
+
+    reader.read([&]<typename Record>(const Record&) {
+      panes += std::same_as<Record, checkpoint::PaneRecord>;
+    });
+
+    check(panes == 2);
+    std::filesystem::remove_all(root);
+  }
+
+  // A worktree record that later validation rejects is skipped; the rest of the session restores.
+  void testInvalidWorktreeSkipped() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& memory = adapter;
+    std::array<Byte, 4096> buffer;
+    checkpoint::Writer writer{buffer, checkpoint::Counters{10, 10, 10, 10}};
+    constexpr char arguments[] = "/bin/cat\0";
+
+    writer.append(checkpoint::WorkspaceRecord{5, "/tmp", "Kept", 6, "Shell"});
+    writer.append(checkpoint::PaneRecord{1, 5, 6, "/tmp", 80, 24, 1, {arguments, sizeof(arguments) - 1}});
+    writer.append(checkpoint::WorktreeRecord{9, 5, RegisterWorktree{.source = 5, .path = "/relative-worktree", .branch = "feature"}});
+    const auto encoded = writer.finish();
+    // The writer refuses a relative path, so the record is edited in place, as an older release or
+    // a damaged file could hold it.
+    std::vector<Byte> bytes{encoded.begin(), encoded.end()};
+    constexpr std::string_view absolute = "/relative-worktree";
+    const auto found = std::ranges::search(bytes, std::span{reinterpret_cast<const Byte*>(absolute.data()), absolute.size()});
+
+    check(!found.empty());
+    found.front() = 'x';
+    RestoredSession restored{memory};
+
+    restored.restore(memory, bytes, false);
+    check(restored.model.workspaces.find(5) != nullptr && restored.model.panes.size() == 1, "one bad worktree lost the session");
+    check(std::ranges::count(restored.model.worktrees.items(), nullptr) == std::ranges::ssize(restored.model.worktrees.items()), "the invalid worktree was restored");
+  }
+
+  // A workspace none of whose panes could start again is not restored empty, and the worktree it
+  // held forgets it.
+  void testEmptyWorkspacesDropped() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    ConcurrentMemory& memory = adapter;
+    std::array<Byte, 4096> buffer;
+    checkpoint::Writer writer{buffer, checkpoint::Counters{10, 10, 10, 10}};
+    constexpr char arguments[] = "/bin/cat\0";
+
+    writer.append(checkpoint::WorkspaceRecord{5, "/tmp", "Kept", 6, "Shell"});
+    writer.append(checkpoint::PaneRecord{1, 5, 6, "/tmp", 80, 24, 1, {arguments, sizeof(arguments) - 1}});
+    writer.append(checkpoint::WorkspaceRecord{7, "/telar-missing-workspace", "Gone", 8, "Shell"});
+    writer.append(checkpoint::PaneRecord{2, 7, 8, "/telar-missing-checkpoint-directory", 80, 24, 1, {arguments, sizeof(arguments) - 1}});
+    writer.append(checkpoint::WorktreeRecord{9, 7, RegisterWorktree{.source = 5, .path = "/tmp/telar-gone-worktree", .branch = "feature"}});
+    RestoredSession restored{memory};
+
+    restored.restore(memory, writer.finish(), false);
+    check(restored.model.workspaces.find(5) != nullptr);
+    check(restored.model.workspaces.find(7) == nullptr, "a workspace with no pane was restored");
+    const auto* worktree = restored.model.worktrees.find(9);
+
+    check(worktree != nullptr && !worktree->workspace, "the worktree still points at the dropped workspace");
+  }
+
   void testPersistence() {
     SystemAllocator system;
     MemoryAdapter adapter{system};
@@ -521,5 +786,9 @@ namespace {
   const telar::testing::Case case_checkpoint_validation{"persistence.checkpoint_validation", testCheckpointValidation};
   const telar::testing::Case case_worktree_restore{"persistence.worktree_restore", testWorktreeRestore};
   const telar::testing::Case case_corrupt_session_quarantined{"persistence.corrupt_session_quarantined", testCorruptSessionQuarantined};
+  const telar::testing::Case case_agent_resume{"persistence.agent_resume", testAgentResume};
+  const telar::testing::Case case_write_failure_retried{"persistence.write_failure_retried", testWriteFailureRetried};
+  const telar::testing::Case case_invalid_worktree_skipped{"persistence.invalid_worktree_skipped", testInvalidWorktreeSkipped};
+  const telar::testing::Case case_empty_workspaces_dropped{"persistence.empty_workspaces_dropped", testEmptyWorkspacesDropped};
 
 }

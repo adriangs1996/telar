@@ -69,7 +69,8 @@ return telar.config {
   api_version = 2,
   runtime = {
     history = history,
-    session = {persist=false},
+    session = {persist=false, path='state/s.bin'},
+    proxy = {ca_dir='keys'},
     engine = {command={'/bin/cat', ''}, timeout_ms=1000, idle_timeout_ms=10000},
     agents = {
       {name='custom-agent', process_names={'custom'}, display_name='Custom Agent', icon='é', attachments='ordered', command_tools={{tool='Shell',field='cmd'}}},
@@ -93,6 +94,9 @@ return telar.config {
       check(values.capture_output && values.persist_session && !values.resume_agents);
       check(values.shell_integration && !values.ssh_integration);
       check(std::string_view{values.history_path} == root + "/history.db" && !values.history_filters.secrets);
+      // The session and the proxy's keys go beside the configuration that named them, not under the runtime's cwd.
+      check(std::string_view{values.session_path} == root + "/state/s.bin");
+      check(std::string_view{values.proxy.authority_directory} == root + "/keys");
       check(!values.history_filters.allowsPane("hidden", "/tmp") && !values.history_filters.allowsPane("private", "/tmp"));
       check(values.history_filters.allowsPane("other-only", "/tmp"));
       check(values.engine.arguments.size() == 2 && values.engine.arguments[1].empty());
@@ -230,6 +234,91 @@ return {api_version=2,plugins=plugins,profiles={selected={plugins={{path='replac
     std::filesystem::remove_all(root);
   }
 
+  // A private directory, removed with it.
+  class Directory {
+  public:
+    Directory() {
+      std::array<char, 64> temporary{};
+
+      std::strcpy(temporary.data(), "/tmp/telar-config-test-XXXXXX");
+      check(::mkdtemp(temporary.data()) != nullptr);
+      path_ = std::filesystem::canonical(temporary.data()).string();
+    }
+
+    ~Directory() {
+      std::error_code ignored;
+
+      std::filesystem::remove_all(path_, ignored);
+    }
+
+    const std::string& path() const noexcept {
+      return path_;
+    }
+
+  private:
+    std::string path_;
+  };
+
+  // True when loading `options` threw; `persist_session` tells whether the values kept their defaults.
+  bool refused(const cli::ServerOptions& options, bool* defaults = nullptr) {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    Memory& memory = adapter;
+    config::RuntimeValues values{memory};
+    const config::RuntimeValues untouched{memory};
+
+    try {
+      config::Loader{memory, values}.load(options, ProcessEnvironment{});
+    } catch (const std::exception&) {
+      if (defaults != nullptr) {
+        *defaults = values.persist_session == untouched.persist_session && values.history_path.empty() && values.session_path.empty();
+      }
+
+      return true;
+    }
+
+    return false;
+  }
+
+  void testExplicitMissingFileFails() {
+    Directory directory;
+    const auto missing = directory.path() + "/missing.lua";
+    cli::ServerOptions options;
+
+    // A --config that names no file is a mistake, not a request for the defaults.
+    options.config = missing;
+    check(refused(options), "a missing --config started with the defaults");
+
+    // Without a configuration at the default place the defaults apply, unless a profile was asked for.
+    check(::setenv("TELAR_DEVELOPMENT_CONFIG", missing.c_str(), 1) == 0);
+    options.config = {};
+    check(!refused(options), "an absent default configuration was refused");
+    options.profile = "x";
+    check(refused(options), "a profile started with the defaults although no configuration names it");
+  }
+
+  void testRejectsOversizedOrIrregularFile() {
+    Directory directory;
+    const auto path = directory.path() + "/config.lua";
+    cli::ServerOptions options;
+    std::string source = "return {api_version=2, runtime={session={persist=false}}}\n--";
+
+    // Valid Lua one byte past the 1 MiB a configuration may hold.
+    source.resize(1024 * 1024 + 1, 'x');
+    writeConfig(path, source);
+    options.config = path;
+    bool defaults = false;
+
+    check(refused(options, &defaults) && defaults, "a configuration past 1 MiB was read");
+
+    // A directory given as the configuration.
+    options.config = directory.path();
+    defaults = false;
+    check(refused(options, &defaults) && defaults, "a directory was read as the configuration");
+  }
+
   const telar::testing::Case case_config{"config.config", testConfig};
+  const telar::testing::Case case_explicit_missing_file_fails{"config.explicit_missing_file_fails", testExplicitMissingFileFails};
+  const telar::testing::Case case_rejects_oversized_or_irregular_file{"config.rejects_oversized_or_irregular_file", testRejectsOversizedOrIrregularFile};
 
 }

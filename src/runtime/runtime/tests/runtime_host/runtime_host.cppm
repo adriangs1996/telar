@@ -28,7 +28,7 @@ using telar::testing::check;
 
 namespace {
 
-  // The child half: argv is `--runtime-host DIRECTORY GUARD [--session]`. The runtime listens on
+  // The child half: argv is `--runtime-host DIRECTORY GUARD [--session] [--resume] [--suggest ENGINE]`. The runtime listens on
   // DIRECTORY/runtime.sock and, with --session, keeps its session in DIRECTORY/session.ckpt. GUARD is
   // the read end of a pipe whose write end only the test holds: when the test ends, however it ends,
   // the pipe reads end of file and the runtime stops as on SIGTERM, so no runtime outlives its test,
@@ -43,7 +43,20 @@ namespace {
 
     const std::string directory{argv[2]};
     const int guard = std::atoi(argv[3]);
-    const bool session = argc > 4 && std::string_view{argv[4]} == "--session";
+    bool session = false;
+    bool resume = false;
+    std::string_view engine;
+
+    for (int index = 4; index < argc; ++index) {
+      const std::string_view flag{argv[index]};
+
+      session |= flag == "--session";
+      resume |= flag == "--resume";
+      if (flag == "--suggest" && index + 1 < argc) {
+        engine = argv[++index];
+      }
+    }
+
     const auto socket = directory + "/runtime.sock";
     const auto session_path = session ? directory + "/session.ckpt" : std::string{};
 
@@ -67,7 +80,9 @@ namespace {
     BackgroundService history{memory, ":memory:"};
     PathService paths{memory};
     EditorService editor{memory};
-    SuggestionService suggestions{memory, SuggestionOptions{}};
+    // The suggestion engine, when the test gives one, is the shell script it names.
+    const std::array<std::string_view, 2> engine_arguments{"/bin/sh", engine};
+    SuggestionService suggestions{memory, SuggestionOptions{.arguments = engine.empty() ? std::span<const std::string_view>{} : std::span<const std::string_view>{engine_arguments}}};
     BackgroundPool background{memory, history, paths, editor, suggestions};
     NativeEventLoop<ConcurrentMemory> poller{memory};
 
@@ -77,7 +92,7 @@ namespace {
     const RuntimeOptions options{
         .socket = socket,
         .cli_executable = cli.view(),
-        .session = {.path = session_path, .resume_agents = false},
+        .session = {.path = session_path, .resume_agents = resume},
     };
 
     Runtime runtime{memory, poller, background, options};
@@ -96,6 +111,10 @@ export {
   struct RuntimeHostOptions {
     // Keeps the session in the directory, so a restarted runtime restores it.
     bool session = false;
+    // A restored session resumes the agents its panes ran.
+    bool resume_agents = false;
+    // A shell script that speaks the suggestion engine's protocol; none leaves suggestions unavailable.
+    std::string suggestion_engine;
   };
 
   class RuntimeHost {
@@ -144,12 +163,27 @@ export {
       ::fcntl(guard[1], F_SETFD, FD_CLOEXEC);
       const telar::runtime::ExecutablePath executable;
       const auto descriptor = std::to_string(guard[0]);
-      const char* arguments[] = {executable.c_str(), "--runtime-host", directory_.c_str(), descriptor.c_str(), options_.session ? "--session" : nullptr, nullptr};
+      std::vector<const char*> arguments{executable.c_str(), "--runtime-host", directory_.c_str(), descriptor.c_str()};
+
+      if (options_.session) {
+        arguments.push_back("--session");
+      }
+
+      if (options_.resume_agents) {
+        arguments.push_back("--resume");
+      }
+
+      if (!options_.suggestion_engine.empty()) {
+        arguments.push_back("--suggest");
+        arguments.push_back(options_.suggestion_engine.c_str());
+      }
+
+      arguments.push_back(nullptr);
 
       child_ = ::fork();
       check(child_ >= 0);
       if (child_ == 0) {
-        ::execv(arguments[0], const_cast<char* const*>(arguments));
+        ::execv(arguments[0], const_cast<char* const*>(arguments.data()));
         ::_exit(127);
       }
 

@@ -52,23 +52,94 @@ def bridge_handshake(binary, socket, environment, schema):
             bridge.wait()
 
 
+def isolated_environment(root):
+    """The environment of a user whose home, XDG directories and temporary files all live in `root`."""
+    environment = {key: value for key, value in os.environ.items() if not key.startswith("TELAR_")}
+    environment.update({"HOME": str(root / "home"), "XDG_RUNTIME_DIR": str(root / "run"),
+                        "XDG_DATA_HOME": str(root / "data"), "XDG_CONFIG_HOME": str(root / "config"),
+                        "XDG_CACHE_HOME": str(root / "cache"), "XDG_STATE_HOME": str(root / "state"), "TMPDIR": str(root)})
+    (root / "home").mkdir(mode=0o700)
+    (root / "run").mkdir(mode=0o700)
+    return environment
+
+
+def server_invoker(binary, environment):
+    def invoke(*arguments, success=True):
+        result = subprocess.run([str(binary), "server", *map(str, arguments)], env=environment,
+                                capture_output=True, text=True, timeout=15)
+        if success and result.returncode != 0:
+            raise RuntimeError(f"CLI failed: {arguments}: {result.stderr}")
+        return result
+    return invoke
+
+
+def check_no_session(binary, checkpoint_probe):
+    """The user's opt-out of a saved session, by flag or by configuration, leaves no session on disk."""
+    with tempfile.TemporaryDirectory(prefix="telar-cli-", dir="/tmp") as directory:
+        root = Path(directory).resolve()
+        environment = isolated_environment(root)
+        invoke = server_invoker(binary, environment)
+        socket = root / "runtime.sock"
+        checkpoint = root / "data/telar/session.ckpt"
+
+        def probe(mode, *arguments):
+            invoke("--background", "--socket", socket, *arguments)
+            wait_socket(socket, True)
+            result = subprocess.run([str(checkpoint_probe), str(socket), mode, str(root / "expected")],
+                                    env=environment, capture_output=True, text=True, timeout=30)
+            if result.returncode:
+                raise RuntimeError(f"Checkpoint probe {mode} failed: {result.stderr.strip()}")
+            wait_socket(socket, False)
+
+        try:
+            probe("seed", "--no-config", "--no-session")
+            assert not checkpoint.exists(), "--no-session saved the session"
+
+            configuration = root / "config/telar/config.lua"
+            configuration.parent.mkdir(parents=True)
+            configuration.write_text("return {api_version=2, runtime={session={persist=false}}}\n")
+            probe("seed")
+            assert not checkpoint.exists(), "session.persist=false saved the session"
+
+            # A later start that does save sessions has nothing to restore.
+            probe("empty", "--no-config")
+        finally:
+            if socket.exists():
+                invoke("stop", "--socket", socket)
+
+
+def check_unwritable_shell_integration(binary, checkpoint_probe):
+    """A data home where the shell integration cannot be written still runs the runtime and its panes."""
+    if os.geteuid() == 0:
+        return
+    with tempfile.TemporaryDirectory(prefix="telar-cli-", dir="/tmp") as directory:
+        root = Path(directory).resolve()
+        environment = isolated_environment(root)
+        invoke = server_invoker(binary, environment)
+        socket = root / "runtime.sock"
+        scripts = root / "data/telar/shell-integration"
+        scripts.mkdir(parents=True, mode=0o700)
+        scripts.chmod(0o500)
+        try:
+            invoke("--background", "--socket", socket, "--no-config")
+            wait_socket(socket, True)
+            seeded = subprocess.run([str(checkpoint_probe), str(socket), "seed", str(root / "expected")],
+                                    env=environment, capture_output=True, text=True, timeout=30)
+            if seeded.returncode:
+                raise RuntimeError(f"Panes did not open: {seeded.stderr.strip()}")
+            wait_socket(socket, False)
+        finally:
+            scripts.chmod(0o700)
+            if socket.exists():
+                invoke("stop", "--socket", socket)
+
+
 def check_runtime(binary, checkpoint_probe):
     with tempfile.TemporaryDirectory(prefix="telar-cli-", dir="/tmp") as directory:
         root = Path(directory).resolve()
-        environment = {key: value for key, value in os.environ.items() if not key.startswith("TELAR_")}
-        environment.update({"HOME": str(root / "home"), "XDG_RUNTIME_DIR": str(root / "run"),
-                            "XDG_DATA_HOME": str(root / "data"), "XDG_CONFIG_HOME": str(root / "config"),
-                            "XDG_CACHE_HOME": str(root / "cache"), "XDG_STATE_HOME": str(root / "state"), "TMPDIR": str(root)})
-        (root / "home").mkdir(mode=0o700)
-        (root / "run").mkdir(mode=0o700)
+        environment = isolated_environment(root)
         socket = root / "runtime.sock"
-
-        def invoke(*arguments, success=True):
-            result = subprocess.run([str(binary), "server", *map(str, arguments)], env=environment,
-                                    capture_output=True, text=True, timeout=15)
-            if success and result.returncode != 0:
-                raise RuntimeError(f"CLI failed: {arguments}: {result.stderr}")
-            return result
+        invoke = server_invoker(binary, environment)
 
         def stop(path):
             result = invoke("stop", "--socket", path)

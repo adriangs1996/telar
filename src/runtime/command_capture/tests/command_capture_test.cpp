@@ -454,6 +454,55 @@ namespace {
     check(shown.back().command.ends_with("command65"));
   }
 
+  // An OSC longer than the 16 KiB a pane keeps is dropped whole: its kept prefix is never read.
+  void testOverlongOscIgnored() {
+    struct Completions {
+      void complete(CommandCompletion) {}
+    };
+
+    const auto token = ShellToken::generate();
+    const auto names = "\x1b]6973;telar=" + std::string{token.text()} + ";names=";
+    CommandZones zones{"/initial", token};
+    Completions sink;
+
+    zones.feed(byteSpan("\x1b]7;file://host/" + std::string(17 * 1024, 'a') + "\x1b\\"), {}, sink);
+    check(zones.directory() == "/initial", "a prefix of an overlong directory report was taken");
+
+    zones.feed(byteSpan(names + "ll gs\x07"), {}, sink);
+    check(zones.names() != nullptr && *zones.names() == "ll gs");
+
+    // Names that did not fit are unknown, not the ones that did.
+    zones.feed(byteSpan(names + std::string(17 * 1024, 'n') + "\x07"), {}, sink);
+    check(zones.names() == nullptr, "a prefix of an overlong names report was taken");
+
+    // The next report is read again.
+    zones.feed(byteSpan("\x1b]7;file://host/next\x07"), {}, sink);
+    check(zones.directory() == "/next");
+  }
+
+  // A prompt while a command runs, with no D mark, ends that command as interrupted.
+  void testPromptWhileRunningInterrupts() {
+    struct Completions {
+      std::vector<CommandCompletion> values;
+
+      void complete(CommandCompletion completion) {
+        values.push_back(completion);
+      }
+    };
+
+    CommandZones zones{"/"};
+    Completions sink;
+
+    zones.feed(byteSpan("\x1b]133;A\x07$ \x1b]133;B\x07"), {}, sink);
+    zones.input(byteSpan("sleep 100\r"));
+    zones.feed(byteSpan("\x1b]133;C\x07"), {}, sink);
+    check(zones.running() && sink.values.empty());
+
+    zones.feed(byteSpan("^C\r\n\x1b]133;A\x07"), {300, 300}, sink);
+    check(sink.values.size() == 1 && sink.values[0].status == HistoryStatus::interrupted && !sink.values[0].exit_code);
+    check(!zones.running());
+  }
+
   const telar::testing::Case case_signed_marks{"command_capture.signed_marks", testSignedMarks};
   const telar::testing::Case case_nested_marks{"command_capture.nested_marks", testNestedMarks};
   const telar::testing::Case case_input_boundaries{"command_capture.input_boundaries", testInputBoundaries};
@@ -468,5 +517,7 @@ namespace {
   const telar::testing::Case case_osc_fragments{"command_capture.osc_fragments", testOscFragments};
   const telar::testing::Case case_private_report_without_token_ignored{"command_capture.private_report_without_token_ignored", testPrivateReportWithoutToken};
   const telar::testing::Case case_block_ring_keeps_newest{"command_capture.block_ring_keeps_newest", testBlockRingKeepsNewest};
+  const telar::testing::Case case_overlong_osc_ignored{"command_capture.overlong_osc_ignored", testOverlongOscIgnored};
+  const telar::testing::Case case_prompt_while_running_interrupts{"command_capture.prompt_while_running_interrupts", testPromptWhileRunningInterrupts};
 
 }

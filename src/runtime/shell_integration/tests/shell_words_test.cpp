@@ -1,6 +1,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <future>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -63,7 +64,42 @@ namespace {
     check(!ShellToken::parse(std::string(31, 'a') + "\x1b"), "a control byte was accepted");
   }
 
+  // A FIFO named like a makefile, as a cloned repository can hold, and a package.json past the
+  // size the reader takes: neither blocks the completion worker nor is read.
+  void testIgnoresSpecialAndOversizedFiles() {
+    std::array<char, 64> directory{};
+
+    std::strcpy(directory.data(), "/tmp/telar-word-files-XXXXXX");
+    check(::mkdtemp(directory.data()) != nullptr);
+    const std::string root{directory.data()};
+    const auto observe = [&](CompletionProvider provider) {
+      WordReader reader;
+      WordRequest request{.client = 1, .request = 2, .provider = provider, .prefix = {}, .directory = {}, .home = {}, .path = {}};
+
+      request.directory.assign(root);
+      auto pending = std::async(std::launch::async, [&] {
+        return reader.observe(request);
+      });
+
+      check(pending.wait_for(std::chrono::seconds{5}) == std::future_status::ready, "reading the directory's files blocked");
+      return pending.get();
+    };
+
+    check(::mkfifo((root + "/Makefile").c_str(), 0600) == 0);
+    check(observe(CompletionProvider::make_target).words.empty());
+
+    const std::string scripts = R"({"scripts": {"build": "make"}})";
+
+    std::ofstream{root + "/package.json"} << scripts;
+    check(observe(CompletionProvider::package_script).words.size() == 1);
+
+    std::ofstream{root + "/package.json"} << scripts << std::string(WordReader::maximum_file, ' ');
+    check(observe(CompletionProvider::package_script).words.empty(), "a package.json past the limit was read");
+    std::filesystem::remove_all(root);
+  }
+
   const telar::testing::Case case_reply_cap{"shell_words.reply_cap", testReplyCap};
   const telar::testing::Case case_token_parse{"shell_words.token_parse", testTokenParse};
+  const telar::testing::Case case_ignores_special_and_oversized_files{"shell_words.ignores_special_and_oversized_files", testIgnoresSpecialAndOversizedFiles};
 
 }
