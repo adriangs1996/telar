@@ -339,8 +339,8 @@ def check_domain_targets(layers, files, read):
 
 TEST_FILE_RE = re.compile(r'_test\.(cpp|mm)$')
 TEST_UNIT_SUFFIXES = ('.cpp', '.cppm', '.mm')
-# The processes whose tests live with their domains; the GUI's join once its tests have moved.
-DOMAIN_TESTS = ('runtime', 'cli')
+# The processes whose tests live with their domains.
+DOMAIN_TESTS = ('runtime', 'cli', 'gui')
 # Every test program links the harness, whatever its folder.
 HARNESS = 'telar.testing'
 # src/gui/ui is no domain: its folders are one QML module, and a UI test is placed by the
@@ -402,6 +402,12 @@ def check_test_placement(layers, library_layers, files, read, ui_rules=()):
     def libraries(library):
         return reach(lambda name: library_layers.get(name, []), library) | {library}
 
+    fixtures = {}
+    for path in sorted(name for name in files if name.startswith('src/') and '/tests/' in name and name.endswith('.cppm')):
+        text = COMMENTS_RE.sub('', read(path))
+        if declaration := DECLARATION_RE.search(text):
+            fixtures[declaration[2]] = imports_of('', text)
+
     errors, count = [], 0
     for path in sorted(name for name in files if name.endswith(TEST_UNIT_SUFFIXES)):
         if '/tests/' not in path:
@@ -418,7 +424,10 @@ def check_test_placement(layers, library_layers, files, read, ui_rules=()):
             if process[1] == 'gui' and TEST_FILE_RE.search(path):
                 text = COMMENTS_RE.sub('', read(path))
                 checked = ui_folder(text)
-                gui = [name for name in imports_of('', text) if name.startswith('telar.gui.')]
+                # A shared fixture of src/gui/tests counts by what it imports itself.
+                gui = [name for imported in imports_of('', text)
+                       for name in (fixtures.get(imported, ()) if imported.startswith('telar.gui.tests.') else (imported,))
+                       if name.startswith('telar.gui.') and not name.startswith('telar.gui.tests.')]
                 ui_imports = all(name.startswith(tuple(ui_rules)) for name in gui)
                 if owner is not None and owner.split('/')[0] == 'ui':
                     count += 1
@@ -469,6 +478,9 @@ def check_test_placement(layers, library_layers, files, read, ui_rules=()):
                 if name not in allowed:
                     errors.append(f'{path} imports the {name} domain, which {owner} does not build on: '
                                   f'as an integration test it belongs in src/{process[1]}/tests/')
+        elif not TEST_FILE_RE.search(path):
+            # Support shared by the process's integration tests, placed by the tests that use it.
+            continue
         elif not reached:
             errors.append(f'{path} imports no domain of {process[1]}: it belongs with the library it checks')
         else:

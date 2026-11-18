@@ -520,6 +520,13 @@ class UiPlacement(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, r'it belongs in src/gui/ui/app/tests/'):
             placed_gui({'src/gui/tests/window_test.cpp': ui_unit(['ui/app/window.hpp'], 'telar.gui.application')})
 
+    def test_a_shared_fixture_counts_by_what_it_imports(self):
+        fixture = {'src/gui/tests/cards/cards.cppm': 'export module telar.gui.tests.cards;\nimport telar.gui.features.history.cards;\n'}
+        self.assertEqual(placed_gui({**fixture, 'src/gui/tests/window_test.cpp': ui_unit(['ui/app/window.hpp'], 'telar.gui.tests.cards')}), 2)
+        with self.assertRaisesRegex(RuntimeError, r'it belongs in src/gui/ui/app/tests/'):
+            placed_gui({'src/gui/tests/plain/plain.cppm': 'export module telar.gui.tests.plain;\nimport telar.gui.foundation.core;\n',
+                        'src/gui/tests/window_test.cpp': ui_unit(['ui/app/window.hpp'], 'telar.gui.tests.plain')})
+
     def test_a_domain_test_includes_no_ui_header(self):
         self.assertEqual(placed_gui({'src/gui/features/history/tests/cards_test.cpp': test_unit('telar.gui.features.history.cards')}), 1)
         with self.assertRaisesRegex(RuntimeError, r'includes headers of ui/, which no domain builds on'):
@@ -563,11 +570,11 @@ class TestPlacement(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'src/runtime/proxy/relay_test.cpp is a test outside a tests/ folder'):
             placed({'src/runtime/proxy/relay_test.cpp': test_unit('telar.runtime.proxy.relay')})
 
-    def test_leaves_the_gui_and_tbc_to_their_own_layout(self):
-        self.assertEqual(placed({
-            'src/gui/tests/view_test.cpp': test_unit('telar.gui.core.metrics'),
-            'lib/tbc/tests/spec/places.cpp': 'import telar.runtime.proxy.relay;\n',
-        }), 0)
+    def test_leaves_tbc_to_its_own_layout(self):
+        self.assertEqual(placed({'lib/tbc/tests/spec/places.cpp': 'import telar.runtime.proxy.relay;\n'}), 0)
+
+    def test_support_of_the_process_tests_is_no_test(self):
+        self.assertEqual(placed({'src/runtime/tests/peer/peer.cppm': 'export module telar.runtime.tests.peer;\n'}), 1)
 
 
 if __name__ == '__main__':
