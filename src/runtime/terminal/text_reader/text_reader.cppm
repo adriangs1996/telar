@@ -131,7 +131,9 @@ export {
 
     class CellProjection {
     public:
-      void updateColors(GhosttyTerminal terminal, GhosttyRenderState render_state);
+      // Reads the terminal's colors; true when the default colors changed, which ghostty does
+      // not count as damage to the rows already drawn with them.
+      bool updateColors(GhosttyTerminal terminal, GhosttyRenderState render_state);
       void copyRow(GhosttyRenderStateRowIterator row, GhosttyRenderStateRowCells cells, std::span<ScreenCell> destination) const;
 
     private:

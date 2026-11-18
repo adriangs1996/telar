@@ -778,10 +778,11 @@ namespace telar::runtime {
     auto iterator = row_iterator_.get();
 
     checkGhostty(ghostty_render_state_get(render_state_.get(), GHOSTTY_RENDER_STATE_DATA_ROW_ITERATOR, &iterator));
-    projection_.updateColors(terminal_.get(), render_state_.get());
+    const bool recolored = projection_.updateColors(terminal_.get(), render_state_.get());
 
     ++screen.revision;
-    const bool all_rows = force_ || damage == GHOSTTY_RENDER_STATE_DIRTY_FULL;
+    // Rows drawn with the previous default colors are projected again, with every other row.
+    const bool all_rows = force_ || recolored || damage == GHOSTTY_RENDER_STATE_DIRTY_FULL;
     bool rebuild_links = all_rows;
     bool metadata_changed = all_rows;
     std::uint16_t row = 0;
