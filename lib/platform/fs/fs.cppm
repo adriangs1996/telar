@@ -239,5 +239,10 @@ export {
 
     int writePrivateFile(int directory, std::string_view name, std::span<const std::uint8_t> bytes, PrivateFileMode mode) noexcept;
 
+    // Opens the lock file `name` in `directory` read-write, creating it 0600 when absent:
+    // every process that creates the same name at once gets it. An invalid descriptor, with
+    // errno set, when it cannot be opened.
+    FileDescriptor openLockFile(int directory, const char* name) noexcept;
+
   }
 }

@@ -41,7 +41,7 @@ namespace telar::runtime::cli::machine {
     auto parent = openPrivateParent(absolute.string());
     const auto name = absolute.filename().string();
     const auto lock_name = name + ".lock";
-    FileDescriptor lock{::openat(parent.get(), lock_name.c_str(), O_RDWR | O_CREAT | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC, 0600)};
+    const auto lock = openLockFile(parent.get(), lock_name.c_str());
     struct stat state{};
     if (!lock || ::fstat(lock.get(), &state) != 0 || !S_ISREG(state.st_mode) || state.st_uid != ::geteuid() || (state.st_mode & 0077) != 0) {
       throw CommandError{"InsecureFile"};
