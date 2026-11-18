@@ -185,7 +185,11 @@ namespace {
       std::string model;
 
       for (std::size_t step = 0; step < operations; ++step) {
-        switch (random() % 10) {
+        const auto position = [&](std::size_t bound) {
+          return static_cast<std::size_t>(random() % (bound + 1));
+        };
+
+        switch (random() % 18) {
         case 0:
         case 1:
         case 2: {
@@ -231,6 +235,89 @@ namespace {
           mine = std::move(moved);
           break;
         }
+        case 9: {
+          const auto at = position(model.size());
+          const auto piece = text(random);
+
+          mine.insert(at, piece);
+          model.insert(at, piece);
+          break;
+        }
+        case 10: {
+          const auto at = position(model.size());
+          const auto count = position(model.size() - at + 4);
+
+          mine.remove(at, count);
+          model.erase(at, count);
+          break;
+        }
+        case 11: {
+          const auto at = position(model.size());
+          const auto count = position(model.size() - at);
+          const auto piece = text(random);
+
+          mine.replace(at, count, piece);
+          model.replace(at, count, piece);
+          break;
+        }
+        case 12:
+          // Text that is a part of the String itself, replacing another part of it.
+          if (!model.empty()) {
+            const auto from = position(model.size() - 1);
+            const auto length = position(model.size() - from);
+            const auto at = position(model.size());
+            const auto count = position(model.size() - at);
+            const auto part = model.substr(from, length);
+
+            mine.replace(at, count, mine.view().substr(from, length));
+            model.replace(at, count, part);
+          }
+
+          break;
+        case 13: {
+          const auto count = position(model.size() + 30);
+
+          mine.resize(count, 'r');
+          model.resize(count, 'r');
+          break;
+        }
+        case 14: {
+          const auto popped = mine.pop();
+
+          check(popped.hasValue() == !model.empty());
+          if (!model.empty()) {
+            check(popped.get() == model.back());
+            model.pop_back();
+          }
+
+          break;
+        }
+        case 15:
+          if (!model.empty()) {
+            const auto from = position(model.size() - 1);
+            const auto part = model.substr(from);
+
+            mine.assign(mine.view().substr(from));
+            model.assign(part);
+          } else {
+            const auto piece = text(random);
+
+            mine.assign(piece);
+            model.assign(piece);
+          }
+
+          break;
+        case 16:
+          if (!model.empty()) {
+            const auto at = position(model.size() - 1);
+
+            mine.atMut(at) = 'z';
+            model[at] = 'z';
+            mine.truncate(at + 1);
+            model.resize(at + 1);
+          }
+
+          break;
         default:
           if (random() % 16 == 0) {
             mine.clear();

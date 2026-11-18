@@ -176,9 +176,9 @@ namespace telar::ds {
   // A growable sequence in memory from an allocator, as Rust's `Vec<T>`. Copying allocates, so it is
   // explicit (`clone`); moving hands the storage over, or moves the values when the destination's
   // allocator is another one. Values relocate without throwing, as Rust moves them, and as bytes
-  // where they can.
+  // where they can. The value type may be incomplete where a Vec of it is declared, as a tree's node
+  // holds a Vec of nodes; it is checked where a Vec is destroyed.
   template <typename Value, Allocator Memory>
-    requires std::is_nothrow_move_constructible_v<Value>
   class TBC_GENERIC Vec {
   public:
     explicit Vec(tbc::view<Memory&, tbc::lt::a> memory) noexcept
@@ -219,6 +219,7 @@ namespace telar::ds {
     }
 
     ~Vec() {
+      static_assert(std::is_nothrow_move_constructible_v<Value>, "a Vec relocates its values without throwing, as Rust moves them");
       release();
     }
 
@@ -722,12 +723,114 @@ namespace telar::ds {
 
     // Empties it and keeps its storage.
     void clear() noexcept {
-      if (onHeap()) {
-        representation_.heap.size = 0;
-        representation_.heap.data[0] = '\0';
-      } else {
-        setInlineSize(0);
+      setSize(0);
+    }
+
+    // The bytes to write in place, `size()` of them followed by the NUL, which stays.
+    [[nodiscard]] char* dataMut() noexcept {
+      return onHeap() ? representation_.heap.data : representation_.bytes;
+    }
+
+    [[nodiscard]] char operator[](std::size_t index) const noexcept {
+      TELAR_ASSERT(index < size());
+      return data()[index];
+    }
+
+    [[nodiscard]] char& atMut(std::size_t index) noexcept {
+      TELAR_ASSERT(index < size());
+      return dataMut()[index];
+    }
+
+    // Shortens it to `count` bytes and keeps its storage; a longer count leaves it as it is.
+    void truncate(std::size_t count) noexcept {
+      if (count < size()) {
+        setSize(count);
       }
+    }
+
+    // `count` bytes: the first ones kept, any new ones `fill`.
+    void resize(std::size_t count, char fill = '\0') {
+      const auto size = this->size();
+      if (count <= size) {
+        setSize(count);
+        return;
+      }
+
+      reserve(count);
+      std::memset(dataMut() + size, fill, count - size);
+      setSize(count);
+    }
+
+    // The last byte, removed; none when it is empty.
+    [[nodiscard]] Option<char> pop() noexcept {
+      const auto size = this->size();
+      if (size == 0) {
+        return none;
+      }
+
+      const char last = data()[size - 1];
+
+      setSize(size - 1);
+      return last;
+    }
+
+    // Its bytes become the text's, which may be a part of this String.
+    void assign(std::string_view text) {
+      replace(0, size(), text);
+    }
+
+    void insert(std::size_t index, std::string_view text) {
+      replace(index, 0, text);
+    }
+
+    // Removes `count` bytes from `index`, or up to the end when fewer follow, as std::string::erase.
+    void remove(std::size_t index, std::size_t count = std::string_view::npos) noexcept {
+      TELAR_ASSERT(index <= size());
+      count = std::min(count, size() - index);
+
+      auto* bytes = dataMut();
+      const auto size = this->size();
+
+      std::memmove(bytes + index, bytes + index + count, size - index - count);
+      setSize(size - count);
+    }
+
+    // The `count` bytes from `index`, or those up to the end, become the text, which may be a part of
+    // this String: it is read before any byte it lies in is written.
+    void replace(std::size_t index, std::size_t count, std::string_view text) {
+      const auto size = this->size();
+      TELAR_ASSERT(index <= size);
+      count = std::min(count, size - index);
+      if (text.size() > maximum_capacity - (size - count)) {
+        throw std::bad_array_new_length{};
+      }
+
+      const auto result = size - count + text.size();
+      const auto* own = data();
+      const bool aliases = text.data() >= own && text.data() <= own + capacity();
+      if (result > capacity() || aliases) {
+        // New storage, so the text and the old bytes stay intact while they are copied.
+        const auto capacity = roundedCapacity(std::max(result, size));
+        auto* storage = static_cast<char*>(allocateBytes(*memory_, capacity + 1, 1));
+
+        std::memcpy(storage, own, index);
+        std::memcpy(storage + index, text.data(), text.size());
+        std::memcpy(storage + index + text.size(), own + index + count, size - index - count);
+        storage[result] = '\0';
+        release();
+        representation_.heap = {
+            .data = tbc::raw(storage),
+            .size = result,
+            .capacity = capacity | heap_flag,
+        };
+        return;
+      }
+
+      auto* bytes = dataMut();
+
+      std::memmove(bytes + index + text.size(), bytes + index + count, size - index - count);
+      std::memcpy(bytes + index, text.data(), text.size());
+      setSize(result);
     }
 
     friend bool operator==(const String& left, const String& right) noexcept {
@@ -779,6 +882,16 @@ namespace telar::ds {
     void setInlineSize(std::size_t size) noexcept {
       representation_.bytes[size] = '\0';
       representation_.bytes[inline_capacity] = static_cast<char>(inline_capacity - size);
+    }
+
+    // Sets the size within the current storage, followed by its NUL.
+    void setSize(std::size_t size) noexcept {
+      if (onHeap()) {
+        representation_.heap.size = size;
+        representation_.heap.data[size] = '\0';
+      } else {
+        setInlineSize(size);
+      }
     }
 
     // A capacity of at least `count` bytes whose NUL ends a whole 16-byte block, as the allocator
