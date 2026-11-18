@@ -1,7 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Controls.Basic
 import Telar.Gui
 
 // One indicator for a summary group's metrics and meters: a ring with an arc
