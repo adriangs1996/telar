@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""`telar integration` and `telar plugin trust` through the executable, in private homes:
+"""`telar integration`, `telar plugin trust` and `telar proxy trust status` through the executable, in private homes:
 the files they write, keep and remove, and the output other telar commands parse."""
 import argparse
 import json
@@ -187,13 +187,27 @@ def plugin_trust(home):
     assert trusted(home) == {}
 
 
+def proxy_trust_status(home):
+    """`proxy trust status` reports an unreadable trust record as a failure, never as a
+    store without telar's CA (an install would then add a second one). Status only: an
+    install would change the system trust store."""
+    authority = home.root / 'ca'
+    home.run('proxy', 'trust', 'status', '--ca-dir', authority)
+    authority.mkdir(mode=0o700)
+    record = authority / 'trust-install.json'
+    record.write_text('{broken')
+    record.chmod(0o600)
+    home.run('proxy', 'trust', 'status', '--ca-dir', authority, status=1)
+    home.run('proxy', 'trust', 'status', '--ca-dir', 'relative/ca', status=1)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--telar', type=Path, required=True)
     parser.add_argument('--scratch', type=Path)
     args = parser.parse_args()
     count = 0
-    for check in (install_output, unparseable_settings, skills, extensions, plugin_trust, linked_settings, legacy_settings):
+    for check in (install_output, unparseable_settings, skills, extensions, plugin_trust, linked_settings, legacy_settings, proxy_trust_status):
         with tempfile.TemporaryDirectory(prefix='integration-', dir=args.scratch) as directory:
             home = Home(args.telar.resolve(), Path(directory).resolve())
             check(home)
