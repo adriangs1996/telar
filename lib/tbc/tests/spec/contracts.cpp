@@ -564,6 +564,43 @@ contracts::maybe_text anonymousUnionEscape() {
 
 // END CASE
 
+// CASE: contract.array_member_copy
+// PAIR: contract.array_member
+// SOURCE: lib/base/include/telar_base/ds/values.hpp :: Array
+// STATUS: implemented
+// CONTRACT: A copy of a record whose member is a C array holds what the copied array holds, element by element.
+// SCENARIO: The copy keeps views of the caller's text, which outlives it; accept.
+namespace contracts {
+  struct view_pair {
+    std::string_view values[2];
+  };
+}
+
+contracts::view_pair arrayMemberCopy(std::string_view first, std::string_view second) {
+  const contracts::view_pair original{{first, second}};
+  const contracts::view_pair copy = original;
+
+  return copy;
+}
+
+// END CASE
+
+// CASE: contract.array_member_escape
+// PAIR: contract.array_member
+// SOURCE: lib/base/include/telar_base/ds/values.hpp :: Array
+// STATUS: implemented
+// CONTRACT: A copy of a record whose member is a C array holds what the copied array holds, element by element.
+// SCENARIO: The copy keeps a view of a local string that dies when the function returns; reject.
+contracts::view_pair arrayMemberEscape() {
+  const std::string local = "local";
+  const contracts::view_pair original{{local, local}};
+  const contracts::view_pair copy = original;
+
+  return copy; // expected-error [tbc-dangling-borrow]
+}
+
+// END CASE
+
 // CASE: contract.deduced_result
 // PAIR: contract.deduced_result
 // SOURCE: src/gui/ui/foundation/config/configuration_source.cpp :: ConfigurationSource::reload

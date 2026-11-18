@@ -32,12 +32,12 @@ comparison. Notes are permitted but their wording and locations are not yet part
 of the assertion. There is no message-substring match that can accidentally
 accept a different rule's warning.
 
-The corpus contains **391 cases in 179 groups**: 198 accepted and 193 rejected
-examples. There are 340 implemented regressions and 51 explicitly pending
+The corpus contains **393 cases in 180 groups**: 199 accepted and 194 rejected
+examples. There are 342 implemented regressions and 51 explicitly pending
 requirements. The original 58 cases are supplemented by 74 inference cases,
 35 pointer and lambda cases, 45 standard-library cases, 20 third-party library
 cases, 44 storage-place cases, 2 system-macro cases, 2 elided-contract cases,
-4 retention-path cases, 3 static-result cases, 2 opaque-constructor cases, 16 elision, self-field and labeled-field cases, 2 deduced-result cases, 63 declaration cases, 10 cross-unit cases, and 11 constness cases.
+4 retention-path cases, 3 static-result cases, 2 opaque-constructor cases, 18 elision, self-field and labeled-field cases, 2 deduced-result cases, 63 declaration cases, 10 cross-unit cases, and 11 constness cases.
 A passing pending positive case does not establish support for its contract.
 
 ## Source inventory

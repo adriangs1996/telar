@@ -1055,6 +1055,11 @@ namespace tbc_lint {
         return clean(bound->getSubExpr());
       }
 
+      // An opaque value stands for the expression it was bound from, as in an array copy's loop.
+      if (const auto* opaque = llvm::dyn_cast<clang::OpaqueValueExpr>(expression); opaque != nullptr && opaque->getSourceExpr() != nullptr) {
+        return clean(opaque->getSourceExpr());
+      }
+
       // A constant-evaluated expression borrows exactly what the expression it wraps borrows.
       if (const auto* constant = llvm::dyn_cast<clang::ConstantExpr>(expression)) {
         return clean(constant->getSubExpr());
@@ -3970,6 +3975,12 @@ namespace tbc_lint {
 
         if (const auto* temporary = llvm::dyn_cast<clang::MaterializeTemporaryExpr>(expression)) {
           return value(temporary->getSubExpr(), current);
+        }
+
+        // A C array member copied element by element, as an implicit copy constructor copies it, holds
+        // what the array it copies holds.
+        if (const auto* loop = llvm::dyn_cast<clang::ArrayInitLoopExpr>(expression); loop != nullptr && loop->getCommonExpr()->getSourceExpr() != nullptr) {
+          return value(loop->getCommonExpr()->getSourceExpr(), current);
         }
 
         if (llvm::isa<clang::ImplicitValueInitExpr>(expression) || llvm::isa<clang::CXXScalarValueInitExpr>(expression)) {
