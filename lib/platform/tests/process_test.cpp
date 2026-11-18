@@ -52,6 +52,50 @@ namespace {
     }
   }
 
+  // Input and output are pumped together: a program that echoes a large input as it reads
+  // it finishes, instead of both ends blocking on full pipes.
+  void testLargeInputDoesNotDeadlock() {
+    std::atomic<bool> finished{false};
+    std::thread watchdog{[&] {
+      for (int tick = 0; tick < 300 && !finished.load(); ++tick) {
+        std::this_thread::sleep_for(std::chrono::milliseconds{100});
+      }
+
+      check(finished.load(), "a large input to cat did not finish");
+    }};
+
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    Memory& memory = adapter;
+    std::string input(std::size_t{4} << 20, '\0');
+
+    for (std::size_t index = 0; index < input.size(); ++index) {
+      input[index] = static_cast<char>(index * 31 % 251);
+    }
+
+    const std::array<std::string_view, 1> arguments{"/bin/cat"};
+    const std::array<std::string_view, 1> pieces{input};
+    Command command{memory, Launch{.arguments = arguments}, CommandPurpose::configured_helper};
+    CommandOutput<Memory> process{memory, 0};
+    std::string output;
+    const auto status = process.streamWithInput(
+        command,
+        std::chrono::steady_clock::now() + std::chrono::seconds{5},
+        pieces,
+        [&](std::span<const Byte> bytes) {
+          output.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+          return true;
+        },
+        [](std::span<const Byte>) {}
+    );
+
+    finished = true;
+    watchdog.join();
+    check(status == 0);
+    check(output == input);
+  }
+
   const telar::testing::Case case_administration_environment{"process.administration_command_drops_pane_identity", testAdministrationCommandDropsPaneIdentity};
+  const telar::testing::Case case_large_input{"process.large_input_does_not_deadlock", testLargeInputDoesNotDeadlock};
 
 }
