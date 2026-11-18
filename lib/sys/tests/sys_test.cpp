@@ -128,6 +128,9 @@ namespace {
     expect(same(telar::sys::errorName(EIO), "InputOutput") && same(telar::sys::errorName(EEXIST), "PathAlreadyExists"), "errorName files");
     expect(same(telar::sys::errorName(ENOSPC), "NoSpaceLeft") && same(telar::sys::errorName(EINVAL), "InvalidArgument"), "errorName space");
     expect(same(telar::sys::errorName(ENOMEM), "SystemResources") && same(telar::sys::errorName(EBADF), "InvalidDescriptor"), "errorName resources");
+    expect(same(telar::sys::errorName(ENOENT), "FileNotFound") && same(telar::sys::errorName(ECONNREFUSED), "ConnectionRefused"), "errorName missing");
+    expect(same(telar::sys::errorName(ENOTDIR), "NotDir") && same(telar::sys::errorName(ENAMETOOLONG), "NameTooLong"), "errorName paths");
+    expect(same(telar::sys::errorName(ELOOP), "SymLinkLoop") && same(telar::sys::errorName(ENOBUFS), "SystemResources"), "errorName links");
     expect(same(telar::sys::errorName(EISDIR), "Unexpected") && same(telar::sys::errorName(EISDIR, "Spawn"), "Spawn"), "errorName fallback");
   }
 
