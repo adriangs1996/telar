@@ -24,6 +24,7 @@ import telar.runtime.terminal.control;
 import telar.runtime.runtime.tests.client_peer;
 import telar.runtime.graphics.synchronizer;
 import telar.runtime.terminal.text_reader;
+import telar.wire.content;
 import telar.wire.graphics;
 import telar.wire.history;
 import telar.wire.vocabulary;
@@ -32,6 +33,7 @@ import telar.runtime.graphics.pane_media;
 import telar.runtime.model.client_layouts;
 import telar.runtime.model.slot_store;
 import telar.runtime.terminal.graphics_storage;
+import telar.runtime.transport.connection;
 
 namespace {
 
@@ -418,6 +420,197 @@ namespace {
     check(first_client.used() == 0 && second_client.used() == 0);
   }
 
+  // One pane's media and the synchronizer that mirrors its images to one client over the
+  // byte transport.
+  struct SyncedPane {
+    using Message = std::variant<GraphicsSnapshot, GraphicsImage, GraphicsImageChunk, GraphicsPlacementMessage, GraphicsDeletePlacement, GraphicsDeleteImage>;
+
+    RuntimeModel model;
+    ClientStore clients;
+    ClientPeer peer;
+    std::shared_ptr<PaneMedia> media;
+    GraphicsSynchronizer sync;
+
+    SyncedPane(ConcurrentMemory& memory, MediaBudget* budget = nullptr)
+        : model{memory},
+          clients{memory},
+          peer{memory, model, clients, ClientRole::control},
+          media{std::allocate_shared<PaneMedia>(AllocatorRef<PaneMedia, ConcurrentMemory>{memory}, memory, budget != nullptr ? *budget : model.media_budget, model.graphics_limits, TerminalSize{80, 24, 8, 16})},
+          sync{peer.session().graphics_credit, 42, media} {
+      sync.configure(false);
+    }
+
+    Connection<ConcurrentMemory>& connection() {
+      return peer.session().connection;
+    }
+
+    void feed(std::string_view text) {
+      media->output({reinterpret_cast<const Byte*>(text.data()), text.size()});
+      check(media->seal() && !media->process());
+      media->complete();
+    }
+
+    // Publishes once, running the pane's pending batch when the synchronizer waits on it.
+    bool publish() {
+      auto& storage = media->terminal()->graphics;
+      const bool pending = sync.publish(connection(), storage);
+
+      if (!pending && media->seal()) {
+        check(!media->process());
+        media->complete();
+        return sync.publish(connection(), storage);
+      }
+
+      return pending;
+    }
+
+    // Publishes until the client is up to date, and returns every graphics message it
+    // received, up to a marker sent after the last. Chunk bytes are not kept.
+    std::vector<Message> synchronize() {
+      std::vector<Message> received;
+
+      while (publish()) {
+      }
+
+      connection().send(PaneDocument{.pane_id = 42});
+      while (true) {
+        auto message = peer.receiveAny<GraphicsSnapshot, GraphicsImage, GraphicsImageChunk, GraphicsPlacementMessage, GraphicsDeletePlacement, GraphicsDeleteImage, PaneDocument>();
+        if (std::holds_alternative<PaneDocument>(message)) {
+          return received;
+        }
+
+        std::visit([&](const auto& value) {
+          if constexpr (!std::is_same_v<std::decay_t<decltype(value)>, PaneDocument>) {
+            received.emplace_back(value);
+          }
+        },
+            message);
+      }
+    }
+  };
+
+  template <typename Kind>
+  std::vector<Kind> messages(const std::vector<SyncedPane::Message>& received) {
+    std::vector<Kind> result;
+
+    for (const auto& message : received) {
+      if (const auto* value = std::get_if<Kind>(&message)) {
+        result.push_back(*value);
+      }
+    }
+
+    return result;
+  }
+
+  // A client that stops reading stops receiving graphics: past the transport's queue
+  // limit the synchronizer queues nothing more, whatever the pane draws, and once the
+  // client reads again it receives every image and placement.
+  void testQueueBackpressure(ConcurrentMemory& memory) {
+    SyncedPane pane{memory};
+    auto& connection = pane.connection();
+    const std::vector<Byte> filler(PaneDocument::chunk_bytes, 'x');
+    constexpr std::size_t unread = 48;
+
+    for (std::size_t index = 0; index < unread; ++index) {
+      connection.send(PaneDocument{.pane_id = 42, .size = PaneDocument::chunk_bytes, .bytes = filler});
+    }
+
+    const auto queued = connection.queuedBytes();
+
+    pane.feed("\x1b_Ga=T,f=32,s=1,v=1,i=1,p=1,q=2;/wAA/w==\x1b\\");
+    for (unsigned attempt = 0; attempt < 4; ++attempt) {
+      check(!pane.publish());
+      check(!pane.sync.advanceTransfer(connection));
+    }
+
+    pane.feed("\x1b[3;5H\x1b_Ga=T,f=32,s=1,v=1,i=2,p=2,q=2;AAD//w==\x1b\\");
+    check(!pane.publish());
+    check(connection.queuedBytes() == queued);
+
+    for (std::size_t index = 0; index < unread; ++index) {
+      check(pane.peer.receive<PaneDocument>().bytes.size() == filler.size());
+    }
+
+    const auto received = pane.synchronize();
+    const auto images = messages<GraphicsImage>(received);
+    const auto placements = messages<GraphicsPlacementMessage>(received);
+
+    check(images.size() == 2 && placements.size() == 2);
+    for (const std::uint32_t image : {1u, 2u}) {
+      check(std::ranges::count(images, image, [](const auto& message) {
+        return message.image.key.image_id;
+      }) == 1);
+      check(std::ranges::count(placements, image, [](const auto& message) {
+        return message.placement.key.image_id;
+      }) == 1);
+    }
+  }
+
+  // An image the pane cannot copy for the client, because the media budget is spent,
+  // reaches the client as nothing at all: no metadata, no partial pixels, no budget kept.
+  // The failure surfaces to the caller, which stops retrying that revision.
+  void testFailedFreeze(ConcurrentMemory& memory) {
+    constexpr std::size_t limit = 64 * 1024 * 1024;
+    MediaBudget budget{limit};
+    SyncedPane pane{memory, &budget};
+    auto& connection = pane.connection();
+    auto& storage = pane.media->terminal()->graphics;
+    std::size_t others = 0;
+
+    pane.feed("\x1b_Ga=T,f=32,s=1,v=1,i=1,p=1,q=2;/wAA/w==\x1b\\");
+    check(budget.reserve(others, limit, limit - budget.used()));
+    const auto used = budget.used();
+    bool failed = false;
+
+    for (unsigned attempt = 0; attempt < 8 && !failed; ++attempt) {
+      try {
+        pane.publish();
+      } catch (const std::bad_alloc&) {
+        failed = true;
+        pane.sync.abandon(storage.revision());
+      }
+    }
+
+    check(failed && budget.used() == used);
+    check(!pane.sync.publish(connection, storage));
+    budget.release(others, others);
+
+    const auto received = pane.synchronize();
+
+    check(messages<GraphicsImage>(received).empty() && messages<GraphicsImageChunk>(received).empty());
+  }
+
+  // After the client has a pane's images, removing one placement deletes only that
+  // placement, and placing an image again moves its placement; the image itself stays.
+  void testPlacementDeleteAndMove(ConcurrentMemory& memory) {
+    SyncedPane pane{memory};
+
+    pane.feed("\x1b_Ga=T,f=32,s=1,v=1,i=1,p=1,q=2;/wAA/w==\x1b\\\x1b_Ga=p,i=1,p=2,q=2;\x1b\\");
+    const auto initial = messages<GraphicsPlacementMessage>(pane.synchronize());
+
+    check(initial.size() == 2);
+    const auto second = std::ranges::find(initial, 2u, [](const auto& message) {
+      return message.placement.placement_id;
+    });
+
+    check(second != initial.end());
+    pane.feed("\x1b_Ga=d,d=i,i=1,p=2,q=2;\x1b\\");
+    auto received = pane.synchronize();
+
+    check(received.size() == 1);
+    const auto* removed = std::get_if<GraphicsDeletePlacement>(&received.front());
+
+    check(removed != nullptr && removed->virtual_id == second->placement.virtual_id);
+
+    pane.feed("\x1b[5;10H\x1b_Ga=p,i=1,p=1,q=2;\x1b\\");
+    received = pane.synchronize();
+    const auto moved = messages<GraphicsPlacementMessage>(received);
+
+    check(!moved.empty() && moved.back().placement.placement_id == 1);
+    check(moved.back().placement.x == 9 && moved.back().placement.y == 4);
+    check(messages<GraphicsDeleteImage>(received).empty() && messages<GraphicsImage>(received).empty());
+  }
+
   void testGraphics() {
     SystemAllocator system;
     MemoryAdapter adapter{system};
@@ -438,5 +631,17 @@ namespace {
   const telar::testing::Case case_graphics{"graphics.graphics", testGraphics};
   const telar::testing::Case case_kitty_framing{"graphics.kitty_framing", testKittyFraming};
   const telar::testing::Case case_graphics_credit{"graphics.graphics_credit", testGraphicsCredit};
+
+  template <void (*body)(ConcurrentMemory&)>
+  void withMemory() {
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+
+    body(adapter);
+  }
+
+  const telar::testing::Case case_queue_backpressure{"graphics_sync.queue_backpressure", withMemory<testQueueBackpressure>};
+  const telar::testing::Case case_failed_freeze{"graphics_sync.failed_freeze_reported", withMemory<testFailedFreeze>};
+  const telar::testing::Case case_placement_delete_and_move{"graphics_sync.placement_delete_and_move", withMemory<testPlacementDeleteAndMove>};
 
 }
