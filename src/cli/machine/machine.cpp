@@ -601,11 +601,27 @@ fetch() {
       return true;
     }
 
-    static bool owned(std::string_view remote) {
+    // What telar installs in an agent's directory itself, which setup leaves to the other
+    // machine's telar. `remote` names a file from the home; each path is from an agent's root,
+    // or from the parent of a shared root such as .agents/skills.
+    bool owned(std::string_view remote) const {
       static constexpr auto paths = std::to_array<std::string_view>({"skills/telar", "skills/telar-coordinator", "extensions/telar.ts", "plugins/telar.ts"});
+      const auto matches = [](std::string_view relative) {
+        return std::ranges::any_of(paths, [&](auto path) {
+          return relative == path || below(relative, path);
+        });
+      };
 
-      return std::ranges::any_of(paths, [&](auto path) {
-        return remote == path || below(remote, path);
+      return std::ranges::any_of(roots_, [&](const Root& root) {
+        if (!below(remote, root.remote)) {
+          return false;
+        }
+
+        const auto relative = remote.substr(root.remote.size() + 1);
+        const std::string_view base{root.remote};
+        const auto parent = base.substr(base.rfind('/') + 1);
+
+        return matches(relative) || matches(std::string{parent} + "/" + std::string{relative});
       });
     }
 
