@@ -653,7 +653,8 @@ export {
       static void recordJump(const Pane<Memory>& pane, features::prompt::PaneLine& line);
 
       // Back to where the last jump left from, or forward again; the view's top goes there.
-      void jumpBack(const Pane<Memory>& pane, features::prompt::PaneLine& line, bool back);
+      // The row of `pane` the line's jump list moves to, back or forth, among the rows it shows.
+      [[nodiscard]] static ds::Option<std::uint32_t> jumpTarget(const Pane<Memory>& pane, features::prompt::PaneLine& line, bool back);
 
       // Copy mode on a block's output, at its first row, with the scrollback search asked for and
       // confined to that output.
@@ -706,6 +707,13 @@ export {
 
     public:
       features::terminal::graphics::State graphics;
+
+    private:
+      // The bytes every pane's images count against, shared by the panes' stores; declared before
+      // the panes, which give theirs back as they go.
+      features::terminal::graphics::GraphicsBudget graphics_budget_;
+
+    public:
 
     private:
 

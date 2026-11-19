@@ -31,6 +31,58 @@ namespace telar::gui::application {
         refold(memory) {}
 
   template <Allocator Memory>
+  void Pane<Memory>::setGit(const PaneGit& message) {
+    auto kept = message;
+
+    git_branch.assign(message.branch);
+    kept.branch = git_branch.view();
+    git = kept;
+  }
+
+  template <Allocator Memory>
+  tbc::view<PaneShell, tbc::lt::static_storage> Pane<Memory>::setShell(const PaneShell& message) {
+    auto previous = shell;
+    auto kept = message;
+
+    previous.host = {};
+    previous.directory = {};
+    shell_host.assign(message.host);
+    shell_directory.assign(message.directory);
+    kept.host = shell_host.view();
+    kept.directory = shell_directory.view();
+    shell = kept;
+    return previous;
+  }
+
+  template <Allocator Memory>
+  void Pane<Memory>::setBlocks(std::span<const CommandBlock> commands) {
+    std::size_t bytes = 0;
+
+    for (const auto& block : commands) {
+      bytes += block.command.size();
+    }
+
+    // The pane's own copy of the lines comes first, so no command views it while it grows.
+    blocks_text.clear();
+    blocks_text.reserve(bytes);
+    for (const auto& block : commands) {
+      blocks_text.append(block.command);
+    }
+
+    blocks.clear();
+    blocks.extend(commands);
+
+    std::size_t start = 0;
+
+    for (auto& block : blocks.viewMut()) {
+      const auto size = block.command.size();
+
+      block.command = blocks_text.view().substr(start, size);
+      start += size;
+    }
+  }
+
+  template <Allocator Memory>
   Pane<Memory>::InlineDocument::InlineDocument(Memory& memory, std::uint64_t identity)
       : id(identity),
         document(memory),

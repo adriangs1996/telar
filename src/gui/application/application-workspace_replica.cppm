@@ -51,6 +51,21 @@ export {
     struct Pane {
       explicit Pane(Memory& memory, std::uint64_t identity, features::terminal::graphics::GraphicsBudget& budget);
 
+      // The shell, the repository and the commands view strings the pane holds, so it stays where
+      // it is made, boxed in the session.
+      Pane(const Pane&) = delete;
+      Pane& operator=(const Pane&) = delete;
+
+      // Keeps `message` with the branch copied into the pane.
+      void setGit(const PaneGit& message);
+
+      // Keeps `message` with its host and directory copied into the pane, and returns the shell it
+      // replaces without them, since the pane's strings now hold the new ones.
+      tbc::view<PaneShell, tbc::lt::static_storage> setShell(const PaneShell& message);
+
+      // Keeps `blocks` with their lines copied into the pane.
+      void setBlocks(std::span<const CommandBlock> blocks);
+
       std::uint64_t id;
       std::uint64_t generation = 0;
       std::uint64_t attachment_generation = 0;
@@ -80,7 +95,7 @@ export {
       PaneProgressState progress_state = PaneProgressState::remove;
       ds::Option<Byte> progress_percent;
       // The integrated shell's phase and the terminal's line discipline, for the command editor.
-      PaneShell shell{};
+      tbc::view<PaneShell, tbc::lt::self> shell{};
       // The document the pane's program shows natively (`telar render`) while `document_shown`;
       // `document_version` changes whenever either does. `document_parts` gathers the parts of
       // revision `document_revision` until it is whole.
@@ -112,14 +127,14 @@ export {
       ds::Vec<InlineDocument, Memory> inline_documents;
       std::uint64_t inline_version = 0;
       // The repository the integrated shell works in; `branch` owns the text the message viewed.
-      PaneGit git{};
+      tbc::view<PaneGit, tbc::lt::self> git{};
       ds::String<Memory> git_branch;
       // The host a remote shell runs on and where it works there, which `shell.host` and
       // `shell.directory` view.
       ds::String<Memory> shell_host;
       ds::String<Memory> shell_directory;
       // The commands the integrated shell ran, oldest first; `blocks_text` owns their lines.
-      ds::Vec<CommandBlock, Memory> blocks;
+      tbc::view<ds::Vec<CommandBlock, Memory>, tbc::lt::self> blocks;
       ds::String<Memory> blocks_text;
       // The commands folded, by the stable number of their first row, and the rows their output
       // hides from the view.

@@ -288,9 +288,7 @@ namespace telar::gui::application {
       return Change::none;
     }
 
-    pane->git_branch.assign(message.branch);
-    pane->git = message;
-    pane->git.branch = pane->git_branch.view();
+    pane->setGit(message);
     changed_pane_ = pane->id;
     ++chrome_revision_;
     return Change::model;
@@ -302,21 +300,17 @@ namespace telar::gui::application {
       return Change::none;
     }
 
+    const auto pane_id = pane->id;
     const bool host_changed = pane->shell_host.view() != message.host;
-    const auto previous = std::exchange(pane->shell, message);
-
-    pane->shell_host.assign(message.host);
-    pane->shell.host = pane->shell_host.view();
-    pane->shell_directory.assign(message.directory);
-    pane->shell.directory = pane->shell_directory.view();
+    const auto previous = pane->setShell(message);
     // The pane's header names the host and the link.
     chrome_changed_ |= previous.remote != message.remote || host_changed || previous.link_ms != message.link_ms;
     if (chrome_changed_) {
       ++chrome_revision_;
     }
-    prompt::follow(*this, pane->id, previous, message);
+    prompt::follow(*this, pane_id, previous, message);
 
-    changed_pane_ = pane->id;
+    changed_pane_ = pane_id;
     return Change::terminal;
   }
 

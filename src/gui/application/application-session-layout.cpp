@@ -206,7 +206,7 @@ namespace telar::gui::application {
       throw std::length_error{"GUI pane capacity reached"};
     }
 
-    panes.push(ds::makeBox<Pane<Memory>>(memory, memory, pane_id, features::terminal::graphics::budget(graphics)));
+    panes.push(ds::makeBox<Pane<Memory>>(memory, memory, pane_id, graphics_budget_));
     panes.backMut().getMut().location = location;
     ++view_version.panes;
 
@@ -509,7 +509,7 @@ namespace telar::gui::application {
     tab.getMut().layout.add(message.root_pane_id, ClientLayoutAxis::horizontal, tab->focused_pane);
     tab.getMut().focused_pane = message.root_pane_id;
     tab.getMut().loaded = true;
-    auto pane = ds::makeBox<Pane<Memory>>(memory, memory, message.root_pane_id, features::terminal::graphics::budget(graphics));
+    auto pane = ds::makeBox<Pane<Memory>>(memory, memory, message.root_pane_id, graphics_budget_);
 
     pane.getMut().generation = message.pane_generation;
     pane.getMut().location = message.location;
@@ -747,9 +747,12 @@ namespace telar::gui::application {
 
   template <typename Removed>
   void Session::removePanes(Removed removed) {
-    for (const auto& pane : panes) {
-      if (removed(*pane)) {
-        forgetPane(pane->id);
+    // By index: forgetting a pane reaches the session, though not its panes.
+    for (std::size_t index = 0; index < panes.size(); ++index) {
+      if (const auto& pane = *panes[index]; removed(pane)) {
+        const auto pane_id = pane.id;
+
+        forgetPane(pane_id);
       }
     }
 

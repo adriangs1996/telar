@@ -26,18 +26,14 @@ namespace telar::gui::features::terminal::graphics {
 
 export namespace telar::gui::features::terminal::graphics {
 
-  // The bytes every pane's images count against and the panes paused after a limit. Opaque:
-  // only the use cases below reach it. Each pane holds its own GraphicsStore, which a frame
-  // reads.
+  // The panes paused after a limit. Opaque: only the use cases below reach it. Each pane holds
+  // its own GraphicsStore, which a frame reads, counting against a GraphicsBudget the panes'
+  // owner keeps beside them.
   class State {
     friend struct Access;
 
-    GraphicsBudget budget_;
     GraphicsPauses pauses_;
   };
-
-  // The budget each pane's store counts against; it outlives the panes.
-  [[nodiscard]] inline GraphicsBudget& budget(State& state) noexcept;
 
   [[nodiscard]] TBC_HOT_PATH inline bool paused(const State& state, std::uint64_t pane_id) noexcept;
 
@@ -81,10 +77,6 @@ namespace telar::gui::features::terminal::graphics {
 
   // The use cases' way into State.
   struct Access {
-    [[nodiscard]] static constexpr GraphicsBudget& budget(State& state) noexcept {
-      return state.budget_;
-    }
-
     [[nodiscard]] static constexpr GraphicsPauses& pauses(State& state) noexcept {
       return state.pauses_;
     }
@@ -93,10 +85,6 @@ namespace telar::gui::features::terminal::graphics {
       return state.pauses_;
     }
   };
-
-  inline GraphicsBudget& budget(State& state) noexcept {
-    return Access::budget(state);
-  }
 
   inline bool paused(const State& state, std::uint64_t pane_id) noexcept {
     return Access::pauses(state).contains(pane_id);

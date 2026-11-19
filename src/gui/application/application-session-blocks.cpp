@@ -148,21 +148,23 @@ namespace telar::gui::application {
       }
     }
 
-    ds::Vec<std::uint64_t, Memory> kept{memory};
-
     for (std::size_t index = 0; index < pane.blocks.size(); ++index) {
       if (std::ranges::find(pane.folded, blockKey(pane, index)) == pane.folded.end()) {
         continue;
       }
 
-      kept.push(blockKey(pane, index));
       const auto [first, end] = blockRows(pane, index);
       if (end > first) {
         spans.push({.first = first, .count = end - first});
       }
     }
 
-    pane.folded = std::move(kept);
+    // A fold stays while a command still starts at its row.
+    pane.folded.retain([&blocks = pane.blocks, trimmed = pane.scrollback_trimmed](std::uint64_t key) {
+      return std::ranges::any_of(blocks, [&](const CommandBlock& block) {
+        return trimmed + block.row == key;
+      });
+    });
     if (!std::ranges::equal(pane.folds.spans(), spans.view())) {
       pane.folds.assign(spans.view());
       ++pane.fold_revision;
@@ -175,22 +177,7 @@ namespace telar::gui::application {
       return Change::none;
     }
 
-    std::size_t bytes = 0;
-
-    for (const auto& block : message.blocks) {
-      bytes += block.command.size();
-    }
-
-    pane->blocks_text.clear();
-    pane->blocks_text.reserve(bytes);
-    pane->blocks.clear();
-    pane->blocks.extend(message.blocks);
-    for (auto& block : pane->blocks.viewMut()) {
-      const auto start = pane->blocks_text.size();
-
-      pane->blocks_text.append(block.command);
-      block.command = pane->blocks_text.view().substr(start, block.command.size());
-    }
+    pane->setBlocks(message.blocks);
 
     // A command that ran without the shell finding it missing (status 127) exists, though the
     // shell never reported it: a function defined since its last report, say.
@@ -202,8 +189,8 @@ namespace telar::gui::application {
     }
 
     if (!pane->refold.empty()) {
-      for (const auto index : pane->refold) {
-        if (index < pane->blocks.size()) {
+      for (std::size_t at = 0; at < pane->refold.size(); ++at) {
+        if (const auto index = pane->refold[at]; index < pane->blocks.size()) {
           pane->folded.push(blockKey(*pane, index));
         }
       }
@@ -285,7 +272,12 @@ namespace telar::gui::application {
       case 'o':
       case 'i':
         static_cast<void>(features::prompt::takeChord(line));
-        jumpBack(*pane, line, key.character == 'o');
+        if (const auto row = jumpTarget(*pane, line, key.character == 'o')) {
+          scrollToRow(pane_id, *row);
+          changed_pane_ = pane_id;
+          block_changed_ = true;
+        }
+
         return Outcome::edited;
       default:
         break;
@@ -438,18 +430,16 @@ namespace telar::gui::application {
     features::prompt::recordJump(line, jumpRow(pane));
   }
 
-  void Session::jumpBack(const Pane<Memory>& pane, features::prompt::PaneLine& line, bool back) {
+  ds::Option<std::uint32_t> Session::jumpTarget(const Pane<Memory>& pane, features::prompt::PaneLine& line, bool back) {
     const auto target = features::prompt::jump(line, jumpRow(pane), back);
     if (!target) {
-      return;
+      return ds::none;
     }
 
     const auto stable = *target;
     const auto row = stable > pane.scrollback_trimmed ? stable - pane.scrollback_trimmed : 0;
 
-    scrollToRow(pane.id, static_cast<std::uint32_t>(std::min<std::uint64_t>(row, std::numeric_limits<std::uint32_t>::max())));
-    changed_pane_ = pane.id;
-    block_changed_ = true;
+    return static_cast<std::uint32_t>(std::min<std::uint64_t>(row, std::numeric_limits<std::uint32_t>::max()));
   }
 
   void Session::searchBlockOutput(Pane<Memory>& pane, std::size_t index) {
