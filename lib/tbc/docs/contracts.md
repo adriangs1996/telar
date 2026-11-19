@@ -431,6 +431,18 @@ tbc::view<std::string_view, tbc::lt::a> textOf(const record &input) {
 }
 ```
 
+`tbc::holds` says the same of one reference parameter whatever its type labels:
+`tbc::holds<const pane &, tbc::lt::a>` is Rust's `&Pane<'a>`, an anonymous borrow
+of the pane whose contents are in region `a`. A result or a holder in `a` takes
+what the pane holds; viewing what the pane owns, or keeping the reference itself,
+is a `tbc-contract-violation`, so a result built from the pane may outlive it:
+
+```cpp
+tbc::view<request, tbc::lt::a> requestFor(tbc::holds<const pane &, tbc::lt::a> pane) {
+  return {pane.name}; // the name the pane views, not the pane
+}
+```
+
 A field labeled `lt::static_storage` only ever holds storage that outlives every
 caller, as a Rust `&'static str` does, so its object borrows nothing through it,
 and what it holds supplies a static result or any other place, as a static input
@@ -779,9 +791,10 @@ has deliberate limits:
   call, whatever value selects that path: a queue that copies a reply unless a
   shared owner is supplied must copy and retain in separate functions. A shared
   owner retained beside a view does not keep the view's referent alive.
-- One label per field or parameter names one region. A wrapper that holds a
-  reference to an object which itself holds borrows cannot yet name the inner
-  region apart from the reference, as `&'s Stream<'b>` does.
+- One label per field or parameter names one region. `tbc::holds` names a
+  referent's region beside an anonymous borrow of it, as `&Stream<'b>` does, but a
+  wrapper that holds a reference to an object which itself holds borrows cannot
+  yet name both, as `&'s Stream<'b>` does.
 - Two objects that each keep the same mutable reference, when neither is the
   other's field, are not reported; only overlapping arguments of one call are.
 - A function known by its declaration may call a callback it receives with

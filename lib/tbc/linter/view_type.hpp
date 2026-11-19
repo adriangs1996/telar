@@ -14,13 +14,16 @@ namespace tbc_lint {
   struct annotation {
     bool present = false;
     const clang::Type* region = nullptr;
+    // Labeled with tbc::holds: the region is what the referent holds, the reference anonymous.
+    bool held = false;
   };
 
   inline annotation viewAnnotation(clang::QualType type, const clang::ASTContext& context) {
     while (!type.isNull()) {
       if (const auto* specialization = llvm::dyn_cast<clang::TemplateSpecializationType>(type.getTypePtr())) {
         const auto* declaration = specialization->getTemplateName().getAsTemplateDecl();
-        if (declaration != nullptr && declaration->getQualifiedNameAsString() == "tbc::view") {
+        const auto name = declaration == nullptr ? std::string{} : declaration->getQualifiedNameAsString();
+        if (name == "tbc::view" || name == "tbc::holds") {
           const auto arguments = specialization->template_arguments();
           const clang::Type* region = nullptr;
 
@@ -32,7 +35,7 @@ namespace tbc_lint {
             }
           }
 
-          return {.present = true, .region = region};
+          return {.present = true, .region = region, .held = name == "tbc::holds" && region != nullptr};
         }
       }
 

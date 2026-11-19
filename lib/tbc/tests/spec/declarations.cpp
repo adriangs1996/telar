@@ -2243,6 +2243,55 @@ std::size_t declarations::region_named::replaced() {
 
 // END CASE
 
+// CASE: declaration.held_contents
+// PAIR: declaration.held
+// SOURCE: src/runtime/runtime/runtime/runtime.cpp :: Runtime::makeWordRequest (a request shares the names the pane's shell reported)
+// STATUS: implemented
+// CONTRACT: A reference labeled tbc::holds lends what its referent holds in the region and never the referent, as Rust's `&Pane<'a>` lends `'a` and an anonymous borrow of the pane.
+// SCENARIO: A request built from a pane outlives the pane, keeping only the name the pane viewed; accept.
+namespace declarations {
+  struct held_pane {
+    text_a name;
+    std::string title;
+  };
+
+  struct held_request {
+    text_a name;
+  };
+
+  tbc::view<held_request, tbc::lt::a> heldRequest(tbc::holds<const held_pane&, tbc::lt::a> pane) {
+    return {pane.name};
+  }
+}
+
+std::size_t declarationHeldContents(declarations::text_a name) {
+  declarations::held_request request{};
+
+  {
+    const declarations::held_pane pane{name, "title"};
+
+    request = declarations::heldRequest(pane);
+  }
+
+  return request.name.size();
+}
+
+// END CASE
+
+// CASE: declaration.held_owned
+// PAIR: declaration.held
+// SOURCE: src/runtime/runtime/runtime/runtime.cpp :: Runtime::makeWordRequest (a request shares the names the pane's shell reported)
+// STATUS: implemented
+// CONTRACT: A reference labeled tbc::holds lends what its referent holds in the region and never the referent, as Rust's `&Pane<'a>` lends `'a` and an anonymous borrow of the pane.
+// SCENARIO: A result in the region views the title the pane owns, which the anonymous borrow does not lend; reject at the return.
+namespace declarations {
+  text_a heldTitle(tbc::holds<const held_pane&, tbc::lt::a> pane) {
+    return pane.title; // expected-error [tbc-contract-violation]
+  }
+}
+
+// END CASE
+
 // CASE: declaration.output_shared_only_copied
 // PAIR: declaration.output_shared_only
 // SOURCE: src/gui/features/prompt/prompt.cpp :: ask (the root a path's question names is written in a buffer of the state)

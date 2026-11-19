@@ -48,6 +48,13 @@ namespace tbc {
   template <typename type, detail::lifetime_region region = lt::elided>
     requires(std::is_object_v<type> || std::is_reference_v<type>)
   using view = type;
+
+  // A reference whose referent holds borrows of `region`, the reference itself lent for the call
+  // alone, as Rust's `&Pane<'a>`: a result or a holder in `region` takes what the referent holds,
+  // never the referent.
+  template <typename type, detail::lifetime_region region>
+    requires std::is_reference_v<type>
+  using holds = type;
 }
 
 #endif

@@ -2330,7 +2330,14 @@ namespace tbc_lint {
             continue;
           }
 
-          const auto* source_region = parameterAnnotation(*parameter, context_).region;
+          const auto source_annotation = parameterAnnotation(*parameter, context_);
+          const auto* source_region = source_annotation.region;
+          // A `&Pane<'a>` lets its holder keep what the pane holds, never the pane.
+          if (source_annotation.held && !contents) {
+            report(issue::retention, where, &source);
+            continue;
+          }
+
           // A self field may carry what the object already keeps in a region of its own, as one that
           // reads bytes a sibling allocates there: the object lives within that region anyway.
           if (field != nullptr && selfBorrowing(*field) && source_region != nullptr && receiverHasRegion(function_, source_region)) {
@@ -3433,6 +3440,13 @@ namespace tbc_lint {
       loans lent(const clang::FunctionDecl& callee, const clang::ParmVarDecl& parameter, const clang::Expr& argument, const state& current) {
         const auto type = parameter.getType();
 
+        // A `&Pane<'a>` lends what the pane holds, never the pane.
+        if (parameterAnnotation(parameter, context_).held) {
+          const auto held = value(&argument, current);
+
+          return callee.getReturnType()->isReferenceType() ? somewhereInside(held) : held;
+        }
+
         if (callee.getReturnType()->isReferenceType()) {
           return somewhereInside(type->isReferenceType() ? reference(&argument, current) : value(&argument, current));
         }
@@ -4031,7 +4045,7 @@ namespace tbc_lint {
 
         auto result = lent(callee, parameter, argument, current);
 
-        if (parameter.getType()->isReferenceType()) {
+        if (parameter.getType()->isReferenceType() && !parameterAnnotation(parameter, context_).held) {
           result.merge(reference(&argument, current));
         }
 
@@ -4442,6 +4456,11 @@ namespace tbc_lint {
         const auto input = parameterAnnotation(*parameter, context_);
 
         if (output.region != nullptr) {
+          // A `&Pane<'a>` supplies what the pane holds, not the pane.
+          if (input.held && source.kind != origin_kind::parameter) {
+            return false;
+          }
+
           return (input.region == output.region && input.present) || (source.kind == origin_kind::parameter && !input.present && carriesRegion(parameter->getType(), output.region));
         }
 

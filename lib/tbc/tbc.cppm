@@ -7,6 +7,7 @@ export module telar.tbc;
 // including the header and its standard library in each global module fragment. A module
 // exports no macros: the annotations stay in tbc/annotations.hpp.
 export namespace tbc {
+  using tbc::holds;
   using tbc::raw;
   using tbc::view;
 }
