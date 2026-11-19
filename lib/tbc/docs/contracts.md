@@ -469,7 +469,10 @@ What a region keeps of a labeled reference parameter depends on its fields: a
 reference, a pointer or a view there keeps the argument itself, while fields
 that hold values keep a copy of what the argument holds, so a temporary passed
 by `const &` and copied does not dangle. An allocator, or any shared type, is
-always kept by reference.
+always kept by reference. An output whose type labels its fields, all of them
+shared, keeps no other input of its region, as a Rust `&'b mut String` beside a
+`&'b str` cannot keep the text: a body stores a borrow only in a labeled field,
+so such a buffer keeps its allocator and copies what it is given.
 
 A body keeps nothing its declaration does not let it keep. Storing an input's
 borrow in a field, in an output parameter, or in what an input designates

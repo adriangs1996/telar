@@ -3954,6 +3954,44 @@ namespace tbc_lint {
         return found;
       }
 
+      // Whether an object of a type keeps no input but a shared one, as a string keeps its allocator and
+      // copies the text it is given. A body stores an input's borrow only in a labeled field or in what a
+      // type argument holds, so a record that labels its fields, all of them shared, and whose type
+      // arguments hold no borrows but shared ones, keeps nothing else, as a Rust type without a lifetime
+      // parameter cannot.
+      [[nodiscard]] bool keepsOnlySharedInputs(clang::QualType type) const {
+        const auto* record = recordOf(type);
+        if (record == nullptr || libraryRecord(type) || record->getDefinition() == nullptr) {
+          return false;
+        }
+
+        if (const auto* specialization = llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(record)) {
+          for (const auto& argument : specialization->getTemplateArgs().asArray()) {
+            if (argument.getKind() == clang::TemplateArgument::Pack || (argument.getKind() == clang::TemplateArgument::Type && containsViews(argument.getAsType()) && !sharedType(argument.getAsType()))) {
+              return false;
+            }
+          }
+        }
+
+        llvm::SmallVector<const clang::FieldDecl*, 8> fields;
+        bool labeled = false;
+
+        recordFields(*record->getDefinition(), fields);
+        for (const auto* field : fields) {
+          if (!viewAnnotation(field->getType(), context_).present) {
+            continue;
+          }
+
+          if (!sharedType(field->getType())) {
+            return false;
+          }
+
+          labeled = true;
+        }
+
+        return labeled;
+      }
+
       // Whether a record keeps references in a region: a field there that is a reference, a pointer or a
       // view. Its other fields in the region hold copies of what they are given.
       [[nodiscard]] bool keepsReferences(const clang::CXXRecordDecl& record, const clang::Type* region) const {
@@ -4872,12 +4910,18 @@ namespace tbc_lint {
           }
 
           const auto region = parameterAnnotation(*parameter, context_).region;
+          const auto object = parameter->getType()->isPointerType() ? parameter->getType()->getPointeeType() : parameter->getType().getNonReferenceType();
+          const bool shared_only = keepsOnlySharedInputs(object);
           loans incoming;
 
           for (unsigned other = 0; other < callee->getNumParams() && other + offset < call.getNumArgs(); ++other) {
             const auto* input = callee->getParamDecl(other);
             const auto annotation = parameterAnnotation(*input, context_);
             const auto* argument = call.getArg(other + offset);
+
+            if (shared_only && !sharedType(input->getType())) {
+              continue;
+            }
 
             if (other != index && annotation.present && annotation.region == region && !outputParameter(*input)) {
               incoming.merge(lent(*callee, *input, *argument, current));

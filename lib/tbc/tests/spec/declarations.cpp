@@ -2164,3 +2164,49 @@ void declarationRegionSharedMutated(declarations::region_state& state) {
 }
 
 // END CASE
+
+// CASE: declaration.output_shared_only_copied
+// PAIR: declaration.output_shared_only
+// SOURCE: src/gui/features/prompt/prompt.cpp :: ask (the root a path's question names is written in a buffer of the state)
+// STATUS: implemented
+// CONTRACT: A labeled output whose type labels its fields, all of them shared, keeps no other input of its region, as a Rust `&'b mut String` beside a `&'b str` cannot keep the text: a result in that region still borrows both.
+// SCENARIO: A buffer that keeps only its memory is filled from a word and the result is read while the word lives; accept.
+namespace declarations {
+  struct shared_buffer_holder {
+    region_text root;
+  };
+
+  tbc::view<std::string_view, tbc::lt::b> rooted(tbc::view<region_text&, tbc::lt::b> root, tbc::view<std::string_view, tbc::lt::b> word);
+}
+
+std::size_t declarationOutputSharedOnlyCopied(declarations::shared_buffer_holder& holder, std::string_view word) {
+  const auto rooted = declarations::rooted(holder.root, word);
+  return rooted.size();
+}
+
+// END CASE
+
+// CASE: declaration.output_shared_only_kept
+// PAIR: declaration.output_shared_only
+// SOURCE: src/gui/features/prompt/prompt.cpp :: ask (the root a path's question names is written in a buffer of the state)
+// STATUS: implemented
+// CONTRACT: A labeled output whose type labels its fields, all of them shared, keeps no other input of its region, as a Rust `&'b mut String` beside a `&'b str` cannot keep the text: a result in that region still borrows both.
+// SCENARIO: An output with a labeled view field can keep the word, which the caller's declaration does not let its holder keep; reject at the call.
+namespace declarations {
+  struct kept_word {
+    tbc::view<std::string_view, tbc::lt::a> word;
+  };
+
+  struct kept_word_holder {
+    kept_word kept;
+  };
+
+  tbc::view<std::string_view, tbc::lt::b> keep(tbc::view<kept_word&, tbc::lt::b> into, tbc::view<std::string_view, tbc::lt::b> word);
+}
+
+std::size_t declarationOutputSharedOnlyKept(declarations::kept_word_holder& holder, std::string_view word) {
+  const auto kept = declarations::keep(holder.kept, word); // expected-error [tbc-contract-violation]
+  return kept.size();
+}
+
+// END CASE
