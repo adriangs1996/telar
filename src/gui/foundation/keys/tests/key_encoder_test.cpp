@@ -22,6 +22,9 @@ namespace {
   using Modifier = KeyChord::Modifier;
   using Code = KeyChord::Key;
 
+  // Every Kitty keyboard enhancement flag set.
+  constexpr telar::Byte all_kitty_flags = 31;
+
   void unicodeScalars() {
     for (std::uint32_t codepoint = 0; codepoint <= Utf8Scalar::maximum_codepoint; ++codepoint) {
       if (Utf8Scalar::valid(codepoint)) {
@@ -74,54 +77,83 @@ namespace {
 
   void kittyMetadata() {
     KeyEncoder encoder;
-    constexpr telar::Byte all_flags = 31;
     constexpr std::uint32_t base_codepoint = 113;
 
-    check(encoder.encode({.codepoint = 'a', .kitty = KittyCodepoints{.primary = 'a', .base = base_codepoint}}, {.kitty_keyboard_flags = all_flags}) == "\x1b[97::113;1;97u", "a missing shifted codepoint must retain its empty Kitty field");
-    check(encoder.encode({.codepoint = 'a', .modifiers = static_cast<unsigned>(Modifier::shift), .kitty = KittyCodepoints{.primary = 'a', .shifted = 'A'}}, {.kitty_keyboard_flags = all_flags}) == "\x1b[97:65;2;65u", "associated text must use the shifted semantic character");
-    check(encoder.encode({.codepoint = 'a', .modifiers = static_cast<unsigned>(Modifier::alt)}, {.kitty_keyboard_flags = all_flags}) == "\x1b[97;3u", "Alt chords must not carry associated text");
+    check(encoder.encode({.codepoint = 'a', .kitty = KittyCodepoints{.primary = 'a', .base = base_codepoint}}, {.kitty_keyboard_flags = all_kitty_flags}) == "\x1b[97::113;1;97u", "a missing shifted codepoint must retain its empty Kitty field");
+    check(encoder.encode({.codepoint = 'a', .modifiers = static_cast<unsigned>(Modifier::shift), .kitty = KittyCodepoints{.primary = 'a', .shifted = 'A'}}, {.kitty_keyboard_flags = all_kitty_flags}) == "\x1b[97:65;2;65u", "associated text must use the shifted semantic character");
+    check(encoder.encode({.codepoint = 'a', .modifiers = static_cast<unsigned>(Modifier::alt)}, {.kitty_keyboard_flags = all_kitty_flags}) == "\x1b[97;3u", "Alt chords must not carry associated text");
     constexpr auto maximum = std::numeric_limits<std::uint32_t>::max();
-    const auto maximal = encoder.encode({.codepoint = Utf8Scalar::maximum_codepoint, .phase = KeyPhase::repeat, .kitty = KittyCodepoints{.primary = maximum, .shifted = maximum, .base = maximum}}, {.kitty_keyboard_flags = all_flags});
+    const auto maximal = encoder.encode({.codepoint = Utf8Scalar::maximum_codepoint, .phase = KeyPhase::repeat, .kitty = KittyCodepoints{.primary = maximum, .shifted = maximum, .base = maximum}}, {.kitty_keyboard_flags = all_kitty_flags});
 
     check(maximal == "\x1b[4294967295:4294967295:4294967295;1:2;1114111u" && maximal.size() <= KeyEncoder::capacity, "the fixed encoder capacity must admit full-width Kitty fields");
+  }
+
+  // A 64-bit FNV-1a digest of encodings, each closed by a byte no encoding holds, so that moving a
+  // byte from one encoding to the next changes it.
+  class SweepDigest {
+  public:
+    void fold(std::string_view bytes) noexcept {
+      for (const auto byte : bytes) {
+        mix(static_cast<unsigned char>(byte));
+      }
+
+      mix(separator);
+    }
+
+    [[nodiscard]] std::uint64_t value() const noexcept {
+      return value_;
+    }
+
+  private:
+    static constexpr std::uint64_t offset_basis = 14695981039346656037ULL;
+    static constexpr std::uint64_t prime = 1099511628211ULL;
+    static constexpr unsigned char separator = 0xff;
+
+    void mix(unsigned char byte) noexcept {
+      value_ = (value_ ^ byte) * prime;
+    }
+
+    std::uint64_t value_ = offset_basis;
+  };
+
+  // Folds every swept key, as a code and as text, with one set of modifiers in every phase.
+  void sweepModifiers(KeyEncoder& encoder, SweepDigest& digest, const telar::InputModes& modes, unsigned modifiers) {
+    constexpr auto codepoints = telar::ds::Array<std::uint32_t, 19>{'a', 'A', 'c', 'z', '2', '8', ' ', '@', '[', '\\', ']', '^', '_', '/', '?', '~', 0xe9, 0x4e2d, 0x1f600};
+
+    for (const auto phase : {KeyPhase::press, KeyPhase::repeat, KeyPhase::release}) {
+      for (auto code = static_cast<unsigned>(Code::up); code <= static_cast<unsigned>(Code::back_tab); ++code) {
+        digest.fold(encoder.encode({.code = static_cast<Code>(code), .modifiers = modifiers, .phase = phase}, modes));
+      }
+
+      for (const auto codepoint : codepoints) {
+        digest.fold(encoder.encode({.codepoint = codepoint, .modifiers = modifiers, .phase = phase}, modes));
+        digest.fold(encoder.encode({.codepoint = codepoint, .modifiers = modifiers, .phase = phase, .kitty = KittyCodepoints{.primary = codepoint, .shifted = codepoint + 1, .base = 'q'}}, modes));
+      }
+    }
   }
 
   // Every encoding over a fixed sweep of keys, modifiers, phases and modes, folded into one digest,
   // so any byte the encoder changes fails here. `golden` was taken from the encoder as it is.
   std::uint64_t sweepDigest() {
+    // Cursor keys, keypad keys and modifyOtherKeys 2 take one bit of the mode each, and the four
+    // modifiers one bit of the modifiers each.
+    constexpr unsigned mode_count = 8;
+    constexpr unsigned modifier_count = 16;
+    constexpr auto kitty_flags = telar::ds::Array<telar::Byte, 7>{0, 1, 2, 3, 8, 10, all_kitty_flags};
     KeyEncoder encoder;
-    std::uint64_t digest = 14695981039346656037ULL;
-    const auto fold = [&](std::string_view bytes) {
-      for (const auto byte : bytes) {
-        digest = (digest ^ static_cast<unsigned char>(byte)) * 1099511628211ULL;
-      }
-
-      digest = (digest ^ 0xffU) * 1099511628211ULL;
-    };
-
-    constexpr auto codepoints = telar::ds::Array<std::uint32_t, 19>{'a', 'A', 'c', 'z', '2', '8', ' ', '@', '[', '\\', ']', '^', '_', '/', '?', '~', 0xe9, 0x4e2d, 0x1f600};
-    constexpr auto kitty_flags = telar::ds::Array<telar::Byte, 7>{0, 1, 2, 3, 8, 10, 31};
+    SweepDigest digest;
 
     for (const auto flags : kitty_flags) {
-      for (unsigned mode = 0; mode < 8; ++mode) {
+      for (unsigned mode = 0; mode < mode_count; ++mode) {
         const telar::InputModes modes{.cursor_keys = (mode & 1U) != 0, .keypad_keys = (mode & 2U) != 0, .kitty_keyboard_flags = flags, .modify_other_keys_2 = (mode & 4U) != 0};
 
-        for (unsigned modifiers = 0; modifiers < 16; ++modifiers) {
-          for (const auto phase : {KeyPhase::press, KeyPhase::repeat, KeyPhase::release}) {
-            for (auto code = static_cast<unsigned>(Code::up); code <= static_cast<unsigned>(Code::back_tab); ++code) {
-              fold(encoder.encode({.code = static_cast<Code>(code), .modifiers = modifiers, .phase = phase}, modes));
-            }
-
-            for (const auto codepoint : codepoints) {
-              fold(encoder.encode({.codepoint = codepoint, .modifiers = modifiers, .phase = phase}, modes));
-              fold(encoder.encode({.codepoint = codepoint, .modifiers = modifiers, .phase = phase, .kitty = KittyCodepoints{.primary = codepoint, .shifted = codepoint + 1, .base = 'q'}}, modes));
-            }
-          }
+        for (unsigned modifiers = 0; modifiers < modifier_count; ++modifiers) {
+          sweepModifiers(encoder, digest, modes, modifiers);
         }
       }
     }
 
-    return digest;
+    return digest.value();
   }
 
   // Alternate scroll sends Up or Down as the cursor key mode encodes them, and never in a keyboard
@@ -131,14 +163,14 @@ namespace {
 
     check(encoder.alternateScroll(true, {}) == "\x1b[A" && encoder.alternateScroll(false, {}) == "\x1b[B", "alternate scroll must send normal cursor keys");
     check(encoder.alternateScroll(true, {.cursor_keys = true}) == "\x1bOA" && encoder.alternateScroll(false, {.cursor_keys = true}) == "\x1bOB", "alternate scroll must honor application cursor keys");
-    check(encoder.alternateScroll(true, {.kitty_keyboard_flags = 31, .modify_other_keys_2 = true}) == "\x1b[A", "alternate scroll must ignore keyboard protocols");
+    check(encoder.alternateScroll(true, {.kitty_keyboard_flags = all_kitty_flags, .modify_other_keys_2 = true}) == "\x1b[A", "alternate scroll must ignore keyboard protocols");
   }
 
   void golden() {
     const auto digest = sweepDigest();
     constexpr std::uint64_t expected = 10501462004054449213ULL;
     if (digest != expected) {
-      std::fprintf(stderr, "gui-key-encoder: sweep digest %llu\n", static_cast<unsigned long long>(digest));
+      std::println(stderr, "gui-key-encoder: sweep digest {}", digest);
     }
 
     check(digest == expected, "the key encoder's bytes must match the golden sweep");

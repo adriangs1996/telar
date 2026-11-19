@@ -100,7 +100,7 @@ export {
 
       // The key one alternate-scroll step sends: Up or Down as the cursor key mode encodes them, as
       // Ghostty sends it (Surface.zig), whatever keyboard protocol the application asked for.
-      [[nodiscard]] std::string_view alternateScroll(bool up, const InputModes& modes);
+      [[nodiscard]] std::string_view alternateScroll(bool upward, const InputModes& modes);
 
       [[nodiscard]] std::string_view encode(const TerminalKey& key, const InputModes& modes);
 

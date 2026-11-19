@@ -16,6 +16,12 @@ namespace telar::gui::inline foundation::inline system {
 
   namespace {
 
+    // open(2) and flock(2) take their flags as an int; the bits are combined unsigned.
+    template <std::same_as<int>... Flag>
+    constexpr int combineFlags(Flag... flags) noexcept {
+      return static_cast<int>((0U | ... | static_cast<unsigned>(flags)));
+    }
+
     struct PrivateMode {
       static constexpr mode_t file = 0600;
       static constexpr mode_t shared = 0077;
@@ -35,7 +41,7 @@ namespace telar::gui::inline foundation::inline system {
     runtime::FileDescriptor openProfileLockFile(int directory, std::string_view name) {
       try {
         try {
-          return runtime::openBeneath(directory, name, O_RDWR | O_CREAT | O_EXCL, PrivateMode::file);
+          return runtime::openBeneath(directory, name, combineFlags(O_RDWR, O_CREAT, O_EXCL), PrivateMode::file);
         } catch (const runtime::SystemError& error) {
           if (error.code() != EEXIST) {
             throw;
@@ -65,7 +71,7 @@ namespace telar::gui::inline foundation::inline system {
           throw ProfileOperationCancelled{};
         }
 
-        if (::flock(descriptor, LOCK_EX | LOCK_NB) == 0) {
+        if (::flock(descriptor, combineFlags(LOCK_EX, LOCK_NB)) == 0) {
           return;
         }
 
@@ -73,7 +79,7 @@ namespace telar::gui::inline foundation::inline system {
           continue;
         }
 
-        if (sys::lastError() != EWOULDBLOCK && sys::lastError() != EAGAIN) {
+        if (sys::lastError() != EWOULDBLOCK) {
           throw runtime::SystemError{"Lock machine profiles"};
         }
 
@@ -90,7 +96,7 @@ namespace telar::gui::inline foundation::inline system {
         for (unsigned attempt = 0; attempt < maximum_attempts; ++attempt) {
           generateName();
           try {
-            file_ = runtime::openBeneath(parent_, name_.data(), O_WRONLY | O_CREAT | O_EXCL, PrivateMode::file);
+            file_ = runtime::openBeneath(parent_, name_.data(), combineFlags(O_WRONLY, O_CREAT, O_EXCL), PrivateMode::file);
 
             return;
           } catch (const runtime::SystemError& error) {

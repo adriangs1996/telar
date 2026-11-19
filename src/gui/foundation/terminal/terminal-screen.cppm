@@ -1,3 +1,6 @@
+module;
+#include "telar_base/diagnostics/config.hpp"
+
 export module telar.gui.foundation.terminal:screen;
 
 import std;
@@ -69,6 +72,8 @@ export namespace telar::gui::inline foundation::inline terminal {
 
     FrameApplication apply(const PaneFrame& frame) {
       frame.validate();
+      // validate() rejects a frame without columns, which the spans' rows divide by.
+      TELAR_ASSERT(frame.cols != 0);
 
       if (frame.pane_id == pane_id_ && frame.frame_id <= frame_id_) {
         return FrameApplication::stale;

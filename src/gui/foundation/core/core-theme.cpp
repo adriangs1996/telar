@@ -190,8 +190,13 @@ namespace telar::gui::inline foundation::inline core {
       const auto bit = static_cast<std::uint16_t>(1U << index);
 
       result.syntax.atMut(index) = style.color;
-      result.syntax_italic |= style.italic ? bit : 0;
-      result.syntax_bold |= style.bold ? bit : 0;
+      if (style.italic) {
+        result.syntax_italic |= bit;
+      }
+
+      if (style.bold) {
+        result.syntax_bold |= bit;
+      }
     }
 
     result.surface = result.resolve(values.color(PaletteRole::surface0), result.background);

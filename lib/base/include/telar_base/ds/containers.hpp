@@ -1110,6 +1110,7 @@ namespace telar::ds {
     }
 
     void setInlineSize(std::size_t size) noexcept {
+      TELAR_ASSERT(size <= inline_capacity);
       representation_.bytes[size] = '\0';
       representation_.bytes[inline_capacity] = static_cast<char>(inline_capacity - size);
     }

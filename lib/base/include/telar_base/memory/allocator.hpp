@@ -228,7 +228,9 @@ namespace telar {
   template <Allocator Upstream>
   class TBC_SHARED MemoryAdapter final : public MemoryInterface<Upstream> {
   public:
-    explicit MemoryAdapter(tbc::view<Upstream&, tbc::lt::a> upstream) noexcept
+    // constexpr, so that a unit declaring an adapter instantiates the constructor, and with it the
+    // overrides, rather than only the unit that emits the vtable.
+    explicit constexpr MemoryAdapter(tbc::view<Upstream&, tbc::lt::a> upstream) noexcept
         : upstream_(upstream) {}
 
     void* allocate(std::size_t size, std::size_t alignment) noexcept override {

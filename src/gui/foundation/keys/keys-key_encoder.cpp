@@ -34,8 +34,8 @@ namespace telar::gui::inline foundation::inline keys {
     return (modifiers & static_cast<unsigned>(modifier)) != 0;
   }
 
-  std::string_view KeyEncoder::alternateScroll(bool up, const InputModes& modes) {
-    return encode({.code = up ? KeyChord::Key::up : KeyChord::Key::down}, {.cursor_keys = modes.cursor_keys});
+  std::string_view KeyEncoder::alternateScroll(bool upward, const InputModes& modes) {
+    return encode({.code = upward ? KeyChord::Key::up : KeyChord::Key::down}, {.cursor_keys = modes.cursor_keys});
   }
 
   std::string_view KeyEncoder::encode(const TerminalKey& key, const InputModes& modes) {
@@ -120,7 +120,7 @@ namespace telar::gui::inline foundation::inline keys {
 
   void KeyEncoder::number(std::uint32_t value) {
     const auto encoded = std::to_chars(bytes_.dataMut() + used_, bytes_.dataMut() + bytes_.size(), value);
-    if (encoded.ec != std::errc{}) {
+    if (encoded.ec == std::errc::value_too_large) {
       throw std::length_error{"Encoded key number exceeds its byte capacity"};
     }
 
@@ -248,25 +248,27 @@ namespace telar::gui::inline foundation::inline keys {
       return static_cast<char>(codepoint & control_mask);
     }
 
-    constexpr auto controls = ds::Array<std::pair<std::uint32_t, char>, 17>{{
-        {' ', '\0'},
-        {'@', '\0'},
-        {'2', '\0'},
-        {'[', '\x1b'},
-        {'3', '\x1b'},
-        {'\\', '\x1c'},
-        {'4', '\x1c'},
-        {']', '\x1d'},
-        {'5', '\x1d'},
-        {'^', '\x1e'},
-        {'~', '\x1e'},
-        {'6', '\x1e'},
-        {'_', '\x1f'},
-        {'/', '\x1f'},
-        {'7', '\x1f'},
-        {'?', erase},
-        {'8', erase},
-    }};
+    constexpr auto controls = ds::Array<std::pair<std::uint32_t, char>, 17>{
+        {
+            {' ', '\0'},
+            {'@', '\0'},
+            {'2', '\0'},
+            {'[', '\x1b'},
+            {'3', '\x1b'},
+            {'\\', '\x1c'},
+            {'4', '\x1c'},
+            {']', '\x1d'},
+            {'5', '\x1d'},
+            {'^', '\x1e'},
+            {'~', '\x1e'},
+            {'6', '\x1e'},
+            {'_', '\x1f'},
+            {'/', '\x1f'},
+            {'7', '\x1f'},
+            {'?', erase},
+            {'8', erase},
+        },
+    };
 
     for (const auto& [known, value] : controls) {
       if (codepoint == known) {

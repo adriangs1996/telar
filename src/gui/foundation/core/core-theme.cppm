@@ -10,7 +10,7 @@ export {
   namespace telar::gui::inline foundation::inline core {
 
     struct BackgroundOpacity {
-      enum class Surface : std::size_t {
+      enum class Surface : std::uint8_t {
         sidebar,
         topbar,
         bottombar,

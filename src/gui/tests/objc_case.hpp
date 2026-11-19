@@ -18,6 +18,11 @@ namespace telar::gui::test {
   public:
     ObjcCase(std::string_view name, void (*run)()) noexcept;
 
+    // From a literal without string_view's constructor from a pointer, which may throw before main.
+    template <std::size_t Size>
+    ObjcCase(const char (&name)[Size], void (*run)()) noexcept
+        : ObjcCase(std::string_view(name, Size - 1), run) {}
+
     ObjcCase(const ObjcCase&) = delete;
     ObjcCase& operator=(const ObjcCase&) = delete;
     ObjcCase(ObjcCase&&) = delete;

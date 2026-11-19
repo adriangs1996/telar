@@ -22,7 +22,9 @@ export {
       }
 
     private:
-      runtime::ErrorText<511> message_;
+      static constexpr std::size_t message_capacity = 511;
+
+      runtime::ErrorText<message_capacity> message_;
     };
 
     // The socket of the user's own runtime, which `telar server endpoint` starts in the background

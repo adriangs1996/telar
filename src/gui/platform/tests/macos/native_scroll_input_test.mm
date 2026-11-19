@@ -76,16 +76,18 @@ namespace {
 
     event.delta = fractional_delta;
     event.precise = YES;
-    const auto phases = telar::ds::Array<std::pair<NSEventPhase, ScrollPhase>, 8>{{
-        {NSEventPhaseNone, ScrollPhase::none},
-        {NSEventPhaseBegan, ScrollPhase::begin},
-        {NSEventPhaseMayBegin, ScrollPhase::begin},
-        {NSEventPhaseStationary, ScrollPhase::update},
-        {NSEventPhaseChanged, ScrollPhase::update},
-        {NSEventPhaseEnded, ScrollPhase::end},
-        {NSEventPhaseCancelled, ScrollPhase::cancel},
-        {static_cast<NSEventPhase>(NSEventPhaseCancelled | NSEventPhaseBegan), ScrollPhase::cancel},
-    }};
+    const auto phases = telar::ds::Array<std::pair<NSEventPhase, ScrollPhase>, 8>{
+        {
+            {NSEventPhaseNone, ScrollPhase::none},
+            {NSEventPhaseBegan, ScrollPhase::begin},
+            {NSEventPhaseMayBegin, ScrollPhase::begin},
+            {NSEventPhaseStationary, ScrollPhase::update},
+            {NSEventPhaseChanged, ScrollPhase::update},
+            {NSEventPhaseEnded, ScrollPhase::end},
+            {NSEventPhaseCancelled, ScrollPhase::cancel},
+            {static_cast<NSEventPhase>(NSEventPhaseCancelled | NSEventPhaseBegan), ScrollPhase::cancel},
+        },
+    };
 
     for (const auto& [phase, expected] : phases) {
       event.scrollPhase = phase;

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef TELAR_GUI_TESTS_PLATFORM_PRIVATE_CLIPBOARD_HPP
+#define TELAR_GUI_TESTS_PLATFORM_PRIVATE_CLIPBOARD_HPP
 
 #include <cstddef>
 #include <memory>
@@ -28,3 +29,5 @@ namespace telar::gui::test {
   };
 
 }
+
+#endif // TELAR_GUI_TESTS_PLATFORM_PRIVATE_CLIPBOARD_HPP

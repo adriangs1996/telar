@@ -14,10 +14,20 @@ namespace telar::gui::inline foundation::inline system {
     bool sharedStorage(const struct stat& status) noexcept {
 #ifdef __APPLE__
       // Darwin reports permission bits but no regular-file type for shm_open objects.
-      return (status.st_mode & S_IFMT) == 0;
+      return (status.st_mode & static_cast<mode_t>(S_IFMT)) == 0;
 #else
       return S_ISREG(status.st_mode);
 #endif
+    }
+
+    // A descriptor that stays open across exec is not kept, so a failure here only drops the image.
+    bool closeOnExec(int descriptor) noexcept {
+      try {
+        runtime::setCloseOnExec(descriptor);
+        return true;
+      } catch (const std::exception&) {
+        return false;
+      }
     }
 
   }
@@ -44,7 +54,7 @@ namespace telar::gui::inline foundation::inline system {
       return;
     }
 
-    const bool close_on_exec = ::fcntl(descriptor.get(), F_SETFD, FD_CLOEXEC) == 0;
+    const bool close_on_exec = closeOnExec(descriptor.get());
     const bool unlinked = ::shm_unlink(terminated.data()) == 0;
     if (close_on_exec && unlinked) {
       descriptor_ = std::move(descriptor);

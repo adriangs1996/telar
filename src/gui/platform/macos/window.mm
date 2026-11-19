@@ -48,7 +48,8 @@ namespace telar::gui::platform {
       return view.window;
     }
 
-    char content_layout_key;
+    // Only its address matters: it keys the associated object that marks a configured window.
+    constexpr char content_layout_key{};
 
     // Opt in individual windows without changing their class: Qt/AppKit can already
     // be observing them through KVO. Other Qt windows retain their original layout.
@@ -60,8 +61,12 @@ namespace telar::gui::platform {
       }
 
       const SEL selector = @selector(contentLayoutRect);
-      const Method method = class_getInstanceMethod(base, selector);
-      const auto original = std::bit_cast<NSRect (*)(NSWindow*, SEL)>(method_getImplementation(method));
+      auto* const method = class_getInstanceMethod(base, selector);
+      if (method == nullptr) {
+        return;
+      }
+
+      const auto original = reinterpret_cast<NSRect (*)(NSWindow*, SEL)>(method_getImplementation(method)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): an IMP must be cast to the method's signature to be called
       const IMP replacement = imp_implementationWithBlock(^NSRect(NSWindow* native) {
         auto rect = original(native, selector);
         const auto style = native.styleMask;
@@ -349,8 +354,8 @@ namespace telar::gui::platform {
   // this process's volatile argument domain, before Qt creates NSApplication, so
   // held keys repeat at the system rate without writing the user's preferences.
   void configureKeyRepeat() {
-    NSUserDefaults* preferences = NSUserDefaults.standardUserDefaults;
-    NSMutableDictionary* arguments = [[preferences volatileDomainForName:NSArgumentDomain] mutableCopy];
+    NSUserDefaults* const preferences = NSUserDefaults.standardUserDefaults;
+    NSMutableDictionary* const arguments = [[preferences volatileDomainForName:NSArgumentDomain] mutableCopy];
 
     arguments[@"ApplePressAndHoldEnabled"] = @NO;
     [preferences setVolatileDomain:arguments forName:NSArgumentDomain];

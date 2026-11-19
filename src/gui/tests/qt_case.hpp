@@ -32,7 +32,9 @@ namespace telar::gui::test {
   template <typename Test, Slot slot>
   class QtCase {
   public:
-    explicit QtCase(std::string_view name) noexcept
+    // From a literal, which telar::testing::Case takes without a constructor that may throw.
+    template <std::size_t Size>
+    explicit QtCase(const char (&name)[Size]) noexcept
         : case_{name, run} {}
 
   private:

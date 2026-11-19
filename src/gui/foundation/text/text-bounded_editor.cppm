@@ -147,8 +147,11 @@ export {
     };
 
     // The native form field's text and display editors.
-    extern template class BoundedEditor<512>;
-    extern template class BoundedEditor<8192>;
+    inline constexpr std::size_t form_text_capacity = 512;
+    inline constexpr std::size_t form_display_capacity = 8192;
+
+    extern template class BoundedEditor<form_text_capacity>;
+    extern template class BoundedEditor<form_display_capacity>;
 
   }
 }

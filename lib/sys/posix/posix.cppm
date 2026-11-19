@@ -386,7 +386,7 @@ export {
   TELAR_SYS_FILE_FLAGS(TELAR_SYS_CONSTANT)
   TELAR_SYS_FILE_CONSTANTS(TELAR_SYS_CONSTANT)
   TELAR_SYS_LIMITS(TELAR_SYS_CONSTANT)
-  TELAR_SYS_ENUMERATORS(TELAR_SYS_ENUMERATOR)
+  TELAR_SYS_ENUMERATORS(TELAR_SYS_ENUMERATOR) // NOLINT(bugprone-reserved-identifier): POSIX spells these sysconf names, which the module exports as the system does
 
   inline constexpr bool S_ISDIR(mode_t mode) noexcept {
     return telar::sys::captured::S_ISDIR_(mode);

@@ -45,8 +45,11 @@ namespace telar::gui::inline foundation::inline system {
       return CommandLine::withArguments("paplay", ds::Array<std::string_view, 1>{file});
     case Backend::pipewire:
       return CommandLine::withArguments("pw-play", ds::Array<std::string_view, 1>{file});
-    case Backend::ffmpeg:
-      return CommandLine::withArguments("ffplay", ds::Array<std::string_view, 5>{"-nodisp", "-autoexit", "-loglevel", "quiet", file});
+    case Backend::ffmpeg: {
+      constexpr std::size_t ffplay_arguments = 5;
+
+      return CommandLine::withArguments("ffplay", ds::Array<std::string_view, ffplay_arguments>{"-nodisp", "-autoexit", "-loglevel", "quiet", file});
+    }
     case Backend::mpv:
       return CommandLine::withArguments("mpv", ds::Array<std::string_view, 3>{"--no-video", "--really-quiet", file});
     }

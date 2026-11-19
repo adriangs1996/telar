@@ -16,22 +16,27 @@ export {
       std::string_view expanded;
     };
 
+    // What a listing found besides the names it keeps: the directory it listed, how many entries
+    // matched, and whether the query names a directory itself.
+    struct DirectoryListing {
+      using Path = runtime::FixedText<PATH_MAX>;
+
+      Path base;
+      std::size_t matched = 0;
+      bool exact_exists = false;
+    };
+
     // The directories one expanded path can complete to, as the workspace form
     // lists them. A listing may block on the filesystem, so it runs on a
     // worker and keeps at most maximum_entries names, the first ones by name.
-    struct DirectoryCompletion {
+    // A value of fixed size, so a worker hands it back without the heap.
+    struct DirectoryCompletion : DirectoryListing {
       static constexpr std::size_t maximum_entries = 64;
       static constexpr std::size_t maximum_name_bytes = 255;
 
       using Name = runtime::FixedText<maximum_name_bytes>;
-      using Path = runtime::FixedText<PATH_MAX>;
       // A listed directory's path with the entry's name and a '/' after each.
       using Joined = runtime::FixedText<PATH_MAX + maximum_name_bytes + 2>;
-
-      // A value of fixed size, so a worker hands it back without the heap.
-      Path base;
-      std::size_t matched = 0;
-      bool exact_exists = false;
 
       [[nodiscard]] std::span<const Name> entries() const noexcept {
         return names_.view().first(count_);

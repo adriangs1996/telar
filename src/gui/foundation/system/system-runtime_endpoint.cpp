@@ -44,7 +44,7 @@ namespace telar::gui::inline foundation::inline system {
     void keep(Text& buffer, std::span<const telar::Byte> bytes, std::size_t limit) {
       const auto kept = std::min(bytes.size(), limit - buffer.size());
 
-      buffer.append({reinterpret_cast<const char*>(bytes.data()), kept});
+      buffer.append(telar::textView(bytes.first(kept)));
     }
 
     // Reads both streams until telar closes them, then waits for it to exit, all within one
@@ -81,14 +81,17 @@ namespace telar::gui::inline foundation::inline system {
       return end == std::string_view::npos ? std::string_view{} : text.substr(0, end + 1);
     }
 
+    runtime_endpoint::Failure unreadable() noexcept {
+      return runtime_endpoint::Failure{"telar answered with something other than the runtime endpoint"};
+    }
+
     // Exactly the socket path and the schema, each ending its line. Anything else, such as what a
     // shell startup file prints, is refused rather than guessed around.
     runtime_endpoint::Path parse(std::string_view answer) {
-      const runtime_endpoint::Failure unreadable{"telar answered with something other than the runtime endpoint"};
       const auto end = answer.find('\n');
 
       if (end == std::string_view::npos) {
-        throw unreadable;
+        throw unreadable();
       }
 
       const auto path = answer.substr(0, end);
@@ -97,22 +100,25 @@ namespace telar::gui::inline foundation::inline system {
 
       if (path.empty() || path.front() != '/' || path.size() >= sizeof(sockaddr_un::sun_path) ||
           std::ranges::any_of(path, [](unsigned char byte) {
-            return byte < 0x20 || byte == 0x7f;
+            constexpr unsigned char first_printable = 0x20;
+            constexpr unsigned char delete_character = 0x7f;
+
+            return byte < first_printable || byte == delete_character;
           })) {
-        throw unreadable;
+        throw unreadable();
       }
 
       if (schema.size() != expected.size() + 1 || schema.back() != '\n' ||
           std::ranges::any_of(schema.substr(0, expected.size()), [](unsigned char byte) {
             return !std::isalnum(byte);
           })) {
-        throw unreadable;
+        throw unreadable();
       }
 
       if (!std::ranges::equal(schema.substr(0, expected.size()), expected, {}, [](char byte) {
             return static_cast<telar::Byte>(byte);
           })) {
-        throw runtime_endpoint::Failure{"telar speaks wire schema ", schema.substr(0, expected.size()), "; the GUI speaks ", std::string_view{reinterpret_cast<const char*>(expected.data()), expected.size()}, ". Update one of them"};
+        throw runtime_endpoint::Failure{"telar speaks wire schema ", schema.substr(0, expected.size()), "; the GUI speaks ", telar::textView(expected), ". Update one of them"};
       }
 
       runtime_endpoint::Path endpoint;

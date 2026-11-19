@@ -195,7 +195,7 @@ export {
     // Calls `visit` with each pane leaf of `tab` in layout order; with `shown`, only the leaves the
     // tab shows: the focused one alone when it is fullscreen.
     template <Allocator Memory, typename Visit>
-    TBC_GENERIC void forEachLeaf(const Tab<Memory>& tab, bool shown, Visit&& visit) {
+    TBC_GENERIC void forEachLeaf(const Tab<Memory>& tab, bool shown, Visit visit) {
       for (const auto& node : tab.layout.nodes()) {
         const auto* leaf = std::get_if<ClientLayoutPane>(&node);
         if (leaf != nullptr && (!shown || !tab.fullscreen || leaf->pane_id == tab.focused_pane)) {

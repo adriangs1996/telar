@@ -78,7 +78,7 @@ namespace telar::gui::platform {
         continue;
       }
 
-      if (ready <= 0 || (static_cast<unsigned>(waiting.revents) & static_cast<unsigned>(POLLERR | POLLNVAL)) != 0) {
+      if (ready <= 0 || (static_cast<unsigned>(waiting.revents) & (static_cast<unsigned>(POLLERR) | static_cast<unsigned>(POLLNVAL))) != 0) {
         throw ClipboardImageFailure{ClipboardImageError::read_failed};
       }
 

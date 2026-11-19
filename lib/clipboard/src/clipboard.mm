@@ -1,5 +1,6 @@
 #include "telar_clipboard/clipboard.hpp"
 #import <AppKit/AppKit.h>
+#include <array>
 #include <new>
 #include <stdexcept>
 
@@ -27,10 +28,10 @@ namespace telar::clipboard {
         std::string_view mime_type;
       };
 
-      const image_format formats[] = {
-          {NSPasteboardTypePNG, "image/png"},
-          {@"public.jpeg", "image/jpeg"},
-          {NSPasteboardTypeTIFF, "image/tiff"},
+      const std::array formats{
+          image_format{.type = NSPasteboardTypePNG, .mime_type = "image/png"},
+          image_format{.type = @"public.jpeg", .mime_type = "image/jpeg"},
+          image_format{.type = NSPasteboardTypeTIFF, .mime_type = "image/tiff"},
       };
 
       // Prefer PNG/JPEG over TIFF, which AppKit can synthesize for legacy consumers.

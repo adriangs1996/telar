@@ -78,7 +78,7 @@ namespace telar::gui::inline foundation::inline core {
       }
 
       const auto result = std::to_chars(output.data(), output.data() + output.size(), value);
-      if (result.ec != std::errc{}) {
+      if (result.ec == std::errc::value_too_large) {
         throw std::length_error{"WriteFailed"};
       }
 
@@ -118,7 +118,7 @@ namespace telar::gui::inline foundation::inline core {
     constexpr std::size_t capacity = std::numeric_limits<double>::max_exponent10 + std::numeric_limits<double>::max_digits10 + sizeof("-0.");
     ds::Array<char, capacity> encoded{};
     const auto result = std::to_chars(encoded.dataMut(), encoded.dataMut() + encoded.size(), value, std::chars_format::fixed);
-    if (result.ec != std::errc{}) {
+    if (result.ec == std::errc::value_too_large) {
       throw std::length_error{"WriteFailed"};
     }
 

@@ -2,6 +2,7 @@
 #include "cf_reference.hpp"
 #include "font_smoothing.h"
 #include "tbc/view.hpp"
+#include "telar_base/ds/values.hpp"
 #import <CoreGraphics/CoreGraphics.h>
 #import <CoreText/CoreText.h>
 #include <cmath>
@@ -12,16 +13,6 @@
 
 using telar::gui::platform::NativeReference;
 
-enum NativeGlyphOptions {
-  maximum_font_faces = 256,
-  synthetic_bold_style = 1,
-  synthetic_italic_style = 2,
-  maximum_glyph_style = synthetic_bold_style | synthetic_italic_style,
-};
-
-static const CGFloat synthetic_bold_divisor = 24;
-static const CGFloat synthetic_italic_slant = 0.21256;
-
 // Each owned reference is released with the rasterizer.
 struct telar_glyph_rasterizer {
   NativeReference<CTFontRef> base, regular, italic;
@@ -30,73 +21,84 @@ struct telar_glyph_rasterizer {
   bool thicken = false;
 };
 
-static CTFontRef font_from_data(const telar_glyph_rasterizer_options* options) {
-  const NativeReference data{CFDataCreateWithBytesNoCopy(kCFAllocatorDefault, options->font, (CFIndex)options->font_len, kCFAllocatorNull)};
-  if (!data) {
-    return nullptr;
-  }
+namespace {
 
-  const NativeReference descriptors{CTFontManagerCreateFontDescriptorsFromData(data.get())};
-  if (!descriptors) {
-    return nullptr;
-  }
+  constexpr CFIndex maximum_font_faces = 256;
+  constexpr uint32_t synthetic_bold_style = 1;
+  constexpr uint32_t synthetic_italic_style = 2;
+  constexpr uint32_t maximum_glyph_style = synthetic_bold_style | synthetic_italic_style;
+  constexpr CGFloat synthetic_bold_divisor = 24;
+  constexpr CGFloat synthetic_italic_slant = 0.21256;
 
-  const NativeReference name{options->postscript != nullptr ? CFStringCreateWithCString(kCFAllocatorDefault, options->postscript, kCFStringEncodingUTF8) : nullptr};
-  if (options->postscript != nullptr && !name) {
-    return nullptr;
-  }
+  CTFontRef createFontFromData(const telar_glyph_rasterizer_options* options) {
+    const NativeReference data{CFDataCreateWithBytesNoCopy(kCFAllocatorDefault, options->font, (CFIndex)options->font_len, kCFAllocatorNull)};
+    if (!data) {
+      return nullptr;
+    }
 
-  const CFIndex count = CFArrayGetCount(descriptors.get());
-  if (count <= maximum_font_faces) {
-    for (CFIndex i = 0; i < count; i++) {
-      auto descriptor = (CTFontDescriptorRef)CFArrayGetValueAtIndex(descriptors.get(), i);
-      const NativeReference candidate{(CFStringRef)CTFontDescriptorCopyAttribute(descriptor, kCTFontNameAttribute)};
-      const bool matches = name ? candidate && (CFEqual(name.get(), candidate.get()) != 0u) : i == options->face_index;
-      if (matches) {
-        return CTFontCreateWithFontDescriptor(descriptor, 1, nullptr);
+    const NativeReference descriptors{CTFontManagerCreateFontDescriptorsFromData(data.get())};
+    if (!descriptors) {
+      return nullptr;
+    }
+
+    const NativeReference name{options->postscript != nullptr ? CFStringCreateWithCString(kCFAllocatorDefault, options->postscript, kCFStringEncodingUTF8) : nullptr};
+    if (options->postscript != nullptr && !name) {
+      return nullptr;
+    }
+
+    const CFIndex count = CFArrayGetCount(descriptors.get());
+    if (count <= maximum_font_faces) {
+      for (CFIndex i = 0; i < count; i++) {
+        const auto* descriptor = static_cast<CTFontDescriptorRef>(CFArrayGetValueAtIndex(descriptors.get(), i));
+        const NativeReference candidate{static_cast<CFStringRef>(CTFontDescriptorCopyAttribute(descriptor, kCTFontNameAttribute))};
+        const bool matches = name ? candidate && (CFEqual(name.get(), candidate.get()) != 0U) : i == options->face_index;
+        if (matches) {
+          return CTFontCreateWithFontDescriptor(descriptor, 1, nullptr);
+        }
       }
     }
-  }
 
-  return nullptr;
-}
-
-// The font with the variation applied, or none; the font itself is consumed. The result is a new
-// reference the caller owns, borrowing none of the arguments.
-static tbc::view<CTFontRef, tbc::lt::static_storage> vary(CTFontRef consumed, const telar_font_variation* variation) {
-  NativeReference font{consumed};
-  if (!font || variation == nullptr || variation->count == 0) {
-    return tbc::raw(font.release());
-  }
-
-  if (variation->count > telar_font_max_axes) {
     return nullptr;
   }
 
-  const NativeReference axes{CFDictionaryCreateMutable(kCFAllocatorDefault, variation->count, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks)};
-
-  for (uint32_t i = 0; axes && i < variation->count; i++) {
-    const NativeReference tag{CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type, &variation->tags[i])};
-    const NativeReference value{CFNumberCreate(kCFAllocatorDefault, kCFNumberFloat32Type, &variation->values[i])};
-    if (tag && value) {
-      CFDictionarySetValue(axes.get(), tag.get(), value.get());
+  // The font with the variation applied, or none; the font itself is consumed. The result is a new
+  // reference the caller owns, borrowing none of the arguments.
+  tbc::view<CTFontRef, tbc::lt::static_storage> vary(CF_CONSUMED CTFontRef consumed, const telar_font_variation* variation) {
+    NativeReference font{consumed};
+    if (!font || variation == nullptr || variation->count == 0) {
+      return tbc::raw(font.release());
     }
+
+    if (variation->count > telar_font_max_axes) {
+      return nullptr;
+    }
+
+    const NativeReference axes{CFDictionaryCreateMutable(kCFAllocatorDefault, variation->count, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks)};
+
+    for (uint32_t i = 0; axes && i < variation->count; i++) {
+      const NativeReference tag{CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type, &variation->tags[i])};
+      const NativeReference value{CFNumberCreate(kCFAllocatorDefault, kCFNumberFloat32Type, &variation->values[i])};
+      if (tag && value) {
+        CFDictionarySetValue(axes.get(), tag.get(), value.get());
+      }
+    }
+
+    if (!axes || std::cmp_not_equal(CFDictionaryGetCount(axes.get()), variation->count)) {
+      return nullptr;
+    }
+
+    telar::ds::Array<const void*, 1> keys{kCTFontVariationAttribute};
+    telar::ds::Array<const void*, 1> values{axes.get()};
+    const NativeReference attributes{CFDictionaryCreate(kCFAllocatorDefault, keys.dataMut(), values.dataMut(), static_cast<CFIndex>(keys.size()), &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks)};
+    const NativeReference descriptor{attributes ? CTFontDescriptorCreateWithAttributes(attributes.get()) : nullptr};
+
+    return descriptor ? tbc::raw(CTFontCreateCopyWithAttributes(font.get(), CTFontGetSize(font.get()), nullptr, descriptor.get())) : nullptr;
   }
 
-  if (!axes || std::cmp_not_equal(CFDictionaryGetCount(axes.get()), variation->count)) {
-    return nullptr;
-  }
-
-  const void* keys[] = {kCTFontVariationAttribute};
-  const void* values[] = {axes.get()};
-  const NativeReference attributes{CFDictionaryCreate(kCFAllocatorDefault, keys, values, 1, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks)};
-  const NativeReference descriptor{attributes ? CTFontDescriptorCreateWithAttributes(attributes.get()) : nullptr};
-
-  return descriptor ? tbc::raw(CTFontCreateCopyWithAttributes(font.get(), CTFontGetSize(font.get()), nullptr, descriptor.get())) : nullptr;
 }
 
 void telarGlyphRasterizerDestroy(const telar_glyph_rasterizer* self) {
-  delete self;
+  std::default_delete<const telar_glyph_rasterizer>{}(self);
 }
 
 telar_glyph_rasterizer* telarGlyphRasterizerCreate(const telar_glyph_rasterizer_options* options) {
@@ -112,11 +114,14 @@ telar_glyph_rasterizer* telarGlyphRasterizerCreate(const telar_glyph_rasterizer_
 
   self->side = options->side;
   self->thicken = options->thicken != 0;
-  self->base.reset(vary(font_from_data(options), options->variation));
+  self->base.reset(vary(createFontFromData(options), options->variation));
   const NativeReference space{CGColorSpaceCreateWithName(kCGColorSpaceLinearGray)};
   if (self->base && space) {
+    // One byte of alpha per pixel.
+    constexpr size_t bits_per_component = 8;
+
     // The caller's buffer, which the context draws into from now on: C's, by address.
-    self->context.reset(CGBitmapContextCreate(tbc::raw(options->pixels), options->side, options->side, 8, options->side, space.get(), (CGBitmapInfo)kCGImageAlphaOnly));
+    self->context.reset(CGBitmapContextCreate(tbc::raw(options->pixels), options->side, options->side, bits_per_component, options->side, space.get(), (CGBitmapInfo)kCGImageAlphaOnly));
   }
 
   if (!self->context) {
@@ -154,7 +159,7 @@ int telarGlyphRasterizerMeasure(const telar_glyph_rasterizer* self, telar_glyph_
     return -1;
   }
 
-  CTFontRef font = ((glyph->style & synthetic_italic_style) != 0u) ? self->italic.get() : self->regular.get();
+  CTFontRef font = ((glyph->style & synthetic_italic_style) != 0U) ? self->italic.get() : self->regular.get();
   const auto index = (CGGlyph)glyph->index;
   const CGRect rect = CTFontGetBoundingRectsForGlyphs(font, kCTFontOrientationHorizontal, &index, nullptr, 1);
   if (CGRectIsEmpty(rect)) {
@@ -162,7 +167,7 @@ int telarGlyphRasterizerMeasure(const telar_glyph_rasterizer* self, telar_glyph_
     return 0;
   }
 
-  const CGFloat stroke = ((glyph->style & synthetic_bold_style) != 0u) ? (CGFloat)self->pixel_height / synthetic_bold_divisor : 0;
+  const CGFloat stroke = ((glyph->style & synthetic_bold_style) != 0U) ? (CGFloat)self->pixel_height / synthetic_bold_divisor : 0;
   const CGFloat extra = (stroke / 2) + (self->thicken ? 1 : 0);
   const CGFloat left = floor(CGRectGetMinX(rect) - extra);
   const CGFloat bottom = floor(CGRectGetMinY(rect) - extra);
@@ -195,11 +200,11 @@ void telarGlyphRasterizerDraw(const telar_glyph_rasterizer* self, const telar_gl
 
   CGContextClipToRect(context, region);
   CGContextClearRect(context, region);
-  CGContextSetTextDrawingMode(context, ((glyph->style & synthetic_bold_style) != 0u) ? kCGTextFillStroke : kCGTextFill);
+  CGContextSetTextDrawingMode(context, ((glyph->style & synthetic_bold_style) != 0U) ? kCGTextFillStroke : kCGTextFill);
   CGContextSetLineWidth(context, (CGFloat)self->pixel_height / synthetic_bold_divisor);
-  CTFontRef font = ((glyph->style & synthetic_italic_style) != 0u) ? self->italic.get() : self->regular.get();
+  CTFontRef font = ((glyph->style & synthetic_italic_style) != 0U) ? self->italic.get() : self->regular.get();
   const auto index = (CGGlyph)glyph->index;
-  const CGPoint point = {(CGFloat)glyph->x - glyph->left, (CGFloat)self->side - glyph->y - glyph->top};
+  const CGPoint point = {.x = (CGFloat)glyph->x - glyph->left, .y = (CGFloat)self->side - glyph->y - glyph->top};
 
   CTFontDrawGlyphs(font, &index, &point, 1, context);
   CGContextRestoreGState(context);

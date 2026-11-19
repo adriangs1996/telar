@@ -88,6 +88,11 @@ export {
       static constexpr float sans_line_ratio = 1.3F;
       static constexpr float minimum_text = 6;
 
+      // Text sizes at the design font size, before resolve() scales them.
+      static constexpr std::uint16_t design_title = 14;
+      static constexpr std::uint16_t design_body = 13;
+      static constexpr std::uint16_t design_small = 12;
+
       float ratio = 1;
       // The display scale times the chrome text's growth over the design font. Lengths that frame
       // chrome text (insets, marks, rows) follow it to keep their proportion to that text.
@@ -95,9 +100,9 @@ export {
       float top_bar = logical_top_bar;
       float status_bar = logical_status_bar;
       float pane_header = logical_pane_header;
-      std::uint16_t title = 14;
-      std::uint16_t body = 13;
-      std::uint16_t small = 12;
+      std::uint16_t title = design_title;
+      std::uint16_t body = design_body;
+      std::uint16_t small = design_small;
 
       static ChromeMetrics resolve(const Configuration& configuration, const Viewport& viewport, const CellMetrics& cells) noexcept;
 

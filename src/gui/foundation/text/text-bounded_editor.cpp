@@ -612,7 +612,7 @@ namespace telar::gui::inline foundation::inline text {
     return static_cast<std::uint16_t>(cellTextColumns(text().substr(first, last - first)));
   }
 
-  template class BoundedEditor<512>;
-  template class BoundedEditor<8192>;
+  template class BoundedEditor<form_text_capacity>;
+  template class BoundedEditor<form_display_capacity>;
 
 }

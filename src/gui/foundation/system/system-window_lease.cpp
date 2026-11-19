@@ -11,6 +11,12 @@ namespace telar::gui::inline foundation::inline system {
 
   namespace {
 
+    // open(2) and flock(2) take their flags as an int; the bits are combined unsigned.
+    template <std::same_as<int>... Flag>
+    constexpr int combineFlags(Flag... flags) noexcept {
+      return static_cast<int>((0U | ... | static_cast<unsigned>(flags)));
+    }
+
     // The filename is written into the output, region `a`.
     tbc::view<std::string_view, tbc::lt::a> lockFilename(tbc::view<std::span<char>, tbc::lt::a> output, std::string_view basename, unsigned slot) {
       constexpr std::string_view prefix = ".gui-";
@@ -23,7 +29,7 @@ namespace telar::gui::inline foundation::inline system {
 
       next = std::ranges::copy(prefix, next).out;
       auto formatted = std::to_chars(next, output.data() + output.size() - suffix.size(), slot);
-      if (formatted.ec != std::errc{}) {
+      if (formatted.ec == std::errc::value_too_large) {
         throw std::runtime_error{"GUI identity filename exceeds capacity"};
       }
 
@@ -66,7 +72,7 @@ namespace telar::gui::inline foundation::inline system {
     }
 
     canonical_endpoint_.atMut(canonical_length) = '/';
-    std::ranges::copy(basename, canonical_endpoint_.viewMut().begin() + canonical_length + 1);
+    std::ranges::copy(basename, canonical_endpoint_.viewMut().subspan(canonical_length + 1).begin());
     endpoint_length_ = canonical_length + 1 + basename.size();
     canonical_endpoint_.atMut(endpoint_length_) = '\0';
 
@@ -74,11 +80,11 @@ namespace telar::gui::inline foundation::inline system {
       ds::Array<char, NAME_MAX> filename{};
       const auto name = lockFilename(filename.viewMut(), basename, slot);
       constexpr mode_t private_file_permissions = 0600;
-      auto file = runtime::openBeneath(directory.get(), name, O_RDWR | O_CREAT, private_file_permissions);
+      auto file = runtime::openBeneath(directory.get(), name, combineFlags(O_RDWR, O_CREAT), private_file_permissions);
 
       validateFile(file.get());
-      if (::flock(file.get(), LOCK_EX | LOCK_NB) != 0) {
-        if (sys::lastError() == EWOULDBLOCK || sys::lastError() == EAGAIN) {
+      if (::flock(file.get(), combineFlags(LOCK_EX, LOCK_NB)) != 0) {
+        if (sys::lastError() == EWOULDBLOCK) {
           continue;
         }
 

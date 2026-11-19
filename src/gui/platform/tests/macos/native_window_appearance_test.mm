@@ -36,8 +36,8 @@ namespace {
 
   // The buttons keep AppKit's spacing, sit on the navigation bar's middle line and
   // leave room before the first control drawn by Qt, even after AppKit retiles them.
-  void requireNavigationControls(const QQuickWindow& window, NSWindow* native, CGFloat navigation_height, CGFloat pitch) {
-    const auto middle = native.frame.size.height - (navigation_height / 2);
+  void requireNavigationControls(const QQuickWindow& window, NSWindow* native, const telar::gui::platform::WindowAppearance& appearance, CGFloat pitch) {
+    const auto middle = native.frame.size.height - (appearance.navigation_height / 2);
     CGFloat previous = 0;
     CGFloat trailing = 0;
 
@@ -59,24 +59,33 @@ namespace {
     explicit NavigationPointerProbe(QEventLoop& loop)
         : loop_(loop) {}
 
-    int presses = 0;
-    int drags = 0;
-    int releases = 0;
+    [[nodiscard]] int presses() const noexcept {
+      return presses_;
+    }
 
-  protected:
+    [[nodiscard]] int drags() const noexcept {
+      return drags_;
+    }
+
+    [[nodiscard]] int releases() const noexcept {
+      return releases_;
+    }
+
     bool eventFilter(QObject* /*watched*/, QEvent* event) override {
       switch (event->type()) {
       case QEvent::MouseButtonPress:
-        ++presses;
+        ++presses_;
         return true;
-      case QEvent::MouseMove:
-        if (static_cast<QMouseEvent*>(event)->buttons().testFlag(Qt::LeftButton)) {
-          ++drags;
+      case QEvent::MouseMove: {
+        const auto* const mouse = dynamic_cast<const QMouseEvent*>(event);
+        if (mouse != nullptr && mouse->buttons().testFlag(Qt::LeftButton)) {
+          ++drags_;
         }
 
         return true;
+      }
       case QEvent::MouseButtonRelease:
-        ++releases;
+        ++releases_;
         loop_.quit();
         return true;
       default:
@@ -86,6 +95,9 @@ namespace {
 
   private:
     QEventLoop& loop_;
+    int presses_ = 0;
+    int drags_ = 0;
+    int releases_ = 0;
   };
 
   void verifyNavigationMouseDelivery(QQuickWindow& window) {
@@ -110,7 +122,10 @@ namespace {
     const auto post = [&](NSEventType type, NSPoint point) {
       NSEvent* const event = [NSEvent mouseEventWithType:type location:point modifierFlags:0 timestamp:timestamp windowNumber:native.windowNumber context:nil eventNumber:0 clickCount:1 pressure:type == NSEventTypeLeftMouseUp ? 0 : 1];
 
-      [NSApp postEvent:event atStart:NO];
+      check(event != nil, "AppKit must create the synthetic mouse event");
+      if (event != nil) {
+        [NSApp postEvent:event atStart:NO];
+      }
     };
 
     post(NSEventTypeLeftMouseDown, start);
@@ -119,7 +134,7 @@ namespace {
     deadline.start(timeout_ms);
     delivery.exec();
     window.removeEventFilter(&probe);
-    check(probe.presses == 1 && probe.drags > 0 && probe.releases == 1, "native navigation drags must reach Qt instead of AppKit's window-drag strip");
+    check(probe.presses() == 1 && probe.drags() > 0 && probe.releases() == 1, "native navigation drags must reach Qt instead of AppKit's window-drag strip");
     check(window.position() == origin, "dragging inside navigation must not move the native window");
   }
 
@@ -160,7 +175,7 @@ namespace {
     painted.exec();
     check(deadline.isActive(), "native blurred window must present a Qt frame");
     deadline.stop();
-    requireNavigationControls(window, native, blurred.navigation_height, pitch);
+    requireNavigationControls(window, native, blurred, pitch);
     verifyNavigationMouseDelivery(window);
 
     configureWindow(window, blurred);
@@ -170,7 +185,7 @@ namespace {
     QGuiApplication::processEvents();
     check(NSEqualRects(effect.frame, content.frame), "native blur must follow resized content");
     requireHiddenTitleLayout(native);
-    requireNavigationControls(window, native, blurred.navigation_height, pitch);
+    requireNavigationControls(window, native, blurred, pitch);
     auto titled = blurred;
 
     titled.titlebar = true;

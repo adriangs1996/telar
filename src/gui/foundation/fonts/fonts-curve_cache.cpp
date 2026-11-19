@@ -174,15 +174,17 @@ namespace telar::gui::inline foundation::inline fonts::glyphs {
     const auto middle_x = split(cell.width, half_eighths);
     const auto middle_y = split(cell.height, half_eighths);
     // A row with neither of its quadrants comes out with no width, which the ink skips.
-    const auto band = [&](unsigned row, float top, float bottom) -> Rect {
+    const auto band = [&](unsigned row) -> Rect {
+      const auto top = row == 0 ? 0.0F : middle_y;
+      const auto bottom = row == 0 ? middle_y : cell.height;
       const auto x = (mask & (upper_left << (2 * row))) != 0 ? 0 : middle_x;
       const auto right_edge = (mask & (upper_right << (2 * row))) != 0 ? cell.width : middle_x;
 
       return {.x = x, .y = top, .width = right_edge - x, .height = bottom - top};
     };
 
-    auto upper = band(0, 0, middle_y);
-    const auto lower = band(1, middle_y, cell.height);
+    auto upper = band(0);
+    const auto lower = band(1);
     Paint result;
 
     // Two bands that line up make one rectangle, as Ink::appendMerged would join them; with only

@@ -12,6 +12,8 @@ namespace telar::gui::inline foundation::inline core {
   }
 
   std::uint8_t MetricLevels::percent(BarMetric metric, const SystemMetrics& sample) noexcept {
+    constexpr unsigned full_percent = 100;
+
     switch (metric) {
     case BarMetric::cpu:
       return sample.cpu_percent;
@@ -20,7 +22,7 @@ namespace telar::gui::inline foundation::inline core {
         return 0;
       }
 
-      return static_cast<std::uint8_t>(std::min<unsigned>(100, ((sample.memory_used_decigib * 100U) + (sample.memory_total_decigib / 2U)) / sample.memory_total_decigib));
+      return static_cast<std::uint8_t>(std::min<unsigned>(full_percent, ((sample.memory_used_decigib * full_percent) + (sample.memory_total_decigib / 2U)) / sample.memory_total_decigib));
     case BarMetric::battery:
       return sample.battery_percent;
     }
@@ -35,8 +37,11 @@ namespace telar::gui::inline foundation::inline core {
 
     const int value = percent(metric, sample);
     const auto rising = [&](int warning, int danger) noexcept {
-      return value + margin >= danger ? MetricSeverity::danger : value + margin >= warning ? MetricSeverity::warning
-                                                                                           : MetricSeverity::normal;
+      if (value + margin >= danger) {
+        return MetricSeverity::danger;
+      }
+
+      return value + margin >= warning ? MetricSeverity::warning : MetricSeverity::normal;
     };
 
     switch (metric) {
@@ -45,8 +50,11 @@ namespace telar::gui::inline foundation::inline core {
     case BarMetric::memory:
       return rising(memory_warning, memory_danger);
     case BarMetric::battery:
-      return value - margin <= battery_danger ? MetricSeverity::danger : value - margin <= battery_warning ? MetricSeverity::warning
-                                                                                                           : MetricSeverity::normal;
+      if (value - margin <= battery_danger) {
+        return MetricSeverity::danger;
+      }
+
+      return value - margin <= battery_warning ? MetricSeverity::warning : MetricSeverity::normal;
     }
 
     return MetricSeverity::normal;

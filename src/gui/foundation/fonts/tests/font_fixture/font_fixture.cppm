@@ -18,6 +18,7 @@ import telar.gui.foundation.core;
 import telar.base.memory.allocators;
 import telar.gui.foundation.fonts;
 import telar.platform.fs;
+import telar.wire.vocabulary;
 import telar.base.ds;
 
 export {
@@ -65,7 +66,7 @@ export {
       static tbc::view<ds::Vec<std::uint8_t, Memory>, tbc::lt::a> read(tbc::view<Memory&, tbc::lt::a> memory, const std::filesystem::path& path) {
         const auto data = runtime::readFile(memory, path.c_str(), telar_font_max_bytes);
 
-        return ds::Vec<std::uint8_t, Memory>{memory, {reinterpret_cast<const std::uint8_t*>(data.data()), data.size()}};
+        return ds::Vec<std::uint8_t, Memory>{memory, telar::byteView({data.data(), data.size()})};
       }
 
       tbc::view<ds::Vec<std::uint8_t, Memory>, tbc::lt::a> regular_bytes_;

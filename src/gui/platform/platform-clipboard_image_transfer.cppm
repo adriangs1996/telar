@@ -6,32 +6,30 @@ import :clipboard_image_pipe;
 import telar.base.ds;
 
 // This class completes the forward declaration in the Objective-C++ ABI.
-export extern "C++" {
-  namespace telar::gui::platform {
+export namespace telar::gui::platform {
 
-    class ClipboardImageTransfer {
-    public:
-      void fail(ClipboardImageError error) noexcept {
-        if (failed_.load(std::memory_order_relaxed)) {
-          return;
-        }
-
-        error_ = error;
-        failed_.store(true, std::memory_order_release);
+  extern "C++" class ClipboardImageTransfer {
+  public:
+    void fail(ClipboardImageError error) noexcept {
+      if (failed_.load(std::memory_order_relaxed)) {
+        return;
       }
 
-      [[nodiscard]] ds::Option<ClipboardImageError> failure() const noexcept {
-        if (failed_.load(std::memory_order_acquire)) {
-          return error_;
-        }
+      error_ = error;
+      failed_.store(true, std::memory_order_release);
+    }
 
-        return ds::none;
+    [[nodiscard]] ds::Option<ClipboardImageError> failure() const noexcept {
+      if (failed_.load(std::memory_order_acquire)) {
+        return error_;
       }
 
-    private:
-      ClipboardImageError error_ = ClipboardImageError::read_failed;
-      std::atomic<bool> failed_ = false;
-    };
+      return ds::none;
+    }
 
-  }
+  private:
+    ClipboardImageError error_ = ClipboardImageError::read_failed;
+    std::atomic<bool> failed_ = false;
+  };
+
 }

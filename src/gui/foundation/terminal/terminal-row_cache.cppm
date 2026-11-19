@@ -66,7 +66,7 @@ export namespace telar::gui::inline foundation::inline terminal {
     // Calls `visit` with each hyperlink on held row `stable`. Generic over the caller's visitor,
     // so it stays here.
     template <typename Visitor>
-    TBC_GENERIC void links(std::uint64_t stable, Visitor&& visit) const {
+    TBC_GENERIC void links(std::uint64_t stable, Visitor visit) const {
       if (!holds(stable)) {
         return;
       }

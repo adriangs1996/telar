@@ -19,7 +19,7 @@ namespace telar::gui::inline foundation::inline system {
     const auto modified = status.st_mtim;
 #endif
 
-    return FileStamp{.size = static_cast<std::uint64_t>(status.st_size), .modified_seconds = modified.tv_sec, .modified_nanoseconds = modified.tv_nsec, .kind = static_cast<std::uint32_t>(status.st_mode & S_IFMT)};
+    return FileStamp{.size = static_cast<std::uint64_t>(status.st_size), .modified_seconds = modified.tv_sec, .modified_nanoseconds = modified.tv_nsec, .kind = static_cast<std::uint32_t>(status.st_mode & static_cast<mode_t>(S_IFMT))};
   }
 
 }
