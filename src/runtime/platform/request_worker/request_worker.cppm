@@ -194,7 +194,9 @@ export {
       tbc::view<ds::Option<Request>, tbc::lt::a> request_;
       // Only the worker's thread touches the request it is answering.
       tbc::view<ds::Option<Request>, tbc::lt::a> processing_;
-      ds::Option<Result> result_;
+      // May view the request processing_ holds, which is replaced only once the result is collected;
+      // the worker never moves, as its mutex and thread do not.
+      tbc::view<ds::Option<Result>, tbc::lt::self> result_;
       bool busy_ = false;
       std::atomic<bool> result_ready_{false};
       bool stopping_ = false;

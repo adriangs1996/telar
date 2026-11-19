@@ -386,11 +386,14 @@ export {
 
         ds::Option<AgentResume> resume = resumable(record);
         ds::Array<std::string_view, 4> resume_storage;
-        auto resumed = resume ? resumeArguments(*resume, resume_storage) : std::span<const std::string_view>{};
-        const bool direct = !resumed.empty() && original[0].substr(original[0].rfind('/') + 1) == resumed[0];
+        const auto resumed_count = resume ? resumeArguments(*resume, resume_storage).size() : 0;
+        const bool direct = resumed_count != 0 && original[0].substr(original[0].rfind('/') + 1) == resume_storage[0];
         if (direct) {
           resume_storage.atMut(0) = original[0];
         }
+
+        // Viewed once the program the pane ran is in place.
+        const auto resumed = std::span<const std::string_view>{resume_storage}.first(resumed_count);
 
         const auto arguments = direct ? resumed : std::span<const std::string_view>{original}.first(record.argument_count);
         Command command{memory_, Launch{.cwd = record.cwd, .arguments = arguments}};
@@ -451,7 +454,9 @@ export {
         ds::Array<std::uint64_t, WorkspaceStore::capacity> emptied{};
         std::size_t count = 0;
 
-        for (auto* workspace : model_.workspaces.items()) {
+        // By index: changing a workspace borrows the store it lies in.
+        for (std::size_t index = 0; index < model_.workspaces.items().size(); ++index) {
+          auto* workspace = model_.workspaces.items()[index];
           if (workspace == nullptr) {
             continue;
           }

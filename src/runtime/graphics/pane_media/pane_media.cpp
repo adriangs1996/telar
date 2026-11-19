@@ -564,13 +564,15 @@ namespace telar::runtime {
 
   void AtomicFrameLoader::place(AtomicFrameKey key) {
     ds::Array<char, 64> command;
-    auto* end = std::copy_n("\x1b_Ga=p,i=", 9, command.dataMut());
+    // One mutable borrow of the command, which `end` walks.
+    const std::span<char> output{command.dataMut(), command.size()};
+    auto* end = std::copy_n("\x1b_Ga=p,i=", 9, output.data());
 
-    end = std::to_chars(end, command.dataMut() + command.size(), key.image_id).ptr;
+    end = std::to_chars(end, output.data() + output.size(), key.image_id).ptr;
     end = std::copy_n(",p=", 3, end);
-    end = std::to_chars(end, command.dataMut() + command.size(), key.placement_id).ptr;
+    end = std::to_chars(end, output.data() + output.size(), key.placement_id).ptr;
     end = std::copy_n(",C=1,q=2\x1b\\", 10, end);
-    terminal_.feed({reinterpret_cast<const Byte*>(command.data()), static_cast<std::size_t>(end - command.data())});
+    terminal_.feed({reinterpret_cast<const Byte*>(output.data()), static_cast<std::size_t>(end - output.data())});
   }
 
   MediaInput::MediaInput(MediaAllocator<ConcurrentMemory>& memory, MediaTerminal& terminal, PreparedImages& prepared, const std::atomic<unsigned>& shared_clients) noexcept
@@ -892,12 +894,15 @@ namespace telar::runtime {
       }
     }
 
-    auto frozen = requests_.take(key, shared);
-    if (!frozen && requests_.request(key, shared)) {
+    if (auto frozen = requests_.take(key, shared)) {
+      return frozen;
+    }
+
+    if (requests_.request(key, shared)) {
       output({});
     }
 
-    return frozen;
+    return ds::none;
   }
 
   bool PaneMedia::idle() const noexcept {
