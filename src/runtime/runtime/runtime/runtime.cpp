@@ -1259,7 +1259,13 @@ namespace telar::runtime {
 
     const auto previous = workspace->tabs.size() == 1 ? previousWorkspace(model.workspaces, workspace->id) : ds::none;
 
-    for (const auto identity : tab->panes) {
+    // The tab's panes, copied: closing one changes the pane store while the tab lies in the
+    // workspaces, as Rust copies ids out of one collection before mutating another.
+    ds::Array<std::uint64_t, maximum_panes_per_tab> closing{};
+    const auto count = std::min(tab->panes.size(), closing.size());
+
+    std::ranges::copy(tab->panes.view().first(count), closing.dataMut());
+    for (const auto identity : std::span{closing}.first(count)) {
       if (auto* pane = model.panes.find(identity)) {
         pane->requestClose();
       }
