@@ -172,6 +172,10 @@ export namespace telar::runtime {
     }
 
     void scan(std::span<const Byte> bytes, ObservationTime time, CommandZoneSink& sink);
+
+    // Forgets every mark and report, as a new observation starts, keeping the memory, the token
+    // and the directory.
+    void restart();
     void input(std::span<const Byte> bytes) noexcept;
     bool editing() const noexcept;
     bool markersReady() const noexcept;
@@ -218,35 +222,43 @@ export namespace telar::runtime {
     static constexpr std::size_t host_capacity = 255;
     static constexpr std::string_view private_code = "6973";
 
-    void finishSequence(ObservationTime time, CommandZoneSink& sink, std::size_t end);
-    // Not inlined: finishSequence runs for every OSC a pane prints, and these two only for OSC 6973 and
-    // OSC 7; their buffers in its frame would put every prompt mark (OSC 133) on deeper stack pages.
-    [[gnu::noinline]] bool privateReport(std::string_view body);
-    void semantic(std::string_view body, ObservationTime time, CommandZoneSink& sink, std::size_t end);
-    [[gnu::noinline]] void directoryReport(std::string_view body);
+    // What the shell's marks and reports said, apart from the sequence being read, so a report's
+    // body, which views that sequence, is handed to it.
+    struct Shell {
+      // Not inlined: a sequence finishes for every OSC a pane prints, and these two only for OSC
+      // 6973 and OSC 7; their buffers in its frame would put every prompt mark (OSC 133) on deeper
+      // stack pages.
+      [[gnu::noinline]] bool privateReport(std::string_view body);
+      void semantic(std::string_view body, ObservationTime time, CommandZoneSink& sink, std::size_t end);
+      [[gnu::noinline]] void directoryReport(std::string_view body);
 
 #if TELAR_DIAGNOSTICS
-    diagnostics::CommandCaptureCounters metrics_;
+      diagnostics::CommandCaptureCounters metrics_;
 #endif
-    ConcurrentMemory* memory_;
-    ds::Option<ShellToken> token_;
-    ds::Option<ShellToken> remote_;
-    ds::Option<ShellToken> nest_;
-    IntegratedShell remote_shell_ = IntegratedShell::none;
+      ConcurrentMemory* memory_ = nullptr;
+      ds::Option<ShellToken> token_;
+      ds::Option<ShellToken> remote_;
+      ds::Option<ShellToken> nest_;
+      IntegratedShell remote_shell_ = IntegratedShell::none;
+      Zone zone_ = Zone::unknown;
+      bool markers_ready_ = false;
+      bool has_input_ = false;
+      bool running_ = false;
+      bool nested_running_ = false;
+      FixedText<directory_capacity> directory_;
+      FixedText<path_capacity> path_;
+      FixedText<host_capacity> host_;
+      FixedText<directory_capacity> remote_directory_;
+      std::shared_ptr<const ds::String<ConcurrentMemory>> names_;
+    };
+
+    void finishSequence(ObservationTime time, CommandZoneSink& sink, std::size_t end);
+
+    Shell shell_;
     ParserState parser_ = ParserState::ground;
-    Zone zone_ = Zone::unknown;
     ds::Array<char, 16 * 1024> bytes_{};
     std::size_t length_ = 0;
     bool overflow_ = false;
-    bool markers_ready_ = false;
-    bool has_input_ = false;
-    bool running_ = false;
-    bool nested_running_ = false;
-    FixedText<directory_capacity> directory_;
-    FixedText<path_capacity> path_;
-    FixedText<host_capacity> host_;
-    FixedText<directory_capacity> remote_directory_;
-    std::shared_ptr<const ds::String<ConcurrentMemory>> names_;
   };
 
   // The last bytes of a command's output, kept in storage its owner allocates: empty storage
@@ -291,7 +303,7 @@ export namespace telar::runtime {
     std::uint16_t columns = 0;
   };
 
-  CommandScreen commandScreen(Terminal& terminal) noexcept;
+  CommandScreen commandScreen(const Terminal& terminal) noexcept;
 
   // Receives a formatted selection into a buffer, keeping what fits.
   class CommandTextWriter {
@@ -328,7 +340,9 @@ export namespace telar::runtime {
     void rebase(CommandScreen screen, ds::Option<std::string_view> typed);
 
     // What to read from the anchor to the cursor, or nothing when there is no text to read.
-    ds::Option<GhosttySelection> select(CommandScreen screen) const;
+    // Ghostty's own references into its grid, which it keeps valid until the screen changes: a raw
+    // value, as Rust keeps an FFI library's handles.
+    TBC_RAW tbc::view<ds::Option<GhosttySelection>, tbc::lt::a> select(tbc::view<CommandScreen, tbc::lt::a> screen) const;
 
   private:
     using TrackedReference = GhosttyHandle<GhosttyTrackedGridRef, ghostty_tracked_grid_ref_free>;
@@ -336,7 +350,7 @@ export namespace telar::runtime {
     void findRightPrompt(CommandScreen screen);
     GhosttyPointCoordinate selectionFinish(CommandScreen screen, GhosttyPointCoordinate start, GhosttyPointCoordinate fallback) const;
 
-    TrackedReference anchor_;
+    tbc::view<TrackedReference, tbc::lt::a> anchor_;
     TrackedReference right_prompt_;
     std::uint64_t right_prompt_hash_ = 0;
     bool right_prompt_active_ = false;
@@ -371,10 +385,11 @@ export namespace telar::runtime {
     void follow(bool reflowed = false);
 
     std::uint64_t revision() const noexcept;
-    PaneBlocks message(std::uint64_t pane_id, ds::Array<CommandBlock, capacity>& storage) const;
+    // The blocks view their commands in the ring, region `b`, through `storage`.
+    tbc::view<PaneBlocks, tbc::lt::b> message(std::uint64_t pane_id, tbc::view<ds::Array<CommandBlock, capacity>&, tbc::lt::b> storage) const;
 
   protected:
-    explicit CommandBlockRing(GhosttyTerminal terminal);
+    explicit CommandBlockRing(tbc::view<GhosttyTerminal, tbc::lt::a> terminal);
     ~CommandBlockRing() = default;
 
   private:
@@ -417,17 +432,19 @@ export namespace telar::runtime {
     virtual std::span<const Byte> captured() const noexcept = 0;
 
     Entry& entryMut(std::size_t index) noexcept;
-    const Entry& entry(std::size_t index) const noexcept;
-    ds::Option<TrackedReference> track();
+    tbc::view<const Entry&, tbc::lt::b> entry(std::size_t index) const noexcept;
+    // A tracked reference ghostty keeps into its grid, which the block owns: a raw handle.
+    TBC_RAW ds::Option<TrackedReference> track();
     ds::Option<std::uint32_t> row(const TrackedReference& tracked) const;
     void start(std::chrono::steady_clock::time_point now);
     void finish(CommandBlockState state, std::int32_t status, std::chrono::steady_clock::time_point now);
     void closeSession(CommandBlockState state, std::int32_t status, std::chrono::steady_clock::time_point now);
     void end(Entry& block, CommandBlockState state, std::int32_t status, std::chrono::steady_clock::time_point now);
 
-    CommandSelection selection_;
+    // The terminal the selection reads, region `a`.
+    tbc::view<CommandSelection, tbc::lt::a> selection_;
     ds::Option<TrackedReference> prompt_;
-    ds::Array<Entry, capacity> entries_{};
+    tbc::view<ds::Array<Entry, capacity>, tbc::lt::b> entries_{};
     std::size_t first_ = 0;
     std::size_t count_ = 0;
     std::uint64_t revision_ = 0;

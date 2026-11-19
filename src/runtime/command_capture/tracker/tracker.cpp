@@ -207,26 +207,26 @@ namespace telar::runtime {
 
   // CommandZones
 
-  CommandZones::CommandZones(ConcurrentMemory& memory, std::string_view directory, ds::Option<ShellToken> token)
-      : memory_(&memory),
-        token_(token) {
+  CommandZones::CommandZones(ConcurrentMemory& memory, std::string_view directory, ds::Option<ShellToken> token) {
+    shell_.memory_ = &memory;
+    shell_.token_ = token;
     setDirectory(directory);
   }
 
   ConcurrentMemory& CommandZones::memory() const noexcept {
-    return *memory_;
+    return *shell_.memory_;
   }
 
   ds::Option<ShellToken> CommandZones::token() const noexcept {
-    return token_;
+    return shell_.token_;
   }
 
   bool CommandZones::remote() const noexcept {
-    return remote_.hasValue();
+    return shell_.remote_.hasValue();
   }
 
   IntegratedShell CommandZones::remoteShell() const noexcept {
-    return remote_ ? remote_shell_ : IntegratedShell::none;
+    return shell_.remote_ ? shell_.remote_shell_ : IntegratedShell::none;
   }
 
   void CommandZones::scan(std::span<const Byte> bytes, ObservationTime time, CommandZoneSink& sink) {
@@ -252,7 +252,7 @@ namespace telar::runtime {
       case ParserState::escape:
         parser_ = byte == ']' ? ParserState::osc : ParserState::ground;
         if (parser_ == ParserState::osc) {
-          TELAR_DIAGNOSTIC(diagnostics::accumulate(metrics_.osc_started));
+          TELAR_DIAGNOSTIC(diagnostics::accumulate(shell_.metrics_.osc_started));
           length_ = 0;
           overflow_ = false;
         }
@@ -282,60 +282,72 @@ namespace telar::runtime {
     }
   }
 
+  void CommandZones::restart() {
+    Shell shell;
+
+    shell.memory_ = shell_.memory_;
+    shell.token_ = shell_.token_;
+    shell.directory_ = shell_.directory_;
+    shell_ = std::move(shell);
+    parser_ = ParserState::ground;
+    length_ = 0;
+    overflow_ = false;
+  }
+
   void CommandZones::input(std::span<const Byte> bytes) noexcept {
-    if (zone_ == Zone::input && !bytes.empty()) {
-      has_input_ = true;
+    if (shell_.zone_ == Zone::input && !bytes.empty()) {
+      shell_.has_input_ = true;
     }
   }
 
   bool CommandZones::editing() const noexcept {
-    return markers_ready_ && zone_ == Zone::input;
+    return shell_.markers_ready_ && shell_.zone_ == Zone::input;
   }
 
   bool CommandZones::markersReady() const noexcept {
-    return markers_ready_;
+    return shell_.markers_ready_;
   }
 
   bool CommandZones::running() const noexcept {
-    return markers_ready_ && zone_ == Zone::output;
+    return shell_.markers_ready_ && shell_.zone_ == Zone::output;
   }
 
   void CommandZones::setDirectory(std::string_view directory) {
-    directory_.assign(directory.substr(0, directory_capacity));
+    shell_.directory_.assign(directory.substr(0, directory_capacity));
   }
 
   std::string_view CommandZones::directory() const noexcept {
-    return directory_.view();
+    return shell_.directory_.view();
   }
 
   std::string_view CommandZones::path() const noexcept {
-    return path_.view();
+    return shell_.path_.view();
   }
 
   const std::shared_ptr<const ds::String<ConcurrentMemory>>& CommandZones::names() const noexcept {
-    return names_;
+    return shell_.names_;
   }
 
   std::string_view CommandZones::remoteHost() const noexcept {
-    return remote_ ? host_.view() : std::string_view{};
+    return shell_.remote_ ? shell_.host_.view() : std::string_view{};
   }
 
   std::string_view CommandZones::remoteDirectory() const noexcept {
-    return remote_ ? remote_directory_.view() : std::string_view{};
+    return shell_.remote_ ? shell_.remote_directory_.view() : std::string_view{};
   }
 
 #if TELAR_DIAGNOSTICS
   diagnostics::CommandCaptureCounters CommandZones::takeMetrics() noexcept {
-    return std::exchange(metrics_, {});
+    return std::exchange(shell_.metrics_, {});
   }
 #endif
 
   void CommandZones::finishSequence(ObservationTime time, CommandZoneSink& sink, std::size_t end) {
-    TELAR_DIAGNOSTIC(diagnostics::accumulate(metrics_.osc_finished));
+    TELAR_DIAGNOSTIC(diagnostics::accumulate(shell_.metrics_.osc_finished));
     if (overflow_) {
       // A names report too long to keep: the shell's names are unknown, not empty.
       if (std::string_view{bytes_.data(), length_}.starts_with("6973;")) {
-        names_.reset();
+        shell_.names_.reset();
       }
 
       return;
@@ -347,10 +359,10 @@ namespace telar::runtime {
     const auto body = separator == std::string_view::npos ? std::string_view{} : sequence.substr(separator + 1);
 
     if (code == "133") {
-      semantic(body, time, sink, end);
+      shell_.semantic(body, time, sink, end);
     } else if (code == "7") {
-      directoryReport(body);
-    } else if (code == private_code && privateReport(body)) {
+      shell_.directoryReport(body);
+    } else if (code == private_code && shell_.privateReport(body)) {
       note(sink, 'N', end);
     }
   }
@@ -362,7 +374,7 @@ namespace telar::runtime {
   // with the nonce and the token its own marks carry (nest=<nonce>;token=<token>;shell=<name>):
   // the nonce stands in for a signature, once, so the pane's token never leaves the host.
   // True when the remote shell took over.
-  bool CommandZones::privateReport(std::string_view body) {
+  bool CommandZones::Shell::privateReport(std::string_view body) {
     if (!token_) {
       return false;
     }
@@ -393,7 +405,10 @@ namespace telar::runtime {
       // The last option, so its names may be anything but the sequence's terminators.
       const auto names = body.substr(body.find(";names=") + 7);
 
-      names_ = std::allocate_shared<ds::String<ConcurrentMemory>>(AllocatorRef<ds::String<ConcurrentMemory>, ConcurrentMemory>{*memory_}, *memory_, names);
+      // The shell's own copy, made before the shared object that hands it to other threads.
+      ds::String<ConcurrentMemory> copied{*memory_, names};
+
+      names_ = std::allocate_shared<ds::String<ConcurrentMemory>>(AllocatorRef<ds::String<ConcurrentMemory>, ConcurrentMemory>{*memory_}, std::move(copied));
       return false;
     }
 
@@ -413,7 +428,7 @@ namespace telar::runtime {
     return false;
   }
 
-  void CommandZones::semantic(std::string_view body, ObservationTime time, CommandZoneSink& sink, std::size_t end) {
+  void CommandZones::Shell::semantic(std::string_view body, ObservationTime time, CommandZoneSink& sink, std::size_t end) {
     const auto separator = body.find(';');
     const auto action = body.substr(0, separator);
     const auto options = separator == std::string_view::npos ? std::string_view{} : body.substr(separator + 1);
@@ -471,7 +486,7 @@ namespace telar::runtime {
     }
   }
 
-  void CommandZones::directoryReport(std::string_view body) {
+  void CommandZones::Shell::directoryReport(std::string_view body) {
     for (const auto prefix : {std::string_view{"file://"}, std::string_view{"kitty-shell-cwd://"}}) {
       if (!body.starts_with(prefix)) {
         continue;
@@ -726,7 +741,7 @@ namespace telar::runtime {
     findRightPrompt(screen);
   }
 
-  ds::Option<GhosttySelection> CommandSelection::select(CommandScreen screen) const {
+  tbc::view<ds::Option<GhosttySelection>, tbc::lt::a> CommandSelection::select(tbc::view<CommandScreen, tbc::lt::a> screen) const {
     const auto anchor = snapshot(anchor_);
     if (!primary(screen) || !anchor || erased_ || blank(*anchor, 0, screen.columns)) {
       return ds::none;
@@ -823,7 +838,7 @@ namespace telar::runtime {
     }
   }
 
-  CommandBlockRing::CommandBlockRing(GhosttyTerminal terminal)
+  CommandBlockRing::CommandBlockRing(tbc::view<GhosttyTerminal, tbc::lt::a> terminal)
       : selection_(terminal) {}
 
   void CommandBlockRing::mark(char action, std::chrono::steady_clock::time_point now) {
@@ -927,7 +942,7 @@ namespace telar::runtime {
     return revision_;
   }
 
-  PaneBlocks CommandBlockRing::message(std::uint64_t pane_id, ds::Array<CommandBlock, capacity>& storage) const {
+  tbc::view<PaneBlocks, tbc::lt::b> CommandBlockRing::message(std::uint64_t pane_id, tbc::view<ds::Array<CommandBlock, capacity>&, tbc::lt::b> storage) const {
     for (std::size_t index = 0; index < count_; ++index) {
       const auto& current = entry(index);
 
@@ -941,7 +956,7 @@ namespace telar::runtime {
     return entries_.atMut((first_ + index) % capacity);
   }
 
-  const CommandBlockRing::Entry& CommandBlockRing::entry(std::size_t index) const noexcept {
+  tbc::view<const CommandBlockRing::Entry&, tbc::lt::b> CommandBlockRing::entry(std::size_t index) const noexcept {
     return entries_[(first_ + index) % capacity];
   }
 
@@ -1217,7 +1232,7 @@ namespace telar::runtime {
     TELAR_DIAGNOSTIC(metrics_.merge(zones_.takeMetrics()));
     clearSubmitted();
     reset();
-    zones_ = CommandZones{zones_.memory(), zones_.directory(), zones_.token()};
+    zones_.restart();
   }
 
   void CommandTrackerCore::updateDirectory(std::string_view directory) {
@@ -1309,7 +1324,7 @@ namespace telar::runtime {
 
   template class CommandOutputTail<ConcurrentMemory>;
 
-  CommandScreen commandScreen(Terminal& terminal) noexcept {
+  CommandScreen commandScreen(const Terminal& terminal) noexcept {
     return {terminal.handle(), terminal.screen.cols};
   }
 
