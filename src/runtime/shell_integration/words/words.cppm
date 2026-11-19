@@ -31,7 +31,7 @@ export namespace telar::runtime {
     // The shell whose builtins and keywords count as commands, and the aliases and functions
     // it reported; without them a missing command cannot be told from an unreported one.
     IntegratedShell shell = IntegratedShell::none;
-    std::shared_ptr<const ds::String<ConcurrentMemory>> names;
+    tbc::view<std::shared_ptr<const ds::String<ConcurrentMemory>>, tbc::lt::a> names;
     // Asks for the completion spec of the command `prefix` names instead of words, and the
     // digest of the spec the client already holds.
     bool spec = false;
@@ -107,7 +107,8 @@ export namespace telar::runtime {
   public:
     explicit WordService(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, std::string_view configuration_directory = {});
 
-    void request(const WordRequest& request);
+    // The service keeps the request, and the names it shares, until its turn comes.
+    void request(tbc::holds<const WordRequest&, tbc::lt::a> request);
 
     // The consumer is the caller's type; the queue's collect is a template over it too.
     template <typename Consumer>

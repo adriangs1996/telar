@@ -2186,7 +2186,7 @@ namespace telar::runtime {
 
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
-  WordRequest Runtime<Poller, Background>::makeWordRequest(const ClientSession& client, std::uint64_t request_id, CompletionProvider provider, std::string_view prefix, const Pane& pane) const {
+  tbc::view<WordRequest, tbc::lt::a> Runtime<Poller, Background>::makeWordRequest(const ClientSession& client, std::uint64_t request_id, CompletionProvider provider, std::string_view prefix, tbc::holds<const Pane&, tbc::lt::a> pane) const {
     WordRequest request{.client = client.id, .request = request_id, .provider = provider, .prefix = {}, .directory = {}, .home = {}, .path = {}};
 
     request.prefix.assign(prefix);

@@ -633,7 +633,8 @@ export {
 
       // What a completion asks for, from the PATH and shell of the pane's shell where its
       // integration reported them, this runtime's PATH otherwise.
-      WordRequest makeWordRequest(const ClientSession& client, std::uint64_t request_id, CompletionProvider provider, std::string_view prefix, const Pane& pane) const;
+      // The request shares the names the pane's shell reported, region `a`.
+      tbc::view<WordRequest, tbc::lt::a> makeWordRequest(const ClientSession& client, std::uint64_t request_id, CompletionProvider provider, std::string_view prefix, tbc::holds<const Pane&, tbc::lt::a> pane) const;
 
       void handle(std::uint64_t identity, const FindPaths& message);
 

@@ -829,7 +829,7 @@ namespace telar::runtime {
       : worker_(std::in_place, memory, configuration_directory),
         queue_(memory) {}
 
-  void WordService::request(const WordRequest& request) {
+  void WordService::request(tbc::holds<const WordRequest&, tbc::lt::a> request) {
     if (std::ranges::count(queue_.waiting(), request.client, &WordRequest::client) >= 4) {
       return;
     }
