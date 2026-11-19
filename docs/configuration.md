@@ -276,7 +276,7 @@ Cybervenom uses a `#211b2f` background, `#aa87f5` accents, and its own terminal
 and syntax palettes.
 Zenburn sits on `zenburn-bg-1` (`#2b2b2b`) with `#dcdccc` text and every
 surface on Zenburn's own grey scale. Roles are told apart by hue, not weight:
-keywords `#f0dfaf`, functions `#a7d1ce`, types `#bde0f3`, properties `#dfaf8f`,
+keywords `#f0dfaf`, functions `#bde0f3`, types `#a7d1ce`, properties `#dfaf8f`,
 constants and numbers `#bfebbf`, strings `#cc9393`. It uses `#f0dfaf` accents
 and no italics or bold.
 The window uses the preset's terminal
