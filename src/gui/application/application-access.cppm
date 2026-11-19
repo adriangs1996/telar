@@ -5,17 +5,12 @@ module telar.gui.application:access;
 import std;
 
 import :session;
-import telar.gui.features.palette;
 import telar.gui.features.paths;
 import telar.gui.features.history;
-import telar.gui.features.notifications;
 import telar.gui.features.prompt;
-import telar.gui.features.status_bar;
 import telar.gui.features.peek;
 import telar.gui.features.terminal.copy_mode;
-import telar.gui.features.terminal.graphics;
 import telar.gui.features.terminal.links;
-import telar.gui.features.workbench;
 import telar.base.ds;
 
 namespace telar::gui::application {
@@ -36,82 +31,6 @@ namespace telar::gui::application {
 
     [[nodiscard]] static constexpr const Configuration& configuration(const Session& session) noexcept {
       return session.configuration_;
-    }
-
-    [[nodiscard]] static constexpr features::peek::State& peek(Session& session) noexcept {
-      return session.peek_;
-    }
-
-    [[nodiscard]] static constexpr const features::peek::State& peek(const Session& session) noexcept {
-      return session.peek_;
-    }
-
-    [[nodiscard]] static constexpr features::palette::State& palette(Session& session) noexcept {
-      return session.palette_;
-    }
-
-    [[nodiscard]] static constexpr const features::palette::State& palette(const Session& session) noexcept {
-      return session.palette_;
-    }
-
-    [[nodiscard]] static constexpr features::paths::State& paths(Session& session) noexcept {
-      return session.paths_;
-    }
-
-    [[nodiscard]] static constexpr const features::paths::State& paths(const Session& session) noexcept {
-      return session.paths_;
-    }
-
-    [[nodiscard]] static constexpr features::history::State& history(Session& session) noexcept {
-      return session.history_;
-    }
-
-    [[nodiscard]] static constexpr const features::history::State& history(const Session& session) noexcept {
-      return session.history_;
-    }
-
-    [[nodiscard]] static constexpr features::prompt::State& prompt(Session& session) noexcept {
-      return session.prompt_;
-    }
-
-    [[nodiscard]] static constexpr const features::prompt::State& prompt(const Session& session) noexcept {
-      return session.prompt_;
-    }
-
-    [[nodiscard]] static constexpr features::terminal::copy_mode::State& copyMode(Session& session) noexcept {
-      return session.copy_mode_;
-    }
-
-    [[nodiscard]] static constexpr const features::terminal::copy_mode::State& copyMode(const Session& session) noexcept {
-      return session.copy_mode_;
-    }
-
-    [[nodiscard]] static constexpr features::terminal::graphics::State& graphics(Session& session) noexcept {
-      return session.graphics_;
-    }
-
-    [[nodiscard]] static constexpr const features::terminal::graphics::State& graphics(const Session& session) noexcept {
-      return session.graphics_;
-    }
-
-    [[nodiscard]] static constexpr features::notifications::State& notifications(Session& session) noexcept {
-      return session.notifications_;
-    }
-
-    [[nodiscard]] static constexpr const features::notifications::State& notifications(const Session& session) noexcept {
-      return session.notifications_;
-    }
-
-    [[nodiscard]] static constexpr features::status_bar::State& statusBar(Session& session) noexcept {
-      return session.status_bar_;
-    }
-
-    [[nodiscard]] static constexpr const features::status_bar::State& statusBar(const Session& session) noexcept {
-      return session.status_bar_;
-    }
-
-    [[nodiscard]] static constexpr features::terminal::links::State& links(Session& session) noexcept {
-      return session.links_;
     }
 
     // ---- what the session keeps for every feature -------------------------------------------
@@ -168,17 +87,9 @@ namespace telar::gui::application {
 
     // ---- the tabs and panes the session holds ------------------------------------------------
 
-    [[nodiscard]] static constexpr features::workbench::State& workbench(Session& session) noexcept {
-      return session.workbench_;
-    }
-
     // The tabs, to change them.
     [[nodiscard]] static std::span<ds::Box<Tab<Memory>, Memory>> tabsMut(Session& session) noexcept {
       return session.tabs_.viewMut();
-    }
-
-    [[nodiscard]] static constexpr const features::workbench::State& workbench(const Session& session) noexcept {
-      return session.workbench_;
     }
 
     [[nodiscard]] static constexpr ds::Option<TabLocation>& activeTab(Session& session) noexcept {
@@ -257,7 +168,7 @@ namespace telar::gui::application {
 
     // Sends a limit report unless the transport is too busy for one; false when it dropped it.
     static bool report(Session& session, const ReportLimit& report) {
-      return session.transport_.report(session.encode(report));
+      return session.link.transport.report(session.link.encode(report));
     }
 
     // Whether the transport hands images over in shared memory.
@@ -266,7 +177,7 @@ namespace telar::gui::application {
     }
 
     [[nodiscard]] static system::SharedImageSource sharedImage(Session& session, std::string_view name) {
-      return session.transport_.sharedImage(name);
+      return session.link.transport.sharedImage(name);
     }
 
     // The connection failed under a request: the session recovers it.
@@ -274,45 +185,6 @@ namespace telar::gui::application {
       session.recoverRuntime(reason);
     }
 
-    [[nodiscard]] static std::uint64_t nextRequest(Session& session) noexcept {
-      return session.nextRequest();
-    }
-
-    template <typename Message>
-    static void send(Session& session, const Message& message) {
-      session.send(message);
-    }
-
-    // A request of `kind` the runtime will answer, tracked under a new id until it does.
-    [[nodiscard]] static std::uint64_t pending(Session& session, RequestKind kind, std::uint64_t pane_id = 0, ClientLayoutAxis axis = ClientLayoutAxis::horizontal) {
-      return session.pending(kind, pane_id, axis);
-    }
-
-    // What the session tracks of the request `pending` registered last, for its reply to read.
-    [[nodiscard]] static constexpr Pending& lastPending(Session& session) noexcept {
-      return session.pending_.atMut(session.pending_count_ - 1);
-    }
-
-    // The requests the runtime is yet to answer.
-    [[nodiscard]] static constexpr std::span<const Pending> requests(const Session& session) noexcept {
-      return std::span{session.pending_}.first(session.pending_count_);
-    }
-
-    // Sends `request` under a new pending id of `kind`; a request the transport refuses leaves
-    // nothing pending.
-    template <typename Request>
-    static void sendRegistered(Session& session, RequestKind kind, Request request, std::uint64_t pane_id = 0) {
-      session.sendRegistered(kind, request, pane_id);
-    }
-
-    static void complete(Session& session, std::uint64_t request_id) noexcept {
-      static_cast<void>(session.complete(request_id));
-    }
-
-    // Completes `request_id` when it is a pending request of `kind`.
-    [[nodiscard]] static bool completeRequest(Session& session, RequestKind kind, std::uint64_t request_id) noexcept {
-      return session.completeRequest(kind, request_id);
-    }
   };
 
 }

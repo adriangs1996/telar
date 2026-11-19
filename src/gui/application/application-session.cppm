@@ -267,12 +267,6 @@ export {
       [[nodiscard]] const ProxyStatus& proxyStatus() const noexcept;
 
     private:
-      // Encodes `message` into the storage the transport lends.
-      template <typename Message>
-      std::span<const Byte> encode(const Message& message);
-
-      template <typename Message>
-      void send(const Message& message);
 
       enum class RequestKind : std::uint8_t {
         open_default,
@@ -310,6 +304,58 @@ export {
         ds::Option<std::uint64_t> fallback_workspace;
       };
 
+    public:
+      // The connection with the runtime and the requests it is yet to answer, a field of its own: a
+      // use case asks and sends while it holds a feature's state, as Rust borrows one field at a time.
+      class Link {
+      public:
+        explicit Link(tbc::view<RuntimeTransport&, tbc::lt::a> transport) noexcept
+            : transport(transport) {}
+
+        [[nodiscard]] std::uint64_t nextRequest() noexcept;
+
+        // A request of `kind` the runtime will answer, tracked under a new id until it does.
+        std::uint64_t pending(RequestKind kind, std::uint64_t pane_id = 0, ClientLayoutAxis axis = ClientLayoutAxis::horizontal);
+
+        ds::Option<Pending> complete(std::uint64_t request_id) noexcept;
+
+        // Completes `request_id` when it is a pending request of `kind`.
+        bool completeRequest(RequestKind kind, std::uint64_t request_id) noexcept;
+
+        // The requests the runtime is yet to answer.
+        [[nodiscard]] std::span<const Pending> requests() const noexcept;
+
+        // What is tracked of the request `pending` registered last, for its reply to read.
+        [[nodiscard]] Pending& lastPending() noexcept;
+
+        // Forgets every request, as a new connection answers none of them.
+        void forgetRequests() noexcept;
+
+        // Encodes `message` into the storage the transport lends.
+        template <typename Message>
+        std::span<const Byte> encode(const Message& message);
+
+        template <typename Message>
+        void send(const Message& message);
+
+        // Sends `request` under a new pending id of `kind`, once `fill` recorded in the pending entry
+        // what the reply will need; a request the transport refuses leaves nothing pending.
+        template <typename Request, typename Fill>
+        void sendRegistered(RequestKind kind, Request request, std::uint64_t pane_id, Fill&& fill);
+
+        template <typename Request>
+        void sendRegistered(RequestKind kind, Request request, std::uint64_t pane_id = 0);
+
+        tbc::view<RuntimeTransport&, tbc::lt::a> transport;
+
+      private:
+        std::uint64_t request_id_ = 0;
+        ds::Array<Pending, maximum_pending> pending_;
+        std::size_t pending_count_ = 0;
+      };
+
+    private:
+
       template <typename Request>
         requires(std::same_as<Request, OpenPane> || std::same_as<Request, CreateWorkspace>)
       void sendOpeningRequest(RequestKind kind, Request request, TabLocation location = TabLocation(), ds::Option<std::uint64_t> fallback_workspace = ds::none);
@@ -318,8 +364,6 @@ export {
         requires(std::same_as<Request, RequestTabSnapshot> || std::same_as<Request, RequestWorkspaceSnapshot>)
       void sendSnapshotRequest(Request request);
 
-      bool completeRequest(RequestKind kind, std::uint64_t request_id) noexcept;
-
       Pane<Memory>& allocateSplitPane(const Pending& request, const PaneOpened& message);
 
       Change adoptSplit(const Pending& request, const PaneOpened& message);
@@ -327,22 +371,8 @@ export {
       template <typename Request>
       void sendTabOperation(RequestKind kind, Request request);
 
-      // Sends `request` under a new pending id of `kind`, once `fill` recorded in the pending entry
-      // what the reply will need; a request the transport refuses leaves nothing pending.
-      template <typename Request, typename Fill>
-      void sendRegistered(RequestKind kind, Request request, std::uint64_t pane_id, Fill&& fill);
-
-      template <typename Request>
-      void sendRegistered(RequestKind kind, Request request, std::uint64_t pane_id = 0);
-
       template <typename Value>
       static void reserveAppend(ds::Vec<Value, Memory>& values, std::size_t maximum);
-
-      std::uint64_t nextRequest() noexcept;
-
-      std::uint64_t pending(RequestKind kind, std::uint64_t pane_id = 0, ClientLayoutAxis axis = ClientLayoutAxis::horizontal);
-
-      ds::Option<Pending> complete(std::uint64_t request_id) noexcept;
 
       [[nodiscard]] const Tab<Memory>* findTab(TabLocation location) const noexcept;
 
@@ -573,30 +603,52 @@ export {
       bool chrome_changed_ = false;
       bool clipboard_written_ = false;
       bool block_changed_ = false;
-      features::prompt::State prompt_;
-      features::terminal::copy_mode::State copy_mode_;
-      features::terminal::links::State links_;
-      features::status_bar::State status_bar_;
+
+    public:
+      // The features' states, which their use cases in application::<feature> reach directly, as Rust
+      // borrows a struct's fields: an accessor would lend the whole session.
+      features::prompt::State prompt;
+      features::terminal::copy_mode::State copy_mode;
+      features::terminal::links::State links;
+      features::status_bar::State status_bar;
+
+    private:
       ProxyStatus proxy_{};
       tbc::view<Memory&, tbc::lt::a> memory_;
-      tbc::view<RuntimeTransport&, tbc::lt::a> transport_;
+
+    public:
+      Link link;
+
+    private:
       tbc::view<HostEffects&, tbc::lt::a> effects_;
       tbc::view<MonotonicNow, tbc::lt::static_storage> now_;
       // A session built without effects points `effects_` here.
       DiscardHostEffects discard_effects_;
-      features::terminal::graphics::State graphics_;
+
+    public:
+      features::terminal::graphics::State graphics;
+
+    private:
       tbc::view<ds::Vec<ds::Box<Pane<Memory>, Memory>, Memory>, tbc::lt::a> panes_;
       tbc::view<ds::Vec<ds::Box<Tab<Memory>, Memory>, Memory>, tbc::lt::a> tabs_;
       tbc::view<WorkspaceReplica<Memory>, tbc::lt::a> workspaces_;
       tbc::view<AgentReplica<Memory>, tbc::lt::a> agents_;
       tbc::view<PaneListReplica<Memory>, tbc::lt::a> pane_list_;
       AgentAcknowledgement agent_acknowledgement_;
-      features::notifications::State notifications_;
+
+    public:
+      features::notifications::State notifications;
+
+    private:
       std::uint64_t chrome_revision_ = 0;
-      tbc::view<features::history::State, tbc::lt::a> history_;
-      tbc::view<features::peek::State, tbc::lt::a> peek_;
-      features::paths::State paths_;
-      features::palette::State palette_;
+
+    public:
+      tbc::view<features::history::State, tbc::lt::a> history;
+      tbc::view<features::peek::State, tbc::lt::a> peek;
+      features::paths::State paths;
+      features::palette::State palette;
+
+    private:
       tbc::view<ds::Vec<Byte, Memory>, tbc::lt::a> decode_;
       tbc::view<ds::String<Memory>, tbc::lt::a> clipboard_;
       tbc::view<ds::String<Memory>, tbc::lt::a> error_;
@@ -606,13 +658,14 @@ export {
       // The launch arguments view the strings stored beside them; the protocol allows at most 64.
       tbc::view<ds::Array<std::string_view, maximum_launch_arguments>, tbc::lt::self> launch_arguments_{};
       std::size_t launch_argument_count_ = 0;
-      ds::Array<Pending, maximum_pending> pending_;
-      std::size_t pending_count_ = 0;
       ds::Option<TabLocation> active_tab_;
-      features::workbench::State workbench_;
+
+    public:
+      features::workbench::State workbench;
+
+    private:
       ds::Option<TabLocation> deferred_tab_;
       ds::Option<MachineBookmark> left_machine_;
-      std::uint64_t request_id_ = 0;
       std::uint64_t attachment_generation_ = 0;
       std::uint64_t changed_pane_ = 0;
       bool ready_ = false;

@@ -32,7 +32,7 @@ namespace telar::gui::application {
     }
 
     if (source == PaneInputSource::keyboard || source == PaneInputSource::key_release) {
-      static_cast<void>(features::terminal::copy_mode::clearPointer(copy_mode_));
+      static_cast<void>(features::terminal::copy_mode::clearPointer(copy_mode));
       if (source != PaneInputSource::key_release) {
         followLiveEnd(*pane);
       }
@@ -43,7 +43,7 @@ namespace telar::gui::application {
     while (!pending_bytes.empty()) {
       const auto count = std::min(pending_bytes.size(), input_chunk_size);
 
-      send(PaneInput{.pane_id = pane_id, .bytes = pending_bytes.first(count)});
+      link.send(PaneInput{.pane_id = pane_id, .bytes = pending_bytes.first(count)});
       if (source != PaneInputSource::terminal_report && pending_bytes.size() == bytes.size()) {
         notePaneInput(*pane);
       }
@@ -64,9 +64,9 @@ namespace telar::gui::application {
       return;
     }
 
-    static_cast<void>(features::terminal::copy_mode::clearPointer(copy_mode_));
+    static_cast<void>(features::terminal::copy_mode::clearPointer(copy_mode));
     followLiveEnd(*pane);
-    send(PaneCommand{.pane_id = pane_id, .text = byteView(text)});
+    link.send(PaneCommand{.pane_id = pane_id, .text = byteView(text)});
     notePaneInput(*pane);
   }
 
@@ -76,7 +76,7 @@ namespace telar::gui::application {
       ++view_version_.viewport;
       ++pane.viewport_requests;
       pane.screen.setViewport(bottom);
-      send(SetPaneViewport{.pane_id = pane.id, .offset = follow_output});
+      link.send(SetPaneViewport{.pane_id = pane.id, .offset = follow_output});
     }
   }
 
@@ -111,9 +111,9 @@ namespace telar::gui::application {
       }
 
       const auto count = static_cast<std::uint16_t>(std::min<std::uint64_t>(RowCache<Memory>::request_rows, last - *missing + 1));
-      const auto request_id = nextRequest();
+      const auto request_id = link.nextRequest();
 
-      send(ReadPaneRows{.request_id = request_id, .pane_id = pane_id, .from = *missing, .count = count});
+      link.send(ReadPaneRows{.request_id = request_id, .pane_id = pane_id, .from = *missing, .count = count});
       pane->rows.ask(request_id, *missing, count);
       from = *missing + count;
     }
@@ -132,7 +132,7 @@ namespace telar::gui::application {
     }
 
     if (pane->attached) {
-      send(PaneResize{.pane_id = pane_id, .size = size});
+      link.send(PaneResize{.pane_id = pane_id, .size = size});
     }
 
     pane->size = size;
@@ -142,14 +142,14 @@ namespace telar::gui::application {
   void Session::presented(std::uint64_t pane_id, std::uint64_t frame_id) {
     auto* pane = findPaneMut(pane_id);
     if (ready_ && pane != nullptr && pane->attached && frame_id > pane->acknowledged_frame && frame_id <= pane->screen.frameId()) {
-      send(FrameAck{.pane_id = pane_id, .frame_id = frame_id});
+      link.send(FrameAck{.pane_id = pane_id, .frame_id = frame_id});
       pane->acknowledged_frame = frame_id;
     }
   }
 
   void Session::scroll(PaneScrollDelta delta) {
     auto* pane = findPaneMut(delta.pane_id);
-    if (pane == nullptr || !pane->attached || features::terminal::copy_mode::view(copy_mode_).active()) {
+    if (pane == nullptr || !pane->attached || features::terminal::copy_mode::view(copy_mode).active()) {
       return;
     }
 
@@ -164,7 +164,7 @@ namespace telar::gui::application {
 
     // The bottom as this replica knows it may be behind the runtime's: ask to follow instead.
     ++pane->viewport_requests;
-    send(SetPaneViewport{.pane_id = delta.pane_id, .offset = requested == maximum ? follow_output : requested});
+    link.send(SetPaneViewport{.pane_id = delta.pane_id, .offset = requested == maximum ? follow_output : requested});
     pane->screen.setViewport(requested);
     ++view_version_.viewport;
   }
@@ -198,21 +198,21 @@ namespace telar::gui::application {
     const auto outcome = pane->screen.apply(message);
     if (outcome == FrameApplication::needs_snapshot && !pane->snapshot_requested) {
       pane->snapshot_requested = true;
-      send(RequestSnapshot{message.pane_id, pane->screen.frameId()});
+      link.send(RequestSnapshot{message.pane_id, pane->screen.frameId()});
     }
 
     if (outcome == FrameApplication::applied) {
-      if (const auto& copy = features::terminal::copy_mode::view(copy_mode_).state(); copy && copy->pane_id == pane->id) {
-        features::terminal::copy_mode::follow(copy_mode_, previous_offset, copyGrid(pane->screen));
+      if (const auto& copy = features::terminal::copy_mode::view(copy_mode).state(); copy && copy->pane_id == pane->id) {
+        features::terminal::copy_mode::follow(copy_mode, previous_offset, copyGrid(pane->screen));
       }
 
-      features::prompt::output(prompt_, pane->id, [this] {
+      features::prompt::output(prompt, pane->id, [this] {
         return now_();
       });
 
       pane->snapshot_requested = false;
-      if (const auto prompt = livePromptRow(*pane)) {
-        pane->live_prompt_row = prompt;
+      if (const auto live_prompt = livePromptRow(*pane)) {
+        pane->live_prompt_row = live_prompt;
       }
 
       if (!pane->folded.empty()) {
@@ -480,7 +480,7 @@ namespace telar::gui::application {
   }
 
   void Session::paste(std::uint64_t pane_id, std::string_view bytes) {
-    if (features::terminal::copy_mode::view(copy_mode_).active()) {
+    if (features::terminal::copy_mode::view(copy_mode).active()) {
       return;
     }
 

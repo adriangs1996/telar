@@ -45,7 +45,7 @@ namespace telar::gui::application::window {
     const auto maximum_fps = configuration.max_fps == 0 ? ds::none : ds::Option{configuration.max_fps};
     const auto interval_ns = FramePacer::resolveInterval(FramePacer::nanoseconds_per_second / Access::displayFps(session), maximum_fps);
 
-    Access::send(session, ConfigureFrameInterval{static_cast<std::uint32_t>(interval_ns)});
+    session.link.send(ConfigureFrameInterval{static_cast<std::uint32_t>(interval_ns)});
   }
 
 }

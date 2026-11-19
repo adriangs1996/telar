@@ -22,7 +22,7 @@ namespace telar::gui::application::terminal::graphics {
     template <typename Message>
     void send(Session& session, const Message& message) {
       try {
-        Access::send(session, message);
+        session.link.send(message);
       } catch (const std::exception& error) {
         Access::recoverRuntime(session, error.what());
 
@@ -60,7 +60,7 @@ namespace telar::gui::application::terminal::graphics {
     void pause(Session& session, std::uint64_t pane_id, const feature::GraphicsLimitError& error) {
       const auto slot = notifications::countLimitReach(session, {.name = error.what(), .route = "runtime_message"}).slot;
 
-      feature::pause(Access::graphics(session), pane_id, Access::now(session), [&session](std::uint64_t paused_pane) {
+      feature::pause(session.graphics, pane_id, Access::now(session), [&session](std::uint64_t paused_pane) {
         requestSnapshot(session, paused_pane);
       },
           [&session, slot](std::uint64_t paused_pane) {
@@ -81,7 +81,7 @@ namespace telar::gui::application::terminal::graphics {
         if constexpr (std::same_as<Message, GraphicsSnapshot>) {
           changed = pane->graphics.snapshot(message);
           if (changed) {
-            feature::receive(Access::graphics(session), pane->id, message.phase, Access::now(session));
+            feature::receive(session.graphics, pane->id, message.phase, Access::now(session));
           }
         } else if constexpr (std::same_as<Message, GraphicsImage>) {
           changed = pane->graphics.image(message);
@@ -113,20 +113,20 @@ namespace telar::gui::application::terminal::graphics {
   }
 
   bool paused(const Session& session, std::uint64_t pane_id) noexcept {
-    return feature::paused(Access::graphics(session), pane_id);
+    return feature::paused(session.graphics, pane_id);
   }
 
   std::uint64_t recoveryRevision(const Session& session) noexcept {
-    return feature::revision(Access::graphics(session));
+    return feature::revision(session.graphics);
   }
 
   ds::Option<std::uint64_t> resumeDeadline(const Session& session) noexcept {
-    return feature::deadline(Access::graphics(session));
+    return feature::deadline(session.graphics);
   }
 
   void resume(Session& session) {
     if (session.ready()) {
-      feature::resume(Access::graphics(session), Access::now(session), [&session](std::uint64_t pane_id) {
+      feature::resume(session.graphics, Access::now(session), [&session](std::uint64_t pane_id) {
         requestSnapshot(session, pane_id);
       });
     }
@@ -137,13 +137,13 @@ namespace telar::gui::application::terminal::graphics {
   }
 
   void focus(Session& session, std::uint64_t pane_id) {
-    feature::focus(Access::graphics(session), pane_id, Access::now(session), [&session](std::uint64_t paused_pane) {
+    feature::focus(session.graphics, pane_id, Access::now(session), [&session](std::uint64_t paused_pane) {
       requestSnapshot(session, paused_pane);
     });
   }
 
   void forgetClosed(Session& session) {
-    feature::forgetClosed(Access::graphics(session), [&session](std::uint64_t pane_id) {
+    feature::forgetClosed(session.graphics, [&session](std::uint64_t pane_id) {
       return session.findPane(pane_id) != nullptr;
     });
   }

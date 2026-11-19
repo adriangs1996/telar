@@ -30,7 +30,7 @@ namespace telar::gui::application::notifications {
     }
 
     void startSound(Session& session, AgentSound sound) {
-      auto& state = Access::notifications(session);
+      auto& state = session.notifications;
 
       try {
         if (!Access::effects(session).playSound(sound)) {
@@ -45,11 +45,11 @@ namespace telar::gui::application::notifications {
   }
 
   const NotificationCenter& center(const Session& session) noexcept {
-    return feature::center(Access::notifications(session));
+    return feature::center(session.notifications);
   }
 
   std::uint64_t revision(const Session& session) noexcept {
-    return feature::revision(Access::notifications(session));
+    return feature::revision(session.notifications);
   }
 
   void publish(Session& session, NotificationInput input) {
@@ -57,21 +57,21 @@ namespace telar::gui::application::notifications {
   }
 
   void publish(Session& session, NotificationInput input, std::uint64_t now_ns) {
-    feature::publish(Access::notifications(session), input, now_ns);
+    feature::publish(session.notifications, input, now_ns);
 
     static_cast<void>(deliverHostNotification(session, input));
   }
 
   bool advance(Session& session, std::uint64_t now_ns) noexcept {
-    return feature::advance(Access::notifications(session), now_ns);
+    return feature::advance(session.notifications, now_ns);
   }
 
   bool dismiss(Session& session, NotificationId id) noexcept {
-    return feature::dismiss(Access::notifications(session), id, Access::now(session));
+    return feature::dismiss(session.notifications, id, Access::now(session));
   }
 
   bool activate(Session& session, NotificationId id) {
-    const auto target = feature::activate(Access::notifications(session), id, Access::now(session));
+    const auto target = feature::activate(session.notifications, id, Access::now(session));
     if (!target) {
       return false;
     }
@@ -106,7 +106,7 @@ namespace telar::gui::application::notifications {
   }
 
   feature::LimitRecorded countLimitReach(Session& session, LimitReach reach) {
-    auto& state = Access::notifications(session);
+    auto& state = session.notifications;
     const auto awake_ms = static_cast<std::int64_t>(Access::now(session) / NotificationInput::nanoseconds_per_millisecond);
     const feature::LimitTime sampled{.awake_ms = awake_ms, .real_ms = runtime::ObservationTime::now().milliseconds};
     const auto recorded = feature::record(state, reach, sampled);
@@ -128,7 +128,7 @@ namespace telar::gui::application::notifications {
   }
 
   feature::LimitNotices::Description describeLimit(const Session& session, feature::LimitSlot slot) {
-    return feature::describe(Access::notifications(session), slot);
+    return feature::describe(session.notifications, slot);
   }
 
   void reportLimit(Session& session, LimitReach reach) {
@@ -141,7 +141,7 @@ namespace telar::gui::application::notifications {
   }
 
   void completeSound(Session& session) {
-    if (const auto next = feature::completeSound(Access::notifications(session))) {
+    if (const auto next = feature::completeSound(session.notifications)) {
       startSound(session, *next);
     }
   }
@@ -158,7 +158,7 @@ namespace telar::gui::application::notifications {
       return agent.pane_id == message.pane_id && agent.pane_generation == message.pane_generation;
     });
     if (current) {
-      const auto outcome = feature::requestSound(Access::notifications(session), message.sound);
+      const auto outcome = feature::requestSound(session.notifications, message.sound);
       if (outcome.state == feature::SoundRequestOutcome::State::start) {
         startSound(session, outcome.sound);
       }

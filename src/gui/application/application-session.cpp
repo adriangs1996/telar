@@ -34,23 +34,23 @@ import telar.base.ds;
 namespace telar::gui::application {
 
   template <typename Message>
-  std::span<const Byte> Session::encode(const Message& message) {
-    return Codec::encode(message, transport_.buffer(Codec::encodedSize(message)));
+  std::span<const Byte> Session::Link::encode(const Message& message) {
+    return Codec::encode(message, transport.buffer(Codec::encodedSize(message)));
   }
 
   template <typename Message>
-  void Session::send(const Message& message) {
-    transport_.send(encode(message));
+  void Session::Link::send(const Message& message) {
+    transport.send(encode(message));
   }
 
   Session::Session(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<RuntimeTransport&, tbc::lt::a> transport, tbc::view<MonotonicNow, tbc::lt::static_storage> now)
       : Session(memory, transport, discard_effects_, now) {}
 
   Session::Session(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<RuntimeTransport&, tbc::lt::a> transport, tbc::view<HostEffects&, tbc::lt::a> effects, tbc::view<MonotonicNow, tbc::lt::static_storage> now)
-      : prompt_(memory),
-        copy_mode_(memory),
+      : prompt(memory),
+        copy_mode(memory),
         memory_(memory),
-        transport_(transport),
+        link(transport),
         effects_(effects),
         now_(now),
         panes_(memory),
@@ -58,8 +58,8 @@ namespace telar::gui::application {
         workspaces_(memory),
         agents_(memory),
         pane_list_(memory),
-        history_(memory),
-        peek_(memory),
+        history(memory),
+        peek(memory),
         decode_(memory),
         clipboard_(memory),
         error_(memory),
@@ -110,7 +110,7 @@ namespace telar::gui::application {
     active_tab_.reset();
     left_machine_.reset();
     deferred_tab_.reset();
-    features::workbench::clear(workbench_);
+    features::workbench::clear(workbench);
     initial_open_pending_ = false;
     workspaces_.resetSource();
     ++view_version_.workspace;
@@ -118,16 +118,16 @@ namespace telar::gui::application {
     ++view_version_.active_tab;
     ++view_version_.panes;
     ready_ = true;
-    status_bar_ = {};
+    status_bar = {};
     proxy_ = {};
-    send(RequestRuntimeState{.client_identity = identity, .interactive = true});
-    send(ConfigureGraphics{supportsSharedGraphics()});
+    link.send(RequestRuntimeState{.client_identity = identity, .interactive = true});
+    link.send(ConfigureGraphics{supportsSharedGraphics()});
     window::pace(*this);
     prompt::configureShell(*this);
   }
 
   bool Session::requestsPending() const noexcept {
-    return pending_count_ != 0;
+    return !link.requests().empty();
   }
 
   bool Session::presented() const noexcept {
@@ -159,7 +159,7 @@ namespace telar::gui::application {
   }
 
   bool Session::settlePresentation() {
-    if (!leave_pending_ || presented_ || (ready_ && pending_count_ != 0)) {
+    if (!leave_pending_ || presented_ || (ready_ && !link.requests().empty())) {
       return false;
     }
 
@@ -170,7 +170,7 @@ namespace telar::gui::application {
       for (auto& pane : panes_.viewMut()) {
         if (pane->attached || pane->attaching) {
           prepareDetach(pane->id);
-          send(DetachPane{pane->id});
+          link.send(DetachPane{pane->id});
           pane.getMut().attached = false;
           pane.getMut().attaching = false;
         }
@@ -190,18 +190,18 @@ namespace telar::gui::application {
   void Session::disconnected() noexcept {
     ++view_version_.host;
     ready_ = false;
-    features::terminal::graphics::suspend(graphics_);
+    features::terminal::graphics::suspend(graphics);
     agents_.resetSource();
     pane_list_.resetSource();
     workspaces_.resetSource();
-    features::terminal::copy_mode::close(copy_mode_);
-    features::history::suspend(history_);
-    features::paths::close(paths_);
-    features::peek::close(peek_);
-    features::palette::discard(palette_);
-    pending_count_ = 0;
-    features::terminal::links::suspend(links_);
-    features::prompt::failAll(prompt_);
+    features::terminal::copy_mode::close(copy_mode);
+    features::history::suspend(history);
+    features::paths::close(paths);
+    features::peek::close(peek);
+    features::palette::discard(palette);
+    link.forgetRequests();
+    features::terminal::links::suspend(links);
+    features::prompt::failAll(prompt);
     for (auto& pane : panes_.viewMut()) {
       pane.getMut().attached = false;
       pane.getMut().attaching = false;
@@ -489,11 +489,23 @@ namespace telar::gui::application {
     return proxy_;
   }
 
-  std::uint64_t Session::nextRequest() noexcept {
+  std::uint64_t Session::Link::nextRequest() noexcept {
     return ++request_id_;
   }
 
-  std::uint64_t Session::pending(RequestKind kind, std::uint64_t pane_id, ClientLayoutAxis axis) {
+  auto Session::Link::requests() const noexcept -> std::span<const Pending> {
+    return std::span{pending_}.first(pending_count_);
+  }
+
+  auto Session::Link::lastPending() noexcept -> Pending& {
+    return pending_.atMut(pending_count_ - 1);
+  }
+
+  void Session::Link::forgetRequests() noexcept {
+    pending_count_ = 0;
+  }
+
+  std::uint64_t Session::Link::pending(RequestKind kind, std::uint64_t pane_id, ClientLayoutAxis axis) {
     if (pending_count_ == pending_.size()) {
       throw std::length_error{"Pending GUI request capacity reached"};
     }
@@ -505,7 +517,7 @@ namespace telar::gui::application {
     return request;
   }
 
-  auto Session::complete(std::uint64_t request_id) noexcept -> ds::Option<Pending> {
+  auto Session::Link::complete(std::uint64_t request_id) noexcept -> ds::Option<Pending> {
     for (std::size_t index = 0; index < pending_count_; ++index) {
       if (pending_[index].id == request_id) {
         const auto result = pending_[index];
@@ -546,7 +558,7 @@ namespace telar::gui::application {
     }
 
     ready_ = false;
-    transport_.recover(reason);
+    link.transport.recover(reason);
   }
 
   Change Session::apply(const SystemMetrics& message) {
@@ -581,7 +593,7 @@ namespace telar::gui::application {
       return *change;
     }
 
-    if (const auto request = complete(message.request_id)) {
+    if (const auto request = link.complete(message.request_id)) {
       if (request->kind == RequestKind::peek_screen) {
         peek::readFailed(*this, message.request_id);
 
@@ -619,7 +631,7 @@ namespace telar::gui::application {
   }
 
   Change Session::apply(const RequestCompleted& message) {
-    const auto request = complete(message.request_id);
+    const auto request = link.complete(message.request_id);
     if (request && request->kind == RequestKind::forget_worktree) {
       return Change::none;
     }
@@ -648,50 +660,50 @@ namespace telar::gui::application {
 
   // The messages the other units of the session send.
   // Limit reports go out through the transport's report, which may drop them.
-  template std::span<const Byte> Session::encode<ReportLimit>(const ReportLimit& message);
+  template std::span<const Byte> Session::Link::encode<ReportLimit>(const ReportLimit& message);
 
-  template void Session::send<AcknowledgeAgent>(const AcknowledgeAgent& message);
-  template void Session::send<ClosePane>(const ClosePane& message);
-  template void Session::send<CloseTab>(const CloseTab& message);
-  template void Session::send<CompleteClientCommand>(const CompleteClientCommand& message);
-  template void Session::send<CompletePaneFocus>(const CompletePaneFocus& message);
-  template void Session::send<CompleteWords>(const CompleteWords& message);
-  template void Session::send<ConfigureFrameInterval>(const ConfigureFrameInterval& message);
-  template void Session::send<ConfigureShellPrompt>(const ConfigureShellPrompt& message);
-  template void Session::send<CopySelection>(const CopySelection& message);
-  template void Session::send<CreatePane>(const CreatePane& message);
-  template void Session::send<CreateTab>(const CreateTab& message);
-  template void Session::send<CreateWorkspace>(const CreateWorkspace& message);
-  template void Session::send<DeleteHistory>(const DeleteHistory& message);
-  template void Session::send<DetachPane>(const DetachPane& message);
-  template void Session::send<FindPaths>(const FindPaths& message);
-  template void Session::send<ForgetWorktree>(const ForgetWorktree& message);
-  template void Session::send<FrameAck>(const FrameAck& message);
-  template void Session::send<GraphicsCredit>(const GraphicsCredit& message);
-  template void Session::send<InterruptAgent>(const InterruptAgent& message);
-  template void Session::send<LaunchWorktree>(const LaunchWorktree& message);
-  template void Session::send<MoveTab>(const MoveTab& message);
-  template void Session::send<OpenEditor>(const OpenEditor& message);
-  template void Session::send<OpenPane>(const OpenPane& message);
-  template void Session::send<PaneCommand>(const PaneCommand& message);
-  template void Session::send<PaneInput>(const PaneInput& message);
-  template void Session::send<PaneResize>(const PaneResize& message);
-  template void Session::send<QueryHistory>(const QueryHistory& message);
-  template void Session::send<ReadHistoryOutput>(const ReadHistoryOutput& message);
-  template void Session::send<ReadPane>(const ReadPane& message);
-  template void Session::send<ReadPaneRows>(const ReadPaneRows& message);
-  template void Session::send<RenameTab>(const RenameTab& message);
-  template void Session::send<RenameWorkspace>(const RenameWorkspace& message);
-  template void Session::send<RequestCommandSpec>(const RequestCommandSpec& message);
-  template void Session::send<RequestGraphicsSnapshot>(const RequestGraphicsSnapshot& message);
-  template void Session::send<RequestSnapshot>(const RequestSnapshot& message);
-  template void Session::send<RequestTabSnapshot>(const RequestTabSnapshot& message);
-  template void Session::send<RequestWorkspaceSnapshot>(const RequestWorkspaceSnapshot& message);
-  template void Session::send<SearchPane>(const SearchPane& message);
-  template void Session::send<SearchPaneRows>(const SearchPaneRows& message);
-  template void Session::send<SendPaneText>(const SendPaneText& message);
-  template void Session::send<SetPaneViewport>(const SetPaneViewport& message);
-  template void Session::send<SuggestCommand>(const SuggestCommand& message);
-  template void Session::send<UpdateClientLayout>(const UpdateClientLayout& message);
+  template void Session::Link::send<AcknowledgeAgent>(const AcknowledgeAgent& message);
+  template void Session::Link::send<ClosePane>(const ClosePane& message);
+  template void Session::Link::send<CloseTab>(const CloseTab& message);
+  template void Session::Link::send<CompleteClientCommand>(const CompleteClientCommand& message);
+  template void Session::Link::send<CompletePaneFocus>(const CompletePaneFocus& message);
+  template void Session::Link::send<CompleteWords>(const CompleteWords& message);
+  template void Session::Link::send<ConfigureFrameInterval>(const ConfigureFrameInterval& message);
+  template void Session::Link::send<ConfigureShellPrompt>(const ConfigureShellPrompt& message);
+  template void Session::Link::send<CopySelection>(const CopySelection& message);
+  template void Session::Link::send<CreatePane>(const CreatePane& message);
+  template void Session::Link::send<CreateTab>(const CreateTab& message);
+  template void Session::Link::send<CreateWorkspace>(const CreateWorkspace& message);
+  template void Session::Link::send<DeleteHistory>(const DeleteHistory& message);
+  template void Session::Link::send<DetachPane>(const DetachPane& message);
+  template void Session::Link::send<FindPaths>(const FindPaths& message);
+  template void Session::Link::send<ForgetWorktree>(const ForgetWorktree& message);
+  template void Session::Link::send<FrameAck>(const FrameAck& message);
+  template void Session::Link::send<GraphicsCredit>(const GraphicsCredit& message);
+  template void Session::Link::send<InterruptAgent>(const InterruptAgent& message);
+  template void Session::Link::send<LaunchWorktree>(const LaunchWorktree& message);
+  template void Session::Link::send<MoveTab>(const MoveTab& message);
+  template void Session::Link::send<OpenEditor>(const OpenEditor& message);
+  template void Session::Link::send<OpenPane>(const OpenPane& message);
+  template void Session::Link::send<PaneCommand>(const PaneCommand& message);
+  template void Session::Link::send<PaneInput>(const PaneInput& message);
+  template void Session::Link::send<PaneResize>(const PaneResize& message);
+  template void Session::Link::send<QueryHistory>(const QueryHistory& message);
+  template void Session::Link::send<ReadHistoryOutput>(const ReadHistoryOutput& message);
+  template void Session::Link::send<ReadPane>(const ReadPane& message);
+  template void Session::Link::send<ReadPaneRows>(const ReadPaneRows& message);
+  template void Session::Link::send<RenameTab>(const RenameTab& message);
+  template void Session::Link::send<RenameWorkspace>(const RenameWorkspace& message);
+  template void Session::Link::send<RequestCommandSpec>(const RequestCommandSpec& message);
+  template void Session::Link::send<RequestGraphicsSnapshot>(const RequestGraphicsSnapshot& message);
+  template void Session::Link::send<RequestSnapshot>(const RequestSnapshot& message);
+  template void Session::Link::send<RequestTabSnapshot>(const RequestTabSnapshot& message);
+  template void Session::Link::send<RequestWorkspaceSnapshot>(const RequestWorkspaceSnapshot& message);
+  template void Session::Link::send<SearchPane>(const SearchPane& message);
+  template void Session::Link::send<SearchPaneRows>(const SearchPaneRows& message);
+  template void Session::Link::send<SendPaneText>(const SendPaneText& message);
+  template void Session::Link::send<SetPaneViewport>(const SetPaneViewport& message);
+  template void Session::Link::send<SuggestCommand>(const SuggestCommand& message);
+  template void Session::Link::send<UpdateClientLayout>(const UpdateClientLayout& message);
 
 }

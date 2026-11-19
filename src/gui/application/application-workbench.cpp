@@ -27,7 +27,7 @@ namespace telar::gui::application::workbench {
     using RequestKind = Access::RequestKind;
 
     [[nodiscard]] bool paneOperationPending(const Session& session) noexcept {
-      return std::ranges::any_of(Access::requests(session), [](const auto& request) {
+      return std::ranges::any_of(session.link.requests(), [](const auto& request) {
         return request.kind == RequestKind::split || request.kind == RequestKind::close_pane;
       });
     }
@@ -39,13 +39,13 @@ namespace telar::gui::application::workbench {
         return false;
       }
 
-      const auto sizes = feature::splitSizes(Access::workbench(session), *tab, pane_id, axis);
+      const auto sizes = feature::splitSizes(session.workbench, *tab, pane_id, axis);
       if (!sizes) {
         return false;
       }
 
-      const auto request_id = Access::pending(session, RequestKind::split, pane_id, axis);
-      auto& registration = Access::lastPending(session);
+      const auto request_id = session.link.pending(RequestKind::split, pane_id, axis);
+      auto& registration = session.link.lastPending();
 
       registration.location = tab->location;
       registration.size = sizes->added;
@@ -53,10 +53,10 @@ namespace telar::gui::application::workbench {
 
       launch.cwd_source = pane_id;
       try {
-        Access::send(session, PaneResize{.pane_id = pane_id, .size = sizes->existing});
-        Access::send(session, CreatePane{.request_id = request_id, .location = tab->location, .size = sizes->added, .launch = launch});
+        session.link.send(PaneResize{.pane_id = pane_id, .size = sizes->existing});
+        session.link.send(CreatePane{.request_id = request_id, .location = tab->location, .size = sizes->added, .launch = launch});
       } catch (...) {
-        Access::complete(session, request_id);
+        session.link.complete(request_id);
         recoverSplit(session, registered.location, registered.pane_id);
         throw;
       }
@@ -85,7 +85,7 @@ namespace telar::gui::application::workbench {
         launch.arguments = arguments;
       }
 
-      Access::sendTabOperation(session, RequestKind::create_tab, CreateTab{.workspace = tab->location.workspace, .label = label, .size = feature::launchSize(Access::workbench(session)), .launch = launch});
+      Access::sendTabOperation(session, RequestKind::create_tab, CreateTab{.workspace = tab->location.workspace, .label = label, .size = feature::launchSize(session.workbench), .launch = launch});
 
       return TabCreationOutcome::requested;
     }
@@ -118,17 +118,17 @@ namespace telar::gui::application::workbench {
   // ---- the area the panes share -------------------------------------------------------------
 
   const WorkbenchGeometry& geometry(const Session& session) noexcept {
-    return feature::geometry(Access::workbench(session));
+    return feature::geometry(session.workbench);
   }
 
   void setGeometry(Session& session, WorkbenchGeometry geometry) noexcept {
-    if (feature::place(Access::workbench(session), geometry)) {
+    if (feature::place(session.workbench, geometry)) {
       ++Access::viewVersion(session).viewport;
     }
   }
 
   void reserveBottom(Session& session, ds::Option<PaneBottomReservation> reservation) {
-    auto& state = Access::workbench(session);
+    auto& state = session.workbench;
     const auto reserved = feature::reserve(state, reservation, Access::tabsMut(session));
 
     if (reserved.changed) {
@@ -158,7 +158,7 @@ namespace telar::gui::application::workbench {
     }
 
     if (const auto* copy_pane = terminal::copy_mode::pane(session); copy_pane != nullptr && !sameTab(copy_pane->location, location)) {
-      features::terminal::copy_mode::close(Access::copyMode(session));
+      features::terminal::copy_mode::close(session.copy_mode);
     }
 
     active_tab = location;
@@ -238,7 +238,7 @@ namespace telar::gui::application::workbench {
   }
 
   bool tabOperationPending(const Session& session) noexcept {
-    return std::ranges::any_of(Access::requests(session), [](const auto& request) {
+    return std::ranges::any_of(session.link.requests(), [](const auto& request) {
       return request.kind == RequestKind::create_tab || request.kind == RequestKind::rename_tab || request.kind == RequestKind::move_tab || request.kind == RequestKind::close_tab;
     });
   }
@@ -306,7 +306,7 @@ namespace telar::gui::application::workbench {
 
   bool resizeToward(Session& session, PaneDirection direction) {
     auto* tab = session.activeTabMut();
-    if (tab == nullptr || !feature::resize(Access::workbench(session), *tab, direction)) {
+    if (tab == nullptr || !feature::resize(session.workbench, *tab, direction)) {
       return false;
     }
 
@@ -330,7 +330,7 @@ namespace telar::gui::application::workbench {
       return false;
     }
 
-    Access::sendRegistered(session, RequestKind::close_pane, ClosePane{0, pane_id}, pane_id);
+    session.link.sendRegistered(RequestKind::close_pane, ClosePane{0, pane_id}, pane_id);
 
     return true;
   }
@@ -376,7 +376,7 @@ namespace telar::gui::application::workbench {
       return sameTab(layout.location, *active_tab);
     });
     if (active_found) {
-      Access::send(session, UpdateClientLayout{.sidebar_visible = Access::configuration(session).sidebar_visible, .sidebar_width = Access::sidebarColumns(session), .workspace_list_collapsed = session.workspaceListCollapsed(), .active_tab = *active_tab, .tabs = {layouts.data(), count}});
+      session.link.send(UpdateClientLayout{.sidebar_visible = Access::configuration(session).sidebar_visible, .sidebar_width = Access::sidebarColumns(session), .workspace_list_collapsed = session.workspaceListCollapsed(), .active_tab = *active_tab, .tabs = {layouts.data(), count}});
     }
   }
 
@@ -389,7 +389,7 @@ namespace telar::gui::application::workbench {
       return false;
     }
 
-    const auto bookmark = feature::bookmark(Access::workbench(session), location);
+    const auto bookmark = feature::bookmark(session.workbench, location);
     const auto target = bookmark ? PaneTarget{.kind = PaneTarget::Kind::pane, .id = *bookmark} : PaneTarget{.kind = PaneTarget::Kind::workspace, .id = location.id};
 
     Access::handoffWorkspace(session, target, location.id);
@@ -413,12 +413,12 @@ namespace telar::gui::application::workbench {
       launch.cwd_source = pane->id;
     }
 
-    Access::open(session, RequestKind::create_workspace, CreateWorkspace{.size = feature::launchSize(Access::workbench(session)), .name = draft.name, .create_cwd = draft.create_directory, .launch = launch});
+    Access::open(session, RequestKind::create_workspace, CreateWorkspace{.size = feature::launchSize(session.workbench), .name = draft.name, .create_cwd = draft.create_directory, .launch = launch});
   }
 
   void renameWorkspace(Session& session, std::string_view name) {
     if (const auto location = Access::activeTab(session)) {
-      Access::send(session, RenameWorkspace{Access::nextRequest(session), location->workspace, name});
+      session.link.send(RenameWorkspace{session.link.nextRequest(), location->workspace, name});
     }
   }
 
@@ -461,11 +461,11 @@ namespace telar::gui::application::workbench {
         continue;
       }
 
-      if (Access::requests(session).size() == Session::maximum_pending) {
+      if (session.link.requests().size() == Session::maximum_pending) {
         break;
       }
 
-      Access::sendRegistered(session, RequestKind::forget_worktree, ForgetWorktree{.request_id = 0, .worktree = row.id});
+      session.link.sendRegistered(RequestKind::forget_worktree, ForgetWorktree{.request_id = 0, .worktree = row.id});
 
       ++sent;
     }
@@ -496,7 +496,7 @@ namespace telar::gui::application::workbench {
     if (session.activeTab() != nullptr) {
       static_cast<void>(requestTab(session, {}, launch.arguments));
     } else {
-      Access::open(session, RequestKind::open_default, OpenPane{.size = feature::launchSize(Access::workbench(session)), .launch = launch});
+      Access::open(session, RequestKind::open_default, OpenPane{.size = feature::launchSize(session.workbench), .launch = launch});
     }
   }
 
@@ -519,7 +519,7 @@ namespace telar::gui::application::workbench {
   }
 
   void resizeVisible(Session& session, Tab<Memory>& tab) {
-    feature::arrange(Access::workbench(session), tab, [&](std::uint64_t pane_id, TerminalSize size) {
+    feature::arrange(session.workbench, tab, [&](std::uint64_t pane_id, TerminalSize size) {
       session.resize(pane_id, size);
     });
   }
@@ -531,9 +531,9 @@ namespace telar::gui::application::workbench {
       return;
     }
 
-    feature::arrange(Access::workbench(session), *tab, [&](std::uint64_t placed, TerminalSize size) {
+    feature::arrange(session.workbench, *tab, [&](std::uint64_t placed, TerminalSize size) {
       if (placed == pane_id) {
-        Access::send(session, PaneResize{.pane_id = pane_id, .size = size});
+        session.link.send(PaneResize{.pane_id = pane_id, .size = size});
       }
     });
   }
@@ -544,7 +544,7 @@ namespace telar::gui::application::workbench {
       return 0;
     }
 
-    return feature::neighbor(Access::workbench(session), *tab, direction);
+    return feature::neighbor(session.workbench, *tab, direction);
   }
 
   std::string_view exportLayout(Session& session) {

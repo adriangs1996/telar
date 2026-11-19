@@ -34,12 +34,12 @@ namespace telar::gui::application {
     } catch (const std::exception& error) {
       reply.status = ClientCommandStatus::failed;
       reply.text = error.what();
-      send(reply);
+      link.send(reply);
 
       return Change::none;
     }
 
-    send(reply);
+    link.send(reply);
 
     return change;
   }
@@ -223,7 +223,7 @@ namespace telar::gui::application {
         throw EncodingError{"InvalidScrollDelta"};
       }
 
-      if (!commandPane(message.target_id).attached || features::terminal::copy_mode::view(copy_mode_).active()) {
+      if (!commandPane(message.target_id).attached || features::terminal::copy_mode::view(copy_mode).active()) {
         throw EncodingError{"PaneViewportUnavailable"};
       }
 
@@ -234,7 +234,7 @@ namespace telar::gui::application {
         throw EncodingError{"TerminalPaneNotAttached"};
       }
 
-      send(CopyRangeParser::parse(message.target_id, message.text));
+      link.send(CopyRangeParser::parse(message.target_id, message.text));
       reply.text = {};
       reply.status = ClientCommandStatus::admitted;
       break;
@@ -314,7 +314,7 @@ namespace telar::gui::application {
 
     const auto* focused = focusedPane();
 
-    send(CompletePaneFocus{message.requester, message.request_id, message.pane_id, message.pane_generation, outcome, focused == nullptr ? 0 : focused->id});
+    link.send(CompletePaneFocus{message.requester, message.request_id, message.pane_id, message.pane_generation, outcome, focused == nullptr ? 0 : focused->id});
 
     return Change::model;
   }

@@ -46,7 +46,7 @@ namespace telar::gui::application::activity {
     const auto focused = agent == nullptr ? ds::none : ds::Option{FocusedAgent{.pane_id = agent->pane_id, .pane_generation = agent->pane_generation, .status = agent->status}};
 
     if (const auto request = Access::agentAcknowledgement(session).take(focused)) {
-      Access::send(session, *request);
+      session.link.send(*request);
     }
   }
 

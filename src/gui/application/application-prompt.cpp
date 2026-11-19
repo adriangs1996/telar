@@ -38,15 +38,15 @@ namespace telar::gui::application::prompt {
 
     // The commands people typed, most recent first and each once, for the editor's suggestions.
     void requestHistory(Session& session) {
-      auto& state = Access::prompt(session);
+      auto& state = session.prompt;
       if (!session.ready() || !session.configuration().prompt.ghost || features::prompt::historyAsked(state)) {
         return;
       }
 
-      const auto query = features::prompt::historyQuery(Access::nextRequest(session));
+      const auto query = features::prompt::historyQuery(session.link.nextRequest());
 
       try {
-        Access::send(session, query);
+        session.link.send(query);
         features::prompt::askedHistory(state, query.request_id);
       } catch (const std::length_error&) {
       }
@@ -61,15 +61,15 @@ namespace telar::gui::application::prompt {
         return SpecState::unavailable;
       }
 
-      auto& state = Access::prompt(session);
+      auto& state = session.prompt;
       if (const auto known = features::prompt::spec(state, commands(*pane), command)) {
         return *known;
       }
 
-      const auto request = features::prompt::askSpec(state, pane_id, command, Access::nextRequest(session));
+      const auto request = features::prompt::askSpec(state, pane_id, command, session.link.nextRequest());
 
       try {
-        Access::send(session, request);
+        session.link.send(request);
       } catch (const std::exception&) {
         features::prompt::askedSpec(state, pane_id, command, request.request_id, false);
         return SpecState::unavailable;
@@ -84,14 +84,14 @@ namespace telar::gui::application::prompt {
     void complete(Session& session, std::uint64_t pane_id, features::prompt::PaneLine& line, shell::Dialect dialect) {
       using features::prompt::SpecState;
       const auto* pane = session.findPane(pane_id);
-      auto context = features::prompt::completing(Access::prompt(session), line, dialect);
+      auto context = features::prompt::completing(session.prompt, line, dialect);
       if (pane == nullptr || !context) {
         return;
       }
 
       // A command's spec comes from the runtime, for the commands this pane's shell runs; while
       // it is on its way, Tab waits for it and completes once it arrives.
-      auto& state = Access::prompt(session);
+      auto& state = session.prompt;
       bool specified = false;
 
       if (!context->command_position && !pane->shell.remote && session.ready()) {
@@ -110,12 +110,12 @@ namespace telar::gui::application::prompt {
       auto plan = features::prompt::plan(state, line, std::move(context.getMut()), specified, session.ready() && !pane->shell.remote, std::string_view{pane->cwd}, dialect);
 
       for (std::size_t index = 0; index < features::prompt::questions(plan); ++index) {
-        const auto request_id = Access::nextRequest(session);
+        const auto request_id = session.link.nextRequest();
 
         try {
           std::visit(
               [&](const auto& request) {
-                Access::send(session, request);
+                session.link.send(request);
               },
               features::prompt::request(plan, index, pane_id, request_id)
           );
@@ -141,7 +141,7 @@ namespace telar::gui::application::prompt {
       case Outcome::run:
         features::history::HistoryText::validate(text, pane->screen.modes().bracketed_paste);
         session.runCommand(pane_id, text);
-        features::prompt::remember(Access::prompt(session), text);
+        features::prompt::remember(session.prompt, text);
         break;
       case Outcome::answer: {
         features::history::HistoryText::validate(text.empty() ? std::string_view{" "} : text, false);
@@ -166,7 +166,7 @@ namespace telar::gui::application::prompt {
         static_cast<void>(specState(session, settled.pane_id, settled.word.view()));
       }
 
-      return changed(session, features::prompt::settle(Access::prompt(session), settled) ? settled.pane_id : 0);
+      return changed(session, features::prompt::settle(session.prompt, settled) ? settled.pane_id : 0);
     }
 
   }
@@ -175,7 +175,7 @@ namespace telar::gui::application::prompt {
     const auto* pane = session.findPane(pane_id);
     const auto mode = session.configuration().prompt.mode;
     // telar's editor stays while copy mode, which owns the keys, reads the scrollback.
-    if (pane == nullptr || !pane->attached || pane->exited || (features::terminal::copy_mode::view(Access::copyMode(session)).active() && mode != PromptMode::telar)) {
+    if (pane == nullptr || !pane->attached || pane->exited || (features::terminal::copy_mode::view(session.copy_mode).active() && mode != PromptMode::telar)) {
       return Surface::none;
     }
 
@@ -221,7 +221,7 @@ namespace telar::gui::application::prompt {
   }
 
   ds::Option<LineView> line(const Session& session, std::uint64_t pane_id) noexcept {
-    return features::prompt::line(Access::prompt(session), pane_id);
+    return features::prompt::line(session.prompt, pane_id);
   }
 
   std::string_view suggestion(const Session& session, std::uint64_t pane_id) noexcept {
@@ -231,7 +231,7 @@ namespace telar::gui::application::prompt {
   }
 
   features::prompt::History history(const Session& session) noexcept {
-    return features::prompt::history(Access::prompt(session));
+    return features::prompt::history(session.prompt);
   }
 
   Outcome key(Session& session, std::uint64_t pane_id, const KeyPress& key) {
@@ -257,7 +257,7 @@ namespace telar::gui::application::prompt {
     }
 
     const auto shell = dialect(*pane);
-    const auto outcome = features::prompt::press(Access::prompt(session), line, where, key, session.configuration().prompt, shell);
+    const auto outcome = features::prompt::press(session.prompt, line, where, key, session.configuration().prompt, shell);
     if (outcome == Outcome::complete) {
       complete(session, pane_id, line, shell);
       return Outcome::edited;
@@ -268,7 +268,7 @@ namespace telar::gui::application::prompt {
   }
 
   void text(Session& session, std::uint64_t pane_id, std::string_view text) {
-    features::prompt::insert(Access::prompt(session), open(session, pane_id), text);
+    features::prompt::insert(session.prompt, open(session, pane_id), text);
   }
 
   CommandPresence commandPresence(Session& session, std::uint64_t pane_id, std::string_view word) {
@@ -277,13 +277,13 @@ namespace telar::gui::application::prompt {
       return CommandPresence::unknown;
     }
 
-    auto& state = Access::prompt(session);
+    auto& state = session.prompt;
     const auto asked = commands(*pane);
     if (const auto known = features::prompt::presence(state, asked, word)) {
       return *known;
     }
 
-    const auto request_id = Access::nextRequest(session);
+    const auto request_id = session.link.nextRequest();
 
     try {
       const auto query = features::prompt::ask(state, asked, word, request_id);
@@ -293,7 +293,7 @@ namespace telar::gui::application::prompt {
 
       std::visit(
           [&](const auto& request) {
-            Access::send(session, request);
+            session.link.send(request);
           },
           *query
       );
@@ -307,12 +307,12 @@ namespace telar::gui::application::prompt {
   }
 
   ds::Option<std::uint64_t> takeWrite(Session& session) noexcept {
-    return features::prompt::takeWrite(Access::prompt(session));
+    return features::prompt::takeWrite(session.prompt);
   }
 
   features::prompt::PaneLine& open(Session& session, std::uint64_t pane_id) {
     const auto keymap = session.configuration().prompt.keymap == PromptKeymap::vim ? Keymap::vim : Keymap::emacs;
-    const auto opened = features::prompt::open(Access::prompt(session), pane_id, keymap);
+    const auto opened = features::prompt::open(session.prompt, pane_id, keymap);
     if (opened.wants_history) {
       requestHistory(session);
     }
@@ -321,7 +321,7 @@ namespace telar::gui::application::prompt {
   }
 
   void write(Session& session, std::uint64_t pane_id, std::string_view command) {
-    features::prompt::write(Access::prompt(session), open(session, pane_id), command);
+    features::prompt::write(session.prompt, open(session, pane_id), command);
   }
 
   void typeSecret(Session& session, std::uint64_t pane_id, char byte) {
@@ -329,7 +329,7 @@ namespace telar::gui::application::prompt {
   }
 
   void follow(Session& session, std::uint64_t pane_id, const PaneShell& previous, const PaneShell& current) {
-    auto* line = features::prompt::find(Access::prompt(session), pane_id);
+    auto* line = features::prompt::find(session.prompt, pane_id);
     if (line == nullptr) {
       return;
     }
@@ -341,12 +341,12 @@ namespace telar::gui::application::prompt {
 
   void configureShell(Session& session) {
     if (session.readsRows()) {
-      Access::send(session, ConfigureShellPrompt{.bare = session.configuration().prompt.mode == PromptMode::telar});
+      session.link.send(ConfigureShellPrompt{.bare = session.configuration().prompt.mode == PromptMode::telar});
     }
   }
 
   Change receive(Session& session, const CommandSpec& message) {
-    auto& state = Access::prompt(session);
+    auto& state = session.prompt;
     const auto pane_id = features::prompt::receive(state, message);
     if (!pane_id) {
       return Change::none;
@@ -363,19 +363,19 @@ namespace telar::gui::application::prompt {
   }
 
   Change receive(Session& session, const CompletionWords& message) {
-    if (const auto settled = features::prompt::settles(Access::prompt(session), message)) {
+    if (const auto settled = features::prompt::settles(session.prompt, message)) {
       return settle(session, *settled);
     }
 
-    return changed(session, features::prompt::receive(Access::prompt(session), message).valueOr(0));
+    return changed(session, features::prompt::receive(session.prompt, message).valueOr(0));
   }
 
   ds::Option<Change> receive(Session& session, const PathResults& message) {
-    if (const auto settled = features::prompt::settles(Access::prompt(session), message)) {
+    if (const auto settled = features::prompt::settles(session.prompt, message)) {
       return settle(session, *settled);
     }
 
-    const auto pane_id = features::prompt::receive(Access::prompt(session), message);
+    const auto pane_id = features::prompt::receive(session.prompt, message);
     if (!pane_id) {
       return ds::none;
     }
@@ -384,7 +384,7 @@ namespace telar::gui::application::prompt {
   }
 
   ds::Option<Change> fail(Session& session, std::uint64_t request_id) {
-    const auto pane_id = features::prompt::fail(Access::prompt(session), request_id);
+    const auto pane_id = features::prompt::fail(session.prompt, request_id);
     if (!pane_id) {
       return ds::none;
     }

@@ -2,7 +2,6 @@ module telar.gui.application;
 
 import std;
 
-import :access;
 import telar.gui.features.paths;
 import telar.gui.features.prompt;
 import telar.wire.editor;
@@ -30,12 +29,12 @@ namespace telar::gui::application::paths {
 
     // Writes `path` over the word the search started from, while the editor still holds it.
     bool replaceSeed(Session& session, std::uint64_t pane_id, std::string_view path) {
-      const auto seed = features::paths::seed(Access::paths(session));
+      const auto seed = features::paths::seed(session.paths);
       if (seed.pane_id != pane_id || seed.text.empty()) {
         return false;
       }
 
-      return features::prompt::replace(Access::prompt(session), pane_id, seed.begin, seed.text, path);
+      return features::prompt::replace(session.prompt, pane_id, seed.begin, seed.text, path);
     }
 
   }
@@ -46,7 +45,7 @@ namespace telar::gui::application::paths {
       return false;
     }
 
-    auto& state = Access::paths(session);
+    auto& state = session.paths;
 
     features::paths::open(state, pane->id, pane->cwd, caretWord(session, pane->id));
     search(session, features::paths::seed(state).text);
@@ -55,19 +54,19 @@ namespace telar::gui::application::paths {
   }
 
   std::string_view seed(const Session& session) noexcept {
-    return features::paths::seed(Access::paths(session)).text;
+    return features::paths::seed(session.paths).text;
   }
 
   bool search(Session& session, std::string_view query) {
-    auto& state = Access::paths(session);
+    auto& state = session.paths;
     if (!session.ready() || features::paths::page(state).paneId() == 0) {
       return false;
     }
 
-    const auto request = features::paths::search(state, query, Access::nextRequest(session));
+    const auto request = features::paths::search(state, query, session.link.nextRequest());
 
     try {
-      Access::send(session, request);
+      session.link.send(request);
     } catch (const std::length_error&) {
       features::paths::report(state, "Path request queue is full; retry");
 
@@ -80,7 +79,7 @@ namespace telar::gui::application::paths {
   }
 
   bool descend(Session& session, std::size_t selection) {
-    if (!features::paths::descend(Access::paths(session), selection)) {
+    if (!features::paths::descend(session.paths, selection)) {
       return false;
     }
 
@@ -90,7 +89,7 @@ namespace telar::gui::application::paths {
   }
 
   bool ascend(Session& session) {
-    if (!features::paths::ascend(Access::paths(session))) {
+    if (!features::paths::ascend(session.paths)) {
       return false;
     }
 
@@ -100,11 +99,11 @@ namespace telar::gui::application::paths {
   }
 
   void close(Session& session) noexcept {
-    features::paths::close(Access::paths(session));
+    features::paths::close(session.paths);
   }
 
   bool insert(Session& session, std::size_t selection, bool absolute) {
-    auto& state = Access::paths(session);
+    auto& state = session.paths;
     if (!features::paths::insertable(state)) {
       return false;
     }
@@ -140,15 +139,15 @@ namespace telar::gui::application::paths {
   }
 
   PathPickerPage page(const Session& session) noexcept {
-    return features::paths::page(Access::paths(session));
+    return features::paths::page(session.paths);
   }
 
   Change receive(Session& session, const PathResults& results) {
-    return features::paths::receive(Access::paths(session), results) ? Change::paths : Change::none;
+    return features::paths::receive(session.paths, results) ? Change::paths : Change::none;
   }
 
   ds::Option<Change> fail(Session& session, const RequestFailed& failure) {
-    const auto changed = features::paths::fail(Access::paths(session), failure);
+    const auto changed = features::paths::fail(session.paths, failure);
     if (!changed) {
       return ds::none;
     }

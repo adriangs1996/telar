@@ -15,7 +15,7 @@ namespace telar::gui::application {
   }
 
   bool Session::supportsSharedGraphics() const noexcept {
-    return transport_.supportsSharedMemory();
+    return link.transport.supportsSharedMemory();
   }
 
   Change Session::apply(const GraphicsSharedImage& message) {

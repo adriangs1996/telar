@@ -18,14 +18,14 @@ namespace telar::gui::application::terminal::copy_mode {
 
     // Sends what `plan` asks for and moves the pane's view, once copy mode commits it.
     void apply(Session& session, const feature::CopyPlan& plan, Pane<Memory>& pane) {
-      auto& state = Access::copyMode(session);
+      auto& state = session.copy_mode;
 
       if (!feature::current(state, plan) || plan.effect.open_link) {
         return;
       }
 
       if (plan.selection) {
-        Access::send(session, *plan.selection);
+        session.link.send(*plan.selection);
       }
 
       if (!feature::commit(state, plan)) {
@@ -39,12 +39,12 @@ namespace telar::gui::application::terminal::copy_mode {
 
         pane.screen.setViewport(plan.viewport->offset);
         ++pane.viewport_requests;
-        Access::send(session, *plan.viewport);
+        session.link.send(*plan.viewport);
       }
     }
 
     feature::CopyPointerAuthority authority(const Session& session, const CopyPointerInput& input) noexcept {
-      const auto copy = feature::view(Access::copyMode(session));
+      const auto copy = feature::view(session.copy_mode);
 
       if (const auto owner = copy.pointerOwner()) {
         const auto* pane = session.findPane(owner->pane_id);
@@ -67,7 +67,7 @@ namespace telar::gui::application::terminal::copy_mode {
     }
 
     void move(Session& session, const CopyPointerDecision& decision, bool released, Pane<Memory>& pane) {
-      const auto& state = Access::copyMode(session);
+      const auto& state = session.copy_mode;
       const auto grid = copyGrid(pane.screen);
       ds::Option<feature::CopyPlan> plan;
 
@@ -85,7 +85,7 @@ namespace telar::gui::application::terminal::copy_mode {
   }
 
   CopyModeView view(const Session& session) noexcept {
-    return feature::view(Access::copyMode(session));
+    return feature::view(session.copy_mode);
   }
 
   bool enter(Session& session) noexcept {
@@ -94,7 +94,7 @@ namespace telar::gui::application::terminal::copy_mode {
       return false;
     }
 
-    return feature::enter(Access::copyMode(session), pane->id, copyGrid(pane->screen), pane->screen.cursor());
+    return feature::enter(session.copy_mode, pane->id, copyGrid(pane->screen), pane->screen.cursor());
   }
 
   CopyEffect key(Session& session, const TerminalKey& key) {
@@ -103,7 +103,7 @@ namespace telar::gui::application::terminal::copy_mode {
       return {.handled = false};
     }
 
-    const auto plan = feature::key(Access::copyMode(session), key, copyGrid(copy_pane->screen));
+    const auto plan = feature::key(session.copy_mode, key, copyGrid(copy_pane->screen));
     if (!plan) {
       return {};
     }
@@ -114,7 +114,7 @@ namespace telar::gui::application::terminal::copy_mode {
   }
 
   void leave(Session& session) {
-    auto& state = Access::copyMode(session);
+    auto& state = session.copy_mode;
 
     if (auto* copy_pane = pane(session)) {
       apply(session, feature::leave(state, copyGrid(copy_pane->screen)), *copy_pane);
@@ -131,11 +131,11 @@ namespace telar::gui::application::terminal::copy_mode {
       return false;
     }
 
-    return feature::press(Access::copyMode(session), press, copyGrid(pane->screen));
+    return feature::press(session.copy_mode, press, copyGrid(pane->screen));
   }
 
   bool copy(Session& session, std::uint64_t pane_id) {
-    const auto& state = feature::view(Access::copyMode(session)).state();
+    const auto& state = feature::view(session.copy_mode).state();
     if (!state || state->pane_id != pane_id || !state->pointer) {
       return false;
     }
@@ -145,13 +145,13 @@ namespace telar::gui::application::terminal::copy_mode {
       return false;
     }
 
-    Access::send(session, *selection);
+    session.link.send(*selection);
 
     return true;
   }
 
   CopyPointerDecision::Outcome pointer(Session& session, const CopyPointerInput& input) {
-    auto& state = Access::copyMode(session);
+    auto& state = session.copy_mode;
     const auto decision = feature::routeCopyPointer(input, authority(session, input));
     const auto finish = decision.cancel || (decision.motion && input.kind == CopyPointerKind::release);
 
@@ -179,7 +179,7 @@ namespace telar::gui::application::terminal::copy_mode {
   }
 
   void search(Session& session, std::string_view needle) {
-    auto& state = Access::copyMode(session);
+    auto& state = session.copy_mode;
     auto* copy_pane = pane(session);
     if (copy_pane == nullptr || !feature::view(state).active()) {
       throw EncodingError{"No copy mode owns this search"};
@@ -194,12 +194,12 @@ namespace telar::gui::application::terminal::copy_mode {
       return;
     }
 
-    const auto request_id = Access::nextRequest(session);
+    const auto request_id = session.link.nextRequest();
     const auto request = feature::request(state, copy_pane->id, request_id, session.readsRows());
 
     try {
       std::visit([&](const auto& message) {
-        Access::send(session, message);
+        session.link.send(message);
       },
           request);
     } catch (...) {
@@ -209,11 +209,11 @@ namespace telar::gui::application::terminal::copy_mode {
   }
 
   void finishSearch(Session& session) noexcept {
-    feature::finishSearch(Access::copyMode(session));
+    feature::finishSearch(session.copy_mode);
   }
 
   CopySearchState searchState(const Session& session) noexcept {
-    return feature::search(Access::copyMode(session));
+    return feature::search(session.copy_mode);
   }
 
   void stepMatch(Session& session, bool forward) {
@@ -223,23 +223,23 @@ namespace telar::gui::application::terminal::copy_mode {
   }
 
   ds::Option<std::size_t> searchBlock(const Session& session) noexcept {
-    return feature::searchBlock(Access::copyMode(session));
+    return feature::searchBlock(session.copy_mode);
   }
 
   bool searchScopes(const Session& session) noexcept {
-    return feature::searchScopes(Access::copyMode(session), session.readsRows());
+    return feature::searchScopes(session.copy_mode, session.readsRows());
   }
 
   void toggleSearchScope(Session& session) noexcept {
-    feature::toggleSearchScope(Access::copyMode(session), session.readsRows());
+    feature::toggleSearchScope(session.copy_mode, session.readsRows());
   }
 
   bool takeSearchRequest(Session& session) noexcept {
-    return feature::takeSearchRequest(Access::copyMode(session));
+    return feature::takeSearchRequest(session.copy_mode);
   }
 
   Pane<Memory>* pane(Session& session) noexcept {
-    auto& state = Access::copyMode(session);
+    auto& state = session.copy_mode;
     const auto& copy = feature::view(state).state();
     if (!copy) {
       return nullptr;
@@ -256,7 +256,7 @@ namespace telar::gui::application::terminal::copy_mode {
   }
 
   Change receive(Session& session, const PaneMatches& message) {
-    auto& state = Access::copyMode(session);
+    auto& state = session.copy_mode;
     if (!feature::awaits(state, message)) {
       return Change::none;
     }

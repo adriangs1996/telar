@@ -75,9 +75,9 @@ namespace telar::gui::application {
       end = pane.blocks[index + 1].row;
     } else if (block.state != CommandBlockState::running) {
       // The live prompt, read where the view shows it and remembered while it does not.
-      const auto prompt = livePromptRow(pane);
-      if (prompt && *prompt >= first) {
-        end = *prompt;
+      const auto live_prompt = livePromptRow(pane);
+      if (live_prompt && *live_prompt >= first) {
+        end = *live_prompt;
       } else if (pane.live_prompt_row && *pane.live_prompt_row >= first) {
         end = *pane.live_prompt_row;
       }
@@ -87,7 +87,7 @@ namespace telar::gui::application {
   }
 
   ds::Option<std::size_t> Session::selectedBlock(std::uint64_t pane_id) const noexcept {
-    const auto block = features::prompt::selectedBlock(prompt_, pane_id);
+    const auto block = features::prompt::selectedBlock(prompt, pane_id);
     const auto* pane = findPane(pane_id);
     if (!block || pane == nullptr || *block >= pane->blocks.size()) {
       return ds::none;
@@ -197,7 +197,7 @@ namespace telar::gui::application {
     if (!pane->blocks.empty() && !pane->shell.remote) {
       const auto& last = pane->blocks.back();
       if ((last.state == CommandBlockState::succeeded || last.state == CommandBlockState::failed) && last.status != 127) {
-        features::prompt::learn(prompt_, pane->id, last.command, pane->shell.shell == IntegratedShell::fish ? shell::Dialect::fish : shell::Dialect::posix);
+        features::prompt::learn(prompt, pane->id, last.command, pane->shell.shell == IntegratedShell::fish ? shell::Dialect::fish : shell::Dialect::posix);
       }
     }
 
@@ -223,7 +223,7 @@ namespace telar::gui::application {
       return ds::none;
     }
 
-    const auto editor = features::prompt::view(prompt_, line);
+    const auto editor = features::prompt::view(prompt, line);
     const bool normal = editor.keymap() == features::prompt::Keymap::vim && editor.mode() == features::prompt::Mode::normal && !editor.commandPending();
     const auto count = pane->blocks.size();
     const auto selection = features::prompt::selectedBlock(line);
@@ -457,7 +457,7 @@ namespace telar::gui::application {
       fold(pane.id, index, false);
     }
 
-    if (features::terminal::copy_mode::searchOutput(copy_mode_, pane.id, grid, {.block = index, .first = first, .last = last}, readsRows())) {
+    if (features::terminal::copy_mode::searchOutput(copy_mode, pane.id, grid, {.block = index, .first = first, .last = last}, readsRows())) {
       changed_pane_ = pane.id;
       block_changed_ = true;
     }
@@ -470,7 +470,7 @@ namespace telar::gui::application {
 
     if (index + 1 < pane.blocks.size()) {
       end = pane.blocks[index + 1].row;
-    } else if (const auto live = features::prompt::livePrompt(prompt_, pane.id)) {
+    } else if (const auto live = features::prompt::livePrompt(prompt, pane.id)) {
       end = *live;
     }
 
@@ -482,7 +482,7 @@ namespace telar::gui::application {
     const auto grid = copyGrid(pane.screen);
     const auto columns = static_cast<std::uint16_t>(grid.columns == 0 ? 0 : grid.columns - 1);
     const CopyPoint start{.x = 0, .y = first};
-    if (features::terminal::copy_mode::select(copy_mode_, pane.id, grid, lines ? CopyPoint{.x = columns, .y = last} : start, start, lines)) {
+    if (features::terminal::copy_mode::select(copy_mode, pane.id, grid, lines ? CopyPoint{.x = columns, .y = last} : start, start, lines)) {
       changed_pane_ = pane.id;
       block_changed_ = true;
     }
@@ -492,7 +492,7 @@ namespace telar::gui::application {
     const auto [first, last] = blockOutput(pane, index);
     const auto columns = pane.screen.columns();
 
-    send(CopySelection{.pane_id = pane.id, .start_x = 0, .start_y = first, .end_x = static_cast<std::uint16_t>(columns == 0 ? 0 : columns - 1), .end_y = last, .linewise = true});
+    link.send(CopySelection{.pane_id = pane.id, .start_x = 0, .start_y = first, .end_x = static_cast<std::uint16_t>(columns == 0 ? 0 : columns - 1), .end_y = last, .linewise = true});
   }
 
   bool Session::takeBlockChange() noexcept {

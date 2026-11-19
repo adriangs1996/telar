@@ -71,7 +71,7 @@ namespace telar::gui::application::terminal::links {
 
     const auto* source = session.findPane(*source_id);
     const features::terminal::links::EditorRequest request{
-        .request_id = source->generation == 0 ? 0 : Access::nextRequest(session),
+        .request_id = source->generation == 0 ? 0 : session.link.nextRequest(),
         .source = {.pane_id = source->id, .pane_generation = source->generation, .attachment_generation = source->attachment_generation, .location = source->location},
         .target = features::terminal::links::EditorTarget{executable, path.text().starts_with('/') ? path.text() : anchored, path.line(), path.column()},
     };
@@ -82,11 +82,11 @@ namespace telar::gui::application::terminal::links {
       return;
     }
 
-    auto& state = Access::links(session);
+    auto& state = session.links;
     const auto message = features::terminal::links::open(state, request);
 
     try {
-      Access::send(session, message);
+      session.link.send(message);
     } catch (...) {
       static_cast<void>(features::terminal::links::complete(state, request.request_id));
       throw;
@@ -94,7 +94,7 @@ namespace telar::gui::application::terminal::links {
   }
 
   Change receive(Session& session, const EditorOpened& message) {
-    const auto request = features::terminal::links::complete(Access::links(session), message.request_id);
+    const auto request = features::terminal::links::complete(session.links, message.request_id);
     if (!request) {
       return Change::none;
     }
@@ -135,7 +135,7 @@ namespace telar::gui::application::terminal::links {
   }
 
   ds::Option<Change> fail(Session& session, std::uint64_t request_id, std::string_view message) {
-    if (!features::terminal::links::complete(Access::links(session), request_id)) {
+    if (!features::terminal::links::complete(session.links, request_id)) {
       return ds::none;
     }
 

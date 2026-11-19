@@ -1086,7 +1086,7 @@ namespace telar::gui::application::configuration {
     const bool prompt_changed = shown.prompt.mode != configuration.prompt.mode;
 
     shown = configuration;
-    features::notifications::configure(Access::notifications(session), configuration.sound);
+    features::notifications::configure(session.notifications, configuration.sound);
     ++Access::viewVersion(session).configuration;
     if (prompt_changed) {
       prompt::configureShell(session);

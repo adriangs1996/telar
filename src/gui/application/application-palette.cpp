@@ -2,7 +2,6 @@ module telar.gui.application;
 
 import std;
 
-import :access;
 import telar.gui.features.palette;
 import telar.gui.foundation.keys;
 import telar.gui.foundation.model;
@@ -12,20 +11,20 @@ import telar.wire.editor;
 namespace telar::gui::application::palette {
 
   Suggestion suggestion(const Session& session) noexcept {
-    return features::palette::suggestion(Access::palette(session));
+    return features::palette::suggestion(session.palette);
   }
 
   void suggest(Session& session) noexcept {
-    features::palette::suggest(Access::palette(session));
+    features::palette::suggest(session.palette);
   }
 
   void discard(Session& session) noexcept {
-    features::palette::discard(Access::palette(session));
+    features::palette::discard(session.palette);
   }
 
   bool submit(Session& session, std::string_view task) {
     using Kind = features::palette::Submission::Kind;
-    auto& state = Access::palette(session);
+    auto& state = session.palette;
     const auto* pane = session.focusedPane();
     const auto submission = features::palette::submit(state, task);
 
@@ -59,16 +58,16 @@ namespace telar::gui::application::palette {
       return false;
     }
 
-    const SuggestCommand request{.request_id = Access::nextRequest(session), .pane_id = pane->id, .text = submission.text};
+    const SuggestCommand request{.request_id = session.link.nextRequest(), .pane_id = pane->id, .text = submission.text};
 
-    Access::send(session, request);
+    session.link.send(request);
     features::palette::wait(state, request.request_id);
 
     return false;
   }
 
   Change receive(Session& session, const CommandSuggestion& suggestion) {
-    return features::palette::receive(Access::palette(session), suggestion) ? Change::suggestion : Change::none;
+    return features::palette::receive(session.palette, suggestion) ? Change::suggestion : Change::none;
   }
 
 }

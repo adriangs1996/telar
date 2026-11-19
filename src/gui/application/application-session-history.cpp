@@ -13,7 +13,7 @@ namespace telar::gui::application {
 
   Change Session::apply(const HistoryResults& message) {
     // The editor's suggestions read the commands people typed through the history too.
-    if (features::prompt::receive(prompt_, message)) {
+    if (features::prompt::receive(prompt, message)) {
       return Change::none;
     }
 

@@ -17,22 +17,22 @@ namespace telar::gui::application::history {
     template <typename Request>
     void send(Session& session, const Request& request) {
       try {
-        Access::send(session, request);
+        session.link.send(request);
       } catch (const std::exception& error) {
-        features::history::fail(Access::history(session), request.request_id, error.what());
+        features::history::fail(session.history, request.request_id, error.what());
         throw;
       }
     }
 
     // Reads the selected command's whole text and its output, when the panel needs them.
     void readDetails(Session& session) {
-      auto& state = Access::history(session);
+      auto& state = session.history;
 
-      if (const auto request = features::history::readCommand(state, Access::nextRequest(session))) {
+      if (const auto request = features::history::readCommand(state, session.link.nextRequest())) {
         send(session, *request);
       }
 
-      if (const auto request = features::history::readOutput(state, Access::nextRequest(session))) {
+      if (const auto request = features::history::readOutput(state, session.link.nextRequest())) {
         send(session, *request);
       }
     }
@@ -74,14 +74,14 @@ namespace telar::gui::application::history {
 
   void search(Session& session, std::string_view query, HistoryFilters filters) {
     // Each command once, at its newest run that passes the filters.
-    QueryHistory request{.request_id = Access::nextRequest(session), .query = query, .failed_only = filters.failed_only, .author = filters.author, .match = session.configuration().history.match_fts ? HistoryMatch::fts : HistoryMatch::fuzzy, .distinct = true};
+    QueryHistory request{.request_id = session.link.nextRequest(), .query = query, .failed_only = filters.failed_only, .author = filters.author, .match = session.configuration().history.match_fts ? HistoryMatch::fts : HistoryMatch::fuzzy, .distinct = true};
 
     resolveScope(session, request, filters.scope);
-    send(session, features::history::search(Access::history(session), request));
+    send(session, features::history::search(session.history, request));
   }
 
   bool page(Session& session, HistoryPage direction) {
-    if (const auto request = features::history::page(Access::history(session), direction, Access::nextRequest(session))) {
+    if (const auto request = features::history::page(session.history, direction, session.link.nextRequest())) {
       send(session, *request);
 
       return true;
@@ -95,21 +95,21 @@ namespace telar::gui::application::history {
   }
 
   HistoryView view(const Session& session) noexcept {
-    return features::history::view(Access::history(session));
+    return features::history::view(session.history);
   }
 
   void report(Session& session, std::string_view message) {
-    features::history::report(Access::history(session), message);
+    features::history::report(session.history, message);
   }
 
   void select(Session& session, std::size_t row) {
-    if (features::history::select(Access::history(session), row)) {
+    if (features::history::select(session.history, row)) {
       readDetails(session);
     }
   }
 
   void inspect(Session& session, bool enabled) {
-    features::history::inspect(Access::history(session), enabled);
+    features::history::inspect(session.history, enabled);
     readDetails(session);
   }
 
@@ -149,11 +149,11 @@ namespace telar::gui::application::history {
   }
 
   void remove(Session& session, std::uint64_t entry_id) {
-    send(session, features::history::erase(Access::history(session), entry_id, Access::nextRequest(session)));
+    send(session, features::history::erase(session.history, entry_id, session.link.nextRequest()));
   }
 
   Change receive(Session& session, const HistoryResults& results) {
-    if (!features::history::receive(Access::history(session), results)) {
+    if (!features::history::receive(session.history, results)) {
       return Change::none;
     }
 
@@ -163,22 +163,22 @@ namespace telar::gui::application::history {
   }
 
   Change receive(Session& session, const HistoryOutput& output) {
-    return features::history::receive(Access::history(session), output) ? Change::history : Change::none;
+    return features::history::receive(session.history, output) ? Change::history : Change::none;
   }
 
   Change receive(Session& session, const HistoryPruned& pruned) {
-    auto& state = Access::history(session);
+    auto& state = session.history;
     if (!features::history::receive(state, pruned)) {
       return Change::none;
     }
 
-    send(session, features::history::refresh(state, Access::nextRequest(session)));
+    send(session, features::history::refresh(state, session.link.nextRequest()));
 
     return Change::history;
   }
 
   ds::Option<Change> fail(Session& session, std::uint64_t request_id, std::string_view message) {
-    auto& state = Access::history(session);
+    auto& state = session.history;
     if (!features::history::view(state).owns(request_id)) {
       return ds::none;
     }

@@ -20,22 +20,22 @@ namespace telar::gui::application::peek {
     // Reads the agent's recent screen unless a read is in flight, under a pending request the
     // reply or its failure completes.
     void read(Session& session) {
-      auto& state = Access::peek(session);
+      auto& state = session.peek;
       if (!features::peek::target(state) || features::peek::reading(state)) {
         return;
       }
 
-      const auto request_id = Access::pending(session, Access::RequestKind::peek_screen);
+      const auto request_id = session.link.pending(Access::RequestKind::peek_screen);
 
       try {
         if (const auto request = features::peek::read(state, request_id)) {
-          Access::send(session, *request);
+          session.link.send(*request);
         } else {
-          Access::complete(session, request_id);
+          session.link.complete(request_id);
         }
       } catch (...) {
         features::peek::fail(state, request_id);
-        Access::complete(session, request_id);
+        session.link.complete(request_id);
         throw;
       }
     }
@@ -51,13 +51,13 @@ namespace telar::gui::application::peek {
       constexpr TerminalSize size{.cols = 160, .rows = 48, .cell_width_px = 0, .cell_height_px = 0};
       const ds::Array<std::string_view, 5> arguments{"sh", "-c", script, "sh", row->branch};
 
-      Access::sendRegistered(session, Access::RequestKind::peek_diff, LaunchWorktree{.worktree = row->id, .label = "diff", .size = size, .launch = {.cwd = row->path.empty() ? std::string_view{"/"} : std::string_view{row->path}, .arguments = arguments}}, agent.pane_id);
+      session.link.sendRegistered(Access::RequestKind::peek_diff, LaunchWorktree{.worktree = row->id, .label = "diff", .size = size, .launch = {.cwd = row->path.empty() ? std::string_view{"/"} : std::string_view{row->path}, .arguments = arguments}}, agent.pane_id);
     }
 
   }
 
   bool open(Session& session, PeekTarget target) {
-    auto& state = Access::peek(session);
+    auto& state = session.peek;
     if (!session.ready() || !session.presented() || features::peek::find(session.agents(), target) == nullptr) {
       return false;
     }
@@ -74,7 +74,7 @@ namespace telar::gui::application::peek {
   }
 
   void close(Session& session) noexcept {
-    auto& state = Access::peek(session);
+    auto& state = session.peek;
     if (features::peek::target(state)) {
       features::peek::close(state);
     }
@@ -95,13 +95,13 @@ namespace telar::gui::application::peek {
       static_cast<void>(activity::chooseAgent(session, peeked->pane_id, peeked->pane_generation));
       break;
     case features::peek::PeekCommand::stop:
-      Access::sendRegistered(session, Access::RequestKind::peek_action, InterruptAgent{.pane_id = peeked->pane_id, .pane_generation = peeked->pane_generation}, peeked->pane_id);
+      session.link.sendRegistered(Access::RequestKind::peek_action, InterruptAgent{.pane_id = peeked->pane_id, .pane_generation = peeked->pane_generation}, peeked->pane_id);
       break;
     case features::peek::PeekCommand::diff:
       openDiff(session, *peeked);
       break;
     case features::peek::PeekCommand::message:
-      Access::sendRegistered(session, Access::RequestKind::peek_action, SendPaneText{.pane_id = peeked->pane_id, .pane_generation = peeked->pane_generation, .mode = PaneTextMode::prompt, .text = submission.message, .sender = {}}, peeked->pane_id);
+      session.link.sendRegistered(Access::RequestKind::peek_action, SendPaneText{.pane_id = peeked->pane_id, .pane_generation = peeked->pane_generation, .mode = PaneTextMode::prompt, .text = submission.message, .sender = {}}, peeked->pane_id);
       break;
     }
 
@@ -111,15 +111,15 @@ namespace telar::gui::application::peek {
   }
 
   const ds::Option<PeekTarget>& target(const Session& session) noexcept {
-    return features::peek::target(Access::peek(session));
+    return features::peek::target(session.peek);
   }
 
   const Agent<Memory>* agent(const Session& session) noexcept {
-    return features::peek::agent(Access::peek(session), session.agents());
+    return features::peek::agent(session.peek, session.agents());
   }
 
   std::string_view text(const Session& session) noexcept {
-    return features::peek::text(Access::peek(session));
+    return features::peek::text(session.peek);
   }
 
   std::string_view lines(const Session& session, std::uint16_t rows) noexcept {
@@ -127,7 +127,7 @@ namespace telar::gui::application::peek {
   }
 
   bool reading(const Session& session) noexcept {
-    return features::peek::reading(Access::peek(session));
+    return features::peek::reading(session.peek);
   }
 
   void follow(Session& session) {
@@ -143,11 +143,11 @@ namespace telar::gui::application::peek {
   }
 
   Change receive(Session& session, const PaneText& reply) {
-    if (!Access::completeRequest(session, Access::RequestKind::peek_screen, reply.request_id)) {
+    if (!session.link.completeRequest(Access::RequestKind::peek_screen, reply.request_id)) {
       return Change::none;
     }
 
-    const auto dropped = features::peek::receive(Access::peek(session), reply);
+    const auto dropped = features::peek::receive(session.peek, reply);
     if (!dropped) {
       return Change::none;
     }
@@ -160,7 +160,7 @@ namespace telar::gui::application::peek {
   }
 
   void readFailed(Session& session, std::uint64_t request_id) noexcept {
-    features::peek::fail(Access::peek(session), request_id);
+    features::peek::fail(session.peek, request_id);
   }
 
   Change actionFailed(Session& session, std::uint64_t pane_id, std::string_view message) {
