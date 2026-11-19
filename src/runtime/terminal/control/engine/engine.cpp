@@ -289,7 +289,7 @@ namespace telar::runtime::control {
     return clipboard_;
   }
 
-  auto Engine::takeZone() noexcept -> ds::Option<Zone> {
+  auto Engine::takeZone() noexcept -> tbc::view<ds::Option<Zone>, tbc::lt::a> {
     if (zones_.empty()) {
       return ds::none;
     }

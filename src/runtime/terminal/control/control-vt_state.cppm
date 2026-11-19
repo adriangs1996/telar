@@ -70,7 +70,8 @@ export namespace telar::runtime::control {
     void setMode(std::uint16_t number, bool enabled);
 
     // Follows the cursor's row through reflow.
-    TrackedRow trackCursorRow() const;
+    // A row of the bound terminal, region `a`, which follows it while it lives.
+    tbc::view<TrackedRow, tbc::lt::a> trackCursorRow() const;
 
     Position cursor() const;
 

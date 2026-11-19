@@ -419,7 +419,7 @@ namespace telar::runtime::control {
     invalidate();
   }
 
-  TrackedRow VtState::trackCursorRow() const {
+  tbc::view<TrackedRow, tbc::lt::a> VtState::trackCursorRow() const {
     return TrackedRow::active(terminal_, cursor().row);
   }
 

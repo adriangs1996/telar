@@ -171,12 +171,12 @@ namespace telar::runtime {
     std::ranges::fill(row_revisions.viewMut(), revision);
   }
 
-  TerminalEffects::TerminalEffects(ConcurrentMemory& memory)
+  TerminalEffects::TerminalEffects(tbc::view<ConcurrentMemory&, tbc::lt::a> memory)
       : clipboard(memory),
         document(memory),
         inline_documents(memory) {}
 
-  void TerminalEffects::keepInline(ds::Vec<Byte, ConcurrentMemory> bytes, TrackedRow first, TrackedRow end, bool end_inclusive) {
+  void TerminalEffects::keepInline(tbc::view<ds::Vec<Byte, ConcurrentMemory>, tbc::lt::a> bytes, tbc::view<TrackedRow, tbc::lt::a> first, tbc::view<TrackedRow, tbc::lt::a> end, bool end_inclusive) {
     while (!inline_documents.empty() && (inline_documents.size() >= ::telar::render::max_pane_documents || inline_bytes + bytes.size() > ::telar::render::max_pane_document_bytes)) {
       inline_bytes -= inline_documents.front().bytes.size();
       static_cast<void>(inline_documents.remove(0));
@@ -690,7 +690,8 @@ namespace telar::runtime {
   void Terminal::attachMedia(TerminalMedia& media) noexcept {
     TELAR_ASSERT(purpose_ == TerminalPurpose::separate_media && media_ == nullptr);
     media.requireOrderedInput();
-    media_ = &media;
+    // Only its identity: the terminal never reaches the media through it.
+    media_ = tbc::raw(&media);
     control_.enableMediaBoundaries();
   }
 
@@ -942,7 +943,7 @@ namespace telar::runtime {
   }
 #endif
 
-  TerminalMedia* Terminal::attached(TerminalMedia& media) const noexcept {
+  tbc::view<TerminalMedia*, tbc::lt::b> Terminal::attached(tbc::view<TerminalMedia&, tbc::lt::b> media) const noexcept {
     TELAR_ASSERT(media_ == nullptr || media_ == &media);
     return media_ != nullptr ? &media : nullptr;
   }
@@ -1384,11 +1385,17 @@ namespace telar::runtime {
       }
     }
 
-    reply.cols = screen.cols;
-    reply.rows = count;
-    reply.text_metadata = TextMetadata{.status = metadata.status, .row_flags = metadata.row_flags.subspan(skip, count), .links = metadata.links, .runs = runs_, .uris = metadata.uris};
     reply.cells = std::span<const Byte>{cells_}.first(cells_.size() - output.size());
+    // Back at the bottom before the reply views the screen: scrolling only marks the view for the
+    // next refresh, so the screen still holds the rows read.
     terminal.scrollToBottom();
+
+    const auto& read = terminal.screen;
+    const auto kept = read.metadata.view(read.row_flags);
+
+    reply.cols = read.cols;
+    reply.rows = count;
+    reply.text_metadata = TextMetadata{.status = kept.status, .row_flags = kept.row_flags.subspan(skip, count), .links = kept.links, .runs = runs_, .uris = kept.uris};
     return reply;
   }
 

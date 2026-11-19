@@ -1,4 +1,5 @@
 module;
+#include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
 
 export module telar.runtime.terminal.text_reader;
@@ -157,26 +158,28 @@ export {
 
     class TerminalEffects {
     public:
-      explicit TerminalEffects(ConcurrentMemory& memory);
+      // What the effects keep lives in `memory`, region `a`.
+      explicit TerminalEffects(tbc::view<ConcurrentMemory&, tbc::lt::a> memory);
 
       // A document that stands for rows of the scrollback, kept while the scrollback keeps them.
       struct InlineDocument {
         std::uint64_t id = 0;
-        ds::Vec<Byte, ConcurrentMemory> bytes;
-        TrackedRow first;
-        TrackedRow end;
+        tbc::view<ds::Vec<Byte, ConcurrentMemory>, tbc::lt::a> bytes;
+        // Rows of the terminal the effects belong to, valid while it lives.
+        tbc::view<TrackedRow, tbc::lt::a> first;
+        tbc::view<TrackedRow, tbc::lt::a> end;
         bool end_inclusive = false;
         // Where its rows were last seen, from the top of the scrollback; none before.
         std::uint32_t row = 0;
         std::uint32_t rows = 0;
         // What each of its rows held when the terminal first drew it, 0 before: a document stands
         // for that text, and goes once a row of it changes. A reflow learns them again.
-        ds::Vec<std::uint64_t, ConcurrentMemory> contents;
+        tbc::view<ds::Vec<std::uint64_t, ConcurrentMemory>, tbc::lt::a> contents;
       };
 
       // Keeps the document of a zone a program closed. Past the pane's limits the oldest documents
       // go, and their rows show their text again.
-      void keepInline(ds::Vec<Byte, ConcurrentMemory> bytes, TrackedRow first, TrackedRow end, bool end_inclusive);
+      void keepInline(tbc::view<ds::Vec<Byte, ConcurrentMemory>, tbc::lt::a> bytes, tbc::view<TrackedRow, tbc::lt::a> first, tbc::view<TrackedRow, tbc::lt::a> end, bool end_inclusive);
 
       // Follows the documents' rows through output and reflow, and lets go of those whose rows the
       // scrollback dropped. Only the primary screen holds them.
@@ -193,13 +196,13 @@ export {
 
       void setProgress(PaneProgressState state, ds::Option<Byte> percent) noexcept;
 
-      ds::Vec<Byte, ConcurrentMemory> clipboard;
+      tbc::view<ds::Vec<Byte, ConcurrentMemory>, tbc::lt::a> clipboard;
       // The encoded document the pane's program shows over the pane, empty when none.
-      ds::Vec<Byte, ConcurrentMemory> document;
+      tbc::view<ds::Vec<Byte, ConcurrentMemory>, tbc::lt::a> document;
       std::uint64_t document_revision = 0;
       // The documents that stand for rows of the scrollback, oldest first; the revision changes
       // whenever one comes, goes or moves.
-      ds::Vec<InlineDocument, ConcurrentMemory> inline_documents;
+      tbc::view<ds::Vec<InlineDocument, ConcurrentMemory>, tbc::lt::a> inline_documents;
       std::uint64_t inline_revision = 0;
       std::uint64_t next_document_id = 1;
       std::size_t inline_bytes = 0;
@@ -415,7 +418,9 @@ export {
       // The rows it holds, its scrollback included.
       std::size_t totalRows() const;
 
-      GhosttyTerminal handle() const noexcept;
+      // ghostty's terminal, which lives apart from this object, by address only: raw, as a Rust FFI
+      // `*mut` is.
+      TBC_RAW GhosttyTerminal handle() const noexcept;
 
       const GhosttyAllocator* allocator() const noexcept;
 
@@ -429,7 +434,8 @@ export {
 
     private:
       // The media to feed, or none once abortControl let it go.
-      TerminalMedia* attached(TerminalMedia& media) const noexcept;
+      // The media given, when it is the one attached.
+      tbc::view<TerminalMedia*, tbc::lt::b> attached(tbc::view<TerminalMedia&, tbc::lt::b> media) const noexcept;
 
       void feedWith(std::span<const Byte> bytes, TerminalMedia* media);
 
@@ -496,7 +502,7 @@ export {
         std::atomic<std::size_t> refusals = 0;
       };
 
-      GhosttyMemory ghostty_memory_;
+      tbc::view<GhosttyMemory, tbc::lt::a> ghostty_memory_;
       tbc::view<GhosttyAllocatorBridge<GhosttyMemory>, tbc::lt::a> allocator_;
       TerminalHandle terminal_;
       RenderStateHandle render_state_;
