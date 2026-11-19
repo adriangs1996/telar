@@ -83,12 +83,14 @@ namespace telar::gui::qt {
       return *cached;
     }
 
-    auto& reserved = fallback_.atMut(index);
-    if (!reserved) {
-      reserved = createMask(paint.shape, {.width = Cache::fallback_width, .height = Cache::fallback_height}, 1).valueOr(CurveMaskRef{});
+    // Made before it is stored: making a mask borrows this scene, its fallbacks included.
+    if (!fallback_[index]) {
+      const auto made = createMask(paint.shape, {.width = Cache::fallback_width, .height = Cache::fallback_height}, 1).valueOr(CurveMaskRef{});
+
+      fallback_.atMut(index) = made;
     }
 
-    return *reserved;
+    return *fallback_[index];
   }
 
   void CurveScene::paint(QSGNode& parent, const CurvePaint& paint) {

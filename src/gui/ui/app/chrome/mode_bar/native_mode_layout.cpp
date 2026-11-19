@@ -41,15 +41,18 @@ namespace telar::gui::qt {
     }
 
     // The hint views the label it writes into the storage, region `a`.
-    tbc::view<application::status_bar::ModeHint, tbc::lt::a> readHint(const QVariantMap& value, tbc::view<QByteArray&, tbc::lt::a> storage) {
+    // A hint's label as UTF-8, which the hint views once every label is stored.
+    QByteArray hintLabel(const QVariantMap& value) {
+      return value.value(QStringLiteral("label")).toString().toUtf8();
+    }
+
+    tbc::view<application::status_bar::ModeHint, tbc::lt::a> readHint(const QVariantMap& value, tbc::view<const QByteArray&, tbc::lt::a> label) {
       const auto kind = value.value(QStringLiteral("key")).toInt();
       if (kind < static_cast<int>(KeyChord::Key::character) || kind > static_cast<int>(KeyChord::Key::back_tab)) {
         throw std::invalid_argument{"InvalidModeHintKey"};
       }
 
-      storage = value.value(QStringLiteral("label")).toString().toUtf8();
-
-      return {.key = {.key = static_cast<KeyChord::Key>(kind), .character = value.value(QStringLiteral("character")).toUInt(), .modifiers = value.value(QStringLiteral("modifiers")).toUInt()}, .label = {storage.constData(), static_cast<std::size_t>(storage.size())}};
+      return {.key = {.key = static_cast<KeyChord::Key>(kind), .character = value.value(QStringLiteral("character")).toUInt(), .modifiers = value.value(QStringLiteral("modifiers")).toUInt()}, .label = {label.constData(), static_cast<std::size_t>(label.size())}};
     }
 
     float advance(const QVariant& value, qreal density) {
@@ -141,8 +144,14 @@ namespace telar::gui::qt {
       application::status_bar::ModeHints bound;
       const auto count = std::min(records.size(), static_cast<qsizetype>(storage.size()));
 
+      // Every label is stored before any hint views one, as Rust lends no element of an array it still
+      // writes by index.
       for (qsizetype index = 0; index < count; ++index) {
-        bound.append(readHint(records[index].toMap(), storage.atMut(static_cast<std::size_t>(index))));
+        storage.atMut(static_cast<std::size_t>(index)) = hintLabel(records[index].toMap());
+      }
+
+      for (qsizetype index = 0; index < count; ++index) {
+        bound.append(readHint(records[index].toMap(), storage[static_cast<std::size_t>(index)]));
       }
 
       const auto labels = application::status_bar::ModeBarLabels::resolve(static_cast<application::status_bar::StatusMode>(kind), bound);

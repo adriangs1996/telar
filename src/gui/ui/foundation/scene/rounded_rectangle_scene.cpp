@@ -324,7 +324,8 @@ namespace telar::gui::qt {
     }
 
     while (next != nullptr) {
-      auto* retired = next;
+      // Qt's scene graph holds its nodes by address, as a C library does: removing one hands it to `owner`.
+      auto* retired = tbc::raw(next);
 
       next = next->nextSibling();
       root.removeChildNode(retired);

@@ -56,7 +56,8 @@ namespace telar::gui::qt {
     application::machines::MachineClientKey key;
     RuntimeConnection connection;
     MachineEffects effects;
-    GuiSession session;
+    // Talks through `connection` and reports to `effects`, its siblings, so the client stays put.
+    tbc::view<GuiSession, tbc::lt::self> session;
     ds::Option<system::WindowLease> identity_lease;
     std::uint64_t identity = 0;
     std::uint64_t runtime_generation = 0;
@@ -70,6 +71,11 @@ namespace telar::gui::qt {
           connection(memory),
           effects(sinks, admission),
           session(memory, connection, effects) {}
+
+    MachineClient(const MachineClient&) = delete;
+    MachineClient& operator=(const MachineClient&) = delete;
+    MachineClient(MachineClient&&) = delete;
+    MachineClient& operator=(MachineClient&&) = delete;
   };
 
   // The client the key names, or null once its slot holds another client or none.

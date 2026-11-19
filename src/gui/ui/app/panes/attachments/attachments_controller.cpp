@@ -244,8 +244,10 @@ namespace telar::gui::qt {
 
     if (plan.removal) {
       const application::terminal::attachments::AttachmentMarkerInput input{*plan.removal, pane->screen.modes()};
+      // Read first: the session the pane lies in is borrowed whole to send the input.
+      const auto pane_id = pane->id;
 
-      store_.sessionMut().input(pane->id, input.view());
+      store_.sessionMut().input(pane_id, input.view());
       static_cast<void>(shelf_.remove(identity));
     }
   } catch (const std::exception& error) {

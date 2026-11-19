@@ -24,8 +24,9 @@ namespace telar::gui::qt {
     try {
       if (target.scheme() == application::terminal::links::LinkScheme::file || target.scheme() == application::terminal::links::LinkScheme::path) {
         const ProcessEnvironment environment;
-        const auto configured = store_.session().configuration.editor.view();
-        const auto executable = configured.empty() ? environment("EDITOR").valueOr(std::string_view{}) : configured;
+        // A copy, as Rust clones it: opening the file borrows the session it is configured in.
+        const auto configured = store_.session().configuration.editor;
+        const auto executable = configured.view().empty() ? environment("EDITOR").valueOr(std::string_view{}) : configured.view();
 
         application::terminal::links::openFile(store_.sessionMut(), application::terminal::links::FilePath::parse(target), executable, environment, source_id);
       } else {
