@@ -14,7 +14,7 @@ namespace telar::runtime {
     return value == nullptr ? std::string_view{} : std::string_view{value};
   }
 
-  std::string_view processHome() noexcept {
+  tbc::view<std::string_view, tbc::lt::static_storage> processHome() noexcept {
     static const std::string_view home = [] {
       const char* value = std::getenv("HOME");
 

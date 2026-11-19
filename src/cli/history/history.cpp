@@ -6,6 +6,7 @@ import telar.sys.posix;
 import telar.base.diagnostics;
 import telar.cli.server;
 import telar.platform.fs;
+import telar.platform.paths;
 import telar.platform.error;
 import telar.wire.runtime;
 import telar.base.ds;
@@ -673,8 +674,8 @@ namespace telar::runtime::cli::history {
       return {kind, Text{memory, file}};
     }
 
-    const auto* home = std::getenv("HOME");
-    if (home == nullptr) {
+    const auto home = processHome();
+    if (home.empty()) {
       throw std::runtime_error{"HistfileNotFound"};
     }
 

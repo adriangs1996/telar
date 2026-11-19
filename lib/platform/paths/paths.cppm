@@ -62,7 +62,7 @@ export {
   namespace telar::runtime {
 
     // HOME as this process started with it, read once: nothing in telar changes it.
-    std::string_view processHome() noexcept;
+    tbc::view<std::string_view, tbc::lt::static_storage> processHome() noexcept;
 
   }
 }
