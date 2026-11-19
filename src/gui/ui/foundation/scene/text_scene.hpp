@@ -99,7 +99,10 @@ namespace telar::gui::qt {
 
     std::unique_ptr<QSGNode> takeChunk();
     void appendChunk(std::unique_ptr<QSGNode> node);
-    void paintChunk(const ChromeTextPaint& paint);
+    static void appendChunk(QSGNode& text, QSGNode* next_chunk, std::unique_ptr<QSGNode> node);
+    // Paints one chunk through the scene's chunk fields alone, as Rust splits a borrow of self: what it
+    // paints views the row layout beside them.
+    static void paintChunk(QSGNode& text, QSGNode*& next_chunk, QQuickWindow& window, const std::shared_ptr<const FontCollection>& collection, fonts::GlyphRasterization rasterization, const ChromeTextPaint& paint);
     void flushCells(std::span<const CellValue> cells);
     void addFallbackCells(const Batch& batch, std::span<const CellValue> cells);
     void addQtText(const QString& text, const QFont& font, const QTextCharFormat& format, TextPlacement placement);

@@ -165,10 +165,16 @@ namespace telar::gui::qt {
     std::size_t count = 0;
     const auto* tab = session.activeTab();
     if (tab != nullptr) {
-      forEachLeaf(*tab, true, [&](const ClientLayoutPane& leaf) {
-        const auto* pane = session.findPane(leaf.pane_id);
-        const auto terminal = terminals_.constFind(leaf.pane_id);
-        if (pane != nullptr && pane->attached && terminal != terminals_.cend() && *terminal != nullptr && (*terminal)->window() == window_ && (*terminal)->isVisible()) {
+      // The visit captures only what it reads, shared, as a Rust closure captures `&Session` and the
+      // fields it names rather than the whole controller.
+      const auto& shown = session;
+      const auto& terminals = terminals_;
+      const QQuickWindow* const window = window_.data();
+
+      forEachLeaf(*tab, true, [&sources, &count, &shown, &terminals, window](const ClientLayoutPane& leaf) {
+        const auto* pane = shown.findPane(leaf.pane_id);
+        const auto terminal = terminals.constFind(leaf.pane_id);
+        if (pane != nullptr && pane->attached && terminal != terminals.cend() && *terminal != nullptr && (*terminal)->window() == window && (*terminal)->isVisible()) {
           sources.atMut(count++) = {.owner = *terminal, .store = &pane->graphics, .cell = (*terminal)->cellSize()};
         }
       });
@@ -259,21 +265,29 @@ namespace telar::gui::qt {
   }
 
   void TerminalController::cancelPane(std::uint64_t pane_id) {
-    for (auto& lease : captures_.viewMut()) {
-      if (lease.pane_id == pane_id) {
-        if (lease.child.owned()) {
-          report(pane_id, lease.child.cancel(view(lease)));
-        }
-
-        lease.terminal.clear();
+    // By index: reporting borrows this controller, its captures included.
+    for (std::size_t index = 0; index < captures_.size(); ++index) {
+      if (captures_[index].pane_id != pane_id) {
+        continue;
       }
+
+      if (captures_[index].child.owned()) {
+        auto& lease = captures_.atMut(index);
+        const auto outcome = lease.child.cancel(view(lease));
+
+        report(pane_id, outcome);
+      }
+
+      captures_.atMut(index).terminal.clear();
     }
   }
 
   void TerminalController::cancelPointer() {
     const auto previous_recipients = recipients();
 
-    for (auto& lease : captures_.viewMut()) {
+    // By index: reporting borrows this controller, its captures included.
+    for (std::size_t index = 0; index < captures_.size(); ++index) {
+      auto& lease = captures_.atMut(index);
       const auto pane_id = lease.pane_id;
       const auto outcome = lease.child.owned() ? ds::Option{lease.child.cancel(view(lease))} : ds::none;
 

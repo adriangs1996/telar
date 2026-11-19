@@ -157,11 +157,18 @@ namespace telar::gui::qt {
     ds::Array<application::history::HistoryInspectionLine, application::history::HistoryInspectionFacts::count> facts;
     const auto fact_count = std::min(facts.size(), static_cast<std::size_t>(records.size()));
 
+    // Every text is stored before any fact views one, as Rust lends no element of an array it still
+    // writes by index.
     for (std::size_t index = 0; index < fact_count; ++index) {
       const auto record = records[static_cast<qsizetype>(index)].toMap();
 
       texts.atMut(index) = record.value(QStringLiteral("text")).toString().toUtf8();
       labels.atMut(index) = record.value(QStringLiteral("label")).toString().toUtf8();
+    }
+
+    for (std::size_t index = 0; index < fact_count; ++index) {
+      const auto record = records[static_cast<qsizetype>(index)].toMap();
+
       facts.atMut(index) = {.kind = application::history::HistoryInspectionLine::Kind::fact, .text = bytes(texts[index]), .label = bytes(labels[index]), .color = color(record.value(QStringLiteral("color")).toString()), .mono = record.value(QStringLiteral("mono")).toBool()};
     }
 

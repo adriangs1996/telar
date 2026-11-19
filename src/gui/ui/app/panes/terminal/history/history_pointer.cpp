@@ -404,17 +404,19 @@ namespace telar::gui::qt {
 
   void HistoryController::moveRows(std::int32_t steps) {
     auto& session = store_.sessionMut();
-    const auto browser = application::history::view(session);
 
     for (std::int32_t remaining = std::abs(steps); remaining > 0; --remaining) {
+      // Viewed anew each step: selecting a row or a page changes the session the view reads.
+      const auto browser = application::history::view(session);
       if (busy() || browser.rows().empty()) {
         break;
       }
 
       const auto selected = browser.state().selection;
+      const auto rows = browser.rows().size();
 
       if (steps < 0) {
-        if (selected + 1 < browser.rows().size()) {
+        if (selected + 1 < rows) {
           application::history::select(session, selected + 1);
         } else {
           application::history::page(session, application::history::HistoryPage::older);

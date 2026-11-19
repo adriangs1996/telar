@@ -193,8 +193,9 @@ export namespace telar::gui::features::prompt {
       return line_->suggestion(history_);
     }
 
-    // The same for every view of one line, for a view to tell when the line it shows changed.
-    [[nodiscard]] TBC_HOT_PATH inline const void* identity() const noexcept {
+    // The same for every view of one line, for a view to tell when the line it shows changed: an
+    // address compared, never followed, as Rust's `*const ()`.
+    [[nodiscard]] TBC_HOT_PATH TBC_RAW inline const void* identity() const noexcept {
       return line_;
     }
 

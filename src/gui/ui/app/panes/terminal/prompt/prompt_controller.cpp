@@ -123,12 +123,14 @@ namespace telar::gui::qt {
   }
 
   void PromptController::attach(PromptEditorItem& editor) {
+    // Held by address, as Qt holds its items: each editor detaches before it is destroyed.
+    auto* const held = tbc::raw(&editor);
     const auto attached = editors_.viewMut();
     const auto free = std::ranges::find(attached, nullptr);
     if (free == attached.end()) {
-      editors_.push(&editor);
+      editors_.push(held);
     } else {
-      *free = &editor;
+      *free = held;
     }
   }
 
