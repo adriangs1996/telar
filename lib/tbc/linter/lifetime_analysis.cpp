@@ -3658,8 +3658,20 @@ namespace tbc_lint {
             }
 
             const auto* argument = call.getArg(index + offset);
+            auto contents = parameter->getType()->isPointerType() ? referencedContents(value(argument, current), current) : value(argument, current);
 
-            result.merge(parameter->getType()->isPointerType() ? referencedContents(value(argument, current), current) : value(argument, current));
+            // A shared object in the region is what the one field there that refers to one holds, as a
+            // `&'a Memory` copied out of a `State<'a>` is that field's: the borrow keeps its type, so what
+            // mutates other parts of the input leaves it.
+            if (const auto* field = sharedRegionField(parameter->getType(), selected_region, callee->getReturnType())) {
+              for (auto& source : contents.values) {
+                if (standsForInput(source) && source.select.empty()) {
+                  source.select.push_back({.field = field, .level = storage_kind::object});
+                }
+              }
+            }
+
+            result.merge(std::move(contents));
           }
         }
 
@@ -3904,6 +3916,40 @@ namespace tbc_lint {
         return llvm::any_of(fields, [&](const clang::FieldDecl* field) {
           return viewAnnotation(field->getType(), context_).region == region;
         });
+      }
+
+      // The one field of a type in a region that refers to an object of a shared type a result designates,
+      // or null where none or several do.
+      [[nodiscard]] const clang::FieldDecl* sharedRegionField(clang::QualType type, const clang::Type* region, clang::QualType result) const {
+        type = type.getNonReferenceType();
+        if (type->isPointerType()) {
+          type = type->getPointeeType();
+        }
+
+        const auto* record = recordOf(type);
+        if (region == nullptr || record == nullptr || !record->hasDefinition() || (!result->isReferenceType() && !result->isPointerType()) || !sharedType(result)) {
+          return nullptr;
+        }
+
+        const auto designated = designatedType(result);
+        llvm::SmallVector<const clang::FieldDecl*, 8> fields;
+        const clang::FieldDecl* found = nullptr;
+
+        recordFields(*record->getDefinition(), fields);
+        for (const auto* field : fields) {
+          const auto field_type = field->getType();
+          if (viewAnnotation(field_type, context_).region != region || (!field_type->isReferenceType() && !field_type->isPointerType()) || !sharedType(field_type) || !compatible(designatedType(field_type), designated)) {
+            continue;
+          }
+
+          if (found != nullptr) {
+            return nullptr;
+          }
+
+          found = field;
+        }
+
+        return found;
       }
 
       // Whether a record keeps references in a region: a field there that is a reference, a pointer or a
@@ -4450,7 +4496,7 @@ namespace tbc_lint {
 
           // An object of a shared type, such as an allocator, keeps what it handed out valid whatever is
           // done to the inputs that reach it, also when an object that keeps it designates it.
-          if (sharedType(owner->getType()) && !insideShared(*owner, place.target)) {
+          if ((sharedType(owner->getType()) && !insideShared(*owner, place.target)) || throughShared(*owner, place.target)) {
             continue;
           }
 
@@ -4490,7 +4536,9 @@ namespace tbc_lint {
             }
 
             for (auto& source : entry.second.values) {
-              if (source.invalidated != nullptr) {
+              // A borrow of a shared object an input refers to, or of storage it handed out, stays valid
+              // whatever is done to the input, as a `&'a Memory` copied out of a `&mut State<'a>` does.
+              if (source.invalidated != nullptr || (standsForInput(source) && source.variable != nullptr && throughShared(*source.variable, source.select, source.path))) {
                 continue;
               }
 
@@ -4510,31 +4558,88 @@ namespace tbc_lint {
       // found through it: a place past a field no step names, or past another type's field, is not the
       // object's.
       [[nodiscard]] static bool insideShared(const clang::ValueDecl& owner, const object_place& target) {
+        const auto type = owner.getType().getNonReferenceType();
+        const auto* record = recordOf(type->isPointerType() ? type->getPointeeType() : type);
+
+        return record != nullptr && insideRecord(*record, target.path, target.select);
+      }
+
+      // Whether a place past a shared object, at `path` inside what `select` designates, lies along that
+      // object's own fields.
+      [[nodiscard]] static bool insideRecord(const clang::CXXRecordDecl& record, llvm::ArrayRef<projection> path, llvm::ArrayRef<projection> select) {
         const auto unknown = [](const projection& step) {
           return step.field == nullptr && !step.dereference;
         };
-        if (std::ranges::any_of(target.path, unknown) || std::ranges::any_of(target.select, unknown)) {
+        if (std::ranges::any_of(path, unknown) || std::ranges::any_of(select, unknown)) {
           return false;
         }
 
         const auto named = [](const projection& step) {
           return step.field != nullptr;
         };
-        const auto first = target.path.empty() ? std::ranges::find_if(target.select, named) : target.path.begin();
-        if (first == (target.path.empty() ? target.select.end() : target.path.end())) {
+        const auto first = path.empty() ? std::ranges::find_if(select, named) : path.begin();
+        if (first == (path.empty() ? select.end() : path.end())) {
           return false;
         }
 
-        const auto type = owner.getType().getNonReferenceType();
-        const auto* record = recordOf(type->isPointerType() ? type->getPointeeType() : type);
         const auto* parent = llvm::dyn_cast<clang::CXXRecordDecl>(first->field->getParent());
-        if (record == nullptr || record->getDefinition() == nullptr || parent == nullptr) {
+        if (record.getDefinition() == nullptr || parent == nullptr) {
           return false;
         }
 
-        const auto* definition = record->getDefinition();
+        const auto* definition = record.getDefinition();
 
         return parent == definition || definition->isDerivedFrom(parent);
+      }
+
+      // Whether a place an input designates lies past a field of it that refers to an object of a shared
+      // type, outside that object's own fields: the object, or storage it handed out, which a shared
+      // object keeps valid whatever is done to what holds the reference.
+      [[nodiscard]] static bool throughShared(const clang::ValueDecl& owner, const object_place& target) {
+        return target.designated && throughShared(owner, target.select, target.path);
+      }
+
+      // Borrows of what an input designates past a reference to a shared object reach nothing a call can
+      // invalidate through them: what that object handed out belongs to whoever holds it.
+      [[nodiscard]] static loans withoutShared(const loans& contents) {
+        loans result;
+
+        for (const auto& source : contents.values) {
+          if (!standsForInput(source) || source.variable == nullptr || !throughShared(*source.variable, source.select, source.path)) {
+            result.values.push_back(source);
+          }
+        }
+
+        return result;
+      }
+
+      [[nodiscard]] static bool throughShared(const clang::ValueDecl& owner, llvm::ArrayRef<projection> select, llvm::ArrayRef<projection> path) {
+        auto type = owner.getType().getNonReferenceType();
+
+        for (std::size_t index = 0; index < select.size(); ++index) {
+          const auto& step = select[index];
+          if (type.isNull() || cut(step)) {
+            return false;
+          }
+
+          if (step.dereference) {
+            type = designatedType(type);
+            continue;
+          }
+
+          if (!memberOf(type, *step.field)) {
+            return false;
+          }
+
+          type = step.field->getType();
+          if ((type->isReferenceType() || type->isPointerType()) && sharedType(type)) {
+            const auto* record = recordOf(designatedType(type));
+
+            return record != nullptr && !insideRecord(*record, path, select.drop_front(index + 1));
+          }
+        }
+
+        return false;
       }
 
       void invalidateEnvironment(const clang::CallExpr& call, state& current) {
@@ -5254,7 +5359,7 @@ namespace tbc_lint {
 
           for (const auto* field : fields) {
             const object_place target{.variable = field, .designated = true};
-            const auto contents = receiverField(*callee, *object, *field, current);
+            const auto contents = withoutShared(receiverField(*callee, *object, *field, current));
             const auto type = field->getType();
 
             for (const auto& designation : ofType(contents, designatedTypeOf(*field, {})).values) {
@@ -5283,7 +5388,7 @@ namespace tbc_lint {
           }
 
           const auto* argument = call.getArg(index + offset);
-          const auto actual = value(argument, current);
+          const auto actual = withoutShared(value(argument, current));
           const bool by_reference = parameter->getType()->isReferenceType();
 
           if (by_reference) {

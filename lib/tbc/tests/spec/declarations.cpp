@@ -5,6 +5,7 @@
 #include <memory>
 #include <new>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -2063,3 +2064,103 @@ void declarationNestedReferenceShared() {
 
 // END CASE
 
+
+// CASE: declaration.region_shared_kept
+// PAIR: declaration.region_shared
+// SOURCE: src/gui/features/prompt/prompt.cpp :: plan (the memory the state lives in builds the plan's words)
+// STATUS: implemented
+// CONTRACT: A result in a class region that refers to a shared object is what the one field of that region holding such a reference designates, as a `&'a Memory` copied out of a `State<'a>` is: a call that mutates an object keeping it leaves the input's other parts valid.
+// SCENARIO: The state's memory builds a list that keeps it, which grows while a history entry of the state is read; accept.
+namespace declarations {
+  class TBC_SHARED region_memory {
+  public:
+    virtual ~region_memory() = default;
+    virtual void* allocate(std::size_t size) = 0;
+  };
+
+  class region_text {
+  public:
+    region_text(tbc::view<region_memory&, tbc::lt::a> memory, std::string_view text);
+
+    [[nodiscard]] std::string_view view() const noexcept {
+      return {bytes_, 1};
+    }
+
+  private:
+    tbc::view<region_memory*, tbc::lt::a> memory_;
+    char* bytes_ = nullptr;
+  };
+
+  class region_list {
+  public:
+    explicit region_list(tbc::view<region_memory&, tbc::lt::a> memory) noexcept
+        : memory_(&memory) {}
+
+    template <typename... Arguments>
+    region_text& emplace(Arguments&&... arguments) {
+      items_ = static_cast<region_text*>(memory_->allocate(sizeof(region_text)));
+      return *new (items_) region_text(std::forward<Arguments>(arguments)...);
+    }
+
+    [[nodiscard]] std::span<const region_text> view() const noexcept {
+      return {static_cast<const region_text*>(items_), 1};
+    }
+
+  private:
+    tbc::view<region_memory*, tbc::lt::a> memory_;
+    region_text* items_ = nullptr;
+  };
+
+  class region_state {
+    friend struct region_access;
+
+  public:
+    explicit region_state(tbc::view<region_memory&, tbc::lt::a> memory);
+
+  private:
+    tbc::view<region_memory&, tbc::lt::a> memory_;
+    tbc::view<region_list, tbc::lt::a> history_;
+  };
+
+  struct region_access {
+    static tbc::view<region_memory&, tbc::lt::a> memory(const region_state& state) {
+      return state.memory_;
+    }
+
+    static const region_list& history(const region_state& state) {
+      return state.history_;
+    }
+
+  };
+
+  void growHistory(region_state& state);
+}
+
+void declarationRegionSharedKept(declarations::region_state& state) {
+  auto& memory = declarations::region_access::memory(state);
+  const std::string_view entry = declarations::region_access::history(state).view()[0].view();
+  declarations::region_list words{memory};
+
+  words.emplace(memory, entry);
+  declarations::observe(entry);
+}
+
+// END CASE
+
+// CASE: declaration.region_shared_mutated
+// PAIR: declaration.region_shared
+// SOURCE: src/gui/features/prompt/prompt.cpp :: plan (the memory the state lives in builds the plan's words)
+// STATUS: implemented
+// CONTRACT: A result in a class region that refers to a shared object is what the one field of that region holding such a reference designates, as a `&'a Memory` copied out of a `State<'a>` is: a call that mutates an object keeping it leaves the input's other parts valid.
+// SCENARIO: The state the entry lies in is mutated while the list keeps its memory, before the entry is read; reject at the mutation.
+void declarationRegionSharedMutated(declarations::region_state& state) {
+  auto& memory = declarations::region_access::memory(state);
+  const std::string_view entry = declarations::region_access::history(state).view()[0].view();
+  declarations::region_list words{memory};
+
+  words.emplace(memory, "x");
+  declarations::growHistory(state); // expected-error [tbc-invalidated-borrow]
+  declarations::observe(entry);
+}
+
+// END CASE

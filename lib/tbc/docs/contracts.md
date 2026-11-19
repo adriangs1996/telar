@@ -593,6 +593,21 @@ Nor is an object of a shared type invalidated by a call to something that keeps
 it: a store that mutates a model holding the allocator leaves the allocator, and
 every other borrow of it, valid.
 
+The same holds for a shared object an input refers to. A result in a class region
+whose type refers to a shared type is what the one field of that region referring
+to one holds, as a `&'a Memory` copied out of a `State<'a>` is that field's. A
+call that mutates the state, or an object that keeps the memory, then leaves that
+borrow and the state's other parts valid:
+
+```cpp
+tbc::view<Memory &, tbc::lt::a> memoryOf(const State &state); // state.memory_
+
+auto &memory = memoryOf(state);
+const std::string_view entry = historyOf(state).front();
+List words{memory};
+words.push(memory, entry); // accepted: growing words reaches the memory, not the state
+```
+
 A field may keep a reference to a sibling of a shared type, as services keep the
 allocator or the limit queue of the object that holds them. That borrow is internal
 to the object, so the object only has to keep its address: it must be neither
