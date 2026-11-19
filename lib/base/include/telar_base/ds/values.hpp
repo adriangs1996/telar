@@ -438,6 +438,38 @@ namespace telar::ds {
     return option.hasValue() ? option.get() <=> value : std::compare_three_way_result_t<Value, Other>{std::strong_ordering::less};
   }
 
+  // A value that the objects referring to it read and replace by copy, as Rust's Cell: it hands out no
+  // reference to what it holds, so replacing it through a shared reference invalidates nothing. Not
+  // synchronized, as a Cell is not Sync: every holder of a reference runs on one thread.
+  template <typename Value>
+    requires std::is_trivially_copyable_v<Value>
+  class TBC_SHARED Cell {
+  public:
+    constexpr Cell() noexcept = default;
+
+    constexpr explicit Cell(Value value) noexcept
+        : value_(value) {}
+
+    Cell(const Cell&) = delete;
+    Cell& operator=(const Cell&) = delete;
+
+    [[nodiscard]] constexpr Value get() const noexcept {
+      return value_;
+    }
+
+    constexpr void set(Value value) const noexcept {
+      value_ = value;
+    }
+
+    // The value, leaving the default in its place, as Cell::take.
+    constexpr Value take() const noexcept {
+      return std::exchange(value_, Value{});
+    }
+
+  private:
+    mutable Value value_{};
+  };
+
 }
 
 template <typename Value, std::size_t Count>

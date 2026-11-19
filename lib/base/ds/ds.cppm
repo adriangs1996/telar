@@ -10,6 +10,7 @@ export module telar.base.ds;
 export namespace telar::ds {
   using telar::ds::Array;
   using telar::ds::Box;
+  using telar::ds::Cell;
   using telar::ds::format;
   using telar::ds::formatTo;
   using telar::ds::Function;

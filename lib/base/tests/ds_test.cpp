@@ -84,6 +84,15 @@ namespace {
     check(std::ranges::equal(copy, std::array{4, 4, 4}) && copy.view().size() == 3);
   }
 
+  void testCell() {
+    const ds::Cell<ds::Option<int>> owner;
+
+    check(!owner.get(), "a new cell holds the default");
+    owner.set(7);
+    check(owner.get() == 7, "a cell set through shared access holds the new value");
+    check(owner.take() == 7 && !owner.get(), "taking a cell's value leaves the default");
+  }
+
   void testOption() {
     static_assert(std::is_trivially_copyable_v<ds::Option<int>> && std::is_trivially_destructible_v<ds::Option<int>>);
     static_assert(sizeof(ds::Option<int>) == sizeof(ds::Option<int>));
@@ -1278,5 +1287,6 @@ namespace {
   const telar::testing::Case case_box_ownership{"ds.box_ownership", testBoxOwnership};
   const telar::testing::Case case_box_hand_over{"ds.box_hand_over", testBoxHandOver};
   const telar::testing::Case case_box_exhaustion{"ds.box_exhaustion", testBoxExhaustion};
+  const telar::testing::Case case_cell{"ds.cell", testCell};
 
 }
