@@ -1384,8 +1384,9 @@ export {
 
       inline ~Http2EndpointConnection() {
         closing_ = true;
-        for (auto& slot : streams_.viewMut()) {
-          if (auto* stream = tbc::raw(slot ? &slot.getMut() : nullptr)) {
+        // By index: what each stream does borrows this connection.
+        for (std::size_t index = 0; index < streams_.size(); ++index) {
+          if (auto* stream = tbc::raw(streams_[index] ? &streams_.atMut(index).getMut() : nullptr)) {
             cancel(stream->request);
             cancel(stream->response);
           }
@@ -1412,8 +1413,9 @@ export {
           progress = send(false, origin, readiness.origin) || progress;
           progress = receive(true, child, readiness.child) || progress;
           progress = receive(false, origin, readiness.origin) || progress;
-          for (auto& slot : streams_.viewMut()) {
-            auto* stream = tbc::raw(slot ? &slot.getMut() : nullptr);
+          // By index: what each stream does borrows this connection.
+          for (std::size_t index = 0; index < streams_.size(); ++index) {
+            auto* stream = tbc::raw(streams_[index] ? &streams_.atMut(index).getMut() : nullptr);
             if (!stream) {
               continue;
             }
@@ -1424,7 +1426,7 @@ export {
             }
 
             if (stream->child_closed && (stream->origin_closed || stream->origin_id == 0)) {
-              slot.reset();
+              streams_.atMut(index).reset();
             }
           }
 
@@ -1611,8 +1613,9 @@ export {
         if (frame.hd.type == NGHTTP2_GOAWAY) {
           draining_ = true;
           if (!child) {
-            for (auto& slot : streams_.viewMut()) {
-              auto* stream = tbc::raw(slot ? &slot.getMut() : nullptr);
+            // By index: what each stream does borrows this connection.
+            for (std::size_t index = 0; index < streams_.size(); ++index) {
+              auto* stream = tbc::raw(streams_[index] ? &streams_.atMut(index).getMut() : nullptr);
               if (stream && (stream->origin_id == 0 || stream->origin_id > frame.goaway.last_stream_id)) {
                 reject(*stream, "http2_origin_goaway", NGHTTP2_REFUSED_STREAM);
               }
@@ -1889,10 +1892,13 @@ export {
           return NGHTTP2_ERR_DEFERRED;
         }
 
+        // Measured first: consuming them ends the view of the queue.
+        const auto count = bytes.size();
+
         std::ranges::copy(bytes, output);
-        half.queue.consume(bytes.size());
+        half.queue.consume(count);
         if (half.streaming) {
-          endpoint.owner->credit(half, bytes.size());
+          endpoint.owner->credit(half, count);
         }
 
         if (half.queue.empty() && half.ended) {
@@ -1914,7 +1920,7 @@ export {
           }
         }
 
-        return static_cast<nghttp2_ssize>(bytes.size());
+        return static_cast<nghttp2_ssize>(count);
       }
 
       inline void credit(Half& half, std::size_t count) noexcept {
@@ -1981,8 +1987,9 @@ export {
             draining_ = true;
             side(child).output.reset();
             side(child).output_size = 0;
-            for (auto& slot : streams_.viewMut()) {
-              if (auto* stream = tbc::raw(slot ? &slot.getMut() : nullptr); stream && !stream->origin_closed) {
+            // By index: what each stream does borrows this connection.
+            for (std::size_t index = 0; index < streams_.size(); ++index) {
+              if (auto* stream = tbc::raw(streams_[index] ? &streams_.atMut(index).getMut() : nullptr); stream && !stream->origin_closed) {
                 reject(*stream, "http2_origin_closed");
               }
             }

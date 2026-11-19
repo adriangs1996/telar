@@ -388,8 +388,11 @@ namespace telar::runtime {
       readiness = TunnelReadiness::available();
     }
 
-    TlsStream child{session_.getMut(), TlsSide::child};
-    TlsStream origin{session_.getMut(), TlsSide::origin};
+    // The two halves of one TLS session, each reading and writing its own side of it, as a split
+    // duplex is: the session is reached by address from both, as Rust's split does with raw parts.
+    auto* const session = tbc::raw(&session_.getMut());
+    TlsStream child{*session, TlsSide::child};
+    TlsStream origin{*session, TlsSide::origin};
 
     readiness.child.readable = readiness.child.readable || session_->buffered(TlsSide::child);
     readiness.origin.readable = readiness.origin.readable || session_->buffered(TlsSide::origin);

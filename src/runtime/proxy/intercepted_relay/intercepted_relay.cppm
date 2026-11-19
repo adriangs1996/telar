@@ -85,20 +85,22 @@ export {
             // A borrowed body fragment stays in the source, stable through every write retry, until it is
             // consumed; everything else waits in the relay's own storage.
             const bool body_pending = state_ == State::writing_body;
-            std::span<const std::uint8_t> pending = storage_.bytes().first(std::min(write_length_, storage_.bytes().size()));
+            ds::Option<std::span<const std::uint8_t>> borrowed;
+            auto available = std::min(write_length_, storage_.bytes().size());
 
             if constexpr (BufferedByteStream<Source>) {
               if (body_pending) {
-                pending = source.peekView(write_length_).bytes;
+                borrowed.emplace(source.peekView(write_length_).bytes);
+                available = borrowed->size();
               }
             }
 
-            if (pending.size() != write_length_) {
+            if (available != write_length_) {
               state_ = State::failed;
               return active_;
             }
 
-            continued = writePending(destination, observer, pending);
+            continued = writePending(destination, observer, borrowed);
             if constexpr (BufferedByteStream<Source>) {
               if (body_pending && state_ != State::writing_body) {
                 source.consume(write_length_);
@@ -228,7 +230,10 @@ export {
       }
 
       template <ByteStream Destination, Http1Observer Observer>
-      TBC_GENERIC bool writePending(Destination& destination, Observer& observer, std::span<const std::uint8_t> pending) noexcept {
+      // Writes the source's borrowed bytes, or, without them, the relay's own storage: the storage is
+      // named here rather than lent in, as Rust names a field of self instead of passing it with &mut self.
+      TBC_GENERIC bool writePending(Destination& destination, Observer& observer, ds::Option<std::span<const std::uint8_t>> borrowed) noexcept {
+        const auto pending = borrowed ? *borrowed : storage_.bytes().first(write_length_);
         const auto sent = destination.write(pending.subspan(write_offset_));
         if (sent.state == StreamResult::State::blocked) {
           write_waiting_ = sent.waiting;
