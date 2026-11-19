@@ -216,15 +216,15 @@ export namespace telar::runtime::control {
     // Generic over the caller's response sink, so it stays here.
     template <typename Sink>
     TBC_GENERIC bool publish(Sink& sink) {
-      while (reply_count_ != 0) {
-        auto& reply = asynchronous_replies_.atMut(reply_head_);
+      while (replies_.count != 0) {
+        auto& reply = replies_.replies.atMut(replies_.head);
         if (!reply.publish(sink)) {
           return false;
         }
 
         reply.clear();
-        reply_head_ = (reply_head_ + 1) % asynchronous_replies_.size();
-        --reply_count_;
+        replies_.head = (replies_.head + 1) % replies_.replies.size();
+        --replies_.count;
       }
 
       return true;
@@ -305,9 +305,17 @@ export namespace telar::runtime::control {
 
     void commit(Ending ending, const Policy& policy, Reply<ConcurrentMemory>& reply);
 
+    // The replies completions queue, oldest first: building one borrows these alone, so what the
+    // clipboard is completing stays borrowed meanwhile.
+    struct ReplyRing {
+      ds::Array<Reply<ConcurrentMemory>, 2> replies;
+      std::size_t head = 0;
+      std::size_t count = 0;
+    };
+
     class ReplyBuilder {
     public:
-      explicit ReplyBuilder(Clipboard& owner);
+      explicit ReplyBuilder(ReplyRing& ring);
 
       ~ReplyBuilder();
 
@@ -319,20 +327,17 @@ export namespace telar::runtime::control {
       void commit();
 
     private:
-      Clipboard& owner_;
+      ReplyRing& ring_;
       Reply<ConcurrentMemory>& reply_;
       bool committed_ = false;
     };
 
-    ReplyBuilder buildReply();
 
     ConcurrentMemory& memory_;
     ds::Vec<std::uint8_t, ConcurrentMemory> decoded_;
     ds::Box<ClipboardWrite, ConcurrentMemory> transaction_;
     ds::Box<Pending, ConcurrentMemory> pending_;
-    ds::Array<Reply<ConcurrentMemory>, 2> asynchronous_replies_;
-    std::size_t reply_head_ = 0;
-    std::size_t reply_count_ = 0;
+    ReplyRing replies_;
     ClipboardGrants grants_;
     ds::Array<ClipboardRoute, ClipboardGrants::capacity> routes_;
     std::size_t route_count_ = 0;

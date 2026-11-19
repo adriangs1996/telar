@@ -558,7 +558,7 @@ namespace telar::runtime::control {
         decoded_(memory),
         transaction_(),
         pending_(),
-        asynchronous_replies_{Reply<ConcurrentMemory>{memory}, Reply<ConcurrentMemory>{memory}} {}
+        replies_{.replies{Reply<ConcurrentMemory>{memory}, Reply<ConcurrentMemory>{memory}}} {}
 
   void Clipboard::routes(std::span<const ClipboardRoute> routes, ds::Option<ClipboardRoute> preferred) {
     if (routes.size() > routes_.size()) {
@@ -586,7 +586,7 @@ namespace telar::runtime::control {
     const auto encoded = payload.substr(separator + 1);
     const bool read = encoded == "?";
     const auto access = read ? policy.clipboard_read : policy.clipboard_write;
-    if (access == Access::deny || pending_ || cancellation_ || reply_count_ != 0 || !preferred_) {
+    if (access == Access::deny || pending_ || cancellation_ || replies_.count != 0 || !preferred_) {
       return;
     }
 
@@ -732,7 +732,7 @@ namespace telar::runtime::control {
 
       if (completion.status != ClipboardDesktopStatus::success) {
         if (pending_->traditional && !pending_->write && completion.status == ClipboardDesktopStatus::denied) {
-          auto builder = buildReply();
+          ReplyBuilder builder{replies_};
 
           builder.reply().append("\x1b]52;");
           builder.reply().append({&pending_->selection, 1});
@@ -778,7 +778,7 @@ namespace telar::runtime::control {
       grants_.grant(pending.metadata.password.view(), sender, pending.write, false);
     }
 
-    auto builder = buildReply();
+    ReplyBuilder builder{replies_};
     auto& asynchronous_reply = builder.reply();
 
     if (pending.traditional) {
@@ -840,12 +840,12 @@ namespace telar::runtime::control {
     transaction_.reset();
     grants_.clear();
     decoded_ = ds::Vec<std::uint8_t, ConcurrentMemory>{decoded_.memory()};
-    for (auto& reply : asynchronous_replies_.viewMut()) {
+    for (auto& reply : replies_.replies.viewMut()) {
       reply.discard();
     }
 
-    reply_count_ = 0;
-    reply_head_ = 0;
+    replies_.count = 0;
+    replies_.head = 0;
   }
 
   void Clipboard::expire(Clock::time_point now) {
@@ -856,7 +856,7 @@ namespace telar::runtime::control {
   }
 
   bool Clipboard::hasReply() const noexcept {
-    return reply_count_ != 0;
+    return replies_.count != 0;
   }
 
   void Clipboard::reset() {
@@ -870,13 +870,13 @@ namespace telar::runtime::control {
   }
 
   bool Clipboard::paste(ClipboardRoute route, bool primary, std::span<const std::string_view> available) {
-    if (!live(route) || reply_count_ != 0) {
+    if (!live(route) || replies_.count != 0) {
       return false;
     }
 
     try {
       const auto password = ClipboardGrants::password();
-      auto builder = buildReply();
+      ReplyBuilder builder{replies_};
       auto& asynchronous_reply = builder.reply();
 
       clipboardReadSuccess(asynchronous_reply, ClipboardPacket{.primary = primary, .password = password.view()}, {}, available, true);
@@ -978,7 +978,7 @@ namespace telar::runtime::control {
 
   void Clipboard::finish(ClipboardStatus result) {
     if (!pending_->traditional) {
-      auto builder = buildReply();
+      ReplyBuilder builder{replies_};
 
       status(pending_->metadata, result, pending_->ending, builder.reply());
       builder.commit();
@@ -1015,7 +1015,7 @@ namespace telar::runtime::control {
       return;
     }
 
-    if (pending_ || cancellation_ || reply_count_ != 0) {
+    if (pending_ || cancellation_ || replies_.count != 0) {
       status(metadata, ClipboardStatus::busy, ending, reply);
       return;
     }
@@ -1051,7 +1051,7 @@ namespace telar::runtime::control {
       return;
     }
 
-    if (pending_ || cancellation_ || reply_count_ != 0) {
+    if (pending_ || cancellation_ || replies_.count != 0) {
       abort(ClipboardStatus::busy, ending, reply);
       return;
     }
@@ -1069,10 +1069,10 @@ namespace telar::runtime::control {
     request.transaction = std::move(transaction_);
   }
 
-  Clipboard::ReplyBuilder::ReplyBuilder(Clipboard& owner)
-      : owner_(owner),
-        reply_(owner.asynchronous_replies_.atMut((owner.reply_head_ + owner.reply_count_) % owner.asynchronous_replies_.size())) {
-    if (owner.reply_count_ == owner.asynchronous_replies_.size()) {
+  Clipboard::ReplyBuilder::ReplyBuilder(ReplyRing& ring)
+      : ring_(ring),
+        reply_(ring.replies.atMut((ring.head + ring.count) % ring.replies.size())) {
+    if (ring.count == ring.replies.size()) {
       throw std::logic_error{"Clipboard completion capacity invariant failed"};
     }
   }
@@ -1089,12 +1089,8 @@ namespace telar::runtime::control {
 
   void Clipboard::ReplyBuilder::commit() {
     reply_.seal();
-    ++owner_.reply_count_;
+    ++ring_.count;
     committed_ = true;
-  }
-
-  auto Clipboard::buildReply() -> ReplyBuilder {
-    return ReplyBuilder{*this};
   }
 
 }
