@@ -372,7 +372,7 @@ export {
 
 template <>
 struct std::formatter<telar::runtime::AsciiLower, char> {
-  constexpr auto parse(std::format_parse_context& context) {
+  constexpr tbc::view<std::format_parse_context::iterator, tbc::lt::a> parse(tbc::view<std::format_parse_context&, tbc::lt::a> context) {
     return context.begin();
   }
 
@@ -390,7 +390,7 @@ struct std::formatter<telar::runtime::AsciiLower, char> {
 
 template <>
 struct std::formatter<telar::runtime::LowerHex, char> {
-  constexpr auto parse(std::format_parse_context& context) {
+  constexpr tbc::view<std::format_parse_context::iterator, tbc::lt::a> parse(tbc::view<std::format_parse_context&, tbc::lt::a> context) {
     return context.begin();
   }
 

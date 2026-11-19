@@ -184,12 +184,12 @@ export {
 
 template <>
 struct std::formatter<telar::runtime::JsonQuoted, char> {
-  constexpr auto parse(std::format_parse_context& context) {
+  constexpr tbc::view<std::format_parse_context::iterator, tbc::lt::a> parse(tbc::view<std::format_parse_context&, tbc::lt::a> context) {
     return context.begin();
   }
 
   template <typename Context>
-  auto format(const telar::runtime::JsonQuoted& quoted, Context& context) const {
+  tbc::view<typename Context::iterator, tbc::lt::a> format(const telar::runtime::JsonQuoted& quoted, tbc::view<Context&, tbc::lt::a> context) const {
     auto output = context.out();
 
     *output++ = '"';

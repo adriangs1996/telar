@@ -232,12 +232,12 @@ export {
 
 template <>
 struct std::formatter<telar::runtime::cli::EscapedField, char> {
-  constexpr auto parse(std::format_parse_context& context) {
+  constexpr tbc::view<std::format_parse_context::iterator, tbc::lt::a> parse(tbc::view<std::format_parse_context&, tbc::lt::a> context) {
     return context.begin();
   }
 
   template <typename Context>
-  auto format(const telar::runtime::cli::EscapedField& field, Context& context) const {
+  tbc::view<typename Context::iterator, tbc::lt::a> format(const telar::runtime::cli::EscapedField& field, tbc::view<Context&, tbc::lt::a> context) const {
     auto output = context.out();
 
     for (const unsigned char byte : field.text) {
@@ -266,24 +266,24 @@ struct std::formatter<telar::runtime::cli::EscapedField, char> {
 
 template <typename Number>
 struct std::formatter<telar::runtime::cli::NumberOrNull<Number>, char> {
-  constexpr auto parse(std::format_parse_context& context) {
+  constexpr tbc::view<std::format_parse_context::iterator, tbc::lt::a> parse(tbc::view<std::format_parse_context&, tbc::lt::a> context) {
     return context.begin();
   }
 
   template <typename Context>
-  auto format(const telar::runtime::cli::NumberOrNull<Number>& number, Context& context) const {
+  tbc::view<typename Context::iterator, tbc::lt::a> format(const telar::runtime::cli::NumberOrNull<Number>& number, tbc::view<Context&, tbc::lt::a> context) const {
     return number.value ? std::format_to(context.out(), "{}", *number.value) : std::format_to(context.out(), "null");
   }
 };
 
 template <>
 struct std::formatter<telar::runtime::cli::LimitDescription, char> {
-  constexpr auto parse(std::format_parse_context& context) {
+  constexpr tbc::view<std::format_parse_context::iterator, tbc::lt::a> parse(tbc::view<std::format_parse_context&, tbc::lt::a> context) {
     return context.begin();
   }
 
   template <typename Context>
-  auto format(const telar::runtime::cli::LimitDescription& description, Context& context) const {
+  tbc::view<typename Context::iterator, tbc::lt::a> format(const telar::runtime::cli::LimitDescription& description, tbc::view<Context&, tbc::lt::a> context) const {
     const auto& reach = description.reach;
     auto output = std::format_to(context.out(), "{}: ", reach.name);
     const std::string_view space = reach.noun.empty() ? "" : " ";
