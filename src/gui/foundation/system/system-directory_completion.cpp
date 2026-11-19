@@ -11,7 +11,7 @@ namespace telar::gui::inline foundation::inline system {
     // Joins `parts` into `Text`, which has room for all of them.
     template <typename Text, std::size_t Capacity>
     Text joined(std::initializer_list<std::string_view> parts) {
-      ds::Array<char, Capacity> bytes;
+      ds::Array<char, Capacity> bytes{};
       std::size_t length = 0;
 
       for (const auto part : parts) {

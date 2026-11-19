@@ -27,8 +27,8 @@ static_assert(true);
 #include <QtCore/qchar.h>
 #include <QtCore/qstring.h>
 #include <QtCore/qtypes.h>
+#include <climits>
 #include <exception>
-#include <limits.h>
 
 import telar.gui.foundation.actions;
 
@@ -48,8 +48,7 @@ namespace telar::gui::qt {
   }
 
   ConfigurationPreparation::ConfigurationPreparation()
-      : generation(),
-        snapshot() {
+      : snapshot() {
   }
 
   ConfigurationPreparation::~ConfigurationPreparation() = default;
@@ -160,7 +159,7 @@ namespace telar::gui::qt {
         arguments.append(QByteArray{argument.data(), static_cast<qsizetype>(argument.size())});
       });
 
-      result.arguments.insert({reference, QByteArray{field}}, std::move(arguments));
+      result.arguments.insert({reference, QByteArray{field}}, arguments);
     };
 
     const auto& definitions = generation.components().definitions();

@@ -40,10 +40,10 @@ typedef struct telar_glyph_rasterizer telar_glyph_rasterizer;
 
 // Borrowed font bytes and atlas storage outlive the single-owner rasterizer.
 telar_glyph_rasterizer* telarGlyphRasterizerCreate(const telar_glyph_rasterizer_options* options);
-void telarGlyphRasterizerDestroy(telar_glyph_rasterizer* self);
+void telarGlyphRasterizerDestroy(const telar_glyph_rasterizer* self);
 int telarGlyphRasterizerSelect(telar_glyph_rasterizer* self, uint32_t pixel_height);
-int telarGlyphRasterizerMeasure(telar_glyph_rasterizer* self, telar_glyph_raster* glyph);
-void telarGlyphRasterizerDraw(telar_glyph_rasterizer* self, const telar_glyph_raster* glyph);
+int telarGlyphRasterizerMeasure(const telar_glyph_rasterizer* self, telar_glyph_raster* glyph);
+void telarGlyphRasterizerDraw(const telar_glyph_rasterizer* self, const telar_glyph_raster* glyph);
 
 #ifdef __cplusplus
 }

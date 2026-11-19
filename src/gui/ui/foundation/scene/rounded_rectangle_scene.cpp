@@ -113,7 +113,7 @@ namespace telar::gui::qt {
       [[nodiscard]] QSGMaterialType* type() const override {
         static ds::Array<QSGMaterialType, 4> types;
 
-        return &types.atMut(static_cast<std::size_t>(physical_coordinates_) + 2 * static_cast<std::size_t>(replace_background_));
+        return &types.atMut(static_cast<std::size_t>(physical_coordinates_) + (2 * static_cast<std::size_t>(replace_background_)));
       }
 
       [[nodiscard]] QSGMaterialShader* createShader([[maybe_unused]] QSGRendererInterface::RenderMode render_mode) const override {

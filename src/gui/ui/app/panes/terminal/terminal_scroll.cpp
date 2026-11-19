@@ -946,7 +946,7 @@ namespace telar::gui::qt {
   // from the screen's first row `first` while the view draws the screen's own.
   ds::Option<std::size_t> TerminalItem::drawnRowOf(std::uint64_t row, std::uint64_t first) const {
     if (!view_rows_.empty()) {
-      const auto found = std::ranges::find_if(view_rows_, [row](const ViewRow& view) {
+      const auto* const found = std::ranges::find_if(view_rows_, [row](const ViewRow& view) {
         return view.exists && view.row == row;
       });
 

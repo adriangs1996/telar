@@ -382,7 +382,7 @@ namespace telar::gui::application {
   }
 
   const Pane<Memory>* findPane(const Panes& panes, std::uint64_t pane_id) noexcept {
-    const auto found = std::find_if(panes.begin(), panes.end(), [&](const auto& pane) {
+    const auto* const found = std::find_if(panes.begin(), panes.end(), [&](const auto& pane) {
       return pane->id == pane_id;
     });
 

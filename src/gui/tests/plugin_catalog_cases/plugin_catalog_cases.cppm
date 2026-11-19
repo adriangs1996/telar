@@ -1,9 +1,9 @@
 module;
+#include <climits>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <limits.h>
 
 export module telar.gui.tests.plugin_catalog_cases;
 

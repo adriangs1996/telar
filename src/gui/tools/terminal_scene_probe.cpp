@@ -156,7 +156,7 @@ namespace {
 
     const auto hinting = parser.value("hinting").toStdString();
     const auto& names = telar::runtime::config::font_hinting_names;
-    const auto found = std::ranges::find(names, hinting);
+    const auto* const found = std::ranges::find(names, hinting);
     if (found == names.end()) {
       throw std::invalid_argument{"Invalid --hinting"};
     }
@@ -204,7 +204,7 @@ namespace {
       fonts_ = ResidentFonts::shared(collection_);
       resolved_ = FontResolver::resolve(fonts_->face(fonts::FontRole::primary), configuration_.font, options_.scale);
       setSize({columns_ * resolved_.font.cell.width(), rows_ * resolved_.font.cell.height()});
-      configuration_.theme.background = Color{.r = static_cast<float>(options_.background.redF()), .g = static_cast<float>(options_.background.greenF()), .b = static_cast<float>(options_.background.blueF()), .a = 1};
+      configuration_.theme.background = Color{.r = options_.background.redF(), .g = options_.background.greenF(), .b = options_.background.blueF(), .a = 1};
       row_flags_.resize(rows_);
       characters_.resize(static_cast<std::size_t>(columns_) * rows_ * utf8_slot);
       cells_.resize(static_cast<std::size_t>(columns_) * rows_);
@@ -277,7 +277,7 @@ namespace {
 
         for (unsigned column = 0; column < columns_; ++column) {
           const auto offset = (row * columns_) + column;
-          const auto bytes = Utf8Scalar::encode(column < static_cast<unsigned>(line.size()) ? line[column] : U' ');
+          const auto bytes = Utf8Scalar::encode(std::cmp_less(column, line.size()) ? line[column] : U' ');
           const auto slot = std::span{characters_}.subspan(offset * utf8_slot, utf8_slot);
 
           std::ranges::transform(bytes.view(), slot.begin(), [](char byte) {

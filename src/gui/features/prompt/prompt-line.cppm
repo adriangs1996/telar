@@ -109,7 +109,7 @@ namespace telar::gui::features::prompt {
     // Writes `text` over [begin, end) of the line, as a path chosen for the word there does.
     void replaceText(std::size_t begin, std::size_t end, std::string_view text);
 
-    const ds::Option<Menu>& menu() const noexcept;
+    [[nodiscard]] const ds::Option<Menu>& menu() const noexcept;
 
     // Offers `choices` for the word in [begin, end): one is written at once, more open the
     // menu. While `requests` are still looking for more, even one choice waits for them.
@@ -118,7 +118,7 @@ namespace telar::gui::features::prompt {
     // What a pending request found, added to the menu it was asked for.
     bool receive(std::uint64_t request, tbc::view<Choices, tbc::lt::a> paths, bool truncated = false);
 
-    bool pending(std::uint64_t request) const noexcept;
+    [[nodiscard]] bool pending(std::uint64_t request) const noexcept;
 
     // The shell is back at its prompt after `succeeded` (or not): a queued command runs only
     // after a success, and otherwise stays as a draft.
@@ -149,7 +149,7 @@ namespace telar::gui::features::prompt {
     ds::Option<Outcome> menuKey(const KeyPress& key, bool& refining);
 
     // The word the menu completes, as typed so far.
-    std::string_view typedWord() const noexcept;
+    [[nodiscard]] std::string_view typedWord() const noexcept;
 
     // After a key typed or erased in the word: the choices that still start with it. Erasing
     // past where they were offered asks for them again; leaving the word closes the menu.

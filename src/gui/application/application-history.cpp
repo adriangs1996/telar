@@ -79,7 +79,7 @@ namespace telar::gui::application::history {
       } else if (const auto& active = session.active_tab; scope == HistoryScope::workspace && active) {
         const auto location = active->workspace;
         const auto& workspaces = workspace_list.entries();
-        const auto workspace = std::ranges::find_if(workspaces, [&](const auto& entry) {
+        const auto* const workspace = std::ranges::find_if(workspaces, [&](const auto& entry) {
           return entry.location.kind == WorkspaceLocation::Kind::workspace && sameWorkspace(entry.location, location);
         });
         if (workspace != workspaces.end() && !workspace->path.empty()) {

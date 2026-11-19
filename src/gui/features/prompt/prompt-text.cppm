@@ -22,25 +22,25 @@ namespace telar::gui::features::prompt {
     // The text and its history live in `memory`, region `a`.
     explicit Text(tbc::view<Memory&, tbc::lt::a> memory);
 
-    std::string_view view() const noexcept;
+    [[nodiscard]] std::string_view view() const noexcept;
 
-    std::size_t size() const noexcept;
+    [[nodiscard]] std::size_t size() const noexcept;
 
-    bool empty() const noexcept;
+    [[nodiscard]] bool empty() const noexcept;
 
-    std::size_t cursor() const noexcept;
+    [[nodiscard]] std::size_t cursor() const noexcept;
 
     // The other end of the selection; equal to the cursor without one.
-    std::size_t anchor() const noexcept;
+    [[nodiscard]] std::size_t anchor() const noexcept;
 
-    bool selecting() const noexcept;
+    [[nodiscard]] bool selecting() const noexcept;
 
-    std::size_t selectionStart() const noexcept;
+    [[nodiscard]] std::size_t selectionStart() const noexcept;
 
-    std::size_t selectionEnd() const noexcept;
+    [[nodiscard]] std::size_t selectionEnd() const noexcept;
 
     // Counts every change to the text, so views redraw only what changed.
-    std::uint64_t revision() const noexcept;
+    [[nodiscard]] std::uint64_t revision() const noexcept;
 
     void moveTo(std::size_t offset, bool extend = false) noexcept;
 
@@ -65,22 +65,22 @@ namespace telar::gui::features::prompt {
     void seal() noexcept;
 
     // Code point navigation.
-    std::size_t next(std::size_t offset) const noexcept;
+    [[nodiscard]] std::size_t next(std::size_t offset) const noexcept;
 
-    std::size_t previous(std::size_t offset) const noexcept;
+    [[nodiscard]] std::size_t previous(std::size_t offset) const noexcept;
 
-    std::size_t lineStart(std::size_t offset) const noexcept;
+    [[nodiscard]] std::size_t lineStart(std::size_t offset) const noexcept;
 
-    std::size_t lineEnd(std::size_t offset) const noexcept;
+    [[nodiscard]] std::size_t lineEnd(std::size_t offset) const noexcept;
 
-    std::size_t lineCount() const noexcept;
+    [[nodiscard]] std::size_t lineCount() const noexcept;
 
-    std::size_t lineOf(std::size_t offset) const noexcept;
+    [[nodiscard]] std::size_t lineOf(std::size_t offset) const noexcept;
 
     // The code points between the line start and the offset, for keeping a column across lines.
-    std::size_t column(std::size_t offset) const noexcept;
+    [[nodiscard]] std::size_t column(std::size_t offset) const noexcept;
 
-    std::size_t atColumn(std::size_t line_start, std::size_t column) const noexcept;
+    [[nodiscard]] std::size_t atColumn(std::size_t line_start, std::size_t column) const noexcept;
 
     static bool continuation(char byte) noexcept;
 
@@ -96,7 +96,7 @@ namespace telar::gui::features::prompt {
       std::size_t cursor;
     };
 
-    std::size_t boundary(std::size_t offset) const noexcept;
+    [[nodiscard]] std::size_t boundary(std::size_t offset) const noexcept;
 
     void record();
 

@@ -178,7 +178,7 @@ namespace {
     telar::ds::String<Memory> huge{arena.memory};
     Editor bounded;
 
-    huge.resize(std::size_t{256} * 1024 + 1, 'x');
+    huge.resize((std::size_t{256} * 1024) + 1, 'x');
     bounded.insert(huge.view());
     require(text(bounded).empty(), "refuses text beyond the capacity");
   }

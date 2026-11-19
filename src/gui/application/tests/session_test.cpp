@@ -147,7 +147,7 @@ namespace {
       };
 
       deliver(client, WorkspaceSnapshot{.request_id = 1, .workspace = location.workspace, .name = "project", .tabs = tabs});
-      const auto entry = std::ranges::find_if(client.tabs, [](const auto& tab) {
+      const auto* const entry = std::ranges::find_if(client.tabs, [](const auto& tab) {
         return tab->location.tab_id == 2;
       });
 

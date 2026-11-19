@@ -4,10 +4,10 @@ static_assert(true);
 #endif
 
 #include <array>
+#include <climits>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <limits.h>
 #include <optional>
 #include <stdexcept>
 #include <string>

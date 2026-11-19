@@ -33,11 +33,11 @@ static_assert(true);
 #include <QtTest/qtestcase.h>
 #include <array>
 #include <cerrno>
+#include <climits>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <fcntl.h>
-#include <limits.h>
 #include <memory>
 #include <optional>
 #include <span>

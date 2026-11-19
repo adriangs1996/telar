@@ -367,7 +367,7 @@ namespace telar::gui::inline foundation::inline fonts {
       // A bounded half-pixel dilation changes ink, not advances or the terminal grid.
       constexpr FT_Pos maximum_thickening = 32;
       constexpr unsigned maximum_strength = std::numeric_limits<std::uint8_t>::max();
-      const auto strength = static_cast<FT_Pos>((request.thicken_strength * maximum_thickening + maximum_strength / 2) / maximum_strength);
+      const auto strength = (((request.thicken_strength * maximum_thickening) + (maximum_strength / 2)) / maximum_strength);
       if (FT_Outline_EmboldenXY(&slot->outline, strength, strength) != 0) {
         throw std::runtime_error{"GlyphThickeningFailed"};
       }

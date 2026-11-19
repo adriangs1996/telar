@@ -484,7 +484,7 @@ namespace telar::gui::features::prompt {
     }
 
     if (position >= text_.size()) {
-      return text_.size() == 0 ? 0 : text_.previous(text_.size());
+      return text_.empty() ? 0 : text_.previous(text_.size());
     }
 
     const auto run = kind(position, big);
@@ -630,7 +630,7 @@ namespace telar::gui::features::prompt {
     if ((character >= '1' && character <= '9') || (character == '0' && (operator_ != 0 ? operator_count_ : count_) != 0)) {
       auto& target = operator_ != 0 ? operator_count_ : count_;
 
-      target = std::min<std::size_t>(target * 10 + (character - '0'), 9999);
+      target = std::min<std::size_t>((target * 10) + (character - '0'), 9999);
       return Request::none;
     }
 
@@ -700,7 +700,7 @@ namespace telar::gui::features::prompt {
   ds::Option<Editor::Motion> Editor::motionFor(char32_t character) const noexcept {
     const auto cursor = text_.cursor();
     const auto repeat = count();
-    auto apply = [&](auto step) {
+    const auto apply = [&](auto step) {
       auto position = cursor;
 
       for (std::size_t index = 0; index < repeat; ++index) {
@@ -894,7 +894,7 @@ namespace telar::gui::features::prompt {
     auto position = cursor;
     const auto end = text_.lineEnd(cursor);
 
-    while (position < end && open.find(view[position]) == std::string_view::npos && close.find(view[position]) == std::string_view::npos) {
+    while (position < end && !open.contains(view[position]) && !close.contains(view[position])) {
       ++position;
     }
 
@@ -908,7 +908,7 @@ namespace telar::gui::features::prompt {
     const int step = opening != std::string_view::npos ? 1 : -1;
     int depth = 0;
 
-    for (auto index = static_cast<std::ptrdiff_t>(position); index >= 0 && index < static_cast<std::ptrdiff_t>(view.size()); index += step) {
+    for (auto index = static_cast<std::ptrdiff_t>(position); index >= 0 && std::cmp_less(index, view.size()); index += step) {
       const auto byte = view[static_cast<std::size_t>(index)];
 
       depth += byte == here ? 1 : byte == other ? -1
@@ -930,7 +930,7 @@ namespace telar::gui::features::prompt {
 
     if (operator_ != 0) {
       const auto cursor = text_.cursor();
-      auto start = std::min(cursor, motion.target);
+      const auto start = std::min(cursor, motion.target);
       auto end = std::max(cursor, motion.target);
 
       if (motion.inclusive) {
@@ -1063,7 +1063,7 @@ namespace telar::gui::features::prompt {
 
     for (auto index = static_cast<std::ptrdiff_t>(cursor); index >= 0; --index) {
       const auto byte = view[static_cast<std::size_t>(index)];
-      if (byte == close && static_cast<std::size_t>(index) != cursor) {
+      if (byte == close && std::cmp_not_equal(index, cursor)) {
         ++depth;
       } else if (byte == open) {
         if (depth == 0) {
@@ -1564,8 +1564,8 @@ namespace telar::gui::features::prompt {
     recording_ = true;
     recorded_.clear();
     if (count_ != 0) {
-      ds::Array<char, 24> digits;
-      const auto end = std::to_chars(digits.dataMut(), digits.dataMut() + digits.size(), count_).ptr;
+      ds::Array<char, 24> digits{};
+      auto* const end = std::to_chars(digits.dataMut(), digits.dataMut() + digits.size(), count_).ptr;
 
       for (const auto digit : std::string_view{digits.data(), end}) {
         recorded_.push(Recorded{KeyPress{Key::character, static_cast<char32_t>(digit)}, ds::String<Memory>{recorded_.memory()}});

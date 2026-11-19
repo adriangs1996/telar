@@ -87,7 +87,7 @@ namespace telar::gui::qt {
       }
 
       const auto& workspaces = session.workspace_list.entries();
-      const auto found = std::ranges::find_if(workspaces, [&](const auto& workspace) {
+      const auto* const found = std::ranges::find_if(workspaces, [&](const auto& workspace) {
         return sameWorkspace(workspace.location, pane.location.workspace);
       });
 
@@ -105,7 +105,7 @@ namespace telar::gui::qt {
 
       const auto& agent = session.agents()[*entry.agent];
       const auto& workspaces = session.workspaces();
-      const auto workspace = std::ranges::find_if(workspaces, [&](const auto& candidate) {
+      const auto* const workspace = std::ranges::find_if(workspaces, [&](const auto& candidate) {
         return agent.location.workspace.kind == WorkspaceLocation::Kind::workspace && sameWorkspace(agent.location.workspace, candidate.location);
       });
 
@@ -309,7 +309,7 @@ namespace telar::gui::qt {
   }
 
   const application::machines::MachineActivityTarget* ActivityController::target(const QString& identity) const {
-    const auto row = std::ranges::find(targets_, identity, &RowTarget::identity);
+    const auto* const row = std::ranges::find(targets_, identity, &RowTarget::identity);
 
     return row == targets_.end() ? nullptr : &row->target;
   }

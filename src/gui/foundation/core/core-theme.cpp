@@ -187,7 +187,7 @@ namespace telar::gui::inline foundation::inline core {
     result.chrome = values.palette;
     for (std::size_t index = 0; index < result.syntax.size(); ++index) {
       const auto style = values.syntaxStyle(static_cast<SyntaxRole>(index));
-      const auto bit = static_cast<std::uint16_t>(1u << index);
+      const auto bit = static_cast<std::uint16_t>(1U << index);
 
       result.syntax.atMut(index) = style.color;
       result.syntax_italic |= style.italic ? bit : 0;

@@ -38,7 +38,7 @@ export namespace telar::gui::features::prompt {
     Key key = Key::character;
     char32_t character = 0;
     Modifiers modifiers{};
-    std::string_view text{};
+    std::string_view text;
   };
 
   // What a key bound in `client.prompt.bindings` does. The names, in this order, are

@@ -37,7 +37,7 @@ namespace telar::gui::qt {
       }
 
       if (easing == easing_in_out) {
-        return progress < 0.5 ? 4 * progress * progress * progress : 1 - std::pow(-2 * progress + 2, 3) / 2;
+        return progress < 0.5 ? 4 * progress * progress * progress : 1 - (std::pow((-2 * progress) + 2, 3) / 2);
       }
 
       return 1 - std::pow(1 - progress, 3);

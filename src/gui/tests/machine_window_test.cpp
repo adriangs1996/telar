@@ -21,12 +21,12 @@ static_assert(true);
 #include <algorithm>
 #include <array>
 #include <charconv>
+#include <climits>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <exception>
-#include <limits.h>
 #include <limits>
 #include <optional>
 #include <span>
@@ -35,40 +35,40 @@ static_assert(true);
 #include <system_error>
 #include <tuple>
 #include <utility>
-#if (defined(__APPLE__))
+#ifdef __APPLE__
 #include "ui/app/panes/attachments/attachment_shelf.hpp"
 #endif
-#if (defined(__APPLE__))
+#ifdef __APPLE__
 #include "ui/foundation/input/key_adapter.hpp"
 #endif
-#if (defined(__APPLE__))
+#ifdef __APPLE__
 #include "platform/private_clipboard.hpp"
 #endif
-#if (defined(__APPLE__))
+#ifdef __APPLE__
 #include <QBuffer>
 #endif
-#if (defined(__APPLE__))
+#ifdef __APPLE__
 #include <QRectF>
 #endif
-#if (defined(__APPLE__))
+#ifdef __APPLE__
 #include <QImage>
 #endif
-#if (defined(__APPLE__))
+#ifdef __APPLE__
 #include <QDebug>
 #endif
-#if (defined(__APPLE__))
+#ifdef __APPLE__
 #include <QtCore/qlogging.h>
 #endif
-#if (defined(__APPLE__))
+#ifdef __APPLE__
 #include <QSGRendererInterface>
 #endif
-#if (defined(__APPLE__))
+#ifdef __APPLE__
 #include <QFont>
 #endif
-#if (defined(__APPLE__))
+#ifdef __APPLE__
 #include <QScopeGuard>
 #endif
-#if (defined(__APPLE__))
+#ifdef __APPLE__
 #include <QtGui/qtestsupport_gui.h>
 #endif
 #include "telar_wire/codecs/telar_cells.hpp"
@@ -123,18 +123,6 @@ static_assert(true);
 #include <memory>
 
 #ifdef __APPLE__
-#include "platform/private_clipboard.hpp"
-#include "ui/app/panes/attachments/attachment_shelf.hpp"
-#include "ui/foundation/input/key_adapter.hpp"
-#include <QBuffer>
-#include <QDebug>
-#include <QFont>
-#include <QImage>
-#include <QRectF>
-#include <QSGRendererInterface>
-#include <QScopeGuard>
-#include <QtCore/qlogging.h>
-#include <QtGui/qtestsupport_gui.h>
 #endif
 
 import telar.gui.tests.activity_fixture;
@@ -142,7 +130,7 @@ import telar.gui.tests.metrics_fixture;
 import telar.gui.application;
 import telar.gui.features.plugins;
 import telar.gui.features.machines;
-#if (defined(__APPLE__))
+#ifdef __APPLE__
 #endif
 import telar.gui.features.notifications;
 import telar.wire.agents;

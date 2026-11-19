@@ -156,7 +156,7 @@ namespace telar::gui::features::prompt {
   ds::Option<Action> bound(const KeyPress& key, const Editor& editor, const PromptConfiguration& configuration) {
     using Chord = runtime::config::KeyChord;
     const bool normal = editor.keymap() == Keymap::vim && editor.mode() != Mode::insert;
-    const auto named = [&]() -> ds::Option<Chord::Key> {
+    const auto named = [&] -> ds::Option<Chord::Key> {
       switch (key.key) {
       case Key::character:
         return Chord::Key::character;
@@ -304,7 +304,7 @@ namespace telar::gui::features::prompt {
       return *known;
     }
 
-    if (word.find('/') == std::string_view::npos) {
+    if (!word.contains('/')) {
       for (const auto& entry : checks.listed) {
         if (word.starts_with(entry.key.view())) {
           const auto listed = std::ranges::any_of(entry.value, [word](const Name& command) {
@@ -460,7 +460,7 @@ namespace telar::gui::features::prompt {
       return SpecState::unavailable;
     }
 
-    auto& checks = commandChecks(state.command_checks, state.memory, commands);
+    const auto& checks = commandChecks(state.command_checks, state.memory, commands);
     if (const auto* known = checks.specs.find(command)) {
       return *known;
     }
@@ -496,7 +496,7 @@ namespace telar::gui::features::prompt {
   }
 
   ds::Option<std::uint64_t> receive(State& state, const CommandSpec& message) {
-    auto request = state.spec_requests.remove(message.request_id);
+    const auto request = state.spec_requests.remove(message.request_id);
     if (!request) {
       return ds::none;
     }
@@ -658,7 +658,7 @@ namespace telar::gui::features::prompt {
     }
 
     // The heading names where the choices come from.
-    const auto label = [&]() -> std::string_view {
+    const auto label = [&] -> std::string_view {
       if (context.command_position) {
         return "commands";
       }
@@ -762,7 +762,7 @@ namespace telar::gui::features::prompt {
       // Directories arrive with their trailing slash.
       const bool directory = match.kind == PathKind::directory;
       const auto name = directory ? match.path.substr(0, match.path.size() - 1) : match.path;
-      if (name.find('/') == std::string_view::npos && name.starts_with(query.view())) {
+      if (!name.contains('/') && name.starts_with(query.view())) {
         Name text = base.clone();
 
         text.append(match.path);

@@ -24,7 +24,7 @@ export namespace telar::gui::inline foundation::inline core {
 
     bool operator==(const TerminalGrid&) const = default;
 
-    [[nodiscard]] inline ds::Option<TerminalSize> fit(double width, double height) const noexcept {
+    [[nodiscard]] ds::Option<TerminalSize> fit(double width, double height) const noexcept {
       if (!std::isfinite(width) || !std::isfinite(height) || !std::isfinite(scale) || width <= 0 || height <= 0 || scale <= 0 || cell_width_px == 0 || cell_height_px == 0) {
         return ds::none;
       }

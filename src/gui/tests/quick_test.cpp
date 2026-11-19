@@ -703,7 +703,7 @@ return {api_version = 2, client = {
 
       QVERIFY(terminal != nullptr);
       terminal->forceActiveFocus();
-      QTemporaryDir directory;
+      const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
       QFile source{directory.filePath(QStringLiteral("document.md"))};
@@ -737,8 +737,8 @@ return {api_version = 2, client = {
         return nullptr;
       };
 
-      auto* view = named(window_->contentItem(), u"documentView");
-      auto* list = named(window_->contentItem(), u"documentList");
+      const auto* view = named(window_->contentItem(), u"documentView");
+      const auto* list = named(window_->contentItem(), u"documentList");
 
       QVERIFY(view != nullptr && list != nullptr);
       QTRY_VERIFY(view->isVisible() && list->property("count").toInt() == static_cast<int>(firstPane()->document.blocks.size()));
@@ -764,7 +764,7 @@ return {api_version = 2, client = {
       auto* terminal = terminalIn(window_->contentItem());
 
       QVERIFY(terminal != nullptr);
-      QTemporaryDir directory;
+      const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
       QFile source{directory.filePath(QStringLiteral("inline.md"))};
@@ -806,7 +806,7 @@ return {api_version = 2, client = {
       QTRY_COMPARE_WITH_TIMEOUT(terminal->property("rowsBelow").toInt(), 0, runtime_wait_ms);
       const auto cursor_row = terminal->property("cursorRow").toInt();
 
-      QVERIFY2(cursor_row >= 0 && cursor_row < static_cast<int>(firstPane()->screen.rows()), qPrintable(QString::number(cursor_row)));
+      QVERIFY2(cursor_row >= 0 && std::cmp_less(cursor_row, firstPane()->screen.rows()), qPrintable(QString::number(cursor_row)));
       // Read from the top, the way back to the end is the jump the view offers.
       QVERIFY(QMetaObject::invokeMethod(terminal, "scrollToFraction", Q_ARG(qreal, 0.0), Q_ARG(bool, false)));
       QTRY_VERIFY_WITH_TIMEOUT(terminal->property("rowsBelow").toInt() > 0, runtime_wait_ms);
@@ -1087,7 +1087,7 @@ return {api_version = 2, client = {
 
       for (const auto& key : {original_workspace, created_workspace}) {
         QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-        QQuickItem* target = nullptr;
+        const QQuickItem* target = nullptr;
 
         for (auto* mark : test::visualItems(*window_->contentItem(), QStringLiteral("projectSwitcherMark"))) {
           if (mark->property("record").toMap().value(QStringLiteral("key")).toString() == key) {
@@ -2498,8 +2498,8 @@ return {api_version=2, client={keybindings={
       client_->commands()->execute(window_actions::Action::focus_pane, second);
       QTRY_VERIFY_WITH_TIMEOUT(client_->panes()->rows()->data(client_->panes()->rows()->index(1, 0), ListModel::record_role).toMap().value(QStringLiteral("focused")).toBool(), runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(line(first) != nullptr && line(second) != nullptr, runtime_wait_ms);
-      auto* first_line = line(first);
-      auto* second_line = line(second);
+      const auto* first_line = line(first);
+      const auto* second_line = line(second);
 
       test::HistoryPresentation::showLineSearch(*client_, Store::Dialog::history, first.toULongLong());
       QVERIFY(!first_line->property("searching").toBool());
@@ -5413,7 +5413,7 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(firstPane()->id, source_id, runtime_wait_ms);
       QCOMPARE(client_->panes()->rows()->rowCount(), 1);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && entries().size() == 2, runtime_wait_ms);
-      const auto leave = [&]() -> const QQuickItem* {
+      const auto leave = [&] -> const QQuickItem* {
         for (const auto* action : telar::gui::test::visualItems(*window_->contentItem(), QStringLiteral("paneAction"))) {
           if (action->isVisible() && action->property("modelData").toMap().value(QStringLiteral("label")).toString() == QLatin1StringView("Restore panes")) {
             return action;
@@ -5968,8 +5968,8 @@ return {api_version=2, client={keybindings={
       // clicks another, so Qt delivers the press right after a synthesized move and the open
       // tooltip loses it.
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-      auto* panel_button = componentGroup(QStringLiteral("Bar panel"));
-      auto* pick_button = componentGroup(QStringLiteral("Bar pick"));
+      const auto* panel_button = componentGroup(QStringLiteral("Bar panel"));
+      const auto* pick_button = componentGroup(QStringLiteral("Bar pick"));
 
       QVERIFY(pick_button != nullptr);
       const auto* panel_tooltip = componentTooltip(*panel_button);
@@ -5992,7 +5992,7 @@ return {api_version=2, client={keybindings={
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       QVERIFY(!panel_tooltip->property("visible").toBool());
 
-      auto* panel_action = componentGroup(QStringLiteral("Panel action"));
+      const auto* panel_action = componentGroup(QStringLiteral("Panel action"));
       const auto* own_tooltip = componentTooltip(*panel_action);
 
       QVERIFY(own_tooltip != nullptr);
@@ -6018,7 +6018,7 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(client_->components()->pick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(!pick_tooltip->property("visible").toBool(), runtime_wait_ms);
 
-      const auto pickRowArea = [this]() -> QQuickItem* {
+      const auto pickRowArea = [this] -> QQuickItem* {
         auto* rows = window_->findChild<QQuickItem*>(QStringLiteral("configuredPickRows"));
         if (rows == nullptr) {
           return nullptr;
@@ -6277,7 +6277,7 @@ return {api_version=2, client={keybindings={
         QFAIL("The component has no validated plugin action");
       }
 
-      const auto saved = retained.get();
+      const auto& saved = retained.get();
       const auto revision = client_->components()->panel().value(QStringLiteral("revision")).toString();
 
       QTest::keyClick(window_, Qt::Key_M, Qt::AltModifier);
@@ -6287,7 +6287,7 @@ return {api_version=2, client={keybindings={
         QFAIL("The mutated component has no named action");
       }
 
-      const auto mutated = current.get();
+      const auto& mutated = current.get();
 
       QVERIFY(saved.action == mutated.action);
       QVERIFY(std::holds_alternative<PluginActionDescription>(saved.destination));
@@ -6385,7 +6385,7 @@ return {api_version=2, client={keybindings={
         QFAIL("The component has no validated definition action");
       }
 
-      const auto validated_definition = validated.get();
+      const auto& validated_definition = validated.get();
       const auto revision = client_->components()->panel().value(QStringLiteral("revision")).toString();
 
       QTest::keyClick(window_, Qt::Key_M, Qt::AltModifier);
@@ -6396,7 +6396,7 @@ return {api_version=2, client={keybindings={
         QFAIL("The mutated component has no current definition action");
       }
 
-      const auto current_definition = current.get();
+      const auto& current_definition = current.get();
 
       QVERIFY(validated_definition.action == current_definition.action);
       QVERIFY(std::holds_alternative<DefinitionActionDescription>(validated_definition.destination));

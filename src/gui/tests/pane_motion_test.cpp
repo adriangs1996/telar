@@ -68,7 +68,7 @@ namespace {
         QVERIFY(entrance.width == 0 || entrance.height == 0);
         QCOMPARE(entrance.right(), split[1].bounds.right());
         QCOMPARE(entrance.bottom(), split[1].bounds.bottom());
-        const auto middle = sample(motions, 1, 10 + PaneMotions::opening_ns / 2);
+        const auto middle = sample(motions, 1, 10 + (PaneMotions::opening_ns / 2));
 
         QVERIFY(middle.width > 0 && middle.height > 0);
         QCOMPARE(sample(motions, 0, 10 + PaneMotions::opening_ns), split[0].bounds);
@@ -86,7 +86,7 @@ namespace {
 
       motions.update(initial, 0);
       motions.update(horizontal, 10);
-      const auto now = 10 + PaneMotions::opening_ns / 2;
+      const auto now = 10 + (PaneMotions::opening_ns / 2);
       const auto visible = sample(motions, 0, now);
 
       motions.update(initial, now);
@@ -99,7 +99,7 @@ namespace {
 
       motions.update(initial, 0);
       motions.update(horizontal, 10);
-      motions.update(horizontal, 10 + PaneMotions::opening_ns / 2);
+      motions.update(horizontal, 10 + (PaneMotions::opening_ns / 2));
       QCOMPARE(sample(motions, 0, 10 + PaneMotions::opening_ns), horizontal[0].bounds);
       auto resized = horizontal;
 

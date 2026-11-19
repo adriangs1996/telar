@@ -169,7 +169,7 @@ namespace telar::gui::qt {
     const auto* const pane = local.session.focusedPane();
     if (pane != nullptr && pane->attached && !pane->exited) {
       const auto& agents = local.session.agents();
-      const auto agent = std::ranges::find_if(agents, [&](const auto& entry) {
+      const auto* const agent = std::ranges::find_if(agents, [&](const auto& entry) {
         return entry.pane_id == pane->id && sameTab(entry.location, pane->location);
       });
       if (agent != agents.end() && agent->attachments != AgentAttachmentMarkers::none) {

@@ -12,7 +12,7 @@ namespace telar::gui::inline foundation::inline system {
   namespace {
 
     bool sharedStorage(const struct stat& status) noexcept {
-#if defined(__APPLE__)
+#ifdef __APPLE__
       // Darwin reports permission bits but no regular-file type for shm_open objects.
       return (status.st_mode & S_IFMT) == 0;
 #else
@@ -29,7 +29,7 @@ namespace telar::gui::inline foundation::inline system {
     ds::Array<char, name_capacity> terminated{};
 
     std::ranges::copy(name, terminated.viewMut().begin());
-#if defined(__linux__)
+#ifdef __linux__
     constexpr int open_flags = O_RDONLY | O_NONBLOCK;
 #else
     constexpr int open_flags = O_RDONLY;

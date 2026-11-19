@@ -16,12 +16,12 @@ static_assert(true);
 #include <QtCore/qtypes.h>
 #include <array>
 #include <cerrno>
+#include <climits>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <exception>
 #include <fcntl.h>
-#include <limits.h>
 #include <optional>
 #include <span>
 #include <stop_token>

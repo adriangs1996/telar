@@ -17,7 +17,7 @@ static_assert(true);
 
 #include "telar_wire/serializers/telar_cells.hpp"
 
-#include <limits.h>
+#include <climits>
 
 import telar.testing;
 import telar.testing.test_memory;
@@ -193,7 +193,7 @@ namespace {
     bool palette_kept = colors.palette.hasValue();
 
     for (std::size_t index = 0; palette_kept && index < zenburn.terminal.palette.size(); ++index) {
-      palette_kept = ThemeRgb{(*colors.palette)[index * 3], (*colors.palette)[index * 3 + 1], (*colors.palette)[index * 3 + 2]} == zenburn.terminal.palette[index];
+      palette_kept = ThemeRgb{(*colors.palette)[index * 3], (*colors.palette)[(index * 3) + 1], (*colors.palette)[(index * 3) + 2]} == zenburn.terminal.palette[index];
     }
 
     check(palette_kept, "the 16 ANSI colors are the theme's terminal palette");
@@ -202,7 +202,7 @@ namespace {
 
     const auto dragon = application::configuration::terminalColors(projectTheme(themeValuesByName("kanagawa_dragon")));
     const auto bit = [](SyntaxRole role) {
-      return static_cast<std::uint16_t>(1u << static_cast<unsigned>(role));
+      return static_cast<std::uint16_t>(1U << static_cast<unsigned>(role));
     };
 
     check((dragon.syntax_italic & bit(SyntaxRole::keyword)) != 0 && (dragon.syntax_italic & bit(SyntaxRole::comment)) != 0, "italic syntax roles travel as their bits");

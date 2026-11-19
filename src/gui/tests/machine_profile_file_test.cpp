@@ -11,6 +11,7 @@ static_assert(true);
 #include <array>
 #include <cerrno>
 #include <chrono>
+#include <climits>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -21,7 +22,6 @@ static_assert(true);
 #include <fstream>
 #include <future>
 #include <iostream>
-#include <limits.h>
 #include <optional>
 #include <span>
 #include <stop_token>

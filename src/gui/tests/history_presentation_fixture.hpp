@@ -43,7 +43,7 @@ namespace telar::gui::test {
         return ds::none;
       }
 
-      return QPointF{(target->bounds.x + target->bounds.width / 2) / surface.scale, (target->bounds.y + target->bounds.height / 2) / surface.scale};
+      return QPointF{(target->bounds.x + (target->bounds.width / 2)) / surface.scale, (target->bounds.y + (target->bounds.height / 2)) / surface.scale};
     }
 
     // Sets the dialog and the pane whose prompt line hosts it, then announces them, as the last two

@@ -27,7 +27,7 @@ namespace {
 
   void snapshotNotificationsPreservePositions() {
     ListModel model;
-    QAbstractItemModelTester tester{&model, QAbstractItemModelTester::FailureReportingMode::Fatal};
+    const QAbstractItemModelTester tester{&model, QAbstractItemModelTester::FailureReportingMode::Fatal};
     const QSignalSpy inserted{&model, &QAbstractItemModel::rowsInserted};
     const QSignalSpy removed{&model, &QAbstractItemModel::rowsRemoved};
     const QSignalSpy changed{&model, &QAbstractItemModel::dataChanged};
@@ -60,7 +60,7 @@ namespace {
     constexpr int trials = 4096;
     ListModel reference;
     ListModel candidate;
-    QAbstractItemModelTester tester{&candidate, QAbstractItemModelTester::FailureReportingMode::Fatal};
+    const QAbstractItemModelTester tester{&candidate, QAbstractItemModelTester::FailureReportingMode::Fatal};
     std::mt19937 random{0x28b4c31};
     std::vector<int> identities(identity_count);
 

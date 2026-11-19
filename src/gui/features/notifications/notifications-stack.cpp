@@ -114,7 +114,7 @@ namespace telar::gui::features::notifications {
   }
 
   ds::Option<std::size_t> NotificationStack::motion(NotificationId id, float y) noexcept {
-    auto* const found = std::ranges::find(motions_, id, &Motion::id);
+    const auto* const found = std::ranges::find(motions_, id, &Motion::id);
     if (found != motions_.end()) {
       return static_cast<std::size_t>(found - motions_.begin());
     }

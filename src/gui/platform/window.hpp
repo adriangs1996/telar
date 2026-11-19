@@ -19,7 +19,7 @@ namespace telar::gui::platform {
   bool usesCommandKey() noexcept;
   void configureKeyRepeat();
   bool supportsImmediateWindowUpdates();
-  void deliverPendingWindowUpdate(QWindow& window);
+  void deliverPendingWindowUpdate(const QWindow& window);
   void configureGraphics();
   float windowControls(const QWindow& window) noexcept;
   void configureWindow(QWindow& window, WindowAppearance appearance);

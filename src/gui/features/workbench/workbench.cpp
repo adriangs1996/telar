@@ -119,7 +119,7 @@ namespace telar::gui::features::workbench {
     ds::Array<const Tab<Memory>*, maximum_tabs> sorted{};
     const auto count = ordered(tabs, active, sorted);
     const auto* current = active ? find(tabs, *active) : nullptr;
-    const auto found = std::find(sorted.begin(), sorted.begin() + count, current);
+    const auto* const found = std::find(sorted.begin(), sorted.begin() + count, current);
     if (count == 0 || found == sorted.begin() + count) {
       return ds::none;
     }

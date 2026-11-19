@@ -166,7 +166,7 @@ namespace telar::gui::qt {
     }
 
     if (title_ != title || hints_ != hints) {
-      title_ = title;
+      title_ = std::move(title);
       hints_ = hints;
       emit labelsChanged();
     }

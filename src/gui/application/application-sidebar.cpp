@@ -26,7 +26,7 @@ namespace telar::gui::application {
     return ChromeMetrics::lineHeight(chrome.body) + ChromeMetrics::lineHeight(chrome.small) + chrome.px(workspace_vertical_padding);
   }
 
-  SidebarGeometry SidebarGeometry::measure(Rect area, const ChromeMetrics& chrome, std::size_t, SidebarMachines machines) noexcept {
+  SidebarGeometry SidebarGeometry::measure(Rect area, const ChromeMetrics& chrome, std::size_t /*unused*/, SidebarMachines machines) noexcept {
     const auto inset = std::round(chrome.textPx(margin));
     Rect content{.x = area.x + inset, .y = area.y + inset, .width = std::max(0.0F, area.width - 2 * inset), .height = std::max(0.0F, area.height - 2 * inset)};
     const auto header = chrome.pane_header;

@@ -1,9 +1,9 @@
 module;
 #include <cerrno>
+#include <climits>
 #include <cstddef>
 #include <cstdint>
 #include <fcntl.h>
-#include <limits.h>
 #include <sys/stat.h>
 
 export module telar.gui.tests.plugin_effect_cases;

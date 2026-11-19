@@ -8,6 +8,7 @@ static_assert(true);
 #include "telar_wire/serializers/telar_messages.hpp"
 #include <array>
 #include <cerrno>
+#include <climits>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -15,7 +16,6 @@ static_assert(true);
 #include <exception>
 #include <fcntl.h>
 #include <initializer_list>
-#include <limits.h>
 #include <limits>
 #include <optional>
 #include <span>

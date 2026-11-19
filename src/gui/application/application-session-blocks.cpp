@@ -34,7 +34,7 @@ namespace telar::gui::application {
     }
 
     const auto key = blockKey(*pane, index);
-    const auto found = std::ranges::find(pane->folded, key);
+    const auto* const found = std::ranges::find(pane->folded, key);
     if (fold == (found != pane->folded.end())) {
       return;
     }
@@ -119,7 +119,7 @@ namespace telar::gui::application {
   }
 
   bool Session::enterBlocks() {
-    auto* pane = focusedPaneMut();
+    const auto* pane = focusedPaneMut();
     if (pane == nullptr || configuration.prompt.mode != PromptMode::telar || pane->blocks.empty() || prompt::surface(*this, pane->id) != features::prompt::Surface::editor || selectedBlock(pane->id)) {
       return false;
     }
@@ -138,7 +138,7 @@ namespace telar::gui::application {
       return;
     }
 
-    ds::Vec<typename FoldMap<>::Span, Memory> spans{memory};
+    ds::Vec<FoldMap<>::Span, Memory> spans{memory};
 
     // Each document drawn in place of its rows, in the rows the view measured it in, while the
     // rows are numbered as the runtime numbered them for it.

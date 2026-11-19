@@ -100,8 +100,8 @@ int telar::gui::test::runAgentReportFixture(int& argc, char** argv) {
 
   deadline.setSingleShot(true);
   ReportAgent report{.request_id = static_cast<std::uint64_t>(Request::report), .pane_id = pane, .pane_generation = generation, .provider = AgentProvider::claude, .state = AgentReportState::blocked, .session = "gui-attention", .blocked_reason = AgentBlockedReason::question, .event = "GUI_ATTENTION_READY"};
-  QSocketNotifier input{0, QSocketNotifier::Read};
-  QObject callbacks;
+  const QSocketNotifier input{0, QSocketNotifier::Read};
+  const QObject callbacks;
 
   QObject::connect(&input, &QSocketNotifier::activated, &callbacks, [&] {
     std::string command;

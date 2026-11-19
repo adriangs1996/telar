@@ -60,9 +60,9 @@ namespace {
     using Adapter = KeyAdapter<Convention>;
 
     struct Case {
-      int key;
+      int key{};
       QString text;
-      char character;
+      char character{};
     };
 
     const telar::ds::Array cases{

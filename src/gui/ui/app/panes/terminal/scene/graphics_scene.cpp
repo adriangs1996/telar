@@ -55,7 +55,7 @@ namespace telar::gui::qt {
   }
 
   const WindowImage* GraphicsScene::texture(const application::terminal::graphics::GraphicsStore<Memory>& store, ImageKey key) {
-    for (auto& entry : std::span{resolved_}.first(resolved_count_)) {
+    for (const auto& entry : std::span{resolved_}.first(resolved_count_)) {
       if (entry.image_id == key.image_id) {
         return entry.texture ? &*entry.texture : nullptr;
       }

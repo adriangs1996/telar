@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#if (defined(Q_OS_MACOS))
+#ifdef Q_OS_MACOS
 #endif
 
 #include "alpha_mask.hpp"
@@ -26,45 +26,42 @@ static_assert(true);
 #include <optional>
 #include <span>
 #include <utility>
-#if (defined(Q_OS_MACOS))
+#ifdef Q_OS_MACOS
 #include "foundation/core/memory.hpp"
 #endif
-#if (defined(Q_OS_MACOS))
+#ifdef Q_OS_MACOS
 #include "platform/font.h"
 #endif
-#if (defined(Q_OS_MACOS))
+#ifdef Q_OS_MACOS
 #include <algorithm>
 #endif
-#if (defined(Q_OS_MACOS))
+#ifdef Q_OS_MACOS
 #include <cstring>
 #endif
-#if (defined(Q_OS_MACOS))
+#ifdef Q_OS_MACOS
 #endif
-#if (defined(Q_OS_MACOS))
+#ifdef Q_OS_MACOS
 #endif
-#if (defined(Q_OS_MACOS))
+#ifdef Q_OS_MACOS
 #endif
-#if (defined(Q_OS_MACOS))
+#ifdef Q_OS_MACOS
 #include <memory>
 #endif
 #include <array>
-#include <cstring>
-#include <memory>
 #include <stdexcept>
 #include <type_traits>
 
 #pragma once
 
 #ifdef Q_OS_MACOS
-#include "foundation/core/memory.hpp"
 #endif
 
-#if (defined(Q_OS_MACOS))
+#ifdef Q_OS_MACOS
 #endif
 
 import telar.gui.foundation.fonts;
 import telar.base.ds;
-#if (defined(Q_OS_MACOS))
+#ifdef Q_OS_MACOS
 #endif
 
 namespace telar::gui::qt {

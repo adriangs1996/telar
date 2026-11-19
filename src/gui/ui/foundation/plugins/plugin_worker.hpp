@@ -127,7 +127,6 @@ namespace telar::gui::qt {
     explicit PluginWorker(ApplicationAllocator& memory, Observer& observer)
         : memory_(memory),
           observer_(observer),
-          snapshot_(),
           process_(*this) {
       QObject::connect(&preparation_, &QFutureWatcher<PluginWorkerPreparation>::finished, &context_, [this] {
         snapshotReady();
@@ -229,7 +228,7 @@ namespace telar::gui::qt {
     }
 
     void deliver(const PluginWorkerResult& result) {
-      auto invocation = std::exchange(invocation_, ds::none);
+      const auto invocation = std::exchange(invocation_, ds::none);
       const auto execution = std::exchange(execution_, 0);
 
       snapshot_.reset();

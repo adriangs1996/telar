@@ -34,7 +34,7 @@ export namespace telar::gui::features::status_bar {
   // What the bar reads of the host's metrics: a view of the state, valid until the next sample.
   class HostMetrics {
   public:
-    inline explicit HostMetrics(tbc::view<const State&, tbc::lt::a> state) noexcept
+    explicit HostMetrics(tbc::view<const State&, tbc::lt::a> state) noexcept
         : state_(&state) {}
 
     [[nodiscard]] inline tbc::view<const SystemMetrics&, tbc::lt::a> sample() const noexcept;

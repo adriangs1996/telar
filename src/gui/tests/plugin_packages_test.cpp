@@ -15,6 +15,7 @@ static_assert(true);
 #include <cerrno>
 #include <charconv>
 #include <chrono>
+#include <climits>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
@@ -22,7 +23,6 @@ static_assert(true);
 #include <dirent.h>
 #include <exception>
 #include <fcntl.h>
-#include <limits.h>
 #include <limits>
 #include <optional>
 #include <span>
@@ -30,7 +30,7 @@ static_assert(true);
 #include <string_view>
 #include <sys/stat.h>
 #include <unistd.h>
-#if (defined(__APPLE__))
+#ifdef __APPLE__
 #include <openssl/sha.h>
 #endif
 #include <QFile>
@@ -49,7 +49,7 @@ import telar.gui.tests.plugin_effect_cases;
 import telar.platform.fs;
 import telar.plugins;
 import telar.base.ds;
-#if (defined(__APPLE__))
+#ifdef __APPLE__
 #endif
 
 namespace {

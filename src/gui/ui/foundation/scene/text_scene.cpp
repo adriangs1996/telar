@@ -35,7 +35,7 @@ static_assert(true);
 #include <string_view>
 #include <type_traits>
 #include <utility>
-#if (defined(Q_OS_MACOS))
+#ifdef Q_OS_MACOS
 #include "optical_text.hpp"
 #endif
 #include <QBrush>
@@ -54,7 +54,6 @@ static_assert(true);
 #include <exception>
 
 #ifdef Q_OS_MACOS
-#include "optical_text.hpp"
 #include "telar_base/ds/values.hpp"
 #endif
 

@@ -38,16 +38,16 @@ namespace telar::gui::features::prompt {
 
     Text& textMut() noexcept;
 
-    const Text& text() const noexcept;
+    [[nodiscard]] const Text& text() const noexcept;
 
-    Keymap keymap() const noexcept;
+    [[nodiscard]] Keymap keymap() const noexcept;
 
     void setKeymap(Keymap keymap) noexcept;
 
-    Mode mode() const noexcept;
+    [[nodiscard]] Mode mode() const noexcept;
 
     // An operator or count is waiting for the rest of the command.
-    bool pending() const noexcept;
+    [[nodiscard]] bool pending() const noexcept;
 
     // The editor keeps the clipboard, which may borrow what lives in region `a`.
     void setClipboard(tbc::view<Clipboard, tbc::lt::a> clipboard);
@@ -86,13 +86,13 @@ namespace telar::gui::features::prompt {
       tbc::view<ds::String<Memory>, tbc::lt::a> text;
 
       // The copy lives in the text's memory, region `a`, with the key it was recorded for.
-      tbc::view<Recorded, tbc::lt::a> clone() const {
+      [[nodiscard]] tbc::view<Recorded, tbc::lt::a> clone() const {
         return {key, text.clone()};
       }
     };
 
     // The allocator the editor's texts come from.
-    Memory& memory() const noexcept;
+    [[nodiscard]] Memory& memory() const noexcept;
 
     // ---- shared editing --------------------------------------------------------------------
 
@@ -116,26 +116,26 @@ namespace telar::gui::features::prompt {
 
     // ---- word boundaries -------------------------------------------------------------------
 
-    bool blank(std::size_t offset) const noexcept;
+    [[nodiscard]] bool blank(std::size_t offset) const noexcept;
 
-    CharacterClass kind(std::size_t offset, bool big) const noexcept;
+    [[nodiscard]] CharacterClass kind(std::size_t offset, bool big) const noexcept;
 
     // The start of the word before the offset (readline's backward-word and vim's b).
-    std::size_t wordStart(std::size_t offset, bool big) const noexcept;
+    [[nodiscard]] std::size_t wordStart(std::size_t offset, bool big) const noexcept;
 
-    std::size_t bigWordStart(std::size_t offset) const noexcept;
+    [[nodiscard]] std::size_t bigWordStart(std::size_t offset) const noexcept;
 
     // readline's forward-word: past the next word.
-    std::size_t wordEnd(std::size_t offset) const noexcept;
+    [[nodiscard]] std::size_t wordEnd(std::size_t offset) const noexcept;
 
     // vim's w: the start of the next word.
-    std::size_t nextWord(std::size_t offset, bool big) const noexcept;
+    [[nodiscard]] std::size_t nextWord(std::size_t offset, bool big) const noexcept;
 
     // The last character of the run of one class the offset is in.
-    std::size_t runEnd(std::size_t offset, bool big) const noexcept;
+    [[nodiscard]] std::size_t runEnd(std::size_t offset, bool big) const noexcept;
 
     // vim's e: the last character of the current or next word.
-    std::size_t endOfWord(std::size_t offset, bool big) const noexcept;
+    [[nodiscard]] std::size_t endOfWord(std::size_t offset, bool big) const noexcept;
 
     // ---- vim -------------------------------------------------------------------------------
 
@@ -148,32 +148,32 @@ namespace telar::gui::features::prompt {
     // In normal mode the cursor sits on a character, never on a line's end, unless it is empty.
     void clampNormal() noexcept;
 
-    std::size_t count() const noexcept;
+    [[nodiscard]] std::size_t count() const noexcept;
 
     Request normal(const KeyPress& key);
 
     Request normalControl(char32_t character);
 
-    ds::Option<Motion> motionFor(char32_t character) const noexcept;
+    [[nodiscard]] ds::Option<Motion> motionFor(char32_t character) const noexcept;
 
     static char reversed(char kind) noexcept;
 
-    std::size_t firstNonBlank(std::size_t line) const noexcept;
+    [[nodiscard]] std::size_t firstNonBlank(std::size_t line) const noexcept;
 
-    std::size_t lineAt(std::size_t index) const noexcept;
+    [[nodiscard]] std::size_t lineAt(std::size_t index) const noexcept;
 
-    Motion findMotion(char kind, char32_t target, std::size_t repeat, bool repeated = false) const;
+    [[nodiscard]] Motion findMotion(char kind, char32_t target, std::size_t repeat, bool repeated = false) const;
 
-    Motion matchingBracket(std::size_t cursor) const noexcept;
+    [[nodiscard]] Motion matchingBracket(std::size_t cursor) const noexcept;
 
     // A motion moves the cursor, or with an operator pending, ends the range it acts on.
     Request applyMotion(Motion motion);
 
     Request applyTextObject(char32_t character);
 
-    ds::Option<std::pair<std::size_t, std::size_t>> textObject(char32_t character, bool inner) const;
+    [[nodiscard]] ds::Option<std::pair<std::size_t, std::size_t>> textObject(char32_t character, bool inner) const;
 
-    ds::Option<std::pair<std::size_t, std::size_t>> bracketObject(char open, char close, bool inner) const;
+    [[nodiscard]] ds::Option<std::pair<std::size_t, std::size_t>> bracketObject(char open, char close, bool inner) const;
 
     // Applies the pending operator to [start, end), whole lines when `linewise`.
     void operate(std::size_t start, std::size_t end, bool linewise);

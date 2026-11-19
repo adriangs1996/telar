@@ -635,7 +635,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void ComponentsController::commandFinished(const ComponentCommandOwner& owner, SurfaceCommandResult result) {
+  void ComponentsController::commandFinished(const ComponentCommandOwner& owner, const SurfaceCommandResult& result) {
     command_owner_.reset();
     const bool same_panel = !owner.panel || (surfaces_.open_panel == owner.index && surfaces_.panel_identity == owner.panel_identity);
     if (!commandCurrent(owner.generation, owner.source, owner.runtime) || !same_panel) {

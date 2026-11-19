@@ -150,7 +150,7 @@ namespace telar::gui::application {
       reply.status = ClientCommandStatus::admitted;
       break;
     case ClientAction::tab_select: {
-      const auto tab = std::ranges::find_if(tabs, [&](const auto& entry) {
+      const auto* const tab = std::ranges::find_if(tabs, [&](const auto& entry) {
         return entry->location.tab_id == message.target_id;
       });
       if (message.target_id == 0 || tab == tabs.end()) {
@@ -216,7 +216,7 @@ namespace telar::gui::application {
     case ClientAction::pane_fullscreen:
       focusCommandPane(message.target_id);
       workbench::toggleFullscreen(*this);
-      reply.value = activeTab()->fullscreen;
+      reply.value = static_cast<std::int64_t>(activeTab()->fullscreen);
       break;
     case ClientAction::pane_scroll:
       if (message.value < std::numeric_limits<std::int32_t>::min() || message.value > std::numeric_limits<std::int32_t>::max()) {

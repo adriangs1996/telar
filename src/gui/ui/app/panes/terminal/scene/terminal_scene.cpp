@@ -393,7 +393,7 @@ namespace telar::gui::qt {
       if (revealed != row.revealed || offset != row.offset) {
         row.revealed = revealed;
         row.offset = offset;
-        const auto settled = 1.0F - (1.0F - revealed) * (1.0F - revealed) * (1.0F - revealed);
+        const auto settled = 1.0F - ((1.0F - revealed) * (1.0F - revealed) * (1.0F - revealed));
         QMatrix4x4 lift;
 
         lift.translate(0, (static_cast<float>(frame.font.cell.height()) * 0.25F * (1.0F - settled)) + offset);
@@ -450,7 +450,7 @@ namespace telar::gui::qt {
     const auto& theme = frame.configuration.theme;
 
     for (const auto& match : frame.matches) {
-      if (match.row >= static_cast<std::size_t>(row_nodes_.size()) || frame.hidden(match.row)) {
+      if (std::cmp_greater_equal(match.row, row_nodes_.size()) || frame.hidden(match.row)) {
         continue;
       }
 

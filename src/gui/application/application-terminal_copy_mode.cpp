@@ -218,7 +218,7 @@ namespace telar::gui::application::terminal::copy_mode {
   }
 
   void stepMatch(Session& session, bool forward) {
-    TerminalKey key{.code = KeyChord::Key::character, .codepoint = static_cast<std::uint32_t>(forward ? 'n' : 'N')};
+    const TerminalKey key{.code = KeyChord::Key::character, .codepoint = static_cast<std::uint32_t>(forward ? 'n' : 'N')};
 
     static_cast<void>(copy_mode::key(session, key));
   }

@@ -480,7 +480,7 @@ namespace telar::gui::application {
       throw EncodingError{"UnexpectedTabCreated"};
     }
 
-    const auto cached = std::ranges::find_if(tabs, [&](const auto& tab) {
+    const auto* const cached = std::ranges::find_if(tabs, [&](const auto& tab) {
       return sameTab(tab->location, message.location);
     });
 
@@ -837,7 +837,7 @@ namespace telar::gui::application {
       const auto count = std::ranges::count_if(tabs, [&](const auto& entry) {
         return sameWorkspace(entry->location.workspace, message.location.workspace);
       });
-      if (message.position >= count) {
+      if (std::cmp_greater_equal(message.position, count)) {
         throw EncodingError{"Invalid tab position"};
       }
 

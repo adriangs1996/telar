@@ -27,7 +27,7 @@ static_assert(true);
 #include <limits>
 #include <optional>
 #include <span>
-#if (defined(__aarch64__))
+#ifdef __aarch64__
 #include <arm_neon.h>
 #endif
 #include <QQuickWindow>
@@ -46,7 +46,6 @@ static_assert(true);
 #include <utility>
 
 #ifdef __aarch64__
-#include <arm_neon.h>
 #endif
 
 import telar.gui.application;

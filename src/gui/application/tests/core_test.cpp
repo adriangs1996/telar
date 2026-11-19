@@ -444,7 +444,7 @@ namespace {
     check(split.hasValue(), "independent headers must permit a sufficiently large split");
     for (const auto& placement : layout.arrange(area, metrics)) {
       check(placement.content.y == placement.bounds.y + metrics.header, "a pane header must reserve complete terminal rows");
-      check(placement.content.x == placement.bounds.x + metrics.border && placement.content.width + 2 * metrics.border == placement.bounds.width, "header reservation must not change horizontal borders");
+      check(placement.content.x == placement.bounds.x + metrics.border && placement.content.width + (2 * metrics.border) == placement.bounds.width, "header reservation must not change horizontal borders");
       check(placement.content.bottom() + metrics.border == placement.bounds.bottom(), "independent headers must retain the bottom border");
     }
 

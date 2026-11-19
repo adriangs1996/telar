@@ -97,7 +97,7 @@ export {
     };
 
     struct EditorRequest {
-      std::uint64_t request_id;
+      std::uint64_t request_id{};
       EditorSource source;
       EditorTarget target;
 

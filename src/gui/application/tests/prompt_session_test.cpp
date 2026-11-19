@@ -372,7 +372,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     tab(client);
     const auto& menu = prompt::line(client, 1)->menu();
 
-    check(menu && menu->choices.size() > 1 && menu->choices[0].text.view().starts_with("s"), "several choices open the menu");
+    check(menu && menu->choices.size() > 1 && menu->choices[0].text.view().starts_with('s'), "several choices open the menu");
     check(!menu->choices[0].description.empty(), "choices carry the spec's description");
     const auto second = menu->choices[1].text.clone();
 
@@ -418,7 +418,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     deliver(client, CommandSpec{.request_id = cat.request_id, .command = "cat", .state = CommandSpecState::unavailable, .digest = 0, .source = {}});
     const auto find = transport.last<FindPaths>();
 
-    check(find.root.starts_with("/") && find.query == "sr" && prompt::line(client, 1)->pending(find.request_id), "paths are asked from the runtime");
+    check(find.root.starts_with('/') && find.query == "sr" && prompt::line(client, 1)->pending(find.request_id), "paths are asked from the runtime");
     const ds::Array matches{PathMatch{.path = "src/", .kind = PathKind::directory}, PathMatch{.path = "src/main.cpp", .kind = PathKind::file}, PathMatch{.path = "README", .kind = PathKind::file}};
 
     check(deliver(client, PathResults{.request_id = find.request_id, .root = find.root, .complete = true, .matches = matches}) == application::Change::terminal, "the answer repaints the line");
@@ -795,7 +795,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     ds::Array matches{PathMatch{.path = "src/main.cpp", .kind = PathKind::file}};
 
     deliver(client, PathResults{.request_id = request.request_id, .root = request.root, .complete = true, .matches = matches});
-    auto before = transport.sent.size();
+    const auto before = transport.sent.size();
 
     check(application::paths::insert(client, 0, false), "a found path inserts");
     check(transport.inputSince(before).empty() && prompt::line(client, 1)->text() == "cat src/main.cpp", "the path replaces the word in the line");

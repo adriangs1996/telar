@@ -44,7 +44,7 @@ namespace telar::gui::qt {
     // Not const: arranging the layout fills its placements.
     [[nodiscard]] QVariantMap geometry();
     // The paths from `first` on, at most `count`, cut to `columns` cells, for the prompt line's rows.
-    Q_INVOKABLE QVariantList rows(int columns, int first, int count) const;
+    Q_INVOKABLE [[nodiscard]] QVariantList rows(int columns, int first, int count) const;
     Q_INVOKABLE void search(const QString& text);
     Q_INVOKABLE void reportQueryLimit(qulonglong requested_bytes);
     Q_INVOKABLE void move(int delta);

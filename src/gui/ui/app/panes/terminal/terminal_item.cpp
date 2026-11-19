@@ -580,7 +580,7 @@ namespace telar::gui::qt {
         }
 
         for (std::size_t index = 0; index < view_rows_.size(); ++index) {
-          if (view_rows_[index].screen_row >= 0 && static_cast<std::size_t>(view_rows_[index].screen_row) == screen_row) {
+          if (view_rows_[index].screen_row >= 0 && std::cmp_equal(view_rows_[index].screen_row, screen_row)) {
             return index;
           }
         }
@@ -637,7 +637,7 @@ namespace telar::gui::qt {
 
       const bool telar = controller_->configuration().prompt.mode == PromptMode::telar && current->shell.shell != IntegratedShell::none && !screen.modes().alternate_screen;
       const auto selected = controller_->prompt().selectedBlock(pane_id_);
-      auto& session = controller_->sessionMut();
+      const auto& session = controller_->sessionMut();
       const auto live_session = liveSession(*current);
       const auto host = current->shell.host.empty() ? QString{} : QString::fromUtf8(current->shell.host.data(), static_cast<qsizetype>(current->shell.host.size()));
 
@@ -877,7 +877,7 @@ namespace telar::gui::qt {
       for (const auto& view : view_rows_) {
         if (!view.exists) {
           drawn_rows_.push({.source = missing_source});
-        } else if (view.screen_row >= 0 && view.screen_row < screen.rows()) {
+        } else if (view.screen_row >= 0 && std::cmp_less(view.screen_row, screen.rows())) {
           const auto row = static_cast<std::size_t>(view.screen_row);
 
           drawn_rows_.push({.cells = screen.row(row), .revision = screen.rowRevision(row), .source = row, .screen_row = view.screen_row});

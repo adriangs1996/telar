@@ -13,8 +13,8 @@ static_assert(true);
 #include <stdexcept>
 #include <string_view>
 
+#include <climits>
 #include <exception>
-#include <limits.h>
 
 import telar.testing;
 import telar.testing.test_memory;

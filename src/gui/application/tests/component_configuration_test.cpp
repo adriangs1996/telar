@@ -20,9 +20,9 @@ static_assert(true);
 #include <string_view>
 #include <variant>
 
+#include <climits>
 #include <exception>
 #include <iostream>
-#include <limits.h>
 
 import telar.testing;
 import telar.gui.features.components;

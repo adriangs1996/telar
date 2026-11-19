@@ -3,8 +3,8 @@
 #include "telar_base/ds/values.hpp"
 #import <CoreText/CoreText.h>
 #import <Foundation/Foundation.h>
-#include <math.h>
-#include <string.h>
+#include <cmath>
+#include <cstring>
 #include <sys/stat.h>
 
 using telar::gui::platform::NativeReference;
@@ -14,8 +14,8 @@ static CTFontRef default_instance(CTFontRef font) {
   NSMutableDictionary* defaults = [NSMutableDictionary dictionaryWithCapacity:axes.count];
 
   for (NSDictionary* axis in axes) {
-    id tag = axis[(id)kCTFontVariationAxisIdentifierKey];
-    id value = axis[(id)kCTFontVariationAxisDefaultValueKey];
+    const id tag = axis[(id)kCTFontVariationAxisIdentifierKey];
+    const id value = axis[(id)kCTFontVariationAxisDefaultValueKey];
     if (tag != nil && value != nil) {
       defaults[tag] = value;
     }
@@ -25,10 +25,10 @@ static CTFontRef default_instance(CTFontRef font) {
     CTFontDescriptorCreateWithAttributes((__bridge CFDictionaryRef) @{(id)kCTFontVariationAttribute : defaults})
   };
   if (!reset) {
-    return NULL;
+    return nullptr;
   }
 
-  return CTFontCreateCopyWithAttributes(font, CTFontGetSize(font), NULL, reset.get());
+  return CTFontCreateCopyWithAttributes(font, CTFontGetSize(font), nullptr, reset.get());
 }
 
 static int fill_variation(NSDictionary* variation, telar_font_variation* out) {
@@ -64,7 +64,7 @@ static int fill(CTFontRef font, telar_font_match* match) {
   NSURL* url = CFBridgingRelease(CTFontCopyAttribute(font, kCTFontURLAttribute));
   const char* path = url.fileSystemRepresentation;
   const char* name = postscript.UTF8String;
-  if (path == NULL || name == NULL || strlen(path) >= sizeof match->path ||
+  if (path == nullptr || name == nullptr || strlen(path) >= sizeof match->path ||
       strlen(name) >= sizeof match->postscript) {
     return -1;
   }
@@ -82,7 +82,7 @@ static int fill(CTFontRef font, telar_font_match* match) {
 
 static CTFontRef create_font(NSString* family, NSString* style) {
   if (style.length == 0) {
-    return CTFontCreateWithName((__bridge CFStringRef)family, 15, NULL);
+    return CTFontCreateWithName((__bridge CFStringRef)family, 15, nullptr);
   }
 
   const NativeReference query {
@@ -92,10 +92,10 @@ static CTFontRef create_font(NSString* family, NSString* style) {
     })
   };
   if (!query) {
-    return NULL;
+    return nullptr;
   }
 
-  return CTFontCreateWithFontDescriptor(query.get(), 15, NULL);
+  return CTFontCreateWithFontDescriptor(query.get(), 15, nullptr);
 }
 
 static int verify(CTFontRef font, NSString* family, NSString* style) {
@@ -162,14 +162,14 @@ static bool covers(CTFontRef font, NSString* text) {
 }
 
 static bool monochrome(CTFontRef font) {
-  if (CTFontGetSymbolicTraits(font) & kCTFontTraitColorGlyphs) {
+  if ((CTFontGetSymbolicTraits(font) & kCTFontTraitColorGlyphs) != 0u) {
     return false;
   }
 
   const NativeReference tables{CTFontCopyAvailableTables(font, kCTFontTableOptionNoOptions)};
   if (tables) {
     for (CFIndex i = 0; i < CFArrayGetCount(tables.get()); i++) {
-      CTFontTableTag tag = (CTFontTableTag)(uintptr_t)CFArrayGetValueAtIndex(tables.get(), i);
+      const auto tag = (CTFontTableTag)(uintptr_t)CFArrayGetValueAtIndex(tables.get(), i);
       if (tag == kCTFontTableSbix || tag == kCTFontTableCBDT || tag == kCTFontTableCOLR) {
         return false;
       }
@@ -186,12 +186,12 @@ static int accept(CTFontRef font, NSString* text, telar_font_match* match, telar
     return -1;
   }
 
-  struct stat info;
-  if (stat(match->path, &info) != 0 || !S_ISREG(info.st_mode) || info.st_size > telar_font_max_bytes) {
+  struct stat info{};
+  if (stat(match->path, &info) != 0 || !S_ISREG(info.st_mode) || std::cmp_greater(info.st_size, telar_font_max_bytes)) {
     return -1;
   }
 
-  return validator == NULL ? 0 : validator(match, context);
+  return validator == nullptr ? 0 : validator(match, context);
 }
 
 int telarGuiFindValidatedFallbackFont(const char* text, telar_font_match* match, telar_font_validator validator, void* context) {
@@ -201,7 +201,7 @@ int telarGuiFindValidatedFallbackFont(const char* text, telar_font_match* match,
       return -1;
     }
 
-    const NativeReference base{CTFontCreateWithName(CFSTR("Menlo"), 15, NULL)};
+    const NativeReference base{CTFontCreateWithName(CFSTR("Menlo"), 15, nullptr)};
     if (base) {
       const NativeReference direct{CTFontCreateForString(base.get(), (__bridge CFStringRef)requested, CFRangeMake(0, (CFIndex)requested.length))};
       if (direct && accept(direct.get(), requested, match, validator, context) == 0) {
@@ -217,25 +217,24 @@ int telarGuiFindValidatedFallbackFont(const char* text, telar_font_match* match,
       return -1;
     }
 
-    const NativeReference candidates{CTFontDescriptorCreateMatchingFontDescriptors(query.get(), NULL)};
+    const NativeReference candidates{CTFontDescriptorCreateMatchingFontDescriptors(query.get(), nullptr)};
     if (!candidates) {
       return -1;
     }
 
     int status = -1;
     CFIndex count = CFArrayGetCount(candidates.get());
-    if (count > max_candidates) {
-      count = max_candidates;
-    }
+
+    count = std::min<CFIndex>(count, max_candidates);
 
     for (int pass = 0; pass < 2 && status != 0; pass++) {
       for (CFIndex i = 0; i < count && status != 0; i++) {
-        const NativeReference font{CTFontCreateWithFontDescriptor((CTFontDescriptorRef)CFArrayGetValueAtIndex(candidates.get(), i), 15, NULL)};
+        const NativeReference font{CTFontCreateWithFontDescriptor((CTFontDescriptorRef)CFArrayGetValueAtIndex(candidates.get(), i), 15, nullptr)};
         if (!font) {
           continue;
         }
 
-        bool mono = (CTFontGetSymbolicTraits(font.get()) & kCTFontTraitMonoSpace) != 0;
+        const bool mono = (CTFontGetSymbolicTraits(font.get()) & kCTFontTraitMonoSpace) != 0;
         if (mono == (pass == 0)) {
           status = accept(font.get(), requested, match, validator, context);
         }
@@ -247,5 +246,5 @@ int telarGuiFindValidatedFallbackFont(const char* text, telar_font_match* match,
 }
 
 int telarGuiFindFallbackFont(const char* text, telar_font_match* match) {
-  return telarGuiFindValidatedFallbackFont(text, match, NULL, NULL);
+  return telarGuiFindValidatedFallbackFont(text, match, nullptr, nullptr);
 }

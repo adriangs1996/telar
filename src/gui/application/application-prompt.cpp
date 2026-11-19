@@ -166,7 +166,7 @@ namespace telar::gui::application::prompt {
     // is there by the first Tab.
     Change settle(Session& session, const features::prompt::Settled& settled) {
       const auto* pane = findPane(session.panes, settled.pane_id);
-      if (pane != nullptr && settled.presence == CommandPresence::found && settled.word.view().find('/') == std::string_view::npos) {
+      if (pane != nullptr && settled.presence == CommandPresence::found && !settled.word.view().contains('/')) {
         static_cast<void>(specState(session.prompt, session.link, *pane, settled.word.view()));
       }
 

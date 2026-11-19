@@ -20,7 +20,7 @@ export namespace telar::gui::features::prompt {
     bool directory = false;
 
     // The copy lives in the strings' memory, region `a`, and borrows nothing else of this choice.
-    tbc::view<Choice, tbc::lt::a> clone() const {
+    [[nodiscard]] tbc::view<Choice, tbc::lt::a> clone() const {
       return {text.clone(), description.clone(), directory};
     }
   };

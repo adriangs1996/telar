@@ -50,7 +50,7 @@ namespace {
     TestSession client{memory, transport};
 
     openFirstPane(client, transport);
-    auto* pane = client.findPane(1);
+    const auto* pane = client.findPane(1);
     const auto bytes = encoded("# Title\n\nSome *text*.\n\n- one\n- two\n");
     const auto half = bytes.size() / 2;
 

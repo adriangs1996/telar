@@ -26,7 +26,7 @@ namespace telar::gui::test {
       std::copy_n(name, length, text);
     }
 
-    char text[length];
+    char text[length]{};
   };
 
   template <typename Test, Slot slot>

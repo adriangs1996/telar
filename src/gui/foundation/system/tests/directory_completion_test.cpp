@@ -100,7 +100,7 @@ namespace {
     check(DirectoryCompletion::list(fixture.path("telar")).exact_exists, "an exact name is a directory");
     check(prefix.join(0).view() == fixture.path("telar") + "/", "joined paths end in a separator");
 
-    const auto copied = prefix;
+    const auto& copied = prefix;
 
     check(lists(copied, {"telar", "terminal", "tools"}) && copied.base.view() == prefix.base.view(), "a copy holds the same listing");
   }

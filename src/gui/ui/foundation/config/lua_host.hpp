@@ -54,7 +54,7 @@ namespace telar::gui::qt {
       auto task = std::make_shared<Task>(Task{.work = std::move(work), .done = std::move(done), .outcome = {}});
 
       ++pending_;
-      QMetaObject::invokeMethod(worker_, [this, task]() mutable {
+      QMetaObject::invokeMethod(worker_, [this, task] mutable {
         try {
           if constexpr (std::is_void_v<Value>) {
             task->work();
@@ -67,7 +67,7 @@ namespace telar::gui::qt {
         }
 
         // The window thread owns `this`; its destructor waits for this thread first.
-        QMetaObject::invokeMethod(this, [this, task]() mutable {
+        QMetaObject::invokeMethod(this, [this, task] mutable {
           --pending_;
           task->done(std::move(task->outcome));
         },

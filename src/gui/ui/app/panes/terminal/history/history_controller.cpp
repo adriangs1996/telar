@@ -249,7 +249,7 @@ namespace telar::gui::qt {
         return {};
       }
 
-      const auto current = std::ranges::find_if(session.workspaces(), [&](const auto& workspace) {
+      const auto* const current = std::ranges::find_if(session.workspaces(), [&](const auto& workspace) {
         return sameWorkspace(workspace.location, active->location.workspace);
       });
 

@@ -131,7 +131,7 @@ namespace telar::gui::qt {
       }
 
       using Inline = application::Pane<Memory>::InlineDocument;
-      const auto found = std::ranges::find(pane->inline_documents, document_id, &Inline::id);
+      const auto* const found = std::ranges::find(pane->inline_documents, document_id, &Inline::id);
       if (found == pane->inline_documents.end()) {
         return nullptr;
       }
@@ -152,7 +152,7 @@ namespace telar::gui::qt {
             link_style_(QStringLiteral("color:%1; text-decoration:underline;").arg(color(colors, "accent", "#8aadf4"))),
             muted_style_(QStringLiteral("color:%1;").arg(color(colors, "muted", "#888888"))) {}
 
-      QString runs(std::span<const render::Run> runs) const {
+      [[nodiscard]] QString runs(std::span<const render::Run> runs) const {
         QString html;
 
         for (std::size_t index = 0; index < runs.size(); ++index) {

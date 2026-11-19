@@ -13,7 +13,7 @@ import telar.base.ds;
 export {
   namespace telar::gui::inline foundation::inline actions {
 
-    using BindingContext = runtime::config::BindingContext;
+    using runtime::config::BindingContext;
 
     struct BindingEffects {
       static constexpr std::size_t maximum_effects = 16;

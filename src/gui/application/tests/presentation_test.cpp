@@ -124,7 +124,7 @@ namespace {
       const WorkbenchGeometry workbench{
           .area = {.width = 900.0F * scale, .height = 720.0F * scale},
           .grid = {.cell_width_px = static_cast<std::uint16_t>(9 * scale), .cell_height_px = static_cast<std::uint16_t>(18 * scale)},
-          .layout_metrics = {},
+          .layout_metrics = {}
       };
 
       const CellRectangle bounds{.width = 45, .height = 20};

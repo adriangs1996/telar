@@ -804,7 +804,7 @@ namespace telar::gui::application {
   }
 
   template <Allocator Memory>
-  typename ConfigurationGeneration<Memory>::ElementHandlers& ConfigurationGeneration<Memory>::handlersOf(std::uint64_t instance) {
+  ConfigurationGeneration<Memory>::ElementHandlers& ConfigurationGeneration<Memory>::handlersOf(std::uint64_t instance) {
     const auto handlers = element_handlers_.viewMut();
     const auto found = std::ranges::find(handlers, instance, &ElementHandlers::instance);
     if (found != handlers.end()) {
@@ -999,7 +999,7 @@ namespace telar::gui::application {
   BindingEffects ConfigurationGeneration<Memory>::effects(const runtime::lua::Value& result, BindingActionReader& reader) {
     BindingEffects batch;
     const auto past = runtime::config::CallbackResultReader::actions(result, BindingEffects::maximum_effects, [&](const runtime::lua::Value& value) {
-      if (auto action = reader.read(value)) {
+      if (const auto action = reader.read(value)) {
         if (action->kind == BindingActionKind::extended) {
           transient_references_.atMut(transient_count_++) = action->reference;
         }

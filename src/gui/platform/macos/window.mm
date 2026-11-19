@@ -26,7 +26,7 @@ namespace telar::gui::platform {
     return QGuiApplication::platformName() == QLatin1StringView{"cocoa"};
   }
 
-  void deliverPendingWindowUpdate(QWindow& window) {
+  void deliverPendingWindowUpdate(const QWindow& window) {
     if (auto* handle = window.handle(); handle != nullptr && handle->hasPendingUpdateRequest()) {
       handle->deliverUpdateRequest();
     }
@@ -54,7 +54,7 @@ namespace telar::gui::platform {
     // be observing them through KVO. Other Qt windows retain their original layout.
     void configureContentLayout(NSWindow* window) {
       objc_setAssociatedObject(window, &content_layout_key, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-      Class base = window.class;
+      const Class base = window.class;
       if (objc_getAssociatedObject(base, &content_layout_key) != nil) {
         return;
       }

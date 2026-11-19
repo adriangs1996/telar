@@ -31,9 +31,9 @@ namespace telar::gui::features::window {
 
   Color ChromeSurfaces::mix(Color base, Color ink, float amount) noexcept {
     return {
-        .r = base.r + (ink.r - base.r) * amount,
-        .g = base.g + (ink.g - base.g) * amount,
-        .b = base.b + (ink.b - base.b) * amount,
+        .r = base.r + ((ink.r - base.r) * amount),
+        .g = base.g + ((ink.g - base.g) * amount),
+        .b = base.b + ((ink.b - base.b) * amount),
         .a = 1,
     };
   }

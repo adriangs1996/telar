@@ -4,10 +4,10 @@ static_assert(true);
 #endif
 
 #include <cerrno>
+#include <climits>
 #include <cstdio>
 #include <cstdlib>
 #include <fcntl.h>
-#include <limits.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <unistd.h>

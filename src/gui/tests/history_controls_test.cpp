@@ -984,8 +984,8 @@ namespace {
       };
 
       QTRY_COMPARE_WITH_TIMEOUT(matches().size(), qsizetype{2}, wait_ms);
-      QPointer<QQuickItem> first = matches()[0];
-      QPointer<QQuickItem> second = matches()[1];
+      const QPointer<QQuickItem> first = matches()[0];
+      const QPointer<QQuickItem> second = matches()[1];
 
       QCOMPARE(first->property("text").toString(), QStringLiteral("a"));
       QCOMPARE(second->property("text").toString(), QStringLiteral("b"));
@@ -1001,7 +1001,7 @@ namespace {
       QTRY_COMPARE_WITH_TIMEOUT(matches().size(), qsizetype{3}, wait_ms);
       QCOMPARE(matches()[0], first.data());
       QCOMPARE(matches()[1], second.data());
-      QPointer<QQuickItem> third = matches()[2];
+      const QPointer<QQuickItem> third = matches()[2];
 
       row->setProperty("query", QStringLiteral("a"));
       QTRY_COMPARE_WITH_TIMEOUT(matches().size(), qsizetype{1}, wait_ms);
@@ -1022,8 +1022,8 @@ namespace {
       row->setProperty("record", record);
       row->setProperty("query", QStringLiteral("界e\u0301"));
       QTRY_COMPARE_WITH_TIMEOUT(matches().size(), qsizetype{2}, wait_ms);
-      const auto wide = matches()[0];
-      const auto combining = matches()[1];
+      auto* const wide = matches()[0];
+      auto* const combining = matches()[1];
 
       QCOMPARE(wide->property("text").toString(), QStringLiteral("界"));
       QCOMPARE(combining->property("text").toString(), QStringLiteral("e\u0301"));

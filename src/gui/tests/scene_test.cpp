@@ -89,8 +89,8 @@ namespace {
   };
 
   struct BackgroundRectangle {
-    qreal column;
-    qreal columns;
+    qreal column{};
+    qreal columns{};
     Color color;
   };
 
@@ -773,6 +773,7 @@ namespace {
       const auto after = scrollCells(offset + scroll_rows - 1);
       std::vector<CellValue> last;
 
+      last.reserve(scroll_columns);
       for (std::size_t column = 0; column < scroll_columns; ++column) {
         last.emplace_back(after[column]);
       }
@@ -891,7 +892,7 @@ namespace {
 
     Q_SLOT static void viewportResizeExcludesHiddenLigatureContextWithoutCellDamage() {
       SceneFixture fixture{CursorShape::block, false};
-      ds::Array<Byte, 4> text{'=', '=', '=', '='};
+      const ds::Array<Byte, 4> text{'=', '=', '=', '='};
       ds::Array<Cell, 4> cells;
 
       for (std::size_t index = 0; index < cells.size(); ++index) {
@@ -918,7 +919,7 @@ namespace {
 
     Q_SLOT static void blinkingCursorMovesRebuildLigaturesWithoutCellDamage() {
       SceneFixture fixture{CursorShape::block};
-      ds::Array<Byte, 4> text{'=', '=', '=', ' '};
+      const ds::Array<Byte, 4> text{'=', '=', '=', ' '};
       ds::Array<Cell, 4> cells;
 
       for (std::size_t index = 0; index < cells.size(); ++index) {

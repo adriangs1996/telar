@@ -44,86 +44,86 @@ export namespace telar::gui::features::history {
   // A view of a history browser, region `a`: what it reads lies in the browser, not in the view.
   class HistoryView {
   public:
-    inline explicit HistoryView(tbc::view<const HistoryBrowser<Memory>&, tbc::lt::a> browser) noexcept
+    explicit HistoryView(tbc::view<const HistoryBrowser<Memory>&, tbc::lt::a> browser) noexcept
         : browser_(&browser) {}
 
-    [[nodiscard]] inline tbc::view<const ds::Vec<HistoryRow<Memory>, Memory>&, tbc::lt::a> rows() const noexcept {
+    [[nodiscard]] tbc::view<const ds::Vec<HistoryRow<Memory>, Memory>&, tbc::lt::a> rows() const noexcept {
       return browser_->rows();
     }
 
-    [[nodiscard]] inline tbc::view<const HistoryViewState&, tbc::lt::a> state() const noexcept {
+    [[nodiscard]] tbc::view<const HistoryViewState&, tbc::lt::a> state() const noexcept {
       return browser_->state();
     }
 
-    [[nodiscard]] inline tbc::view<const HistoryRow<Memory>&, tbc::lt::a> entry(std::uint64_t id) const {
+    [[nodiscard]] tbc::view<const HistoryRow<Memory>&, tbc::lt::a> entry(std::uint64_t id) const {
       return browser_->entry(id);
     }
 
-    [[nodiscard]] inline std::size_t entryIndex(std::uint64_t id) const {
+    [[nodiscard]] std::size_t entryIndex(std::uint64_t id) const {
       return browser_->entryIndex(id);
     }
 
-    [[nodiscard]] inline tbc::view<std::string_view, tbc::lt::a> command(std::uint64_t id) const {
+    [[nodiscard]] tbc::view<std::string_view, tbc::lt::a> command(std::uint64_t id) const {
       return browser_->command(id);
     }
 
-    [[nodiscard]] inline bool canPage(HistoryPage direction) const noexcept {
+    [[nodiscard]] bool canPage(HistoryPage direction) const noexcept {
       return browser_->canPage(direction);
     }
 
-    [[nodiscard]] inline bool canSubmit() const noexcept {
+    [[nodiscard]] bool canSubmit() const noexcept {
       return browser_->canSubmit();
     }
 
-    [[nodiscard]] inline tbc::view<std::string_view, tbc::lt::a> selectedCommand() const {
+    [[nodiscard]] tbc::view<std::string_view, tbc::lt::a> selectedCommand() const {
       return browser_->selectedCommand();
     }
 
-    [[nodiscard]] inline tbc::view<std::string_view, tbc::lt::a> output() const noexcept {
+    [[nodiscard]] tbc::view<std::string_view, tbc::lt::a> output() const noexcept {
       return browser_->output();
     }
 
-    [[nodiscard]] inline tbc::view<std::string_view, tbc::lt::a> error() const noexcept {
+    [[nodiscard]] tbc::view<std::string_view, tbc::lt::a> error() const noexcept {
       return browser_->error();
     }
 
-    [[nodiscard]] inline std::uint64_t viewVersion() const noexcept {
+    [[nodiscard]] std::uint64_t viewVersion() const noexcept {
       return browser_->viewVersion();
     }
 
-    [[nodiscard]] inline std::uint64_t revision() const noexcept {
+    [[nodiscard]] std::uint64_t revision() const noexcept {
       return browser_->revision();
     }
 
-    [[nodiscard]] inline std::uint64_t rowsVersion() const noexcept {
+    [[nodiscard]] std::uint64_t rowsVersion() const noexcept {
       return browser_->rowsVersion();
     }
 
-    [[nodiscard]] inline ds::Option<HistoryChoice> choice() const noexcept {
+    [[nodiscard]] ds::Option<HistoryChoice> choice() const noexcept {
       return browser_->choice();
     }
 
-    [[nodiscard]] inline bool acceptsRow(HistoryChoice candidate) const noexcept {
+    [[nodiscard]] bool acceptsRow(HistoryChoice candidate) const noexcept {
       return browser_->acceptsRow(candidate);
     }
 
-    [[nodiscard]] inline bool accepts(HistoryChoice candidate) const noexcept {
+    [[nodiscard]] bool accepts(HistoryChoice candidate) const noexcept {
       return browser_->accepts(candidate);
     }
 
-    [[nodiscard]] inline HistoryScope scope() const noexcept {
+    [[nodiscard]] HistoryScope scope() const noexcept {
       return browser_->scope();
     }
 
-    [[nodiscard]] inline HistoryMatch match() const noexcept {
+    [[nodiscard]] HistoryMatch match() const noexcept {
       return browser_->match();
     }
 
-    [[nodiscard]] inline bool deleting() const noexcept {
+    [[nodiscard]] bool deleting() const noexcept {
       return browser_->deleting();
     }
 
-    [[nodiscard]] inline bool owns(std::uint64_t request_id) const noexcept {
+    [[nodiscard]] bool owns(std::uint64_t request_id) const noexcept {
       return browser_->owns(request_id);
     }
 

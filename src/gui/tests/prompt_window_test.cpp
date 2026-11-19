@@ -20,12 +20,12 @@ static_assert(true);
 #include <algorithm>
 #include <array>
 #include <charconv>
+#include <climits>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <exception>
-#include <limits.h>
 #include <limits>
 #include <optional>
 #include <span>
@@ -34,35 +34,35 @@ static_assert(true);
 #include <system_error>
 #include <tuple>
 #include <utility>
-#if (defined(__APPLE__))
+#ifdef __APPLE__
 #endif
-#if (defined(__APPLE__))
+#ifdef __APPLE__
 #endif
-#if (defined(__APPLE__))
+#ifdef __APPLE__
 #include <QBuffer>
 #endif
-#if (defined(__APPLE__))
+#ifdef __APPLE__
 #include <QRectF>
 #endif
-#if (defined(__APPLE__))
+#ifdef __APPLE__
 #include <QImage>
 #endif
-#if (defined(__APPLE__))
+#ifdef __APPLE__
 #include <QDebug>
 #endif
-#if (defined(__APPLE__))
+#ifdef __APPLE__
 #include <QtCore/qlogging.h>
 #endif
-#if (defined(__APPLE__))
+#ifdef __APPLE__
 #include <QSGRendererInterface>
 #endif
-#if (defined(__APPLE__))
+#ifdef __APPLE__
 #include <QFont>
 #endif
-#if (defined(__APPLE__))
+#ifdef __APPLE__
 #include <QScopeGuard>
 #endif
-#if (defined(__APPLE__))
+#ifdef __APPLE__
 #include <QtGui/qtestsupport_gui.h>
 #endif
 #include "telar_wire/codecs/telar_cells.hpp"
@@ -124,15 +124,6 @@ static_assert(true);
 #include <memory>
 
 #ifdef __APPLE__
-#include <QBuffer>
-#include <QDebug>
-#include <QFont>
-#include <QImage>
-#include <QRectF>
-#include <QSGRendererInterface>
-#include <QScopeGuard>
-#include <QtCore/qlogging.h>
-#include <QtGui/qtestsupport_gui.h>
 #endif
 
 import telar.gui.application;
@@ -260,7 +251,7 @@ namespace {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       ApplicationController application{memory};
-      QTemporaryDir directory;
+      const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
       const auto config = directory.filePath(QStringLiteral("config.lua"));
@@ -470,7 +461,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       ApplicationController application{memory};
-      QTemporaryDir directory;
+      const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
       const auto config = directory.filePath(QStringLiteral("config.lua"));
@@ -530,7 +521,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       ApplicationController application{memory};
-      QTemporaryDir directory;
+      const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
       const auto config = directory.filePath(QStringLiteral("config.lua"));
@@ -721,7 +712,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       ApplicationController application{memory};
-      QTemporaryDir directory;
+      const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
       const auto config = directory.filePath(QStringLiteral("config.lua"));
@@ -812,7 +803,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       }
 
       constexpr int runtime_wait_ms = 20000;
-      QTemporaryDir directory;
+      const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
       const auto home = directory.filePath(QStringLiteral("home"));
@@ -1047,7 +1038,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
         // matches arrive as the query is typed, and Enter leaves them for n and N.
         type(terminal, "/");
         QTRY_VERIFY_WITH_TIMEOUT(application.dialogs()->kind() == telar::gui::qt::ApplicationController::Dialog::copy_search && application.dialogs()->lineSearch() == telar::gui::qt::ApplicationController::Dialog::copy_search && line->property("searching").toBool(), runtime_wait_ms);
-        QQuickItem* query = nullptr;
+        const QQuickItem* query = nullptr;
 
         QTRY_VERIFY_WITH_TIMEOUT((query = line->findChild<QQuickItem*>(QStringLiteral("scrollbackSearch"))) != nullptr, runtime_wait_ms);
         QTRY_VERIFY_WITH_TIMEOUT(query->hasActiveFocus(), runtime_wait_ms);

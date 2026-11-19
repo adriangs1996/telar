@@ -11,7 +11,7 @@ export extern "C++" {
 
     class ClipboardImageTransfer {
     public:
-      inline void fail(ClipboardImageError error) noexcept {
+      void fail(ClipboardImageError error) noexcept {
         if (failed_.load(std::memory_order_relaxed)) {
           return;
         }
@@ -20,7 +20,7 @@ export extern "C++" {
         failed_.store(true, std::memory_order_release);
       }
 
-      [[nodiscard]] inline ds::Option<ClipboardImageError> failure() const noexcept {
+      [[nodiscard]] ds::Option<ClipboardImageError> failure() const noexcept {
         if (failed_.load(std::memory_order_acquire)) {
           return error_;
         }

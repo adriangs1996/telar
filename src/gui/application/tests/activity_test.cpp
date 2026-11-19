@@ -40,7 +40,7 @@ namespace {
     telar::ConcurrentMemory& memory = adapter;
     WorkspaceReplica replica{memory};
     const ds::Array projects{WorkspaceListEntry{.workspace = 2, .name = "task", .path = "/task"}, WorkspaceListEntry{.workspace = 1, .name = "project", .path = "/project", .tab_count = 3}};
-    ds::Array rows{worktreeEntry()};
+    const ds::Array rows{worktreeEntry()};
 
     check(replica.apply({.revision = 1, .entries = projects, .worktrees = rows}), "workspace snapshots must commit");
     check(replica.entries().size() == 2 && replica.projects().size() == 1 && replica.entries().front().location.id == 1, "project rows must precede worktree workspaces without duplicating them");

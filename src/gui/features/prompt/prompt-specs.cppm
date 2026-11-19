@@ -19,10 +19,10 @@ namespace telar::gui::features::prompt {
     // The specs live in `memory`.
     explicit Specs(Memory& memory);
 
-    const ebnf::command_spec* find(std::string_view command) const;
+    [[nodiscard]] const ebnf::command_spec* find(std::string_view command) const;
 
     // The digest of the spec held for `command`, or 0.
-    std::uint64_t digest(std::string_view command) const;
+    [[nodiscard]] std::uint64_t digest(std::string_view command) const;
 
     // Compiles and keeps `source`; a spec that does not compile is dropped.
     bool install(std::string_view command, std::uint64_t digest, std::string_view source);

@@ -462,7 +462,7 @@ namespace telar::gui::qt {
     application::palette::NavigationLabel label;
 
     if (const auto* workspace = std::get_if<WorkspaceLocation>(&navigation)) {
-      const auto found = std::ranges::find_if(session.workspaces(), [&](const auto& row) {
+      const auto* const found = std::ranges::find_if(session.workspaces(), [&](const auto& row) {
         return sameWorkspace(row.location, *workspace);
       });
       if (found != session.workspaces().end()) {
@@ -474,7 +474,7 @@ namespace telar::gui::qt {
     }
 
     if (const auto* tab = std::get_if<TabLocation>(&navigation)) {
-      const auto found = std::ranges::find_if(session.tabs, [&](const auto& row) {
+      const auto* const found = std::ranges::find_if(session.tabs, [&](const auto& row) {
         return sameTab(row->location, *tab);
       });
       if (found != session.tabs.end()) {
@@ -486,7 +486,7 @@ namespace telar::gui::qt {
     }
 
     const auto identity = std::get<AgentNavigationTarget>(navigation);
-    const auto found = std::ranges::find_if(session.agents(), [&](const auto& row) {
+    const auto* const found = std::ranges::find_if(session.agents(), [&](const auto& row) {
       return row.pane_id == identity.pane_id && row.pane_generation == identity.pane_generation;
     });
     if (found == session.agents().end()) {
@@ -751,7 +751,7 @@ namespace telar::gui::qt {
     auto& session = store_.sessionMut();
 
     if (const auto* workspace = std::get_if<WorkspaceLocation>(&target)) {
-      const auto found = std::ranges::find_if(session.workspaces(), [&](const auto& row) {
+      const auto* const found = std::ranges::find_if(session.workspaces(), [&](const auto& row) {
         return sameWorkspace(row.location, *workspace);
       });
       if (found == session.workspaces().end()) {
@@ -764,7 +764,7 @@ namespace telar::gui::qt {
     }
 
     if (const auto* tab = std::get_if<TabLocation>(&target)) {
-      const auto found = std::ranges::find_if(session.tabs, [&](const auto& row) {
+      const auto* const found = std::ranges::find_if(session.tabs, [&](const auto& row) {
         return sameTab(row->location, *tab);
       });
       if (found == session.tabs.end()) {

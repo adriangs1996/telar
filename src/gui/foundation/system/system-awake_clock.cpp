@@ -2,7 +2,7 @@ module telar.gui.foundation.system;
 
 import std;
 import telar.sys.posix;
-#if defined(__APPLE__)
+#ifdef __APPLE__
 import telar.sys.apple;
 #endif
 

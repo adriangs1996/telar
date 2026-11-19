@@ -172,7 +172,7 @@ namespace telar::gui::application {
 
     // The bottom as this replica knows it may be behind the runtime's: ask to follow instead.
     ++pane->viewport_requests;
-    link.send(SetPaneViewport{.pane_id = delta.pane_id, .offset = requested == maximum ? follow_output : requested});
+    link.send(SetPaneViewport{.pane_id = delta.pane_id, .offset = std::cmp_equal(requested, maximum) ? follow_output : requested});
     pane->screen.setViewport(requested);
     ++view_version.viewport;
   }
@@ -183,7 +183,7 @@ namespace telar::gui::application {
       return false;
     }
 
-    using Inline = typename Pane<Memory>::InlineDocument;
+    using Inline = Pane<Memory>::InlineDocument;
     const auto documents = pane->inline_documents.viewMut();
     const auto found = std::ranges::find(documents, id, &Inline::id);
     if (found == documents.end() || found->view_rows == rows) {
@@ -364,7 +364,7 @@ namespace telar::gui::application {
   }
 
   Change Session::applyInline(Pane<Memory>& pane, const PaneDocument& message) {
-    using Inline = typename Pane<Memory>::InlineDocument;
+    using Inline = Pane<Memory>::InlineDocument;
     const auto documents = pane.inline_documents.viewMut();
     const auto found = std::ranges::find(documents, message.id, &Inline::id);
 

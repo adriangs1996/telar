@@ -42,9 +42,9 @@ static_assert(true);
 #include <QtCore/qtimer.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
+#include <climits>
 #include <exception>
 #include <fcntl.h>
-#include <limits.h>
 
 import telar.gui.application;
 import telar.config.client;
@@ -71,9 +71,7 @@ namespace telar::gui::qt {
       : QObject(parent),
         memory_(memory),
         fonts_(memory),
-        default_keymap_(default_input_.compile()),
-        generation_(),
-        commands_() {
+        default_keymap_(default_input_.compile()) {
     debounce_.setSingleShot(true);
     constexpr int reload_debounce_ms = 100;
 
@@ -173,7 +171,7 @@ namespace telar::gui::qt {
     const auto number = generation->number();
     const auto known = static_cast<std::size_t>(watch_.modules.size());
 
-    lua_.post([generation, known, work = std::move(work)]() mutable {
+    lua_.post([generation, known, work = std::move(work)] mutable {
       TrackedResult<Value> result;
 
       try {
@@ -239,7 +237,7 @@ namespace telar::gui::qt {
 
         return true;
       },
-          [](LuaOutcome<bool>) {});
+          [](const LuaOutcome<bool>&) {});
     }
   }
 
@@ -264,7 +262,7 @@ namespace telar::gui::qt {
 
         return true;
       },
-          [](LuaOutcome<bool>) {});
+          [](const LuaOutcome<bool>&) {});
     }
   }
 
@@ -574,10 +572,10 @@ namespace telar::gui::qt {
 
     std::shared_ptr<Generation> previous = std::move(generation_).intoShared();
 
-    lua_.post([previous = std::move(previous)]() mutable {
+    lua_.post([previous = std::move(previous)] mutable {
       previous.reset();
     },
-        [](LuaOutcome<void>) {});
+        [](const LuaOutcome<void>&) {});
   }
 
   ConfigurationReloadRequest ConfigurationSource::request(bool force) {

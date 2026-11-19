@@ -290,7 +290,7 @@ namespace telar::gui::qt {
           marked = hit;
         }
 
-        matched += hit;
+        matched += static_cast<std::size_t>(hit);
       }
 
       result.push_back(QVariantMap{
@@ -365,7 +365,7 @@ namespace telar::gui::qt {
       return QStringLiteral("\u2303") + QChar(static_cast<char16_t>(key + 0x40));
     }
 
-    return QString(QChar(static_cast<char16_t>(key)));
+    return {QChar(static_cast<char16_t>(key))};
   }
 
   QString PromptEditorItem::program() const {
@@ -648,7 +648,7 @@ namespace telar::gui::qt {
     const auto last_row = first_row_ + maximum_rows_;
     std::size_t used = 0;
     const auto now = clock_.elapsed();
-    const auto place = [&](QString text, std::uint32_t row, std::uint32_t column, const QColor& color, qreal lift = 0, qreal opacity = 1) {
+    const auto place = [&](const QString& text, std::uint32_t row, std::uint32_t column, const QColor& color, qreal lift = 0, qreal opacity = 1) {
       if (used == runs_.size()) {
         auto* item = new NativeCellText(this);
 
@@ -660,7 +660,7 @@ namespace telar::gui::qt {
       item->setGrid(grid_);
       item->setText(text);
       item->setColor(color);
-      item->setPosition({column * width, (static_cast<int>(row) - first_row_) * height + lift});
+      item->setPosition({column * width, ((static_cast<int>(row) - first_row_) * height) + lift});
       item->setOpacity(opacity);
       item->setVisible(true);
     };
@@ -669,13 +669,13 @@ namespace telar::gui::qt {
     static const QEasingCurve sweep_curve{QEasingCurve::OutQuad};
     const auto accent = accent_;
     const auto mix = [](const QColor& from, const QColor& to, qreal amount) {
-      return QColor::fromRgbF(static_cast<float>(from.redF() + (to.redF() - from.redF()) * amount), static_cast<float>(from.greenF() + (to.greenF() - from.greenF()) * amount), static_cast<float>(from.blueF() + (to.blueF() - from.blueF()) * amount), static_cast<float>(from.alphaF() + (to.alphaF() - from.alphaF()) * amount));
+      return QColor::fromRgbF(static_cast<float>(from.redF() + ((to.redF() - from.redF()) * amount)), static_cast<float>(from.greenF() + ((to.greenF() - from.greenF()) * amount)), static_cast<float>(from.blueF() + ((to.blueF() - from.blueF()) * amount)), static_cast<float>(from.alphaF() + ((to.alphaF() - from.alphaF()) * amount)));
     };
 
     QVariantList glows;
 
     for (const auto& run : layout_.runs) {
-      if (static_cast<int>(run.row) >= first_row_ && static_cast<int>(run.row) < last_row) {
+      if (std::cmp_greater_equal(run.row, first_row_) && std::cmp_less(run.row, last_row)) {
         const auto text = QString::fromUtf8(display_.data() + run.start, static_cast<qsizetype>(run.end - run.start));
         auto color = styleColor(run.style);
         qreal lift = 0;
@@ -817,7 +817,7 @@ namespace telar::gui::qt {
     typed_.assign(text);
 
     static_cast<void>(fresh_.retain([&](const Fresh& fresh) {
-      return !(fresh.end > prefix && fresh.start < prefix + std::max<std::size_t>(removed, 1));
+      return fresh.end <= prefix || fresh.start >= prefix + std::max<std::size_t>(removed, 1);
     }));
 
     for (auto& fresh : fresh_.viewMut()) {
@@ -839,7 +839,7 @@ namespace telar::gui::qt {
     std::size_t characters = 0;
 
     for (const auto byte : added) {
-      characters += !continuation(byte);
+      characters += static_cast<std::size_t>(!continuation(byte));
     }
 
     if (characters == 1) {
@@ -956,7 +956,7 @@ namespace telar::gui::qt {
     const auto height = cellHeight();
     const auto last_row = first_row_ + maximum_rows_;
     const auto visible = [&](std::uint32_t row) {
-      return static_cast<int>(row) >= first_row_ && static_cast<int>(row) < last_row;
+      return std::cmp_greater_equal(row, first_row_) && std::cmp_less(row, last_row);
     };
 
     auto selection = accent_;
@@ -986,7 +986,7 @@ namespace telar::gui::qt {
       const bool wavy = run.style == application::prompt::Style::missing;
       const auto left = run.column * width;
       const auto right = (run.column + run.columns) * width;
-      const auto baseline = (static_cast<int>(run.row) - first_row_ + 1) * height - 2 * pixel;
+      const auto baseline = ((static_cast<int>(run.row) - first_row_ + 1) * height) - (2 * pixel);
       const auto step = wavy ? width / 4 : 3 * pixel;
       const auto points = static_cast<int>(std::ceil((right - left) / step)) + 1;
       auto& node = underlines.take<QSGGeometryNode>([] {
@@ -1007,7 +1007,7 @@ namespace telar::gui::qt {
       auto* vertices = geometry->vertexDataAsPoint2D();
 
       for (int index = 0; index < geometry->vertexCount(); ++index) {
-        const auto x = std::min(right, left + index * step);
+        const auto x = std::min(right, left + (index * step));
         const auto y = wavy ? baseline + (index % 2 == 0 ? -pixel : pixel) : baseline;
 
         vertices[index].set(static_cast<float>(x), static_cast<float>(y));

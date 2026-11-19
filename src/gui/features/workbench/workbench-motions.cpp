@@ -285,9 +285,9 @@ namespace telar::gui::features::workbench {
 
     const float phase = now_ns <= started ? 0 : static_cast<float>(now_ns - started) / static_cast<float>(duration);
     const float remaining = 1 - phase;
-    const float eased = 1 - remaining * remaining * remaining;
+    const float eased = 1 - (remaining * remaining * remaining);
 
-    return {.x = from.x + (to.x - from.x) * eased, .y = from.y + (to.y - from.y) * eased, .width = from.width + (to.width - from.width) * eased, .height = from.height + (to.height - from.height) * eased};
+    return {.x = from.x + ((to.x - from.x) * eased), .y = from.y + ((to.y - from.y) * eased), .width = from.width + ((to.width - from.width) * eased), .height = from.height + ((to.height - from.height) * eased)};
   }
 
   auto PaneMotions::find(std::uint64_t id) const noexcept -> const Motion* {

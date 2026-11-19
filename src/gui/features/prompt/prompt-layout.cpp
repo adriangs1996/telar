@@ -25,10 +25,10 @@ namespace telar::gui::features::prompt {
         wrapped = std::ranges::find(wrappers, word) != wrappers.end() ? token.command : shell::no_command;
         break;
       case shell::TokenKind::argument:
-        if (token.command == wrapped && (token.flags & shell::Token::word_start) != 0 && !word.starts_with('-') && word.find('=') == std::string_view::npos) {
+        if (token.command == wrapped && (token.flags & shell::Token::word_start) != 0 && !word.starts_with('-') && !word.contains('=')) {
           style = Style::command;
           wrapped = std::ranges::find(wrappers, word) != wrappers.end() ? token.command : shell::no_command;
-        } else if (word.find('/') != std::string_view::npos && !word.starts_with('-')) {
+        } else if (word.contains('/') && !word.starts_with('-')) {
           style = Style::path;
         }
 

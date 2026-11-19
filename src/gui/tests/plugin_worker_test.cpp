@@ -27,13 +27,13 @@ static_assert(true);
 #include <array>
 #include <cerrno>
 #include <charconv>
+#include <climits>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <exception>
 #include <fcntl.h>
 #include <filesystem>
-#include <limits.h>
 #include <optional>
 #include <span>
 #include <stdexcept>

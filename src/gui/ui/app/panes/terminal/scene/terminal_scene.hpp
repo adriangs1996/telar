@@ -77,10 +77,10 @@ namespace telar::gui::qt {
     bool background_provided = false;
     // Rows painted empty, one flag per row: the shell's own prompt while telar's editor stands
     // in for it, and the prompts of the commands it ran, which their separators stand in for.
-    std::span<const std::uint8_t> hidden_rows{};
+    std::span<const std::uint8_t> hidden_rows;
     // How far each row has come into view, 0 to 1, while a command's first lines of output
     // enter one after another; empty when every row is in place.
-    std::span<const float> revealed_rows{};
+    std::span<const float> revealed_rows;
     // The rows drawn, top first, when they are not the screen's: a view scrolled by pixels draws
     // a row past the screen's last, and a folded view rows from wherever its folds leave them.
     // Empty: the screen's rows, one for one. The hidden and revealed rows count these rows.

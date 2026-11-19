@@ -36,10 +36,10 @@ static_assert(true);
 #include <QtCore/qcontainerfwd.h>
 #include <QtCore/qobject.h>
 #include <QtCore/qtypes.h>
+#include <climits>
 #include <exception>
 #include <functional>
 #include <iostream>
-#include <limits.h>
 
 import telar.gui.features.components;
 

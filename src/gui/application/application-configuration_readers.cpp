@@ -517,7 +517,7 @@ namespace telar::gui::application {
     lua_setfield(state, -2, "time");
 
     lua_newtable(state);
-    runtime::lua::setField(state, "available", static_cast<bool>(context_.metrics.hasValue()));
+    runtime::lua::setField(state, "available", context_.metrics.hasValue());
     if (context_.metrics) {
       runtime::lua::setField(state, "cpu_percent", static_cast<lua_Integer>(context_.metrics->cpu_percent));
       runtime::lua::setField(state, "memory_used_decigib", static_cast<lua_Integer>(context_.metrics->memory_used_decigib));

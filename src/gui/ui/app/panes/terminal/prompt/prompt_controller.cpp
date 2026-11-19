@@ -139,16 +139,16 @@ namespace telar::gui::qt {
   }
 
   void PromptController::refresh(qulonglong pane_id) {
-    for (std::size_t index = 0; index < editors_.size(); ++index) {
-      if (auto* editor = editors_[index]) {
+    for (auto editor : editors_) {
+      if (editor) {
         editor->refreshPane(pane_id);
       }
     }
   }
 
   void PromptController::configure() {
-    for (std::size_t index = 0; index < editors_.size(); ++index) {
-      if (auto* editor = editors_[index]) {
+    for (auto editor : editors_) {
+      if (editor) {
         editor->refresh();
       }
     }

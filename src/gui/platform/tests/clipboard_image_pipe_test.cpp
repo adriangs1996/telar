@@ -15,12 +15,12 @@ static_assert(true);
 #include <cerrno>
 #include <chrono>
 #include <cstddef>
+#include <ctime>
 #include <new>
 #include <poll.h>
 #include <span>
 #include <stdexcept>
 #include <thread>
-#include <time.h>
 #include <unistd.h>
 
 import telar.testing;

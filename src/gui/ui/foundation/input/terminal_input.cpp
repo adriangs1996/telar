@@ -61,7 +61,7 @@ namespace telar::gui::qt {
   QByteArray terminalKey(const QKeyEvent& event, const telar::InputModes& modes) {
     const auto flags = modes.kitty_keyboard_flags;
     const bool released = event.type() == QEvent::KeyRelease;
-    if (released && (!(flags & report_events) || event.isAutoRepeat())) {
+    if (released && (((flags & report_events) == 0) || event.isAutoRepeat())) {
       return {};
     }
 
@@ -133,7 +133,7 @@ namespace telar::gui::qt {
 
         code = function_codes[index];
         suffix = '~';
-        if (index < 4 && !(flags && event.key() == Qt::Key_F3)) {
+        if (index < 4 && (!flags || event.key() != Qt::Key_F3)) {
           code = 1;
           suffix = application = static_cast<char>('P' + index);
         }
@@ -152,7 +152,7 @@ namespace telar::gui::qt {
     }
 
     const bool recovery_key = code == '\r' || code == '\t' || code == delete_character;
-    if (released && recovery_key && !(flags & all_keys)) {
+    if (released && recovery_key && ((flags & all_keys) == 0)) {
       return {};
     }
 
@@ -160,12 +160,12 @@ namespace telar::gui::qt {
                                    event.modifiers().testFlag(Qt::AltModifier) ||
                                    commandModifier(event.modifiers());
     const bool extended =
-        flags && ((flags & all_keys) || suffix != 'u' ||
-                     ((flags & disambiguate) && (non_text_modifier || code == escape)));
-    if (extended && code) {
+        (flags != 0u) && (((flags & all_keys) != 0) || suffix != 'u' ||
+                             (((flags & disambiguate) != 0) && (non_text_modifier || code == escape)));
+    if (extended && (code != 0)) {
       QByteArray result = "\x1b[" + QByteArray::number(code);
 
-      if ((flags & alternate_keys) && suffix == 'u' &&
+      if (((flags & alternate_keys) != 0) && suffix == 'u' &&
           event.modifiers().testFlag(Qt::ShiftModifier)) {
         const auto points = event.text().toUcs4();
         if (points.size() == 1 && points.front() != static_cast<char32_t>(code)) {
@@ -174,16 +174,16 @@ namespace telar::gui::qt {
       }
 
       result += ';' + QByteArray::number(modifiers);
-      if (flags & report_events) {
+      if ((flags & report_events) != 0) {
         result += ':' + QByteArray::number(released ? release : event.isAutoRepeat() ? repeat
                                                                                      : press);
       }
 
-      if (!released && (flags & associated_text) && !controlModifier(event.modifiers()) &&
+      if (!released && ((flags & associated_text) != 0) && !controlModifier(event.modifiers()) &&
           !commandModifier(event.modifiers()) && !event.text().isEmpty()) {
         bool first = true;
 
-        for (auto point : event.text().toUcs4()) {
+        for (const auto point : event.text().toUcs4()) {
           result += first ? ';' : ':';
           result += QByteArray::number(static_cast<uint>(point));
           first = false;
@@ -198,7 +198,7 @@ namespace telar::gui::qt {
     }
 
     if (suffix != 'u') {
-      if (application && modifiers == 1) {
+      if ((application != 0) && modifiers == 1) {
         return QByteArray(modes.cursor_keys || application >= 'P' ? "\x1bO" : "\x1b[") +
                application;
       }
@@ -215,7 +215,7 @@ namespace telar::gui::qt {
       return {};
     }
 
-    if (modes.modify_other_keys_2 && modifiers > 1 && code) {
+    if (modes.modify_other_keys_2 && modifiers > 1 && (code != 0)) {
       return "\x1b[27;" + QByteArray::number(modifiers) + ';' + QByteArray::number(code) + '~';
     }
 

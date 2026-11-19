@@ -82,7 +82,7 @@ namespace telar::gui::application::notifications {
       break;
     case NotificationTarget::Kind::tab: {
       const auto& tabs = session.tabs;
-      const auto tab = std::ranges::find_if(tabs, [&](const auto& candidate) {
+      const auto* const tab = std::ranges::find_if(tabs, [&](const auto& candidate) {
         return candidate->location.tab_id == target->id;
       });
       if (tab != tabs.end()) {

@@ -23,7 +23,7 @@ static_assert(true);
 #include <string>
 #include <string_view>
 
-#include <limits.h>
+#include <climits>
 #include <new>
 
 import telar.testing;
@@ -420,7 +420,7 @@ namespace {
     openThreeTabs(client, transport);
     const auto workspace = client.activeTab()->location.workspace;
     const TabDragMove move{.location = {.workspace = workspace, .tab_id = 1}, .direction = TabMoveDirection::next, .relative_to = 3};
-    const auto source = std::ranges::find_if(client.tabs, [](const auto& tab) {
+    const auto* const source = std::ranges::find_if(client.tabs, [](const auto& tab) {
       return tab->location.tab_id == 1;
     });
 

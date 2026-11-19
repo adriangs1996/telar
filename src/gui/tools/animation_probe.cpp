@@ -212,7 +212,7 @@ int main(int argc, char** argv) {
   });
 
   const auto status = application.exec();
-  QJsonObject report{
+  const QJsonObject report{
       {QStringLiteral("requested_screen"), screen->name()},
       {QStringLiteral("actual_qt_screen"), window.screen()->name()},
       {QStringLiteral("window_x"), window.x()},

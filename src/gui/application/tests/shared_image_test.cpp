@@ -89,11 +89,11 @@ namespace {
     PublishedImage(const PublishedImage&) = delete;
     PublishedImage& operator=(const PublishedImage&) = delete;
 
-    std::string_view name() const noexcept {
+    [[nodiscard]] std::string_view name() const noexcept {
       return name_.data();
     }
 
-    runtime::FileDescriptor open() const {
+    [[nodiscard]] runtime::FileDescriptor open() const {
       return runtime::FileDescriptor{::shm_open(name_.data(), O_RDWR, 0)};
     }
 
@@ -122,8 +122,8 @@ namespace {
   };
 
   void ownedReadPreservesPixelsAndUnlinksTheName() {
-    PublishedImage published;
-    system::SharedImageSource source{published.name()};
+    const PublishedImage published;
+    const system::SharedImageSource source{published.name()};
 
     check(!published.open() && errno == ENOENT, "adoption must unlink the runtime-owned name immediately");
     ds::Array<Byte, pixels.size()> output{};
@@ -134,11 +134,11 @@ namespace {
   }
 
   void unavailableAndUndersizedObjectsFailWithoutPublishing() {
-    PublishedImage published;
-    auto writer = published.open();
+    const PublishedImage published;
+    const auto writer = published.open();
 
     check(static_cast<bool>(writer), "the fixture must retain a writer before adoption");
-    system::SharedImageSource source{published.name()};
+    const system::SharedImageSource source{published.name()};
     struct stat status{};
 
     check(::fstat(writer.get(), &status) == 0 && status.st_size > 0, "the fixture must report its actual backing extent");
@@ -147,37 +147,37 @@ namespace {
     check(!source.read(oversized), "a read beyond backing storage must fail before copying pixels");
     ds::Array<Byte, pixels.size()> output{};
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
     check(::ftruncate(writer.get(), 0) == -1 && errno == EINVAL, "Darwin must refuse to resize an initialized POSIX shared object");
 #else
     check(::ftruncate(writer.get(), 0) == 0, "the fixture must truncate the adopted object");
     check(!source.read(output.viewMut()), "truncated storage must fail instead of faulting or returning partial pixels");
 #endif
-    system::SharedImageSource missing{published.name()};
+    const system::SharedImageSource missing{published.name()};
 
     check(!missing.read(output.viewMut()), "a missing shared object must fail without allocating source pixels");
   }
 
   void nonPrivateObjectsAndMalformedNamesAreRejected() {
-    PublishedImage published;
+    const PublishedImage published;
 
     check(::shm_unlink(published.name().data()) == 0, "the fixture must release its private object before creating the permission case");
     const auto previous_mask = ::umask(0);
-    runtime::FileDescriptor writer{::shm_open(published.name().data(), O_CREAT | O_EXCL | O_RDWR, 0644)};
+    const runtime::FileDescriptor writer{::shm_open(published.name().data(), O_CREAT | O_EXCL | O_RDWR, 0644)};
 
     ::umask(previous_mask);
     check(static_cast<bool>(writer) && ::ftruncate(writer.get(), pixels.size()) == 0, "the fixture must expose an unsafe permission mode");
-    system::SharedImageSource source{published.name()};
+    const system::SharedImageSource source{published.name()};
     ds::Array<Byte, pixels.size()> output{};
 
     check(!source.read(output.viewMut()), "public shared storage must not be accepted as private image delivery");
     check(static_cast<bool>(published.open()), "a rejected nonprivate object must not be unlinked");
 
-    for (const auto name : {"", "relative", "/nested/path", "/UPPER", "/abcdefghijklmnopqrstuvwxyz123456"}) {
+    for (const auto* const name : {"", "relative", "/nested/path", "/UPPER", "/abcdefghijklmnopqrstuvwxyz123456"}) {
       bool rejected = false;
 
       try {
-        system::SharedImageSource invalid{name};
+        const system::SharedImageSource invalid{name};
       } catch (const EncodingError&) {
         rejected = true;
       }
@@ -210,7 +210,7 @@ namespace {
 
       inline_store.image({.header = header, .image = image});
       inline_store.chunk({.header = header, .key = image.key, .bytes = source_pixels});
-      PublishedImage published;
+      const PublishedImage published;
       system::SharedImageSource source{published.name()};
 
       check(shared_store.sharedImage(GraphicsSharedImage{.header = header, .image = image, .name = published.name()}, source), "a complete shared image must invalidate presentation");
@@ -230,7 +230,7 @@ namespace {
     struct Reader {
       unsigned calls = 0;
 
-      bool read(std::span<Byte>) noexcept {
+      bool read(std::span<Byte> /*unused*/) noexcept {
         ++calls;
         return true;
       }
@@ -261,7 +261,7 @@ namespace {
 
     telar::gui::application::tests::session_fixture::openFirstPane(client, transport);
     check(transport.last<ConfigureGraphics>().shared, "a capable local transport must request shared graphics");
-    PublishedImage published;
+    const PublishedImage published;
 
     check(::shm_unlink(published.name().data()) == 0, "the fixture must remove the image before delivery");
     telar::gui::application::tests::session_fixture::deliver(client, GraphicsSharedImage{.header = header, .image = description(), .name = published.name()});
@@ -277,7 +277,7 @@ namespace {
     TestSession client{memory, local};
 
     telar::gui::application::tests::session_fixture::openFirstPane(client, local);
-    PublishedImage ignored;
+    const PublishedImage ignored;
 
     telar::gui::application::tests::session_fixture::deliver(client, GraphicsSharedImage{.header = {.pane_id = 99, .revision = 1}, .image = description(), .name = ignored.name()});
     check(!ignored.open() && errno == ENOENT, "images for detached panes must still release their shared names");
@@ -289,7 +289,7 @@ namespace {
 
     telar::gui::application::tests::session_fixture::openFirstPane(remote_client, remote);
     check(!remote.last<ConfigureGraphics>().shared, "remote transports must retain inline delivery");
-    PublishedImage unexpected;
+    const PublishedImage unexpected;
     bool rejected = false;
 
     try {

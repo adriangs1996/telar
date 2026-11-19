@@ -12,7 +12,7 @@ export namespace telar::gui::inline foundation::inline terminal {
     std::uint16_t x = 0;
     std::uint32_t y = 0;
 
-    [[nodiscard]] inline auto operator<=>(const CellPosition& other) const noexcept {
+    [[nodiscard]] auto operator<=>(const CellPosition& other) const noexcept {
       return std::tie(y, x) <=> std::tie(other.y, other.x);
     }
 
@@ -27,18 +27,18 @@ export namespace telar::gui::inline foundation::inline terminal {
     CellWidth width = CellWidth::single;
     Byte length = 1;
 
-    inline CellValue() noexcept {
+    CellValue() noexcept {
       text.atMut(0) = ' ';
     }
 
-    inline explicit CellValue(const Cell& source) noexcept
+    explicit CellValue(const Cell& source) noexcept
         : style(source.style),
           width(source.width),
           length(static_cast<Byte>(source.text.size())) {
       std::ranges::copy(source.text, text.viewMut().begin());
     }
 
-    [[nodiscard]] inline std::string_view utf8() const noexcept {
+    [[nodiscard]] std::string_view utf8() const noexcept {
       return textView(std::span{text}.first(length));
     }
   };
@@ -113,7 +113,7 @@ export namespace telar::gui::inline foundation::inline terminal {
         staged += span.count;
         const auto last = (span.start + span.count - 1) / frame.cols;
 
-        std::fill(row_revisions_.dataMut() + span.start / frame.cols, row_revisions_.dataMut() + last + 1, revision_ + 1);
+        std::fill(row_revisions_.dataMut() + (span.start / frame.cols), row_revisions_.dataMut() + last + 1, revision_ + 1);
       }
 
       if (frame.text_metadata) {

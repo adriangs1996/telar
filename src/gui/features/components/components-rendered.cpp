@@ -10,7 +10,8 @@ import telar.base.memory.allocators;
 
 namespace telar::gui::features::components {
 
-  CommandTabCopy::CommandTabCopy(const View& view) {
+  CommandTabCopy::CommandTabCopy(const View& view)
+      : count_(view.count) {
     std::size_t used = 0;
     const auto store = [&](std::string_view text) {
       if (text.size() > bytes_.size() - used) {
@@ -23,7 +24,6 @@ namespace telar::gui::features::components {
       return static_cast<std::uint16_t>(text.size());
     };
 
-    count_ = view.count;
     for (std::size_t index = 0; index < view.count; ++index) {
       lengths_.atMut(index) = store(view.arguments[index]);
     }

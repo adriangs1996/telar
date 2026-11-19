@@ -86,7 +86,7 @@ namespace telar::gui::qt {
     if (!frame_requested_ && next_sample_ns_ && now_ns >= *next_sample_ns_) {
       frame_requested_ = true;
       polish();
-      if (window()) {
+      if (window() != nullptr) {
         window()->update();
       }
     }

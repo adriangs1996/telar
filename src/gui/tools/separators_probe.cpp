@@ -35,11 +35,11 @@ static_assert(true);
 #include <array>
 #include <chrono>
 #include <cstdint>
+#include <ctime>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
 #include <string>
-#include <time.h>
 #include <vector>
 
 import telar.wire.content;
@@ -96,7 +96,7 @@ namespace {
     std::vector<Cell> cells(static_cast<std::size_t>(columns) * rows, Cell{.text = byteView(" ")});
     std::vector<Byte> encoded(cells.size() * 16);
     const ds::Array spans{FrameSpan{.start = 0, .count = static_cast<std::uint32_t>(cells.size()), .cells = CellRunCodec::encode(cells, encoded)}};
-    ds::Array<Byte, rows> flags{};
+    const ds::Array<Byte, rows> flags{};
 
     runtime.send(PaneFrame{FrameBody{.pane_id = pane_id, .frame_id = 1, .cols = columns, .rows = rows, .cursor = {.visible = true, .x = 0, .y = rows - 1}, .scroll = {.total_rows = rows}, .text_metadata = TextMetadata{.row_flags = flags}, .spans = spans}});
   }
@@ -124,9 +124,9 @@ namespace {
     return options;
   }
 
-  int run(QGuiApplication& application) {
+  int run(const QGuiApplication& application) {
     const auto options = parse(application);
-    QTemporaryDir directory;
+    const QTemporaryDir directory;
 
     require(directory.isValid(), "No temporary directory");
 

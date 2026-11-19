@@ -99,7 +99,7 @@ export namespace telar::gui::features::prompt {
   // selected from it. Opaque: only the use cases below reach it. It stays where it is until its
   // pane is forgotten.
   struct PaneLine {
-    inline PaneLine(Memory& memory, std::uint64_t pane_id, Keymap keymap)
+    PaneLine(Memory& memory, std::uint64_t pane_id, Keymap keymap)
         : line(memory, keymap),
           pane_id(pane_id),
           jumps(memory) {}
@@ -123,79 +123,79 @@ export namespace telar::gui::features::prompt {
   // until a use case changes them. Inline, as a line's view reads it whenever it draws.
   class LineView {
   public:
-    inline LineView(tbc::view<const Line&, tbc::lt::a> line, tbc::view<History, tbc::lt::a> history) noexcept
+    LineView(tbc::view<const Line&, tbc::lt::a> line, tbc::view<History, tbc::lt::a> history) noexcept
         : line_(&line),
           history_(history) {}
 
-    [[nodiscard]] TBC_HOT_PATH inline tbc::view<std::string_view, tbc::lt::a> text() const noexcept {
+    [[nodiscard]] TBC_HOT_PATH tbc::view<std::string_view, tbc::lt::a> text() const noexcept {
       return line_->editor().text().view();
     }
 
-    [[nodiscard]] TBC_HOT_PATH inline std::size_t cursor() const noexcept {
+    [[nodiscard]] TBC_HOT_PATH std::size_t cursor() const noexcept {
       return line_->editor().text().cursor();
     }
 
     // The other end of the selection; the cursor without one.
-    [[nodiscard]] TBC_HOT_PATH inline std::size_t anchor() const noexcept {
+    [[nodiscard]] TBC_HOT_PATH std::size_t anchor() const noexcept {
       return line_->editor().text().anchor();
     }
 
-    [[nodiscard]] TBC_HOT_PATH inline Keymap keymap() const noexcept {
+    [[nodiscard]] TBC_HOT_PATH Keymap keymap() const noexcept {
       return line_->editor().keymap();
     }
 
-    [[nodiscard]] TBC_HOT_PATH inline Mode mode() const noexcept {
+    [[nodiscard]] TBC_HOT_PATH Mode mode() const noexcept {
       return line_->editor().mode();
     }
 
     // An operator or count of vim's waits for the rest of its command.
-    [[nodiscard]] TBC_HOT_PATH inline bool commandPending() const noexcept {
+    [[nodiscard]] TBC_HOT_PATH bool commandPending() const noexcept {
       return line_->editor().pending();
     }
 
     // The command typed while another runs waits for it; Enter arms it to run when that one
     // succeeds.
-    [[nodiscard]] TBC_HOT_PATH inline bool queued() const noexcept {
+    [[nodiscard]] TBC_HOT_PATH bool queued() const noexcept {
       return line_->queued();
     }
 
     // While a program runs, typed lines go to it instead of the queue.
-    [[nodiscard]] TBC_HOT_PATH inline bool answering() const noexcept {
+    [[nodiscard]] TBC_HOT_PATH bool answering() const noexcept {
       return line_->answering();
     }
 
-    [[nodiscard]] TBC_HOT_PATH inline std::uint32_t secretKeys() const noexcept {
+    [[nodiscard]] TBC_HOT_PATH std::uint32_t secretKeys() const noexcept {
       return line_->secretKeys();
     }
 
-    [[nodiscard]] TBC_HOT_PATH inline tbc::view<const ds::Option<Menu>&, tbc::lt::a> menu() const noexcept {
+    [[nodiscard]] TBC_HOT_PATH tbc::view<const ds::Option<Menu>&, tbc::lt::a> menu() const noexcept {
       return line_->menu();
     }
 
     // Moves with every change to what the line shows.
-    [[nodiscard]] TBC_HOT_PATH inline std::uint64_t revision() const noexcept {
+    [[nodiscard]] TBC_HOT_PATH std::uint64_t revision() const noexcept {
       return line_->revision();
     }
 
     // The commands sent from this line, oldest first.
-    [[nodiscard]] TBC_HOT_PATH inline tbc::view<History, tbc::lt::a> recent() const noexcept {
+    [[nodiscard]] TBC_HOT_PATH tbc::view<History, tbc::lt::a> recent() const noexcept {
       return line_->recent();
     }
 
     // Whether the menu still waits for the answer to request `request`.
-    [[nodiscard]] TBC_HOT_PATH inline bool pending(std::uint64_t request) const noexcept {
+    [[nodiscard]] TBC_HOT_PATH bool pending(std::uint64_t request) const noexcept {
       return line_->pending(request);
     }
 
     // The rest of a command this one starts: from what this line sent, then from the history.
     // Only while typing at the end of a line of two characters or more.
-    [[nodiscard]] TBC_HOT_PATH inline tbc::view<std::string_view, tbc::lt::a> suggestion() const noexcept {
+    [[nodiscard]] TBC_HOT_PATH tbc::view<std::string_view, tbc::lt::a> suggestion() const noexcept {
       return line_->suggestion(history_);
     }
 
     // The same for every view of one line, for a view to tell when the line it shows changed: an
     // address compared, never followed, as Rust's `*const ()`.
-    [[nodiscard]] TBC_HOT_PATH TBC_RAW inline const void* identity() const noexcept {
+    [[nodiscard]] TBC_HOT_PATH TBC_RAW const void* identity() const noexcept {
       return line_;
     }
 

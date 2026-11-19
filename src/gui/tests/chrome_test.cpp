@@ -173,7 +173,7 @@ namespace {
     };
   }
 
-  QVariantMap sidebarProperties(ListModel& workspaces, ListModel& agents, bool expanded, int) {
+  QVariantMap sidebarProperties(const ListModel& workspaces, ListModel& agents, bool expanded, int /*unused*/) {
     const ChromeMetrics chrome;
     const auto width = expanded ? fixture_sidebar_width : fixture_rail_width;
     const Rect area{.width = static_cast<float>(width), .height = fixture_height};
@@ -345,7 +345,7 @@ namespace {
       ListModel tabs;
 
       tabs.reconcile(tabRecords({.count = 2, .active = 0}));
-      auto properties = navigationProperties(tabs, 1000);
+      const auto properties = navigationProperties(tabs, 1000);
       const auto navigation = createChrome(engine, QStringLiteral("NavigationBar"), properties);
 
       navigation->setParentItem(window.contentItem());
@@ -435,7 +435,7 @@ namespace {
       window.resize(1000, ChromeMetrics{}.top_bar);
       window.show();
       QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
-      auto* layout = navigation->findChild<TabStripLayout*>(QStringLiteral("tabStripLayout"));
+      const auto* layout = navigation->findChild<TabStripLayout*>(QStringLiteral("tabStripLayout"));
 
       QVERIFY(layout != nullptr);
       const auto names = visualItems(*navigation, QStringLiteral("workspaceContextName"));
@@ -931,7 +931,7 @@ namespace {
       telar::ds::Array<Geometry::Measure, 3> sizes;
 
       sizes.fill({.caption = 400, .chip = Geometry::chip_widths[0]});
-      const auto minimum_room = sizes[0].truncated(metrics) * static_cast<float>(sizes.size()) + metrics.gap * static_cast<float>(sizes.size() - 1);
+      const auto minimum_room = (sizes[0].truncated(metrics) * static_cast<float>(sizes.size())) + (metrics.gap * static_cast<float>(sizes.size() - 1));
 
       for (const auto room : {minimum_room, minimum_room + 30}) {
         for (std::size_t focus = 0; focus < sizes.size(); ++focus) {
@@ -1155,7 +1155,7 @@ namespace {
       window.resize(width, static_cast<int>(ChromeMetrics::logical_top_bar));
       window.show();
       QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
-      const auto selected = [&]() -> QQuickItem* {
+      const auto selected = [&] -> QQuickItem* {
         for (auto* mark : visualItems(*switcher, QStringLiteral("projectSwitcherMark"))) {
           if (mark->property("record").toMap().value(QStringLiteral("selected")).toBool()) {
             return mark;
@@ -1213,7 +1213,7 @@ namespace {
       window.resize(1000, static_cast<int>(ChromeMetrics::logical_top_bar));
       window.show();
       QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
-      auto* strip = navigation->findChild<TabStripLayout*>(QStringLiteral("tabStripLayout"));
+      const auto* strip = navigation->findChild<TabStripLayout*>(QStringLiteral("tabStripLayout"));
 
       QVERIFY(strip != nullptr);
       const auto switchers = visualItems(*navigation, QStringLiteral("projectSwitcher"));
@@ -1250,7 +1250,7 @@ namespace {
       window.resize(strip_width, static_cast<int>(ChromeMetrics::logical_top_bar));
       window.show();
       QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), fixture_wait_ms);
-      const auto firstArea = [&]() -> QQuickItem* {
+      const auto firstArea = [&] -> QQuickItem* {
         for (auto* item : visualItems(*strip, QString{})) {
           if (item->inherits("QQuickMouseArea") && item->isVisible() && item->width() > 0) {
             return item;

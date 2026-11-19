@@ -33,7 +33,7 @@ namespace telar::gui::features::prompt {
     ds::Vec<char, Memory> unquoted{memory};
 
     words.resize(text.size() + 1);
-    unquoted.resize(2 * text.size() + 2);
+    unquoted.resize((2 * text.size()) + 2);
     const auto at = shell::commandAt(text, syntax, tokens.view().first(lexed.tokens), lexed, words.viewMut(), unquoted.viewMut());
     if (at.overflow || at.current == shell::no_word) {
       return ds::none;
@@ -113,7 +113,7 @@ namespace telar::gui::features::prompt {
     ds::String<Memory> result{memory};
 
     for (const auto byte : text) {
-      if (special.find(byte) != std::string_view::npos && !(dialect == shell::Dialect::fish && (byte == '!' || byte == '#'))) {
+      if (special.contains(byte) && (dialect != shell::Dialect::fish || (byte != '!' && byte != '#'))) {
         result.push('\\');
       }
 

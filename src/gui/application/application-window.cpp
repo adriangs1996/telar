@@ -23,7 +23,7 @@ namespace telar::gui::application::window {
       }
 
       const auto& workspaces = session.workspaces();
-      const auto workspace = std::ranges::find_if(workspaces, [&](const auto& entry) {
+      const auto* const workspace = std::ranges::find_if(workspaces, [&](const auto& entry) {
         return sameWorkspace(entry.location, tab->location.workspace);
       });
       if (workspace != workspaces.end()) {

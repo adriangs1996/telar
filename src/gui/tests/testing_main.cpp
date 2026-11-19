@@ -22,7 +22,7 @@ int main(int argc, char** argv) {
     qputenv("QT_QUICK_BACKEND", "software");
   }
 
-  QGuiApplication application{argc, argv};
+  const QGuiApplication application{argc, argv};
 
   return telar::testing::run(argc, argv);
 }

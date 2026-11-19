@@ -36,7 +36,7 @@ namespace {
 
   // The buttons keep AppKit's spacing, sit on the navigation bar's middle line and
   // leave room before the first control drawn by Qt, even after AppKit retiles them.
-  void requireNavigationControls(QQuickWindow& window, NSWindow* native, CGFloat navigation_height, CGFloat pitch) {
+  void requireNavigationControls(const QQuickWindow& window, NSWindow* native, CGFloat navigation_height, CGFloat pitch) {
     const auto middle = native.frame.size.height - (navigation_height / 2);
     CGFloat previous = 0;
     CGFloat trailing = 0;
@@ -64,7 +64,7 @@ namespace {
     int releases = 0;
 
   protected:
-    bool eventFilter(QObject*, QEvent* event) override {
+    bool eventFilter(QObject* /*watched*/, QEvent* event) override {
       switch (event->type()) {
       case QEvent::MouseButtonPress:
         ++presses;

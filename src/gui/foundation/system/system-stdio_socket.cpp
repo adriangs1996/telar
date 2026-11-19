@@ -7,7 +7,7 @@ import telar.sys.posix;
 import telar.sys.socket;
 import telar.platform.primitives;
 import telar.base.ds;
-#if defined(__linux__)
+#ifdef __linux__
 import telar.sys.linux_api;
 #endif
 

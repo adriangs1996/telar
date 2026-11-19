@@ -18,8 +18,8 @@ static_assert(true);
 #include <string>
 #include <string_view>
 
+#include <climits>
 #include <exception>
-#include <limits.h>
 #include <new>
 
 import telar.testing;

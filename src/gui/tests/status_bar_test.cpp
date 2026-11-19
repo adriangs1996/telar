@@ -68,12 +68,12 @@ namespace {
     };
   }
 
-  using BarContent = features::components::BarContent;
+  using features::components::BarContent;
 
   void appendNode(BarContent& content, features::components::Node node, std::string_view text = {}, std::string_view detail = {}, std::string_view url = {}) {
     features::components::Input input{};
 
-    input.node = node;
+    input.node = std::move(node);
     input.text = text;
     input.detail = detail;
     input.url = url;
@@ -172,7 +172,7 @@ namespace {
       QVERIFY(bar->setProperty("diagnostic", QStringLiteral("The configuration could not be loaded")));
       window.show();
       QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
-      const auto findArea = [&]() -> QQuickItem* {
+      const auto findArea = [&] -> QQuickItem* {
         for (auto* item : visualItems(*bar, QString{})) {
           if (item->inherits("QQuickMouseArea") && item->isVisible() && item->width() > 0) {
             return item;
@@ -291,7 +291,7 @@ namespace {
       int full_samples = 0;
 
       for (const auto* column : columns) {
-        full_samples += column->property("modelData").toInt() == 100;
+        full_samples += static_cast<int>(column->property("modelData").toInt() == 100);
       }
 
       QCOMPARE(full_samples, 1);

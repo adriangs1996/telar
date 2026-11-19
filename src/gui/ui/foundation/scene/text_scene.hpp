@@ -32,7 +32,7 @@ static_assert(true);
 #include <string_view>
 #include <type_traits>
 #include <utility>
-#if (defined(Q_OS_MACOS))
+#ifdef Q_OS_MACOS
 #include "optical_text.hpp"
 #endif
 #include <QFont>
@@ -46,7 +46,6 @@ static_assert(true);
 
 #pragma once
 #ifdef Q_OS_MACOS
-#include "optical_text.hpp"
 #endif
 
 import telar.gui.foundation.core;

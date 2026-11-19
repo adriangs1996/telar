@@ -15,7 +15,7 @@ static_assert(true);
 #include "telar_base/memory/allocator.hpp"
 #include <string>
 
-#include <limits.h>
+#include <climits>
 
 import telar.testing;
 import telar.testing.test_memory;

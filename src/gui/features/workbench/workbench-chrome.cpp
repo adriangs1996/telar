@@ -120,7 +120,7 @@ namespace telar::gui::features::workbench {
     }
 
     const auto end = band.x + band.width;
-    const auto index_room = measurements.needs_attention ? std::max(0.0F, band.width - measurements.chip - part_gap * ratio) : band.width;
+    const auto index_room = measurements.needs_attention ? std::max(0.0F, band.width - measurements.chip - (part_gap * ratio)) : band.width;
     const auto index_width = std::min(measurements.index, index_room);
 
     result.index = {.x = band.x, .y = band.y, .width = index_width, .height = band.height};

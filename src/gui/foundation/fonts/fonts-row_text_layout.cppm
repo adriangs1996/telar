@@ -37,13 +37,13 @@ export {
     template <CascadingFontProvider Fonts>
     class TBC_GENERIC FontRuns {
     public:
-      inline FontRuns(Fonts& fonts, std::string_view text, FontRole preferred) noexcept
+      FontRuns(Fonts& fonts, std::string_view text, FontRole preferred) noexcept
           : fonts_(fonts),
             text_(text),
             cursor_(text),
             preferred_(preferred) {}
 
-      [[nodiscard]] inline ds::Option<FontSpan> next() {
+      [[nodiscard]] ds::Option<FontSpan> next() {
         const auto start = cursor_.position();
         const auto cluster = cursor_.next();
         if (!cluster) {

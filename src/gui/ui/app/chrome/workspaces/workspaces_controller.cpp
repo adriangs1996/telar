@@ -69,7 +69,7 @@ namespace telar::gui::qt {
 
     if (active != nullptr && active->location.workspace.kind == WorkspaceLocation::Kind::workspace) {
       selected_project = session.workspace_list.projectOf(active->location.workspace.id);
-      const auto current = std::ranges::find_if(session.workspaces(), [&](const auto& workspace) {
+      const auto* const current = std::ranges::find_if(session.workspaces(), [&](const auto& workspace) {
         return sameWorkspace(workspace.location, active->location.workspace);
       });
       if (current != session.workspaces().end()) {

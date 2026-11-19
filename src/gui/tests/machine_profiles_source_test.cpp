@@ -18,11 +18,11 @@ static_assert(true);
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
 #include <cerrno>
+#include <climits>
 #include <cstddef>
 #include <cstring>
 #include <fcntl.h>
 #include <filesystem>
-#include <limits.h>
 #include <memory>
 #include <optional>
 #include <span>

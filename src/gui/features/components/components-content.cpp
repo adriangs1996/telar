@@ -283,7 +283,7 @@ namespace telar::gui::features::components {
   }
 
   template <Capacity Bounds>
-  typename Content<Bounds>::Usage Content<Bounds>::Usage::with(const Node& node) const noexcept {
+  Content<Bounds>::Usage Content<Bounds>::Usage::with(const Node& node) const noexcept {
     return {.nodes = nodes + 1, .text = text + node.text.length + node.detail.length + node.url.length, .samples = samples + node.samples.length, .actions = actions + (node.action != Node::no_action ? 1 : 0)};
   }
 

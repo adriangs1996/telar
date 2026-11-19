@@ -80,13 +80,13 @@ namespace telar::gui::qt {
     // never overlaps a present on the GUI thread.
     const auto frames = std::allocate_shared<PresentedFrames>(AllocatorRef<PresentedFrames, ApplicationAllocator>{memory_});
 
-    connect(&window, &QQuickWindow::beforeSynchronizing, this, [this, frames, generation]() mutable {
+    connect(&window, &QQuickWindow::beforeSynchronizing, this, [this, frames, generation] mutable {
       if (generation == window_generation_) {
         prepareFrame(frames->next());
       }
     },
         Qt::DirectConnection);
-    connect(&window, &QQuickWindow::afterSynchronizing, this, [this, frames, generation]() mutable {
+    connect(&window, &QQuickWindow::afterSynchronizing, this, [this, frames, generation] mutable {
       if (generation == window_generation_) {
         auto& frame = frames->prepared.atMut(frames->current);
 

@@ -254,7 +254,7 @@ namespace telar::gui::application::workbench {
     auto* pane = findPaneMut(session.panes, pane_id);
     if (pane == nullptr) {
       const auto& agents = session.agents();
-      const auto agent = std::find_if(agents.begin(), agents.end(), [&](const auto& entry) {
+      const auto* const agent = std::find_if(agents.begin(), agents.end(), [&](const auto& entry) {
         return entry.pane_id == pane_id;
       });
       if (agent == agents.end()) {
@@ -558,7 +558,7 @@ namespace telar::gui::application::workbench {
   }
 
   std::string_view exportLayout(Session& session) {
-    auto* tab = activeTabMut(session.tabs, session.active_tab);
+    const auto* tab = activeTabMut(session.tabs, session.active_tab);
     if (tab == nullptr || tab->focused_pane == 0) {
       throw EncodingError{"No active tab layout"};
     }

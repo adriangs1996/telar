@@ -82,7 +82,7 @@ namespace {
   template <typename Host>
   struct EffectsClient : private HostedEffects<Host>, TestSession<SystemAllocator> {
     EffectsClient(SystemAllocator& memory, Transport& transport, Host effects, application::MonotonicNow now = &system::AwakeClock::nowNanoseconds)
-        : HostedEffects<Host>{effects},
+        : HostedEffects<Host>{std::move(effects)},
           TestSession(memory, transport, this->effects, now) {}
   };
 
@@ -130,7 +130,7 @@ namespace {
 
   struct InputClient : EffectsClient<InputEffects> {
     InputClient(SystemAllocator& memory, Transport& transport, InputEffects effects)
-        : EffectsClient(memory, transport, effects, &InputClock::nowNanoseconds) {}
+        : EffectsClient(memory, transport, std::move(effects), &InputClock::nowNanoseconds) {}
   };
 
   void acceptedInputObservesTheQueuedPaneIdentity() {
@@ -140,7 +140,7 @@ namespace {
     InputClient client{memory, transport, InputEffects{transport, observations}};
 
     openFirstPane(client, transport);
-    auto* pane = client.focusedPaneMut();
+    const auto* pane = client.focusedPaneMut();
 
     check(pane != nullptr, "input observation requires the opened pane");
     client.findPaneMut(pane->id)->graphics.detach();
