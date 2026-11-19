@@ -146,8 +146,6 @@ namespace telar::gui::qt {
   MachineClient& MachinesCoordinator::createClient(application::machines::Machines::Slot slot) {
     const auto key = store_.admission(slot);
     const MachineEffects::Sinks sinks{
-        .machines = store_.machines(),
-        .clients = store_.clients(),
         .desktop = desktop_,
         .sound_owner = sound_owner_,
         .frame_pacer = frames_.pacer(),
@@ -159,7 +157,7 @@ namespace telar::gui::qt {
     client->admitted_program.assign(store_.machines().row(slot).program.view());
     client->identity = QRandomGenerator::system()->generate64() | std::uint64_t{1};
     application::configuration::configure(client->session, configuration_source_.configuration());
-    client->session.setPresented(slot == store_.machines().active());
+    client->setPresented(slot == store_.machines().active());
     const bool replacing_active = store_.clients()[slot] && slot == store_.machines().active();
     if (replacing_active) {
       host_.releaseInput();
@@ -253,7 +251,7 @@ namespace telar::gui::qt {
     host_.releaseInput();
     dialogs_.show(Store::Dialog::none);
     application::palette::discard(store_.sessionMut());
-    store_.sessionMut().setPresented(false);
+    store_.clientMut(store_.machines().active()).setPresented(false);
     store_.advanceMachineView();
     host_.forgetView();
     if (!store_.machinesMut().select(target.slot)) {
@@ -264,7 +262,7 @@ namespace telar::gui::qt {
     emit changed();
     emit listChanged();
     display_.layoutWorkbench();
-    store_.sessionMut().setPresented(true);
+    store_.clientMut(store_.machines().active()).setPresented(true);
     host_.presentMachine();
   }
 
@@ -351,7 +349,7 @@ namespace telar::gui::qt {
   }
 
   void MachinesCoordinator::soundFinished([[maybe_unused]] ds::Option<CommandFailure> failure) {
-    const auto owner = std::exchange(sound_owner_, ds::none);
+    const auto owner = sound_owner_.take();
     auto* client = owner ? findClientMut(*owner) : nullptr;
     if (client == nullptr) {
       return;

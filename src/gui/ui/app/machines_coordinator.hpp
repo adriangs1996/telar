@@ -136,7 +136,7 @@ namespace telar::gui::qt {
     MachinesHost& host_;
     QByteArray hostname_;
     // The client whose agent the desktop's one sound plays for.
-    ds::Option<application::machines::MachineClientKey> sound_owner_;
+    ds::Cell<ds::Option<application::machines::MachineClientKey>> sound_owner_;
   };
 
 }

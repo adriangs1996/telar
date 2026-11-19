@@ -54,8 +54,10 @@ namespace telar::gui::qt {
 
   struct MachineClient {
     application::machines::MachineClientKey key;
-    RuntimeConnection connection;
-    MachineEffects effects;
+    // The connection allocates from the window's memory, and the effects reach the desktop it lends,
+    // region `a`.
+    tbc::view<RuntimeConnection, tbc::lt::a> connection;
+    tbc::view<MachineEffects, tbc::lt::a> effects;
     // Talks through `connection` and reports to `effects`, its siblings, so the client stays put.
     tbc::view<GuiSession, tbc::lt::self> session;
     ds::Option<system::WindowLease> identity_lease;
@@ -66,11 +68,18 @@ namespace telar::gui::qt {
     bool named_launch = false;
     runtime::FixedText<application::machines::MachineLimits::program_bytes> admitted_program;
 
-    explicit MachineClient(ApplicationAllocator& memory, const MachineEffects::Sinks& sinks, application::machines::MachineClientKey admission)
+    explicit MachineClient(tbc::view<ApplicationAllocator&, tbc::lt::a> memory, tbc::holds<const MachineEffects::Sinks&, tbc::lt::a> sinks, application::machines::MachineClientKey admission)
         : key(admission),
           connection(memory),
           effects(sinks, admission),
           session(memory, connection, effects) {}
+
+    // Whether the window shows this client's machine: its session draws and its effects reach the
+    // desktop only then.
+    void setPresented(bool presented) {
+      session.setPresented(presented);
+      effects.setPresented(presented);
+    }
 
     MachineClient(const MachineClient&) = delete;
     MachineClient& operator=(const MachineClient&) = delete;

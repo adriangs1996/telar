@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "machine_effects.hpp"
-#include "machine_client.hpp"
 
 import std;
 import telar.gui.foundation.system;
@@ -12,26 +11,22 @@ import telar.gui.application;
 
 namespace telar::gui::qt {
 
-  bool MachineEffects::presented() const noexcept {
-    return findMachineClient(sinks_.machines, sinks_.clients, source_) != nullptr && source_.machine.slot == sinks_.machines.active();
-  }
-
   bool MachineEffects::postNotification(const NotificationPayload& payload) {
-    return presented() && sinks_.desktop.postNotification(payload);
+    return presented_ && sinks_.desktop.postNotification(payload);
   }
 
   bool MachineEffects::playSound(AgentSound sound) {
-    if (!presented() || !sinks_.desktop.playSound(sound)) {
+    if (!presented_ || !sinks_.desktop.playSound(sound)) {
       return false;
     }
 
-    sinks_.sound_owner = source_;
+    sinks_.sound_owner.set(source_);
 
     return true;
   }
 
   void MachineEffects::notePaneInput(application::window::FramePacer::Pane pane) noexcept {
-    if (presented() && sinks_.frame_pacer) {
+    if (presented_ && sinks_.frame_pacer) {
       sinks_.frame_pacer.getMut().noteInput(pane, system::AwakeClock::nowNanoseconds());
     }
   }
