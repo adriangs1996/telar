@@ -528,10 +528,11 @@ namespace telar::runtime {
         continue;
       }
 
-      if (agent->cwd_revision != pane->cwd_revision || agent->title_revision != pane->terminal.effects.title_revision) {
+      // The registry learns of the change once this agent is no longer borrowed from it.
+      const bool revised = agent->cwd_revision != pane->cwd_revision || agent->title_revision != pane->terminal.effects.title_revision;
+      if (revised) {
         agent->cwd_revision = pane->cwd_revision;
         agent->title_revision = pane->terminal.effects.title_revision;
-        agents_.changed();
       }
 
       const bool settled = agent->interrupt_at && settleInterrupt(panes, focused(clients, layouts, pane->id), *pane, *agent, now);
@@ -545,6 +546,10 @@ namespace telar::runtime {
 
       if (agent->project(current_time) || settled) {
         projected(agent->pane, agent->generation);
+      }
+
+      if (revised) {
+        agents_.changed();
       }
     }
   }
