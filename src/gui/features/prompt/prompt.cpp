@@ -283,7 +283,7 @@ namespace telar::gui::features::prompt {
     return typed.promptReturned(current.commands != previous.commands && current.status == 0);
   }
 
-  void useClipboard(PaneLine& line, Clipboard clipboard) {
+  void useClipboard(tbc::view<PaneLine&, tbc::lt::a> line, tbc::view<Clipboard, tbc::lt::a> clipboard) {
     line.line.editorMut().setClipboard(std::move(clipboard));
   }
 
@@ -710,7 +710,7 @@ namespace telar::gui::features::prompt {
     line.line.offer(std::move(plan.completion.choices), context.replace_begin, context.replace_end, std::move(requests), plan.dialect, plan.label.view());
   }
 
-  ds::Option<std::uint64_t> receive(State& state, Lines& lines, const CompletionWords& message) {
+  ds::Option<std::uint64_t> receive(tbc::view<State&, tbc::lt::a> state, tbc::view<Lines&, tbc::lt::a> lines, const CompletionWords& message) {
     const auto pending = state.completions.remove(message.request_id);
     if (!pending) {
       return ds::none;
@@ -733,11 +733,11 @@ namespace telar::gui::features::prompt {
       words.push(Choice{.text = std::move(text), .description = Name{memory, word.description}});
     }
 
-    line->line.receive(message.request_id, words.view(), message.truncated);
+    line->line.receive(message.request_id, std::move(words), message.truncated);
     return pane_id;
   }
 
-  ds::Option<std::uint64_t> receive(State& state, Lines& lines, const PathResults& message) {
+  ds::Option<std::uint64_t> receive(tbc::view<State&, tbc::lt::a> state, tbc::view<Lines&, tbc::lt::a> lines, const PathResults& message) {
     const auto pending = state.completions.remove(message.request_id);
     if (!pending) {
       return ds::none;
@@ -766,13 +766,13 @@ namespace telar::gui::features::prompt {
       }
     }
 
-    line->line.receive(message.request_id, paths.view(), message.truncated);
+    line->line.receive(message.request_id, std::move(paths), message.truncated);
     return pane_id;
   }
 
   // ---- requests that fail -----------------------------------------------------------------------
 
-  ds::Option<std::uint64_t> fail(State& state, Lines& lines, std::uint64_t request_id) {
+  ds::Option<std::uint64_t> fail(tbc::view<State&, tbc::lt::a> state, tbc::view<Lines&, tbc::lt::a> lines, std::uint64_t request_id) {
     if (state.command_requests.contains(request_id)) {
       const auto settled = take(state.command_requests, request_id, CommandPresence::unknown);
 
@@ -795,7 +795,7 @@ namespace telar::gui::features::prompt {
     if (const auto pending = state.completions.remove(request_id)) {
       const auto pane_id = pending->pane_id;
       auto* line = lineOf(lines, pane_id);
-      if (line == nullptr || !line->line.receive(request_id, {}, true)) {
+      if (line == nullptr || !line->line.receive(request_id, Choices{state.memory}, true)) {
         return 0;
       }
 

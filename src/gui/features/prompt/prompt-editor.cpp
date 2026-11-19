@@ -2,11 +2,12 @@ module telar.gui.features.prompt;
 
 import std;
 import telar.base.ds;
+import telar.tbc;
 import telar.base.memory.allocators;
 
 namespace telar::gui::features::prompt {
 
-  Editor::Editor(Memory& memory, Keymap keymap)
+  Editor::Editor(tbc::view<Memory&, tbc::lt::a> memory, Keymap keymap)
       : text_(memory),
         keymap_(keymap),
         kill_ring_(memory),
@@ -53,7 +54,7 @@ namespace telar::gui::features::prompt {
     return count_ != 0 || operator_ != 0 || pending_ != Pending::none || register_pending_;
   }
 
-  void Editor::setClipboard(Clipboard clipboard) {
+  void Editor::setClipboard(tbc::view<Clipboard, tbc::lt::a> clipboard) {
     clipboard_ = std::move(clipboard);
   }
 

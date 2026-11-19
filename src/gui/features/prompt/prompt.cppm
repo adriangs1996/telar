@@ -351,7 +351,7 @@ export namespace telar::gui::features::prompt {
   [[nodiscard]] ds::Option<Outcome> follow(PaneLine& line, const PaneShell& previous, const PaneShell& current);
 
   // The system clipboard behind vim's "+ and "* registers.
-  void useClipboard(PaneLine& line, Clipboard clipboard);
+  void useClipboard(tbc::view<PaneLine&, tbc::lt::a> line, tbc::view<Clipboard, tbc::lt::a> clipboard);
 
   // ---- the commands the shell runs --------------------------------------------------------------
 
@@ -431,9 +431,9 @@ export namespace telar::gui::features::prompt {
 
   // An answer to a question Tab asked: the pane whose menu changed, 0 when none did, and none
   // when the answer is not one.
-  [[nodiscard]] ds::Option<std::uint64_t> receive(State& state, Lines& lines, const CompletionWords& message);
+  [[nodiscard]] ds::Option<std::uint64_t> receive(tbc::view<State&, tbc::lt::a> state, tbc::view<Lines&, tbc::lt::a> lines, const CompletionWords& message);
 
-  [[nodiscard]] ds::Option<std::uint64_t> receive(State& state, Lines& lines, const PathResults& message);
+  [[nodiscard]] ds::Option<std::uint64_t> receive(tbc::view<State&, tbc::lt::a> state, tbc::view<Lines&, tbc::lt::a> lines, const PathResults& message);
 
   // ---- requests that fail -----------------------------------------------------------------------
 
@@ -441,7 +441,7 @@ export namespace telar::gui::features::prompt {
   // found nothing. Its word stops waiting, its spec is unavailable and its menu stops expecting
   // it; none of them is an error the user should read. The pane whose line changed, 0 when none
   // did, and none when the request is not the line's.
-  [[nodiscard]] ds::Option<std::uint64_t> fail(State& state, Lines& lines, std::uint64_t request_id);
+  [[nodiscard]] ds::Option<std::uint64_t> fail(tbc::view<State&, tbc::lt::a> state, tbc::view<Lines&, tbc::lt::a> lines, std::uint64_t request_id);
 
   // Every question in flight fails.
   void failAll(State& state, Lines& lines) noexcept;

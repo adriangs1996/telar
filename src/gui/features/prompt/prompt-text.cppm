@@ -7,6 +7,7 @@ export module telar.gui.features.prompt:text;
 import std;
 import telar.base.memory.allocators;
 import telar.base.ds;
+import telar.tbc;
 
 namespace telar::gui::features::prompt {
 
@@ -18,7 +19,8 @@ namespace telar::gui::features::prompt {
     static constexpr std::size_t undo_capacity = 256;
 
     // The text and its undo history live in `memory`.
-    explicit Text(Memory& memory);
+    // The text and its history live in `memory`, region `a`.
+    explicit Text(tbc::view<Memory&, tbc::lt::a> memory);
 
     std::string_view view() const noexcept;
 
@@ -90,7 +92,7 @@ namespace telar::gui::features::prompt {
     };
 
     struct Snapshot {
-      ds::String<Memory> bytes;
+      tbc::view<ds::String<Memory>, tbc::lt::a> bytes;
       std::size_t cursor;
     };
 
@@ -98,11 +100,13 @@ namespace telar::gui::features::prompt {
 
     void record();
 
-    bool swap(ds::Vec<Snapshot, Memory>& from, ds::Vec<Snapshot, Memory>& to);
+    // Restores the last snapshot of the undo history, or of the redo history when not `back`, and
+    // keeps the current text in the other.
+    bool travel(bool back);
 
-    ds::String<Memory> bytes_;
-    ds::Vec<Snapshot, Memory> undo_;
-    ds::Vec<Snapshot, Memory> redo_;
+    tbc::view<ds::String<Memory>, tbc::lt::a> bytes_;
+    tbc::view<ds::Vec<Snapshot, Memory>, tbc::lt::a> undo_;
+    tbc::view<ds::Vec<Snapshot, Memory>, tbc::lt::a> redo_;
     std::size_t cursor_ = 0;
     std::size_t anchor_ = 0;
     std::uint64_t revision_ = 0;

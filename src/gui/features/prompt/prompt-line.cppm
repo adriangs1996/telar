@@ -17,6 +17,7 @@ import :menu;
 import telar.shell.syntax;
 import telar.base.ds;
 import telar.base.memory.allocators;
+import telar.tbc;
 
 namespace telar::gui::features::prompt {
 
@@ -53,7 +54,7 @@ namespace telar::gui::features::prompt {
     static constexpr std::size_t recent_capacity = 512;
 
     // The line, its menu and the commands it sent live in `memory`.
-    explicit Line(Memory& memory, Keymap keymap = Keymap::emacs);
+    explicit Line(tbc::view<Memory&, tbc::lt::a> memory, Keymap keymap = Keymap::emacs);
 
     Editor& editorMut() noexcept;
 
@@ -78,7 +79,8 @@ namespace telar::gui::features::prompt {
 
     // The rest of a command this one starts, from what this line sent (newest first) and then
     // `history`, newest first. Only while typing at the end of a non-empty line.
-    [[nodiscard]] std::string_view suggestion(History history) const noexcept;
+    // From the commands sent from this line or from the history, both in region `a`.
+    [[nodiscard]] tbc::view<std::string_view, tbc::lt::a> suggestion(tbc::view<History, tbc::lt::a> history) const noexcept;
 
     // A key in the editor or the queue. `incomplete` tells whether the shell would wait for more
     // of the command, so Enter continues it on a new line.
@@ -111,10 +113,10 @@ namespace telar::gui::features::prompt {
 
     // Offers `choices` for the word in [begin, end): one is written at once, more open the
     // menu. While `requests` are still looking for more, even one choice waits for them.
-    void offer(Choices choices, std::size_t begin, std::size_t end, ds::Vec<std::uint64_t, Memory> requests, shell::Dialect dialect, std::string_view label = {});
+    void offer(tbc::view<Choices, tbc::lt::a> choices, std::size_t begin, std::size_t end, tbc::view<ds::Vec<std::uint64_t, Memory>, tbc::lt::a> requests, shell::Dialect dialect, std::string_view label = {});
 
     // What a pending request found, added to the menu it was asked for.
-    bool receive(std::uint64_t request, std::span<const Choice> paths, bool truncated = false);
+    bool receive(std::uint64_t request, tbc::view<Choices, tbc::lt::a> paths, bool truncated = false);
 
     bool pending(std::uint64_t request) const noexcept;
 
@@ -159,12 +161,12 @@ namespace telar::gui::features::prompt {
     // what was being written to come back to.
     Outcome travel(int direction);
 
-    Editor editor_;
-    ds::Vec<ds::String<Memory>, Memory> recent_;
-    ds::String<Memory> draft_;
-    ds::String<Memory> delivery_;
+    tbc::view<Editor, tbc::lt::a> editor_;
+    tbc::view<ds::Vec<ds::String<Memory>, Memory>, tbc::lt::a> recent_;
+    tbc::view<ds::String<Memory>, tbc::lt::a> draft_;
+    tbc::view<ds::String<Memory>, tbc::lt::a> delivery_;
     ds::Option<std::size_t> history_index_;
-    ds::Option<Menu> menu_;
+    tbc::view<ds::Option<Menu>, tbc::lt::a> menu_;
     std::uint64_t revision_ = 0;
     // The next offer refines the menu typing reopened: one choice left is not written.
     bool refining_ = false;

@@ -33,8 +33,8 @@ namespace telar::gui::features::prompt {
 
   class Editor {
   public:
-    // The text, its registers and its recorded keys live in `memory`.
-    explicit Editor(Memory& memory, Keymap keymap = Keymap::emacs);
+    // The text, its registers and its recorded keys live in `memory`, region `a`.
+    explicit Editor(tbc::view<Memory&, tbc::lt::a> memory, Keymap keymap = Keymap::emacs);
 
     Text& textMut() noexcept;
 
@@ -49,7 +49,8 @@ namespace telar::gui::features::prompt {
     // An operator or count is waiting for the rest of the command.
     bool pending() const noexcept;
 
-    void setClipboard(Clipboard clipboard);
+    // The editor keeps the clipboard, which may borrow what lives in region `a`.
+    void setClipboard(tbc::view<Clipboard, tbc::lt::a> clipboard);
 
     // Starts a new line, back in insert mode.
     void clear() noexcept;
@@ -185,7 +186,7 @@ namespace telar::gui::features::prompt {
     void store(std::string_view text, bool linewise);
 
     struct Register {
-      ds::String<Memory> text;
+      tbc::view<ds::String<Memory>, tbc::lt::a> text;
       bool linewise = false;
     };
 
@@ -217,17 +218,17 @@ namespace telar::gui::features::prompt {
 
     static std::size_t encode(char32_t value, ds::Array<char, 4>& output) noexcept;
 
-    Text text_;
+    tbc::view<Text, tbc::lt::a> text_;
     Keymap keymap_;
     Mode mode_ = Mode::insert;
-    Clipboard clipboard_;
-    ds::String<Memory> kill_ring_;
-    ds::String<Memory> pasted_;
-    Register unnamed_;
+    tbc::view<Clipboard, tbc::lt::a> clipboard_;
+    tbc::view<ds::String<Memory>, tbc::lt::a> kill_ring_;
+    tbc::view<ds::String<Memory>, tbc::lt::a> pasted_;
+    tbc::view<Register, tbc::lt::a> unnamed_;
     // vim's named registers, a to z.
-    ds::Vec<Register, Memory> registers_;
-    ds::Vec<Recorded, Memory> recorded_;
-    ds::Vec<Recorded, Memory> last_change_;
+    tbc::view<ds::Vec<Register, Memory>, tbc::lt::a> registers_;
+    tbc::view<ds::Vec<Recorded, Memory>, tbc::lt::a> recorded_;
+    tbc::view<ds::Vec<Recorded, Memory>, tbc::lt::a> last_change_;
     ds::Option<std::size_t> goal_column_;
     std::pair<char, char32_t> last_find_{'f', 0};
     std::size_t count_ = 0;

@@ -4,10 +4,11 @@ import std;
 
 import telar.shell.syntax;
 import telar.base.ds;
+import telar.tbc;
 
 namespace telar::gui::features::prompt {
 
-  Line::Line(Memory& memory, Keymap keymap)
+  Line::Line(tbc::view<Memory&, tbc::lt::a> memory, Keymap keymap)
       : editor_(memory, keymap),
         recent_(memory),
         draft_(memory),
@@ -52,7 +53,7 @@ namespace telar::gui::features::prompt {
     }
   }
 
-  std::string_view Line::suggestion(History history) const noexcept {
+  tbc::view<std::string_view, tbc::lt::a> Line::suggestion(tbc::view<History, tbc::lt::a> history) const noexcept {
     const auto& text = editor_.text();
 
     if (textIsSmallAndInVimMode(text)) {
@@ -153,7 +154,7 @@ namespace telar::gui::features::prompt {
     return menu_;
   }
 
-  void Line::offer(Choices choices, std::size_t begin, std::size_t end, ds::Vec<std::uint64_t, Memory> requests, shell::Dialect dialect, std::string_view label) {
+  void Line::offer(tbc::view<Choices, tbc::lt::a> choices, std::size_t begin, std::size_t end, tbc::view<ds::Vec<std::uint64_t, Memory>, tbc::lt::a> requests, shell::Dialect dialect, std::string_view label) {
     const bool whole = choices.size() <= Menu::capacity;
     if (!whole) {
       choices.truncate(Menu::capacity);
@@ -176,7 +177,7 @@ namespace telar::gui::features::prompt {
     ++revision_;
   }
 
-  bool Line::receive(std::uint64_t request, std::span<const Choice> paths, bool truncated) {
+  bool Line::receive(std::uint64_t request, tbc::view<Choices, tbc::lt::a> paths, bool truncated) {
     if (!menu_ || menu_.getMut().requests.retain([request](std::uint64_t waiting) {
           return waiting != request;
         }) == 0) {
@@ -187,14 +188,15 @@ namespace telar::gui::features::prompt {
     // Answers to an older word join, narrowed to the word as it is now.
     const auto word = typedWord();
 
-    for (const auto& path : paths) {
+    for (auto& path : paths.viewMut()) {
       if (menu_->all.size() < Menu::capacity && std::ranges::none_of(menu_->all, [&](const Choice& choice) {
             return choice.text == path.text;
           })) {
-        menu_.getMut().all.push(path.clone());
         if (path.text.view().starts_with(word)) {
           menu_.getMut().choices.push(path.clone());
         }
+
+        menu_.getMut().all.push(std::move(path));
       }
     }
 
@@ -400,9 +402,11 @@ namespace telar::gui::features::prompt {
     const auto word = typedWord();
 
     menu.choices.clear();
-    for (const auto& choice : menu.all) {
-      if (choice.text.view().starts_with(word)) {
-        menu.choices.push(choice.clone());
+    // By index: the menu is reached through the Option holding it, which the checker sees as some
+    // part of it, so a borrow of `all` would overlap the growth of `choices`.
+    for (std::size_t index = 0; index < menu.all.size(); ++index) {
+      if (menu.all[index].text.view().starts_with(word)) {
+        menu.choices.push(menu.all[index].clone());
       }
     }
 

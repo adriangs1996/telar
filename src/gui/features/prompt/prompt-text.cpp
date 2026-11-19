@@ -2,9 +2,11 @@ module telar.gui.features.prompt;
 
 import std;
 
+import telar.tbc;
+
 namespace telar::gui::features::prompt {
 
-  Text::Text(Memory& memory)
+  Text::Text(tbc::view<Memory&, tbc::lt::a> memory)
       : bytes_(memory),
         undo_(memory),
         redo_(memory) {}
@@ -100,11 +102,11 @@ namespace telar::gui::features::prompt {
   }
 
   bool Text::undo() {
-    return swap(undo_, redo_);
+    return travel(true);
   }
 
   bool Text::redo() {
-    return swap(redo_, undo_);
+    return travel(false);
   }
 
   void Text::seal() noexcept {
@@ -198,7 +200,9 @@ namespace telar::gui::features::prompt {
     undo_.push(Snapshot{bytes_.clone(), cursor_});
   }
 
-  bool Text::swap(ds::Vec<Snapshot, Memory>& from, ds::Vec<Snapshot, Memory>& to) {
+  bool Text::travel(bool back) {
+    auto& from = back ? undo_ : redo_;
+    auto& to = back ? redo_ : undo_;
     if (from.empty()) {
       return false;
     }

@@ -7,6 +7,7 @@ import :completion;
 import telar.shell.syntax;
 import telar.base.ds;
 import telar.base.memory.allocators;
+import telar.tbc;
 
 export namespace telar::gui::features::prompt {
 
@@ -30,28 +31,28 @@ export namespace telar::gui::features::prompt {
     search_history,
   };
 
-  // The choices Tab offered, over the word they would replace.
+  // The choices Tab offered, over the word they would replace, in the memory of region `a`.
   struct Menu {
     static constexpr std::size_t capacity = 256;
 
-    explicit Menu(Memory& memory)
+    explicit Menu(tbc::view<Memory&, tbc::lt::a> memory)
         : choices(memory),
           requests(memory),
           label(memory),
           all(memory) {}
 
-    Choices choices;
+    tbc::view<Choices, tbc::lt::a> choices;
     std::size_t selected = 0;
     std::size_t begin = 0;
     std::size_t end = 0;
     // Requests to the runtime whose answers join the choices.
-    ds::Vec<std::uint64_t, Memory> requests;
+    tbc::view<ds::Vec<std::uint64_t, Memory>, tbc::lt::a> requests;
     shell::Dialect dialect = shell::Dialect::posix;
     // What the choices are, for the menu's heading: "commands", "branches · git".
-    ds::String<Memory> label;
+    tbc::view<ds::String<Memory>, tbc::lt::a> label;
     // Every choice offered for the word, and the cursor it was offered at: typing narrows them
     // down; erasing past that cursor asks for them again.
-    Choices all;
+    tbc::view<Choices, tbc::lt::a> all;
     std::size_t floor = 0;
     // Every choice for the word arrived: a cut list asks again as typing narrows it.
     bool whole = true;
