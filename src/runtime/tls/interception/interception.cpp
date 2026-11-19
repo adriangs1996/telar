@@ -24,13 +24,16 @@ namespace telar::runtime {
 
     const auto available = static_cast<std::size_t>(count);
     std::size_t cursor = 0, collected = 0;
+    // One mutable borrow of the bytes: the records are read from it and their bodies gathered at its
+    // front, as Rust's copy_within does.
+    const std::span<std::uint8_t> buffer{bytes_.dataMut(), bytes_.size()};
 
     while (cursor < available) {
       if (available - cursor < record_header_bytes) {
         return incomplete(available);
       }
 
-      const auto* header = bytes_.data() + cursor;
+      const auto* header = buffer.data() + cursor;
       const std::size_t length = (std::size_t{header[3]} << 8) | header[4];
       if (header[0] != handshake_record || header[1] != 3 || length == 0 || length > maximum_record_bytes) {
         return Read::complete;
@@ -40,12 +43,12 @@ namespace telar::runtime {
         return incomplete(available);
       }
 
-      std::memmove(bytes_.dataMut() + collected, header + record_header_bytes, length);
+      std::memmove(buffer.data() + collected, header + record_header_bytes, length);
       collected += length;
       cursor += record_header_bytes + length;
       if (collected >= 4) {
-        const auto expected = (std::size_t{bytes_[1]} << 16) | (std::size_t{bytes_[2]} << 8) | bytes_[3];
-        if (expected > maximum_hello_bytes - 4 || bytes_[0] != client_hello) {
+        const auto expected = (std::size_t{buffer[1]} << 16) | (std::size_t{buffer[2]} << 8) | buffer[3];
+        if (expected > maximum_hello_bytes - 4 || buffer[0] != client_hello) {
           return Read::complete;
         }
 
@@ -150,8 +153,11 @@ namespace telar::runtime {
         if (!protocols(body)) {
           return;
         }
+
+        protocols_offset_ = static_cast<std::size_t>(body.data() - handshake.data()) + 2;
+        protocols_size_ = body.size() - 2;
       } else if (kind == 0) {
-        if (seen_name || !serverName(body)) {
+        if (seen_name || !serverName(body, server_name_)) {
           return;
         }
 
@@ -208,7 +214,7 @@ namespace telar::runtime {
     return count == bytes_.size() ? Read::complete : Read::pending;
   }
 
-  bool AlpnOffer::serverName(std::span<const std::uint8_t> extension) noexcept {
+  bool AlpnOffer::serverName(std::span<const std::uint8_t> extension, FixedText<ProxyHostname::maximum_bytes>& name) noexcept {
     Cursor names{extension};
     const auto length = names.word();
     if (names.failed() || length != names.remaining()) {
@@ -225,11 +231,11 @@ namespace telar::runtime {
 
       if (type == 0) {
         const std::string_view host{reinterpret_cast<const char*>(value.data()), value.size()};
-        if (!server_name_.view().empty() || !ProxyHostname::validTarget(host)) {
+        if (!name.view().empty() || !ProxyHostname::validTarget(host)) {
           return false;
         }
 
-        server_name_.assign(host);
+        name.assign(host);
       }
     }
 
@@ -252,8 +258,6 @@ namespace telar::runtime {
       }
     }
 
-    protocols_offset_ = static_cast<std::size_t>(extension.data() - bytes_.data()) + 2;
-    protocols_size_ = extension.size() - 2;
     return true;
   }
 
@@ -288,7 +292,8 @@ namespace telar::runtime {
       }
 
       if (std::ranges::equal(names.first(size), selection->protocol())) {
-        *selected = selection->name_.data();
+        // OpenSSL keeps the name by address while the selection, the connection's app data, lives.
+        *selected = tbc::raw(selection->name_.data());
         *length = selection->length_;
         return SSL_TLSEXT_ERR_OK;
       }

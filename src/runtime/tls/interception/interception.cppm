@@ -80,9 +80,11 @@ export {
 
       Read incomplete(std::size_t count) const noexcept;
 
-      bool serverName(std::span<const std::uint8_t> extension) noexcept;
+      // Reads the server name into `name`, from the hello the offer holds, so neither borrows it whole.
+      static bool serverName(std::span<const std::uint8_t> extension, FixedText<ProxyHostname::maximum_bytes>& name) noexcept;
 
-      bool protocols(std::span<const std::uint8_t> extension) noexcept;
+      // Whether the extension lists protocols well formed.
+      static bool protocols(std::span<const std::uint8_t> extension) noexcept;
 
       static constexpr std::uint8_t handshake_record = 22;
       static constexpr std::uint8_t client_hello = 1;
