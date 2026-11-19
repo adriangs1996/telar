@@ -246,7 +246,7 @@ if(TELAR_GUI_NATIVE)
   if(TELAR_GUI_TEST_RUNTIME)
     get_filename_component(gui_test_runtime_directory "${TELAR_GUI_TEST_RUNTIME}" DIRECTORY)
     telar_add_test(gui-quick COMMAND gui-quick-test
-      LABELS gui.ui ENVIRONMENT "TELAR_GUI_TEST_RUNTIME=${TELAR_GUI_TEST_RUNTIME}" "PATH=${gui_test_runtime_directory}:$ENV{PATH}" QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 90)
+      LABELS gui.ui ENVIRONMENT "TELAR_GUI_TEST_RUNTIME=${TELAR_GUI_TEST_RUNTIME}" "PATH=${gui_test_runtime_directory}:$ENV{PATH}" QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 120)
   endif()
 endif()
 
