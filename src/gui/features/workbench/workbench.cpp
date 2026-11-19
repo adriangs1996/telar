@@ -12,7 +12,7 @@ namespace telar::gui::features::workbench {
   namespace {
 
     // The tabs of the workspace `active` shows, in the order it shows them.
-    std::size_t ordered(Tabs tabs, ds::Option<TabLocation> active, ds::Array<Tab<Memory>*, maximum_tabs>& output) noexcept {
+    std::size_t ordered(Tabs tabs, ds::Option<TabLocation> active, ds::Array<const Tab<Memory>*, maximum_tabs>& output) noexcept {
       std::size_t count = 0;
 
       if (!active) {
@@ -21,7 +21,7 @@ namespace telar::gui::features::workbench {
 
       for (const auto& tab : tabs) {
         if (sameWorkspace(tab->location.workspace, active->workspace)) {
-          output.atMut(count++) = tab.get();
+          output.atMut(count++) = &tab.get();
         }
       }
 
@@ -45,7 +45,7 @@ namespace telar::gui::features::workbench {
     return true;
   }
 
-  Reservation reserve(State& state, ds::Option<PaneBottomReservation> reservation, std::span<Owned<Tab<Memory>, Memory>> tabs) noexcept {
+  Reservation reserve(State& state, ds::Option<PaneBottomReservation> reservation, std::span<ds::Box<Tab<Memory>, Memory>> tabs) noexcept {
     auto& current = Access::reservation(state);
     const auto changed = current != reservation;
 
@@ -53,7 +53,7 @@ namespace telar::gui::features::workbench {
       current = reservation;
       Access::resizePending(state) = true;
       for (auto& tab : tabs) {
-        tab->layout.setBottomReservation(reservation);
+        tab.getMut().layout.setBottomReservation(reservation);
       }
     }
 
@@ -107,14 +107,14 @@ namespace telar::gui::features::workbench {
   }
 
   ds::Option<TabLocation> tabAt(Tabs tabs, ds::Option<TabLocation> active, std::size_t index) noexcept {
-    ds::Array<Tab<Memory>*, maximum_tabs> sorted{};
+    ds::Array<const Tab<Memory>*, maximum_tabs> sorted{};
     const auto count = ordered(tabs, active, sorted);
 
     return index < count ? ds::Option{sorted[index]->location} : ds::none;
   }
 
   ds::Option<TabLocation> tabBeside(Tabs tabs, ds::Option<TabLocation> active, std::int32_t offset) noexcept {
-    ds::Array<Tab<Memory>*, maximum_tabs> sorted{};
+    ds::Array<const Tab<Memory>*, maximum_tabs> sorted{};
     const auto count = ordered(tabs, active, sorted);
     const auto* current = active ? find(tabs, *active) : nullptr;
     const auto found = std::find(sorted.begin(), sorted.begin() + count, current);
@@ -139,9 +139,9 @@ namespace telar::gui::features::workbench {
       }
 
       if (tab->position > position && (next == nullptr || tab->position < next->position)) {
-        next = tab.get();
+        next = &tab.get();
       } else if (tab->position < position && (previous == nullptr || tab->position > previous->position)) {
-        previous = tab.get();
+        previous = &tab.get();
       }
     }
 

@@ -136,7 +136,7 @@ namespace {
       constexpr TerminalSize size{80, 24, 0, 0};
       constexpr ds::Array<std::string_view, 1> arguments{"/bin/cat"};
       const Launch launch{.cwd = "/", .arguments = arguments};
-      auto workspace = makeOwned<Workspace>(memory, memory, location.workspace.id, "/workspace with spaces", "Failure fixture");
+      auto workspace = ds::makeBox<Workspace>(memory, memory, location.workspace.id, "/workspace with spaces", "Failure fixture");
 
       model.workspaces.insert(location.workspace.id, std::move(workspace));
 

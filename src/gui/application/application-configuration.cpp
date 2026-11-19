@@ -407,8 +407,8 @@ namespace telar::gui::application {
   ConfigurationGeneration<Memory>::ConfigurationGeneration(tbc::view<Memory&, tbc::lt::a> memory, ConfigurationSourceText source)
       : memory_(memory),
         machine_(memory),
-        runtime_(makeOwned<runtime::config::RuntimeValues<Memory>>(memory, memory)),
-        components_(makeOwned<ComponentConfiguration>(memory, *machine_.state())),
+        runtime_(ds::makeBox<runtime::config::RuntimeValues<Memory>>(memory, memory)),
+        components_(ds::makeBox<ComponentConfiguration>(memory, *machine_.state())),
         descriptions_(memory),
         number_(source.generation) {
     profile_.assign(source.profile);
@@ -442,7 +442,7 @@ namespace telar::gui::application {
     const auto source = components_->definitions().source(position);
 
     renderComponents(source, context, [&](const auto& value, const auto& actions) {
-      components_->readBar(position, value, actions, notices_);
+      components_.getMut().readBar(position, value, actions, notices_);
     });
   }
 
@@ -456,24 +456,24 @@ namespace telar::gui::application {
     const auto source = panels[index].source;
 
     renderComponents(source, context, [&](const auto& value, const auto& actions) {
-      components_->readPanel(value, actions, notices_);
+      components_.getMut().readPanel(value, actions, notices_);
     });
   }
 
   template <Allocator Memory>
   void ConfigurationGeneration<Memory>::closePanel() noexcept {
-    components_->closePanel();
+    components_.getMut().closePanel();
   }
 
   template <Allocator Memory>
   template <features::components::Capacity Bounds>
-  tbc::view<Owned<features::components::RenderedContent<Bounds, Memory>, Memory>, tbc::lt::b> ConfigurationGeneration<Memory>::copied(tbc::view<Memory&, tbc::lt::b> memory, const features::components::Content<Bounds>& content) const {
-    auto result = makeOwned<features::components::RenderedContent<Bounds, Memory>>(memory, memory);
+  tbc::view<ds::Box<features::components::RenderedContent<Bounds, Memory>, Memory>, tbc::lt::b> ConfigurationGeneration<Memory>::copied(tbc::view<Memory&, tbc::lt::b> memory, const features::components::Content<Bounds>& content) const {
+    auto result = ds::makeBox<features::components::RenderedContent<Bounds, Memory>>(memory, memory);
 
-    result->content = content;
+    result.getMut().content = content;
     for (const auto& node : content.nodes()) {
       if (const auto action = content.action(node)) {
-        result->actions.add(resolve(*action));
+        result.getMut().actions.add(resolve(*action));
       }
     }
 
@@ -481,14 +481,14 @@ namespace telar::gui::application {
   }
 
   template <Allocator Memory>
-  Owned<features::components::RenderedContent<features::components::BarContent::capacity, Memory>, Memory> ConfigurationGeneration<Memory>::renderedBar(features::components::Position position, const features::components::Context& context) {
+  ds::Box<features::components::RenderedContent<features::components::BarContent::capacity, Memory>, Memory> ConfigurationGeneration<Memory>::renderedBar(features::components::Position position, const features::components::Context& context) {
     renderBar(position, context);
 
     return copied(memory_, components_->bar(position));
   }
 
   template <Allocator Memory>
-  Owned<features::components::RenderedContent<features::components::PanelContent::capacity, Memory>, Memory> ConfigurationGeneration<Memory>::renderedPanel(std::size_t index, const features::components::Context& context) {
+  ds::Box<features::components::RenderedContent<features::components::PanelContent::capacity, Memory>, Memory> ConfigurationGeneration<Memory>::renderedPanel(std::size_t index, const features::components::Context& context) {
     renderPanel(index, context);
 
     return copied(memory_, components_->panel());
@@ -510,13 +510,13 @@ namespace telar::gui::application {
   }
 
   template <Allocator Memory>
-  Owned<features::components::ResolvedEffects<Memory>, Memory> ConfigurationGeneration<Memory>::invokeResolved(BindingAction action, BindingContext context) {
-    auto result = makeOwned<features::components::ResolvedEffects<Memory>>(memory_, memory_);
+  ds::Box<features::components::ResolvedEffects<Memory>, Memory> ConfigurationGeneration<Memory>::invokeResolved(BindingAction action, BindingContext context) {
+    auto result = ds::makeBox<features::components::ResolvedEffects<Memory>>(memory_, memory_);
 
-    result->effects = invoke(action, context);
+    result.getMut().effects = invoke(action, context);
     for (const auto effect : std::span{result->effects.actions}.first(result->effects.length)) {
       if (effect.kind == BindingActionKind::extended || effect.kind == BindingActionKind::command_tab) {
-        result->actions.add(resolve(effect));
+        result.getMut().actions.add(resolve(effect));
       }
     }
 
@@ -524,13 +524,13 @@ namespace telar::gui::application {
   }
 
   template <Allocator Memory>
-  Owned<features::components::RenderedElements<Memory>, Memory> ConfigurationGeneration<Memory>::renderElements(features::components::Slot slot, std::uint64_t instance, const features::components::Context& context, std::string_view item) {
+  ds::Box<features::components::RenderedElements<Memory>, Memory> ConfigurationGeneration<Memory>::renderElements(features::components::Slot slot, std::uint64_t instance, const features::components::Context& context, std::string_view item) {
     const auto reference = components_->definitions().slot(slot);
     if (reference == LUA_NOREF) {
       throw std::invalid_argument{"Slot has no render function"};
     }
 
-    auto result = makeOwned<features::components::RenderedElements<Memory>>(memory_, memory_);
+    auto result = ds::makeBox<features::components::RenderedElements<Memory>>(memory_, memory_);
     ds::Vec<int, Memory> handlers{memory_};
     const auto release = [&] {
       for (const auto handler : handlers) {
@@ -557,7 +557,7 @@ namespace telar::gui::application {
         return static_cast<std::uint32_t>(handlers.size() - 1);
       };
 
-      ElementSink<Memory, decltype(action), decltype(callback)> sink{*result, action, callback};
+      ElementSink<Memory, decltype(action), decltype(callback)> sink{result.getMut(), action, callback};
       const features::components::ComponentColors colors;
 
       runtime::config::ElementReader{sink, colors}.read(root);
@@ -571,7 +571,7 @@ namespace telar::gui::application {
 
     client_state_.commands.endRender();
     lua_settop(machine_.state(), 0);
-    result->callbacks = static_cast<std::uint32_t>(handlers.size());
+    result.getMut().callbacks = static_cast<std::uint32_t>(handlers.size());
     auto& kept = handlersOf(instance);
 
     std::swap(kept.references, handlers);
@@ -581,7 +581,7 @@ namespace telar::gui::application {
   }
 
   template <Allocator Memory>
-  Owned<features::components::ResolvedEffects<Memory>, Memory> ConfigurationGeneration<Memory>::invokeElement(std::uint64_t instance, std::uint32_t callback, const features::components::Context& context, std::string_view item) {
+  ds::Box<features::components::ResolvedEffects<Memory>, Memory> ConfigurationGeneration<Memory>::invokeElement(std::uint64_t instance, std::uint32_t callback, const features::components::Context& context, std::string_view item) {
     const auto found = std::ranges::find(element_handlers_, instance, &ElementHandlers::instance);
     if (found == element_handlers_.end() || callback >= found->references.size()) {
       throw std::invalid_argument{"That element changed before its click arrived"};
@@ -597,10 +597,10 @@ namespace telar::gui::application {
     ComponentInvocation invocation{found->references[callback], context, nullptr, item};
 
     machine_.invoke(&ComponentInvocation::invoke, &invocation, 1);
-    auto result = makeOwned<features::components::ResolvedEffects<Memory>>(memory_, memory_);
+    auto result = ds::makeBox<features::components::ResolvedEffects<Memory>>(memory_, memory_);
     const runtime::lua::Value value{machine_.state(), -1, "click result"};
     if (value.present()) {
-      result->effects = withActions([&](const auto& reader) {
+      result.getMut().effects = withActions([&](const auto& reader) {
         return effects(value, reader);
       });
     }
@@ -608,7 +608,7 @@ namespace telar::gui::application {
     lua_settop(machine_.state(), 0);
     for (const auto effect : std::span{result->effects.actions}.first(result->effects.length)) {
       if (effect.kind == BindingActionKind::extended || effect.kind == BindingActionKind::command_tab) {
-        result->actions.add(resolve(effect));
+        result.getMut().actions.add(resolve(effect));
       }
     }
 
@@ -882,7 +882,7 @@ namespace telar::gui::application {
   void ConfigurationGeneration<Memory>::readConfiguration(tbc::view<Memory&, tbc::lt::a> memory, const features::plugins::PluginOverrides* overrides) {
     const runtime::lua::Value root{machine_.state(), -1, "config"};
 
-    runtime::config::SnapshotReader{memory, *runtime_}.read(root, profile_.view(), client_state_);
+    runtime::config::SnapshotReader{memory, runtime_.getMut()}.read(root, profile_.view(), client_state_);
     validateUtf8(runtime_->history_path);
     validateUtf8(runtime_->session_path);
     validateUtf8(runtime_->proxy.authority_directory);
@@ -894,14 +894,14 @@ namespace telar::gui::application {
     });
 
     if (overrides != nullptr) {
-      overrides->apply(runtime_->plugins);
+      overrides->apply(runtime_.getMut().plugins);
       removeDisabledPluginBindings(*overrides);
     }
 
     rebindDefinitions();
     keymap_ = input_.compile();
     withActions([&](const auto& reader) {
-      components_->readFixed(reader, notices_);
+      components_.getMut().readFixed(reader, notices_);
     });
 
     client_state_.commands.seal();
@@ -947,7 +947,7 @@ namespace telar::gui::application {
 
   template <Allocator Memory>
   void ConfigurationGeneration<Memory>::readClient(const runtime::lua::Value& client, const runtime::lua::Value* inherited) {
-    components_->readDefinitions(client);
+    components_.getMut().readDefinitions(client);
     const runtime::config::ClientDefinitions definitions{client, inherited};
     const runtime::config::RetainedActionValidator validator{definitions, notices_, client_state_.commands};
     const BindingActionReader reader{*machine_.state(), validator, client_state_.commands, number_};
@@ -1016,10 +1016,10 @@ namespace telar::gui::application {
   template class ConfigurationGeneration<telar::Memory>;
   template class ConfigurationGeneration<telar::ConcurrentMemory>;
 
-  template tbc::view<Owned<features::components::RenderedContent<features::components::BarContent::capacity, telar::Memory>, telar::Memory>, tbc::lt::b> ConfigurationGeneration<telar::Memory>::copied<features::components::BarContent::capacity>(tbc::view<telar::Memory&, tbc::lt::b> memory, const features::components::Content<features::components::BarContent::capacity>& content) const;
-  template tbc::view<Owned<features::components::RenderedContent<features::components::PanelContent::capacity, telar::Memory>, telar::Memory>, tbc::lt::b> ConfigurationGeneration<telar::Memory>::copied<features::components::PanelContent::capacity>(tbc::view<telar::Memory&, tbc::lt::b> memory, const features::components::Content<features::components::PanelContent::capacity>& content) const;
-  template tbc::view<Owned<features::components::RenderedContent<features::components::BarContent::capacity, telar::ConcurrentMemory>, telar::ConcurrentMemory>, tbc::lt::b> ConfigurationGeneration<telar::ConcurrentMemory>::copied<features::components::BarContent::capacity>(tbc::view<telar::ConcurrentMemory&, tbc::lt::b> memory, const features::components::Content<features::components::BarContent::capacity>& content) const;
-  template tbc::view<Owned<features::components::RenderedContent<features::components::PanelContent::capacity, telar::ConcurrentMemory>, telar::ConcurrentMemory>, tbc::lt::b> ConfigurationGeneration<telar::ConcurrentMemory>::copied<features::components::PanelContent::capacity>(tbc::view<telar::ConcurrentMemory&, tbc::lt::b> memory, const features::components::Content<features::components::PanelContent::capacity>& content) const;
+  template tbc::view<ds::Box<features::components::RenderedContent<features::components::BarContent::capacity, telar::Memory>, telar::Memory>, tbc::lt::b> ConfigurationGeneration<telar::Memory>::copied<features::components::BarContent::capacity>(tbc::view<telar::Memory&, tbc::lt::b> memory, const features::components::Content<features::components::BarContent::capacity>& content) const;
+  template tbc::view<ds::Box<features::components::RenderedContent<features::components::PanelContent::capacity, telar::Memory>, telar::Memory>, tbc::lt::b> ConfigurationGeneration<telar::Memory>::copied<features::components::PanelContent::capacity>(tbc::view<telar::Memory&, tbc::lt::b> memory, const features::components::Content<features::components::PanelContent::capacity>& content) const;
+  template tbc::view<ds::Box<features::components::RenderedContent<features::components::BarContent::capacity, telar::ConcurrentMemory>, telar::ConcurrentMemory>, tbc::lt::b> ConfigurationGeneration<telar::ConcurrentMemory>::copied<features::components::BarContent::capacity>(tbc::view<telar::ConcurrentMemory&, tbc::lt::b> memory, const features::components::Content<features::components::BarContent::capacity>& content) const;
+  template tbc::view<ds::Box<features::components::RenderedContent<features::components::PanelContent::capacity, telar::ConcurrentMemory>, telar::ConcurrentMemory>, tbc::lt::b> ConfigurationGeneration<telar::ConcurrentMemory>::copied<features::components::PanelContent::capacity>(tbc::view<telar::ConcurrentMemory&, tbc::lt::b> memory, const features::components::Content<features::components::PanelContent::capacity>& content) const;
 
   tbc::view<std::string_view, tbc::lt::a> ClientQuery::write(const Configuration& configuration, const ClientQueryContext& context, tbc::view<std::span<char>, tbc::lt::a> output) {
     JsonWriter writer{output};

@@ -142,7 +142,7 @@ namespace telar::runtime {
       const auto slot = (start + std::countr_zero(candidates)) % ClientSession::attachment_capacity;
 
       candidates &= candidates - 1;
-      auto& attachment = *client.attachments[slots_[slot].index];
+      auto& attachment = client.attachments.atMut(slots_[slot].index).getMut();
       auto& pane = *model.panes.find(attachment.pane_id);
       Output output{client.connection, client.completing_exit, client.frame_interval, model.metrics};
       if (prepare(output, attachment, pane, lane, now, timeout)) {
@@ -472,7 +472,7 @@ namespace telar::runtime {
       }
 
       client.connection.send(PaneClipboard{pane->id, pane->terminal.effects.clipboard});
-      attachment->clipboard_revision = pane->terminal.effects.clipboard_revision;
+      attachment.getMut().clipboard_revision = pane->terminal.effects.clipboard_revision;
       return true;
     }
 

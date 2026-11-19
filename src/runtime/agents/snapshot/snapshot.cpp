@@ -506,10 +506,21 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  Agent* AgentRegistry<Memory>::find(std::uint64_t pane, std::uint64_t generation) const noexcept {
+  const Agent* AgentRegistry<Memory>::find(std::uint64_t pane, std::uint64_t generation) const noexcept {
     for (const auto& agent : records_) {
       if (agent->pane == pane && agent->generation == generation) {
-        return agent.get();
+        return &agent.get();
+      }
+    }
+
+    return nullptr;
+  }
+
+  template <Allocator Memory>
+  Agent* AgentRegistry<Memory>::findMut(std::uint64_t pane, std::uint64_t generation) noexcept {
+    for (auto& agent : records_.viewMut()) {
+      if (agent->pane == pane && agent->generation == generation) {
+        return &agent.getMut();
       }
     }
 
@@ -518,7 +529,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   Agent& AgentRegistry<Memory>::ensure(std::uint64_t pane, std::uint64_t generation) {
-    if (auto* existing = find(pane, generation)) {
+    if (auto* existing = findMut(pane, generation)) {
       return *existing;
     }
 
@@ -526,13 +537,18 @@ namespace telar::runtime {
       throw RequestError{FailureCode::resource_limit, "Agent capacity reached"};
     }
 
-    records_.push(makeOwned<Agent>(memory_, pane, generation));
-    return *records_.back();
+    records_.push(ds::makeBox<Agent>(memory_, pane, generation));
+    return records_.backMut().getMut();
   }
 
   template <Allocator Memory>
-  std::span<const Owned<Agent, Memory>> AgentRegistry<Memory>::records() const noexcept {
+  std::span<const ds::Box<Agent, Memory>> AgentRegistry<Memory>::records() const noexcept {
     return std::span{records_};
+  }
+
+  template <Allocator Memory>
+  std::span<ds::Box<Agent, Memory>> AgentRegistry<Memory>::recordsMut() noexcept {
+    return records_.viewMut();
   }
 
   template <Allocator Memory>

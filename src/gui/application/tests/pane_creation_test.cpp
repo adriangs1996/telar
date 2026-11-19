@@ -42,7 +42,7 @@ namespace {
   const Tab<Memory>* tabIn(const application::Session& client, TabLocation location) {
     for (const auto& tab : client.tabs()) {
       if (sameTab(tab->location, location)) {
-        return tab.get();
+        return &tab.get();
       }
     }
 

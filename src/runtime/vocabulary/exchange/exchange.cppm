@@ -239,7 +239,7 @@ export {
   namespace telar::runtime {
 
     struct CapturedExchange {
-      using Half = Owned<CaptureHalf, ConcurrentMemory>;
+      using Half = ds::Box<CaptureHalf, ConcurrentMemory>;
 
       // The halves keep the quota they were captured under, region `a`.
       explicit CapturedExchange(tbc::view<ConcurrentMemory&, tbc::lt::a> memory) noexcept;

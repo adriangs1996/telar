@@ -215,18 +215,18 @@ namespace {
 
   void checkHistoryShutdown(SystemAllocator& memory) {
     ControlledHistoryService service;
-    auto worker = makeOwned<RequestWorker<SystemAllocator, ControlledHistoryService>>(memory, memory, service);
+    auto worker = ds::makeBox<RequestWorker<SystemAllocator, ControlledHistoryService>>(memory, memory, service);
 
-    worker->submit(1, QueryClients{.request_id = 1});
+    worker.getMut().submit(1, QueryClients{.request_id = 1});
     check(service.waitStarted(1));
     for (std::uint64_t identity = 2; identity <= 6; ++identity) {
-      worker->submit(1, QueryClients{.request_id = identity});
+      worker.getMut().submit(1, QueryClients{.request_id = identity});
     }
 
     service.allow(6);
     check(service.waitStarted(5));
     for (std::uint64_t identity = 7; identity <= 70; ++identity) {
-      worker->submit(1, ImportHistory{.request_id = identity, .source = "fixture", .entries = history_entries});
+      worker.getMut().submit(1, ImportHistory{.request_id = identity, .source = "fixture", .entries = history_entries});
     }
 
     auto shutdown = std::async(std::launch::async, [owned = std::move(worker)]() mutable {

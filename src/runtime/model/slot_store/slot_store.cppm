@@ -306,7 +306,7 @@ export {
       inline ~SlotStore() {
         for (auto* value : items_) {
           if (value != nullptr) {
-            AllocationDeleter<Value, Memory>{memory_}(value);
+            ds::Box<Value, Memory>::fromRaw(value, memory_).reset();
           }
         }
       }
@@ -322,14 +322,14 @@ export {
         return next_id_;
       }
 
-      inline std::uint64_t insert(std::uint64_t id, Owned<Value, Memory> value) {
+      inline std::uint64_t insert(std::uint64_t id, ds::Box<Value, Memory> value) {
         const auto handle = insertProvisional(id, std::move(value));
 
         advanceCounter(id + 1);
         return handle;
       }
 
-      inline std::uint64_t insertProvisional(std::uint64_t id, Owned<Value, Memory> value) {
+      inline std::uint64_t insertProvisional(std::uint64_t id, ds::Box<Value, Memory> value) {
         if (id == 0 || count_ == Capacity || find(id) != nullptr) {
           throw std::bad_alloc{};
         }
@@ -347,7 +347,7 @@ export {
         ++generations_.atMut(slot);
         identities_.atMut(slot) = id;
         lookup_.atMut(bucket(id)) = static_cast<std::uint16_t>(slot + 1);
-        items_.atMut(slot) = value.release();
+        items_.atMut(slot) = value.intoRaw();
         ++count_;
         return generations_[slot] * Capacity + slot;
       }
@@ -377,7 +377,7 @@ export {
         identities_.atMut(slot) = 0;
         items_.atMut(slot) = nullptr;
         --count_;
-        AllocationDeleter<Value, Memory>{memory_}(value);
+        ds::Box<Value, Memory>::fromRaw(value, memory_).reset();
       }
 
       inline std::size_t size() const noexcept {

@@ -473,7 +473,7 @@ namespace telar::gui::platform {
 
   XcbClipboardImageMonitor::XcbClipboardImageMonitor(ApplicationAllocator& memory)
       : memory_(memory),
-        native_(makeOwned<Native>(memory, memory)) {}
+        native_(ds::makeBox<Native>(memory, memory)) {}
 
   XcbClipboardImageMonitor::~XcbClipboardImageMonitor() = default;
 

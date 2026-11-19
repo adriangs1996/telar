@@ -61,18 +61,18 @@ namespace {
             continue;
           }
 
-          auto half = makeOwned<CaptureHalf>(memory, memory, quota, limits, CaptureStart{.key = {UINT64_MAX, UINT32_MAX}, .side = side, .protocol = protocol, .host = "example.test", .started_at_ms = INT64_MIN});
+          auto half = ds::makeBox<CaptureHalf>(memory, memory, quota, limits, CaptureStart{.key = {UINT64_MAX, UINT32_MAX}, .side = side, .protocol = protocol, .host = "example.test", .started_at_ms = INT64_MIN});
 
-          half->setMethod("POST");
-          half->setTarget("/resource");
-          half->setEncoding("gzip");
-          half->append(half->headPart(), "head");
-          half->append(half->bodyPart(), std::string_view{"a\0b", 3});
-          half->head.truncated = true;
-          half->body.truncated = true;
-          half->body_decoded = true;
-          half->status_code = 503;
-          half->finish(CaptureOutcome::failed, INT64_MAX);
+          half.getMut().setMethod("POST");
+          half.getMut().setTarget("/resource");
+          half.getMut().setEncoding("gzip");
+          half.getMut().append(half->headPart(), "head");
+          half.getMut().append(half->bodyPart(), std::string_view{"a\0b", 3});
+          half.getMut().head.truncated = true;
+          half.getMut().body.truncated = true;
+          half.getMut().body_decoded = true;
+          half.getMut().status_code = 503;
+          half.getMut().finish(CaptureOutcome::failed, INT64_MAX);
           exchange.include(std::move(half));
         }
 
@@ -278,13 +278,13 @@ namespace {
     const ProxyCaptureLimits limits{.part_bytes = 1024, .exchange_bytes = 2048, .total_bytes = 4096, .enabled = true};
     ds::Array<Byte, 4096> buffer;
     CapturedExchange exchange{memory};
-    auto half = makeOwned<CaptureHalf>(memory, memory, quota, limits, CaptureStart{.key = {1, 0}, .side = CaptureSide::request, .protocol = CaptureProtocol::http1, .host = "example.test"});
+    auto half = ds::makeBox<CaptureHalf>(memory, memory, quota, limits, CaptureStart{.key = {1, 0}, .side = CaptureSide::request, .protocol = CaptureProtocol::http1, .host = "example.test"});
 
-    half->setMethod("POST");
-    half->setTarget("/");
-    half->append(half->headPart(), "0123456789");
-    half->append(half->bodyPart(), "abcdefghij");
-    half->finish(CaptureOutcome::finished, 1);
+    half.getMut().setMethod("POST");
+    half.getMut().setTarget("/");
+    half.getMut().append(half->headPart(), "0123456789");
+    half.getMut().append(half->bodyPart(), "abcdefghij");
+    half.getMut().finish(CaptureOutcome::finished, 1);
     exchange.include(std::move(half));
 
     auto text = [](std::span<const std::uint8_t> bytes) {

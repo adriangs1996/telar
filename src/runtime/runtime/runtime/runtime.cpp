@@ -119,7 +119,7 @@ namespace telar::runtime {
   template <EventLoop Poller, HistoryEventSink History>
   void AgentService<Poller, History>::observeInput(const Pane& pane, std::span<const Byte> bytes) {
     if (descriptions_.enabled()) {
-      if (auto* agent = agents_.find(pane.id, pane.generation)) {
+      if (auto* agent = agents_.findMut(pane.id, pane.generation)) {
         agent->observeInput(bytes);
       }
     }
@@ -138,7 +138,7 @@ namespace telar::runtime {
   template <EventLoop Poller, HistoryEventSink History>
   void AgentService<Poller, History>::report(RuntimeModel& model, ClientSession& client, const ReportAgent& request) {
     auto& pane = authorize(model.panes, client, request.pane_id, request.pane_generation, request.provider);
-    auto* existing = agents_.find(pane.id, pane.generation);
+    auto* existing = agents_.findMut(pane.id, pane.generation);
     if (existing == nullptr && request.state == AgentReportState::continuing) {
       client.connection.send(RequestCompleted{.request_id = request.request_id});
       return;
@@ -206,7 +206,7 @@ namespace telar::runtime {
       }
 
       if (selected == nullptr || watch.checked_at < selected->file_watch.checked_at) {
-        selected = agent.get();
+        selected = &agent.get();
       }
     }
 
@@ -215,7 +215,7 @@ namespace telar::runtime {
 
   template <EventLoop Poller, HistoryEventSink History>
   void AgentService<Poller, History>::completeSessionFile(const SessionFileResult& result, std::chrono::steady_clock::time_point now) {
-    auto* agent = agents_.find(result.request.pane, result.request.generation);
+    auto* agent = agents_.findMut(result.request.pane, result.request.generation);
     if (agent == nullptr) {
       return;
     }
@@ -318,7 +318,7 @@ namespace telar::runtime {
 
   template <EventLoop Poller, HistoryEventSink History>
   void AgentService<Poller, History>::acknowledge(const AcknowledgeAgent& request) noexcept {
-    if (auto* agent = agents_.find(request.pane_id, request.pane_generation); agent != nullptr && agent->status == AgentStatus::done) {
+    if (auto* agent = agents_.findMut(request.pane_id, request.pane_generation); agent != nullptr && agent->status == AgentStatus::done) {
       agent->acknowledged = true;
       if (agent->project(wallMilliseconds())) {
         projected(agent->pane, agent->generation);
@@ -337,7 +337,7 @@ namespace telar::runtime {
       throw RequestError{FailureCode::pane_focused, "The pane has focus in an attached window"};
     }
 
-    auto* agent = agents_.find(pane.id, pane.generation);
+    auto* agent = agents_.findMut(pane.id, pane.generation);
     const auto now = std::chrono::steady_clock::now();
     if (agent != nullptr && agent->interrupt_at && now - *agent->interrupt_at < std::chrono::seconds{2}) {
       client.connection.send(RequestCompleted{.request_id = request.request_id});
@@ -407,7 +407,7 @@ namespace telar::runtime {
 
   template <EventLoop Poller, HistoryEventSink History>
   void AgentService<Poller, History>::observeProcess(Pane& pane, ds::Option<ProcessIdentity> identity, AgentProvider provider) {
-    auto* agent = agents_.find(pane.id, pane.generation);
+    auto* agent = agents_.findMut(pane.id, pane.generation);
     if (agent != nullptr && agent->process_identity && provider == AgentProvider::unknown) {
       agents_.removeIf([&](const Agent& record) {
         return record.pane == pane.id && record.generation == pane.generation;
@@ -456,7 +456,7 @@ namespace telar::runtime {
   template <EventLoop Poller, HistoryEventSink History>
   void AgentService<Poller, History>::observeProcess(Pane& pane, const ProcessProbeResult& observation) {
     observeProcess(pane, observation.identity, observation.provider);
-    auto* agent = agents_.find(pane.id, pane.generation);
+    auto* agent = agents_.findMut(pane.id, pane.generation);
     if (agent == nullptr) {
       return;
     }
@@ -480,7 +480,7 @@ namespace telar::runtime {
 
   template <EventLoop Poller, HistoryEventSink History>
   void AgentService<Poller, History>::observeScreen(Pane& pane, const AgentSignal& signal, ObservationTime time) {
-    auto* agent = agents_.find(pane.id, pane.generation);
+    auto* agent = agents_.findMut(pane.id, pane.generation);
     if (agent == nullptr) {
       return;
     }
@@ -507,7 +507,7 @@ namespace telar::runtime {
         continue;
       }
 
-      auto* agent = agents_.find(pane->id, pane->generation);
+      auto* agent = agents_.findMut(pane->id, pane->generation);
       if (agent == nullptr) {
         continue;
       }
@@ -557,7 +557,7 @@ namespace telar::runtime {
   void AgentService<Poller, History>::projected(std::uint64_t pane, std::uint64_t generation) noexcept {
     const auto pending = DescriptionQueue::pending(agents_);
 
-    if (auto* agent = agents_.find(pane, generation)) {
+    if (auto* agent = agents_.findMut(pane, generation)) {
       descriptions_.project(pending, *agent);
       agent->sequence = ++sequence_;
     }
@@ -1305,10 +1305,10 @@ namespace telar::runtime {
     }
 
     const auto workspace_id = model.workspaces.nextId();
-    auto workspace = makeOwned<Workspace>(memory_, memory_, workspace_id, launch.cwd, name);
+    auto workspace = ds::makeBox<Workspace>(memory_, memory_, workspace_id, launch.cwd, name);
     const auto tab_id = model.next_tab_id;
 
-    workspace->tabs.emplace(memory_, tab_id, std::string_view{});
+    workspace.getMut().tabs.emplace(memory_, tab_id, std::string_view{});
     model.workspaces.insertProvisional(workspace_id, std::move(workspace));
     ds::Option<std::uint64_t> pane;
 
@@ -1468,7 +1468,7 @@ namespace telar::runtime {
     if (created) {
       workspace = model.workspaces.nextId();
       const auto title = entry.title.view().empty() ? entry.branch.view() : entry.title.view();
-      auto owned = makeOwned<Workspace>(memory_, memory_, workspace, entry.path, utf8Prefix(title, 128));
+      auto owned = ds::makeBox<Workspace>(memory_, memory_, workspace, entry.path, utf8Prefix(title, 128));
 
       model.workspaces.insertProvisional(workspace, std::move(owned));
     }
@@ -1790,10 +1790,10 @@ namespace telar::runtime {
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::admitClient(FileDescriptor descriptor) {
     const auto identity = clients_.nextId();
-    auto client = makeOwned<ClientSession>(memory_, memory_, identity, std::move(descriptor));
+    auto client = ds::makeBox<ClientSession>(memory_, memory_, identity, std::move(descriptor));
 
-    client->connection.negotiated = true;
-    client->peer_identity = process_inspector_.peer(client->connection.descriptor());
+    client.getMut().connection.negotiated = true;
+    client.getMut().peer_identity = process_inspector_.peer(client->connection.descriptor());
     const auto handle = clients_.insert(identity, std::move(client));
     auto& admitted = requireClient(clients_, identity);
 
@@ -2459,7 +2459,7 @@ namespace telar::runtime {
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const FrameAck& message) {
-    if (auto* attachment = requireClient(clients_, identity).attachment(message.pane_id)) {
+    if (auto* attachment = requireClient(clients_, identity).attachmentMut(message.pane_id)) {
       attachment->frames.acknowledge(message.frame_id);
       TELAR_DIAGNOSTIC(model_.metrics.frames.merge(attachment->frames.takeCounters()));
     }
@@ -2468,7 +2468,7 @@ namespace telar::runtime {
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const RequestSnapshot& message) {
-    if (auto* attachment = requireClient(clients_, identity).attachment(message.pane_id)) {
+    if (auto* attachment = requireClient(clients_, identity).attachmentMut(message.pane_id)) {
       attachment->frames.requestSnapshot();
     }
   }
@@ -2476,7 +2476,7 @@ namespace telar::runtime {
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const SetPaneViewport& message) {
-    if (auto* attachment = requireClient(clients_, identity).attachment(message.pane_id)) {
+    if (auto* attachment = requireClient(clients_, identity).attachmentMut(message.pane_id)) {
       // At or past the bottom the view follows the output, as before any scroll; a row
       // above it stays put while output grows.
       std::uint32_t bottom = 0;
@@ -2612,14 +2612,14 @@ namespace telar::runtime {
 
     client.shared_graphics = message.shared;
     for (auto& attachment : client.attachments.viewMut()) {
-      attachment->graphics.configure(message.shared);
+      attachment.getMut().graphics.configure(message.shared);
     }
   }
 
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const GraphicsCredit& message) {
-    if (auto* attachment = requireClient(clients_, identity).attachment(message.pane_id)) {
+    if (auto* attachment = requireClient(clients_, identity).attachmentMut(message.pane_id)) {
       attachment->graphics.returnCredit(message.bytes);
     }
   }
@@ -2627,7 +2627,7 @@ namespace telar::runtime {
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const RequestGraphicsSnapshot& message) {
-    if (auto* attachment = requireClient(clients_, identity).attachment(message.pane_id)) {
+    if (auto* attachment = requireClient(clients_, identity).attachmentMut(message.pane_id)) {
       attachment->graphics.requestSnapshot();
     }
   }

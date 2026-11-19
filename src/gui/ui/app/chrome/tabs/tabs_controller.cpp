@@ -73,7 +73,7 @@ namespace telar::gui::qt {
 
     for (const auto& tab : session.tabs()) {
       if (active != nullptr && sameWorkspace(tab->location.workspace, active->location.workspace)) {
-        ordered.append(tab.get());
+        ordered.append(&tab.get());
       }
     }
 

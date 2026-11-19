@@ -49,10 +49,10 @@ export {
 
       check(::setsockopt(peer_.get(), SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == 0);
       telar::runtime::setNonblocking(sockets[0]);
-      auto client = telar::makeOwned<telar::runtime::ClientSession>(memory, memory, id_, telar::runtime::FileDescriptor{sockets[0]});
+      auto client = telar::ds::makeBox<telar::runtime::ClientSession>(memory, memory, id_, telar::runtime::FileDescriptor{sockets[0]});
 
-      client->role = role;
-      client->connection.negotiated = true;
+      client.getMut().role = role;
+      client.getMut().connection.negotiated = true;
       const auto handle = clients.insert(id_, std::move(client));
 
       clients.find(id_)->event_identity = handle;

@@ -116,7 +116,7 @@ namespace {
     ProxyCaptureLimits limits;
     using Joiner = CaptureJoiner;
     auto half = [&](std::uint64_t connection, CaptureSide side) {
-      return makeOwned<CaptureHalf>(memory, memory, quota, limits, CaptureStart{.key = {connection, 1}, .side = side});
+      return ds::makeBox<CaptureHalf>(memory, memory, quota, limits, CaptureStart{.key = {connection, 1}, .side = side});
     };
 
     {

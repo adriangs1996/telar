@@ -173,7 +173,7 @@ namespace telar::gui::application {
     }
 
     // The tabs, to change them.
-    [[nodiscard]] static std::span<Owned<Tab<Memory>, Memory>> tabsMut(Session& session) noexcept {
+    [[nodiscard]] static std::span<ds::Box<Tab<Memory>, Memory>> tabsMut(Session& session) noexcept {
       return session.tabs_.viewMut();
     }
 

@@ -245,11 +245,11 @@ namespace telar::runtime::plugins {
       const auto failure = Protocol::decodeError(received.bytes());
 
       requireEvent(event_id, failure.event_id);
-      return {nullptr, AllocationDeleter<Result<Memory>, Memory>{memory_}};
+      return {};
     }
 
     const auto size = received.bytes().size();
-    auto result = makeOwned<Result<Memory>>(memory_, specification, std::move(received), 0, size);
+    auto result = ds::makeBox<Result<Memory>>(memory_, specification, std::move(received), 0, size);
 
     requireEvent(event_id, result->event_id);
     return result;
@@ -546,7 +546,7 @@ namespace telar::runtime::plugins {
         secure_(memory),
         specification_(specification),
         port_(port),
-        reply_(makeOwned<TrafficReply>(memory)) {}
+        reply_(ds::makeBox<TrafficReply>(memory)) {}
 
   void TrafficBridge::attach(Session<ConcurrentMemory>& session) {
     ds::Array<Byte, 1024> output;
@@ -597,7 +597,7 @@ namespace telar::runtime::plugins {
   }
 
   tbc::view<TrafficOutcome, tbc::lt::a> TrafficBridge::apply(std::uint64_t event_id, tbc::view<std::span<const Byte>, tbc::lt::a> input) {
-    const auto outcome = TrafficProtocol::readReply(input, *reply_);
+    const auto outcome = TrafficProtocol::readReply(input, reply_.getMut());
 
     if (reply_->event_id != event_id) {
       throw EncodingError{"Stale traffic worker reply"};
@@ -892,10 +892,10 @@ namespace telar::runtime::plugins {
         if (!session_) {
           ensureSession(true);
           if (!bridge_) {
-            bridge_ = makeOwned<TrafficBridge>(memory_, memory_, specification_, *launch_.traffic);
+            bridge_ = ds::makeBox<TrafficBridge>(memory_, memory_, specification_, *launch_.traffic);
           }
 
-          bridge_->attach(session_.getMut());
+          bridge_.getMut().attach(session_.getMut());
         }
 
         wake_.drain();
@@ -907,7 +907,7 @@ namespace telar::runtime::plugins {
           continue;
         }
 
-        bridge_->step(session_ ? &session_.getMut() : nullptr, wake_.descriptor(), cancellation_, [&](OwnedResult<ConcurrentMemory> result) {
+        bridge_.getMut().step(session_ ? &session_.getMut() : nullptr, wake_.descriptor(), cancellation_, [&](OwnedResult<ConcurrentMemory> result) {
           results_.publish(std::move(result));
         },
             requests_.metrics().queued != 0);
@@ -994,7 +994,7 @@ namespace telar::runtime::plugins {
   template <WorkerClock Clock>
   void Worker<Clock>::restart() noexcept {
     if (bridge_) {
-      bridge_->detach();
+      bridge_.getMut().detach();
       if (bridge_->transportFailed()) {
         callback_errors_base_ += bridge_->errors();
         bridge_.reset();

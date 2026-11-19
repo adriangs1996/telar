@@ -301,42 +301,6 @@ namespace telar {
     tbc::view<Memory*, tbc::lt::a> memory_;
   };
 
-  template <typename Value, Allocator Memory>
-  class AllocationDeleter {
-  public:
-    explicit AllocationDeleter(Memory& memory) noexcept
-        : memory_(&memory) {}
-
-    void operator()(Value* value) const noexcept {
-      if (value != nullptr) {
-        std::destroy_at(value);
-        memory_->deallocate(value, sizeof(Value), alignof(Value));
-      }
-    }
-
-  private:
-    Memory* memory_;
-  };
-
-  template <typename Value, Allocator Memory>
-  using Owned = std::unique_ptr<Value, AllocationDeleter<Value, Memory>>;
-
-  // The owner keeps what Value's constructor keeps of the arguments, and its allocator.
-  template <typename Value, Allocator Memory, typename... Arguments>
-  TBC_CONSTRUCTS Owned<Value, Memory> makeOwned(Memory& memory, Arguments&&... arguments) {
-    AllocatorRef<Value, Memory> allocator{memory};
-    Value* value = allocator.allocate(1);
-
-    try {
-      std::construct_at(value, std::forward<Arguments>(arguments)...);
-    } catch (...) {
-      allocator.deallocate(value, 1);
-      throw;
-    }
-
-    return Owned<Value, Memory>{value, AllocationDeleter<Value, Memory>{memory}};
-  }
-
   static_assert(Allocator<SystemAllocator>);
   static_assert(Allocator<BudgetAllocator<SystemAllocator>>);
   static_assert(Allocator<Memory>);

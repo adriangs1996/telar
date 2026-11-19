@@ -9,11 +9,13 @@ export module telar.base.ds;
 // declarations.
 export namespace telar::ds {
   using telar::ds::Array;
+  using telar::ds::Box;
   using telar::ds::format;
   using telar::ds::formatTo;
   using telar::ds::Function;
   using telar::ds::get;
   using telar::ds::Hash;
+  using telar::ds::makeBox;
   using telar::ds::Map;
   using telar::ds::None;
   using telar::ds::none;

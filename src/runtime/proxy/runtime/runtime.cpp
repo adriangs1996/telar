@@ -162,7 +162,7 @@ namespace telar::runtime {
   }
 
   ApplicationRelay::ApplicationRelay(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<ConnectionObservation, tbc::lt::a> observation, std::string_view hostname)
-      : relays_{.memory_ = memory, .observation_ = observation, .http1_ = {nullptr, AllocationDeleter<Http1, ConcurrentMemory>{memory}}, .http2_ = {nullptr, AllocationDeleter<Http2, ConcurrentMemory>{memory}}, .http2_endpoint_ = {nullptr, AllocationDeleter<Http2Endpoint, ConcurrentMemory>{memory}}} {
+      : relays_{.memory_ = memory, .observation_ = observation, .http1_ = {}, .http2_ = {}, .http2_endpoint_ = {}} {
     relays_.hostname_.assign(hostname.substr(0, ProxyHostname::maximum_bytes));
   }
 
@@ -355,7 +355,7 @@ namespace telar::runtime {
     return application_.interest(side);
   }
 
-  TlsTunnel::TlsTunnel(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<const TlsInterception&, tbc::lt::a> interception, TunnelSockets sockets, std::string_view hostname, tbc::view<Owned<AlpnOffer, ConcurrentMemory>, tbc::lt::a> offer, tbc::view<ConnectionObservation, tbc::lt::a> observation)
+  TlsTunnel::TlsTunnel(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<const TlsInterception&, tbc::lt::a> interception, TunnelSockets sockets, std::string_view hostname, tbc::view<ds::Box<AlpnOffer, ConcurrentMemory>, tbc::lt::a> offer, tbc::view<ConnectionObservation, tbc::lt::a> observation)
       : observation_(observation),
         session_(interception.open(memory, sockets, hostname, std::move(offer))),
         application_(memory, observation, hostname) {}
@@ -366,7 +366,7 @@ namespace telar::runtime {
     }
 
     if (!established()) {
-      if (session_->advance() == TlsSession::State::failed) {
+      if (session_.getMut().advance() == TlsSession::State::failed) {
         const auto reason = recordFailure();
 
         if (flow != nullptr) {
@@ -388,8 +388,8 @@ namespace telar::runtime {
       readiness = TunnelReadiness::available();
     }
 
-    TlsStream child{*session_, TlsSide::child};
-    TlsStream origin{*session_, TlsSide::origin};
+    TlsStream child{session_.getMut(), TlsSide::child};
+    TlsStream origin{session_.getMut(), TlsSide::origin};
 
     readiness.child.readable = readiness.child.readable || session_->buffered(TlsSide::child);
     readiness.origin.readable = readiness.origin.readable || session_->buffered(TlsSide::origin);
@@ -468,9 +468,9 @@ namespace telar::runtime {
 
   ConnectionTransport::ConnectionTransport(tbc::view<ConcurrentMemory&, tbc::lt::a> memory) noexcept
       : memory_(memory),
-        flow_(nullptr, AllocationDeleter<FlowState, ConcurrentMemory>{memory}),
-        plain_(nullptr, AllocationDeleter<PlainTunnel, ConcurrentMemory>{memory}),
-        tls_(nullptr, AllocationDeleter<TlsTunnel, ConcurrentMemory>{memory}) {}
+        flow_(),
+        plain_(),
+        tls_() {}
 
   bool ConnectionTransport::opened() const noexcept {
     return plain_ || tls_;
@@ -478,7 +478,9 @@ namespace telar::runtime {
 
   bool ConnectionTransport::advance(TunnelReadiness readiness) noexcept {
     TELAR_TRACE("proxy.relayTunnel");
-    return plain_ ? plain_->advance(readiness, flow_.get()) : tls_->advance(readiness, flow_.get());
+    auto* flow = flow_ ? &flow_.getMut() : nullptr;
+
+    return plain_ ? plain_.getMut().advance(readiness, flow) : tls_.getMut().advance(readiness, flow);
   }
 
   bool ConnectionTransport::established() const noexcept {
@@ -524,13 +526,13 @@ namespace telar::runtime {
 
   void ConnectionTransport::reason(tbc::view<std::string_view, tbc::lt::static_storage> value) noexcept {
     if (flow_) {
-      flow_->reason(value);
+      flow_.getMut().reason(value);
     }
   }
 
   void ConnectionTransport::error(tbc::view<std::string_view, tbc::lt::static_storage> value) noexcept {
     if (flow_) {
-      flow_->error(value);
+      flow_.getMut().error(value);
     }
   }
 

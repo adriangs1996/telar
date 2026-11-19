@@ -93,7 +93,7 @@ namespace telar::gui::qt {
   };
 
   NativePointerEvents::NativePointerEvents(ApplicationAllocator& memory)
-      : native_(makeOwned<Native>(memory)) {}
+      : native_(ds::makeBox<Native>(memory)) {}
 
   NativePointerEvents::~NativePointerEvents() = default;
 

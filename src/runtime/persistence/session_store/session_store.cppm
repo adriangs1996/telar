@@ -340,9 +340,9 @@ export {
       inline void restore(const WorkspaceRecord& record) {
         validateIdentity(record.id);
         validateIdentity(record.first_tab);
-        auto workspace = makeOwned<Workspace>(memory_, memory_, record.id, record.path, record.name);
+        auto workspace = ds::makeBox<Workspace>(memory_, memory_, record.id, record.path, record.name);
 
-        workspace->tabs.emplace(memory_, record.first_tab, record.first_label);
+        workspace.getMut().tabs.emplace(memory_, record.first_tab, record.first_label);
         model_.workspaces.insert(record.id, std::move(workspace));
         advanceIdentityCounter(model_.next_tab_id, record.first_tab + 1);
       }

@@ -34,7 +34,7 @@ namespace telar::gui::qt {
     // The cache allocates its generations from memory, region `a`.
     explicit FontCache(tbc::view<Memory&, tbc::lt::a> memory) noexcept
         : memory_(memory),
-          generation_(nullptr, AllocationDeleter<Generation, Memory>{memory}) {}
+          generation_() {}
 
     [[nodiscard]] ResolvedFont resolve(const FontConfiguration& font, qreal scale) {
       static_cast<void>(FontGrid::pixelHeight(font, static_cast<float>(scale)));
@@ -48,7 +48,7 @@ namespace telar::gui::qt {
         }
       }
 
-      return remember(FontResolver::resolve(generation_->face, font, scale), scale);
+      return remember(FontResolver::resolve(generation_.getMut().face, font, scale), scale);
     }
 
   private:
@@ -74,8 +74,8 @@ namespace telar::gui::qt {
     }
 
     ResolvedFont replace(const FontConfiguration& font, qreal scale) {
-      auto replacement = makeOwned<Generation>(memory_, memory_, font);
-      auto resolved = FontResolver::resolve(replacement->face, font, scale);
+      auto replacement = ds::makeBox<Generation>(memory_, memory_, font);
+      auto resolved = FontResolver::resolve(replacement.getMut().face, font, scale);
 
       generation_ = std::move(replacement);
       for (auto& entry : entries_.viewMut()) {
@@ -98,7 +98,7 @@ namespace telar::gui::qt {
     }
 
     tbc::view<Memory&, tbc::lt::a> memory_;
-    tbc::view<Owned<Generation, Memory>, tbc::lt::a> generation_;
+    tbc::view<ds::Box<Generation, Memory>, tbc::lt::a> generation_;
     ds::Array<Entry, scale_capacity> entries_{};
     std::size_t next_slot_ = 0;
   };

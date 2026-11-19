@@ -292,9 +292,9 @@ namespace telar::runtime {
     return nullptr;
   }
 
-  CapturedExchange::CapturedExchange(tbc::view<ConcurrentMemory&, tbc::lt::a> memory) noexcept
-      : request(nullptr, AllocationDeleter<CaptureHalf, ConcurrentMemory>{memory}),
-        response(nullptr, AllocationDeleter<CaptureHalf, ConcurrentMemory>{memory}) {}
+  CapturedExchange::CapturedExchange(tbc::view<ConcurrentMemory&, tbc::lt::a>) noexcept
+      : request(),
+        response() {}
 
   void CapturedExchange::include(tbc::view<Half, tbc::lt::a> half) noexcept {
     (half->side == CaptureSide::request ? request : response) = std::move(half);

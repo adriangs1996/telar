@@ -63,9 +63,9 @@ namespace telar::gui::test {
     }
 
     static qt::MachineClient* client(qt::ApplicationController& application, Machines::Slot slot) {
-      const auto& client = application.store_.clients()[slot];
+      auto& client = application.store_.clientsMut().atMut(slot);
 
-      return client ? client->get() : nullptr;
+      return client ? &client.getMut().getMut() : nullptr;
     }
 
     static void select(qt::ApplicationController& application, Machines::Slot slot) {

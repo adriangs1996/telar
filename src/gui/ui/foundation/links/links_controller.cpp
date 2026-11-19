@@ -53,7 +53,7 @@ namespace telar::gui::qt {
   }
 
   void LinksController::linkOpeningFinished(application::machines::MachineClientKey source, ds::Option<LinkOpeningFailure> failure) {
-    auto* client = store_.find(source);
+    auto* client = store_.findMut(source);
     if (client == nullptr || !failure) {
       return;
     }

@@ -193,12 +193,12 @@ namespace telar::gui::qt {
   template <typename Items>
   WindowAnimationLane WindowAnimationLane::make(Memory& memory) {
     const auto destroy = [](Memory& owner, void* items) {
-      const Owned<Items, Memory> owned{static_cast<Items*>(items), AllocationDeleter<Items, Memory>{owner}};
+      ds::Box<Items, Memory>::fromRaw(static_cast<Items*>(items), owner).reset();
     };
 
     return {
         .tag = &typeid(Items),
-        .items = {makeOwned<Items>(memory).release(), Release{&memory, destroy}},
+        .items = {ds::makeBox<Items>(memory).intoRaw(), Release{&memory, destroy}},
         .sample = [](void* items, std::uint64_t timestamp, bool window_exposed, const QPointer<WindowAnimationClock>& alive) {
           return static_cast<Items*>(items)->sample(timestamp, window_exposed, alive);
         },

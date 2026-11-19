@@ -278,7 +278,7 @@ export namespace telar::gui::features::prompt {
     tbc::view<Name, tbc::lt::a> command_root;
     std::uint64_t written = 0;
     // Each pane's line in an allocation of its own, so it stays where it is as others come and go.
-    tbc::view<ds::Map<std::uint64_t, Owned<PaneLine, Memory>, Memory>, tbc::lt::a> lines;
+    tbc::view<ds::Map<std::uint64_t, ds::Box<PaneLine, Memory>, Memory>, tbc::lt::a> lines;
   };
 
   // ---- lines ------------------------------------------------------------------------------------
@@ -488,7 +488,7 @@ namespace telar::gui::features::prompt {
   inline PaneLine* find(State& state, std::uint64_t pane_id) noexcept {
     auto* found = state.lines.findMut(pane_id);
 
-    return found == nullptr ? nullptr : found->get();
+    return found == nullptr ? nullptr : &found->getMut();
   }
 
   inline tbc::view<LineView, tbc::lt::a> view(tbc::view<const State&, tbc::lt::a> state, tbc::view<const PaneLine&, tbc::lt::a> line) noexcept {

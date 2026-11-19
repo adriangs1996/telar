@@ -77,11 +77,11 @@ namespace telar::gui::qt {
 
   public:
     using BarRender = ConfigurationSnapshot::BarRender;
-    using PanelRender = Owned<application::components::RenderedContent<application::components::PanelContent::capacity, ApplicationAllocator>, ApplicationAllocator>;
-    using PickRender = Owned<application::components::PickItems, ApplicationAllocator>;
-    using Effects = Owned<application::components::ResolvedEffects<ApplicationAllocator>, ApplicationAllocator>;
+    using PanelRender = ds::Box<application::components::RenderedContent<application::components::PanelContent::capacity, ApplicationAllocator>, ApplicationAllocator>;
+    using PickRender = ds::Box<application::components::PickItems, ApplicationAllocator>;
+    using Effects = ds::Box<application::components::ResolvedEffects<ApplicationAllocator>, ApplicationAllocator>;
     using Actions = application::components::ResolvedActions<ApplicationAllocator>;
-    using ElementsRender = Owned<application::components::RenderedElements<ApplicationAllocator>, ApplicationAllocator>;
+    using ElementsRender = ds::Box<application::components::RenderedElements<ApplicationAllocator>, ApplicationAllocator>;
     // A callback held inline, never on the heap; what it captures fits in eight pointers.
     template <typename Value>
     using Done = ds::Function<void(LuaOutcome<Value>), 8 * sizeof(void*)>;
@@ -162,8 +162,8 @@ namespace telar::gui::qt {
     InputConfiguration default_input_;
     // The default keymap is compiled from the input beside it, so the source stays where Qt made it.
     tbc::view<BindingMap<BindingAction>, tbc::lt::self> default_keymap_;
-    tbc::view<Owned<Generation, ApplicationAllocator>, tbc::lt::a> generation_;
-    tbc::view<Owned<runtime::config::RetainedCommandTabRegistry, ApplicationAllocator>, tbc::lt::a> commands_;
+    tbc::view<ds::Box<Generation, ApplicationAllocator>, tbc::lt::a> generation_;
+    tbc::view<ds::Box<runtime::config::RetainedCommandTabRegistry, ApplicationAllocator>, tbc::lt::a> commands_;
     tbc::view<ds::Array<ds::Option<BarRender>, application::components::Definitions::positions>, tbc::lt::a> fixed_bars_{};
     ConfigurationSnapshot::CommandArguments arguments_;
     tbc::view<ds::Option<PluginPackages>, tbc::lt::a> plugins_;

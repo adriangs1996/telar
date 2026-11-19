@@ -474,7 +474,7 @@ namespace {
     for (std::size_t index = 0; index < producer.queue_capacity; ++index) {
       auto half = producer.start({.key = {index, 0}, .host = "host"});
 
-      check(half && half->append(CapturePart::request_body, "x"));
+      check(half && half.getMut().append(CapturePart::request_body, "x"));
       check(producer.publish(std::move(half)));
     }
 
@@ -503,22 +503,22 @@ namespace {
     CaptureProducer producer{memory, limits};
     auto half = producer.start({});
 
-    half->setEncoding("gzip");
+    half.getMut().setEncoding("gzip");
     const auto compressed = decodeHexadecimal("1f8b0800000000000213aba8a03d00008f5d0e5e64000000");
 
-    check(half->append(CapturePart::request_body, compressed));
+    check(half.getMut().append(CapturePart::request_body, compressed));
     check(producer.publish(std::move(half)) && producer.metrics().truncated == 0);
     auto received = producer.receive();
 
-    producer.decodeBody(**received);
+    producer.decodeBody(received.getMut().getMut());
     check((*received)->body_decoded && (*received)->body.truncated && (*received)->body.size() == 32);
     check(producer.metrics().truncated == 1 && producer.metrics().truncated_part == 1);
 
     auto malformed = producer.start({});
 
-    malformed->setEncoding("br");
-    malformed->append(CapturePart::request_body, "broken");
-    producer.decodeBody(*malformed);
+    malformed.getMut().setEncoding("br");
+    malformed.getMut().append(CapturePart::request_body, "broken");
+    producer.decodeBody(malformed.getMut());
     check(producer.metrics().decode_failed == 1 && malformed->body.size() == 6 && !malformed->body_decoded);
 
     BudgetAllocator failing{system, 0};

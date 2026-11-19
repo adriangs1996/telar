@@ -9,7 +9,6 @@ import std;
 // Owned textual headers stay in this global module fragment only; importers
 // reach their names through these declarations instead of including them.
 export namespace telar {
-  using telar::AllocationDeleter;
   using telar::AllocationPath;
   using telar::AllocationStatistics;
   using telar::AllocationTotals;
@@ -19,11 +18,9 @@ export namespace telar {
   using telar::ConcurrentAllocator;
   using telar::ConcurrentMemory;
   using telar::ErasingMemory;
-  using telar::makeOwned;
   using telar::Memory;
   using telar::MemoryAdapter;
   using telar::MemoryInterface;
-  using telar::Owned;
   using telar::SensitiveAllocator;
   using telar::SynchronizedAllocator;
   using telar::SystemAllocator;

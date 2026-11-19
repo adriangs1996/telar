@@ -24,7 +24,7 @@ namespace telar::gui::platform {
 
   private:
     struct Native;
-    Owned<Native, ApplicationAllocator> native_;
+    ds::Box<Native, ApplicationAllocator> native_;
   };
 
 }

@@ -193,7 +193,7 @@ namespace telar::gui::features::terminal::graphics {
 
     if (previous != nullptr) {
       for (std::size_t index = 0; index < images_.size(); ++index) {
-        if (images_[index].get() == previous) {
+        if (&images_[index].get() == previous) {
           eraseImage(index);
 
           break;
@@ -201,7 +201,7 @@ namespace telar::gui::features::terminal::graphics {
       }
     }
 
-    auto replacement = makeOwned<Image>(memory_, memory_, message.image);
+    auto replacement = ds::makeBox<Image>(memory_, memory_, message.image);
 
     images_.push(std::move(replacement));
     bytes_ += requested;
@@ -216,7 +216,7 @@ namespace telar::gui::features::terminal::graphics {
       return false;
     }
 
-    auto* image = findImage(message.key);
+    auto* image = findImageMut(message.key);
     if (image == nullptr) {
       throw EncodingError{"Unknown graphics image"};
     }
@@ -273,7 +273,7 @@ namespace telar::gui::features::terminal::graphics {
       return false;
     }
 
-    auto* image = findImage(message.key);
+    auto* image = findImageMut(message.key);
     if (image == nullptr) {
       return false;
     }
@@ -309,12 +309,22 @@ namespace telar::gui::features::terminal::graphics {
   }
 
   template <Allocator Memory>
-  auto GraphicsStore<Memory>::findImage(ImageKey key) const noexcept -> Image* {
+  auto GraphicsStore<Memory>::findImage(ImageKey key) const noexcept -> const Image* {
     const auto found = std::find_if(images_.begin(), images_.end(), [&](const auto& image) {
       return sameKey(image->description().key, key);
     });
 
-    return found == images_.end() ? nullptr : found->get();
+    return found == images_.end() ? nullptr : &found->get();
+  }
+
+  template <Allocator Memory>
+  auto GraphicsStore<Memory>::findImageMut(ImageKey key) noexcept -> Image* {
+    const auto images = images_.viewMut();
+    const auto found = std::find_if(images.begin(), images.end(), [&](const auto& image) {
+      return sameKey(image->description().key, key);
+    });
+
+    return found == images.end() ? nullptr : &found->getMut();
   }
 
   template <Allocator Memory>
@@ -327,7 +337,7 @@ namespace telar::gui::features::terminal::graphics {
 
     for (const auto& image : images_) {
       if (image->description().key.image_id == key.image_id && image->ready() && !image->retired() && (latest == nullptr || image->description().key.generation > latest->description().key.generation)) {
-        latest = image.get();
+        latest = &image.get();
       }
     }
 
@@ -375,7 +385,7 @@ namespace telar::gui::features::terminal::graphics {
     for (auto& image : images_.viewMut()) {
       const auto key = image->description().key;
       if (key.image_id == current.image_id && key.generation != current.generation) {
-        image->retire();
+        image.getMut().retire();
       }
     }
 

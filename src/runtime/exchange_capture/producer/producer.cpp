@@ -500,7 +500,7 @@ namespace telar::runtime {
   }
 
   auto CaptureProducer::start(CaptureStart context) noexcept -> Half {
-    Half absent{nullptr, AllocationDeleter<CaptureHalf, ConcurrentMemory>{memory_}};
+    Half absent{};
 
     if (!limits_.enabled) {
       return absent;
@@ -508,7 +508,7 @@ namespace telar::runtime {
 
     if (!context.host.oversized()) {
       try {
-        auto half = makeOwned<CaptureHalf>(memory_, memory_, quota_, limits_, context);
+        auto half = ds::makeBox<CaptureHalf>(memory_, memory_, quota_, limits_, context);
 
         if (context.side == CaptureSide::request) {
           started_.fetch_add(1, std::memory_order_relaxed);

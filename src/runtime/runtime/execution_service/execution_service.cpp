@@ -499,16 +499,16 @@ namespace telar::runtime {
     }
 
     const std::string_view cwd = request.cwd.empty() ? std::string_view{workspace->path} : request.cwd;
-    auto execution = makeOwned<Execution<ConcurrentMemory>>(memory_, memory_, token, request, workspace_id, cwd);
+    auto execution = ds::makeBox<Execution<ConcurrentMemory>>(memory_, memory_, token, request, workspace_id, cwd);
 
-    execution->input_owner = request.stdin_open ? ds::Option{client_id} : ds::none;
+    execution.getMut().input_owner = request.stdin_open ? ds::Option{client_id} : ds::none;
     try {
       if (execution->process) {
         poller_.watch(execution->process->output(), eventToken(EventSource::execution_output, token));
         poller_.watch(execution->process->error(), eventToken(EventSource::execution_error, token));
       }
     } catch (...) {
-      unwatch(poller_, *execution);
+      unwatch(poller_, execution.getMut());
       throw;
     }
 
@@ -528,7 +528,7 @@ namespace telar::runtime {
     }
 
     const auto identity = model.workspaces.nextId();
-    auto workspace = makeOwned<Workspace>(memory_, memory_, identity, home, "Administration");
+    auto workspace = ds::makeBox<Workspace>(memory_, memory_, identity, home, "Administration");
 
     model.workspaces.insert(identity, std::move(workspace));
     administration_ = identity;

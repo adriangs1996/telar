@@ -130,10 +130,10 @@ namespace telar::gui::qt {
 
     const auto columns = std::clamp(std::floor(geometry.terminal.width / static_cast<float>(grid.cell_width_px)), 1.0F, static_cast<float>(std::numeric_limits<std::uint16_t>::max()));
 
-    for (auto& client : store_.clients()) {
+    for (auto& client : store_.clientsMut().viewMut()) {
       if (client) {
-        application::workbench::setGeometry((*client)->session, workbench);
-        (*client)->session.setHostColumns(static_cast<std::uint16_t>(columns));
+        application::workbench::setGeometry(client.getMut().getMut().session, workbench);
+        client.getMut().getMut().session.setHostColumns(static_cast<std::uint16_t>(columns));
       }
     }
   }

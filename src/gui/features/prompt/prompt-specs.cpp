@@ -15,7 +15,7 @@ namespace telar::gui::features::prompt {
   const ebnf::command_spec* Specs::find(std::string_view command) const {
     const auto* found = entries_.find(command);
 
-    return found == nullptr ? nullptr : found->spec.get();
+    return found == nullptr ? nullptr : &found->spec.get();
   }
 
   std::uint64_t Specs::digest(std::string_view command) const {
@@ -25,10 +25,10 @@ namespace telar::gui::features::prompt {
   }
 
   bool Specs::install(std::string_view command, std::uint64_t digest, std::string_view source) {
-    ds::Option<Owned<ebnf::command_spec, Memory>> spec;
+    ds::Option<ds::Box<ebnf::command_spec, Memory>> spec;
 
     try {
-      spec = makeOwned<ebnf::command_spec>(memory_, ebnf::command_spec::compile(source));
+      spec = ds::makeBox<ebnf::command_spec>(memory_, ebnf::command_spec::compile(source));
     } catch (const std::exception&) {
       static_cast<void>(entries_.remove(command));
       return false;
@@ -47,10 +47,10 @@ namespace telar::gui::features::prompt {
 
   ebnf::match_scratch& MatchScratch::lend() {
     if (!scratch_) {
-      scratch_ = makeOwned<ebnf::match_scratch>(memory_);
+      scratch_ = ds::makeBox<ebnf::match_scratch>(memory_);
     }
 
-    return *scratch_.getMut();
+    return scratch_.getMut().getMut();
   }
 
 }

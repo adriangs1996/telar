@@ -212,9 +212,9 @@ export {
 
       [[nodiscard]] Pane<Memory>* focusedPaneMut() noexcept;
 
-      [[nodiscard]] const ds::Vec<Owned<Tab<Memory>, Memory>, Memory>& tabs() const noexcept;
+      [[nodiscard]] const ds::Vec<ds::Box<Tab<Memory>, Memory>, Memory>& tabs() const noexcept;
 
-      [[nodiscard]] const ds::Vec<Owned<Pane<Memory>, Memory>, Memory>& panes() const noexcept;
+      [[nodiscard]] const ds::Vec<ds::Box<Pane<Memory>, Memory>, Memory>& panes() const noexcept;
 
       [[nodiscard]] const ds::Vec<Workspace<Memory>, Memory>& workspaces() const noexcept;
 
@@ -585,8 +585,8 @@ export {
       // A session built without effects points `effects_` here.
       DiscardHostEffects discard_effects_;
       features::terminal::graphics::State graphics_;
-      tbc::view<ds::Vec<Owned<Pane<Memory>, Memory>, Memory>, tbc::lt::a> panes_;
-      tbc::view<ds::Vec<Owned<Tab<Memory>, Memory>, Memory>, tbc::lt::a> tabs_;
+      tbc::view<ds::Vec<ds::Box<Pane<Memory>, Memory>, Memory>, tbc::lt::a> panes_;
+      tbc::view<ds::Vec<ds::Box<Tab<Memory>, Memory>, Memory>, tbc::lt::a> tabs_;
       tbc::view<WorkspaceReplica<Memory>, tbc::lt::a> workspaces_;
       tbc::view<AgentReplica<Memory>, tbc::lt::a> agents_;
       tbc::view<PaneListReplica<Memory>, tbc::lt::a> pane_list_;

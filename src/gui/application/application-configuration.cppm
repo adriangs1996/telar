@@ -110,25 +110,25 @@ export {
       void closePanel() noexcept;
 
       // The members below until configuredAction run on the Lua thread: they read or run the VM.
-      [[nodiscard]] Owned<features::components::RenderedContent<features::components::BarContent::capacity, Memory>, Memory> renderedBar(features::components::Position position, const features::components::Context& context);
+      [[nodiscard]] ds::Box<features::components::RenderedContent<features::components::BarContent::capacity, Memory>, Memory> renderedBar(features::components::Position position, const features::components::Context& context);
 
-      [[nodiscard]] Owned<features::components::RenderedContent<features::components::PanelContent::capacity, Memory>, Memory> renderedPanel(std::size_t index, const features::components::Context& context);
+      [[nodiscard]] ds::Box<features::components::RenderedContent<features::components::PanelContent::capacity, Memory>, Memory> renderedPanel(std::size_t index, const features::components::Context& context);
 
       // Instantiated for the bar's and the panel's capacities.
       template <features::components::Capacity Bounds>
       // The copy allocates from memory, region `b`.
-      [[nodiscard]] tbc::view<Owned<features::components::RenderedContent<Bounds, Memory>, Memory>, tbc::lt::b> copied(tbc::view<Memory&, tbc::lt::b> memory, const features::components::Content<Bounds>& content) const;
+      [[nodiscard]] tbc::view<ds::Box<features::components::RenderedContent<Bounds, Memory>, Memory>, tbc::lt::b> copied(tbc::view<Memory&, tbc::lt::b> memory, const features::components::Content<Bounds>& content) const;
 
       [[nodiscard]] features::components::ResolvedAction resolve(BindingAction action) const;
 
-      [[nodiscard]] Owned<features::components::ResolvedEffects<Memory>, Memory> invokeResolved(BindingAction action, BindingContext context);
+      [[nodiscard]] ds::Box<features::components::ResolvedEffects<Memory>, Memory> invokeResolved(BindingAction action, BindingContext context);
 
       // Calls a slot's function with the context and the item, a JSON document, and reads the
       // element tree it returns. The instance keeps the `on_click` functions of its last render.
-      [[nodiscard]] Owned<features::components::RenderedElements<Memory>, Memory> renderElements(features::components::Slot slot, std::uint64_t instance, const features::components::Context& context, std::string_view item);
+      [[nodiscard]] ds::Box<features::components::RenderedElements<Memory>, Memory> renderElements(features::components::Slot slot, std::uint64_t instance, const features::components::Context& context, std::string_view item);
 
       // Runs one `on_click` function of the instance's last render and resolves what it returns.
-      [[nodiscard]] Owned<features::components::ResolvedEffects<Memory>, Memory> invokeElement(std::uint64_t instance, std::uint32_t callback, const features::components::Context& context, std::string_view item);
+      [[nodiscard]] ds::Box<features::components::ResolvedEffects<Memory>, Memory> invokeElement(std::uint64_t instance, std::uint32_t callback, const features::components::Context& context, std::string_view item);
 
       void forgetElements(std::uint64_t instance) noexcept;
 
@@ -237,8 +237,8 @@ export {
 
       tbc::view<Memory&, tbc::lt::a> memory_;
       tbc::view<runtime::lua::Vm<Memory>, tbc::lt::a> machine_;
-      tbc::view<Owned<runtime::config::RuntimeValues<Memory>, Memory>, tbc::lt::a> runtime_;
-      tbc::view<Owned<ComponentConfiguration, Memory>, tbc::lt::a> components_;
+      tbc::view<ds::Box<runtime::config::RuntimeValues<Memory>, Memory>, tbc::lt::a> runtime_;
+      tbc::view<ds::Box<ComponentConfiguration, Memory>, tbc::lt::a> components_;
       ds::Option<runtime::config::LocalModules> modules_;
       runtime::config::LimitNotices notices_;
       runtime::config::RetainedClientValidationState client_state_;
@@ -257,10 +257,10 @@ export {
     extern template class ConfigurationGeneration<telar::Memory>;
     extern template class ConfigurationGeneration<telar::ConcurrentMemory>;
 
-    extern template tbc::view<Owned<features::components::RenderedContent<features::components::BarContent::capacity, telar::Memory>, telar::Memory>, tbc::lt::b> ConfigurationGeneration<telar::Memory>::copied<features::components::BarContent::capacity>(tbc::view<telar::Memory&, tbc::lt::b> memory, const features::components::Content<features::components::BarContent::capacity>& content) const;
-    extern template tbc::view<Owned<features::components::RenderedContent<features::components::PanelContent::capacity, telar::Memory>, telar::Memory>, tbc::lt::b> ConfigurationGeneration<telar::Memory>::copied<features::components::PanelContent::capacity>(tbc::view<telar::Memory&, tbc::lt::b> memory, const features::components::Content<features::components::PanelContent::capacity>& content) const;
-    extern template tbc::view<Owned<features::components::RenderedContent<features::components::BarContent::capacity, telar::ConcurrentMemory>, telar::ConcurrentMemory>, tbc::lt::b> ConfigurationGeneration<telar::ConcurrentMemory>::copied<features::components::BarContent::capacity>(tbc::view<telar::ConcurrentMemory&, tbc::lt::b> memory, const features::components::Content<features::components::BarContent::capacity>& content) const;
-    extern template tbc::view<Owned<features::components::RenderedContent<features::components::PanelContent::capacity, telar::ConcurrentMemory>, telar::ConcurrentMemory>, tbc::lt::b> ConfigurationGeneration<telar::ConcurrentMemory>::copied<features::components::PanelContent::capacity>(tbc::view<telar::ConcurrentMemory&, tbc::lt::b> memory, const features::components::Content<features::components::PanelContent::capacity>& content) const;
+    extern template tbc::view<ds::Box<features::components::RenderedContent<features::components::BarContent::capacity, telar::Memory>, telar::Memory>, tbc::lt::b> ConfigurationGeneration<telar::Memory>::copied<features::components::BarContent::capacity>(tbc::view<telar::Memory&, tbc::lt::b> memory, const features::components::Content<features::components::BarContent::capacity>& content) const;
+    extern template tbc::view<ds::Box<features::components::RenderedContent<features::components::PanelContent::capacity, telar::Memory>, telar::Memory>, tbc::lt::b> ConfigurationGeneration<telar::Memory>::copied<features::components::PanelContent::capacity>(tbc::view<telar::Memory&, tbc::lt::b> memory, const features::components::Content<features::components::PanelContent::capacity>& content) const;
+    extern template tbc::view<ds::Box<features::components::RenderedContent<features::components::BarContent::capacity, telar::ConcurrentMemory>, telar::ConcurrentMemory>, tbc::lt::b> ConfigurationGeneration<telar::ConcurrentMemory>::copied<features::components::BarContent::capacity>(tbc::view<telar::ConcurrentMemory&, tbc::lt::b> memory, const features::components::Content<features::components::BarContent::capacity>& content) const;
+    extern template tbc::view<ds::Box<features::components::RenderedContent<features::components::PanelContent::capacity, telar::ConcurrentMemory>, telar::ConcurrentMemory>, tbc::lt::b> ConfigurationGeneration<telar::ConcurrentMemory>::copied<features::components::PanelContent::capacity>(tbc::view<telar::ConcurrentMemory&, tbc::lt::b> memory, const features::components::Content<features::components::PanelContent::capacity>& content) const;
 
   }
 }

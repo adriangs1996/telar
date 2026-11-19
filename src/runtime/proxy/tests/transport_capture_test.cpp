@@ -374,10 +374,10 @@ namespace {
       for (;;) {
         auto half = producer.start(start);
 
-        check(half != nullptr);
-        half->append(half->bodyPart(), body);
-        half->setEncoding(encoding);
-        half->finish(CaptureOutcome::finished, start.started_at_ms);
+        check(half.hasValue());
+        half.getMut().append(half->bodyPart(), body);
+        half.getMut().setEncoding(encoding);
+        half.getMut().finish(CaptureOutcome::finished, start.started_at_ms);
         if (producer.publish(std::move(half))) {
           return;
         }

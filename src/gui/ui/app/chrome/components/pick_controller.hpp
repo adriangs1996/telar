@@ -45,7 +45,7 @@ namespace telar::gui::qt {
         : host_(host),
           memory_(memory),
           source_(source),
-          items_(nullptr, AllocationDeleter<application::components::PickItems, Memory>{memory}) {}
+          items_() {}
 
     [[nodiscard]] bool isOpen() const noexcept {
       return index_.hasValue();
@@ -72,7 +72,7 @@ namespace telar::gui::qt {
       }
 
       close();
-      items_ = makeOwned<application::components::PickItems>(memory_);
+      items_ = ds::makeBox<application::components::PickItems>(memory_);
       const auto& definition = definitions->picks()[index];
 
       title_ = text(definition.heading.title.view());
@@ -302,7 +302,7 @@ namespace telar::gui::qt {
     Host& host_;
     Memory& memory_;
     Source& source_;
-    Owned<application::components::PickItems, Memory> items_;
+    ds::Box<application::components::PickItems, Memory> items_;
     application::components::PickMatches matches_;
     QVariantList rows_;
     QByteArray query_;

@@ -194,7 +194,7 @@ export {
       std::size_t effect_bytes_ = 0;
       ds::Array<QueuedDecision, TrafficLimits::decisions> queued_;
       std::size_t decision_count_ = 0;
-      Owned<TrafficReply, Memory> reply_;
+      ds::Box<TrafficReply, Memory> reply_;
     };
 
   }

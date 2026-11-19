@@ -82,10 +82,10 @@ namespace telar::gui::qt {
     [[nodiscard]] bool post(const NotificationPayload& payload) {
       for (auto& delivery : deliveries_.viewMut()) {
         if (!delivery) {
-          delivery = makeOwned<Delivery>(memory_);
+          delivery = ds::makeBox<Delivery>(memory_);
         }
 
-        auto& process = (*delivery)->process;
+        auto& process = delivery.getMut().getMut().process;
         if (!process.active()) {
           process.start(payload);
 
@@ -106,7 +106,7 @@ namespace telar::gui::qt {
     };
 
     Memory& memory_;
-    ds::Array<ds::Option<Owned<Delivery, Memory>>, maximum_active> deliveries_;
+    ds::Array<ds::Option<ds::Box<Delivery, Memory>>, maximum_active> deliveries_;
   };
 
 }

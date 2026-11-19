@@ -82,7 +82,7 @@ namespace telar::gui::qt {
   void MachinesCoordinator::shutdown() {
     for (auto& client : store_.clientsMut().viewMut()) {
       if (client) {
-        release(*client.getMut());
+        release(client.getMut().getMut());
       }
     }
   }
@@ -121,9 +121,9 @@ namespace telar::gui::qt {
         continue;
       }
 
-      application::configuration::configure(client.getMut()->session, configuration_source_.configuration());
-      if (client->get()->session.ready()) {
-        application::window::pace(client.getMut()->session);
+      application::configuration::configure(client.getMut().getMut().session, configuration_source_.configuration());
+      if ((*client)->session.ready()) {
+        application::window::pace(client.getMut().getMut().session);
       }
     }
   }
@@ -134,9 +134,9 @@ namespace telar::gui::qt {
         continue;
       }
 
-      application::window::setRefreshRate(client.getMut()->session, fps);
-      if (client->get()->session.ready()) {
-        application::window::pace(client.getMut()->session);
+      application::window::setRefreshRate(client.getMut().getMut().session, fps);
+      if ((*client)->session.ready()) {
+        application::window::pace(client.getMut().getMut().session);
       }
     }
   }
@@ -151,8 +151,8 @@ namespace telar::gui::qt {
         .frame_pacer = frames_.pacer(),
     };
 
-    auto owned = makeOwned<MachineClient>(memory_, memory_, sinks, key);
-    auto* client = owned.get();
+    auto owned = ds::makeBox<MachineClient>(memory_, memory_, sinks, key);
+    auto* client = &owned.getMut();
 
     client->admitted_program.assign(store_.machines().row(slot).program.view());
     client->identity = QRandomGenerator::system()->generate64() | std::uint64_t{1};
@@ -167,7 +167,7 @@ namespace telar::gui::qt {
     }
 
     if (auto& previous = store_.clientsMut().atMut(slot)) {
-      release(*previous.getMut());
+      release(previous.getMut().getMut());
       previous.reset();
     }
 
@@ -178,30 +178,38 @@ namespace telar::gui::qt {
       emit changed();
     }
 
-    return clientAt(slot);
+    return clientAtMut(slot);
   }
 
-  MachineClient& MachinesCoordinator::clientAt(application::machines::Machines::Slot slot) const noexcept {
+  const MachineClient& MachinesCoordinator::clientAt(application::machines::Machines::Slot slot) const noexcept {
     return store_.client(slot);
   }
 
-  MachineClient* MachinesCoordinator::findClient(application::machines::MachineClientKey key) const noexcept {
+  MachineClient& MachinesCoordinator::clientAtMut(application::machines::Machines::Slot slot) noexcept {
+    return store_.clientMut(slot);
+  }
+
+  const MachineClient* MachinesCoordinator::findClient(application::machines::MachineClientKey key) const noexcept {
     return store_.find(key);
   }
 
+  MachineClient* MachinesCoordinator::findClientMut(application::machines::MachineClientKey key) noexcept {
+    return store_.findMut(key);
+  }
+
   void MachinesCoordinator::connectMachine(application::machines::Machines::Slot slot) {
-    auto& client = clientAt(slot);
+    auto& client = clientAtMut(slot);
     const auto key = client.key;
 
     connect(&client.connection, &RuntimeConnection::discovered, this, [this, key](const RemoteDiscovery& discovery) {
-      if (auto* source = findClient(key)) {
+      if (auto* source = findClientMut(key)) {
         discovered(*source, discovery);
       }
     },
         Qt::DirectConnection);
 
     connect(&client.connection, &RuntimeConnection::connected, this, [this, key] {
-      if (auto* source = findClient(key)) {
+      if (auto* source = findClientMut(key)) {
         ++source->runtime_generation;
         source->phase = application::machines::MachinePhase::connected;
         source->needs_setup = false;
@@ -217,7 +225,7 @@ namespace telar::gui::qt {
     host_.attend(client);
 
     connect(&client.connection, &RuntimeConnection::linkChanged, this, [this, key] {
-      if (auto* source = findClient(key)) {
+      if (auto* source = findClientMut(key)) {
         source->phase = source->connection.link().phase;
         source->needs_setup = source->connection.link().setup_repairs;
         summarize(source->key);
@@ -310,7 +318,7 @@ namespace telar::gui::qt {
   }
 
   void MachinesCoordinator::open(const QString& endpoint) {
-    auto& client = clientAt(application::machines::Machines::local_slot);
+    auto& client = clientAtMut(application::machines::Machines::local_slot);
     const auto path = endpoint.toUtf8();
 
     client.identity_lease.emplace(std::string_view{path.constData(), static_cast<std::size_t>(path.size())});
@@ -342,7 +350,7 @@ namespace telar::gui::qt {
 
   void MachinesCoordinator::soundFinished([[maybe_unused]] ds::Option<CommandFailure> failure) {
     const auto owner = std::exchange(sound_owner_, ds::none);
-    auto* client = owner ? findClient(*owner) : nullptr;
+    auto* client = owner ? findClientMut(*owner) : nullptr;
     if (client == nullptr) {
       return;
     }

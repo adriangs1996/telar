@@ -25,18 +25,18 @@ namespace {
     BudgetAllocator memory{system, 128 * 1024};
 
     {
-      auto commands = makeOwned<config::CommandTabRegistry>(memory);
+      auto commands = ds::makeBox<config::CommandTabRegistry>(memory);
       config::LimitNotices limits;
       const ds::Array<std::string_view, 2> arguments{"echo", "value"};
 
-      check(commands->keep(arguments, {}, limits));
+      check(commands.getMut().keep(arguments, {}, limits));
       const auto saved = commands->checkpoint();
 
-      check(commands->keep(arguments, {}, limits));
+      check(commands.getMut().keep(arguments, {}, limits));
       check(commands->checkpoint().rows == saved.rows && commands->checkpoint().bytes == saved.bytes);
-      check(commands->keep(arguments, "named", limits));
+      check(commands.getMut().keep(arguments, "named", limits));
       check(commands->checkpoint().rows == 2);
-      commands->restore(saved);
+      commands.getMut().restore(saved);
       check(commands->checkpoint().rows == 1);
 
       ds::Array<char, 16> label;
@@ -44,14 +44,14 @@ namespace {
       for (std::size_t index = saved.rows; index < 768; ++index) {
         const auto length = std::snprintf(label.dataMut(), label.size(), "%zu", index);
 
-        check(commands->keep(arguments, {label.data(), static_cast<std::size_t>(length)}, limits));
+        check(commands.getMut().keep(arguments, {label.data(), static_cast<std::size_t>(length)}, limits));
       }
 
-      check(!commands->keep(arguments, "excess", limits));
+      check(!commands.getMut().keep(arguments, "excess", limits));
       check(limits.entries().size() == 1 && limits.entries()[0].name == "config.command_tab_rows");
-      check(commands->keep(arguments, {}, limits));
+      check(commands.getMut().keep(arguments, {}, limits));
 
-      commands->restore(saved);
+      commands.getMut().restore(saved);
       ds::Array<char, 4096> bytes;
 
       bytes.fill('x');
@@ -60,14 +60,14 @@ namespace {
       for (std::size_t index = 0; index < 19; ++index) {
         const auto length = std::snprintf(label.dataMut(), label.size(), "%zu", index);
 
-        check(commands->keep(large, {label.data(), static_cast<std::size_t>(length)}, limits));
+        check(commands.getMut().keep(large, {label.data(), static_cast<std::size_t>(length)}, limits));
       }
 
-      check(!commands->keep(large, "excess", limits));
+      check(!commands.getMut().keep(large, "excess", limits));
       check(limits.entries().size() == 2 && limits.entries()[1].name == "config.command_tab_bytes");
-      check(!commands->keep(large, "excess", limits) && !limits.entries()[1].requested);
-      commands->restore(saved);
-      check(commands->keep(large, {}, limits));
+      check(!commands.getMut().keep(large, "excess", limits) && !limits.entries()[1].requested);
+      commands.getMut().restore(saved);
+      check(commands.getMut().keep(large, {}, limits));
     }
 
     check(memory.liveBytes() == 0);
@@ -80,11 +80,11 @@ namespace {
     BudgetAllocator memory{system, 128 * 1024};
 
     {
-      auto commands = makeOwned<config::CommandTabRegistry>(memory);
+      auto commands = ds::makeBox<config::CommandTabRegistry>(memory);
       config::LimitNotices limits;
       const ds::Array<std::string_view, 1> kept{"echo"};
 
-      check(commands->keep(kept, {}, limits));
+      check(commands.getMut().keep(kept, {}, limits));
       const auto saved = commands->checkpoint();
       const ds::Array<std::string_view, 33> too_many{"a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a"};
       const std::string long_label(33, 'l');
@@ -96,7 +96,7 @@ namespace {
 
       const auto refused = [&](std::span<const std::string_view> arguments, std::string_view label) {
         try {
-          static_cast<void>(commands->keepReference(arguments, label, limits));
+          static_cast<void>(commands.getMut().keepReference(arguments, label, limits));
         } catch (const EncodingError&) {
           const auto after = commands->checkpoint();
 
@@ -112,10 +112,10 @@ namespace {
       check(refused(empty_argument, {}));
       check(refused(nul_argument, {}));
       check(refused(too_long, {}));
-      check(commands->keep(std::span{too_many}.first(32), std::string_view{long_label}.substr(1), limits));
+      check(commands.getMut().keep(std::span{too_many}.first(32), std::string_view{long_label}.substr(1), limits));
       const ds::Array<std::string_view, 2> fits{half, std::string_view{other_half}.substr(1)};
 
-      check(commands->keep(fits, {}, limits));
+      check(commands.getMut().keep(fits, {}, limits));
     }
 
     check(memory.liveBytes() == 0);

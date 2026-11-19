@@ -211,7 +211,7 @@ export {
       // `offer` is the child's ClientHello when the caller already read it complete; without one the
       // session reads its own, from an offer allocated in `memory`. Either is released once the origin
       // has the protocols.
-      explicit TlsSession(tbc::view<const TlsContexts&, tbc::lt::a> contexts, tbc::view<std::shared_ptr<const CertificateAuthority>, tbc::lt::a> authority, TunnelSockets sockets, std::string_view hostname, tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<Owned<AlpnOffer, ConcurrentMemory>, tbc::lt::a> offer);
+      explicit TlsSession(tbc::view<const TlsContexts&, tbc::lt::a> contexts, tbc::view<std::shared_ptr<const CertificateAuthority>, tbc::lt::a> authority, TunnelSockets sockets, std::string_view hostname, tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<ds::Box<AlpnOffer, ConcurrentMemory>, tbc::lt::a> offer);
 
       ~TlsSession();
 
@@ -271,7 +271,7 @@ export {
       TunnelSockets sockets_;
       FixedText<ProxyHostname::maximum_bytes> hostname_;
       bool offered_;
-      tbc::view<Owned<AlpnOffer, ConcurrentMemory>, tbc::lt::a> offer_;
+      tbc::view<ds::Box<AlpnOffer, ConcurrentMemory>, tbc::lt::a> offer_;
       AlpnSelection selection_;
       TlsConnection origin_;
       TlsConnection child_;
@@ -294,9 +294,9 @@ export {
       explicit TlsInterception(tbc::view<const TlsContexts&, tbc::lt::a> contexts, tbc::view<std::shared_ptr<const CertificateAuthority>, tbc::lt::a> authority) noexcept;
 
       // `offer` is the child's ClientHello when the caller already read it complete, or null.
-      tbc::view<Owned<TlsSession, ConcurrentMemory>, tbc::lt::a> open(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname, tbc::view<Owned<AlpnOffer, ConcurrentMemory>, tbc::lt::a> offer) const;
+      tbc::view<ds::Box<TlsSession, ConcurrentMemory>, tbc::lt::a> open(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname, tbc::view<ds::Box<AlpnOffer, ConcurrentMemory>, tbc::lt::a> offer) const;
 
-      tbc::view<Owned<TlsSession, ConcurrentMemory>, tbc::lt::a> open(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname) const;
+      tbc::view<ds::Box<TlsSession, ConcurrentMemory>, tbc::lt::a> open(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname) const;
 
       tbc::view<std::shared_ptr<const CertificateAuthority>, tbc::lt::a> snapshot() const noexcept;
 

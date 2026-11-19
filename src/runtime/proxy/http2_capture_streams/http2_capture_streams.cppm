@@ -246,8 +246,8 @@ export {
             options_(options),
             secret_(secret),
             counters_(counters),
-            head_(makeOwned<ConnectHead>(memory)),
-            hello_(nullptr, AllocationDeleter<AlpnOffer, Memory>{memory}) {}
+            head_(ds::makeBox<ConnectHead>(memory)),
+            hello_() {}
 
       // A redirected connection reads the ClientHello only when transparent TLS may intercept it, into
       // an offer from `memory` that the TLS session takes over or that is released once established.
@@ -257,20 +257,20 @@ export {
             secret_(secret),
             counters_(counters),
             adopted_origin_(std::move(connection.origin)),
-            head_(nullptr, AllocationDeleter<ConnectHead, Memory>{memory}),
-            hello_(nullptr, AllocationDeleter<AlpnOffer, Memory>{memory}),
+            head_(),
+            hello_(),
             state_(State::established),
             transparent_(true) {
         hostname_.assign(connection.target.host.view());
         if (options_.transparent_tls) {
-          hello_ = makeOwned<AlpnOffer>(memory);
+          hello_ = ds::makeBox<AlpnOffer>(memory);
           state_ = State::probing;
         }
       }
 
       // The child's ClientHello, read complete, when the connection is to be intercepted; null
       // otherwise. The handshake keeps no part of it.
-      inline Owned<AlpnOffer, Memory> takeOffer() noexcept {
+      inline ds::Box<AlpnOffer, Memory> takeOffer() noexcept {
         return std::move(hello_);
       }
 
@@ -405,7 +405,7 @@ export {
           return;
         }
 
-        const auto read = hello_->peek(child_.get());
+        const auto read = hello_.getMut().peek(child_.get());
         if (read == AlpnOffer::Read::pending) {
           if (now >= probe_until_) {
             state_ = hello_->tls() ? State::closed : State::established;
@@ -444,7 +444,7 @@ export {
       }
 
       inline void readHead(Time now) noexcept {
-        switch (head_->receive(child_.get())) {
+        switch (head_.getMut().receive(child_.get())) {
         case ConnectHead::Read::pending:
           return;
         case ConnectHead::Read::ended:
@@ -461,7 +461,7 @@ export {
           break;
         }
 
-        const auto decision = authenticateProxy(secret_, options_.anonymous_tunnels, options_.intercept_hosts, head_->text());
+        const auto decision = authenticateProxy(secret_, options_.anonymous_tunnels, options_.intercept_hosts, head_.getMut().text());
         if (const auto* rejected = std::get_if<ProxyRejection>(&decision)) {
           if (rejected->reason != ProxyRejection::Reason::invalid_target) {
             counters_.record(ProxyCounter::rejected_connection);
@@ -553,8 +553,8 @@ export {
       FileDescriptor adopted_origin_;
       // The CONNECT head until it is answered, and the ClientHello of a redirected connection until
       // the handshake is established.
-      Owned<ConnectHead, Memory> head_;
-      Owned<AlpnOffer, Memory> hello_;
+      ds::Box<ConnectHead, Memory> head_;
+      ds::Box<AlpnOffer, Memory> hello_;
       Time probe_until_{};
       Time probe_after_{};
       std::string_view failure_ = "connection_failed";
@@ -657,7 +657,7 @@ export {
         if (const auto index = find(event.stream)) {
           auto& half = slots_.atMut(*index).getMut();
 
-          half->append(half->bodyPart(), event.bytes);
+          half.getMut().append(half->bodyPart(), event.bytes);
         }
       }
 
@@ -682,7 +682,7 @@ export {
         }
 
         if (const auto existing = find(stream)) {
-          return slots_[*existing]->get();
+          return &slots_.atMut(*existing).getMut().getMut();
         }
 
         const auto index = occupied_.firstUnused();
@@ -700,7 +700,7 @@ export {
 
         slots_.atMut(*index).emplace(std::move(half));
         occupied_.insert(*index);
-        return slots_[*index]->get();
+        return &slots_.atMut(*index).getMut().getMut();
       }
 
       inline ds::Option<std::size_t> find(std::uint32_t stream) const noexcept {
@@ -720,7 +720,7 @@ export {
 
         slots_.atMut(index).reset();
         occupied_.erase(index);
-        half->finish(outcome, Clock::now());
+        half.getMut().finish(outcome, Clock::now());
         producer_->publish(std::move(half));
       }
 

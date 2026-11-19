@@ -66,13 +66,10 @@ namespace telar::gui::qt {
 
   // Read before the Lua thread owns the VM: the window keeps these instead of reading it.
   struct ConfigurationSnapshot {
-    using BarRender = Owned<application::components::RenderedContent<application::components::BarContent::capacity, ApplicationAllocator>, ApplicationAllocator>;
+    using BarRender = ds::Box<application::components::RenderedContent<application::components::BarContent::capacity, ApplicationAllocator>, ApplicationAllocator>;
     using CommandArguments = QMap<std::pair<int, QByteArray>, QList<QByteArray>>;
 
-    explicit ConfigurationSnapshot(ApplicationAllocator& memory)
-        : commands(nullptr, AllocationDeleter<runtime::config::RetainedCommandTabRegistry, ApplicationAllocator>{memory}) {}
-
-    Owned<runtime::config::RetainedCommandTabRegistry, ApplicationAllocator> commands;
+    ds::Box<runtime::config::RetainedCommandTabRegistry, ApplicationAllocator> commands;
     ds::Array<ds::Option<BarRender>, application::components::Definitions::positions> fixed_bars{};
     CommandArguments arguments;
   };
@@ -84,7 +81,7 @@ namespace telar::gui::qt {
       failed,
     };
 
-    explicit ConfigurationPreparation(ApplicationAllocator& memory);
+    ConfigurationPreparation();
     ~ConfigurationPreparation();
     ConfigurationPreparation(const ConfigurationPreparation&) = delete;
     ConfigurationPreparation& operator=(const ConfigurationPreparation&) = delete;
@@ -95,7 +92,7 @@ namespace telar::gui::qt {
     ConfigurationWatch::Modules modules;
     Configuration configuration;
     ds::Option<ThemeValues> locked_theme;
-    Owned<application::ConfigurationGeneration<ApplicationAllocator>, ApplicationAllocator> generation;
+    ds::Box<application::ConfigurationGeneration<ApplicationAllocator>, ApplicationAllocator> generation;
     ConfigurationSnapshot snapshot;
     ds::Option<PluginPackages> plugins;
     runtime::plugins::TrustStore trust;
@@ -105,7 +102,7 @@ namespace telar::gui::qt {
     State state = State::unchanged;
   };
 
-  using PreparedConfiguration = Owned<ConfigurationPreparation, ApplicationAllocator>;
+  using PreparedConfiguration = ds::Box<ConfigurationPreparation, ApplicationAllocator>;
 
   class ConfigurationLoader {
   public:

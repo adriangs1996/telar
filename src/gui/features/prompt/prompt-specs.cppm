@@ -30,7 +30,7 @@ namespace telar::gui::features::prompt {
   private:
     struct Entry {
       std::uint64_t digest = 0;
-      Owned<ebnf::command_spec, Memory> spec;
+      ds::Box<ebnf::command_spec, Memory> spec;
     };
 
     Memory& memory_;
@@ -46,7 +46,7 @@ namespace telar::gui::features::prompt {
 
   private:
     Memory& memory_;
-    ds::Option<Owned<ebnf::match_scratch, Memory>> scratch_;
+    ds::Option<ds::Box<ebnf::match_scratch, Memory>> scratch_;
   };
 
 }

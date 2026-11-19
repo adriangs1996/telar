@@ -192,7 +192,8 @@ export {
     public:
       explicit AgentRegistry(Memory& memory);
 
-      Agent* find(std::uint64_t pane, std::uint64_t generation) const noexcept;
+      const Agent* find(std::uint64_t pane, std::uint64_t generation) const noexcept;
+      Agent* findMut(std::uint64_t pane, std::uint64_t generation) noexcept;
       Agent& ensure(std::uint64_t pane, std::uint64_t generation);
 
       // The predicate is the caller's type, so this member keeps its body here.
@@ -205,7 +206,8 @@ export {
         }
       }
 
-      std::span<const Owned<Agent, Memory>> records() const noexcept;
+      std::span<const ds::Box<Agent, Memory>> records() const noexcept;
+      std::span<ds::Box<Agent, Memory>> recordsMut() noexcept;
       void changed() noexcept;
       std::uint64_t revision() const noexcept;
 
@@ -213,7 +215,7 @@ export {
 
     private:
       Memory& memory_;
-      ds::Vec<Owned<Agent, Memory>, Memory> records_;
+      ds::Vec<ds::Box<Agent, Memory>, Memory> records_;
       std::uint64_t revision_ = 1;
     };
 

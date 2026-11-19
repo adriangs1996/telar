@@ -190,7 +190,7 @@ namespace {
       check(SSL_set_alpn_protos(client.get(), offered.data(), offered.size()) == 0);
     }
 
-    TlsSession session{contexts, authority, TunnelSockets{downstream.local.get(), upstream.local.get()}, scenario == SessionCase::wrong_hostname ? "wrong.test" : "origin.test", memory, Owned<AlpnOffer, TlsTestMemory>{nullptr, AllocationDeleter<AlpnOffer, TlsTestMemory>{memory}}};
+    TlsSession session{contexts, authority, TunnelSockets{downstream.local.get(), upstream.local.get()}, scenario == SessionCase::wrong_hostname ? "wrong.test" : "origin.test", memory, ds::Box<AlpnOffer, TlsTestMemory>{}};
     bool client_failed = false;
     bool server_failed = false;
     bool client_ready = false;
@@ -350,8 +350,8 @@ namespace {
       transferThrough(session, server.get(), client.get(), TlsSide::origin);
     };
 
-    handshake(*old_session, first_root.get(), old_downstream, old_upstream);
-    handshake(*new_session, second->certificate(), new_downstream, new_upstream);
+    handshake(old_session.getMut(), first_root.get(), old_downstream, old_upstream);
+    handshake(new_session.getMut(), second->certificate(), new_downstream, new_upstream);
     old_session.reset();
     check(retained.expired());
   }

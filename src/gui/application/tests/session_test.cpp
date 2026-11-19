@@ -152,7 +152,7 @@ namespace {
       });
 
       check(entry != client.tabs().end() && client.findPane(remembered_detached_pane) == nullptr, "workspace metadata must not instantiate detached panes");
-      const auto* detached = entry->get();
+      const auto* detached = &entry->get();
 
       check(application::tabApplicationName(*client.activeTab(), client.focusedPane()) == "Python", "foreground snapshots must honor this client's focused pane");
       check(application::tabApplicationName(*detached, nullptr) == "nvim", "detached tabs must retain the first reported application until focus is known");

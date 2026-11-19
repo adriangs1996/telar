@@ -72,8 +72,8 @@ namespace telar::gui::qt {
         memory_(memory),
         fonts_(memory),
         default_keymap_(default_input_.compile()),
-        generation_(nullptr, AllocationDeleter<application::ConfigurationGeneration<ApplicationAllocator>, ApplicationAllocator>{memory}),
-        commands_(nullptr, AllocationDeleter<runtime::config::RetainedCommandTabRegistry, ApplicationAllocator>{memory}) {
+        generation_(),
+        commands_() {
     debounce_.setSingleShot(true);
     constexpr int reload_debounce_ms = 100;
 
@@ -169,7 +169,7 @@ namespace telar::gui::qt {
       throw std::runtime_error{"ConfigurationNotLoaded"};
     }
 
-    auto* generation = generation_.get();
+    auto* generation = &generation_.getMut();
     const auto number = generation->number();
     const auto known = static_cast<std::size_t>(watch_.modules.size());
 
@@ -215,7 +215,7 @@ namespace telar::gui::qt {
   const application::components::RenderedContent<application::components::BarContent::capacity, ApplicationAllocator>* ConfigurationSource::fixedBar(application::components::Position position) const noexcept {
     const auto& bar = fixed_bars_.at(static_cast<std::size_t>(position));
 
-    return bar ? bar->get() : nullptr;
+    return bar ? &bar->get() : nullptr;
   }
 
   void ConfigurationSource::renderBar(application::components::Position position, const application::components::Context& context, Done<BarRender> done) {
@@ -270,9 +270,9 @@ namespace telar::gui::qt {
 
   void ConfigurationSource::renderPick(std::size_t index, const application::components::Context& context, Done<PickRender> done) {
     run<PickRender>([this, index, context = ContextCopy{context}](Generation& generation) {
-      auto items = makeOwned<application::components::PickItems>(memory_);
+      auto items = ds::makeBox<application::components::PickItems>(memory_);
 
-      generation.renderPick(index, context.view(), *items);
+      generation.renderPick(index, context.view(), items.getMut());
 
       return items;
     },
@@ -572,7 +572,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    std::shared_ptr<Generation> previous{std::move(generation_)};
+    std::shared_ptr<Generation> previous = std::move(generation_).intoShared();
 
     lua_.post([previous = std::move(previous)]() mutable {
       previous.reset();
@@ -652,7 +652,7 @@ namespace telar::gui::qt {
     case ConfigurationPreparation::State::unchanged:
       return;
     case ConfigurationPreparation::State::failed:
-      error_ = std::move(result->error);
+      error_ = std::move(result.getMut().error);
       result.reset();
       emit failed();
 
@@ -662,22 +662,22 @@ namespace telar::gui::qt {
     }
 
     static_cast<void>(fonts_.resolve(result->configuration.font, 1));
-    configuration_ = std::move(result->configuration);
+    configuration_ = std::move(result.getMut().configuration);
     locked_theme_ = result->locked_theme;
     configuration_.theme = projectTheme(configuration_.themes.resolve(appearance_, locked_theme_));
     retire();
-    generation_ = std::move(result->generation);
-    commands_ = std::move(result->snapshot.commands);
-    fixed_bars_ = std::move(result->snapshot.fixed_bars);
-    arguments_ = std::move(result->snapshot.arguments);
-    plugins_ = std::move(result->plugins);
+    generation_ = std::move(result.getMut().generation);
+    commands_ = std::move(result.getMut().snapshot.commands);
+    fixed_bars_ = std::move(result.getMut().snapshot.fixed_bars);
+    arguments_ = std::move(result.getMut().snapshot.arguments);
+    plugins_ = std::move(result.getMut().plugins);
     trust_ = result->trust;
     if (generation_) {
       next_generation_ = generation_->number() + 1;
     }
 
-    module_root_ = std::move(result->directory);
-    watch_.modules = std::move(result->modules);
+    module_root_ = std::move(result.getMut().directory);
+    watch_.modules = std::move(result.getMut().modules);
     loaded_ = !path_.isEmpty();
     error_.clear();
     result.reset();

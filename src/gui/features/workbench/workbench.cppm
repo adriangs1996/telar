@@ -33,7 +33,7 @@ export namespace telar::gui::features::workbench {
   inline constexpr std::size_t maximum_tabs = 256;
 
   // The tabs a session holds, each owned by the session.
-  using Tabs = std::span<const Owned<Tab<Memory>, Memory>>;
+  using Tabs = std::span<const ds::Box<Tab<Memory>, Memory>>;
 
   // The sizes a split leaves the pane it splits and gives the pane it adds.
   struct SplitSizes {
@@ -72,7 +72,7 @@ export namespace telar::gui::features::workbench {
   [[nodiscard]] bool place(State& state, WorkbenchGeometry geometry) noexcept;
 
   // The attachment shelf reserves `reservation` at the bottom of every tab in `tabs`.
-  [[nodiscard]] Reservation reserve(State& state, ds::Option<PaneBottomReservation> reservation, std::span<Owned<Tab<Memory>, Memory>> tabs) noexcept;
+  [[nodiscard]] Reservation reserve(State& state, ds::Option<PaneBottomReservation> reservation, std::span<ds::Box<Tab<Memory>, Memory>> tabs) noexcept;
 
   // The panes on screen took the sizes the reservation leaves them.
   void resized(State& state) noexcept;
@@ -107,7 +107,7 @@ export namespace telar::gui::features::workbench {
   [[nodiscard]] TBC_HOT_PATH inline const Tab<Memory>* find(Tabs tabs, TabLocation location) noexcept;
 
   // The same tab, to change it.
-  [[nodiscard]] TBC_HOT_PATH inline Tab<Memory>* findMut(std::span<Owned<Tab<Memory>, Memory>> tabs, TabLocation location) noexcept;
+  [[nodiscard]] TBC_HOT_PATH inline Tab<Memory>* findMut(std::span<ds::Box<Tab<Memory>, Memory>> tabs, TabLocation location) noexcept;
 
   // The tab at `index` in the order the workspace of `active` shows its tabs.
   [[nodiscard]] ds::Option<TabLocation> tabAt(Tabs tabs, ds::Option<TabLocation> active, std::size_t index) noexcept;
@@ -207,15 +207,15 @@ namespace telar::gui::features::workbench {
       return sameTab(tab->location, location);
     });
 
-    return found == tabs.end() ? nullptr : found->get();
+    return found == tabs.end() ? nullptr : &found->get();
   }
 
-  inline Tab<Memory>* findMut(std::span<Owned<Tab<Memory>, Memory>> tabs, TabLocation location) noexcept {
+  inline Tab<Memory>* findMut(std::span<ds::Box<Tab<Memory>, Memory>> tabs, TabLocation location) noexcept {
     const auto found = std::find_if(tabs.begin(), tabs.end(), [&](const auto& tab) {
       return sameTab(tab->location, location);
     });
 
-    return found == tabs.end() ? nullptr : found->get();
+    return found == tabs.end() ? nullptr : &found->getMut();
   }
 
   template <typename Visit>

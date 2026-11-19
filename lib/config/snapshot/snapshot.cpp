@@ -54,9 +54,9 @@ namespace telar::runtime::config {
 
   template <Allocator Memory>
   void SnapshotReader<Memory>::read(const lua::Value& root, std::string_view selected_profile) {
-    auto state = makeOwned<ClientValidationState>(memory_);
+    auto state = ds::makeBox<ClientValidationState>(memory_);
 
-    read(root, selected_profile, *state);
+    read(root, selected_profile, state.getMut());
   }
 
   template <Allocator Memory>
@@ -90,11 +90,11 @@ namespace telar::runtime::config {
       }
 
       if (name != selected_profile) {
-        auto checked = makeOwned<RuntimeValues<Memory>>(memory_, values_.clone());
+        auto checked = ds::makeBox<RuntimeValues<Memory>>(memory_, values_.clone());
         const auto saved_commands = client_state.commands.checkpoint();
         const auto saved_keymap = client_state.keymap;
 
-        readProfile(profile.as("config"), *checked, base_client, client_state);
+        readProfile(profile.as("config"), checked.getMut(), base_client, client_state);
         client_state.commands.restore(saved_commands);
         client_state.keymap = saved_keymap;
       }

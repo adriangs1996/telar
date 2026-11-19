@@ -21,7 +21,7 @@ namespace telar::gui::features::prompt {
   namespace {
 
     using Checks = ds::Map<std::uint64_t, CommandChecks, Memory>;
-    using Lines = ds::Map<std::uint64_t, Owned<PaneLine, Memory>, Memory>;
+    using Lines = ds::Map<std::uint64_t, ds::Box<PaneLine, Memory>, Memory>;
 
     // The pane's checks, made empty in `memory` the first time. Valid until the next pane's are made.
     tbc::view<CommandChecks&, tbc::lt::a> checksOf(tbc::view<Checks&, tbc::lt::a> all, tbc::view<Memory&, tbc::lt::a> memory, std::uint64_t pane_id) {
@@ -53,7 +53,7 @@ namespace telar::gui::features::prompt {
     PaneLine* lineOf(Lines& lines, std::uint64_t pane_id) noexcept {
       auto* found = lines.findMut(pane_id);
 
-      return found == nullptr ? nullptr : found->get();
+      return found == nullptr ? nullptr : &found->getMut();
     }
 
     // Keeps every command an answer listed under the word it was asked for, while what the pane
@@ -129,11 +129,11 @@ namespace telar::gui::features::prompt {
     if (inserted) {
       auto& memory = state.memory;
 
-      static_cast<void>(lines.insert(pane_id, makeOwned<PaneLine>(memory, memory, pane_id, keymap)));
+      static_cast<void>(lines.insert(pane_id, ds::makeBox<PaneLine>(memory, memory, pane_id, keymap)));
       found = lines.findMut(pane_id);
     }
 
-    auto& line = **found;
+    auto& line = found->getMut();
 
     line.line.setKeymap(keymap);
     return {.line = line, .wants_history = inserted && wants_history};

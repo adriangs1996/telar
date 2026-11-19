@@ -167,8 +167,8 @@ namespace {
     LimitService limits;
     ControlledGitProbe probe;
     GitService service{limits, probe};
-    auto first = makeOwned<Workspace>(memory, memory, 7, "/first", "first");
-    auto second = makeOwned<Workspace>(memory, memory, 9, "/second", "second");
+    auto first = ds::makeBox<Workspace>(memory, memory, 7, "/first", "first");
+    auto second = ds::makeBox<Workspace>(memory, memory, 9, "/second", "second");
     auto& workspace = *first;
 
     model.workspaces.insert(7, std::move(first));

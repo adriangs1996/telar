@@ -246,7 +246,7 @@ namespace telar::gui::qt {
 
     for (const auto& tab : session.tabs()) {
       if (active != nullptr && sameWorkspace(tab->location.workspace, active->location.workspace) && count < tabs.size()) {
-        tabs.atMut(count++) = tab.get();
+        tabs.atMut(count++) = &tab.get();
       }
     }
 

@@ -308,9 +308,9 @@ namespace telar::gui::platform {
   };
 
   WaylandClipboardImageMonitor::WaylandClipboardImageMonitor(ApplicationAllocator& memory, ::wl_display* display)
-      : native_(nullptr, AllocationDeleter<Native, ApplicationAllocator>{memory}) {
+      : native_() {
     if (display != nullptr) {
-      native_ = makeOwned<Native>(memory, display);
+      native_ = ds::makeBox<Native>(memory, display);
     }
   }
 

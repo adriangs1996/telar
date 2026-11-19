@@ -271,7 +271,7 @@ export namespace telar::runtime::control {
       tbc::view<ds::Array<ClipboardRepresentation, 128>, tbc::lt::self> content_views;
       std::size_t mime_count = 0;
       ds::Vec<std::uint8_t, ConcurrentMemory> text;
-      Owned<ClipboardWrite, ConcurrentMemory> transaction;
+      ds::Box<ClipboardWrite, ConcurrentMemory> transaction;
       bool write = false;
       bool listing = false;
       bool prompt = false;
@@ -328,8 +328,8 @@ export namespace telar::runtime::control {
 
     ConcurrentMemory& memory_;
     ds::Vec<std::uint8_t, ConcurrentMemory> decoded_;
-    Owned<ClipboardWrite, ConcurrentMemory> transaction_;
-    Owned<Pending, ConcurrentMemory> pending_;
+    ds::Box<ClipboardWrite, ConcurrentMemory> transaction_;
+    ds::Box<Pending, ConcurrentMemory> pending_;
     ds::Array<Reply<ConcurrentMemory>, 2> asynchronous_replies_;
     std::size_t reply_head_ = 0;
     std::size_t reply_count_ = 0;

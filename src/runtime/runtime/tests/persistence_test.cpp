@@ -93,7 +93,7 @@ namespace {
       }
 
       identities.atMut(slot) = counter;
-      store.insert(counter, makeOwned<std::uint64_t>(memory, counter));
+      store.insert(counter, ds::makeBox<std::uint64_t>(memory, counter));
       counter += 64;
       for (const auto identity : identities) {
         if (identity != 0) {
@@ -106,7 +106,7 @@ namespace {
     bool exhausted = false;
 
     try {
-      store.insert(UINT64_MAX, makeOwned<std::uint64_t>(memory, UINT64_MAX));
+      store.insert(UINT64_MAX, ds::makeBox<std::uint64_t>(memory, UINT64_MAX));
     } catch (const std::bad_alloc&) {
       exhausted = true;
     }
@@ -117,14 +117,14 @@ namespace {
   void testIndependentHandles(ConcurrentMemory& memory) {
     SlotStore<std::uint64_t, 3, ConcurrentMemory> store{memory};
     constexpr std::uint64_t high_identity = UINT64_MAX - 1;
-    const auto first = store.insert(high_identity, makeOwned<std::uint64_t>(memory, high_identity));
+    const auto first = store.insert(high_identity, ds::makeBox<std::uint64_t>(memory, high_identity));
 
     check(*store.findHandle(first) == high_identity);
     check(store.find(high_identity) == store.findHandle(first));
     store.erase(high_identity);
     check(store.findHandle(first) == nullptr);
 
-    const auto second = store.insert(1, makeOwned<std::uint64_t>(memory, 1));
+    const auto second = store.insert(1, ds::makeBox<std::uint64_t>(memory, 1));
 
     check(second != first);
     check(store.findHandle(first) == nullptr);
@@ -137,7 +137,7 @@ namespace {
 
     store.advanceCounter(UINT64_MAX);
     check(store.nextId() == UINT64_MAX);
-    store.insert(UINT64_MAX, makeOwned<std::uint64_t>(memory, UINT64_MAX));
+    store.insert(UINT64_MAX, ds::makeBox<std::uint64_t>(memory, UINT64_MAX));
     check(store.nextCounter() == 0 && *store.find(UINT64_MAX) == UINT64_MAX);
     store.erase(UINT64_MAX);
     store.advanceCounter(1);

@@ -1154,6 +1154,97 @@ namespace {
     check(memory.liveBytes() == 0);
   }
 
+  void testBoxOwnership() {
+    using Memory = BudgetAllocator<SystemAllocator>;
+    using Box = ds::Box<Counted, Memory>;
+
+    static_assert(!std::is_copy_constructible_v<Box> && std::is_nothrow_move_constructible_v<Box> && sizeof(Box) == 2 * sizeof(void*));
+    static_assert(std::is_same_v<decltype(std::declval<const Box&>().get()), const Counted&> && std::is_same_v<decltype(std::declval<const Box&>().operator->()), const Counted*>, "shared access is deep");
+
+    SystemAllocator system;
+    Memory memory{system, 1 << 10};
+    Lives alive;
+
+    {
+      Box empty;
+
+      check(!empty.hasValue() && !empty);
+      auto held = ds::makeBox<Counted>(memory, 1, alive);
+
+      check(held.hasValue() && held->value == 1 && (*held).value == 1 && alive.count() == 1 && memory.liveBytes() == sizeof(Counted));
+      held.getMut().value = 2;
+      check(held.get().value == 2);
+      const auto* address = &held.get();
+      auto moved = std::move(held);
+
+      check(!held.hasValue() && &moved.get() == address && alive.count() == 1, "moving hands the value over without moving it");
+      empty = std::move(moved);
+      check(empty->value == 2 && !moved && alive.count() == 1);
+      empty = ds::makeBox<Counted>(memory, 3, alive);
+      check(empty->value == 3 && alive.count() == 1, "assigning destroys the value held before");
+      empty.reset();
+      check(!empty && alive.count() == 0 && memory.liveBytes() == 0);
+      empty = ds::makeBox<Counted>(memory, 4, alive);
+    }
+
+    check(alive.count() == 0 && memory.liveBytes() == 0, "a Box frees its value when it goes");
+  }
+
+  void testBoxHandOver() {
+    SystemAllocator system;
+    BudgetAllocator memory{system, 1 << 10};
+    Lives alive;
+    auto held = ds::makeBox<Counted>(memory, 5, alive);
+    auto* raw = held.intoRaw();
+
+    check(!held && raw->value == 5 && alive.count() == 1 && memory.liveBytes() == sizeof(Counted), "intoRaw hands the value over without freeing it");
+    ds::Box<Counted, decltype(memory)>::fromRaw(raw, memory).reset();
+    check(alive.count() == 0 && memory.liveBytes() == 0, "fromRaw takes it back to free it");
+
+    auto shared = ds::makeBox<Counted>(memory, 6, alive).intoShared();
+    auto copy = shared;
+
+    check(shared->value == 6 && copy.use_count() == 2 && memory.liveBytes() == sizeof(Counted));
+    shared.reset();
+    check(alive.count() == 1 && copy->value == 6);
+    copy.reset();
+    check(alive.count() == 0 && memory.liveBytes() == 0, "the last shared owner frees the value in its memory");
+    check(ds::Box<Counted, decltype(memory)>{}.intoShared() == nullptr);
+  }
+
+  struct ThrowingConstruction {
+    explicit ThrowingConstruction(int value) {
+      if (value < 0) {
+        throw std::invalid_argument{"negative"};
+      }
+    }
+  };
+
+  void testBoxExhaustion() {
+    SystemAllocator system;
+    BudgetAllocator memory{system, sizeof(std::uint64_t) - 1};
+    bool exhausted = false;
+
+    try {
+      static_cast<void>(ds::makeBox<std::uint64_t>(memory, 1));
+    } catch (const std::bad_alloc&) {
+      exhausted = true;
+    }
+
+    check(exhausted && memory.liveBytes() == 0);
+
+    BudgetAllocator roomy{system, 1 << 10};
+    bool thrown = false;
+
+    try {
+      static_cast<void>(ds::makeBox<ThrowingConstruction>(roomy, -1));
+    } catch (const std::invalid_argument&) {
+      thrown = true;
+    }
+
+    check(thrown && roomy.liveBytes() == 0, "a constructor that throws leaves its allocation freed");
+  }
+
   const telar::testing::Case case_array{"ds.array", testArray};
   const telar::testing::Case case_option{"ds.option", testOption};
   const telar::testing::Case case_vec_growth{"ds.vec_growth", testVecGrowth};
@@ -1183,5 +1274,8 @@ namespace {
   const telar::testing::Case case_string_edges{"ds.string_edges", testStringEdges};
   const telar::testing::Case case_map_edges{"ds.map_edges", testMapEdges};
   const telar::testing::Case case_function_edges{"ds.function_edges", testFunctionEdges};
+  const telar::testing::Case case_box_ownership{"ds.box_ownership", testBoxOwnership};
+  const telar::testing::Case case_box_hand_over{"ds.box_hand_over", testBoxHandOver};
+  const telar::testing::Case case_box_exhaustion{"ds.box_exhaustion", testBoxExhaustion};
 
 }

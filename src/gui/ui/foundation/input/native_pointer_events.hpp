@@ -2,6 +2,7 @@
 
 #include "foundation/core/application_memory.hpp"
 #include "foundation/core/memory.hpp"
+#include "telar_base/ds/containers.hpp"
 
 namespace telar::gui::qt {
 
@@ -18,7 +19,7 @@ namespace telar::gui::qt {
 
   private:
     struct Native;
-    Owned<Native, ApplicationAllocator> native_;
+    ds::Box<Native, ApplicationAllocator> native_;
   };
 
 }

@@ -44,7 +44,7 @@ namespace telar::gui::qt {
     connect(&shelf_, &AttachmentShelf::failed, this, [this](const QString& message) {
       const auto bytes = message.toUtf8();
 
-      application::notifications::publish(store_.client(application::machines::Machines::local_slot).session, {.level = NotificationLevel::failure, .title = "Image preview failed", .message = {bytes.constData(), static_cast<std::size_t>(bytes.size())}, .link = {}});
+      application::notifications::publish(store_.clientMut(application::machines::Machines::local_slot).session, {.level = NotificationLevel::failure, .title = "Image preview failed", .message = {bytes.constData(), static_cast<std::size_t>(bytes.size())}, .link = {}});
       if (store_.machines().active() == application::machines::Machines::local_slot) {
         store_.commit();
       }
@@ -73,13 +73,13 @@ namespace telar::gui::qt {
         return;
       }
 
-      application::notifications::reportLimit(store_.client(application::machines::Machines::local_slot).session, {.name = name, .noun = noun, .value = value});
+      application::notifications::reportLimit(store_.clientMut(application::machines::Machines::local_slot).session, {.name = name, .noun = noun, .value = value});
     });
 
     connect(&shelf_, &AttachmentShelf::evicted, this, [this](application::terminal::attachments::AttachmentEviction reason, qulonglong requested) {
       const bool items = reason == application::terminal::attachments::AttachmentEviction::items;
 
-      application::notifications::reportLimit(store_.client(application::machines::Machines::local_slot).session, {.name = items ? "attachments.max_items" : "attachments.max_retained_bytes", .noun = items ? "previews" : "bytes", .value = items ? AttachmentLimits::maximum_items : AttachmentLimits::maximum_retained_bytes, .requested = requested});
+      application::notifications::reportLimit(store_.clientMut(application::machines::Machines::local_slot).session, {.name = items ? "attachments.max_items" : "attachments.max_retained_bytes", .noun = items ? "previews" : "bytes", .value = items ? AttachmentLimits::maximum_items : AttachmentLimits::maximum_retained_bytes, .requested = requested});
     });
   }
 
@@ -184,7 +184,7 @@ namespace telar::gui::qt {
       reservation = PaneBottomReservation{.pane_id = prompt->target.pane_id};
     }
 
-    application::workbench::reserveBottom(store_.client(application::machines::Machines::local_slot).session, reservation);
+    application::workbench::reserveBottom(store_.clientMut(application::machines::Machines::local_slot).session, reservation);
   }
 
   bool AttachmentsController::interceptKey(QKeyEvent& event) {
@@ -201,7 +201,7 @@ namespace telar::gui::qt {
 
   void AttachmentsController::reconcileFrame(std::uint64_t pane_id) {
     const auto& prompt = shelf_.capturePrompt();
-    const auto* const pane = store_.client(application::machines::Machines::local_slot).session.findPane(pane_id);
+    const auto* const pane = store_.clientMut(application::machines::Machines::local_slot).session.findPane(pane_id);
     if (prompt && prompt->target.pane_id == pane_id && pane != nullptr && prompt->policy != AttachmentMarkerPolicy::ordered) {
       shelf_.reconcile(application::terminal::attachments::AttachmentMarkerScreen::from(pane->screen));
     }

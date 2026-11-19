@@ -125,12 +125,12 @@ namespace {
     // Answers at once, as the Lua thread would after its queue drains.
     template <typename Done>
     void renderPick(std::size_t index, const features::components::Context& context, Done done) {
-      LuaOutcome<Owned<features::components::PickItems, Memory>> outcome;
+      LuaOutcome<telar::ds::Box<features::components::PickItems, Memory>> outcome;
 
       try {
-        auto items = makeOwned<features::components::PickItems>(memory);
+        auto items = telar::ds::makeBox<features::components::PickItems>(memory);
 
-        generation.renderPick(index, context, *items);
+        generation.renderPick(index, context, items.getMut());
         outcome.value.emplace(std::move(items));
       } catch (const std::exception& error) {
         outcome.error = QString::fromUtf8(error.what());

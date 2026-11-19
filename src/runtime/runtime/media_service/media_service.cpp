@@ -223,14 +223,14 @@ namespace telar::runtime {
       pending += agent->hasPendingDescription();
     }
 
-    for (auto& agent : agents.records()) {
-      if (pending < description_queue_capacity && agent->queueDescription()) {
+    for (auto& agent : agents.recordsMut()) {
+      if (pending < description_queue_capacity && agent.getMut().queueDescription()) {
         ++pending;
         agents.changed();
       }
     }
 
-    for (auto& agent : agents.records()) {
+    for (auto& agent : agents.recordsMut()) {
       if (agent->description_phase != DescriptionPhase::queued) {
         continue;
       }
@@ -238,14 +238,14 @@ namespace telar::runtime {
       try {
         auto query = agent->description_capture.normalized();
 
-        agent->description_capture.clear();
-        agent->description_phase = DescriptionPhase::running;
-        agent->description_revision = ++description_revision_;
+        agent.getMut().description_capture.clear();
+        agent.getMut().description_phase = DescriptionPhase::running;
+        agent.getMut().description_revision = ++description_revision_;
         return DescriptionRequest{.identity = {agent->pane, agent->generation, agent->session_id, agent->description_revision}, .query = std::move(query)};
       } catch (const EncodingError&) {
-        agent->description_capture.clear();
-        agent->description_phase = DescriptionPhase::failed;
-        agent->title_state = AgentTitleState::failed;
+        agent.getMut().description_capture.clear();
+        agent.getMut().description_phase = DescriptionPhase::failed;
+        agent.getMut().title_state = AgentTitleState::failed;
         agents.changed();
       }
     }
@@ -254,7 +254,7 @@ namespace telar::runtime {
   }
 
   ds::Option<HistorySessionTitle> DescriptionQueue::completeDescription(AgentRegistry<ConcurrentMemory>& agents, const DescriptionResult& result) {
-    auto* agent = agents.find(result.identity.pane, result.identity.generation);
+    auto* agent = agents.findMut(result.identity.pane, result.identity.generation);
     if (agent == nullptr || agent->description_phase != DescriptionPhase::running || agent->session_id != result.identity.session || agent->description_revision != result.identity.revision) {
       return ds::none;
     }
@@ -455,7 +455,7 @@ namespace telar::runtime {
 
       if (entry.reset) {
         for (auto* client : clients.items()) {
-          if (auto* attachment = client == nullptr ? nullptr : client->attachment(pane->id)) {
+          if (auto* attachment = client == nullptr ? nullptr : client->attachmentMut(pane->id)) {
             attachment->graphics.requestSnapshot();
           }
         }
@@ -481,7 +481,7 @@ namespace telar::runtime {
     }
 
     for (auto* client : clients.items()) {
-      if (auto* attachment = client == nullptr ? nullptr : client->attachment(pane)) {
+      if (auto* attachment = client == nullptr ? nullptr : client->attachmentMut(pane)) {
         attachment->graphics.stageAtMediaBoundary(storage);
         TELAR_DIAGNOSTIC(metrics.graphics.merge(attachment->graphics.takeCounters()));
       }

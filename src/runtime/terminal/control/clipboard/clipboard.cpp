@@ -556,8 +556,8 @@ namespace telar::runtime::control {
   Clipboard::Clipboard(ConcurrentMemory& memory)
       : memory_(memory),
         decoded_(memory),
-        transaction_(nullptr, AllocationDeleter<ClipboardWrite, ConcurrentMemory>{memory}),
-        pending_(nullptr, AllocationDeleter<Pending, ConcurrentMemory>{memory}),
+        transaction_(),
+        pending_(),
         asynchronous_replies_{Reply<ConcurrentMemory>{memory}, Reply<ConcurrentMemory>{memory}} {}
 
   void Clipboard::routes(std::span<const ClipboardRoute> routes, ds::Option<ClipboardRoute> preferred) {
@@ -595,8 +595,8 @@ namespace telar::runtime::control {
         return;
       }
 
-      pending_ = makeOwned<Pending>(memory_, memory_);
-      auto& request = *pending_;
+      pending_ = ds::makeBox<Pending>(memory_, memory_);
+      auto& request = pending_.getMut();
 
       request.traditional = true;
       request.selection = selection;
@@ -634,7 +634,7 @@ namespace telar::runtime::control {
       return;
     }
 
-    const bool had_pending = pending_ != nullptr;
+    const bool had_pending = pending_.hasValue();
 
     try {
       switch (metadata->operation) {
@@ -646,7 +646,7 @@ namespace telar::runtime::control {
         if (policy.clipboard_write == Access::deny) {
           status(*metadata, ClipboardStatus::denied, ending, reply);
         } else {
-          transaction_ = makeOwned<ClipboardWrite>(memory_, memory_, *metadata, maximum_bytes);
+          transaction_ = ds::makeBox<ClipboardWrite>(memory_, memory_, *metadata, maximum_bytes);
         }
 
         return;
@@ -666,7 +666,7 @@ namespace telar::runtime::control {
           return;
         }
 
-        const auto result = metadata->operation == ClipboardOperation::data ? transaction_->data(metadata->mime.view(), data) : transaction_->alias(metadata->mime.view(), data);
+        const auto result = metadata->operation == ClipboardOperation::data ? transaction_.getMut().data(metadata->mime.view(), data) : transaction_.getMut().alias(metadata->mime.view(), data);
         if (result != ClipboardStatus::ok) {
           abort(result, ending, reply);
         }
@@ -691,7 +691,7 @@ namespace telar::runtime::control {
       return ds::none;
     }
 
-    auto& pending = *pending_;
+    auto& pending = pending_.getMut();
 
     pending.ticket = {pane, generation, pending.route.generation, pending.nonce};
     const auto contents = pending.prepareViews();
@@ -715,7 +715,7 @@ namespace telar::runtime::control {
 
   void Clipboard::announced() noexcept {
     if (pending_) {
-      pending_->announced = true;
+      pending_.getMut().announced = true;
     }
   }
 
@@ -745,8 +745,8 @@ namespace telar::runtime::control {
         return true;
       }
 
-      pending_->prepared = true;
-      pending_->remember = completion.remember;
+      pending_.getMut().prepared = true;
+      pending_.getMut().remember = completion.remember;
       return true;
     }
 
@@ -906,13 +906,13 @@ namespace telar::runtime::control {
 
   void Clipboard::committed() noexcept {
     if (pending_) {
-      pending_->committed = true;
+      pending_.getMut().committed = true;
     }
   }
 
   Clipboard::Pending::Pending(ConcurrentMemory& memory)
       : text(memory),
-        transaction(nullptr, AllocationDeleter<ClipboardWrite, ConcurrentMemory>{memory}) {
+        transaction() {
     randomBytes(&nonce, sizeof(nonce));
     if (nonce == 0) {
       nonce = 1;
@@ -1020,8 +1020,8 @@ namespace telar::runtime::control {
       return;
     }
 
-    pending_ = makeOwned<Pending>(memory_, memory_);
-    auto& request = *pending_;
+    pending_ = ds::makeBox<Pending>(memory_, memory_);
+    auto& request = pending_.getMut();
 
     request.metadata = metadata;
     request.ending = ending;
@@ -1040,7 +1040,7 @@ namespace telar::runtime::control {
   }
 
   void Clipboard::commit(Ending ending, const Policy& policy, Reply<ConcurrentMemory>& reply) {
-    const auto result = transaction_->commit();
+    const auto result = transaction_.getMut().commit();
     if (result != ClipboardStatus::ok) {
       abort(result, ending, reply);
       return;
@@ -1056,10 +1056,10 @@ namespace telar::runtime::control {
       return;
     }
 
-    pending_ = makeOwned<Pending>(memory_, memory_);
-    auto& request = *pending_;
+    pending_ = ds::makeBox<Pending>(memory_, memory_);
+    auto& request = pending_.getMut();
 
-    request.metadata = transaction_->metadata;
+    request.metadata = transaction_.getMut().metadata;
     request.write = true;
     request.ending = ending;
     const auto granted = authorizedRoute(grants_, request.metadata, true, false);

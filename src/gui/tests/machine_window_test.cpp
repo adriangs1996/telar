@@ -193,7 +193,7 @@ namespace telar::gui::test {
     }
 
     static qt::MachineClient& client(qt::ApplicationController& application, Machines::Slot slot) {
-      return application.machines_.clientAt(slot);
+      return application.machines_.clientAtMut(slot);
     }
 
     static void refreshActivity(qt::ApplicationController& application) {

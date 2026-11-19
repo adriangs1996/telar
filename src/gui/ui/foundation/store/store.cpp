@@ -25,7 +25,7 @@ namespace telar::gui::qt {
     return clients_;
   }
 
-  MachineClient& Store::client(application::machines::Machines::Slot slot) const noexcept {
+  const MachineClient& Store::client(application::machines::Machines::Slot slot) const noexcept {
     const auto& client = clients_[slot];
     if (!client) {
       std::terminate();
@@ -34,12 +34,25 @@ namespace telar::gui::qt {
     return **client;
   }
 
-  MachineClient* Store::find(application::machines::MachineClientKey key) const noexcept {
+  MachineClient& Store::clientMut(application::machines::Machines::Slot slot) noexcept {
+    auto& client = clients_.atMut(slot);
+    if (!client) {
+      std::terminate();
+    }
+
+    return client.getMut().getMut();
+  }
+
+  const MachineClient* Store::find(application::machines::MachineClientKey key) const noexcept {
     return findMachineClient(machines_, clients_, key);
   }
 
+  MachineClient* Store::findMut(application::machines::MachineClientKey key) noexcept {
+    return findMachineClientMut(machines_, clients_, key);
+  }
+
   GuiSession& Store::sessionMut() noexcept {
-    return client(machines_.active()).session;
+    return clientMut(machines_.active()).session;
   }
 
   const GuiSession& Store::session() const noexcept {
@@ -47,7 +60,7 @@ namespace telar::gui::qt {
   }
 
   RuntimeConnection& Store::connectionMut() noexcept {
-    return client(machines_.active()).connection;
+    return clientMut(machines_.active()).connection;
   }
 
   const RuntimeConnection& Store::connection() const noexcept {

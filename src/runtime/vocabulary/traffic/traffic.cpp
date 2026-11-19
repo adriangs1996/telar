@@ -108,7 +108,7 @@ namespace telar::runtime::plugins {
 
   template <FrameOutput Output>
   void Protocol::writeExchange(Output& writer, ExchangeIdentity identity, const CapturedExchange& exchange, std::size_t part_limit) {
-    const auto* representative = exchange.request ? exchange.request.get() : exchange.response.get();
+    const auto* representative = exchange.request ? &exchange.request.get() : exchange.response ? &exchange.response.get() : nullptr;
     if (representative == nullptr) {
       throw EncodingError{"Cannot encode an empty capture"};
     }
@@ -123,8 +123,8 @@ namespace telar::runtime::plugins {
     writer.text(representative->method());
     writer.text(representative->target());
     writer.timestamp(representative->started_at_ms);
-    writeHalf(writer, exchange.request.get(), part_limit);
-    writeHalf(writer, exchange.response.get(), part_limit);
+    writeHalf(writer, exchange.request ? &exchange.request.get() : nullptr, part_limit);
+    writeHalf(writer, exchange.response ? &exchange.response.get() : nullptr, part_limit);
   }
 
   ExchangeProtocol Protocol::exchangeProtocol(CaptureProtocol protocol) {

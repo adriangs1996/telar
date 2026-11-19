@@ -164,9 +164,9 @@ namespace telar::gui::application::workbench {
     active_tab = location;
     auto& tab = Access::ensureTab(session, location);
 
-    for (const auto& candidate : session.tabs()) {
+    for (auto& candidate : Access::tabsMut(session)) {
       if (sameWorkspace(candidate->location.workspace, location.workspace)) {
-        candidate->workspace_active = candidate.get() == &tab;
+        candidate.getMut().workspace_active = &candidate.get() == &tab;
       }
     }
 

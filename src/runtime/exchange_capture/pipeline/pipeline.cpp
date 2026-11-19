@@ -90,7 +90,7 @@ namespace telar::runtime {
 
     auto half = producer_.receive();
     if (half && request.decode) {
-      producer_.decodeBody(*half.getMut());
+      producer_.decodeBody(half.getMut().getMut());
     }
 
     return half;

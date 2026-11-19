@@ -37,6 +37,132 @@ namespace telar::ds {
     return storage;
   }
 
+  // One value in an allocation of its own from an allocator, as Rust's `Box`, or none yet, as
+  // `Option<Box>` is one pointer: a default Box holds nothing until a `makeBox` is assigned to it.
+  // Shared access is deep, as through Rust's `&Box<T>`: a const Box hands out a const value, and
+  // `getMut` the mutable one. Moving it moves the pointer, so what borrows the value outlives the
+  // Box's moves, as a Vec of them growing.
+  template <typename Value, Allocator Memory>
+  class TBC_OWNER TBC_GENERIC Box {
+  public:
+    using element_type = Value;
+
+    Box() noexcept = default;
+
+    Box(const Box&) = delete;
+    Box& operator=(const Box&) = delete;
+
+    Box(Box&& other) noexcept
+        : value_(std::exchange(other.value_, nullptr)),
+          memory_(other.memory_) {}
+
+    Box& operator=(Box&& other) noexcept {
+      if (this != &other) {
+        drop();
+        value_ = std::exchange(other.value_, nullptr);
+        memory_ = other.memory_;
+      }
+
+      return *this;
+    }
+
+    ~Box() {
+      drop();
+    }
+
+    [[nodiscard]] bool hasValue() const noexcept {
+      return value_ != nullptr;
+    }
+
+    explicit operator bool() const noexcept {
+      return hasValue();
+    }
+
+    // Destroys the value, leaving none.
+    void reset() noexcept {
+      drop();
+    }
+
+    // Takes back a value `intoRaw` handed out, from `memory`, as Rust's `Box::from_raw`: the caller
+    // answers for it being one, as unsafe Rust does.
+    [[nodiscard]] static Box fromRaw(Value* value, Memory& memory) noexcept {
+      return Box{value, memory};
+    }
+
+    // Hands the value over to foreign code that keeps it by address, leaving none, as Rust's
+    // `Box::into_raw`: `fromRaw` frees it again.
+    [[nodiscard]] Value* intoRaw() noexcept {
+      return std::exchange(value_, nullptr);
+    }
+
+    // Hands the value over to shared owners, which free it in the same memory once the last one goes,
+    // as Rust's `Arc::from(Box)`; their count lives where std::shared_ptr keeps it.
+    [[nodiscard]] std::shared_ptr<Value> intoShared() && {
+      if (value_ == nullptr) {
+        return {};
+      }
+
+      auto* memory = memory_;
+
+      return std::shared_ptr<Value>{std::exchange(value_, nullptr), [memory](Value* value) noexcept {
+                                      fromRaw(value, *memory).reset();
+                                    }};
+    }
+
+    [[nodiscard]] const Value& get() const noexcept {
+      TELAR_ASSERT(value_ != nullptr);
+      return *value_;
+    }
+
+    [[nodiscard]] Value& getMut() noexcept {
+      TELAR_ASSERT(value_ != nullptr);
+      return *value_;
+    }
+
+    [[nodiscard]] const Value& operator*() const noexcept {
+      return get();
+    }
+
+    [[nodiscard]] const Value* operator->() const noexcept {
+      return &get();
+    }
+
+  private:
+    template <typename Boxed, Allocator Source, typename... Arguments>
+    friend Box<Boxed, Source> makeBox(Source& memory, Arguments&&... arguments);
+
+    Box(Value* value, Memory& memory) noexcept
+        : value_(value),
+          memory_(&memory) {}
+
+    void drop() noexcept {
+      if (value_ != nullptr) {
+        std::destroy_at(value_);
+        memory_->deallocate(value_, sizeof(Value), alignof(Value));
+        value_ = nullptr;
+      }
+    }
+
+    Value* value_ = nullptr;
+    Memory* memory_ = nullptr;
+  };
+
+  // A Box holding the Value its arguments construct, in `memory`; it keeps what Value's constructor
+  // keeps of them, and the allocator.
+  template <typename Value, Allocator Memory, typename... Arguments>
+  TBC_CONSTRUCTS TBC_GENERIC Box<Value, Memory> makeBox(Memory& memory, Arguments&&... arguments) {
+    auto* value = static_cast<Value*>(allocateBytes(memory, sizeof(Value), alignof(Value)));
+
+    try {
+      std::construct_at(value, std::forward<Arguments>(arguments)...);
+    } catch (...) {
+      memory.deallocate(value, sizeof(Value), alignof(Value));
+      throw;
+    }
+
+    return Box<Value, Memory>{value, memory};
+  }
+
   // The high and low halves of a 128-bit product folded together: every bit of either factor
   // reaches every bit of the result, as wyhash and rapidhash mix.
   TBC_HOT_PATH inline std::uint64_t mix(std::uint64_t left, std::uint64_t right) noexcept {

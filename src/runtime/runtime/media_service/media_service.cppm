@@ -339,7 +339,7 @@ export {
     public:
       inline explicit PathService(Memory& memory)
           : memory_(memory),
-            slots_{emptySlot(memory), emptySlot(memory), emptySlot(memory), emptySlot(memory)} {}
+            slots_() {}
 
       inline ~PathService() {
         stop();
@@ -348,7 +348,7 @@ export {
       inline void stop() noexcept {
         for (auto& slot : slots_.viewMut()) {
           if (slot) {
-            slot->index.stop();
+            slot.getMut().index.stop();
           }
         }
       }
@@ -369,7 +369,7 @@ export {
 
       template <typename Reply>
       inline bool tryQuery(std::uint64_t client, const FindPaths& request, Reply& reply) {
-        auto* slot = find(client);
+        auto* slot = findMut(client);
         if (slot == nullptr || slot->building || slot->querying || slot->rebuild || !slot->index.canQueryInline(request)) {
           return false;
         }
@@ -388,7 +388,7 @@ export {
             continue;
           }
 
-          auto& slot = *owned;
+          auto& slot = owned.getMut();
 
           slot.build_worker.collect([&](bool) {
             slot.building = false;
@@ -423,8 +423,8 @@ export {
             continue;
           }
 
-          slot->abandoned = true;
-          slot->index.stop();
+          slot.getMut().abandoned = true;
+          slot.getMut().index.stop();
           completion_.notify();
           return;
         }
@@ -456,14 +456,10 @@ export {
         tbc::view<ObservationWorker<PathQueryTask<Memory, Index>>, tbc::lt::self> query_worker;
       };
 
-      inline static Owned<Slot, Memory> emptySlot(Memory& memory) noexcept {
-        return {nullptr, AllocationDeleter<Slot, Memory>{memory}};
-      }
-
-      inline Slot* find(std::uint64_t client) const noexcept {
-        for (const auto& slot : slots_) {
+      inline Slot* findMut(std::uint64_t client) noexcept {
+        for (auto& slot : slots_.viewMut()) {
           if (slot && !slot->abandoned && slot->client == client) {
-            return slot.get();
+            return &slot.getMut();
           }
         }
 
@@ -471,11 +467,11 @@ export {
       }
 
       inline Slot& acquire(std::uint64_t client) {
-        if (auto* slot = find(client)) {
+        if (auto* slot = findMut(client)) {
           return *slot;
         }
 
-        Owned<Slot, Memory>* selected = nullptr;
+        ds::Box<Slot, Memory>* selected = nullptr;
 
         for (auto& slot : slots_.viewMut()) {
           if (!slot) {
@@ -493,8 +489,8 @@ export {
         }
 
         selected->reset();
-        *selected = makeOwned<Slot>(memory_, memory_, completion_, client);
-        return **selected;
+        *selected = ds::makeBox<Slot>(memory_, memory_, completion_, client);
+        return selected->getMut();
       }
 
       inline static void advance(Slot& slot) {
@@ -518,7 +514,7 @@ export {
 
       Memory& memory_;
       CompletionSignal completion_;
-      ds::Array<Owned<Slot, Memory>, 4> slots_;
+      ds::Array<ds::Box<Slot, Memory>, 4> slots_;
       std::uint64_t clock_ = 0;
     };
 

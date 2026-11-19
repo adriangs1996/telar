@@ -98,7 +98,7 @@ namespace {
     BudgetAllocator memory{system, 256 * 1024};
 
     {
-      auto commands = makeOwned<config::CommandTabRegistry>(memory);
+      auto commands = ds::makeBox<config::CommandTabRegistry>(memory);
       config::LimitNotices limits;
       std::string long_argument(300, 'a');
 
@@ -108,7 +108,7 @@ namespace {
 
       const ds::Array<std::string_view, 3> arguments{"sh", long_argument, "-c"};
       const std::string_view label = "a label of exactly thirty-two by";
-      const auto reference = commands->keepReference(arguments, label, limits);
+      const auto reference = commands.getMut().keepReference(arguments, label, limits);
 
       check(reference.hasValue());
       const auto loaded = commands->load(*reference);

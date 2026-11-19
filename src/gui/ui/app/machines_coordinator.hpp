@@ -93,8 +93,10 @@ namespace telar::gui::qt {
 
     // Admits a new client to the slot, in place of the one it held.
     [[nodiscard]] MachineClient& createClient(application::machines::Machines::Slot slot);
-    [[nodiscard]] MachineClient& clientAt(application::machines::Machines::Slot slot) const noexcept;
-    [[nodiscard]] MachineClient* findClient(application::machines::MachineClientKey key) const noexcept;
+    [[nodiscard]] const MachineClient& clientAt(application::machines::Machines::Slot slot) const noexcept;
+    [[nodiscard]] MachineClient& clientAtMut(application::machines::Machines::Slot slot) noexcept;
+    [[nodiscard]] const MachineClient* findClient(application::machines::MachineClientKey key) const noexcept;
+    [[nodiscard]] MachineClient* findClientMut(application::machines::MachineClientKey key) noexcept;
     // Shows another machine in the window, if it is live.
     void select(application::machines::MachineToken target);
     // Shows the next live machine in the direction of `delta`.

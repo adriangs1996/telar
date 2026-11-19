@@ -159,7 +159,8 @@ export {
       // The bit its slot sets in a pane's observers; none before the client is stored.
       std::uint32_t observerBit() const noexcept;
 
-      Attachment* attachment(std::uint64_t pane_id) const noexcept;
+      const Attachment* attachment(std::uint64_t pane_id) const noexcept;
+      Attachment* attachmentMut(std::uint64_t pane_id) noexcept;
 
       // Whether the runtime verified this client runs inside `pane`, the generation it has now.
       bool verifiedFor(const Pane& pane) const noexcept;
@@ -175,7 +176,7 @@ export {
       ds::Option<PendingClientCommand> pending_command;
       ds::Option<PendingPaneFocus> pending_focus;
       Connection<ConcurrentMemory> connection;
-      ds::Vec<Owned<Attachment, ConcurrentMemory>, ConcurrentMemory> attachments;
+      ds::Vec<ds::Box<Attachment, ConcurrentMemory>, ConcurrentMemory> attachments;
       PendingClipboard clipboard;
       std::size_t next_attachment = 0;
       ds::Option<std::uint64_t> completing_exit;

@@ -153,7 +153,7 @@ namespace {
         FailureCode::invalid_request,
         unavailable);
 
-    owner.session().attachments.push(makeOwned<Attachment>(memory, memory, owner.session().graphics_credit, pane.id, pane.media));
+    owner.session().attachments.push(ds::makeBox<Attachment>(memory, memory, owner.session().graphics_credit, pane.id, pane.media));
     panes.remove(model, clients, pane.id);
     expectFailure([&] {
       resolveLaunchDirectory(model, owner.session(), launch, directory);
@@ -172,11 +172,11 @@ namespace {
     ClientPeer owner{memory, model, clients, ClientRole::interactive};
     ClientPeer spectator{memory, model, clients, ClientRole::interactive};
     const auto identity = model.workspaces.nextId();
-    auto workspace = makeOwned<Workspace>(memory, memory, identity, "/", "Existing");
+    auto workspace = ds::makeBox<Workspace>(memory, memory, identity, "/", "Existing");
 
-    workspace->tabs.emplace(memory, model.next_tab_id++, "Default");
-    workspace->tabs.emplace(memory, model.next_tab_id++, "Running");
-    auto& stored = *workspace;
+    workspace.getMut().tabs.emplace(memory, model.next_tab_id++, "Default");
+    workspace.getMut().tabs.emplace(memory, model.next_tab_id++, "Running");
+    auto& stored = workspace.getMut();
 
     model.workspaces.insert(identity, std::move(workspace));
     const TabLocation empty{WorkspaceLocation{.id = identity}, stored.tabs.front().id};
@@ -226,9 +226,9 @@ namespace {
     ClientPeer owner{memory, model, clients, ClientRole::interactive};
     ClientPeer spectator{memory, model, clients, ClientRole::interactive};
     const auto identity = model.workspaces.nextId();
-    auto workspace = makeOwned<Workspace>(memory, memory, identity, "/", "Existing");
+    auto workspace = ds::makeBox<Workspace>(memory, memory, identity, "/", "Existing");
 
-    workspace->tabs.emplace(memory, model.next_tab_id++, "Default");
+    workspace.getMut().tabs.emplace(memory, model.next_tab_id++, "Default");
     auto& stored = *workspace;
 
     model.workspaces.insert(identity, std::move(workspace));

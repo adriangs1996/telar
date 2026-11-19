@@ -10,6 +10,7 @@ static_assert(true);
 #include "features/terminal/attachments/types.hpp"
 #include "foundation/core/application_memory.hpp"
 #include "foundation/core/memory.hpp"
+#include "telar_base/ds/containers.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include <QBuffer>
 #include <QByteArray>
@@ -40,7 +41,7 @@ namespace telar::gui::qt {
       static void release(void* context) noexcept {
         auto* const owner = static_cast<ImagePixels*>(context);
 
-        AllocationDeleter<ImagePixels, ApplicationAllocator>{owner->memory}(owner);
+        ds::Box<ImagePixels, ApplicationAllocator>::fromRaw(owner, owner->memory).reset();
       }
     };
 
@@ -82,10 +83,10 @@ namespace telar::gui::qt {
 
     QImage resampled(ApplicationAllocator& memory, const QImage& source, application::terminal::attachments::AttachmentPreviewSize size) {
       const auto byte_count = static_cast<std::size_t>(size.width) * size.height * application::terminal::graphics::RgbaImageView::channels;
-      auto pixels = makeOwned<ImagePixels>(memory, ImagePixels{.memory = memory, .bytes = SensitiveBytes{memory}});
+      auto pixels = ds::makeBox<ImagePixels>(memory, ImagePixels{.memory = memory, .bytes = SensitiveBytes{memory}});
 
-      pixels->bytes.resizeZeroed(byte_count, static_cast<std::size_t>(application::terminal::attachments::AttachmentPreviewSize::full_pixels) * application::terminal::graphics::RgbaImageView::channels);
-      const auto view = pixels->bytes.unsignedBytesMut();
+      pixels.getMut().bytes.resizeZeroed(byte_count, static_cast<std::size_t>(application::terminal::attachments::AttachmentPreviewSize::full_pixels) * application::terminal::graphics::RgbaImageView::channels);
+      const auto view = pixels.getMut().bytes.unsignedBytesMut();
       auto* const rgba = view.data();
       const application::terminal::graphics::RgbaImageView input{
           .pixels = std::as_bytes(std::span{source.constBits(), static_cast<std::size_t>(source.sizeInBytes())}),
@@ -100,13 +101,13 @@ namespace telar::gui::qt {
       }
 
       application::terminal::graphics::ArtworkResize::premultiply(output);
-      const auto* const owner = pixels.get();
-      QImage image{rgba, static_cast<int>(size.width), static_cast<int>(size.height), static_cast<qsizetype>(size.width) * static_cast<qsizetype>(application::terminal::graphics::RgbaImageView::channels), QImage::Format_RGBA8888_Premultiplied, ImagePixels::release, pixels.get()};
+      const auto* const owner = &pixels.get();
+      QImage image{rgba, static_cast<int>(size.width), static_cast<int>(size.height), static_cast<qsizetype>(size.width) * static_cast<qsizetype>(application::terminal::graphics::RgbaImageView::channels), QImage::Format_RGBA8888_Premultiplied, ImagePixels::release, &pixels.getMut()};
       if (image.isNull()) {
         throw std::bad_alloc{};
       }
 
-      if (pixels.release() != owner) {
+      if (pixels.intoRaw() != owner) {
         std::terminate();
       }
 

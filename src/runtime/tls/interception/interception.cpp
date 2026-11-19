@@ -382,12 +382,12 @@ namespace telar::runtime {
     return child_.get();
   }
 
-  TlsSession::TlsSession(tbc::view<const TlsContexts&, tbc::lt::a> contexts, tbc::view<std::shared_ptr<const CertificateAuthority>, tbc::lt::a> authority, TunnelSockets sockets, std::string_view hostname, tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<Owned<AlpnOffer, ConcurrentMemory>, tbc::lt::a> offer)
+  TlsSession::TlsSession(tbc::view<const TlsContexts&, tbc::lt::a> contexts, tbc::view<std::shared_ptr<const CertificateAuthority>, tbc::lt::a> authority, TunnelSockets sockets, std::string_view hostname, tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<ds::Box<AlpnOffer, ConcurrentMemory>, tbc::lt::a> offer)
       : contexts_(contexts),
         authority_(std::move(authority)),
         sockets_(sockets),
-        offered_(offer != nullptr),
-        offer_(offer ? std::move(offer) : makeOwned<AlpnOffer>(memory)) {
+        offered_(offer.hasValue()),
+        offer_(offer ? std::move(offer) : ds::makeBox<AlpnOffer>(memory)) {
     requireTls(authority_ != nullptr, "TLS authority is unavailable");
     requireTls(TlsHostname::valid(hostname), "Invalid TLS session hostname");
     hostname_.assign(hostname);
@@ -417,7 +417,7 @@ namespace telar::runtime {
             return state_;
           }
 
-          const auto read = offer_->peek(sockets_.child);
+          const auto read = offer_.getMut().peek(sockets_.child);
           if (read == AlpnOffer::Read::pending) {
             offer_after_ = now + std::chrono::milliseconds{2};
             return state_;
@@ -629,13 +629,13 @@ namespace telar::runtime {
       : contexts_(contexts),
         replacement_(std::move(authority)) {}
 
-  tbc::view<Owned<TlsSession, ConcurrentMemory>, tbc::lt::a> TlsInterception::open(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname, tbc::view<Owned<AlpnOffer, ConcurrentMemory>, tbc::lt::a> offer) const {
+  tbc::view<ds::Box<TlsSession, ConcurrentMemory>, tbc::lt::a> TlsInterception::open(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname, tbc::view<ds::Box<AlpnOffer, ConcurrentMemory>, tbc::lt::a> offer) const {
     requireTls(!suspended_.load(std::memory_order_acquire), "TLS authority synchronization is in progress");
-    return makeOwned<TlsSession>(memory, contexts_, snapshot(), sockets, hostname, memory, std::move(offer));
+    return ds::makeBox<TlsSession>(memory, contexts_, snapshot(), sockets, hostname, memory, std::move(offer));
   }
 
-  tbc::view<Owned<TlsSession, ConcurrentMemory>, tbc::lt::a> TlsInterception::open(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname) const {
-    return open(memory, sockets, hostname, Owned<AlpnOffer, ConcurrentMemory>{nullptr, AllocationDeleter<AlpnOffer, ConcurrentMemory>{memory}});
+  tbc::view<ds::Box<TlsSession, ConcurrentMemory>, tbc::lt::a> TlsInterception::open(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname) const {
+    return open(memory, sockets, hostname, ds::Box<AlpnOffer, ConcurrentMemory>{});
   }
 
   tbc::view<std::shared_ptr<const CertificateAuthority>, tbc::lt::a> TlsInterception::snapshot() const noexcept {

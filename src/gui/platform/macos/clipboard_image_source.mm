@@ -308,7 +308,7 @@ namespace telar::gui::platform {
 
   ClipboardImageMonitor::ClipboardImageMonitor(ApplicationAllocator& memory)
       : memory_(memory),
-        native_(nullptr, AllocationDeleter<Native, ApplicationAllocator>{memory}) {}
+        native_() {}
 
   ClipboardImageMonitor::~ClipboardImageMonitor() = default;
 

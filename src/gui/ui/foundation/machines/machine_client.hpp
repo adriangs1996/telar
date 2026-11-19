@@ -73,14 +73,24 @@ namespace telar::gui::qt {
   };
 
   // The client the key names, or null once its slot holds another client or none.
-  [[nodiscard]] inline MachineClient* findMachineClient(const application::machines::Machines& machines, const MachineClients& clients, application::machines::MachineClientKey key) noexcept {
+  [[nodiscard]] inline tbc::view<const MachineClient*, tbc::lt::a> findMachineClient(const application::machines::Machines& machines, tbc::view<const MachineClients&, tbc::lt::a> clients, application::machines::MachineClientKey key) noexcept {
     if (!machines.contains(key.machine)) {
       return nullptr;
     }
 
     const auto& client = clients[key.machine.slot];
 
-    return client && (*client)->key == key ? client->get() : nullptr;
+    return client && (*client)->key == key ? &client->get() : nullptr;
+  }
+
+  [[nodiscard]] inline tbc::view<MachineClient*, tbc::lt::a> findMachineClientMut(const application::machines::Machines& machines, tbc::view<MachineClients&, tbc::lt::a> clients, application::machines::MachineClientKey key) noexcept {
+    if (!machines.contains(key.machine)) {
+      return nullptr;
+    }
+
+    auto& client = clients.atMut(key.machine.slot);
+
+    return client && (*client)->key == key ? &client.getMut().getMut() : nullptr;
   }
 
 }

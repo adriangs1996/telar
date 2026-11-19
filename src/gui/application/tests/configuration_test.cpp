@@ -56,9 +56,9 @@ namespace {
       machine.execute(example.source, "@test.lua");
       // As a configuration generation reads it: validated by the library's reader first.
       const telar::runtime::lua::Value root{machine.state(), -1, "config"};
-      const auto values = telar::makeOwned<telar::runtime::config::RuntimeValues<telar::Memory>>(memory, memory);
+      auto values = telar::ds::makeBox<telar::runtime::config::RuntimeValues<telar::Memory>>(memory, memory);
 
-      telar::runtime::config::SnapshotReader{memory, *values}.read(root, example.profile);
+      telar::runtime::config::SnapshotReader{memory, values.getMut()}.read(root, example.profile);
       result = application::ConfigurationReader::read(root, example.profile);
     }
 

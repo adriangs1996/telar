@@ -164,7 +164,7 @@ export {
     extern template struct Result<ConcurrentMemory>;
 
     template <Allocator Memory>
-    using OwnedResult = Owned<Result<Memory>, Memory>;
+    using OwnedResult = ds::Box<Result<Memory>, Memory>;
 
   }
 }
@@ -665,7 +665,7 @@ export {
         }
 
         const auto offset = static_cast<std::size_t>(effects.data() - response.bytes().data());
-        auto result = makeOwned<Result<ConcurrentMemory>>(memory_, specification_, std::move(response), offset, effects.size(), true);
+        auto result = ds::makeBox<Result<ConcurrentMemory>>(memory_, specification_, std::move(response), offset, effects.size(), true);
         if (result->event_id != event_id) {
           throw EncodingError{"Stale traffic notification"};
         }
@@ -742,7 +742,7 @@ export {
       ServiceSpec specification_;
       tbc::view<traffic::PackagePort&, tbc::lt::a> port_;
       tbc::view<ds::Array<ds::Option<Connection>, TrafficLimits::registrations>, tbc::lt::a> connections_;
-      tbc::view<Owned<TrafficReply, ConcurrentMemory>, tbc::lt::a> reply_;
+      tbc::view<ds::Box<TrafficReply, ConcurrentMemory>, tbc::lt::a> reply_;
       std::uint64_t next_event_ = 0;
       std::uint64_t errors_ = 0;
       std::uint64_t dropped_observations_ = 0;
@@ -832,7 +832,7 @@ export {
       tbc::view<DropChannel<Shared, Limits::queue_depth, ChannelPolicy::keep_newest>, tbc::lt::a> requests_;
       CancellationSignal cancellation_;
       ds::Option<Session<ConcurrentMemory>> session_;
-      Owned<TrafficBridge, ConcurrentMemory> bridge_{nullptr, AllocationDeleter<TrafficBridge, ConcurrentMemory>{memory_}};
+      ds::Box<TrafficBridge, ConcurrentMemory> bridge_{};
       CompletionSignal wake_;
       std::uint64_t callback_errors_base_ = 0;
       RestartWindow restarts_;

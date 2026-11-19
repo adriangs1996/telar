@@ -190,11 +190,11 @@ namespace telar::gui::application {
       throw std::length_error{"GUI tab capacity reached"};
     }
 
-    tabs_.push(makeOwned<Tab<Memory>>(memory_, memory_, location));
-    features::workbench::furnish(workbench_, *tabs_.backMut());
+    tabs_.push(ds::makeBox<Tab<Memory>>(memory_, memory_, location));
+    features::workbench::furnish(workbench_, tabs_.backMut().getMut());
     ++view_version_.tabs;
 
-    return *tabs_.back();
+    return tabs_.backMut().getMut();
   }
 
   Pane<Memory>& Session::ensurePane(std::uint64_t pane_id, TabLocation location) {
@@ -206,11 +206,11 @@ namespace telar::gui::application {
       throw std::length_error{"GUI pane capacity reached"};
     }
 
-    panes_.push(makeOwned<Pane<Memory>>(memory_, memory_, pane_id, features::terminal::graphics::budget(graphics_)));
-    panes_.backMut()->location = location;
+    panes_.push(ds::makeBox<Pane<Memory>>(memory_, memory_, pane_id, features::terminal::graphics::budget(graphics_)));
+    panes_.backMut().getMut().location = location;
     ++view_version_.panes;
 
-    return *panes_.back();
+    return panes_.backMut().getMut();
   }
 
   void Session::openDefault() {
@@ -267,8 +267,8 @@ namespace telar::gui::application {
         if (pane->attached || pane->attaching) {
           prepareDetach(pane->id);
           send(DetachPane{pane->id});
-          pane->attached = false;
-          pane->attaching = false;
+          pane.getMut().attached = false;
+          pane.getMut().attaching = false;
         }
       }
 
@@ -388,20 +388,20 @@ namespace telar::gui::application {
     for (auto& pane : panes_.viewMut()) {
       const auto visible = active != nullptr && active->layout.contains(pane->id) && (!active->fullscreen || pane->id == active->focused_pane);
       if (visible && !pane->attached && !pane->attaching && !pane->exited) {
-        pane->attaching = true;
+        pane.getMut().attaching = true;
         try {
           sendOpeningRequest(RequestKind::attach, OpenPane{.target = {PaneTarget::Kind::pane, pane->id}, .size = pane->size});
         } catch (...) {
-          pane->attaching = false;
+          pane.getMut().attaching = false;
           throw;
         }
       } else if (!visible && pane->attached) {
         prepareDetach(pane->id);
         send(DetachPane{pane->id});
-        pane->attached = false;
-        pane->acknowledged_frame = 0;
-        pane->screen.detach();
-        pane->graphics.detach();
+        pane.getMut().attached = false;
+        pane.getMut().acknowledged_frame = 0;
+        pane.getMut().screen.detach();
+        pane.getMut().graphics.detach();
       }
     }
   }
@@ -505,40 +505,40 @@ namespace telar::gui::application {
       throw EncodingError{"Invalid tab position or capacity"};
     }
 
-    auto tab = makeOwned<Tab<Memory>>(memory_, memory_, message.location);
+    auto tab = ds::makeBox<Tab<Memory>>(memory_, memory_, message.location);
 
-    tab->label.assign(message.label);
-    tab->position = message.position;
+    tab.getMut().label.assign(message.label);
+    tab.getMut().position = message.position;
     if (discovered) {
-      tab->foreground.assign((*cached)->foreground);
-      tab->foreground_pane = (*cached)->foreground_pane;
+      tab.getMut().foreground.assign((*cached)->foreground);
+      tab.getMut().foreground_pane = (*cached)->foreground_pane;
     }
 
-    tab->layout.add(message.root_pane_id, ClientLayoutAxis::horizontal, tab->focused_pane);
-    tab->focused_pane = message.root_pane_id;
-    tab->loaded = true;
-    auto pane = makeOwned<Pane<Memory>>(memory_, memory_, message.root_pane_id, features::terminal::graphics::budget(graphics_));
+    tab.getMut().layout.add(message.root_pane_id, ClientLayoutAxis::horizontal, tab->focused_pane);
+    tab.getMut().focused_pane = message.root_pane_id;
+    tab.getMut().loaded = true;
+    auto pane = ds::makeBox<Pane<Memory>>(memory_, memory_, message.root_pane_id, features::terminal::graphics::budget(graphics_));
 
-    pane->generation = message.pane_generation;
-    pane->location = message.location;
-    pane->size = request->size;
+    pane.getMut().generation = message.pane_generation;
+    pane.getMut().location = message.location;
+    pane.getMut().size = request->size;
     if (!discovered) {
       reserveAppend(tabs_, maximum_tabs);
     }
 
     reserveAppend(panes_, maximum_panes);
-    confirmAttachment(*pane);
+    confirmAttachment(pane.getMut());
 
     if (discovered) {
       tabs_.atMut(cached_index) = std::move(tab);
     } else {
       for (auto& existing : tabs_.viewMut()) {
         if (sameWorkspace(existing->location.workspace, message.location.workspace) && existing->position >= message.position) {
-          ++existing->position;
+          ++existing.getMut().position;
         }
       }
 
-      features::workbench::furnish(workbench_, *tab);
+      features::workbench::furnish(workbench_, tab.getMut());
       tabs_.push(std::move(tab));
     }
 
@@ -703,7 +703,7 @@ namespace telar::gui::application {
     if (closing_known) {
       for (auto& tab : tabs_.viewMut()) {
         if (sameWorkspace(tab->location.workspace, message.location.workspace) && tab->position > position) {
-          --tab->position;
+          --tab.getMut().position;
         }
       }
     }
@@ -776,9 +776,9 @@ namespace telar::gui::application {
     }
 
     for (auto& tab : tabs_.viewMut()) {
-      tab->layout.remove(message.pane_id);
+      tab.getMut().layout.remove(message.pane_id);
       if (tab->focused_pane == message.pane_id) {
-        tab->focused_pane = tab->layout.firstPane();
+        tab.getMut().focused_pane = tab->layout.firstPane();
       }
     }
 
@@ -849,14 +849,14 @@ namespace telar::gui::application {
       const auto previous = tab->position;
 
       for (auto& entry : tabs_.viewMut()) {
-        if (!sameWorkspace(entry->location.workspace, message.location.workspace) || entry.get() == tab) {
+        if (!sameWorkspace(entry->location.workspace, message.location.workspace) || &entry.get() == tab) {
           continue;
         }
 
         if (previous < message.position && entry->position > previous && entry->position <= message.position) {
-          --entry->position;
+          --entry.getMut().position;
         } else if (previous > message.position && entry->position >= message.position && entry->position < previous) {
-          ++entry->position;
+          ++entry.getMut().position;
         }
       }
 

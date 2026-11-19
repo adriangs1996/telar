@@ -14,6 +14,7 @@ import telar.config.runtime;
 import telar.config.gui;
 import telar.wire.vocabulary;
 import telar.config.snapshot;
+import telar.base.ds;
 
 namespace {
 
@@ -29,13 +30,13 @@ namespace {
     telar::testing::TestMemory adapter;
     Memory& memory = adapter;
     lua::Vm<Memory> vm{memory};
-    const auto values = makeOwned<config::RuntimeValues<Memory>>(memory, memory);
+    auto values = ds::makeBox<config::RuntimeValues<Memory>>(memory, memory);
 
     vm.execute(source, "@config.lua");
     const lua::Value root{vm.state(), -1, "config"};
 
     try {
-      config::SnapshotReader{memory, *values}.read(root, profile);
+      config::SnapshotReader{memory, values.getMut()}.read(root, profile);
     } catch (const std::exception&) {
       return false;
     }

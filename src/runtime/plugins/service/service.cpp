@@ -24,7 +24,7 @@ namespace telar::runtime::plugins {
     workers_.reserve(specifications.size());
     try {
       for (const auto& specification : specifications) {
-        workers_.push(makeOwned<Worker<>>(memory, memory, specification, results_, budget_, WorkerLaunch{.executable = executable, .cancellation = cancellation_.getMut(), .trace_prefix = trace_prefix, .traffic = traffic}));
+        workers_.push(ds::makeBox<Worker<>>(memory, memory, specification, results_, budget_, WorkerLaunch{.executable = executable, .cancellation = cancellation_.getMut(), .trace_prefix = trace_prefix, .traffic = traffic}));
       }
     } catch (...) {
       stop();
@@ -78,8 +78,8 @@ namespace telar::runtime::plugins {
       trust_monitor_.join();
     }
 
-    for (const auto& worker : workers_) {
-      worker->stop();
+    for (auto& worker : workers_.viewMut()) {
+      worker.getMut().stop();
     }
 
     results_.close();
@@ -113,8 +113,8 @@ namespace telar::runtime::plugins {
     try {
       auto shared = std::allocate_shared<SharedExchange>(AllocatorRef<SharedExchange, ConcurrentMemory>{memory_}, std::move(charged.getMut()), event_id, std::move(owned));
 
-      for (const auto& worker : workers_) {
-        worker->submit(shared);
+      for (auto& worker : workers_.viewMut()) {
+        worker.getMut().submit(shared);
       }
     } catch (const std::bad_alloc&) {
     }
@@ -142,16 +142,16 @@ namespace telar::runtime::plugins {
     try {
       const auto trust = TrustStore::load(memory_, trust_path_.view());
 
-      for (const auto& worker : workers_) {
+      for (auto& worker : workers_.viewMut()) {
         const auto& specification = worker->specification();
         if (!specification.stillAuthorized(trust.granted(specification.name.view(), specification.digest))) {
-          worker->revoke();
+          worker.getMut().revoke();
         }
       }
     } catch (...) {
       // An unreadable, unsafe or invalid store cannot keep an old grant alive.
-      for (const auto& worker : workers_) {
-        worker->revoke();
+      for (auto& worker : workers_.viewMut()) {
+        worker.getMut().revoke();
       }
     }
   }

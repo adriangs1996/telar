@@ -576,10 +576,10 @@ namespace telar::gui::qt {
         current.error = outcome.error;
       } else {
         if constexpr (std::is_same_v<decltype(outcome.value.getMut()), ConfigurationSource::PanelRender&>) {
-          current.panel = std::shared_ptr<const ComponentSlotState::Panel>{std::move(outcome.value.getMut())};
+          current.panel = std::move(outcome.value.getMut()).intoShared();
           surfaces_.last_render = QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss"));
         } else {
-          current.bar = std::shared_ptr<const ComponentSlotState::Bar>{std::move(outcome.value.getMut())};
+          current.bar = std::move(outcome.value.getMut()).intoShared();
         }
 
         current.error = truncated ? QStringLiteral("Command output exceeded its limit; showing what fits") : QString{};

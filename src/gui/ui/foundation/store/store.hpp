@@ -70,9 +70,11 @@ namespace telar::gui::qt {
     [[nodiscard]] Clients& clientsMut() noexcept;
     [[nodiscard]] const Clients& clients() const noexcept;
     // The client of an occupied slot; an empty slot is a broken invariant and terminates.
-    [[nodiscard]] MachineClient& client(application::machines::Machines::Slot slot) const noexcept;
+    [[nodiscard]] const MachineClient& client(application::machines::Machines::Slot slot) const noexcept;
+    [[nodiscard]] MachineClient& clientMut(application::machines::Machines::Slot slot) noexcept;
     // The client the key names, or null once its slot holds another client or none.
-    [[nodiscard]] MachineClient* find(application::machines::MachineClientKey key) const noexcept;
+    [[nodiscard]] const MachineClient* find(application::machines::MachineClientKey key) const noexcept;
+    [[nodiscard]] MachineClient* findMut(application::machines::MachineClientKey key) noexcept;
     [[nodiscard]] GuiSession& sessionMut() noexcept;
     [[nodiscard]] const GuiSession& session() const noexcept;
     [[nodiscard]] RuntimeConnection& connectionMut() noexcept;

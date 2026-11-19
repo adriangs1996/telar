@@ -115,13 +115,13 @@ export {
 
       inline void head(CaptureSide side, std::string_view bytes) noexcept {
         if (auto& half = select(side)) {
-          half->appendHead(bytes);
+          half.getMut().appendHead(bytes);
         }
       }
 
       inline void payload(CaptureSide side, std::span<const std::uint8_t> bytes) noexcept {
         if (auto& half = select(side)) {
-          half->append(half->bodyPart(), bytes);
+          half.getMut().append(half->bodyPart(), bytes);
         }
       }
 
@@ -131,7 +131,7 @@ export {
 
       inline void finishResponse(std::uint16_t status, bool complete = true) noexcept {
         if (exchange_.response) {
-          exchange_.response->status_code = status;
+          exchange_.response.getMut().status_code = status;
         }
 
         finish(CaptureSide::response, !complete || status >= 400 ? CaptureOutcome::failed : CaptureOutcome::finished);
@@ -139,7 +139,7 @@ export {
 
       inline void discardInformational() noexcept {
         if (exchange_.response) {
-          exchange_.response->head.reset();
+          exchange_.response.getMut().head.reset();
         }
       }
 
@@ -158,7 +158,7 @@ export {
       inline void finish(CaptureSide side, CaptureOutcome outcome) noexcept {
         auto& half = select(side);
         if (half) {
-          half->finish(outcome, Clock::now());
+          half.getMut().finish(outcome, Clock::now());
           producer_->publish(std::move(half));
         }
       }
@@ -1309,8 +1309,8 @@ export {
             return 0;
           }
 
-          for (auto& slot : endpoint.owner->streams_) {
-            auto* stream = tbc::raw(slot.get());
+          for (auto& slot : endpoint.owner->streams_.viewMut()) {
+            auto* stream = tbc::raw(slot ? &slot.getMut() : nullptr);
             if (!stream || (endpoint.child ? stream->child_id : stream->origin_id) != frame->hd.stream_id) {
               continue;
             }
@@ -1377,15 +1377,15 @@ export {
             identity_(traffic::FlowIdentity::of(context)),
             child_(memory_, tbc::raw(this), true),
             origin_(memory_, tbc::raw(this), false),
-            streams_(makeSlots(memory_)) {}
+            streams_() {}
 
       Http2EndpointConnection(const Http2EndpointConnection&) = delete;
       Http2EndpointConnection& operator=(const Http2EndpointConnection&) = delete;
 
       inline ~Http2EndpointConnection() {
         closing_ = true;
-        for (auto& slot : streams_) {
-          if (auto* stream = tbc::raw(slot.get())) {
+        for (auto& slot : streams_.viewMut()) {
+          if (auto* stream = tbc::raw(slot ? &slot.getMut() : nullptr)) {
             cancel(stream->request);
             cancel(stream->response);
           }
@@ -1413,7 +1413,7 @@ export {
           progress = receive(true, child, readiness.child) || progress;
           progress = receive(false, origin, readiness.origin) || progress;
           for (auto& slot : streams_.viewMut()) {
-            auto* stream = tbc::raw(slot.get());
+            auto* stream = tbc::raw(slot ? &slot.getMut() : nullptr);
             if (!stream) {
               continue;
             }
@@ -1540,8 +1540,8 @@ export {
               continue;
             }
 
-            slot = makeOwned<Stream>(memory_, memory_, frame.hd.stream_id);
-            stream = tbc::raw(slot.get());
+            slot = ds::makeBox<Stream>(memory_, memory_, frame.hd.stream_id);
+            stream = tbc::raw(slot ? &slot.getMut() : nullptr);
             if (nghttp2_session_set_stream_user_data(side(child).session, frame.hd.stream_id, stream) != 0) {
               throw std::runtime_error{"Set HTTP/2 stream identity"};
             }
@@ -1611,8 +1611,8 @@ export {
         if (frame.hd.type == NGHTTP2_GOAWAY) {
           draining_ = true;
           if (!child) {
-            for (auto& slot : streams_) {
-              auto* stream = tbc::raw(slot.get());
+            for (auto& slot : streams_.viewMut()) {
+              auto* stream = tbc::raw(slot ? &slot.getMut() : nullptr);
               if (stream && (stream->origin_id == 0 || stream->origin_id > frame.goaway.last_stream_id)) {
                 reject(*stream, "http2_origin_goaway", NGHTTP2_REFUSED_STREAM);
               }
@@ -1981,8 +1981,8 @@ export {
             draining_ = true;
             side(child).output.reset();
             side(child).output_size = 0;
-            for (auto& slot : streams_) {
-              if (auto* stream = tbc::raw(slot.get()); stream && !stream->origin_closed) {
+            for (auto& slot : streams_.viewMut()) {
+              if (auto* stream = tbc::raw(slot ? &slot.getMut() : nullptr); stream && !stream->origin_closed) {
                 reject(*stream, "http2_origin_closed");
               }
             }
@@ -2095,12 +2095,6 @@ export {
         }
       }
 
-      inline static auto makeSlots(Local& memory) {
-        return [&]<std::size_t... Index>(std::index_sequence<Index...>) {
-          return ds::Array<Owned<Stream, Local>, maximum_streams>{((void)Index, Owned<Stream, Local>{nullptr, AllocationDeleter<Stream, Local>{memory}})...};
-        }(std::make_index_sequence<maximum_streams>{});
-      }
-
       static constexpr unsigned maximum_rounds = 8, maximum_informational = 8;
       tbc::view<BudgetAllocator<Memory>, tbc::lt::a> budget_;
       tbc::view<Local, tbc::lt::a> memory_;
@@ -2110,7 +2104,7 @@ export {
       traffic::FlowIdentity identity_;
       // Each endpoint's session calls back into this connection, so it stays where it was built.
       tbc::view<Endpoint, tbc::lt::a> child_, origin_;
-      tbc::view<ds::Array<Owned<Stream, Local>, maximum_streams>, tbc::lt::a> streams_;
+      tbc::view<ds::Array<ds::Box<Stream, Local>, maximum_streams>, tbc::lt::a> streams_;
       std::int32_t highest_forwarded_ = 0;
       bool failed_ = false, closing_ = false, draining_ = false;
     };
@@ -2300,9 +2294,9 @@ export {
                 if (control) {
                   const auto event = flow ? flow->context() : traffic::FlowEvent{.id = observation_.identity, .host = hostname_.view()};
 
-                  http2_endpoint_ = makeOwned<Http2Endpoint>(memory_, memory_, std::move(capture), control, event);
+                  http2_endpoint_ = ds::makeBox<Http2Endpoint>(memory_, memory_, std::move(capture), control, event);
                 } else {
-                  http2_ = makeOwned<Http2>(memory_, memory_, observation_.counters, std::move(capture));
+                  http2_ = ds::makeBox<Http2>(memory_, memory_, observation_.counters, std::move(capture));
                 }
               } catch (...) {
                 failed_ = true;
@@ -2310,7 +2304,7 @@ export {
               }
             }
 
-            return http2_endpoint_ ? http2_endpoint_->advance(child, origin, readiness) : http2_->advance(child, origin, readiness);
+            return http2_endpoint_ ? http2_endpoint_.getMut().advance(child, origin, readiness) : http2_.getMut().advance(child, origin, readiness);
           }
 
           if (protocol == HttpProtocol::http11) {
@@ -2320,7 +2314,7 @@ export {
                 const auto event = flow ? flow->context() : traffic::FlowEvent{.id = observation_.identity, .host = hostname_.view()};
                 const HttpRelayContext context{observation_.flows ? observation_.flows->http() : nullptr, traffic::FlowIdentity::of(event)};
 
-                http1_ = makeOwned<Http1>(memory_, memory_, observation_.counters, std::move(capture), context);
+                http1_ = ds::makeBox<Http1>(memory_, memory_, observation_.counters, std::move(capture), context);
               } catch (...) {
                 failed_ = true;
                 return false;
@@ -2328,7 +2322,7 @@ export {
             }
 
             if (!http1_->upgraded()) {
-              const bool active = http1_->advance(child, origin, readiness);
+              const bool active = http1_.getMut().advance(child, origin, readiness);
 
               if (!http1_->upgraded()) {
                 return active;
@@ -2344,9 +2338,9 @@ export {
         tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
         tbc::view<ConnectionObservation, tbc::lt::a> observation_;
         FixedText<ProxyHostname::maximum_bytes> hostname_;
-        tbc::view<Owned<Http1, ConcurrentMemory>, tbc::lt::a> http1_;
-        tbc::view<Owned<Http2, ConcurrentMemory>, tbc::lt::a> http2_;
-        tbc::view<Owned<Http2Endpoint, ConcurrentMemory>, tbc::lt::a> http2_endpoint_;
+        tbc::view<ds::Box<Http1, ConcurrentMemory>, tbc::lt::a> http1_;
+        tbc::view<ds::Box<Http2, ConcurrentMemory>, tbc::lt::a> http2_;
+        tbc::view<ds::Box<Http2Endpoint, ConcurrentMemory>, tbc::lt::a> http2_endpoint_;
         DuplexRelay<> duplex_;
         bool failed_ = false;
       };
@@ -2404,7 +2398,7 @@ export {
       // The tunnel keeps the allocator, the interception and the observation, region `a`, and its session
       // and relay copy the host.
       // `offer` is the child's ClientHello when the handshake already read it, or null.
-      explicit TlsTunnel(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<const TlsInterception&, tbc::lt::a> interception, TunnelSockets sockets, std::string_view hostname, tbc::view<Owned<AlpnOffer, ConcurrentMemory>, tbc::lt::a> offer, tbc::view<ConnectionObservation, tbc::lt::a> observation);
+      explicit TlsTunnel(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<const TlsInterception&, tbc::lt::a> interception, TunnelSockets sockets, std::string_view hostname, tbc::view<ds::Box<AlpnOffer, ConcurrentMemory>, tbc::lt::a> offer, tbc::view<ConnectionObservation, tbc::lt::a> observation);
 
       // `flow` is the connection's flow, or null when no hook watches it.
       auto advance(TunnelReadiness readiness, FlowState* flow) noexcept -> bool;
@@ -2429,7 +2423,7 @@ export {
       tbc::view<std::string_view, tbc::lt::static_storage> recordFailure() noexcept;
 
       tbc::view<ConnectionObservation, tbc::lt::a> observation_;
-      tbc::view<Owned<TlsSession, ConcurrentMemory>, tbc::lt::a> session_;
+      tbc::view<ds::Box<TlsSession, ConcurrentMemory>, tbc::lt::a> session_;
       tbc::view<ApplicationRelay, tbc::lt::a> application_;
       bool failed_ = false;
     };
@@ -2450,16 +2444,16 @@ export {
       template <HostnameResolver Resolver>
       TBC_GENERIC void open(tbc::view<const TlsInterception&, tbc::lt::a> interception, tbc::view<ConnectHandshake<ConcurrentMemory, Resolver>&, tbc::lt::a> handshake, tbc::view<ConnectionObservation, tbc::lt::a> observation) {
         if (observation.flows) {
-          flow_ = makeOwned<FlowState>(memory_);
-          flow_->open(observation.flows, observation.identity, handshake.childDescriptor(), handshake.originDescriptor(), handshake.hostname());
+          flow_ = ds::makeBox<FlowState>(memory_);
+          flow_.getMut().open(observation.flows, observation.identity, handshake.childDescriptor(), handshake.originDescriptor(), handshake.hostname());
         }
 
         const TunnelSockets sockets{handshake.childDescriptor(), handshake.originDescriptor()};
 
         if (handshake.intercept()) {
-          tls_ = makeOwned<TlsTunnel>(memory_, memory_, interception, sockets, handshake.hostname(), handshake.takeOffer(), observation);
+          tls_ = ds::makeBox<TlsTunnel>(memory_, memory_, interception, sockets, handshake.hostname(), handshake.takeOffer(), observation);
         } else {
-          plain_ = makeOwned<PlainTunnel>(memory_, memory_, sockets, handshake.hostname(), observation);
+          plain_ = ds::makeBox<PlainTunnel>(memory_, memory_, sockets, handshake.hostname(), observation);
           observation.counters.record(ProxyCounter::passthrough_connection);
         }
       }
@@ -2490,9 +2484,9 @@ export {
 
     private:
       tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
-      tbc::view<Owned<FlowState, ConcurrentMemory>, tbc::lt::a> flow_;
-      tbc::view<Owned<PlainTunnel, ConcurrentMemory>, tbc::lt::a> plain_;
-      tbc::view<Owned<TlsTunnel, ConcurrentMemory>, tbc::lt::a> tls_;
+      tbc::view<ds::Box<FlowState, ConcurrentMemory>, tbc::lt::a> flow_;
+      tbc::view<ds::Box<PlainTunnel, ConcurrentMemory>, tbc::lt::a> plain_;
+      tbc::view<ds::Box<TlsTunnel, ConcurrentMemory>, tbc::lt::a> tls_;
     };
 
   }
@@ -3009,11 +3003,11 @@ export {
       using Connection = ProxyConnection<Resolver>;
 
       struct Slot {
-        inline explicit Slot(Owned<Connection, ConcurrentMemory> connection, std::uint64_t generation) noexcept
+        inline explicit Slot(ds::Box<Connection, ConcurrentMemory> connection, std::uint64_t generation) noexcept
             : connection(std::move(connection)),
               child_generation(generation) {}
 
-        Owned<Connection, ConcurrentMemory> connection;
+        ds::Box<Connection, ConcurrentMemory> connection;
         SocketWatch child;
         SocketWatch origin;
         std::uint64_t child_generation;
@@ -3047,7 +3041,7 @@ export {
               auto& slot = slots_.atMut(index);
 
               if (now >= reap_at) {
-                slot.getMut().connection->expire(now);
+                slot.getMut().connection.getMut().expire(now);
                 advance(index, {}, now);
               } else if (slot->connection->buffered() || (slot->connection->deadline() && now >= *slot->connection->deadline())) {
                 advance(index, TunnelReadiness::available(), now);
@@ -3124,7 +3118,7 @@ export {
             }
 
             try {
-              keep(makeOwned<Connection>(memory_, memory_, std::move(connection.getMut()), options_, secret_, observations_.counters), *index, now);
+              keep(ds::makeBox<Connection>(memory_, memory_, std::move(connection.getMut()), options_, secret_, observations_.counters), *index, now);
             } catch (...) {
               release(*index);
             }
@@ -3175,7 +3169,7 @@ export {
           }
 
           try {
-            auto connection = makeOwned<Connection>(memory_, memory_, std::move(child), options_, secret_, observations_.counters);
+            auto connection = ds::makeBox<Connection>(memory_, memory_, std::move(child), options_, secret_, observations_.counters);
 
             keep(std::move(connection), *index, now);
           } catch (...) {
@@ -3184,7 +3178,7 @@ export {
         }
       }
 
-      inline void keep(Owned<Connection, ConcurrentMemory> connection, std::size_t index, Time now) {
+      inline void keep(ds::Box<Connection, ConcurrentMemory> connection, std::size_t index, Time now) {
         slots_.atMut(index).emplace(std::move(connection), nextGeneration());
         occupied_.insert(index);
         active_.fetch_add(1, std::memory_order_relaxed);
@@ -3243,7 +3237,7 @@ export {
       inline void advance(std::size_t index, TunnelReadiness readiness, Time now) noexcept {
         auto& slot = slots_.atMut(index).getMut();
 
-        slot.connection->advance(interception_, observations_, readiness, now);
+        slot.connection.getMut().advance(interception_, observations_, readiness, now);
         if (slot.connection->closed()) {
           release(index);
           return;

@@ -47,9 +47,9 @@ namespace telar::gui::qt {
 
   }
 
-  ConfigurationPreparation::ConfigurationPreparation(ApplicationAllocator& memory)
-      : generation(nullptr, AllocationDeleter<application::ConfigurationGeneration<ApplicationAllocator>, ApplicationAllocator>{memory}),
-        snapshot(memory) {
+  ConfigurationPreparation::ConfigurationPreparation()
+      : generation(),
+        snapshot() {
   }
 
   ConfigurationPreparation::~ConfigurationPreparation() = default;
@@ -69,20 +69,20 @@ namespace telar::gui::qt {
     }
 
     if (!request.force && observed == request.watch) {
-      return PreparedConfiguration{nullptr, AllocationDeleter<ConfigurationPreparation, ApplicationAllocator>{memory}};
+      return PreparedConfiguration{};
     }
 
-    auto result = makeOwned<ConfigurationPreparation>(memory, memory);
+    auto result = ds::makeBox<ConfigurationPreparation>(memory);
 
-    result->revision = request.revision;
-    result->observed = std::move(observed);
+    result.getMut().revision = request.revision;
+    result.getMut().observed = std::move(observed);
 
     try {
-      load(memory, request, *result);
-      result->state = ConfigurationPreparation::State::ready;
+      load(memory, request, result.getMut());
+      result.getMut().state = ConfigurationPreparation::State::ready;
     } catch (const std::exception& error) {
-      result->state = ConfigurationPreparation::State::failed;
-      result->error = QString::fromUtf8(error.what());
+      result.getMut().state = ConfigurationPreparation::State::failed;
+      result.getMut().error = QString::fromUtf8(error.what());
     }
 
     return result;
@@ -125,7 +125,7 @@ namespace telar::gui::qt {
           .plugin_overrides = &request.plugin_overrides,
       };
 
-      result.generation = makeOwned<application::ConfigurationGeneration<ApplicationAllocator>>(memory, memory, generation_source);
+      result.generation = ds::makeBox<application::ConfigurationGeneration<ApplicationAllocator>>(memory, memory, generation_source);
       const auto& generation = *result.generation;
       const auto& configured = generation.runtimeValues().plugins.configured();
 
@@ -152,7 +152,7 @@ namespace telar::gui::qt {
   }
 
   void ConfigurationLoader::snapshot(tbc::view<ApplicationAllocator&, tbc::lt::a> memory, const application::ConfigurationGeneration<ApplicationAllocator>& generation, tbc::view<ConfigurationSnapshot&, tbc::lt::a> result) {
-    result.commands = makeOwned<runtime::config::RetainedCommandTabRegistry>(memory, generation.commandTabs());
+    result.commands = ds::makeBox<runtime::config::RetainedCommandTabRegistry>(memory, generation.commandTabs());
     const auto store = [&](int reference, const char* field) {
       QList<QByteArray> arguments;
 

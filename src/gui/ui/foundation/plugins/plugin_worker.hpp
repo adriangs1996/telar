@@ -109,12 +109,9 @@ namespace telar::gui::qt {
     }
   };
 
-  using PreparedPluginWorker = Owned<PluginWorkerSnapshot, ApplicationAllocator>;
+  using PreparedPluginWorker = ds::Box<PluginWorkerSnapshot, ApplicationAllocator>;
 
   struct PluginWorkerPreparation {
-    explicit PluginWorkerPreparation(ApplicationAllocator& memory)
-        : snapshot(nullptr, AllocationDeleter<PluginWorkerSnapshot, ApplicationAllocator>{memory}) {}
-
     PreparedPluginWorker snapshot;
     QString error;
   };
@@ -130,7 +127,7 @@ namespace telar::gui::qt {
     explicit PluginWorker(ApplicationAllocator& memory, Observer& observer)
         : memory_(memory),
           observer_(observer),
-          snapshot_(nullptr, AllocationDeleter<PluginWorkerSnapshot, ApplicationAllocator>{memory}),
+          snapshot_(),
           process_(*this) {
       QObject::connect(&preparation_, &QFutureWatcher<PluginWorkerPreparation>::finished, &context_, [this] {
         snapshotReady();
@@ -177,10 +174,10 @@ namespace telar::gui::qt {
       output_length_ = 0;
       try {
         preparation_.setFuture(QtConcurrent::run([&memory = memory_, invocation, executable] {
-          PluginWorkerPreparation result{memory};
+          PluginWorkerPreparation result{};
 
           try {
-            result.snapshot = makeOwned<PluginWorkerSnapshot>(memory, memory, invocation, executable);
+            result.snapshot = ds::makeBox<PluginWorkerSnapshot>(memory, memory, invocation, executable);
           } catch (const std::exception& error) {
             result.error = QString::fromUtf8(error.what());
           }

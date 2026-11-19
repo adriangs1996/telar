@@ -31,13 +31,13 @@ namespace {
     const CaptureStart request{.key = {index, 1}, .side = CaptureSide::request, .protocol = CaptureProtocol::http1, .host = "example.test", .started_at_ms = 1};
     const CaptureStart response{.key = {index, 1}, .side = CaptureSide::response, .protocol = CaptureProtocol::http1, .host = "example.test", .started_at_ms = 1};
 
-    exchange.request = makeOwned<CaptureHalf>(memory, memory, quota, limits, request);
+    exchange.request = ds::makeBox<CaptureHalf>(memory, memory, quota, limits, request);
     exchange.request->setMethod("POST");
     exchange.request->setTarget("/resource");
     exchange.request->appendHead("POST /resource HTTP/1.1\r\nHost: example.test\r\nContent-Length: 16\r\n\r\n");
     exchange.request->append(exchange.request->bodyPart(), "{\"value\":123456}");
     exchange.request->finish(CaptureOutcome::finished, 2);
-    exchange.response = makeOwned<CaptureHalf>(memory, memory, quota, limits, response);
+    exchange.response = ds::makeBox<CaptureHalf>(memory, memory, quota, limits, response);
     exchange.response->appendHead("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n");
     exchange.response->append(exchange.response->bodyPart(), "ok");
     exchange.response->status_code = 200;

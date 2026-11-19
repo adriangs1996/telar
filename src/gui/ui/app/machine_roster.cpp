@@ -210,7 +210,7 @@ namespace telar::gui::qt {
     }
 
     display_.layoutWorkbench();
-    auto& client = machines_.clientAt(slot);
+    auto& client = machines_.clientAtMut(slot);
     const auto& row = store_.machines().row(slot);
 
     client.connection.openRemote({.destination = toQString(row.destination.view()), .program = toQString(row.program.view()), .local_endpoint = control_endpoint_, .prepare_directory = prepare_directory_});
@@ -229,13 +229,15 @@ namespace telar::gui::qt {
       notifications_.publish({.title = "Machine left the window", .message = bytes(detail), .link = {}});
     }
 
-    if (const auto& client = store_.clients()[slot]) {
-      (*client)->connection.close();
-      (*client)->session.disconnected();
-      static_cast<void>((*client)->session.settlePresentation());
-      (*client)->phase = application::machines::MachinePhase::stopped;
-      (*client)->needs_setup = false;
-      machines_.summarize((*client)->key);
+    if (auto& slot_client = store_.clientsMut().atMut(slot)) {
+      auto& client = slot_client.getMut().getMut();
+
+      client.connection.close();
+      client.session.disconnected();
+      static_cast<void>(client.session.settlePresentation());
+      client.phase = application::machines::MachinePhase::stopped;
+      client.needs_setup = false;
+      machines_.summarize(client.key);
     }
   }
 
@@ -265,7 +267,7 @@ namespace telar::gui::qt {
 
       static_cast<void>(profiles_.edit({.kind = intent == application::machines::MachinePicker::Intent::enable ? application::machines::MachineEditKind::enable : application::machines::MachineEditKind::disable, .label = label, .value = {}}));
     } else if (store_.clients()[token.slot]) {
-      auto& client = machines_.clientAt(token.slot);
+      auto& client = machines_.clientAtMut(token.slot);
       if (!client.connection.ready()) {
         client.phase = application::machines::MachinePhase::connecting;
         client.needs_setup = false;
@@ -333,7 +335,7 @@ namespace telar::gui::qt {
       admit(opened);
     }
 
-    auto& client = machines_.clientAt(opened);
+    auto& client = machines_.clientAtMut(opened);
 
     if (!request.arguments.isEmpty()) {
       const LaunchArguments prepared{request.arguments};

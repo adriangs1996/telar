@@ -70,7 +70,7 @@ namespace telar::gui::platform {
       throw ClipboardImageFailure{ClipboardImageError::no_image};
     }
 
-    auto transfer = makeOwned<Transfer>(memory, Transfer{.memory = memory, .png = SensitiveBytes{memory}, .pipe = runtime::FileDescriptor{}, .status = {}});
+    auto transfer = ds::makeBox<Transfer>(memory, Transfer{.memory = memory, .png = SensitiveBytes{memory}, .pipe = runtime::FileDescriptor{}, .status = {}});
 
     QByteArray encoded = mime->data(QStringLiteral("image/png"));
     try {
@@ -94,7 +94,7 @@ namespace telar::gui::platform {
   }
 
   ClipboardImageSource ClipboardImageSource::fromPipe(ApplicationAllocator& memory, runtime::FileDescriptor descriptor, std::shared_ptr<ClipboardImageTransfer> status) {
-    auto transfer = makeOwned<Transfer>(memory, Transfer{.memory = memory, .png = SensitiveBytes{memory}, .pipe = std::move(descriptor), .status = std::move(status)});
+    auto transfer = ds::makeBox<Transfer>(memory, Transfer{.memory = memory, .png = SensitiveBytes{memory}, .pipe = std::move(descriptor), .status = std::move(status)});
 
     return ClipboardImageSource{transfer.release(), 0};
   }
@@ -120,7 +120,7 @@ namespace telar::gui::platform {
   void ClipboardImageSource::clear() noexcept {
     if (native_ != nullptr) {
       auto* const transfer = static_cast<Transfer*>(native_);
-      AllocationDeleter<Transfer, ApplicationAllocator>{transfer->memory}(transfer);
+      ds::Box<Transfer, ApplicationAllocator>::fromRaw(transfer, transfer->memory).reset();
       native_ = nullptr;
     }
   }

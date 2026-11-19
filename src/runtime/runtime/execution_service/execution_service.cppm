@@ -279,20 +279,20 @@ export {
           pane.resize(size);
         }
 
-        if (auto* existing = client.attachment(pane.id)) {
+        if (auto* existing = client.attachmentMut(pane.id)) {
           return *existing;
         }
 
         const auto slot = client.availableAttachmentSlot();
         // The attachment shares the pane's media through its own handle.
         auto media = pane.media;
-        auto attachment = makeOwned<Attachment>(memory_, memory_, client.graphics_credit, pane.id, std::move(media));
+        auto attachment = ds::makeBox<Attachment>(memory_, memory_, client.graphics_credit, pane.id, std::move(media));
 
-        attachment->slot = slot;
-        attachment->graphics.configure(client.shared_graphics);
-        attachment->clipboard_revision = pane.terminal.effects.clipboard_revision;
+        attachment.getMut().slot = slot;
+        attachment.getMut().graphics.configure(client.shared_graphics);
+        attachment.getMut().clipboard_revision = pane.terminal.effects.clipboard_revision;
 
-        auto& result = *attachment;
+        auto& result = attachment.getMut();
 
         client.attachments.push(std::move(attachment));
         client.workspace = workspace->id;
@@ -340,8 +340,8 @@ export {
         ds::Array<std::uint64_t, ClientSession::attachment_capacity> detached{};
         std::size_t count = 0;
 
-        for (const auto& attachment : client->attachments) {
-          attachment->desktop.reset();
+        for (auto& attachment : client->attachments.viewMut()) {
+          attachment.getMut().desktop.reset();
           if (auto* pane = model.panes.find(attachment->pane_id)) {
             pane->observers &= ~bit;
             detached.atMut(count++) = pane->id;
@@ -526,7 +526,7 @@ export {
       inline void configureDesktop(RuntimeModel& model, ClientStore& clients, std::uint64_t client_id, const ConfigurePaneDesktop& request) {
         const auto pane = requireGeneration(model.panes, request.pane_id, request.pane_generation).id;
         auto* client = clients.find(client_id);
-        auto* attachment = client == nullptr ? nullptr : client->attachment(pane);
+        auto* attachment = client == nullptr ? nullptr : client->attachmentMut(pane);
         if (attachment == nullptr || client->connection.closing) {
           throw RequestError{FailureCode::invalid_request, "Desktop state requires a live pane attachment"};
         }
@@ -818,11 +818,11 @@ export {
 
         proxy_.apply(command);
         const auto shell = shell_integration_.apply(command, bare_prompt);
-        auto pane = makeOwned<Pane>(memory_, memory_, identity.id, location, command, PaneLaunch{size, model.media_budget, model.graphics_limits, shell});
+        auto pane = ds::makeBox<Pane>(memory_, memory_, identity.id, location, command, PaneLaunch{size, model.media_budget, model.graphics_limits, shell});
 
-        TELAR_DIAGNOSTIC(pane->counters = &model.metrics.panes);
-        pane->generation = identity.generation;
-        pane->terminal.controlPolicy() = control_policy_;
+        TELAR_DIAGNOSTIC(pane.getMut().counters = &model.metrics.panes);
+        pane.getMut().generation = identity.generation;
+        pane.getMut().terminal.controlPolicy() = control_policy_;
         const auto* workspace = model.workspaces.find(location.workspace.id);
         const HistorySession session{.id = pane->history_session, .pane = pane->id, .location = location, .started_at_ms = ObservationTime::now().milliseconds, .workspace_path = workspace == nullptr ? std::string_view{} : std::string_view{workspace->path}, .shell = command.arguments().front()};
         auto phase = LaunchPhase::pane_registration;
@@ -830,7 +830,7 @@ export {
 
         try {
           if (owner_colors != nullptr) {
-            pane->terminal.configureColors(*owner_colors);
+            pane.getMut().terminal.configureColors(*owner_colors);
           }
 
           pane->observer->configureHistory(session, model.capture_output);

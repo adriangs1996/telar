@@ -298,7 +298,7 @@ namespace {
 
       checkGhostty(ghostty_terminal_set(pane.terminal.handle(), GHOSTTY_TERMINAL_OPT_SCROLLBACK_MAX_BYTES, &limit));
       pane.terminal.followScrollback();
-      client.attachment(pane.id)->viewport = 50'000;
+      client.attachmentMut(pane.id)->viewport = 50'000;
       std::string lines;
 
       for (std::size_t line = 0; line < 8; ++line) {
@@ -317,7 +317,7 @@ namespace {
       const auto dropped = peer.receive<PaneScrollback>();
 
       check(dropped.trimmed == trimmed && dropped.generation == first.generation);
-      check(client.attachment(pane.id)->viewport == 50'000 - trimmed);
+      check(client.attachmentMut(pane.id)->viewport == 50'000 - trimmed);
       panes.detachAll(model, clients, client.id);
       panes.remove(model, clients, pane.id);
     }
@@ -496,7 +496,7 @@ namespace {
         const auto frame = peer.receive<PaneFrame>();
 
         check(frame.pane_id == ids[index]);
-        check(client.attachment(frame.pane_id)->frames.acknowledge(frame.frame_id));
+        check(client.attachmentMut(frame.pane_id)->frames.acknowledge(frame.frame_id));
       }
 
       for (const auto index : {1, 2, 0}) {
@@ -517,23 +517,23 @@ namespace {
       check(rotated.prepare(model, client, DeliveryLane::cwd, now, timeout));
       check(peer.receive<PaneCwd>().pane_id == ids[1] && client.next_attachment == 2);
 
-      for (auto& attachment : client.attachments) {
+      for (auto& attachment : client.attachments.viewMut()) {
         auto& pane = panes.require(model.panes, attachment->pane_id);
 
-        attachment->foreground_revision = pane.foreground_revision;
-        attachment->scrollback_generation = pane.terminal.scrollbackGeneration();
-        attachment->scrollback_trimmed = pane.terminal.scrollbackTrimmed();
+        attachment.getMut().foreground_revision = pane.foreground_revision;
+        attachment.getMut().scrollback_generation = pane.terminal.scrollbackGeneration();
+        attachment.getMut().scrollback_trimmed = pane.terminal.scrollbackTrimmed();
         pane.terminal.refresh();
-        const auto payload = attachment->frames.prepare(pane.terminal.screen);
+        const auto payload = attachment.getMut().frames.prepare(pane.terminal.screen);
         if (!payload.empty()) {
           std::vector<Byte> storage(128 * 1024);
           DecodeStorage decoded{storage};
           const auto frame = Codec::decode<PaneFrame>(payload, decoded);
 
-          check(attachment->frames.acknowledge(frame.frame_id));
+          check(attachment.getMut().frames.acknowledge(frame.frame_id));
         }
 
-        attachment->graphics.abandon(0);
+        attachment.getMut().graphics.abandon(0);
       }
 
       ClientDelivery delivery{memory, model};
@@ -555,12 +555,12 @@ namespace {
       delivery.write(client, state, now);
       check(peer.receive<PaneProgress>().percent == 80);
 
-      client.attachment(pane.id)->viewport = 0;
-      client.attachment(pane.id)->frames.requestSnapshot();
+      client.attachmentMut(pane.id)->viewport = 0;
+      client.attachmentMut(pane.id)->frames.requestSnapshot();
       delivery.write(client, state, now);
       const auto viewport = peer.receive<PaneFrame>();
 
-      check(client.attachment(pane.id)->frames.acknowledge(viewport.frame_id));
+      check(client.attachmentMut(pane.id)->frames.acknowledge(viewport.frame_id));
 
       pane.output_closed = true;
       pane.exit_status = 0;
@@ -607,7 +607,7 @@ namespace {
           return false;
         }
 
-        check(client.attachment(pane.id)->frames.acknowledge(peer.receive<PaneFrame>().frame_id));
+        check(client.attachmentMut(pane.id)->frames.acknowledge(peer.receive<PaneFrame>().frame_id));
         return true;
       };
 

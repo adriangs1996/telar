@@ -520,8 +520,8 @@ namespace {
     command.setEnvironment("HOME", home.path());
     command.removeEnvironment("ZDOTDIR");
     RuntimeModel model{memory};
-    auto owned = makeOwned<Pane>(memory, memory, 7, TabLocation{}, command, PaneLaunch{TerminalSize{80, 24, 8, 16}, model.media_budget, model.graphics_limits, integration.apply(command)});
-    auto& pane = *owned;
+    auto owned = ds::makeBox<Pane>(memory, memory, 7, TabLocation{}, command, PaneLaunch{TerminalSize{80, 24, 8, 16}, model.media_budget, model.graphics_limits, integration.apply(command)});
+    auto& pane = owned.getMut();
 
     check(pane.shell_state.pane_id == 7 && pane.shell_state.shell == IntegratedShell::zsh);
 
@@ -651,8 +651,8 @@ namespace {
     command.setEnvironment("HOME", home.path());
     command.removeEnvironment("ZDOTDIR");
     RuntimeModel model{memory};
-    auto owned = makeOwned<Pane>(memory, memory, 7, TabLocation{}, command, PaneLaunch{TerminalSize{80, 24, 8, 16}, model.media_budget, model.graphics_limits, integration.apply(command)});
-    auto& pane = *owned;
+    auto owned = ds::makeBox<Pane>(memory, memory, 7, TabLocation{}, command, PaneLaunch{TerminalSize{80, 24, 8, 16}, model.media_budget, model.graphics_limits, integration.apply(command)});
+    auto& pane = owned.getMut();
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{30};
     const auto until = [&](auto ready) {
       while (!ready()) {

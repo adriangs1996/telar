@@ -101,10 +101,20 @@ namespace telar::runtime {
     return event_identity == 0 ? 0 : std::uint32_t{1} << (event_identity % client_capacity);
   }
 
-  Attachment* ClientSession::attachment(std::uint64_t pane_id) const noexcept {
+  const Attachment* ClientSession::attachment(std::uint64_t pane_id) const noexcept {
     for (const auto& entry : attachments) {
       if (entry->pane_id == pane_id) {
-        return entry.get();
+        return &entry.get();
+      }
+    }
+
+    return nullptr;
+  }
+
+  Attachment* ClientSession::attachmentMut(std::uint64_t pane_id) noexcept {
+    for (auto& entry : attachments.viewMut()) {
+      if (entry->pane_id == pane_id) {
+        return &entry.getMut();
       }
     }
 
@@ -500,7 +510,7 @@ namespace telar::runtime {
     }
 
     const auto identity = restored_identity == 0 ? entries_.nextId() : restored_identity;
-    auto entry = makeOwned<Worktree>(memory_, memory_, identity, request);
+    auto entry = ds::makeBox<Worktree>(memory_, memory_, identity, request);
 
     entries_.insert(identity, std::move(entry));
     return {request.request_id, identity, true};

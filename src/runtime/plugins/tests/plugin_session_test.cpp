@@ -190,8 +190,8 @@ namespace {
     CapturedExchange exchange{memory};
     const ProxyCaptureLimits limits{.part_bytes = 1024, .exchange_bytes = 2048, .total_bytes = 4096, .enabled = true};
 
-    exchange.request = makeOwned<CaptureHalf>(memory, memory, quota, limits, CaptureStart{.key = {1, 1}, .side = CaptureSide::request, .protocol = CaptureProtocol::http1, .host = "test", .started_at_ms = 1});
-    exchange.request->appendHead("GET / HTTP/1.1\r\n\r\n");
+    exchange.request = ds::makeBox<CaptureHalf>(memory, memory, quota, limits, CaptureStart{.key = {1, 1}, .side = CaptureSide::request, .protocol = CaptureProtocol::http1, .host = "test", .started_at_ms = 1});
+    exchange.request.getMut().appendHead("GET / HTTP/1.1\r\n\r\n");
     const auto frame = tap::Protocol::encodeExchange(output.viewMut(), {73, 1}, exchange);
     tap::ServiceSpec specification;
 
@@ -306,8 +306,8 @@ end}
     CapturedExchange exchange{memory};
     const ProxyCaptureLimits limits{.part_bytes = 1024, .exchange_bytes = 2048, .total_bytes = 4096, .enabled = true};
 
-    exchange.request = makeOwned<CaptureHalf>(memory, memory, quota, limits, CaptureStart{.key = {1, 1}, .side = CaptureSide::request, .protocol = CaptureProtocol::http1, .host = "example.test", .started_at_ms = 1});
-    exchange.request->appendHead("GET / HTTP/1.1\r\n\r\n");
+    exchange.request = ds::makeBox<CaptureHalf>(memory, memory, quota, limits, CaptureStart{.key = {1, 1}, .side = CaptureSide::request, .protocol = CaptureProtocol::http1, .host = "example.test", .started_at_ms = 1});
+    exchange.request.getMut().appendHead("GET / HTTP/1.1\r\n\r\n");
     const auto frame = tap::Protocol::encodeExchange(output.viewMut(), {73, 1}, exchange);
     tap::ServiceSpec specification;
 

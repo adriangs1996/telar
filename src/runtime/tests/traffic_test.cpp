@@ -320,17 +320,17 @@ namespace {
     exchange.request = producer.start({.key = {37, 3}, .protocol = CaptureProtocol::http2, .host = "fixture.test", .started_at_ms = 1});
     exchange.response = producer.start({.key = {37, 3}, .side = CaptureSide::response, .protocol = CaptureProtocol::http2, .host = "fixture.test", .started_at_ms = 1});
     check(exchange.request && exchange.response);
-    exchange.request->setMethod("POST");
-    exchange.request->setTarget("/capture");
-    exchange.request->append(CapturePart::request_head, ":method: POST\r\n:authority: fixture.test\r\n");
-    exchange.request->append(CapturePart::request_body, std::string_view{"a\0b", 3});
-    exchange.request->finish(CaptureOutcome::finished, 2);
-    exchange.response->status_code = 200;
-    exchange.response->body_decoded = true;
+    exchange.request.getMut().setMethod("POST");
+    exchange.request.getMut().setTarget("/capture");
+    exchange.request.getMut().append(CapturePart::request_head, ":method: POST\r\n:authority: fixture.test\r\n");
+    exchange.request.getMut().append(CapturePart::request_body, std::string_view{"a\0b", 3});
+    exchange.request.getMut().finish(CaptureOutcome::finished, 2);
+    exchange.response.getMut().status_code = 200;
+    exchange.response.getMut().body_decoded = true;
     const std::string response(128 * 1024, 'x');
 
-    exchange.response->append(CapturePart::response_body, response);
-    exchange.response->finish(CaptureOutcome::finished, 3);
+    exchange.response.getMut().append(CapturePart::response_body, response);
+    exchange.response.getMut().finish(CaptureOutcome::finished, 3);
     service.submit(exchange);
 
     for (;;) {

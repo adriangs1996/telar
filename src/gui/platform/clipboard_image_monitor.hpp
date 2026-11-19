@@ -2,6 +2,7 @@
 
 #include "foundation/core/application_memory.hpp"
 #include "foundation/core/memory.hpp"
+#include "telar_base/ds/containers.hpp"
 #include "platform/clipboard_image_source.hpp"
 #ifdef __linux__
 #include "platform/linux/wayland_clipboard_image_monitor.hpp"
@@ -32,7 +33,7 @@ namespace telar::gui::platform {
     ds::Option<XcbClipboardImageMonitor> xcb_;
 #else
     struct Native;
-    Owned<Native, ApplicationAllocator> native_;
+    ds::Box<Native, ApplicationAllocator> native_;
 #endif
   };
 

@@ -70,8 +70,8 @@ namespace {
       CapturedExchange exchange{memory};
       const ProxyCaptureLimits limits{.part_bytes = 1024, .exchange_bytes = 2048, .total_bytes = 4096, .enabled = true};
 
-      exchange.request = makeOwned<CaptureHalf>(memory, memory, quota, limits, CaptureStart{.key = {1, 1}, .side = CaptureSide::request, .protocol = CaptureProtocol::http1, .host = "test", .started_at_ms = 1});
-      exchange.request->appendHead("GET / HTTP/1.1\r\n\r\n");
+      exchange.request = ds::makeBox<CaptureHalf>(memory, memory, quota, limits, CaptureStart{.key = {1, 1}, .side = CaptureSide::request, .protocol = CaptureProtocol::http1, .host = "test", .started_at_ms = 1});
+      exchange.request.getMut().appendHead("GET / HTTP/1.1\r\n\r\n");
       return exchange;
     }
 
@@ -137,7 +137,7 @@ namespace {
         SensitiveAllocation storage{memory, 64};
         const auto size = tap::Protocol::encodeEffects(storage.bytesMut(), event_id, {}).size();
 
-        results.publish(makeOwned<tap::Result<Memory>>(memory, identity, std::move(storage), 0, size));
+        results.publish(ds::makeBox<tap::Result<Memory>>(memory, identity, std::move(storage), 0, size));
       };
 
       publish(1);
@@ -180,7 +180,7 @@ namespace {
         SensitiveAllocation storage{memory, 64};
         const auto size = tap::Protocol::encodeEffects(storage.bytesMut(), event_id, {}).size();
 
-        results.publish(makeOwned<tap::Result<ConcurrentMemory>>(memory, identity, std::move(storage), 0, size));
+        results.publish(ds::makeBox<tap::Result<ConcurrentMemory>>(memory, identity, std::move(storage), 0, size));
       };
 
       for (std::uint64_t index = 0; index <= tap::Limits::queue_depth; ++index) {

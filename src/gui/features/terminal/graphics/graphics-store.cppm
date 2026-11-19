@@ -162,7 +162,7 @@ export {
         }
 
         image(GraphicsImage{.header = message.header, .image = message.image});
-        auto* received = findImage(message.image.key);
+        auto* received = findImageMut(message.image.key);
         if (received == nullptr || !received->readShared(source)) {
           requireSnapshot();
 
@@ -177,7 +177,8 @@ export {
       bool placement(const GraphicsPlacementMessage& message);
       bool erase(const GraphicsDeleteImage& message);
       bool erase(const GraphicsDeletePlacement& message);
-      [[nodiscard]] Image* findImage(ImageKey key) const noexcept;
+      [[nodiscard]] const Image* findImage(ImageKey key) const noexcept;
+      [[nodiscard]] Image* findImageMut(ImageKey key) noexcept;
       [[nodiscard]] const Image* readyImage(ImageKey key) const noexcept;
       [[nodiscard]] std::span<const GraphicsPlacement> placements() const noexcept;
       [[nodiscard]] std::uint64_t revision() const noexcept;
@@ -202,7 +203,7 @@ export {
 
       Memory& memory_;
       GraphicsBudget& budget_;
-      ds::Vec<Owned<Image, Memory>, Memory> images_;
+      ds::Vec<ds::Box<Image, Memory>, Memory> images_;
       ds::Vec<GraphicsPlacement, Memory> placements_;
       std::size_t bytes_ = 0;
       std::uint64_t released_bytes_ = 0;

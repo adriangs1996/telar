@@ -49,7 +49,7 @@ namespace {
         telar::ds::Vec<int, decltype(budget)> values{budget};
 
         values.push(42);
-        auto value = telar::makeOwned<int>(budget, 7);
+        auto value = telar::ds::makeBox<int>(budget, 7);
 
         check(values.front() == 42 && *value == 7);
         check(budget.liveBytes() == (values.capacity() + 1) * sizeof(int), "the budget counts the Vec's storage and the owned value");
@@ -129,7 +129,7 @@ namespace {
       bool thrown = false;
 
       try {
-        static_cast<void>(telar::makeOwned<int>(exhausted, 7));
+        static_cast<void>(telar::ds::makeBox<int>(exhausted, 7));
       } catch (const std::bad_alloc&) {
         thrown = true;
       }
@@ -147,7 +147,7 @@ namespace {
 
       {
         const int seven = 7;
-        auto value = telar::makeOwned<int>(memory, seven);
+        auto value = telar::ds::makeBox<int>(memory, seven);
         auto* block = memory.allocate(64 - sizeof(int), alignof(int));
 
         check(*value == 7 && block != nullptr && budget.liveBytes() == 64);

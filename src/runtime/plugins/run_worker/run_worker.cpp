@@ -627,7 +627,7 @@ namespace telar::runtime::plugins {
         scratch_(memory, HttpMessageLimits::message_bytes + 32),
         decisions_(memory, 3 * 1024 * 1024),
         effects_(memory, Limits::effect_bytes),
-        reply_(makeOwned<TrafficReply>(memory)) {}
+        reply_(ds::makeBox<TrafficReply>(memory)) {}
 
   template <Allocator Memory>
   void LuaTraffic<Memory>::install(lua_State* state) {
@@ -720,7 +720,7 @@ namespace telar::runtime::plugins {
 
   template <Allocator Memory>
   tbc::view<std::span<const Byte>, tbc::lt::a> LuaTraffic<Memory>::finish(std::uint64_t event_id, tbc::view<std::span<Byte>, tbc::lt::a> output) {
-    auto& reply = *reply_;
+    auto& reply = reply_.getMut();
 
     reply.event_id = event_id;
     reply.changed = changed_;

@@ -251,7 +251,7 @@ namespace telar::gui::application {
     }
 
     for (auto& tab : tabs_.viewMut()) {
-      tab->observeForeground(message);
+      tab.getMut().observeForeground(message);
     }
 
     ++chrome_revision_;

@@ -239,7 +239,7 @@ namespace telar::gui::qt {
         } else {
           current.failures = 0;
           current.error.clear();
-          current.rendered = std::shared_ptr<const Rendered>{std::move(outcome.value.getMut())};
+          current.rendered = std::move(outcome.value.getMut()).intoShared();
           current.nodes = project(*current.rendered, source_.configuration().theme);
           current.revision = ++next_revision_;
         }
