@@ -493,7 +493,8 @@ namespace telar::ds {
     }
 
     // Removes the last value and hands it back, as Rust's `pop`.
-    [[nodiscard]] Option<Value> pop() noexcept(std::is_nothrow_move_constructible_v<Value>) {
+    // The value leaves with what it borrows, region `a`, and none of this Vec's storage, as Rust's `-> T`.
+    [[nodiscard]] tbc::view<Option<Value>, tbc::lt::a> pop() noexcept(std::is_nothrow_move_constructible_v<Value>) {
       if (size_ == 0) {
         return {};
       }
@@ -586,8 +587,9 @@ namespace telar::ds {
       return items_[index];
     }
 
-    // Removes the value at `index` and hands it back, moving the later ones down, as Rust's `remove`.
-    Value remove(std::size_t index) {
+    // Removes the value at `index` and hands it back, moving the later ones down, as Rust's `remove`:
+    // it leaves with what it borrows, region `a`, and none of this Vec's storage.
+    tbc::view<Value, tbc::lt::a> remove(std::size_t index) {
       TELAR_ASSERT(index < size_);
       Value removed = std::move(items_[index]);
 
@@ -623,8 +625,10 @@ namespace telar::ds {
           continue;
         }
 
+        // A different slot, `kept` being behind `index`: read through a raw pointer, as Rust's `retain`
+        // moves values within its buffer.
         if (kept != index) {
-          items_[kept] = std::move(items_[index]);
+          items_[kept] = std::move(*tbc::raw(items_ + index));
         }
 
         ++kept;
@@ -1488,8 +1492,9 @@ namespace telar::ds {
       return true;
     }
 
-    // Removes the key's entry and hands its value back, as Rust's `remove`.
-    Option<Value> remove(Lookup key) {
+    // Removes the key's entry and hands its value back, as Rust's `remove`: it leaves with what it
+    // borrows, region `a`, and none of this Map's storage.
+    tbc::view<Option<Value>, tbc::lt::a> remove(Lookup key) {
       const auto index = locate(key, hashOf(key));
       if (index == not_found) {
         return {};
@@ -1753,7 +1758,8 @@ namespace telar::ds {
 
     tbc::view<Memory*, tbc::lt::a> memory_;
     std::int8_t* control_ = emptyControl();
-    Entry* entries_ = nullptr;
+    // The entries live in storage from the allocator, region `a`, as a Vec's values do.
+    tbc::view<Entry*, tbc::lt::a> entries_ = nullptr;
     std::size_t mask_ = 0;
     std::size_t size_ = 0;
     std::size_t growth_left_ = 0;
@@ -1819,7 +1825,9 @@ namespace telar::ds {
       return invoke_ != &callEmpty;
     }
 
-    Result operator()(Arguments... arguments) {
+    // The arguments are lent to this call alone, region `b` of no field, as Rust's `for<'b> FnMut(&'b T)`
+    // takes them: the callable cannot keep them.
+    Result operator()(tbc::view<Arguments, tbc::lt::b>... arguments) {
       return invoke_(storage_, std::forward<Arguments>(arguments)...);
     }
 
