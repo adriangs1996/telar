@@ -38,7 +38,7 @@ namespace telar::gui::application {
     [[nodiscard]] ds::Option<BindingAction> read(const runtime::lua::Value& value, bool expression = false);
 
   private:
-    [[nodiscard]] BindingAction command(const runtime::config::CommandTabView& command) const;
+    [[nodiscard]] BindingAction command(const runtime::config::CommandTabView& command);
 
     // The configuration admits only the names the GUI binds.
     static BindingAction builtin(const runtime::lua::Value& value, std::string_view name);

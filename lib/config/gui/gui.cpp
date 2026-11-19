@@ -7,7 +7,7 @@ import telar.base.text;
 
 namespace telar::runtime::config {
 
-  GuiSettings GuiReader::read(const lua::Value& gui) {
+  tbc::view<GuiSettings, tbc::lt::a> GuiReader::read(const lua::Value& gui) {
     GuiSettings settings;
 
     if (!gui.present()) {
@@ -134,7 +134,7 @@ namespace telar::runtime::config {
     }
   }
 
-  ThemeSelectionSettings ThemeReader::selection(const lua::Value& configuration) {
+  tbc::view<ThemeSelectionSettings, tbc::lt::a> ThemeReader::selection(const lua::Value& configuration) {
     ThemeSelectionSettings result;
     const auto theme = configuration.field("theme");
     const auto client = configuration.field("client");
@@ -155,7 +155,7 @@ namespace telar::runtime::config {
     return result;
   }
 
-  ds::Option<ThemeSettings> ThemeReader::read(const lua::Value& theme) {
+  tbc::view<ds::Option<ThemeSettings>, tbc::lt::a> ThemeReader::read(const lua::Value& theme) {
     if (!theme.present()) {
       return ds::none;
     }
@@ -175,7 +175,7 @@ namespace telar::runtime::config {
     return result;
   }
 
-  ds::Option<std::string_view> ThemeReader::preset(const lua::Value& value) {
+  tbc::view<ds::Option<std::string_view>, tbc::lt::a> ThemeReader::preset(const lua::Value& value) {
     if (!value.present()) {
       return ds::none;
     }
@@ -293,7 +293,7 @@ namespace telar::runtime::config {
     }
   }
 
-  void ThemeReader::appearance(const lua::Value& table, ThemeSelectionSettings& selection) {
+  void ThemeReader::appearance(const lua::Value& table, tbc::view<ThemeSelectionSettings&, tbc::lt::a> selection) {
     if (table.present()) {
       table.onlyFields({"light", "dark"});
       selection.light = read(table.field("light"));

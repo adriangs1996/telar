@@ -242,10 +242,11 @@ export {
     class ExtendedActionReader {
     public:
       // The definition is the one `definitions` holds now: a profile may replace it.
-      [[nodiscard]] static ExtendedActionSetting read(const lua::Value& action, const ClientDefinitions& definitions);
+      // The setting views the strings the Lua state holds, region `a`.
+      [[nodiscard]] static tbc::view<ExtendedActionSetting, tbc::lt::a> read(const lua::Value& action, const ClientDefinitions& definitions);
 
     private:
-      static NotificationActionSetting notification(const lua::Value& action);
+      static tbc::view<NotificationActionSetting, tbc::lt::a> notification(const lua::Value& action);
 
       static constexpr ds::Array<std::string_view, 4> notification_level_names{"info", "success", "warning", "failure"};
     };
@@ -477,7 +478,7 @@ export {
       // Stays in the interface, as do the other templates of this class, because it is a template
       // over the client's colors.
       template <UiColors Colors>
-      [[nodiscard]] TBC_GENERIC static ComponentValues<typename Colors::Color> read(const lua::Value& value, const ComponentShape& shape, const Colors& colors) {
+      [[nodiscard]] TBC_GENERIC static tbc::view<ComponentValues<typename Colors::Color>, tbc::lt::a> read(const lua::Value& value, const ComponentShape& shape, const Colors& colors) {
         ComponentValues<typename Colors::Color> result;
 
         if (shape.form == ComponentForm::text) {
@@ -577,7 +578,7 @@ export {
         return parsed;
       }
 
-      static ds::Option<std::string_view> icon(const lua::Value& value);
+      static tbc::view<ds::Option<std::string_view>, tbc::lt::a> icon(const lua::Value& value);
       static ds::Option<UiMark> mark(const lua::Value& value);
       static ComponentMetric metric(const lua::Value& value);
       static ds::Option<double> number(const lua::Value& value);
@@ -645,21 +646,27 @@ export {
       unsigned rank = 0;
     };
 
-    // Walks a component tree: text, a component, a segment, or a list of them. It hands each one
-    // a builder may place to `place(value, shape, position)`, which returns the parent its children
-    // name, or nothing to leave them out. An explicit stack bounds both the nested lists and the Lua
-    // stack the walk holds.
-    class ComponentTreeWalker {
+    // What a walk hands each node a builder may place: `place(value, shape, position)` returns the
+    // parent its children name, or nothing to leave them out.
+    class ComponentPlacer {
     public:
-      void walk(const lua::Value& value, ComponentPosition position);
+      virtual ds::Option<ComponentParent> place(const lua::Value& value, const ComponentShape& shape, const ComponentPosition& position) = 0;
 
     protected:
-      ComponentTreeWalker(lua_State& state, LimitNotices& limits) noexcept;
-      ~ComponentTreeWalker() = default;
+      ComponentPlacer() = default;
+      ComponentPlacer(const ComponentPlacer&) = default;
+      ComponentPlacer& operator=(const ComponentPlacer&) = default;
+      ~ComponentPlacer() = default;
+    };
 
-      // Places a node on the builder, which the walk reaches through a reference: the walk itself
-      // does not change.
-      virtual ds::Option<ComponentParent> place(const lua::Value& value, const ComponentShape& shape, const ComponentPosition& position) = 0;
+    // Walks a component tree: text, a component, a segment, or a list of them, handing each node to
+    // a placer apart from the walk, so a frame's value stays borrowed while it is placed. An
+    // explicit stack bounds both the nested lists and the Lua stack the walk holds.
+    class ComponentTreeWalker {
+    public:
+      ComponentTreeWalker(lua_State& state, LimitNotices& limits) noexcept;
+
+      void walk(const lua::Value& value, ComponentPosition position, ComponentPlacer& placer);
 
     private:
       enum class Phase : std::uint8_t {
@@ -687,12 +694,12 @@ export {
 
       void push(ComponentPosition position);
       void pop() noexcept;
-      void advance();
+      void advance(ComponentPlacer& placer);
       static const lua::Value& frameValue(const Frame& frame);
       // Each reads the frame on top of the stack, which stays there while they run.
-      void visit();
-      void component();
-      ds::Option<ComponentParent> node(const lua::Value& value, const ComponentShape& shape, const ComponentPosition& position);
+      void visit(ComponentPlacer& placer);
+      void component(ComponentPlacer& placer);
+      static ds::Option<ComponentParent> node(ComponentPlacer& placer, const lua::Value& value, const ComponentShape& shape, const ComponentPosition& position);
 
       lua_State& state_;
       LimitNotices& limits_;
@@ -703,18 +710,32 @@ export {
     // A walk that hands each node to `builder.node(value, shape, position)`. Stays in the interface
     // because it is a template over the caller's builder; it only forwards to it.
     template <typename Builder>
-    class TBC_GENERIC ComponentWalker final : public ComponentTreeWalker {
+    class TBC_GENERIC ComponentWalker final {
     public:
       inline ComponentWalker(lua_State& state, Builder& builder, LimitNotices& limits) noexcept
-          : ComponentTreeWalker(state, limits),
-            builder_(builder) {}
+          : walker_(state, limits),
+            placer_(builder) {}
 
-    private:
-      inline ds::Option<ComponentParent> place(const lua::Value& value, const ComponentShape& shape, const ComponentPosition& position) override {
-        return builder_.node(value, shape, position);
+      inline void walk(const lua::Value& value, ComponentPosition position) {
+        walker_.walk(value, position, placer_);
       }
 
-      Builder& builder_;
+    private:
+      class Placer final : public ComponentPlacer {
+      public:
+        inline explicit Placer(Builder& builder) noexcept
+            : builder_(builder) {}
+
+        inline ds::Option<ComponentParent> place(const lua::Value& value, const ComponentShape& shape, const ComponentPosition& position) override {
+          return builder_.node(value, shape, position);
+        }
+
+      private:
+        Builder& builder_;
+      };
+
+      ComponentTreeWalker walker_;
+      Placer placer_;
     };
 
   }
@@ -949,7 +970,7 @@ export {
 
       static constexpr ds::Array<std::string_view, 27> layout_fields{"ui", "id", "width", "height", "min_width", "max_width", "min_height", "max_height", "grow", "align_self", "x", "y", "rotation", "scale", "opacity", "z", "background", "border", "radius", "padding", "shadow", "clip", "on_click", "url", "tooltip", "hover", "transition"};
 
-      inline void fields(const Value& value, Element& element) {
+      inline void fields(tbc::view<const Value&, tbc::lt::a> value, tbc::view<Element&, tbc::lt::a> element) {
         switch (element.kind) {
         case Kind::row:
         case Kind::column:
@@ -1023,7 +1044,7 @@ export {
         box(value, element);
       }
 
-      inline void box(const Value& value, Element& element) {
+      inline void box(tbc::view<const Value&, tbc::lt::a> value, tbc::view<Element&, tbc::lt::a> element) {
         if (const auto id = value.field("id"); id.present()) {
           element.key = text(id);
         }
@@ -1318,7 +1339,8 @@ export {
         return result;
       }
 
-      inline std::string_view text(const Value& value) {
+      // The texts view the strings the Lua state holds, region `a`, as Value::string does.
+      inline tbc::view<std::string_view, tbc::lt::a> text(const Value& value) {
         if (!value.present()) {
           return {};
         }
@@ -1326,7 +1348,7 @@ export {
         return store(value.string(), value);
       }
 
-      inline std::string_view store(std::string_view text, const Value& value) {
+      inline tbc::view<std::string_view, tbc::lt::a> store(tbc::view<std::string_view, tbc::lt::a> text, const Value& value) {
         validateUtf8(text);
         constexpr unsigned char first_printable = 0x20;
         constexpr unsigned char delete_control = 0x7f;
@@ -2034,7 +2056,7 @@ export {
       // Hands each binding to `binding` in order. Stays in the interface because it is a template
       // over the caller's callable.
       template <typename Binding>
-      [[nodiscard]] TBC_GENERIC static PromptSettings read(const lua::Value& table, Binding&& binding) {
+      [[nodiscard]] TBC_GENERIC static tbc::view<PromptSettings, tbc::lt::a> read(const lua::Value& table, Binding&& binding) {
         PromptSettings settings;
 
         if (!table.present()) {
@@ -2148,7 +2170,7 @@ export {
       // the other templates of this class, because it is a template over the caller's callable; the
       // rest of the table is read out of line.
       template <typename Binding>
-      [[nodiscard]] TBC_GENERIC static ClientSettings read(const lua::Value& client, Binding&& binding) {
+      [[nodiscard]] TBC_GENERIC static tbc::view<ClientSettings, tbc::lt::a> read(const lua::Value& client, Binding&& binding) {
         auto settings = readSettings(client);
 
         if (client.present()) {
@@ -2188,7 +2210,7 @@ export {
 
     private:
       // The settings of the table but its prompt.
-      static ClientSettings readSettings(const lua::Value& client);
+      static tbc::view<ClientSettings, tbc::lt::a> readSettings(const lua::Value& client);
       // The index of the slot `name` names in component_slots.
       static std::size_t slot(std::string_view name, const lua::Value& entry);
       static tbc::view<ds::Option<std::string_view>, tbc::lt::a> printableText(const lua::Value& value, std::size_t maximum, bool allow_empty);

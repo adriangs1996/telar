@@ -81,7 +81,7 @@ namespace telar::gui::application {
     return {};
   }
 
-  BindingAction BindingActionReader::command(const runtime::config::CommandTabView& command) const {
+  BindingAction BindingActionReader::command(const runtime::config::CommandTabView& command) {
     runtime::config::LimitNotices limits;
     const auto reference = commands_.keepReference(command.argv(), command.configured_label, limits);
     if (!reference) {
@@ -139,7 +139,9 @@ namespace telar::gui::application {
   void ActionReferences<MaximumReferences>::keepOnly(const features::components::Content<Bounds>& content) {
     std::size_t kept = 0;
 
-    for (const auto retained : std::span{references_}.first(count_)) {
+    // By index, as a reference kept moves down over one released.
+    for (std::size_t index = 0; index < count_; ++index) {
+      const auto retained = references_[index];
       const bool used = std::ranges::any_of(content.nodes(), [&](const features::components::Node& node) {
         const auto action = content.action(node);
 
@@ -204,12 +206,20 @@ namespace telar::gui::application {
     builder_.counting_ = true;
     builder_.staged_.clear();
     const Position root{.place = builder_.surface_ == ComponentSurface::bar ? Place::bar : Place::panel};
-    runtime::config::ComponentWalker walker{state_, builder_, builder_.limits_};
+    // A walk borrows the builder, so the budget is prepared between two walks.
+    {
+      runtime::config::ComponentWalker walker{state_, builder_, builder_.limits_};
 
-    walker.walk(value, root);
+      walker.walk(value, root);
+    }
+
     builder_.budget_.prepare();
     builder_.counting_ = false;
-    walker.walk(value, root);
+    {
+      runtime::config::ComponentWalker walker{state_, builder_, builder_.limits_};
+
+      walker.walk(value, root);
+    }
     output.keepFitting(builder_.staged_, &builder_.had_children_);
     builder_.report(Bounds);
   }

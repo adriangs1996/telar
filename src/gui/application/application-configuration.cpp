@@ -910,7 +910,9 @@ namespace telar::gui::application {
   void ConfigurationGeneration<Memory>::removeDisabledPluginBindings(const features::plugins::PluginOverrides& overrides) {
     std::size_t retained = 0;
 
-    for (const auto& binding : std::span{input_.configured}.first(input_.length)) {
+    // By index, as a binding kept moves down over one dropped.
+    for (std::size_t index = 0; index < input_.length; ++index) {
+      const auto binding = input_.configured[index];
       if (binding.action.kind == BindingActionKind::extended) {
         const auto* plugin = std::get_if<PluginActionDescription>(&descriptions_.at(binding.action.parameter));
         if (plugin != nullptr && overrides.disabled(plugin->plugin, runtime_->plugins.configured())) {

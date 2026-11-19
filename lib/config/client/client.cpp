@@ -304,7 +304,7 @@ namespace telar::runtime::config {
     }
   }
 
-  ExtendedActionSetting ExtendedActionReader::read(const lua::Value& action, const ClientDefinitions& definitions) {
+  tbc::view<ExtendedActionSetting, tbc::lt::a> ExtendedActionReader::read(const lua::Value& action, const ClientDefinitions& definitions) {
     const auto kind = action.field("kind").string();
     if (kind == "notification") {
       return notification(action);
@@ -324,7 +324,7 @@ namespace telar::runtime::config {
     return DefinitionActionSetting{.panel = panel, .index = *index};
   }
 
-  NotificationActionSetting ExtendedActionReader::notification(const lua::Value& action) {
+  tbc::view<NotificationActionSetting, tbc::lt::a> ExtendedActionReader::notification(const lua::Value& action) {
     NotificationActionSetting result;
 
     result.title = utf8Prefix(action.field("title").string(), max_notification_title_bytes);
@@ -1009,7 +1009,7 @@ namespace telar::runtime::config {
     return static_cast<ComponentTone>(found - component_tone_names.begin());
   }
 
-  ds::Option<std::string_view> ComponentValuesReader::icon(const lua::Value& value) {
+  tbc::view<ds::Option<std::string_view>, tbc::lt::a> ComponentValuesReader::icon(const lua::Value& value) {
     if (!value.present()) {
       return ds::none;
     }
@@ -1065,14 +1065,14 @@ namespace telar::runtime::config {
       : state_(state),
         limits_(limits) {}
 
-  void ComponentTreeWalker::walk(const lua::Value& value, ComponentPosition position) {
+  void ComponentTreeWalker::walk(const lua::Value& value, ComponentPosition position, ComponentPlacer& placer) {
     const auto original_top = lua_gettop(&state_);
 
     value.pushCopy();
     try {
       push(position);
       while (frame_count_ != 0) {
-        advance();
+        advance(placer);
       }
     } catch (...) {
       while (frame_count_ != 0) {
@@ -1092,10 +1092,11 @@ namespace telar::runtime::config {
       throw std::length_error{"Component traversal stack exceeded"};
     }
 
+    const auto index = lua_gettop(&state_);
     auto& frame = frames_.atMut(frame_count_++);
 
-    frame.index = lua_gettop(&state_);
-    frame.value.emplace(&state_, frame.index, "component");
+    frame.index = index;
+    frame.value.emplace(&state_, index, "component");
     frame.position = position;
     frame.phase = Phase::visit;
     frame.tooltip = false;
@@ -1110,12 +1111,12 @@ namespace telar::runtime::config {
     lua_settop(&state_, frame.index - 1);
   }
 
-  void ComponentTreeWalker::advance() {
+  void ComponentTreeWalker::advance(ComponentPlacer& placer) {
     auto& frame = frames_.atMut(frame_count_ - 1);
 
     switch (frame.phase) {
     case Phase::visit:
-      visit();
+      visit(placer);
       break;
     case Phase::list:
     case Phase::children:
@@ -1153,18 +1154,21 @@ namespace telar::runtime::config {
     return *frame.value;
   }
 
-  void ComponentTreeWalker::visit() {
-    auto& frame = frames_.atMut(frame_count_ - 1);
-    const auto& value = frameValue(frame);
-    const auto position = frame.position;
+  // The frame's value is read through the stack, which stays shared while a node is placed; the
+  // frame changes only once the value is done with.
+  void ComponentTreeWalker::visit(ComponentPlacer& placer) {
+    const auto top = frame_count_ - 1;
+    const auto position = frames_[top].position;
 
-    frame.phase = Phase::done;
+    frames_.atMut(top).phase = Phase::done;
+
+    const auto& value = frameValue(frames_[top]);
     if (!value.present()) {
       return;
     }
 
     if (value.is(LUA_TSTRING)) {
-      static_cast<void>(node(value, {.text = value.string(), .priority = position.priority}, position));
+      static_cast<void>(node(placer, value, {.text = value.string(), .priority = position.priority}, position));
       return;
     }
 
@@ -1173,12 +1177,12 @@ namespace telar::runtime::config {
     }
 
     if (value.field("ui").present()) {
-      component();
+      component(placer);
       return;
     }
 
     if (value.field("text").present() || value.field("icon").present()) {
-      static_cast<void>(node(value, ComponentShapeReader::segment(value, position.priority), position));
+      static_cast<void>(node(placer, value, ComponentShapeReader::segment(value, position.priority), position));
       return;
     }
 
@@ -1186,20 +1190,28 @@ namespace telar::runtime::config {
       value.fail("exceeds the component nesting limit");
     }
 
+    const auto count = value.arraySize();
+    auto& frame = frames_.atMut(top);
+
     frame.child = position;
     ++frame.child.depth;
-    frame.count = value.arraySize();
+    frame.count = count;
     frame.phase = Phase::list;
   }
 
-  void ComponentTreeWalker::component() {
-    auto& frame = frames_.atMut(frame_count_ - 1);
-    const auto& value = frameValue(frame);
-    const auto shape = ComponentShapeReader::read(value, frame.position.priority, limits_);
-    const auto parent = node(value, shape, frame.position);
+  void ComponentTreeWalker::component(ComponentPlacer& placer) {
+    const auto top = frame_count_ - 1;
+    const auto position = frames_[top].position;
+    const auto& value = frameValue(frames_[top]);
+    const auto shape = ComponentShapeReader::read(value, position.priority, limits_);
+    const auto parent = node(placer, value, shape, position);
     if (!parent) {
       return;
     }
+
+    const bool lists = shape.kind == ComponentKind::group || shape.kind == ComponentKind::actions;
+    const auto count = lists ? value.listLength() : 0;
+    auto& frame = frames_.atMut(top);
 
     frame.child = {.parent = parent->index, .rank = parent->rank};
     switch (shape.kind) {
@@ -1207,12 +1219,12 @@ namespace telar::runtime::config {
       frame.child.place = ComponentPlace::group;
       frame.child.priority = shape.priority;
       frame.tooltip = true;
-      frame.count = value.listLength();
+      frame.count = count;
       frame.phase = Phase::children;
       break;
     case ComponentKind::actions:
       frame.child.place = ComponentPlace::buttons;
-      frame.count = value.listLength();
+      frame.count = count;
       frame.phase = Phase::children;
       break;
     case ComponentKind::callout:
@@ -1223,12 +1235,12 @@ namespace telar::runtime::config {
     }
   }
 
-  ds::Option<ComponentParent> ComponentTreeWalker::node(const lua::Value& value, const ComponentShape& shape, const ComponentPosition& position) {
+  ds::Option<ComponentParent> ComponentTreeWalker::node(ComponentPlacer& placer, const lua::Value& value, const ComponentShape& shape, const ComponentPosition& position) {
     if (!componentAllowed(shape.kind, position.place)) {
       value.fail("contains a component unsupported in this position");
     }
 
-    return place(value, shape, position);
+    return placer.place(value, shape, position);
   }
 
   class CommandArgumentsValidator {
@@ -2094,7 +2106,7 @@ namespace telar::runtime::config {
     }
   }
 
-  ClientSettings ClientReader::readSettings(const lua::Value& client) {
+  tbc::view<ClientSettings, tbc::lt::a> ClientReader::readSettings(const lua::Value& client) {
     ClientSettings settings;
 
     if (!client.present()) {

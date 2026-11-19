@@ -9,6 +9,7 @@ import telar.config.gui;
 import telar.config.runtime;
 import telar.base.memory.allocators;
 import telar.lua;
+import telar.tbc;
 
 // Interface: telar_config/snapshot_reader.cppm
 export {
@@ -94,7 +95,8 @@ export {
 
       // Hands each `client.prompt` binding to `binding` in order.
       template <typename Binding>
-      [[nodiscard]] TBC_GENERIC inline static ClientLayerSettings read(const lua::Value& configuration, Binding&& binding) {
+      // The settings view the strings the Lua state holds, region `a`.
+      [[nodiscard]] TBC_GENERIC inline static tbc::view<ClientLayerSettings, tbc::lt::a> read(const lua::Value& configuration, Binding&& binding) {
         return {
             .themes = ThemeReader::selection(configuration),
             .client = ClientReader::read(configuration.field("client"), std::forward<Binding>(binding)),
