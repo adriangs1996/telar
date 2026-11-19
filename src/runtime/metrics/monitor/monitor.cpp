@@ -35,8 +35,8 @@ namespace telar::runtime {
         bytes.atMut(index) = byte < 0x20 || byte == 0x7f ? ' ' : static_cast<char>(byte);
       }
 
-      std::string_view result{bytes.data(), length};
-      if (inspectUtf8(utf8Prefix(result, Capacity)) != Utf8Validation::valid) {
+      const auto valid = inspectUtf8(utf8Prefix({bytes.data(), length}, Capacity)) == Utf8Validation::valid;
+      if (!valid) {
         for (std::size_t index = 0; index < length; ++index) {
           if (static_cast<unsigned char>(bytes[index]) >= 0x80) {
             bytes.atMut(index) = '?';
@@ -44,7 +44,7 @@ namespace telar::runtime {
         }
       }
 
-      output.assign(utf8Prefix(result, Capacity));
+      output.assign(utf8Prefix({bytes.data(), length}, Capacity));
     }
 
     std::uint64_t ratePerSecond(std::uint64_t now, std::uint64_t before, double seconds) noexcept {

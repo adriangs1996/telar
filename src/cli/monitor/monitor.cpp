@@ -438,8 +438,10 @@ namespace telar::runtime::cli::monitor {
         storage.push('\0');
       }
 
+      const auto bytes = storage.viewMut();
+
       for (std::size_t index = 0; index < count; ++index) {
-        argv.atMut(index) = storage.viewMut().data() + offsets[index];
+        argv.atMut(index) = bytes.data() + offsets[index];
       }
 
       ::execvp(argv[0], argv.dataMut());

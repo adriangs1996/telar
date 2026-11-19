@@ -154,6 +154,7 @@ namespace {
     service.tick(started, [&](MonitorWork& work) {
       work.roots.atMut(work.root_count++) = {.process = ::getpid(), .pane_id = 9, .agent = true};
     });
+
     finish(service, reply);
     check(client.receive<RequestFailed>().code == FailureCode::foreign_process);
   }

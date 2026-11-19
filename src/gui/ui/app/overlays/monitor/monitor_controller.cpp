@@ -21,13 +21,16 @@ namespace telar::gui::qt {
     using application::monitor::ProcessInstance;
     using application::monitor::ProcessSignal;
 
-    constexpr std::array<const char*, 5> sort_names{"cpu", "memory", "threads", "pid", "name"};
-    constexpr std::array<const char*, 3> scope_names{"all", "telar", "agents"};
-    constexpr std::array<const char*, 6> state_names{"unknown", "running", "sleeping", "idle", "stopped", "zombie"};
+    constexpr ds::Array<const char*, 5> sort_names{"cpu", "memory", "threads", "pid", "name"};
+    constexpr ds::Array<const char*, 3> scope_names{"all", "telar", "agents"};
+    constexpr ds::Array<const char*, 6> state_names{"unknown", "running", "sleeping", "idle", "stopped", "zombie"};
     constexpr std::size_t microsecond_digits = 6;
+    constexpr int decimal = 10;
+    // The runtime counts shares in permille; QML shows percents.
+    constexpr double permille_per_percent = 10.0;
 
     QString started(const ProcessInstance& instance) {
-      return QStringLiteral("%1.%2").arg(instance.started_seconds).arg(instance.started_microseconds, static_cast<int>(microsecond_digits), 10, QLatin1Char('0'));
+      return QStringLiteral("%1.%2").arg(instance.started_seconds).arg(instance.started_microseconds, static_cast<int>(microsecond_digits), decimal, QLatin1Char('0'));
     }
 
     ProcessInstance instance(int pid, const QString& text) {
@@ -64,9 +67,9 @@ namespace telar::gui::qt {
           {QStringLiteral("name"), toQString(row.name.view())},
           {QStringLiteral("program"), program(row)},
           {QStringLiteral("command"), toQString(row.command.view())},
-          {QStringLiteral("state"), QString::fromLatin1(state_names.at(static_cast<std::size_t>(row.state)))},
+          {QStringLiteral("state"), QString::fromLatin1(state_names[static_cast<std::size_t>(row.state)])},
           {QStringLiteral("measured"), row.measured},
-          {QStringLiteral("cpu"), static_cast<double>(row.cpu_permille) / 10.0},
+          {QStringLiteral("cpu"), static_cast<double>(row.cpu_permille) / permille_per_percent},
           {QStringLiteral("memory"), static_cast<double>(row.resident_bytes)},
           {QStringLiteral("threads"), row.threads},
           {QStringLiteral("nice"), row.nice},
@@ -77,7 +80,7 @@ namespace telar::gui::qt {
     }
 
     template <std::size_t Size>
-    ds::Option<std::size_t> indexOf(const std::array<const char*, Size>& names, const QString& name) {
+    ds::Option<std::size_t> indexOf(const ds::Array<const char*, Size>& names, const QString& name) {
       for (std::size_t index = 0; index < Size; ++index) {
         if (name == QLatin1StringView{names[index]}) {
           return index;
@@ -157,7 +160,7 @@ namespace telar::gui::qt {
     QVariantList interfaces;
 
     for (const auto core : state.cores) {
-      cores.push_back(static_cast<double>(core) / 10.0);
+      cores.push_back(static_cast<double>(core) / permille_per_percent);
     }
 
     for (const auto& disk : state.disks) {
@@ -179,7 +182,7 @@ namespace telar::gui::qt {
     }
 
     return {
-        {QStringLiteral("cpu"), static_cast<double>(state.cpu_permille) / 10.0},
+        {QStringLiteral("cpu"), static_cast<double>(state.cpu_permille) / permille_per_percent},
         {QStringLiteral("cores"), cores},
         {QStringLiteral("memoryTotal"), static_cast<double>(state.memory_total_bytes)},
         {QStringLiteral("memoryUsed"), static_cast<double>(state.memory_used_bytes)},
@@ -202,9 +205,9 @@ namespace telar::gui::qt {
     const auto& view = application::monitor::state(store_.session()).view;
 
     return {
-        {QStringLiteral("sort"), QString::fromLatin1(sort_names.at(static_cast<std::size_t>(view.sort)))},
+        {QStringLiteral("sort"), QString::fromLatin1(sort_names[static_cast<std::size_t>(view.sort)])},
         {QStringLiteral("reverse"), view.reverse},
-        {QStringLiteral("scope"), QString::fromLatin1(scope_names.at(static_cast<std::size_t>(view.scope)))},
+        {QStringLiteral("scope"), QString::fromLatin1(scope_names[static_cast<std::size_t>(view.scope)])},
         {QStringLiteral("tree"), view.tree},
         {QStringLiteral("filter"), toQString(view.filter.view())},
         {QStringLiteral("selected"), view.selected.pid},
@@ -292,26 +295,27 @@ namespace telar::gui::qt {
   }
 
   void MonitorController::signal(const QString& name) {
-    static constexpr std::array<const char*, 4> names{"TERM", "KILL", "STOP", "CONT"};
-    static constexpr std::array<ProcessSignal, 4> kinds{ProcessSignal::terminate, ProcessSignal::kill, ProcessSignal::stop, ProcessSignal::resume};
-    const auto& view = application::monitor::state(store_.session()).view;
+    static constexpr ds::Array<const char*, 4> names{"TERM", "KILL", "STOP", "CONT"};
+    static constexpr ds::Array<ProcessSignal, 4> kinds{ProcessSignal::terminate, ProcessSignal::kill, ProcessSignal::stop, ProcessSignal::resume};
+    // A copy: the call below changes the session the view lives in.
+    const auto selected = application::monitor::state(store_.session()).view.selected;
     const auto index = indexOf(names, name);
-    if (!index || view.selected.pid == 0) {
+    if (!index || selected.pid == 0) {
       return;
     }
 
-    if (!application::monitor::signal(store_.sessionMut(), view.selected, kinds.at(*index))) {
+    if (!application::monitor::signal(store_.sessionMut(), selected, kinds[*index])) {
       emit failed(QStringLiteral("The monitor is busy with another request; try again"));
     }
   }
 
   void MonitorController::renice(int nice) {
-    const auto& view = application::monitor::state(store_.session()).view;
-    if (view.selected.pid == 0) {
+    const auto selected = application::monitor::state(store_.session()).view.selected;
+    if (selected.pid == 0) {
       return;
     }
 
-    if (!application::monitor::prioritize(store_.sessionMut(), view.selected, std::clamp(nice, -20, 20))) {
+    if (!application::monitor::prioritize(store_.sessionMut(), selected, std::clamp(nice, -20, 20))) {
       emit failed(QStringLiteral("The monitor is busy with another request; try again"));
     }
   }
@@ -337,7 +341,7 @@ namespace telar::gui::qt {
   }
 
   void MonitorController::review(const QString& tool) {
-    static constexpr std::array<const char*, 4> tools{"stack", "files", "logs", "debug"};
+    static constexpr ds::Array<const char*, 4> tools{"stack", "files", "logs", "debug"};
     const auto& state = application::monitor::state(store_.session());
     const auto* focused = store_.session().focusedPane();
     if (!indexOf(tools, tool) || state.view.selected.pid == 0 || focused == nullptr) {
@@ -347,7 +351,7 @@ namespace telar::gui::qt {
     // The new pane runs on the process's machine: its `telar` checks the instance again, runs the
     // tool, then leaves a shell.
     const auto script = QStringLiteral("\"${TELAR_BIN_PATH:-telar}\" process review %1 --started %2 --tool %3; exec \"${SHELL:-/bin/sh}\" -l").arg(state.view.selected.pid).arg(started(state.view.selected), tool).toUtf8();
-    const std::array<std::string_view, 3> arguments{"/bin/sh", "-c", {script.constData(), static_cast<std::size_t>(script.size())}};
+    const ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", {script.constData(), static_cast<std::size_t>(script.size())}};
     const auto pane = focused->id;
 
     emit closeRequested();
