@@ -56,15 +56,29 @@ export {
       FixedText<MonitorLimits::command_bytes> command{};
     };
 
+    inline constexpr std::size_t maximum_monitor_answers = 16;
+
+    // The answers of one round, in the order of its queries; none for a query that names a process
+    // that is gone or was replaced.
+    using MonitorAnswers = ds::Array<ds::Option<MonitorSnapshot>, maximum_monitor_answers>;
+
+    // A user's name as the sampler caches it.
+    struct UserName {
+      uid_t user = 0;
+      FixedText<MonitorLimits::user_bytes> name{};
+    };
+
     // Keeps the processes and the host between readings and answers queries about them. A reading
     // allocates only when the table outgrows every earlier one; an answer views the sampler and stays
-    // valid until the next reading or the next round of answers.
+    // valid until the next reading or the next round of answers, so the sampler never moves.
     class MonitorSampler {
     public:
       using Clock = std::chrono::steady_clock;
-      static constexpr std::size_t maximum_answers = 16;
+      static constexpr std::size_t maximum_answers = maximum_monitor_answers;
 
-      MonitorSampler(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const ProcessInspector& inspector);
+      MonitorSampler(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<const ProcessInspector&, tbc::lt::a> inspector);
+      MonitorSampler(const MonitorSampler&) = delete;
+      MonitorSampler& operator=(const MonitorSampler&) = delete;
 
       // Takes the processes, leaving the previous reading's storage in `records` for the next one.
       void update(ds::Vec<ProcessRecord, ConcurrentMemory>& records, const HostDetail& host, Clock::time_point now, std::span<const PaneRoot> roots);
@@ -72,13 +86,9 @@ export {
       // Two readings were taken, so CPU and rates are known.
       [[nodiscard]] bool ready() const noexcept;
 
-      // Starts a round of at most maximum_answers answers listing `rows` processes together,
-      // dropping the previous round's.
-      void beginAnswers(std::size_t count, std::size_t rows);
-
-      // Fills the snapshot except its request id. False when the query names a process that is
-      // gone or was replaced; the snapshot is then left as it was.
-      bool answer(const MonitorView& view, MonitorSnapshot& snapshot);
+      // Answers a round of at most maximum_answers queries, but for their request ids, dropping the
+      // previous round's answers.
+      MonitorAnswers answer(std::span<const MonitorView> views);
 
       [[nodiscard]] std::span<const MonitorEntry> entries() const noexcept;
 
@@ -86,14 +96,11 @@ export {
       [[nodiscard]] const MonitorEntry* find(const ProcessInstance& instance) const noexcept;
 
     private:
-      struct UserName {
-        uid_t user = 0;
-        FixedText<MonitorLimits::user_bytes> name{};
-      };
-
       struct DetailText {
         // A process that started after the last reading, read for this answer.
         MonitorEntry fresh{};
+        // The entry the detail is of, or none for `fresh`.
+        ds::Option<std::uint32_t> entry{};
         FixedText<MonitorLimits::arguments_bytes> arguments{};
         FixedText<MonitorLimits::directory_bytes> directory{};
         ListeningPorts ports{};
@@ -101,19 +108,17 @@ export {
         std::uint16_t child_count = 0;
       };
 
-      void describe(MonitorEntry& entry);
-      FixedText<MonitorLimits::user_bytes> userName(uid_t user);
       void attribute(std::span<const PaneRoot> roots);
       void measureHost(const HostDetail& host, double seconds);
       [[nodiscard]] bool matches(const MonitorEntry& entry, const MonitorView& view) const noexcept;
       [[nodiscard]] bool before(const MonitorEntry& left, const MonitorEntry& right, const MonitorView& view) const noexcept;
       [[nodiscard]] ds::Option<std::uint32_t> indexOf(pid_t process) const noexcept;
+      bool detail(const ProcessInstance& instance);
       void select(const MonitorView& view);
       void selectTree(const MonitorView& view);
-      MonitorProcess row(const MonitorEntry& entry, std::uint8_t depth) const noexcept;
 
       tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
-      ProcessInspector inspector_;
+      tbc::view<ProcessInspector, tbc::lt::a> inspector_;
       // Sorted by pid.
       tbc::view<ds::Vec<MonitorEntry, ConcurrentMemory>, tbc::lt::a> entries_;
       tbc::view<ds::Vec<MonitorEntry, ConcurrentMemory>, tbc::lt::a> previous_;
@@ -125,7 +130,7 @@ export {
       tbc::view<ds::Vec<std::uint8_t, ConcurrentMemory>, tbc::lt::a> flags_;
       tbc::view<ds::Vec<std::pair<std::uint32_t, std::uint8_t>, ConcurrentMemory>, tbc::lt::a> stack_;
       // What the answers of a round view.
-      tbc::view<ds::Vec<MonitorProcess, ConcurrentMemory>, tbc::lt::a> rows_;
+      tbc::view<ds::Vec<MonitorProcess, ConcurrentMemory>, tbc::lt::self> rows_;
       tbc::view<ds::Vec<DetailText, ConcurrentMemory>, tbc::lt::a> details_;
       ds::Option<Clock::time_point> sampled_;
       std::uint32_t readings_ = 0;
@@ -135,8 +140,9 @@ export {
       std::uint16_t cpu_permille_ = 0;
       std::uint64_t disk_read_per_second_ = 0;
       std::uint64_t disk_written_per_second_ = 0;
-      ds::Array<MonitorInterface, HostDetail::maximum_interfaces> interfaces_{};
-      ds::Array<MonitorDisk, HostDetail::maximum_mounts> disks_{};
+      // They view host_.
+      tbc::view<ds::Array<MonitorInterface, HostDetail::maximum_interfaces>, tbc::lt::self> interfaces_{};
+      tbc::view<ds::Array<MonitorDisk, HostDetail::maximum_mounts>, tbc::lt::self> disks_{};
       std::uint32_t thread_count_ = 0;
     };
 

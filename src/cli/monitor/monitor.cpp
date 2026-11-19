@@ -1,6 +1,7 @@
 module telar.cli.monitor;
 
 import std;
+import telar.tbc;
 import telar.sys.posix;
 import telar.sys.process;
 
@@ -368,7 +369,7 @@ namespace telar::runtime::cli::monitor {
     }
 
     // The system tool that shows `tool` of a process here, and its arguments.
-    ds::Array<std::string_view, 6> reviewCommand(ReviewTool tool, std::string_view pid, std::string_view predicate) noexcept {
+    tbc::view<ds::Array<std::string_view, 6>, tbc::lt::a> reviewCommand(ReviewTool tool, tbc::view<std::string_view, tbc::lt::a> pid, tbc::view<std::string_view, tbc::lt::a> predicate) noexcept {
 #if defined(__APPLE__)
       switch (tool) {
       case ReviewTool::stack:
@@ -380,6 +381,7 @@ namespace telar::runtime::cli::monitor {
       case ReviewTool::debug:
         return {"lldb", "-p", pid};
       }
+
 #else
       switch (tool) {
       case ReviewTool::stack:
@@ -557,6 +559,7 @@ namespace telar::runtime::cli::monitor {
       switch (options.command) {
       case Command::process_list: {
         const auto snapshot = session.getMut().template exchange<MonitorSnapshot>(query(options, MonitorSections::processes));
+
         if (options.json) {
           appendListJson(output, snapshot);
           output.push('\n');

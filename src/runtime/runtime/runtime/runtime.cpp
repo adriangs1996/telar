@@ -2729,6 +2729,7 @@ namespace telar::runtime {
         client->connection.send(message);
       }
     });
+
     runtime_clipboard_.collect(clients_);
     workspace_git_.collect(model_, Clock::now());
     shell_git_.collect([&](const ShellGitResult& result) {
@@ -2951,6 +2952,7 @@ namespace telar::runtime {
         work.roots.atMut(work.root_count++) = {.process = pane->process->processId(), .pane_id = pane->id, .agent = working};
       }
     }));
+
     timeout = std::min(timeout, workspace_git_.tick(model_, now));
     deliverQueued();
 

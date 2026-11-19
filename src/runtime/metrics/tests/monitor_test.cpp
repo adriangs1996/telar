@@ -60,11 +60,14 @@ namespace {
     }
 
     std::vector<MonitorProcess> list(MonitorView view, std::uint32_t* matched = nullptr) {
-      MonitorSnapshot snapshot{};
-
       view.sections = MonitorSections::processes;
-      sampler.beginAnswers(1, view.limit);
-      check(sampler.answer(view, snapshot));
+
+      const auto answers = sampler.answer({&view, 1});
+
+      check(answers[0].hasValue());
+
+      const auto& snapshot = *answers[0];
+
       if (matched != nullptr) {
         *matched = snapshot.matched;
       }
@@ -191,18 +194,18 @@ namespace {
     child.parent = ::getpid();
     fixture.read({child, process(2, 0, "gone", 0)});
 
-    MonitorSnapshot snapshot{};
     MonitorView view{.sections = 0};
 
     view.detail = {.pid = ::getpid(), .started_seconds = self->started_seconds, .started_microseconds = self->started_microseconds};
-    fixture.sampler.beginAnswers(3, 0);
-    check(fixture.sampler.answer(view, snapshot));
-    check(snapshot.detail && snapshot.detail->process.instance.pid == ::getpid());
-    check(snapshot.detail->children.size() == 1 && snapshot.detail->children[0] == base + 1);
+    const auto answers = fixture.sampler.answer({&view, 1});
+    const auto& snapshot = answers[0];
+
+    check(snapshot && snapshot->detail && snapshot->detail->process.instance.pid == ::getpid());
+    check(snapshot->detail->children.size() == 1 && snapshot->detail->children[0] == base + 1);
     view.detail.started_seconds += 1;
-    check(!fixture.sampler.answer(view, snapshot));
+    check(!fixture.sampler.answer({&view, 1})[0]);
     view.detail = {.pid = base + 2};
-    check(!fixture.sampler.answer(view, snapshot));
+    check(!fixture.sampler.answer({&view, 1})[0]);
   }
 
   // The real host, read twice, answers a snapshot the wire carries whole.
@@ -223,12 +226,16 @@ namespace {
       now += std::chrono::seconds{2};
     }
 
-    MonitorSnapshot snapshot{.request_id = 1};
     MonitorView view{.limit = 1024};
 
     view.detail = {.pid = ::getpid()};
-    sampler.beginAnswers(1, view.limit);
-    check(sampler.answer(view, snapshot));
+    auto answers = sampler.answer({&view, 1});
+
+    check(answers[0].hasValue());
+
+    auto& snapshot = answers.atMut(0).getMut();
+
+    snapshot.request_id = 1;
     check(snapshot.process_count > 1 && !snapshot.cores.empty() && snapshot.processes.size() == std::min<std::size_t>(snapshot.process_count, 1024));
     check(snapshot.detail && !snapshot.detail->arguments.empty());
 

@@ -67,6 +67,67 @@ namespace telar::runtime {
       return left.pid == right.pid && left.started_seconds == right.started_seconds && left.started_microseconds == right.started_microseconds;
     }
 
+    FixedText<MonitorLimits::user_bytes> userName(ds::Vec<UserName, ConcurrentMemory>& users, uid_t user) {
+      for (const auto& known : users) {
+        if (known.user == user) {
+          return known.name;
+        }
+      }
+
+      UserName found{.user = user};
+      passwd record{};
+      passwd* result = nullptr;
+      ds::Array<char, user_record_bytes> storage;
+      if (::getpwuid_r(user, &record, storage.dataMut(), storage.size(), &result) == 0 && result != nullptr && result->pw_name != nullptr) {
+        displayCopy(found.name, std::string_view{result->pw_name});
+      } else {
+        ds::Array<char, 16> digits;
+        const auto converted = std::to_chars(digits.dataMut(), digits.dataMut() + digits.size(), user);
+
+        found.name.assign({digits.data(), static_cast<std::size_t>(converted.ptr - digits.data())});
+      }
+
+      if (users.size() < maximum_cached_users) {
+        users.push(found);
+      }
+
+      return found.name;
+    }
+
+    void describe(MonitorEntry& entry, const ProcessInspector& inspector, ds::Vec<UserName, ConcurrentMemory>& users) {
+      ds::Array<char, MonitorLimits::command_bytes> text;
+      const auto line = inspector.commandLine(entry.record.pid, text.viewMut());
+      const auto first = line.text.substr(0, line.text.find(' '));
+      const auto program = processBasename(first);
+      const auto short_name = entry.record.name.view();
+
+      entry.agent = line.provider;
+      displayCopy(entry.command, line.text);
+      // macOS keeps 16 bytes of a process's name; its program's file name is the whole of it.
+      displayCopy(entry.name, !short_name.empty() && program.size() > short_name.size() && program.starts_with(short_name) ? program : short_name);
+      entry.user = userName(users, entry.record.user);
+      entry.described = true;
+    }
+
+    MonitorProcess row(const MonitorEntry& entry, std::uint8_t depth) noexcept {
+      return {
+          .instance = {.pid = entry.record.pid, .started_seconds = entry.record.started_seconds, .started_microseconds = entry.record.started_microseconds},
+          .parent = std::max(entry.record.parent, 0),
+          .user_id = entry.record.user,
+          .user = entry.user.view(),
+          .name = entry.name.view(),
+          .command = entry.command.view(),
+          .state = entry.record.state,
+          .measured = entry.record.measured,
+          .cpu_permille = entry.cpu_permille,
+          .resident_bytes = entry.record.resident_bytes,
+          .threads = entry.record.threads,
+          .nice = entry.record.nice,
+          .pane_id = entry.pane_id,
+          .agent = entry.agent,
+          .depth = depth,
+      };
+    }
   }
 
   MonitorSampler::MonitorSampler(ConcurrentMemory& memory, const ProcessInspector& inspector)
@@ -100,6 +161,7 @@ namespace telar::runtime {
       }
 
       auto& entry = entries_.push(MonitorEntry{.record = record});
+
       if (earlier < previous_.size() && sameInstance(previous_[earlier].record, record)) {
         const auto& before = previous_[earlier];
 
@@ -116,7 +178,7 @@ namespace telar::runtime {
       }
 
       if (!entry.described) {
-        describe(entry);
+        describe(entry, inspector_, users_);
       }
 
       thread_count_ += record.threads;
@@ -161,48 +223,6 @@ namespace telar::runtime {
     }
 
     return &entry;
-  }
-
-  void MonitorSampler::describe(MonitorEntry& entry) {
-    ds::Array<char, MonitorLimits::command_bytes> text;
-    const auto line = inspector_.commandLine(entry.record.pid, text.viewMut());
-    const auto first = line.text.substr(0, line.text.find(' '));
-    const auto program = processBasename(first);
-    const auto short_name = entry.record.name.view();
-
-    entry.agent = line.provider;
-    displayCopy(entry.command, line.text);
-    // macOS keeps 16 bytes of a process's name; its program's file name is the whole of it.
-    displayCopy(entry.name, !short_name.empty() && program.size() > short_name.size() && program.starts_with(short_name) ? program : short_name);
-    entry.user = userName(entry.record.user);
-    entry.described = true;
-  }
-
-  FixedText<MonitorLimits::user_bytes> MonitorSampler::userName(uid_t user) {
-    for (const auto& known : users_) {
-      if (known.user == user) {
-        return known.name;
-      }
-    }
-
-    UserName found{.user = user};
-    passwd record{};
-    passwd* result = nullptr;
-    ds::Array<char, user_record_bytes> storage;
-    if (::getpwuid_r(user, &record, storage.dataMut(), storage.size(), &result) == 0 && result != nullptr && result->pw_name != nullptr) {
-      displayCopy(found.name, std::string_view{result->pw_name});
-    } else {
-      ds::Array<char, 16> digits;
-      const auto converted = std::to_chars(digits.dataMut(), digits.dataMut() + digits.size(), user);
-
-      found.name.assign({digits.data(), static_cast<std::size_t>(converted.ptr - digits.data())});
-    }
-
-    if (users_.size() < maximum_cached_users) {
-      users_.push(found);
-    }
-
-    return found.name;
   }
 
   // Which pane each process runs in and whether an agent runs it, from the parents in the table: a
@@ -400,6 +420,7 @@ namespace telar::runtime {
 
       return left_parent != right_parent ? left_parent < right_parent : before(entries_[left], entries_[right], view);
     });
+
     flags_.clear();
     flags_.resize(entries_.size(), 0);
     for (const auto index : selected_) {
@@ -419,6 +440,7 @@ namespace telar::runtime {
     std::ranges::sort(stack_.viewMut(), [&](const auto& left, const auto& right) {
       return before(entries_[right.first], entries_[left.first], view);
     });
+
     while (!stack_.empty() && ordered_.size() < view.limit) {
       const auto [index, depth] = *stack_.pop();
       const auto pid = entries_[index].record.pid;
@@ -437,125 +459,147 @@ namespace telar::runtime {
     }
   }
 
-  MonitorProcess MonitorSampler::row(const MonitorEntry& entry, std::uint8_t depth) const noexcept {
-    return {
-        .instance = {.pid = entry.record.pid, .started_seconds = entry.record.started_seconds, .started_microseconds = entry.record.started_microseconds},
-        .parent = std::max(entry.record.parent, 0),
-        .user_id = entry.record.user,
-        .user = entry.user.view(),
-        .name = entry.name.view(),
-        .command = entry.command.view(),
-        .state = entry.record.state,
-        .measured = entry.record.measured,
-        .cpu_permille = entry.cpu_permille,
-        .resident_bytes = entry.record.resident_bytes,
-        .threads = entry.record.threads,
-        .nice = entry.record.nice,
-        .pane_id = entry.pane_id,
-        .agent = entry.agent,
-        .depth = depth,
+  MonitorAnswers MonitorSampler::answer(std::span<const MonitorView> views) {
+    // Where each query's rows and detail are; every row and detail is written before any answer
+    // views them.
+    struct Written {
+      bool found = true;
+      std::size_t first = 0;
+      std::size_t count = 0;
+      std::uint32_t matched = 0;
+      ds::Option<std::size_t> detail{};
     };
-  }
 
-  void MonitorSampler::beginAnswers(std::size_t count, std::size_t rows) {
+    const auto queries = std::min(views.size(), maximum_answers);
+    ds::Array<Written, maximum_answers> written{};
+    std::size_t rows = 0;
+
+    for (std::size_t query = 0; query < queries; ++query) {
+      rows += views[query].limit;
+    }
+
     rows_.clear();
     details_.clear();
     rows_.reserve(rows);
-    details_.reserve(std::min(count, maximum_answers));
+    details_.reserve(queries);
+    for (std::size_t query = 0; query < queries; ++query) {
+      const auto& view = views[query];
+      auto& place = written.atMut(query);
+
+      if (view.detail.pid != 0) {
+        place.found = detail(view.detail);
+        if (!place.found) {
+          continue;
+        }
+
+        place.detail = details_.size() - 1;
+      }
+
+      if ((view.sections & MonitorSections::processes) != 0) {
+        select(view);
+        place.first = rows_.size();
+        place.count = std::min(ordered_.size(), rows_.capacity() - place.first);
+        place.matched = static_cast<std::uint32_t>(selected_.size());
+        for (std::size_t index = 0; index < place.count; ++index) {
+          rows_.push(row(entries_[ordered_[index]], depths_[index]));
+        }
+      }
+    }
+
+    MonitorAnswers answers{};
+
+    for (std::size_t query = 0; query < queries; ++query) {
+      const auto& view = views[query];
+      const auto& place = written[query];
+      if (!place.found) {
+        continue;
+      }
+
+      auto& snapshot = answers.atMut(query).emplace();
+
+      snapshot.sections = view.sections;
+      if ((view.sections & MonitorSections::host) != 0) {
+        snapshot.cpu_permille = cpu_permille_;
+        snapshot.cores = {cores_.data(), host_.core_count};
+        snapshot.memory_total_bytes = host_.memory_total_bytes;
+        snapshot.memory_used_bytes = host_.memory_used_bytes;
+        snapshot.memory_available_bytes = host_.memory_available_bytes;
+        snapshot.memory_cached_bytes = host_.memory_cached_bytes;
+        snapshot.swap_total_bytes = host_.swap_total_bytes;
+        snapshot.swap_used_bytes = host_.swap_used_bytes;
+        snapshot.process_count = static_cast<std::uint32_t>(entries_.size());
+        snapshot.thread_count = thread_count_;
+      }
+
+      if ((view.sections & MonitorSections::disks) != 0) {
+        snapshot.disks = {disks_.data(), host_.mount_count};
+        snapshot.disk_read_per_second = disk_read_per_second_;
+        snapshot.disk_written_per_second = disk_written_per_second_;
+      }
+
+      if ((view.sections & MonitorSections::network) != 0) {
+        snapshot.interfaces = {interfaces_.data(), host_.interface_count};
+      }
+
+      if ((view.sections & MonitorSections::processes) != 0) {
+        snapshot.matched = place.matched;
+        snapshot.processes = rows_.view().subspan(place.first, place.count);
+      }
+
+      if (place.detail) {
+        const auto& text = details_[*place.detail];
+        const auto& entry = text.entry ? entries_[*text.entry] : text.fresh;
+
+        snapshot.detail = MonitorDetail{
+            .process = row(entry, 0),
+            .arguments = text.arguments.view(),
+            .directory = text.directory.view(),
+            .ports = text.ports.view(),
+            .children = {text.children.data(), text.child_count},
+        };
+      }
+    }
+
+    return answers;
   }
 
-  bool MonitorSampler::answer(const MonitorView& view, MonitorSnapshot& snapshot) {
-    const MonitorEntry* detailed = nullptr;
-    DetailText* text = nullptr;
-    if (view.detail.pid != 0) {
-      if (details_.size() == details_.capacity()) {
-        return false;
-      }
+  // Reads the detail of the instance into a new DetailText; false when it is gone or was replaced.
+  bool MonitorSampler::detail(const ProcessInstance& instance) {
+    // The process as it is now: the last reading may still list one that exited since.
+    const auto record = ProcessTable::find(instance.pid);
+    const auto any = instance.started_seconds == 0 && instance.started_microseconds == 0;
+    if (!record || (!any && (record->started_seconds != instance.started_seconds || record->started_microseconds != instance.started_microseconds))) {
+      return false;
+    }
 
-      // The process as it is now: the last reading may still list one that exited since.
-      const auto record = ProcessTable::find(view.detail.pid);
-      const auto any = view.detail.started_seconds == 0 && view.detail.started_microseconds == 0;
-      if (!record || (!any && (record->started_seconds != view.detail.started_seconds || record->started_microseconds != view.detail.started_microseconds))) {
-        return false;
-      }
+    auto& text = details_.push(DetailText{});
+    const auto index = indexOf(record->pid);
+    const auto listed = index && sameInstance(entries_[*index].record, *record);
+    ds::Array<char, MonitorLimits::arguments_bytes> arguments;
+    const auto pid = record->pid;
 
-      text = &details_.push(DetailText{});
-      detailed = find({.pid = record->pid, .started_seconds = record->started_seconds, .started_microseconds = record->started_microseconds});
-      if (detailed == nullptr) {
-        // Started after the last reading: described now, with the pane and agent of its parent.
-        text->fresh.record = *record;
-        describe(text->fresh);
-        if (const auto parent = indexOf(record->parent)) {
-          text->fresh.pane_id = entries_[*parent].pane_id;
-          text->fresh.under_agent = entries_[*parent].under_agent || text->fresh.agent != AgentProvider::unknown;
-        }
-
-        detailed = &text->fresh;
+    if (listed) {
+      text.entry = *index;
+    } else {
+      // Started after the last reading: described now, with the pane and agent of its parent.
+      text.fresh.record = *record;
+      describe(text.fresh, inspector_, users_);
+      if (const auto parent = indexOf(record->parent)) {
+        text.fresh.pane_id = entries_[*parent].pane_id;
+        text.fresh.under_agent = entries_[*parent].under_agent || text.fresh.agent != AgentProvider::unknown;
       }
     }
 
-    snapshot.sections = view.sections;
-    if ((view.sections & MonitorSections::host) != 0) {
-      snapshot.cpu_permille = cpu_permille_;
-      snapshot.cores = {cores_.data(), host_.core_count};
-      snapshot.memory_total_bytes = host_.memory_total_bytes;
-      snapshot.memory_used_bytes = host_.memory_used_bytes;
-      snapshot.memory_available_bytes = host_.memory_available_bytes;
-      snapshot.memory_cached_bytes = host_.memory_cached_bytes;
-      snapshot.swap_total_bytes = host_.swap_total_bytes;
-      snapshot.swap_used_bytes = host_.swap_used_bytes;
-      snapshot.process_count = static_cast<std::uint32_t>(entries_.size());
-      snapshot.thread_count = thread_count_;
+    displayCopy(text.arguments, inspector_.commandLine(pid, arguments.viewMut()).text);
+    displayCopy(text.directory, inspector_.directory(pid).view());
+    if (const auto identity = inspector_.identity(pid)) {
+      text.ports = inspector_.listeningPorts(identity->process_group);
     }
 
-    if ((view.sections & MonitorSections::disks) != 0) {
-      snapshot.disks = {disks_.data(), host_.mount_count};
-      snapshot.disk_read_per_second = disk_read_per_second_;
-      snapshot.disk_written_per_second = disk_written_per_second_;
-    }
-
-    if ((view.sections & MonitorSections::network) != 0) {
-      snapshot.interfaces = {interfaces_.data(), host_.interface_count};
-    }
-
-    if ((view.sections & MonitorSections::processes) != 0) {
-      select(view);
-
-      const auto first = rows_.size();
-      const auto count = std::min(ordered_.size(), rows_.capacity() - first);
-
-      for (std::size_t index = 0; index < count; ++index) {
-        rows_.push(row(entries_[ordered_[index]], depths_[index]));
+    for (const auto& entry : entries_) {
+      if (entry.record.parent == pid && entry.record.pid != pid && text.child_count < MonitorLimits::maximum_children) {
+        text.children.atMut(text.child_count++) = entry.record.pid;
       }
-
-      snapshot.matched = static_cast<std::uint32_t>(selected_.size());
-      snapshot.processes = rows_.view().subspan(first, count);
-    }
-
-    if (detailed != nullptr) {
-      auto& detail = *text;
-      ds::Array<char, MonitorLimits::arguments_bytes> arguments;
-      const auto pid = detailed->record.pid;
-
-      displayCopy(detail.arguments, inspector_.commandLine(pid, arguments.viewMut()).text);
-      displayCopy(detail.directory, inspector_.directory(pid).view());
-      if (const auto identity = inspector_.identity(pid)) {
-        detail.ports = inspector_.listeningPorts(identity->process_group);
-      }
-
-      for (const auto& entry : entries_) {
-        if (entry.record.parent == pid && entry.record.pid != pid && detail.child_count < MonitorLimits::maximum_children) {
-          detail.children.atMut(detail.child_count++) = entry.record.pid;
-        }
-      }
-
-      snapshot.detail = MonitorDetail{
-          .process = row(*detailed, 0),
-          .arguments = detail.arguments.view(),
-          .directory = detail.directory.view(),
-          .ports = detail.ports.view(),
-          .children = {detail.children.data(), detail.child_count},
-      };
     }
 
     return true;

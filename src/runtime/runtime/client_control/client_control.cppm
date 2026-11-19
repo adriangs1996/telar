@@ -624,7 +624,7 @@ export {
       using Request = MonitorWork;
       using Result = MonitorOutcome;
 
-      inline MonitorReader(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const ProcessInspector& inspector, Processes processes, Host host)
+      inline MonitorReader(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<const ProcessInspector&, tbc::lt::a> inspector, Processes processes, Host host)
           : inspector_(inspector),
             processes_(std::move(processes)),
             host_(std::move(host)),
@@ -645,18 +645,20 @@ export {
           }
 
           if (work.query_count != 0 && sampler_.ready()) {
-            std::size_t rows = 0;
+            ds::Array<MonitorView, MonitorLimitsOfWork::maximum_queries> views{};
 
             for (std::size_t index = 0; index < work.query_count; ++index) {
-              rows += work.queries[index].view.limit;
+              views.atMut(index) = work.queries[index].view;
             }
 
-            sampler_.beginAnswers(work.query_count, rows);
+            const auto answers = sampler_.answer({views.data(), work.query_count});
+
             for (std::size_t index = 0; index < work.query_count; ++index) {
-              const auto& query = work.queries[index];
-              MonitorSnapshot snapshot{.request_id = query.request_id};
-              if (sampler_.answer(query.view, snapshot)) {
-                outcome.answers.atMut(index).snapshot = snapshot;
+              auto& answer = outcome.answers.atMut(index).snapshot;
+
+              answer = answers[index];
+              if (answer) {
+                answer.getMut().request_id = work.queries[index].request_id;
               }
             }
 
@@ -727,10 +729,10 @@ export {
         return {.failure = FailureCode::internal, .message = "The system refused the request"};
       }
 
-      ProcessInspector inspector_;
+      tbc::view<ProcessInspector, tbc::lt::a> inspector_;
       Processes processes_;
       Host host_;
-      MonitorSampler sampler_;
+      tbc::view<MonitorSampler, tbc::lt::a> sampler_;
       tbc::view<ds::Vec<ProcessRecord, ConcurrentMemory>, tbc::lt::a> records_;
       HostDetail detail_{};
     };
@@ -747,7 +749,7 @@ export {
       static constexpr auto warm_interval = std::chrono::seconds{1};
       static constexpr auto idle_after = std::chrono::seconds{10};
 
-      inline MonitorService(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const ProcessInspector& inspector, Processes processes, Host host)
+      inline MonitorService(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<const ProcessInspector&, tbc::lt::a> inspector, Processes processes, Host host)
           : worker_(std::in_place, memory, inspector, std::move(processes), std::move(host)) {}
 
       inline void query(std::uint64_t client, const QueryMonitor& message, Clock::time_point now) {
@@ -767,6 +769,7 @@ export {
             .limit = message.limit,
             .detail = message.detail,
         };
+
         ticket.view.filter.assign(message.filter);
         wake(now);
       }

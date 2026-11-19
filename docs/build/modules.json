@@ -154,6 +154,7 @@
       "foundation/drawing",
       "foundation/forms",
       "features/peek",
+      "features/monitor",
       "features/palette",
       "features/paths",
       "features/history",
@@ -204,6 +205,8 @@
   },
   "upward_imports": [],
   "interfaces": {
+    "src/gui/application/application-monitor.cppm": "telar.gui.application:monitor",
+    "src/gui/features/monitor/monitor.cppm": "telar.gui.features.monitor",
     "src/cli/monitor/monitor.cppm": "telar.cli.monitor",
     "src/runtime/metrics/monitor/monitor.cppm": "telar.runtime.metrics.monitor",
     "lib/wire/monitor/monitor.cppm": "telar.wire.monitor",
@@ -953,6 +956,7 @@
     }
   ],
   "implementations": {
+    "src/gui/features/monitor/monitor.cpp": "telar.gui.features.monitor",
     "src/cli/monitor/monitor.cpp": "telar.cli.monitor",
     "src/runtime/metrics/monitor/monitor.cpp": "telar.runtime.metrics.monitor",
     "src/runtime/platform/process_table/process_table.cpp": "telar.runtime.platform.process_table",
