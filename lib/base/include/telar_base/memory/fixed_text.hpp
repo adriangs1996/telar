@@ -4,9 +4,9 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
-#include <type_traits>
 #include <stdexcept>
 #include <string_view>
+#include <type_traits>
 
 namespace telar::runtime {
 

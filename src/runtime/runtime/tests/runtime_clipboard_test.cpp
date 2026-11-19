@@ -1,5 +1,5 @@
-#include <telar_clipboard/clipboard.hpp>
 #include <expected>
+#include <telar_clipboard/clipboard.hpp>
 #ifdef __clangd__
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);

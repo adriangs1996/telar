@@ -19,10 +19,10 @@ namespace telar::runtime {
     // from may not once something replaces it.
     static SystemAllocator memory;
     static const ds::String<SystemAllocator> home{memory, [] {
-      const char* value = std::getenv("HOME");
+                                                    const char* value = std::getenv("HOME");
 
-      return value == nullptr ? std::string_view{} : std::string_view{value};
-    }()};
+                                                    return value == nullptr ? std::string_view{} : std::string_view{value};
+                                                  }()};
 
     return home.view();
   }

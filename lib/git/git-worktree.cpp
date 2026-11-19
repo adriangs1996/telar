@@ -602,7 +602,7 @@ namespace telar::git {
 
     if (verified_.size() != index.entries.size()) {
       verified_.clear();
-    verified_.resize(index.entries.size(), Verified{});
+      verified_.resize(index.entries.size(), Verified{});
     }
 
     directories_.reset(worktree);

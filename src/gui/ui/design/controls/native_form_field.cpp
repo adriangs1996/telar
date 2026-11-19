@@ -7,9 +7,9 @@ static_assert(true);
 #include "cell_text_grid.hpp"
 #include "form_input_context.hpp"
 #include "form_text_grid.hpp"
+#include "telar_base/ds/values.hpp"
 #include "telar_base/text/utf8.hpp"
 #include "ui/foundation/text/utf16_encoding.hpp"
-#include "telar_base/ds/values.hpp"
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QInputMethod>

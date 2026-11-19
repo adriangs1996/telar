@@ -1,7 +1,7 @@
 #include "element_layout.hpp"
 
-#include "ui/foundation/scene/window_animation_clock.hpp"
 #include "telar_base/ds/values.hpp"
+#include "ui/foundation/scene/window_animation_clock.hpp"
 
 #include <QQuickWindow>
 #include <QVariantMap>

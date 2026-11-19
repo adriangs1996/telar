@@ -107,13 +107,14 @@ namespace {
 
     // The fixture is sound: a ready clone of the commit is accepted.
     check(prepared(memory, Receiver{memory, [](std::string_view commit) {
-      return reply("/srv/clones/repo", commit, true);
-    }}) == "/srv/clones/repo");
+                                      return reply("/srv/clones/repo", commit, true);
+                                    }}) == "/srv/clones/repo");
 
     // A reply that does not parse is refused by the parser, under its own name.
     check(!prepared(memory, Receiver{memory, [](std::string_view) {
-      return std::string{"not json"};
-    }}).starts_with('/'));
+                                       return std::string{"not json"};
+                                     }})
+            .starts_with('/'));
 
     check(transfers().empty());
 

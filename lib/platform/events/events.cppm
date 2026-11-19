@@ -26,7 +26,7 @@ export {
     template <typename Time>
     constexpr ds::Option<Time> earliest(const ds::Option<Time>& left, const ds::Option<Time>& right) noexcept {
       return left && right ? ds::Option{std::min(*left, *right)} : left ? left
-                                                                           : right;
+                                                                        : right;
     }
 
   }

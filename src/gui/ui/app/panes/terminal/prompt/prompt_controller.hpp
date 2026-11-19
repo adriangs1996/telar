@@ -3,6 +3,7 @@
 static_assert(true);
 #endif
 
+#include "foundation/core/memory.hpp"
 #include "ui/foundation/store/store.hpp"
 #include <QObject>
 #include <QString>
@@ -11,7 +12,6 @@ static_assert(true);
 #include <cstdint>
 #include <optional>
 #include <string_view>
-#include "foundation/core/memory.hpp"
 
 #pragma once
 

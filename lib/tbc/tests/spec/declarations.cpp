@@ -2064,7 +2064,6 @@ void declarationNestedReferenceShared() {
 
 // END CASE
 
-
 // CASE: declaration.region_shared_kept
 // PAIR: declaration.region_shared
 // SOURCE: src/gui/features/prompt/prompt.cpp :: plan (the memory the state lives in builds the plan's words)
@@ -2130,7 +2129,6 @@ namespace declarations {
     static const region_list& history(const region_state& state) {
       return state.history_;
     }
-
   };
 
   void growHistory(region_state& state);

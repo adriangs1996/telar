@@ -1907,7 +1907,7 @@ namespace telar::shell {
 
           const std::size_t length = next(p_ + 1, ')') ? 2 : 1;
           const TokenKind closer = length == 1 ? TokenKind::error : frames_[frame].arithmetic_command ? TokenKind::keyword
-                                                                                         : TokenKind::substitution;
+                                                                                                      : TokenKind::substitution;
 
           out(frame, closer, Quote::none, p_, p_ + length);
           p_ += length;

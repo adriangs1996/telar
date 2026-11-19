@@ -410,7 +410,7 @@ namespace telar::gui::features::prompt {
     }
 
     return take(state.command_requests, message.request_id, found ? CommandPresence::found : message.truncated ? CommandPresence::unknown
-                                                                                   : CommandPresence::missing);
+                                                                                                               : CommandPresence::missing);
   }
 
   tbc::view<ds::Option<Settled>, tbc::lt::a> settles(State& state, const PathResults& message) {
@@ -426,7 +426,7 @@ namespace telar::gui::features::prompt {
     });
 
     return take(state.command_requests, message.request_id, found ? CommandPresence::found : message.truncated ? CommandPresence::unknown
-                                                                                   : CommandPresence::missing);
+                                                                                                               : CommandPresence::missing);
   }
 
   namespace {

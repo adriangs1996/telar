@@ -113,20 +113,22 @@ namespace {
 
           values.extend(std::span{source}.first(shifted));
           return values;
-        }, [&](auto& values) {
-          while (!values.empty()) {
-            keep(values.remove(0));
-          }
-        }),
+        },
+            [&](auto& values) {
+              while (!values.empty()) {
+                keep(values.remove(0));
+              }
+            }),
         nan,
         timedOn(shifted, [&] {
           return std::vector<Value>(source.begin(), source.begin() + static_cast<std::ptrdiff_t>(shifted));
-        }, [&](auto& values) {
-          while (!values.empty()) {
-            keep(values.front());
-            values.erase(values.begin());
-          }
-        })
+        },
+            [&](auto& values) {
+              while (!values.empty()) {
+                keep(values.front());
+                values.erase(values.begin());
+              }
+            })
     );
     report(
         std::format("vec pop, {}", kind),

@@ -5,8 +5,8 @@ static_assert(true);
 
 #pragma once
 
-#include "prompt_controller.hpp"
 #include "foundation/core/memory.hpp"
+#include "prompt_controller.hpp"
 #include "ui/design/controls/cell_text_grid.hpp"
 #include "ui/foundation/scene/ancestor_geometry.hpp"
 #include <QColor>

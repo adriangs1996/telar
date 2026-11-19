@@ -5,8 +5,8 @@ static_assert(true);
 
 // graphics_scene.hpp declares telar::String textually; it comes before the header that imports
 // telar.gui.application, or clang does not merge the std::basic_string_view the two declare.
-#include "graphics_scene.hpp"
 #include "image_resource.hpp"
+#include "graphics_scene.hpp"
 #include "tbc/view.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"

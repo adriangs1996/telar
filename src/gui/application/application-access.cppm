@@ -133,7 +133,6 @@ namespace telar::gui::application {
     static void recoverRuntime(Session& session, std::string_view reason) {
       session.recoverRuntime(reason);
     }
-
   };
 
 }

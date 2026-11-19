@@ -45,7 +45,6 @@ namespace {
 
   using namespace telar::gui;
 
-
   using namespace telar::gui::features::status_bar;
   using namespace telar::gui::qt;
   using namespace telar::gui::test;

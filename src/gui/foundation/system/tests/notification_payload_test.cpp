@@ -33,7 +33,6 @@ namespace {
     check(filtered.message.view().size() == max_notification_message_bytes, "host detail storage must respect the shared wire capacity");
   }
 
-
   const telar::testing::Case case_host_payloads{"notification_payload.host_payloads_own_sanitized_bounded_utf8", hostPayloadsOwnSanitizedBoundedUtf8};
 
 }

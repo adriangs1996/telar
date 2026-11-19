@@ -5,6 +5,7 @@ static_assert(true);
 
 #include "platform/window.hpp"
 #include "tbc/view.hpp"
+#include "telar_base/ds/values.hpp"
 #include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/fonts/font_collection.hpp"
 #include "ui/foundation/fonts/resident_fonts.hpp"
@@ -12,7 +13,6 @@ static_assert(true);
 #include "ui/foundation/scene/alpha_mask_vertex.hpp"
 #include "ui/foundation/scene/chrome_glyph_images.hpp"
 #include "ui/foundation/scene/chrome_text_scene.hpp"
-#include "telar_base/ds/values.hpp"
 #include <QByteArray>
 #include <QByteArrayView>
 #include <QColor>

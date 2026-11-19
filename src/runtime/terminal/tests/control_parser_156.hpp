@@ -2,8 +2,8 @@
 // includes it imports std, telar.base.memory.allocators and telar.runtime.terminal.control first,
 // which declare the sequences, the APC borrow and the allocators it uses.
 #pragma once
-#include "telar_base/ds/values.hpp"
 #include "telar_base/ds/containers.hpp"
+#include "telar_base/ds/values.hpp"
 
 namespace telar::runtime::control {
 

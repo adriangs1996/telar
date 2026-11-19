@@ -48,7 +48,7 @@ namespace {
 
     request.readHttp1Head("POST /original HTTP/1.1\r\nHost: fixture.test\r\nContent-Length: 4\r\n\r\n");
     request.body.clear();
-      request.body.extend(ds::Array<std::uint8_t, 4>{'b', 'o', 'd', 'y'}.view());
+    request.body.extend(ds::Array<std::uint8_t, 4>{'b', 'o', 'd', 'y'}.view());
     std::vector<Byte> buffer(HttpMessageLimits::message_bytes);
     const auto original = HttpMessageCodec::encodeMessage(std::span{buffer}, request);
     const auto view = HttpMessageCodec::decode(original);

@@ -14,8 +14,8 @@ import telar.base.ds;
 
 namespace {
 
-  using telar::testing::check;
   using telar::gui::Color;
+  using telar::testing::check;
   using ColorBits = telar::ds::Array<std::uint32_t, 4>;
 
   constexpr unsigned channel_bits = 8;

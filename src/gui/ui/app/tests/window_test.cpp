@@ -277,5 +277,5 @@ namespace {
 
 }
 
-#include "window_test.moc"
 #include "telar_base/ds/values.hpp"
+#include "window_test.moc"

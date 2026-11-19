@@ -713,7 +713,7 @@ namespace telar::runtime::redirect {
     }
 
     const PfScope scope{.uid = uid, .label = identity.label, .discovery_interface = discovery_ ? discovery_->name() : "utun0", .flows = std::span{keys}.first(size), .log_interface = packet_log_ ? ds::Option{packet_log_->index()} : dry_run && allowsIncoming(direction_) ? ds::Option{0u}
-                                                                                                                                                                                                                                                                                : ds::none,
+                                                                                                                                                                                                                                                                             : ds::none,
         .bypasses = std::span{bypasses}.first(bypass_size),
         .log_all = process_count_ != 0 || allowsIncoming(direction_),
         .direction = direction_,

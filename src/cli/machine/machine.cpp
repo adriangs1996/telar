@@ -459,7 +459,9 @@ fetch() {
 
     report.end(Step::agents, failed ? Status::failed : ran ? Status::changed
                                                            : Status::ok,
-        "{} wanted: {}", wanted.size(), names(wanted).view());
+        "{} wanted: {}",
+        wanted.size(),
+        names(wanted).view());
     return ran;
   }
 
@@ -504,7 +506,8 @@ fetch() {
 
     report.end(Step::integrations, failed ? Status::failed : changed ? Status::changed
                                                                      : Status::ok,
-        "{}", names(present).view());
+        "{}",
+        names(present).view());
   }
 
   constexpr unsigned config_json_depth = 256;
@@ -2113,10 +2116,10 @@ fetch() {
                                                 : started ? Status::changed
                                                           : Status::ok;
 
-      report_.end(Step::logins, status, "{}", failed ? "a login failed; see the notes" : !any ? "no agent there to log in"
-                                                                                  : pending ? "a login waits for you; run setup again to see it done"
-                                                                                  : started ? "every started login finished"
-                                                                                            : "every agent there is logged in");
+      report_.end(Step::logins, status, "{}", failed ? "a login failed; see the notes" : !any  ? "no agent there to log in"
+                                                                                     : pending ? "a login waits for you; run setup again to see it done"
+                                                                                     : started ? "every started login finished"
+                                                                                               : "every agent there is logged in");
     }
   };
 

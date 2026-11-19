@@ -4,8 +4,8 @@ static_assert(true);
 #endif
 
 #include "native_progress_ring.hpp"
-#include "ui/foundation/scene/rounded_paints_scene.hpp"
 #include "telar_base/ds/values.hpp"
+#include "ui/foundation/scene/rounded_paints_scene.hpp"
 #include <QColor>
 #include <QQuickItem>
 #include <QQuickWindow>

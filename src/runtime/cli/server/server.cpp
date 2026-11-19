@@ -282,14 +282,14 @@ namespace telar::runtime::cli {
     traffic::Tap<plugins::Service> tap{plugin_service, shared_traffic};
     ProxyRuntime<NativeEventLoop<ConcurrentMemory>, SystemNameResolver, decltype(tap)> proxy{memory, configuration.proxy, paths.socket, configuration.proxy.enabled && paths.isDefaultSocket(process_environment), tap};
     traffic::control::Backend network_backend{memory, proxy, shared_traffic, traffic::control::Configuration{
-                                                                                                                .endpoint = paths.socket,
-                                                                                                                .executable = executable.view(),
-                                                                                                                .proxy = configuration.proxy.enabled,
-                                                                                                                .redirect = configuration.proxy.transparent_redirect,
-                                                                                                                .transparent_tls = configuration.proxy.transparent_tls,
-                                                                                                                .interception = configuration.proxy.stream_interception,
-                                                                                                                .administration = configuration.proxy.network_control,
-                                                                                                            }};
+                                                                                 .endpoint = paths.socket,
+                                                                                 .executable = executable.view(),
+                                                                                 .proxy = configuration.proxy.enabled,
+                                                                                 .redirect = configuration.proxy.transparent_redirect,
+                                                                                 .transparent_tls = configuration.proxy.transparent_tls,
+                                                                                 .interception = configuration.proxy.stream_interception,
+                                                                                 .administration = configuration.proxy.network_control,
+                                                                             }};
 
     ds::Option<traffic::control::Service<ConcurrentMemory, decltype(network_backend)>> network_control;
 

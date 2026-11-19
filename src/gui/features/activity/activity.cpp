@@ -30,7 +30,7 @@ namespace telar::gui::features::activity {
     });
 
     const auto location = agent != nullptr ? ds::Option{agent->location} : pane != listed.end() ? ds::Option{pane->location}
-                                                                                                   : ds::none;
+                                                                                                : ds::none;
 
     return location && location->workspace.kind == WorkspaceLocation::Kind::workspace ? ds::Option{location->workspace.id} : ds::none;
   }

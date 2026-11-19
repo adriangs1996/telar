@@ -69,7 +69,8 @@ namespace telar::gui::qt {
     }
 
     [[nodiscard]] std::size_t count() const noexcept {
-      return !view_rows.empty() ? view_rows.size() : screen != nullptr ? screen->rows() : 0;
+      return !view_rows.empty() ? view_rows.size() : screen != nullptr ? screen->rows()
+                                                                       : 0;
     }
 
     [[nodiscard]] std::span<const CellValue> row(std::size_t index) const noexcept {

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "telar_wire/codecs/telar_wire.hpp"
 #include "telar_base/ds/values.hpp"
+#include "telar_wire/codecs/telar_wire.hpp"
 #include <QByteArrayView>
 #include <QCryptographicHash>
 #include <array>

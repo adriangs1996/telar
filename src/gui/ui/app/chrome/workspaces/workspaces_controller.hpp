@@ -3,9 +3,9 @@
 static_assert(true);
 #endif
 
+#include "telar_base/ds/values.hpp"
 #include "ui/foundation/models/list_model.hpp"
 #include "ui/foundation/store/store.hpp"
-#include "telar_base/ds/values.hpp"
 #include <QAbstractItemModel>
 #include <QObject>
 #include <QVariantMap>

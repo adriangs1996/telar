@@ -72,7 +72,7 @@ namespace telar::runtime {
 
     arguments.atMut(0) = resume.provider == AgentProvider::cursor ? "cursor-agent" : describeProvider(resume.provider).name;
     arguments.atMut(1) = resume.provider == AgentProvider::codex ? "resume" : resume.provider == AgentProvider::pi || resume.provider == AgentProvider::opencode ? "--session"
-                                                                                                                                                           : "--resume";
+                                                                                                                                                                 : "--resume";
     std::size_t count = 2;
 
     if (resume.provider == AgentProvider::codex && resume.in_pane) {

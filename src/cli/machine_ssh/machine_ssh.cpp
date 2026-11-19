@@ -1351,7 +1351,6 @@ namespace telar::runtime::cli::machine::filter {
   }
 
   ds::Option<std::string_view> finding(std::string_view line) {
-
     if (line.contains("PRIVATE KEY-----")) {
       return "a private key";
     }
@@ -1959,5 +1958,3 @@ namespace telar::runtime::cli::machine {
   }
 
 }
-
-

@@ -1,6 +1,6 @@
 #include "foundation/core/application_memory.hpp"
-#include "ui/app/panes/attachments/clipboard_images.hpp"
 #include "telar_base/ds/values.hpp"
+#include "ui/app/panes/attachments/clipboard_images.hpp"
 #include <QByteArray>
 #include <QByteArrayView>
 #include <QClipboard>

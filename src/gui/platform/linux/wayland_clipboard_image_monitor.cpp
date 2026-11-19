@@ -3,9 +3,9 @@
 #include "foundation/core/memory.hpp"
 #include "platform/clipboard_image_file.h"
 #include "platform/clipboard_image_source.hpp"
+#include "telar_base/ds/values.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_platform/file_descriptor.hpp"
-#include "telar_base/ds/values.hpp"
 #include <QString>
 #include <QtCore/qstringliteral.h>
 #include <QtWaylandClient/private/qwayland-wayland.h>

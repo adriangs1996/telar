@@ -470,7 +470,8 @@ int main(int argc, const char** argv) try {
         stamp << "allow " << event << '\n';
       }
 
-      stamp << "output\n" << output;
+      stamp << "output\n"
+            << output;
     }
   });
 

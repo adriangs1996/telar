@@ -1140,7 +1140,7 @@ namespace {
     check(deliver(client, PaneOpened{.request_id = late_attach.request_id, .pane_id = 1, .location = {.workspace = created.workspace, .tab_id = 1}, .created = false, .pane_generation = 1}) == application::Change::none && client.findPane(1) == nullptr, "late attachment replies must not resurrect a closed tab");
 
     check(deliver(client, ResyncRequired{.workspace = created.workspace, .workspace_closed = true, .previous_workspace = {}}) == application::Change::closed && client.tabs.empty(), "closing the final workspace must release the client projection and "
-                                                                                                                                                                                       "close its window");
+                                                                                                                                                                                     "close its window");
   }
 
   void linkContextRevisions() {

@@ -149,6 +149,7 @@ namespace {
   }
 
   const telar::testing::Case case_parses_integers{"arguments.parses_integers", parsesIntegers};
+
   // Formatted output reaches the descriptor whole, past the writer's buffer, and the CLI's
   // formattable values print as their text would.
   void formattedOutput() {

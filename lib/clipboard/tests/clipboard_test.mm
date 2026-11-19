@@ -1,5 +1,5 @@
-#include "telar_clipboard/clipboard.hpp"
 #include "platform/private_clipboard.hpp"
+#include "telar_clipboard/clipboard.hpp"
 #import <AppKit/AppKit.h>
 #include <cstdio>
 #include <cstdlib>

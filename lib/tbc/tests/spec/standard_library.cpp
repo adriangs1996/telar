@@ -727,7 +727,6 @@ int referenceReadBeforeGrowth() {
 
 // END CASE
 
-
 // CASE: standard.factory_copies
 // PAIR: standard.factory
 // SOURCE: src/runtime/model/client_layouts/client_layouts.cpp :: Pane::Pane (a pane's observer is built from the command's directory, which it copies)

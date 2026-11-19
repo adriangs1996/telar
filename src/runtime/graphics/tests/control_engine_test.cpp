@@ -1114,7 +1114,7 @@ namespace {
           count = std::snprintf(expected.dataMut(), expected.size(), "\x1b[48;%u;%u;%u;%ut", rows, cols, rows * height, cols * width);
         } else {
           count = std::snprintf(expected.dataMut(), expected.size(), "\x1b[%u;%u;%ut", static_cast<unsigned>(Kind), Kind == SizeReport::pixels ? rows * height : Kind == SizeReport::cell ? height
-                                                                                                                                                                                       : rows,
+                                                                                                                                                                                          : rows,
               Kind == SizeReport::pixels ? cols * width : Kind == SizeReport::cell ? width
                                                                                    : cols);
         }

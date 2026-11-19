@@ -24,10 +24,10 @@
 #define KILO_BYTES(x) x * 1024
 #define MEGA_BYTES(x) KILO_BYTES(x) * 1024
 
+#include "telar_base/ds/values.hpp"
 #include "telar_base/text/utf8.hpp"
 #include "telar_vocabulary/vocabulary.hpp"
 #include "telar_wire/codecs/telar_annotations.hpp"
-#include "telar_base/ds/values.hpp"
 
 namespace telar {
 

@@ -332,7 +332,6 @@ export namespace telar::runtime::control {
       bool committed_ = false;
     };
 
-
     ConcurrentMemory& memory_;
     ds::Vec<std::uint8_t, ConcurrentMemory> decoded_;
     ds::Box<ClipboardWrite, ConcurrentMemory> transaction_;

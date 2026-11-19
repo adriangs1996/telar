@@ -1,8 +1,8 @@
 #pragma once
 
+#include "telar_base/ds/values.hpp"
 #include "telar_base/text/utf8.hpp"
 #include "telar_codec.hpp"
-#include "telar_base/ds/values.hpp"
 
 #include <bit>
 #include <limits>

@@ -13,8 +13,8 @@ import telar.base.ds;
 // Owned textual headers stay in this global module fragment only; importers
 // reach their names through these declarations instead of including them.
 export namespace telar::runtime {
-  using telar::runtime::FixedText;
   using telar::runtime::ErrorText;
+  using telar::runtime::FixedText;
 }
 
 // Interface: telar_base/memory/byte_queue.cppm

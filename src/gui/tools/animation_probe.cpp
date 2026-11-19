@@ -7,6 +7,7 @@ static_assert(true);
 #include "foundation/core/application_memory.hpp"
 #include "platform/window.hpp"
 #include "platform/window_activation.hpp"
+#include "telar_base/ds/values.hpp"
 #include "ui/app/application_controller.hpp"
 #include "ui/app/chrome/tabs/tab_strip_layout.hpp"
 #include "ui/design/controls/modal_reveal_layout.hpp"
@@ -14,7 +15,6 @@ static_assert(true);
 #include "ui/foundation/fonts/bundled_fonts.hpp"
 #include "ui/foundation/models/list_model.hpp"
 #include "ui/foundation/scene/window_animation_clock.hpp"
-#include "telar_base/ds/values.hpp"
 #include <QCommandLineParser>
 #include <QGuiApplication>
 #include <QJsonDocument>

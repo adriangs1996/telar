@@ -479,7 +479,7 @@ export {
         glyphs_.clear();
         spans_.clear();
         cells_.clear();
-      cells_.resize(cells.size(), {});
+        cells_.resize(cells.size(), {});
         runs_.reserve(cells.size());
         runs_.clear();
         auto& primary = fonts.face(FontRole::primary);

@@ -4,8 +4,8 @@ static_assert(true);
 #endif
 
 #include "copy_controller.hpp"
-#include "ui/foundation/input/key_adapter.hpp"
 #include "telar_base/ds/values.hpp"
+#include "ui/foundation/input/key_adapter.hpp"
 #include <QByteArray>
 #include <exception>
 

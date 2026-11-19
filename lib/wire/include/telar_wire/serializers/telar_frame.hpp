@@ -1,8 +1,8 @@
 #pragma once
 
 #include "../codecs/telar_cells.hpp"
-#include "telar_messages.hpp"
 #include "telar_base/ds/values.hpp"
+#include "telar_messages.hpp"
 
 namespace telar {
 

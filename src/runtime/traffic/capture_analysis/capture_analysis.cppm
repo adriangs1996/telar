@@ -215,7 +215,7 @@ export {
           slot = free == entries.end() ? &*std::min_element(entries.begin(), entries.end(), [](const auto& first, const auto& second) {
             return first->created < second->created;
           })
-                                        : &*free;
+                                       : &*free;
           if (*slot && (*slot)->storage) {
             failure(slot->getMut(), "ip_fragment_capacity", report);
           }

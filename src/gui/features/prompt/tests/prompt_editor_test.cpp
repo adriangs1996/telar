@@ -481,8 +481,12 @@ namespace {
       auto& line = feature::open(state, lines, 1, Keymap::vim).line;
       const telar::gui::PromptConfiguration configuration;
 
-      for (const char byte : std::string_view{"iecho one two\x1b" "0dwP\"ayiwu\x12" "A three\r"}) {
-        const KeyPress key = byte == '\x1b' ? KeyPress{Key::escape} : byte == '\r' ? KeyPress{Key::enter} : byte == '\x12' ? KeyPress{Key::character, U'r', {.control = true}} : KeyPress{Key::character, static_cast<char32_t>(byte), {}, std::string_view{&byte, 1}};
+      for (const char byte : std::string_view{"iecho one two\x1b"
+                                              "0dwP\"ayiwu\x12"
+                                              "A three\r"}) {
+        const KeyPress key = byte == '\x1b' ? KeyPress{Key::escape} : byte == '\r' ? KeyPress{Key::enter}
+                                                                  : byte == '\x12' ? KeyPress{Key::character, U'r', {.control = true}}
+                                                                                   : KeyPress{Key::character, static_cast<char32_t>(byte), {}, std::string_view{&byte, 1}};
 
         static_cast<void>(feature::press(state, line, Surface::editor, key, configuration, telar::shell::Dialect::posix));
       }

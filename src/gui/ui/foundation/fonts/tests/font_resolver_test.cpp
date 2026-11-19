@@ -551,5 +551,5 @@ namespace {
 }
 
 #include "font_resolver_test.moc"
-#include "telar_base/ds/values.hpp"
 #include "telar_base/ds/containers.hpp"
+#include "telar_base/ds/values.hpp"

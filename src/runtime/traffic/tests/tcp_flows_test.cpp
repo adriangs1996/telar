@@ -53,7 +53,8 @@ namespace {
     void expire(bool stop) {
       flows.expire([&](const traffic::Event& event) {
         record(event);
-      }, stop);
+      },
+          stop);
     }
 
     void record(const traffic::Event& event) {

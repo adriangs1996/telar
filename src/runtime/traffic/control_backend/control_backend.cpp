@@ -282,7 +282,7 @@ namespace telar::runtime::traffic {
 
         if (verdict == Verdict::replace) {
           slot.getMut().bytes.clear();
-      slot.getMut().bytes.extend(bytes);
+          slot.getMut().bytes.extend(bytes);
           slot.getMut().replaced = true;
         }
 

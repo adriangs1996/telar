@@ -2,8 +2,8 @@
 
 #include "foundation/core/application_memory.hpp"
 #include "foundation/core/memory.hpp"
-#include "telar_base/ds/containers.hpp"
 #include "platform/clipboard_image_source.hpp"
+#include "telar_base/ds/containers.hpp"
 #ifdef __linux__
 #include "platform/linux/wayland_clipboard_image_monitor.hpp"
 #include "platform/linux/xcb_clipboard_image_monitor.hpp"

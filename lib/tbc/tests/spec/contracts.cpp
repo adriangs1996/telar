@@ -535,6 +535,7 @@ namespace contracts {
       char empty_;
       tbc::view<std::string_view, tbc::lt::a> text_;
     };
+
     bool full_ = false;
   };
 }

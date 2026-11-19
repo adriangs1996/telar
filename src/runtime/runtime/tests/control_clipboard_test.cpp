@@ -711,7 +711,7 @@ namespace {
       };
 
       constexpr ds::Array<std::string_view, 3> transitions{"\x1b"
-                                                            "c",
+                                                           "c",
           "\x1b[!p",
           "\x1b[?1049h\x1b[?1049l"};
 

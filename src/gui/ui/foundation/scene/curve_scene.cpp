@@ -7,8 +7,8 @@ static_assert(true);
 #include "curve_mask.hpp"
 #include "curve_mask_node.hpp"
 #include "scene_nodes.hpp"
-#include "ui/foundation/models/projection.hpp"
 #include "telar_base/ds/values.hpp"
+#include "ui/foundation/models/projection.hpp"
 #include <QImage>
 #include <QPainter>
 #include <QRectF>

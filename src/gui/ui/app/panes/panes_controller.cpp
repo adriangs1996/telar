@@ -5,9 +5,9 @@ static_assert(true);
 
 #include "panes_controller.hpp"
 #include "pane_projection.hpp"
+#include "telar_base/ds/values.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/foundation/models/projection.hpp"
-#include "telar_base/ds/values.hpp"
 #include <QList>
 #include <QString>
 #include <algorithm>
