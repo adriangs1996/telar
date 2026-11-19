@@ -1036,3 +1036,65 @@ int placeWriteThroughHolderKept(places::logged_client& client) {
 }
 
 // END CASE
+
+// CASE: place.write_through_lent
+// PAIR: place.write_through_method
+// SOURCE: src/gui/main.cpp :: main (the launch is configured through the roster the window controller lends)
+// STATUS: implemented
+// CONTRACT: A call through what a method of a variable lends reborrows that variable, as Rust's `client.roster_mut().configure()` does: it ends other borrows of what it reaches, never the variable's own.
+// SCENARIO: A controller built on an arena configures its roster through the accessor, then is used again; accept.
+namespace places {
+  struct launch_arena {
+    std::vector<int> blocks;
+  };
+
+  struct launch_roster {
+    void configure(int value);
+
+    launch_arena& arena;
+  };
+
+  class launch_controller {
+  public:
+    explicit launch_controller(launch_arena& arena);
+
+    launch_roster* roster() noexcept;
+    void open(int value);
+  };
+}
+
+void placeWriteThroughLent(places::launch_arena& arena) {
+  places::launch_controller controller{arena};
+
+  controller.roster()->configure(1);
+  controller.open(2);
+}
+
+// END CASE
+
+// CASE: place.write_through_lent_other
+// PAIR: place.write_through_method
+// SOURCE: src/gui/main.cpp :: main (the launch is configured through the roster the window controller lends)
+// STATUS: implemented
+// CONTRACT: A call through what a method of a variable lends reborrows that variable, as Rust's `client.roster_mut().configure()` does: it ends other borrows of what it reaches, never the variable's own.
+// SCENARIO: A value inside the lent part is kept in another variable while the part grows through the accessor; reject at the growth.
+namespace places {
+  struct lent_part {
+    void grow();
+
+    std::vector<int> values;
+  };
+
+  struct lent_owner {
+    lent_part& part();
+  };
+}
+
+int placeWriteThroughLentOther(places::lent_owner& owner) {
+  const int& first = owner.part().values[0];
+
+  owner.part().grow(); // expected-error [tbc-invalidated-borrow]
+  return first;
+}
+
+// END CASE

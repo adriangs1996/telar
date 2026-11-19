@@ -5208,35 +5208,35 @@ namespace tbc_lint {
         return ownVariable(receiver(call));
       }
 
-      // The reference or pointer a call's receiver is reached through, as `item` in `item.mutate()` or
-      // `slot` in `slot->graphics.stage()`, when the receiver is no object of its own.
+      // The variable a call's receiver is reached through, along fields, dereferences and the methods
+      // that lend parts of it: `item` in `item.mutate()`, `slot` in `slot->graphics.stage()`, `client`
+      // in `client.roster()->open()`, or a field of this object. A call through it reborrows that
+      // variable, as a Rust `&mut` does, so it never ends the variable's own borrows.
       [[nodiscard]] const clang::ValueDecl* receiverBorrower(const clang::CallExpr& call) const {
         const auto* object = receiver(call);
 
         while (object != nullptr) {
           object = clean(object);
           if (const auto* member = llvm::dyn_cast<clang::MemberExpr>(object)) {
-            object = member->getBase();
-            if (member->isArrow()) {
-              break;
+            if (llvm::isa<clang::CXXThisExpr>(clean(member->getBase()))) {
+              return llvm::dyn_cast<clang::FieldDecl>(member->getMemberDecl());
             }
+
+            object = member->getBase();
           } else if (const auto* unary = llvm::dyn_cast<clang::UnaryOperator>(object); unary != nullptr && unary->getOpcode() == clang::UO_Deref) {
             object = unary->getSubExpr();
-            break;
+          } else if (const auto* lent = llvm::dyn_cast<clang::CXXMemberCallExpr>(object)) {
+            object = lent->getImplicitObjectArgument();
+          } else if (const auto* access = llvm::dyn_cast<clang::CXXOperatorCallExpr>(object); access != nullptr && (access->getOperator() == clang::OO_Arrow || access->getOperator() == clang::OO_Star) && access->getNumArgs() != 0) {
+            object = access->getArg(0);
           } else {
             break;
           }
         }
 
         const auto* name = object == nullptr ? nullptr : llvm::dyn_cast<clang::DeclRefExpr>(clean(object));
-        const auto* variable = name == nullptr ? nullptr : llvm::dyn_cast<clang::VarDecl>(name->getDecl());
-        if (variable == nullptr) {
-          return nullptr;
-        }
 
-        const auto type = variable->getType();
-
-        return type->isReferenceType() || type->isPointerType() ? variable : nullptr;
+        return name == nullptr ? nullptr : llvm::dyn_cast<clang::VarDecl>(name->getDecl());
       }
 
       // The variable an argument or a receiver is, when it is an object of its own.
