@@ -1582,7 +1582,12 @@ namespace telar::gui::features::prompt {
       return;
     }
 
-    recorded_.push(Recorded{key, ds::String<Memory>{recorded_.memory(), key.text}});
+    // The key's text views the input it came with, which ends after this key: the recording keeps a
+    // copy of it, and the key without it.
+    auto kept = key;
+
+    kept.text = {};
+    recorded_.push(Recorded{kept, ds::String<Memory>{recorded_.memory(), key.text}});
   }
 
   void Editor::finishRecording() noexcept {
