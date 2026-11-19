@@ -8,6 +8,7 @@ export import :metrics;
 export import :modes;
 
 import std;
+import telar.tbc;
 
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
@@ -33,17 +34,17 @@ export namespace telar::gui::features::status_bar {
   // What the bar reads of the host's metrics: a view of the state, valid until the next sample.
   class HostMetrics {
   public:
-    inline explicit HostMetrics(const State& state) noexcept
+    inline explicit HostMetrics(tbc::view<const State&, tbc::lt::a> state) noexcept
         : state_(&state) {}
 
-    [[nodiscard]] inline const SystemMetrics& sample() const noexcept;
+    [[nodiscard]] inline tbc::view<const SystemMetrics&, tbc::lt::a> sample() const noexcept;
 
-    [[nodiscard]] inline const CpuHistory& history() const noexcept;
+    [[nodiscard]] inline tbc::view<const CpuHistory&, tbc::lt::a> history() const noexcept;
 
     [[nodiscard]] inline MetricSeverity severity(BarMetric metric) const noexcept;
 
   private:
-    const State* state_;
+    tbc::view<const State*, tbc::lt::a> state_;
   };
 
   // A sample from the runtime: false when it is not newer than the one the bar shows.
@@ -83,11 +84,11 @@ namespace telar::gui::features::status_bar {
     }
   };
 
-  inline const SystemMetrics& HostMetrics::sample() const noexcept {
+  inline tbc::view<const SystemMetrics&, tbc::lt::a> HostMetrics::sample() const noexcept {
     return Access::sample(*state_);
   }
 
-  inline const CpuHistory& HostMetrics::history() const noexcept {
+  inline tbc::view<const CpuHistory&, tbc::lt::a> HostMetrics::history() const noexcept {
     return Access::history(*state_);
   }
 

@@ -41,20 +41,21 @@ export namespace telar::gui::features::history {
 
   // What the panel reads of the history: a view of the state, valid until a use case changes it.
   // Inline, as the pointer reads it on every move over the panel.
+  // A view of a history browser, region `a`: what it reads lies in the browser, not in the view.
   class HistoryView {
   public:
-    inline explicit HistoryView(const HistoryBrowser<Memory>& browser) noexcept
+    inline explicit HistoryView(tbc::view<const HistoryBrowser<Memory>&, tbc::lt::a> browser) noexcept
         : browser_(&browser) {}
 
-    [[nodiscard]] inline const ds::Vec<HistoryRow<Memory>, Memory>& rows() const noexcept {
+    [[nodiscard]] inline tbc::view<const ds::Vec<HistoryRow<Memory>, Memory>&, tbc::lt::a> rows() const noexcept {
       return browser_->rows();
     }
 
-    [[nodiscard]] inline const HistoryViewState& state() const noexcept {
+    [[nodiscard]] inline tbc::view<const HistoryViewState&, tbc::lt::a> state() const noexcept {
       return browser_->state();
     }
 
-    [[nodiscard]] inline const HistoryRow<Memory>& entry(std::uint64_t id) const {
+    [[nodiscard]] inline tbc::view<const HistoryRow<Memory>&, tbc::lt::a> entry(std::uint64_t id) const {
       return browser_->entry(id);
     }
 
@@ -62,7 +63,7 @@ export namespace telar::gui::features::history {
       return browser_->entryIndex(id);
     }
 
-    [[nodiscard]] inline std::string_view command(std::uint64_t id) const {
+    [[nodiscard]] inline tbc::view<std::string_view, tbc::lt::a> command(std::uint64_t id) const {
       return browser_->command(id);
     }
 
@@ -74,15 +75,15 @@ export namespace telar::gui::features::history {
       return browser_->canSubmit();
     }
 
-    [[nodiscard]] inline std::string_view selectedCommand() const {
+    [[nodiscard]] inline tbc::view<std::string_view, tbc::lt::a> selectedCommand() const {
       return browser_->selectedCommand();
     }
 
-    [[nodiscard]] inline std::string_view output() const noexcept {
+    [[nodiscard]] inline tbc::view<std::string_view, tbc::lt::a> output() const noexcept {
       return browser_->output();
     }
 
-    [[nodiscard]] inline std::string_view error() const noexcept {
+    [[nodiscard]] inline tbc::view<std::string_view, tbc::lt::a> error() const noexcept {
       return browser_->error();
     }
 
@@ -127,7 +128,7 @@ export namespace telar::gui::features::history {
     }
 
   private:
-    const HistoryBrowser<Memory>* browser_;
+    tbc::view<const HistoryBrowser<Memory>*, tbc::lt::a> browser_;
   };
 
   [[nodiscard]] inline HistoryView view(const State& state) noexcept;

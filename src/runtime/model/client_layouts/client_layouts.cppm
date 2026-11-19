@@ -368,7 +368,8 @@ export {
       // link's round trip so far, smoothed.
       ds::Option<std::chrono::steady_clock::time_point> echo_sent;
       double link_average_ms = 0;
-      PaneShell shell_state{};
+      // Its host and directory view `shell_zones`' fixed buffers, made once with the pane.
+      tbc::view<PaneShell, tbc::lt::self> shell_state{};
       // The shell the pane started, which an `ssh` session it nests stands in for.
       IntegratedShell local_shell = IntegratedShell::none;
       // Zero until the pane has an integrated shell: other panes never send their state.

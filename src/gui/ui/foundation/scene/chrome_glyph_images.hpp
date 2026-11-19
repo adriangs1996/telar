@@ -93,7 +93,8 @@ namespace telar::gui::qt {
     static constexpr auto font_roles = static_cast<std::size_t>(fonts::FontRole::fallback_7) + 1;
     SystemAllocator memory;
     ds::Vec<std::uint8_t, SystemAllocator> pixels{memory};
-    ds::Array<std::unique_ptr<fonts::GlyphRasterizer>, font_roles> fonts{};
+    // Each views `pixels`, sized once before the first is made.
+    tbc::view<ds::Array<std::unique_ptr<fonts::GlyphRasterizer>, font_roles>, tbc::lt::self> fonts{};
 #endif
   };
 
