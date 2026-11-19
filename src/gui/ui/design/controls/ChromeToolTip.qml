@@ -1,5 +1,5 @@
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Controls.Basic
 import Telar.Gui
 
 // A plain-text hint that appears once the pointer rests on its parent.

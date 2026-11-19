@@ -1,6 +1,6 @@
 import Telar.Gui
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Controls.Basic
 
 Popup {
     id: root

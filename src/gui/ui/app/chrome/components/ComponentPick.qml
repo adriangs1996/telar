@@ -1,7 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Controls.Basic
 import Telar.Gui
 
 // A configured pick, drawn as the palette draws a nested list: a heading, the search band, whole

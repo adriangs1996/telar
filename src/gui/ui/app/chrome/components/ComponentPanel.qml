@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 
 import Telar.Gui
 import QtQuick
-import QtQuick.Controls
+import QtQuick.Controls.Basic
 
 // A configured panel: a title line with refresh and close, the rendered blocks, and a footer that
 // says how fresh they are and holds the panel's trailing actions.
