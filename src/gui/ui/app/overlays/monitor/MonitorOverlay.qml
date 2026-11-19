@@ -201,6 +201,9 @@ FocusScope {
                     title: "CPU " + root.percent(root.host.cpu ?? 0)
 
                     Flow {
+                        id: coreGrid
+                        // Four cores a row, or two when there are few.
+                        readonly property int columns: (root.host.cores ?? []).length > 8 ? 4 : 2
                         anchors.fill: parent
                         anchors.topMargin: root.rowHeight
                         spacing: 4 * root.ratio
@@ -211,7 +214,7 @@ FocusScope {
                             delegate: Meter {
                                 required property var modelData
                                 required property int index
-                                width: 64 * root.ratio
+                                width: (coreGrid.width - (coreGrid.columns - 1) * coreGrid.spacing) / coreGrid.columns
                                 label: String(index)
                                 fraction: modelData / 100
                                 caption: modelData.toFixed(0) + "%"
