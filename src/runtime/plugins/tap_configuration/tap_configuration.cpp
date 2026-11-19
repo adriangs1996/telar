@@ -23,8 +23,11 @@ namespace telar::runtime::plugins {
       }
     }
 
+    // Measured before the count is written: `output` views the same storage.
+    const auto length = storage_.size() - output.size();
+
     storage_.atMut(0) = count;
-    return std::span{storage_}.first(storage_.size() - output.size());
+    return std::span{storage_}.first(length);
   }
 
   bool ActionEncoder::append(config::RetainedActionValidator& validator, const lua::Value& value, std::span<Byte>& output) {

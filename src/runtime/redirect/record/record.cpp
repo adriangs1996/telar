@@ -203,17 +203,18 @@ namespace telar::runtime::redirect {
     }
 
     if (metadata) {
-      const auto end = std::ranges::find(header.interface, '\0');
-      if (end == header.interface.end()) {
+      // The name ends at its NUL; one that fills the field is malformed.
+      const auto length = ::strnlen(header.interface.data(), header.interface.size());
+      if (length == header.interface.size()) {
         return 0;
       }
 
       metadata->pid = header.pid;
       metadata->incoming = incoming;
-      metadata->interface.assign({header.interface.data(), end});
+      metadata->interface.assign({header.interface.data(), length});
       ds::Array<char, IFNAMSIZ> name{};
 
-      std::copy(header.interface.begin(), end, name.dataMut());
+      std::copy_n(header.interface.data(), length, name.dataMut());
       metadata->interface_index = ::if_nametoindex(name.data());
     }
 

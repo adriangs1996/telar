@@ -634,10 +634,12 @@ namespace telar::runtime {
     temporary |= inside("/private/tmp", path);
 #endif
     if (!temporary) {
+      ds::Array<char, PATH_MAX + 1> canonical;
+      // Asked for before the lookup, which any later call into the project may replace.
+      auto* resolved = canonical.dataMut();
       const auto* environment = std::getenv("TMPDIR");
       if (environment != nullptr && ::strnlen(environment, PATH_MAX + 1) <= PATH_MAX) {
-        ds::Array<char, PATH_MAX + 1> canonical;
-        if (::realpath(environment, canonical.dataMut()) != nullptr) {
+        if (::realpath(environment, resolved) != nullptr) {
           temporary = inside(canonical.data(), path);
         }
       }
