@@ -119,7 +119,10 @@ uses only the callee's signature:
 
 - The result borrows what elision or the result's label names. A returned
   reference designates some part of what it borrows, at fields the declaration
-  does not name. A returned value borrows what that input owns and what it holds.
+  does not name: one part for everything one evaluation of the call lent, so
+  the fields reached through it stay apart, as a Rust reborrow's do, while
+  another call, or the same call evaluated again, may return another part. A
+  returned value borrows what that input owns and what it holds.
   A labeled non-const reference to a type that holds borrows is an output
   parameter, which receives borrows of its region; when the result names that
   region too, it also lends, as `fn find<'a>(store: &'a mut Store) -> &'a Entry`

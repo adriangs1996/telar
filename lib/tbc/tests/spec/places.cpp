@@ -840,3 +840,71 @@ void placeVariantOtherCondition(const places::scoped_query& query, const std::op
 }
 
 // END CASE
+
+// CASE: place.reborrow_fields
+// PAIR: place.reborrow
+// SOURCE: src/gui/ui/app/machines_coordinator.cpp :: MachinesCoordinator::configure (each client's session is reached through the Option boxes holding it)
+// STATUS: implemented
+// CONTRACT: The reference one evaluation of a call returns designates one part of what it borrows, so the fields reached through it stay apart, as those of a Rust reborrow do; another call, or a later evaluation of the same one, may return another part.
+// SCENARIO: One field of the lists a call returns is read while another grows; accept.
+namespace places {
+  struct menu_lists {
+    std::vector<int> all;
+    std::vector<int> chosen;
+  };
+
+  class menu_holder {
+  public:
+    menu_lists& lists();
+
+  private:
+    menu_lists lists_;
+  };
+}
+
+void placeReborrowFields(places::menu_holder& holder) {
+  auto& lists = holder.lists();
+
+  for (const int value : lists.all) {
+    lists.chosen.push_back(value);
+  }
+}
+
+// END CASE
+
+// CASE: place.reborrow_twice
+// PAIR: place.reborrow
+// SOURCE: src/gui/ui/app/machines_coordinator.cpp :: MachinesCoordinator::configure (each client's session is reached through the Option boxes holding it)
+// STATUS: implemented
+// CONTRACT: The reference one evaluation of a call returns designates one part of what it borrows, so the fields reached through it stay apart, as those of a Rust reborrow do; another call, or a later evaluation of the same one, may return another part.
+// SCENARIO: The lists are asked for twice, and the second one grows while the first is read; reject at the growth.
+void placeReborrowTwice(places::menu_holder& holder) {
+  for (const int value : holder.lists().all) {
+    holder.lists().chosen.push_back(value); // expected-error [tbc-invalidated-borrow]
+  }
+}
+
+// END CASE
+
+// CASE: place.reborrow_repeated
+// PAIR: place.reborrow
+// SOURCE: src/gui/ui/app/machines_coordinator.cpp :: MachinesCoordinator::configure (each client's session is reached through the Option boxes holding it)
+// STATUS: implemented
+// CONTRACT: The reference one evaluation of a call returns designates one part of what it borrows, so the fields reached through it stay apart, as those of a Rust reborrow do; another call, or a later evaluation of the same one, may return another part.
+// SCENARIO: A list kept from an earlier round is read after the call lends the lists again, as Rust's second `&mut` borrow does; reject at the call.
+void placeReborrowRepeated(places::menu_holder& holder) {
+  const std::vector<int>* earlier = nullptr;
+
+  for (int round = 0; round < 2; ++round) {
+    auto& lists = holder.lists(); // expected-error [tbc-invalidated-borrow]
+
+    if (earlier != nullptr) {
+      lists.all.push_back(round);
+      places::observe(static_cast<int>(earlier->size()));
+    }
+
+    earlier = &lists.chosen;
+  }
+}
+
+// END CASE

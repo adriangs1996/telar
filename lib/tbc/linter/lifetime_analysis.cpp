@@ -110,6 +110,9 @@ namespace tbc_lint {
       const clang::FieldDecl* field = nullptr;
       storage_kind level = storage_kind::object;
       bool dereference = false;
+      // For a step that stands for any field, the call whose returned reference it stands for, as long
+      // as the borrow comes from that call's latest evaluation: every such step is the same part.
+      const clang::Expr* anchor = nullptr;
 
       bool operator==(const projection&) const = default;
     };
@@ -133,6 +136,12 @@ namespace tbc_lint {
       return step.field == nullptr && !step.dereference;
     }
 
+    // Two steps for the same unknown part: what one evaluation of a call returned a reference to, as
+    // a Rust reborrow is one place whose fields stay apart.
+    bool sameAnchor(const projection& left, const projection& right) {
+      return cut(left) && cut(right) && left.anchor != nullptr && left.anchor == right.anchor && left.level == right.level;
+    }
+
     // Appends a step unless the path is full or already cut at the step's level. The deepest level
     // merges every level below it, so its fields are not recorded. A dereference starts a new object; it
     // does not follow a cut, since what an unknown field designates is not known.
@@ -144,7 +153,7 @@ namespace tbc_lint {
       const auto dereferences = path.size() - fields;
 
       if (step.dereference) {
-        if (dereferences <= std::to_underlying(path_bound::dereferences) && (path.empty() || !cut(path.back()))) {
+        if (dereferences <= std::to_underlying(path_bound::dereferences) && (path.empty() || !cut(path.back()) || path.back().anchor != nullptr)) {
           path.push_back({.dereference = true});
         }
 
@@ -155,7 +164,7 @@ namespace tbc_lint {
         return;
       }
 
-      if (!path.empty() && !path.back().dereference && (path.back().level > step.level || (path.back().level == step.level && path.back().field == nullptr))) {
+      if (!path.empty() && !path.back().dereference && (path.back().level > step.level || (path.back().level == step.level && path.back().field == nullptr && path.back().anchor == nullptr))) {
         return;
       }
 
@@ -214,6 +223,10 @@ namespace tbc_lint {
         bool known = true;
 
         for (; first < left.size() && second < right.size() && !left[first].dereference && !right[second].dereference; ++first, ++second) {
+          if (sameAnchor(left[first], right[second])) {
+            continue;
+          }
+
           if (known && !cut(left[first]) && !cut(right[second]) && left[first].field != right[second].field) {
             return false;
           }
@@ -245,6 +258,10 @@ namespace tbc_lint {
         };
 
         for (const auto [left, right] : llvm::zip(llvm::make_filter_range(borrow, at), llvm::make_filter_range(target.path, at))) {
+          if (sameAnchor(left, right)) {
+            continue;
+          }
+
           if (left.field == nullptr || right.field == nullptr) {
             break;
           }
@@ -305,6 +322,10 @@ namespace tbc_lint {
     // lies inside the first, or the first is cut before they differ.
     bool covers(const field_path& outer, const field_path& inner) {
       for (std::size_t index = 0; index < outer.size(); ++index) {
+        if (index < inner.size() && sameAnchor(outer[index], inner[index])) {
+          continue;
+        }
+
         if (cut(outer[index])) {
           return true;
         }
@@ -455,6 +476,10 @@ namespace tbc_lint {
     // an unknown position that covers it, or apart from it.
     containment contain(const field_path& position, const field_path& fields) {
       for (std::size_t index = 0; index < fields.size(); ++index) {
+        if (index < position.size() && sameAnchor(position[index], fields[index])) {
+          continue;
+        }
+
         if (index == position.size() || cut(position[index]) || cut(fields[index])) {
           return containment::covering;
         }
@@ -3408,7 +3433,7 @@ namespace tbc_lint {
         }
 
         if (hasReceiver(callee)) {
-          return object != nullptr ? std::optional<loans>(receiverLent(callee, *object, current)) : std::nullopt;
+          return object != nullptr ? std::optional<loans>(receiverLent(callee, *object, current, &call)) : std::nullopt;
         }
 
         const auto parameter = elidedParameter(callee);
@@ -3425,15 +3450,15 @@ namespace tbc_lint {
           return std::nullopt;
         }
 
-        return lent(callee, **parameter, *call.getArg(index), current);
+        return lent(callee, **parameter, *call.getArg(index), current, &call);
       }
 
       // A reference a call returns designates some part of what it borrows, at fields its declaration
-      // does not name.
-      static loans somewhereInside(loans result) {
+      // does not name: the same part for every borrow of one evaluation of `call`, its anchor.
+      static loans somewhereInside(loans result, const clang::Expr* call = nullptr) {
         for (auto& source : result.values) {
           if (source.variable != nullptr) {
-            appendStep(source.path, {.field = nullptr, .level = std::max(source.storage, storage_kind::object)});
+            appendStep(source.path, {.field = nullptr, .level = std::max(source.storage, storage_kind::object), .anchor = call});
           }
         }
 
@@ -3444,18 +3469,18 @@ namespace tbc_lint {
       // part of the object a reference binds, or of what a pointer designates. A value borrows what that
       // object owns, and, as Rust's implied bounds require, what it holds; what a view or a pointer
       // passed by value designates; or what an object passed by value holds, never the copy itself.
-      loans lent(const clang::FunctionDecl& callee, const clang::ParmVarDecl& parameter, const clang::Expr& argument, const state& current) {
+      loans lent(const clang::FunctionDecl& callee, const clang::ParmVarDecl& parameter, const clang::Expr& argument, const state& current, const clang::Expr* call = nullptr) {
         const auto type = parameter.getType();
 
         // A `&Pane<'a>` lends what the pane holds, never the pane.
         if (parameterAnnotation(parameter, context_).held) {
           const auto held = value(&argument, current);
 
-          return callee.getReturnType()->isReferenceType() ? somewhereInside(held) : held;
+          return callee.getReturnType()->isReferenceType() ? somewhereInside(held, call) : held;
         }
 
         if (callee.getReturnType()->isReferenceType()) {
-          return somewhereInside(type->isReferenceType() ? reference(&argument, current) : value(&argument, current));
+          return somewhereInside(type->isReferenceType() ? reference(&argument, current) : value(&argument, current), call);
         }
 
         if (!type->isReferenceType()) {
@@ -3473,9 +3498,9 @@ namespace tbc_lint {
 
       // What a receiver lends to a call's result: part of the object for a returned reference, otherwise
       // the storage it owns and, as Rust's implied bounds require, what it holds.
-      loans receiverLent(const clang::FunctionDecl& callee, const clang::Expr& object, const state& current) {
+      loans receiverLent(const clang::FunctionDecl& callee, const clang::Expr& object, const state& current, const clang::Expr* call = nullptr) {
         if (callee.getReturnType()->isReferenceType()) {
-          return somewhereInside(objectStorage(object, current));
+          return somewhereInside(objectStorage(object, current), call);
         }
 
         auto result = objectStorage(object, current);
@@ -3643,7 +3668,7 @@ namespace tbc_lint {
 
           if (selected_region != nullptr) {
             if (annotation.region == selected_region) {
-              result.merge(lent(*callee, *parameter, *call.getArg(index + offset), current));
+              result.merge(lent(*callee, *parameter, *call.getArg(index + offset), current, &call));
             }
           } else if (object == nullptr) {
             if (elided != nullptr && (annotation.region == nullptr || annotation.region != parameterAnnotation(*elided, context_).region)) {
@@ -3651,12 +3676,12 @@ namespace tbc_lint {
             }
 
             elided = parameter;
-            result.merge(lent(*callee, *parameter, *call.getArg(index + offset), current));
+            result.merge(lent(*callee, *parameter, *call.getArg(index + offset), current, &call));
           }
         }
 
         if (selected_region == nullptr && object != nullptr) {
-          return receiverLent(*callee, *object, current);
+          return receiverLent(*callee, *object, current, &call);
         }
 
         if (ambiguous) {
@@ -4767,6 +4792,28 @@ namespace tbc_lint {
         return false;
       }
 
+      // Evaluating a call again returns a reference to a part that may differ from the one its earlier
+      // evaluation returned, so what that one lent stands for an unknown part from now on.
+      static void forgetAnchor(const clang::CallExpr& call, state& current) {
+        const auto forget = [&](field_path& path) {
+          for (auto& step : path) {
+            if (step.anchor == &call) {
+              step.anchor = nullptr;
+            }
+          }
+        };
+
+        for (auto* map : {&current.values, &current.references, &current.designated}) {
+          for (auto& entry : *map) {
+            for (auto& source : entry.second.values) {
+              forget(source.path);
+              forget(source.held);
+              forget(source.select);
+            }
+          }
+        }
+      }
+
       void applyCall(const clang::CallExpr& call, state& current) {
         const auto* callee = call.getDirectCallee();
         if (callee == nullptr) {
@@ -4776,6 +4823,7 @@ namespace tbc_lint {
         // Summaries describe the result in terms of entry state, so read it before this call's writes.
         const receiver_reads reads(*this);
 
+        forgetAnchor(call, current);
         call_results_.erase(&call);
         auto result = callResult(call, current);
 
