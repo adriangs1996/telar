@@ -152,10 +152,13 @@ export {
         }
 
         constexpr std::size_t maximum_text_bytes = 262144;
+        // Read before the reader borrows the pane's terminal for as long as its text is sent.
+        const auto pane_id = pane->id;
+        const auto exit_code = pane->exitCode();
         TextReader reader{memory_, pane->terminal, maximum_text_bytes};
 
         reader.read(request.source, request.rows);
-        send(PaneText{.request_id = request.request_id, .pane_id = pane->id, .truncated = reader.truncated(), .text = reader.text(), .exit_code = pane->exitCode()});
+        send(PaneText{.request_id = request.request_id, .pane_id = pane_id, .truncated = reader.truncated(), .text = reader.text(), .exit_code = exit_code});
       }
 
       // Kept here: `send` is the connection's callable, an open set no unit can instantiate ahead.
@@ -182,6 +185,8 @@ export {
 
         ds::Array<TabDescriptor, 64> descriptors;
         ds::Array<TabPane, 256> panes;
+        // Where each tab's panes start: they are lent to the descriptors only once every pane is written.
+        ds::Array<std::size_t, 64> firsts{};
         std::size_t pane_count = 0;
         std::size_t count = 0;
 
@@ -197,10 +202,13 @@ export {
             }
           }
 
-          const auto members = std::span{panes}.subspan(first, pane_count - first);
-
-          descriptors.atMut(count) = TabDescriptor{.tab_id = tab.id, .position = static_cast<std::uint16_t>(count), .pane_count = static_cast<std::uint16_t>(members.size()), .label = tab.label, .panes = members};
+          firsts.atMut(count) = first;
+          descriptors.atMut(count) = TabDescriptor{.tab_id = tab.id, .position = static_cast<std::uint16_t>(count), .pane_count = static_cast<std::uint16_t>(pane_count - first), .label = tab.label};
           ++count;
+        }
+
+        for (std::size_t index = 0; index < count; ++index) {
+          descriptors.atMut(index).panes = std::span{panes}.subspan(firsts[index], descriptors[index].pane_count);
         }
 
         send(WorkspaceSnapshot{.request_id = request.request_id, .workspace = request.workspace, .name = workspace->displayName(), .tabs = std::span{descriptors}.first(count)});

@@ -501,7 +501,7 @@ namespace telar::runtime {
   }
 
 #if TELAR_DIAGNOSTICS
-  diagnostics::FrameCounters FrameSync::takeCounters() noexcept {
+  diagnostics::FrameCounters FrameSync::takeCounters() const noexcept {
     return std::exchange(counters_, {});
   }
 #endif

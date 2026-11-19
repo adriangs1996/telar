@@ -37,14 +37,13 @@ namespace telar::runtime {
     pending_ = false;
   }
 
-  SentDocuments::Item* SentDocuments::find(std::uint64_t id) noexcept {
-    const auto kept = items.viewMut().first(count);
-    const auto found = std::ranges::find(kept, id, &Item::id);
+  SentDocuments::Item* SentDocuments::entry(std::uint64_t id) noexcept {
+    for (std::size_t index = 0; index < count; ++index) {
+      if (items[index].id == id) {
+        return &items.atMut(index);
+      }
+    }
 
-    return found == kept.end() ? nullptr : &*found;
-  }
-
-  SentDocuments::Item* SentDocuments::add(std::uint64_t id) noexcept {
     if (count == items.size()) {
       return nullptr;
     }

@@ -264,8 +264,9 @@ export {
       std::span<const Byte> prepare(const Screen& screen);
 
 #if TELAR_DIAGNOSTICS
-      // What the sync counted since the last call, which the caller adds to the runtime's metrics.
-      diagnostics::FrameCounters takeCounters() noexcept;
+      // What the sync counted since the last call, which the caller adds to the runtime's metrics; taken
+      // through shared access, as Rust's Cell::take is, so a prepared frame stays borrowed meanwhile.
+      diagnostics::FrameCounters takeCounters() const noexcept;
 #endif
 
     private:
@@ -282,7 +283,7 @@ export {
 #if TELAR_DIAGNOSTICS
       void recordFrame(std::size_t bytes, bool snapshot) noexcept;
 
-      diagnostics::FrameCounters counters_;
+      mutable diagnostics::FrameCounters counters_;
 #endif
       std::uint64_t pane_id_;
       tbc::view<ds::Vec<ScreenCell, ConcurrentMemory>, tbc::lt::a> baseline_;

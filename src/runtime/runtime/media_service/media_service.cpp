@@ -223,11 +223,18 @@ namespace telar::runtime {
       pending += agent->hasPendingDescription();
     }
 
+    // The registry learns of the change once its records are no longer borrowed.
+    bool queued = false;
+
     for (auto& agent : agents.recordsMut()) {
       if (pending < description_queue_capacity && agent.getMut().queueDescription()) {
         ++pending;
-        agents.changed();
+        queued = true;
       }
+    }
+
+    if (queued) {
+      agents.changed();
     }
 
     for (auto& agent : agents.recordsMut()) {

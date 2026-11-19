@@ -88,7 +88,8 @@ namespace telar::runtime {
       }
     }
 
-    if (clipboard.hasReply()) {
+    // Reached again: configuring the pane may have borrowed it whole.
+    if (pane.terminal.clipboardControl().hasReply()) {
       pane.resumeControl();
       return true;
     }
@@ -248,8 +249,8 @@ namespace telar::runtime {
         continue;
       }
 
-      auto* item = sent.find(document.id);
-      if (item == nullptr && (item = sent.add(document.id)) == nullptr) {
+      auto* item = sent.entry(document.id);
+      if (item == nullptr) {
         continue;
       }
 

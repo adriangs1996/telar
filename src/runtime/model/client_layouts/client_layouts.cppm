@@ -86,9 +86,8 @@ export {
         std::uint32_t rows = 0;
       };
 
-      [[nodiscard]] Item* find(std::uint64_t id) noexcept;
-
-      Item* add(std::uint64_t id) noexcept;
+      // A document's item, added when absent, as Rust's entry().or_insert; null once the list is full.
+      Item* entry(std::uint64_t id) noexcept;
 
       void erase(std::size_t index) noexcept;
 
