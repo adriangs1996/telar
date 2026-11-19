@@ -758,7 +758,14 @@ namespace telar::git {
 
     head_reference_.assign(target);
     status_.branch.assign(target.starts_with("refs/heads/") ? target.substr(11) : target);
-    switch (resolve(head_reference_, status_.head_id, &inputs_.branch)) {
+    // Resolved into copies: resolving reads the reader, so it cannot also write its fields.
+    auto head_id = status_.head_id;
+    auto branch = inputs_.branch;
+    const auto head = resolve(target, head_id, &branch);
+
+    status_.head_id = head_id;
+    inputs_.branch = branch;
+    switch (head) {
     case RefLookup::found:
       status_.head = HeadState::branch;
       break;
@@ -861,7 +868,13 @@ namespace telar::git {
 
     upstream_reference_.assign(tracking.view());
     status_.upstream_name.assign(shortReference(tracking.view()));
-    switch (resolve(upstream_reference_, status_.upstream_id, &inputs_.upstream)) {
+    auto upstream_id = status_.upstream_id;
+    auto upstream = inputs_.upstream;
+    const auto found = resolve(tracking.view(), upstream_id, &upstream);
+
+    status_.upstream_id = upstream_id;
+    inputs_.upstream = upstream;
+    switch (found) {
     case RefLookup::found:
       status_.upstream = UpstreamState::tracking;
       break;

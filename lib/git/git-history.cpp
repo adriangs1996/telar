@@ -86,26 +86,24 @@ namespace telar::git {
       return Divergence{};
     }
 
-    objects_ = &objects;
-    graph_ = &graph;
-    shallow_ = &shallow;
-    limits_ = &limits;
+    Sources sources{.objects = objects, .graph = graph, .shallow = shallow, .limits = limits};
+
     reset();
-    const auto left_node = insert(left, ds::none);
-    const auto right_node = insert(right, ds::none);
+    const auto left_node = insert(sources, left, ds::none);
+    const auto right_node = insert(sources, right, ds::none);
     if (!left_node || !right_node) {
       return ds::none;
     }
 
     mark(*left_node, left_flag);
     mark(*right_node, right_flag);
-    const auto result = walk(graph);
+    const auto result = walk(sources);
 
     release();
     return result;
   }
 
-  ds::Option<Divergence> DivergenceWalk::walk(const CommitGraph& graph) {
+  ds::Option<Divergence> DivergenceWalk::walk(Sources& sources) {
     // Generation numbers make the order exact (commits outside the graph are
     // newer than all of it and come first); commit dates may be skewed, so
     // like git's limit_list the walk drains a few stale commits past the end.
@@ -114,7 +112,7 @@ namespace telar::git {
 
     while (!heap_.empty()) {
       if (interesting_ == 0) {
-        if (!graph.empty() && nodes_[heap_.front().node].graph != no_position) {
+        if (!sources.graph.empty() && nodes_[heap_.front().node].graph != no_position) {
           break;
         }
 
@@ -136,7 +134,7 @@ namespace telar::git {
         --interesting_;
       }
 
-      if (!expand(index)) {
+      if (!expand(sources, index)) {
         return ds::none;
       }
     }
@@ -189,10 +187,10 @@ namespace telar::git {
     }
   }
 
-  std::uint64_t DivergenceWalk::key(std::uint64_t generation, std::int64_t time) const noexcept {
+  std::uint64_t DivergenceWalk::key(const CommitGraph& graph, std::uint64_t generation, std::int64_t time) noexcept {
     const auto seconds = static_cast<std::uint64_t>(std::max<std::int64_t>(time, 0)) & time_mask;
 
-    return graph_->empty() ? seconds : generation << 34 | seconds;
+    return graph.empty() ? seconds : generation << 34 | seconds;
   }
 
   std::uint32_t& DivergenceWalk::slot(const ObjectId& id) noexcept {
@@ -206,7 +204,7 @@ namespace telar::git {
     }
   }
 
-  ds::Option<std::uint32_t> DivergenceWalk::insert(const ObjectId& id, ds::Option<std::uint32_t> position) {
+  ds::Option<std::uint32_t> DivergenceWalk::insert(Sources& sources, const ObjectId& id, ds::Option<std::uint32_t> position) {
     if (2 * (nodes_.size() + 1) > slots_.size()) {
       grow();
     }
@@ -216,38 +214,38 @@ namespace telar::git {
       return entry - 1;
     }
 
-    if (nodes_.size() >= limits_->walk_commits) {
+    if (nodes_.size() >= sources.limits.walk_commits) {
       return ds::none;
     }
 
     Node node{.id = id};
 
-    if (!position && !graph_->empty()) {
-      position = graph_->find(id);
+    if (!position && !sources.graph.empty()) {
+      position = sources.graph.find(id);
     }
 
     if (position) {
-      const auto commit = graph_->commit(*position);
+      const auto commit = sources.graph.commit(*position);
       if (!commit) {
         return ds::none;
       }
 
       node.graph = *position;
-      node.key = key(commit->generation, commit->time);
+      node.key = key(sources.graph, commit->generation, commit->time);
     } else {
       CommitHeader header;
 
       node.parents_begin = static_cast<std::uint32_t>(parents_.size());
-      if (!readCommit(id, header)) {
+      if (!readCommit(sources, id, header)) {
         return ds::none;
       }
 
-      if (shallow_->contains(id)) {
+      if (sources.shallow.contains(id)) {
         parents_.resize(node.parents_begin);
       }
 
       node.parents_count = static_cast<std::uint32_t>(parents_.size() - node.parents_begin);
-      node.key = key(infinite_generation, header.time);
+      node.key = key(sources.graph, infinite_generation, header.time);
     }
 
     nodes_.push(node);
@@ -255,18 +253,18 @@ namespace telar::git {
     return entry - 1;
   }
 
-  bool DivergenceWalk::readCommit(const ObjectId& id, CommitHeader& header) {
+  bool DivergenceWalk::readCommit(Sources& sources, const ObjectId& id, CommitHeader& header) {
     ++commits_read;
     const auto begin = parents_.size();
     constexpr std::size_t first_prefix = 4096;
 
-    for (const auto prefix : {std::min(first_prefix, limits_->commit_header), limits_->commit_header}) {
+    for (const auto prefix : {std::min(first_prefix, sources.limits.commit_header), sources.limits.commit_header}) {
       ObjectType type = ObjectType::none;
-      if (objects_->read(id, type, object_, prefix) != Lookup::found || type != ObjectType::commit) {
+      if (sources.objects.read(id, type, object_, prefix) != Lookup::found || type != ObjectType::commit) {
         return false;
       }
 
-      if (parseCommit(object_, objects_->format(), limits_->commit_parents, header, parents_)) {
+      if (parseCommit(object_, sources.objects.format(), sources.limits.commit_parents, header, parents_)) {
         return true;
       }
 
@@ -315,34 +313,36 @@ namespace telar::git {
     std::ranges::push_heap(heap_.viewMut(), std::less{}, &Queued::key);
   }
 
-  bool DivergenceWalk::expand(std::uint32_t index) {
+  bool DivergenceWalk::expand(Sources& sources, std::uint32_t index) {
     const auto flags = nodes_[index].flags;
 
     if (nodes_[index].graph != no_position) {
-      const auto commit = graph_->commit(nodes_[index].graph);
+      const auto commit = sources.graph.commit(nodes_[index].graph);
+      // The parents' buffer, taken while they are inserted: inserting mutates the walk.
+      auto parents = std::move(graph_parents_);
+      bool expanded = true;
 
-      graph_parents_.clear();
-      if (!commit || !graph_->parents(*commit, limits_->commit_parents, [&](std::uint32_t parent) {
-            graph_parents_.push(parent);
+      parents.clear();
+      if (!commit || !sources.graph.parents(*commit, sources.limits.commit_parents, [&](std::uint32_t parent) {
+            parents.push(parent);
           })) {
-        return false;
+        expanded = false;
       }
 
-      for (const auto parent : graph_parents_) {
-        const auto id = graph_->id(parent);
-        if (!id) {
-          return false;
-        }
+      for (std::size_t at = 0; expanded && at < parents.size(); ++at) {
+        const auto parent = parents[at];
+        const auto id = sources.graph.id(parent);
+        const auto node = id ? insert(sources, *id, parent) : ds::none;
 
-        const auto node = insert(*id, parent);
-        if (!node) {
-          return false;
+        if (node) {
+          mark(*node, flags);
+        } else {
+          expanded = false;
         }
-
-        mark(*node, flags);
       }
 
-      return true;
+      graph_parents_ = std::move(parents);
+      return expanded;
     }
 
     const auto begin = nodes_[index].parents_begin;
@@ -350,7 +350,7 @@ namespace telar::git {
 
     for (std::uint32_t offset = 0; offset < count; ++offset) {
       const auto parent = parents_[begin + offset];
-      const auto node = insert(parent, ds::none);
+      const auto node = insert(sources, parent, ds::none);
       if (!node) {
         return false;
       }

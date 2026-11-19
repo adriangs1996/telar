@@ -10,6 +10,7 @@ import telar.native.zlib;
 import telar.platform.primitives;
 import :format;
 import telar.base.ds;
+import telar.tbc;
 
 // The object database: loose objects, packfiles with their v2 indexes and
 // delta chains, and the commit-graph. Reads use pread on descriptors rather
@@ -86,19 +87,19 @@ namespace telar::git {
   // Iterates the entries of a tree object, refusing malformed or unordered ones.
   class TreeReader {
   public:
-    TreeReader(std::string_view content, ObjectFormat format) noexcept;
+    TreeReader(tbc::view<std::string_view, tbc::lt::a> content, ObjectFormat format) noexcept;
 
     // False at the end, or when `failed()` because the tree is malformed.
-    bool next(TreeEntry& entry) noexcept;
+    bool next(tbc::view<TreeEntry&, tbc::lt::a> entry) noexcept;
 
     bool failed() const noexcept;
 
   private:
     bool fail() noexcept;
 
-    std::string_view rest_;
+    tbc::view<std::string_view, tbc::lt::a> rest_;
     std::size_t hash_size_;
-    std::string_view previous_;
+    tbc::view<std::string_view, tbc::lt::a> previous_;
     bool previous_directory_ = false;
     bool have_previous_ = false;
     bool failed_ = false;
@@ -157,20 +158,22 @@ namespace telar::git {
     bool openPack(int directory, std::string_view index_name, Pack& pack) noexcept;
 
     // The position of `id` in a pack index, by binary search over pread blocks.
-    ds::Option<std::uint32_t> findInPack(const Pack& pack, const ObjectId& id) noexcept;
+    // The helpers below are static and take the fields they use, so a call borrows those fields apart
+    // from the pack it reads.
+    static ds::Option<std::uint32_t> findInPack(std::span<std::uint8_t> block, const Pack& pack, const ObjectId& id) noexcept;
 
-    ds::Option<std::uint64_t> packOffset(const Pack& pack, std::uint32_t position) noexcept;
+    static ds::Option<std::uint64_t> packOffset(ObjectFormat format, const Pack& pack, std::uint32_t position) noexcept;
     Lookup locate(const ObjectId& id, std::uint32_t& pack, std::uint64_t& offset);
-    bool entryAt(const Pack& pack, std::uint64_t offset, Entry& entry) noexcept;
-    bool inflatePacked(const Pack& pack, std::uint64_t data_offset, std::span<std::uint8_t> output, bool whole);
+    static bool entryAt(ObjectFormat format, const Pack& pack, std::uint64_t offset, Entry& entry) noexcept;
+    static bool inflatePacked(Inflater& inflater, std::span<std::uint8_t> chunk, ObjectFormat format, const Pack& pack, std::uint64_t data_offset, std::span<std::uint8_t> output, bool whole);
     Lookup readPacked(std::uint32_t pack, std::uint64_t offset, ObjectType& type, ds::String<Memory>& output, std::size_t prefix);
     Lookup readLoose(const ObjectId& id, ObjectType& type, ds::String<Memory>& output, std::size_t prefix);
 
     // Counts bytes against the per-read budget, so that a crafted delta chain
     // cannot make one read inflate gigabytes.
-    bool charge(std::uint64_t bytes) noexcept;
+    static bool charge(std::uint64_t& inflated, std::uint64_t limit, std::uint64_t bytes) noexcept;
 
-    const Limits* limits_ = nullptr;
+    Limits limits_;
     std::uint64_t inflated_ = 0;
     ObjectFormat format_ = ObjectFormat::sha1;
     FileDescriptor objects_;

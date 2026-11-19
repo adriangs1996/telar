@@ -55,9 +55,11 @@ namespace telar::git {
     bool intentToAdd() const noexcept;
   };
 
-  // One cache-tree node of the TREE extension; `end` is the index past its subtree.
+  // One cache-tree node of the TREE extension; `end` is the index past its subtree. Its name is kept
+  // as where it lies in the index's bytes, which Index::treeName reads: the index owns both.
   struct CacheTreeNode {
-    std::string_view name;
+    std::uint32_t name_offset = 0;
+    std::uint32_t name_size = 0;
     std::int32_t entries = -1;
     std::uint32_t end = 0;
     ObjectId id;
@@ -78,6 +80,7 @@ namespace telar::git {
     IndexState load(int gitdir, ObjectFormat format, const Limits& limits);
 
     std::string_view path(const IndexEntry& entry) const noexcept;
+    std::string_view treeName(const CacheTreeNode& node) const noexcept;
 
     // The index's own modification time: entries modified at or after it are racy.
     std::int64_t timestamp() const noexcept;
@@ -89,7 +92,8 @@ namespace telar::git {
 
   private:
     IndexState parse(const Limits& limits);
-    bool parseTree(std::span<const std::uint8_t> data, std::size_t& position, std::size_t depth, const Limits& limits);
+    // Static, so parsing the index's bytes borrows them apart from the tree it fills.
+    static bool parseTree(ds::Vec<CacheTreeNode, Memory>& tree, std::size_t entries_held, ObjectFormat format, std::span<const std::uint8_t> data, std::size_t& position, std::size_t depth, const Limits& limits);
 
     ds::String<Memory> bytes_;
     ds::String<Memory> paths_;
@@ -115,29 +119,33 @@ namespace telar::git {
     // depth keeps viewing its buffer while deeper trees are read.
     ds::String<Memory>& buffer(std::size_t depth) noexcept;
 
-    bool readTree(const ObjectId& id, std::size_t depth);
-    std::string_view relative(std::uint32_t entry, std::size_t prefix) const noexcept;
+    // What one comparison reads and counts, handed to each step rather than kept between them.
+    struct Sources {
+      ObjectDatabase& objects;
+      const Index& index;
+      const Limits& limits;
+      ChangeCounts& counts;
+    };
+
+    bool readTree(Sources& sources, const ObjectId& id, std::size_t depth);
+    static std::string_view relative(const Index& index, std::uint32_t entry, std::size_t prefix) noexcept;
 
     // The index entries [begin, end) are new to HEAD.
-    void addRange(std::uint32_t begin, std::uint32_t end) noexcept;
+    void addRange(Sources& sources, std::uint32_t begin, std::uint32_t end) noexcept;
 
     // Every file below tree `id` left the index.
-    bool deleteTree(const ObjectId& id, std::size_t depth);
+    bool deleteTree(Sources& sources, const ObjectId& id, std::size_t depth);
 
-    bool compareTree(const ObjectId& id, std::size_t prefix, std::uint32_t begin, std::uint32_t end, std::uint32_t cache, std::size_t depth);
+    bool compareTree(Sources& sources, const ObjectId& id, std::size_t prefix, std::uint32_t begin, std::uint32_t end, std::uint32_t cache, std::size_t depth);
 
     // Past the stages of the entry at `begin`.
-    std::uint32_t pathEnd(std::uint32_t begin, std::uint32_t end) const noexcept;
+    static std::uint32_t pathEnd(const Index& index, std::uint32_t begin, std::uint32_t end) noexcept;
 
     // Past the entries below directory `component` of the current prefix.
-    std::uint32_t groupEnd(std::uint32_t begin, std::uint32_t end, std::size_t prefix, std::string_view component) const noexcept;
+    static std::uint32_t groupEnd(const Index& index, std::uint32_t begin, std::uint32_t end, std::size_t prefix, std::string_view component) noexcept;
 
     ds::Vec<ds::String<Memory>, Memory> trees_;
     Memory& memory_;
-    ObjectDatabase* objects_ = nullptr;
-    const Index* index_ = nullptr;
-    const Limits* limits_ = nullptr;
-    ChangeCounts* counts_ = nullptr;
     std::size_t trees_read_ = 0;
   };
 
@@ -203,7 +211,8 @@ namespace telar::git {
     ds::Option<ObjectId> hashFile(int parent, const char* name, const struct stat& expected);
 
     Options options_;
-    const Limits* limits_ = nullptr;
+    // The bytes one scan may hash, from its limits.
+    std::uint64_t hashed_limit_ = 0;
     std::uint64_t hashed_bytes_ = 0;
     Fingerprint verified_index_;
     ds::Vec<Verified, Memory> verified_;

@@ -6,6 +6,7 @@ import telar.platform.sha256;
 import telar.platform.primitives;
 import telar.sys.posix;
 import telar.base.ds;
+import telar.tbc;
 
 // Byte-level primitives every other part of the reader shares: object ids,
 // hashing, bounded file reads beneath a directory descriptor and file
@@ -76,7 +77,7 @@ export namespace telar::git {
     std::span<const std::uint8_t> view() const noexcept;
 
     // The first `digits` hexadecimal digits, written into `buffer`.
-    std::string_view hex(std::span<char, 2 * maximum_hash_size> buffer, std::size_t digits = 2 * maximum_hash_size) const noexcept;
+    tbc::view<std::string_view, tbc::lt::a> hex(tbc::view<std::span<char, 2 * maximum_hash_size>, tbc::lt::a> buffer, std::size_t digits = 2 * maximum_hash_size) const noexcept;
 
     static ds::Option<ObjectId> fromHex(std::string_view text, ObjectFormat format) noexcept;
 
@@ -152,7 +153,7 @@ namespace telar::git {
   bool readAt(int descriptor, void* destination, std::size_t size, std::uint64_t offset) noexcept;
 
   // Reads a small file into a caller buffer; files that do not fit are invalid.
-  ReadStatus readSmall(int directory, const char* name, std::span<char> buffer, std::string_view& contents, Fingerprint* fingerprint = nullptr) noexcept;
+  ReadStatus readSmall(int directory, const char* name, tbc::view<std::span<char>, tbc::lt::a> buffer, tbc::view<std::string_view&, tbc::lt::a> contents, Fingerprint* fingerprint = nullptr) noexcept;
 
   // Reads a whole file of at most `limit` bytes into `bytes`, which keeps its capacity.
   ReadStatus readWhole(int directory, const char* name, ds::String<Memory>& bytes, std::size_t limit, Fingerprint* fingerprint = nullptr);

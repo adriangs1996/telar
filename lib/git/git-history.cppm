@@ -48,7 +48,15 @@ namespace telar::git {
     std::uint64_t commits_read = 0;
 
   private:
-    ds::Option<Divergence> walk(const CommitGraph& graph);
+    // What one walk reads, handed to each step rather than kept between walks.
+    struct Sources {
+      ObjectDatabase& objects;
+      const CommitGraph& graph;
+      const ShallowCommits& shallow;
+      const Limits& limits;
+    };
+
+    ds::Option<Divergence> walk(Sources& sources);
 
     static constexpr std::uint8_t left_flag = 1;
     static constexpr std::uint8_t right_flag = 2;
@@ -81,24 +89,20 @@ namespace telar::git {
     // Doubles the open-addressing table, keeping it at most half full.
     void grow();
 
-    std::uint64_t key(std::uint64_t generation, std::int64_t time) const noexcept;
+    static std::uint64_t key(const CommitGraph& graph, std::uint64_t generation, std::int64_t time) noexcept;
     std::uint32_t& slot(const ObjectId& id) noexcept;
 
     // The node of commit `id`, read on first sight so its order key is known.
-    ds::Option<std::uint32_t> insert(const ObjectId& id, ds::Option<std::uint32_t> position);
+    ds::Option<std::uint32_t> insert(Sources& sources, const ObjectId& id, ds::Option<std::uint32_t> position);
 
-    bool readCommit(const ObjectId& id, CommitHeader& header);
+    bool readCommit(Sources& sources, const ObjectId& id, CommitHeader& header);
     void classify(std::uint8_t flags, bool add) noexcept;
 
     // Adds `flags` to a node, keeps the counts, and queues it when it changed.
     void mark(std::uint32_t index, std::uint8_t flags);
 
-    bool expand(std::uint32_t index);
+    bool expand(Sources& sources, std::uint32_t index);
 
-    ObjectDatabase* objects_ = nullptr;
-    const CommitGraph* graph_ = nullptr;
-    const ShallowCommits* shallow_ = nullptr;
-    const Limits* limits_ = nullptr;
     ds::Vec<Node, Memory> nodes_;
     ds::Vec<std::uint32_t, Memory> slots_;
     ds::Vec<ObjectId, Memory> parents_;

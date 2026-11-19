@@ -55,13 +55,15 @@ namespace telar::git {
     }
 
     // The cache-tree child of `parent` named `name`, if the extension has one.
-    std::uint32_t cacheTreeChild(std::span<const CacheTreeNode> tree, std::uint32_t parent, std::string_view name) noexcept {
+    std::uint32_t cacheTreeChild(const Index& index, std::uint32_t parent, std::string_view name) noexcept {
       if (parent == no_cache_tree) {
         return no_cache_tree;
       }
 
+      const auto& tree = index.tree;
+
       for (auto child = parent + 1; child < tree[parent].end; child = tree[child].end) {
-        if (tree[child].name == name) {
+        if (index.treeName(tree[child]) == name) {
           return child;
         }
       }
@@ -133,6 +135,10 @@ namespace telar::git {
     }
 
     return state;
+  }
+
+  std::string_view Index::treeName(const CacheTreeNode& node) const noexcept {
+    return std::string_view{bytes_}.substr(node.name_offset, node.name_size);
   }
 
   std::string_view Index::path(const IndexEntry& entry) const noexcept {
@@ -314,7 +320,7 @@ namespace telar::git {
 
       if (signature == "TREE") {
         std::size_t cursor = position;
-        if (!parseTree(data.first(position + size), cursor, 0, limits) || cursor != position + size) {
+        if (!parseTree(tree, entries.size(), format_, data.first(position + size), cursor, 0, limits) || cursor != position + size) {
           tree.clear();
         }
       } else if (signature[0] < 'A' || signature[0] > 'Z') {
@@ -327,8 +333,8 @@ namespace telar::git {
     return IndexState::ready;
   }
 
-  bool Index::parseTree(std::span<const std::uint8_t> data, std::size_t& position, std::size_t depth, const Limits& limits) {
-    if (depth > limits.path_depth || tree.size() >= entries.size() + 1 + limits.path_depth) {
+  bool Index::parseTree(ds::Vec<CacheTreeNode, Memory>& tree, std::size_t entries_held, ObjectFormat format, std::span<const std::uint8_t> data, std::size_t& position, std::size_t depth, const Limits& limits) {
+    if (depth > limits.path_depth || tree.size() >= entries_held + 1 + limits.path_depth) {
       return false;
     }
 
@@ -340,7 +346,8 @@ namespace telar::git {
 
     CacheTreeNode node;
 
-    node.name = std::string_view{bytes_}.substr(position, name_end - position);
+    node.name_offset = static_cast<std::uint32_t>(position);
+    node.name_size = static_cast<std::uint32_t>(name_end - position);
     const auto line_end = text.find('\n', name_end + 1);
     if (line_end == std::string_view::npos) {
       return false;
@@ -364,7 +371,7 @@ namespace telar::git {
     position = line_end + 1;
     node.entries = entry_count;
     if (entry_count >= 0) {
-      const auto hash_size = hashSize(format_);
+      const auto hash_size = hashSize(format);
       if (!fits(data.size(), position, hash_size)) {
         return false;
       }
@@ -377,7 +384,7 @@ namespace telar::git {
 
     tree.push(node);
     for (std::uint32_t child = 0; child < subtrees; ++child) {
-      if (!parseTree(data, position, depth + 1, limits)) {
+      if (!parseTree(tree, entries_held, format, data, position, depth + 1, limits)) {
         return false;
       }
     }
@@ -391,10 +398,8 @@ namespace telar::git {
         memory_(memory) {}
 
   bool StagedComparison::compare(ObjectDatabase& objects, const Index& index, ds::Option<ObjectId> tree, const Limits& limits, ChangeCounts& counts) {
-    objects_ = &objects;
-    index_ = &index;
-    limits_ = &limits;
-    counts_ = &counts;
+    Sources sources{.objects = objects, .index = index, .limits = limits, .counts = counts};
+
     trees_read_ = 0;
     while (trees_.size() < limits.path_depth + 2) {
       trees_.emplace(memory_);
@@ -403,11 +408,11 @@ namespace telar::git {
     const auto end = static_cast<std::uint32_t>(index.entries.size());
 
     if (!tree) {
-      addRange(0, end);
+      addRange(sources, 0, end);
       return true;
     }
 
-    const auto complete = compareTree(*tree, 0, 0, end, index.tree.empty() ? no_cache_tree : 0, 0);
+    const auto complete = compareTree(sources, *tree, 0, 0, end, index.tree.empty() ? no_cache_tree : 0, 0);
     constexpr std::size_t retained = 256 << 10;
 
     for (auto& buffer : trees_.viewMut()) {
@@ -424,65 +429,65 @@ namespace telar::git {
     return trees_.atMut(depth);
   }
 
-  bool StagedComparison::readTree(const ObjectId& id, std::size_t depth) {
-    if (++trees_read_ > limits_->tree_objects || depth > limits_->path_depth) {
+  bool StagedComparison::readTree(Sources& sources, const ObjectId& id, std::size_t depth) {
+    if (++trees_read_ > sources.limits.tree_objects || depth > sources.limits.path_depth) {
       return false;
     }
 
     ++trees_read;
     ObjectType type = ObjectType::none;
 
-    return objects_->read(id, type, buffer(depth)) == Lookup::found && type == ObjectType::tree;
+    return sources.objects.read(id, type, buffer(depth)) == Lookup::found && type == ObjectType::tree;
   }
 
-  std::string_view StagedComparison::relative(std::uint32_t entry, std::size_t prefix) const noexcept {
-    return index_->path(index_->entries[entry]).substr(prefix);
+  std::string_view StagedComparison::relative(const Index& index, std::uint32_t entry, std::size_t prefix) noexcept {
+    return index.path(index.entries[entry]).substr(prefix);
   }
 
-  void StagedComparison::addRange(std::uint32_t begin, std::uint32_t end) noexcept {
+  void StagedComparison::addRange(Sources& sources, std::uint32_t begin, std::uint32_t end) noexcept {
     for (auto entry = begin; entry < end; ++entry) {
-      const auto& item = index_->entries[entry];
+      const auto& item = sources.index.entries[entry];
       if (item.stage() == 0 && !item.intentToAdd()) {
-        ++counts_->staged_added;
+        ++sources.counts.staged_added;
       }
     }
   }
 
-  bool StagedComparison::deleteTree(const ObjectId& id, std::size_t depth) {
-    if (!readTree(id, depth)) {
+  bool StagedComparison::deleteTree(Sources& sources, const ObjectId& id, std::size_t depth) {
+    if (!readTree(sources, id, depth)) {
       return false;
     }
 
-    TreeReader reader{buffer(depth), objects_->format()};
+    TreeReader reader{buffer(depth), sources.objects.format()};
     TreeEntry entry;
 
     while (reader.next(entry)) {
       if (entry.directory()) {
         const auto child = entry.id;
-        if (!deleteTree(child, depth + 1)) {
+        if (!deleteTree(sources, child, depth + 1)) {
           return false;
         }
       } else {
-        ++counts_->staged_deleted;
+        ++sources.counts.staged_deleted;
       }
     }
 
     return !reader.failed();
   }
 
-  bool StagedComparison::compareTree(const ObjectId& id, std::size_t prefix, std::uint32_t begin, std::uint32_t end, std::uint32_t cache, std::size_t depth) {
+  bool StagedComparison::compareTree(Sources& sources, const ObjectId& id, std::size_t prefix, std::uint32_t begin, std::uint32_t end, std::uint32_t cache, std::size_t depth) {
     if (cache != no_cache_tree) {
-      const auto& node = index_->tree[cache];
+      const auto& node = sources.index.tree[cache];
       if (node.entries >= 0 && node.id == id) {
         return true;
       }
     }
 
-    if (!readTree(id, depth)) {
+    if (!readTree(sources, id, depth)) {
       return false;
     }
 
-    TreeReader reader{buffer(depth), objects_->format()};
+    TreeReader reader{buffer(depth), sources.objects.format()};
     TreeEntry entry;
     auto current = begin;
 
@@ -494,7 +499,7 @@ namespace telar::git {
       int order = 1;
 
       while (current < end) {
-        const auto rest = relative(current, prefix);
+        const auto rest = relative(sources.index, current, prefix);
         const auto slash = rest.find('/');
         const auto component = rest.substr(0, slash);
         const bool nested = slash != std::string_view::npos;
@@ -504,26 +509,26 @@ namespace telar::git {
           break;
         }
 
-        const auto group_end = nested ? groupEnd(current, end, prefix, component) : pathEnd(current, end);
+        const auto group_end = nested ? groupEnd(sources.index, current, end, prefix, component) : pathEnd(sources.index, current, end);
 
-        addRange(current, group_end);
+        addRange(sources, current, group_end);
         current = group_end;
       }
 
       if (current < end && order == 0) {
         if (directory) {
-          const auto group_end = groupEnd(current, end, prefix, name);
-          const auto child = cacheTreeChild(index_->tree, cache, name);
-          if (!compareTree(tree_id, prefix + name.size() + 1, current, group_end, child, depth + 1)) {
+          const auto group_end = groupEnd(sources.index, current, end, prefix, name);
+          const auto child = cacheTreeChild(sources.index, cache, name);
+          if (!compareTree(sources, tree_id, prefix + name.size() + 1, current, group_end, child, depth + 1)) {
             return false;
           }
 
           current = group_end;
         } else {
-          const auto path_end = pathEnd(current, end);
-          const auto& item = index_->entries[current];
+          const auto path_end = pathEnd(sources.index, current, end);
+          const auto& item = sources.index.entries[current];
           if (path_end - current == 1 && item.stage() == 0 && !item.intentToAdd() && (item.mode != tree_mode || item.id != tree_id)) {
-            ++counts_->staged_modified;
+            ++sources.counts.staged_modified;
           }
 
           current = path_end;
@@ -533,11 +538,11 @@ namespace telar::git {
       }
 
       if (directory) {
-        if (!deleteTree(tree_id, depth + 1)) {
+        if (!deleteTree(sources, tree_id, depth + 1)) {
           return false;
         }
       } else {
-        ++counts_->staged_deleted;
+        ++sources.counts.staged_deleted;
       }
     }
 
@@ -545,26 +550,26 @@ namespace telar::git {
       return false;
     }
 
-    addRange(current, end);
+    addRange(sources, current, end);
     return true;
   }
 
-  std::uint32_t StagedComparison::pathEnd(std::uint32_t begin, std::uint32_t end) const noexcept {
-    const auto path = index_->path(index_->entries[begin]);
+  std::uint32_t StagedComparison::pathEnd(const Index& index, std::uint32_t begin, std::uint32_t end) noexcept {
+    const auto path = index.path(index.entries[begin]);
     auto current = begin + 1;
 
-    while (current < end && index_->path(index_->entries[current]) == path) {
+    while (current < end && index.path(index.entries[current]) == path) {
       ++current;
     }
 
     return current;
   }
 
-  std::uint32_t StagedComparison::groupEnd(std::uint32_t begin, std::uint32_t end, std::size_t prefix, std::string_view component) const noexcept {
+  std::uint32_t StagedComparison::groupEnd(const Index& index, std::uint32_t begin, std::uint32_t end, std::size_t prefix, std::string_view component) noexcept {
     auto current = begin;
 
     while (current < end) {
-      const auto rest = relative(current, prefix);
+      const auto rest = relative(index, current, prefix);
       if (rest.size() <= component.size() || rest[component.size()] != '/' || !rest.starts_with(component)) {
         break;
       }
@@ -588,7 +593,7 @@ namespace telar::git {
 
   bool UnstagedComparison::scan(int worktree, const Index& index, Options options, const Limits& limits, ChangeCounts& counts) {
     options_ = options;
-    limits_ = &limits;
+    hashed_limit_ = limits.hashed_bytes;
     hashed_bytes_ = 0;
     if (index.fingerprint != verified_index_) {
       verified_.clear();
@@ -656,7 +661,12 @@ namespace telar::git {
         return false;
       }
 
-      switch (examine(entry, index.timestamp(), parent, file.c_str(), status, verified_.atMut(current))) {
+      // Examined on a copy: examining reads the comparison, so it cannot also write its records.
+      auto verified = verified_[current];
+      const auto verdict = examine(entry, index.timestamp(), parent, file.c_str(), status, verified);
+
+      verified_.atMut(current) = verified;
+      switch (verdict) {
       case Verdict::clean:
         break;
       case Verdict::modified:
@@ -834,7 +844,7 @@ namespace telar::git {
 
   ds::Option<ObjectId> UnstagedComparison::hashFile(int parent, const char* name, const struct stat& expected) {
     const auto size = static_cast<std::uint64_t>(expected.st_size);
-    if (size > limits_->hashed_bytes - hashed_bytes_) {
+    if (size > hashed_limit_ - hashed_bytes_) {
       return ds::none;
     }
 

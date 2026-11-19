@@ -343,11 +343,11 @@ namespace telar::git {
                                                                 : 0;
   }
 
-  TreeReader::TreeReader(std::string_view content, ObjectFormat format) noexcept
+  TreeReader::TreeReader(tbc::view<std::string_view, tbc::lt::a> content, ObjectFormat format) noexcept
       : rest_(content),
         hash_size_(hashSize(format)) {}
 
-  bool TreeReader::next(TreeEntry& entry) noexcept {
+  bool TreeReader::next(tbc::view<TreeEntry&, tbc::lt::a> entry) noexcept {
     if (rest_.empty() || failed_) {
       return false;
     }
@@ -420,7 +420,7 @@ namespace telar::git {
         delta_(memory) {}
 
   bool ObjectDatabase::open(int common, ObjectFormat format, const Limits& limits) {
-    limits_ = &limits;
+    limits_ = limits;
     inflated_ = 0;
     if (format != format_ || !objects_) {
       packs_.clear();
@@ -508,7 +508,7 @@ namespace telar::git {
         continue;
       }
 
-      if (packs_.size() >= limits_->packs) {
+      if (packs_.size() >= limits_.packs) {
         break;
       }
 
@@ -574,14 +574,14 @@ namespace telar::git {
     return std::memcmp(pack_header.data(), "PACK", 4) == 0 && (version == 2 || version == 3) && loadBig32(pack_header.data() + 8) == pack.count;
   }
 
-  ds::Option<std::uint32_t> ObjectDatabase::findInPack(const Pack& pack, const ObjectId& id) noexcept {
+  ds::Option<std::uint32_t> ObjectDatabase::findInPack(std::span<std::uint8_t> block, const Pack& pack, const ObjectId& id) noexcept {
     const auto hash_size = std::size_t{id.size};
     const auto first = id.bytes[0];
     std::uint32_t low = first == 0 ? 0 : pack.fanout[first - 1];
     std::uint32_t high = pack.fanout[first];
     const auto key = id.view();
 
-    while (high > low && std::size_t{high - low} * hash_size > block_.size()) {
+    while (high > low && std::size_t{high - low} * hash_size > block.size()) {
       const auto middle = low + (high - low) / 2;
       ds::Array<std::uint8_t, maximum_hash_size> name;
       if (!readAt(pack.index.get(), name.dataMut(), hash_size, pack_index_header + std::uint64_t{middle} * hash_size)) {
@@ -605,7 +605,7 @@ namespace telar::git {
     }
 
     const auto count = std::size_t{high - low};
-    if (!readAt(pack.index.get(), block_.dataMut(), count * hash_size, pack_index_header + std::uint64_t{low} * hash_size)) {
+    if (!readAt(pack.index.get(), block.data(), count * hash_size, pack_index_header + std::uint64_t{low} * hash_size)) {
       return ds::none;
     }
 
@@ -614,7 +614,7 @@ namespace telar::git {
 
     while (begin < end) {
       const auto middle = begin + (end - begin) / 2;
-      const auto order = compareBytes(key, {block_.data() + middle * hash_size, hash_size});
+      const auto order = compareBytes(key, {block.data() + middle * hash_size, hash_size});
       if (order == 0) {
         return low + static_cast<std::uint32_t>(middle);
       }
@@ -629,8 +629,8 @@ namespace telar::git {
     return ds::none;
   }
 
-  ds::Option<std::uint64_t> ObjectDatabase::packOffset(const Pack& pack, std::uint32_t position) noexcept {
-    const auto hash_size = hashSize(format_);
+  ds::Option<std::uint64_t> ObjectDatabase::packOffset(ObjectFormat format, const Pack& pack, std::uint32_t position) noexcept {
+    const auto hash_size = hashSize(format);
     const auto offsets = pack_index_header + std::uint64_t{pack.count} * (hash_size + 4);
     ds::Array<std::uint8_t, 8> bytes;
     if (!readAt(pack.index.get(), bytes.dataMut(), 4, offsets + 4 * std::uint64_t{position})) {
@@ -661,8 +661,8 @@ namespace telar::git {
 
     for (std::size_t step = 0; step < packs_.size(); ++step) {
       const auto index = (last_pack_ + step) % packs_.size();
-      if (const auto position = findInPack(packs_[index], id)) {
-        const auto found = packOffset(packs_[index], *position);
+      if (const auto position = findInPack(block_.viewMut(), packs_[index], id)) {
+        const auto found = packOffset(format_, packs_[index], *position);
         if (!found) {
           return Lookup::invalid;
         }
@@ -690,8 +690,8 @@ namespace telar::git {
     return Lookup::found;
   }
 
-  bool ObjectDatabase::entryAt(const Pack& pack, std::uint64_t offset, Entry& entry) noexcept {
-    const auto hash_size = hashSize(format_);
+  bool ObjectDatabase::entryAt(ObjectFormat format, const Pack& pack, std::uint64_t offset, Entry& entry) noexcept {
+    const auto hash_size = hashSize(format);
     const auto end = pack.data_size - hash_size;
     if (offset < 12 || offset >= end) {
       return false;
@@ -757,18 +757,18 @@ namespace telar::git {
     return true;
   }
 
-  bool ObjectDatabase::inflatePacked(const Pack& pack, std::uint64_t data_offset, std::span<std::uint8_t> output, bool whole) {
-    if (!inflater_.start()) {
+  bool ObjectDatabase::inflatePacked(Inflater& inflater, std::span<std::uint8_t> chunk, ObjectFormat format, const Pack& pack, std::uint64_t data_offset, std::span<std::uint8_t> output, bool whole) {
+    if (!inflater.start()) {
       return false;
     }
 
-    PackSource source{pack.data.get(), data_offset, pack.data_size - hashSize(format_), chunk_.viewMut()};
+    PackSource source{pack.data.get(), data_offset, pack.data_size - hashSize(format), chunk};
 
     if (whole) {
-      return inflateExactly(inflater_.stream(), source, output);
+      return inflateExactly(inflater.stream(), source, output);
     }
 
-    return inflatePrefix(inflater_.stream(), source, output);
+    return inflatePrefix(inflater.stream(), source, output);
   }
 
   Lookup ObjectDatabase::readPacked(std::uint32_t pack, std::uint64_t offset, ObjectType& type, ds::String<Memory>& output, std::size_t prefix) {
@@ -778,7 +778,7 @@ namespace telar::git {
     ObjectId loose_id;
 
     for (;;) {
-      if (!entryAt(packs_[pack], offset, entry)) {
+      if (!entryAt(format_, packs_[pack], offset, entry)) {
         return Lookup::invalid;
       }
 
@@ -786,7 +786,7 @@ namespace telar::git {
         break;
       }
 
-      if (chain_.size() >= limits_->delta_depth || entry.size > limits_->object_size) {
+      if (chain_.size() >= limits_.delta_depth || entry.size > limits_.object_size) {
         return Lookup::invalid;
       }
 
@@ -813,17 +813,17 @@ namespace telar::git {
     }
 
     if (chain_.empty()) {
-      if (entry.size > limits_->object_size && prefix == 0) {
+      if (entry.size > limits_.object_size && prefix == 0) {
         return Lookup::invalid;
       }
 
       const auto size = static_cast<std::size_t>(prefix == 0 ? entry.size : std::min<std::uint64_t>(entry.size, prefix));
-      if (!charge(size)) {
+      if (!charge(inflated_, limits_.inflated_bytes, size)) {
         return Lookup::invalid;
       }
 
       resizeForOverwrite(output, size);
-      if (!inflatePacked(packs_[pack], entry.data_offset, writable(output), prefix == 0 || size == entry.size)) {
+      if (!inflatePacked(inflater_, chunk_.viewMut(), format_, packs_[pack], entry.data_offset, writable(output), prefix == 0 || size == entry.size)) {
         return Lookup::invalid;
       }
 
@@ -832,16 +832,21 @@ namespace telar::git {
     }
 
     if (loose_base) {
-      if (readLoose(loose_id, type, base_, 0) != Lookup::found) {
+      // The base buffer, taken while the loose object is read into it: reading mutates the database.
+      auto base = std::move(base_);
+      const auto read = readLoose(loose_id, type, base, 0);
+
+      base_ = std::move(base);
+      if (read != Lookup::found) {
         return Lookup::invalid;
       }
     } else {
-      if (entry.size > limits_->object_size || !charge(entry.size)) {
+      if (entry.size > limits_.object_size || !charge(inflated_, limits_.inflated_bytes, entry.size)) {
         return Lookup::invalid;
       }
 
       resizeForOverwrite(base_, static_cast<std::size_t>(entry.size));
-      if (!inflatePacked(packs_[pack], entry.data_offset, writable(base_), true)) {
+      if (!inflatePacked(inflater_, chunk_.viewMut(), format_, packs_[pack], entry.data_offset, writable(base_), true)) {
         return Lookup::invalid;
       }
 
@@ -851,13 +856,13 @@ namespace telar::git {
     for (auto index = chain_.size(); index-- != 0;) {
       const auto* link = &chain_[index];
 
-      if (!charge(link->size)) {
+      if (!charge(inflated_, limits_.inflated_bytes, link->size)) {
         return Lookup::invalid;
       }
 
       resizeForOverwrite(delta_, static_cast<std::size_t>(link->size));
-      if (!inflatePacked(packs_[link->pack], link->data_offset, writable(delta_), true) || !applyDelta(asBytes(base_), asBytes(delta_), target_, limits_->object_size) ||
-          !charge(target_.size())) {
+      if (!inflatePacked(inflater_, chunk_.viewMut(), format_, packs_[link->pack], link->data_offset, writable(delta_), true) || !applyDelta(asBytes(base_), asBytes(delta_), target_, limits_.object_size) ||
+          !charge(inflated_, limits_.inflated_bytes, target_.size())) {
         return Lookup::invalid;
       }
 
@@ -880,7 +885,7 @@ namespace telar::git {
       return Lookup::invalid;
     }
 
-    const auto read = readWhole(objects_.get(), name.c_str(), compressed_, limits_->object_size);
+    const auto read = readWhole(objects_.get(), name.c_str(), compressed_, limits_.object_size);
     if (read != ReadStatus::ok) {
       return read == ReadStatus::missing ? Lookup::missing : Lookup::invalid;
     }
@@ -925,12 +930,12 @@ namespace telar::git {
     }
 
     const auto size = *parsed;
-    if (prefix == 0 && size > limits_->object_size) {
+    if (prefix == 0 && size > limits_.object_size) {
       return Lookup::invalid;
     }
 
     const auto wanted = static_cast<std::size_t>(prefix == 0 ? size : std::min<std::uint64_t>(size, prefix));
-    if (!charge(wanted)) {
+    if (!charge(inflated_, limits_.inflated_bytes, wanted)) {
       return Lookup::invalid;
     }
 
@@ -960,12 +965,12 @@ namespace telar::git {
     return inflateExactly(stream, source, rest) ? Lookup::found : Lookup::invalid;
   }
 
-  bool ObjectDatabase::charge(std::uint64_t bytes) noexcept {
-    if (bytes > limits_->inflated_bytes - inflated_) {
+  bool ObjectDatabase::charge(std::uint64_t& inflated, std::uint64_t limit, std::uint64_t bytes) noexcept {
+    if (bytes > limit - inflated) {
       return false;
     }
 
-    inflated_ += bytes;
+    inflated += bytes;
     return true;
   }
 
@@ -998,25 +1003,32 @@ namespace telar::git {
       return;
     }
 
-    if (!chain.present || readWhole(objects, "info/commit-graphs/commit-graph-chain", chain_, limits.small_file * 16) != ReadStatus::ok) {
+    if (!chain.present) {
       return;
     }
 
-    std::string_view lines{chain_};
-    const auto digits = 2 * hashSize(format);
+    // The chain file's buffer, taken while its lines are read: adding a layer mutates the graph.
+    auto listing = std::move(chain_);
 
-    while (!lines.empty()) {
-      const auto end = lines.find('\n');
-      const auto line = lines.substr(0, end);
+    if (readWhole(objects, "info/commit-graphs/commit-graph-chain", listing, limits.small_file * 16) == ReadStatus::ok) {
+      std::string_view lines{listing};
+      const auto digits = 2 * hashSize(format);
 
-      lines.remove_prefix(end == std::string_view::npos ? lines.size() : end + 1);
-      PathName name;
-      if (line.size() != digits || !ObjectId::fromHex(line, format) || layers_.size() >= limits.commit_graph_layers ||
-          !name.assign({"info/commit-graphs/graph-", line, ".graph"}) || !addLayer(objects, name.c_str())) {
-        layers_.clear();
-        return;
+      while (!lines.empty()) {
+        const auto end = lines.find('\n');
+        const auto line = lines.substr(0, end);
+
+        lines.remove_prefix(end == std::string_view::npos ? lines.size() : end + 1);
+        PathName name;
+        if (line.size() != digits || !ObjectId::fromHex(line, format) || layers_.size() >= limits.commit_graph_layers ||
+            !name.assign({"info/commit-graphs/graph-", line, ".graph"}) || !addLayer(objects, name.c_str())) {
+          layers_.clear();
+          break;
+        }
       }
     }
+
+    chain_ = std::move(listing);
   }
 
   void CommitGraph::clear() noexcept {

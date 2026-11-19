@@ -63,7 +63,7 @@ namespace telar::git {
     return {bytes.data(), size};
   }
 
-  std::string_view ObjectId::hex(std::span<char, 2 * maximum_hash_size> buffer, std::size_t digits) const noexcept {
+  tbc::view<std::string_view, tbc::lt::a> ObjectId::hex(tbc::view<std::span<char, 2 * maximum_hash_size>, tbc::lt::a> buffer, std::size_t digits) const noexcept {
     constexpr std::string_view alphabet = "0123456789abcdef";
 
     digits = std::min(digits, std::size_t{size} * 2);
@@ -230,7 +230,7 @@ namespace telar::git {
     return true;
   }
 
-  ReadStatus readSmall(int directory, const char* name, std::span<char> buffer, std::string_view& contents, Fingerprint* fingerprint) noexcept {
+  ReadStatus readSmall(int directory, const char* name, tbc::view<std::span<char>, tbc::lt::a> buffer, tbc::view<std::string_view&, tbc::lt::a> contents, Fingerprint* fingerprint) noexcept {
     FileDescriptor file;
     struct stat status{};
     if (const auto opened = openRegular(directory, name, file, status); opened != ReadStatus::ok) {
@@ -340,11 +340,14 @@ namespace telar::git {
   void hashObjectHeader(Hasher& hasher, std::string_view type, std::uint64_t size) noexcept {
     ds::Array<char, 48> header;
 
-    std::copy(type.begin(), type.end(), header.dataMut());
-    auto* cursor = header.dataMut() + type.size();
+    auto* const begin = header.dataMut();
+    auto* const last = begin + header.size() - 1;
+
+    std::copy(type.begin(), type.end(), begin);
+    auto* cursor = begin + type.size();
 
     *cursor++ = ' ';
-    cursor = std::to_chars(cursor, header.dataMut() + header.size() - 1, size).ptr;
+    cursor = std::to_chars(cursor, last, size).ptr;
     *cursor++ = '\0';
     hasher.update(asBytes({header.data(), static_cast<std::size_t>(cursor - header.data())}));
   }

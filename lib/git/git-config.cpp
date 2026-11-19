@@ -24,7 +24,7 @@ namespace telar::git {
   bool parseConfigEntries(std::string_view text, ds::String<Memory>& scratch, void* target, bool (*visit)(void*, const ConfigEntry&)) {
     scratch.resize(2 * text.size() + 2);
     char* const subsection_buffer = scratch.dataMut();
-    char* const value_buffer = scratch.dataMut() + text.size() + 1;
+    char* const value_buffer = subsection_buffer + text.size() + 1;
 
     if (text.starts_with("\xef\xbb\xbf")) {
       text.remove_prefix(3);
