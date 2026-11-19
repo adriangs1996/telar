@@ -150,8 +150,20 @@ export {
       void stageAtMediaBoundary(const GraphicsStorage<GraphicsMemory>& storage) noexcept;
 
     private:
+      // What the synchronizer counts for diagnostics, nothing in a build without them.
+      struct Metrics {
+#if TELAR_DIAGNOSTICS
+        diagnostics::GraphicsCounters counters;
+        std::uint64_t available_revision = 0;
+        std::uint64_t pending_blocked = 0;
+        std::uint64_t pending_adopted = 0;
+#endif
+      };
+
+      // Sends through the connection and counts it: the connection and the metrics alone, so what the
+      // synchronizer knows stays borrowed while it sends.
       template <typename Message>
-      void send(Connection<ConcurrentMemory>& connection, const Message& message);
+      static void send(Connection<ConcurrentMemory>& connection, const Message& message, Metrics& metrics);
 
       template <Allocator GraphicsMemory>
       void initialize(const GraphicsStorage<GraphicsMemory>& storage) noexcept;
@@ -177,7 +189,8 @@ export {
 
       bool knows(ImageKey key) const noexcept;
 
-      GraphicsPlacement& placementSlot(std::uint64_t identity);
+      // The slot among the known placements for `identity`: those alone, so a transfer stays borrowed.
+      static GraphicsPlacement& placementSlot(std::span<GraphicsPlacement> placements, std::uint64_t identity);
 
       static constexpr std::size_t maximum_chunk_bytes = 1024 * 1024;
       static constexpr std::size_t maximum_queue_bytes = 2 * 1024 * 1024;
@@ -193,12 +206,7 @@ export {
       SnapshotState snapshot_ = SnapshotState::idle;
       bool shared_ = false;
       bool initialized_ = false;
-#if TELAR_DIAGNOSTICS
-      diagnostics::GraphicsCounters counters_;
-      std::uint64_t available_revision_ = 0;
-      std::uint64_t pending_blocked_ = 0;
-      std::uint64_t pending_adopted_ = 0;
-#endif
+      [[no_unique_address]] Metrics metrics_;
     };
 
     // The storages it publishes: the pane terminal's and the media terminal's.

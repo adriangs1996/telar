@@ -123,7 +123,7 @@ namespace telar::runtime {
 
 #if TELAR_DIAGNOSTICS
   diagnostics::GraphicsCounters GraphicsSynchronizer::takeCounters() noexcept {
-    return std::exchange(counters_, {});
+    return std::exchange(metrics_.counters, {});
   }
 #endif
 
@@ -139,7 +139,7 @@ namespace telar::runtime {
 
   bool GraphicsSynchronizer::advanceTransfer(Connection<ConcurrentMemory>& connection) {
     if (!transfer_) {
-      TELAR_DIAGNOSTIC(if (snapshot_ != SnapshotState::idle || observed_revision_ != available_revision_) { diagnostics::accumulate(counters_.stage_deferred); });
+      TELAR_DIAGNOSTIC(if (snapshot_ != SnapshotState::idle || observed_revision_ != metrics_.available_revision) { diagnostics::accumulate(metrics_.counters.stage_deferred); });
       return false;
     }
 
@@ -166,7 +166,7 @@ namespace telar::runtime {
     const GraphicsHeader header{.pane_id = pane_, .revision = std::max<std::uint64_t>(1, storage.revision())};
 
     if (snapshot_ == SnapshotState::pending) {
-      send(connection, GraphicsSnapshot{.header = header, .phase = SnapshotPhase::begin});
+      send(connection, GraphicsSnapshot{.header = header, .phase = SnapshotPhase::begin}, metrics_);
       snapshot_ = SnapshotState::open;
       return true;
     }
@@ -184,7 +184,7 @@ namespace telar::runtime {
         return image.description.key.image_id == known.image_id;
       });
       if (current == storage.images().end() || (!sameImage(known, current->description.key) && knows(current->description.key))) {
-        send(connection, GraphicsDeleteImage{.header = header, .key = known});
+        send(connection, GraphicsDeleteImage{.header = header, .key = known}, metrics_);
         for (auto& placement : known_placements_.viewMut()) {
           if (sameImage(placement.key, known)) {
             placement = {};
@@ -214,16 +214,16 @@ namespace telar::runtime {
         return placement.virtual_id == known.virtual_id;
       });
       if (current == storage.placements().end()) {
-        send(connection, GraphicsDeletePlacement{.header = header, .key = known.key, .virtual_id = known.virtual_id, .placement_id = known.placement_id});
+        send(connection, GraphicsDeletePlacement{.header = header, .key = known.key, .virtual_id = known.virtual_id, .placement_id = known.placement_id}, metrics_);
         known = {};
         return true;
       }
     }
 
     for (const auto& placement : storage.placements()) {
-      auto& known = placementSlot(placement.virtual_id);
+      auto& known = placementSlot(known_placements_.viewMut(), placement.virtual_id);
       if (!samePlacement(known, placement)) {
-        send(connection, GraphicsPlacementMessage{.header = header, .placement = placement});
+        send(connection, GraphicsPlacementMessage{.header = header, .placement = placement}, metrics_);
         known = placement;
         return true;
       }
@@ -231,7 +231,7 @@ namespace telar::runtime {
 
     observed_revision_ = storage.revision();
     if (snapshot_ == SnapshotState::open) {
-      send(connection, GraphicsSnapshot{.header = header, .phase = SnapshotPhase::end});
+      send(connection, GraphicsSnapshot{.header = header, .phase = SnapshotPhase::end}, metrics_);
       snapshot_ = SnapshotState::idle;
     }
 
@@ -256,7 +256,7 @@ namespace telar::runtime {
       }
 
       if (!credit_.canReserve(image.pixels.size())) {
-        TELAR_DIAGNOSTIC(diagnostics::accumulate(pending_blocked_));
+        TELAR_DIAGNOSTIC(diagnostics::accumulate(metrics_.pending_blocked));
         return StageResult::blocked;
       }
 
@@ -274,7 +274,7 @@ namespace telar::runtime {
       }
 
       transfer_ = std::move(transfer);
-      TELAR_DIAGNOSTIC(diagnostics::accumulate(pending_adopted_));
+      TELAR_DIAGNOSTIC(diagnostics::accumulate(metrics_.pending_adopted));
       return StageResult::staged;
     }
 
@@ -283,14 +283,14 @@ namespace telar::runtime {
 
   template <Allocator GraphicsMemory>
   void GraphicsSynchronizer::stageAtMediaBoundary(const GraphicsStorage<GraphicsMemory>& storage) noexcept {
-    TELAR_DIAGNOSTIC(available_revision_ = storage.revision());
+    TELAR_DIAGNOSTIC(metrics_.available_revision = storage.revision());
     if (transfer_ || synchronized(storage)) {
       return;
     }
 
     try {
       if (stage(storage) == StageResult::staged) {
-        TELAR_DIAGNOSTIC(diagnostics::accumulate(counters_.transfers_staged));
+        TELAR_DIAGNOSTIC(diagnostics::accumulate(metrics_.counters.transfers_staged));
       }
     } catch (const std::bad_alloc&) {
       abandon(storage.revision());
@@ -298,18 +298,18 @@ namespace telar::runtime {
   }
 
   template <typename Message>
-  void GraphicsSynchronizer::send(Connection<ConcurrentMemory>& connection, const Message& message) {
+  void GraphicsSynchronizer::send(Connection<ConcurrentMemory>& connection, const Message& message, [[maybe_unused]] Metrics& metrics) {
     connection.send(message);
     TELAR_DIAGNOSTIC({
-      counters_.record(message);
-      diagnostics::accumulate(counters_.stage_blocked, std::exchange(pending_blocked_, 0));
-      diagnostics::accumulate(counters_.transfers_adopted, std::exchange(pending_adopted_, 0));
+      metrics.counters.record(message);
+      diagnostics::accumulate(metrics.counters.stage_blocked, std::exchange(metrics.pending_blocked, 0));
+      diagnostics::accumulate(metrics.counters.transfers_adopted, std::exchange(metrics.pending_adopted, 0));
     });
   }
 
   template <Allocator GraphicsMemory>
   void GraphicsSynchronizer::initialize(const GraphicsStorage<GraphicsMemory>& storage) noexcept {
-    TELAR_DIAGNOSTIC(available_revision_ = storage.revision());
+    TELAR_DIAGNOSTIC(metrics_.available_revision = storage.revision());
     if (!initialized_) {
       initialized_ = true;
       if (!storage.images().empty()) {
@@ -324,10 +324,10 @@ namespace telar::runtime {
     header.revision = transfer.revision;
     if (!transfer.metadata_sent) {
       if (!transfer.frozen.name().empty()) {
-        send(connection, GraphicsSharedImage{.header = header, .image = transfer.image, .name = transfer.frozen.name()});
+        send(connection, GraphicsSharedImage{.header = header, .image = transfer.image, .name = transfer.frozen.name()}, metrics_);
         transfer.frozen.published();
       } else {
-        send(connection, GraphicsImage{.header = header, .image = transfer.image});
+        send(connection, GraphicsImage{.header = header, .image = transfer.image}, metrics_);
       }
 
       transfer.metadata_sent = true;
@@ -338,7 +338,7 @@ namespace telar::runtime {
       const auto bytes = transfer.frozen.pixels().subspan(transfer.offset);
       const auto chunk = bytes.first(std::min(bytes.size(), maximum_chunk_bytes));
 
-      send(connection, GraphicsImageChunk{.header = header, .key = transfer.image.key, .offset = transfer.offset, .bytes = chunk});
+      send(connection, GraphicsImageChunk{.header = header, .key = transfer.image.key, .offset = transfer.offset, .bytes = chunk}, metrics_);
       transfer.offset += chunk.size();
       return true;
     }
@@ -346,8 +346,8 @@ namespace telar::runtime {
     if (transfer.placement_index < transfer.placement_count) {
       const auto& placement = transfer.placements[transfer.placement_index];
 
-      send(connection, GraphicsPlacementMessage{.header = header, .placement = placement});
-      placementSlot(placement.virtual_id) = placement;
+      send(connection, GraphicsPlacementMessage{.header = header, .placement = placement}, metrics_);
+      placementSlot(known_placements_.viewMut(), placement.virtual_id) = placement;
       ++transfer.placement_index;
       return true;
     }
@@ -371,8 +371,7 @@ namespace telar::runtime {
     });
   }
 
-  GraphicsPlacement& GraphicsSynchronizer::placementSlot(std::uint64_t identity) {
-    const auto placements = known_placements_.viewMut();
+  GraphicsPlacement& GraphicsSynchronizer::placementSlot(std::span<GraphicsPlacement> placements, std::uint64_t identity) {
     auto existing = std::ranges::find_if(placements, [&](const auto& placement) {
       return placement.virtual_id == identity;
     });
