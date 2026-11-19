@@ -87,11 +87,13 @@ namespace telar::shell {
 
     // Writes unquoted bytes into a caller buffer. Unquoting never produces more
     // bytes than it reads, so an output as large as the input never overflows.
+    // Writes unquoted text into a buffer it borrows, region `a`, only ever appending, so the text it
+    // returns views the buffer and stays valid as more is written.
     class Unquoter {
     public:
       Unquoter() noexcept = default;
 
-      explicit Unquoter(std::span<char> out) noexcept
+      explicit Unquoter(tbc::view<std::span<char>, tbc::lt::a> out) noexcept
           : out_(out) {}
 
       [[nodiscard]] std::size_t size() const noexcept {
@@ -102,7 +104,7 @@ namespace telar::shell {
         return overflow_;
       }
 
-      [[nodiscard]] std::string_view text(std::size_t from) const noexcept {
+      [[nodiscard]] tbc::view<std::string_view, tbc::lt::a> text(std::size_t from) const noexcept {
         return {out_.data() + from, size_ - from};
       }
 
@@ -353,7 +355,7 @@ namespace telar::shell {
         return true;
       }
 
-      std::span<char> out_;
+      tbc::view<std::span<char>, tbc::lt::a> out_;
       std::size_t size_ = 0;
       bool overflow_ = false;
     };
@@ -560,6 +562,12 @@ namespace telar::shell {
           }
         }
       }
+
+      // The capture writes into a heredoc beside it, so the lexer stays where it was built.
+      Lexer(const Lexer&) = delete;
+      Lexer& operator=(const Lexer&) = delete;
+      Lexer(Lexer&&) = delete;
+      Lexer& operator=(Lexer&&) = delete;
 
       Lexed run() noexcept {
         if (n_ > max_line) {
@@ -2096,7 +2104,8 @@ namespace telar::shell {
       bool capturing_ = false;
       u32 capture_command_ = no_command;
       std::size_t capture_gap_ = 0;
-      Unquoter capture_;
+      // Writes into the heredoc beside it.
+      tbc::view<Unquoter, tbc::lt::self> capture_;
     };
 
   }
