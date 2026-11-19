@@ -28,6 +28,8 @@ namespace telar::gui::qt {
     constexpr int decimal = 10;
     // The runtime counts shares in permille; QML shows percents.
     constexpr double permille_per_percent = 10.0;
+    constexpr int least_nice = -20;
+    constexpr int most_nice = 20;
 
     QString started(const ProcessInstance& instance) {
       return QStringLiteral("%1.%2").arg(instance.started_seconds).arg(instance.started_microseconds, static_cast<int>(microsecond_digits), decimal, QLatin1Char('0'));
@@ -315,7 +317,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    if (!application::monitor::prioritize(store_.sessionMut(), selected, std::clamp(nice, -20, 20))) {
+    if (!application::monitor::prioritize(store_.sessionMut(), selected, std::clamp(nice, least_nice, most_nice))) {
       emit failed(QStringLiteral("The monitor is busy with another request; try again"));
     }
   }
@@ -363,7 +365,7 @@ namespace telar::gui::qt {
   }
 
   bool MonitorController::perform(window_actions::Action action) {
-    using Action = window_actions::Action;
+    using window_actions::Action;
 
     if (!selected()) {
       return false;

@@ -11,11 +11,11 @@ namespace telar::gui::features::monitor {
   namespace {
 
     template <std::size_t Capacity>
-    void copy(FixedText<Capacity>& output, std::string_view text) noexcept {
+    void copy(FixedText<Capacity>& output, std::string_view text) {
       output.assign(runtime::utf8Prefix(text, Capacity));
     }
 
-    ProcessRow row(const MonitorProcess& process) noexcept {
+    ProcessRow row(const MonitorProcess& process) {
       ProcessRow result{
           .instance = process.instance,
           .parent = process.parent,
@@ -110,7 +110,7 @@ namespace telar::gui::features::monitor {
       detail.process = row(snapshot.detail->process);
       copy(detail.arguments, snapshot.detail->arguments);
       copy(detail.directory, snapshot.detail->directory);
-      detail.port_count = static_cast<std::uint8_t>(std::min(snapshot.detail->ports.size(), detail.ports.size()));
+      detail.port_count = static_cast<std::uint8_t>(std::min(snapshot.detail->ports.size(), max_listed_ports));
       std::ranges::copy(snapshot.detail->ports.first(detail.port_count), detail.ports.dataMut());
       detail.child_count = static_cast<std::uint16_t>(snapshot.detail->children.size());
     }
@@ -119,7 +119,7 @@ namespace telar::gui::features::monitor {
     return true;
   }
 
-  bool fail(State& state, std::uint64_t request_id, std::string_view message) noexcept {
+  bool fail(State& state, std::uint64_t request_id, std::string_view message) {
     if (request_id == 0 || (request_id != state.waiting && request_id != state.acting)) {
       return false;
     }
@@ -137,7 +137,7 @@ namespace telar::gui::features::monitor {
     return true;
   }
 
-  bool complete(State& state, std::uint64_t request_id) noexcept {
+  bool complete(State& state, std::uint64_t request_id) {
     if (request_id == 0 || request_id != state.acting) {
       return false;
     }

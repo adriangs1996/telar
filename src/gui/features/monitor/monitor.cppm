@@ -20,9 +20,9 @@ export namespace telar::gui::features::monitor {
     ProcessInstance instance{};
     std::int32_t parent = 0;
     std::uint32_t user_id = 0;
-    FixedText<MonitorLimits::user_bytes> user{};
-    FixedText<MonitorLimits::name_bytes> name{};
-    FixedText<MonitorLimits::command_bytes> command{};
+    FixedText<MonitorLimits::user_bytes> user;
+    FixedText<MonitorLimits::name_bytes> name;
+    FixedText<MonitorLimits::command_bytes> command;
     ProcessState state = ProcessState::unknown;
     bool measured = false;
     std::uint32_t cpu_permille = 0;
@@ -34,24 +34,29 @@ export namespace telar::gui::features::monitor {
     std::uint8_t depth = 0;
   };
 
+  // What the window keeps of a mount's path, a file system's type and an interface's name.
+  inline constexpr std::size_t path_bytes = 128;
+  inline constexpr std::size_t short_name_bytes = 16;
+  inline constexpr std::size_t error_bytes = 256;
+
   struct DiskRow {
-    FixedText<128> path{};
-    FixedText<16> type{};
+    FixedText<path_bytes> path;
+    FixedText<short_name_bytes> type;
     std::uint64_t total_bytes = 0;
     std::uint64_t used_bytes = 0;
     std::uint64_t available_bytes = 0;
   };
 
   struct InterfaceRow {
-    FixedText<16> name{};
+    FixedText<short_name_bytes> name;
     std::uint64_t received_per_second = 0;
     std::uint64_t sent_per_second = 0;
   };
 
   struct ProcessDetail {
     ProcessRow process{};
-    FixedText<MonitorLimits::arguments_bytes> arguments{};
-    FixedText<MonitorLimits::directory_bytes> directory{};
+    FixedText<MonitorLimits::arguments_bytes> arguments;
+    FixedText<MonitorLimits::directory_bytes> directory;
     ds::Array<std::uint16_t, max_listed_ports> ports{};
     std::uint8_t port_count = 0;
     std::uint16_t child_count = 0;
@@ -65,7 +70,7 @@ export namespace telar::gui::features::monitor {
     bool reverse = false;
     MonitorScope scope = MonitorScope::all;
     bool tree = false;
-    FixedText<MonitorLimits::filter_bytes> filter{};
+    FixedText<MonitorLimits::filter_bytes> filter;
     // The process whose detail the window shows; pid 0 for none.
     ProcessInstance selected{};
   };
@@ -81,7 +86,7 @@ export namespace telar::gui::features::monitor {
     // Grows with every answer the window keeps.
     std::uint64_t revision = 0;
     // What the runtime last refused, until the next answer.
-    FixedText<256> error{};
+    FixedText<error_bytes> error;
 
     std::uint16_t cpu_permille = 0;
     tbc::view<ds::Vec<std::uint16_t, Memory>, tbc::lt::a> cores;
@@ -99,7 +104,7 @@ export namespace telar::gui::features::monitor {
     tbc::view<ds::Vec<InterfaceRow, Memory>, tbc::lt::a> interfaces;
     std::uint32_t matched = 0;
     tbc::view<ds::Vec<ProcessRow, Memory>, tbc::lt::a> processes;
-    ds::Option<ProcessDetail> detail{};
+    ds::Option<ProcessDetail> detail;
   };
 
   // The query for what the window shows, under `request_id`, which the state now waits for.
@@ -109,10 +114,10 @@ export namespace telar::gui::features::monitor {
   bool receive(State& state, const MonitorSnapshot& snapshot);
 
   // The runtime refused `request_id`; false when the state waits for no such request.
-  bool fail(State& state, std::uint64_t request_id, std::string_view message) noexcept;
+  bool fail(State& state, std::uint64_t request_id, std::string_view message);
 
   // The signal or priority `request_id` was applied; false when the state waits for no such one.
-  bool complete(State& state, std::uint64_t request_id) noexcept;
+  bool complete(State& state, std::uint64_t request_id);
 
   // Forgets what was asked: a new connection answers none of it.
   void reset(State& state) noexcept;
