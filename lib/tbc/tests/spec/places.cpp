@@ -1098,3 +1098,81 @@ int placeWriteThroughLentOther(places::lent_owner& owner) {
 }
 
 // END CASE
+
+// CASE: place.write_through_callback
+// PAIR: place.write_through_inferred
+// SOURCE: lib/base/text/json/json.cppm :: JsonValue::eachElement (each element is handed to the caller's consumer)
+// STATUS: implemented
+// CONTRACT: A call through a reference to an object whose callee the checker reads, as a lambda's call operator, reborrows that reference, as Rust calls an `&mut impl FnMut` again and again: it ends other borrows, never the reference's own.
+// SCENARIO: A generic walk hands each element to a consumer it takes by forwarding reference, which counts into a capture; accept.
+namespace places {
+  struct element_list {
+    template <typename Consumer>
+    void each(Consumer&& consume) const {
+      for (const int value : values) {
+        consume(value);
+      }
+    }
+
+    std::vector<int> values;
+  };
+}
+
+int placeWriteThroughCallback(const places::element_list& list) {
+  int total = 0;
+
+  list.each([&](int value) {
+    total += value;
+  });
+  return total;
+}
+
+// END CASE
+
+// CASE: place.write_through_callback_grows
+// PAIR: place.write_through_inferred
+// SOURCE: lib/base/text/json/json.cppm :: JsonValue::eachElement (each element is handed to the caller's consumer)
+// STATUS: implemented
+// CONTRACT: A call through a reference to an object whose callee the checker reads, as a lambda's call operator, reborrows that reference, as Rust calls an `&mut impl FnMut` again and again: it ends other borrows, never the reference's own.
+// SCENARIO: The consumer grows a list while another variable keeps one of its values across the call; reject at the call.
+int placeWriteThroughCallbackGrows(std::vector<int>& values) {
+  const int& first = values[0];
+  auto grow = [&](int value) {
+    values.push_back(value);
+  };
+
+  grow(1); // expected-error [tbc-invalidated-borrow]
+  return first;
+}
+
+// END CASE
+
+// CASE: place.write_through_callback_this
+// PAIR: place.write_through_inferred
+// SOURCE: src/cli/hooks/command/command.cpp :: Event (a workspace root is kept from each element of a list)
+// STATUS: implemented
+// CONTRACT: A call through a reference to an object whose callee the checker reads, as a lambda's call operator, reborrows that reference, as Rust calls an `&mut impl FnMut` again and again: it ends other borrows, never the reference's own.
+// SCENARIO: A method hands each element to a consumer that captures this object and changes one of its fields; accept.
+namespace places {
+  class root_reader {
+  public:
+    void read(const element_list& roots) {
+      roots.each([&](int root) {
+        if (first_ == 0) {
+          first_ = root;
+        }
+      });
+    }
+
+  private:
+    int first_ = 0;
+  };
+}
+
+void placeWriteThroughCallbackThis(const places::element_list& roots) {
+  places::root_reader reader;
+
+  reader.read(roots);
+}
+
+// END CASE

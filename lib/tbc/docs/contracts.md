@@ -144,7 +144,8 @@ uses only the callee's signature:
   those objects end, while the input keeps its own, as a Rust `&mut` reborrows
   what its fields lend. A receiver reached through a variable, along its fields,
   references, pointers and what its methods lend, as `client.roster()->open()`,
-  is reborrowed the same way: the call ends other borrows of what that variable
+  or a closure called through such a variable, whose captures it reaches, is
+  reborrowed the same way: the call ends other borrows of what that variable
   designates and of what the receiver's own mutable references reach, never
   the variable's own, also when it borrows two places at once, as one found in
   a field or made through its owner does. Nothing a

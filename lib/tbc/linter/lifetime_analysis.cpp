@@ -5133,6 +5133,9 @@ namespace tbc_lint {
         // What the receiver designates through its own fields it borrows exclusively, as a Rust `&mut`
         // field is: a call through it invalidates other borrows of those objects, not the receiver's.
         llvm::SmallVector<invalidation, 8> borrowed_places;
+        // The receiver's own fields where another variable reaches it: a call through that variable
+        // reborrows it, as a Rust `&mut` does, so it ends other borrows, not the variable's.
+        llvm::SmallVector<invalidation, 8> received;
 
         for (const auto& [target, range] : known->summary.invalidates) {
           // A place the callee's input designates lies where the same part of the actual input designates.
@@ -5181,14 +5184,14 @@ namespace tbc_lint {
             if (capturedReceiver(*call.getDirectCallee(), field)) {
               for (const auto& actual : capturedThis(*call.getDirectCallee(), *object, current).values) {
                 if (const auto place = placeWithin(actual, receiverPlace(target))) {
-                  places.push_back({.target = *place, .range = range});
+                  received.push_back({.target = *place, .range = range});
                 }
               }
             } else if (llvm::isa<clang::CXXThisExpr>(clean(object))) {
               places.push_back({.target = target, .range = range});
             } else {
               for (const auto& actual : invalidationTargets(*object, current)) {
-                places.push_back({.target = rebased(actual, receiverPlace(target)), .range = range});
+                received.push_back({.target = rebased(actual, receiverPlace(target)), .range = range});
               }
             }
           } else {
@@ -5196,9 +5199,16 @@ namespace tbc_lint {
           }
         }
 
+        const auto* holder = receiverVariable(call);
+        const auto* borrower = holder != nullptr ? holder : receiverBorrower(call);
+
         invalidateAll(places, &call, current);
+        if (!received.empty()) {
+          invalidateAll(received, &call, current, false, borrower);
+        }
+
         if (!borrowed_places.empty()) {
-          invalidateAll(borrowed_places, &call, current, false, receiverVariable(call));
+          invalidateAll(borrowed_places, &call, current, false, borrower);
         }
       }
 
