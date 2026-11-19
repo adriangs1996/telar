@@ -17,6 +17,8 @@ export {
 
       bool belongsTo(uid_t user) const noexcept;
 
+      ds::Option<uid_t> owner() const noexcept;
+
       ds::Option<std::string_view> read(const char* name, std::span<char> buffer) const noexcept;
 
       ds::Option<std::string_view> link(const char* name, std::span<char> buffer) const noexcept;
@@ -31,6 +33,13 @@ export {
       pid_t foreground = 0;
       std::uint64_t started_ticks = 0;
       std::string_view name;
+      // The state letter: R, S, D, Z, T, t, I, X.
+      char state = '?';
+      // User and system time, in clock ticks.
+      std::uint64_t cpu_ticks = 0;
+      std::int8_t nice = 0;
+      std::uint32_t threads = 0;
+      std::uint64_t resident_pages = 0;
 
       static ds::Option<ProcStat> parse(std::string_view input) noexcept;
     };

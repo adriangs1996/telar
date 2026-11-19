@@ -13,6 +13,7 @@ module;
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
 #include <sys/types.h>
 #include <sys/uio.h>
 #include <time.h>
@@ -77,6 +78,7 @@ export {
   using ::renameat;
   using ::rmdir;
   using ::stat;
+  using ::statvfs;
   using ::symlink;
   using ::unlink;
   using ::unlinkat;
@@ -105,6 +107,7 @@ export {
   using ::getpagesize;
   using ::getpid;
   using ::getpwuid;
+  using ::getpwuid_r;
   using ::getuid;
   using ::passwd;
   using ::setenv;

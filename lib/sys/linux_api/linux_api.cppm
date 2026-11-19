@@ -66,6 +66,8 @@ export namespace telar::sys {
   X(SO_PEERCRED)               \
   X(SYS_close_range)           \
   X(SYS_epoll_pwait2)          \
+  X(SYS_pidfd_open)            \
+  X(SYS_pidfd_send_signal)     \
   X(SYS_renameat2)             \
   X(TCP_KEEPIDLE)              \
   X(TUNSETIFF)
@@ -111,6 +113,8 @@ namespace telar::sys::captured {
 #undef SOCK_CLOEXEC
 #undef SYS_close_range
 #undef SYS_epoll_pwait2
+#undef SYS_pidfd_open
+#undef SYS_pidfd_send_signal
 #undef SYS_renameat2
 
 #define TELAR_SYS_CONSTANT(name) inline constexpr auto name = telar::sys::captured::name##_;

@@ -93,6 +93,7 @@ export {
   X(INADDR_BROADCAST)          \
   X(INADDR_LOOPBACK)           \
   X(INET6_ADDRSTRLEN)          \
+  X(IF_NAMESIZE)               \
   X(IPV6_V6ONLY)               \
   X(NI_MAXHOST)                \
   X(NI_MAXSERV)                \
@@ -172,6 +173,7 @@ namespace telar::sys::captured {
 #undef INADDR_BROADCAST
 #undef INADDR_LOOPBACK
 #undef INET6_ADDRSTRLEN
+#undef IF_NAMESIZE
 #undef IPV6_V6ONLY
 #undef NI_MAXHOST
 #undef NI_MAXSERV

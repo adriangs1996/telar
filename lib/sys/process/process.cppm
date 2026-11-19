@@ -69,9 +69,12 @@ export {
   using ::posix_spawnp;
 
   // Resource limits.
+  using ::getpriority;
   using ::getrlimit;
+  using ::id_t;
   using ::rlim_t;
   using ::rlimit;
+  using ::setpriority;
   using ::setrlimit;
 
   // Terminals and pseudo-terminals.
@@ -92,8 +95,8 @@ export {
   using ::pthread_attr_t;
   using ::pthread_create;
   using ::pthread_detach;
-  using ::pthread_mutex_lock;
   using ::pthread_join;
+  using ::pthread_mutex_lock;
   using ::pthread_mutex_t;
   using ::pthread_mutex_unlock;
   using ::pthread_self;
@@ -109,6 +112,7 @@ export {
   X(NSIG)                    \
   X(SA_RESTART)              \
   X(SIGCHLD)                 \
+  X(SIGCONT)                 \
   X(SIGHUP)                  \
   X(SIGINT)                  \
   X(SIGKILL)                 \
@@ -146,6 +150,7 @@ export {
 
 // glibc declares these as enumerators and defines each macro as its own name.
 #define TELAR_SYS_ENUMERATORS(X) \
+  X(PRIO_PROCESS)                \
   X(PTHREAD_CREATE_DETACHED)     \
   X(RLIMIT_NOFILE)
 
@@ -172,6 +177,7 @@ namespace telar::sys::captured {
 #undef NSIG
 #undef SA_RESTART
 #undef SIGCHLD
+#undef SIGCONT
 #undef SIGHUP
 #undef SIGINT
 #undef SIGKILL
@@ -200,6 +206,7 @@ namespace telar::sys::captured {
 #undef VQUIT
 #undef VSUSP
 #undef _POSIX_VDISABLE
+#undef PRIO_PROCESS
 #undef PTHREAD_CREATE_DETACHED
 #undef RLIMIT_NOFILE
 #undef PTHREAD_MUTEX_INITIALIZER
