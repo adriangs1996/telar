@@ -971,3 +971,68 @@ int places::entry_service::updateKept(int id) {
 }
 
 // END CASE
+
+// CASE: place.write_through_reached
+// PAIR: place.write_through_holder
+// SOURCE: src/gui/ui/app/machine_roster.cpp :: MachineRoster (a client's session, whose effects it reaches by reference, is told it disconnected)
+// STATUS: implemented
+// CONTRACT: A call through a reference reborrows what the reference designates and what that object's own mutable references reach, as a Rust `&mut` does: it ends other borrows of those objects, never the reference's own.
+// SCENARIO: A session that reaches its effects through a reference field is changed twice through the one reference to the client holding it; accept.
+namespace places {
+  struct host_effects {
+    virtual void notify(int value) = 0;
+  };
+
+  struct session_state {
+    void disconnected();
+    bool settle();
+
+    host_effects& effects;
+  };
+
+  struct machine_client {
+    session_state session;
+    int phase = 0;
+  };
+
+  struct client_store {
+    machine_client& client(int slot);
+  };
+}
+
+void placeWriteThroughReached(places::client_store& store, int slot) {
+  auto& client = store.client(slot);
+
+  client.session.disconnected();
+  static_cast<void>(client.session.settle());
+  client.phase = 0;
+}
+
+// END CASE
+
+// CASE: place.write_through_holder_kept
+// PAIR: place.write_through_holder
+// SOURCE: src/gui/ui/app/machine_roster.cpp :: MachineRoster (a client's session, whose effects it reaches by reference, is told it disconnected)
+// STATUS: implemented
+// CONTRACT: A call through a reference reborrows what the reference designates and what that object's own mutable references reach, as a Rust `&mut` does: it ends other borrows of those objects, never the reference's own.
+// SCENARIO: A value the session's log reference reaches is kept in another variable across the call; reject at the call.
+namespace places {
+  struct logged_session {
+    void disconnected();
+
+    std::vector<int>& log;
+  };
+
+  struct logged_client {
+    logged_session session;
+  };
+}
+
+int placeWriteThroughHolderKept(places::logged_client& client) {
+  const int& first = client.session.log[0];
+
+  client.session.disconnected(); // expected-error [tbc-invalidated-borrow]
+  return first;
+}
+
+// END CASE

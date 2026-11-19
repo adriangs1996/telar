@@ -5668,7 +5668,9 @@ namespace tbc_lint {
 
         invalidateAll(places, &call, current);
         if (!reached.empty()) {
-          invalidateAll(reached, &call, current, false, receiverVariable(call));
+          const auto* holder = receiverVariable(call);
+
+          invalidateAll(reached, &call, current, false, holder != nullptr ? holder : receiverBorrower(call));
         }
       }
 

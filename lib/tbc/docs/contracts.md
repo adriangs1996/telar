@@ -144,8 +144,9 @@ uses only the callee's signature:
   those objects end, while the input keeps its own, as a Rust `&mut` reborrows
   what its fields lend. A receiver reached through a reference or a pointer is
   reborrowed the same way: the call ends other borrows of what that variable
-  designates, never the variable's own, also when it borrows two places at
-  once, as one found in a field or made through its owner does. Nothing a
+  designates and of what the receiver's own mutable references reach, never
+  the variable's own, also when it borrows two places at once, as one found in
+  a field or made through its owner does. Nothing a
   reference to const designates, nor a constant
   with static storage, is invalidated through it, as a Rust `&T` lends nothing
   to mutate. The callee's body never narrows this: a function another unit
