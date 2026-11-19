@@ -339,17 +339,16 @@ namespace telar::runtime::cli::launch {
 
   // The pointers exec takes, into the arguments' own bytes, which end with a NUL; the list ends
   // with a null pointer. They live in the first argument's allocator.
-  ds::Vec<char*, Memory> pointers(std::span<const Text> arguments) {
+  ds::Vec<const char*, Memory> pointers(std::span<const Text> arguments) {
     if (arguments.empty()) {
       throw CommandError{"MissingProgram"};
     }
 
-    ds::Vec<char*, Memory> result{arguments.front().memory()};
+    ds::Vec<const char*, Memory> result{arguments.front().memory()};
 
     result.reserve(arguments.size() + 1);
     for (const auto& argument : arguments) {
-      // exec takes char* const[] for C's sake and never writes through them.
-      result.push(const_cast<char*>(argument.data()));
+      result.push(argument.data());
     }
 
     result.push(nullptr);
@@ -359,18 +358,19 @@ namespace telar::runtime::cli::launch {
   [[noreturn]] void replace(std::span<const Text> arguments) {
     const auto argv = pointers(arguments);
 
-    ::execvp(argv.front(), argv.data());
+    // exec takes char* const[] for C's sake and never writes through them.
+    ::execvp(argv.front(), const_cast<char* const*>(argv.data()));
     throw CommandError{sys::errorName(sys::lastError())};
   }
 
   int inherit(std::span<const Text> arguments) {
-    auto argv = pointers(arguments);
+    const auto argv = pointers(arguments);
     SpawnOptions spawn{0};
 
     spawn.keepStandardStreams();
 
     pid_t process = -1;
-    if (const auto failure = ::posix_spawnp(&process, argv.front(), &spawn.actions, &spawn.attributes, argv.dataMut(), environ); failure != 0) {
+    if (const auto failure = ::posix_spawnp(&process, argv.front(), &spawn.actions, &spawn.attributes, const_cast<char* const*>(argv.data()), environ); failure != 0) {
       throw SystemError{"Start child process", failure};
     }
 
@@ -695,7 +695,7 @@ namespace telar::runtime::cli::machine {
 
   // The options every connection to `destination` shares, including the
   // control master that keeps one SSH session per machine.
-  void appendSshOptions(Memory& memory, Argv& argv, std::string_view destination) {
+  void appendSshOptions(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<Argv&, tbc::lt::a> argv, std::string_view destination) {
     MachineFieldRules::destination(destination);
     const RuntimePaths paths{memory, ServerOptions{}, process_environment};
 
