@@ -89,7 +89,13 @@ export {
 #endif
     };
 
-    class PaneObserver {
+    // Shared by the runtime's thread and the observation worker, which hand it over rather than lock
+    // it: the runtime writes the active batch and seals it; between submitting a request and
+    // collecting its result the worker alone reads the sealed batch and owns the terminal, the
+    // tracker and the inference; the request queue's mutex orders each handover, and the runtime
+    // completes the batch only once its result came back. Only the runtime reads what the worker
+    // owns, after collecting, and copies it then.
+    class TBC_SHARED PaneObserver {
     public:
       explicit PaneObserver(ConcurrentMemory& memory, TerminalSize size, std::string_view directory = {}, bool capture_output = false, ds::Option<ShellToken> shell_token = ds::none);
 
