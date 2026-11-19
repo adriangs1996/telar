@@ -289,7 +289,6 @@ export {
       static constexpr unsigned maximum_depth = 256;
       static constexpr unsigned indentation = 2;
 
-      tbc::view<Memory&, tbc::lt::a> memory() const noexcept;
       static tbc::view<JsonNode, tbc::lt::a> fromValue(tbc::view<Memory&, tbc::lt::a> memory, JsonValue value);
       void appendFormatted(ds::String<Memory>& output, unsigned depth) const;
 

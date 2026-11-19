@@ -498,7 +498,7 @@ namespace telar::runtime {
       return *existing;
     }
 
-    JsonNode child{memory(), kind};
+    JsonNode child{text_.memory(), kind};
 
     child.name_.assign(name);
     children_.push(std::move(child));
@@ -537,16 +537,11 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   ds::String<Memory> JsonNode<Memory>::format() const {
-    ds::String<Memory> output{memory()};
+    ds::String<Memory> output{text_.memory()};
 
     appendFormatted(output, 0);
     output.push('\n');
     return output;
-  }
-
-  template <Allocator Memory>
-  tbc::view<Memory&, tbc::lt::a> JsonNode<Memory>::memory() const noexcept {
-    return text_.memory();
   }
 
   template <Allocator Memory>
