@@ -157,9 +157,11 @@ export namespace telar::runtime::control {
       constexpr std::string_view terminator = "\x1b\\";
       static_assert(maximum_reply_bytes > maximum_prefix_bytes + terminator.size());
       ds::Array<char, maximum_reply_bytes> encoded;
-      auto* next = std::copy(image_prefix.begin(), image_prefix.end(), encoded.dataMut());
+      // One mutable borrow of the buffer, which `next` walks.
+      const std::span<char> output{encoded.dataMut(), encoded.size()};
+      auto* next = std::copy(image_prefix.begin(), image_prefix.end(), output.data());
       const auto identifier = [&](std::uint32_t value) {
-        const auto formatted = std::to_chars(next, encoded.dataMut() + maximum_prefix_bytes, value);
+        const auto formatted = std::to_chars(next, output.data() + maximum_prefix_bytes, value);
 
         TELAR_ASSERT(formatted.ec == std::errc{});
         next = formatted.ptr;
@@ -180,13 +182,13 @@ export namespace telar::runtime::control {
 
       // Result strings are internal diagnostics. Keep the bound explicit if a
       // future validator adds a longer message; only initialized bytes escape.
-      if (result.size() > static_cast<std::size_t>(encoded.data() + encoded.size() - next) - terminator.size()) {
+      if (result.size() > static_cast<std::size_t>(output.data() + output.size() - next) - terminator.size()) {
         throw std::length_error{"Graphics query reply exceeds its configured limit"};
       }
 
       next = std::copy(result.begin(), result.end(), next);
       next = std::copy(terminator.begin(), terminator.end(), next);
-      reply.append({encoded.data(), static_cast<std::size_t>(next - encoded.data())});
+      reply.append({output.data(), static_cast<std::size_t>(next - output.data())});
     }
 
     std::string_view validate(const GraphicsQuery& request) {
@@ -303,7 +305,8 @@ export namespace telar::runtime::control {
           return "EINVAL: invalid data";
         }
 
-        ghostty_free(allocator_.get(), image.data, image.data_len);
+        // ghostty's allocator, which C reaches by address, frees the image it decoded.
+        ghostty_free(tbc::raw(allocator_.get()), image.data, image.data_len);
         return image.width > maximum_dimension || image.height > maximum_dimension ? "EINVAL: dimensions too large" : "OK";
       }
 

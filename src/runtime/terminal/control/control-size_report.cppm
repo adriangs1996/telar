@@ -34,9 +34,11 @@ export namespace telar::runtime::control {
                                                                              : Kind == SizeReport::text   ? "\x1b[8;"
                                                                              : Kind == SizeReport::screen ? "\x1b[9;"
                                                                                                           : "\x1b[48;";
-    auto* next = std::copy(prefix.begin(), prefix.end(), encoded.dataMut());
+    // One mutable borrow of the buffer, which `next` walks.
+    const std::span<char> output{encoded.dataMut(), encoded.size()};
+    auto* next = std::copy(prefix.begin(), prefix.end(), output.data());
     const auto number = [&](std::uint32_t value) {
-      const auto result = std::to_chars(next, encoded.dataMut() + encoded.size(), value);
+      const auto result = std::to_chars(next, output.data() + output.size(), value);
 
       TELAR_ASSERT(result.ec == std::errc{});
       next = result.ptr;
@@ -63,7 +65,7 @@ export namespace telar::runtime::control {
     }
 
     *next++ = 't';
-    reply.append({encoded.data(), static_cast<std::size_t>(next - encoded.data())});
+    reply.append({output.data(), static_cast<std::size_t>(next - output.data())});
   }
 
 }

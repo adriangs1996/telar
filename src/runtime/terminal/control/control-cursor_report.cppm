@@ -17,7 +17,9 @@ export namespace telar::runtime::control {
   TBC_GENERIC void cursorReport(Reply<Memory>& reply, Position position, bool extended) {
     constexpr std::size_t maximum_cursor_reply = 32;
     ds::Array<char, maximum_cursor_reply> encoded;
-    auto* next = encoded.dataMut();
+    // One mutable borrow of the buffer, which `next` walks.
+    const std::span<char> output{encoded.dataMut(), encoded.size()};
+    auto* next = output.data();
 
     *next++ = '\x1b';
     *next++ = '[';
@@ -25,12 +27,12 @@ export namespace telar::runtime::control {
       *next++ = '?';
     }
 
-    const auto row = std::to_chars(next, encoded.dataMut() + encoded.size(), static_cast<unsigned>(position.row) + 1);
+    const auto row = std::to_chars(next, output.data() + output.size(), static_cast<unsigned>(position.row) + 1);
 
     TELAR_ASSERT(row.ec == std::errc{});
     next = row.ptr;
     *next++ = ';';
-    const auto column = std::to_chars(next, encoded.dataMut() + encoded.size(), static_cast<unsigned>(position.column) + 1);
+    const auto column = std::to_chars(next, output.data() + output.size(), static_cast<unsigned>(position.column) + 1);
 
     TELAR_ASSERT(column.ec == std::errc{});
     next = column.ptr;
@@ -40,7 +42,7 @@ export namespace telar::runtime::control {
     }
 
     *next++ = 'R';
-    reply.append({encoded.data(), static_cast<std::size_t>(next - encoded.data())});
+    reply.append({output.data(), static_cast<std::size_t>(next - output.data())});
   }
 
 }

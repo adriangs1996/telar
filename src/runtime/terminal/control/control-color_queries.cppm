@@ -135,26 +135,28 @@ export namespace telar::runtime::control {
       constexpr std::string_view terminator = "\x1b\\";
       static_assert(introducer.size() + std::numeric_limits<unsigned>::digits10 + 2 + terminator.size() <= inline_osc_bytes);
       ds::Array<char, inline_osc_bytes> packet;
-      auto* position = std::copy(introducer.begin(), introducer.end(), packet.dataMut());
-      auto number = std::to_chars(position, packet.dataMut() + packet.size() - 1, operation);
+      // One mutable borrow of the packet, which `position` walks.
+      const std::span<char> output{packet.dataMut(), packet.size()};
+      auto* position = std::copy(introducer.begin(), introducer.end(), output.data());
+      auto number = std::to_chars(position, output.data() + output.size() - 1, operation);
 
       TELAR_ASSERT(number.ec == std::errc{});
       *number.ptr = ';';
       position = number.ptr + 1;
-      const auto header_size = static_cast<std::size_t>(position - packet.data());
+      const auto header_size = static_cast<std::size_t>(position - output.data());
 
-      if (payload.size() <= packet.size() - header_size - terminator.size()) {
+      if (payload.size() <= output.size() - header_size - terminator.size()) {
         if (!payload.empty()) {
           std::memcpy(position, payload.data(), payload.size());
           position += payload.size();
         }
 
         position = std::copy(terminator.begin(), terminator.end(), position);
-        context.state.write({reinterpret_cast<const std::uint8_t*>(packet.data()), static_cast<std::size_t>(position - packet.data())});
+        context.state.write({reinterpret_cast<const std::uint8_t*>(output.data()), static_cast<std::size_t>(position - output.data())});
         return;
       }
 
-      context.state.write({reinterpret_cast<const std::uint8_t*>(packet.data()), header_size});
+      context.state.write({reinterpret_cast<const std::uint8_t*>(output.data()), header_size});
       context.state.write({reinterpret_cast<const std::uint8_t*>(payload.data()), payload.size()});
       context.state.write({reinterpret_cast<const std::uint8_t*>(terminator.data()), terminator.size()});
     }
@@ -164,11 +166,13 @@ export namespace telar::runtime::control {
       // The longest complete item is 24 bytes, including a present RGB value.
       static_assert(std::string_view{";foreground=rgb:00/00/00"}.size() <= maximum_color_reply);
       ds::Array<char, maximum_color_reply> encoded;
-      auto* position = encoded.dataMut();
+      // One mutable borrow of the buffer, which `position` walks.
+      const std::span<char> output{encoded.dataMut(), encoded.size()};
+      auto* position = output.data();
 
       *position++ = ';';
       if (selector < VtState::foreground) {
-        const auto number = std::to_chars(position, encoded.dataMut() + encoded.size(), selector);
+        const auto number = std::to_chars(position, output.data() + output.size(), selector);
 
         TELAR_ASSERT(number.ec == std::errc{});
         position = number.ptr;
@@ -193,7 +197,7 @@ export namespace telar::runtime::control {
         }
       }
 
-      context.reply.append({encoded.data(), static_cast<std::size_t>(position - encoded.data())});
+      context.reply.append({output.data(), static_cast<std::size_t>(position - output.data())});
     }
 
     void traditionalColor(Context context, unsigned operation, ds::Option<unsigned> index, std::string_view terminator) {
@@ -212,9 +216,11 @@ export namespace telar::runtime::control {
       }
 
       ds::Array<char, maximum_color_reply> encoded;
-      auto* position = std::copy_n("\x1b]", 2, encoded.dataMut());
+      // One mutable borrow of the buffer, which `position` walks.
+      const std::span<char> output{encoded.dataMut(), encoded.size()};
+      auto* position = std::copy_n("\x1b]", 2, output.data());
       const auto number = [&](unsigned value) {
-        const auto formatted = std::to_chars(position, encoded.dataMut() + encoded.size(), value);
+        const auto formatted = std::to_chars(position, output.data() + output.size(), value);
 
         TELAR_ASSERT(formatted.ec == std::errc{});
         position = formatted.ptr;
@@ -249,7 +255,7 @@ export namespace telar::runtime::control {
       }
 
       position = std::copy(terminator.begin(), terminator.end(), position);
-      context.reply.append({encoded.data(), static_cast<std::size_t>(position - encoded.data())});
+      context.reply.append({output.data(), static_cast<std::size_t>(position - output.data())});
     }
 
     static ds::Option<unsigned> colorKey(std::string_view key) noexcept {
