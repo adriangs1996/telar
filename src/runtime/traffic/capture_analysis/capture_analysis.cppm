@@ -384,6 +384,11 @@ export {
 
     public:
       explicit TcpFlows(ConcurrentMemory& memory);
+      // Each flow's buffers allocate from the table's own allocator, so the table stays put.
+      TcpFlows(const TcpFlows&) = delete;
+      TcpFlows& operator=(const TcpFlows&) = delete;
+      TcpFlows(TcpFlows&&) = delete;
+      TcpFlows& operator=(TcpFlows&&) = delete;
 
       // Generic over the caller's callbacks, and called for every captured packet.
       template <typename Emit>
@@ -417,7 +422,8 @@ export {
           announceClose(key, flow, event, stop ? "capture_stopped" : gap ? "tcp_gap_timeout"
                                                                          : "idle_timeout",
               emit,
-              gap);
+              gap,
+              buffered_);
           return false;
         });
       }
@@ -619,9 +625,10 @@ export {
         emit(event);
       }
 
-      // Publishes the end of a flow and returns its buffered bytes; the caller drops the flow.
+      // Publishes the end of a flow and returns its buffered bytes; the caller drops the flow. It borrows
+      // the buffered total alone, so the flow, which the table holds, stays borrowed meanwhile.
       template <typename Emit>
-      TBC_GENERIC void announceClose(const Key& key, const Flow& flow, const Event& event, std::string_view reason, Emit emit, bool gap) {
+      TBC_GENERIC static void announceClose(const Key& key, const Flow& flow, const Event& event, std::string_view reason, Emit emit, bool gap, std::size_t& buffered) {
         if (flow.outbound.gap) {
           publish(Kind::flow_gap, key, flow, event, {.offset = flow.outbound.offset, .reason = reason}, emit);
         }
@@ -635,13 +642,13 @@ export {
         }
 
         publish(Kind::flow_close, key, flow, event, {.reason = reason}, emit);
-        buffered_ -= flow.buffered;
+        buffered -= flow.buffered;
       }
 
       // Ends the flow of a key this Map holds.
       template <typename Emit>
       TBC_GENERIC void close(const Key& key, const Event& event, std::string_view reason, Emit emit, bool gap) {
-        announceClose(key, *flows_.find(key), event, reason, emit, gap);
+        announceClose(key, *flows_.find(key), event, reason, emit, gap, buffered_);
         static_cast<void>(flows_.remove(key));
       }
 
@@ -650,7 +657,7 @@ export {
       static constexpr std::size_t per_flow_bytes = 64 * 1024;
       static constexpr std::size_t total_bytes = 8 * 1024 * 1024;
       Secure memory_;
-      Map flows_;
+      tbc::view<Map, tbc::lt::self> flows_;
       std::size_t buffered_ = 0;
       std::uint64_t next_ = 0;
     };
