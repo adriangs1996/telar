@@ -2285,10 +2285,11 @@ namespace tbc_lint {
           }
 
           if (source.kind == origin_kind::receiver) {
-            // A sibling of a shared type tolerates every alias; its object only has to keep its address.
+            // A sibling of a shared type tolerates every alias, as does a shared object a sibling
+            // holds; their object only has to keep its address.
             const auto* sibling = llvm::dyn_cast_or_null<clang::FieldDecl>(source.variable);
             const auto* record = llvm::dyn_cast<clang::CXXMethodDecl>(&function_) != nullptr ? llvm::cast<clang::CXXMethodDecl>(function_).getParent() : nullptr;
-            if (sibling != nullptr && sharedType(sibling->getType()) && record != nullptr) {
+            if (sibling != nullptr && (sharedType(sibling->getType()) || withinShared(source)) && record != nullptr) {
               if (relocatable(*record)) {
                 report(issue::relocated_self, where, &source);
               }
@@ -4637,6 +4638,16 @@ namespace tbc_lint {
       // object keeps valid whatever is done to what holds the reference.
       [[nodiscard]] static bool throughShared(const clang::ValueDecl& owner, const object_place& target) {
         return target.designated && throughShared(owner, target.select, target.path);
+      }
+
+      // Whether a borrow lies in a shared object one of the fields along its place holds, which tolerates
+      // every alias, as a shared sibling does.
+      [[nodiscard]] static bool withinShared(const origin& source) {
+        const auto shared = [](const projection& step) {
+          return step.field != nullptr && sharedType(step.field->getType());
+        };
+
+        return llvm::any_of(source.select, shared) || llvm::any_of(source.path, shared);
       }
 
       // Borrows of what an input designates past a reference to a shared object reach nothing a call can

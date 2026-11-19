@@ -621,8 +621,10 @@ List words{memory};
 words.push(memory, entry); // accepted: growing words reaches the memory, not the state
 ```
 
-A field may keep a reference to a sibling of a shared type, as services keep the
-allocator or the limit queue of the object that holds them. That borrow is internal
+A field may keep a reference to a sibling of a shared type, or to a shared object
+a sibling holds, as services keep the allocator or the limit queue of the object
+that holds them and panes keep the graphics budget of a state beside them. That
+borrow is internal
 to the object, so the object only has to keep its address: it must be neither
 copyable nor movable, as Rust shares such a field behind `Pin`
 (`tbc-dangling-borrow` otherwise). A sibling of any other type still needs the

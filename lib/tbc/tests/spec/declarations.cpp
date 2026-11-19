@@ -2210,3 +2210,60 @@ std::size_t declarationOutputSharedOnlyKept(declarations::kept_word_holder& hold
 }
 
 // END CASE
+
+// CASE: declaration.shared_nested_sibling_pinned
+// PAIR: declaration.shared_nested_sibling
+// SOURCE: src/gui/application/application-session-layout.cpp :: Session::ensurePane (each pane's store counts against the graphics state's budget)
+// STATUS: implemented
+// CONTRACT: A field may keep a TBC_SHARED object another field holds only while their object can be neither copied nor moved, as it may keep a shared sibling.
+// SCENARIO: A lender keeps the arena a state beside it holds, in a pinned object; accept.
+namespace declarations {
+  struct arena_state {
+    arena memory;
+  };
+
+  class nested_pinned_pool {
+  public:
+    nested_pinned_pool()
+        : lender_(state_.memory) {}
+
+    nested_pinned_pool(const nested_pinned_pool&) = delete;
+    nested_pinned_pool& operator=(const nested_pinned_pool&) = delete;
+
+  private:
+    arena_state state_;
+    lender lender_;
+  };
+}
+
+void declarationSharedNestedSiblingPinned() {
+  const declarations::nested_pinned_pool pool;
+  static_cast<void>(&pool);
+}
+
+// END CASE
+
+// CASE: declaration.shared_nested_sibling_copied
+// PAIR: declaration.shared_nested_sibling
+// SOURCE: src/gui/application/application-session-layout.cpp :: Session::ensurePane (each pane's store counts against the graphics state's budget)
+// STATUS: implemented
+// CONTRACT: A field may keep a TBC_SHARED object another field holds only while their object can be neither copied nor moved, as it may keep a shared sibling.
+// SCENARIO: The object holding the lender and the state can be copied; reject where the constructor lends the arena.
+namespace declarations {
+  class nested_copied_pool {
+  public:
+    nested_copied_pool()
+        : lender_(state_.memory) {} // expected-error [tbc-dangling-borrow]
+
+  private:
+    arena_state state_;
+    lender lender_;
+  };
+}
+
+void declarationSharedNestedSiblingCopied() {
+  const declarations::nested_copied_pool pool;
+  static_cast<void>(&pool);
+}
+
+// END CASE
