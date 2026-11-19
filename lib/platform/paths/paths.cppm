@@ -1,3 +1,6 @@
+module;
+#include "tbc/annotations.hpp"
+
 export module telar.platform.paths;
 
 import std;
@@ -33,6 +36,22 @@ export {
     template <typename Environment>
     concept EnvironmentLookup = requires(const Environment& environment, const char* name) {
       { environment.lookup(name) } -> std::same_as<std::string_view>;
+    };
+
+    // Any lookup behind the virtual one, as Rust's `&dyn Environment`, for a function that reads it
+    // without being a template over it.
+    template <EnvironmentLookup Environment>
+    class TBC_GENERIC EnvironmentOf final : public EnvironmentSource {
+    public:
+      explicit EnvironmentOf(tbc::view<const Environment&, tbc::lt::a> environment) noexcept
+          : environment_(environment) {}
+
+      std::string_view lookup(const char* name) const override {
+        return environment_.lookup(name);
+      }
+
+    private:
+      tbc::view<const Environment&, tbc::lt::a> environment_;
     };
 
   }

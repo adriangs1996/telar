@@ -220,15 +220,13 @@ export {
 export {
   namespace telar::runtime {
 
-    // The directory without the caller's environment type: lookup reads a variable from environment.
-    tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> proxyAuthorityDirectoryFrom(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const void* environment, std::string_view (*lookup)(const void*, const char*));
+    // The directory without the caller's environment type.
+    tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> proxyAuthorityDirectoryFrom(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const EnvironmentSource& environment);
 
-    // Generic over the caller's environment, so it stays here and hands the lookup to proxyAuthorityDirectoryFrom.
+    // Generic over the caller's environment, so it stays here and hands it to proxyAuthorityDirectoryFrom.
     template <Allocator Memory, EnvironmentLookup Environment>
     TBC_GENERIC tbc::view<ds::String<Memory>, tbc::lt::a> proxyAuthorityDirectory(tbc::view<Memory&, tbc::lt::a> memory, const Environment& environment) {
-      return proxyAuthorityDirectoryFrom(memory, std::addressof(environment), [](const void* target, const char* name) {
-        return static_cast<const Environment*>(target)->lookup(name);
-      });
+      return proxyAuthorityDirectoryFrom(memory, EnvironmentOf{environment});
     }
 
   }
@@ -332,27 +330,21 @@ export {
       FileDescriptor prepare() const;
       static void validateDirectory(int descriptor);
 
-      // Generic over the caller's environment, so it stays here and hands the lookup to keychainFrom.
+      // Generic over the caller's environment, so it stays here and hands it to keychainFrom.
       template <EnvironmentLookup Environment>
       TBC_GENERIC static ds::String<ConcurrentMemory> keychain(ConcurrentMemory& memory, const Environment& environment) {
-        return keychainFrom(memory, std::addressof(environment), [](const void* target, const char* name) {
-          return static_cast<const Environment*>(target)->lookup(name);
-        });
+        return keychainFrom(memory, EnvironmentOf{environment});
       }
 
-      // Generic over the caller's environment, so it stays here and hands the lookup to nativeDestinationFrom.
+      // Generic over the caller's environment, so it stays here and hands it to nativeDestinationFrom.
       template <EnvironmentLookup Environment>
       TBC_GENERIC Destination nativeDestination(ConcurrentMemory& memory, const Environment& environment, ds::Option<Backend> selected = ds::none) const {
-        return nativeDestinationFrom(memory, selected, std::addressof(environment), [](const void* target, const char* name) {
-          return static_cast<const Environment*>(target)->lookup(name);
-        });
+        return nativeDestinationFrom(memory, selected, EnvironmentOf{environment});
       }
 
     private:
-      using Lookup = std::string_view (*)(const void*, const char*);
-
-      static tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> keychainFrom(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const void* environment, Lookup lookup);
-      Destination nativeDestinationFrom(ConcurrentMemory& memory, ds::Option<Backend> selected, const void* environment, Lookup lookup) const;
+      static tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> keychainFrom(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const EnvironmentSource& environment);
+      Destination nativeDestinationFrom(ConcurrentMemory& memory, ds::Option<Backend> selected, const EnvironmentSource& environment) const;
 
       ds::String<ConcurrentMemory> directory_;
     };

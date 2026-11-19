@@ -394,10 +394,10 @@ namespace telar::runtime {
       : memory_(memory),
         pair_(std::move(pair)) {}
 
-  tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> proxyAuthorityDirectoryFrom(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const void* environment, std::string_view (*lookup)(const void*, const char*)) {
-    ds::String<ConcurrentMemory> path{memory, lookup(environment, "XDG_DATA_HOME")};
+  tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> proxyAuthorityDirectoryFrom(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const EnvironmentSource& environment) {
+    ds::String<ConcurrentMemory> path{memory, environment.lookup("XDG_DATA_HOME")};
     if (path.empty() || path.view().front() != '/') {
-      path.assign(lookup(environment, "HOME"));
+      path.assign(environment.lookup("HOME"));
       if (path.empty()) {
         throw std::invalid_argument{"Home directory unavailable for proxy"};
       }
@@ -429,7 +429,7 @@ namespace telar::runtime::proxy_trust {
 
   void SystemCommand::run(std::span<const std::string_view> arguments) {
     ds::Vec<ds::String<ConcurrentMemory>, ConcurrentMemory> owned{memory_};
-    ds::Vec<char*, ConcurrentMemory> pointers{memory_};
+    ds::Vec<const char*, ConcurrentMemory> pointers{memory_};
     ds::String<ConcurrentMemory> line{memory_, "telar proxy trust: exec"};
 
     owned.reserve(arguments.size());
@@ -449,8 +449,8 @@ namespace telar::runtime::proxy_trust {
       throw SystemError{"Print proxy trust command", EIO};
     }
 
-    for (auto& argument : owned.viewMut()) {
-      pointers.push(argument.dataMut());
+    for (const auto& argument : owned.view()) {
+      pointers.push(argument.data());
     }
 
     pointers.push(nullptr);
@@ -462,7 +462,8 @@ namespace telar::runtime::proxy_trust {
     spawn.keepStandardStreams();
 
     pid_t child;
-    if (const int error = ::posix_spawn(&child, pointers.front(), &spawn.actions, &spawn.attributes, pointers.data(), environ)) {
+    // POSIX declares argv `char* const[]` for C's sake and never writes it.
+    if (const int error = ::posix_spawn(&child, pointers.front(), &spawn.actions, &spawn.attributes, const_cast<char* const*>(pointers.data()), environ)) {
       throw SystemError{"Start proxy trust command", error};
     }
 
@@ -626,8 +627,8 @@ namespace telar::runtime::proxy_trust {
     }
   }
 
-  tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> Paths::keychainFrom(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const void* environment, Lookup lookup) {
-    const auto home = lookup(environment, "HOME");
+  tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> Paths::keychainFrom(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const EnvironmentSource& environment) {
+    const auto home = environment.lookup("HOME");
     ds::String<ConcurrentMemory> result{memory, home};
 
     if (home.empty()) {
@@ -642,16 +643,15 @@ namespace telar::runtime::proxy_trust {
     return result;
   }
 
-  Destination Paths::nativeDestinationFrom(ConcurrentMemory& memory, ds::Option<Backend> selected, const void* environment, Lookup lookup) const {
+  Destination Paths::nativeDestinationFrom(ConcurrentMemory& memory, ds::Option<Backend> selected, const EnvironmentSource& environment) const {
 #if defined(__APPLE__)
     if (selected && *selected != Backend::macos) {
       throw std::invalid_argument{"Linux trust backend is not supported on macOS"};
     }
 
-    return Destination{keychainFrom(memory, environment, lookup)};
+    return Destination{keychainFrom(memory, environment)};
 #else
     (void)environment;
-    (void)lookup;
     auto backend = selected.valueOr(Backend::trust);
     if (!selected) {
       const auto directory = open();
