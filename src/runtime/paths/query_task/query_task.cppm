@@ -68,8 +68,11 @@ export {
       allocation,
     };
 
+    // Paths in storage reserved whole when it is built, which never moves: one builder appends while
+    // readers read the prefix it published, and a path handed out stays where it is until the index is
+    // reset for another root, between queries, which send their answers before then.
     template <Allocator Memory>
-    class PathIndexStorage {
+    class TBC_SHARED PathIndexStorage {
     public:
       static constexpr std::size_t maximum_entries = 512 * 1024;
       static constexpr std::size_t maximum_bytes = 32 * 1024 * 1024;

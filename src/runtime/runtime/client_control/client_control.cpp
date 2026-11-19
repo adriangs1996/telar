@@ -33,13 +33,14 @@ namespace telar::runtime {
     auto& requester = requireClient(clients, requester_id);
 
     requireRole(requester, ClientRole::control);
-    auto* target = resolve(clients, ClientRoute{request.client_id, request.client_generation});
-    if (!routable(target) || target == &requester) {
+    const ClientRoute route{request.client_id, request.client_generation};
+    if (const auto* target = resolve(clients, route); !routable(target) || target == &requester) {
       throw RequestError{FailureCode::invalid_request, "Interactive client is absent, closing, or stale"};
     }
 
     requester.connection.send(RequestCompleted{.request_id = request.request_id});
-    target->connection.closing = true;
+    // Found again: answering the requester borrowed the store both clients lie in.
+    resolve(clients, route)->connection.closing = true;
   }
 
   void ClientControl::requestCommand(ClientStore& clients, std::uint64_t requester_id, const RequestClientCommand& request) {

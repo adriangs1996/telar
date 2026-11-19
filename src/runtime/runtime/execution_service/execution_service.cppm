@@ -292,9 +292,8 @@ export {
         attachment.getMut().graphics.configure(client.shared_graphics);
         attachment.getMut().clipboard_revision = pane.terminal.effects.clipboard_revision;
 
-        auto& result = attachment.getMut();
-
-        client.attachments.push(std::move(attachment));
+        // The attachment as the client keeps it, once its box is in the client's list.
+        auto& result = client.attachments.push(std::move(attachment)).getMut();
         client.workspace = workspace->id;
         pane.observers |= client.observerBit();
         return result;

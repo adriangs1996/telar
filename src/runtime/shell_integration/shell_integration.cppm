@@ -158,9 +158,11 @@ namespace telar::runtime::shell_files {
 
   inline constexpr auto remote_command = [] {
     ds::Array<char, remote_command_prefix.size() + remote_script_encoded_bytes + remote_command_suffix.size()> text{};
-    const auto encoded = text.viewMut().subspan(remote_command_prefix.size(), remote_script_encoded_bytes);
+    // One mutable borrow of the text: the prefix, the encoded script and the suffix in turn.
+    const auto output = text.viewMut();
+    const auto encoded = output.subspan(remote_command_prefix.size(), remote_script_encoded_bytes);
 
-    std::ranges::copy(remote_command_prefix, text.viewMut().begin());
+    std::ranges::copy(remote_command_prefix, output.begin());
     static_cast<void>(base64::encode(remote_script.view(), encoded));
     std::ranges::copy(remote_command_suffix, encoded.end());
     return text;

@@ -146,8 +146,9 @@ namespace telar::runtime {
   }
 
   void ListeningPorts::add(std::uint16_t port) noexcept {
-    const auto end = values.dataMut() + count;
-    const auto at = std::lower_bound(values.dataMut(), end, port);
+    auto* const begin = values.dataMut();
+    const auto end = begin + count;
+    const auto at = std::lower_bound(begin, end, port);
     if (port == 0 || (at != end && *at == port) || (count == values.size() && at == end)) {
       return;
     }
