@@ -11,6 +11,36 @@ import telar.base.ds;
 
 namespace telar::runtime {
 
+  namespace {
+    // A path the environment names, copied with its NUL, as Rust's env::var returns its own String: a
+    // later lookup may replace the environment it lives in. A path too long to use reads as absent.
+    class EnvironmentPath {
+    public:
+      explicit EnvironmentPath(const char* name) noexcept {
+        // Asked for before the lookup, which any later call into the project may replace.
+        auto* destination = text_.dataMut();
+        const char* value = std::getenv(name);
+        if (value == nullptr) {
+          return;
+        }
+
+        const auto length = std::strlen(value);
+        if (length < PATH_MAX) {
+          std::memcpy(destination, value, length + 1);
+          present_ = true;
+        }
+      }
+
+      [[nodiscard]] const char* get() const noexcept {
+        return present_ ? text_.data() : nullptr;
+      }
+
+    private:
+      ds::Array<char, PATH_MAX> text_{};
+      bool present_ = false;
+    };
+  }
+
   RemoteEditor::RemoteEditor(ConcurrentMemory& memory)
       : memory_(memory),
         output_(memory, output_limit),
@@ -137,27 +167,26 @@ namespace telar::runtime {
   }
 
   void RemoteEditor::discoverNeovim(Session& session) {
-    if (const char* root = std::getenv("XDG_RUNTIME_DIR")) {
-      scan(session, root, true);
+    if (const EnvironmentPath root{"XDG_RUNTIME_DIR"}; root.get() != nullptr) {
+      scan(session, root.get(), true);
     }
 
     // A later lookup may overwrite what getenv returned, so the name is copied first.
-    const char* found = std::getenv("USER");
-    ds::Array<char, 256> user{};
-    if (session.opened != nullptr || found == nullptr || *found == '\0' || std::strchr(found, '/') != nullptr || std::strlen(found) >= user.size()) {
+    const EnvironmentPath user{"USER"};
+    const char* name = user.get();
+    if (session.opened != nullptr || name == nullptr || *name == '\0' || std::strchr(name, '/') != nullptr) {
       return;
     }
 
-    std::strcpy(user.dataMut(), found);
-    const char* temporary = std::getenv("TMPDIR");
+    const EnvironmentPath temporary{"TMPDIR"};
 
-    for (const char* root : {temporary, "/tmp"}) {
+    for (const char* root : {temporary.get(), "/tmp"}) {
       if (root == nullptr) {
         continue;
       }
 
       ds::Array<char, PATH_MAX> directory{};
-      const int count = std::snprintf(directory.dataMut(), directory.size(), "%s/nvim.%s", root, user.data());
+      const int count = std::snprintf(directory.dataMut(), directory.size(), "%s/nvim.%s", root, name);
       if (count > 0 && static_cast<std::size_t>(count) < directory.size()) {
         scan(session, directory.data(), true);
       }
@@ -287,21 +316,21 @@ namespace telar::runtime {
   }
 
   void RemoteEditor::discoverEmacs(Session& session) {
-    if (const char* socket = std::getenv("EMACS_SOCKET_NAME"); socket != nullptr && ownedPath(socket, false)) {
-      emacsEndpoint(session, socket);
+    if (const EnvironmentPath socket{"EMACS_SOCKET_NAME"}; socket.get() != nullptr && ownedPath(socket.get(), false)) {
+      emacsEndpoint(session, socket.get());
     }
 
-    if (const char* root = std::getenv("XDG_RUNTIME_DIR")) {
+    if (const EnvironmentPath root{"XDG_RUNTIME_DIR"}; root.get() != nullptr) {
       ds::Array<char, PATH_MAX> path{};
-      const int count = std::snprintf(path.dataMut(), path.size(), "%s/emacs", root);
+      const int count = std::snprintf(path.dataMut(), path.size(), "%s/emacs", root.get());
       if (count > 0 && static_cast<std::size_t>(count) < path.size()) {
         scan(session, path.data(), false);
       }
     }
 
-    const char* temporary = std::getenv("TMPDIR");
+    const EnvironmentPath temporary{"TMPDIR"};
 
-    for (const char* root : {temporary, "/tmp"}) {
+    for (const char* root : {temporary.get(), "/tmp"}) {
       if (root == nullptr) {
         continue;
       }
