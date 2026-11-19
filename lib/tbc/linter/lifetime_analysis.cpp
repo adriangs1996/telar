@@ -2086,8 +2086,15 @@ namespace tbc_lint {
       // Where an operation on an object lands: each place that can hold it.
       llvm::SmallVector<object_place, 2> invalidationTargets(const clang::Expr& object, const state& current) {
         llvm::SmallVector<object_place, 2> result;
+        const auto designated = objectReference(object, current);
 
-        for (const auto& source : objectReference(object, current).values) {
+        // A pointer that borrows nothing, as a raw one, designates no place the checker follows, as a Rust
+        // FFI `*mut T` does not: an operation through it lands in none.
+        if (designated.values.empty() && throughPointer(object)) {
+          return result;
+        }
+
+        for (const auto& source : designated.values) {
           if (source.variable == nullptr) {
             result.clear();
             break;

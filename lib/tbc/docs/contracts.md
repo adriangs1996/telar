@@ -564,7 +564,9 @@ it, as a `std::unique_ptr` with a function deleter does.
 checker keeps no borrow through what it returns, so the code that dereferences
 it answers for the object being alive, as unsafe Rust does. It belongs only where
 foreign code already holds the object by address, such as a C library's
-callbacks re-entering the object that owns their state.
+callbacks re-entering the object that owns their state, or Qt's items, which
+their parent item owns. An operation through such a pointer lands in no place
+the checker follows, so it invalidates nothing, not even what holds the pointer.
 
 A pointer field of a C struct that a system header declares, such as zlib's
 `z_stream::next_in`, is a raw pointer, as Rust's `*const T` in an FFI struct

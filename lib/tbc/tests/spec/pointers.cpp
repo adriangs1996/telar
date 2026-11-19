@@ -6,6 +6,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace pointers {
   void observe(std::string_view text) {
@@ -675,6 +676,62 @@ bool readDeadPointee() {
     return true;
   }
   return false;
+}
+
+// END CASE
+
+// CASE: pointer.raw_pointee_mutated
+// PAIR: pointer.raw_pointee
+// SOURCE: src/gui/ui/design/elements/element_layout.cpp :: ElementLayout::updatePolish (the children's Qt items are moved while the list of them is read)
+// STATUS: implemented
+// CONTRACT: An operation through a pointer that borrows nothing, as a raw one, lands in no place the checker follows, as one through a Rust FFI `*mut T` does; through a tracked pointer it lands where the pointer designates.
+// SCENARIO: Each slot's raw target is bumped while the slots are read; accept.
+namespace pointers {
+  struct counter {
+    int count = 0;
+
+    void bump();
+  };
+
+  struct counter_slot {
+    counter* target = nullptr;
+  };
+}
+
+void pointerRawPointeeMutated(pointers::counter& total) {
+  std::vector<pointers::counter_slot> slots{{tbc::raw(&total)}};
+
+  for (auto& slot : slots) {
+    slot.target->bump();
+  }
+}
+
+// END CASE
+
+// CASE: pointer.raw_pointee_tracked
+// PAIR: pointer.raw_pointee
+// SOURCE: src/gui/ui/design/elements/element_layout.cpp :: ElementLayout::updatePolish (the children's Qt items are moved while the list of them is read)
+// STATUS: implemented
+// CONTRACT: An operation through a pointer that borrows nothing, as a raw one, lands in no place the checker follows, as one through a Rust FFI `*mut T` does; through a tracked pointer it lands where the pointer designates.
+// SCENARIO: A tracked pointer's owner grows the list being read; reject at the growth.
+namespace pointers {
+  struct value_owner {
+    std::vector<int> values;
+
+    void add(int value);
+  };
+
+  struct owner_handle {
+    value_owner* owner = nullptr;
+  };
+}
+
+void pointerRawPointeeTracked(pointers::value_owner& owner) {
+  std::vector<pointers::owner_handle> handles{{&owner}};
+
+  for (const int value : owner.values) {
+    handles.front().owner->add(value); // expected-error [tbc-invalidated-borrow]
+  }
 }
 
 // END CASE
