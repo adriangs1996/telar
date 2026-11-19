@@ -390,20 +390,22 @@ export {
 
           auto& slot = owned.getMut();
 
-          slot.build_worker.collect([&](bool) {
-            slot.building = false;
-            slot.pending |= slot.answered_partial && !slot.querying;
+          // Each completion captures the slot's fields it changes, apart from the worker it is handed
+          // to, as a Rust 2021 closure captures disjoint fields.
+          slot.build_worker.collect([&building = slot.building, &pending = slot.pending, &answered_partial = slot.answered_partial, &querying = slot.querying](bool) {
+            building = false;
+            pending |= answered_partial && !querying;
           });
 
-          slot.query_worker.collect([&](const typename PathQueryTask<Memory, Index>::Result& result) {
-            slot.querying = false;
-            slot.answered_partial = !result.complete;
-            if (!result.complete && slot.index.complete() && !slot.rebuild) {
-              slot.pending = true;
+          slot.query_worker.collect([&querying = slot.querying, &answered_partial = slot.answered_partial, &pending = slot.pending, &index = std::as_const(slot.index), rebuild = slot.rebuild, abandoned = slot.abandoned, client = slot.client, &consume](const typename PathQueryTask<Memory, Index>::Result& result) {
+            querying = false;
+            answered_partial = !result.complete;
+            if (!result.complete && index.complete() && !rebuild) {
+              pending = true;
             }
 
-            if (!slot.abandoned) {
-              consume(slot.client, ClientTag::find_paths, result.payload);
+            if (!abandoned) {
+              consume(client, ClientTag::find_paths, result.payload);
             }
           });
 
