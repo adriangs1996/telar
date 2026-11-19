@@ -243,8 +243,9 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
       throw std::invalid_argument{"Provider does not use an integration extension"};
     }
 
+    // The text lives in the memory it is written to, region `a`.
     template <Allocator Memory>
-    ds::String<Memory> render(Memory& memory, std::string_view executable) const {
+    tbc::view<ds::String<Memory>, tbc::lt::a> render(tbc::view<Memory&, tbc::lt::a> memory, std::string_view executable) const {
       constexpr std::string_view placeholder = "\"__TELAR_EXECUTABLE__\"";
       const auto offset = source.find(placeholder);
       if (offset == std::string_view::npos) {

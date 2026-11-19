@@ -569,7 +569,8 @@ export {
       void upsert(const Manifest& manifest, const PackageDigest& digest, Capabilities capabilities);
       bool revoke(std::string_view id);
 
-      ds::String<Memory> json(Memory& memory) const;
+      // The text lives in the memory it is written to, region `a`.
+      tbc::view<ds::String<Memory>, tbc::lt::a> json(tbc::view<Memory&, tbc::lt::a> memory) const;
 
       static PackageDigest parseDigest(std::string_view text);
 

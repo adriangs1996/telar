@@ -756,7 +756,7 @@ namespace telar::runtime::plugins {
     return false;
   }
 
-  ds::String<Memory> TrustStore::json(Memory& memory) const {
+  tbc::view<ds::String<Memory>, tbc::lt::a> TrustStore::json(tbc::view<Memory&, tbc::lt::a> memory) const {
     ds::String<Memory> output{memory, "{\"version\":1,\"grants\":["};
 
     for (std::size_t index = 0; index < count_; ++index) {

@@ -217,7 +217,7 @@ namespace telar::runtime::config {
     }
   }
 
-  ds::String<Memory> IntegrationProvider::root(Memory& memory, const EnvironmentSource& environment, bool legacy) const {
+  tbc::view<ds::String<Memory>, tbc::lt::a> IntegrationProvider::root(tbc::view<Memory&, tbc::lt::a> memory, const EnvironmentSource& environment, bool legacy) const {
     ds::String<Memory> result{memory};
 
     if (this->environment != nullptr && !legacy) {

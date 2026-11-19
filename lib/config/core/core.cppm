@@ -136,7 +136,8 @@ export {
 
       static IntegrationProvider describe(AgentProvider provider);
 
-      ds::String<Memory> root(Memory& memory, const EnvironmentSource& environment, bool legacy = false) const;
+      // The path lives in the memory it is written to, region `a`.
+      tbc::view<ds::String<Memory>, tbc::lt::a> root(tbc::view<Memory&, tbc::lt::a> memory, const EnvironmentSource& environment, bool legacy = false) const;
 
     private:
       static constexpr auto claude_events = ds::Array<std::string_view, 8>{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop", "Notification", "SessionEnd", "CwdChanged"};
