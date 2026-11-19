@@ -107,7 +107,7 @@ export {
       bool destructive = false;
     };
 
-    inline constexpr auto palette_actions = ds::Array<PaletteAction, 29>{{
+    inline constexpr auto palette_actions = ds::Array<PaletteAction, 41>{{
         {.action = BindingActionKind::split_horizontal, .label = "Split right"},
         {.action = BindingActionKind::split_vertical, .label = "Split down"},
         {.action = BindingActionKind::focus_left, .label = "Focus pane left"},
@@ -137,6 +137,18 @@ export {
         {.action = BindingActionKind::next_machine, .label = "Next machine"},
         {.action = BindingActionKind::previous_machine, .label = "Previous machine"},
         {.action = BindingActionKind::add_machine, .label = "Add machine"},
+        {.action = BindingActionKind::monitor, .label = "Open monitor"},
+        {.action = BindingActionKind::process_picker, .label = "Find process"},
+        {.action = BindingActionKind::process_terminate, .label = "Terminate process", .destructive = true},
+        {.action = BindingActionKind::process_kill, .label = "Kill process", .destructive = true},
+        {.action = BindingActionKind::process_stop, .label = "Pause process"},
+        {.action = BindingActionKind::process_continue, .label = "Resume process"},
+        {.action = BindingActionKind::process_lower_priority, .label = "Lower process priority"},
+        {.action = BindingActionKind::process_copy_command, .label = "Copy process command"},
+        {.action = BindingActionKind::process_focus_pane, .label = "Go to process pane"},
+        {.action = BindingActionKind::process_review_stack, .label = "Review process stack"},
+        {.action = BindingActionKind::process_review_files, .label = "Review process open files"},
+        {.action = BindingActionKind::process_review_logs, .label = "Review process logs"},
     }};
 
   }

@@ -61,6 +61,18 @@ namespace telar::gui::qt::window_actions {
     next_machine,
     previous_machine,
     add_machine,
+    monitor,
+    process_picker,
+    process_terminate,
+    process_kill,
+    process_stop,
+    process_continue,
+    process_lower_priority,
+    process_copy_command,
+    process_focus_pane,
+    process_review_stack,
+    process_review_files,
+    process_review_logs,
   };
   Q_ENUM_NS(Action)
 

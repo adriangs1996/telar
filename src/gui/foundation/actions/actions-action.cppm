@@ -57,6 +57,18 @@ export {
       previous_machine,
       machine_picker,
       add_machine,
+      monitor,
+      process_picker,
+      process_terminate,
+      process_kill,
+      process_stop,
+      process_continue,
+      process_lower_priority,
+      process_copy_command,
+      process_focus_pane,
+      process_review_stack,
+      process_review_files,
+      process_review_logs,
       palette,
       callback,
       expression,
@@ -73,7 +85,7 @@ export {
       bool operator==(const BindingAction&) const = default;
     };
 
-    inline constexpr auto builtin_binding_actions = ds::Array<std::pair<std::string_view, BindingActionKind>, 45>{{
+    inline constexpr auto builtin_binding_actions = ds::Array<std::pair<std::string_view, BindingActionKind>, 57>{{
         {"scroll-pane-up", BindingActionKind::scroll_pane_up},
         {"scroll-pane-down", BindingActionKind::scroll_pane_down},
         {"split-horizontal", BindingActionKind::split_horizontal},
@@ -119,6 +131,18 @@ export {
         {"previous-machine", BindingActionKind::previous_machine},
         {"machine-picker", BindingActionKind::machine_picker},
         {"add-machine", BindingActionKind::add_machine},
+        {"monitor", BindingActionKind::monitor},
+        {"process-picker", BindingActionKind::process_picker},
+        {"process-terminate", BindingActionKind::process_terminate},
+        {"process-kill", BindingActionKind::process_kill},
+        {"process-stop", BindingActionKind::process_stop},
+        {"process-continue", BindingActionKind::process_continue},
+        {"process-lower-priority", BindingActionKind::process_lower_priority},
+        {"process-copy-command", BindingActionKind::process_copy_command},
+        {"process-focus-pane", BindingActionKind::process_focus_pane},
+        {"process-review-stack", BindingActionKind::process_review_stack},
+        {"process-review-files", BindingActionKind::process_review_files},
+        {"process-review-logs", BindingActionKind::process_review_logs},
     }};
 
     ds::Option<BindingAction> builtinBindingAction(std::string_view name) noexcept;

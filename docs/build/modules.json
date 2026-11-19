@@ -679,6 +679,7 @@
     "src/gui/application/application-plugins.cppm": "telar.gui.application:plugins"
   },
   "textual_boundaries": {
+    "src/gui/ui/app/overlays/monitor/monitor_controller.hpp": "Qt moc/QML integration",
     "lib/base/include/telar_base/diagnostics/config.hpp": "Project macro header: TELAR_DIAGNOSTIC, TELAR_DIAGNOSTICS and TELAR_ASSERT; includes nothing",
     "lib/base/include/telar_base/diagnostics/limit_reach.hpp": "Included by other textual headers and tests; module units import its owner module",
     "lib/base/include/telar_base/diagnostics/timing.hpp": "Objective-C++ ABI",

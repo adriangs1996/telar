@@ -727,6 +727,9 @@ namespace telar::gui::application {
   template void Session::Link::send<CompleteWords>(const CompleteWords& message);
   template void Session::Link::send<ConfigureFrameInterval>(const ConfigureFrameInterval& message);
   template void Session::Link::send<ConfigureShellPrompt>(const ConfigureShellPrompt& message);
+  template void Session::Link::send<QueryMonitor>(const QueryMonitor& message);
+  template void Session::Link::send<RequestProcessPriority>(const RequestProcessPriority& message);
+  template void Session::Link::send<RequestProcessSignal>(const RequestProcessSignal& message);
   template void Session::Link::send<CopySelection>(const CopySelection& message);
   template void Session::Link::send<CreatePane>(const CreatePane& message);
   template void Session::Link::send<CreateTab>(const CreateTab& message);

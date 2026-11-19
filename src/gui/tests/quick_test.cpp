@@ -3110,9 +3110,9 @@ return {api_version=2, client={keybindings={
     Q_SLOT void paletteActionsUseOriginalLabelsAndReorderExistingTabs() {
       const auto commands = client_->commands()->list();
 
-      QCOMPARE(commands.size(), qsizetype{29});
+      QCOMPARE(commands.size(), qsizetype{41});
       QCOMPARE(commands.front().toMap().value(QStringLiteral("label")).toString(), QStringLiteral("Split right"));
-      const QStringList tail{QStringLiteral("Insert a path"), QStringLiteral("Switch machine"), QStringLiteral("Next machine"), QStringLiteral("Previous machine"), QStringLiteral("Add machine")};
+      const QStringList tail{QStringLiteral("Copy process command"), QStringLiteral("Go to process pane"), QStringLiteral("Review process stack"), QStringLiteral("Review process open files"), QStringLiteral("Review process logs")};
 
       for (qsizetype index = 0; index < tail.size(); ++index) {
         QCOMPARE(commands[commands.size() - tail.size() + index].toMap().value(QStringLiteral("label")).toString(), tail[index]);

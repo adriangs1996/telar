@@ -17,6 +17,12 @@ export namespace telar::gui::application::monitor {
   using features::monitor::State;
   using features::monitor::View;
 
+  using telar::MonitorLimits;
+  using telar::MonitorScope;
+  using telar::MonitorSort;
+  using telar::ProcessInstance;
+  using telar::ProcessSignal;
+
   // Whether the runtime of this session answers the monitor.
   [[nodiscard]] bool available(const Session& session) noexcept;
 

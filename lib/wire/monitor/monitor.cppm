@@ -299,5 +299,31 @@ export extern "C++" {
               Field<&RequestProcessPriority::request_id, NonzeroU64, "request_id">,
               Field<&RequestProcessPriority::process, ValueCodec<ProcessInstance>, "process">,
               Field<&RequestProcessPriority::nice, BoundedInteger<i32, -20, 20>, "nice">> {};
+
+    // Every operation of the monitor, with the CLI command, the binding action and the palette label
+    // that reach it. The CLI's and the window's tests check each one against their tables, so an
+    // operation never exists in one place only.
+    struct MonitorOperation {
+      std::string_view binding;
+      std::string_view label;
+      std::string_view family;
+      std::string_view command;
+    };
+
+    inline constexpr ds::Array<MonitorOperation, 12> monitor_operations{{
+        {.binding = "monitor", .label = "Open monitor", .family = "monitor", .command = "host"},
+        {.binding = "process-picker", .label = "Find process", .family = "process", .command = "list"},
+        {.binding = "process-terminate", .label = "Terminate process", .family = "process", .command = "signal"},
+        {.binding = "process-kill", .label = "Kill process", .family = "process", .command = "signal"},
+        {.binding = "process-stop", .label = "Pause process", .family = "process", .command = "signal"},
+        {.binding = "process-continue", .label = "Resume process", .family = "process", .command = "signal"},
+        {.binding = "process-lower-priority", .label = "Lower process priority", .family = "process", .command = "renice"},
+        {.binding = "process-copy-command", .label = "Copy process command", .family = "process", .command = "get"},
+        {.binding = "process-focus-pane", .label = "Go to process pane", .family = "process", .command = "get"},
+        {.binding = "process-review-stack", .label = "Review process stack", .family = "process", .command = "review"},
+        {.binding = "process-review-files", .label = "Review process open files", .family = "process", .command = "review"},
+        {.binding = "process-review-logs", .label = "Review process logs", .family = "process", .command = "review"},
+    }};
+
   }
 }

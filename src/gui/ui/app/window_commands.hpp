@@ -164,6 +164,8 @@ namespace telar::gui::qt {
   signals:
     // A command has something to tell the user that no dialog shows.
     void notified(const QString& message);
+    // The monitor, or an action on the process selected in it.
+    void monitorRequested(telar::gui::qt::window_actions::Action action);
 
   private:
     [[nodiscard]] BindingContext context() const;

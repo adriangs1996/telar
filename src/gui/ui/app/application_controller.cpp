@@ -78,6 +78,7 @@ namespace telar::gui::qt {
         machine_prompt_(store_, machine_profiles_),
         machine_chrome_(store_),
         peek_(store_),
+        monitor_(store_),
         prompt_(store_, memory),
         documents_(store_),
         link_status_(store_),
@@ -190,6 +191,25 @@ namespace telar::gui::qt {
       dialogs_.show(Dialog::none);
     });
     connect(&peek_, &PeekController::failed, &status_, &WindowStatus::report);
+    connect(&monitor_, &MonitorController::closeRequested, this, [this] {
+      if (store_.dialog().kind == Dialog::monitor) {
+        dialogs_.show(Dialog::none);
+      }
+    });
+    connect(&monitor_, &MonitorController::failed, &status_, &WindowStatus::report);
+    connect(&commands_, &WindowCommands::monitorRequested, this, [this](window_actions::Action action) {
+      const auto showing = store_.dialog().kind == Dialog::monitor;
+      if (!showing) {
+        dialogs_.show(Dialog::monitor);
+        monitor_.opened();
+      }
+
+      if (action == window_actions::Action::process_picker) {
+        emit monitor_.filterRequested();
+      } else if (action != window_actions::Action::monitor && !monitor_.perform(action)) {
+        status_.report(QStringLiteral("Select a process in the monitor, then run the action again"));
+      }
+    });
     connect(&panes_, &PanesController::failed, &status_, &WindowStatus::report);
     connect(&machines_, &MachinesCoordinator::changed, &link_status_, &LinkStatusController::publish);
     connect(&machines_, &MachinesCoordinator::linkChanged, &link_status_, &LinkStatusController::publish);
@@ -591,6 +611,9 @@ namespace telar::gui::qt {
       break;
     case application::Change::suggestion:
       palette_.publish();
+      break;
+    case application::Change::monitor:
+      monitor_.synchronize();
       break;
     case application::Change::peek:
       peek_.synchronize();
