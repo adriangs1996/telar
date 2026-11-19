@@ -72,12 +72,22 @@ export {
     // The panes a session holds, each boxed so a pane stays put while the list grows.
     using Panes = ds::Vec<ds::Box<Pane<Memory>, Memory>, Memory>;
 
+    // The tabs a session holds, boxed as its panes are.
+    using Tabs = ds::Vec<ds::Box<Tab<Memory>, Memory>, Memory>;
+
     // Pane `pane_id` among `panes`. It borrows the panes alone, so a use case keeps it while it
     // changes another of the session's fields.
     [[nodiscard]] const Pane<Memory>* findPane(const Panes& panes, std::uint64_t pane_id) noexcept;
 
     // The same pane, to change it.
     [[nodiscard]] Pane<Memory>* findPaneMut(Panes& panes, std::uint64_t pane_id) noexcept;
+
+    // The tab at `active` among `tabs`, once its record arrived. It borrows the tabs alone, as
+    // findPane borrows the panes.
+    [[nodiscard]] tbc::view<const Tab<Memory>*, tbc::lt::a> activeTab(tbc::view<const Tabs&, tbc::lt::a> tabs, ds::Option<TabLocation> active) noexcept;
+
+    // The same tab, to change it.
+    [[nodiscard]] tbc::view<Tab<Memory>*, tbc::lt::a> activeTabMut(tbc::view<Tabs&, tbc::lt::a> tabs, ds::Option<TabLocation> active) noexcept;
 
     class Session {
       // The use cases of application::<feature> reach the members below through it.
@@ -105,6 +115,35 @@ export {
 
       Session(const Session&) = delete;
       Session& operator=(const Session&) = delete;
+
+      // The directory and arguments a new pane launches with, beside the strings the arguments view,
+      // so it stays where it is made.
+      class LaunchDefaults {
+      public:
+        explicit LaunchDefaults(tbc::view<Memory&, tbc::lt::a> memory);
+
+        LaunchDefaults(const LaunchDefaults&) = delete;
+        LaunchDefaults& operator=(const LaunchDefaults&) = delete;
+
+        // The directory, else `/`, and the arguments, else a shell.
+        [[nodiscard]] Launch launch() const noexcept;
+
+        void set(const Launch& launch);
+
+        void setDirectory(std::string_view directory);
+
+        void setArguments(std::span<const std::string_view> arguments);
+
+      private:
+        void storeArguments(std::span<const std::string_view> arguments);
+
+        tbc::view<Memory*, tbc::lt::a> memory_;
+        tbc::view<ds::String<Memory>, tbc::lt::a> cwd_;
+        tbc::view<ds::Vec<ds::String<Memory>, Memory>, tbc::lt::a> storage_;
+        // The arguments view the strings stored beside them; the protocol allows at most 64.
+        tbc::view<ds::Array<std::string_view, maximum_launch_arguments>, tbc::lt::self> arguments_{};
+        std::size_t count_ = 0;
+      };
 
       void setLaunch(const Launch& launch);
 
@@ -226,7 +265,6 @@ export {
 
       [[nodiscard]] const ds::Vec<Workspace<Memory>, Memory>& workspaces() const noexcept;
 
-      [[nodiscard]] const WorkspaceReplica<Memory>& workspaceList() const noexcept;
 
       [[nodiscard]] const ds::Vec<Agent<Memory>, Memory>& agents() const noexcept;
 
@@ -353,6 +391,21 @@ export {
         template <typename Request>
         void sendRegistered(RequestKind kind, Request request, std::uint64_t pane_id = 0);
 
+        // Asks the runtime to open a pane or a workspace, tracked as `kind` until it does, with the
+        // tab it opens in and the workspace to fall back to.
+        template <typename Request>
+          requires(std::same_as<Request, OpenPane> || std::same_as<Request, CreateWorkspace>)
+        void sendOpeningRequest(RequestKind kind, Request request, TabLocation location = TabLocation(), ds::Option<std::uint64_t> fallback_workspace = ds::none);
+
+        // Asks the runtime to describe a tab or a workspace, which it answers with a snapshot.
+        template <typename Request>
+          requires(std::same_as<Request, RequestTabSnapshot> || std::same_as<Request, RequestWorkspaceSnapshot>)
+        void sendSnapshotRequest(Request request);
+
+        // Sends a request to create, rename, move or close a tab, tracked until the runtime answers.
+        template <typename Request>
+        void sendTabOperation(RequestKind kind, Request request);
+
         tbc::view<RuntimeTransport&, tbc::lt::a> transport;
 
       private:
@@ -363,20 +416,9 @@ export {
 
     private:
 
-      template <typename Request>
-        requires(std::same_as<Request, OpenPane> || std::same_as<Request, CreateWorkspace>)
-      void sendOpeningRequest(RequestKind kind, Request request, TabLocation location = TabLocation(), ds::Option<std::uint64_t> fallback_workspace = ds::none);
-
-      template <typename Request>
-        requires(std::same_as<Request, RequestTabSnapshot> || std::same_as<Request, RequestWorkspaceSnapshot>)
-      void sendSnapshotRequest(Request request);
-
       Pane<Memory>& allocateSplitPane(const Pending& request, const PaneOpened& message);
 
       Change adoptSplit(const Pending& request, const PaneOpened& message);
-
-      template <typename Request>
-      void sendTabOperation(RequestKind kind, Request request);
 
       template <typename Value>
       static void reserveAppend(ds::Vec<Value, Memory>& values, std::size_t maximum);
@@ -407,13 +449,19 @@ export {
 
       void confirmAttachment(Pane<Memory>& pane);
 
-      [[nodiscard]] Launch defaultLaunch() const noexcept;
 
       void synchronizeAttachments();
 
       // Detaches pane `pane_id` from the runtime, closing copy mode when it reads that pane. Static,
       // with the fields it changes, so a loop over the panes may call it.
       static void detachPane(features::terminal::copy_mode::State& copy_mode, Link& link, std::uint64_t pane_id);
+
+    public:
+      // Gives pane `pane_id` `size`, telling the runtime through `link` while it is attached. Static,
+      // with the fields it changes, so the layout may call it while it holds a tab.
+      static void resizePane(Panes& panes, Link& link, ViewVersion& view_version, std::uint64_t pane_id, TerminalSize size);
+
+    private:
 
       Change apply(const PaneMatches& message);
 
@@ -570,7 +618,12 @@ export {
       Configuration configuration;
 
     private:
-      ViewVersion view_version_;
+
+    public:
+      // What a view of the session has to redraw: a use case that moves a pane's view bumps it.
+      ViewVersion view_version;
+
+    private:
 
       // The keys of the command blocks, ahead of the editor. From the normal mode: Ctrl-U and
       // Ctrl-D, or [[ and ]], step through the blocks, [f and ]f through the failed ones, Ctrl-O and
@@ -653,10 +706,15 @@ export {
     public:
       // The panes and tabs the runtime reported, which the use cases search as fields of their own.
       tbc::view<Panes, tbc::lt::a> panes;
-      tbc::view<ds::Vec<ds::Box<Tab<Memory>, Memory>, Memory>, tbc::lt::a> tabs;
+      tbc::view<Tabs, tbc::lt::a> tabs;
 
     private:
-      tbc::view<WorkspaceReplica<Memory>, tbc::lt::a> workspaces_;
+
+    public:
+      // The workspaces and worktrees the runtime lists, a field the use cases walk while they send.
+      tbc::view<WorkspaceReplica<Memory>, tbc::lt::a> workspace_list;
+
+    private:
       tbc::view<AgentReplica<Memory>, tbc::lt::a> agents_;
       tbc::view<PaneListReplica<Memory>, tbc::lt::a> pane_list_;
       AgentAcknowledgement agent_acknowledgement_;
@@ -678,12 +736,19 @@ export {
       tbc::view<ds::String<Memory>, tbc::lt::a> clipboard_;
       tbc::view<ds::String<Memory>, tbc::lt::a> error_;
       tbc::view<ds::String<Memory>, tbc::lt::a> command_response_;
-      tbc::view<ds::String<Memory>, tbc::lt::a> launch_cwd_;
-      tbc::view<ds::Vec<ds::String<Memory>, Memory>, tbc::lt::a> argument_storage_;
-      // The launch arguments view the strings stored beside them; the protocol allows at most 64.
-      tbc::view<ds::Array<std::string_view, maximum_launch_arguments>, tbc::lt::self> launch_arguments_{};
-      std::size_t launch_argument_count_ = 0;
-      ds::Option<TabLocation> active_tab_;
+
+    public:
+      // What a pane launches with when its request names nothing else, a field the use cases read
+      // while they send through the link.
+      tbc::view<LaunchDefaults, tbc::lt::a> launch_defaults;
+
+    private:
+
+    public:
+      // The tab the session shows, by location, whether or not its record arrived.
+      ds::Option<TabLocation> active_tab;
+
+    private:
 
     public:
       features::workbench::State workbench;

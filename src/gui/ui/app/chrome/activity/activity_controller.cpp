@@ -55,7 +55,7 @@ namespace telar::gui::qt {
         throw std::logic_error{"ActivityEntryWithoutOwner"};
       }
 
-      const auto& row = source.session.workspaceList().worktrees()[*entry.worktree];
+      const auto& row = source.session.workspace_list.worktrees()[*entry.worktree];
 
       return {.source = source.key, .runtime_generation = source.runtime_generation, .owner = application::machines::MachineActivityTarget::Command{.worktree = row.id, .workspace = row.workspace.valueOr(0)}};
     }
@@ -86,7 +86,7 @@ namespace telar::gui::qt {
         return {};
       }
 
-      const auto& workspaces = session.workspaceList().entries();
+      const auto& workspaces = session.workspace_list.entries();
       const auto found = std::ranges::find_if(workspaces, [&](const auto& workspace) {
         return sameWorkspace(workspace.location, pane.location.workspace);
       });
@@ -100,7 +100,7 @@ namespace telar::gui::qt {
           throw std::logic_error{"ActivityEntryWithoutOwner"};
         }
 
-        return commandRecord(session.workspaceList().worktrees()[*entry.worktree], context);
+        return commandRecord(session.workspace_list.worktrees()[*entry.worktree], context);
       }
 
       const auto& agent = session.agents()[*entry.agent];
@@ -114,7 +114,7 @@ namespace telar::gui::qt {
 
       context.selected = tab != nullptr && agent.pane_id == tab->focused_pane && sameTab(agent.location, tab->location);
       if (entry.worktree) {
-        return taskRecord(agent, session.workspaceList().worktrees()[*entry.worktree], context);
+        return taskRecord(agent, session.workspace_list.worktrees()[*entry.worktree], context);
       }
 
       return agentRecord(agent, context);
@@ -195,7 +195,7 @@ namespace telar::gui::qt {
       const auto& client = store_.clients()[index];
       const auto& row = store_.machines().row(static_cast<application::machines::Machines::Slot>(index));
       if (row.used && row.live && client) {
-        versions.atMut(index) = SourceVersion{.source = (*client)->key, .runtime_generation = (*client)->runtime_generation, .agents = (*client)->session.agentRevision(), .workspaces = (*client)->session.workspaceList().revision(), .panes = (*client)->session.paneListRevision(), .connected = row.enabled && (*client)->phase == application::machines::MachinePhase::connected && (*client)->session.ready(), .label = row.label};
+        versions.atMut(index) = SourceVersion{.source = (*client)->key, .runtime_generation = (*client)->runtime_generation, .agents = (*client)->session.agentRevision(), .workspaces = (*client)->session.workspace_list.revision(), .panes = (*client)->session.paneListRevision(), .connected = row.enabled && (*client)->phase == application::machines::MachinePhase::connected && (*client)->session.ready(), .label = row.label};
       }
     }
 
@@ -219,7 +219,7 @@ namespace telar::gui::qt {
       const auto slot = static_cast<application::machines::Machines::Slot>(index);
       const auto& session = store_.client(slot).session;
 
-      sources.push({.slot = slot, .agents = session.agents(), .workspaces = session.workspaceList()});
+      sources.push({.slot = slot, .agents = session.agents(), .workspaces = session.workspace_list});
     }
 
     Order::Plan order;

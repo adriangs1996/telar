@@ -42,7 +42,7 @@ namespace telar::gui::application::peek {
 
     // What an agent's task changed, in a worktree terminal of its own.
     void openDiff(Session& session, const Agent<Memory>& agent) {
-      const auto* row = features::activity::AgentOrder::taskRow(session.workspaceList(), agent);
+      const auto* row = features::activity::AgentOrder::taskRow(session.workspace_list, agent);
       if (row == nullptr) {
         return;
       }

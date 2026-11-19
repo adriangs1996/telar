@@ -47,8 +47,8 @@ namespace telar::gui::application {
 
   template <typename Request>
     requires(std::same_as<Request, OpenPane> || std::same_as<Request, CreateWorkspace>)
-  void Session::sendOpeningRequest(RequestKind kind, Request request, TabLocation location, ds::Option<std::uint64_t> fallback_workspace) {
-    link.sendRegistered(kind, request, 0, [&](Pending& registered, const Request& sent) {
+  void Session::Link::sendOpeningRequest(RequestKind kind, Request request, TabLocation location, ds::Option<std::uint64_t> fallback_workspace) {
+    sendRegistered(kind, request, 0, [&](Pending& registered, const Request& sent) {
       registered.size = sent.size;
       registered.location = location;
       registered.fallback_workspace = fallback_workspace;
@@ -60,10 +60,10 @@ namespace telar::gui::application {
 
   template <typename Request>
     requires(std::same_as<Request, RequestTabSnapshot> || std::same_as<Request, RequestWorkspaceSnapshot>)
-  void Session::sendSnapshotRequest(Request request) {
+  void Session::Link::sendSnapshotRequest(Request request) {
     constexpr auto kind = std::same_as<Request, RequestTabSnapshot> ? RequestKind::tab_snapshot : RequestKind::workspace_snapshot;
 
-    link.sendRegistered(kind, request, 0, [](Pending& registered, const Request& sent) {
+    sendRegistered(kind, request, 0, [](Pending& registered, const Request& sent) {
       if constexpr (std::same_as<Request, RequestTabSnapshot>) {
         registered.location = sent.location;
       } else {
@@ -130,28 +130,28 @@ namespace telar::gui::application {
       tab->layout.add(pane.id, request.axis, beside);
     }
 
-    if (active_tab_ && sameTab(*active_tab_, tab->location)) {
+    if (active_tab && sameTab(*active_tab, tab->location)) {
       confirmAttachment(pane);
-      workbench::setFocus(*this, *tab, pane.id);
-      workbench::resizeVisible(*this, *tab);
+      workbench::setFocus(*this, tab->location, pane.id);
+      workbench::resizeVisible(*this);
     } else {
       link.send(DetachPane{pane.id});
     }
 
-    ++view_version_.panes;
+    ++view_version.panes;
     synchronizeAttachments();
     workbench::retainLayout(*this);
 
     if (message.pane_generation == 0) {
-      sendSnapshotRequest(RequestTabSnapshot{.location = message.location});
+      link.sendSnapshotRequest(RequestTabSnapshot{.location = message.location});
     }
 
     return Change::model;
   }
 
   template <typename Request>
-  void Session::sendTabOperation(RequestKind kind, Request request) {
-    link.sendRegistered(kind, request, 0, [](Pending& registered, const Request& sent) {
+  void Session::Link::sendTabOperation(RequestKind kind, Request request) {
+    sendRegistered(kind, request, 0, [](Pending& registered, const Request& sent) {
       if constexpr (std::same_as<Request, CreateTab>) {
         registered.location.workspace = sent.workspace;
         registered.size = sent.size;
@@ -192,7 +192,7 @@ namespace telar::gui::application {
 
     tabs.push(ds::makeBox<Tab<Memory>>(memory, memory, location));
     features::workbench::furnish(workbench, tabs.backMut().getMut());
-    ++view_version_.tabs;
+    ++view_version.tabs;
 
     return tabs.backMut().getMut();
   }
@@ -208,7 +208,7 @@ namespace telar::gui::application {
 
     panes.push(ds::makeBox<Pane<Memory>>(memory, memory, pane_id, features::terminal::graphics::budget(graphics)));
     panes.backMut().getMut().location = location;
-    ++view_version_.panes;
+    ++view_version.panes;
 
     return panes.backMut().getMut();
   }
@@ -221,9 +221,9 @@ namespace telar::gui::application {
       return;
     }
 
-    const auto launch = defaultLaunch();
+    const auto launch = launch_defaults.launch();
 
-    sendOpeningRequest(RequestKind::open_default, OpenPane{.size = features::workbench::launchSize(workbench), .launch = launch});
+    link.sendOpeningRequest(RequestKind::open_default, OpenPane{.size = features::workbench::launchSize(workbench), .launch = launch});
   }
 
   auto Session::machineBookmark() const noexcept -> ds::Option<MachineBookmark> {
@@ -236,7 +236,7 @@ namespace telar::gui::application {
 
     if (tab->location.workspace.kind == WorkspaceLocation::Kind::workspace) {
       fallback = tab->location.workspace.id;
-    } else if (const auto* row = workspaces_.worktree(tab->location.workspace.id)) {
+    } else if (const auto* row = workspace_list.worktree(tab->location.workspace.id)) {
       fallback = row->source;
     }
 
@@ -249,7 +249,7 @@ namespace telar::gui::application {
     }
 
     features::workbench::forget(workbench, {.kind = WorkspaceLocation::Kind::workspace, .id = *request.fallback_workspace});
-    sendOpeningRequest(RequestKind::open_default, OpenPane{.target = {.kind = PaneTarget::Kind::workspace, .id = *request.fallback_workspace}, .size = features::workbench::launchSize(workbench)});
+    link.sendOpeningRequest(RequestKind::open_default, OpenPane{.target = {.kind = PaneTarget::Kind::workspace, .id = *request.fallback_workspace}, .size = features::workbench::launchSize(workbench)});
 
     return true;
   }
@@ -271,7 +271,7 @@ namespace telar::gui::application {
         }
       }
 
-      sendOpeningRequest(RequestKind::visit_pane, opening, {}, fallback_workspace);
+      link.sendOpeningRequest(RequestKind::visit_pane, opening, {}, fallback_workspace);
     } catch (...) {
       const auto failure = std::current_exception();
 
@@ -290,25 +290,25 @@ namespace telar::gui::application {
   void Session::releaseWorkspacePresentation() noexcept {
     const auto* tab = activeTab();
 
-    features::workbench::leave(workbench, tabs, active_tab_, tab != nullptr && findPane(tab->focused_pane) != nullptr ? tab : nullptr);
+    features::workbench::leave(workbench, tabs, active_tab, tab != nullptr && findPane(tab->focused_pane) != nullptr ? tab : nullptr);
     panes.clear();
     tabs.clear();
-    active_tab_.reset();
+    active_tab.reset();
     features::terminal::copy_mode::close(copy_mode);
     features::history::suspend(history);
     features::paths::close(paths);
     features::palette::discard(palette);
     features::terminal::graphics::suspend(graphics);
     features::terminal::links::suspend(links);
-    ++view_version_.workspace;
-    ++view_version_.tabs;
-    ++view_version_.active_tab;
-    ++view_version_.panes;
-    ++view_version_.host;
+    ++view_version.workspace;
+    ++view_version.tabs;
+    ++view_version.active_tab;
+    ++view_version.panes;
+    ++view_version.host;
   }
 
   void Session::restoreMachinePresentation() {
-    if (active_tab_) {
+    if (active_tab) {
       synchronizeAttachments();
 
       return;
@@ -340,7 +340,7 @@ namespace telar::gui::application {
       const auto bookmark = *left_machine_;
       const auto target = bookmark.pane_id != 0 ? PaneTarget{.kind = PaneTarget::Kind::pane, .id = bookmark.pane_id} : PaneTarget{.kind = PaneTarget::Kind::workspace, .id = bookmark.fallback_workspace.valueOr(bookmark.location.workspace.id)};
 
-      sendOpeningRequest(RequestKind::restore_machine, OpenPane{.target = target, .size = features::workbench::launchSize(workbench)}, bookmark.location, bookmark.fallback_workspace);
+      link.sendOpeningRequest(RequestKind::restore_machine, OpenPane{.target = target, .size = features::workbench::launchSize(workbench)}, bookmark.location, bookmark.fallback_workspace);
     }
   }
 
@@ -352,7 +352,7 @@ namespace telar::gui::application {
 
     const auto fallback = location.workspace.kind == WorkspaceLocation::Kind::workspace ? ds::Option{location.workspace.id} : ds::none;
 
-    sendOpeningRequest(RequestKind::restore_machine, OpenPane{.target = {.kind = PaneTarget::Kind::pane, .id = *saved}, .size = features::workbench::launchSize(workbench)}, location, fallback);
+    link.sendOpeningRequest(RequestKind::restore_machine, OpenPane{.target = {.kind = PaneTarget::Kind::pane, .id = *saved}, .size = features::workbench::launchSize(workbench)}, location, fallback);
   }
 
   void Session::confirmAttachment(Pane<Memory>& pane) {
@@ -369,13 +369,6 @@ namespace telar::gui::application {
     ++chrome_revision_;
   }
 
-  Launch Session::defaultLaunch() const noexcept {
-    static constexpr ds::Array<std::string_view, 1> default_shell{"/bin/sh"};
-    const auto arguments = launch_argument_count_ == 0 ? std::span<const std::string_view>{default_shell} : std::span<const std::string_view>{launch_arguments_}.first(launch_argument_count_);
-
-    return {.cwd = launch_cwd_.empty() ? std::string_view{"/"} : std::string_view{launch_cwd_}, .arguments = arguments};
-  }
-
   void Session::synchronizeAttachments() {
     if (!presented_) {
       return;
@@ -389,7 +382,7 @@ namespace telar::gui::application {
       if (visible && !pane->attached && !pane->attaching && !pane->exited) {
         pane.getMut().attaching = true;
         try {
-          sendOpeningRequest(RequestKind::attach, OpenPane{.target = {PaneTarget::Kind::pane, pane->id}, .size = pane->size});
+          link.sendOpeningRequest(RequestKind::attach, OpenPane{.target = {PaneTarget::Kind::pane, pane->id}, .size = pane->size});
         } catch (...) {
           pane.getMut().attaching = false;
           throw;
@@ -438,7 +431,7 @@ namespace telar::gui::application {
     const bool discovered = findPane(message.pane_id) != nullptr;
     auto& pane = ensurePane(message.pane_id, message.location);
     if (pane.generation != message.pane_generation) {
-      ++view_version_.panes;
+      ++view_version.panes;
     }
 
     const auto desired_size = discovered ? pane.size : request->size;
@@ -463,12 +456,12 @@ namespace telar::gui::application {
 
     if (!tab.loading && !tab.loaded) {
       tab.loading = true;
-      sendSnapshotRequest(RequestTabSnapshot{.location = tab.location});
-      sendSnapshotRequest(RequestWorkspaceSnapshot{.workspace = tab.location.workspace});
+      link.sendSnapshotRequest(RequestTabSnapshot{.location = tab.location});
+      link.sendSnapshotRequest(RequestWorkspaceSnapshot{.workspace = tab.location.workspace});
     }
 
     if (request->kind != RequestKind::attach) {
-      workbench::setFocus(*this, tab, pane.id);
+      workbench::setFocus(*this, tab.location, pane.id);
       workbench::selectTab(*this, message.location);
       left_machine_.reset();
     }
@@ -542,8 +535,8 @@ namespace telar::gui::application {
     }
 
     panes.push(std::move(pane));
-    ++view_version_.tabs;
-    ++view_version_.panes;
+    ++view_version.tabs;
+    ++view_version.panes;
     workbench::selectTab(*this, message.location);
     synchronizeAttachments();
     workbench::retainLayout(*this);
@@ -560,7 +553,7 @@ namespace telar::gui::application {
     auto& tab = ensureTab(message.location);
 
     features::workbench::restore(workbench, tab, [&](std::uint64_t pane_id) {
-      workbench::setFocus(*this, tab, pane_id);
+      workbench::setFocus(*this, tab.location, pane_id);
     });
     tab.loaded = true;
     tab.loading = false;
@@ -579,13 +572,13 @@ namespace telar::gui::application {
 
     for (const auto identity : std::span{removed}.first(removed_count)) {
       tab.layout.remove(identity);
-      ++view_version_.panes;
+      ++view_version.panes;
     }
 
     for (const auto& descriptor : message.panes) {
       auto& pane = ensurePane(descriptor.pane_id, message.location);
       if (pane.generation != descriptor.pane_generation || pane.exited != (descriptor.lifecycle == PaneLifecycle::exited)) {
-        ++view_version_.panes;
+        ++view_version.panes;
       }
 
       pane.generation = descriptor.pane_generation;
@@ -594,7 +587,7 @@ namespace telar::gui::application {
     }
 
     if (!tab.layout.contains(tab.focused_pane)) {
-      workbench::setFocus(*this, tab, tab.layout.firstPane());
+      workbench::setFocus(*this, tab.location, tab.layout.firstPane());
     }
 
     synchronizeAttachments();
@@ -607,7 +600,7 @@ namespace telar::gui::application {
   }
 
   Change Session::apply(const WorkspaceSnapshot& message) {
-    const bool current_workspace = active_tab_ && sameWorkspace(active_tab_->workspace, message.workspace);
+    const bool current_workspace = active_tab && sameWorkspace(active_tab->workspace, message.workspace);
 
     link.completeRequest(RequestKind::workspace_snapshot, message.request_id);
     ds::Array<TabLocation, maximum_tabs> removed;
@@ -625,10 +618,10 @@ namespace telar::gui::application {
       discardTab(location);
     }
 
-    for (auto& workspace : workspaces_.entriesMut()) {
+    for (auto& workspace : workspace_list.entriesMut()) {
       if (sameWorkspace(workspace.location, message.workspace)) {
         if (workspace.name != message.name) {
-          ++view_version_.workspace;
+          ++view_version.workspace;
         }
 
         workspace.name.assign(message.name);
@@ -638,7 +631,7 @@ namespace telar::gui::application {
     for (const auto& descriptor : message.tabs) {
       auto& tab = ensureTab({message.workspace, descriptor.tab_id});
       if (tab.label != descriptor.label || tab.position != descriptor.position) {
-        ++view_version_.tabs;
+        ++view_version.tabs;
       }
 
       tab.label.assign(descriptor.label);
@@ -647,7 +640,7 @@ namespace telar::gui::application {
       ++chrome_revision_;
     }
 
-    if (current_workspace && !active_tab_ && (presented_ || leave_pending_) && !message.tabs.empty()) {
+    if (current_workspace && !active_tab && (presented_ || leave_pending_) && !message.tabs.empty()) {
       workbench::selectTab(*this, {message.workspace, message.tabs.front().tab_id});
     }
 
@@ -655,13 +648,13 @@ namespace telar::gui::application {
   }
 
   Change Session::apply(const WorkspaceList& message) {
-    return workspaces_.apply(message) ? Change::model : Change::none;
+    return workspace_list.apply(message) ? Change::model : Change::none;
   }
 
   Change Session::apply(const ClientLayoutSnapshot& message) {
-    if (active_tab_) {
+    if (active_tab) {
       if (auto const* tab = activeTab()) {
-        sendSnapshotRequest(RequestTabSnapshot{.location = tab->location});
+        link.sendSnapshotRequest(RequestTabSnapshot{.location = tab->location});
         synchronizeAttachments();
       }
 
@@ -675,7 +668,7 @@ namespace telar::gui::application {
     }
 
     configuration.sidebar_visible = message.sidebar_visible;
-    ++view_version_.host;
+    ++view_version.host;
     sidebar_columns_ = std::max(SidebarColumns::minimum_width, message.sidebar_width);
     workspace_list_collapsed_ = message.workspace_list_collapsed;
     features::workbench::adopt(workbench, message.tabs);
@@ -692,7 +685,7 @@ namespace telar::gui::application {
 
   Change Session::apply(const TabClosed& message) {
     link.complete(message.request_id);
-    const auto active_closed = active_tab_ && sameTab(*active_tab_, message.location);
+    const auto active_closed = active_tab && sameTab(*active_tab, message.location);
     const auto* closing = findTab(message.location);
     const bool closing_known = closing != nullptr;
     const auto position = closing_known ? closing->position : std::uint16_t{};
@@ -725,8 +718,8 @@ namespace telar::gui::application {
 
   void Session::discardTab(TabLocation location) {
     if (findTab(location) != nullptr) {
-      ++view_version_.tabs;
-      ++view_version_.panes;
+      ++view_version.tabs;
+      ++view_version.panes;
     }
 
     for (const auto& pane : panes) {
@@ -747,8 +740,8 @@ namespace telar::gui::application {
       return sameTab(pane.location, location);
     });
 
-    if (active_tab_ && sameTab(*active_tab_, location)) {
-      active_tab_.reset();
+    if (active_tab && sameTab(*active_tab, location)) {
+      active_tab.reset();
     }
   }
 
@@ -770,7 +763,7 @@ namespace telar::gui::application {
   Change Session::apply(const PaneExited& message) {
     if (auto* pane = findPaneMut(message.pane_id)) {
       pane->exited = true;
-      ++view_version_.panes;
+      ++view_version.panes;
     }
 
     for (auto& tab : tabs.viewMut()) {
@@ -821,7 +814,7 @@ namespace telar::gui::application {
 
     if (auto* tab = findTabMut(message.location)) {
       if (tab->label != message.label) {
-        ++view_version_.tabs;
+        ++view_version.tabs;
       }
 
       tab->label.assign(message.label);
@@ -859,7 +852,7 @@ namespace telar::gui::application {
       }
 
       if (tab->position != message.position) {
-        ++view_version_.tabs;
+        ++view_version.tabs;
       }
 
       tab->position = message.position;
@@ -874,7 +867,7 @@ namespace telar::gui::application {
 
   Change Session::apply(const ResyncRequired& message) {
     if (message.workspace_closed) {
-      const auto active_closed = active_tab_ && sameWorkspace(active_tab_->workspace, message.workspace);
+      const auto active_closed = active_tab && sameWorkspace(active_tab->workspace, message.workspace);
       ds::Array<TabLocation, maximum_tabs> removed;
       std::size_t removed_count = 0;
 
@@ -899,9 +892,9 @@ namespace telar::gui::application {
       return Change::model;
     }
 
-    if (const auto location = active_tab_) {
-      sendSnapshotRequest(RequestWorkspaceSnapshot{.workspace = location->workspace});
-      sendSnapshotRequest(RequestTabSnapshot{.location = *location});
+    if (const auto location = active_tab) {
+      link.sendSnapshotRequest(RequestWorkspaceSnapshot{.workspace = location->workspace});
+      link.sendSnapshotRequest(RequestTabSnapshot{.location = *location});
     }
 
     for (const auto& pane : panes) {
@@ -921,12 +914,12 @@ namespace telar::gui::application {
   // The requests application::workbench registers and sends.
   template void Session::Link::sendRegistered<ClosePane>(RequestKind kind, ClosePane request, std::uint64_t pane_id);
   template void Session::Link::sendRegistered<ForgetWorktree>(RequestKind kind, ForgetWorktree request, std::uint64_t pane_id);
-  template void Session::sendOpeningRequest<OpenPane>(RequestKind kind, OpenPane request, TabLocation location, ds::Option<std::uint64_t> fallback_workspace);
-  template void Session::sendOpeningRequest<CreateWorkspace>(RequestKind kind, CreateWorkspace request, TabLocation location, ds::Option<std::uint64_t> fallback_workspace);
-  template void Session::sendSnapshotRequest<RequestTabSnapshot>(RequestTabSnapshot request);
-  template void Session::sendTabOperation<CreateTab>(RequestKind kind, CreateTab request);
-  template void Session::sendTabOperation<RenameTab>(RequestKind kind, RenameTab request);
-  template void Session::sendTabOperation<MoveTab>(RequestKind kind, MoveTab request);
-  template void Session::sendTabOperation<CloseTab>(RequestKind kind, CloseTab request);
+  template void Session::Link::sendOpeningRequest<OpenPane>(RequestKind kind, OpenPane request, TabLocation location, ds::Option<std::uint64_t> fallback_workspace);
+  template void Session::Link::sendOpeningRequest<CreateWorkspace>(RequestKind kind, CreateWorkspace request, TabLocation location, ds::Option<std::uint64_t> fallback_workspace);
+  template void Session::Link::sendSnapshotRequest<RequestTabSnapshot>(RequestTabSnapshot request);
+  template void Session::Link::sendTabOperation<CreateTab>(RequestKind kind, CreateTab request);
+  template void Session::Link::sendTabOperation<RenameTab>(RequestKind kind, RenameTab request);
+  template void Session::Link::sendTabOperation<MoveTab>(RequestKind kind, MoveTab request);
+  template void Session::Link::sendTabOperation<CloseTab>(RequestKind kind, CloseTab request);
 
 }

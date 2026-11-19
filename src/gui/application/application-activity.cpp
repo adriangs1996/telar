@@ -37,7 +37,7 @@ namespace telar::gui::application::activity {
       return;
     }
 
-    const auto* active = session.activeTab();
+    const auto* active = activeTab(session.tabs, session.active_tab);
     if (active == nullptr) {
       return;
     }

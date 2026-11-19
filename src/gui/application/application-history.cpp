@@ -53,7 +53,7 @@ namespace telar::gui::application::history {
           request.scope = scope;
           request.scope_value = std::string_view{pane->cwd};
         }
-      } else if (const auto& active = Access::activeTab(session); scope == HistoryScope::workspace && active) {
+      } else if (const auto& active = session.active_tab; scope == HistoryScope::workspace && active) {
         const auto location = active->workspace;
         const auto& workspaces = session.workspaces();
         const auto workspace = std::ranges::find_if(workspaces, [&](const auto& entry) {

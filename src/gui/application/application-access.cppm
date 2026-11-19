@@ -36,19 +36,9 @@ namespace telar::gui::application {
       return session.clipboard_;
     }
 
-    // What a view of the session has to redraw: a use case that moves a pane's view bumps it.
-    [[nodiscard]] static constexpr ViewVersion& viewVersion(Session& session) noexcept {
-      return session.view_version_;
-    }
-
     // The pane whose terminal changed since the last message, for its view to redraw.
     [[nodiscard]] static constexpr std::uint64_t& changedPane(Session& session) noexcept {
       return session.changed_pane_;
-    }
-
-    // The tab the session shows, by location, whether or not its record arrived.
-    [[nodiscard]] static constexpr const ds::Option<TabLocation>& activeTab(const Session& session) noexcept {
-      return session.active_tab_;
     }
 
     // The agents the runtime reports and the panes it lists, which the session replicates.
@@ -80,10 +70,6 @@ namespace telar::gui::application {
       return session.tabs.viewMut();
     }
 
-    [[nodiscard]] static constexpr ds::Option<TabLocation>& activeTab(Session& session) noexcept {
-      return session.active_tab_;
-    }
-
     // The tab at `location`, added to the model when the session holds none there.
     static Tab<Memory>& ensureTab(Session& session, TabLocation location) {
       return session.ensureTab(location);
@@ -99,22 +85,6 @@ namespace telar::gui::application {
       session.synchronizeAttachments();
     }
 
-    // What a pane opened on its own runs: the launch's program and directory.
-    [[nodiscard]] static Launch defaultLaunch(const Session& session) noexcept {
-      return session.defaultLaunch();
-    }
-
-    // Asks the runtime to describe a tab, which it answers with a snapshot.
-    static void requestSnapshot(Session& session, RequestTabSnapshot request) {
-      session.sendSnapshotRequest(request);
-    }
-
-    // Asks the runtime to open a pane or a workspace, tracked as `kind` until it does.
-    template <typename Request>
-    static void open(Session& session, RequestKind kind, Request request) {
-      session.sendOpeningRequest(kind, request);
-    }
-
     // Leaves the active workspace for the one holding pane `pane_id`, else `fallback_workspace`.
     static void handoffPane(Session& session, std::uint64_t pane_id, ds::Option<std::uint64_t> fallback_workspace) {
       session.handoffPane(pane_id, fallback_workspace);
@@ -123,12 +93,6 @@ namespace telar::gui::application {
     // Leaves the active workspace for `target`, else `fallback_workspace`.
     static void handoffWorkspace(Session& session, PaneTarget target, ds::Option<std::uint64_t> fallback_workspace) {
       session.handoffWorkspace(target, fallback_workspace);
-    }
-
-    // Sends a request to create, rename, move or close a tab, tracked until the runtime answers.
-    template <typename Request>
-    static void sendTabOperation(Session& session, RequestKind kind, Request request) {
-      session.sendTabOperation(kind, request);
     }
 
     // The width of the sidebar in columns, which the layout the runtime retains carries.

@@ -90,10 +90,10 @@ namespace {
       const auto second = transport.last<ForgetWorktree>();
 
       check(first.worktree == checkout_id && second.worktree == second_checkout_id && first.request_id != second.request_id, "cleanup requests must preserve snapshot order and own distinct correlations");
-      check(client.workspaceList().worktrees().size() == worktrees.size(), "cleanup must await runtime snapshots instead of mutating its replica");
+      check(client.workspace_list.worktrees().size() == worktrees.size(), "cleanup must await runtime snapshots instead of mutating its replica");
       check(deliver(client, RequestFailed{.request_id = first.request_id, .code = FailureCode::worktree_not_found, .message = "Already forgotten"}) == application::Change::none && client.error().empty(), "a concurrently forgotten row must release its correlation without an error");
       check(deliver(client, RequestCompleted{.request_id = second.request_id}) == application::Change::none, "a successful cleanup must only release request ownership");
-      check(client.workspaceList().worktrees().size() == worktrees.size(), "request completion must not substitute for an authoritative snapshot");
+      check(client.workspace_list.worktrees().size() == worktrees.size(), "request completion must not substitute for an authoritative snapshot");
       client.disconnected();
       check(application::workbench::forgetGoneWorktrees(client) == 0, "disconnected cleanup must not queue requests against stale state");
     }

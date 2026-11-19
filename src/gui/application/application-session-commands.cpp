@@ -107,14 +107,14 @@ namespace telar::gui::application {
     switch (message.action) {
     case ClientAction::tab_next:
     case ClientAction::tab_previous: {
-      if (!active_tab_) {
+      if (!active_tab) {
         throw EncodingError{"NoActiveTab"};
       }
 
-      const auto before = *active_tab_;
+      const auto before = *active_tab;
 
       workbench::selectTabBeside(*this, message.action == ClientAction::tab_next ? 1 : -1);
-      reply.status = sameTab(before, *active_tab_) ? ClientCommandStatus::applied : ClientCommandStatus::admitted;
+      reply.status = sameTab(before, *active_tab) ? ClientCommandStatus::applied : ClientCommandStatus::admitted;
       break;
     }
     case ClientAction::workspace_select: {
@@ -124,13 +124,13 @@ namespace telar::gui::application {
 
       const WorkspaceLocation location{WorkspaceLocation::Kind::workspace, message.target_id};
 
-      if (std::ranges::none_of(workspaces_, [&](const auto& workspace) {
+      if (std::ranges::none_of(workspace_list, [&](const auto& workspace) {
             return workspace.location.kind == WorkspaceLocation::Kind::workspace && workspace.location.id == message.target_id;
           })) {
         throw EncodingError{"WorkspaceNotFound"};
       }
 
-      if (active_tab_ && sameWorkspace(active_tab_->workspace, location)) {
+      if (active_tab && sameWorkspace(active_tab->workspace, location)) {
         break;
       }
 
@@ -157,7 +157,7 @@ namespace telar::gui::application {
         throw EncodingError{"TabNotFound"};
       }
 
-      if (active_tab_ && sameTab(*active_tab_, (*tab)->location)) {
+      if (active_tab && sameTab(*active_tab, (*tab)->location)) {
         break;
       }
 
@@ -289,7 +289,7 @@ namespace telar::gui::application {
 
   const Pane<Memory>& Session::commandPane(std::uint64_t identity) const {
     const auto* pane = findPane(identity);
-    if (pane == nullptr || !active_tab_ || !sameTab(pane->location, *active_tab_)) {
+    if (pane == nullptr || !active_tab || !sameTab(pane->location, *active_tab)) {
       throw EncodingError{"Pane does not belong to the active tab"};
     }
 

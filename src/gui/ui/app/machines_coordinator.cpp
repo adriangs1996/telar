@@ -282,7 +282,7 @@ namespace telar::gui::qt {
         .attention = summary.attention,
         .metrics_revision = sample.revision,
         .agent_revision = client.session.agentRevision(),
-        .workspace_revision = client.session.workspaceList().revision(),
+        .workspace_revision = client.session.workspace_list.revision(),
     };
 
     if (sample.revision != 0) {

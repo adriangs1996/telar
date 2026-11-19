@@ -56,7 +56,7 @@ namespace telar::gui::application {
         now_(now),
         panes(memory),
         tabs(memory),
-        workspaces_(memory),
+        workspace_list(memory),
         agents_(memory),
         pane_list_(memory),
         history(memory),
@@ -65,39 +65,67 @@ namespace telar::gui::application {
         clipboard_(memory),
         error_(memory),
         command_response_(memory),
-        launch_cwd_(memory),
-        argument_storage_(memory) {
+        launch_defaults(memory) {
     decode_.resize(decode_capacity);
   }
 
-  void Session::setLaunch(const Launch& launch) {
-    BodySchema<Launch>::validate(launch);
-    launch_cwd_.assign(launch.cwd);
-    argument_storage_.clear();
-    launch_argument_count_ = 0;
-    argument_storage_.reserve(launch.arguments.size());
-    for (const auto argument : launch.arguments) {
-      argument_storage_.emplace(memory, argument);
-    }
+  Session::LaunchDefaults::LaunchDefaults(tbc::view<Memory&, tbc::lt::a> memory)
+      : memory_(&memory),
+        cwd_(memory),
+        storage_(memory) {}
 
-    for (const auto& argument : argument_storage_) {
-      launch_arguments_.atMut(launch_argument_count_++) = argument;
-    }
+  Launch Session::LaunchDefaults::launch() const noexcept {
+    static constexpr ds::Array<std::string_view, 1> default_shell{"/bin/sh"};
+    const auto arguments = count_ == 0 ? std::span<const std::string_view>{default_shell} : std::span<const std::string_view>{arguments_}.first(count_);
+
+    return {.cwd = cwd_.empty() ? std::string_view{"/"} : std::string_view{cwd_}, .arguments = arguments};
   }
 
-  void Session::setLaunchDirectory(std::string_view directory) {
-    auto launch = defaultLaunch();
+  void Session::LaunchDefaults::set(const Launch& launch) {
+    BodySchema<Launch>::validate(launch);
+    cwd_.assign(launch.cwd);
+    storeArguments(launch.arguments);
+  }
+
+  void Session::LaunchDefaults::setDirectory(std::string_view directory) {
+    auto launch = this->launch();
 
     launch.cwd = directory;
     BodySchema<Launch>::validate(launch);
-    launch_cwd_.assign(directory);
+    cwd_.assign(directory);
+  }
+
+  void Session::LaunchDefaults::setArguments(std::span<const std::string_view> arguments) {
+    auto launch = this->launch();
+
+    launch.arguments = arguments;
+    BodySchema<Launch>::validate(launch);
+    storeArguments(arguments);
+  }
+
+  void Session::LaunchDefaults::storeArguments(std::span<const std::string_view> arguments) {
+    storage_.clear();
+    count_ = 0;
+    storage_.reserve(arguments.size());
+    for (const auto argument : arguments) {
+      storage_.emplace(*memory_, argument);
+    }
+
+    for (const auto& argument : storage_) {
+      arguments_.atMut(count_++) = argument;
+    }
+  }
+
+  void Session::setLaunch(const Launch& launch) {
+    launch_defaults.set(launch);
+  }
+
+  void Session::setLaunchDirectory(std::string_view directory) {
+    launch_defaults.setDirectory(directory);
   }
 
   void Session::setLaunchArguments(std::span<const std::string_view> arguments) {
-    auto launch = defaultLaunch();
-
-    launch.arguments = arguments;
-    setLaunch(launch);
+    launch_defaults.setArguments(arguments);
   }
 
   void Session::setRestoreLayout(bool enabled) noexcept {
@@ -108,16 +136,16 @@ namespace telar::gui::application {
     reads_rows_ = reads_rows;
     panes.clear();
     tabs.clear();
-    active_tab_.reset();
+    active_tab.reset();
     left_machine_.reset();
     deferred_tab_.reset();
     features::workbench::clear(workbench);
     initial_open_pending_ = false;
-    workspaces_.resetSource();
-    ++view_version_.workspace;
-    ++view_version_.tabs;
-    ++view_version_.active_tab;
-    ++view_version_.panes;
+    workspace_list.resetSource();
+    ++view_version.workspace;
+    ++view_version.tabs;
+    ++view_version.active_tab;
+    ++view_version.panes;
     ready_ = true;
     status_bar = {};
     proxy_ = {};
@@ -188,12 +216,12 @@ namespace telar::gui::application {
   }
 
   void Session::disconnected() noexcept {
-    ++view_version_.host;
+    ++view_version.host;
     ready_ = false;
     features::terminal::graphics::suspend(graphics);
     agents_.resetSource();
     pane_list_.resetSource();
-    workspaces_.resetSource();
+    workspace_list.resetSource();
     features::terminal::copy_mode::close(copy_mode);
     features::history::suspend(history);
     features::paths::close(paths);
@@ -367,12 +395,20 @@ namespace telar::gui::application {
     return application::findPaneMut(panes, pane_id);
   }
 
+  tbc::view<const Tab<Memory>*, tbc::lt::a> activeTab(tbc::view<const Tabs&, tbc::lt::a> tabs, ds::Option<TabLocation> active) noexcept {
+    return active ? features::workbench::find(tabs.view(), *active) : nullptr;
+  }
+
+  tbc::view<Tab<Memory>*, tbc::lt::a> activeTabMut(tbc::view<Tabs&, tbc::lt::a> tabs, ds::Option<TabLocation> active) noexcept {
+    return active ? features::workbench::findMut(tabs.viewMut(), *active) : nullptr;
+  }
+
   const Tab<Memory>* Session::activeTab() const noexcept {
-    return active_tab_ ? findTab(*active_tab_) : nullptr;
+    return application::activeTab(tabs, active_tab);
   }
 
   Tab<Memory>* Session::activeTabMut() noexcept {
-    return active_tab_ ? findTabMut(*active_tab_) : nullptr;
+    return application::activeTabMut(tabs, active_tab);
   }
 
   const Pane<Memory>* Session::focusedPane() const noexcept {
@@ -388,11 +424,7 @@ namespace telar::gui::application {
   }
 
   const ds::Vec<Workspace<Memory>, Memory>& Session::workspaces() const noexcept {
-    return workspaces_.entries();
-  }
-
-  const WorkspaceReplica<Memory>& Session::workspaceList() const noexcept {
-    return workspaces_;
+    return workspace_list.entries();
   }
 
   const ds::Vec<Agent<Memory>, Memory>& Session::agents() const noexcept {
@@ -440,16 +472,16 @@ namespace telar::gui::application {
   }
 
   ViewVersion Session::viewVersion() const noexcept {
-    return view_version_;
+    return view_version;
   }
 
   void Session::invalidateView() noexcept {
-    ++view_version_.host;
+    ++view_version.host;
   }
 
   void Session::setSidebarVisible(bool visible) {
     if (configuration.sidebar_visible != visible) {
-      ++view_version_.host;
+      ++view_version.host;
     }
 
     configuration.sidebar_visible = visible;
@@ -458,7 +490,7 @@ namespace telar::gui::application {
 
   void Session::setSidebarWidth(float width) {
     if (configuration.sidebar_width != width) {
-      ++view_version_.host;
+      ++view_version.host;
     }
 
     configuration.sidebar_width = width;
@@ -633,7 +665,7 @@ namespace telar::gui::application {
     }
 
     if (request && request->kind == RequestKind::close_pane) {
-      ++view_version_.panes;
+      ++view_version.panes;
       for (auto& tab : tabs.viewMut()) {
         tab.getMut().layout.remove(request->pane_id);
         if (tab->focused_pane == request->pane_id) {

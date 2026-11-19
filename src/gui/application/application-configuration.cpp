@@ -18,7 +18,6 @@ import telar.config.runtime;
 import telar.config.snapshot;
 import telar.gui.features.configuration;
 import telar.gui.features.notifications;
-import :access;
 import telar.base.ds;
 
 namespace telar::gui::application {
@@ -1087,7 +1086,7 @@ namespace telar::gui::application::configuration {
 
     shown = configuration;
     features::notifications::configure(session.notifications, configuration.sound);
-    ++Access::viewVersion(session).configuration;
+    ++session.view_version.configuration;
     if (prompt_changed) {
       prompt::configureShell(session);
     }
@@ -1100,7 +1099,7 @@ namespace telar::gui::application::configuration {
     }
 
     shown.theme = theme;
-    ++Access::viewVersion(session).configuration;
+    ++session.view_version.configuration;
   }
 
   template <Allocator Memory>

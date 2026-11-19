@@ -100,7 +100,7 @@ namespace telar::gui::application::notifications {
   }
 
   bool targetVisible(const Session& session, NotificationTarget target) noexcept {
-    const auto* tab = session.activeTab();
+    const auto* tab = activeTab(session.tabs, session.active_tab);
 
     return target.kind == NotificationTarget::Kind::pane && tab != nullptr && tab->layout.contains(target.id);
   }

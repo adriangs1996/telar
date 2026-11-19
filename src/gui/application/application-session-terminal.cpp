@@ -73,7 +73,7 @@ namespace telar::gui::application {
   void Session::followLiveEnd(Pane<Memory>& pane) {
     const auto bottom = copyGrid(pane.screen).maximumOffset();
     if (pane.screen.scroll().offset != bottom) {
-      ++view_version_.viewport;
+      ++view_version.viewport;
       ++pane.viewport_requests;
       pane.screen.setViewport(bottom);
       link.send(SetPaneViewport{.pane_id = pane.id, .offset = follow_output});
@@ -126,7 +126,11 @@ namespace telar::gui::application {
   }
 
   void Session::resize(std::uint64_t pane_id, TerminalSize size) {
-    auto* pane = findPaneMut(pane_id);
+    resizePane(panes, link, view_version, pane_id, size);
+  }
+
+  void Session::resizePane(Panes& panes, Link& link, ViewVersion& view_version, std::uint64_t pane_id, TerminalSize size) {
+    auto* pane = application::findPaneMut(panes, pane_id);
     if (pane == nullptr || pane->size == size) {
       return;
     }
@@ -136,7 +140,7 @@ namespace telar::gui::application {
     }
 
     pane->size = size;
-    ++view_version_.viewport;
+    ++view_version.viewport;
   }
 
   void Session::presented(std::uint64_t pane_id, std::uint64_t frame_id) {
@@ -166,7 +170,7 @@ namespace telar::gui::application {
     ++pane->viewport_requests;
     link.send(SetPaneViewport{.pane_id = delta.pane_id, .offset = requested == maximum ? follow_output : requested});
     pane->screen.setViewport(requested);
-    ++view_version_.viewport;
+    ++view_version.viewport;
   }
 
   bool Session::measureInline(std::uint64_t pane_id, std::uint64_t id, std::uint32_t rows) {

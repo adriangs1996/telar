@@ -34,7 +34,7 @@ namespace telar::gui::application::terminal::copy_mode {
 
       if (plan.viewport) {
         if (pane.screen.scroll().offset != plan.viewport->offset) {
-          ++Access::viewVersion(session).viewport;
+          ++session.view_version.viewport;
         }
 
         pane.screen.setViewport(plan.viewport->offset);

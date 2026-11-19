@@ -32,7 +32,7 @@ namespace telar::gui::qt {
     }
 
     const auto command = std::get<application::machines::MachineActivityTarget::Command>(target.owner);
-    const auto* row = client->session.workspaceList().worktree(command.worktree);
+    const auto* row = client->session.workspace_list.worktree(command.worktree);
 
     return row != nullptr && row->workspace && *row->workspace == command.workspace;
   }

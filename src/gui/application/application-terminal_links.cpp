@@ -2,7 +2,6 @@ module telar.gui.application;
 
 import std;
 
-import :access;
 import telar.gui.features.terminal.links;
 import telar.wire.editor;
 import telar.wire.vocabulary;
@@ -48,7 +47,7 @@ namespace telar::gui::application::terminal::links {
     }
 
     const auto* source = findPane(session.panes, *source_id);
-    const auto& active = Access::activeTab(session);
+    const auto& active = session.active_tab;
     if (source == nullptr || !active || !sameTab(source->location, *active)) {
       throw std::runtime_error{"PaneNotFound"};
     }
@@ -100,7 +99,7 @@ namespace telar::gui::application::terminal::links {
     }
 
     const auto& source = request->source;
-    const auto& active = Access::activeTab(session);
+    const auto& active = session.active_tab;
     const auto* pane = findPane(session.panes, source.pane_id);
     if (pane == nullptr || !active || !sameTab(source.location, *active) || !sameTab(pane->location, source.location) || pane->generation != source.pane_generation || pane->attachment_generation != source.attachment_generation) {
       return Change::none;

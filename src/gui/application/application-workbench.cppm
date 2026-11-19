@@ -146,11 +146,11 @@ namespace telar::gui::application::workbench {
   // Splits pane `pane_id` beside a new pane running `arguments`; throws when it cannot.
   void launchSplit(Session& session, std::uint64_t pane_id, std::span<const std::string_view> arguments);
 
-  // `tab` focuses `pane_id`, which the graphics of a paused pane hear.
-  void setFocus(Session& session, Tab<Memory>& tab, std::uint64_t pane_id);
+  // The tab at `location` focuses `pane_id`, which the graphics of a paused pane hear.
+  void setFocus(Session& session, TabLocation location, std::uint64_t pane_id);
 
-  // The panes of `tab` on screen take the sizes their places leave them.
-  void resizeVisible(Session& session, Tab<Memory>& tab);
+  // The panes of the active tab take the sizes their places leave them.
+  void resizeVisible(Session& session);
 
   // A split of pane `pane_id` in the tab at `location` failed: the pane takes back its size.
   void recoverSplit(Session& session, TabLocation location, std::uint64_t pane_id);

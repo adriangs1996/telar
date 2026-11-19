@@ -11,7 +11,7 @@ import telar.base.ds;
 namespace telar::gui::application::window {
 
   WindowTitle title(const Session& session, std::string_view hostname) {
-    const auto* tab = session.activeTab();
+    const auto* tab = activeTab(session.tabs, session.active_tab);
     const auto* pane = session.focusedPane();
     WindowTitle::Tokens tokens{.workspace = {}, .tab = {}, .pane_title = pane != nullptr ? std::string_view{pane->title} : std::string_view{}, .hostname = hostname};
 

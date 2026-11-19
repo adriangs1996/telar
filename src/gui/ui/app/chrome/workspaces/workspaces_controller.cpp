@@ -44,7 +44,7 @@ namespace telar::gui::qt {
         .runtime_generation = client.runtime_generation,
         .workspace = view.workspace,
         .active_tab = view.active_tab,
-        .workspace_list = session.workspaceList().revision(),
+        .workspace_list = session.workspace_list.revision(),
         .agents = session.agentRevision(),
     };
   }
@@ -68,7 +68,7 @@ namespace telar::gui::qt {
     ds::Option<std::uint64_t> selected_project;
 
     if (active != nullptr && active->location.workspace.kind == WorkspaceLocation::Kind::workspace) {
-      selected_project = session.workspaceList().projectOf(active->location.workspace.id);
+      selected_project = session.workspace_list.projectOf(active->location.workspace.id);
       const auto current = std::ranges::find_if(session.workspaces(), [&](const auto& workspace) {
         return sameWorkspace(workspace.location, active->location.workspace);
       });
@@ -77,9 +77,9 @@ namespace telar::gui::qt {
       }
     }
 
-    for (const auto& workspace : session.workspaceList().projects()) {
+    for (const auto& workspace : session.workspace_list.projects()) {
       const bool selected = selected_project == workspace.location.id;
-      auto record = projectRecord(workspace, session.workspaceList(), std::span<const Agent<Memory>>{session.agents()}, selected);
+      auto record = projectRecord(workspace, session.workspace_list, std::span<const Agent<Memory>>{session.agents()}, selected);
 
       record.insert(QStringLiteral("index"), workspaces.size());
       if (selected) {
