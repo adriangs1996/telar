@@ -663,9 +663,11 @@ namespace telar::runtime::cli::sessions {
     return found == descriptions.end() ? name : found->second;
   }
 
+  // What a dispatch reads and builds lives in `memory`, region `a`; it reads the options and the
+  // machine's profile it is given, region `b`.
   class WorktreeDispatch {
   public:
-    WorktreeDispatch(Memory& memory, const WorktreeOptions& options, const machines::MachineProfile& profile)
+    WorktreeDispatch(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<const WorktreeOptions&, tbc::lt::b> options, tbc::view<const machines::MachineProfile&, tbc::lt::b> profile)
         : memory_(memory),
           options_(options),
           profile_(profile),
@@ -704,7 +706,11 @@ namespace telar::runtime::cli::sessions {
       optional("--title", options_.title);
       optional("--label", options_.label);
       optional("--coordinator", coordinator_text ? ds::Option{coordinator_text->view()} : ds::none);
-      optional("--from", continued ? ds::none : ds::Option{commit.view()});
+      if (!continued) {
+        words.push("--from");
+        words.push(commit.view());
+      }
+
       if (options_.setup) {
         words.push("--setup");
       }
@@ -744,7 +750,7 @@ namespace telar::runtime::cli::sessions {
     }
 
   private:
-    Text commitOf(std::string_view revision) {
+    tbc::view<Text, tbc::lt::a> commitOf(std::string_view revision) {
       try {
         return git_.line({"git", "-C", root_, "rev-parse", "--verify", "--quiet", "--end-of-options", ds::format(memory_, "{}^{{commit}}", revision)});
       } catch (const std::exception&) {
@@ -752,7 +758,7 @@ namespace telar::runtime::cli::sessions {
       }
     }
 
-    Text originIdentity() {
+    tbc::view<Text, tbc::lt::a> originIdentity() {
       Text url{memory_};
 
       try {
@@ -765,7 +771,7 @@ namespace telar::runtime::cli::sessions {
     }
 
     // Asks the other machine which of its workspaces holds this repository.
-    Text findClone() {
+    tbc::view<Text, tbc::lt::a> findClone() {
       const auto identity = originIdentity();
       const ds::Array<std::string_view, 5> words{"worktree", "resolve", "--repository", identity, "--json"};
       const auto output = machine::capture(memory_, profile_, std::span<const std::string_view>{words.view()}, "MachineCommandFailed");
@@ -833,15 +839,15 @@ namespace telar::runtime::cli::sessions {
       return ds::none;
     }
 
-    Text formatCoordinator(const CoordinatorReference& reference) {
+    tbc::view<Text, tbc::lt::a> formatCoordinator(const CoordinatorReference& reference) {
       return ds::format(memory_, "{}:{}:{}", lowerHex(reference.session_id.view()), reference.pane_id, reference.pane_generation);
     }
 
-    Memory& memory_;
-    const WorktreeOptions& options_;
-    const machines::MachineProfile& profile_;
-    WorktreeGit git_;
-    Text root_;
+    tbc::view<Memory&, tbc::lt::a> memory_;
+    tbc::view<const WorktreeOptions&, tbc::lt::b> options_;
+    tbc::view<const machines::MachineProfile&, tbc::lt::b> profile_;
+    tbc::view<WorktreeGit, tbc::lt::a> git_;
+    tbc::view<Text, tbc::lt::a> root_;
   };
 
   // A session id as the 32 hexadecimal digits it is written in.
