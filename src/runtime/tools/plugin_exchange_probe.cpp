@@ -32,16 +32,20 @@ namespace {
     const CaptureStart response{.key = {index, 1}, .side = CaptureSide::response, .protocol = CaptureProtocol::http1, .host = "example.test", .started_at_ms = 1};
 
     exchange.request = ds::makeBox<CaptureHalf>(memory, memory, quota, limits, request);
-    exchange.request->setMethod("POST");
-    exchange.request->setTarget("/resource");
-    exchange.request->appendHead("POST /resource HTTP/1.1\r\nHost: example.test\r\nContent-Length: 16\r\n\r\n");
-    exchange.request->append(exchange.request->bodyPart(), "{\"value\":123456}");
-    exchange.request->finish(CaptureOutcome::finished, 2);
+    auto& sent = exchange.request.getMut();
+
+    sent.setMethod("POST");
+    sent.setTarget("/resource");
+    sent.appendHead("POST /resource HTTP/1.1\r\nHost: example.test\r\nContent-Length: 16\r\n\r\n");
+    sent.append(sent.bodyPart(), "{\"value\":123456}");
+    sent.finish(CaptureOutcome::finished, 2);
     exchange.response = ds::makeBox<CaptureHalf>(memory, memory, quota, limits, response);
-    exchange.response->appendHead("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n");
-    exchange.response->append(exchange.response->bodyPart(), "ok");
-    exchange.response->status_code = 200;
-    exchange.response->finish(CaptureOutcome::finished, 3);
+    auto& received = exchange.response.getMut();
+
+    received.appendHead("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n");
+    received.append(received.bodyPart(), "ok");
+    received.status_code = 200;
+    received.finish(CaptureOutcome::finished, 3);
     return exchange;
   }
 
