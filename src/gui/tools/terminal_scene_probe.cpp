@@ -182,15 +182,15 @@ namespace {
 
   class TerminalProbe final : public QQuickItem {
   public:
-    TerminalProbe(QQuickWindow& window, Options options)
-        : QQuickItem(window.contentItem()),
+    // A child of a window's content item, which Qt's item tree holds by address.
+    TerminalProbe(QQuickItem* parent, Options options)
+        : QQuickItem(parent),
           options_(std::move(options)),
           columns_(options_.text.isEmpty() ? terminal_columns : static_cast<unsigned>(std::ranges::max(options_.text, {}, &QString::size).size())),
           rows_(options_.text.isEmpty() ? terminal_rows : static_cast<unsigned>(options_.text.size())),
           screen_(memory_),
           graphics_(memory_, graphics_budget_) {
       setFlag(ItemHasContents);
-      WindowImages::forWindow(window);
       configuration_.font.family.assign(options_.family.toStdString());
       configuration_.font.size = options_.font_size;
       configuration_.font.line_height = options_.line_height;
@@ -375,11 +375,12 @@ namespace {
     unsigned columns_;
     unsigned rows_;
     ApplicationMemory application_memory_;
-    ApplicationAllocator& memory_ = application_memory_.memory();
+    // The probe's allocator, and what allocates from it or counts against its budget, live beside it.
+    tbc::view<ApplicationAllocator&, tbc::lt::self> memory_ = application_memory_.memory();
     Configuration configuration_;
-    Screen<Memory> screen_;
+    tbc::view<Screen<Memory>, tbc::lt::self> screen_;
     application::terminal::graphics::GraphicsBudget graphics_budget_;
-    application::terminal::graphics::GraphicsStore<Memory> graphics_;
+    tbc::view<application::terminal::graphics::GraphicsStore<Memory>, tbc::lt::self> graphics_;
     std::shared_ptr<const FontCollection> collection_;
     std::shared_ptr<ResidentFonts> fonts_;
     ResolvedFont resolved_;
@@ -414,7 +415,8 @@ int main(int argc, char** argv) {
 
     window.setFlag(Qt::Tool, options.floating_window);
     window.setColor(options.background);
-    TerminalProbe probe{window, options};
+    WindowImages::forWindow(window);
+    TerminalProbe probe{tbc::raw(window.contentItem()), options};
 
     window.resize(static_cast<int>(probe.width()), static_cast<int>(probe.height()));
     bool captured = false;
