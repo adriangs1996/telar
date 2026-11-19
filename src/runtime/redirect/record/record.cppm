@@ -4,6 +4,7 @@ module;
 export module telar.runtime.redirect.record;
 
 import std;
+import telar.tbc;
 import telar.native.pcap;
 import telar.sys.socket;
 import telar.sys.posix;
@@ -410,7 +411,8 @@ export {
     template <Allocator Memory>
     class Record {
     public:
-      explicit Record(Memory& memory, const PfIdentity<Memory>& identity, std::string_view endpoint);
+      // What the record keeps lives in `memory`, region `a`; the endpoint and the label are copied.
+      explicit Record(tbc::view<Memory&, tbc::lt::a> memory, const PfIdentity<Memory>& identity, std::string_view endpoint);
 
       ds::Option<std::uint64_t> load();
 
@@ -421,9 +423,9 @@ export {
       void clear();
 
     private:
-      Memory& memory_;
-      ds::String<Memory> endpoint_;
-      RecordFile<Memory> file_;
+      tbc::view<Memory&, tbc::lt::a> memory_;
+      tbc::view<ds::String<Memory>, tbc::lt::a> endpoint_;
+      tbc::view<RecordFile<Memory>, tbc::lt::a> file_;
       ds::Option<unsigned> log_index_;
       ds::Option<std::uint64_t> last_token_;
     };

@@ -466,7 +466,7 @@ export {
     public:
       explicit Helper(Memory& memory, std::string_view endpoint, std::span<const Target> targets, std::span<const ProcessIdentity> processes = {}, Direction direction = Direction::outbound);
 
-      ds::String<Memory> plan(uid_t uid, const PfIdentity<Memory>& identity, bool dry_run = false);
+      ds::String<Memory> plan(uid_t uid, const PfIdentity<Memory>& identity, bool dry_run = false) const;
 
       void run(const PfIdentity<Memory>& identity);
 

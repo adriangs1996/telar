@@ -694,7 +694,7 @@ namespace telar::runtime::redirect {
     }
   }
 
-  ds::String<Memory> Helper::plan(uid_t uid, const PfIdentity<Memory>& identity, bool dry_run) {
+  ds::String<Memory> Helper::plan(uid_t uid, const PfIdentity<Memory>& identity, bool dry_run) const {
     ds::Array<FlowKey, maximum_flows> keys;
     ds::Array<FlowKey, maximum_flows> incoming;
     ds::Array<Bypass, maximum_flows> bypasses;

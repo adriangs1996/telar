@@ -226,7 +226,7 @@ namespace telar::runtime::redirect {
   }
 
   template <Allocator Memory>
-  Record<Memory>::Record(Memory& memory, const PfIdentity<Memory>& identity, std::string_view endpoint)
+  Record<Memory>::Record(tbc::view<Memory&, tbc::lt::a> memory, const PfIdentity<Memory>& identity, std::string_view endpoint)
       : memory_(memory),
         endpoint_(memory, endpoint),
         file_(memory, identity.label) {}
