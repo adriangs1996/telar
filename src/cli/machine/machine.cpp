@@ -216,7 +216,7 @@ namespace telar::runtime::cli::machine {
       return result;
     }
 
-    Text assetName(Memory& memory) const {
+    tbc::view<Text, tbc::lt::a> assetName(tbc::view<Memory&, tbc::lt::a> memory) const {
       return ds::format(memory, "telar-{}-{}{}", os, arch, os == "linux" ? "-headless.tar.gz" : ".tar.gz");
     }
   };
@@ -286,17 +286,20 @@ namespace telar::runtime::cli::machine {
     }
   };
 
-  AgentSet localAgents() {
+  AgentSet localAgents(Memory& memory) {
     AgentSet found;
-    const auto* path = std::getenv("PATH");
-    if (!path) {
+    const auto* variable = std::getenv("PATH");
+    if (!variable) {
       return found;
     }
+
+    // Copied out of the environment, as std::env::var does: a call into the project may change it.
+    const Text path{memory, variable};
 
     ds::Array<char, PATH_MAX> executable;
 
     for (std::size_t agent = 0; agent < agent_names.size(); ++agent) {
-      if (findExecutable(path, agent_commands[agent], executable.viewMut())) {
+      if (findExecutable(path.view(), agent_commands[agent], executable.viewMut())) {
         found.insert(agent_names[agent]);
       }
     }
@@ -507,7 +510,7 @@ fetch() {
   constexpr unsigned config_json_depth = 256;
 
   struct SyncEntry {
-    std::string_view name;
+    tbc::view<std::string_view, tbc::lt::static_storage> name;
     enum class Format {
       text,
       json,
@@ -569,9 +572,10 @@ fetch() {
                                                                  : agent == "pi"       ? "PI_CODING_AGENT_DIR"
                                                                  : agent == "opencode" ? "XDG_CONFIG_HOME"
                                                                                        : "CURSOR_CONFIG_DIR";
-    const auto* override = std::getenv(variable);
+    const auto* set = std::getenv(variable);
+    const Text override{memory, set == nullptr ? std::string_view{} : std::string_view{set}};
 
-    return override && *override ? ds::format(memory, "{}{}", override, agent == "opencode" ? "/opencode" : "") : ds::format(memory, "{}/{}", home, remoteRoot(agent));
+    return !override.empty() ? ds::format(memory, "{}{}", override.view(), agent == "opencode" ? "/opencode" : "") : ds::format(memory, "{}/{}", home, remoteRoot(agent));
   }
 
   // Calls `visit` with each word of a shell command, split at its separators.
@@ -636,7 +640,8 @@ fetch() {
   // Texts kept sorted, without repeats, for lookups by binary search.
   class SortedTexts {
   public:
-    explicit SortedTexts(Memory& memory)
+    // Copies what it keeps into `memory`.
+    explicit SortedTexts(tbc::view<Memory&, tbc::lt::a> memory)
         : texts_(memory) {}
 
     void insert(std::string_view text) {
@@ -653,7 +658,7 @@ fetch() {
     }
 
   private:
-    ds::Vec<Text, Memory> texts_;
+    tbc::view<ds::Vec<Text, Memory>, tbc::lt::a> texts_;
   };
 
   class ConfigSync {
@@ -672,14 +677,15 @@ fetch() {
       Text real;
     };
 
-    Memory& memory_;
-    Text home_;
-    Text remote_home_;
-    ds::Vec<Root, Memory> roots_;
+    // Everything below lives in memory_'s region.
+    tbc::view<Memory&, tbc::lt::a> memory_;
+    tbc::view<Text, tbc::lt::a> home_;
+    tbc::view<Text, tbc::lt::a> remote_home_;
+    tbc::view<ds::Vec<Root, Memory>, tbc::lt::a> roots_;
     // Each wanted agent's local root, in the agents' alphabetical order.
-    ds::Vec<std::pair<std::string_view, Text>, Memory> local_roots_;
-    ds::Vec<File, Memory> files_;
-    ds::Vec<Text, Memory> left_;
+    tbc::view<ds::Vec<std::pair<std::string_view, Text>, Memory>, tbc::lt::a> local_roots_;
+    tbc::view<ds::Vec<File, Memory>, tbc::lt::a> files_;
+    tbc::view<ds::Vec<Text, Memory>, tbc::lt::a> left_;
     std::size_t total_ = 0;
 
     template <typename... Arguments>
@@ -692,7 +698,7 @@ fetch() {
     }
 
     // The canonical path of `path`, when it resolves.
-    ds::Option<Text> canonical(std::string_view path) const {
+    tbc::view<ds::Option<Text>, tbc::lt::a> canonical(std::string_view path) const {
       const Text given{memory_, path};
       ds::Array<char, PATH_MAX> resolved{};
       if (::realpath(given.data(), resolved.dataMut()) == nullptr) {
@@ -909,7 +915,10 @@ fetch() {
 
     bool keep(std::size_t index, Text bytes) {
       if (const auto found = filter::findSecret(bytes)) {
-        leave("{}: held back, line {} holds what looks like {}; review it and sync again", files_[index].remote, found->first, found->second);
+        // Formatted before it is kept: leaving mutates the sync, files included.
+        auto message = ds::format(memory_, "{}: held back, line {} holds what looks like {}; review it and sync again", files_[index].remote, found->first, found->second);
+
+        left_.push(std::move(message));
         return false;
       }
 
@@ -1068,11 +1077,11 @@ fetch() {
 
     // The absolute paths a command names there: its absolute words and its words under the home.
     template <typename Visit>
-    void paths(std::string_view command, Visit&& visit) const {
+    static void paths(Memory& memory, std::string_view remote_home, std::string_view command, Visit&& visit) {
       commandTokens(command, [&](std::string_view token) {
         if (token.starts_with('/')) {
           visit(token);
-        } else if (const auto expanded = homePath(memory_, token, remote_home_)) {
+        } else if (const auto expanded = homePath(memory, token, remote_home)) {
           visit(expanded->view());
         }
       });
@@ -1091,7 +1100,7 @@ fetch() {
 
         commands(memory_, JsonValue::parse(formatted, config_json_depth), found);
         for (const auto& command : found) {
-          paths(command, [&](std::string_view path) {
+          paths(memory_, remote_home_, command, [&](std::string_view path) {
             if (!path.contains('\n') && path != "TELAR_PATHS") {
               asked.emplace(memory_, path);
             }
@@ -1139,15 +1148,15 @@ fetch() {
       return result;
     }
 
-    bool commandRuns(const SortedTexts& staged, std::string_view command, const SortedTexts& existing) const {
+    static bool commandRuns(Memory& memory, std::string_view remote_home, const SortedTexts& staged, std::string_view command, const SortedTexts& existing) {
       if (command.ends_with(" hook claude") || command.ends_with(" hook codex") || command.ends_with(" hook cursor")) {
         return true;
       }
 
       bool runs = true;
 
-      paths(command, [&](std::string_view path) {
-        if (existing.contains(path) || (below(path, remote_home_) && staged.contains(path.substr(remote_home_.size() + 1)))) {
+      paths(memory, remote_home, command, [&](std::string_view path) {
+        if (existing.contains(path) || (below(path, remote_home) && staged.contains(path.substr(remote_home.size() + 1)))) {
           return;
         }
 
@@ -1156,11 +1165,14 @@ fetch() {
       return runs;
     }
 
-    // Leaves out the commands whose programs the machine lacks, noting each in what is left.
-    bool keepCommands(const SortedTexts& staged, JsonNode<Memory>& node, const SortedTexts& existing, std::string_view path) {
+    // Leaves out the commands whose programs the machine lacks, noting each in `left`. Static, so a call
+    // takes the sync's fields apart from the file whose commands it prunes.
+    static bool keepCommands(std::string_view remote_home, ds::Vec<Text, Memory>& left, const SortedTexts& staged, JsonNode<Memory>& node, const SortedTexts& existing, std::string_view path) {
+      auto& memory = left.memory();
+
       if (node.kind() == JsonKind::object) {
-        if (const auto* command = node.find("command"); command && command->kind() == JsonKind::string && !commandRuns(staged, command->text(), existing)) {
-          leave("{}: left out `{}`, whose program is not there", path, command->text());
+        if (const auto* command = node.find("command"); command && command->kind() == JsonKind::string && !commandRuns(memory, remote_home, staged, command->text(), existing)) {
+          left.push(ds::format(memory, "{}: left out `{}`, whose program is not there", path, command->text()));
           return false;
         }
       }
@@ -1172,7 +1184,7 @@ fetch() {
           auto& child = node.childrenMut()[index];
           const bool container = child.kind() == JsonKind::object || child.kind() == JsonKind::array;
           const bool recurse = container && (node.kind() == JsonKind::array || !child.children().empty());
-          if (recurse && !keepCommands(staged, child, existing, path)) {
+          if (recurse && !keepCommands(remote_home, left, staged, child, existing, path)) {
             node.erase(index);
           } else {
             ++index;
@@ -1186,7 +1198,7 @@ fetch() {
     }
 
   public:
-    ConfigSync(Memory& memory, std::string_view home, std::string_view remote_home)
+    ConfigSync(tbc::view<Memory&, tbc::lt::a> memory, std::string_view home, std::string_view remote_home)
         : memory_(memory),
           home_(memory, home),
           remote_home_(memory, remote_home),
@@ -1250,12 +1262,12 @@ fetch() {
           continue;
         }
 
-        if (auto* status = file.json.getMut().findMut("statusLine"); status && !keepCommands(staged, *status, existing, file.remote)) {
+        if (auto* status = file.json.getMut().findMut("statusLine"); status && !keepCommands(remote_home_, left_, staged, *status, existing, file.remote)) {
           file.json.getMut().remove("statusLine");
         }
 
         if (auto* hooks = file.json.getMut().findMut("hooks")) {
-          keepCommands(staged, *hooks, existing, file.remote);
+          keepCommands(remote_home_, left_, staged, *hooks, existing, file.remote);
         }
       }
 
@@ -1318,12 +1330,13 @@ fetch() {
     }
 
     try {
-      const auto* home = std::getenv("HOME");
-      if (!home) {
+      const auto* variable = std::getenv("HOME");
+      if (!variable) {
         throw CommandError{"HomeUnavailable"};
       }
 
-      ConfigSync sync{memory, home, platform.home};
+      const Text home{memory, variable};
+      ConfigSync sync{memory, home.view(), platform.home};
 
       sync.run(report, destination, platform, wanted);
     } catch (const std::exception& error) {
@@ -2707,7 +2720,7 @@ mkdir -p "$HOME/.local/bin" && "$telar" cli install --dir "$HOME/.local/bin" >/d
       report.end(Step::profile, Status::failed, "{}", description ? description : error.what());
     }
 
-    const auto wanted = localAgents();
+    const auto wanted = localAgents(memory);
     ds::Option<Platform> reprobed;
 
     if (options.skip[0]) {
