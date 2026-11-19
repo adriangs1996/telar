@@ -12,7 +12,7 @@ namespace telar::gui::features::prompt {
         keymap_(keymap),
         kill_ring_(memory),
         pasted_(memory),
-        unnamed_{ds::String<Memory>{memory}},
+        unnamed_{.text = ds::String<Memory>{memory}},
         registers_(memory),
         recorded_(memory),
         last_change_(memory) {
@@ -20,7 +20,7 @@ namespace telar::gui::features::prompt {
 
     registers_.reserve(named_registers);
     for (std::size_t index = 0; index < named_registers; ++index) {
-      registers_.push(Register{ds::String<Memory>{memory}});
+      registers_.push(Register{.text = ds::String<Memory>{memory}});
     }
   }
 
@@ -166,19 +166,21 @@ namespace telar::gui::features::prompt {
   }
 
   Request Editor::press(const KeyPress& key) {
-    if (keymap_ == Keymap::vim && mode_ != Mode::insert) {
-      if (replaying_ == 0 && recording_) {
-        record(key);
-      }
-
-      return normal(key);
-    }
-
     if (keymap_ == Keymap::vim && replaying_ == 0 && recording_) {
       record(key);
     }
 
-    return insert(key);
+    const auto request = dispatch(key);
+
+    if (repeat_requested_) {
+      repeat();
+    }
+
+    return request;
+  }
+
+  Request Editor::dispatch(const KeyPress& key) {
+    return keymap_ == Keymap::vim && mode_ != Mode::insert ? normal(key) : insert(key);
   }
 
   Request Editor::insert(const KeyPress& key) {
@@ -208,14 +210,7 @@ namespace telar::gui::features::prompt {
 
       return Request::submit;
     case Key::backspace:
-      if (text_.selecting()) {
-        text_.insert({});
-      } else if (mods.alt || mods.control) {
-        killBackward(wordStart(cursor, false));
-      } else {
-        text_.replace(text_.previous(cursor), cursor, {}, true);
-      }
-
+      eraseBackward(mods.alt || mods.control);
       return Request::none;
     case Key::delete_forward:
       if (text_.selecting()) {
@@ -246,17 +241,33 @@ namespace telar::gui::features::prompt {
     case Key::backtab:
       return Request::unhandled;
     case Key::escape:
-      if (keymap_ == Keymap::vim) {
-        enterNormal();
-        return Request::none;
-      }
+      return escapeInsert();
+    }
 
-      if (text_.selecting()) {
-        text_.moveTo(text_.cursor());
-        return Request::none;
-      }
+    return Request::unhandled;
+  }
 
-      return Request::unhandled;
+  void Editor::eraseBackward(bool word) {
+    const auto cursor = text_.cursor();
+
+    if (text_.selecting()) {
+      text_.insert({});
+    } else if (word) {
+      killBackward(wordStart(cursor, false));
+    } else {
+      text_.replace(text_.previous(cursor), cursor, {}, true);
+    }
+  }
+
+  Request Editor::escapeInsert() {
+    if (keymap_ == Keymap::vim) {
+      enterNormal();
+      return Request::none;
+    }
+
+    if (text_.selecting()) {
+      text_.moveTo(text_.cursor());
+      return Request::none;
     }
 
     return Request::unhandled;
@@ -364,7 +375,7 @@ namespace telar::gui::features::prompt {
     const auto column = goal_column_ ? *goal_column_ : text_.column(cursor);
     const auto target_start = direction < 0 ? text_.lineStart(start - 1) : text_.lineEnd(cursor) + 1;
 
-    move(text_.atColumn(target_start, column), extend);
+    move(text_.atColumn({.line_start = target_start, .column = column}), extend);
     goal_column_ = column;
     return Request::none;
   }
@@ -538,6 +549,35 @@ namespace telar::gui::features::prompt {
     return std::max<std::size_t>(1, count_) * std::max<std::size_t>(1, operator_count_);
   }
 
+  namespace {
+
+    // The vim command a key other than a character stands for, if any.
+    ds::Option<char32_t> vimCharacter(const KeyPress& key) noexcept {
+      switch (key.key) {
+      case Key::left:
+      case Key::backspace:
+        return U'h';
+      case Key::right:
+        return U'l';
+      case Key::up:
+        return U'k';
+      case Key::down:
+        return U'j';
+      case Key::home:
+        return U'0';
+      case Key::end:
+        return U'$';
+      case Key::delete_forward:
+        return U'x';
+      case Key::character:
+        return key.character;
+      default:
+        return ds::none;
+      }
+    }
+
+  }
+
   Request Editor::normal(const KeyPress& key) {
     if (key.key == Key::escape) {
       if (mode_ == Mode::visual || mode_ == Mode::visual_line) {
@@ -558,79 +598,77 @@ namespace telar::gui::features::prompt {
       return normalControl(key.character);
     }
 
-    char32_t character = key.character;
-
-    switch (key.key) {
-    case Key::left:
-      character = 'h';
-      break;
-    case Key::right:
-      character = 'l';
-      break;
-    case Key::up:
-      character = 'k';
-      break;
-    case Key::down:
-      character = 'j';
-      break;
-    case Key::home:
-      character = '0';
-      break;
-    case Key::end:
-      character = '$';
-      break;
-    case Key::backspace:
-      character = 'h';
-      break;
-    case Key::delete_forward:
-      character = 'x';
-      break;
-    case Key::tab:
+    if (key.key == Key::tab) {
       return Request::complete;
-    case Key::character:
-      break;
-    default:
+    }
+
+    const auto character = vimCharacter(key);
+    if (!character) {
       return Request::unhandled;
     }
 
+    if (const auto request = pendingKey(*character, key)) {
+      return *request;
+    }
+
+    return normalKey(*character, key);
+  }
+
+  ds::Option<Request> Editor::pendingKey(char32_t character, const KeyPress& key) {
     if (register_pending_) {
       register_ = static_cast<char>(character);
       register_pending_ = false;
       return Request::none;
     }
 
-    if (pending_ == Pending::replace) {
+    switch (pending_) {
+    case Pending::replace:
       replaceCharacters(key.text);
       return Request::none;
-    }
-
-    if (pending_ == Pending::find) {
-      last_find_ = {find_kind_, character};
-      return applyMotion(findMotion(find_kind_, character, count()));
-    }
-
-    if (pending_ == Pending::g) {
-      pending_ = Pending::none;
-      if (character == 'g') {
-        return applyMotion({0, false, true});
-      }
-
-      if (character == 'e' || character == 'E') {
-        return applyMotion({wordStart(text_.cursor(), character == 'E'), true});
-      }
-
-      reset();
-      return Request::none;
-    }
-
-    if (pending_ == Pending::text_object) {
+    case Pending::find:
+      last_find_ = Find{.kind = find_kind_, .target = character};
+      return applyMotion(findMotion(last_find_, count()));
+    case Pending::g:
+      return afterG(character);
+    case Pending::text_object:
       return applyTextObject(character);
+    case Pending::none:
+      return ds::none;
     }
 
-    if ((character >= '1' && character <= '9') || (character == '0' && (operator_ != 0 ? operator_count_ : count_) != 0)) {
-      auto& target = operator_ != 0 ? operator_count_ : count_;
+    return ds::none;
+  }
 
-      target = std::min<std::size_t>((target * 10) + (character - '0'), 9999);
+  Request Editor::afterG(char32_t character) {
+    pending_ = Pending::none;
+    if (character == 'g') {
+      return applyMotion(Motion{.target = 0, .inclusive = false, .linewise = true});
+    }
+
+    if (character == 'e' || character == 'E') {
+      return applyMotion(Motion{.target = wordStart(text_.cursor(), character == 'E'), .inclusive = true});
+    }
+
+    reset();
+    return Request::none;
+  }
+
+  bool Editor::countDigit(char32_t character) noexcept {
+    // A count's digits; past four, more digits only make vim slower.
+    constexpr std::size_t decimal_base = 10;
+    constexpr std::size_t maximum_count = 9999;
+    auto& target = operator_ != 0 ? operator_count_ : count_;
+
+    if ((character < '1' || character > '9') && (character != '0' || target == 0)) {
+      return false;
+    }
+
+    target = std::min<std::size_t>((target * decimal_base) + (character - '0'), maximum_count);
+    return true;
+  }
+
+  Request Editor::normalKey(char32_t character, const KeyPress& key) {
+    if (countDigit(character)) {
       return Request::none;
     }
 
@@ -697,7 +735,7 @@ namespace telar::gui::features::prompt {
     }
   }
 
-  ds::Option<Editor::Motion> Editor::motionFor(char32_t character) const noexcept {
+  ds::Option<Editor::Motion> Editor::motionFor(char32_t character) const {
     const auto cursor = text_.cursor();
     const auto repeat = count();
     const auto apply = [&](auto step) {
@@ -712,97 +750,117 @@ namespace telar::gui::features::prompt {
 
     switch (character) {
     case 'h':
-      return Motion{apply([&](std::size_t at) {
-        return at > text_.lineStart(cursor) ? text_.previous(at) : at;
-      })};
+      return Motion{
+          .target = apply([&](std::size_t offset) {
+            return offset > text_.lineStart(cursor) ? text_.previous(offset) : offset;
+          }),
+      };
     case 'l':
     case ' ':
-      return Motion{apply([&](std::size_t at) {
-        return at < text_.lineEnd(cursor) ? text_.next(at) : at;
-      })};
+      return Motion{
+          .target = apply([&](std::size_t offset) {
+            return offset < text_.lineEnd(cursor) ? text_.next(offset) : offset;
+          }),
+      };
     case 'w':
     case 'W':
-      // cw on a word changes to its end, as vim does.
-      if (operator_ == 'c' && !blank(cursor)) {
-        auto end = runEnd(cursor, character == 'W');
-
-        for (std::size_t index = 1; index < repeat; ++index) {
-          end = endOfWord(end, character == 'W');
-        }
-
-        return Motion{end, true};
-      }
-
-      return Motion{apply([&](std::size_t at) {
-        return nextWord(at, character == 'W');
-      })};
+      return wordMotion(character == 'W');
     case 'b':
     case 'B':
-      return Motion{apply([&](std::size_t at) {
-        return wordStart(at, character == 'B');
-      })};
+      return Motion{
+          .target = apply([&](std::size_t offset) {
+            return wordStart(offset, character == 'B');
+          }),
+      };
     case 'e':
     case 'E':
-      return Motion{apply([&](std::size_t at) {
-                      return endOfWord(at, character == 'E');
-                    }),
-          true};
+      return Motion{
+          .target = apply([&](std::size_t offset) {
+            return endOfWord(offset, character == 'E');
+          }),
+          .inclusive = true,
+      };
     case '0':
-      return Motion{text_.lineStart(cursor)};
+      return Motion{.target = text_.lineStart(cursor)};
     case '^':
-      return Motion{firstNonBlank(text_.lineStart(cursor))};
-    case '$': {
-      auto line = text_.lineStart(cursor);
-
-      for (std::size_t index = 1; index < repeat && text_.lineEnd(line) < text_.size(); ++index) {
-        line = text_.lineEnd(line) + 1;
-      }
-
-      const auto end = text_.lineEnd(line);
-
-      return Motion{end > line ? text_.previous(end) : end, true};
-    }
-    case 'G': {
+      return Motion{.target = firstNonBlank(text_.lineStart(cursor))};
+    case '$':
+      return lineEndMotion();
+    case 'G':
       if (count_ == 0 && operator_count_ == 0) {
-        return Motion{text_.lineStart(text_.size()), false, true};
+        return Motion{.target = text_.lineStart(text_.size()), .inclusive = false, .linewise = true};
       }
 
-      return Motion{lineAt(repeat - 1), false, true};
-    }
+      return Motion{.target = lineAt(repeat - 1), .inclusive = false, .linewise = true};
     case 'j':
-    case 'k': {
-      auto line = text_.lineStart(cursor);
-
-      for (std::size_t index = 0; index < repeat; ++index) {
-        if (character == 'j') {
-          if (text_.lineEnd(line) == text_.size()) {
-            return Motion{cursor, false, true, operator_ != 0 && index > 0};
-          }
-
-          line = text_.lineEnd(line) + 1;
-        } else {
-          if (line == 0) {
-            return Motion{cursor, false, true, operator_ != 0 && index > 0};
-          }
-
-          line = text_.lineStart(line - 1);
-        }
-      }
-
-      return Motion{text_.atColumn(line, text_.column(cursor)), false, true};
-    }
+    case 'k':
+      return lineMotion(character == 'j');
     case ';':
     case ',':
-      if (last_find_.second == 0) {
-        return Motion{cursor, false, false, false};
+      if (last_find_.target == 0) {
+        return Motion{.target = cursor, .valid = false};
       }
 
-      return findMotion(character == ';' ? last_find_.first : reversed(last_find_.first), last_find_.second, repeat, true);
+      return findMotion(character == ';' ? last_find_ : Find{.kind = reversed(last_find_.kind), .target = last_find_.target}, repeat, true);
     case '%':
       return matchingBracket(cursor);
     default:
       return ds::none;
     }
+  }
+
+  Editor::Motion Editor::wordMotion(bool big) const noexcept {
+    const auto cursor = text_.cursor();
+    const auto repeat = count();
+
+    // cw on a word changes to its end, as vim does.
+    if (operator_ == 'c' && !blank(cursor)) {
+      auto end = runEnd(cursor, big);
+
+      for (std::size_t index = 1; index < repeat; ++index) {
+        end = endOfWord(end, big);
+      }
+
+      return Motion{.target = end, .inclusive = true};
+    }
+
+    auto position = cursor;
+
+    for (std::size_t index = 0; index < repeat; ++index) {
+      position = nextWord(position, big);
+    }
+
+    return Motion{.target = position};
+  }
+
+  Editor::Motion Editor::lineEndMotion() const noexcept {
+    const auto repeat = count();
+    auto line = text_.lineStart(text_.cursor());
+
+    for (std::size_t index = 1; index < repeat && text_.lineEnd(line) < text_.size(); ++index) {
+      line = text_.lineEnd(line) + 1;
+    }
+
+    const auto end = text_.lineEnd(line);
+
+    return Motion{.target = end > line ? text_.previous(end) : end, .inclusive = true};
+  }
+
+  Editor::Motion Editor::lineMotion(bool down) const noexcept {
+    const auto cursor = text_.cursor();
+    const auto repeat = count();
+    auto line = text_.lineStart(cursor);
+
+    for (std::size_t index = 0; index < repeat; ++index) {
+      const bool edge = down ? text_.lineEnd(line) == text_.size() : line == 0;
+      if (edge) {
+        return Motion{.target = cursor, .inclusive = false, .linewise = true, .valid = operator_ != 0 && index > 0};
+      }
+
+      line = down ? text_.lineEnd(line) + 1 : text_.lineStart(line - 1);
+    }
+
+    return Motion{.target = text_.atColumn({.line_start = line, .column = text_.column(cursor)}), .inclusive = false, .linewise = true};
   }
 
   char Editor::reversed(char kind) noexcept {
@@ -839,52 +897,64 @@ namespace telar::gui::features::prompt {
     return line;
   }
 
-  Editor::Motion Editor::findMotion(char kind, char32_t target, std::size_t repeat, bool repeated) const {
+  Editor::Motion Editor::findMotion(Find find, std::size_t repeat, bool repeated) const {
     ds::Array<char, 4> encoded{};
-    const auto bytes = encode(target, encoded);
+    const auto bytes = encode(find.target, encoded);
     const auto needle = std::string_view{encoded.data(), bytes};
-    const auto view = text_.view();
     const auto cursor = text_.cursor();
     const auto start = text_.lineStart(cursor);
     const auto end = text_.lineEnd(cursor);
+    const bool forward = find.kind == 'f' || find.kind == 't';
     auto position = cursor;
 
     for (std::size_t index = 0; index < repeat; ++index) {
-      if (kind == 'f' || kind == 't') {
-        auto from = text_.next(position);
-        // Repeating t with ; skips the character it stopped before.
-        if (repeated && kind == 't' && index == 0 && from < end && view.substr(from, needle.size()) == needle) {
-          from = text_.next(from);
-        }
-
-        const auto found = view.find(needle, from);
-        if (found == std::string_view::npos || found >= end) {
-          return Motion{cursor, false, false, false};
-        }
-
-        position = found;
-      } else {
-        auto from = text_.previous(position);
-        if (repeated && kind == 'T' && index == 0 && from > start && view.substr(text_.previous(from), needle.size()) == needle) {
-          from = text_.previous(from);
-        }
-
-        const auto found = position <= start ? std::string_view::npos : view.rfind(needle, from);
-        if (found == std::string_view::npos || found < start) {
-          return Motion{cursor, false, false, false};
-        }
-
-        position = found;
+      // Repeating t with ; skips the character it stopped before.
+      const bool skip = repeated && index == 0 && (find.kind == 't' || find.kind == 'T');
+      const auto found = forward ? findAfter(position, needle, skip, end) : findBefore(position, needle, skip, start);
+      if (!found) {
+        return Motion{.target = cursor, .valid = false};
       }
+
+      position = *found;
     }
 
-    if (kind == 't') {
+    if (find.kind == 't') {
       position = text_.previous(position);
-    } else if (kind == 'T') {
+    } else if (find.kind == 'T') {
       position = text_.next(position);
     }
 
-    return Motion{position, kind == 'f' || kind == 't'};
+    return Motion{.target = position, .inclusive = forward};
+  }
+
+  ds::Option<std::size_t> Editor::findAfter(std::size_t position, std::string_view needle, bool skip, std::size_t end) const {
+    const auto view = text_.view();
+    auto from = text_.next(position);
+    if (skip && from < end && view.substr(from, needle.size()) == needle) {
+      from = text_.next(from);
+    }
+
+    const auto found = view.find(needle, from);
+    if (found == std::string_view::npos || found >= end) {
+      return ds::none;
+    }
+
+    return found;
+  }
+
+  ds::Option<std::size_t> Editor::findBefore(std::size_t position, std::string_view needle, bool skip, std::size_t start) const {
+    const auto view = text_.view();
+    auto from = text_.previous(position);
+    if (skip && from > start && view.substr(text_.previous(from), needle.size()) == needle) {
+      from = text_.previous(from);
+    }
+
+    const auto found = position <= start ? std::string_view::npos : view.rfind(needle, from);
+    if (found == std::string_view::npos || found < start) {
+      return ds::none;
+    }
+
+    return found;
   }
 
   Editor::Motion Editor::matchingBracket(std::size_t cursor) const noexcept {
@@ -899,7 +969,7 @@ namespace telar::gui::features::prompt {
     }
 
     if (position >= end) {
-      return Motion{cursor, false, false, false};
+      return Motion{.target = cursor, .valid = false};
     }
 
     const auto here = view[position];
@@ -911,14 +981,18 @@ namespace telar::gui::features::prompt {
     for (auto index = static_cast<std::ptrdiff_t>(position); index >= 0 && std::cmp_less(index, view.size()); index += step) {
       const auto byte = view[static_cast<std::size_t>(index)];
 
-      depth += byte == here ? 1 : byte == other ? -1
-                                                : 0;
+      if (byte == here) {
+        ++depth;
+      } else if (byte == other) {
+        --depth;
+      }
+
       if (depth == 0) {
-        return Motion{static_cast<std::size_t>(index), true};
+        return Motion{.target = static_cast<std::size_t>(index), .inclusive = true};
       }
     }
 
-    return Motion{cursor, false, false, false};
+    return Motion{.target = cursor, .valid = false};
   }
 
   Request Editor::applyMotion(Motion motion) {
@@ -971,71 +1045,14 @@ namespace telar::gui::features::prompt {
   }
 
   ds::Option<std::pair<std::size_t, std::size_t>> Editor::textObject(char32_t character, bool inner) const {
-    const auto cursor = text_.cursor();
-    const auto view = text_.view();
-
     switch (character) {
     case 'w':
-    case 'W': {
-      const bool big = character == 'W';
-
-      if (cursor >= view.size()) {
-        return ds::none;
-      }
-
-      const auto run = kind(cursor, big);
-      auto start = cursor;
-
-      while (start > 0 && kind(text_.previous(start), big) == run) {
-        start = text_.previous(start);
-      }
-
-      auto end = cursor;
-
-      while (end < view.size() && kind(end, big) == run) {
-        end = text_.next(end);
-      }
-
-      if (!inner) {
-        if (end < view.size() && blank(end) && view[end] != '\n') {
-          while (end < view.size() && blank(end) && view[end] != '\n') {
-            end = text_.next(end);
-          }
-        } else {
-          while (start > 0 && blank(text_.previous(start)) && view[text_.previous(start)] != '\n') {
-            start = text_.previous(start);
-          }
-        }
-      }
-
-      return std::pair{start, end};
-    }
+    case 'W':
+      return wordObject(character == 'W', inner);
     case '"':
     case '\'':
-    case '`': {
-      const auto quote = static_cast<char>(character);
-      const auto line = text_.lineStart(cursor);
-      const auto end = text_.lineEnd(cursor);
-      auto open = view.rfind(quote, cursor);
-      std::size_t close = std::string_view::npos;
-
-      if (open != std::string_view::npos && open >= line) {
-        close = view.find(quote, open == cursor ? cursor + 1 : std::max(open + 1, cursor));
-        if (open == cursor && (close == std::string_view::npos || close >= end)) {
-          close = open;
-          open = view.rfind(quote, cursor == 0 ? std::string_view::npos : cursor - 1);
-        }
-      } else {
-        open = view.find(quote, cursor);
-        close = open == std::string_view::npos ? open : view.find(quote, open + 1);
-      }
-
-      if (open == std::string_view::npos || close == std::string_view::npos || open < line || close >= end || close <= open) {
-        return ds::none;
-      }
-
-      return inner ? std::pair{open + 1, close} : std::pair{open, close + 1};
-    }
+    case '`':
+      return quoteObject(static_cast<char>(character), inner);
     case '(':
     case ')':
     case 'b':
@@ -1053,6 +1070,74 @@ namespace telar::gui::features::prompt {
     default:
       return ds::none;
     }
+  }
+
+  ds::Option<std::pair<std::size_t, std::size_t>> Editor::wordObject(bool big, bool inner) const {
+    const auto cursor = text_.cursor();
+    const auto view = text_.view();
+    if (cursor >= view.size()) {
+      return ds::none;
+    }
+
+    const auto run = kind(cursor, big);
+    auto start = cursor;
+
+    while (start > 0 && kind(text_.previous(start), big) == run) {
+      start = text_.previous(start);
+    }
+
+    auto end = cursor;
+
+    while (end < view.size() && kind(end, big) == run) {
+      end = text_.next(end);
+    }
+
+    if (inner) {
+      return std::pair{start, end};
+    }
+
+    // The blanks after the word, or before it when none follow, on the same line.
+    const auto inline_blank = [&](std::size_t offset) {
+      return blank(offset) && view[offset] != '\n';
+    };
+
+    if (end < view.size() && inline_blank(end)) {
+      while (end < view.size() && inline_blank(end)) {
+        end = text_.next(end);
+      }
+    } else {
+      while (start > 0 && inline_blank(text_.previous(start))) {
+        start = text_.previous(start);
+      }
+    }
+
+    return std::pair{start, end};
+  }
+
+  ds::Option<std::pair<std::size_t, std::size_t>> Editor::quoteObject(char quote, bool inner) const {
+    const auto cursor = text_.cursor();
+    const auto view = text_.view();
+    const auto line = text_.lineStart(cursor);
+    const auto end = text_.lineEnd(cursor);
+    auto open = view.rfind(quote, cursor);
+    std::size_t close = std::string_view::npos;
+
+    if (open != std::string_view::npos && open >= line) {
+      close = view.find(quote, open == cursor ? cursor + 1 : std::max(open + 1, cursor));
+      if (open == cursor && (close == std::string_view::npos || close >= end)) {
+        close = open;
+        open = view.rfind(quote, cursor == 0 ? std::string_view::npos : cursor - 1);
+      }
+    } else {
+      open = view.find(quote, cursor);
+      close = open == std::string_view::npos ? open : view.find(quote, open + 1);
+    }
+
+    if (open == std::string_view::npos || close == std::string_view::npos || open < line || close >= end || close <= open) {
+      return ds::none;
+    }
+
+    return inner ? std::pair{open + 1, close} : std::pair{open, close + 1};
   }
 
   ds::Option<std::pair<std::size_t, std::size_t>> Editor::bracketObject(char open, char close, bool inner) const {
@@ -1081,8 +1166,8 @@ namespace telar::gui::features::prompt {
 
     depth = 0;
     for (auto index = *start; index < view.size(); ++index) {
-      depth += view[index] == open ? 1 : view[index] == close ? -1
-                                                              : 0;
+      // `open` and `close` differ, so a byte is at most one of them.
+      depth += static_cast<int>(view[index] == open) - static_cast<int>(view[index] == close);
       if (depth == 0) {
         return inner ? std::pair{*start + 1, index} : std::pair{*start, index + 1};
       }
@@ -1180,6 +1265,8 @@ namespace telar::gui::features::prompt {
   }
 
   void Editor::changeCase(std::size_t start, std::size_t end, char action) {
+    // ASCII's lowercase letters sit this far after the uppercase ones.
+    constexpr char case_distance = 'a' - 'A';
     ds::String<Memory> changed{memory(), text_.view().substr(start, end - start)};
 
     for (auto& byte : changed.viewMut()) {
@@ -1187,9 +1274,9 @@ namespace telar::gui::features::prompt {
       const bool upper = byte >= 'A' && byte <= 'Z';
 
       if ((action == 'U' || action == '~') && lower) {
-        byte = static_cast<char>(byte - 32);
+        byte = static_cast<char>(byte - case_distance);
       } else if ((action == 'u' || action == '~') && upper) {
-        byte = static_cast<char>(byte + 32);
+        byte = static_cast<char>(byte + case_distance);
       }
     }
 
@@ -1221,12 +1308,12 @@ namespace telar::gui::features::prompt {
         clipboard_.read(pasted_);
       }
 
-      return {pasted_.view(), false};
+      return {.text = pasted_.view(), .linewise = false};
     }
 
     const auto& source = register_ >= 'a' && register_ <= 'z' ? registers_[register_ - 'a'] : unnamed_;
 
-    return {source.text.view(), source.linewise};
+    return {.text = source.text.view(), .linewise = source.linewise};
   }
 
   void Editor::put(bool before) {
@@ -1266,10 +1353,10 @@ namespace telar::gui::features::prompt {
         }
       }
     } else {
-      const auto at = before || text_.empty() || cursor == text_.lineEnd(cursor) ? cursor : text_.next(cursor);
+      const auto position = before || text_.empty() || cursor == text_.lineEnd(cursor) ? cursor : text_.next(cursor);
 
-      text_.replace(at, at, text);
-      text_.moveTo(text_.previous(at + text.size()));
+      text_.replace(position, position, text);
+      text_.moveTo(text_.previous(position + text.size()));
     }
 
     clampNormal();
@@ -1308,21 +1395,8 @@ namespace telar::gui::features::prompt {
       return visualCommand(character);
     }
 
-    // An operator typed twice acts on whole lines.
     if (operator_ != 0) {
-      if (static_cast<char>(character) == operator_ || (operator_ == 'g' && character == '~')) {
-        const auto lines = count() - 1;
-        auto last = cursor;
-
-        for (std::size_t index = 0; index < lines && text_.lineEnd(last) < text_.size(); ++index) {
-          last = text_.lineEnd(last) + 1;
-        }
-
-        operate(cursor, last, true);
-      } else {
-        reset();
-      }
-
+      secondOperator(character);
       return Request::none;
     }
 
@@ -1342,63 +1416,22 @@ namespace telar::gui::features::prompt {
       register_pending_ = true;
       return Request::none;
     case 'i':
-      startRecording(key);
-      enterInsert(cursor);
-      return Request::none;
     case 'a':
-      startRecording(key);
-      enterInsert(cursor < text_.lineEnd(cursor) ? text_.next(cursor) : cursor);
-      return Request::none;
     case 'I':
-      startRecording(key);
-      enterInsert(firstNonBlank(text_.lineStart(cursor)));
-      return Request::none;
     case 'A':
       startRecording(key);
-      enterInsert(text_.lineEnd(cursor));
+      enterInsert(insertPosition(character));
       return Request::none;
-    case 'o': {
+    case 'o':
+    case 'O':
       startRecording(key);
-      const auto end = text_.lineEnd(cursor);
-
-      text_.replace(end, end, "\n");
-      mode_ = Mode::insert;
+      openLine(character == 'O');
       return Request::none;
-    }
-    case 'O': {
-      startRecording(key);
-      const auto start = text_.lineStart(cursor);
-
-      text_.replace(start, start, "\n");
-      text_.moveTo(start);
-      mode_ = Mode::insert;
-      return Request::none;
-    }
     case 'x':
-    case 'X': {
+    case 'X':
       startRecording(key);
-      auto start = cursor;
-      auto end = cursor;
-
-      for (std::size_t index = 0; index < count(); ++index) {
-        if (character == 'x' && end < text_.lineEnd(cursor)) {
-          end = text_.next(end);
-        } else if (character == 'X' && start > text_.lineStart(cursor)) {
-          start = text_.previous(start);
-        }
-      }
-
-      if (start != end) {
-        store(text_.view().substr(start, end - start), false);
-        text_.replace(start, end, {});
-        text_.moveTo(start);
-      }
-
-      clampNormal();
-      reset();
-      finishRecording();
+      deleteCharacters(character == 'X');
       return Request::none;
-    }
     case 's':
       // cl: the characters under the cursor.
       startRecording(key);
@@ -1407,23 +1440,9 @@ namespace telar::gui::features::prompt {
     case 'S':
     case 'C':
     case 'D':
-    case 'Y': {
-      if (character != 'Y') {
-        startRecording(key);
-      }
-
-      operator_ = character == 'S' ? 'c' : character == 'C' ? 'c'
-                                       : character == 'D'   ? 'd'
-                                                            : 'y';
-      if (character == 'S' || character == 'Y') {
-        return command(static_cast<char32_t>(operator_), key);
-      }
-
-      const auto end = text_.lineEnd(cursor);
-
-      operate(cursor, end, false);
+    case 'Y':
+      operateToLineEnd(character, key);
       return Request::none;
-    }
     case 'p':
     case 'P':
       startRecording(key);
@@ -1435,52 +1454,20 @@ namespace telar::gui::features::prompt {
       startRecording(key);
       pending_ = Pending::replace;
       return Request::none;
-    case '~': {
+    case '~':
       startRecording(key);
-      auto end = cursor;
-
-      for (std::size_t index = 0; index < count() && end < text_.lineEnd(cursor); ++index) {
-        end = text_.next(end);
-      }
-
-      operator_ = '~';
-      operate(cursor, end, false);
-      text_.moveTo(end);
-      clampNormal();
+      toggleCase();
       return Request::none;
-    }
-    case 'J': {
+    case 'J':
       startRecording(key);
-      for (std::size_t index = 0; index < std::max<std::size_t>(1, count() - (count_ > 1 ? 1 : 0)); ++index) {
-        const auto end = text_.lineEnd(text_.cursor());
-        if (end >= text_.size()) {
-          break;
-        }
-
-        auto next = end + 1;
-
-        while (next < text_.size() && blank(next) && text_.view()[next] != '\n') {
-          ++next;
-        }
-
-        text_.replace(end, next, " ");
-        text_.moveTo(end);
-      }
-
-      reset();
-      finishRecording();
+      joinLines();
       return Request::none;
-    }
     case 'u':
-      for (std::size_t index = 0; index < count(); ++index) {
-        text_.undo();
-      }
-
-      reset();
-      clampNormal();
+      undoChanges();
       return Request::none;
     case '.':
-      repeat();
+      // Repeated once the key is done: the keys it replays come through `dispatch`, not here.
+      repeat_requested_ = true;
       return Request::none;
     case 'v':
     case 'V':
@@ -1502,6 +1489,151 @@ namespace telar::gui::features::prompt {
     }
   }
 
+  void Editor::secondOperator(char32_t character) {
+    // An operator typed twice acts on whole lines.
+    if (static_cast<char>(character) == operator_ || (operator_ == 'g' && character == '~')) {
+      operateOnLines();
+    } else {
+      reset();
+    }
+  }
+
+  std::size_t Editor::insertPosition(char32_t character) const noexcept {
+    const auto cursor = text_.cursor();
+
+    switch (character) {
+    case 'a':
+      return cursor < text_.lineEnd(cursor) ? text_.next(cursor) : cursor;
+    case 'I':
+      return firstNonBlank(text_.lineStart(cursor));
+    case 'A':
+      return text_.lineEnd(cursor);
+    default:
+      return cursor;
+    }
+  }
+
+  void Editor::operateOnLines() {
+    const auto cursor = text_.cursor();
+    const auto lines = count() - 1;
+    auto last = cursor;
+
+    for (std::size_t index = 0; index < lines && text_.lineEnd(last) < text_.size(); ++index) {
+      last = text_.lineEnd(last) + 1;
+    }
+
+    operate(cursor, last, true);
+  }
+
+  void Editor::openLine(bool above) {
+    const auto cursor = text_.cursor();
+
+    if (above) {
+      const auto start = text_.lineStart(cursor);
+
+      text_.replace(start, start, "\n");
+      text_.moveTo(start);
+    } else {
+      const auto end = text_.lineEnd(cursor);
+
+      text_.replace(end, end, "\n");
+    }
+
+    mode_ = Mode::insert;
+  }
+
+  void Editor::deleteCharacters(bool backward) {
+    const auto cursor = text_.cursor();
+    auto start = cursor;
+    auto end = cursor;
+
+    for (std::size_t index = 0; index < count(); ++index) {
+      if (!backward && end < text_.lineEnd(cursor)) {
+        end = text_.next(end);
+      } else if (backward && start > text_.lineStart(cursor)) {
+        start = text_.previous(start);
+      }
+    }
+
+    if (start != end) {
+      store(text_.view().substr(start, end - start), false);
+      text_.replace(start, end, {});
+      text_.moveTo(start);
+    }
+
+    clampNormal();
+    reset();
+    finishRecording();
+  }
+
+  void Editor::operateToLineEnd(char32_t character, const KeyPress& key) {
+    if (character != 'Y') {
+      startRecording(key);
+    }
+
+    // S and C change, D deletes and Y yanks; S and Y take whole lines.
+    operator_ = 'c';
+    if (character == 'D') {
+      operator_ = 'd';
+    } else if (character == 'Y') {
+      operator_ = 'y';
+    }
+
+    if (character == 'S' || character == 'Y') {
+      operateOnLines();
+      return;
+    }
+
+    const auto cursor = text_.cursor();
+
+    operate(cursor, text_.lineEnd(cursor), false);
+  }
+
+  void Editor::toggleCase() {
+    const auto cursor = text_.cursor();
+    auto end = cursor;
+
+    for (std::size_t index = 0; index < count() && end < text_.lineEnd(cursor); ++index) {
+      end = text_.next(end);
+    }
+
+    operator_ = '~';
+    operate(cursor, end, false);
+    text_.moveTo(end);
+    clampNormal();
+  }
+
+  void Editor::joinLines() {
+    for (std::size_t index = 0; index < std::max<std::size_t>(1, count() - (count_ > 1 ? 1 : 0)); ++index) {
+      const auto newline = text_.lineEnd(text_.cursor());
+      if (newline >= text_.size()) {
+        break;
+      }
+
+      // The newline and the blanks that indent the next line become one space.
+      auto content = newline + 1;
+
+      while (content < text_.size() && blank(content) && text_.view()[content] != '\n') {
+        ++content;
+      }
+
+      text_.replace(newline, content, " ");
+      text_.moveTo(newline);
+    }
+
+    reset();
+    finishRecording();
+  }
+
+  void Editor::undoChanges() {
+    for (std::size_t index = 0; index < count(); ++index) {
+      text_.undo();
+    }
+
+    reset();
+    clampNormal();
+  }
+
   Request Editor::visualCommand(char32_t character) {
     auto start = text_.selectionStart();
     auto end = text_.next(text_.selectionEnd());
@@ -1518,8 +1650,13 @@ namespace telar::gui::features::prompt {
     case '~':
     case 'u':
     case 'U': {
-      operator_ = character == 'x' ? 'd' : character == 's' ? 'c'
-                                                            : static_cast<char>(character);
+      operator_ = static_cast<char>(character);
+      if (character == 'x') {
+        operator_ = 'd';
+      } else if (character == 's') {
+        operator_ = 'c';
+      }
+
       mode_ = Mode::normal;
       text_.moveTo(start);
       operate(start, lines ? text_.selectionEnd() : end, lines);
@@ -1564,11 +1701,16 @@ namespace telar::gui::features::prompt {
     recording_ = true;
     recorded_.clear();
     if (count_ != 0) {
-      ds::Array<char, 24> digits{};
+      // Room for any std::size_t in decimal.
+      constexpr std::size_t count_digits = 24;
+      ds::Array<char, count_digits> digits{};
       auto* const end = std::to_chars(digits.dataMut(), digits.dataMut() + digits.size(), count_).ptr;
 
       for (const auto digit : std::string_view{digits.data(), end}) {
-        recorded_.push(Recorded{KeyPress{Key::character, static_cast<char32_t>(digit)}, ds::String<Memory>{recorded_.memory()}});
+        recorded_.push(Recorded{
+            .key = KeyPress{.key = Key::character, .character = static_cast<char32_t>(digit)},
+            .text = ds::String<Memory>{recorded_.memory()},
+        });
       }
     }
 
@@ -1576,7 +1718,8 @@ namespace telar::gui::features::prompt {
   }
 
   void Editor::record(const KeyPress& key) {
-    if (recorded_.size() >= 4096) {
+    constexpr std::size_t maximum_recorded_keys = 4096;
+    if (recorded_.size() >= maximum_recorded_keys) {
       recording_ = false;
       recorded_.clear();
       return;
@@ -1587,10 +1730,10 @@ namespace telar::gui::features::prompt {
     auto kept = key;
 
     kept.text = {};
-    recorded_.push(Recorded{kept, ds::String<Memory>{recorded_.memory(), key.text}});
+    recorded_.push(Recorded{.key = kept, .text = ds::String<Memory>{recorded_.memory(), key.text}});
   }
 
-  void Editor::finishRecording() noexcept {
+  void Editor::finishRecording() {
     if (replaying_ == 0 && recording_) {
       recording_ = false;
       last_change_ = recorded_.clone();
@@ -1598,6 +1741,7 @@ namespace telar::gui::features::prompt {
   }
 
   void Editor::repeat() {
+    repeat_requested_ = false;
     // Copied: pressing the keys records them again.
     const auto changes = last_change_.clone();
 
@@ -1607,9 +1751,11 @@ namespace telar::gui::features::prompt {
       auto key = entry.key;
 
       key.text = entry.text;
-      press(key);
+      dispatch(key);
     }
 
+    // A dot among the keys it replays repeats nothing more.
+    repeat_requested_ = false;
     if (mode_ == Mode::insert) {
       enterNormal();
     }
@@ -1617,29 +1763,49 @@ namespace telar::gui::features::prompt {
     --replaying_;
   }
 
+  namespace {
+
+    // UTF-8: the first code point each length takes, the tag of the lead byte for that length,
+    // and the six bits under the tag of every byte after it.
+    constexpr char32_t first_two_byte = 0x80;
+    constexpr char32_t first_three_byte = 0x800;
+    constexpr char32_t first_four_byte = 0x10000;
+    constexpr char32_t two_byte_lead = 0xc0;
+    constexpr char32_t three_byte_lead = 0xe0;
+    constexpr char32_t four_byte_lead = 0xf0;
+    constexpr char32_t continuation_tag = 0x80;
+    constexpr char32_t continuation_mask = 0x3f;
+    constexpr unsigned continuation_shift = 6;
+
+    constexpr char continuation(char32_t value, unsigned shift) noexcept {
+      return static_cast<char>(continuation_tag | ((value >> shift) & continuation_mask));
+    }
+
+  }
+
   std::size_t Editor::encode(char32_t value, ds::Array<char, 4>& output) noexcept {
-    if (value < 0x80) {
+    if (value < first_two_byte) {
       output.atMut(0) = static_cast<char>(value);
       return 1;
     }
 
-    if (value < 0x800) {
-      output.atMut(0) = static_cast<char>(0xc0 | (value >> 6));
-      output.atMut(1) = static_cast<char>(0x80 | (value & 0x3f));
+    if (value < first_three_byte) {
+      output.atMut(0) = static_cast<char>(two_byte_lead | (value >> continuation_shift));
+      output.atMut(1) = continuation(value, 0);
       return 2;
     }
 
-    if (value < 0x10000) {
-      output.atMut(0) = static_cast<char>(0xe0 | (value >> 12));
-      output.atMut(1) = static_cast<char>(0x80 | ((value >> 6) & 0x3f));
-      output.atMut(2) = static_cast<char>(0x80 | (value & 0x3f));
+    if (value < first_four_byte) {
+      output.atMut(0) = static_cast<char>(three_byte_lead | (value >> (2 * continuation_shift)));
+      output.atMut(1) = continuation(value, continuation_shift);
+      output.atMut(2) = continuation(value, 0);
       return 3;
     }
 
-    output.atMut(0) = static_cast<char>(0xf0 | (value >> 18));
-    output.atMut(1) = static_cast<char>(0x80 | ((value >> 12) & 0x3f));
-    output.atMut(2) = static_cast<char>(0x80 | ((value >> 6) & 0x3f));
-    output.atMut(3) = static_cast<char>(0x80 | (value & 0x3f));
+    output.atMut(0) = static_cast<char>(four_byte_lead | (value >> (3 * continuation_shift)));
+    output.atMut(1) = continuation(value, 2 * continuation_shift);
+    output.atMut(2) = continuation(value, continuation_shift);
+    output.atMut(3) = continuation(value, 0);
     return 4;
   }
 

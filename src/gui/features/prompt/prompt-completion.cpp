@@ -34,22 +34,22 @@ namespace telar::gui::features::prompt {
 
     words.resize(text.size() + 1);
     unquoted.resize((2 * text.size()) + 2);
-    const auto at = shell::commandAt(text, syntax, tokens.view().first(lexed.tokens), lexed, words.viewMut(), unquoted.viewMut());
-    if (at.overflow || at.current == shell::no_word) {
+    const auto located = shell::commandAt(text, syntax, tokens.view().first(lexed.tokens), lexed, words.viewMut(), unquoted.viewMut());
+    if (located.overflow || located.current == shell::no_word) {
       return ds::none;
     }
 
     CompletionContext context{memory};
 
-    context.partial.assign(at.prefix);
-    context.replace_begin = at.replace.begin;
-    context.replace_end = at.replace.end;
-    context.command_position = at.command_word == shell::no_word || at.current <= at.command_word;
+    context.partial.assign(located.prefix);
+    context.replace_begin = located.replace.begin;
+    context.replace_end = located.replace.end;
+    context.command_position = located.command_word == shell::no_word || located.current <= located.command_word;
     if (!context.command_position) {
-      auto name = words[at.command_word].text;
+      auto name = words[located.command_word].text;
 
       context.command.assign(name.substr(name.rfind('/') + 1));
-      for (auto index = at.command_word + 1; index < at.current && index < at.words; ++index) {
+      for (auto index = located.command_word + 1; index < located.current && index < located.words; ++index) {
         context.words.emplace(memory, words[index].text);
       }
     }
@@ -63,12 +63,17 @@ namespace telar::gui::features::prompt {
       if (text.starts_with(context.partial.view()) && std::ranges::none_of(result.choices, [&](const Choice& choice) {
             return choice.text == text;
           })) {
-        result.choices.push(Choice{ds::String<Memory>{memory, text}, ds::String<Memory>{memory, description}});
+        result.choices.push(Choice{
+            .text = ds::String<Memory>{memory, text},
+            .description = ds::String<Memory>{memory, description},
+        });
       }
     };
 
     if (context.command_position) {
-      for (auto entry = history.rbegin(); entry != history.rend() && result.choices.size() < 64; ++entry) {
+      constexpr std::size_t max_history_choices = 64;
+
+      for (auto entry = history.rbegin(); entry != history.rend() && result.choices.size() < max_history_choices; ++entry) {
         const auto line = entry->view();
         const auto end = line.find_first_of(" \t\n|;&");
 
@@ -90,7 +95,8 @@ namespace telar::gui::features::prompt {
       words.push(word.view());
     }
 
-    ds::Array<ebnf::candidate, 128> candidates{};
+    constexpr std::size_t max_candidates = 128;
+    ds::Array<ebnf::candidate, max_candidates> candidates{};
     const auto matched = spec->complete(words.view(), context.partial, scratch, candidates.viewMut());
     if (matched.status != ebnf::match_status::valid) {
       return result;

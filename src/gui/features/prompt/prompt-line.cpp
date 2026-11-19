@@ -8,6 +8,26 @@ import telar.tbc;
 
 namespace telar::gui::features::prompt {
 
+  namespace {
+
+    bool takesSuggestion(const KeyPress& key) noexcept {
+      return (key.key == Key::right && !key.modifiers.alt && !key.modifiers.shift) || key.key == Key::end || (key.key == Key::character && key.modifiers.control && (key.character == 'e' || key.character == 'f'));
+    }
+
+    bool takesSuggestedWord(const KeyPress& key) noexcept {
+      return (key.key == Key::character && key.modifiers.alt && key.character == 'f') || (key.key == Key::right && key.modifiers.alt);
+    }
+
+    // The first word of `rest`, with the blanks before it and through a slash that ends it.
+    std::string_view nextWord(std::string_view rest) {
+      const auto start = rest.find_first_not_of(' ');
+      const auto end = rest.find_first_of(" /", start == std::string_view::npos ? 0 : start);
+
+      return rest.substr(0, end == std::string_view::npos ? rest.size() : end + (rest[end] == '/' ? 1 : 0));
+    }
+
+  }
+
   Line::Line(tbc::view<Memory&, tbc::lt::a> memory, Keymap keymap)
       : editor_(memory, keymap),
         recent_(memory),
@@ -64,13 +84,19 @@ namespace telar::gui::features::prompt {
 
     for (const auto& entry : std::views::reverse(recent_)) {
       if (isCommandExtendedBy(entry, view)) {
-        return entry.view().substr(view.size());
+        auto rest = entry.view();
+
+        rest.remove_prefix(view.size());
+        return rest;
       }
     }
 
     for (const auto& command : history) {
       if (isCommandExtendedBy(command, view)) {
-        return command.view().substr(view.size());
+        auto rest = command.view();
+
+        rest.remove_prefix(view.size());
+        return rest;
       }
     }
 
@@ -82,19 +108,11 @@ namespace telar::gui::features::prompt {
     const auto rest = suggestion(history);
     // → and Ctrl-E at the end take the whole suggestion, Alt-F its next word, as fish does.
     if (!rest.empty()) {
-      const bool all = (key.key == Key::right && !key.modifiers.alt && !key.modifiers.shift) || key.key == Key::end || (key.key == Key::character && key.modifiers.control && (key.character == 'e' || key.character == 'f'));
-      const bool word = (key.key == Key::character && key.modifiers.alt && key.character == 'f') || (key.key == Key::right && key.modifiers.alt);
+      const bool all = takesSuggestion(key);
+      const bool word = takesSuggestedWord(key);
 
       if (all || word) {
-        auto taken = rest;
-
-        if (word) {
-          const auto start = taken.find_first_not_of(' ');
-          const auto end = taken.find_first_of(" /", start == std::string_view::npos ? 0 : start);
-
-          taken = taken.substr(0, end == std::string_view::npos ? taken.size() : end + (taken[end] == '/' ? 1 : 0));
-        }
-
+        const auto taken = word ? nextWord(rest) : rest;
         // Copied: the suggestion views the history the insert may change.
         const ds::String<Memory> copy{draft_.memory(), taken};
 
@@ -154,7 +172,7 @@ namespace telar::gui::features::prompt {
     return menu_;
   }
 
-  void Line::offer(tbc::view<Choices, tbc::lt::a> choices, std::size_t begin, std::size_t end, tbc::view<ds::Vec<std::uint64_t, Memory>, tbc::lt::a> requests, shell::Dialect dialect, std::string_view label) {
+  void Line::offer(tbc::view<Choices, tbc::lt::a> choices, WordRange word, tbc::view<ds::Vec<std::uint64_t, Memory>, tbc::lt::a> requests, shell::Dialect dialect, std::string_view label) {
     const bool whole = choices.size() <= Menu::capacity;
     if (!whole) {
       choices.truncate(Menu::capacity);
@@ -164,12 +182,12 @@ namespace telar::gui::features::prompt {
 
     menu.all = choices.clone();
     menu.choices = std::move(choices);
-    menu.begin = begin;
-    menu.end = end;
+    menu.begin = word.begin;
+    menu.end = word.end;
     menu.requests = std::move(requests);
     menu.dialect = dialect;
     menu.label.assign(label);
-    menu.floor = end;
+    menu.floor = word.end;
     menu.whole = whole;
     menu.refined = std::exchange(refining_, false);
     menu_ = std::move(menu);
@@ -379,7 +397,7 @@ namespace telar::gui::features::prompt {
       return {};
     }
 
-    return text.substr(menu_->begin, menu_->end - menu_->begin);
+    return std::string_view{text.data() + menu_->begin, menu_->end - menu_->begin};
   }
 
   Outcome Line::refine(Outcome outcome) {

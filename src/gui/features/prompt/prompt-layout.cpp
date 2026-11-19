@@ -73,37 +73,62 @@ namespace telar::gui::features::prompt {
     return shell::lex(text, syntax, tokens.viewMut()).completeness != shell::Completeness::complete;
   }
 
+  namespace {
+
+    void reset(Layout& result) {
+      result.runs.clear();
+      result.selection.clear();
+      result.rows = 1;
+      result.width = Layout::indent;
+      result.caret_row = 0;
+      result.caret_column = Layout::indent;
+      result.caret_columns = 1;
+    }
+
+    void placeCaret(Layout& result, CellRange cell) {
+      result.caret_row = cell.row;
+      result.caret_column = cell.column;
+      result.caret_columns = std::max<std::uint32_t>(1, cell.columns);
+    }
+
+    // Adds `cell` to the selection, extending its last range when `cell` continues it.
+    void select(Layout& result, CellRange cell) {
+      auto& selection = result.selection;
+      if (!selection.empty() && selection.back().row == cell.row && selection.back().column + selection.back().columns == cell.column) {
+        selection.backMut().columns += cell.columns;
+      } else if (selection.size() < Layout::maximum_runs) {
+        selection.push(cell);
+      }
+    }
+
+    // Adds `run` to the runs, extending the last one when `run` continues it in its style and group.
+    void addRun(Layout& result, Run run) {
+      auto& runs = result.runs;
+      if (!runs.empty() && runs.back().row == run.row && runs.back().style == run.style && runs.back().group == run.group && runs.back().end == run.start) {
+        runs.backMut().end = run.end;
+        runs.backMut().columns += run.columns;
+      } else if (runs.size() < Layout::maximum_runs) {
+        runs.push(run);
+      }
+    }
+
+  }
+
   void layout(Layout& result, std::string_view text, std::span<const Style> styles, std::size_t cursor, std::size_t anchor, std::uint32_t columns, std::span<const std::uint8_t> groups) {
-    result.runs.clear();
-    result.selection.clear();
-    result.rows = 1;
-    result.width = Layout::indent;
-    result.caret_row = 0;
-    result.caret_column = Layout::indent;
-    result.caret_columns = 1;
+    reset(result);
 
     columns = std::max<std::uint32_t>(columns, Layout::indent + 1);
     std::uint32_t row = 0;
     std::uint32_t column = Layout::indent;
     const auto selection_start = std::min(cursor, anchor);
     const auto selection_end = std::max(cursor, anchor);
-    const auto caret = [&](std::size_t offset, std::uint32_t at_row, std::uint32_t at_column, std::uint32_t width) {
+    const auto place = [&](std::size_t offset, CellRange cell) {
       if (offset == cursor) {
-        result.caret_row = at_row;
-        result.caret_column = at_column;
-        result.caret_columns = std::max<std::uint32_t>(1, width);
-      }
-    };
-
-    const auto select = [&](std::size_t offset, std::uint32_t at_row, std::uint32_t at_column, std::uint32_t width) {
-      if (offset < selection_start || offset >= selection_end) {
-        return;
+        placeCaret(result, cell);
       }
 
-      if (!result.selection.empty() && result.selection.back().row == at_row && result.selection.back().column + result.selection.back().columns == at_column) {
-        result.selection.backMut().columns += width;
-      } else if (result.selection.size() < Layout::maximum_runs) {
-        result.selection.push({at_row, at_column, width});
+      if (offset >= selection_start && offset < selection_end) {
+        select(result, cell);
       }
     };
 
@@ -119,8 +144,7 @@ namespace telar::gui::features::prompt {
 
       offset = graphemes.position();
       if (text[start] == '\n') {
-        caret(start, row, column, 1);
-        select(start, row, column, 1);
+        place(start, CellRange{.row = row, .column = column, .columns = 1});
         ++row;
         column = Layout::indent;
         continue;
@@ -132,18 +156,19 @@ namespace telar::gui::features::prompt {
         column = Layout::indent;
       }
 
-      caret(start, row, column, width);
-      select(start, row, column, width);
-      const auto style = start < styles.size() ? styles[start] : Style::plain;
-      const auto group = start < groups.size() ? groups[start] : std::uint8_t{0};
-      auto& runs = result.runs;
-      if (!runs.empty() && runs.back().row == row && runs.back().style == style && runs.back().group == group && runs.back().end == start) {
-        runs.backMut().end = offset;
-        runs.backMut().columns += width;
-      } else if (runs.size() < Layout::maximum_runs) {
-        runs.push({row, column, width, start, offset, style, group});
-      }
-
+      place(start, CellRange{.row = row, .column = column, .columns = width});
+      addRun(
+          result,
+          Run{
+              .row = row,
+              .column = column,
+              .columns = width,
+              .start = start,
+              .end = offset,
+              .style = start < styles.size() ? styles[start] : Style::plain,
+              .group = start < groups.size() ? groups[start] : std::uint8_t{0},
+          }
+      );
       column += width;
       result.width = std::max(result.width, column);
     }
@@ -154,9 +179,7 @@ namespace telar::gui::features::prompt {
         column = Layout::indent;
       }
 
-      result.caret_row = row;
-      result.caret_column = column;
-      result.caret_columns = 1;
+      placeCaret(result, CellRange{.row = row, .column = column, .columns = 1});
     }
 
     result.rows = row + 1;

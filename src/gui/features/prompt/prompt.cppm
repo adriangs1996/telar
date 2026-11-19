@@ -516,7 +516,7 @@ namespace telar::gui::features::prompt {
   template <typename Now>
   void output(Lines& lines, std::uint64_t pane_id, Now&& now) noexcept {
     if (auto* line = find(lines, pane_id)) {
-      line->output = now();
+      line->output = std::forward<Now>(now)();
     }
   }
 
@@ -543,16 +543,20 @@ namespace telar::gui::features::prompt {
       return false;
     }
 
+    // Ctrl with an ASCII character types the control byte that shares its low five bits.
+    constexpr char32_t ascii_end = 0x80;
+    constexpr char32_t control_bits = 0x1f;
+
     // Signal and end-of-file keys always reach the program, as does typing while it seems to ask
     // a question.
-    if (key.key == Key::character && key.modifiers.control && !key.modifiers.alt && key.character < 0x80) {
-      const char control = static_cast<char>(key.character & 0x1f);
+    if (key.key == Key::character && key.modifiers.control && !key.modifiers.alt && key.character < ascii_end) {
+      const char control = static_cast<char>(key.character & control_bits);
       if (controlKey(shell, {&control, 1})) {
         return true;
       }
     }
 
-    return typed.editor().text().empty() && PendingPrompt::likely(cursor_column, std::chrono::nanoseconds{now() - line.output});
+    return typed.editor().text().empty() && PendingPrompt::likely(cursor_column, std::chrono::nanoseconds{std::forward<Now>(now)() - line.output});
   }
 
   inline std::string_view delivery(const PaneLine& line) noexcept {
@@ -560,12 +564,18 @@ namespace telar::gui::features::prompt {
   }
 
   inline void typeSecret(PaneLine& line, char byte) noexcept {
+    // DEL, Backspace and Ctrl-U erase what was typed; any other control types nothing.
+    constexpr unsigned char delete_control = 0x7f;
+    constexpr unsigned char backspace = 0x08;
+    constexpr unsigned char kill_line = 0x15;
+    constexpr unsigned char first_printable = 0x20;
+
     const auto value = static_cast<unsigned char>(byte);
     auto& typed = line.line;
 
-    if (value == 0x7f || value == 0x08 || value == 0x15) {
+    if (value == delete_control || value == backspace || value == kill_line) {
       typed.clearSecret();
-    } else if (value >= 0x20) {
+    } else if (value >= first_printable) {
       typed.countSecretKey();
     }
   }

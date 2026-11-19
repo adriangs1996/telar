@@ -38,7 +38,7 @@ namespace telar::gui::features::prompt {
       entries_.clear();
     }
 
-    static_cast<void>(entries_.assign(ds::String<Memory>{memory_, command}, Entry{digest, std::move(spec.getMut())}));
+    static_cast<void>(entries_.assign(ds::String<Memory>{memory_, command}, Entry{.digest = digest, .spec = std::move(spec.getMut())}));
     return true;
   }
 

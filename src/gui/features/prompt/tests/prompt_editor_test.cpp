@@ -25,8 +25,11 @@ namespace {
   // The memory a test's prompt lives in, counted so a test can tell it all came back.
   struct Arena {
     Arena() = default;
+    ~Arena() = default;
     Arena(const Arena&) = delete;
     Arena& operator=(const Arena&) = delete;
+    Arena(Arena&&) = delete;
+    Arena& operator=(Arena&&) = delete;
 
     telar::SystemAllocator system;
     telar::BudgetAllocator<telar::SystemAllocator> budget{system, std::numeric_limits<std::size_t>::max()};
@@ -83,14 +86,17 @@ namespace {
     telar::gui::PromptConfiguration configuration_;
   };
 
-  const Editor* current = nullptr;
+  // The editor `type` drove last, whose line a failed requirement prints.
+  const Editor*& current() {
+    static const Editor* editor = nullptr;
+
+    return editor;
+  }
 
   void require(bool condition, std::string_view message, std::source_location location = std::source_location::current()) {
     if (!condition) {
-      if (current != nullptr) {
-        const auto value = current->view().text();
-
-        std::fprintf(stderr, "text: [%.*s] cursor %zu\n", static_cast<int>(value.size()), value.data(), current->view().cursor());
+      if (const auto* editor = current(); editor != nullptr) {
+        std::println(stderr, "text: [{}] cursor {}", editor->view().text(), editor->view().cursor());
       }
 
       telar::testing::fail(message, location);
@@ -100,17 +106,17 @@ namespace {
   // Types `keys` one by one: printable characters as themselves, `\x1b` as Escape and `\r` as
   // Enter. Returns the last outcome.
   Outcome type(Editor& editor, std::string_view keys) {
-    current = &editor;
+    current() = &editor;
     Outcome last = Outcome::edited;
 
     for (std::size_t index = 0; index < keys.size(); ++index) {
       const auto byte = keys[index];
       if (byte == '\x1b') {
-        last = editor.press({Key::escape});
+        last = editor.press({.key = Key::escape});
       } else if (byte == '\r') {
-        last = editor.press({Key::enter});
+        last = editor.press({.key = Key::enter});
       } else {
-        last = editor.press({Key::character, static_cast<char32_t>(static_cast<unsigned char>(byte)), {}, keys.substr(index, 1)});
+        last = editor.press({.key = Key::character, .character = static_cast<char32_t>(static_cast<unsigned char>(byte)), .text = keys.substr(index, 1)});
       }
     }
 
@@ -118,11 +124,11 @@ namespace {
   }
 
   Outcome control(Editor& editor, char key) {
-    return editor.press({Key::character, static_cast<char32_t>(key), {.control = true}});
+    return editor.press({.key = Key::character, .character = static_cast<char32_t>(key), .modifiers = {.control = true}});
   }
 
   Outcome meta(Editor& editor, char key) {
-    return editor.press({Key::character, static_cast<char32_t>(key), {.alt = true}});
+    return editor.press({.key = Key::character, .character = static_cast<char32_t>(key), .modifiers = {.alt = true}});
   }
 
   std::string_view text(const Editor& editor) {
@@ -145,40 +151,44 @@ namespace {
     Editor moving;
 
     moving.write("café 🙂");
-    moving.press({Key::left});
+    moving.press({.key = Key::left});
     require(text(moving).substr(cursor(moving)) == "🙂", "moves by code point");
-    moving.press({Key::left});
-    moving.press({Key::left});
+    moving.press({.key = Key::left});
+    moving.press({.key = Key::left});
     require(cursor(moving) == 3, "a cursor never splits a code point");
 
     // Up and Down keep the column they started from until the next Up or Down, so the line's
     // column is set by moving across it first.
     Editor lines;
+    // Offsets into the three lines: the second spans [4, 7), the third starts at 8.
+    constexpr std::size_t third_line_column_two = 10;
+    constexpr std::size_t second_line_end = 7;
 
     lines.write("one\ntwo\nthree");
     control(lines, 'a');
-    lines.press({Key::left});
-    lines.press({Key::left});
-    lines.press({Key::down});
-    require(cursor(lines) == 10, "keeps a column");
+    lines.press({.key = Key::left});
+    lines.press({.key = Key::left});
+    lines.press({.key = Key::down});
+    require(cursor(lines) == third_line_column_two, "keeps a column");
     control(lines, 'a');
-    lines.press({Key::left});
+    lines.press({.key = Key::left});
     control(lines, 'a');
     const auto start = cursor(lines);
 
     control(lines, 'e');
-    require(start == 4 && cursor(lines) == 7, "finds line bounds");
-    lines.press({Key::down});
-    lines.press({Key::up});
-    lines.press({Key::up});
+    require(start == 4 && cursor(lines) == second_line_end, "finds line bounds");
+    lines.press({.key = Key::down});
+    lines.press({.key = Key::up});
+    lines.press({.key = Key::up});
     require(cursor(lines) < 4, "counts lines");
 
     // The text a line holds stops at 256 KiB, as Text::capacity says.
+    constexpr std::size_t capacity = std::size_t{256} * 1024;
     Arena arena;
     telar::ds::String<Memory> huge{arena.memory};
     Editor bounded;
 
-    huge.resize((std::size_t{256} * 1024) + 1, 'x');
+    huge.resize(capacity + 1, 'x');
     bounded.insert(huge.view());
     require(text(bounded).empty(), "refuses text beyond the capacity");
   }
@@ -187,7 +197,7 @@ namespace {
     Editor editor;
 
     type(editor, "echo first");
-    require(editor.press({Key::enter}) == Outcome::run && editor.delivery() == "echo first" && text(editor).empty(), "Enter asks to submit");
+    require(editor.press({.key = Key::enter}) == Outcome::run && editor.delivery() == "echo first" && text(editor).empty(), "Enter asks to submit");
     type(editor, "git commit -m wip");
     require(text(editor) == "git commit -m wip", "types");
     control(editor, 'w');
@@ -209,26 +219,29 @@ namespace {
     require(control(editor, 'd') == Outcome::bytes && editor.delivery() == "\x04", "Ctrl-D on an empty line is end of file");
 
     type(editor, "for f in *; do");
-    require(editor.press({Key::enter}) == Outcome::edited && text(editor) == "for f in *; do\n", "Enter continues a command the shell would read more of");
+    require(editor.press({.key = Key::enter}) == Outcome::edited && text(editor) == "for f in *; do\n", "Enter continues a command the shell would read more of");
     type(editor, "  echo $f");
-    editor.press({Key::enter, 0, {.alt = true}});
+    editor.press({.key = Key::enter, .modifiers = {.alt = true}});
     require(text(editor) == "for f in *; do\n  echo $f\n", "Alt-Enter inserts a newline");
     type(editor, "done");
-    require(editor.press({Key::up}) == Outcome::edited && cursor(editor) == 19, "Up moves to the line above");
-    editor.press({Key::up});
-    require(editor.press({Key::up}) == Outcome::edited && text(editor) == "echo first", "Up on the first line reaches the history");
-    editor.press({Key::down});
+    // The end of `done`, column 4, on the line above.
+    constexpr std::size_t above_done_end = 19;
+
+    require(editor.press({.key = Key::up}) == Outcome::edited && cursor(editor) == above_done_end, "Up moves to the line above");
+    editor.press({.key = Key::up});
+    require(editor.press({.key = Key::up}) == Outcome::edited && text(editor) == "echo first", "Up on the first line reaches the history");
+    editor.press({.key = Key::down});
     require(text(editor) == "for f in *; do\n  echo $f\ndone", "Down past the history comes back to the line");
-    editor.press({Key::up});
-    editor.press({Key::up});
-    editor.press({Key::end});
-    editor.press({Key::left, 0, {.shift = true}});
-    editor.press({Key::left, 0, {.shift = true}});
+    editor.press({.key = Key::up});
+    editor.press({.key = Key::up});
+    editor.press({.key = Key::end});
+    editor.press({.key = Key::left, .modifiers = {.shift = true}});
+    editor.press({.key = Key::left, .modifiers = {.shift = true}});
     require(editor.view().anchor() != cursor(editor), "Shift extends a selection");
     type(editor, "XX");
     require(text(editor).starts_with("for f in *; XX\n"), "typing replaces the selection");
     require(control(editor, 'c') == Outcome::edited && text(editor).empty(), "Ctrl-C cancels");
-    require(editor.press({Key::tab}) == Outcome::complete, "Tab completes");
+    require(editor.press({.key = Key::tab}) == Outcome::complete, "Tab completes");
     require(control(editor, 'r') == Outcome::search_history, "Ctrl-R searches the history");
   }
 
@@ -240,30 +253,34 @@ namespace {
 
   void vimBasics() {
     Editor editor{Keymap::vim};
+    constexpr std::string_view line = "git switch main";
+    constexpr auto last = line.size() - 1;
+    constexpr auto second_word = line.find("switch");
+    constexpr auto second_word_end = line.find(" main") - 1;
 
-    start(editor, "git switch main");
+    start(editor, line);
 
-    require(editor.view().mode() == Mode::normal && cursor(editor) == 14, "Escape enters normal mode on the last character");
+    require(editor.view().mode() == Mode::normal && cursor(editor) == last, "Escape enters normal mode on the last character");
     type(editor, "0");
     require(cursor(editor) == 0, "0 goes to the line start");
     type(editor, "w");
-    require(cursor(editor) == 4, "w moves to the next word");
+    require(cursor(editor) == second_word, "w moves to the next word");
     type(editor, "e");
-    require(cursor(editor) == 9, "e moves to the end of the word");
+    require(cursor(editor) == second_word_end, "e moves to the end of the word");
     type(editor, "b");
-    require(cursor(editor) == 4, "b moves back to the word start");
+    require(cursor(editor) == second_word, "b moves back to the word start");
     type(editor, "$");
-    require(cursor(editor) == 14, "$ goes to the last character");
+    require(cursor(editor) == last, "$ goes to the last character");
     type(editor, "^");
     require(cursor(editor) == 0, "^ goes to the first non-blank");
     type(editor, "fm");
-    require(cursor(editor) == 11, "f finds a character");
+    require(cursor(editor) == line.find('m'), "f finds a character");
     type(editor, "0tw");
-    require(cursor(editor) == 4, "t stops before a character");
+    require(cursor(editor) == second_word, "t stops before a character");
     type(editor, "0ti;");
-    require(cursor(editor) == 5, "; repeats t past the character it stopped at");
-    require(type(editor, "\r") == Outcome::run && editor.delivery() == "git switch main", "Enter in normal mode submits");
-    require(type(editor, "\x1bk") == Outcome::edited && text(editor) == "git switch main", "k on the first line reaches the history");
+    require(cursor(editor) == line.find("itch") - 1, "; repeats t past the character it stopped at");
+    require(type(editor, "\r") == Outcome::run && editor.delivery() == line, "Enter in normal mode submits");
+    require(type(editor, "\x1bk") == Outcome::edited && text(editor) == line, "k on the first line reaches the history");
   }
 
   void vimOperators() {
@@ -314,16 +331,17 @@ namespace {
 
   void vimLines() {
     Editor editor{Keymap::vim};
+    constexpr std::string_view three_lines = "one\ntwo\nthree";
 
-    type(editor, "one\ntwo\nthree");
+    type(editor, three_lines);
     type(editor, "\x1bgg");
     require(cursor(editor) == 0, "gg goes to the first line");
     type(editor, "yyjp");
     require(text(editor) == "one\ntwo\none\nthree", "yy and p copy a line below");
     type(editor, "dd");
-    require(text(editor) == "one\ntwo\nthree", "dd deletes the line");
+    require(text(editor) == three_lines, "dd deletes the line");
     type(editor, "G");
-    require(cursor(editor) >= 8, "G goes to the last line");
+    require(cursor(editor) > three_lines.rfind('\n'), "G goes to the last line");
     type(editor, "ggJ");
     require(text(editor) == "one two\nthree", "J joins lines");
     type(editor, "ofour\x1b");
@@ -348,12 +366,14 @@ namespace {
     Arena arena;
     telar::ds::String<Memory> clipboard{arena.memory};
 
-    editor.setClipboard({.read = [](telar::ds::String<Memory>& text) {
-                           text.assign("pasted");
-                         },
+    editor.setClipboard({
+        .read = [](telar::ds::String<Memory>& text) {
+          text.assign("pasted");
+        },
         .write = [&](std::string_view text) {
           clipboard.assign(text);
-        }});
+        },
+    });
 
     type(editor, "0\"+yiw");
     require(clipboard.view() == "git", "the + register writes the system clipboard");
@@ -362,7 +382,12 @@ namespace {
   }
 
   void routing() {
-    telar::PaneShell shell{.pane_id = 1, .shell = telar::IntegratedShell::zsh, .phase = telar::ShellPhase::prompt, .shell_foreground = true, .canonical = false, .echo = false, .signal_keys = false, .interrupt = 3, .quit = 28, .suspend = 26, .end_of_file = 4};
+    // The line discipline's defaults: Ctrl-C, Ctrl-\, Ctrl-Z and Ctrl-D.
+    constexpr telar::Byte interrupt = 0x03;
+    constexpr telar::Byte quit = 0x1c;
+    constexpr telar::Byte suspend = 0x1a;
+    constexpr telar::Byte end_of_file = 0x04;
+    telar::PaneShell shell{.pane_id = 1, .shell = telar::IntegratedShell::zsh, .phase = telar::ShellPhase::prompt, .shell_foreground = true, .canonical = false, .echo = false, .signal_keys = false, .interrupt = interrupt, .quit = quit, .suspend = suspend, .end_of_file = end_of_file};
 
     require(surface(shell, false, true) == Surface::editor, "the editor takes a shell at its prompt");
     require(surface(shell, false, false) == Surface::none, "classic mode leaves the terminal alone");
@@ -392,7 +417,11 @@ namespace {
 
     using namespace std::chrono_literals;
 
-    require(PendingPrompt::likely(14, 400ms) && !PendingPrompt::likely(0, 400ms) && !PendingPrompt::likely(14, 100ms), "a quiet unfinished line looks like a prompt");
+    constexpr std::uint32_t prompt_column = 14;
+    constexpr auto quiet = 400ms;
+    constexpr auto busy = 100ms;
+
+    require(PendingPrompt::likely(prompt_column, quiet) && !PendingPrompt::likely(0, quiet) && !PendingPrompt::likely(prompt_column, busy), "a quiet unfinished line looks like a prompt");
   }
 
   telar::ds::Vec<Style, Memory> styleOf(Memory& memory, std::string_view text) {
@@ -421,28 +450,35 @@ namespace {
     const std::string_view command = "sudo git commit -m \"wip $USER\" | tee log # done";
     const auto styles = styled(command);
 
-    require(styles[0] == Style::command && styles[5] == Style::command, "sudo and the command it runs are commands");
-    require(styles[16] == Style::option && styles[19] == Style::string && styles[24] == Style::variable, "options, strings and variables inside them");
+    require(styles[0] == Style::command && styles[command.find("git")] == Style::command, "sudo and the command it runs are commands");
+    require(styles[command.find("-m")] == Style::option && styles[command.find('"')] == Style::string && styles[command.find('$')] == Style::variable, "options, strings and variables inside them");
     require(styles[command.find('|')] == Style::operator_ && styles[command.find("tee")] == Style::command, "a pipe starts a command");
     require(styles[command.find('#')] == Style::comment, "comments");
-    require(styled("gi")[0] == Style::command && styled("sudo gi")[5] == Style::command, "the command being typed is a command already, as the shell colours it");
-    const auto variable = styled("echo ${HOME}/x $PATH");
+    const std::string_view typing = "sudo gi";
 
-    require(variable[5] == Style::variable && variable[10] == Style::variable && variable[15] == Style::variable, "variables");
-    require(styled("FOO=1 make all")[6] == Style::command, "an assignment prefix leaves the command after it");
-    const auto paths = styled("ls -la ./src /tmp/x y");
+    require(styled("gi")[0] == Style::command && styled(typing)[typing.find("gi")] == Style::command, "the command being typed is a command already, as the shell colours it");
+    const std::string_view expansions = "echo ${HOME}/x $PATH";
+    const auto variable = styled(expansions);
 
-    require(paths[7] == Style::path && paths[13] == Style::path && paths[19] == Style::plain && paths[3] == Style::option, "arguments naming files are paths");
+    require(variable[expansions.find('$')] == Style::variable && variable[expansions.find('}') - 1] == Style::variable && variable[expansions.rfind('$')] == Style::variable, "variables");
+    const std::string_view assignment = "FOO=1 make all";
+
+    require(styled(assignment)[assignment.find("make")] == Style::command, "an assignment prefix leaves the command after it");
+    const std::string_view arguments = "ls -la ./src /tmp/x y";
+    const auto paths = styled(arguments);
+
+    require(paths[arguments.find("./src")] == Style::path && paths[arguments.find("/tmp")] == Style::path && paths[arguments.rfind(' ')] == Style::plain && paths[arguments.find("-la")] == Style::option, "arguments naming files are paths");
 
     // An animation group splits runs where it starts and ends, even within one style.
     const std::string_view grouped = "git status";
+    constexpr std::size_t grouped_byte = 5;
     telar::ds::Vec<std::uint8_t, Memory> groups{memory};
 
     groups.resize(grouped.size(), 0);
-    groups.atMut(5) = 1;
+    groups.atMut(grouped_byte) = 1;
     const auto split = layout(grouped, styled(grouped).view(), grouped.size(), grouped.size(), 80, groups.view());
 
-    require(split.runs.size() == 4 && split.runs[2].group == 1 && split.runs[2].start == 5 && split.runs[2].end == 6, "a group is a run of its own");
+    require(split.runs.size() == 4 && split.runs[2].group == 1 && split.runs[2].start == grouped_byte && split.runs[2].end == grouped_byte + 1, "a group is a run of its own");
 
     // Wraps at the width, never cutting, and continues under the text.
     const std::string_view text = "echo abcdefghij";
@@ -456,7 +492,10 @@ namespace {
     }
 
     require(cells == text.size(), "every character is laid out");
-    require(wrapped.caret_row == 1 && wrapped.caret_column == Layout::indent + 7, "the caret follows the text");
+    // The caret ends after `abcdefghij`, which wrapped to the second row.
+    constexpr std::uint32_t wrapped_caret_column = 7;
+
+    require(wrapped.caret_row == 1 && wrapped.caret_column == Layout::indent + wrapped_caret_column, "the caret follows the text");
 
     const std::string_view lines = "for f in *; do\n  echo $f\ndone";
     const auto multiline = layout(lines, styled(lines).view(), 0, lines.size(), 80);
@@ -465,9 +504,11 @@ namespace {
     require(multiline.selection.size() == 3, "a selection spans rows");
 
     const std::string_view wide = "echo 日本";
+    constexpr std::uint32_t echo_cells = 5;
+    constexpr std::uint32_t cjk_cells = 4;
     const auto cjk = layout(wide, styled(wide).view(), wide.size(), wide.size(), 80);
 
-    require(cjk.caret_column == Layout::indent + 5 + 4, "wide characters take two cells");
+    require(cjk.caret_column == Layout::indent + echo_cells + cjk_cells, "wide characters take two cells");
   }
 
   // What the line holds (its text, undo, registers and the commands it ran) lives in the memory
@@ -484,9 +525,15 @@ namespace {
       for (const char byte : std::string_view{"iecho one two\x1b"
                                               "0dwP\"ayiwu\x12"
                                               "A three\r"}) {
-        const KeyPress key = byte == '\x1b' ? KeyPress{Key::escape} : byte == '\r' ? KeyPress{Key::enter}
-                                                                  : byte == '\x12' ? KeyPress{Key::character, U'r', {.control = true}}
-                                                                                   : KeyPress{Key::character, static_cast<char32_t>(byte), {}, std::string_view{&byte, 1}};
+        KeyPress key{.key = Key::character, .character = static_cast<char32_t>(byte), .text = std::string_view{&byte, 1}};
+
+        if (byte == '\x1b') {
+          key = {.key = Key::escape};
+        } else if (byte == '\r') {
+          key = {.key = Key::enter};
+        } else if (byte == '\x12') {
+          key = {.key = Key::character, .character = U'r', .modifiers = {.control = true}};
+        }
 
         static_cast<void>(feature::press(state, line, Surface::editor, key, configuration, telar::shell::Dialect::posix));
       }

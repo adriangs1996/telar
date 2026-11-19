@@ -25,7 +25,9 @@ namespace telar::gui::features::prompt {
   class Continuation {
   public:
     Continuation(const Continuation&) = delete;
+    Continuation(Continuation&&) = delete;
     Continuation& operator=(const Continuation&) = delete;
+    Continuation& operator=(Continuation&&) = delete;
 
     [[nodiscard]] virtual bool incomplete(std::string_view text) const = 0;
 
@@ -47,6 +49,12 @@ namespace telar::gui::features::prompt {
 
   private:
     Incomplete& incomplete_;
+  };
+
+  // The bytes [begin, end) of the line that a word takes.
+  struct WordRange {
+    std::size_t begin = 0;
+    std::size_t end = 0;
   };
 
   class Line {
@@ -85,16 +93,16 @@ namespace telar::gui::features::prompt {
     // A key in the editor or the queue. `incomplete` tells whether the shell would wait for more
     // of the command, so Enter continues it on a new line.
     template <typename Incomplete>
-    TBC_GENERIC Outcome press(Surface surface, const KeyPress& key, Incomplete&& incomplete, History history = {}) {
-      const ContinuationOf<std::remove_reference_t<Incomplete>> continuation{incomplete};
+    TBC_GENERIC Outcome press(Surface surface, const KeyPress& key, const Incomplete& incomplete, History history = {}) {
+      const ContinuationOf<const Incomplete> continuation{incomplete};
 
       return pressKey(surface, key, continuation, history);
     }
 
     // A key the user bound to an action; the rest of the line answers it as for any key.
     template <typename Incomplete>
-    TBC_GENERIC Outcome perform(Surface surface, Action action, Incomplete&& incomplete, History history = {}) {
-      const ContinuationOf<std::remove_reference_t<Incomplete>> continuation{incomplete};
+    TBC_GENERIC Outcome perform(Surface surface, Action action, const Incomplete& incomplete, History history = {}) {
+      const ContinuationOf<const Incomplete> continuation{incomplete};
 
       return performAction(surface, action, continuation, history);
     }
@@ -111,9 +119,9 @@ namespace telar::gui::features::prompt {
 
     [[nodiscard]] const ds::Option<Menu>& menu() const noexcept;
 
-    // Offers `choices` for the word in [begin, end): one is written at once, more open the
-    // menu. While `requests` are still looking for more, even one choice waits for them.
-    void offer(tbc::view<Choices, tbc::lt::a> choices, std::size_t begin, std::size_t end, tbc::view<ds::Vec<std::uint64_t, Memory>, tbc::lt::a> requests, shell::Dialect dialect, std::string_view label = {});
+    // Offers `choices` for the `word`: one is written at once, more open the menu. While
+    // `requests` are still looking for more, even one choice waits for them.
+    void offer(tbc::view<Choices, tbc::lt::a> choices, WordRange word, tbc::view<ds::Vec<std::uint64_t, Memory>, tbc::lt::a> requests, shell::Dialect dialect, std::string_view label = {});
 
     // What a pending request found, added to the menu it was asked for.
     bool receive(std::uint64_t request, tbc::view<Choices, tbc::lt::a> paths, bool truncated = false);

@@ -15,7 +15,7 @@ namespace telar::gui::features::prompt {
   public:
     // A pasted file must not grow the editor without bound; the shell's own line editor has
     // limits of the same order.
-    static constexpr std::size_t capacity = 256 * 1024;
+    static constexpr std::size_t capacity = std::size_t{256} * 1024;
     static constexpr std::size_t undo_capacity = 256;
 
     // The text and its undo history live in `memory`.
@@ -80,7 +80,13 @@ namespace telar::gui::features::prompt {
     // The code points between the line start and the offset, for keeping a column across lines.
     [[nodiscard]] std::size_t column(std::size_t offset) const noexcept;
 
-    [[nodiscard]] std::size_t atColumn(std::size_t line_start, std::size_t column) const noexcept;
+    struct LineColumn {
+      std::size_t line_start = 0;
+      std::size_t column = 0;
+    };
+
+    // The offset `column` code points into the line, or the line's end when it is shorter.
+    [[nodiscard]] std::size_t atColumn(LineColumn place) const noexcept;
 
     static bool continuation(char byte) noexcept;
 

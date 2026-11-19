@@ -69,8 +69,12 @@ namespace telar::gui::features::prompt {
       return false;
     }
 
-    const auto kind = !typing ? Group::none : text.empty() ? Group::erase
-                                                           : Group::insert;
+    auto kind = Group::none;
+
+    if (typing) {
+      kind = text.empty() ? Group::erase : Group::insert;
+    }
+
     const bool joined = kind != Group::none && kind == group_ && !undo_.empty() && (kind == Group::insert ? start == cursor_ : end == cursor_ || start == cursor_);
     if (!joined) {
       record();
@@ -156,7 +160,9 @@ namespace telar::gui::features::prompt {
   }
 
   std::size_t Text::lineOf(std::size_t offset) const noexcept {
-    return static_cast<std::size_t>(std::ranges::count(view().substr(0, offset), '\n'));
+    const std::string_view before{view().data(), std::min(offset, size())};
+
+    return static_cast<std::size_t>(std::ranges::count(before, '\n'));
   }
 
   std::size_t Text::column(std::size_t offset) const noexcept {
@@ -169,11 +175,11 @@ namespace telar::gui::features::prompt {
     return count;
   }
 
-  std::size_t Text::atColumn(std::size_t line_start, std::size_t column) const noexcept {
-    const auto end = lineEnd(line_start);
-    auto position = line_start;
+  std::size_t Text::atColumn(LineColumn place) const noexcept {
+    const auto end = lineEnd(place.line_start);
+    auto position = place.line_start;
 
-    for (std::size_t count = 0; count < column && position < end; ++count) {
+    for (std::size_t count = 0; count < place.column && position < end; ++count) {
       position = next(position);
     }
 
@@ -181,7 +187,11 @@ namespace telar::gui::features::prompt {
   }
 
   bool Text::continuation(char byte) noexcept {
-    return (static_cast<unsigned char>(byte) & 0xc0) == 0x80;
+    // A UTF-8 continuation byte is 10xxxxxx.
+    constexpr unsigned continuation_mask = 0xc0U;
+    constexpr unsigned continuation_bits = 0x80U;
+
+    return (static_cast<unsigned char>(byte) & continuation_mask) == continuation_bits;
   }
 
   std::size_t Text::boundary(std::size_t offset) const noexcept {
@@ -197,20 +207,20 @@ namespace telar::gui::features::prompt {
       static_cast<void>(undo_.remove(0));
     }
 
-    undo_.push(Snapshot{bytes_.clone(), cursor_});
+    undo_.push(Snapshot{.bytes = bytes_.clone(), .cursor = cursor_});
   }
 
   bool Text::travel(bool back) {
-    auto& from = back ? undo_ : redo_;
-    auto& to = back ? redo_ : undo_;
+    auto& source = back ? undo_ : redo_;
+    auto& target = back ? redo_ : undo_;
 
-    if (from.empty()) {
+    if (source.empty()) {
       return false;
     }
 
-    auto snapshot = from.remove(from.size() - 1);
+    auto snapshot = source.remove(source.size() - 1);
 
-    to.push(Snapshot{std::move(bytes_), cursor_});
+    target.push(Snapshot{.bytes = std::move(bytes_), .cursor = cursor_});
     bytes_ = std::move(snapshot.bytes);
     cursor_ = anchor_ = std::min(snapshot.cursor, bytes_.size());
     group_ = Group::none;
@@ -224,7 +234,11 @@ namespace telar::gui::features::prompt {
       return CharacterClass::blank;
     }
 
-    if (value >= 0x80 || value == '_' || (value >= '0' && value <= '9') || ((value | 0x20) >= 'a' && (value | 0x20) <= 'z')) {
+    // Every byte past ASCII counts as a word character; setting bit 5 folds an ASCII letter to lowercase.
+    constexpr unsigned char first_non_ascii = 0x80;
+    constexpr unsigned lowercase_bit = 0x20U;
+
+    if (value >= first_non_ascii || value == '_' || (value >= '0' && value <= '9') || ((value | lowercase_bit) >= 'a' && (value | lowercase_bit) <= 'z')) {
       return CharacterClass::word;
     }
 

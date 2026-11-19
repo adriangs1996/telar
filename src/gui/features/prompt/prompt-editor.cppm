@@ -87,7 +87,7 @@ namespace telar::gui::features::prompt {
 
       // The copy lives in the text's memory, region `a`, with the key it was recorded for.
       [[nodiscard]] tbc::view<Recorded, tbc::lt::a> clone() const {
-        return {key, text.clone()};
+        return {.key = key, .text = text.clone()};
       }
     };
 
@@ -96,7 +96,16 @@ namespace telar::gui::features::prompt {
 
     // ---- shared editing --------------------------------------------------------------------
 
+    // The key to the keymap and mode it belongs to, without recording it or repeating.
+    Request dispatch(const KeyPress& key);
+
     Request insert(const KeyPress& key);
+
+    // Backspace: the selection, the word before the cursor when `word`, or the character.
+    void eraseBackward(bool word);
+
+    // Escape in insert mode: vim's normal mode, or the selection dropped.
+    Request escapeInsert();
 
     // readline's control bindings, which vim's insert mode shares for the common ones.
     Request control(char32_t character);
@@ -152,9 +161,26 @@ namespace telar::gui::features::prompt {
 
     Request normal(const KeyPress& key);
 
+    // The key that completes a register, a replace, a find, a g command or a text object.
+    ds::Option<Request> pendingKey(char32_t character, const KeyPress& key);
+
+    Request afterG(char32_t character);
+
+    // Adds `character` to the count when it is one of its digits.
+    bool countDigit(char32_t character) noexcept;
+
+    Request normalKey(char32_t character, const KeyPress& key);
+
     Request normalControl(char32_t character);
 
-    [[nodiscard]] ds::Option<Motion> motionFor(char32_t character) const noexcept;
+    [[nodiscard]] ds::Option<Motion> motionFor(char32_t character) const;
+
+    [[nodiscard]] Motion wordMotion(bool big) const noexcept;
+
+    [[nodiscard]] Motion lineEndMotion() const noexcept;
+
+    // j and k, keeping the cursor's column.
+    [[nodiscard]] Motion lineMotion(bool down) const noexcept;
 
     static char reversed(char kind) noexcept;
 
@@ -162,7 +188,21 @@ namespace telar::gui::features::prompt {
 
     [[nodiscard]] std::size_t lineAt(std::size_t index) const noexcept;
 
-    [[nodiscard]] Motion findMotion(char kind, char32_t target, std::size_t repeat, bool repeated = false) const;
+    // f, F, t or T for a character.
+    struct Find {
+      char kind = 'f';
+      char32_t target = 0;
+    };
+
+    [[nodiscard]] Motion findMotion(Find find, std::size_t repeat, bool repeated = false) const;
+
+    // The next `needle` after `position` and before the line's `end`, past the one right after
+    // `position` when `skip`.
+    [[nodiscard]] ds::Option<std::size_t> findAfter(std::size_t position, std::string_view needle, bool skip, std::size_t end) const;
+
+    // The previous `needle` before `position` and from the line's `start`, past the one right
+    // before `position` when `skip`.
+    [[nodiscard]] ds::Option<std::size_t> findBefore(std::size_t position, std::string_view needle, bool skip, std::size_t start) const;
 
     [[nodiscard]] Motion matchingBracket(std::size_t cursor) const noexcept;
 
@@ -172,6 +212,10 @@ namespace telar::gui::features::prompt {
     Request applyTextObject(char32_t character);
 
     [[nodiscard]] ds::Option<std::pair<std::size_t, std::size_t>> textObject(char32_t character, bool inner) const;
+
+    [[nodiscard]] ds::Option<std::pair<std::size_t, std::size_t>> wordObject(bool big, bool inner) const;
+
+    [[nodiscard]] ds::Option<std::pair<std::size_t, std::size_t>> quoteObject(char quote, bool inner) const;
 
     [[nodiscard]] ds::Option<std::pair<std::size_t, std::size_t>> bracketObject(char open, char close, bool inner) const;
 
@@ -204,6 +248,29 @@ namespace telar::gui::features::prompt {
 
     Request command(char32_t character, const KeyPress& key);
 
+    // The key after an operator: the same operator again takes whole lines.
+    void secondOperator(char32_t character);
+
+    // Where i, a, I and A start inserting.
+    [[nodiscard]] std::size_t insertPosition(char32_t character) const noexcept;
+
+    // The pending operator over the cursor's line and the count's lines after it.
+    void operateOnLines();
+
+    void openLine(bool above);
+
+    // x, or X when `backward`: the count's characters on the cursor's line.
+    void deleteCharacters(bool backward);
+
+    // S, C, D and Y.
+    void operateToLineEnd(char32_t character, const KeyPress& key);
+
+    void toggleCase();
+
+    void joinLines();
+
+    void undoChanges();
+
     Request visualCommand(char32_t character);
 
     // ---- dot repeat ------------------------------------------------------------------------
@@ -212,7 +279,7 @@ namespace telar::gui::features::prompt {
 
     void record(const KeyPress& key);
 
-    void finishRecording() noexcept;
+    void finishRecording();
 
     void repeat();
 
@@ -230,7 +297,7 @@ namespace telar::gui::features::prompt {
     tbc::view<ds::Vec<Recorded, Memory>, tbc::lt::a> recorded_;
     tbc::view<ds::Vec<Recorded, Memory>, tbc::lt::a> last_change_;
     ds::Option<std::size_t> goal_column_;
-    std::pair<char, char32_t> last_find_{'f', 0};
+    Find last_find_;
     std::size_t count_ = 0;
     std::size_t operator_count_ = 0;
     unsigned replaying_ = 0;
@@ -241,6 +308,8 @@ namespace telar::gui::features::prompt {
     bool text_object_inner_ = true;
     bool register_pending_ = false;
     bool recording_ = false;
+    // A dot asked to repeat the last change, which `press` does once the key is done.
+    bool repeat_requested_ = false;
   };
 
 }
