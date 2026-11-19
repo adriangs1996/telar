@@ -1771,6 +1771,21 @@ namespace telar::ds {
   template <typename Signature, std::size_t Capacity = 3 * sizeof(void*)>
   class Function;
 
+  namespace detail {
+
+    // What a Function's callable returns, region `a`; nothing to label for void.
+    template <typename Result>
+    struct FunctionResult {
+      using type = tbc::view<Result, tbc::lt::a>;
+    };
+
+    template <>
+    struct FunctionResult<void> {
+      using type = void;
+    };
+
+  }
+
   // A callable of any type behind one signature, as std::move_only_function and Rust's
   // `Box<dyn FnMut>`, stored inline so that it never allocates: a callable larger than Capacity
   // bytes, aligned past a pointer, or whose move can throw does not convert. A call may mutate the
@@ -1782,7 +1797,9 @@ namespace telar::ds {
     template <typename Argument>
     using Pass = std::conditional_t<std::is_scalar_v<Argument>, Argument, Argument&&>;
 
-    using Invoke = Result (*)(void*, Pass<Arguments>...);
+    // The result borrows what the callable at the storage holds, region `a`, never the arguments, region
+    // `b`, as Rust's FnMut returns an Output that borrows none of them.
+    using Invoke = typename detail::FunctionResult<Result>::type (*)(tbc::view<void*, tbc::lt::a>, tbc::view<Pass<Arguments>, tbc::lt::b>...);
 
     // Moves the callable at `source` to `target` and destroys it, or only destroys it when `target`
     // is null.
