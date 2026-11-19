@@ -159,7 +159,8 @@ namespace telar::gui::qt {
 
   void ElementLayout::itemChange(ItemChange change, const ItemChangeData& value) {
     if (change == ItemChildAddedChange) {
-      watch(value.item);
+      // Qt's item, which its parent owns, by address.
+      watch(tbc::raw(value.item));
       polish();
     } else if (change == ItemChildRemovedChange) {
       polish();
@@ -290,8 +291,9 @@ namespace telar::gui::qt {
       const auto natural_width = std::clamp(width >= 0 ? scaled(width) : item->implicitWidth(), scaled(number(element, "minWidth", 0)), scaled(number(element, "maxWidth", std::numeric_limits<qreal>::max() / 4)));
       const auto natural_height = std::clamp(height >= 0 ? scaled(height) : item->implicitHeight(), scaled(number(element, "minHeight", 0)), scaled(number(element, "maxHeight", std::numeric_limits<qreal>::max() / 4)));
 
+      // The items stay Qt's, owned by this item; the list only reaches them by address.
       children.append({
-          .item = item,
+          .item = tbc::raw(item),
           .element = element,
           .main = row ? natural_width : natural_height,
           .cross = row ? natural_height : natural_width,
@@ -364,7 +366,7 @@ namespace telar::gui::qt {
 
     qreal cursor = offset;
 
-    for (const auto& child : children) {
+    for (auto& child : children) {
       const auto alignment = child.element.contains(QStringLiteral("alignSelf")) ? child.element.value(QStringLiteral("alignSelf")).toInt() : align_;
       // A child never overflows the cross axis: text inside it elides instead.
       const auto cross = alignment == align_stretch ? available_cross : std::min(child.cross, std::max<qreal>(0, available_cross));
