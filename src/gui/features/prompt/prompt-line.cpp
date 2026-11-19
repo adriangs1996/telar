@@ -402,11 +402,9 @@ namespace telar::gui::features::prompt {
     const auto word = typedWord();
 
     menu.choices.clear();
-    // By index: the menu is reached through the Option holding it, which the checker sees as some
-    // part of it, so a borrow of `all` would overlap the growth of `choices`.
-    for (std::size_t index = 0; index < menu.all.size(); ++index) {
-      if (menu.all[index].text.view().starts_with(word)) {
-        menu.choices.push(menu.all[index].clone());
+    for (const auto& choice : menu.all) {
+      if (choice.text.view().starts_with(word)) {
+        menu.choices.push(choice.clone());
       }
     }
 
