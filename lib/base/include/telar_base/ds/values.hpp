@@ -43,7 +43,8 @@ namespace telar::ds {
   struct TBC_GENERIC Array {
     using value_type = Value;
 
-    [[nodiscard]] static constexpr std::size_t size() noexcept {
+    // Not static, as std::array's: a call reads as a call on the value it sizes.
+    [[nodiscard]] constexpr std::size_t size() const noexcept {
       return Count;
     }
 
