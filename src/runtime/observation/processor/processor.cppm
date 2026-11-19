@@ -97,7 +97,8 @@ export {
     // owns, after collecting, and copies it then.
     class TBC_SHARED PaneObserver {
     public:
-      explicit PaneObserver(ConcurrentMemory& memory, TerminalSize size, std::string_view directory = {}, bool capture_output = false, ds::Option<ShellToken> shell_token = ds::none);
+      // What the observer keeps lives in `memory`, region `a`; the directory is copied.
+      explicit PaneObserver(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, TerminalSize size, std::string_view directory = {}, bool capture_output = false, ds::Option<ShellToken> shell_token = ds::none);
 
       void configureHistory(const HistorySession& session, bool capture_output = false);
 
@@ -238,12 +239,12 @@ export {
       unsigned active_ = 0;
       ds::Option<unsigned> sealed_;
       ds::Option<LimitReach> drop_;
-      Terminal terminal_;
+      tbc::view<Terminal, tbc::lt::a> terminal_;
       // Reads terminal_.
       tbc::view<CommandTracker, tbc::lt::self> tracker_;
       tbc::view<HistorySession, tbc::lt::self> session_;
-      ds::String<ConcurrentMemory> workspace_path_;
-      ds::String<ConcurrentMemory> shell_;
+      tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> workspace_path_;
+      tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> shell_;
       TerminalSize initial_size_;
       AgentScreenInference inference_;
       bool reset_needed_ = false;

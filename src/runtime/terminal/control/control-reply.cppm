@@ -13,11 +13,12 @@ export namespace telar::runtime::control {
   // Generic over the caller's allocator, so it stays here.
   template <Allocator Memory>
   class TBC_GENERIC Reply {
+    // The bytes a sealed reply moved out of its overflow, in their memory's region `a`.
     struct Storage {
-      explicit Storage(ds::Vec<std::uint8_t, Memory>&& bytes)
+      explicit Storage(tbc::view<ds::Vec<std::uint8_t, Memory>&&, tbc::lt::a> bytes)
           : bytes(std::move(bytes)) {}
 
-      ds::Vec<std::uint8_t, Memory> bytes;
+      tbc::view<ds::Vec<std::uint8_t, Memory>, tbc::lt::a> bytes;
     };
 
   public:

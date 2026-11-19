@@ -13,7 +13,7 @@ namespace telar::runtime {
     return std::span{bytes}.subspan(event.offset, event.length);
   }
 
-  PaneObserver::PaneObserver(ConcurrentMemory& memory, TerminalSize size, std::string_view directory, bool capture_output, ds::Option<ShellToken> shell_token)
+  PaneObserver::PaneObserver(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, TerminalSize size, std::string_view directory, bool capture_output, ds::Option<ShellToken> shell_token)
       : terminal_(memory, size, TerminalPurpose::observation),
         tracker_(memory, terminal_, directory, capture_output, shell_token),
         workspace_path_(memory),
