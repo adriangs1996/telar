@@ -87,12 +87,15 @@ namespace telar::gui::qt {
     }
   }
 
-  void MachinesCoordinator::markDisconnected(MachineClient& client) {
-    client.session.disconnected();
-    static_cast<void>(client.session.settlePresentation());
-    client.phase = client.connection.link().phase;
-    client.needs_setup = client.connection.link().setup_repairs;
-    summarize(client.key);
+  void MachinesCoordinator::markDisconnected(application::machines::MachineClientKey key) {
+    if (auto* client = store_.findMut(key)) {
+      client->session.disconnected();
+      static_cast<void>(client->session.settlePresentation());
+      client->phase = client->connection.link().phase;
+      client->needs_setup = client->connection.link().setup_repairs;
+    }
+
+    summarize(key);
   }
 
   void MachinesCoordinator::publishList() {

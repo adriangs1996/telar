@@ -255,11 +255,11 @@ namespace telar::gui::qt {
     measureDisplay();
   }
 
-  void ApplicationController::runtimeDisconnected(MachineClient& client) {
-    activity_selection_.drop(client.key);
+  void ApplicationController::runtimeDisconnected(application::machines::MachineClientKey key) {
+    activity_selection_.drop(key);
 
-    machines_.markDisconnected(client);
-    if (client.key.machine.slot != store_.machines().active()) {
+    machines_.markDisconnected(key);
+    if (key.machine.slot != store_.machines().active()) {
       return;
     }
 
@@ -318,9 +318,7 @@ namespace telar::gui::qt {
         &RuntimeConnection::payloadReceived,
         this,
         [this, key](QByteArrayView payload) {
-          if (auto* source = store_.findMut(key)) {
-            consume(*source, payload);
-          }
+          consume(key, payload);
         },
         Qt::DirectConnection
     );
@@ -338,8 +336,8 @@ namespace telar::gui::qt {
     );
 
     connect(&client.connection, &RuntimeConnection::disconnected, this, [this, key] {
-      if (auto* source = store_.findMut(key)) {
-        runtimeDisconnected(*source);
+      if (store_.findMut(key) != nullptr) {
+        runtimeDisconnected(key);
       }
     });
   }
@@ -512,28 +510,38 @@ namespace telar::gui::qt {
     return session().configuration;
   }
 
-  void ApplicationController::consume(MachineClient& client, QByteArrayView payload) {
+  void ApplicationController::consume(application::machines::MachineClientKey key, QByteArrayView payload) {
+    const bool active = key.machine.slot == store_.machines().active();
+
     try {
-      const bool active = client.key.machine.slot == store_.machines().active();
+      auto* client = store_.findMut(key);
+      if (client == nullptr) {
+        return;
+      }
+
       WindowCommands::HostCommands handler{commands_, active};
-      const auto notification_revision = application::notifications::revision(client.session);
-      const auto graphics_revision = application::terminal::graphics::recoveryRevision(client.session);
-      const auto change = client.session.consume(byteView({payload.data(), static_cast<std::size_t>(payload.size())}), handler);
+      const auto notification_revision = application::notifications::revision(client->session);
+      const auto graphics_revision = application::terminal::graphics::recoveryRevision(client->session);
+      const auto change = client->session.consume(byteView({payload.data(), static_cast<std::size_t>(payload.size())}), handler);
       // Terminal frames and documents reach their panes directly, and are the bulk of the
       // traffic; every other change may move what the projections read.
       if (change != application::Change::none && change != application::Change::terminal && change != application::Change::document) {
         store_.touch();
       }
-      if (change == application::Change::stopped || change == application::Change::closed) {
-        client.connection.finishSession();
-        if (change == application::Change::closed) {
-          client.session.disconnected();
+
+      if (auto* current = store_.findMut(key)) {
+        if (change == application::Change::stopped || change == application::Change::closed) {
+          current->connection.finishSession();
+          if (change == application::Change::closed) {
+            current->session.disconnected();
+          }
         }
+
+        static_cast<void>(current->session.settlePresentation());
       }
 
-      static_cast<void>(client.session.settlePresentation());
-      machines_.summarize(client.key);
-      if (active && client.key.machine.slot != application::machines::Machines::local_slot && (change == application::Change::stopped || change == application::Change::closed)) {
+      machines_.summarize(key);
+      if (active && key.machine.slot != application::machines::Machines::local_slot && (change == application::Change::stopped || change == application::Change::closed)) {
         machines_.select(store_.machines().token(application::machines::Machines::local_slot));
         return;
       }
@@ -558,11 +566,11 @@ namespace telar::gui::qt {
 
       presentChange(change);
     } catch (const std::exception& error) {
-      if (client.key.machine.slot == store_.machines().active()) {
+      if (key.machine.slot == store_.machines().active()) {
         status_.fail(error);
         store_.touch();
-      } else {
-        client.connection.recover(error.what());
+      } else if (auto* client = store_.findMut(key)) {
+        client->connection.recover(error.what());
       }
     }
   }

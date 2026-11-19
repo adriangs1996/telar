@@ -104,7 +104,7 @@ namespace telar::gui::qt {
     // Brings the machine list's row up to date with what the client's session holds.
     void summarize(application::machines::MachineClientKey key);
     // The client's runtime went away: its session and its row say so.
-    void markDisconnected(MachineClient& client);
+    void markDisconnected(application::machines::MachineClientKey key);
     void publishList();
     // The desktop finished the sound a client's agent asked for.
     void soundFinished(ds::Option<CommandFailure> failure);

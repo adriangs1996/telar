@@ -277,12 +277,14 @@ namespace telar::gui::qt {
     [[nodiscard]] const GuiSession& session() const noexcept;
     [[nodiscard]] RuntimeConnection& connectionMut() noexcept;
     [[nodiscard]] const RuntimeConnection& connection() const noexcept;
-    void runtimeDisconnected(MachineClient& client);
+    // The client the key names is looked up, and again after each call that can change the store
+    // holding it, as Rust indexes a collection its owner's own methods also change.
+    void runtimeDisconnected(application::machines::MachineClientKey key);
     void initializePalette();
     // Pushes the display the controllers measure what they draw in.
     void measureDisplay();
 
-    void consume(MachineClient& client, QByteArrayView payload);
+    void consume(application::machines::MachineClientKey key, QByteArrayView payload);
     void synchronizeDisplay();
     void synchronizeScreen();
     void synchronizeWindowSize();
