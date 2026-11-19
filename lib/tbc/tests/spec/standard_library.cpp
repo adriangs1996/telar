@@ -1,3 +1,5 @@
+#include "tbc/view.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -725,3 +727,64 @@ int referenceReadBeforeGrowth() {
 
 // END CASE
 
+
+// CASE: standard.factory_copies
+// PAIR: standard.factory
+// SOURCE: src/runtime/model/client_layouts/client_layouts.cpp :: Pane::Pane (a pane's observer is built from the command's directory, which it copies)
+// STATUS: implemented
+// CONTRACT: std::make_shared, std::allocate_shared and std::make_unique keep what their first template argument's constructor keeps of the arguments they forward, as Rust's Arc::new(T::new(..)) keeps what T keeps.
+// SCENARIO: An observer built from a directory it copies outlives the directory; accept.
+namespace standard {
+  class copied_directory {
+  public:
+    explicit copied_directory(std::string_view directory)
+        : directory_(directory) {}
+
+    [[nodiscard]] std::size_t size() const noexcept {
+      return directory_.size();
+    }
+
+  private:
+    tbc::view<std::string, tbc::lt::a> directory_;
+  };
+}
+
+std::size_t standardFactoryCopies() {
+  std::shared_ptr<standard::copied_directory> observer;
+
+  {
+    const std::string directory{"/tmp"};
+
+    observer = std::make_shared<standard::copied_directory>(directory);
+  }
+
+  return observer->size();
+}
+
+// END CASE
+
+// CASE: standard.factory_keeps
+// PAIR: standard.factory
+// SOURCE: src/runtime/model/client_layouts/client_layouts.cpp :: Pane::Pane (a pane's observer is built from the command's directory, which it copies)
+// STATUS: implemented
+// CONTRACT: std::make_shared, std::allocate_shared and std::make_unique keep what their first template argument's constructor keeps of the arguments they forward, as Rust's Arc::new(T::new(..)) keeps what T keeps.
+// SCENARIO: An observer built from a directory it views is read after the directory ends; reject where the directory ends.
+namespace standard {
+  struct viewed_directory {
+    std::string_view directory;
+  };
+}
+
+std::size_t standardFactoryKeeps() {
+  std::shared_ptr<standard::viewed_directory> observer;
+
+  {
+    const std::string directory{"/tmp"};
+
+    observer = std::make_shared<standard::viewed_directory>(directory);
+  } // expected-error [tbc-invalidated-borrow]
+
+  return observer->directory.size();
+}
+
+// END CASE

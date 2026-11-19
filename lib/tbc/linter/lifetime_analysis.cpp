@@ -1462,11 +1462,13 @@ namespace tbc_lint {
         }
       }
 
-      // A factory marked TBC_CONSTRUCTS, whose callers rely on the constructor it forwards to.
+      // A factory marked TBC_CONSTRUCTS, whose callers rely on the constructor it forwards to, or one of
+      // the standard library's, which forward their pack to their first template argument's constructor
+      // as Rust's Arc::new(T::new(..)) keeps what T keeps.
       [[nodiscard]] static bool constructs(const clang::FunctionDecl& function) {
         const auto* pattern = function.getPrimaryTemplate() != nullptr ? function.getPrimaryTemplate()->getTemplatedDecl() : nullptr;
 
-        return annotated(function, "tbc::constructs") || (pattern != nullptr && annotated(*pattern, "tbc::constructs"));
+        return annotated(function, "tbc::constructs") || (pattern != nullptr && annotated(*pattern, "tbc::constructs")) || standardFunction(&function, "make_unique") || standardFunction(&function, "make_shared") || standardFunction(&function, "allocate_shared");
       }
 
       // What a TBC_CONSTRUCTS factory returns: what its first template argument's constructor keeps of the
@@ -1483,9 +1485,13 @@ namespace tbc_lint {
         loans result;
         llvm::SmallVector<const clang::Expr*, 4> forwarded;
 
+        // The standard library's allocate_shared copies its allocator into what it builds, so that keeps
+        // what the allocator holds; a project factory keeps the arguments before its pack by reference.
+        const bool standard = standardDeclaration(callee);
+
         for (unsigned index = offset; index < call.getNumArgs(); ++index) {
           if (index - offset < leading) {
-            result.merge(reference(call.getArg(index), current));
+            result.merge(standard ? copiedValue(call.getArg(index), current) : reference(call.getArg(index), current));
           } else {
             forwarded.push_back(call.getArg(index));
           }
@@ -1570,11 +1576,13 @@ namespace tbc_lint {
             continue;
           }
 
-          matched = true;
+          // A value of the record's own type was handled above, so a copy or move constructor is not the
+          // one a value of another type selects; an aggregate built from it is not matched by arity.
           if (constructor->isCopyOrMoveConstructor()) {
-            result.merge(copiedValue(arguments.front(), current));
             continue;
           }
+
+          matched = true;
 
           if (auto built = inPlaceConstruction(*constructor, arguments, current)) {
             result.merge(*built);
@@ -1605,14 +1613,24 @@ namespace tbc_lint {
         }
 
         if (!matched) {
-          const bool references = definition == nullptr || llvm::any_of(namedFields(*definition), [](const clang::FieldDecl* field) {
+          const auto fields = definition == nullptr ? llvm::SmallVector<const clang::FieldDecl*, 8>{} : namedFields(*definition);
+          const bool references = definition == nullptr || llvm::any_of(fields, [](const clang::FieldDecl* field) {
             return field->getType()->isReferenceType() || field->getType()->isPointerType();
           });
 
-          for (const auto* argument : arguments) {
+          for (std::size_t index = 0; index < arguments.size(); ++index) {
+            const auto* argument = arguments[index];
+            const auto type = argument->getType().getNonReferenceType();
+
             result.merge(copiedValue(argument, current));
             if (references) {
               result.merge(reference(argument, current));
+            }
+
+            // A view member built from an owner views the owner's storage, as a std::string_view built
+            // from a std::string does.
+            if (index < fields.size() && viewType(fields[index]->getType()) && !viewType(type) && !type->isPointerType()) {
+              result.merge(storage(argument, current));
             }
           }
         }
@@ -3604,12 +3622,12 @@ namespace tbc_lint {
           return {};
         }
 
-        if (object == nullptr && libraryFunction(*callee) && !callee->getReturnType()->isReferenceType()) {
-          return unplaced(standardArguments(call, 0, current));
-        }
-
         if (auto constructed = forwardedConstruction(*callee, call, current)) {
           return std::move(*constructed);
+        }
+
+        if (object == nullptr && libraryFunction(*callee) && !callee->getReturnType()->isReferenceType()) {
+          return unplaced(standardArguments(call, 0, current));
         }
 
         // A pointer or a reference a shared type hands out, as an allocator's block or a cache's entry, is

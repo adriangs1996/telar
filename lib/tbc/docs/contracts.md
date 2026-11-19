@@ -677,6 +677,11 @@ template <typename Value, Allocator Memory, typename... Arguments>
 TBC_CONSTRUCTS Owned<Value, Memory> makeOwned(Memory &memory, Arguments &&...arguments);
 ```
 
+The standard library's `std::make_unique`, `std::make_shared` and
+`std::allocate_shared` are such factories, as `Arc::new(T::new(arguments))` is:
+what they build keeps what `T`'s constructors keep, and `allocate_shared` keeps
+what the allocator it copies holds.
+
 A constructor template marked `TBC_CONSTRUCTS` builds its class's first template
 argument in place from its trailing pack, as `ds::Option`'s `in_place` one does
 for a value that cannot move: the object keeps what that type's constructors keep
@@ -685,7 +690,9 @@ of the pack.
 Two cases follow overload resolution rather than every constructor that takes as
 many arguments. A value of the type itself selects its copy or move constructor,
 so a `std::string_view` built from another keeps what that one views, not the
-variable it was copied from. A library type has no declaration that states more,
+variable it was copied from, and a value of another type never does: an aggregate
+built from it is built member by member, and a view member built from an owner
+views the owner's storage. A library type has no declaration that states more,
 so it keeps what the argument-shape model gives a construction of it: a view
 views what it is made from, and any other type, such as `std::variant`, keeps a
 copy of what each argument holds.
