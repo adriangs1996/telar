@@ -115,7 +115,8 @@ telar_glyph_rasterizer* telarGlyphRasterizerCreate(const telar_glyph_rasterizer_
   self->base.reset(vary(font_from_data(options), options->variation));
   const NativeReference space{CGColorSpaceCreateWithName(kCGColorSpaceLinearGray)};
   if (self->base && space) {
-    self->context.reset(CGBitmapContextCreate(options->pixels, options->side, options->side, 8, options->side, space.get(), (CGBitmapInfo)kCGImageAlphaOnly));
+    // The caller's buffer, which the context draws into from now on: C's, by address.
+    self->context.reset(CGBitmapContextCreate(tbc::raw(options->pixels), options->side, options->side, 8, options->side, space.get(), (CGBitmapInfo)kCGImageAlphaOnly));
   }
 
   if (!self->context) {

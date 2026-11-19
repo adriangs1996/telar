@@ -447,7 +447,8 @@ export {
       bool fail_closed = false;
     };
 
-    class HttpControl {
+    // What hooks decide about intercepted HTTP, which every relay asks at once, as FlowControl.
+    class TBC_SHARED HttpControl {
     public:
       virtual ~HttpControl() = default;
       virtual HttpPolicy policy(const FlowEvent& context) noexcept = 0;
