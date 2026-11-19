@@ -23,14 +23,28 @@ import telar.base.ds;
 export {
   namespace telar::gui::application::tests::session_fixture {
 
-    class Transport : public application::RuntimeTransport {
+    // Holds the storage messages are encoded into, so Transport keeps only the state tests read.
+    class EncodingTransport : public application::RuntimeTransport {
     public:
+      EncodingTransport() = default;
+      EncodingTransport(const EncodingTransport&) = default;
+      EncodingTransport(EncodingTransport&&) = default;
+      EncodingTransport& operator=(const EncodingTransport&) = default;
+      EncodingTransport& operator=(EncodingTransport&&) = default;
+      virtual ~EncodingTransport() = default;
+
       std::span<Byte> buffer(std::size_t size) override {
         buffer_.resize(size);
 
         return buffer_;
       }
 
+    private:
+      std::vector<Byte> buffer_;
+    };
+
+    class Transport : public EncodingTransport {
+    public:
       void send(std::span<const Byte> message) override {
         const auto tag = static_cast<ClientTag>(message.front());
 
@@ -126,8 +140,6 @@ export {
       mutable ds::Array<Byte, decode_capacity> storage{};
 
     private:
-      std::vector<Byte> buffer_;
-
       void validatePaneDelivery(ClientTag tag) {
         if (tag == MessageSchema<PaneInput>::tag && reject_input_after && count(ClientTag::pane_input) >= *reject_input_after) {
           throw EncodingError{"Pane input transport is full"};

@@ -173,7 +173,9 @@ namespace {
     const auto zenburn_type = zenburn.syntaxStyle(SyntaxRole::type).color;
 
     check(zenburn_func != zenburn_plain && zenburn_type != zenburn_plain && zenburn_func != zenburn_type, "Zenburn must color functions and types apart from the text and each other");
-    check(zenburn.terminal.background == ThemeRgb{43, 43, 43}, "Zenburn must paint the terminal zenburn-bg-1");
+    constexpr ThemeRgb zenburn_bg_1{43, 43, 43};
+
+    check(zenburn.terminal.background == zenburn_bg_1, "Zenburn must paint the terminal zenburn-bg-1");
     check(default_theme_values == zenburn, "Zenburn must be the default theme");
   }
 
@@ -197,7 +199,10 @@ namespace {
     }
 
     check(palette_kept, "the 16 ANSI colors are the theme's terminal palette");
-    check(colors.syntax && syntax(SyntaxRole::number) == ThemeRgb{191, 235, 191} && syntax(SyntaxRole::property) == ThemeRgb{223, 175, 143}, "every syntax role keeps its own color");
+    constexpr ThemeRgb number_color{191, 235, 191};
+    constexpr ThemeRgb property_color{223, 175, 143};
+
+    check(colors.syntax && syntax(SyntaxRole::number) == number_color && syntax(SyntaxRole::property) == property_color, "every syntax role keeps its own color");
     check(colors.chrome && colors.syntax_italic == 0 && colors.syntax_bold == 0, "the chrome colors travel, and Zenburn styles no role");
 
     const auto dragon = application::configuration::terminalColors(projectTheme(themeValuesByName("kanagawa_dragon")));

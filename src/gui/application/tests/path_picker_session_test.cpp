@@ -31,7 +31,7 @@ namespace {
   using namespace telar::gui;
   using namespace telar::gui::application::tests::session_fixture;
 
-  class PathTransport : public Transport {
+  class PathTransport final : public Transport {
   public:
     void send(std::span<const Byte> message) override {
       const auto tag = static_cast<ClientTag>(message.front());

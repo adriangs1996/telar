@@ -387,19 +387,30 @@ return {api_version = 2, client = {
     const auto rendered = generation.renderElements(features::components::Slot::tab, instance, invocation, R"({"title":"Tab λ","panes":[{"program":"nvim"},{"program":"git"}]})");
     const auto& elements = rendered->elements;
     using Kind = features::components::ElementKind;
+    // The row, its stack with a tile per pane, then the row's other children in document order.
+    constexpr std::size_t element_count = 9;
+    constexpr std::size_t title_element = 5;
+    constexpr std::size_t click_element = 6;
+    constexpr std::size_t canvas_element = 7;
+    constexpr std::size_t builtin_element = 8;
+    // What the configuration gives the row and its tiles.
+    constexpr float row_width = 180;
+    constexpr float horizontal_padding = 10;
+    constexpr std::uint8_t background_alpha = 0x80;
+    constexpr std::uint16_t transition_ms = 180;
 
-    check(elements.size() == 9, "an element tree must keep every element in document order");
-    check(elements[0].kind == Kind::row && elements[0].width == 180 && elements[0].padding == telar::ds::Array<float, 4>{10, 2, 10, 2} && elements[0].background.alpha == 0x80, "boxes must read sizes, CSS-ordered padding and colors with alpha");
-    check(elements[1].kind == Kind::stack && elements[2].kind == Kind::tile && elements[2].parent == 1 && rendered->view(elements[2].key) == "nvim" && elements[2].z == -2 && elements[2].transition_ms == 180 && elements[2].easing == 1, "stacks must hold keyed tiles with their poses and transitions");
+    check(elements.size() == element_count, "an element tree must keep every element in document order");
+    check(elements[0].kind == Kind::row && elements[0].width == row_width && elements[0].padding == telar::ds::Array<float, 4>{horizontal_padding, 2, horizontal_padding, 2} && elements[0].background.alpha == background_alpha, "boxes must read sizes, CSS-ordered padding and colors with alpha");
+    check(elements[1].kind == Kind::stack && elements[2].kind == Kind::tile && elements[2].parent == 1 && rendered->view(elements[2].key) == "nvim" && elements[2].z == -2 && elements[2].transition_ms == transition_ms && elements[2].easing == 1, "stacks must hold keyed tiles with their poses and transitions");
     check(elements[4].kind == Kind::label && rendered->view(elements[4].text) == "plain 0", "a string inside a container must become a label");
-    check(rendered->view(elements[5].text) == "Tab λ" && elements[5].bold && elements[5].grow == 1, "labels must keep the item text and their style");
-    check(elements[5].action != features::components::Element::none, "action tables must become element actions");
-    const auto* action = rendered->actions.find(rendered->bindings[elements[5].action]);
+    check(rendered->view(elements[title_element].text) == "Tab λ" && elements[title_element].bold && elements[title_element].grow == 1, "labels must keep the item text and their style");
+    check(elements[title_element].action != features::components::Element::none, "action tables must become element actions");
+    const auto* action = rendered->actions.find(rendered->bindings[elements[title_element].action]);
 
     check(action != nullptr && action->description && std::holds_alternative<DefinitionActionDescription>(*action->description), "element actions must be resolved when the render finishes");
-    check(elements[6].named && elements[6].callback == 0 && rendered->callbacks == 1, "on_click functions must be kept as handlers of their instance");
-    check(elements[7].kind == Kind::canvas && elements[7].steps_count == 4 && rendered->steps[elements[7].steps_offset + 1].count == 1, "canvas operations must keep their values and optional widths");
-    check(elements[8].kind == Kind::builtin && rendered->view(elements[8].text) == "tab_cards", "built-in pieces must name a known piece");
+    check(elements[click_element].named && elements[click_element].callback == 0 && rendered->callbacks == 1, "on_click functions must be kept as handlers of their instance");
+    check(elements[canvas_element].kind == Kind::canvas && elements[canvas_element].steps_count == 4 && rendered->steps[elements[canvas_element].steps_offset + 1].count == 1, "canvas operations must keep their values and optional widths");
+    check(elements[builtin_element].kind == Kind::builtin && rendered->view(elements[builtin_element].text) == "tab_cards", "built-in pieces must name a known piece");
 
     const auto effects = generation.invokeElement(instance, 0, invocation, R"({"title":"Tab λ","panes":[]})");
 
@@ -443,7 +454,7 @@ return {api_version = 2, client = {
     check(::realpath(TELAR_GUI_EXAMPLES_DIR, directory.dataMut()) != nullptr, "the documented examples must exist");
 
     struct Sample {
-      features::components::Slot slot;
+      features::components::Slot slot{};
       std::string_view item;
     };
 
@@ -455,9 +466,10 @@ return {api_version = 2, client = {
         Sample{features::components::Slot::bottom_bar, R"({"workspace":"telar","machine":"laptop","tab_count":2,"sidebar_visible":true})"},
     };
 
+    constexpr telar::ds::Array mods{"stack-tabs", "default-tab", "default-pane-header", "default-card", "default-top-bar", "default-bottom-bar"};
     std::size_t rendered = 0;
 
-    for (const auto* const name : {"stack-tabs", "default-tab", "default-pane-header", "default-card", "default-top-bar", "default-bottom-bar"}) {
+    for (const auto* const name : mods) {
       const auto source = std::string{"return {api_version=2,client={components=require('mods."} + name + "')}}";
       application::ConfigurationGeneration generation{memory, application::ConfigurationSourceText{.source = source, .directory = directory.data(), .profile = {}}};
 
@@ -473,7 +485,7 @@ return {api_version = 2, client = {
       }
     }
 
-    check(rendered == 6, "every example mod must name a slot");
+    check(rendered == mods.size(), "every example mod must name a slot");
   }
 
   // Runs `run` with an injected budget, which it must give back whole.

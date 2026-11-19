@@ -95,21 +95,42 @@ namespace {
     telar::MemoryAdapter memory{budget};
     ds::Option<application::FoldMap<>> held{std::in_place, memory};
     auto& folds = held.getMut();
-    const ds::Array<application::FoldMap<>::Span, 3> spans{{{.first = 40, .count = 10, .shown = 4}, {.first = 10, .count = 5}, {.first = 20, .count = 3, .shown = 6}}};
+    // A fold of rows 10-14, a document that shows rows 20-22 in six display rows, and one that
+    // shows rows 40-49 in four.
+    constexpr std::uint32_t fold = 10;
+    constexpr std::uint32_t fold_rows = 5;
+    constexpr std::uint32_t longer = 20;
+    constexpr std::uint32_t longer_rows = 3;
+    constexpr std::uint32_t longer_shown = 6;
+    constexpr std::uint32_t shorter = 40;
+    constexpr std::uint32_t shorter_rows = 10;
+    constexpr std::uint32_t shorter_shown = 4;
+    // Where each document starts on screen, after the rows the ones above it hide or add.
+    constexpr std::uint32_t longer_display = longer - fold_rows;
+    constexpr std::uint32_t shorter_display = shorter - fold_rows + (longer_shown - longer_rows);
+    constexpr std::uint64_t between_documents = 30;
+    constexpr std::uint64_t total_rows = 100;
+    const ds::Array<application::FoldMap<>::Span, 3> spans{{
+        {.first = shorter, .count = shorter_rows, .shown = shorter_shown},
+        {.first = fold, .count = fold_rows},
+        {.first = longer, .count = longer_rows, .shown = longer_shown},
+    }};
 
     folds.assign(spans);
-    check(folds.display(9) == 9 && folds.display(12) == 10 && folds.display(15) == 10, "a fold still hides its rows");
-    check(folds.display(20) == 15 && folds.display(22) == 17 && folds.display(23) == 21, "a document longer than its rows pushes the rows below down");
-    check(folds.row(15) == 20 && folds.row(17) == 22 && folds.row(20) == 22 && folds.row(21) == 23, "its display rows past its rows stand for its last row");
-    check(folds.display(40) == 38 && folds.display(43) == 41 && folds.display(49) == 41 && folds.display(50) == 42 && folds.row(42) == 50, "a document shorter than its rows pulls the rows below up");
-    check(folds.shownRows(100) == 92 && folds.shownRows(22) == 17, "shown rows count each document's own");
-    check(folds.showing(16) == &folds.spans()[1] && folds.showing(30) == nullptr && folds.showing(10) == nullptr, "a display row knows the document it shows");
-    check(!folds.hides(23) && folds.hides(12) && folds.hides(46) && !folds.hides(41), "rows past what a document shows are hidden");
+    check(folds.display(fold - 1) == fold - 1 && folds.display(fold + 2) == fold && folds.display(fold + fold_rows) == fold, "a fold still hides its rows");
+    check(folds.display(longer) == longer_display && folds.display(longer + 2) == longer_display + 2 && folds.display(longer + longer_rows) == longer_display + longer_shown, "a document longer than its rows pushes the rows below down");
+    check(folds.row(longer_display) == longer && folds.row(longer_display + 2) == longer + 2 && folds.row(longer_display + longer_shown - 1) == longer + 2 && folds.row(longer_display + longer_shown) == longer + longer_rows, "its display rows past its rows stand for its last row");
+    check(folds.display(shorter) == shorter_display && folds.display(shorter + 3) == shorter_display + 3 && folds.display(shorter + shorter_rows - 1) == shorter_display + 3 && folds.display(shorter + shorter_rows) == shorter_display + shorter_shown && folds.row(shorter_display + shorter_shown) == shorter + shorter_rows, "a document shorter than its rows pulls the rows below up");
+    check(folds.shownRows(total_rows) == total_rows - fold_rows + longer_shown - longer_rows - (shorter_rows - shorter_shown) && folds.shownRows(longer + 2) == longer + 2 - fold_rows, "shown rows count each document's own");
+    check(folds.showing(longer_display + 1) == &folds.spans()[1] && folds.showing(between_documents) == nullptr && folds.showing(fold) == nullptr, "a display row knows the document it shows");
+    check(!folds.hides(longer + longer_rows) && folds.hides(fold + 2) && folds.hides(shorter + shorter_shown + 2) && !folds.hides(shorter + 1), "rows past what a document shows are hidden");
 
-    const ds::Array<application::FoldMap<>::Span, 2> covered{{{.first = 20, .count = 3, .shown = 6}, {.first = 18, .count = 10}}};
+    constexpr std::uint32_t cover = 18;
+    constexpr std::uint32_t cover_rows = 10;
+    const ds::Array<application::FoldMap<>::Span, 2> covered{{{.first = longer, .count = longer_rows, .shown = longer_shown}, {.first = cover, .count = cover_rows}}};
 
     folds.assign(covered);
-    check(folds.spans().size() == 1 && folds.spans()[0].shown == 0 && folds.spans()[0].count == 10, "a fold over a document hides it");
+    check(folds.spans().size() == 1 && folds.spans()[0].shown == 0 && folds.spans()[0].count == cover_rows, "a fold over a document hides it");
 
     held.reset();
     check(budget.liveBytes() == 0, "the folds give their memory back");

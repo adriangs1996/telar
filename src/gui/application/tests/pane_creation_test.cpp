@@ -165,10 +165,10 @@ namespace {
       std::uint16_t rows;
     };
 
-    constexpr auto cases = ds::Array<SplitCase, 2>{{
-        {.axis = ClientLayoutAxis::horizontal, .columns = 48, .rows = 40},
-        {.axis = ClientLayoutAxis::vertical, .columns = 99, .rows = 19},
-    }};
+    constexpr ds::Array cases{
+        SplitCase{.axis = ClientLayoutAxis::horizontal, .columns = 48, .rows = 40},
+        SplitCase{.axis = ClientLayoutAxis::vertical, .columns = 99, .rows = 19},
+    };
 
     for (const auto& entry : cases) {
       SystemAllocator memory;

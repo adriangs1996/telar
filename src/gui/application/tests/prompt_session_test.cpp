@@ -44,7 +44,7 @@ namespace {
   template <typename Client>
   void typeKeys(Client& client, std::string_view keys) {
     for (std::size_t index = 0; index < keys.size(); ++index) {
-      const auto outcome = prompt::key(client, 1, prompt::KeyPress{prompt::Key::character, static_cast<char32_t>(keys[index]), {}, keys.substr(index, 1)});
+      const auto outcome = prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = static_cast<char32_t>(keys[index]), .text = keys.substr(index, 1)});
 
       check(outcome == prompt::Outcome::edited, "typing must edit the line");
     }
@@ -52,7 +52,7 @@ namespace {
 
   template <typename Client>
   prompt::Outcome enter(Client& client) {
-    return prompt::key(client, 1, prompt::KeyPress{prompt::Key::enter});
+    return prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::enter});
   }
 
   PaneShell atPrompt(std::uint32_t commands = 0, std::int32_t status = 0) {
@@ -60,7 +60,13 @@ namespace {
   }
 
   PaneShell running(std::uint32_t commands, bool echo = true) {
-    return PaneShell{.pane_id = 1, .shell = IntegratedShell::zsh, .phase = ShellPhase::running, .canonical = true, .echo = echo, .signal_keys = true, .interrupt = 3, .quit = 28, .suspend = 26, .end_of_file = 4, .commands = commands};
+    // A canonical tty's ^C, ^\, ^Z and ^D.
+    constexpr Byte interrupt_key = 3;
+    constexpr Byte quit_key = 28;
+    constexpr Byte suspend_key = 26;
+    constexpr Byte end_of_file_key = 4;
+
+    return PaneShell{.pane_id = 1, .shell = IntegratedShell::zsh, .phase = ShellPhase::running, .canonical = true, .echo = echo, .signal_keys = true, .interrupt = interrupt_key, .quit = quit_key, .suspend = suspend_key, .end_of_file = end_of_file_key, .commands = commands};
   }
 
   void lineRunsCommands() {
@@ -110,13 +116,13 @@ namespace {
     before = transport.sent.size();
     client.paste(1, "git status\x1b[201~; rm -rf ~");
     check(transport.inputSince(before).empty() && prompt::line(client, 1)->text() == "git status[201~; rm -rf ~", "a paste lands in the line without its controls");
-    prompt::key(client, 1, prompt::KeyPress{prompt::Key::character, 'u', {.control = true}});
-    check(prompt::key(client, 1, prompt::KeyPress{prompt::Key::character, 'd', {.control = true}}) == prompt::Outcome::bytes && transport.inputSince(before) == "\x04", "Ctrl-D on an empty line ends the shell");
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    check(prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'd', .modifiers = {.control = true}}) == prompt::Outcome::bytes && transport.inputSince(before) == "\x04", "Ctrl-D on an empty line ends the shell");
 
     // A command queued while another runs waits for it and runs after a success.
     deliver(client, running(1));
     check(prompt::surface(client, 1) == prompt::Surface::running, "a running program queues keys");
-    check(prompt::key(client, 1, prompt::KeyPress{prompt::Key::character, 'c', {.control = true}}) == prompt::Outcome::terminal, "Ctrl-C belongs to the program");
+    check(prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'c', .modifiers = {.control = true}}) == prompt::Outcome::terminal, "Ctrl-C belongs to the program");
     before = transport.sent.size();
     typeKeys(client, "make test");
     enter(client);
@@ -134,7 +140,7 @@ namespace {
     // A password prompt gets the keys; the line only counts them.
     deliver(client, running(3, false));
     check(prompt::surface(client, 1) == prompt::Surface::secret, "echo off is a secret");
-    check(prompt::key(client, 1, prompt::KeyPress{prompt::Key::character, 'a', {}, "a"}) == prompt::Outcome::terminal, "secret keys go to the terminal");
+    check(prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'a', .text = "a"}) == prompt::Outcome::terminal, "secret keys go to the terminal");
     client.input(1, "a");
     client.input(1, "b");
     check(prompt::line(client, 1)->secretKeys() == 2, "the line counts the hidden keys");
@@ -147,21 +153,28 @@ namespace {
     check(prompt::surface(client, 1) == prompt::Surface::none, "a full-screen program keeps the terminal");
   }
 
-  // One row of two cells, the cursor at `column`.
+  // A frame of one row, the cursor at `column` on it.
+  struct Row {
+    std::uint64_t frame_id = 0;
+    std::uint16_t column = 0;
+  };
+
+  // One row of two cells.
   template <typename Client>
-  void deliverRow(Client& client, std::uint64_t frame_id, std::uint16_t column) {
+  void deliverRow(Client& client, Row row) {
     const ds::Array cells{Cell{.text = byteView("$")}, Cell{.text = byteView(" ")}};
-    ds::Array<Byte, 64> encoded{};
+    constexpr std::size_t cell_capacity = 64;
+    ds::Array<Byte, cell_capacity> encoded{};
     const ds::Array spans{FrameSpan{.start = 0, .count = 2, .cells = CellRunCodec::encode(cells, encoded.viewMut())}};
     const ds::Array<Byte, 1> flags{};
     FrameBody frame;
 
     frame.pane_id = 1;
-    frame.frame_id = frame_id;
+    frame.frame_id = row.frame_id;
     frame.cols = 2;
     frame.rows = 1;
     frame.scroll.total_rows = 1;
-    frame.cursor = {.visible = true, .x = column, .y = 0};
+    frame.cursor = {.visible = true, .x = row.column, .y = 0};
     frame.text_metadata = TextMetadata{.row_flags = flags};
     frame.spans = spans;
     deliver(client, PaneFrame{frame});
@@ -173,7 +186,7 @@ namespace {
     TestSession client{memory, transport};
 
     openFirstPane(client, transport);
-    deliverRow(client, 1, 0);
+    deliverRow(client, {.frame_id = 1, .column = 0});
     deliver(client, running(1));
     check(!prompt::hidesTerminalCursor(client, 1), "classic mode draws the terminal's cursor");
 
@@ -182,13 +195,13 @@ namespace {
     configuration.prompt.mode = PromptMode::telar;
     application::configuration::configure(client, configuration);
     check(prompt::hidesTerminalCursor(client, 1), "a quick command's cursor at a line's start, where no key lands, is not drawn");
-    prompt::key(client, 1, prompt::KeyPress{prompt::Key::enter, 0, {.alt = true}});
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::enter, .modifiers = {.alt = true}});
     check(prompt::line(client, 1)->answering() && !prompt::hidesTerminalCursor(client, 1), "answering the program, the keys land at its cursor");
-    prompt::key(client, 1, prompt::KeyPress{prompt::Key::enter, 0, {.alt = true}});
-    deliverRow(client, 2, 1);
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::enter, .modifiers = {.alt = true}});
+    deliverRow(client, {.frame_id = 2, .column = 1});
     check(!prompt::hidesTerminalCursor(client, 1), "a program that printed a question shows where its answer goes");
 
-    deliverRow(client, 3, 0);
+    deliverRow(client, {.frame_id = 3, .column = 0});
     deliver(client, PaneShell{.pane_id = 1, .shell = IntegratedShell::zsh, .phase = ShellPhase::unknown, .shell_foreground = true, .commands = 2});
     check(prompt::hidesTerminalCursor(client, 1), "between a command's end and the next prompt the editor is about to take the row");
     deliver(client, PaneShell{.pane_id = 1, .shell = IntegratedShell::zsh, .phase = ShellPhase::unknown, .shell_foreground = true});
@@ -225,7 +238,7 @@ namespace {
 
   template <typename Client>
   void tab(Client& client) {
-    prompt::key(client, 1, prompt::KeyPress{prompt::Key::tab});
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::tab});
   }
 
   // A prompt request the runtime fails, or a lost connection never answers, settles quietly
@@ -293,14 +306,17 @@ namespace {
     application::configuration::configure(client, configuration);
     deliver(client, atPrompt());
 
-    for (std::size_t index = 0; index <= 1000; ++index) {
+    // The line keeps the newest thousand commands.
+    constexpr std::size_t history_capacity = 1000;
+
+    for (std::size_t index = 0; index <= history_capacity; ++index) {
       typeKeys(client, "c" + std::to_string(index));
       check(enter(client) == prompt::Outcome::run, "Enter runs the command");
     }
 
     const auto history = prompt::history(client);
 
-    check(history.size() == 1000 && history.front() == "c1000" && history.back() == "c1", "the newest thousand commands are kept, newest first");
+    check(history.size() == history_capacity && history.front() == "c1000" && history.back() == "c1", "the newest thousand commands are kept, newest first");
   }
 
   // A pane that leaves the model takes its prompt and the requests it made with it.
@@ -335,6 +351,165 @@ namespace {
     check(deliver(client, CompletionWords{.request_id = checked.request_id, .words = words}) == application::Change::none, "an answer for a pane that left finds nothing waiting");
   }
 
+  // The digest the runtime gives git's spec.
+  constexpr std::uint64_t git_spec_digest = 7;
+
+  // Tab completes from a command's spec, and an alias from the spec of the command it stands for.
+  template <typename Client>
+  void completesFromSpecs(Client& client, Transport& transport) {
+    // The spec of a command comes from the runtime, asked the first time Tab needs it; the Tab
+    // completes once it arrives.
+    typeKeys(client, "git sw");
+    tab(client);
+    const auto asked = transport.last<RequestCommandSpec>();
+
+    check(asked.command == "git" && asked.pane_id == 1 && asked.known_digest == 0 && prompt::line(client, 1)->text() == "git sw", "Tab asks the runtime for the command's spec and waits");
+    constexpr std::string_view git_spec = R"(git = [ command ] ;
+command = "switch" : "Switch branches" , { @branch } | "status" : "Show the working tree status" | "stash" : "Stash the changes" ;)";
+
+    check(deliver(client, CommandSpec{.request_id = asked.request_id, .command = "git", .state = CommandSpecState::available, .digest = git_spec_digest, .source = git_spec}) == application::Change::terminal, "the spec completes the waiting Tab");
+    check(prompt::line(client, 1)->text() == "git switch ", "one choice from the spec is written with a space");
+
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "git s");
+    tab(client);
+    const auto& menu = prompt::line(client, 1)->menu();
+
+    check(menu && menu->choices.size() > 1 && menu->choices[0].text.view().starts_with('s'), "several choices open the menu");
+    check(!menu->choices[0].description.empty(), "choices carry the spec's description");
+    const auto second = menu->choices[1].text.clone();
+
+    tab(client);
+    enter(client);
+    const auto taken = prompt::line(client, 1)->text();
+
+    check(taken.starts_with("git ") && taken.substr(4) == std::format("{} ", second) && !prompt::line(client, 1)->menu(), "Tab moves through the menu and Enter takes the choice");
+
+    // An alias completes as the words it stands for, with its command's spec.
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "gs st");
+    tab(client);
+    const auto alias = transport.last<RequestCommandSpec>();
+
+    check(alias.command == "gs" && alias.known_digest == 0, "an alias's spec is asked for under its name");
+    deliver(client, CommandSpec{.request_id = alias.request_id, .command = "gs", .state = CommandSpecState::unchanged, .digest = git_spec_digest, .source = {}, .expansion = "git"});
+    const auto& aliased = prompt::line(client, 1)->menu();
+
+    check(aliased && aliased->choices.size() == 2 && std::ranges::any_of(aliased->choices, [](const prompt::Choice& choice) {
+      return choice.text == "stash";
+    }) && std::ranges::any_of(aliased->choices, [](const prompt::Choice& choice) {
+      return choice.text == "status";
+    }),
+        "the alias completes with git's spec");
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::escape});
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "gsw fe");
+    tab(client);
+    const auto several = transport.last<RequestCommandSpec>();
+
+    deliver(client, CommandSpec{.request_id = several.request_id, .command = "gsw", .state = CommandSpecState::unchanged, .digest = git_spec_digest, .source = {}, .expansion = "git switch"});
+    check(transport.last<CompleteWords>().provider == CompletionProvider::branch, "an alias of several words completes after all of them");
+    deliver(client, CompletionWords{.request_id = transport.last<CompleteWords>().request_id, .words = {}});
+  }
+
+  // Tab completes files and commands from the runtime, and typing narrows what it offered.
+  template <typename Client>
+  void completesFromRuntime(Client& client, Transport& transport) {
+    // A command without a spec completes files from the runtime, one directory at a time.
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "cat sr");
+    tab(client);
+    const auto cat = transport.last<RequestCommandSpec>();
+
+    check(cat.command == "cat", "a command's spec is asked for once");
+    deliver(client, CommandSpec{.request_id = cat.request_id, .command = "cat", .state = CommandSpecState::unavailable, .digest = 0, .source = {}});
+    const auto find = transport.last<FindPaths>();
+
+    check(find.root.starts_with('/') && find.query == "sr" && prompt::line(client, 1)->pending(find.request_id), "paths are asked from the runtime");
+    const ds::Array matches{PathMatch{.path = "src/", .kind = PathKind::directory}, PathMatch{.path = "src/main.cpp", .kind = PathKind::file}, PathMatch{.path = "README", .kind = PathKind::file}};
+
+    check(deliver(client, PathResults{.request_id = find.request_id, .root = find.root, .complete = true, .matches = matches}) == application::Change::terminal, "the answer repaints the line");
+    check(prompt::line(client, 1)->text() == "cat src/", "the only child that matches is written, a directory without a space");
+
+    typeKeys(client, "my file");
+    check(prompt::line(client, 1)->text() == "cat src/my file", "typing after a completion edits as usual");
+
+    // A command's name comes from the shell's PATH, through the runtime.
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "tel");
+    tab(client);
+    const auto commands = transport.last<CompleteWords>();
+
+    check(commands.provider == CompletionProvider::command && commands.prefix == "tel" && commands.pane_id == 1, "the runtime is asked for commands");
+    const ds::Array found{CompletionWord{.text = "telar"}, CompletionWord{.text = "telnet"}};
+
+    deliver(client, CompletionWords{.request_id = commands.request_id, .words = found});
+    check(prompt::line(client, 1)->menu() && prompt::line(client, 1)->menu()->choices.size() == 2, "the runtime's commands fill the menu");
+
+    // Typing with the menu open narrows it; a single choice left waits for the user.
+    const auto asked_words = transport.count(ClientTag::complete_words);
+
+    typeKeys(client, "a");
+    check(prompt::line(client, 1)->text() == "tela" && prompt::line(client, 1)->menu() && prompt::line(client, 1)->menu()->choices.size() == 1 && prompt::line(client, 1)->menu()->choices[0].text == "telar", "typing narrows the menu");
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::backspace});
+    check(prompt::line(client, 1)->menu() && prompt::line(client, 1)->menu()->choices.size() == 2 && transport.count(ClientTag::complete_words) == asked_words, "erasing back to the word it offered widens the menu without asking");
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::backspace});
+    const auto wider = transport.last<CompleteWords>();
+
+    check(transport.count(ClientTag::complete_words) == asked_words + 1 && wider.prefix == "te", "erasing past it asks again");
+    const ds::Array widened{CompletionWord{.text = "tee"}};
+
+    deliver(client, CompletionWords{.request_id = wider.request_id, .words = widened});
+    check(prompt::line(client, 1)->text() == "te" && prompt::line(client, 1)->menu() && prompt::line(client, 1)->menu()->choices.size() == 1, "a single answer to a refined menu is not written");
+    typeKeys(client, "x");
+    check(!prompt::line(client, 1)->menu() && prompt::line(client, 1)->text() == "tex", "nothing left closes the menu");
+
+    // A list the runtime cut asks again as typing narrows it.
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "t");
+    tab(client);
+    const auto cut = transport.last<CompleteWords>();
+
+    deliver(client, CompletionWords{.request_id = cut.request_id, .truncated = true, .words = found});
+    typeKeys(client, "e");
+    check(transport.last<CompleteWords>().prefix == "te" && transport.last<CompleteWords>().request_id != cut.request_id, "a cut list asks again");
+    deliver(client, CompletionWords{.request_id = transport.last<CompleteWords>().request_id, .words = found});
+    typeKeys(client, "l ");
+    check(!prompt::line(client, 1)->menu() && prompt::line(client, 1)->text() == "tel ", "a space leaves the word and closes the menu");
+  }
+
+  // A spec's provider completes branches, and the history suggests whole commands.
+  template <typename Client>
+  void completesFromProviders(Client& client, Transport& transport) {
+    // A spec's provider: git switch asks for branches.
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "git switch fe");
+    tab(client);
+    const auto branches = transport.last<CompleteWords>();
+
+    check(branches.provider == CompletionProvider::branch && branches.prefix == "fe", "branches are asked for where the spec expects one");
+    const ds::Array branch{CompletionWord{.text = "feature/island", .description = ""}};
+
+    deliver(client, CompletionWords{.request_id = branches.request_id, .words = branch});
+    check(prompt::line(client, 1)->text() == "git switch feature/island ", "the only branch is written");
+
+    // Suggestions come from the history, newest first, and from what the line just sent.
+    const auto query = transport.last<QueryHistory>();
+
+    check(query.distinct && query.author == HistoryAuthorFilter::human, "the line loads the commands people typed");
+    const ds::Array entries{HistoryEntry{.id = 2, .pane_id = 1, .command = "make test-runtime", .cwd = "/"}, HistoryEntry{.id = 1, .pane_id = 1, .command = "make install", .cwd = "/"}};
+
+    check(deliver(client, HistoryResults{.request_id = query.request_id, .snapshot_id = 1, .entries = entries}) == application::Change::none, "the editor's history does not touch the history panel");
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "make t");
+    check(prompt::suggestion(client, 1) == "est-runtime", "the newest command that extends the line is suggested");
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::right});
+    check(prompt::line(client, 1)->text() == "make test-runtime", "Right takes the suggestion");
+    enter(client);
+    typeKeys(client, "mak");
+    check(prompt::suggestion(client, 1) == "e test-runtime", "a command sent from the line is suggested next");
+  }
+
   void lineCompletes() {
     SystemAllocator memory;
     Transport transport;
@@ -354,149 +529,9 @@ namespace {
     application::configuration::configure(client, configuration);
     deliver(client, atPrompt());
 
-    // The spec of a command comes from the runtime, asked the first time Tab needs it; the Tab
-    // completes once it arrives.
-    typeKeys(client, "git sw");
-    tab(client);
-    const auto asked = transport.last<RequestCommandSpec>();
-
-    check(asked.command == "git" && asked.pane_id == 1 && asked.known_digest == 0 && prompt::line(client, 1)->text() == "git sw", "Tab asks the runtime for the command's spec and waits");
-    constexpr std::string_view git_spec = R"(git = [ command ] ;
-command = "switch" : "Switch branches" , { @branch } | "status" : "Show the working tree status" | "stash" : "Stash the changes" ;)";
-
-    check(deliver(client, CommandSpec{.request_id = asked.request_id, .command = "git", .state = CommandSpecState::available, .digest = 7, .source = git_spec}) == application::Change::terminal, "the spec completes the waiting Tab");
-    check(prompt::line(client, 1)->text() == "git switch ", "one choice from the spec is written with a space");
-
-    prompt::key(client, 1, prompt::KeyPress{prompt::Key::character, 'u', {.control = true}});
-    typeKeys(client, "git s");
-    tab(client);
-    const auto& menu = prompt::line(client, 1)->menu();
-
-    check(menu && menu->choices.size() > 1 && menu->choices[0].text.view().starts_with('s'), "several choices open the menu");
-    check(!menu->choices[0].description.empty(), "choices carry the spec's description");
-    const auto second = menu->choices[1].text.clone();
-
-    tab(client);
-    enter(client);
-    const auto taken = prompt::line(client, 1)->text();
-
-    check(taken.starts_with("git ") && taken.substr(4) == std::format("{} ", second) && !prompt::line(client, 1)->menu(), "Tab moves through the menu and Enter takes the choice");
-
-    // An alias completes as the words it stands for, with its command's spec.
-    prompt::key(client, 1, prompt::KeyPress{prompt::Key::character, 'u', {.control = true}});
-    typeKeys(client, "gs st");
-    tab(client);
-    const auto alias = transport.last<RequestCommandSpec>();
-
-    check(alias.command == "gs" && alias.known_digest == 0, "an alias's spec is asked for under its name");
-    deliver(client, CommandSpec{.request_id = alias.request_id, .command = "gs", .state = CommandSpecState::unchanged, .digest = 7, .source = {}, .expansion = "git"});
-    const auto& aliased = prompt::line(client, 1)->menu();
-
-    check(aliased && aliased->choices.size() == 2 && std::ranges::any_of(aliased->choices, [](const prompt::Choice& choice) {
-      return choice.text == "stash";
-    }) && std::ranges::any_of(aliased->choices, [](const prompt::Choice& choice) {
-      return choice.text == "status";
-    }),
-        "the alias completes with git's spec");
-    prompt::key(client, 1, prompt::KeyPress{prompt::Key::escape});
-    prompt::key(client, 1, prompt::KeyPress{prompt::Key::character, 'u', {.control = true}});
-    typeKeys(client, "gsw fe");
-    tab(client);
-    const auto several = transport.last<RequestCommandSpec>();
-
-    deliver(client, CommandSpec{.request_id = several.request_id, .command = "gsw", .state = CommandSpecState::unchanged, .digest = 7, .source = {}, .expansion = "git switch"});
-    check(transport.last<CompleteWords>().provider == CompletionProvider::branch, "an alias of several words completes after all of them");
-    deliver(client, CompletionWords{.request_id = transport.last<CompleteWords>().request_id, .words = {}});
-
-    // A command without a spec completes files from the runtime, one directory at a time.
-    prompt::key(client, 1, prompt::KeyPress{prompt::Key::character, 'u', {.control = true}});
-    typeKeys(client, "cat sr");
-    tab(client);
-    const auto cat = transport.last<RequestCommandSpec>();
-
-    check(cat.command == "cat", "a command's spec is asked for once");
-    deliver(client, CommandSpec{.request_id = cat.request_id, .command = "cat", .state = CommandSpecState::unavailable, .digest = 0, .source = {}});
-    const auto find = transport.last<FindPaths>();
-
-    check(find.root.starts_with('/') && find.query == "sr" && prompt::line(client, 1)->pending(find.request_id), "paths are asked from the runtime");
-    const ds::Array matches{PathMatch{.path = "src/", .kind = PathKind::directory}, PathMatch{.path = "src/main.cpp", .kind = PathKind::file}, PathMatch{.path = "README", .kind = PathKind::file}};
-
-    check(deliver(client, PathResults{.request_id = find.request_id, .root = find.root, .complete = true, .matches = matches}) == application::Change::terminal, "the answer repaints the line");
-    check(prompt::line(client, 1)->text() == "cat src/", "the only child that matches is written, a directory without a space");
-
-    typeKeys(client, "my file");
-    check(prompt::line(client, 1)->text() == "cat src/my file", "typing after a completion edits as usual");
-
-    // A command's name comes from the shell's PATH, through the runtime.
-    prompt::key(client, 1, prompt::KeyPress{prompt::Key::character, 'u', {.control = true}});
-    typeKeys(client, "tel");
-    tab(client);
-    const auto commands = transport.last<CompleteWords>();
-
-    check(commands.provider == CompletionProvider::command && commands.prefix == "tel" && commands.pane_id == 1, "the runtime is asked for commands");
-    const ds::Array found{CompletionWord{.text = "telar"}, CompletionWord{.text = "telnet"}};
-
-    deliver(client, CompletionWords{.request_id = commands.request_id, .words = found});
-    check(prompt::line(client, 1)->menu() && prompt::line(client, 1)->menu()->choices.size() == 2, "the runtime's commands fill the menu");
-
-    // Typing with the menu open narrows it; a single choice left waits for the user.
-    const auto asked_words = transport.count(ClientTag::complete_words);
-
-    typeKeys(client, "a");
-    check(prompt::line(client, 1)->text() == "tela" && prompt::line(client, 1)->menu() && prompt::line(client, 1)->menu()->choices.size() == 1 && prompt::line(client, 1)->menu()->choices[0].text == "telar", "typing narrows the menu");
-    prompt::key(client, 1, prompt::KeyPress{prompt::Key::backspace});
-    check(prompt::line(client, 1)->menu() && prompt::line(client, 1)->menu()->choices.size() == 2 && transport.count(ClientTag::complete_words) == asked_words, "erasing back to the word it offered widens the menu without asking");
-    prompt::key(client, 1, prompt::KeyPress{prompt::Key::backspace});
-    const auto wider = transport.last<CompleteWords>();
-
-    check(transport.count(ClientTag::complete_words) == asked_words + 1 && wider.prefix == "te", "erasing past it asks again");
-    const ds::Array widened{CompletionWord{.text = "tee"}};
-
-    deliver(client, CompletionWords{.request_id = wider.request_id, .words = widened});
-    check(prompt::line(client, 1)->text() == "te" && prompt::line(client, 1)->menu() && prompt::line(client, 1)->menu()->choices.size() == 1, "a single answer to a refined menu is not written");
-    typeKeys(client, "x");
-    check(!prompt::line(client, 1)->menu() && prompt::line(client, 1)->text() == "tex", "nothing left closes the menu");
-
-    // A list the runtime cut asks again as typing narrows it.
-    prompt::key(client, 1, prompt::KeyPress{prompt::Key::character, 'u', {.control = true}});
-    typeKeys(client, "t");
-    tab(client);
-    const auto cut = transport.last<CompleteWords>();
-
-    deliver(client, CompletionWords{.request_id = cut.request_id, .truncated = true, .words = found});
-    typeKeys(client, "e");
-    check(transport.last<CompleteWords>().prefix == "te" && transport.last<CompleteWords>().request_id != cut.request_id, "a cut list asks again");
-    deliver(client, CompletionWords{.request_id = transport.last<CompleteWords>().request_id, .words = found});
-    typeKeys(client, "l ");
-    check(!prompt::line(client, 1)->menu() && prompt::line(client, 1)->text() == "tel ", "a space leaves the word and closes the menu");
-
-    // A spec's provider: git switch asks for branches.
-    prompt::key(client, 1, prompt::KeyPress{prompt::Key::character, 'u', {.control = true}});
-    typeKeys(client, "git switch fe");
-    tab(client);
-    const auto branches = transport.last<CompleteWords>();
-
-    check(branches.provider == CompletionProvider::branch && branches.prefix == "fe", "branches are asked for where the spec expects one");
-    const ds::Array branch{CompletionWord{.text = "feature/island", .description = ""}};
-
-    deliver(client, CompletionWords{.request_id = branches.request_id, .words = branch});
-    check(prompt::line(client, 1)->text() == "git switch feature/island ", "the only branch is written");
-
-    // Suggestions come from the history, newest first, and from what the line just sent.
-    const auto query = transport.last<QueryHistory>();
-
-    check(query.distinct && query.author == HistoryAuthorFilter::human, "the line loads the commands people typed");
-    const ds::Array entries{HistoryEntry{.id = 2, .pane_id = 1, .command = "make test-runtime", .cwd = "/"}, HistoryEntry{.id = 1, .pane_id = 1, .command = "make install", .cwd = "/"}};
-
-    check(deliver(client, HistoryResults{.request_id = query.request_id, .snapshot_id = 1, .entries = entries}) == application::Change::none, "the editor's history does not touch the history panel");
-    prompt::key(client, 1, prompt::KeyPress{prompt::Key::character, 'u', {.control = true}});
-    typeKeys(client, "make t");
-    check(prompt::suggestion(client, 1) == "est-runtime", "the newest command that extends the line is suggested");
-    prompt::key(client, 1, prompt::KeyPress{prompt::Key::right});
-    check(prompt::line(client, 1)->text() == "make test-runtime", "Right takes the suggestion");
-    enter(client);
-    typeKeys(client, "mak");
-    check(prompt::suggestion(client, 1) == "e test-runtime", "a command sent from the line is suggested next");
+    completesFromSpecs(client, transport);
+    completesFromRuntime(client, transport);
+    completesFromProviders(client, transport);
 
     // After a command the pane asks again, with the digest of the spec it holds: an unchanged
     // spec is not sent twice.
@@ -504,29 +539,29 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
 
     next.commands = 1;
     deliver(client, next);
-    prompt::key(client, 1, prompt::KeyPress{prompt::Key::character, 'u', {.control = true}});
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
     typeKeys(client, "git sta");
     tab(client);
     const auto again = transport.last<RequestCommandSpec>();
 
-    check(again.command == "git" && again.known_digest == 7, "the pane asks again with the digest it holds");
-    deliver(client, CommandSpec{.request_id = again.request_id, .command = "git", .state = CommandSpecState::unchanged, .digest = 7, .source = {}});
+    check(again.command == "git" && again.known_digest == git_spec_digest, "the pane asks again with the digest it holds");
+    deliver(client, CommandSpec{.request_id = again.request_id, .command = "git", .state = CommandSpecState::unchanged, .digest = git_spec_digest, .source = {}});
     check(prompt::line(client, 1)->text() == "git stash " || (prompt::line(client, 1)->menu() && prompt::line(client, 1)->menu()->choices.size() == 2), "the spec it held completes");
-    prompt::key(client, 1, prompt::KeyPress{prompt::Key::escape});
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::escape});
 
     // A shell ssh reached: its files and commands are not this host's to offer.
     auto remote = atPrompt();
 
     remote.remote = true;
     deliver(client, remote);
-    prompt::key(client, 1, prompt::KeyPress{prompt::Key::character, 'u', {.control = true}});
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
     const auto paths = transport.count(ClientTag::find_paths);
     const auto words = transport.count(ClientTag::complete_words);
     const auto specs = transport.count(ClientTag::request_command_spec);
 
     typeKeys(client, "cat sr");
     tab(client);
-    prompt::key(client, 1, prompt::KeyPress{prompt::Key::character, 'u', {.control = true}});
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
     typeKeys(client, "tel");
     tab(client);
     check(transport.count(ClientTag::find_paths) == paths && transport.count(ClientTag::complete_words) == words && transport.count(ClientTag::request_command_spec) == specs, "a remote shell asks the runtime for nothing");
@@ -562,14 +597,24 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     deliver(client, atPrompt());
 
     typeKeys(client, "echo hi");
-    prompt::key(client, 1, prompt::KeyPress{prompt::Key::escape});
-    prompt::key(client, 1, prompt::KeyPress{prompt::Key::character, 'H', {}, "H"});
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::escape});
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'H', .text = "H"});
     check(prompt::line(client, 1)->cursor() == 0 && prompt::line(client, 1)->text() == "echo hi", "a binding in normal mode replaces vim's own key");
-    prompt::key(client, 1, prompt::KeyPress{prompt::Key::character, 'i', {}, "i"});
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'i', .text = "i"});
     const auto before = transport.sent.size();
 
-    check(prompt::key(client, 1, prompt::KeyPress{prompt::Key::character, 'j', {.control = true}}) == prompt::Outcome::run, "a bound key runs its action");
+    check(prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'j', .modifiers = {.control = true}}) == prompt::Outcome::run, "a bound key runs its action");
     check(transport.commandsSince(before) == std::vector<std::string>{"echo hi"}, "and submits like Enter");
+  }
+
+  template <typename Client>
+  void control(Client& client, char key) {
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = static_cast<char32_t>(key), .modifiers = {.control = true}});
+  }
+
+  template <typename Client>
+  void press(Client& client, char key) {
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = static_cast<char32_t>(key)});
   }
 
   // The command blocks, from the editor: stepped through from vim's normal mode, their output
@@ -599,74 +644,75 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     };
 
     deliver(client, PaneBlocks{.pane_id = 1, .blocks = blocks});
-    const auto control = [&](char key) {
-      prompt::key(client, 1, prompt::KeyPress{prompt::Key::character, static_cast<char32_t>(key), {.control = true}});
-    };
-
-    const auto press = [&](char key) {
-      prompt::key(client, 1, prompt::KeyPress{prompt::Key::character, static_cast<char32_t>(key)});
-    };
 
     // Insert mode types: Ctrl-U is the editor's there.
-    control('u');
+    control(client, 'u');
     check(!client.selectedBlock(1), "insert mode leaves the blocks alone");
-    prompt::key(client, 1, prompt::KeyPress{prompt::Key::escape});
-    control('u');
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::escape});
+    control(client, 'u');
     check(client.selectedBlock(1) == std::size_t{2} && client.takeBlockChange(), "Ctrl-U selects the last block");
-    control('u');
-    press('[');
-    press('[');
+    control(client, 'u');
+    press(client, '[');
+    press(client, '[');
     check(client.selectedBlock(1) == std::size_t{0}, "Ctrl-U and [[ step back");
-    press(']');
-    press(']');
+    press(client, ']');
+    press(client, ']');
     check(client.selectedBlock(1) == std::size_t{1}, "]] steps forward");
 
     // Y copies the block's whole output, from under its command to the next block's prompt.
-    press('Y');
+    constexpr std::uint32_t output_first = 6;
+    constexpr std::uint32_t output_last = 9;
+
+    press(client, 'Y');
     const auto copied = transport.last<CopySelection>();
 
-    check(copied.start_y == 6 && copied.end_y == 9 && copied.linewise, "Y copies the block's output");
-    press('y');
-    press('c');
+    check(copied.start_y == output_first && copied.end_y == output_last && copied.linewise, "Y copies the block's output");
+    press(client, 'y');
+    press(client, 'c');
     check(client.takeClipboardWrite() && std::string_view{client.clipboard()} == "make test", "yc copies its command");
 
     // v selects its output in copy mode, and the editor stays in place of the prompt.
-    press('v');
+    press(client, 'v');
     const auto& copy = application::terminal::copy_mode::view(client).state();
 
-    check(copy && copy->pane_id == 1 && copy->anchor && copy->anchor->y == 6 && copy->cursor.y == 6, "v starts copy mode on the block's output");
+    check(copy && copy->pane_id == 1 && copy->anchor && copy->anchor->y == output_first && copy->cursor.y == output_first, "v starts copy mode on the block's output");
     check(prompt::surface(client, 1) == prompt::Surface::editor, "copy mode keeps telar's editor");
     application::terminal::copy_mode::leave(client);
     check(client.selectedBlock(1) == std::size_t{1}, "leaving copy mode goes back to the block");
 
     // Stepping past the last block, or A, goes back to the prompt; A in insert mode.
-    control('d');
-    control('d');
+    control(client, 'd');
+    control(client, 'd');
     check(!client.selectedBlock(1), "past the last block is the live prompt");
-    control('u');
-    press('A');
+    control(client, 'u');
+    press(client, 'A');
     check(!client.selectedBlock(1) && prompt::line(client, 1)->mode() == prompt::Mode::insert, "A goes back to the prompt to type");
 
     // Without vim's normal mode, prefix+[ is the way in.
     configuration.prompt.keymap = PromptKeymap::emacs;
     application::configuration::configure(client, configuration);
     check(client.enterBlocks() && client.selectedBlock(1) == std::size_t{2}, "prefix+[ selects the last block");
-    prompt::key(client, 1, prompt::KeyPress{prompt::Key::escape});
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::escape});
     check(!client.selectedBlock(1), "Esc goes back to the prompt");
   }
 
-  // On a selected block the view moves, folds, jumps and searches the block's output.
-  void lineBlockMotions() {
-    SystemAllocator memory;
-    Transport transport;
-    TestSession client{memory, transport};
+  // The scrollback lineBlockMotions steps through: a hundred rows, with blocks at rows 10, 40
+  // (the failed one) and 70.
+  constexpr std::uint32_t motions_rows = 100;
+  constexpr std::uint32_t motions_live_top = motions_rows - 1;
+  constexpr std::uint32_t failed_block_row = 40;
+  constexpr std::uint32_t last_block_row = 70;
+
+  template <typename Client>
+  void openBlocksAtLiveEnd(Client& client, Transport& transport) {
+    constexpr std::uint32_t first_block_row = 10;
 
     openFirstPane(client, transport);
     FrameBody frame;
 
     frame.pane_id = 1;
     frame.frame_id = 1;
-    frame.scroll = {.total_rows = 100, .offset = 99};
+    frame.scroll = {.total_rows = motions_rows, .offset = motions_live_top};
     deliverSingleCell(client, frame);
     deliver(client, PaneScrollback{.pane_id = 1, .generation = 1, .trimmed = 0});
     auto configuration = client.configuration;
@@ -676,92 +722,113 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     application::configuration::configure(client, configuration);
     deliver(client, atPrompt(3));
     const ds::Array blocks{
-        CommandBlock{.row = 10, .rows = 1, .state = CommandBlockState::succeeded, .command = "ls"},
-        CommandBlock{.row = 40, .rows = 1, .state = CommandBlockState::failed, .status = 1, .command = "make"},
-        CommandBlock{.row = 70, .rows = 1, .state = CommandBlockState::succeeded, .command = "git log"},
+        CommandBlock{.row = first_block_row, .rows = 1, .state = CommandBlockState::succeeded, .command = "ls"},
+        CommandBlock{.row = failed_block_row, .rows = 1, .state = CommandBlockState::failed, .status = 1, .command = "make"},
+        CommandBlock{.row = last_block_row, .rows = 1, .state = CommandBlockState::succeeded, .command = "git log"},
     };
 
     deliver(client, PaneBlocks{.pane_id = 1, .blocks = blocks});
-    const auto control = [&](char key) {
-      prompt::key(client, 1, prompt::KeyPress{prompt::Key::character, static_cast<char32_t>(key), {.control = true}});
-    };
+  }
 
-    const auto press = [&](char key) {
-      prompt::key(client, 1, prompt::KeyPress{prompt::Key::character, static_cast<char32_t>(key)});
-    };
+  template <typename Client>
+  auto top(const Client& client) {
+    return client.findPane(1)->screen.scroll().offset;
+  }
 
-    const auto top = [&] {
-      return client.findPane(1)->screen.scroll().offset;
-    };
+  // Selecting, jumping between and scrolling around the blocks.
+  template <typename Client>
+  void stepsThroughBlocks(Client& client) {
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::escape});
+    control(client, 'u');
+    check(client.selectedBlock(1) == std::size_t{2} && top(client) == last_block_row - 1, "Ctrl-U selects the last block above its prompt");
+    press(client, '[');
+    press(client, 'f');
+    check(client.selectedBlock(1) == std::size_t{1} && top(client) == failed_block_row - 1, "[f steps to the failed block");
+    control(client, 'o');
+    check(top(client) == last_block_row - 1, "Ctrl-O goes back to where the jump left");
+    control(client, 'i');
+    check(top(client) == failed_block_row - 1, "Ctrl-I comes forward again");
+    press(client, 'j');
+    check(top(client) == failed_block_row, "j moves the view down a row");
+    press(client, 'k');
+    check(top(client) == failed_block_row - 1, "k moves it up a row");
+    press(client, 'g');
+    press(client, 'g');
+    check(top(client) == 0 && client.selectedBlock(1) == std::size_t{1}, "gg goes to the top, keeping the block");
+    press(client, 'z');
+    press(client, 't');
+    check(top(client) == failed_block_row, "zt puts the block's separator at the top");
+  }
 
-    prompt::key(client, 1, prompt::KeyPress{prompt::Key::escape});
-    control('u');
-    check(client.selectedBlock(1) == std::size_t{2} && top() == 69, "Ctrl-U selects the last block above its prompt");
-    press('[');
-    press('f');
-    check(client.selectedBlock(1) == std::size_t{1} && top() == 39, "[f steps to the failed block");
-    control('o');
-    check(top() == 69, "Ctrl-O goes back to where the jump left");
-    control('i');
-    check(top() == 39, "Ctrl-I comes forward again");
-    press('j');
-    check(top() == 40, "j moves the view down a row");
-    press('k');
-    check(top() == 39, "k moves it up a row");
-    press('g');
-    press('g');
-    check(top() == 0 && client.selectedBlock(1) == std::size_t{1}, "gg goes to the top, keeping the block");
-    press('z');
-    press('t');
-    check(top() == 40, "zt puts the block's separator at the top");
-
-    press('z');
-    press('c');
-    check(client.folded(1, 1) && client.findPane(1)->folds.hides(41) && !client.findPane(1)->folds.hides(70), "zc folds the block's output");
-    press('z');
-    press('o');
+  template <typename Client>
+  void foldsBlocks(Client& client) {
+    press(client, 'z');
+    press(client, 'c');
+    check(client.folded(1, 1) && client.findPane(1)->folds.hides(failed_block_row + 1) && !client.findPane(1)->folds.hides(last_block_row), "zc folds the block's output");
+    press(client, 'z');
+    press(client, 'o');
     check(!client.folded(1, 1), "zo unfolds it");
-    press('z');
-    press('M');
+    press(client, 'z');
+    press(client, 'M');
     check(client.folded(1, 0) && client.folded(1, 1) && client.folded(1, 2), "zM folds every block that is not running");
-    press('z');
-    press('R');
+    press(client, 'z');
+    press(client, 'R');
     check(!client.folded(1, 0) && !client.folded(1, 2), "zR unfolds them all");
+  }
 
-    press('/');
+  template <typename Client>
+  void searchesBlockOutput(Client& client, Transport& transport) {
+    constexpr std::uint32_t output_first = failed_block_row + 1;
+    constexpr std::uint32_t output_last = last_block_row - 1;
+
+    press(client, '/');
     const auto& copy = application::terminal::copy_mode::view(client).state();
 
-    check(copy && copy->cursor.y == 41 && application::terminal::copy_mode::takeSearchRequest(client) && application::terminal::copy_mode::searchBlock(client) == std::size_t{1}, "/ starts a search of the block's output");
+    check(copy && copy->cursor.y == output_first && application::terminal::copy_mode::takeSearchRequest(client) && application::terminal::copy_mode::searchBlock(client) == std::size_t{1}, "/ starts a search of the block's output");
     application::terminal::copy_mode::search(client, "error");
     const auto scoped = transport.last<SearchPaneRows>();
 
-    check(scoped.first_row == 41 && scoped.last_row == 69, "the search reads only the block's output");
+    check(scoped.first_row == output_first && scoped.last_row == output_last, "the search reads only the block's output");
     // Typed a letter at a time: the matches the runtime found, the cursor on the first after
     // where the search began, n and N between them, and back to the start with nothing to find.
-    const ds::Array found{PaneMatch{.x = 2, .y = 50, .len = 5}, PaneMatch{.x = 0, .y = 60, .len = 5}};
+    constexpr std::uint32_t first_match_row = 50;
+    constexpr std::uint32_t second_match_row = 60;
+    const ds::Array found{PaneMatch{.x = 2, .y = first_match_row, .len = 5}, PaneMatch{.x = 0, .y = second_match_row, .len = 5}};
 
     deliver(client, PaneMatches{.request_id = scoped.request_id, .pane_id = 1, .matches = found});
-    check(application::terminal::copy_mode::searchState(client).count == 2 && application::terminal::copy_mode::searchState(client).index == 0 && application::terminal::copy_mode::view(client).state()->cursor.y == 50, "the first match after where the search began is the current one");
+    check(application::terminal::copy_mode::searchState(client).count == 2 && application::terminal::copy_mode::searchState(client).index == 0 && application::terminal::copy_mode::view(client).state()->cursor.y == first_match_row, "the first match after where the search began is the current one");
     application::terminal::copy_mode::stepMatch(client, true);
-    check(application::terminal::copy_mode::searchState(client).index == 1 && application::terminal::copy_mode::view(client).state()->cursor.y == 60, "the next match is a step away");
+    check(application::terminal::copy_mode::searchState(client).index == 1 && application::terminal::copy_mode::view(client).state()->cursor.y == second_match_row, "the next match is a step away");
     application::terminal::copy_mode::search(client, "");
-    check(application::terminal::copy_mode::searchState(client).count == 0 && application::terminal::copy_mode::view(client).state()->cursor.y == 41, "an empty query finds nothing and goes back where the search began");
+    check(application::terminal::copy_mode::searchState(client).count == 0 && application::terminal::copy_mode::view(client).state()->cursor.y == output_first, "an empty query finds nothing and goes back where the search began");
     application::terminal::copy_mode::toggleSearchScope(client);
     application::terminal::copy_mode::search(client, "error");
     check(!application::terminal::copy_mode::searchBlock(client) && transport.last<SearchPane>().needle == "error", "Tab widens it to the whole scrollback");
     application::terminal::copy_mode::leave(client);
     check(!application::terminal::copy_mode::searchScopes(client), "leaving copy mode forgets the search's command");
+  }
+
+  // On a selected block the view moves, folds, jumps and searches the block's output.
+  void lineBlockMotions() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openBlocksAtLiveEnd(client, transport);
+    stepsThroughBlocks(client);
+    foldsBlocks(client);
+    searchesBlockOutput(client, transport);
 
     // A view that draws its own rows says where its top is; the keys move from there.
     constexpr std::uint64_t shown = 20;
 
     client.findPaneMut(1)->shown_top = shown;
-    press('j');
-    check(top() == shown + 1, "j moves from the top the view shows, not the runtime's view");
+    press(client, 'j');
+    check(top(client) == shown + 1, "j moves from the top the view shows, not the runtime's view");
     client.findPaneMut(1)->shown_top.reset();
 
-    press('G');
-    check(!client.selectedBlock(1) && top() == 99, "G goes back to the live end");
+    press(client, 'G');
+    check(!client.selectedBlock(1) && top(client) == motions_live_top, "G goes back to the live end");
   }
 
   // Ctrl-R and the path search start from the command the line holds, and the path chosen
@@ -786,7 +853,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     application::configuration::configure(client, configuration);
 
     typeKeys(client, "cat src/ma");
-    check(prompt::key(client, 1, prompt::KeyPress{prompt::Key::character, 'r', {.control = true}}) == prompt::Outcome::search_history, "Ctrl-R at the prompt searches the history");
+    check(prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'r', .modifiers = {.control = true}}) == prompt::Outcome::search_history, "Ctrl-R at the prompt searches the history");
     check(prompt::line(client, 1)->text() == "cat src/ma", "opening the search keeps the line");
 
     check(application::paths::open(client), "the path search opens over the line");
@@ -809,7 +876,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
 
     deliver(client, running(1));
     typeKeys(client, "x");
-    check(prompt::key(client, 1, prompt::KeyPress{prompt::Key::character, 'r', {.control = true}}) == prompt::Outcome::edited, "Ctrl-R while a command runs stays in the queue");
+    check(prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'r', .modifiers = {.control = true}}) == prompt::Outcome::edited, "Ctrl-R while a command runs stays in the queue");
   }
 
   const telar::testing::Case case_line_runs_commands{"prompt_session.line_runs_commands", lineRunsCommands};

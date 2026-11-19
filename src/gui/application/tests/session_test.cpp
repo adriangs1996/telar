@@ -541,12 +541,12 @@ namespace {
       std::string_view kitty;
     };
 
-    constexpr auto expected = ds::Array<ExpectedKey, 4>{{
-        {.direction = PaneDirection::left, .legacy = "\x08", .kitty = "\x1b[104;5u"},
-        {.direction = PaneDirection::right, .legacy = "\x0c", .kitty = "\x1b[108;5u"},
-        {.direction = PaneDirection::up, .legacy = "\x0b", .kitty = "\x1b[107;5u"},
-        {.direction = PaneDirection::down, .legacy = "\x0a", .kitty = "\x1b[106;5u"},
-    }};
+    constexpr ds::Array expected{
+        ExpectedKey{.direction = PaneDirection::left, .legacy = "\x08", .kitty = "\x1b[104;5u"},
+        ExpectedKey{.direction = PaneDirection::right, .legacy = "\x0c", .kitty = "\x1b[108;5u"},
+        ExpectedKey{.direction = PaneDirection::up, .legacy = "\x0b", .kitty = "\x1b[107;5u"},
+        ExpectedKey{.direction = PaneDirection::down, .legacy = "\x0a", .kitty = "\x1b[106;5u"},
+    };
 
     for (const auto& key : expected) {
       const auto first_message = transport.sent.size();

@@ -130,12 +130,17 @@ namespace {
   }
 
   void memoryAlertsUseTheShareOfTheTotal() {
-    auto sample = hostSample(1, 0, 150);
+    // Tenths of a GiB: 15 used of a 16 total, which rounds to 94 percent, and then 15.5 used.
+    constexpr std::uint16_t used = 150;
+    constexpr std::uint16_t total = 160;
+    constexpr std::uint8_t used_percent = 94;
+    constexpr std::uint16_t nearly_full = 155;
+    auto sample = hostSample(1, 0, used);
 
     check(MetricLevels::severity(BarMetric::memory, sample) == MetricSeverity::normal, "Memory without a total must not alert");
-    sample.memory_total_decigib = 160;
-    check(MetricLevels::percent(BarMetric::memory, sample) == 94 && MetricLevels::severity(BarMetric::memory, sample) == MetricSeverity::warning, "15 of 16 GB must be a memory warning");
-    sample.memory_used_decigib = 155;
+    sample.memory_total_decigib = total;
+    check(MetricLevels::percent(BarMetric::memory, sample) == used_percent && MetricLevels::severity(BarMetric::memory, sample) == MetricSeverity::warning, "15 of 16 GB must be a memory warning");
+    sample.memory_used_decigib = nearly_full;
     check(MetricLevels::severity(BarMetric::memory, sample) == MetricSeverity::danger, "15.5 of 16 GB must be a memory danger");
   }
 

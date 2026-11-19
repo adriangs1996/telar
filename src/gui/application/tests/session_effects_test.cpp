@@ -73,21 +73,6 @@ namespace {
     }
   };
 
-  template <typename Host>
-  struct HostedEffects {
-    Host effects;
-  };
-
-  // A session that keeps its effects.
-  template <typename Host>
-  struct EffectsClient : private HostedEffects<Host>, TestSession<SystemAllocator> {
-    EffectsClient(SystemAllocator& memory, Transport& transport, Host effects, application::MonotonicNow now = &system::AwakeClock::nowNanoseconds)
-        : HostedEffects<Host>{std::move(effects)},
-          TestSession(memory, transport, this->effects, now) {}
-  };
-
-  using Client = EffectsClient<Effects>;
-
   struct InputClock {
     static inline std::uint64_t now_ns = FramePacer::nanoseconds_per_second;
     static inline std::size_t reads = 0;
@@ -111,7 +96,7 @@ namespace {
     std::size_t count = 0;
   };
 
-  struct InputEffects : application::DiscardHostEffects {
+  struct InputEffects final : application::DiscardHostEffects {
     Transport& transport;
     InputObservations& observations;
 
@@ -128,16 +113,12 @@ namespace {
     }
   };
 
-  struct InputClient : EffectsClient<InputEffects> {
-    InputClient(SystemAllocator& memory, Transport& transport, InputEffects effects)
-        : EffectsClient(memory, transport, std::move(effects), &InputClock::nowNanoseconds) {}
-  };
-
   void acceptedInputObservesTheQueuedPaneIdentity() {
     SystemAllocator memory;
     Transport transport;
     InputObservations observations;
-    InputClient client{memory, transport, InputEffects{transport, observations}};
+    InputEffects effects{transport, observations};
+    TestSession client{memory, transport, effects, &InputClock::nowNanoseconds};
 
     openFirstPane(client, transport);
     const auto* pane = client.focusedPaneMut();
@@ -166,7 +147,8 @@ namespace {
     SystemAllocator memory;
     Transport transport;
     InputObservations observations;
-    InputClient client{memory, transport, InputEffects{transport, observations}};
+    InputEffects effects{transport, observations};
+    TestSession client{memory, transport, effects, &InputClock::nowNanoseconds};
 
     openFirstPane(client, transport);
     auto* pane = client.findPaneMut(1);
@@ -197,11 +179,12 @@ namespace {
     SystemAllocator memory;
     Transport transport;
     InputObservations observations;
-    InputClient client{memory, transport, InputEffects{transport, observations}};
+    InputEffects effects{transport, observations};
+    TestSession client{memory, transport, effects, &InputClock::nowNanoseconds};
 
     openFirstPane(client, transport);
     transport.reject_input_after = transport.count(ClientTag::pane_input) + 1;
-    const std::string input(InputClient::input_chunk_size + 1, 'x');
+    const std::string input(application::Session::input_chunk_size + 1, 'x');
     bool rejected = false;
 
     try {
@@ -229,7 +212,8 @@ namespace {
     SystemAllocator memory;
     Transport transport;
     Recorder recorder;
-    Client client{memory, transport, Effects{recorder}};
+    Effects effects{recorder};
+    TestSession client{memory, transport, effects};
 
     application::notifications::publish(client, {.title = "Local only", .message = "body", .link = {}});
     check(recorder.notifications.empty() && application::notifications::center(client).items().size() == 1, "default delivery must retain a card without contacting the desktop");
@@ -255,7 +239,8 @@ namespace {
     SystemAllocator memory;
     Transport transport;
     Recorder recorder;
-    Client client{memory, transport, Effects{recorder}};
+    Effects effects{recorder};
+    TestSession client{memory, transport, effects};
     Configuration configuration;
 
     configuration.notification_delivery = NotificationDelivery::system;
@@ -285,7 +270,8 @@ namespace {
     SystemAllocator memory;
     Transport transport;
     Recorder recorder;
-    Client client{memory, transport, Effects{recorder}};
+    Effects effects{recorder};
+    TestSession client{memory, transport, effects};
     const ds::Array agents{agentSnapshotEntry()};
     const auto& agent = agents.front();
 
@@ -322,7 +308,8 @@ namespace {
     SystemAllocator memory;
     Transport transport;
     Recorder recorder;
-    Client client{memory, transport, Effects{recorder}};
+    Effects effects{recorder};
+    TestSession client{memory, transport, effects};
     const ds::Array agents{agentSnapshotEntry()};
 
     deliver(client, AgentSnapshot{.revision = 1, .entries = agents});

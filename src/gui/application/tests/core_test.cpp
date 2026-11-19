@@ -85,6 +85,53 @@ namespace {
     check(text == raw && text.data() == raw.data(), "shared character views must borrow the existing representation without copying");
   }
 
+  // Room for the encoded runs of the few cells screenFrames sends.
+  constexpr std::size_t cell_buffer_bytes = 256;
+
+  // Applies `frame` to `screen`; true when the screen rejected it as malformed.
+  template <typename Terminal>
+  bool rejects(Terminal& screen, const telar::PaneFrame& frame) {
+    try {
+      screen.apply(frame);
+    } catch (const telar::EncodingError&) {
+      return true;
+    }
+
+    return false;
+  }
+
+  // Deltas on a recovered screen: a span across rows, then one of metadata alone.
+  template <typename Terminal>
+  void appliesDeltasAcrossRows(Terminal& screen, telar::PaneFrame frame, const telar::Cell& changed) {
+    using namespace telar;
+    using namespace telar::gui;
+
+    ds::Array<Byte, cell_buffer_bytes> encoded{};
+    const ds::Array before_crossing{screen.rowRevision(0), screen.rowRevision(1)};
+    const auto crossing_run = CellRunCodec::encode(ds::Array<Cell, 2>{changed, changed}, encoded.viewMut());
+    const ds::Array<FrameSpan, 1> crossing_spans{{{.start = 1, .count = 2, .cells = crossing_run}}};
+
+    frame.base_frame_id = frame.frame_id++;
+    frame.spans = crossing_spans;
+    check(screen.apply(frame) == FrameApplication::applied, "a span across rows must apply");
+    check(screen.cells()[1].utf8() == "y" && screen.cells()[2].utf8() == "y", "a span across rows must commit every cell");
+    check(screen.rowRevision(0) != before_crossing[0] && screen.rowRevision(1) != before_crossing[1], "a span across rows must mark each row it touches");
+
+    const ds::Array prior_rows{screen.rowRevision(0), screen.rowRevision(1)};
+    const ds::Array<Byte, 2> wrapped_flags{static_cast<Byte>(RowFlag::wrap), 0};
+
+    frame.base_frame_id = frame.frame_id++;
+    frame.spans = {};
+    frame.cursor = {.visible = true, .x = 1, .y = 1};
+    frame.input_modes.bracketed_paste = true;
+    frame.scroll = {.total_rows = 4, .offset = 1};
+    frame.text_metadata = TextMetadata{.row_flags = wrapped_flags};
+    check(screen.apply(frame) == FrameApplication::applied, "metadata-only delta must apply without decoding cells");
+    check(screen.rowRevision(0) == prior_rows[0] && screen.rowRevision(1) == prior_rows[1], "metadata-only delta must preserve cell revisions");
+    check(screen.cursor().x == 1 && screen.cursor().y == 1 && screen.modes().bracketed_paste, "metadata-only delta must update cursor and input modes");
+    check(screen.scroll().offset == 1 && screen.rowFlags(0) == wrapped_flags[0], "metadata-only delta must update scroll and text metadata");
+  }
+
   void screenFrames() {
     using namespace telar;
     using namespace telar::gui;
@@ -102,7 +149,6 @@ namespace {
         cell.text = text;
       }
 
-      constexpr std::size_t cell_buffer_bytes = 256;
       ds::Array<Byte, cell_buffer_bytes> encoded{};
       const auto run = CellRunCodec::encode(cells, encoded.viewMut());
       const ds::Array<FrameSpan, 1> spans{{{.start = 0, .count = 4, .cells = run}}};
@@ -142,15 +188,7 @@ namespace {
       const ds::Array<FrameSpan, 1> bad_spans{{{.start = 0, .count = 1, .cells = malformed}}};
 
       frame.spans = bad_spans;
-      bool rejected = false;
-
-      try {
-        screen.apply(frame);
-      } catch (const EncodingError&) {
-        rejected = true;
-      }
-
-      check(rejected && screen.frameId() == 2, "invalid cells must be rejected before mutation");
+      check(rejects(screen, frame) && screen.frameId() == 2, "invalid cells must be rejected before mutation");
 
       const ds::Array<Byte, 1> replacement{'y'};
       const ds::Array<Cell, 1> changed{{{.text = replacement}}};
@@ -158,14 +196,7 @@ namespace {
       const ds::Array<FrameSpan, 2> late_bad_spans{{{.start = 0, .count = 1, .cells = changed_run}, {.start = 3, .count = 1, .cells = malformed}}};
 
       frame.spans = late_bad_spans;
-      rejected = false;
-      try {
-        screen.apply(frame);
-      } catch (const EncodingError&) {
-        rejected = true;
-      }
-
-      check(rejected && screen.frameId() == 2 && screen.cells()[0].utf8() == "x", "a malformed later span must not commit an earlier decoded span");
+      check(rejects(screen, frame) && screen.frameId() == 2 && screen.cells()[0].utf8() == "x", "a malformed later span must not commit an earlier decoded span");
       check(screen.rowRevision(1) == second_row_revision, "a rejected frame must retain row revisions");
       const ds::Array<FrameSpan, 2> recovered_spans{{{.start = 0, .count = 1, .cells = changed_run}, {.start = 3, .count = 1, .cells = changed_run}}};
 
@@ -174,29 +205,7 @@ namespace {
       check(screen.cells()[0].utf8() == "y" && screen.cells()[3].utf8() == "y", "delta spans must commit at their own positions");
       check(screen.cells()[1].utf8() == "x" && screen.cells()[2].utf8() == "x", "delta spans must not overwrite gaps");
 
-      const ds::Array before_crossing{screen.rowRevision(0), screen.rowRevision(1)};
-      const auto crossing_run = CellRunCodec::encode(ds::Array<Cell, 2>{changed[0], changed[0]}, encoded.viewMut());
-      const ds::Array<FrameSpan, 1> crossing_spans{{{.start = 1, .count = 2, .cells = crossing_run}}};
-
-      frame.base_frame_id = frame.frame_id++;
-      frame.spans = crossing_spans;
-      check(screen.apply(frame) == FrameApplication::applied, "a span across rows must apply");
-      check(screen.cells()[1].utf8() == "y" && screen.cells()[2].utf8() == "y", "a span across rows must commit every cell");
-      check(screen.rowRevision(0) != before_crossing[0] && screen.rowRevision(1) != before_crossing[1], "a span across rows must mark each row it touches");
-
-      const ds::Array prior_rows{screen.rowRevision(0), screen.rowRevision(1)};
-      const ds::Array<Byte, 2> wrapped_flags{static_cast<Byte>(RowFlag::wrap), 0};
-
-      frame.base_frame_id = frame.frame_id++;
-      frame.spans = {};
-      frame.cursor = {.visible = true, .x = 1, .y = 1};
-      frame.input_modes.bracketed_paste = true;
-      frame.scroll = {.total_rows = 4, .offset = 1};
-      frame.text_metadata = TextMetadata{.row_flags = wrapped_flags};
-      check(screen.apply(frame) == FrameApplication::applied, "metadata-only delta must apply without decoding cells");
-      check(screen.rowRevision(0) == prior_rows[0] && screen.rowRevision(1) == prior_rows[1], "metadata-only delta must preserve cell revisions");
-      check(screen.cursor().x == 1 && screen.cursor().y == 1 && screen.modes().bracketed_paste, "metadata-only delta must update cursor and input modes");
-      check(screen.scroll().offset == 1 && screen.rowFlags(0) == wrapped_flags[0], "metadata-only delta must update scroll and text metadata");
+      appliesDeltasAcrossRows(screen, frame, changed[0]);
     }
 
     check(memory.liveBytes() == 0, "screen must release injected allocations");
@@ -451,8 +460,12 @@ namespace {
     const auto fullscreen = layout.arrange(area, metrics, 1);
 
     check(fullscreen.size() == 1 && fullscreen.front().content == metrics.content(area), "a fullscreen pane must reserve the same header as a tiled one");
-    check(split->existing_content == metrics.content({.width = 49, .height = 19}), "prospective and committed split sizes must reserve the same header");
-    check(!layout.prospectiveSplit({.width = 20, .height = 10}, ClientLayoutAxis::vertical, 1, metrics), "a split must refuse to consume the last content row");
+    // The bounds pane 1 keeps after the split, and an area too short to split under two headers.
+    constexpr CellRectangle existing_bounds{.width = 49, .height = 19};
+    constexpr CellRectangle cramped{.width = 20, .height = 10};
+
+    check(split->existing_content == metrics.content(existing_bounds), "prospective and committed split sizes must reserve the same header");
+    check(!layout.prospectiveSplit(cramped, ClientLayoutAxis::vertical, 1, metrics), "a split must refuse to consume the last content row");
     check(metrics.content({.width = 2, .height = 2}).empty(), "tiny headers must saturate instead of underflowing");
     constexpr PaneLayout::Metrics borderless{.border = 0, .header = 3};
 

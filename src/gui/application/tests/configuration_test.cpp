@@ -75,10 +75,10 @@ namespace {
 
     check(prompt.mode == PromptMode::telar && prompt.keymap == PromptKeymap::vim && prompt.motion == PromptMotion::none && !prompt.ghost && prompt.max_lines == 4, "every prompt field must be read");
     check(read({.source = R"(return {api_version = 2, client = {prompt = {mode = "telar", skin = "glass"}}})", .profile = {}}).prompt.mode == PromptMode::telar, "client.prompt.skin is accepted as the documentation describes it");
-    check(read({.source = "return {api_version = 2}", .profile = {}}).prompt == PromptConfiguration{}, "the prompt stays classic by default");
+    check(read({.source = "return {api_version = 2}", .profile = {}}).prompt == PromptConfiguration(), "the prompt stays classic by default");
     const auto bound = read({.source = R"(return {api_version = 2, client = {prompt = {bindings = {{keys = "ctrl+j", action = "submit"}, {keys = "H", action = "line_start", mode = "normal"}}}}})", .profile = {}});
 
-    check(bound.prompt.bindings.size() == 2 && bound.prompt.bindings[0].character == 'j' && bound.prompt.bindings[1].normal && bound.prompt.bindings[1].action == 8, "prompt bindings must be read with their action and mode");
+    check(bound.prompt.bindings.size() == 2 && bound.prompt.bindings[0].character == 'j' && bound.prompt.bindings[1].normal && bound.prompt.bindings[1].action == static_cast<std::uint8_t>(application::prompt::Action::line_start), "prompt bindings must be read with their action and mode");
     constexpr auto invalid_sources = telar::ds::Array<std::string_view, 6>{R"(return {api_version = 2, client = {prompt = {mode = "fancy"}}})", R"(return {api_version = 2, client = {prompt = {max_lines = 0}}})", R"(return {api_version = 2, client = {prompt = {keymap = "helix"}}})", R"(return {api_version = 2, client = {prompt = {skin = "neon"}}})", R"(return {api_version = 2, client = {prompt = {ambient = true}}})", R"(return {api_version = 2, client = {prompt = {bindings = {{keys = "ctrl+j", action = "explode"}}}}})"};
 
     for (const auto source : invalid_sources) {
@@ -148,15 +148,19 @@ namespace {
 
   void independentBackgroundOpacity() {
     using Surface = BackgroundOpacity::Surface;
+    // The opacities the configuration below gives the sidebar and the panes.
+    constexpr float sidebar_opacity = 0.5F;
+    constexpr float pane_opacity = 0.25F;
     const auto inherited = read({.source = R"(return {api_version=2,gui={window={background_opacity=0.75},opacity={sidebar=0.5,pane=0.25}},profiles={other={gui={window={background_opacity=1},opacity={topbar=0}}}}})", .profile = "other"});
 
-    check(inherited.opacity.resolve(Surface::sidebar, inherited.background_opacity) == 0.5F && inherited.opacity.resolve(Surface::pane, inherited.background_opacity) == 0.25F, "profiles must preserve explicit surface opacities");
+    check(inherited.opacity.resolve(Surface::sidebar, inherited.background_opacity) == sidebar_opacity && inherited.opacity.resolve(Surface::pane, inherited.background_opacity) == pane_opacity, "profiles must preserve explicit surface opacities");
     check(inherited.opacity.resolve(Surface::topbar, inherited.background_opacity) == 0 && inherited.opacity.resolve(Surface::workspace, inherited.background_opacity) == 1, "unconfigured regions must inherit the adopted global value, including profile changes");
     check(inherited.opacity.minimum(inherited.background_opacity) == 0, "the native window must allow transparency when any region needs it");
     BackgroundOpacity opaque;
+    constexpr float translucent_window = 0.25F;
 
     opaque.overrides.fill(1.0F);
-    check(opaque.minimum(0.25F) == 1, "fully opaque overrides must not retain unnecessary native transparency or blur");
+    check(opaque.minimum(translucent_window) == 1, "fully opaque overrides must not retain unnecessary native transparency or blur");
     for (const auto* source : {R"(return {api_version=2,gui={opacity={pane=-0.01}}})", R"(return {api_version=2,gui={opacity={sidebar=1.01}}})", R"(return {api_version=2,gui={opacity={topbar=false}}})", R"(return {api_version=2,gui={opacity={workspace=0/0}}})", R"(return {api_version=2,gui={opacity={pane=math.huge}}})", R"(return {api_version=2,gui={opacity={unknown=0.5}}})"}) {
       bool rejected = false;
 
@@ -218,8 +222,9 @@ namespace {
 
     check(defaults.sidebar_width_auto, "the sidebar fits its content unless a width is configured");
     const auto fixed = read({.source = R"(return {api_version=2,gui={sidebar={width=320}},profiles={automatic={gui={sidebar={width="auto"}}}}})", .profile = {}});
+    constexpr float fixed_width = 320;
 
-    check(!fixed.sidebar_width_auto && fixed.sidebar_width == 320, "a numeric width fixes the sidebar");
+    check(!fixed.sidebar_width_auto && fixed.sidebar_width == fixed_width, "a numeric width fixes the sidebar");
     const auto automatic = read({.source = R"(return {api_version=2,gui={sidebar={width=320}},profiles={automatic={gui={sidebar={width="auto"}}}}})", .profile = "automatic"});
 
     check(automatic.sidebar_width_auto, "a profile can return the sidebar to its automatic width");

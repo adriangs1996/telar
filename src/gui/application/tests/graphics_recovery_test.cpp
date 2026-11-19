@@ -43,7 +43,7 @@ namespace {
     }
   };
 
-  class RecoveryTransport : public Transport {
+  class RecoveryTransport final : public Transport {
   public:
     void send(std::span<const Byte> message) override {
       const auto tag = static_cast<ClientTag>(message.front());

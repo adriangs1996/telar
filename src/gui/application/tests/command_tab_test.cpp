@@ -456,12 +456,12 @@ namespace {
       std::uint64_t selected;
     };
 
-    constexpr auto cases = ds::Array<ClosureCase, 4>{{
-        {.active = 1, .closing = 1, .selected = 2},
-        {.active = 2, .closing = 2, .selected = 3},
-        {.active = 3, .closing = 3, .selected = 2},
-        {.active = 3, .closing = 1, .selected = 3},
-    }};
+    constexpr ds::Array cases{
+        ClosureCase{.active = 1, .closing = 1, .selected = 2},
+        ClosureCase{.active = 2, .closing = 2, .selected = 3},
+        ClosureCase{.active = 3, .closing = 3, .selected = 2},
+        ClosureCase{.active = 3, .closing = 1, .selected = 3},
+    };
 
     for (const auto& entry : cases) {
       telar::testing::TestMemory adapter;

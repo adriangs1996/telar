@@ -69,7 +69,9 @@ namespace {
   constexpr GraphicsHeader header{.pane_id = 1, .revision = 1};
 
   ImageDescription description(std::uint64_t generation = 1) {
-    return {.key = {.image_id = 77, .generation = generation}, .format = ImageFormat::rgba, .width = image_side, .height = image_side, .byte_len = pixels.size()};
+    constexpr std::uint64_t image_id = 77;
+
+    return {.key = {.image_id = image_id, .generation = generation}, .format = ImageFormat::rgba, .width = image_side, .height = image_side, .byte_len = pixels.size()};
   }
 
   class PublishedImage {
@@ -87,7 +89,9 @@ namespace {
     }
 
     PublishedImage(const PublishedImage&) = delete;
+    PublishedImage(PublishedImage&&) = delete;
     PublishedImage& operator=(const PublishedImage&) = delete;
+    PublishedImage& operator=(PublishedImage&&) = delete;
 
     [[nodiscard]] std::string_view name() const noexcept {
       return name_.data();
@@ -101,7 +105,7 @@ namespace {
     runtime::SharedImageStorage::Name name_{};
   };
 
-  class ImageTransport : public telar::gui::application::tests::session_fixture::Transport {
+  class ImageTransport final : public telar::gui::application::tests::session_fixture::Transport {
   public:
     bool supportsSharedMemory() const noexcept override {
       return local;
@@ -163,7 +167,7 @@ namespace {
 
     check(::shm_unlink(published.name().data()) == 0, "the fixture must release its private object before creating the permission case");
     const auto previous_mask = ::umask(0);
-    const runtime::FileDescriptor writer{::shm_open(published.name().data(), O_CREAT | O_EXCL | O_RDWR, 0644)};
+    const runtime::FileDescriptor writer{::shm_open(published.name().data(), O_CREAT | O_EXCL | O_RDWR, 0644)}; // NOLINT(cppcoreguidelines-pro-type-vararg): POSIX declares shm_open variadic, and O_CREAT needs its mode argument
 
     ::umask(previous_mask);
     check(static_cast<bool>(writer) && ::ftruncate(writer.get(), pixels.size()) == 0, "the fixture must expose an unsafe permission mode");
@@ -203,7 +207,7 @@ namespace {
         constexpr std::size_t rgb_channels = 3;
 
         image.format = ImageFormat::rgb;
-        image.byte_len = image_side * image_side * rgb_channels;
+        image.byte_len = std::size_t{image_side} * image_side * rgb_channels;
       }
 
       const auto source_pixels = std::span{pixels}.first(static_cast<std::size_t>(image.byte_len));
@@ -278,8 +282,9 @@ namespace {
 
     telar::gui::application::tests::session_fixture::openFirstPane(client, local);
     const PublishedImage ignored;
+    constexpr std::uint64_t detached_pane = 99;
 
-    telar::gui::application::tests::session_fixture::deliver(client, GraphicsSharedImage{.header = {.pane_id = 99, .revision = 1}, .image = description(), .name = ignored.name()});
+    telar::gui::application::tests::session_fixture::deliver(client, GraphicsSharedImage{.header = {.pane_id = detached_pane, .revision = 1}, .image = description(), .name = ignored.name()});
     check(!ignored.open() && errno == ENOENT, "images for detached panes must still release their shared names");
 
     ImageTransport remote;

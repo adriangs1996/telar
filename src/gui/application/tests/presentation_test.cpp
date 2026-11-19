@@ -89,12 +89,16 @@ namespace {
     using namespace telar::gui;
     using namespace telar::gui::features::workbench;
     using namespace telar::gui::features::window;
+    // Text for a dark background, one whose red is under half, and for a light one.
+    constexpr float dark_red = 0.5F;
+    constexpr auto light_text = Color::rgb(0xe0e0e0);
+    constexpr auto dark_text = Color::rgb(0x202020);
 
     for (const auto background : {Color::rgb(0x15151a), Color::rgb(0xf6f4ef)}) {
       Theme theme;
 
       theme.background = background;
-      theme.foreground = background.r < 0.5F ? Color::rgb(0xe0e0e0) : Color::rgb(0x202020);
+      theme.foreground = background.r < dark_red ? light_text : dark_text;
       const auto surfaces = ChromeSurfaces::derive(theme, 1);
       auto panel = theme.chromeColor(PaletteRole::panel_bg);
 
@@ -109,11 +113,12 @@ namespace {
 
       check(surfaces.workbench.a == 1 && surfaces.pane.a == 1, "an unconfigured window must be opaque");
       BackgroundOpacity overrides;
+      constexpr float pane_opacity = 0.25F;
 
-      overrides.overrides.atMut(static_cast<std::size_t>(BackgroundOpacity::Surface::pane)) = 0.25F;
+      overrides.overrides.atMut(static_cast<std::size_t>(BackgroundOpacity::Surface::pane)) = pane_opacity;
       const auto independent = ChromeSurfaces::derive(theme, 1, overrides);
 
-      check(independent.pane.a == 0.25F && independent.workbench.a == 1, "a translucent pane must not reduce the workspace opacity or alter header inheritance");
+      check(independent.pane.a == pane_opacity && independent.workbench.a == 1, "a translucent pane must not reduce the workspace opacity or alter header inheritance");
     }
   }
 
@@ -122,9 +127,9 @@ namespace {
 
     for (const std::uint16_t scale : {1, 2, 3}) {
       const WorkbenchGeometry workbench{
-          .area = {.width = 900.0F * scale, .height = 720.0F * scale},
+          .area = {.width = 900.0F * static_cast<float>(scale), .height = 720.0F * static_cast<float>(scale)},
           .grid = {.cell_width_px = static_cast<std::uint16_t>(9 * scale), .cell_height_px = static_cast<std::uint16_t>(18 * scale)},
-          .layout_metrics = {}
+          .layout_metrics = {},
       };
 
       const CellRectangle bounds{.width = 45, .height = 20};
@@ -169,15 +174,22 @@ namespace {
     check(crowded.activity == geometry.activity, "project count must not reduce the activity viewport");
     const auto machines = application::SidebarGeometry::measure(sidebar, chrome, 128, {.shown = true, .rows = 2});
     constexpr Rect expected_rows{.x = 8, .y = 40, .width = 264, .height = 86};
+    // The activity heading under the machine rows and a section gap, and under the machines'
+    // heading alone once the list collapses.
+    constexpr float activity_heading_y = 142;
+    constexpr float collapsed_activity_heading_y = 56;
 
-    check(machines.machines_header == expected_heading && machines.machines == expected_rows && machines.activity_header.y == 142 && machines.activity.y == 174, "the other machines must list above the activity section, a section gap apart");
+    check(machines.machines_header == expected_heading && machines.machines == expected_rows && machines.activity_header.y == activity_heading_y && machines.activity.y == activity_heading_y + expected_heading.height, "the other machines must list above the activity section, a section gap apart");
     const auto collapsed = application::SidebarGeometry::measure(sidebar, chrome, 128, {.shown = true, .rows = 0});
 
-    check(collapsed.machines_header == expected_heading && collapsed.machines.empty() && collapsed.activity_header.y == 56, "a collapsed machine list keeps only its header and the gap under it");
+    check(collapsed.machines_header == expected_heading && collapsed.machines.empty() && collapsed.activity_header.y == collapsed_activity_heading_y, "a collapsed machine list keeps only its header and the gap under it");
     constexpr Rect cramped_area{.width = sidebar.width, .height = 180};
     const auto cramped = application::SidebarGeometry::measure(cramped_area, chrome, 1, {.shown = true, .rows = 4});
 
-    check(cramped.machines.height == 43 && cramped.activity.height >= 32, "machine rows that do not fit stay out whole, so activity keeps its room");
+    constexpr float machine_row_height = expected_rows.height / 2;
+    constexpr float activity_room = 32;
+
+    check(cramped.machines.height == machine_row_height && cramped.activity.height >= activity_room, "machine rows that do not fit stay out whole, so activity keeps its room");
     constexpr Rect short_area{.width = sidebar.width, .height = 60};
     const auto short_sidebar = application::SidebarGeometry::measure(short_area, chrome, 1);
 
@@ -240,7 +252,10 @@ namespace {
     frame.begin(TabMotion::duration_ns / 2);
     const auto halfway = selection.place(target, frame);
 
-    check(halfway == Rect{.x = 70, .width = 150, .height = 30}, "selection position and width must share the tab easing curve");
+    // The capsule half the motion's duration in, on the tab easing curve.
+    constexpr Rect expected_halfway{.x = 70, .width = 150, .height = 30};
+
+    check(halfway == expected_halfway, "selection position and width must share the tab easing curve");
     check(selection.place(initial, frame) == halfway, "rapid selection changes must retarget from the displayed position");
     frame.begin(frame.now_ns + TabMotion::duration_ns);
     check(selection.place(initial, frame) == initial && !frame.deadline_ns, "a settled selection must stop requesting frames");
