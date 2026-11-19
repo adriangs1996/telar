@@ -1825,7 +1825,7 @@ export {
             ds::Array<char, 32> length;
             const auto formatted = std::to_chars(length.dataMut(), length.dataMut() + length.size(), half.queue.size());
 
-            half.message.headers.append("content-length", {length.data(), formatted.ptr});
+            half.message.headers.append("content-length", {length.data(), static_cast<std::size_t>(formatted.ptr - length.data())});
           }
         }
 

@@ -77,7 +77,7 @@ namespace telar::runtime {
   }
 
   std::span<const std::uint8_t> CaptureBuffer::bytes() const noexcept {
-    return {storage_, size_};
+    return {static_cast<const std::uint8_t*>(storage_), size_};
   }
 
   std::size_t CaptureBuffer::size() const noexcept {

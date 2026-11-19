@@ -176,7 +176,7 @@ namespace {
     terminal.setPaneId(QString::number(pane_id));
     terminal.setSize(QSizeF{960, 820});
     QQmlEngine engine;
-    const auto separators = createChrome(engine, QStringLiteral("CommandSeparators"), {{QStringLiteral("view"), QVariant::fromValue(static_cast<QObject*>(&terminal))}, {QStringLiteral("colors"), colors}, {QStringLiteral("grid"), grid}});
+    auto separators = createChrome(engine, QStringLiteral("CommandSeparators"), {{QStringLiteral("view"), QVariant::fromValue(static_cast<QObject*>(&terminal))}, {QStringLiteral("colors"), colors}, {QStringLiteral("grid"), grid}});
 
     separators->setParentItem(&terminal);
     window.show();

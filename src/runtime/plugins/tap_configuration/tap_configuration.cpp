@@ -207,7 +207,7 @@ namespace telar::runtime::plugins {
     constexpr std::string_view prefix = "package-";
 
     std::copy(prefix.begin(), prefix.end(), name.dataMut());
-    const auto suffix = std::to_chars(name.dataMut() + prefix.size(), name.dataMut() + name.size() - 1, index);
+    auto suffix = std::to_chars(name.dataMut() + prefix.size(), name.dataMut() + name.size() - 1, index);
     if (suffix.ec != std::errc{}) {
       throw std::length_error{"Plugin package index exceeds its limit"};
     }

@@ -127,13 +127,13 @@ int main(int argc, char** argv) {
 
   if (mode != QStringLiteral("tabs")) {
     for (std::size_t index = 1; index < boxes.size(); ++index) {
-      boxes[index]->setVisible(false);
+      boxes.atMut(index)->setVisible(false);
     }
   }
 
   QObject::connect(&modal, &ModalRevealLayout::frameChanged, &window, [&] {
     if (mode == QStringLiteral("modal")) {
-      boxes[0]->setX(modal.reveal() * travel);
+      boxes.atMut(0)->setX(modal.reveal() * travel);
     }
   });
 
@@ -146,7 +146,7 @@ int main(int argc, char** argv) {
       const auto record = strip.items()->data(strip.items()->index(row, 0), ListModel::record_role).toMap();
       const auto id = record.value(QStringLiteral("key")).toString().toInt();
 
-      boxes.at(static_cast<std::size_t>(id - 1))->setX(record.value(QStringLiteral("bounds")).toRectF().x());
+      boxes.atCheckedMut(static_cast<std::size_t>(id - 1))->setX(record.value(QStringLiteral("bounds")).toRectF().x());
     }
   });
 
@@ -195,7 +195,7 @@ int main(int argc, char** argv) {
     constexpr std::uint64_t period_ns = 1'000'000'000;
     const auto now = system::AwakeClock::nowNanoseconds();
 
-    boxes[0]->setX(travel * static_cast<double>(now % period_ns) / period_ns);
+    boxes.atMut(0)->setX(travel * static_cast<double>(now % period_ns) / period_ns);
   });
 
   QTimer::singleShot(warmup_ms, &window, [&] {

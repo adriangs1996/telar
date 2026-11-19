@@ -196,7 +196,7 @@ namespace telar::runtime::cli {
       std::ranges::copy(prefix, name.viewMut().begin());
       const auto converted = std::to_chars(name.dataMut() + prefix.size(), name.dataMut() + name.size(), user);
 
-      location.managed(temporary_directory.empty() ? "/tmp" : temporary_directory, {name.data(), converted.ptr});
+      location.managed(temporary_directory.empty() ? "/tmp" : temporary_directory, {name.data(), static_cast<std::size_t>(converted.ptr - name.data())});
     }
 
     location.validate();

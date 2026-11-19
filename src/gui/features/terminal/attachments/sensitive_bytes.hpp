@@ -61,7 +61,7 @@ namespace telar::gui {
     }
 
     [[nodiscard]] std::span<const std::uint8_t> unsignedBytes() const noexcept {
-      return {data_, size_};
+      return {static_cast<const std::uint8_t*>(data_), size_};
     }
 
     void resizeZeroed(std::size_t size, std::size_t limit) {

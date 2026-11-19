@@ -150,7 +150,7 @@ export {
       }
 
       inline std::span<const std::uint8_t> bytes() const noexcept {
-        return {storage_, size_};
+        return {static_cast<const std::uint8_t*>(storage_), size_};
       }
 
     private:

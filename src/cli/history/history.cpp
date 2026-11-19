@@ -187,7 +187,7 @@ namespace telar::runtime::cli::file_transfer {
       ds::Array<char, 64> reply;
       const auto written = std::format_to_n(reply.dataMut(), reply.size(), "{{\"bytes\":{},\"published\":true}}\n", size);
 
-      writeText({reply.data(), written.out});
+      writeText({reply.data(), static_cast<std::size_t>(written.out - reply.data())});
     } catch (...) {
       ::unlinkat(parent.get(), temporary.data(), 0);
       throw;

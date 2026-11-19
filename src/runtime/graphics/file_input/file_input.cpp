@@ -370,7 +370,7 @@ namespace telar::runtime {
   }
 
   std::span<const std::uint8_t> ImageAllocation::placeholder() const noexcept {
-    return {placeholder_, placeholder_bytes};
+    return {static_cast<const std::uint8_t*>(placeholder_), placeholder_bytes};
   }
 
   void ImageAllocation::release() noexcept {

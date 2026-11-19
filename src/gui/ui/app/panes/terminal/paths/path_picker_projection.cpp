@@ -179,7 +179,7 @@ namespace telar::gui::qt {
       return toQRectF(area, density);
     };
 
-    const auto fonts = ChromeFonts::shared();
+    auto fonts = ChromeFonts::shared();
     const auto footer = application::paths::PathPickerFooter::measure(geometry.footer, application::paths::PathPickerLabels::status(page).view(), platform::usesCommandKey(), [&](std::string_view text) {
       const auto advance = fonts->face(false).shape(text, display.chrome.body).advance();
 

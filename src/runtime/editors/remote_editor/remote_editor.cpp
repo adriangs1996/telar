@@ -227,7 +227,7 @@ namespace telar::runtime {
     ds::Array<char, 16> bytes;
     const auto result = std::to_chars(bytes.dataMut(), bytes.dataMut() + bytes.size(), value);
 
-    expression_.append(std::string_view{bytes.dataMut(), result.ptr});
+    expression_.append(std::string_view{bytes.data(), static_cast<std::size_t>(result.ptr - bytes.data())});
   }
 
   void RemoteEditor::vimEndpoint(Session& session, std::string_view endpoint) {

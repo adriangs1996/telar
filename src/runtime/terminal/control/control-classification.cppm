@@ -18,7 +18,7 @@ export namespace telar::runtime::control {
     constexpr std::string_view prefix = "\x1b[?";
 
     std::copy(prefix.begin(), prefix.end(), command.dataMut());
-    const auto number = std::to_chars(command.dataMut() + prefix.size(), command.dataMut() + command.size() - 1, mode);
+    auto number = std::to_chars(command.dataMut() + prefix.size(), command.dataMut() + command.size() - 1, mode);
 
     *number.ptr = final;
     write(std::span<const std::uint8_t>{reinterpret_cast<const std::uint8_t*>(command.data()), static_cast<std::size_t>(number.ptr + 1 - command.data())});

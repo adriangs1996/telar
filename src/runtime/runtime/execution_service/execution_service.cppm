@@ -804,7 +804,7 @@ export {
           ds::Array<char, 32> text{};
           const auto converted = std::to_chars(text.dataMut(), text.dataMut() + text.size(), value);
 
-          command.setEnvironment(name, {text.data(), converted.ptr});
+          command.setEnvironment(name, {text.data(), static_cast<std::size_t>(converted.ptr - text.data())});
         };
 
         setIdentity("TELAR_PANE_ID", identity.id);

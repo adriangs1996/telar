@@ -32,7 +32,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   std::span<const std::uint8_t> ByteStorage<Memory>::bytes() const noexcept {
-    return {storage_, size_};
+    return {static_cast<const std::uint8_t*>(storage_), size_};
   }
 
   template class ByteStorage<Memory>;

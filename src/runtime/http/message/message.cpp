@@ -963,7 +963,7 @@ namespace telar::runtime {
       throw std::length_error{"Invalid HTTP length"};
     }
 
-    append(output, std::string_view{text.data(), result.ptr});
+    append(output, std::string_view{text.data(), static_cast<std::size_t>(result.ptr - text.data())});
   }
 
   template <Allocator Memory>

@@ -94,7 +94,7 @@ namespace telar::gui::features::terminal::graphics {
 
   template <Allocator Memory>
   std::span<const Byte> GraphicsStore<Memory>::Image::pixels() const noexcept {
-    return ready() ? std::span<const Byte>{pixels_, received_} : std::span<const Byte>{};
+    return ready() ? std::span<const Byte>{static_cast<const Byte*>(pixels_), received_} : std::span<const Byte>{};
   }
 
   template <Allocator Memory>

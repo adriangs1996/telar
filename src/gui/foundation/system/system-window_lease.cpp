@@ -22,7 +22,7 @@ namespace telar::gui::inline foundation::inline system {
       auto* next = std::ranges::copy(basename, output.data()).out;
 
       next = std::ranges::copy(prefix, next).out;
-      const auto formatted = std::to_chars(next, output.data() + output.size() - suffix.size(), slot);
+      auto formatted = std::to_chars(next, output.data() + output.size() - suffix.size(), slot);
       if (formatted.ec != std::errc{}) {
         throw std::runtime_error{"GUI identity filename exceeds capacity"};
       }

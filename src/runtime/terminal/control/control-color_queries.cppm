@@ -136,7 +136,7 @@ export namespace telar::runtime::control {
       static_assert(introducer.size() + std::numeric_limits<unsigned>::digits10 + 2 + terminator.size() <= inline_osc_bytes);
       ds::Array<char, inline_osc_bytes> packet;
       auto* position = std::copy(introducer.begin(), introducer.end(), packet.dataMut());
-      const auto number = std::to_chars(position, packet.dataMut() + packet.size() - 1, operation);
+      auto number = std::to_chars(position, packet.dataMut() + packet.size() - 1, operation);
 
       TELAR_ASSERT(number.ec == std::errc{});
       *number.ptr = ';';

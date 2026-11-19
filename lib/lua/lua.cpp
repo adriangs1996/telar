@@ -622,7 +622,7 @@ namespace telar::runtime::lua {
     ds::Array<char, 32> text;
     const auto result = std::to_chars(text.dataMut(), text.dataMut() + text.size(), value);
 
-    setField(state, name, std::string_view{text.data(), result.ptr});
+    setField(state, name, std::string_view{text.data(), static_cast<std::size_t>(result.ptr - text.data())});
   }
 
   void pushReadOnly(lua_State* state, const char* message) {

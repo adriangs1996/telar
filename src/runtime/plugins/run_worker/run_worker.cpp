@@ -172,7 +172,7 @@ namespace telar::runtime::plugins {
     ds::Array<char, 32> text;
     const auto result = std::to_chars(text.dataMut(), text.dataMut() + text.size(), value);
 
-    lua::setField(state, name, {text.data(), result.ptr});
+    lua::setField(state, name, {text.data(), static_cast<std::size_t>(result.ptr - text.data())});
   }
 
   std::string_view LuaExchange::protocolName(ExchangeProtocol protocol) noexcept {

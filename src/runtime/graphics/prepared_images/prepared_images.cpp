@@ -58,7 +58,7 @@ namespace telar::runtime {
   }
 
   std::span<const std::uint8_t> FrozenImage::pixels() const noexcept {
-    return {pixels_, pixels_ == nullptr ? 0 : byte_count_};
+    return {static_cast<const std::uint8_t*>(pixels_), pixels_ == nullptr ? 0 : byte_count_};
   }
 
   std::size_t FrozenImage::byteCount() const noexcept {

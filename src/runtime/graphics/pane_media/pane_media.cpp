@@ -493,7 +493,7 @@ namespace telar::runtime {
     constexpr std::string_view suffix = ";ENOMEM: graphics upload limit exceeded\x1b\\";
     ds::Array<char, prefix.size() + 10 + suffix.size()> response;
     auto* identity = std::copy(prefix.begin(), prefix.end(), response.dataMut());
-    const auto formatted = std::to_chars(identity, identity + 10, image);
+    auto formatted = std::to_chars(identity, identity + 10, image);
     const auto* end = std::copy(suffix.begin(), suffix.end(), formatted.ptr);
 
     reply({reinterpret_cast<const Byte*>(response.data()), static_cast<std::size_t>(end - response.data())});

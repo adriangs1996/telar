@@ -35,7 +35,7 @@ namespace telar::runtime::cli::window {
     constexpr std::size_t maximum_float_bytes = 64;
     ds::Array<char, maximum_float_bytes> buffer;
     const auto formatted = std::to_chars(buffer.dataMut(), buffer.dataMut() + buffer.size(), value);
-    const std::string_view number{buffer.data(), formatted.ptr};
+    const std::string_view number{buffer.data(), static_cast<std::size_t>(formatted.ptr - buffer.data())};
     const auto exponent_at = number.find('e');
     if (exponent_at == std::string_view::npos) {
       output.append(number);

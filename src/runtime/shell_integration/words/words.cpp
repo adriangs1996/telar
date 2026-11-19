@@ -687,7 +687,7 @@ namespace telar::runtime {
           ds::Array<char, 32> stash;
           const auto written = std::format_to_n(stash.dataMut(), stash.size(), "stash@{{{}}}", index);
 
-          add(std::string_view{stash.data(), written.out});
+          add(std::string_view{stash.data(), static_cast<std::size_t>(written.out - stash.data())});
         }
 
         break;
