@@ -64,7 +64,7 @@ namespace telar::gui::qt {
     }
 
     [[nodiscard]] const Configuration& configuration() const noexcept {
-      return store_.session().configuration();
+      return store_.session().configuration;
     }
 
     [[nodiscard]] Store::Dialog dialog() const noexcept {

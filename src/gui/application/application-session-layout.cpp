@@ -174,11 +174,11 @@ namespace telar::gui::application {
   }
 
   const Tab<Memory>* Session::findTab(TabLocation location) const noexcept {
-    return features::workbench::find(tabs_.view(), location);
+    return features::workbench::find(tabs.view(), location);
   }
 
   Tab<Memory>* Session::findTabMut(TabLocation location) noexcept {
-    return features::workbench::findMut(tabs_.viewMut(), location);
+    return features::workbench::findMut(tabs.viewMut(), location);
   }
 
   Tab<Memory>& Session::ensureTab(TabLocation location) {
@@ -186,15 +186,15 @@ namespace telar::gui::application {
       return *tab;
     }
 
-    if (tabs_.size() == maximum_tabs) {
+    if (tabs.size() == maximum_tabs) {
       throw std::length_error{"GUI tab capacity reached"};
     }
 
-    tabs_.push(ds::makeBox<Tab<Memory>>(memory_, memory_, location));
-    features::workbench::furnish(workbench, tabs_.backMut().getMut());
+    tabs.push(ds::makeBox<Tab<Memory>>(memory, memory, location));
+    features::workbench::furnish(workbench, tabs.backMut().getMut());
     ++view_version_.tabs;
 
-    return tabs_.backMut().getMut();
+    return tabs.backMut().getMut();
   }
 
   Pane<Memory>& Session::ensurePane(std::uint64_t pane_id, TabLocation location) {
@@ -202,15 +202,15 @@ namespace telar::gui::application {
       return *pane;
     }
 
-    if (panes_.size() == maximum_panes) {
+    if (panes.size() == maximum_panes) {
       throw std::length_error{"GUI pane capacity reached"};
     }
 
-    panes_.push(ds::makeBox<Pane<Memory>>(memory_, memory_, pane_id, features::terminal::graphics::budget(graphics)));
-    panes_.backMut().getMut().location = location;
+    panes.push(ds::makeBox<Pane<Memory>>(memory, memory, pane_id, features::terminal::graphics::budget(graphics)));
+    panes.backMut().getMut().location = location;
     ++view_version_.panes;
 
-    return panes_.backMut().getMut();
+    return panes.backMut().getMut();
   }
 
   void Session::openDefault() {
@@ -263,10 +263,9 @@ namespace telar::gui::application {
 
     try {
       workbench::retainLayout(*this);
-      for (auto& pane : panes_.viewMut()) {
+      for (auto& pane : panes.viewMut()) {
         if (pane->attached || pane->attaching) {
-          prepareDetach(pane->id);
-          link.send(DetachPane{pane->id});
+          detachPane(copy_mode, link, pane->id);
           pane.getMut().attached = false;
           pane.getMut().attaching = false;
         }
@@ -291,9 +290,9 @@ namespace telar::gui::application {
   void Session::releaseWorkspacePresentation() noexcept {
     const auto* tab = activeTab();
 
-    features::workbench::leave(workbench, tabs_, active_tab_, tab != nullptr && findPane(tab->focused_pane) != nullptr ? tab : nullptr);
-    panes_.clear();
-    tabs_.clear();
+    features::workbench::leave(workbench, tabs, active_tab_, tab != nullptr && findPane(tab->focused_pane) != nullptr ? tab : nullptr);
+    panes.clear();
+    tabs.clear();
     active_tab_.reset();
     features::terminal::copy_mode::close(copy_mode);
     features::history::suspend(history);
@@ -385,7 +384,7 @@ namespace telar::gui::application {
     activity::acknowledge(*this);
     const auto* active = activeTab();
 
-    for (auto& pane : panes_.viewMut()) {
+    for (auto& pane : panes.viewMut()) {
       const auto visible = active != nullptr && active->layout.contains(pane->id) && (!active->fullscreen || pane->id == active->focused_pane);
       if (visible && !pane->attached && !pane->attaching && !pane->exited) {
         pane.getMut().attaching = true;
@@ -396,8 +395,7 @@ namespace telar::gui::application {
           throw;
         }
       } else if (!visible && pane->attached) {
-        prepareDetach(pane->id);
-        link.send(DetachPane{pane->id});
+        detachPane(copy_mode, link, pane->id);
         pane.getMut().attached = false;
         pane.getMut().acknowledged_frame = 0;
         pane.getMut().screen.detach();
@@ -406,12 +404,13 @@ namespace telar::gui::application {
     }
   }
 
-  void Session::prepareDetach(std::uint64_t pane_id) {
+  void Session::detachPane(features::terminal::copy_mode::State& copy_mode, Link& link, std::uint64_t pane_id) {
     if (const auto& copy = features::terminal::copy_mode::view(copy_mode).state(); copy && copy->pane_id == pane_id) {
       features::terminal::copy_mode::close(copy_mode);
     }
 
     link.transport.willDetach(pane_id);
+    link.send(DetachPane{pane_id});
   }
 
   Change Session::apply(const PaneOpened& message) {
@@ -488,24 +487,24 @@ namespace telar::gui::application {
       throw EncodingError{"UnexpectedTabCreated"};
     }
 
-    const auto cached = std::ranges::find_if(tabs_, [&](const auto& tab) {
+    const auto cached = std::ranges::find_if(tabs, [&](const auto& tab) {
       return sameTab(tab->location, message.location);
     });
 
-    const bool discovered = cached != tabs_.end();
+    const bool discovered = cached != tabs.end();
     if ((discovered && ((*cached)->loaded || (*cached)->loading || !(*cached)->layout.nodes().empty())) || findPane(message.root_pane_id) != nullptr) {
       throw EncodingError{"Tab or pane already exists"};
     }
 
-    const auto cached_index = static_cast<std::size_t>(cached - tabs_.begin());
-    const auto count = static_cast<std::size_t>(std::ranges::count_if(tabs_, [&](const auto& tab) {
+    const auto cached_index = static_cast<std::size_t>(cached - tabs.begin());
+    const auto count = static_cast<std::size_t>(std::ranges::count_if(tabs, [&](const auto& tab) {
       return sameWorkspace(tab->location.workspace, message.location.workspace);
     })) - static_cast<std::size_t>(discovered);
-    if (count >= maximum_workspace_tabs || message.position > count || (!discovered && tabs_.size() == maximum_tabs) || panes_.size() == maximum_panes) {
+    if (count >= maximum_workspace_tabs || message.position > count || (!discovered && tabs.size() == maximum_tabs) || panes.size() == maximum_panes) {
       throw EncodingError{"Invalid tab position or capacity"};
     }
 
-    auto tab = ds::makeBox<Tab<Memory>>(memory_, memory_, message.location);
+    auto tab = ds::makeBox<Tab<Memory>>(memory, memory, message.location);
 
     tab.getMut().label.assign(message.label);
     tab.getMut().position = message.position;
@@ -517,32 +516,32 @@ namespace telar::gui::application {
     tab.getMut().layout.add(message.root_pane_id, ClientLayoutAxis::horizontal, tab->focused_pane);
     tab.getMut().focused_pane = message.root_pane_id;
     tab.getMut().loaded = true;
-    auto pane = ds::makeBox<Pane<Memory>>(memory_, memory_, message.root_pane_id, features::terminal::graphics::budget(graphics));
+    auto pane = ds::makeBox<Pane<Memory>>(memory, memory, message.root_pane_id, features::terminal::graphics::budget(graphics));
 
     pane.getMut().generation = message.pane_generation;
     pane.getMut().location = message.location;
     pane.getMut().size = request->size;
     if (!discovered) {
-      reserveAppend(tabs_, maximum_tabs);
+      reserveAppend(tabs, maximum_tabs);
     }
 
-    reserveAppend(panes_, maximum_panes);
+    reserveAppend(panes, maximum_panes);
     confirmAttachment(pane.getMut());
 
     if (discovered) {
-      tabs_.atMut(cached_index) = std::move(tab);
+      tabs.atMut(cached_index) = std::move(tab);
     } else {
-      for (auto& existing : tabs_.viewMut()) {
+      for (auto& existing : tabs.viewMut()) {
         if (sameWorkspace(existing->location.workspace, message.location.workspace) && existing->position >= message.position) {
           ++existing.getMut().position;
         }
       }
 
       features::workbench::furnish(workbench, tab.getMut());
-      tabs_.push(std::move(tab));
+      tabs.push(std::move(tab));
     }
 
-    panes_.push(std::move(pane));
+    panes.push(std::move(pane));
     ++view_version_.tabs;
     ++view_version_.panes;
     workbench::selectTab(*this, message.location);
@@ -614,7 +613,7 @@ namespace telar::gui::application {
     ds::Array<TabLocation, maximum_tabs> removed;
     std::size_t removed_count = 0;
 
-    for (const auto& tab : tabs_) {
+    for (const auto& tab : tabs) {
       if (sameWorkspace(tab->location.workspace, message.workspace) && std::none_of(message.tabs.begin(), message.tabs.end(), [&](const auto& entry) {
             return entry.tab_id == tab->location.tab_id;
           })) {
@@ -675,7 +674,7 @@ namespace telar::gui::application {
       return Change::none;
     }
 
-    configuration_.sidebar_visible = message.sidebar_visible;
+    configuration.sidebar_visible = message.sidebar_visible;
     ++view_version_.host;
     sidebar_columns_ = std::max(SidebarColumns::minimum_width, message.sidebar_width);
     workspace_list_collapsed_ = message.workspace_list_collapsed;
@@ -697,11 +696,11 @@ namespace telar::gui::application {
     const auto* closing = findTab(message.location);
     const bool closing_known = closing != nullptr;
     const auto position = closing_known ? closing->position : std::uint16_t{};
-    const auto replacement = features::workbench::tabAfterClose(tabs_, message.location, position);
+    const auto replacement = features::workbench::tabAfterClose(tabs, message.location, position);
 
     discardTab(message.location);
     if (closing_known) {
-      for (auto& tab : tabs_.viewMut()) {
+      for (auto& tab : tabs.viewMut()) {
         if (sameWorkspace(tab->location.workspace, message.location.workspace) && tab->position > position) {
           --tab.getMut().position;
         }
@@ -730,18 +729,17 @@ namespace telar::gui::application {
       ++view_version_.panes;
     }
 
-    for (const auto& pane : panes_) {
+    for (const auto& pane : panes) {
       if (!sameTab(pane->location, location)) {
         continue;
       }
 
       if (pane->attached) {
-        prepareDetach(pane->id);
-        link.send(DetachPane{pane->id});
+        detachPane(copy_mode, link, pane->id);
       }
     }
 
-    tabs_.retain([&](const auto& tab) {
+    tabs.retain([&](const auto& tab) {
       return !sameTab(tab->location, location);
     });
 
@@ -756,13 +754,13 @@ namespace telar::gui::application {
 
   template <typename Removed>
   void Session::removePanes(Removed removed) {
-    for (const auto& pane : panes_) {
+    for (const auto& pane : panes) {
       if (removed(*pane)) {
         forgetPane(pane->id);
       }
     }
 
-    panes_.retain([&](const auto& pane) {
+    panes.retain([&](const auto& pane) {
       return !removed(*pane);
     });
 
@@ -775,7 +773,7 @@ namespace telar::gui::application {
       ++view_version_.panes;
     }
 
-    for (auto& tab : tabs_.viewMut()) {
+    for (auto& tab : tabs.viewMut()) {
       tab.getMut().layout.remove(message.pane_id);
       if (tab->focused_pane == message.pane_id) {
         tab.getMut().focused_pane = tab->layout.firstPane();
@@ -804,7 +802,7 @@ namespace telar::gui::application {
     }
 
     features::paths::forget(paths, pane_id);
-    features::prompt::forget(prompt, pane_id);
+    features::prompt::forget(prompt, prompt_lines, pane_id);
   }
 
   void Session::cancelPaneRequests(std::uint64_t pane_id) noexcept {
@@ -839,7 +837,7 @@ namespace telar::gui::application {
     }
 
     if (auto* tab = findTabMut(message.location)) {
-      const auto count = std::ranges::count_if(tabs_, [&](const auto& entry) {
+      const auto count = std::ranges::count_if(tabs, [&](const auto& entry) {
         return sameWorkspace(entry->location.workspace, message.location.workspace);
       });
       if (message.position >= count) {
@@ -848,7 +846,7 @@ namespace telar::gui::application {
 
       const auto previous = tab->position;
 
-      for (auto& entry : tabs_.viewMut()) {
+      for (auto& entry : tabs.viewMut()) {
         if (!sameWorkspace(entry->location.workspace, message.location.workspace) || &entry.get() == tab) {
           continue;
         }
@@ -880,7 +878,7 @@ namespace telar::gui::application {
       ds::Array<TabLocation, maximum_tabs> removed;
       std::size_t removed_count = 0;
 
-      for (const auto& tab : tabs_) {
+      for (const auto& tab : tabs) {
         if (sameWorkspace(tab->location.workspace, message.workspace)) {
           removed.atMut(removed_count++) = tab->location;
         }
@@ -906,7 +904,7 @@ namespace telar::gui::application {
       sendSnapshotRequest(RequestTabSnapshot{.location = *location});
     }
 
-    for (const auto& pane : panes_) {
+    for (const auto& pane : panes) {
       if (pane->attached) {
         link.send(RequestSnapshot{pane->id, pane->screen.frameId()});
       }

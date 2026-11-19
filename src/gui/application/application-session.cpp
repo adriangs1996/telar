@@ -48,13 +48,14 @@ namespace telar::gui::application {
 
   Session::Session(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<RuntimeTransport&, tbc::lt::a> transport, tbc::view<HostEffects&, tbc::lt::a> effects, tbc::view<MonotonicNow, tbc::lt::static_storage> now)
       : prompt(memory),
+        prompt_lines(memory),
         copy_mode(memory),
-        memory_(memory),
+        memory(memory),
         link(transport),
         effects_(effects),
         now_(now),
-        panes_(memory),
-        tabs_(memory),
+        panes(memory),
+        tabs(memory),
         workspaces_(memory),
         agents_(memory),
         pane_list_(memory),
@@ -76,7 +77,7 @@ namespace telar::gui::application {
     launch_argument_count_ = 0;
     argument_storage_.reserve(launch.arguments.size());
     for (const auto argument : launch.arguments) {
-      argument_storage_.emplace(memory_, argument);
+      argument_storage_.emplace(memory, argument);
     }
 
     for (const auto& argument : argument_storage_) {
@@ -105,8 +106,8 @@ namespace telar::gui::application {
 
   void Session::connected(std::uint64_t identity, bool reads_rows) {
     reads_rows_ = reads_rows;
-    panes_.clear();
-    tabs_.clear();
+    panes.clear();
+    tabs.clear();
     active_tab_.reset();
     left_machine_.reset();
     deferred_tab_.reset();
@@ -167,10 +168,9 @@ namespace telar::gui::application {
 
     if (ready_) {
       workbench::retainLayout(*this);
-      for (auto& pane : panes_.viewMut()) {
+      for (auto& pane : panes.viewMut()) {
         if (pane->attached || pane->attaching) {
-          prepareDetach(pane->id);
-          link.send(DetachPane{pane->id});
+          detachPane(copy_mode, link, pane->id);
           pane.getMut().attached = false;
           pane.getMut().attaching = false;
         }
@@ -201,8 +201,8 @@ namespace telar::gui::application {
     features::palette::discard(palette);
     link.forgetRequests();
     features::terminal::links::suspend(links);
-    features::prompt::failAll(prompt);
-    for (auto& pane : panes_.viewMut()) {
+    features::prompt::failAll(prompt, prompt_lines);
+    for (auto& pane : panes.viewMut()) {
       pane.getMut().attached = false;
       pane.getMut().attaching = false;
       pane.getMut().snapshot_requested = false;
@@ -213,7 +213,7 @@ namespace telar::gui::application {
       pane.getMut().scrollback_generation = 0;
     }
 
-    for (auto& tab : tabs_.viewMut()) {
+    for (auto& tab : tabs.viewMut()) {
       tab.getMut().loading = false;
     }
   }
@@ -342,21 +342,29 @@ namespace telar::gui::application {
     }
   }
 
-  const Pane<Memory>* Session::findPane(std::uint64_t pane_id) const noexcept {
-    const auto found = std::find_if(panes_.begin(), panes_.end(), [&](const auto& pane) {
-      return pane->id == pane_id;
-    });
-
-    return found == panes_.end() ? nullptr : &found->get();
-  }
-
-  Pane<Memory>* Session::findPaneMut(std::uint64_t pane_id) noexcept {
-    const auto panes = panes_.viewMut();
+  const Pane<Memory>* findPane(const Panes& panes, std::uint64_t pane_id) noexcept {
     const auto found = std::find_if(panes.begin(), panes.end(), [&](const auto& pane) {
       return pane->id == pane_id;
     });
 
-    return found == panes.end() ? nullptr : &found->getMut();
+    return found == panes.end() ? nullptr : &found->get();
+  }
+
+  Pane<Memory>* findPaneMut(Panes& panes, std::uint64_t pane_id) noexcept {
+    const auto all = panes.viewMut();
+    const auto found = std::find_if(all.begin(), all.end(), [&](const auto& pane) {
+      return pane->id == pane_id;
+    });
+
+    return found == all.end() ? nullptr : &found->getMut();
+  }
+
+  const Pane<Memory>* Session::findPane(std::uint64_t pane_id) const noexcept {
+    return application::findPane(panes, pane_id);
+  }
+
+  Pane<Memory>* Session::findPaneMut(std::uint64_t pane_id) noexcept {
+    return application::findPaneMut(panes, pane_id);
   }
 
   const Tab<Memory>* Session::activeTab() const noexcept {
@@ -377,14 +385,6 @@ namespace telar::gui::application {
     const auto* tab = activeTab();
 
     return tab == nullptr ? nullptr : findPaneMut(tab->focused_pane);
-  }
-
-  const ds::Vec<ds::Box<Tab<Memory>, Memory>, Memory>& Session::tabs() const noexcept {
-    return tabs_;
-  }
-
-  const ds::Vec<ds::Box<Pane<Memory>, Memory>, Memory>& Session::panes() const noexcept {
-    return panes_;
   }
 
   const ds::Vec<Workspace<Memory>, Memory>& Session::workspaces() const noexcept {
@@ -435,12 +435,8 @@ namespace telar::gui::application {
     return changed_pane_;
   }
 
-  const Configuration& Session::configuration() const noexcept {
-    return configuration_;
-  }
-
   ClientViewState Session::clientViewState() const noexcept {
-    return {.sidebar_visible = configuration_.sidebar_visible, .sidebar_width = sidebar_columns_, .workspace_list_collapsed = workspace_list_collapsed_, .pane_gaps = configuration_.pane_gaps, .window_title = configuration_.window_title.view()};
+    return {.sidebar_visible = configuration.sidebar_visible, .sidebar_width = sidebar_columns_, .workspace_list_collapsed = workspace_list_collapsed_, .pane_gaps = configuration.pane_gaps, .window_title = configuration.window_title.view()};
   }
 
   ViewVersion Session::viewVersion() const noexcept {
@@ -452,20 +448,20 @@ namespace telar::gui::application {
   }
 
   void Session::setSidebarVisible(bool visible) {
-    if (configuration_.sidebar_visible != visible) {
+    if (configuration.sidebar_visible != visible) {
       ++view_version_.host;
     }
 
-    configuration_.sidebar_visible = visible;
+    configuration.sidebar_visible = visible;
     workbench::retainLayout(*this);
   }
 
   void Session::setSidebarWidth(float width) {
-    if (configuration_.sidebar_width != width) {
+    if (configuration.sidebar_width != width) {
       ++view_version_.host;
     }
 
-    configuration_.sidebar_width = width;
+    configuration.sidebar_width = width;
   }
 
   void Session::setHostColumns(std::uint16_t columns) noexcept {
@@ -571,7 +567,7 @@ namespace telar::gui::application {
   }
 
   Change Session::apply(const RequestFailed& message) {
-    for (auto& pane : panes_.viewMut()) {
+    for (auto& pane : panes.viewMut()) {
       if (pane.getMut().rows.settle(message.request_id)) {
         return Change::none;
       }
@@ -638,7 +634,7 @@ namespace telar::gui::application {
 
     if (request && request->kind == RequestKind::close_pane) {
       ++view_version_.panes;
-      for (auto& tab : tabs_.viewMut()) {
+      for (auto& tab : tabs.viewMut()) {
         tab.getMut().layout.remove(request->pane_id);
         if (tab->focused_pane == request->pane_id) {
           tab.getMut().focused_pane = tab->layout.firstPane();

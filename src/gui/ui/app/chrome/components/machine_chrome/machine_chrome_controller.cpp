@@ -27,7 +27,7 @@ namespace telar::gui::qt {
   }
 
   const Configuration& MachineChromeController::configuration() const noexcept {
-    return store_.session().configuration();
+    return store_.session().configuration;
   }
 
   const application::window::DisplayMetrics& MachineChromeController::display() const noexcept {

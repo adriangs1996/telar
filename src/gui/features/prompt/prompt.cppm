@@ -123,11 +123,11 @@ export namespace telar::gui::features::prompt {
   // until a use case changes them. Inline, as a line's view reads it whenever it draws.
   class LineView {
   public:
-    inline LineView(const Line& line, History history) noexcept
+    inline LineView(tbc::view<const Line&, tbc::lt::a> line, tbc::view<History, tbc::lt::a> history) noexcept
         : line_(&line),
           history_(history) {}
 
-    [[nodiscard]] TBC_HOT_PATH inline std::string_view text() const noexcept {
+    [[nodiscard]] TBC_HOT_PATH inline tbc::view<std::string_view, tbc::lt::a> text() const noexcept {
       return line_->editor().text().view();
     }
 
@@ -168,7 +168,7 @@ export namespace telar::gui::features::prompt {
       return line_->secretKeys();
     }
 
-    [[nodiscard]] TBC_HOT_PATH inline const ds::Option<Menu>& menu() const noexcept {
+    [[nodiscard]] TBC_HOT_PATH inline tbc::view<const ds::Option<Menu>&, tbc::lt::a> menu() const noexcept {
       return line_->menu();
     }
 
@@ -178,7 +178,7 @@ export namespace telar::gui::features::prompt {
     }
 
     // The commands sent from this line, oldest first.
-    [[nodiscard]] TBC_HOT_PATH inline History recent() const noexcept {
+    [[nodiscard]] TBC_HOT_PATH inline tbc::view<History, tbc::lt::a> recent() const noexcept {
       return line_->recent();
     }
 
@@ -189,7 +189,7 @@ export namespace telar::gui::features::prompt {
 
     // The rest of a command this one starts: from what this line sent, then from the history.
     // Only while typing at the end of a line of two characters or more.
-    [[nodiscard]] TBC_HOT_PATH inline std::string_view suggestion() const noexcept {
+    [[nodiscard]] TBC_HOT_PATH inline tbc::view<std::string_view, tbc::lt::a> suggestion() const noexcept {
       return line_->suggestion(history_);
     }
 
@@ -199,8 +199,8 @@ export namespace telar::gui::features::prompt {
     }
 
   private:
-    const Line* line_;
-    History history_;
+    tbc::view<const Line*, tbc::lt::a> line_;
+    tbc::view<History, tbc::lt::a> history_;
   };
 
   // The questions Tab asks the runtime, and the choices known at once. Opaque: application asks
@@ -277,18 +277,21 @@ export namespace telar::gui::features::prompt {
     // The directory a question about a command named by its path reads, while it is sent.
     tbc::view<Name, tbc::lt::a> command_root;
     std::uint64_t written = 0;
-    // Each pane's line in an allocation of its own, so it stays where it is as others come and go.
-    tbc::view<ds::Map<std::uint64_t, ds::Box<PaneLine, Memory>, Memory>, tbc::lt::a> lines;
   };
+
+  // Each pane's line in an allocation of its own, so it stays where it is as others come and go.
+  // Apart from the State, so a use case edits a line while it reads the editor's history or asks
+  // for completions.
+  using Lines = ds::Map<std::uint64_t, ds::Box<PaneLine, Memory>, Memory>;
 
   // ---- lines ------------------------------------------------------------------------------------
 
   // Pane `pane_id`'s line, made on first use, in `keymap`.
-  [[nodiscard]] Opened open(State& state, std::uint64_t pane_id, Keymap keymap);
+  [[nodiscard]] tbc::view<Opened, tbc::lt::a> open(State& state, tbc::view<Lines&, tbc::lt::a> lines, std::uint64_t pane_id, Keymap keymap);
 
-  [[nodiscard]] TBC_HOT_PATH inline PaneLine* find(State& state, std::uint64_t pane_id) noexcept;
+  [[nodiscard]] TBC_HOT_PATH inline PaneLine* find(Lines& lines, std::uint64_t pane_id) noexcept;
 
-  [[nodiscard]] TBC_HOT_PATH inline ds::Option<LineView> line(const State& state, std::uint64_t pane_id) noexcept;
+  [[nodiscard]] TBC_HOT_PATH inline tbc::view<ds::Option<LineView>, tbc::lt::a> line(tbc::view<const State&, tbc::lt::a> state, tbc::view<const Lines&, tbc::lt::a> lines, std::uint64_t pane_id) noexcept;
 
   [[nodiscard]] TBC_HOT_PATH inline tbc::view<LineView, tbc::lt::a> view(tbc::view<const State&, tbc::lt::a> state, tbc::view<const PaneLine&, tbc::lt::a> line) noexcept;
 
@@ -298,10 +301,10 @@ export namespace telar::gui::features::prompt {
   // Pane `pane_id` printed now, as `now` reads the clock, only for a pane with a line: a program
   // quiet since may be asking a question.
   template <typename Now>
-  TBC_GENERIC void output(State& state, std::uint64_t pane_id, Now&& now) noexcept;
+  TBC_GENERIC void output(Lines& lines, std::uint64_t pane_id, Now&& now) noexcept;
 
   // Pane `pane_id` is gone: its line and what it asked for go with it.
-  void forget(State& state, std::uint64_t pane_id) noexcept;
+  void forget(State& state, Lines& lines, std::uint64_t pane_id) noexcept;
 
   // ---- keys and text ----------------------------------------------------------------------------
 
@@ -333,7 +336,7 @@ export namespace telar::gui::features::prompt {
 
   // `text` over `word`, which starts at `begin` of pane `pane_id`'s line, while the caret is right
   // after it; false when the line no longer holds it there.
-  bool replace(State& state, std::uint64_t pane_id, std::size_t begin, std::string_view word, std::string_view text);
+  bool replace(State& state, Lines& lines, std::uint64_t pane_id, std::size_t begin, std::string_view word, std::string_view text);
 
   // The pane whose line took text from outside the keyboard (a paste, a history entry, a
   // suggestion, a path) since the last call, for its view to show it.
@@ -360,8 +363,9 @@ export namespace telar::gui::features::prompt {
 
   // The question about `word` under `request_id`: the commands that start with it, or for a
   // command named by its path, the files in its directory. None when the path names nothing to
-  // look for. It views `word` and the state until the next use case.
-  [[nodiscard]] ds::Option<CommandQuery> ask(State& state, const Commands& commands, std::string_view word, std::uint64_t request_id);
+  // look for. It views `word`, and for a path the directory it writes in `root`, the state's
+  // command_root.
+  [[nodiscard]] tbc::view<ds::Option<CommandQuery>, tbc::lt::b> ask(tbc::view<Name&, tbc::lt::b> root, const Commands& commands, tbc::view<std::string_view, tbc::lt::b> word, std::uint64_t request_id);
 
   // The question `request_id` about `word` went out, `sent`, and `word` waits for its answer; or
   // it could not, and `word` stays unknown.
@@ -399,7 +403,7 @@ export namespace telar::gui::features::prompt {
 
   // Whether a Tab pressed while pane `pane_id` waited for a spec completes now: the line is still
   // the one it was pressed on.
-  [[nodiscard]] bool resume(State& state, std::uint64_t pane_id);
+  [[nodiscard]] bool resume(State& state, Lines& lines, std::uint64_t pane_id);
 
   // ---- completion -------------------------------------------------------------------------------
 
@@ -427,9 +431,9 @@ export namespace telar::gui::features::prompt {
 
   // An answer to a question Tab asked: the pane whose menu changed, 0 when none did, and none
   // when the answer is not one.
-  [[nodiscard]] ds::Option<std::uint64_t> receive(State& state, const CompletionWords& message);
+  [[nodiscard]] ds::Option<std::uint64_t> receive(State& state, Lines& lines, const CompletionWords& message);
 
-  [[nodiscard]] ds::Option<std::uint64_t> receive(State& state, const PathResults& message);
+  [[nodiscard]] ds::Option<std::uint64_t> receive(State& state, Lines& lines, const PathResults& message);
 
   // ---- requests that fail -----------------------------------------------------------------------
 
@@ -437,10 +441,10 @@ export namespace telar::gui::features::prompt {
   // found nothing. Its word stops waiting, its spec is unavailable and its menu stops expecting
   // it; none of them is an error the user should read. The pane whose line changed, 0 when none
   // did, and none when the request is not the line's.
-  [[nodiscard]] ds::Option<std::uint64_t> fail(State& state, std::uint64_t request_id);
+  [[nodiscard]] ds::Option<std::uint64_t> fail(State& state, Lines& lines, std::uint64_t request_id);
 
   // Every question in flight fails.
-  void failAll(State& state) noexcept;
+  void failAll(State& state, Lines& lines) noexcept;
 
   // ---- the history the suggestions read --------------------------------------------------------
 
@@ -457,7 +461,7 @@ export namespace telar::gui::features::prompt {
 
   // ---- the command block selected from the line -------------------------------------------------
 
-  [[nodiscard]] ds::Option<std::size_t> selectedBlock(const State& state, std::uint64_t pane_id) noexcept;
+  [[nodiscard]] ds::Option<std::size_t> selectedBlock(const Lines& lines, std::uint64_t pane_id) noexcept;
 
   [[nodiscard]] ds::Option<std::size_t> selectedBlock(const PaneLine& line) noexcept;
 
@@ -466,7 +470,7 @@ export namespace telar::gui::features::prompt {
   void selectBlock(PaneLine& line, ds::Option<std::size_t> index, ds::Option<std::uint32_t> live_prompt) noexcept;
 
   // The row the live prompt started on when the selection began.
-  [[nodiscard]] ds::Option<std::uint32_t> livePrompt(const State& state, std::uint64_t pane_id) noexcept;
+  [[nodiscard]] ds::Option<std::uint32_t> livePrompt(const Lines& lines, std::uint64_t pane_id) noexcept;
 
   // The first key of a two-key command (`[[`, `gg`, `zt`, `yc`…), which the next key takes.
   void beginChord(PaneLine& line, char first) noexcept;
@@ -485,8 +489,8 @@ export namespace telar::gui::features::prompt {
 
 namespace telar::gui::features::prompt {
 
-  inline PaneLine* find(State& state, std::uint64_t pane_id) noexcept {
-    auto* found = state.lines.findMut(pane_id);
+  inline PaneLine* find(Lines& lines, std::uint64_t pane_id) noexcept {
+    auto* found = lines.findMut(pane_id);
 
     return found == nullptr ? nullptr : &found->getMut();
   }
@@ -495,8 +499,8 @@ namespace telar::gui::features::prompt {
     return LineView{line.line, state.history.view()};
   }
 
-  inline ds::Option<LineView> line(const State& state, std::uint64_t pane_id) noexcept {
-    const auto* found = state.lines.find(pane_id);
+  inline tbc::view<ds::Option<LineView>, tbc::lt::a> line(tbc::view<const State&, tbc::lt::a> state, tbc::view<const Lines&, tbc::lt::a> lines, std::uint64_t pane_id) noexcept {
+    const auto* found = lines.find(pane_id);
     if (found == nullptr) {
       return ds::none;
     }
@@ -509,8 +513,8 @@ namespace telar::gui::features::prompt {
   }
 
   template <typename Now>
-  void output(State& state, std::uint64_t pane_id, Now&& now) noexcept {
-    if (auto* line = find(state, pane_id)) {
+  void output(Lines& lines, std::uint64_t pane_id, Now&& now) noexcept {
+    if (auto* line = find(lines, pane_id)) {
       line->output = now();
     }
   }

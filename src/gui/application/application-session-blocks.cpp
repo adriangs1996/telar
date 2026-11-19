@@ -87,7 +87,7 @@ namespace telar::gui::application {
   }
 
   ds::Option<std::size_t> Session::selectedBlock(std::uint64_t pane_id) const noexcept {
-    const auto block = features::prompt::selectedBlock(prompt, pane_id);
+    const auto block = features::prompt::selectedBlock(prompt_lines, pane_id);
     const auto* pane = findPane(pane_id);
     if (!block || pane == nullptr || *block >= pane->blocks.size()) {
       return ds::none;
@@ -120,7 +120,7 @@ namespace telar::gui::application {
 
   bool Session::enterBlocks() {
     auto* pane = focusedPaneMut();
-    if (pane == nullptr || configuration_.prompt.mode != PromptMode::telar || pane->blocks.empty() || prompt::surface(*this, pane->id) != features::prompt::Surface::editor || selectedBlock(pane->id)) {
+    if (pane == nullptr || configuration.prompt.mode != PromptMode::telar || pane->blocks.empty() || prompt::surface(*this, pane->id) != features::prompt::Surface::editor || selectedBlock(pane->id)) {
       return false;
     }
 
@@ -138,7 +138,7 @@ namespace telar::gui::application {
       return;
     }
 
-    ds::Vec<typename FoldMap<>::Span, Memory> spans{memory_};
+    ds::Vec<typename FoldMap<>::Span, Memory> spans{memory};
 
     // Each document drawn in place of its rows, in the rows the view measured it in, while the
     // rows are numbered as the runtime numbered them for it.
@@ -148,7 +148,7 @@ namespace telar::gui::application {
       }
     }
 
-    ds::Vec<std::uint64_t, Memory> kept{memory_};
+    ds::Vec<std::uint64_t, Memory> kept{memory};
 
     for (std::size_t index = 0; index < pane.blocks.size(); ++index) {
       if (std::ranges::find(pane.folded, blockKey(pane, index)) == pane.folded.end()) {
@@ -216,12 +216,15 @@ namespace telar::gui::application {
     return Change::terminal;
   }
 
-  ds::Option<features::prompt::Outcome> Session::blockKey(std::uint64_t pane_id, features::prompt::PaneLine& line, const features::prompt::KeyPress& key) {
+  ds::Option<features::prompt::Outcome> Session::blockKey(std::uint64_t pane_id, const features::prompt::KeyPress& key) {
     using features::prompt::Outcome;
     auto* pane = findPaneMut(pane_id);
-    if (pane == nullptr || configuration_.prompt.mode != PromptMode::telar) {
+    auto* found = features::prompt::find(prompt_lines, pane_id);
+    if (pane == nullptr || found == nullptr || configuration.prompt.mode != PromptMode::telar) {
       return ds::none;
     }
+
+    auto& line = *found;
 
     const auto editor = features::prompt::view(prompt, line);
     const bool normal = editor.keymap() == features::prompt::Keymap::vim && editor.mode() == features::prompt::Mode::normal && !editor.commandPending();
@@ -470,7 +473,7 @@ namespace telar::gui::application {
 
     if (index + 1 < pane.blocks.size()) {
       end = pane.blocks[index + 1].row;
-    } else if (const auto live = features::prompt::livePrompt(prompt, pane.id)) {
+    } else if (const auto live = features::prompt::livePrompt(prompt_lines, pane.id)) {
       end = *live;
     }
 

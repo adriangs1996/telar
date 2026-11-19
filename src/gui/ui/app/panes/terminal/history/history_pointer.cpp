@@ -319,7 +319,7 @@ namespace telar::gui::qt {
     if (!busy() && synchronized_ && synchronized_->view_version == browser.viewVersion()) {
       frame.surface = surface;
       if (const auto choice = browser.choice()) {
-        frame.history = Presented{.choice = *choice, .dialog_generation = generation, .enter_runs = session.configuration().history.enter_runs};
+        frame.history = Presented{.choice = *choice, .dialog_generation = generation, .enter_runs = session.configuration.history.enter_runs};
       }
     }
   }

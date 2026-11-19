@@ -244,7 +244,7 @@ namespace telar::gui::qt {
     std::size_t count = 0;
     const auto* active = session.activeTab();
 
-    for (const auto& tab : session.tabs()) {
+    for (const auto& tab : session.tabs) {
       if (active != nullptr && sameWorkspace(tab->location.workspace, active->location.workspace) && count < tabs.size()) {
         tabs.atMut(count++) = &tab.get();
       }
@@ -384,10 +384,10 @@ namespace telar::gui::qt {
     }
 
     if (const auto* tab = std::get_if<TabLocation>(&navigation)) {
-      const auto found = std::ranges::find_if(session.tabs(), [&](const auto& row) {
+      const auto found = std::ranges::find_if(session.tabs, [&](const auto& row) {
         return sameTab(row->location, *tab);
       });
-      if (found != session.tabs().end()) {
+      if (found != session.tabs.end()) {
         label.append(application::palette::NavigationLabel::tab_prefix);
         label.append((*found)->label.empty() ? application::tabApplicationName(*(*found), session.findPane((*found)->focused_pane)) : std::string_view{(*found)->label});
       }
@@ -658,10 +658,10 @@ namespace telar::gui::qt {
     }
 
     if (const auto* tab = std::get_if<TabLocation>(&target)) {
-      const auto found = std::ranges::find_if(session.tabs(), [&](const auto& row) {
+      const auto found = std::ranges::find_if(session.tabs, [&](const auto& row) {
         return sameTab(row->location, *tab);
       });
-      if (found == session.tabs().end()) {
+      if (found == session.tabs.end()) {
         return false;
       }
 
@@ -734,7 +734,7 @@ namespace telar::gui::qt {
     QVariantMap grid;
 
     if (suggestion.phase == application::palette::SuggestionPhase::ready) {
-      const auto& font = session.configuration().font;
+      const auto& font = session.configuration.font;
       const auto resolved = FormTextGrid::resolve(toQString(font.family.view()), toQString(font.style.view()), display_.chrome.body);
 
       grid = resolved.record(density);

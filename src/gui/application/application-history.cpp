@@ -69,12 +69,12 @@ namespace telar::gui::application::history {
   }
 
   void search(Session& session, std::string_view query) {
-    search(session, query, {.author = session.configuration().history.show_agent_commands ? HistoryAuthorFilter::all : HistoryAuthorFilter::human});
+    search(session, query, {.author = session.configuration.history.show_agent_commands ? HistoryAuthorFilter::all : HistoryAuthorFilter::human});
   }
 
   void search(Session& session, std::string_view query, HistoryFilters filters) {
     // Each command once, at its newest run that passes the filters.
-    QueryHistory request{.request_id = session.link.nextRequest(), .query = query, .failed_only = filters.failed_only, .author = filters.author, .match = session.configuration().history.match_fts ? HistoryMatch::fts : HistoryMatch::fuzzy, .distinct = true};
+    QueryHistory request{.request_id = session.link.nextRequest(), .query = query, .failed_only = filters.failed_only, .author = filters.author, .match = session.configuration.history.match_fts ? HistoryMatch::fts : HistoryMatch::fuzzy, .distinct = true};
 
     resolveScope(session, request, filters.scope);
     send(session, features::history::search(session.history, request));
@@ -115,14 +115,14 @@ namespace telar::gui::application::history {
 
   void paste(Session& session, std::uint64_t entry_id, bool alternate) {
     // The entry is copied out of the history, which pasting must not be able to reach.
-    const ds::String<Memory> entry{Access::memory(session), view(session).command(entry_id)};
+    const ds::String<Memory> entry{session.memory, view(session).command(entry_id)};
     const std::string_view command = entry;
     const auto* pane = session.focusedPane();
     if (pane == nullptr || !pane->attached || pane->exited) {
       throw EncodingError{"No terminal is ready for input"};
     }
 
-    const auto runs = session.configuration().history.enter_runs != alternate;
+    const auto runs = session.configuration.history.enter_runs != alternate;
 
     if (prompt::edits(session, pane->id)) {
       prompt::write(session, pane->id, command);

@@ -69,6 +69,16 @@ export {
     // The clock a session reads, monotonic and in nanoseconds.
     using MonotonicNow = std::uint64_t (*)() noexcept;
 
+    // The panes a session holds, each boxed so a pane stays put while the list grows.
+    using Panes = ds::Vec<ds::Box<Pane<Memory>, Memory>, Memory>;
+
+    // Pane `pane_id` among `panes`. It borrows the panes alone, so a use case keeps it while it
+    // changes another of the session's fields.
+    [[nodiscard]] const Pane<Memory>* findPane(const Panes& panes, std::uint64_t pane_id) noexcept;
+
+    // The same pane, to change it.
+    [[nodiscard]] Pane<Memory>* findPaneMut(Panes& panes, std::uint64_t pane_id) noexcept;
+
     class Session {
       // The use cases of application::<feature> reach the members below through it.
       friend struct Access;
@@ -212,9 +222,7 @@ export {
 
       [[nodiscard]] Pane<Memory>* focusedPaneMut() noexcept;
 
-      [[nodiscard]] const ds::Vec<ds::Box<Tab<Memory>, Memory>, Memory>& tabs() const noexcept;
 
-      [[nodiscard]] const ds::Vec<ds::Box<Pane<Memory>, Memory>, Memory>& panes() const noexcept;
 
       [[nodiscard]] const ds::Vec<Workspace<Memory>, Memory>& workspaces() const noexcept;
 
@@ -246,7 +254,6 @@ export {
 
       [[nodiscard]] std::uint64_t changedPane() const noexcept;
 
-      [[nodiscard]] const Configuration& configuration() const noexcept;
 
       [[nodiscard]] ClientViewState clientViewState() const noexcept;
 
@@ -404,7 +411,9 @@ export {
 
       void synchronizeAttachments();
 
-      void prepareDetach(std::uint64_t pane_id);
+      // Detaches pane `pane_id` from the runtime, closing copy mode when it reads that pane. Static,
+      // with the fields it changes, so a loop over the panes may call it.
+      static void detachPane(features::terminal::copy_mode::State& copy_mode, Link& link, std::uint64_t pane_id);
 
       Change apply(const PaneMatches& message);
 
@@ -555,7 +564,12 @@ export {
 
       Change apply(const PaneFocusCommand& message);
 
-      Configuration configuration_;
+
+    public:
+      // The configuration the session runs with, a field the use cases read beside a feature's state.
+      Configuration configuration;
+
+    private:
       ViewVersion view_version_;
 
       // The keys of the command blocks, ahead of the editor. From the normal mode: Ctrl-U and
@@ -565,7 +579,7 @@ export {
       // or bottom; za, zc and zo fold its output, zM and zR every block's; / searches its output;
       // v and V select its output, Y copies it and yc its command; Esc, q, i, a, I, A and any other
       // key go back to the prompt.
-      ds::Option<features::prompt::Outcome> blockKey(std::uint64_t pane_id, features::prompt::PaneLine& line, const features::prompt::KeyPress& key);
+      ds::Option<features::prompt::Outcome> blockKey(std::uint64_t pane_id, const features::prompt::KeyPress& key);
 
       // The shown row at the view's top: as its view says, or as the runtime's view puts it.
       [[nodiscard]] static std::uint64_t shownTop(const Pane<Memory>& pane) noexcept;
@@ -607,17 +621,23 @@ export {
     public:
       // The features' states, which their use cases in application::<feature> reach directly, as Rust
       // borrows a struct's fields: an accessor would lend the whole session.
-      features::prompt::State prompt;
-      features::terminal::copy_mode::State copy_mode;
+      tbc::view<features::prompt::State, tbc::lt::a> prompt;
+      tbc::view<features::prompt::Lines, tbc::lt::a> prompt_lines;
+      tbc::view<features::terminal::copy_mode::State, tbc::lt::a> copy_mode;
       features::terminal::links::State links;
       features::status_bar::State status_bar;
 
     private:
       ProxyStatus proxy_{};
-      tbc::view<Memory&, tbc::lt::a> memory_;
 
     public:
-      Link link;
+      // Where the session and its features allocate; a reference, so lending it lends no field.
+      tbc::view<Memory&, tbc::lt::a> memory;
+
+    private:
+
+    public:
+      tbc::view<Link, tbc::lt::a> link;
 
     private:
       tbc::view<HostEffects&, tbc::lt::a> effects_;
@@ -629,8 +649,13 @@ export {
       features::terminal::graphics::State graphics;
 
     private:
-      tbc::view<ds::Vec<ds::Box<Pane<Memory>, Memory>, Memory>, tbc::lt::a> panes_;
-      tbc::view<ds::Vec<ds::Box<Tab<Memory>, Memory>, Memory>, tbc::lt::a> tabs_;
+
+    public:
+      // The panes and tabs the runtime reported, which the use cases search as fields of their own.
+      tbc::view<Panes, tbc::lt::a> panes;
+      tbc::view<ds::Vec<ds::Box<Tab<Memory>, Memory>, Memory>, tbc::lt::a> tabs;
+
+    private:
       tbc::view<WorkspaceReplica<Memory>, tbc::lt::a> workspaces_;
       tbc::view<AgentReplica<Memory>, tbc::lt::a> agents_;
       tbc::view<PaneListReplica<Memory>, tbc::lt::a> pane_list_;

@@ -71,7 +71,7 @@ namespace telar::gui::qt {
     const auto* active = session.activeTab();
     QList<const Tab<Memory>*> ordered;
 
-    for (const auto& tab : session.tabs()) {
+    for (const auto& tab : session.tabs) {
       if (active != nullptr && sameWorkspace(tab->location.workspace, active->location.workspace)) {
         ordered.append(&tab.get());
       }
@@ -86,7 +86,7 @@ namespace telar::gui::qt {
     elements_.begin(ElementSlots::tab_slots);
     for (const auto* tab : ordered) {
       const auto* pane = session.findPane(tab->focused_pane);
-      auto record = tabRecord(*tab, pane, session.panes(), std::span<const Agent<Memory>>{session.agents()}, tab == active);
+      auto record = tabRecord(*tab, pane, session.panes, std::span<const Agent<Memory>>{session.agents()}, tab == active);
 
       if (elements_.active()) {
         record.insert(QStringLiteral("elements"), elements_.elements(ElementSlots::tab_slots, record.value(QStringLiteral("key")).toString(), ElementSlots::tabItem(record, static_cast<int>(tabs.size()))));
@@ -131,7 +131,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    if (std::ranges::any_of(session.tabs(), [&](const auto& tab) {
+    if (std::ranges::any_of(session.tabs, [&](const auto& tab) {
           return tab->location.tab_id == id && tab->location.workspace.kind == surface.workspace.kind && tab->location.workspace.id == surface.workspace.id;
         })) {
       emit selectRequested(id);
@@ -253,7 +253,7 @@ namespace telar::gui::qt {
     ds::Array<std::uint64_t, application::workbench::TabDropSlots::capacity> tabs{};
     std::size_t count = 0;
 
-    for (const auto& tab : session.tabs()) {
+    for (const auto& tab : session.tabs) {
       if (tab->location.workspace.kind == surface.workspace.kind && tab->location.workspace.id == surface.workspace.id && count < tabs.size()) {
         tabs.atMut(count++) = tab->location.tab_id;
       }

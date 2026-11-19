@@ -39,8 +39,9 @@ namespace {
   class Editor : Arena {
   public:
     explicit Editor(Keymap keymap = Keymap::emacs)
-        : state_(memory) {
-      static_cast<void>(feature::open(state_, pane_id, keymap));
+        : state_(memory),
+          lines_(memory) {
+      static_cast<void>(feature::open(state_, lines_, pane_id, keymap));
     }
 
     Outcome press(const KeyPress& key) {
@@ -62,7 +63,7 @@ namespace {
     }
 
     [[nodiscard]] LineView view() const {
-      return *feature::line(state_, pane_id);
+      return *feature::line(state_, lines_, pane_id);
     }
 
     // What the line handed its owner with its last key.
@@ -74,10 +75,11 @@ namespace {
     static constexpr std::uint64_t pane_id = 1;
 
     PaneLine& line() {
-      return *feature::find(state_, pane_id);
+      return *feature::find(lines_, pane_id);
     }
 
     State state_;
+    feature::Lines lines_;
     telar::gui::PromptConfiguration configuration_;
   };
 
@@ -473,7 +475,8 @@ namespace {
 
     {
       State state{arena.memory};
-      auto& line = feature::open(state, 1, Keymap::vim).line;
+      feature::Lines lines{arena.memory};
+      auto& line = feature::open(state, lines, 1, Keymap::vim).line;
       const telar::gui::PromptConfiguration configuration;
 
       for (const char byte : std::string_view{"iecho one two\x1b" "0dwP\"ayiwu\x12" "A three\r"}) {

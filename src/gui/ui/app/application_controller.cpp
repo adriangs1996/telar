@@ -294,7 +294,7 @@ namespace telar::gui::qt {
 
   void ApplicationController::releaseInput() {
     commands_.interrupt();
-    for (const auto& pane : session().panes()) {
+    for (const auto& pane : session().panes) {
       terminals_.releaseInput(pane->id);
     }
   }
@@ -488,7 +488,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    const auto& configuration = session().configuration();
+    const auto& configuration = session().configuration;
 
     WindowAnimationClock::forWindow(*window_).setMaximumFrameRate(configuration.max_fps == 0 ? ds::none : ds::Option{configuration.max_fps});
     frames_.configure();
@@ -509,7 +509,7 @@ namespace telar::gui::qt {
   }
 
   const Configuration& ApplicationController::configuration() const noexcept {
-    return session().configuration();
+    return session().configuration;
   }
 
   void ApplicationController::consume(MachineClient& client, QByteArrayView payload) {
@@ -748,7 +748,7 @@ namespace telar::gui::qt {
   // Each pane delegate reads the theme a score of times; it is built once per configuration.
   QVariantMap ApplicationController::colors() const {
     if (!colors_) {
-      colors_ = themeColors(session().configuration());
+      colors_ = themeColors(session().configuration);
     }
 
     return *colors_;
@@ -756,7 +756,7 @@ namespace telar::gui::qt {
 
   QVariantMap ApplicationController::font() const {
     if (!font_) {
-      font_ = fontSettings(session().configuration().font);
+      font_ = fontSettings(session().configuration.font);
     }
 
     return *font_;

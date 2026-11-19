@@ -47,7 +47,7 @@ namespace telar::gui::application::terminal::copy_mode {
       const auto copy = feature::view(session.copy_mode);
 
       if (const auto owner = copy.pointerOwner()) {
-        const auto* pane = session.findPane(owner->pane_id);
+        const auto* pane = findPane(session.panes, owner->pane_id);
         const auto available = pane != nullptr && pane->attached && pane->screen.columns() != 0 && pane->screen.rows() != 0;
 
         return {.kind = feature::CopyPointerAuthority::Kind::selection, .dragging = owner->dragging, .position = available && input.pane_id == owner->pane_id ? ds::Option{input.position} : ds::none};
@@ -58,7 +58,7 @@ namespace telar::gui::application::terminal::copy_mode {
         return {};
       }
 
-      const auto* pane = session.findPane(state->pane_id);
+      const auto* pane = findPane(session.panes, state->pane_id);
       if (pane == nullptr || !pane->attached) {
         return {.kind = feature::CopyPointerAuthority::Kind::missing};
       }
@@ -245,7 +245,7 @@ namespace telar::gui::application::terminal::copy_mode {
       return nullptr;
     }
 
-    auto* found = session.findPaneMut(copy->pane_id);
+    auto* found = findPaneMut(session.panes, copy->pane_id);
     if (found == nullptr || !found->attached) {
       feature::close(state);
 

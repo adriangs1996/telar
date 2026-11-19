@@ -112,7 +112,7 @@ namespace {
       client.disconnected();
       check(!client.ready() && !client.findPane(1)->attached, "disconnect must invalidate attachment state");
       client.connected(1);
-      check(client.activeTab() == nullptr && client.panes().empty(), "a new runtime session must discard the former projection before receiving its bootstrap snapshot");
+      check(client.activeTab() == nullptr && client.panes.empty(), "a new runtime session must discard the former projection before receiving its bootstrap snapshot");
       const TabLocation restored_location{.workspace = created.workspace, .tab_id = 1};
       const ds::Array<ClientLayoutNode, 1> restored_nodes{ClientLayoutPane{1}};
       const ds::Array restored_tabs{ClientTabLayout{.location = restored_location, .focused_pane = 1, .workspace_active = true, .nodes = restored_nodes}};
@@ -147,11 +147,11 @@ namespace {
       };
 
       deliver(client, WorkspaceSnapshot{.request_id = 1, .workspace = location.workspace, .name = "project", .tabs = tabs});
-      const auto entry = std::ranges::find_if(client.tabs(), [](const auto& tab) {
+      const auto entry = std::ranges::find_if(client.tabs, [](const auto& tab) {
         return tab->location.tab_id == 2;
       });
 
-      check(entry != client.tabs().end() && client.findPane(remembered_detached_pane) == nullptr, "workspace metadata must not instantiate detached panes");
+      check(entry != client.tabs.end() && client.findPane(remembered_detached_pane) == nullptr, "workspace metadata must not instantiate detached panes");
       const auto* detached = &entry->get();
 
       check(application::tabApplicationName(*client.activeTab(), client.focusedPane()) == "Python", "foreground snapshots must honor this client's focused pane");
@@ -242,7 +242,7 @@ namespace {
     const ds::Array<ClientTabLayout, 1> tabs{{{.location = location, .focused_pane = pane_id, .fullscreen = false, .workspace_active = true, .nodes = nodes}}};
 
     deliver(client, ClientLayoutSnapshot{.restored = true, .sidebar_visible = false, .sidebar_width = sidebar_columns, .workspace_list_collapsed = true, .active_tab = location, .tabs = tabs});
-    check(!client.configuration().sidebar_visible && client.activeTab() == nullptr, "saved sidebar preferences must restore before the canonical root is received");
+    check(!client.configuration.sidebar_visible && client.activeTab() == nullptr, "saved sidebar preferences must restore before the canonical root is received");
     check(client.workspaceListCollapsed(), "saved workspace collapse preference must restore");
     const auto opening = transport.last<OpenPane>();
 
@@ -337,7 +337,7 @@ namespace {
     command.request_id = 1;
     command.route = {.id = 1, .generation = 1};
     command.action = ClientAction::sidebar_hide;
-    check(deliver(client, command) == application::Change::sidebar && !client.configuration().sidebar_visible, "routed sidebar commands must update window state");
+    check(deliver(client, command) == application::Change::sidebar && !client.configuration.sidebar_visible, "routed sidebar commands must update window state");
     constexpr std::uint16_t expected_sidebar_columns = 42;
     const auto hidden = transport.last<CompleteClientCommand>();
 
@@ -372,7 +372,7 @@ namespace {
     constexpr std::uint64_t nanoseconds_per_second = 1'000'000'000;
 
     application::window::setRefreshRate(client, display_refresh_rate);
-    auto configuration = client.configuration();
+    auto configuration = client.configuration;
 
     configuration.max_fps = configured_frame_cap;
     application::configuration::configure(client, configuration);
@@ -396,7 +396,7 @@ namespace {
 
     client.setHostColumns(host_columns);
     client.setSidebarVisible(false);
-    const auto logical_width = client.configuration().sidebar_width;
+    const auto logical_width = client.configuration.sidebar_width;
     ClientCommand command{.request_id = 1, .route = {.id = 1, .generation = 1}, .action = ClientAction::sidebar_resize, .value = preferred_columns};
 
     check(deliver(client, command) == application::Change::sidebar, "an exact sidebar column request must update semantic layout state");
@@ -427,7 +427,7 @@ namespace {
       check(transport.count(ClientTag::update_client_layout) == before, "a rejected width must preserve the previous retained state");
     }
 
-    check(client.configuration().sidebar_width == logical_width, "semantic CLI columns must remain independent of the GUI's logical pixel preference");
+    check(client.configuration.sidebar_width == logical_width, "semantic CLI columns must remain independent of the GUI's logical pixel preference");
   }
 
   void routedCopyRange() {
@@ -690,7 +690,7 @@ namespace {
 
     check(tab->focused_pane == 2 && !tab->fullscreen, "import must restore focus and fullscreen together");
     check(std::get<ClientLayoutSplit>(tab->layout.nodes().front()).ratio == original_ratio, "import must restore split fractions");
-    check(!client.configuration().sidebar_visible, "applying the tab tree must preserve the current sidebar preference");
+    check(!client.configuration.sidebar_visible, "applying the tab tree must preserve the current sidebar preference");
     const auto retained = transport.last<UpdateClientLayout>();
 
     check(retained.tabs.size() == 1 && retained.tabs.front().focused_pane == 2 && !retained.tabs.front().fullscreen, "the imported state must be retained for reconnects");
@@ -833,7 +833,7 @@ namespace {
     application::history::paste(client, 1);
     check(transport.inputSince(first_message) == "echo safe", "default history submission must paste exact canonical bytes without running");
 
-    auto configuration = client.configuration();
+    auto configuration = client.configuration;
 
     configuration.history = {.show_agent_commands = true, .enter_runs = true, .match_fts = true};
     application::configuration::configure(client, configuration);
@@ -1136,10 +1136,10 @@ namespace {
     const ds::Array<TabDescriptor, 1> tabs{{{.tab_id = 2, .position = 0, .pane_count = 1, .label = "Second"}}};
 
     deliver(client, WorkspaceSnapshot{.request_id = 1, .workspace = created.workspace, .name = "Project", .tabs = tabs});
-    check(client.tabs().size() == 1 && client.activeTab()->location.tab_id == 2 && client.findPane(1) == nullptr, "canonical workspace snapshots must remove vanished tabs and their screens");
+    check(client.tabs.size() == 1 && client.activeTab()->location.tab_id == 2 && client.findPane(1) == nullptr, "canonical workspace snapshots must remove vanished tabs and their screens");
     check(deliver(client, PaneOpened{.request_id = late_attach.request_id, .pane_id = 1, .location = {.workspace = created.workspace, .tab_id = 1}, .created = false, .pane_generation = 1}) == application::Change::none && client.findPane(1) == nullptr, "late attachment replies must not resurrect a closed tab");
 
-    check(deliver(client, ResyncRequired{.workspace = created.workspace, .workspace_closed = true, .previous_workspace = {}}) == application::Change::closed && client.tabs().empty(), "closing the final workspace must release the client projection and "
+    check(deliver(client, ResyncRequired{.workspace = created.workspace, .workspace_closed = true, .previous_workspace = {}}) == application::Change::closed && client.tabs.empty(), "closing the final workspace must release the client projection and "
                                                                                                                                                                                        "close its window");
   }
 
@@ -1159,8 +1159,8 @@ namespace {
     deliver(client, PaneTitle{.pane_id = 1, .title = "Changed title"});
     deliver(client, PaneCwd{.pane_id = 1, .cwd = "/changed"});
     deliver(client, PaneForeground{.pane_id = 1, .name = "nvim"});
-    client.setSidebarVisible(client.configuration().sidebar_visible);
-    client.setSidebarWidth(client.configuration().sidebar_width);
+    client.setSidebarVisible(client.configuration.sidebar_visible);
+    client.setSidebarWidth(client.configuration.sidebar_width);
     check(client.viewVersion() == original, "frames, pane metadata and unchanged view commands must preserve the gesture context");
     check(client.chromeRevision() > original_chrome, "pane metadata must move the chrome revision the pane headers and tabs read");
 
@@ -1178,13 +1178,13 @@ namespace {
     check(client.viewVersion().viewport > resized.viewport, "restoring a viewport must not revive the previous gesture context");
 
     const auto before_sidebar = client.viewVersion();
-    const auto visible = client.configuration().sidebar_visible;
+    const auto visible = client.configuration.sidebar_visible;
 
     client.setSidebarVisible(!visible);
     client.setSidebarVisible(visible);
     check(client.viewVersion().host > before_sidebar.host, "changing and restoring chrome must keep the intervening invalidation");
     const auto before_configuration = client.viewVersion();
-    const auto configuration = client.configuration();
+    const auto configuration = client.configuration;
 
     application::configuration::configure(client, configuration);
     check(client.viewVersion().configuration > before_configuration.configuration, "adopting a configuration must invalidate links even when its geometry matches");

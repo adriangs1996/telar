@@ -47,7 +47,7 @@ namespace telar::gui::application::terminal::links {
       return ds::none;
     }
 
-    const auto* source = session.findPane(*source_id);
+    const auto* source = findPane(session.panes, *source_id);
     const auto& active = Access::activeTab(session);
     if (source == nullptr || !active || !sameTab(source->location, *active)) {
       throw std::runtime_error{"PaneNotFound"};
@@ -69,7 +69,7 @@ namespace telar::gui::application::terminal::links {
       return;
     }
 
-    const auto* source = session.findPane(*source_id);
+    const auto* source = findPane(session.panes, *source_id);
     const features::terminal::links::EditorRequest request{
         .request_id = source->generation == 0 ? 0 : session.link.nextRequest(),
         .source = {.pane_id = source->id, .pane_generation = source->generation, .attachment_generation = source->attachment_generation, .location = source->location},
@@ -101,7 +101,7 @@ namespace telar::gui::application::terminal::links {
 
     const auto& source = request->source;
     const auto& active = Access::activeTab(session);
-    const auto* pane = session.findPane(source.pane_id);
+    const auto* pane = findPane(session.panes, source.pane_id);
     if (pane == nullptr || !active || !sameTab(source.location, *active) || !sameTab(pane->location, source.location) || pane->generation != source.pane_generation || pane->attachment_generation != source.attachment_generation) {
       return Change::none;
     }
@@ -120,7 +120,7 @@ namespace telar::gui::application::terminal::links {
     case EditorOutcome::missing:
       return report(session, "FileNotFound");
     case EditorOutcome::opened: {
-      const auto* editor = session.findPane(message.pane_id);
+      const auto* editor = findPane(session.panes, message.pane_id);
       if (editor == nullptr || !sameTab(editor->location, source.location) || editor->generation != message.pane_generation) {
         return Change::none;
       }

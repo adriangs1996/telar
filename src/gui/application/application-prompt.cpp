@@ -39,7 +39,7 @@ namespace telar::gui::application::prompt {
     // The commands people typed, most recent first and each once, for the editor's suggestions.
     void requestHistory(Session& session) {
       auto& state = session.prompt;
-      if (!session.ready() || !session.configuration().prompt.ghost || features::prompt::historyAsked(state)) {
+      if (!session.ready() || !session.configuration.prompt.ghost || features::prompt::historyAsked(state)) {
         return;
       }
 
@@ -52,62 +52,64 @@ namespace telar::gui::application::prompt {
       }
     }
 
-    // Whether the runtime has a spec for `command` in pane `pane_id`, asking it the first time:
-    // once per command until the shell's next command, with the digest of the spec already held.
-    features::prompt::SpecState specState(Session& session, std::uint64_t pane_id, std::string_view command) {
+    // Whether the runtime has a spec for `command` in `pane`, asking it through `link` the first
+    // time: once per command until the shell's next command, with the digest of the spec already
+    // held.
+    features::prompt::SpecState specState(features::prompt::State& state, Session::Link& link, const Pane<Memory>& pane, std::string_view command) {
       using features::prompt::SpecState;
-      const auto* pane = session.findPane(pane_id);
-      if (pane == nullptr) {
-        return SpecState::unavailable;
-      }
-
-      auto& state = session.prompt;
-      if (const auto known = features::prompt::spec(state, commands(*pane), command)) {
+      if (const auto known = features::prompt::spec(state, commands(pane), command)) {
         return *known;
       }
 
-      const auto request = features::prompt::askSpec(state, pane_id, command, session.link.nextRequest());
+      const auto request = features::prompt::askSpec(state, pane.id, command, link.nextRequest());
 
       try {
-        session.link.send(request);
+        link.send(request);
       } catch (const std::exception&) {
-        features::prompt::askedSpec(state, pane_id, command, request.request_id, false);
+        features::prompt::askedSpec(state, pane.id, command, request.request_id, false);
         return SpecState::unavailable;
       }
 
-      features::prompt::askedSpec(state, pane_id, command, request.request_id, true);
+      features::prompt::askedSpec(state, pane.id, command, request.request_id, true);
       return SpecState::pending;
     }
 
-    // Tab: the spec's literal choices at once, and the runtime's files when the spec, or a
-    // command without one, expects a path there.
-    void complete(Session& session, std::uint64_t pane_id, features::prompt::PaneLine& line, shell::Dialect dialect) {
+    // Tab in pane `pane_id`'s line: the spec's literal choices at once, and the runtime's files when
+    // the spec, or a command without one, expects a path there.
+    void complete(Session& session, std::uint64_t pane_id, shell::Dialect dialect) {
       using features::prompt::SpecState;
-      const auto* pane = session.findPane(pane_id);
-      auto context = features::prompt::completing(session.prompt, line, dialect);
-      if (pane == nullptr || !context) {
+      const bool ready = session.ready();
+      const auto* pane = findPane(session.panes, pane_id);
+      auto* line = features::prompt::find(session.prompt_lines, pane_id);
+      if (pane == nullptr || line == nullptr) {
+        return;
+      }
+
+      auto& state = session.prompt;
+      auto context = features::prompt::completing(state, *line, dialect);
+      if (!context) {
         return;
       }
 
       // A command's spec comes from the runtime, for the commands this pane's shell runs; while
       // it is on its way, Tab waits for it and completes once it arrives.
-      auto& state = session.prompt;
+      const bool asks = ready && !pane->shell.remote;
       bool specified = false;
 
-      if (!context->command_position && !pane->shell.remote && session.ready()) {
-        switch (specState(session, pane_id, context->command)) {
+      if (!context->command_position && asks) {
+        switch (specState(state, session.link, *pane, context->command)) {
         case SpecState::available:
           specified = true;
           break;
         case SpecState::pending:
-          features::prompt::awaitSpec(state, line);
+          features::prompt::awaitSpec(state, *line);
           return;
         case SpecState::unavailable:
           break;
         }
       }
 
-      auto plan = features::prompt::plan(state, line, std::move(context.getMut()), specified, session.ready() && !pane->shell.remote, std::string_view{pane->cwd}, dialect);
+      auto plan = features::prompt::plan(state, *line, std::move(context.getMut()), specified, asks, std::string_view{pane->cwd}, dialect);
 
       for (std::size_t index = 0; index < features::prompt::questions(plan); ++index) {
         const auto request_id = session.link.nextRequest();
@@ -124,35 +126,35 @@ namespace telar::gui::application::prompt {
         }
       }
 
-      features::prompt::offer(state, line, std::move(plan));
+      features::prompt::offer(state, *line, std::move(plan));
     }
 
-    // Sends what the editor decided: a command to run, a line for the running program, or raw
-    // bytes the shell reads as keys. Commands are validated like a pasted history entry.
-    void deliver(Session& session, std::uint64_t pane_id, Outcome outcome, const features::prompt::PaneLine& line) {
-      const auto* pane = session.findPane(pane_id);
-      if (pane == nullptr || !pane->attached || pane->exited) {
+    // Sends what pane `pane_id`'s line decided: a command to run, a line for the running program,
+    // or raw bytes the shell reads as keys. Commands are validated like a pasted history entry.
+    // The text is copied first: sending it reaches the line again, for a secret prompt's dots.
+    void deliver(Session& session, std::uint64_t pane_id, Outcome outcome) {
+      const auto* pane = findPane(session.panes, pane_id);
+      const auto* line = features::prompt::find(session.prompt_lines, pane_id);
+      if (pane == nullptr || line == nullptr || !pane->attached || pane->exited) {
         return;
       }
 
-      const auto text = features::prompt::delivery(line);
+      const bool bracketed = pane->screen.modes().bracketed_paste;
+      ds::String<Memory> text{session.memory, features::prompt::delivery(*line)};
 
       switch (outcome) {
       case Outcome::run:
-        features::history::HistoryText::validate(text, pane->screen.modes().bracketed_paste);
-        session.runCommand(pane_id, text);
-        features::prompt::remember(session.prompt, text);
+        features::history::HistoryText::validate(text.view(), bracketed);
+        session.runCommand(pane_id, text.view());
+        features::prompt::remember(session.prompt, text.view());
         break;
-      case Outcome::answer: {
-        features::history::HistoryText::validate(text.empty() ? std::string_view{" "} : text, false);
-        ds::String<Memory> answer{Access::memory(session), text};
-
-        answer.push('\r');
-        session.input(pane_id, answer.view());
+      case Outcome::answer:
+        features::history::HistoryText::validate(text.empty() ? std::string_view{" "} : text.view(), false);
+        text.push('\r');
+        session.input(pane_id, text.view());
         break;
-      }
       case Outcome::bytes:
-        session.input(pane_id, text);
+        session.input(pane_id, text.view());
         break;
       default:
         break;
@@ -162,8 +164,9 @@ namespace telar::gui::application::prompt {
     // An answer about a command the editor marks: a command found may have a spec, asked now so it
     // is there by the first Tab.
     Change settle(Session& session, const features::prompt::Settled& settled) {
-      if (settled.presence == CommandPresence::found && settled.word.view().find('/') == std::string_view::npos) {
-        static_cast<void>(specState(session, settled.pane_id, settled.word.view()));
+      const auto* pane = findPane(session.panes, settled.pane_id);
+      if (pane != nullptr && settled.presence == CommandPresence::found && settled.word.view().find('/') == std::string_view::npos) {
+        static_cast<void>(specState(session.prompt, session.link, *pane, settled.word.view()));
       }
 
       return changed(session, features::prompt::settle(session.prompt, settled) ? settled.pane_id : 0);
@@ -172,8 +175,8 @@ namespace telar::gui::application::prompt {
   }
 
   Surface surface(const Session& session, std::uint64_t pane_id) noexcept {
-    const auto* pane = session.findPane(pane_id);
-    const auto mode = session.configuration().prompt.mode;
+    const auto* pane = findPane(session.panes, pane_id);
+    const auto mode = session.configuration.prompt.mode;
     // telar's editor stays while copy mode, which owns the keys, reads the scrollback.
     if (pane == nullptr || !pane->attached || pane->exited || (features::terminal::copy_mode::view(session.copy_mode).active() && mode != PromptMode::telar)) {
       return Surface::none;
@@ -189,7 +192,7 @@ namespace telar::gui::application::prompt {
   }
 
   bool hidesTerminalCursor(const Session& session, std::uint64_t pane_id) noexcept {
-    const auto* pane = session.findPane(pane_id);
+    const auto* pane = findPane(session.panes, pane_id);
     if (pane == nullptr) {
       return false;
     }
@@ -211,7 +214,7 @@ namespace telar::gui::application::prompt {
       return !typed || !typed->answering();
     }
     case Surface::none:
-      return session.configuration().prompt.mode == PromptMode::telar && pane->attached && !pane->exited && pane->shell.shell != IntegratedShell::none && pane->shell.phase == ShellPhase::unknown && pane->shell.commands != 0 && !pane->screen.modes().alternate_screen;
+      return session.configuration.prompt.mode == PromptMode::telar && pane->attached && !pane->exited && pane->shell.shell != IntegratedShell::none && pane->shell.phase == ShellPhase::unknown && pane->shell.commands != 0 && !pane->screen.modes().alternate_screen;
     case Surface::editor:
     case Surface::secret:
       break;
@@ -221,7 +224,7 @@ namespace telar::gui::application::prompt {
   }
 
   ds::Option<LineView> line(const Session& session, std::uint64_t pane_id) noexcept {
-    return features::prompt::line(session.prompt, pane_id);
+    return features::prompt::line(session.prompt, session.prompt_lines, pane_id);
   }
 
   std::string_view suggestion(const Session& session, std::uint64_t pane_id) noexcept {
@@ -240,39 +243,42 @@ namespace telar::gui::application::prompt {
       return Outcome::terminal;
     }
 
-    auto& line = open(session, pane_id);
+    static_cast<void>(open(session, pane_id));
 
     if (where == Surface::editor) {
-      if (const auto outcome = Access::blockKey(session, pane_id, line, key)) {
+      if (const auto outcome = Access::blockKey(session, pane_id, key)) {
         return *outcome;
       }
     }
 
-    const auto* pane = session.findPane(pane_id);
-    const auto now = [&session] {
-      return Access::now(session);
+    const auto* pane = findPane(session.panes, pane_id);
+    auto& line = *features::prompt::find(session.prompt_lines, pane_id);
+    const auto clock = Access::clock(session);
+    const auto now = [clock] {
+      return clock();
     };
     if (where == Surface::running && features::prompt::toProgram(line, key, pane->shell, pane->screen.cursor().x, now)) {
       return Outcome::terminal;
     }
 
     const auto shell = dialect(*pane);
-    const auto outcome = features::prompt::press(session.prompt, line, where, key, session.configuration().prompt, shell);
+    const auto outcome = features::prompt::press(session.prompt, line, where, key, session.configuration.prompt, shell);
     if (outcome == Outcome::complete) {
-      complete(session, pane_id, line, shell);
+      complete(session, pane_id, shell);
       return Outcome::edited;
     }
 
-    deliver(session, pane_id, outcome, line);
+    deliver(session, pane_id, outcome);
     return outcome;
   }
 
   void text(Session& session, std::uint64_t pane_id, std::string_view text) {
-    features::prompt::insert(session.prompt, open(session, pane_id), text);
+    static_cast<void>(open(session, pane_id));
+    features::prompt::insert(session.prompt, *features::prompt::find(session.prompt_lines, pane_id), text);
   }
 
   CommandPresence commandPresence(Session& session, std::uint64_t pane_id, std::string_view word) {
-    const auto* pane = session.findPane(pane_id);
+    const auto* pane = findPane(session.panes, pane_id);
     if (pane == nullptr || pane->shell.remote || !session.ready()) {
       return CommandPresence::unknown;
     }
@@ -286,7 +292,7 @@ namespace telar::gui::application::prompt {
     const auto request_id = session.link.nextRequest();
 
     try {
-      const auto query = features::prompt::ask(state, asked, word, request_id);
+      const auto query = features::prompt::ask(state.command_root, asked, word, request_id);
       if (!query) {
         return CommandPresence::unknown;
       }
@@ -311,17 +317,17 @@ namespace telar::gui::application::prompt {
   }
 
   features::prompt::PaneLine& open(Session& session, std::uint64_t pane_id) {
-    const auto keymap = session.configuration().prompt.keymap == PromptKeymap::vim ? Keymap::vim : Keymap::emacs;
-    const auto opened = features::prompt::open(session.prompt, pane_id, keymap);
-    if (opened.wants_history) {
+    const auto keymap = session.configuration.prompt.keymap == PromptKeymap::vim ? Keymap::vim : Keymap::emacs;
+    if (features::prompt::open(session.prompt, session.prompt_lines, pane_id, keymap).wants_history) {
       requestHistory(session);
     }
 
-    return opened.line;
+    return *features::prompt::find(session.prompt_lines, pane_id);
   }
 
   void write(Session& session, std::uint64_t pane_id, std::string_view command) {
-    features::prompt::write(session.prompt, open(session, pane_id), command);
+    static_cast<void>(open(session, pane_id));
+    features::prompt::write(session.prompt, *features::prompt::find(session.prompt_lines, pane_id), command);
   }
 
   void typeSecret(Session& session, std::uint64_t pane_id, char byte) {
@@ -329,19 +335,19 @@ namespace telar::gui::application::prompt {
   }
 
   void follow(Session& session, std::uint64_t pane_id, const PaneShell& previous, const PaneShell& current) {
-    auto* line = features::prompt::find(session.prompt, pane_id);
+    auto* line = features::prompt::find(session.prompt_lines, pane_id);
     if (line == nullptr) {
       return;
     }
 
     if (const auto outcome = features::prompt::follow(*line, previous, current)) {
-      deliver(session, pane_id, *outcome, *line);
+      deliver(session, pane_id, *outcome);
     }
   }
 
   void configureShell(Session& session) {
     if (session.readsRows()) {
-      session.link.send(ConfigureShellPrompt{.bare = session.configuration().prompt.mode == PromptMode::telar});
+      session.link.send(ConfigureShellPrompt{.bare = session.configuration.prompt.mode == PromptMode::telar});
     }
   }
 
@@ -353,12 +359,12 @@ namespace telar::gui::application::prompt {
     }
 
     // A Tab that waited for it completes now, if the line is still the one it was for.
-    const auto* pane = session.findPane(*pane_id);
-    if (pane == nullptr || !features::prompt::resume(state, *pane_id)) {
+    const auto* pane = findPane(session.panes, *pane_id);
+    if (pane == nullptr || !features::prompt::resume(state, session.prompt_lines, *pane_id)) {
       return Change::none;
     }
 
-    complete(session, *pane_id, *features::prompt::find(state, *pane_id), dialect(*pane));
+    complete(session, *pane_id, dialect(*pane));
     return changed(session, *pane_id);
   }
 
@@ -367,7 +373,7 @@ namespace telar::gui::application::prompt {
       return settle(session, *settled);
     }
 
-    return changed(session, features::prompt::receive(session.prompt, message).valueOr(0));
+    return changed(session, features::prompt::receive(session.prompt, session.prompt_lines, message).valueOr(0));
   }
 
   ds::Option<Change> receive(Session& session, const PathResults& message) {
@@ -375,7 +381,7 @@ namespace telar::gui::application::prompt {
       return settle(session, *settled);
     }
 
-    const auto pane_id = features::prompt::receive(session.prompt, message);
+    const auto pane_id = features::prompt::receive(session.prompt, session.prompt_lines, message);
     if (!pane_id) {
       return ds::none;
     }
@@ -384,7 +390,7 @@ namespace telar::gui::application::prompt {
   }
 
   ds::Option<Change> fail(Session& session, std::uint64_t request_id) {
-    const auto pane_id = features::prompt::fail(session.prompt, request_id);
+    const auto pane_id = features::prompt::fail(session.prompt, session.prompt_lines, request_id);
     if (!pane_id) {
       return ds::none;
     }

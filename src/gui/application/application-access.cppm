@@ -25,23 +25,11 @@ namespace telar::gui::application {
     using RequestKind = Session::RequestKind;
     using Pending = Session::Pending;
 
-    [[nodiscard]] static constexpr Configuration& configuration(Session& session) noexcept {
-      return session.configuration_;
-    }
-
-    [[nodiscard]] static constexpr const Configuration& configuration(const Session& session) noexcept {
-      return session.configuration_;
-    }
-
     // ---- what the session keeps for every feature -------------------------------------------
 
     // The refresh rate of the display the session's window shows on.
     [[nodiscard]] static constexpr std::uint16_t& displayFps(Session& session) noexcept {
       return session.display_fps_;
-    }
-
-    [[nodiscard]] static constexpr Memory& memory(Session& session) noexcept {
-      return session.memory_;
     }
 
     [[nodiscard]] static constexpr ds::String<Memory>& clipboard(Session& session) noexcept {
@@ -81,15 +69,15 @@ namespace telar::gui::application {
 
     // The keys of the command blocks, ahead of the editor's: what a key did to them, none when it
     // goes on to the editor.
-    [[nodiscard]] static ds::Option<features::prompt::Outcome> blockKey(Session& session, std::uint64_t pane_id, features::prompt::PaneLine& line, const features::prompt::KeyPress& key) {
-      return session.blockKey(pane_id, line, key);
+    [[nodiscard]] static ds::Option<features::prompt::Outcome> blockKey(Session& session, std::uint64_t pane_id, const features::prompt::KeyPress& key) {
+      return session.blockKey(pane_id, key);
     }
 
     // ---- the tabs and panes the session holds ------------------------------------------------
 
     // The tabs, to change them.
     [[nodiscard]] static std::span<ds::Box<Tab<Memory>, Memory>> tabsMut(Session& session) noexcept {
-      return session.tabs_.viewMut();
+      return session.tabs.viewMut();
     }
 
     [[nodiscard]] static constexpr ds::Option<TabLocation>& activeTab(Session& session) noexcept {
@@ -156,6 +144,11 @@ namespace telar::gui::application {
     // The session's clock, monotonic and in nanoseconds.
     [[nodiscard]] static std::uint64_t now(const Session& session) noexcept {
       return session.now_();
+    }
+
+    // The clock itself, for a use case that reads it while it holds one of the session's fields.
+    [[nodiscard]] static MonotonicNow clock(const Session& session) noexcept {
+      return session.now_;
     }
 
     // ---- the desktop the session runs in ----------------------------------------------------

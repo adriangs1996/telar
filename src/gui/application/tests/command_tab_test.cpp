@@ -281,7 +281,7 @@ namespace {
         deliver(client, WorkspaceSnapshot{.request_id = request.request_id, .workspace = request.workspace, .name = "workspace", .tabs = descriptors});
       }
 
-      const auto previous_count = client.tabs().size();
+      const auto previous_count = client.tabs.size();
       const auto before = counted.allocations();
 
       gate.permit(budget);
@@ -296,12 +296,12 @@ namespace {
       allocations = counted.allocations() - before;
       gate.permit(ds::none);
       if (budget) {
-        check(rejected && client.tabs().size() == previous_count && client.focusedPane()->id == 1 && client.findPane(2) == nullptr, "failed command adoption must preserve existing tabs, panes and focus");
+        check(rejected && client.tabs.size() == previous_count && client.focusedPane()->id == 1 && client.findPane(2) == nullptr, "failed command adoption must preserve existing tabs, panes and focus");
         if (discover_before_confirmation) {
-          check(application::tabApplicationName(*client.tabs().back(), nullptr) == discovered_application, "failed confirmation must preserve the discovered foreground");
+          check(application::tabApplicationName(*client.tabs.back(), nullptr) == discovered_application, "failed confirmation must preserve the discovered foreground");
         }
       } else {
-        check(!rejected && client.tabs().size() == 2 && client.focusedPane()->id == 2, "a complete allocation budget must adopt the confirmed command");
+        check(!rejected && client.tabs.size() == 2 && client.focusedPane()->id == 2, "a complete allocation budget must adopt the confirmed command");
         if (discover_before_confirmation) {
           check(application::tabApplicationName(*client.activeTab(), client.focusedPane()) == discovered_application, "confirmation must preserve the discovered foreground for the newly adopted pane");
         }
@@ -340,10 +340,10 @@ namespace {
     };
 
     deliver(client, WorkspaceSnapshot{.request_id = request.request_id, .workspace = request.workspace, .name = "workspace", .tabs = descriptors});
-    check(client.tabs().size() == 2 && client.focusedPane()->id == 1, "discovery may expose a tab's metadata without adopting its pane or focus");
+    check(client.tabs.size() == 2 && client.focusedPane()->id == 1, "discovery may expose a tab's metadata without adopting its pane or focus");
     check(application::workbench::createCommandTab(client, command) == application::TabCreationOutcome::busy, "discovery must not complete the creation request");
     deliver(client, TabCreated{.request_id = request.request_id, .location = {.workspace = request.workspace, .tab_id = 2}, .position = 1, .label = "echo", .root_pane_id = 2, .pane_generation = 1});
-    check(client.tabs().size() == 2 && client.focusedPane()->id == 2, "confirmation must adopt an unloaded discovered tab without duplication");
+    check(client.tabs.size() == 2 && client.focusedPane()->id == 2, "confirmation must adopt an unloaded discovered tab without duplication");
   }
 
   void confirmationCannotReplaceALiveTab() {
@@ -363,7 +363,7 @@ namespace {
       rejected = true;
     }
 
-    check(rejected && client.tabs().size() == 1 && client.focusedPane()->id == 1, "a correlated reply must not replace an already adopted tab");
+    check(rejected && client.tabs.size() == 1 && client.focusedPane()->id == 1, "a correlated reply must not replace an already adopted tab");
   }
 
   void openThreeTabs(application::Session& client, Transport& transport) {
@@ -397,7 +397,7 @@ namespace {
     check(application::workbench::createCommandTab(client, command) == application::TabCreationOutcome::busy, "moving a tab must retain ownership until its confirmation");
     deliver(client, TabMoved{.request_id = move.request_id, .location = move.location, .position = 1});
     check(client.activeTab()->position == 1, "the runtime's confirmed position must be adopted");
-    for (const auto& tab : client.tabs()) {
+    for (const auto& tab : client.tabs) {
       if (tab->location.tab_id == 2) {
         check(tab->position == 2, "moving one tab must shift its displaced neighbor");
       }
@@ -420,11 +420,11 @@ namespace {
     openThreeTabs(client, transport);
     const auto workspace = client.activeTab()->location.workspace;
     const TabDragMove move{.location = {.workspace = workspace, .tab_id = 1}, .direction = TabMoveDirection::next, .relative_to = 3};
-    const auto source = std::ranges::find_if(client.tabs(), [](const auto& tab) {
+    const auto source = std::ranges::find_if(client.tabs, [](const auto& tab) {
       return tab->location.tab_id == 1;
     });
 
-    check(source != client.tabs().end(), "the captured source must be present");
+    check(source != client.tabs.end(), "the captured source must be present");
     check(application::workbench::dropTab(client, move), "a drag must move its captured source even when another tab has focus");
     const auto request = transport.last<MoveTab>();
 

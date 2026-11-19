@@ -58,7 +58,7 @@ namespace {
     const auto request = transport.last<OpenPane>();
 
     check(request.target.kind == PaneTarget::Kind::workspace && request.target.id == project_id && !request.launch, "leaving a worktree must open its source workspace without sending a new launch command");
-    check(transport.count(ClientTag::open_pane) == opening_count + 1 && transport.count(ClientTag::detach_pane) == 1 && client.activeTab() == nullptr && client.panes().empty(), "the handoff must retire its checkout only after queuing the source project's canonical open");
+    check(transport.count(ClientTag::open_pane) == opening_count + 1 && transport.count(ClientTag::detach_pane) == 1 && client.activeTab() == nullptr && client.panes.empty(), "the handoff must retire its checkout only after queuing the source project's canonical open");
     client.disconnected();
     check(!application::workbench::leaveWorktree(client), "a disconnected client must not use retained worktree metadata");
   }

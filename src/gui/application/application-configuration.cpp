@@ -1082,7 +1082,7 @@ namespace telar::gui::application {
 namespace telar::gui::application::configuration {
 
   void configure(Session& session, const Configuration& configuration) {
-    auto& shown = Access::configuration(session);
+    auto& shown = session.configuration;
     const bool prompt_changed = shown.prompt.mode != configuration.prompt.mode;
 
     shown = configuration;
@@ -1094,7 +1094,7 @@ namespace telar::gui::application::configuration {
   }
 
   void setTheme(Session& session, const Theme& theme) {
-    auto& shown = Access::configuration(session);
+    auto& shown = session.configuration;
     if (shown.theme == theme) {
       return;
     }

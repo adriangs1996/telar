@@ -208,7 +208,7 @@ namespace {
     const ds::Array tabs{TabDescriptor{.tab_id = source.tab_id, .pane_count = 1}};
 
     deliver(client, WorkspaceSnapshot{.request_id = 1, .workspace = source.workspace, .name = "Late source", .tabs = tabs});
-    check(client.activeTab() == nullptr && client.panes().empty() && transport.count(ClientTag::open_pane) == openings, "Late source metadata must not replace an outstanding canonical workspace arrival");
+    check(client.activeTab() == nullptr && client.panes.empty() && transport.count(ClientTag::open_pane) == openings, "Late source metadata must not replace an outstanding canonical workspace arrival");
   }
 
   void linkedCheckoutsDoNotConsumeProjectPositions() {
@@ -386,7 +386,7 @@ namespace {
     });
 
     check(detach < opening && opening != messages.end(), "Every departure must reach the runtime before its target open");
-    check(client.activeTab() == nullptr && client.panes().empty() && client.requestsPending(), "A queued workspace handoff must await canonical arrival without retaining the previous screen");
+    check(client.activeTab() == nullptr && client.panes.empty() && client.requestsPending(), "A queued workspace handoff must await canonical arrival without retaining the previous screen");
   }
 
   void aPendingOperationFencesWorkspaceSelection() {

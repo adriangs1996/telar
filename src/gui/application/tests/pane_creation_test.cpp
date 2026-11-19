@@ -40,7 +40,7 @@ namespace {
   using namespace telar::gui::application::tests::session_fixture;
 
   const Tab<Memory>* tabIn(const application::Session& client, TabLocation location) {
-    for (const auto& tab : client.tabs()) {
+    for (const auto& tab : client.tabs) {
       if (sameTab(tab->location, location)) {
         return &tab.get();
       }

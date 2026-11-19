@@ -206,7 +206,7 @@ namespace telar::gui::application {
         features::terminal::copy_mode::follow(copy_mode, previous_offset, copyGrid(pane->screen));
       }
 
-      features::prompt::output(prompt, pane->id, [this] {
+      features::prompt::output(prompt_lines, pane->id, [this] {
         return now_();
       });
 
@@ -250,7 +250,7 @@ namespace telar::gui::application {
       pane->foreground.assign(message.name);
     }
 
-    for (auto& tab : tabs_.viewMut()) {
+    for (auto& tab : tabs.viewMut()) {
       tab.getMut().observeForeground(message);
     }
 
@@ -375,7 +375,7 @@ namespace telar::gui::application {
         return Change::none;
       }
 
-      auto& document = found == documents.end() ? pane.inline_documents.emplace(memory_, message.id) : *found;
+      auto& document = found == documents.end() ? pane.inline_documents.emplace(memory, message.id) : *found;
       if (!document.whole) {
         if (message.offset != document.parts.size()) {
           return Change::none;

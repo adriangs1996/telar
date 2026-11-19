@@ -31,7 +31,7 @@ namespace telar::gui::application::window {
       }
     }
 
-    const auto pattern = session.configuration().window_title.view();
+    const auto pattern = session.configuration.window_title.view();
 
     return WindowTitle::render(pattern.empty() ? WindowTitle::default_title : pattern, tokens);
   }
@@ -41,7 +41,7 @@ namespace telar::gui::application::window {
   }
 
   void pace(Session& session) {
-    const auto& configuration = Access::configuration(std::as_const(session));
+    const auto& configuration = session.configuration;
     const auto maximum_fps = configuration.max_fps == 0 ? ds::none : ds::Option{configuration.max_fps};
     const auto interval_ns = FramePacer::resolveInterval(FramePacer::nanoseconds_per_second / Access::displayFps(session), maximum_fps);
 

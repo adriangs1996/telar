@@ -80,7 +80,7 @@ namespace {
     check(deliver(client, atPrompt()) == application::Change::terminal, "the shell's state must repaint its pane");
     check(prompt::surface(client, 1) == prompt::Surface::none, "classic mode keeps the terminal");
     check(transport.count(ClientTag::configure_shell_prompt) == 1 && !transport.last<ConfigureShellPrompt>().bare, "a classic client keeps the prompt of the shells it opens");
-    auto configuration = client.configuration();
+    auto configuration = client.configuration;
 
     configuration.prompt.mode = PromptMode::telar;
     application::configuration::configure(client, configuration);
@@ -177,7 +177,7 @@ namespace {
     deliver(client, running(1));
     check(!prompt::hidesTerminalCursor(client, 1), "classic mode draws the terminal's cursor");
 
-    auto configuration = client.configuration();
+    auto configuration = client.configuration;
 
     configuration.prompt.mode = PromptMode::telar;
     application::configuration::configure(client, configuration);
@@ -242,7 +242,7 @@ namespace {
     frame.frame_id = 1;
     frame.scroll.total_rows = 1;
     deliverSingleCell(client, frame);
-    auto configuration = client.configuration();
+    auto configuration = client.configuration;
 
     configuration.prompt.mode = PromptMode::telar;
     application::configuration::configure(client, configuration);
@@ -287,7 +287,7 @@ namespace {
     frame.frame_id = 1;
     frame.scroll.total_rows = 1;
     deliverSingleCell(client, frame);
-    auto configuration = client.configuration();
+    auto configuration = client.configuration;
 
     configuration.prompt.mode = PromptMode::telar;
     application::configuration::configure(client, configuration);
@@ -316,7 +316,7 @@ namespace {
     frame.frame_id = 1;
     frame.scroll.total_rows = 1;
     deliverSingleCell(client, frame);
-    auto configuration = client.configuration();
+    auto configuration = client.configuration;
 
     configuration.prompt.mode = PromptMode::telar;
     application::configuration::configure(client, configuration);
@@ -348,7 +348,7 @@ namespace {
     frame.scroll.total_rows = 1;
     frame.input_modes.bracketed_paste = true;
     deliverSingleCell(client, frame);
-    auto configuration = client.configuration();
+    auto configuration = client.configuration;
 
     configuration.prompt.mode = PromptMode::telar;
     application::configuration::configure(client, configuration);
@@ -546,7 +546,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     frame.scroll.total_rows = 1;
     frame.input_modes.bracketed_paste = true;
     deliverSingleCell(client, frame);
-    auto configuration = client.configuration();
+    auto configuration = client.configuration;
 
     configuration.prompt.mode = PromptMode::telar;
     configuration.prompt.keymap = PromptKeymap::vim;
@@ -586,7 +586,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     frame.frame_id = 1;
     frame.scroll.total_rows = 1;
     deliverSingleCell(client, frame);
-    auto configuration = client.configuration();
+    auto configuration = client.configuration;
 
     configuration.prompt.mode = PromptMode::telar;
     configuration.prompt.keymap = PromptKeymap::vim;
@@ -669,7 +669,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     frame.scroll = {.total_rows = 100, .offset = 99};
     deliverSingleCell(client, frame);
     deliver(client, PaneScrollback{.pane_id = 1, .generation = 1, .trimmed = 0});
-    auto configuration = client.configuration();
+    auto configuration = client.configuration;
 
     configuration.prompt.mode = PromptMode::telar;
     configuration.prompt.keymap = PromptKeymap::vim;
@@ -780,7 +780,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     deliverSingleCell(client, frame);
     deliver(client, PaneCwd{.pane_id = 1, .cwd = "/work"});
     deliver(client, atPrompt());
-    auto configuration = client.configuration();
+    auto configuration = client.configuration;
 
     configuration.prompt.mode = PromptMode::telar;
     application::configuration::configure(client, configuration);

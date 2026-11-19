@@ -134,7 +134,7 @@ namespace telar::gui::qt {
   }
 
   BindingContext sessionBindingContext(const GuiSession& session) {
-    BindingContext context{.sidebar_visible = session.configuration().sidebar_visible};
+    BindingContext context{.sidebar_visible = session.configuration.sidebar_visible};
     const auto* active = session.activeTab();
     if (active == nullptr) {
       return context;
@@ -146,7 +146,7 @@ namespace telar::gui::qt {
       return std::holds_alternative<ClientLayoutPane>(node);
     }));
 
-    context.tab_count = static_cast<std::uint16_t>(std::ranges::count_if(session.tabs(), [&](const auto& tab) {
+    context.tab_count = static_cast<std::uint16_t>(std::ranges::count_if(session.tabs, [&](const auto& tab) {
       return sameWorkspace(tab->location.workspace, active->location.workspace);
     }));
 

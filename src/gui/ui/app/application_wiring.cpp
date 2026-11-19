@@ -181,7 +181,7 @@ namespace telar::gui::qt {
         components_.closePick();
         components_.closePanel();
         commands_.interrupt();
-        for (const auto& pane : session().panes()) {
+        for (const auto& pane : session().panes) {
           terminals_.releaseInput(pane->id);
         }
       } else {

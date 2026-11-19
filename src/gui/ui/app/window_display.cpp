@@ -39,7 +39,7 @@ namespace telar::gui::qt {
   }
 
   const Configuration& WindowDisplay::configuration() const noexcept {
-    return store_.session().configuration();
+    return store_.session().configuration;
   }
 
   const CellMetrics& WindowDisplay::cell() const noexcept {
@@ -174,11 +174,11 @@ namespace telar::gui::qt {
   }
 
   bool WindowDisplay::sidebarVisible() const {
-    return store_.session().configuration().sidebar_visible;
+    return store_.session().configuration.sidebar_visible;
   }
 
   qreal WindowDisplay::sidebarWidth() const {
-    return store_.session().configuration().sidebar_width;
+    return store_.session().configuration.sidebar_width;
   }
 
   bool WindowDisplay::workspaceListCollapsed() const {

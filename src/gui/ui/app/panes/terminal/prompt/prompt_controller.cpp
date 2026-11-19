@@ -56,7 +56,7 @@ namespace telar::gui::qt {
   }
 
   const Configuration& PromptController::configuration() const noexcept {
-    return store_.session().configuration();
+    return store_.session().configuration;
   }
 
   const ds::Option<application::terminal::copy_mode::CopyState>& PromptController::copy() const noexcept {

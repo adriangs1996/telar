@@ -34,8 +34,8 @@ namespace telar::gui::application::terminal::graphics {
       BoundedText<max_notification_title_bytes> title;
 
       title.append("Images paused");
-      const auto* pane = session.findPane(pane_id);
-      const auto* tab = pane == nullptr ? nullptr : features::workbench::find(session.tabs(), pane->location);
+      const auto* pane = findPane(session.panes, pane_id);
+      const auto* tab = pane == nullptr ? nullptr : features::workbench::find(session.tabs, pane->location);
       const auto index = tab == nullptr ? 0 : tab->layout.displayIndex(pane_id);
       if (index != 0) {
         const std::string_view foreground{pane->foreground};
@@ -70,7 +70,7 @@ namespace telar::gui::application::terminal::graphics {
 
     template <typename Message, typename Source = std::nullptr_t>
     Change apply(Session& session, const Message& message, Source source = nullptr) {
-      auto* pane = session.findPaneMut(message.header.pane_id);
+      auto* pane = findPaneMut(session.panes, message.header.pane_id);
       if (pane == nullptr || !pane->attached) {
         return Change::none;
       }
@@ -144,7 +144,7 @@ namespace telar::gui::application::terminal::graphics {
 
   void forgetClosed(Session& session) {
     feature::forgetClosed(session.graphics, [&session](std::uint64_t pane_id) {
-      return session.findPane(pane_id) != nullptr;
+      return findPane(session.panes, pane_id) != nullptr;
     });
   }
 

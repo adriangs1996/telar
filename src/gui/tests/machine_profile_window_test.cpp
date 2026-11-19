@@ -500,7 +500,7 @@ namespace {
 
       QVERIFY(disabled);
       QVERIFY(MachineProfileWindow::client(application, requireValue(disabled, "Expected disabled saved profile")) == nullptr);
-      QVERIFY(MachineProfileWindow::client(application, slot)->session.panes().empty());
+      QVERIFY(MachineProfileWindow::client(application, slot)->session.panes.empty());
       const auto identity = MachineProfileWindow::client(application, slot)->identity;
 
       QVERIFY(identity != MachineProfileWindow::client(application, Machines::local_slot)->identity);
@@ -510,7 +510,7 @@ namespace {
       fixture.replace(R"({"version":1,"local_label":"Personal","machines":[{"id":"m-000000000001","label":"Build","destination":"window@fixture","enabled":false}]})");
       QTRY_COMPARE(machines.active(), Machines::local_slot);
       QCOMPARE(machines.row(slot).phase, MachinePhase::stopped);
-      QVERIFY(MachineProfileWindow::client(application, slot)->session.panes().empty());
+      QVERIFY(MachineProfileWindow::client(application, slot)->session.panes.empty());
       QVERIFY(!MachineProfileWindow::client(application, slot)->session.ready());
       QCOMPARE(MachineProfileWindow::client(application, slot)->identity, identity);
     }

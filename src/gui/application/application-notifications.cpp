@@ -18,7 +18,7 @@ namespace telar::gui::application::notifications {
     namespace feature = features::notifications;
 
     bool deliverHostNotification(Session& session, const NotificationInput& input) noexcept {
-      if (Access::configuration(std::as_const(session)).notification_delivery != NotificationDelivery::system) {
+      if (session.configuration.notification_delivery != NotificationDelivery::system) {
         return false;
       }
 
@@ -81,7 +81,7 @@ namespace telar::gui::application::notifications {
       workbench::focusPane(session, target->id);
       break;
     case NotificationTarget::Kind::tab: {
-      const auto& tabs = session.tabs();
+      const auto& tabs = session.tabs;
       const auto tab = std::ranges::find_if(tabs, [&](const auto& candidate) {
         return candidate->location.tab_id == target->id;
       });

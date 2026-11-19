@@ -129,7 +129,7 @@ namespace telar::gui::qt {
     auto* images = WindowImages::findWindow(*window_);
     if (images != nullptr && !images->empty()) {
       images->beginCatalogSnapshot();
-      for (const auto& pane : std::as_const(store_).session().panes()) {
+      for (const auto& pane : std::as_const(store_).session().panes) {
         images->observeCatalog(pane->graphics);
       }
     }

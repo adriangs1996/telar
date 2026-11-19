@@ -1520,7 +1520,7 @@ namespace {
 
       runtime.send(ClientLayoutSnapshot{.restored = true, .sidebar_visible = false, .sidebar_width = restored_sidebar_columns, .active_tab = location, .tabs = layouts});
       if (hidden_remote) {
-        QTRY_VERIFY_WITH_TIMEOUT(!session.configuration().sidebar_visible, wait_ms);
+        QTRY_VERIFY_WITH_TIMEOUT(!session.configuration.sidebar_visible, wait_ms);
         QCOMPARE(runtime.count(ClientTag::open_pane), 0);
         QVERIFY(application.pane(pane_id) != nullptr && application.pane(pane_id)->attached);
         MachineWindow::select(application, fixture.remote.machine);
@@ -1800,7 +1800,7 @@ namespace {
       QVERIFY2(activityNamed(application, QStringLiteral("Remote command")).isEmpty(), "another machine's tracked commands stay on that machine");
       QVERIFY(!activityNamed(application, QStringLiteral("Local command")).isEmpty());
       QVERIFY(application.status()->connected());
-      QVERIFY(remote.session.panes().empty());
+      QVERIFY(remote.session.panes.empty());
       QCOMPARE(fixture.remote_runtime->count(ClientTag::open_pane), 0);
       QCOMPARE(fixture.remote_runtime->count(ClientTag::acknowledge_agent), 0);
       const auto rebuilds = MachineWindow::activityRebuilds(application);
@@ -1814,7 +1814,7 @@ namespace {
       remote_agents.atMut(0).session_title = "Remote still waiting";
       fixture.remote_runtime->send(AgentSnapshot{.revision = 2, .entries = remote_agents});
       QTRY_VERIFY_WITH_TIMEOUT(!activityNamed(application, QStringLiteral("Remote still waiting")).isEmpty(), wait_ms);
-      QVERIFY(remote.session.panes().empty());
+      QVERIFY(remote.session.panes.empty());
       QCOMPARE(fixture.remote_runtime->count(ClientTag::acknowledge_agent), 0);
       const auto identity = hidden.value(QStringLiteral("key"));
 
@@ -1991,7 +1991,7 @@ namespace {
       application.commands()->execute(window_actions::Action::select_agent, old_agent);
       QCOMPARE(fixture.remote_runtime->count(ClientTag::open_pane), 0);
       QVERIFY(!MachineWindow::pendingActivity(application));
-      QVERIFY(remote.session.panes().empty());
+      QVERIFY(remote.session.panes.empty());
       application.commands()->execute(window_actions::Action::select_agent, activityNamed(application, QStringLiteral("After reconnect")).value(QStringLiteral("key")).toString());
       QVERIFY(MachineWindow::pendingActivity(application));
       QTRY_COMPARE_WITH_TIMEOUT(fixture.remote_runtime->count(ClientTag::open_pane), 1, wait_ms);
@@ -2113,7 +2113,7 @@ namespace {
       fixture.remote_runtime->send(ClientLayoutSnapshot{});
       QVERIFY(finishOpening(*fixture.local_runtime));
       QTRY_VERIFY_WITH_TIMEOUT(local.session.activeTab() != nullptr, wait_ms);
-      QVERIFY(remote.session.panes().empty());
+      QVERIFY(remote.session.panes.empty());
       QCOMPARE(fixture.remote_runtime->count(ClientTag::open_pane), 0);
       sendFrame(*fixture.local_runtime);
       QTRY_COMPARE_WITH_TIMEOUT(local.session.findPane(pane_id)->screen.frameId(), 1, wait_ms);
@@ -2122,7 +2122,7 @@ namespace {
 
       MachineWindow::select(application, fixture.remote.machine);
       QVERIFY(finishOpening(*fixture.remote_runtime));
-      QTRY_VERIFY_WITH_TIMEOUT(local.session.panes().empty() && remote.session.activeTab() != nullptr, wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(local.session.panes.empty() && remote.session.activeTab() != nullptr, wait_ms);
       QVERIFY(application.terminals()->viewVersion().machine != previous_view.machine);
       QCOMPARE(fixture.local_runtime->count(ClientTag::detach_pane), 1);
       QCOMPARE(fixture.local_runtime->count(ClientTag::close_pane), 0);

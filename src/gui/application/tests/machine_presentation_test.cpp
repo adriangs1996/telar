@@ -67,7 +67,7 @@ namespace {
     client.connected(1);
     deliver(client, ClientLayoutSnapshot{});
     check(client.ready() && !client.presented() && client.activeTab() == nullptr, "a hidden machine must connect for metadata without a presented workspace");
-    check(transport.count(ClientTag::open_pane) == 0 && client.panes().empty(), "a hidden initial connection must defer its first pane");
+    check(transport.count(ClientTag::open_pane) == 0 && client.panes.empty(), "a hidden initial connection must defer its first pane");
     client.setPresented(true);
     check(transport.count(ClientTag::open_pane) == 1, "presenting the machine must open its deferred first pane once");
     client.setPresented(true);
@@ -92,7 +92,7 @@ namespace {
 
     deliver(client, ClientLayoutSnapshot{.restored = true, .sidebar_visible = false, .sidebar_width = sidebar_columns, .workspace_list_collapsed = true, .active_tab = location, .tabs = tabs});
     deliver(client, PaneTitle{.pane_id = first_pane, .title = "overwrite the decoder storage"});
-    check(client.activeTab() == nullptr && client.panes().empty() && transport.count(ClientTag::open_pane) == 0, "a hidden restored layout must retain owned layout data without constructing pane screens");
+    check(client.activeTab() == nullptr && client.panes.empty() && transport.count(ClientTag::open_pane) == 0, "a hidden restored layout must retain owned layout data without constructing pane screens");
     client.setPresented(true);
     const auto opening = transport.last<OpenPane>();
 
@@ -107,7 +107,7 @@ namespace {
     const auto* split = std::get_if<ClientLayoutSplit>(&client.activeTab()->layout.nodes().front());
 
     check(split != nullptr && split->axis == ClientLayoutAxis::vertical && split->ratio == split_ratio, "deferred layout topology and ratio must survive decoder reuse");
-    check(!client.configuration().sidebar_visible && client.workspaceListCollapsed(), "deferred restoration must retain the saved sidebar preferences");
+    check(!client.configuration.sidebar_visible && client.workspaceListCollapsed(), "deferred restoration must retain the saved sidebar preferences");
   }
 
   void rapidReturnDoesNotDuplicateAnOpeningAlreadyInFlight() {
@@ -143,7 +143,7 @@ namespace {
       const auto retained = budget.liveBytes();
 
       client.setPresented(false);
-      check(client.ready() && !client.presented() && client.activeTab() == nullptr && client.panes().empty(), "hiding must retire the workspace and all pane-owned screen storage while retaining the connection");
+      check(client.ready() && !client.presented() && client.activeTab() == nullptr && client.panes.empty(), "hiding must retire the workspace and all pane-owned screen storage while retaining the connection");
       check(budget.liveBytes() < retained, "hiding must release allocator-owned pane and screen storage");
       check(transport.count(ClientTag::detach_pane) == 1 && transport.detaching.size() == 1, "hiding must release input ownership before detaching the pane exactly once");
       check(transport.count(ClientTag::close_pane) == 0 && transport.count(ClientTag::runtime_stop) == 0, "hiding must preserve the runtime's processes");
@@ -182,7 +182,7 @@ namespace {
     const ds::Array tabs{TabDescriptor{.tab_id = 1, .pane_count = 1}};
 
     deliver(client, WorkspaceSnapshot{.request_id = transport.last<RequestWorkspaceSnapshot>().request_id, .workspace = location.workspace, .name = "project", .tabs = tabs});
-    check(client.settlePresentation() && client.panes().empty() && transport.count(ClientTag::detach_pane) == 1, "the last canonical response must allow the hidden workspace to retire");
+    check(client.settlePresentation() && client.panes.empty() && transport.count(ClientTag::detach_pane) == 1, "the last canonical response must allow the hidden workspace to retire");
   }
 
   void hidingWaitsForAnAttachmentAndHandlesItsLateReply() {
@@ -201,7 +201,7 @@ namespace {
     client.setPresented(false);
     check(!client.settlePresentation(), "an attachment request must keep departure pending");
     deliver(client, PaneOpened{.request_id = attach.request_id, .pane_id = 2, .location = location, .pane_generation = 1});
-    check(client.settlePresentation() && client.panes().empty(), "a late attachment reply must be retired after its request settles");
+    check(client.settlePresentation() && client.panes.empty(), "a late attachment reply must be retired after its request settles");
     check(transport.count(ClientTag::detach_pane) == 2, "every attached pane must detach when the machine is hidden");
   }
 
@@ -221,7 +221,7 @@ namespace {
     const ds::Array panes{PaneDescriptor{.pane_id = 1, .lifecycle = PaneLifecycle::running, .pane_generation = 1}};
 
     deliver(client, TabSnapshot{.request_id = 1, .location = location, .panes = panes});
-    check(client.activeTab() == nullptr && client.panes().empty() && transport.count(ClientTag::open_pane) == openings, "background workspace metadata must not reopen hidden panes");
+    check(client.activeTab() == nullptr && client.panes.empty() && transport.count(ClientTag::open_pane) == openings, "background workspace metadata must not reopen hidden panes");
   }
 
   void hiddenCompletionRemainsUnacknowledgedUntilPresentation() {
@@ -259,7 +259,7 @@ namespace {
     deliver(client, RequestFailed{.request_id = tab_request.request_id, .code = FailureCode::tab_not_found, .message = "Tab is gone"});
     check(!client.settlePresentation(), "a failed tab snapshot must retire only its own pending request");
     deliver(client, RequestFailed{.request_id = workspace_request.request_id, .code = FailureCode::workspace_not_found, .message = "Workspace is gone"});
-    check(client.settlePresentation() && client.panes().empty(), "failed snapshot requests must not permanently retain a hidden workspace");
+    check(client.settlePresentation() && client.panes.empty(), "failed snapshot requests must not permanently retain a hidden workspace");
   }
 
   void disconnectionReleasesAHiddenWorkspaceWithoutSendingDetaches() {
@@ -270,7 +270,7 @@ namespace {
     openWithPendingWorkspaceSnapshot(client, transport);
     client.setPresented(false);
     client.disconnected();
-    check(client.settlePresentation() && client.panes().empty() && client.activeTab() == nullptr, "a disconnected hidden machine must release its former screens after pending requests are cancelled");
+    check(client.settlePresentation() && client.panes.empty() && client.activeTab() == nullptr, "a disconnected hidden machine must release its former screens after pending requests are cancelled");
     check(transport.count(ClientTag::detach_pane) == 0, "a disconnected machine must not queue detach messages for a dead transport");
   }
 
@@ -333,10 +333,10 @@ namespace {
       rejected = true;
     }
 
-    check(rejected && client.panes().size() == 2 && client.activeTab() != nullptr, "a partial transport failure must retain all pane objects until departure can finish");
+    check(rejected && client.panes.size() == 2 && client.activeTab() != nullptr, "a partial transport failure must retain all pane objects until departure can finish");
     check(transport.count(ClientTag::detach_pane) == 1, "only the successfully queued detach may be committed before retry");
     transport.reject_detach_after.reset();
-    check(client.settlePresentation() && client.panes().empty(), "retrying the pending departure must finish releasing its screens");
+    check(client.settlePresentation() && client.panes.empty(), "retrying the pending departure must finish releasing its screens");
     check(transport.count(ClientTag::detach_pane) == 2, "retry must detach only the pane whose earlier delivery failed");
   }
 

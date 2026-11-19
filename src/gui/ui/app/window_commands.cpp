@@ -501,7 +501,7 @@ namespace telar::gui::qt {
     switch (message.action) {
     case ClientAction::config_show: {
       // The query rewrites the source's buffer, so the state views a copy of the title, not the session.
-      const auto title = commands.store_.session().configuration().window_title;
+      const auto title = commands.store_.session().configuration.window_title;
       auto state = commands.store_.session().clientViewState();
 
       state.window_title = title.view();
@@ -698,7 +698,7 @@ namespace telar::gui::qt {
     if (action == window_actions::Action::detach) {
       host_.closeWindow();
     } else if (action == window_actions::Action::toggle_sidebar) {
-      store_.sessionMut().setSidebarVisible(!store_.sessionMut().configuration().sidebar_visible);
+      store_.sessionMut().setSidebarVisible(!store_.sessionMut().configuration.sidebar_visible);
       display_.publish();
     } else if (action == window_actions::Action::toggle_workspace_list) {
       store_.sessionMut().setWorkspaceListCollapsed(!store_.sessionMut().workspaceListCollapsed());

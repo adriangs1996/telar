@@ -84,7 +84,7 @@ namespace telar::gui::qt {
 
     auto result = sidebarRegionsRecord(area, display_, static_cast<std::size_t>(workspaces_.count()), machines());
 
-    result.insert(QStringLiteral("typography"), chromeTypographyRecord(display_, store_.session().configuration().font));
+    result.insert(QStringLiteral("typography"), chromeTypographyRecord(display_, store_.session().configuration.font));
 
     return result;
   }
@@ -95,7 +95,7 @@ namespace telar::gui::qt {
   }
 
   void SidebarController::fitWhenReady() {
-    if (!store_.session().configuration().sidebar_width_auto) {
+    if (!store_.session().configuration.sidebar_width_auto) {
       fit_pending_ = false;
       return;
     }

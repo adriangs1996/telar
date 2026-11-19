@@ -349,7 +349,7 @@ namespace {
     });
 
     check(detach < opening && opening != messages.end(), "the runtime must see the departure before the target attachment");
-    check(client.activeTab() == nullptr && client.panes().empty(), "screens must retire after the complete handoff is queued, awaiting a canonical root");
+    check(client.activeTab() == nullptr && client.panes.empty(), "screens must retire after the complete handoff is queued, awaiting a canonical root");
     const auto request = transport.last<OpenPane>();
 
     check(request.target.kind == PaneTarget::Kind::pane && request.target.id == target.agent.pane_id && !request.launch, "a task visit must reopen an existing pane without a new process");
@@ -451,7 +451,7 @@ namespace {
       rejected = true;
     }
 
-    check(rejected && client.panes().size() == panes.size() && sameTab(client.activeTab()->location, source), "partial departure must retain the complete previous projection");
+    check(rejected && client.panes.size() == panes.size() && sameTab(client.activeTab()->location, source), "partial departure must retain the complete previous projection");
     check(transport.count(ClientTag::detach_pane) == 1 && client.findPane(2)->attached, "an unaccepted detach must leave its original attachment committed");
     const auto repair = transport.last<OpenPane>();
 

@@ -34,7 +34,7 @@ namespace telar::gui::application::workbench {
 
     bool requestSplit(Session& session, std::uint64_t pane_id, ClientLayoutAxis axis, Launch launch) {
       auto* tab = session.activeTabMut();
-      const auto* pane = session.findPane(pane_id);
+      const auto* pane = findPane(session.panes, pane_id);
       if (paneOperationPending(session) || tab == nullptr || pane == nullptr || !pane->attached || pane->exited || !sameTab(pane->location, tab->location)) {
         return false;
       }
@@ -96,7 +96,7 @@ namespace telar::gui::application::workbench {
 
       for (const auto& node : preset.layout.nodes()) {
         if (const auto* leaf = std::get_if<ClientLayoutPane>(&node)) {
-          const auto* pane = session.findPane(leaf->pane_id);
+          const auto* pane = findPane(session.panes, leaf->pane_id);
           if (pane == nullptr || !sameTab(pane->location, preset.location)) {
             throw EncodingError{"Layout token pane does not belong to its tab"};
           }
@@ -105,7 +105,7 @@ namespace telar::gui::application::workbench {
         }
       }
 
-      const auto members = std::ranges::count_if(session.panes(), [&](const auto& pane) {
+      const auto members = std::ranges::count_if(session.panes, [&](const auto& pane) {
         return sameTab(pane->location, preset.location);
       });
       if (std::cmp_not_equal(leaves, members)) {
@@ -180,13 +180,13 @@ namespace telar::gui::application::workbench {
   }
 
   void selectTabAt(Session& session, std::size_t index) {
-    if (const auto location = feature::tabAt(session.tabs(), Access::activeTab(session), index)) {
+    if (const auto location = feature::tabAt(session.tabs, Access::activeTab(session), index)) {
       selectTab(session, *location);
     }
   }
 
   void selectTabBeside(Session& session, std::int32_t offset) {
-    if (const auto location = feature::tabBeside(session.tabs(), Access::activeTab(session), offset)) {
+    if (const auto location = feature::tabBeside(session.tabs, Access::activeTab(session), offset)) {
       selectTab(session, *location);
     }
   }
@@ -223,7 +223,7 @@ namespace telar::gui::application::workbench {
 
   bool dropTab(Session& session, const TabDragMove& move) {
     const auto& active_tab = Access::activeTab(session);
-    const auto tabs = feature::Tabs{session.tabs()};
+    const auto tabs = feature::Tabs{session.tabs};
     if (tabOperationPending(session) || !active_tab || !sameWorkspace(active_tab->workspace, move.location.workspace) || feature::find(tabs, move.location) == nullptr) {
       return false;
     }
@@ -246,7 +246,7 @@ namespace telar::gui::application::workbench {
   // ---- panes --------------------------------------------------------------------------------
 
   void focusPane(Session& session, std::uint64_t pane_id) {
-    auto* pane = session.findPaneMut(pane_id);
+    auto* pane = findPaneMut(session.panes, pane_id);
     if (pane == nullptr) {
       const auto& agents = session.agents();
       const auto agent = std::find_if(agents.begin(), agents.end(), [&](const auto& entry) {
@@ -366,7 +366,7 @@ namespace telar::gui::application::workbench {
       append(*active);
     }
 
-    for (const auto& tab : session.tabs()) {
+    for (const auto& tab : session.tabs) {
       if (!sameTab(tab->location, *active_tab)) {
         append(*tab);
       }
@@ -376,7 +376,7 @@ namespace telar::gui::application::workbench {
       return sameTab(layout.location, *active_tab);
     });
     if (active_found) {
-      session.link.send(UpdateClientLayout{.sidebar_visible = Access::configuration(session).sidebar_visible, .sidebar_width = Access::sidebarColumns(session), .workspace_list_collapsed = session.workspaceListCollapsed(), .active_tab = *active_tab, .tabs = {layouts.data(), count}});
+      session.link.send(UpdateClientLayout{.sidebar_visible = session.configuration.sidebar_visible, .sidebar_width = Access::sidebarColumns(session), .workspace_list_collapsed = session.workspaceListCollapsed(), .active_tab = *active_tab, .tabs = {layouts.data(), count}});
     }
   }
 
@@ -480,7 +480,7 @@ namespace telar::gui::application::workbench {
       return;
     }
 
-    const auto* pane = session.findPane(pane_id);
+    const auto* pane = findPane(session.panes, pane_id);
     const auto& active_tab = Access::activeTab(session);
     if (pane != nullptr && (!generation || pane->generation == *generation) && active_tab && sameWorkspace(pane->location.workspace, active_tab->workspace)) {
       focusPane(session, pane_id);
@@ -526,7 +526,7 @@ namespace telar::gui::application::workbench {
 
   void recoverSplit(Session& session, TabLocation location, std::uint64_t pane_id) {
     auto* tab = session.activeTabMut();
-    const auto* pane = session.findPane(pane_id);
+    const auto* pane = findPane(session.panes, pane_id);
     if (tab == nullptr || pane == nullptr || !pane->attached || !sameTab(tab->location, location) || !sameTab(pane->location, location)) {
       return;
     }
@@ -564,7 +564,7 @@ namespace telar::gui::application::workbench {
     const ds::Array tabs{saved_tab};
     const ClientLayoutSnapshot snapshot{
         .restored = true,
-        .sidebar_visible = Access::configuration(session).sidebar_visible,
+        .sidebar_visible = session.configuration.sidebar_visible,
         .sidebar_width = Access::sidebarColumns(session),
         .workspace_list_collapsed = session.workspaceListCollapsed(),
         .active_tab = tab->location,

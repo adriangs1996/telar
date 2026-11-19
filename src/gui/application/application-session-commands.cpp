@@ -150,10 +150,10 @@ namespace telar::gui::application {
       reply.status = ClientCommandStatus::admitted;
       break;
     case ClientAction::tab_select: {
-      const auto tab = std::ranges::find_if(tabs_, [&](const auto& entry) {
+      const auto tab = std::ranges::find_if(tabs, [&](const auto& entry) {
         return entry->location.tab_id == message.target_id;
       });
-      if (message.target_id == 0 || tab == tabs_.end()) {
+      if (message.target_id == 0 || tab == tabs.end()) {
         throw EncodingError{"TabNotFound"};
       }
 
@@ -255,14 +255,14 @@ namespace telar::gui::application {
         workbench::retainLayout(*this);
       }
     } else if (message.action != ClientAction::sidebar_get) {
-      changed = configuration_.sidebar_visible != (message.action == ClientAction::sidebar_show);
+      changed = configuration.sidebar_visible != (message.action == ClientAction::sidebar_show);
       if (changed) {
         setSidebarVisible(message.action == ClientAction::sidebar_show);
       }
     }
 
     reply.value = sidebar_columns_;
-    reply.text = configuration_.sidebar_visible ? "visible" : "hidden";
+    reply.text = configuration.sidebar_visible ? "visible" : "hidden";
 
     return changed ? Change::sidebar : Change::none;
   }

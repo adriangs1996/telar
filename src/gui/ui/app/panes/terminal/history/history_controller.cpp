@@ -108,7 +108,7 @@ namespace telar::gui::qt {
   void HistoryController::open() {
     auto& session = store_.sessionMut();
 
-    filters_ = {.author = session.configuration().history.show_agent_commands ? HistoryAuthorFilter::all : HistoryAuthorFilter::human};
+    filters_ = {.author = session.configuration.history.show_agent_commands ? HistoryAuthorFilter::all : HistoryAuthorFilter::human};
     application::history::inspect(session, false);
     // At the prompt line, the search starts from the command being written.
     QString seed;
@@ -230,7 +230,7 @@ namespace telar::gui::qt {
   std::string_view HistoryController::tabName(const application::Pane<Memory>* pane) const {
     const auto& session = store_.session();
     if (pane != nullptr) {
-      for (const auto& tab : session.tabs()) {
+      for (const auto& tab : session.tabs) {
         if (sameTab(tab->location, pane->location)) {
           return tab->label.empty() ? application::tabApplicationName(*tab, session.findPane(tab->focused_pane)) : std::string_view{tab->label};
         }
@@ -333,7 +333,7 @@ namespace telar::gui::qt {
         {QStringLiteral("count"), static_cast<int>(browser.rows().size())},
         {QStringLiteral("canSubmit"), browser.canSubmit()},
         {QStringLiteral("commandPhase"), phaseName(selected_detail ? state.command_phase : application::history::HistoryPhase::idle)},
-        {QStringLiteral("enterRuns"), session.configuration().history.enter_runs},
+        {QStringLiteral("enterRuns"), session.configuration.history.enter_runs},
         {QStringLiteral("inspecting"), state.inspecting},
         {QStringLiteral("outputPhase"), phaseName(state.output_phase)},
         {QStringLiteral("outputTruncated"), state.output_truncated},
@@ -517,7 +517,7 @@ namespace telar::gui::qt {
 
   void HistoryController::usePresented(const QString& revision, bool alternate) {
     const auto* shown = presented(revision);
-    if (shown == nullptr || shown->enter_runs != store_.session().configuration().history.enter_runs) {
+    if (shown == nullptr || shown->enter_runs != store_.session().configuration.history.enter_runs) {
       return;
     }
 
