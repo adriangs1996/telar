@@ -182,15 +182,15 @@ namespace telar::runtime {
     argument_pointers_.clear();
     environment_pointers_.clear();
 
-    argument_pointers_.push(arguments_.frontMut().dataMut());
-    const auto rest = spawn_arguments_.empty() ? arguments_.viewMut().subspan(1) : spawn_arguments_.viewMut();
+    argument_pointers_.push(arguments_.front().data());
+    const auto rest = spawn_arguments_.empty() ? arguments_.view().subspan(1) : spawn_arguments_.view();
 
-    for (auto& argument : rest) {
-      argument_pointers_.push(argument.dataMut());
+    for (const auto& argument : rest) {
+      argument_pointers_.push(argument.data());
     }
 
-    for (auto& entry : environment_.viewMut()) {
-      environment_pointers_.push(entry.dataMut());
+    for (const auto& entry : environment_.view()) {
+      environment_pointers_.push(entry.data());
     }
 
     argument_pointers_.push(nullptr);
@@ -198,8 +198,9 @@ namespace telar::runtime {
     return SpawnSpec{
         .executable = executable_.data(),
         .cwd = cwd_.data(),
-        .arguments = argument_pointers_.data(),
-        .environment = environment_pointers_.data(),
+        // POSIX declares argv and envp `char* const[]` for C's sake and never writes them.
+        .arguments = const_cast<char* const*>(argument_pointers_.data()),
+        .environment = const_cast<char* const*>(environment_pointers_.data()),
         .size = size,
     };
   }
@@ -452,8 +453,11 @@ namespace telar::runtime {
       throw SystemError{"Executable path exceeds its limit", ENAMETOOLONG};
     }
 
-    name.copy(path_.dataMut() + directory.size(), name.size());
-    path_.atMut(directory.size() + name.size()) = '\0';
+    // The directory views the path written below, so its length is read first.
+    const auto start = directory.size();
+
+    name.copy(path_.dataMut() + start, name.size());
+    path_.atMut(start + name.size()) = '\0';
   }
 
   ds::Option<ExecutablePath> ExecutablePath::sibling(std::initializer_list<std::string_view> candidates) {

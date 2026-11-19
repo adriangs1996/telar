@@ -129,8 +129,8 @@ export {
       // The environment allocates from the sibling allocator, and the spawn arrays point into the
       // command's own strings, so a command keeps its address.
       tbc::view<ds::Vec<ds::String<SensitiveMemory>, SensitiveMemory>, tbc::lt::self> environment_;
-      tbc::view<ds::Vec<char*, Memory>, tbc::lt::self> argument_pointers_;
-      tbc::view<ds::Vec<char*, Memory>, tbc::lt::self> environment_pointers_;
+      tbc::view<ds::Vec<const char*, Memory>, tbc::lt::self> argument_pointers_;
+      tbc::view<ds::Vec<const char*, Memory>, tbc::lt::self> environment_pointers_;
       tbc::view<Memory&, tbc::lt::a> memory_;
       bool restorable_;
     };
