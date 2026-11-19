@@ -2451,7 +2451,9 @@ namespace telar::runtime {
     const auto* pane = findPane(model_.panes, message.pane_id, message.pane_generation);
     const auto* owner_colors = pane == nullptr ? nullptr : Workspaces::ownerColors(model_.workspaces, clients_, pane->location.workspace.id);
 
-    Panes::readTheme(model_.panes, requireClient(clients_, identity), owner_colors, message);
+    const auto reply = Panes::readTheme(model_.panes, owner_colors, message);
+
+    requireClient(clients_, identity).connection.send(reply);
   }
 
   template <EventLoop Poller, typename Background>

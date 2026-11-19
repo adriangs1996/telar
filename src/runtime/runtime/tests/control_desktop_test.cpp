@@ -279,13 +279,13 @@ namespace {
       colors.syntax_italic = 0b10;
       panes.configureColors(model, reconnected.session(), colors);
       ptyReports(pane, panes, "");
-      panes.readTheme(model.panes, reconnected.session(), &reconnected.session().colors, ReadPaneTheme{.request_id = 9, .pane_id = pane.id, .pane_generation = pane.generation});
+      reconnected.session().connection.send(panes.readTheme(model.panes, &reconnected.session().colors, ReadPaneTheme{.request_id = 9, .pane_id = pane.id, .pane_generation = pane.generation}));
 
       const auto theme = reconnected.receive<PaneTheme>();
 
       check(theme.request_id == 9 && theme.pane_id == pane.id);
       check(theme.theme.hasValue() && *theme.theme == static_cast<const TerminalTheme&>(colors));
-      panes.readTheme(model.panes, reconnected.session(), nullptr, ReadPaneTheme{.request_id = 10, .pane_id = pane.id, .pane_generation = pane.generation});
+      reconnected.session().connection.send(panes.readTheme(model.panes, nullptr, ReadPaneTheme{.request_id = 10, .pane_id = pane.id, .pane_generation = pane.generation}));
       check(!reconnected.receive<PaneTheme>().theme.hasValue());
       panes.remove(model, clients, pane.id);
     }

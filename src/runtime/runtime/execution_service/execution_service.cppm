@@ -686,8 +686,10 @@ export {
       }
 
       // The theme a pane's programs read their colors from: that of the client owning its
-      // workspace, with the terminal colors a desktop gave the pane in their place.
-      inline static void readTheme(const PaneStore& panes, ClientSession& client, const ConfigureTerminalColors* owner_colors, const ReadPaneTheme& request) {
+      // workspace, with the terminal colors a desktop gave the pane in their place. It reads
+      // the owner's colors before the asking client is borrowed to send it, as the owner may
+      // be that client.
+      [[nodiscard]] inline static PaneTheme readTheme(const PaneStore& panes, const ConfigureTerminalColors* owner_colors, const ReadPaneTheme& request) {
         const auto* pane = findPane(panes, request.pane_id, request.pane_generation);
         if (pane == nullptr || pane->exit_status) {
           throw RequestError{FailureCode::pane_not_found, "Pane not found"};
@@ -708,7 +710,7 @@ export {
           theme.cursor = desktop->cursor;
         }
 
-        client.connection.send(reply);
+        return reply;
       }
 
       // Rows of an attached pane's scrollback, which its client draws while it scrolls.
