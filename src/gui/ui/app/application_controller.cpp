@@ -138,15 +138,19 @@ namespace telar::gui::qt {
     connect(&copy_, &CopyController::inputStarted, this, [this] {
       key_bindings_.cancelSequence();
     });
+
     connect(&copy_, &CopyController::searchRequested, this, [this] {
       dialogs_.show(Dialog::copy_search);
     });
+
     connect(&copy_, &CopyController::linkRequested, this, [this](qulonglong pane_id, CellPosition cursor) {
       links_.openAt(pane_id, cursor);
     });
+
     connect(&copy_, &CopyController::closeRequested, this, [this] {
       dialogs_.show(Dialog::none);
     });
+
     connect(&copy_, &CopyController::failed, &status_, &WindowStatus::report);
     connect(&key_bindings_, &KeyBindings::failed, &status_, &WindowStatus::report);
     connect(&pointer_dispatcher_, &PointerDispatcher::failed, &status_, &WindowStatus::report);
@@ -157,6 +161,7 @@ namespace telar::gui::qt {
     connect(this, &ApplicationController::configurationChanged, this, [this] {
       palette_.setCommands(commands_.list());
     });
+
     connect(&store_, &Store::interacted, this, &ApplicationController::interacted);
     connect(&store_, &Store::changed, this, &ApplicationController::synchronize);
     // After the workbench geometry, which the dialogs measured from the display are placed in.
@@ -164,38 +169,47 @@ namespace telar::gui::qt {
     connect(&display_, &WindowDisplay::changed, this, [this] {
       history_.setMetrics(display_.historyMetrics());
     });
+
     connect(&history_, &HistoryController::submitted, this, [this] {
       status_.clear();
     });
+
     connect(&history_, &HistoryController::closeRequested, this, [this] {
       dialogs_.show(Dialog::none);
     });
+
     connect(&history_, &HistoryController::failed, &status_, &WindowStatus::report);
     connect(&paths_, &PathPickerController::closeRequested, this, [this] {
       dialogs_.show(Dialog::none);
     });
+
     connect(&paths_, &PathPickerController::failed, &status_, &WindowStatus::report);
     connect(&machine_prompt_, &MachinePromptController::closeRequested, this, [this] {
       dialogs_.show(Dialog::none);
     });
+
     connect(&machines_, &MachinesCoordinator::listChanged, &machine_chrome_, &MachineChromeController::machinesChanged);
     connect(&machine_chrome_, &MachineChromeController::pickerRequested, this, [this] {
       commands_.execute(window_actions::Action::machine_picker);
     });
+
     connect(&machine_chrome_, &MachineChromeController::selectRequested, this, [this](application::machines::MachineToken token) {
       commands_.interact([this, token] {
         machines_.select(token);
       });
     });
+
     connect(&peek_, &PeekController::closeRequested, this, [this] {
       dialogs_.show(Dialog::none);
     });
+
     connect(&peek_, &PeekController::failed, &status_, &WindowStatus::report);
     connect(&monitor_, &MonitorController::closeRequested, this, [this] {
       if (store_.dialog().kind == Dialog::monitor) {
         dialogs_.show(Dialog::none);
       }
     });
+
     connect(&monitor_, &MonitorController::failed, &status_, &WindowStatus::report);
     connect(&commands_, &WindowCommands::monitorRequested, this, [this](window_actions::Action action) {
       const auto showing = store_.dialog().kind == Dialog::monitor;
@@ -210,6 +224,7 @@ namespace telar::gui::qt {
         status_.report(QStringLiteral("Select a process in the monitor, then run the action again"));
       }
     });
+
     connect(&panes_, &PanesController::failed, &status_, &WindowStatus::report);
     connect(&machines_, &MachinesCoordinator::changed, &link_status_, &LinkStatusController::publish);
     connect(&machines_, &MachinesCoordinator::linkChanged, &link_status_, &LinkStatusController::publish);
@@ -220,10 +235,12 @@ namespace telar::gui::qt {
       commands_.execute(window_actions::Action::select_tab, QString::number(tab_id));
       restoreTerminalFocus();
     });
+
     connect(&documents_, &DocumentsController::measured, this, [this](qulonglong pane_id) {
       emit terminals_.terminalChanged(pane_id);
       frames_.request();
     });
+
     connect(&machines_, &MachinesCoordinator::changed, &status_, &WindowStatus::publishMetrics);
     connect(&sidebar_, &SidebarController::widthRequested, &display_, &WindowDisplay::setSidebarWidth);
 
@@ -739,6 +756,7 @@ namespace telar::gui::qt {
     workspaces_.synchronize();
     tabs_.synchronize();
     const auto activity_rebuilds = activity_.rebuilds();
+
     activity_.synchronize();
     if (activity_.rebuilds() != activity_rebuilds) {
       // The sidebar's natural width follows the widest card.

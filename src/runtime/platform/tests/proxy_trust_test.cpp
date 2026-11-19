@@ -264,6 +264,7 @@ namespace {
       const auto withFields = [](std::string_view fingerprint, std::string_view store) {
         return std::string{R"({"version":1,"backend":"update-ca-certificates","fingerprint":")"} + std::string{fingerprint} + R"(","store_path":")" + std::string{store} + R"("})";
       };
+
       constexpr std::string_view fingerprint = "aBcDEF0123456789012345678901234567890123";
 
       check(proxy_trust::Record::parse(memory, withFields(fingerprint, "/fixture")).store.view() == "/fixture");

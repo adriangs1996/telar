@@ -686,6 +686,7 @@ return {}
         plugins.collect([&](const app::EffectBatch& batch) {
           reported |= batch.count == 1 && batch.notifications[0].title == "app_callback_error:traffic-fixture";
         });
+
         std::this_thread::sleep_for(std::chrono::milliseconds{10});
       }
     }
@@ -896,6 +897,7 @@ return {}
         results.collect([&](const auto& result) {
           restarted |= result.batch().count == 1 && result.batch().notifications[0].title == "restarted";
         });
+
         std::this_thread::sleep_for(std::chrono::milliseconds{10});
       }
 

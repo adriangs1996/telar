@@ -229,6 +229,7 @@ namespace telar::gui::qt {
 
   std::string_view HistoryController::tabName(const application::Pane<Memory>* pane) const {
     const auto& session = store_.session();
+
     if (pane != nullptr) {
       for (const auto& tab : session.tabs) {
         if (sameTab(tab->location, pane->location)) {

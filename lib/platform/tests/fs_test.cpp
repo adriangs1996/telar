@@ -148,9 +148,11 @@ namespace {
     check(openFailure([&] {
       return openPrivateFile(temporary.descriptor(), "link", 64).file;
     }) == ELOOP);
+
     check(openFailure([&] {
       return openPrivateFile(temporary.descriptor(), "target", 9).file;
     }) == EFBIG);
+
     check(openPrivateFile(temporary.descriptor(), "target", 10).size == 10);
   }
 

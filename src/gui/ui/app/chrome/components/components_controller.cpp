@@ -396,6 +396,7 @@ namespace telar::gui::qt {
     }
 
     auto bars = elements_.elements(ElementSlots::bar_slots, QStringLiteral("window"), item);
+
     elements_.finish(ElementSlots::bar_slots);
     if (bars != element_bars_) {
       element_bars_ = std::move(bars);

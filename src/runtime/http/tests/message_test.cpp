@@ -93,6 +93,7 @@ namespace {
       check(throws<EncodingError>([&] {
         HttpMessageCodec::readMessage(request, bytes);
       }));
+
       check(request.target == "/edited" && !request.response && request.version == HttpVersion::http11 && request.stream == 0);
       check(request.headers.fields().size() == 2 && std::ranges::equal(request.body, std::string_view{"body"}));
     }
@@ -212,6 +213,7 @@ namespace {
     check(throws<std::length_error>([&] {
       fields.append("X-Field", "v");
     }));
+
     check(fields.fields().size() == maximum);
   }
 

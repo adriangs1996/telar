@@ -71,6 +71,7 @@ namespace {
     check(!refused([&] {
       static_cast<void>(inspect(memory, files));
     }));
+
     write(files / "excess", "x");
     check(refused([&] {
       static_cast<void>(inspect(memory, files));
@@ -124,6 +125,7 @@ namespace {
     check(refused([&] {
       installation.install(demo, foreign.string());
     }));
+
     check(inspect(memory, foreign).digest == other.digest);
 
     const auto file = root / "installed" / "file";

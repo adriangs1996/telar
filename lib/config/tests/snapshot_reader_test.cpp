@@ -121,10 +121,12 @@ namespace {
       check(read.clipboard_read == control::Access::ask && read.clipboard_write == control::Access::ask);
       check(read.color_format == control::ColorFormat::none);
     });
+
     policy("{clipboard_read = 'deny', clipboard_write = 'deny', color_format = '8-bit'}", [](const control::Policy& read) {
       check(read.clipboard_read == control::Access::deny && read.clipboard_write == control::Access::deny);
       check(read.color_format == control::ColorFormat::eight_bit);
     });
+
     policy("{clipboard_read = 'allow', clipboard_write = 'allow', color_format = '16-bit'}", [](const control::Policy& read) {
       check(read.clipboard_read == control::Access::allow && read.clipboard_write == control::Access::allow);
       check(read.color_format == control::ColorFormat::sixteen_bit);

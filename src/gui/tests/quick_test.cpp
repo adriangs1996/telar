@@ -5305,6 +5305,7 @@ return {api_version=2, client={keybindings={
       const auto terminal = [this] {
         return client_->display()->geometry().value(QStringLiteral("terminal")).toRectF().width();
       };
+
       const auto terminal_width = terminal();
       constexpr qreal widened = 40;
 

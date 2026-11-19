@@ -115,6 +115,7 @@ namespace telar::gui::qt {
         status_.fail(error);
       }
     });
+
     connect(&plugins_, &PluginRunner::failed, &status_, &WindowStatus::report);
   }
 
@@ -175,6 +176,7 @@ namespace telar::gui::qt {
     connect(&attachments_, &AttachmentsController::changed, this, [this] {
       refresh_timer_.start();
     });
+
     // The modal takes the keyboard and the pointer from the panes while it is open.
     connect(&attachments_, &AttachmentsController::modalChanged, this, [this](bool open) {
       if (open) {
@@ -188,6 +190,7 @@ namespace telar::gui::qt {
         restoreTerminalFocus();
       }
     });
+
     connect(&attachments_, &AttachmentsController::failed, &status_, &WindowStatus::report);
   }
 

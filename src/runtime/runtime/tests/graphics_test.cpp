@@ -542,6 +542,7 @@ namespace {
       check(std::ranges::count(images, image, [](const auto& message) {
         return message.image.key.image_id;
       }) == 1);
+
       check(std::ranges::count(placements, image, [](const auto& message) {
         return message.placement.key.image_id;
       }) == 1);

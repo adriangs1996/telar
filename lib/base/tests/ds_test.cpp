@@ -1032,6 +1032,7 @@ namespace {
       check(values.retain([](const Counted& value) {
         return value.value % 3 == 0;
       }) == 6);
+
       check(values.size() == 4 && values[0].value == 0 && values[1].value == 3 && values[2].value == 6 && values[3].value == 9);
       check(alive.count() == 4, "each dropped value is destroyed once");
       check(values.retain([](const Counted&) {
@@ -1053,6 +1054,7 @@ namespace {
     check(owners.retain([](const std::unique_ptr<int>& owner) {
       return *owner % 2 == 1;
     }) == 3);
+
     check(owners.size() == 3 && *owners[0] == 1 && *owners[1] == 3 && *owners[2] == 5);
   }
 

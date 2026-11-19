@@ -106,6 +106,7 @@ namespace {
         Extension{IPPROTO_DSTOPTS, 16},
         Extension{IPPROTO_AH, 24},
     };
+
     const auto key = redirect::FlowKey::syn(ipv6Syn(chain));
 
     check(key && key->source.port == 55001 && key->destination.port == 443 && key->destination.host.view() == "::1");

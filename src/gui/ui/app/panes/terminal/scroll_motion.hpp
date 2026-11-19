@@ -32,6 +32,7 @@ namespace telar::gui {
 
     [[nodiscard]] constexpr double millisecondsSince(ScrollTime earlier) const noexcept {
       constexpr double nanoseconds_per_ms = 1e6;
+
       return static_cast<double>(nanoseconds - earlier.nanoseconds) / nanoseconds_per_ms;
     }
   };
@@ -73,12 +74,14 @@ namespace telar::gui {
         // The geometric series of a speed that decays by `friction` every millisecond.
         constexpr double least_loss = 1e-6;
         const auto travel = velocity_ / std::max(least_loss, 1 - tuning_.friction);
+
         return std::clamp(position_ + travel, 0.0, limit_);
       }
       case Kind::rest:
       case Kind::follow:
         break;
       }
+
       return position_;
     }
 
@@ -110,9 +113,11 @@ namespace telar::gui {
       if (!std::isfinite(delta)) {
         return;
       }
+
       if (kind_ != Kind::rest && kind_ != Kind::follow) {
         stop();
       }
+
       kind_ = Kind::follow;
       position_ = bounded(position_ + delta);
       sample(delta, now);
@@ -122,10 +127,12 @@ namespace telar::gui {
     // A precise gesture ended: at rest, or flung on with the speed of its last moments.
     void release(ScrollTime now) noexcept {
       const auto speed = recentSpeed(now);
+
       history_size_ = 0;
       if (kind_ != Kind::follow) {
         return;
       }
+
       kind_ = Kind::rest;
       fling(speed, now);
     }
@@ -135,6 +142,7 @@ namespace telar::gui {
       if (kind_ == Kind::follow) {
         kind_ = Kind::rest;
       }
+
       history_size_ = 0;
     }
 
@@ -143,11 +151,14 @@ namespace telar::gui {
       if (!std::isfinite(delta) || delta == 0) {
         return;
       }
+
       const auto from = kind_ == Kind::ease ? target_ : position_;
+
       if (kind_ != Kind::ease) {
         stop();
         last_ = now;
       }
+
       kind_ = Kind::ease;
       target_ = bounded(from + delta);
     }
@@ -156,9 +167,11 @@ namespace telar::gui {
     void fling(double velocity, ScrollTime now) noexcept {
       constexpr double slowest = 0.05;
       constexpr double fastest = 8;
+
       if (!std::isfinite(velocity) || std::abs(velocity) < slowest) {
         return;
       }
+
       stop();
       kind_ = Kind::fling;
       velocity_ = std::clamp(velocity, -fastest, fastest);
@@ -172,6 +185,7 @@ namespace telar::gui {
       if (!std::isfinite(target)) {
         return;
       }
+
       beginGlide({.target = bounded(target), .viewport = viewport}, now);
     }
 
@@ -185,8 +199,10 @@ namespace telar::gui {
       if (kind_ == Kind::rest || kind_ == Kind::follow) {
         return false;
       }
+
       constexpr double longest_frame_ms = 50;
       const auto elapsed = std::clamp(now.millisecondsSince(last_), 0.0, longest_frame_ms);
+
       last_ = now;
       switch (kind_) {
       case Kind::ease:
@@ -202,6 +218,7 @@ namespace telar::gui {
       case Kind::follow:
         break;
       }
+
       return moving();
     }
 
@@ -247,6 +264,7 @@ namespace telar::gui {
         stop();
         return;
       }
+
       position_ = bounded(position_ + (left * (1 - std::exp(-elapsed / std::max(1.0, tuning_.wheel_ms)))));
     }
 
@@ -254,6 +272,7 @@ namespace telar::gui {
       constexpr double most_kept = 0.9999;
       constexpr double stopped = 0.01;
       const auto next = position_ + (velocity_ * elapsed);
+
       position_ = bounded(next);
       velocity_ *= std::pow(std::clamp(tuning_.friction, 0.0, most_kept), elapsed);
       if (next != position_ || std::abs(velocity_) < stopped) {
@@ -265,6 +284,7 @@ namespace telar::gui {
       const auto target = to_end_ ? limit_ : target_;
       const auto progress = std::clamp(now.millisecondsSince(start_) / duration_ms_, 0.0, 1.0);
       const auto eased = 1 - std::pow(1 - progress, 3);
+
       position_ = bounded(from_ + ((target - from_) * eased));
       if (progress >= 1) {
         position_ = bounded(target);
@@ -275,16 +295,19 @@ namespace telar::gui {
     void beginGlide(Glide glide, ScrollTime now) noexcept {
       const auto view = std::isfinite(glide.viewport) ? std::max(1.0, glide.viewport) : 1.0;
       auto from = position_;
+
       stop();
       if (std::abs(glide.target - from) > far_views * view) {
         from = glide.target - std::copysign(approach_views * view, glide.target - from);
       }
+
       position_ = bounded(from);
       const auto distance = std::abs(glide.target - position_);
       if (distance < settled) {
         position_ = glide.target;
         return;
       }
+
       kind_ = Kind::glide;
       to_end_ = glide.to_end;
       from_ = position_;
@@ -292,6 +315,7 @@ namespace telar::gui {
       start_ = now;
       last_ = now;
       const auto longest = std::max(tuning_.glide_min_ms, tuning_.glide_max_ms);
+
       duration_ms_ = std::clamp(tuning_.glide_min_ms + (std::sqrt(distance) * glide_ms_per_root_pixel), tuning_.glide_min_ms, longest);
     }
 
@@ -310,22 +334,28 @@ namespace telar::gui {
       if (history_size_ < 2) {
         return 0;
       }
+
       // A gesture that rested before it ended has no speed left to carry on.
       if (now.millisecondsSince(recent(0).time) > speed_window_ms / 2) {
         return 0;
       }
+
       double distance = 0;
       ScrollTime first = now;
       std::size_t counted = 0;
+
       for (std::size_t back = 0; back < history_size_ && now.millisecondsSince(recent(back).time) <= speed_window_ms; ++back) {
         distance += recent(back).delta;
         first = recent(back).time;
         ++counted;
       }
+
       if (counted < 2) {
         return 0;
       }
+
       constexpr double shortest_ms = 8;
+
       return distance / std::max(shortest_ms, now.millisecondsSince(first));
     }
 

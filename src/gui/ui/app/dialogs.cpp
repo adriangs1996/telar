@@ -66,6 +66,7 @@ namespace telar::gui::qt {
     const bool searching = kind == Dialog::history || kind == Dialog::paths;
     const auto& copy = application::terminal::copy_mode::view(store_.session()).state();
     std::uint64_t line_search_pane = 0;
+
     if (kind == Dialog::copy_search && copy) {
       line_search_pane = copy->pane_id;
     } else {

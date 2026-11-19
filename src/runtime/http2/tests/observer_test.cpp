@@ -36,6 +36,7 @@ namespace {
         {":authority", "fixture.test"},
         {":path", "/priority"},
     }};
+
     const auto block = hpackFields(request);
     // An exclusive dependency on stream 0x80000003 with weight 255: as HPACK, 0x80 is an invalid index.
     const std::string priority{"\x80\x00\x00\x03\xff", 5};
@@ -47,6 +48,7 @@ namespace {
         http2Frame(Http2FrameKind::headers, end_headers | end_stream | prioritized, 1, priority + block),
         http2Frame(Http2FrameKind::headers, end_headers | end_stream | prioritized | padded, 1, std::string{"\x03", 1} + priority + block + std::string(3, '\0')),
     };
+
     const std::vector<std::string> expected{"1::method=GET", "1::scheme=https", "1::authority=fixture.test", "1::path=/priority"};
 
     for (const auto& frame : frames) {
@@ -90,6 +92,7 @@ namespace {
         {":authority", "fixture.test"},
         {":path", "/continued"},
     }};
+
     const auto block = hpackFields(request);
     const auto split = block.size() / 2;
     const auto input = http2Frame(Http2FrameKind::headers, static_cast<std::uint8_t>(Http2Flag::end_stream), 1, block.substr(0, split)) + http2Frame(Http2FrameKind::continuation, static_cast<std::uint8_t>(Http2Flag::end_headers), 3, block.substr(split));
