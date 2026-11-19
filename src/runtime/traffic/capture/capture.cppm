@@ -1,6 +1,7 @@
 export module telar.runtime.traffic.capture;
 
 import std;
+import telar.tbc;
 import telar.native.pcap;
 import telar.sys.process;
 import telar.sys.posix;
@@ -55,6 +56,11 @@ export {
 
     public:
       explicit Capture(Memory& memory, FileDescriptor socket);
+      // The channel's buffer allocates from the capture's own allocator, so the capture stays put.
+      Capture(const Capture&) = delete;
+      Capture& operator=(const Capture&) = delete;
+      Capture(Capture&&) = delete;
+      Capture& operator=(Capture&&) = delete;
 
       void live();
 
@@ -74,21 +80,35 @@ export {
         sigset_t previous_{};
       };
 
+      // What the capture publishes on its data channel: publishing borrows the channel alone, so the
+      // device being reported stays borrowed meanwhile.
+      struct Channel {
+        explicit Channel(ErasingAllocator<Memory>& memory, FileDescriptor descriptor);
+
+        void emit(Event event);
+
+        void notice(Kind kind, std::string_view interface, std::string_view message = {}, std::uint32_t index = 0);
+
+        void packet(std::uint32_t link_type, const pcap_pkthdr& header, const u_char* bytes, std::string_view interface, std::uint32_t index);
+
+        FileDescriptor socket;
+        ds::Vec<Byte, ErasingAllocator<Memory>> output;
+        std::uint64_t session = 0;
+        std::uint64_t sequence = 0;
+        std::uint64_t dropped = 0;
+        KernelDrops kernel_drops;
+        bool offline = false;
+      };
+
       void greet(Role role);
 
       void drainControl();
-
-      void emit(Event event);
-
-      void notice(Kind kind, std::string_view interface, std::string_view message = {}, std::uint32_t index = 0);
 
       void discover();
 
       // Reads a batch of a device's packets. The device is named by its slot: what it emits is written
       // through the capture, so its name and handle are read out of the table first.
       bool drain(std::size_t slot);
-
-      void packet(std::uint32_t link_type, const pcap_pkthdr& header, const u_char* bytes, std::string_view interface, std::uint32_t index);
 
       void statistics();
 
@@ -97,14 +117,8 @@ export {
       void close(std::size_t slot);
 
       ErasingAllocator<Memory> memory_;
-      FileDescriptor socket_;
-      ds::Vec<Byte, ErasingAllocator<Memory>> output_;
+      tbc::view<Channel, tbc::lt::self> channel_;
       ds::Array<ds::Option<Device>, Limits::interfaces> devices_;
-      std::uint64_t session_ = 0;
-      std::uint64_t sequence_ = 0;
-      std::uint64_t dropped_ = 0;
-      KernelDrops kernel_drops_;
-      bool offline_ = false;
     };
 
   }
