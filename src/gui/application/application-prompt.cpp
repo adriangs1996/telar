@@ -36,6 +36,18 @@ namespace telar::gui::application::prompt {
       return Change::terminal;
     }
 
+    // Sends `request`; false when the runtime's output queue is full and it was dropped.
+    template <typename Request>
+    bool trySend(Session::Link& link, const Request& request) {
+      try {
+        link.send(request);
+      } catch (const std::length_error&) {
+        return false;
+      }
+
+      return true;
+    }
+
     // The commands people typed, most recent first and each once, for the editor's suggestions.
     void requestHistory(Session& session) {
       auto& state = session.prompt;
@@ -45,10 +57,8 @@ namespace telar::gui::application::prompt {
 
       const auto query = features::prompt::historyQuery(session.link.nextRequest());
 
-      try {
-        session.link.send(query);
+      if (trySend(session.link, query)) {
         features::prompt::askedHistory(state, query.request_id);
-      } catch (const std::length_error&) {
       }
     }
 
@@ -115,15 +125,14 @@ namespace telar::gui::application::prompt {
       for (std::size_t index = 0; index < features::prompt::questions(plan); ++index) {
         const auto request_id = session.link.nextRequest();
 
-        try {
-          std::visit(
-              [&](const auto& request) {
-                session.link.send(request);
-              },
-              features::prompt::request(plan, index, pane_id, request_id)
-          );
+        const bool queued = std::visit(
+            [&](const auto& request) {
+              return trySend(session.link, request);
+            },
+            features::prompt::request(plan, index, pane_id, request_id)
+        );
+        if (queued) {
           features::prompt::sent(plan, index, request_id);
-        } catch (const std::length_error&) {
         }
       }
 

@@ -37,7 +37,7 @@ namespace telar::gui::features::machines {
     template <typename Resolve>
     runtime::cli::SocketLocation located(Resolve&& resolve) {
       try {
-        return resolve();
+        return std::forward<Resolve>(resolve)();
       } catch (const std::invalid_argument&) {
         throw MachineFailure{MachineError::invalid_runtime_directory};
       }

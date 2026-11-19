@@ -144,6 +144,8 @@ export {
         ~Variables() = default;
         Variables(const Variables&) = default;
         Variables& operator=(const Variables&) = default;
+        Variables(Variables&&) = default;
+        Variables& operator=(Variables&&) = default;
       };
 
       template <PathEnvironment Environment>

@@ -94,7 +94,10 @@ namespace telar::gui::features::history {
   }
 
   tbc::view<std::string_view, tbc::lt::a> HistoryCard::line(tbc::view<std::string_view, tbc::lt::a> command, HistoryCardLine line) noexcept {
-    return command.substr(std::min<std::size_t>(line.offset, command.size()), line.length);
+    command.remove_prefix(std::min<std::size_t>(line.offset, command.size()));
+    command.remove_suffix(command.size() - std::min<std::size_t>(line.length, command.size()));
+
+    return command;
   }
 
   HistoryCard HistoryCard::measure(const HistoryRowGeometry& row, ChromeMetrics chrome, HistoryCardMetrics metrics, std::string_view command) noexcept {

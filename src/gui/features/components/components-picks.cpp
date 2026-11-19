@@ -75,13 +75,13 @@ namespace telar::gui::features::components {
   }
 
   void PickItems::report(runtime::config::LimitNotices& limits) const noexcept {
-    const auto reaches = ds::Array<LimitReach, 5>{{
-        {.name = "picks.max_items", .noun = "options", .value = maximum_items, .requested = offered_.items, .route = {}},
-        {.name = "picks.max_text_bytes", .noun = "option text bytes", .value = maximum_text_bytes, .requested = offered_.text_full ? ds::Option<std::size_t>{offered_.text} : ds::none, .route = {}},
-        {.name = "picks.max_label_bytes", .noun = "label bytes", .value = maximum_label_bytes, .requested = offered_.label, .route = {}},
-        {.name = "picks.max_value_bytes", .noun = "value bytes", .value = maximum_value_bytes, .requested = offered_.value, .route = {}},
-        {.name = "picks.max_detail_bytes", .noun = "detail bytes", .value = maximum_detail_bytes, .requested = offered_.detail, .route = {}},
-    }};
+    const auto reaches = ds::Array<LimitReach, 5>{
+        LimitReach{.name = "picks.max_items", .noun = "options", .value = maximum_items, .requested = offered_.items, .route = {}},
+        LimitReach{.name = "picks.max_text_bytes", .noun = "option text bytes", .value = maximum_text_bytes, .requested = offered_.text_full ? ds::Option<std::size_t>{offered_.text} : ds::none, .route = {}},
+        LimitReach{.name = "picks.max_label_bytes", .noun = "label bytes", .value = maximum_label_bytes, .requested = offered_.label, .route = {}},
+        LimitReach{.name = "picks.max_value_bytes", .noun = "value bytes", .value = maximum_value_bytes, .requested = offered_.value, .route = {}},
+        LimitReach{.name = "picks.max_detail_bytes", .noun = "detail bytes", .value = maximum_detail_bytes, .requested = offered_.detail, .route = {}},
+    };
 
     for (const auto& reach : reaches) {
       if (reach.requested.valueOr(0) > reach.value) {

@@ -90,16 +90,16 @@ namespace telar::gui::features::status_bar {
       return result;
     case StatusMode::copy:
       result.title_ = "COPY";
-      for (const auto& [key, word] : copy_hints) {
-        result.append(key, word);
+      for (const auto& hint : copy_hints) {
+        result.append(hint);
       }
 
       return result;
     case StatusMode::prefix:
       result.title_ = "PREFIX";
-      result.append(cancel_key, cancel_word);
+      result.append({.key = cancel_key, .word = cancel_word});
       for (const auto& item : hints.items()) {
-        result.append(ModeKeyLabel::format(item.key).view(), item.label);
+        result.append({.key = ModeKeyLabel::format(item.key).view(), .word = item.label});
       }
 
       return result;
@@ -116,11 +116,11 @@ namespace telar::gui::features::status_bar {
     return std::span{hints_}.first(count_);
   }
 
-  void ModeBarLabels::append(std::string_view key, std::string_view word) {
-    auto& hint = hints_.atMut(count_++);
+  void ModeBarLabels::append(KeyHint hint) {
+    auto& stored = hints_.atMut(count_++);
 
-    hint.key.append(key);
-    hint.word.append(word);
+    stored.key.append(hint.key);
+    stored.word.append(hint.word);
   }
 
 }

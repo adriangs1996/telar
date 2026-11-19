@@ -7,12 +7,14 @@ namespace telar::gui::features::window {
 
   ChromeSurfaces ChromeSurfaces::derive(const Theme& theme, float fallback, const BackgroundOpacity& opacity) noexcept {
     const auto panel = theme.chromeColor(PaletteRole::panel_bg);
-    const auto ink = theme.chromeColor(PaletteRole::text);
+    const auto foreground = theme.chromeColor(PaletteRole::text);
     const bool dark = theme.background.r + theme.background.g + theme.background.b < 1.5F;
     const auto gutter_end = Color::rgb(dark ? 0x000000 : 0xffffff);
     const auto text_end = Color::rgb(dark ? 0xffffff : 0x000000);
     const auto dim = theme.chromeColor(PaletteRole::surface_dim);
     const auto sheet = dim == panel ? mix(panel, gutter_end, 0.28F) : dim;
+    // The chrome's text leans most of the way from the theme's ink to plain white or black.
+    constexpr float text_lean = 0.7F;
 
     return {
         .sidebar = alpha(sheet, opacity.resolve(BackgroundOpacity::Surface::sidebar, fallback)),
@@ -20,7 +22,7 @@ namespace telar::gui::features::window {
         .bottombar = alpha(sheet, opacity.resolve(BackgroundOpacity::Surface::bottombar, fallback)),
         .workbench = alpha(sheet, opacity.resolve(BackgroundOpacity::Surface::workspace, fallback)),
         .pane = alpha(panel, opacity.resolve(BackgroundOpacity::Surface::pane, fallback)),
-        .text = mix(ink, text_end, 0.7F),
+        .text = mix(foreground, text_end, text_lean),
     };
   }
 

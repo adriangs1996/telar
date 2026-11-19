@@ -29,8 +29,13 @@ namespace telar::gui::features::activity {
       return entry.pane_id == pane_id && (!generation || entry.pane_generation == *generation);
     });
 
-    const auto location = agent != nullptr ? ds::Option{agent->location} : pane != listed.end() ? ds::Option{pane->location}
-                                                                                                : ds::none;
+    ds::Option<TabLocation> location;
+
+    if (agent != nullptr) {
+      location = agent->location;
+    } else if (pane != listed.end()) {
+      location = pane->location;
+    }
 
     return location && location->workspace.kind == WorkspaceLocation::Kind::workspace ? ds::Option{location->workspace.id} : ds::none;
   }

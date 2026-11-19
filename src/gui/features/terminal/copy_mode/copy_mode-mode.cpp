@@ -93,32 +93,33 @@ namespace telar::gui::features::terminal::copy_mode {
       }
     }
 
-    constexpr auto characters = ds::Array<std::pair<std::uint32_t, Command>, 24>{{
-        {'h', Command::left},
-        {'j', Command::down},
-        {'k', Command::up},
-        {'l', Command::right},
-        {'0', Command::first_column},
-        {'^', Command::first_nonblank},
-        {'$', Command::last_nonblank},
-        {'w', Command::word_forward},
-        {'e', Command::word_end},
-        {'b', Command::word_backward},
-        {'{', Command::paragraph_backward},
-        {'}', Command::paragraph_forward},
-        {'g', Command::top},
-        {'G', Command::bottom},
-        {'/', Command::search_forward},
-        {'?', Command::search_backward},
-        {'n', Command::match_next},
-        {'N', Command::match_previous},
-        {'o', Command::open_link},
-        {'v', Command::select},
-        {' ', Command::select},
-        {'V', Command::select_lines},
-        {'y', Command::copy},
-        {'q', Command::leave},
-    }};
+    using CharacterCommand = std::pair<std::uint32_t, Command>;
+    constexpr auto characters = ds::Array<CharacterCommand, 24>{
+        CharacterCommand{'h', Command::left},
+        CharacterCommand{'j', Command::down},
+        CharacterCommand{'k', Command::up},
+        CharacterCommand{'l', Command::right},
+        CharacterCommand{'0', Command::first_column},
+        CharacterCommand{'^', Command::first_nonblank},
+        CharacterCommand{'$', Command::last_nonblank},
+        CharacterCommand{'w', Command::word_forward},
+        CharacterCommand{'e', Command::word_end},
+        CharacterCommand{'b', Command::word_backward},
+        CharacterCommand{'{', Command::paragraph_backward},
+        CharacterCommand{'}', Command::paragraph_forward},
+        CharacterCommand{'g', Command::top},
+        CharacterCommand{'G', Command::bottom},
+        CharacterCommand{'/', Command::search_forward},
+        CharacterCommand{'?', Command::search_backward},
+        CharacterCommand{'n', Command::match_next},
+        CharacterCommand{'N', Command::match_previous},
+        CharacterCommand{'o', Command::open_link},
+        CharacterCommand{'v', Command::select},
+        CharacterCommand{' ', Command::select},
+        CharacterCommand{'V', Command::select_lines},
+        CharacterCommand{'y', Command::copy},
+        CharacterCommand{'q', Command::leave},
+    };
 
     const auto* const found = std::ranges::find(characters, key.codepoint, &decltype(characters)::value_type::first);
 

@@ -135,6 +135,8 @@ namespace telar::gui::application {
     ComponentActions() noexcept = default;
     ComponentActions(const ComponentActions&) noexcept = default;
     ComponentActions& operator=(const ComponentActions&) noexcept = default;
+    ComponentActions(ComponentActions&&) noexcept = default;
+    ComponentActions& operator=(ComponentActions&&) noexcept = default;
     ~ComponentActions() = default;
   };
 
@@ -207,7 +209,7 @@ namespace telar::gui::application {
       ComponentActions& actions_;
       runtime::config::LimitNotices& limits_;
       features::components::StagedContent& staged_;
-      ComponentSurface surface_;
+      ComponentSurface surface_ = ComponentSurface::bar;
       runtime::config::ComponentBudget budget_{};
       runtime::config::ComponentBudget::Usage demand_{};
       features::components::StagedContent::Parents had_children_{};

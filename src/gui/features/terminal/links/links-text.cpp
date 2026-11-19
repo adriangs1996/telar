@@ -842,7 +842,7 @@ namespace telar::gui::features::terminal::links {
     unsigned byte = 0;
     const auto* const first = text.data() + (policy == EscapePolicy::tolerant && text[1] == '+' ? 2 : 1);
     const auto result = std::from_chars(first, text.data() + escape_bytes, byte, hexadecimal_base);
-    if (result.ec == std::errc{} && result.ptr == text.data() + escape_bytes) {
+    if (!std::make_error_code(result.ec) && result.ptr == text.data() + escape_bytes) {
       return static_cast<char>(byte);
     }
 

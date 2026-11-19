@@ -122,7 +122,7 @@ namespace telar::gui::application {
         throw EncodingError{"InvalidWorkspaceId"};
       }
 
-      const WorkspaceLocation location{WorkspaceLocation::Kind::workspace, message.target_id};
+      const WorkspaceLocation location{.kind = WorkspaceLocation::Kind::workspace, .id = message.target_id};
 
       if (std::ranges::none_of(workspace_list, [&](const auto& workspace) {
             return workspace.location.kind == WorkspaceLocation::Kind::workspace && workspace.location.id == message.target_id;
@@ -314,7 +314,7 @@ namespace telar::gui::application {
 
     const auto* focused = focusedPane();
 
-    link.send(CompletePaneFocus{message.requester, message.request_id, message.pane_id, message.pane_generation, outcome, focused == nullptr ? 0 : focused->id});
+    link.send(CompletePaneFocus{.requester = message.requester, .request_id = message.request_id, .pane_id = message.pane_id, .pane_generation = message.pane_generation, .outcome = outcome, .focused_pane_id = focused == nullptr ? 0 : focused->id});
 
     return Change::model;
   }

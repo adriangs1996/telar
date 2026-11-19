@@ -133,6 +133,32 @@ namespace telar::gui::features::workbench {
   std::size_t TabCardMotions::place(std::span<const TabCardInput> panes, std::span<TabCardPlacement> placed, TabMotionFrame& frame) noexcept {
     // Indices into the entries, which grow while the order is gathered, as Rust keeps them.
     ds::Array<std::size_t, capacity> ordered{};
+    const auto known = gather(panes, ordered);
+    const auto input = [&](const TabCardMotion& motion) {
+      return *std::ranges::find(panes, motion.pane, &TabCardInput::pane);
+    };
+
+    // Each pane has one entry, so the order is total and an unstable sort keeps it without a buffer.
+    std::ranges::sort(ordered.viewMut().first(known), [&](std::size_t first, std::size_t second) {
+      const auto& left = entries_[first];
+      const auto& right = entries_[second];
+      const auto a = input(left);
+      const auto b = input(right);
+      if (a.focused != b.focused) {
+        return a.focused;
+      }
+
+      if (a.attention != b.attention) {
+        return a.attention;
+      }
+
+      return left.used != right.used ? left.used > right.used : left.pane < right.pane;
+    });
+
+    return settle(std::span{ordered}.first(known), placed, frame);
+  }
+
+  std::size_t TabCardMotions::gather(std::span<const TabCardInput> panes, ds::Array<std::size_t, capacity>& ordered) noexcept {
     std::size_t known = 0;
 
     for (const auto& pane : panes) {
@@ -158,29 +184,13 @@ namespace telar::gui::features::workbench {
       ordered.atMut(known++) = *index;
     }
 
-    const auto input = [&](const TabCardMotion& motion) {
-      return *std::ranges::find(panes, motion.pane, &TabCardInput::pane);
-    };
+    return known;
+  }
 
-    std::stable_sort(ordered.dataMut(), ordered.dataMut() + known, [&](std::size_t first, std::size_t second) {
-      const auto& left = entries_[first];
-      const auto& right = entries_[second];
-      const auto a = input(left);
-      const auto b = input(right);
-      if (a.focused != b.focused) {
-        return a.focused;
-      }
-
-      if (a.attention != b.attention) {
-        return a.attention;
-      }
-
-      return left.used != right.used ? left.used > right.used : left.pane < right.pane;
-    });
-
+  std::size_t TabCardMotions::settle(std::span<const std::size_t> ordered, std::span<TabCardPlacement> placed, TabMotionFrame& frame) noexcept {
     std::size_t written = 0;
 
-    for (std::size_t rank = 0; rank < known; ++rank) {
+    for (std::size_t rank = 0; rank < ordered.size(); ++rank) {
       auto& motion = entries_.atMut(ordered[rank]);
       const auto target = TabCardMotion::rest[std::min(rank, TabCardMotion::rest.size() - 1)];
       if (motion.to != target) {

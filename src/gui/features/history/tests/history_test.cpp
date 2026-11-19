@@ -26,14 +26,7 @@ namespace {
 
   // The feature's use cases under the names the browser's methods had, so each assertion reads as
   // it did; every call goes through the feature's boundary, its reads through HistoryView.
-  struct BrowserState {
-    explicit BrowserState(telar::Memory& memory)
-        : history(memory) {}
-
-    State history;
-  };
-
-  class Browser : private BrowserState, public HistoryView {
+  class Browser {
   public:
     static constexpr auto page_entries = HistoryLimits::page_entries;
     static constexpr auto maximum_requests = HistoryLimits::maximum_requests;
@@ -41,56 +34,65 @@ namespace {
     static constexpr auto maximum_output_bytes = HistoryLimits::maximum_output_bytes;
 
     explicit Browser(telar::Memory& memory)
-        : BrowserState(memory),
-          HistoryView(view(history)) {}
+        : history_(memory) {}
 
     Browser(const Browser&) = delete;
     Browser& operator=(const Browser&) = delete;
+    Browser(Browser&&) = delete;
+    Browser& operator=(Browser&&) = delete;
+    ~Browser() = default;
+
+    [[nodiscard]] HistoryView reads() const noexcept {
+      return view(history_);
+    }
 
     QueryHistory begin(QueryHistory query) {
-      return search(history, query);
+      return search(history_, query);
     }
 
     ds::Option<QueryHistory> page(HistoryPage direction, std::uint64_t request_id) {
-      return features::history::page(history, direction, request_id);
+      return features::history::page(history_, direction, request_id);
     }
 
     QueryHistory refresh(std::uint64_t request_id) {
-      return features::history::refresh(history, request_id);
+      return features::history::refresh(history_, request_id);
     }
 
     template <typename Message>
     bool apply(const Message& message) {
-      return receive(history, message);
+      return receive(history_, message);
     }
 
     bool select(std::size_t index) {
-      return features::history::select(history, index);
+      return features::history::select(history_, index);
     }
 
     void setInspecting(bool enabled) {
-      inspect(history, enabled);
+      inspect(history_, enabled);
     }
 
     ds::Option<QueryHistory> readCommand(std::uint64_t request_id) {
-      return features::history::readCommand(history, request_id);
+      return features::history::readCommand(history_, request_id);
     }
 
     ds::Option<ReadHistoryOutput> readOutput(std::uint64_t request_id) {
-      return features::history::readOutput(history, request_id);
+      return features::history::readOutput(history_, request_id);
     }
 
     DeleteHistory erase(std::uint64_t id, std::uint64_t request_id) {
-      return features::history::erase(history, id, request_id);
+      return features::history::erase(history_, id, request_id);
     }
 
     bool fail(std::uint64_t request_id, std::string_view message) {
-      return features::history::fail(history, request_id, message);
+      return features::history::fail(history_, request_id, message);
     }
 
     void suspend() noexcept {
-      features::history::suspend(history);
+      features::history::suspend(history_);
     }
+
+  private:
+    State history_;
   };
 
   void ownedSearchAndPages() {
@@ -112,18 +114,18 @@ namespace {
     const auto older = browser.page(HistoryPage::older, 2);
 
     check(older && older->offset == first.size() && older->snapshot_id == 4 && older->query == "compiler errors", "older pages must retain the insertion boundary and search filters");
-    check(browser.rows().size() == first.size() && browser.state().phase == HistoryPhase::loading, "pending pages must retain their visible rows");
+    check(browser.reads().rows().size() == first.size() && browser.reads().state().phase == HistoryPhase::loading, "pending pages must retain their visible rows");
     check(!browser.apply(HistoryResults{.request_id = 1, .snapshot_id = 4, .entries = first}), "late page replies must not unlock a newer request");
 
     const ds::Array second{HistoryEntry{.id = 3, .pane_id = 1, .command = "older"}};
 
     check(browser.apply(HistoryResults{.request_id = 2, .snapshot_id = 4, .entries = second}), "the older page must replace the previous rows");
-    check(!browser.canPage(HistoryPage::older) && browser.canPage(HistoryPage::newer), "page controls must reflect the actual page boundary");
+    check(!browser.reads().canPage(HistoryPage::older) && browser.reads().canPage(HistoryPage::newer), "page controls must reflect the actual page boundary");
     const auto newer = browser.page(HistoryPage::newer, 3);
 
     check(newer && newer->offset == 0 && newer->snapshot_id == 4, "newer paging must saturate at the first page");
     browser.apply(HistoryResults{.request_id = 3, .snapshot_id = 4, .has_more = true, .entries = first});
-    check(browser.state().selection == first.size() - 1, "returning to a newer page must select its last row");
+    check(browser.reads().state().selection == first.size() - 1, "returning to a newer page must select its last row");
     const auto refreshed = browser.refresh(4);
 
     check(refreshed.offset == 0 && refreshed.snapshot_id == 0, "a refresh must choose a new insertion boundary");
@@ -134,55 +136,55 @@ namespace {
     telar::MemoryAdapter adapted{memory};
     Browser browser{adapted};
 
-    check(!browser.choice(), "an idle browser must not offer a command choice");
+    check(!browser.reads().choice(), "an idle browser must not offer a command choice");
     const ds::Array entries{HistoryEntry{.id = 1, .command = "first"}, HistoryEntry{.id = 2, .command = "second"}};
 
     static_cast<void>(browser.begin({.request_id = 1}));
     browser.apply(HistoryResults{.request_id = 1, .snapshot_id = 1, .has_more = true, .entries = entries});
-    const auto presented = browser.choice();
+    const auto presented = browser.reads().choice();
     if (!presented) {
       throw std::runtime_error{"a ready page must provide a selected choice"};
     }
 
-    check(browser.accepts(*presented), "a ready page must accept its selected choice");
-    check(!browser.acceptsRow({.index = entries.size(), .revision = browser.revision()}), "a choice outside the page must be rejected");
-    const auto previous_view = browser.viewVersion();
+    check(browser.reads().accepts(*presented), "a ready page must accept its selected choice");
+    check(!browser.reads().acceptsRow({.index = entries.size(), .revision = browser.reads().revision()}), "a choice outside the page must be rejected");
+    const auto previous_view = browser.reads().viewVersion();
 
     browser.select(1);
-    check(!browser.accepts(*presented), "selection must not retarget a previously drawn submit action");
-    check(browser.acceptsRow(*presented), "selection must preserve row choices from the same page");
-    check(browser.revision() == presented->revision && browser.viewVersion() > previous_view, "selection must publish view changes without invalidating the content revision");
+    check(!browser.reads().accepts(*presented), "selection must not retarget a previously drawn submit action");
+    check(browser.reads().acceptsRow(*presented), "selection must preserve row choices from the same page");
+    check(browser.reads().revision() == presented->revision && browser.reads().viewVersion() > previous_view, "selection must publish view changes without invalidating the content revision");
     browser.select(0);
-    check(browser.accepts(*presented), "returning to the selected row on the same page must retain the original submission guard");
+    check(browser.reads().accepts(*presented), "returning to the selected row on the same page must retain the original submission guard");
     browser.setInspecting(true);
-    check(browser.acceptsRow(*presented), "opening inspection must preserve ready row choices until a detail request changes the content");
-    const auto selected = browser.choice();
+    check(browser.reads().acceptsRow(*presented), "opening inspection must preserve ready row choices until a detail request changes the content");
+    const auto selected = browser.reads().choice();
     if (!selected) {
       throw std::runtime_error{"the new selection must provide its own choice"};
     }
 
-    check(browser.accepts(*selected), "the new selection must accept its own choice");
+    check(browser.reads().accepts(*selected), "the new selection must accept its own choice");
     static_cast<void>(browser.page(HistoryPage::older, 2));
-    check(!browser.choice() && !browser.acceptsRow(*selected), "loading must disable the old choice while retaining its visible rows");
-    check(browser.rows().size() == entries.size(), "the pending page must preserve displayed rows");
+    check(!browser.reads().choice() && !browser.reads().acceptsRow(*selected), "loading must disable the old choice while retaining its visible rows");
+    check(browser.reads().rows().size() == entries.size(), "the pending page must preserve displayed rows");
     const ds::Array replacement{HistoryEntry{.id = 3, .command = "replacement"}};
 
     browser.apply(HistoryResults{.request_id = 2, .snapshot_id = 1, .entries = replacement});
-    check(!browser.acceptsRow(*selected), "a completed page must not reuse a previous row index as a command choice");
-    const auto replaced = browser.choice();
+    check(!browser.reads().acceptsRow(*selected), "a completed page must not reuse a previous row index as a command choice");
+    const auto replaced = browser.reads().choice();
     if (!replaced) {
       throw std::runtime_error{"the replacement must provide its own choice"};
     }
 
-    check(browser.rows()[replaced->index].id == replacement.front().id, "the replacement must select its own command");
+    check(browser.reads().rows()[replaced->index].id == replacement.front().id, "the replacement must select its own command");
     static_cast<void>(browser.refresh(3));
     browser.fail(3, "search failed");
-    check(!browser.choice() && !browser.accepts(*replaced), "a failed search must not restore the previous choice");
+    check(!browser.reads().choice() && !browser.reads().accepts(*replaced), "a failed search must not restore the previous choice");
     static_cast<void>(browser.begin({.request_id = 4}));
     browser.apply(HistoryResults{.request_id = 4, .snapshot_id = 2});
-    check(!browser.choice(), "an empty ready page must not offer a command choice");
+    check(!browser.reads().choice(), "an empty ready page must not offer a command choice");
     browser.suspend();
-    check(!browser.accepts(*replaced), "disconnect must invalidate a drawn choice");
+    check(!browser.reads().accepts(*replaced), "disconnect must invalidate a drawn choice");
   }
 
   void boundedRequestsAndStaleFailures() {
@@ -203,12 +205,12 @@ namespace {
       rejected = true;
     }
 
-    check(rejected && browser.state().phase == HistoryPhase::failed, "request saturation must block submission without growing storage");
-    check(browser.owns(1) && !browser.fail(1, "stale failure"), "an obsolete failure must retire its request without replacing the current error");
+    check(rejected && browser.reads().state().phase == HistoryPhase::failed, "request saturation must block submission without growing storage");
+    check(browser.reads().owns(1) && !browser.fail(1, "stale failure"), "an obsolete failure must retire its request without replacing the current error");
     static_cast<void>(browser.begin({.request_id = ++sequence}));
-    check(browser.state().phase == HistoryPhase::loading, "retiring a stale request must restore bounded request capacity");
+    check(browser.reads().state().phase == HistoryPhase::loading, "retiring a stale request must restore bounded request capacity");
     browser.suspend();
-    check(!browser.owns(sequence) && browser.state().phase == HistoryPhase::idle, "disconnect must invalidate every history request");
+    check(!browser.reads().owns(sequence) && browser.reads().state().phase == HistoryPhase::idle, "disconnect must invalidate every history request");
   }
 
   void allocationFailureIsAtomic() {
@@ -236,12 +238,12 @@ namespace {
         rejected = true;
       }
 
-      check(rejected && browser.state().phase == HistoryPhase::failed, "allocation failure must close input authority");
-      check(browser.rows().size() == 1 && browser.rows().front().command == "retained", "allocation failure must preserve the previous complete page");
+      check(rejected && browser.reads().state().phase == HistoryPhase::failed, "allocation failure must close input authority");
+      check(browser.reads().rows().size() == 1 && browser.reads().rows().front().command == "retained", "allocation failure must preserve the previous complete page");
       check(budget.liveBytes() == live_bytes, "failed page staging must release every temporary allocation");
       static_cast<void>(browser.begin({.request_id = 3}));
       browser.apply(HistoryResults{.request_id = 3, .snapshot_id = 3, .entries = initial});
-      check(browser.command(1) == "retained", "a later successful query must restore submission authority");
+      check(browser.reads().command(1) == "retained", "a later successful query must restore submission authority");
     }
 
     check(budget.liveBytes() == 0 && budget.failures() != 0, "history ownership must release all injected storage after a tested failure");
@@ -275,13 +277,13 @@ namespace {
         rejected = true;
       }
 
-      check(rejected && browser.state().output_phase == HistoryPhase::failed && !browser.error().empty(), "inspection allocation failure must replace its loading indicator with a bounded error");
-      check(browser.state().phase == HistoryPhase::ready && browser.command(1) == "available", "inspection failure must preserve the current command page and input authority");
+      check(rejected && browser.reads().state().output_phase == HistoryPhase::failed && !browser.reads().error().empty(), "inspection allocation failure must replace its loading indicator with a bounded error");
+      check(browser.reads().state().phase == HistoryPhase::ready && browser.reads().command(1) == "available", "inspection failure must preserve the current command page and input authority");
       browser.setInspecting(false);
       browser.setInspecting(true);
       static_cast<void>(browser.readOutput(3));
       browser.apply(HistoryOutput{.request_id = 3, .id = 1, .content = byteView("recovered")});
-      check(browser.output() == "recovered" && browser.error().empty(), "a later successful inspection must clear its previous error");
+      check(browser.reads().output() == "recovered" && browser.reads().error().empty(), "a later successful inspection must clear its previous error");
     }
 
     check(budget.liveBytes() == 0, "failed inspections must release every injected allocation");
@@ -311,17 +313,17 @@ namespace {
 
     check(second->id == 2, "changing selection must request the newly selected command");
     check(!browser.apply(HistoryOutput{.request_id = first->request_id, .id = 1, .content = byteView("stale")}), "late output must not replace a newer inspection");
-    const auto rows_version = browser.rowsVersion();
+    const auto rows_version = browser.reads().rowsVersion();
     std::string output = "\x1b[31mred\x1b[0m\r\n\x1b]2;hidden\aend";
 
     browser.apply(HistoryOutput{.request_id = second->request_id, .id = 2, .truncated = true, .observed_bytes = output.size(), .content = byteView(output)});
     output.assign("reused network storage");
-    check(browser.output() == "red\nend" && browser.state().output_truncated, "inspection must own sanitized output and preserve truncation status");
-    check(browser.rowsVersion() == rows_version, "inspection changes must not invalidate projected command rows");
+    check(browser.reads().output() == "red\nend" && browser.reads().state().output_truncated, "inspection must own sanitized output and preserve truncation status");
+    check(browser.reads().rowsVersion() == rows_version, "inspection changes must not invalidate projected command rows");
 
     const auto deletion = browser.erase(2, ++sequence);
 
-    check(browser.rows().size() == 2 && browser.deleting(), "deletion must leave rows present until runtime confirmation");
+    check(browser.reads().rows().size() == 2 && browser.reads().deleting(), "deletion must leave rows present until runtime confirmation");
     check(browser.apply(HistoryPruned{.request_id = deletion.request_id, .removed = 1}), "only the matching deletion confirmation may trigger refresh");
     const auto stale_deletion = browser.erase(1, ++sequence);
 
@@ -351,11 +353,11 @@ namespace {
       static_cast<void>(browser.begin({.request_id = ++sequence}));
       browser.apply(HistoryResults{.request_id = sequence, .snapshot_id = 1, .entries = entries});
       check(budget.failures() == 0 && budget.liveBytes() < allocation_budget, "a page of maximal commands must fit its bounded cache and previews");
-      check(browser.rows().front().command.size() == Storage::command_preview_bytes && browser.command(1) == large_command, "bounded previews must retain complete cached commands for input");
-      check(browser.rows()[first_uncached - 1].command_complete && !browser.rows()[first_uncached].command_complete, "the shared command budget must admit only complete commands");
+      check(browser.reads().rows().front().command.size() == Storage::command_preview_bytes && browser.reads().command(1) == large_command, "bounded previews must retain complete cached commands for input");
+      check(browser.reads().rows()[first_uncached - 1].command_complete && !browser.reads().rows()[first_uncached].command_complete, "the shared command budget must admit only complete commands");
       browser.select(first_uncached);
-      check(!browser.canSubmit(), "uncached previews must never authorize input");
-      check(browser.selectedCommand() == browser.rows()[first_uncached].command, "an uncached selection must display only its owned preview");
+      check(!browser.reads().canSubmit(), "uncached previews must never authorize input");
+      check(browser.reads().selectedCommand() == browser.reads().rows()[first_uncached].command, "an uncached selection must display only its owned preview");
       const auto request = browser.readCommand(++sequence);
       if (!request) {
         throw std::runtime_error{"An uncached selection must request its complete command"};
@@ -369,14 +371,14 @@ namespace {
       }
 
       check(!browser.apply(HistoryResults{.request_id = request->request_id, .entries = std::span{entries}.subspan(first_uncached, 1)}), "a late full command must not replace the current selection");
-      const auto rows_version = browser.rowsVersion();
+      const auto rows_version = browser.reads().rowsVersion();
 
       browser.apply(HistoryResults{.request_id = current->request_id, .entries = std::span{entries}.subspan(first_uncached + 1, 1)});
-      check(browser.canSubmit() && browser.command(current->entry_id) == large_command, "only a complete matching reply may authorize the selected command");
-      check(browser.selectedCommand() == large_command, "inspection must expose the complete selected command after its matching read");
-      check(browser.rowsVersion() == rows_version && budget.failures() == 0, "selected detail must not rebuild the page or exceed its memory budget");
+      check(browser.reads().canSubmit() && browser.reads().command(current->entry_id) == large_command, "only a complete matching reply may authorize the selected command");
+      check(browser.reads().selectedCommand() == large_command, "inspection must expose the complete selected command after its matching read");
+      check(browser.reads().rowsVersion() == rows_version && budget.failures() == 0, "selected detail must not rebuild the page or exceed its memory budget");
       static_cast<void>(browser.begin({.request_id = ++sequence}));
-      check(!browser.canSubmit() && browser.state().command_phase == HistoryPhase::idle, "a new search must invalidate selected command ownership");
+      check(!browser.reads().canSubmit() && browser.reads().state().command_phase == HistoryPhase::idle, "a new search must invalidate selected command ownership");
     }
 
     check(budget.liveBytes() == 0, "bounded command storage must release all injected memory");
@@ -401,17 +403,17 @@ namespace {
     static_cast<void>(browser.begin({.request_id = ++sequence}));
     browser.apply(HistoryResults{.request_id = sequence, .entries = entries});
     browser.select(entries.size() - 1);
-    check(!browser.canSubmit() && !browser.readCommand(++sequence), "capture truncation must not be confused with a missing cached command");
+    check(!browser.reads().canSubmit() && !browser.readCommand(++sequence), "capture truncation must not be confused with a missing cached command");
 
     browser.select(cached_entries);
     static_cast<void>(browser.readCommand(++sequence));
     browser.apply(HistoryResults{.request_id = sequence, .entries = std::span{entries}.first(1)});
-    check(!browser.canSubmit() && browser.state().command_phase == HistoryPhase::failed && browser.state().phase == HistoryPhase::ready, "mismatched entry identity must fail locally without replacing the page");
+    check(!browser.reads().canSubmit() && browser.reads().state().command_phase == HistoryPhase::failed && browser.reads().state().phase == HistoryPhase::ready, "mismatched entry identity must fail locally without replacing the page");
     check(!browser.readCommand(++sequence), "a failed full read must not cause an automatic retry loop");
     browser.select(0);
     browser.select(cached_entries);
     static_cast<void>(browser.readCommand(++sequence));
-    check(browser.fail(sequence, "Entry disappeared") && !browser.canSubmit() && browser.state().phase == HistoryPhase::ready, "full-read request failure must remain local to its selection");
+    check(browser.fail(sequence, "Entry disappeared") && !browser.reads().canSubmit() && browser.reads().state().phase == HistoryPhase::ready, "full-read request failure must remain local to its selection");
     browser.select(0);
     browser.select(cached_entries);
     const auto obsolete_request = ++sequence;
@@ -419,7 +421,7 @@ namespace {
     static_cast<void>(browser.readCommand(obsolete_request));
     static_cast<void>(browser.begin({.request_id = ++sequence}));
     check(!browser.apply(HistoryResults{.request_id = obsolete_request, .entries = std::span{entries}.subspan(cached_entries, 1)}), "an obsolete full reply must not end a newer search");
-    check(browser.state().phase == HistoryPhase::loading && browser.state().command_phase == HistoryPhase::idle, "query and selected-command phases must remain independent");
+    check(browser.reads().state().phase == HistoryPhase::loading && browser.reads().state().command_phase == HistoryPhase::idle, "query and selected-command phases must remain independent");
   }
 
   void commandPreviewBoundaries() {
@@ -434,8 +436,8 @@ namespace {
 
     static_cast<void>(page.begin({.request_id = 1}));
     page.apply(HistoryResults{.request_id = 1, .entries = entries});
-    check(page.rows().front().command.size() == Storage::command_preview_bytes - 1, "previews must stop before a split UTF-8 scalar");
-    check(page.command(1) == command, "preview truncation must preserve complete canonical command bytes");
+    check(page.reads().rows().front().command.size() == Storage::command_preview_bytes - 1, "previews must stop before a split UTF-8 scalar");
+    check(page.reads().command(1) == command, "preview truncation must preserve complete canonical command bytes");
   }
 
   void selectedCommandAllocationFailure() {
@@ -470,10 +472,10 @@ namespace {
         rejected = true;
       }
 
-      check(rejected && browser.state().command_phase == HistoryPhase::failed && !browser.canSubmit(), "a detail allocation failure must end loading without authorizing a preview");
-      check(browser.state().phase == HistoryPhase::ready && budget.liveBytes() == live_bytes && !browser.owns(2), "detail allocation failure must retain page ownership and retire its request");
+      check(rejected && browser.reads().state().command_phase == HistoryPhase::failed && !browser.reads().canSubmit(), "a detail allocation failure must end loading without authorizing a preview");
+      check(browser.reads().state().phase == HistoryPhase::ready && budget.liveBytes() == live_bytes && !browser.reads().owns(2), "detail allocation failure must retain page ownership and retire its request");
       browser.select(0);
-      check(browser.canSubmit() && browser.command(1) == command, "a cached command must remain available after detail allocation failure");
+      check(browser.reads().canSubmit() && browser.reads().command(1) == command, "a cached command must remain available after detail allocation failure");
     }
 
     check(budget.liveBytes() == 0 && budget.failures() != 0, "detail failure must release all injected memory");
@@ -485,13 +487,13 @@ namespace {
       std::string_view expected;
     };
 
-    constexpr auto examples = ds::Array<Example, 5>{{
-        {.input = "\x1b[31mfail\x1b[0m\r\n", .expected = "fail\n"},
-        {.input = "before\x1b]52;c;hidden\aafter", .expected = "beforeafter"},
-        {.input = "a\x1bPpayload\x1b\\b\x1bXhidden\x1b\\c\x1b^private\ad\x1b_graphics\x1b\\e", .expected = "abcde"},
-        {.input = "a\x1b(Bb\x1b[12;", .expected = "ab"},
-        {.input = "café\t🌱\n", .expected = "café\t🌱\n"},
-    }};
+    constexpr auto examples = ds::Array<Example, 5>{
+        Example{.input = "\x1b[31mfail\x1b[0m\r\n", .expected = "fail\n"},
+        Example{.input = "before\x1b]52;c;hidden\aafter", .expected = "beforeafter"},
+        Example{.input = "a\x1bPpayload\x1b\\b\x1bXhidden\x1b\\c\x1b^private\ad\x1b_graphics\x1b\\e", .expected = "abcde"},
+        Example{.input = "a\x1b(Bb\x1b[12;", .expected = "ab"},
+        Example{.input = "café\t🌱\n", .expected = "café\t🌱\n"},
+    };
 
     constexpr std::size_t output_capacity = 128;
     ds::Array<char, output_capacity> output{};

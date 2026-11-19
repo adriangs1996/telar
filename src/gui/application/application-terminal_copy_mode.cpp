@@ -65,7 +65,8 @@ namespace telar::gui::application::terminal::copy_mode {
       return {.kind = feature::CopyPointerAuthority::Kind::keyboard, .inside = input.pane_id == state->pane_id && input.inside};
     }
 
-    void move(feature::State& state, Session::Link& link, ViewVersion& view_version, const CopyPointerDecision& decision, bool released, Pane<Memory>& pane) {
+    // What a drag or a wheel turn over `pane` makes copy mode do.
+    tbc::view<ds::Option<feature::CopyPlan>, tbc::lt::static_storage> move(const feature::State& state, const CopyPointerDecision& decision, bool released, const Pane<Memory>& pane) {
       const auto grid = copyGrid(pane.screen);
       ds::Option<feature::CopyPlan> plan;
 
@@ -75,9 +76,7 @@ namespace telar::gui::application::terminal::copy_mode {
         plan = feature::scroll(state, *decision.vertical, grid);
       }
 
-      if (plan) {
-        apply(state, link, view_version, *plan, pane);
-      }
+      return plan;
     }
 
   }
@@ -159,7 +158,9 @@ namespace telar::gui::application::terminal::copy_mode {
       } else if (decision.cancel) {
         static_cast<void>(feature::clearPointer(state));
       } else if (auto* copy_pane = pane(session.copy_mode, session.panes); copy_pane != nullptr) {
-        move(state, session.link, session.view_version, decision, input.kind == CopyPointerKind::release, *copy_pane);
+        if (const auto plan = move(state, decision, input.kind == CopyPointerKind::release, *copy_pane)) {
+          apply(state, session.link, session.view_version, *plan, *copy_pane);
+        }
       }
     } catch (...) {
       if (finish) {

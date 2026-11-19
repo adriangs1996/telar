@@ -108,11 +108,11 @@ export {
       static constexpr std::uint64_t settle_ns = duration_ns - lift_ns;
       // The focused card clears the stack before it lands in front.
       static constexpr TabCardPose lift{.x = 9.1F, .y = -5.5F, .rotation = -8, .scale = 1.06F};
-      static constexpr ds::Array<TabCardPose, 3> rest{{
-          {.x = 0, .y = 0, .rotation = -5, .scale = 1},
-          {.x = 7, .y = 0, .rotation = -3, .scale = 0.93F},
-          {.x = 14.3F, .y = 0, .rotation = -1, .scale = 0.83F},
-      }};
+      static constexpr ds::Array<TabCardPose, 3> rest{
+          TabCardPose{.x = 0, .y = 0, .rotation = -5, .scale = 1},
+          TabCardPose{.x = 7, .y = 0, .rotation = -3, .scale = 0.93F},
+          TabCardPose{.x = 14.3F, .y = 0, .rotation = -1, .scale = 0.83F},
+      };
 
       std::uint64_t pane = 0;
       std::uint64_t used = 0;
@@ -147,6 +147,13 @@ export {
     private:
       // Where a pane's motion is among the entries: an index, as the entries change while it is kept.
       [[nodiscard]] ds::Option<std::size_t> find(std::uint64_t pane) const noexcept;
+
+      // Gathers the motions of `panes` in their order into `ordered`, keeping the panes first seen;
+      // how many it gathered.
+      std::size_t gather(std::span<const TabCardInput> panes, ds::Array<std::size_t, capacity>& ordered) noexcept;
+
+      // Moves each motion toward the pose of its rank in `ordered` and writes those `placed` holds.
+      std::size_t settle(std::span<const std::size_t> ordered, std::span<TabCardPlacement> placed, TabMotionFrame& frame) noexcept;
 
       ds::Array<TabCardMotion, capacity> entries_{};
       std::size_t count_ = 0;

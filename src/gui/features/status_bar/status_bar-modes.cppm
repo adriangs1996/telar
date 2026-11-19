@@ -35,16 +35,17 @@ export {
 
     class ModeHints {
     public:
-      static constexpr auto actions = ds::Array<std::pair<BindingActionKind, std::string_view>, 8>{{
-          {BindingActionKind::split_horizontal, "split right"},
-          {BindingActionKind::split_vertical, "split down"},
-          {BindingActionKind::new_tab, "new tab"},
-          {BindingActionKind::new_workspace, "new workspace"},
-          {BindingActionKind::rename_tab, "rename tab"},
-          {BindingActionKind::rename_workspace, "rename workspace"},
-          {BindingActionKind::close_pane, "close pane"},
-          {BindingActionKind::copy_mode, "copy mode"},
-      }};
+      using ActionHint = std::pair<BindingActionKind, std::string_view>;
+      static constexpr auto actions = ds::Array<ActionHint, 8>{
+          ActionHint{BindingActionKind::split_horizontal, "split right"},
+          ActionHint{BindingActionKind::split_vertical, "split down"},
+          ActionHint{BindingActionKind::new_tab, "new tab"},
+          ActionHint{BindingActionKind::new_workspace, "new workspace"},
+          ActionHint{BindingActionKind::rename_tab, "rename tab"},
+          ActionHint{BindingActionKind::rename_workspace, "rename workspace"},
+          ActionHint{BindingActionKind::close_pane, "close pane"},
+          ActionHint{BindingActionKind::copy_mode, "copy mode"},
+      };
       static constexpr std::size_t capacity = actions.size();
 
       // Stays here: generic over the caller's router.
@@ -105,15 +106,20 @@ export {
     // What the bar shows while a mode holds the keyboard: the mode's name and the keys it answers.
     class ModeBarLabels {
     public:
-      static constexpr auto copy_hints = ds::Array<std::pair<std::string_view, std::string_view>, 7>{{
-          {"h j k l", "move"},
-          {"v", "select"},
-          {"V", "lines"},
-          {"/", "search"},
-          {"y", "copy"},
-          {"o", "open"},
-          {"q", "exit"},
-      }};
+      struct KeyHint {
+        std::string_view key;
+        std::string_view word;
+      };
+
+      static constexpr auto copy_hints = ds::Array<KeyHint, 7>{
+          KeyHint{.key = "h j k l", .word = "move"},
+          KeyHint{.key = "v", .word = "select"},
+          KeyHint{.key = "V", .word = "lines"},
+          KeyHint{.key = "/", .word = "search"},
+          KeyHint{.key = "y", .word = "copy"},
+          KeyHint{.key = "o", .word = "open"},
+          KeyHint{.key = "q", .word = "exit"},
+      };
       static constexpr std::string_view cancel_key = "Esc";
       static constexpr std::string_view cancel_word = "cancel";
       static constexpr std::size_t capacity = std::max(copy_hints.size(), 1 + ModeHints::capacity);
@@ -125,7 +131,7 @@ export {
       [[nodiscard]] std::span<const ModeBarHint> hints() const noexcept;
 
     private:
-      void append(std::string_view key, std::string_view word);
+      void append(KeyHint hint);
 
       std::string_view title_;
       ds::Array<ModeBarHint, capacity> hints_{};

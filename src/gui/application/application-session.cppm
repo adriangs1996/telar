@@ -122,6 +122,9 @@ export {
 
       Session(const Session&) = delete;
       Session& operator=(const Session&) = delete;
+      Session(Session&&) = delete;
+      Session& operator=(Session&&) = delete;
+      ~Session() = default;
 
       // The directory and arguments a new pane launches with, beside the strings the arguments view,
       // so it stays where it is made.
@@ -131,6 +134,9 @@ export {
 
         LaunchDefaults(const LaunchDefaults&) = delete;
         LaunchDefaults& operator=(const LaunchDefaults&) = delete;
+        LaunchDefaults(LaunchDefaults&&) = delete;
+        LaunchDefaults& operator=(LaunchDefaults&&) = delete;
+        ~LaunchDefaults() = default;
 
         // The directory, else `/`, and the arguments, else a shell.
         [[nodiscard]] Launch launch() const noexcept;
@@ -448,6 +454,10 @@ export {
 
       bool recoverMissingWorkspacePane(const Pending& request, const RequestFailed& failure);
 
+      // Undoes what `request`, which failed, had started. A change it returns settles the failure;
+      // none leaves the failure to show as the session's error.
+      ds::Option<Change> failPending(const Pending& request, const RequestFailed& message);
+
       void handoffPane(std::uint64_t pane_id, ds::Option<std::uint64_t> fallback_workspace);
 
       void handoffWorkspace(PaneTarget target, ds::Option<std::uint64_t> fallback_workspace);
@@ -640,6 +650,32 @@ export {
       // v and V select its output, Y copies it and yc its command; Esc, q, i, a, I, A and any other
       // key go back to the prompt.
       ds::Option<features::prompt::Outcome> blockKey(std::uint64_t pane_id, const features::prompt::KeyPress& key);
+
+      // The block selected in `line` while it is one of `pane`'s.
+      [[nodiscard]] static ds::Option<std::size_t> blockSelection(const Pane<Memory>& pane, const features::prompt::PaneLine& line) noexcept;
+
+      // Selects block `index` of `pane`, or none, as a jump.
+      void jumpToBlock(std::uint64_t pane_id, ds::Option<std::size_t> index);
+
+      // Selects the block above (`direction` -1) or below (1) the selected one. With none selected,
+      // going up selects the last block.
+      void stepBlock(std::uint64_t pane_id, int direction);
+
+      // Selects the next failed block above or below the selected one, or from the live end.
+      void stepFailedBlock(std::uint64_t pane_id, int direction);
+
+      // Ctrl-U, Ctrl-D, Ctrl-O and Ctrl-I; false for any other `character`.
+      bool controlBlockKey(std::uint64_t pane_id, char32_t character);
+
+      // The chord `pending` began, yc, gg or z and a key, ended by `character` on block `index`;
+      // false when `pending` begins none of them.
+      bool blockChord(char pending, std::uint64_t pane_id, std::size_t index, char32_t character);
+
+      // The z chord ended by `character` on block `index`.
+      void foldChord(std::uint64_t pane_id, std::size_t index, char32_t character);
+
+      // A key on block `index` outside a chord; false when it is none of block mode's.
+      bool blockCommand(std::uint64_t pane_id, std::size_t index, char32_t character);
 
       // The shown row at the view's top: as its view says, or as the runtime's view puts it.
       [[nodiscard]] static std::uint64_t shownTop(const Pane<Memory>& pane) noexcept;

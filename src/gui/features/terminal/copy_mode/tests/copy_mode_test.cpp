@@ -33,6 +33,9 @@ namespace {
 
     CopyMode(const CopyMode&) = delete;
     CopyMode& operator=(const CopyMode&) = delete;
+    CopyMode(CopyMode&&) = delete;
+    CopyMode& operator=(CopyMode&&) = delete;
+    ~CopyMode() = default;
 
     bool enter(std::uint64_t pane_id, const CopyGrid& grid, const telar::Cursor& cursor) noexcept {
       return feature::enter(state_, pane_id, grid, cursor);

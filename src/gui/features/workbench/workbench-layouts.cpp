@@ -66,7 +66,7 @@ namespace telar::gui::features::workbench {
       const auto digits = text.substr(index * digits_per_byte, digits_per_byte);
       unsigned value = 0;
       const auto parsed = std::from_chars(digits.data(), digits.data() + digits.size(), value, hexadecimal_base);
-      if (parsed.ec != std::errc{} || parsed.ptr != digits.data() + digits.size()) {
+      if (std::make_error_code(parsed.ec) || parsed.ptr != digits.data() + digits.size()) {
         throw EncodingError{"InvalidCharacter"};
       }
 

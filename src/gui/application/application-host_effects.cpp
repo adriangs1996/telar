@@ -31,7 +31,7 @@ namespace telar::gui::application {
       return ds::none;
     }
 
-    acknowledged_ = AcknowledgeAgent{agent->pane_id, agent->pane_generation};
+    acknowledged_ = AcknowledgeAgent{.pane_id = agent->pane_id, .pane_generation = agent->pane_generation};
 
     return acknowledged_;
   }

@@ -52,19 +52,8 @@ export namespace telar::gui::application {
       std::size_t kept = 0;
 
       for (const auto span : all) {
-        if (kept != 0) {
-          auto& previous = all[kept - 1];
-          const bool folds = previous.shown == 0 && span.shown == 0;
-          if (span.first < previous.end() || (folds && span.first == previous.end())) {
-            if (previous.shown == 0 || span.shown == 0) {
-              const auto end = std::max(previous.end(), span.end());
-
-              previous.count = static_cast<std::uint32_t>(std::min<std::uint64_t>(end - previous.first, std::numeric_limits<std::uint32_t>::max()));
-              previous.shown = 0;
-            }
-
-            continue;
-          }
+        if (kept != 0 && joins(all[kept - 1], span)) {
+          continue;
         }
 
         all[kept++] = span;
@@ -181,6 +170,26 @@ export namespace telar::gui::application {
       const auto index = static_cast<std::size_t>(after - spans_.begin()) - 1;
 
       return row < spans_[index].end() ? index : spans_.size();
+    }
+
+    // Whether `span`, which starts at or after `previous`, joins it: it overlaps it, or both are
+    // folds and it starts where `previous` ends. When either is a fold, `previous` becomes one fold
+    // over the rows of both.
+    static bool joins(Span& previous, const Span& span) noexcept {
+      const bool folds = previous.shown == 0 && span.shown == 0;
+      const bool overlaps = span.first < previous.end() || (folds && span.first == previous.end());
+      if (!overlaps) {
+        return false;
+      }
+
+      if (previous.shown == 0 || span.shown == 0) {
+        const auto end = std::max(previous.end(), span.end());
+
+        previous.count = static_cast<std::uint32_t>(std::min<std::uint64_t>(end - previous.first, std::numeric_limits<std::uint32_t>::max()));
+        previous.shown = 0;
+      }
+
+      return true;
     }
 
     ds::Vec<Span, Memory> spans_;

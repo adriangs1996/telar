@@ -34,14 +34,15 @@ export {
       Section section = Section::client;
       std::int64_t index = 0;
 
-      static constexpr auto sections = ds::Array<std::pair<std::string_view, Section>, 6>{{
-          {"client", Section::client},
-          {"theme", Section::theme},
-          {"gui", Section::gui},
-          {"input", Section::input},
-          {"runtime", Section::runtime},
-          {"binding", Section::binding},
-      }};
+      using SectionName = std::pair<std::string_view, Section>;
+      static constexpr auto sections = ds::Array<SectionName, 6>{
+          SectionName{"client", Section::client},
+          SectionName{"theme", Section::theme},
+          SectionName{"gui", Section::gui},
+          SectionName{"input", Section::input},
+          SectionName{"runtime", Section::runtime},
+          SectionName{"binding", Section::binding},
+      };
 
       [[nodiscard]] static ConfigurationQuery parse(std::string_view name, std::int64_t index);
     };

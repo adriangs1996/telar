@@ -24,10 +24,11 @@ namespace telar::gui::features::palette {
         return PaletteScore::boundary_bonus;
       }
 
+      constexpr unsigned char first_non_ascii = 0x80;
       const auto previous = static_cast<unsigned char>(label[index - 1]);
       const auto current = static_cast<unsigned char>(label[index]);
 
-      if (previous < 0x80 && !asciiAlphanumeric(previous)) {
+      if (previous < first_non_ascii && !asciiAlphanumeric(previous)) {
         return PaletteScore::boundary_bonus;
       }
 
@@ -38,6 +39,43 @@ namespace telar::gui::features::palette {
       return 0;
     }
 
+    // The bytes of the label from the first to the last it matches of the query, as tight as the
+    // query allows.
+    struct Window {
+      std::size_t start = 0;
+      std::size_t end = 0;
+    };
+
+    ds::Option<Window> tightestWindow(std::string_view label, std::string_view query) noexcept {
+      // The first place where the whole query fits ends the window.
+      std::size_t matched = 0;
+      std::size_t end = 0;
+
+      for (std::size_t index = 0; index < label.size() && matched < query.size(); ++index) {
+        if (sameLetter(label[index], query[matched])) {
+          end = index;
+          ++matched;
+        }
+      }
+
+      if (matched != query.size()) {
+        return ds::none;
+      }
+
+      // Walking back from there finds the latest start that still fits: the tightest window.
+      auto start = end;
+      auto remaining = query.size();
+
+      for (auto index = end + 1; index-- > 0 && remaining > 0;) {
+        if (sameLetter(label[index], query[remaining - 1])) {
+          start = index;
+          --remaining;
+        }
+      }
+
+      return Window{.start = start, .end = end};
+    }
+
   }
 
   ds::Option<std::uint32_t> PaletteScore::of(std::string_view label, std::string_view query) noexcept {
@@ -45,30 +83,9 @@ namespace telar::gui::features::palette {
       return 1;
     }
 
-    // The first place where the whole query fits ends the window.
-    std::size_t matched = 0;
-    std::size_t end = 0;
-
-    for (std::size_t index = 0; index < label.size() && matched < query.size(); ++index) {
-      if (sameLetter(label[index], query[matched])) {
-        end = index;
-        ++matched;
-      }
-    }
-
-    if (matched != query.size()) {
+    const auto window = tightestWindow(label, query);
+    if (!window) {
       return ds::none;
-    }
-
-    // Walking back from there finds the latest start that still fits: the tightest window.
-    auto start = end;
-    auto remaining = query.size();
-
-    for (auto index = end + 1; index-- > 0 && remaining > 0;) {
-      if (sameLetter(label[index], query[remaining - 1])) {
-        start = index;
-        --remaining;
-      }
     }
 
     std::int32_t score = 0;
@@ -77,7 +94,7 @@ namespace telar::gui::features::palette {
     bool consecutive = false;
     bool in_gap = false;
 
-    for (auto index = start; index <= end; ++index) {
+    for (auto index = window->start; index <= window->end; ++index) {
       if (next == query.size() || !sameLetter(label[index], query[next])) {
         score -= in_gap ? gap_extension : gap_start;
         in_gap = true;

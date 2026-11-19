@@ -254,7 +254,7 @@ namespace telar::gui::application::workbench {
     auto* pane = findPaneMut(session.panes, pane_id);
     if (pane == nullptr) {
       const auto& agents = session.agents();
-      const auto* const agent = std::find_if(agents.begin(), agents.end(), [&](const auto& entry) {
+      const auto* const agent = std::ranges::find_if(agents, [&](const auto& entry) {
         return entry.pane_id == pane_id;
       });
       if (agent == agents.end()) {
@@ -292,12 +292,12 @@ namespace telar::gui::application::workbench {
       return;
     }
 
-    constexpr auto characters = ds::Array<std::pair<PaneDirection, char>, 4>{{
-        {PaneDirection::left, 'h'},
-        {PaneDirection::right, 'l'},
-        {PaneDirection::up, 'k'},
-        {PaneDirection::down, 'j'},
-    }};
+    constexpr auto characters = ds::Array<std::pair<PaneDirection, char>, 4>{
+        std::pair{PaneDirection::left, 'h'},
+        std::pair{PaneDirection::right, 'l'},
+        std::pair{PaneDirection::up, 'k'},
+        std::pair{PaneDirection::down, 'j'},
+    };
 
     const auto* const found = std::ranges::find(characters, direction, &decltype(characters)::value_type::first);
     if (found == characters.end()) {
@@ -338,7 +338,7 @@ namespace telar::gui::application::workbench {
       return false;
     }
 
-    session.link.sendRegistered(RequestKind::close_pane, ClosePane{0, pane_id}, pane_id);
+    session.link.sendRegistered(RequestKind::close_pane, ClosePane{.request_id = 0, .pane_id = pane_id}, pane_id);
 
     return true;
   }
@@ -366,7 +366,7 @@ namespace telar::gui::application::workbench {
         return;
       }
 
-      layouts.atMut(count++) = {tab.location, tab.focused_pane, tab.fullscreen, tab.workspace_active, tab.layout.nodes()};
+      layouts.atMut(count++) = {.location = tab.location, .focused_pane = tab.focused_pane, .fullscreen = tab.fullscreen, .workspace_active = tab.workspace_active, .nodes = tab.layout.nodes()};
       retained_nodes += tab.layout.nodes().size();
     };
 
@@ -426,7 +426,7 @@ namespace telar::gui::application::workbench {
 
   void renameWorkspace(Session& session, std::string_view name) {
     if (const auto location = session.active_tab) {
-      session.link.send(RenameWorkspace{session.link.nextRequest(), location->workspace, name});
+      session.link.send(RenameWorkspace{.request_id = session.link.nextRequest(), .workspace = location->workspace, .name = name});
     }
   }
 

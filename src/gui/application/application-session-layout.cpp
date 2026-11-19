@@ -31,7 +31,7 @@ namespace telar::gui::application {
   template <typename Request, typename Fill>
   void Session::Link::sendRegistered(RequestKind kind, Request request, std::uint64_t pane_id, Fill&& fill) {
     request.request_id = pending(kind, pane_id);
-    fill(lastPending(), std::as_const(request));
+    std::forward<Fill>(fill)(lastPending(), std::as_const(request));
     try {
       send(request);
     } catch (...) {
@@ -271,7 +271,7 @@ namespace telar::gui::application {
         }
       }
 
-      link.sendOpeningRequest(RequestKind::visit_pane, opening, {}, fallback_workspace);
+      link.sendOpeningRequest(RequestKind::visit_pane, opening, TabLocation(), fallback_workspace);
     } catch (...) {
       const auto failure = std::current_exception();
 
@@ -382,7 +382,7 @@ namespace telar::gui::application {
       if (visible && !pane->attached && !pane->attaching && !pane->exited) {
         pane.getMut().attaching = true;
         try {
-          link.sendOpeningRequest(RequestKind::attach, OpenPane{.target = {PaneTarget::Kind::pane, pane->id}, .size = pane->size});
+          link.sendOpeningRequest(RequestKind::attach, OpenPane{.target = {.kind = PaneTarget::Kind::pane, .id = pane->id}, .size = pane->size});
         } catch (...) {
           pane.getMut().attaching = false;
           throw;
@@ -564,7 +564,7 @@ namespace telar::gui::application {
 
     for (const auto& node : tab.layout.nodes()) {
       const auto* leaf = std::get_if<ClientLayoutPane>(&node);
-      if (leaf != nullptr && std::none_of(message.panes.begin(), message.panes.end(), [&](const auto& pane) {
+      if (leaf != nullptr && std::ranges::none_of(message.panes, [&](const auto& pane) {
             return pane.pane_id == leaf->pane_id;
           })) {
         removed.atMut(removed_count++) = leaf->pane_id;
@@ -608,7 +608,7 @@ namespace telar::gui::application {
     std::size_t removed_count = 0;
 
     for (const auto& tab : tabs) {
-      if (sameWorkspace(tab->location.workspace, message.workspace) && std::none_of(message.tabs.begin(), message.tabs.end(), [&](const auto& entry) {
+      if (sameWorkspace(tab->location.workspace, message.workspace) && std::ranges::none_of(message.tabs, [&](const auto& entry) {
             return entry.tab_id == tab->location.tab_id;
           })) {
         removed.atMut(removed_count++) = tab->location;
@@ -630,7 +630,7 @@ namespace telar::gui::application {
     }
 
     for (const auto& descriptor : message.tabs) {
-      auto& tab = ensureTab({message.workspace, descriptor.tab_id});
+      auto& tab = ensureTab({.workspace = message.workspace, .tab_id = descriptor.tab_id});
       if (tab.label != descriptor.label || tab.position != descriptor.position) {
         ++view_version.tabs;
       }
@@ -642,7 +642,7 @@ namespace telar::gui::application {
     }
 
     if (current_workspace && !active_tab && (presented_ || leave_pending_) && !message.tabs.empty()) {
-      workbench::selectTab(*this, {message.workspace, message.tabs.front().tab_id});
+      workbench::selectTab(*this, {.workspace = message.workspace, .tab_id = message.tabs.front().tab_id});
     }
 
     return Change::model;
@@ -706,7 +706,7 @@ namespace telar::gui::application {
         return Change::closed;
       }
 
-      workbench::selectWorkspace(*this, {WorkspaceLocation::Kind::workspace, *message.previous_workspace});
+      workbench::selectWorkspace(*this, {.kind = WorkspaceLocation::Kind::workspace, .id = *message.previous_workspace});
     } else if (active_closed && replacement) {
       workbench::selectTab(*this, *replacement);
     }
@@ -748,8 +748,7 @@ namespace telar::gui::application {
 
   template <typename Removed>
   void Session::removePanes(Removed removed) {
-    // By index: forgetting a pane reaches the session, though not its panes.
-    for (std::size_t index = 0; index < panes.size(); ++index) {
+    for (std::size_t index = 0; index < panes.size(); ++index) { // NOLINT(modernize-loop-convert): by index, as forgetting a pane reaches the session, though not its panes.
       if (const auto& pane = *panes[index]; removed(pane)) {
         const auto pane_id = pane.id;
 
@@ -890,7 +889,7 @@ namespace telar::gui::application {
           return Change::closed;
         }
 
-        workbench::selectWorkspace(*this, {WorkspaceLocation::Kind::workspace, *message.previous_workspace});
+        workbench::selectWorkspace(*this, {.kind = WorkspaceLocation::Kind::workspace, .id = *message.previous_workspace});
       }
 
       return Change::model;
@@ -903,7 +902,7 @@ namespace telar::gui::application {
 
     for (const auto& pane : panes) {
       if (pane->attached) {
-        link.send(RequestSnapshot{pane->id, pane->screen.frameId()});
+        link.send(RequestSnapshot{.pane_id = pane->id, .known_frame_id = pane->screen.frameId()});
       }
     }
 

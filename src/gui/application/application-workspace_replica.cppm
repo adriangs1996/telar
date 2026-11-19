@@ -55,6 +55,9 @@ export {
       // it is made, boxed in the session.
       Pane(const Pane&) = delete;
       Pane& operator=(const Pane&) = delete;
+      Pane(Pane&&) = delete;
+      Pane& operator=(Pane&&) = delete;
+      ~Pane() = default;
 
       // Keeps `message` with the branch copied into the pane.
       void setGit(const PaneGit& message);
@@ -63,8 +66,8 @@ export {
       // replaces without them, since the pane's strings now hold the new ones.
       tbc::view<PaneShell, tbc::lt::static_storage> setShell(const PaneShell& message);
 
-      // Keeps `blocks` with their lines copied into the pane.
-      void setBlocks(std::span<const CommandBlock> blocks);
+      // Keeps `commands` with their lines copied into the pane.
+      void setBlocks(std::span<const CommandBlock> commands);
 
       std::uint64_t id;
       std::uint64_t generation = 0;

@@ -206,7 +206,7 @@ namespace telar::gui::application {
     const auto outcome = pane->screen.apply(message);
     if (outcome == FrameApplication::needs_snapshot && !pane->snapshot_requested) {
       pane->snapshot_requested = true;
-      link.send(RequestSnapshot{message.pane_id, pane->screen.frameId()});
+      link.send(RequestSnapshot{.pane_id = message.pane_id, .known_frame_id = pane->screen.frameId()});
     }
 
     if (outcome == FrameApplication::applied) {

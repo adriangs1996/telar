@@ -47,22 +47,22 @@ namespace telar::gui::features::activity {
 
     // Terminal programs have no operating system icon of their own.
     static constexpr ds::Array known{
-        Known{"nvim", "", "#5fb095", "#0f1a16"},
-        Known{"vim", "", "#5fb095", "#0f1a16"},
-        Known{"vi", "", "#5fb095", "#0f1a16"},
-        Known{"git", "", "#f37986", "#1a1627"},
-        Known{"lazygit", "", "#f37986", "#1a1627"},
-        Known{"node", "", "#83cd29", "#10210a"},
-        Known{"npm", "", "#83cd29", "#10210a"},
-        Known{"python", "", "#ffd43b", "#1f2d3d"},
-        Known{"python3", "", "#ffd43b", "#1f2d3d"},
-        Known{"ruby", "", "#cc342d", "#ffffff"},
-        Known{"irb", "", "#cc342d", "#ffffff"},
-        Known{"bundle", "", "#cc342d", "#ffffff"},
-        Known{"docker", "", "#2496ed", "#ffffff"},
-        Known{"cargo", "", "#dea584", "#1a1627"},
-        Known{"go", "", "#00add8", "#08252b"},
-        Known{"bun", "B", "#fbf0df", "#1a1627"},
+        Known{.name = "nvim", .glyph = "", .tile = "#5fb095", .ink = "#0f1a16"},
+        Known{.name = "vim", .glyph = "", .tile = "#5fb095", .ink = "#0f1a16"},
+        Known{.name = "vi", .glyph = "", .tile = "#5fb095", .ink = "#0f1a16"},
+        Known{.name = "git", .glyph = "", .tile = "#f37986", .ink = "#1a1627"},
+        Known{.name = "lazygit", .glyph = "", .tile = "#f37986", .ink = "#1a1627"},
+        Known{.name = "node", .glyph = "", .tile = "#83cd29", .ink = "#10210a"},
+        Known{.name = "npm", .glyph = "", .tile = "#83cd29", .ink = "#10210a"},
+        Known{.name = "python", .glyph = "", .tile = "#ffd43b", .ink = "#1f2d3d"},
+        Known{.name = "python3", .glyph = "", .tile = "#ffd43b", .ink = "#1f2d3d"},
+        Known{.name = "ruby", .glyph = "", .tile = "#cc342d", .ink = "#ffffff"},
+        Known{.name = "irb", .glyph = "", .tile = "#cc342d", .ink = "#ffffff"},
+        Known{.name = "bundle", .glyph = "", .tile = "#cc342d", .ink = "#ffffff"},
+        Known{.name = "docker", .glyph = "", .tile = "#2496ed", .ink = "#ffffff"},
+        Known{.name = "cargo", .glyph = "", .tile = "#dea584", .ink = "#1a1627"},
+        Known{.name = "go", .glyph = "", .tile = "#00add8", .ink = "#08252b"},
+        Known{.name = "bun", .glyph = "B", .tile = "#fbf0df", .ink = "#1a1627"},
     };
 
     for (const auto& entry : known) {

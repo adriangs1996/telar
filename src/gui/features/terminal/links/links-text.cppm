@@ -147,22 +147,22 @@ export {
         LinkScheme scheme;
       };
 
-      static constexpr auto prefixes = ds::Array<Prefix, 14>{{
-          {.text = "https://", .scheme = LinkScheme::https},
-          {.text = "http://", .scheme = LinkScheme::http},
-          {.text = "file://", .scheme = LinkScheme::file},
-          {.text = "mailto:", .scheme = LinkScheme::external},
-          {.text = "ftp://", .scheme = LinkScheme::external},
-          {.text = "ssh:", .scheme = LinkScheme::external},
-          {.text = "git://", .scheme = LinkScheme::external},
-          {.text = "tel:", .scheme = LinkScheme::external},
-          {.text = "magnet:", .scheme = LinkScheme::external},
-          {.text = "ipfs://", .scheme = LinkScheme::external},
-          {.text = "ipns://", .scheme = LinkScheme::external},
-          {.text = "gemini://", .scheme = LinkScheme::external},
-          {.text = "gopher://", .scheme = LinkScheme::external},
-          {.text = "news:", .scheme = LinkScheme::external},
-      }};
+      static constexpr auto prefixes = ds::Array<Prefix, 14>{
+          Prefix{.text = "https://", .scheme = LinkScheme::https},
+          Prefix{.text = "http://", .scheme = LinkScheme::http},
+          Prefix{.text = "file://", .scheme = LinkScheme::file},
+          Prefix{.text = "mailto:", .scheme = LinkScheme::external},
+          Prefix{.text = "ftp://", .scheme = LinkScheme::external},
+          Prefix{.text = "ssh:", .scheme = LinkScheme::external},
+          Prefix{.text = "git://", .scheme = LinkScheme::external},
+          Prefix{.text = "tel:", .scheme = LinkScheme::external},
+          Prefix{.text = "magnet:", .scheme = LinkScheme::external},
+          Prefix{.text = "ipfs://", .scheme = LinkScheme::external},
+          Prefix{.text = "ipns://", .scheme = LinkScheme::external},
+          Prefix{.text = "gemini://", .scheme = LinkScheme::external},
+          Prefix{.text = "gopher://", .scheme = LinkScheme::external},
+          Prefix{.text = "news:", .scheme = LinkScheme::external},
+      };
 
       [[nodiscard]] static ds::Option<Prefix> prefixAt(std::string_view text);
 

@@ -45,6 +45,11 @@ export {
       virtual void operator()(const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply) = 0;
 
     protected:
+      ClientCommandHandler() noexcept = default;
+      ClientCommandHandler(const ClientCommandHandler&) noexcept = default;
+      ClientCommandHandler(ClientCommandHandler&&) noexcept = default;
+      ClientCommandHandler& operator=(const ClientCommandHandler&) noexcept = default;
+      ClientCommandHandler& operator=(ClientCommandHandler&&) noexcept = default;
       ~ClientCommandHandler() = default;
     };
 
@@ -74,11 +79,24 @@ export {
       virtual void notePaneInput(features::window::FramePacer::Pane pane) noexcept;
 
     protected:
+      HostEffects() noexcept = default;
+      HostEffects(const HostEffects&) noexcept = default;
+      HostEffects(HostEffects&&) noexcept = default;
+      HostEffects& operator=(const HostEffects&) noexcept = default;
+      HostEffects& operator=(HostEffects&&) noexcept = default;
       ~HostEffects() = default;
     };
 
     // The effects of a session without a desktop: it takes nothing.
     struct DiscardHostEffects : HostEffects {
+      DiscardHostEffects() noexcept = default;
+      DiscardHostEffects(const DiscardHostEffects&) noexcept = default;
+      DiscardHostEffects(DiscardHostEffects&&) noexcept = default;
+      DiscardHostEffects& operator=(const DiscardHostEffects&) noexcept = default;
+      DiscardHostEffects& operator=(DiscardHostEffects&&) noexcept = default;
+      // Hosts derive from it to take only some requests.
+      virtual ~DiscardHostEffects() = default;
+
       bool postNotification(const NotificationPayload& payload) noexcept override;
 
       bool playSound(AgentSound sound) noexcept override;
@@ -106,6 +124,11 @@ export {
       [[nodiscard]] virtual system::SharedImageSource sharedImage(std::string_view name) const;
 
     protected:
+      RuntimeTransport() noexcept = default;
+      RuntimeTransport(const RuntimeTransport&) noexcept = default;
+      RuntimeTransport(RuntimeTransport&&) noexcept = default;
+      RuntimeTransport& operator=(const RuntimeTransport&) noexcept = default;
+      RuntimeTransport& operator=(RuntimeTransport&&) noexcept = default;
       ~RuntimeTransport() = default;
     };
 

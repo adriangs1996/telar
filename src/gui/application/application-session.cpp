@@ -266,123 +266,83 @@ namespace telar::gui::application {
       throw EncodingError{"Empty server message"};
     }
 
-    DecodeStorage storage{decode_.viewMut()};
-    const auto dispatch = [&]<typename Message> {
-      return dispatchMessage<Message>(payload, storage, handler);
+    using Dispatch = Change (Session::*)(std::span<const Byte> payload, DecodeStorage& storage, ClientCommandHandler& handler);
+    constexpr auto by_tag = []<typename... Messages>(std::type_identity<Messages>...) consteval {
+      static_assert((std::same_as<std::remove_const_t<decltype(MessageSchema<Messages>::tag)>, ServerTag> && ...), "only the runtime's messages");
+      ds::Array<Dispatch, std::numeric_limits<Byte>::max() + 1> table{};
+
+      ((table.atMut(std::to_underlying(MessageSchema<Messages>::tag)) = &Session::dispatchMessage<Messages>), ...);
+      if (std::ranges::count(table, Dispatch{}) != table.size() - sizeof...(Messages)) {
+        throw std::logic_error{"Two messages share a tag"};
+      }
+
+      return table;
     };
 
-    switch (static_cast<ServerTag>(payload.front())) {
-    case ServerTag::pane_frame:
-      return dispatch.template operator()<PaneFrame>();
-    case ServerTag::client_command:
-      return dispatch.template operator()<ClientCommand>();
-    case ServerTag::pane_focus_command:
-      return dispatch.template operator()<PaneFocusCommand>();
-    case ServerTag::graphics_snapshot:
-      return dispatch.template operator()<GraphicsSnapshot>();
-    case ServerTag::graphics_image:
-      return dispatch.template operator()<GraphicsImage>();
-    case ServerTag::graphics_shared_image:
-      return dispatch.template operator()<GraphicsSharedImage>();
-    case ServerTag::graphics_image_chunk:
-      return dispatch.template operator()<GraphicsImageChunk>();
-    case ServerTag::graphics_placement:
-      return dispatch.template operator()<GraphicsPlacementMessage>();
-    case ServerTag::graphics_delete_image:
-      return dispatch.template operator()<GraphicsDeleteImage>();
-    case ServerTag::graphics_delete_placement:
-      return dispatch.template operator()<GraphicsDeletePlacement>();
-    case ServerTag::pane_opened:
-      return dispatch.template operator()<PaneOpened>();
-    case ServerTag::editor_opened:
-      return dispatch.template operator()<EditorOpened>();
-    case ServerTag::tab_created:
-      return dispatch.template operator()<TabCreated>();
-    case ServerTag::tab_snapshot:
-      return dispatch.template operator()<TabSnapshot>();
-    case ServerTag::workspace_snapshot:
-      return dispatch.template operator()<WorkspaceSnapshot>();
-    case ServerTag::workspace_list:
-      return dispatch.template operator()<WorkspaceList>();
-    case ServerTag::client_layout_snapshot:
-      return dispatch.template operator()<ClientLayoutSnapshot>();
-    case ServerTag::tab_closed:
-      return dispatch.template operator()<TabClosed>();
-    case ServerTag::tab_renamed:
-      return dispatch.template operator()<TabRenamed>();
-    case ServerTag::tab_moved:
-      return dispatch.template operator()<TabMoved>();
-    case ServerTag::pane_exited:
-      return dispatch.template operator()<PaneExited>();
-    case ServerTag::pane_title:
-      return dispatch.template operator()<PaneTitle>();
-    case ServerTag::pane_cwd:
-      return dispatch.template operator()<PaneCwd>();
-    case ServerTag::pane_foreground:
-      return dispatch.template operator()<PaneForeground>();
-    case ServerTag::pane_progress:
-      return dispatch.template operator()<PaneProgress>();
-    case ServerTag::pane_shell:
-      return dispatch.template operator()<PaneShell>();
-    case ServerTag::pane_git:
-      return dispatch.template operator()<PaneGit>();
-    case ServerTag::pane_blocks:
-      return dispatch.template operator()<PaneBlocks>();
-    case ServerTag::pane_scrollback:
-      return dispatch.template operator()<PaneScrollback>();
-    case ServerTag::pane_document:
-      return dispatch.template operator()<PaneDocument>();
-    case ServerTag::pane_rows:
-      return dispatch.template operator()<PaneRows>();
-    case ServerTag::command_spec:
-      return dispatch.template operator()<CommandSpec>();
-    case ServerTag::completion_words:
-      return dispatch.template operator()<CompletionWords>();
-    case ServerTag::pane_clipboard:
-      return dispatch.template operator()<PaneClipboard>();
-    case ServerTag::pane_matches:
-      return dispatch.template operator()<PaneMatches>();
-    case ServerTag::pane_text:
-      return dispatch.template operator()<PaneText>();
-    case ServerTag::agent_snapshot:
-      return dispatch.template operator()<AgentSnapshot>();
-    case ServerTag::pane_list:
-      return dispatch.template operator()<PaneList>();
-    case ServerTag::agent_sound:
-      return dispatch.template operator()<AgentSoundNotification>();
-    case ServerTag::history_results:
-      return dispatch.template operator()<HistoryResults>();
-    case ServerTag::history_output:
-      return dispatch.template operator()<HistoryOutput>();
-    case ServerTag::history_pruned:
-      return dispatch.template operator()<HistoryPruned>();
-    case ServerTag::path_results:
-      return dispatch.template operator()<PathResults>();
-    case ServerTag::command_suggestion:
-      return dispatch.template operator()<CommandSuggestion>();
-    case ServerTag::system_metrics:
-      return dispatch.template operator()<SystemMetrics>();
-    case ServerTag::monitor_snapshot:
-      return dispatch.template operator()<MonitorSnapshot>();
-    case ServerTag::proxy_status:
-      return dispatch.template operator()<ProxyStatus>();
-    case ServerTag::request_failed:
-      return dispatch.template operator()<RequestFailed>();
-    case ServerTag::request_completed:
-      return dispatch.template operator()<RequestCompleted>();
-    case ServerTag::resync_required:
-      return dispatch.template operator()<ResyncRequired>();
-    case ServerTag::notification:
-      return dispatch.template operator()<Notification>();
-    case ServerTag::runtime_stopping:
-      return dispatch.template operator()<RuntimeStopping>();
-    default:
-      return Change::none;
-    }
+    // The runtime's messages by tag: a tag without one is ignored.
+    static constexpr auto messages = by_tag(
+        std::type_identity<PaneFrame>{},
+        std::type_identity<ClientCommand>{},
+        std::type_identity<PaneFocusCommand>{},
+        std::type_identity<GraphicsSnapshot>{},
+        std::type_identity<GraphicsImage>{},
+        std::type_identity<GraphicsSharedImage>{},
+        std::type_identity<GraphicsImageChunk>{},
+        std::type_identity<GraphicsPlacementMessage>{},
+        std::type_identity<GraphicsDeleteImage>{},
+        std::type_identity<GraphicsDeletePlacement>{},
+        std::type_identity<PaneOpened>{},
+        std::type_identity<EditorOpened>{},
+        std::type_identity<TabCreated>{},
+        std::type_identity<TabSnapshot>{},
+        std::type_identity<WorkspaceSnapshot>{},
+        std::type_identity<WorkspaceList>{},
+        std::type_identity<ClientLayoutSnapshot>{},
+        std::type_identity<TabClosed>{},
+        std::type_identity<TabRenamed>{},
+        std::type_identity<TabMoved>{},
+        std::type_identity<PaneExited>{},
+        std::type_identity<PaneTitle>{},
+        std::type_identity<PaneCwd>{},
+        std::type_identity<PaneForeground>{},
+        std::type_identity<PaneProgress>{},
+        std::type_identity<PaneShell>{},
+        std::type_identity<PaneGit>{},
+        std::type_identity<PaneBlocks>{},
+        std::type_identity<PaneScrollback>{},
+        std::type_identity<PaneDocument>{},
+        std::type_identity<PaneRows>{},
+        std::type_identity<CommandSpec>{},
+        std::type_identity<CompletionWords>{},
+        std::type_identity<PaneClipboard>{},
+        std::type_identity<PaneMatches>{},
+        std::type_identity<PaneText>{},
+        std::type_identity<AgentSnapshot>{},
+        std::type_identity<PaneList>{},
+        std::type_identity<AgentSoundNotification>{},
+        std::type_identity<HistoryResults>{},
+        std::type_identity<HistoryOutput>{},
+        std::type_identity<HistoryPruned>{},
+        std::type_identity<PathResults>{},
+        std::type_identity<CommandSuggestion>{},
+        std::type_identity<SystemMetrics>{},
+        std::type_identity<MonitorSnapshot>{},
+        std::type_identity<ProxyStatus>{},
+        std::type_identity<RequestFailed>{},
+        std::type_identity<RequestCompleted>{},
+        std::type_identity<ResyncRequired>{},
+        std::type_identity<Notification>{},
+        std::type_identity<RuntimeStopping>{}
+    );
+
+    DecodeStorage storage{decode_.viewMut()};
+    const auto dispatch = messages[payload.front()];
+
+    return dispatch == nullptr ? Change::none : (this->*dispatch)(payload, storage, handler);
   }
 
   const Pane<Memory>* findPane(const Panes& panes, std::uint64_t pane_id) noexcept {
-    const auto* const found = std::find_if(panes.begin(), panes.end(), [&](const auto& pane) {
+    const auto* const found = std::ranges::find_if(panes, [&](const auto& pane) {
       return pane->id == pane_id;
     });
 
@@ -391,7 +351,7 @@ namespace telar::gui::application {
 
   Pane<Memory>* findPaneMut(Panes& panes, std::uint64_t pane_id) noexcept {
     const auto all = panes.viewMut();
-    const auto found = std::find_if(all.begin(), all.end(), [&](const auto& pane) {
+    const auto found = std::ranges::find_if(all, [&](const auto& pane) {
       return pane->id == pane_id;
     });
 
@@ -649,40 +609,48 @@ namespace telar::gui::application {
     }
 
     if (const auto request = link.complete(message.request_id)) {
-      if (request->kind == RequestKind::peek_screen) {
-        peek::readFailed(*this, message.request_id);
-
-        return Change::none;
-      }
-
-      if (request->kind == RequestKind::peek_action || request->kind == RequestKind::peek_diff) {
-        return peek::actionFailed(*this, request->pane_id, message.message);
-      }
-
-      if (recoverMissingWorkspacePane(*request, message)) {
-        return Change::model;
-      }
-
-      if (request->kind == RequestKind::forget_worktree) {
-        return Change::none;
-      }
-
-      if (request->kind == RequestKind::attach) {
-        if (auto* pane = findPaneMut(request->pane_id)) {
-          pane->attaching = false;
-        }
-      } else if (request->kind == RequestKind::tab_snapshot) {
-        if (auto* tab = findTabMut(request->location)) {
-          tab->loading = false;
-        }
-      } else if (request->kind == RequestKind::split) {
-        workbench::recoverSplit(*this, request->location, request->pane_id);
+      if (const auto change = failPending(*request, message)) {
+        return *change;
       }
     }
 
     error_.assign(message.message);
 
     return Change::model;
+  }
+
+  ds::Option<Change> Session::failPending(const Pending& request, const RequestFailed& message) {
+    if (request.kind == RequestKind::peek_screen) {
+      peek::readFailed(*this, message.request_id);
+
+      return Change::none;
+    }
+
+    if (request.kind == RequestKind::peek_action || request.kind == RequestKind::peek_diff) {
+      return peek::actionFailed(*this, request.pane_id, message.message);
+    }
+
+    if (recoverMissingWorkspacePane(request, message)) {
+      return Change::model;
+    }
+
+    if (request.kind == RequestKind::forget_worktree) {
+      return Change::none;
+    }
+
+    if (request.kind == RequestKind::attach) {
+      if (auto* pane = findPaneMut(request.pane_id)) {
+        pane->attaching = false;
+      }
+    } else if (request.kind == RequestKind::tab_snapshot) {
+      if (auto* tab = findTabMut(request.location)) {
+        tab->loading = false;
+      }
+    } else if (request.kind == RequestKind::split) {
+      workbench::recoverSplit(*this, request.location, request.pane_id);
+    }
+
+    return ds::none;
   }
 
   Change Session::apply(const RequestCompleted& message) {

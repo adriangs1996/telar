@@ -91,7 +91,7 @@ export namespace telar::gui::features::workbench {
   // Calls `visit(pane_id, size)` for each pane of `tab` on screen, with the size its place leaves
   // its terminal.
   template <typename Visit>
-  void arrange(const State& state, Tab<Memory>& tab, Visit&& visit);
+  void arrange(const State& state, Tab<Memory>& tab, Visit visit);
 
   // The pane next to the one `tab` focuses toward `direction`; 0 when there is none.
   [[nodiscard]] std::uint64_t neighbor(const State& state, Tab<Memory>& tab, PaneDirection direction) noexcept;
@@ -203,7 +203,7 @@ namespace telar::gui::features::workbench {
   }
 
   inline const Tab<Memory>* find(Tabs tabs, TabLocation location) noexcept {
-    const auto found = std::find_if(tabs.begin(), tabs.end(), [&](const auto& tab) {
+    const auto found = std::ranges::find_if(tabs, [&](const auto& tab) {
       return sameTab(tab->location, location);
     });
 
@@ -211,7 +211,7 @@ namespace telar::gui::features::workbench {
   }
 
   inline Tab<Memory>* findMut(std::span<ds::Box<Tab<Memory>, Memory>> tabs, TabLocation location) noexcept {
-    const auto found = std::find_if(tabs.begin(), tabs.end(), [&](const auto& tab) {
+    const auto found = std::ranges::find_if(tabs, [&](const auto& tab) {
       return sameTab(tab->location, location);
     });
 
@@ -219,7 +219,7 @@ namespace telar::gui::features::workbench {
   }
 
   template <typename Visit>
-  void arrange(const State& state, Tab<Memory>& tab, Visit&& visit) {
+  void arrange(const State& state, Tab<Memory>& tab, Visit visit) {
     const auto& geometry = Access::geometry(state);
     const auto fullscreen = tab.fullscreen ? ds::Option{tab.focused_pane} : ds::none;
     const auto placements = tab.layout.arrange(geometry.cellArea(), geometry.layout_metrics, fullscreen);
@@ -240,14 +240,14 @@ namespace telar::gui::features::workbench {
       if (restoring->layout) {
         tab.layout.restore(restoring->layout->view());
         tab.fullscreen = restoring->fullscreen;
-        focus(restoring->layout->focused_pane);
+        std::forward<Focus>(focus)(restoring->layout->focused_pane);
       }
 
       restoring.reset();
     } else if (const auto saved = saved_layouts.find(tab.location)) {
       tab.layout.restore(saved->nodes);
       tab.fullscreen = saved->fullscreen;
-      focus(saved->focused_pane);
+      std::forward<Focus>(focus)(saved->focused_pane);
     }
 
     saved_layouts.forget(tab.location);

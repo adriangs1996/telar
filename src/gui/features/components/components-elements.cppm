@@ -102,9 +102,12 @@ export {
     };
 
     struct CanvasStep {
+      // The most values an operation takes, a curve's.
+      static constexpr std::size_t maximum_values = 6;
+
       std::uint8_t op = 0;
       std::uint8_t count = 0;
-      ds::Array<float, 6> values{};
+      ds::Array<float, maximum_values> values{};
       ElementColor color;
       ElementText text;
     };
@@ -129,40 +132,40 @@ export {
       static const ds::Array<Icon, 32> values;
     };
 
-    inline constexpr ds::Array<Icon, 32> Icon::values = ds::Array<Icon, 32>{{
-        {.name = "sidebar_collapse", .glyph = ""},
-        {.name = "sidebar_expand", .glyph = ""},
-        {.name = "workspace_menu", .glyph = ""},
-        {.name = "proxy_active", .glyph = ""},
-        {.name = "cpu", .glyph = ""},
-        {.name = "memory", .glyph = ""},
-        {.name = "battery_empty", .glyph = ""},
-        {.name = "battery_quarter", .glyph = ""},
-        {.name = "battery_half", .glyph = ""},
-        {.name = "battery_three_quarters", .glyph = ""},
-        {.name = "battery_full", .glyph = ""},
-        {.name = "provider_unknown", .glyph = ""},
-        {.name = "provider_claude", .glyph = "", .provider = AgentProvider::claude},
-        {.name = "provider_codex", .glyph = "", .provider = AgentProvider::codex},
-        {.name = "provider_pi", .glyph = "󰏿", .provider = AgentProvider::pi},
-        {.name = "provider_cursor", .glyph = "󰋘", .provider = AgentProvider::cursor},
-        {.name = "provider_opencode", .glyph = "󰝣", .provider = AgentProvider::opencode},
-        {.name = "app_terminal", .glyph = ""},
-        {.name = "app_editor", .glyph = ""},
-        {.name = "app_git", .glyph = ""},
-        {.name = "agent_unknown", .glyph = ""},
-        {.name = "agent_working_0", .glyph = ""},
-        {.name = "agent_working_1", .glyph = ""},
-        {.name = "agent_working_2", .glyph = ""},
-        {.name = "agent_working_3", .glyph = ""},
-        {.name = "agent_blocked", .glyph = ""},
-        {.name = "agent_ready", .glyph = ""},
-        {.name = "agent_done", .glyph = ""},
-        {.name = "agent_failed", .glyph = ""},
-        {.name = "close", .glyph = ""},
-        {.name = "pane_fullscreen", .glyph = ""},
-        {.name = "telar_mark", .glyph = "▣", .telar = true},
-    }};
+    inline constexpr ds::Array<Icon, 32> Icon::values = ds::Array<Icon, 32>{
+        Icon{.name = "sidebar_collapse", .glyph = ""},
+        Icon{.name = "sidebar_expand", .glyph = ""},
+        Icon{.name = "workspace_menu", .glyph = ""},
+        Icon{.name = "proxy_active", .glyph = ""},
+        Icon{.name = "cpu", .glyph = ""},
+        Icon{.name = "memory", .glyph = ""},
+        Icon{.name = "battery_empty", .glyph = ""},
+        Icon{.name = "battery_quarter", .glyph = ""},
+        Icon{.name = "battery_half", .glyph = ""},
+        Icon{.name = "battery_three_quarters", .glyph = ""},
+        Icon{.name = "battery_full", .glyph = ""},
+        Icon{.name = "provider_unknown", .glyph = ""},
+        Icon{.name = "provider_claude", .glyph = "", .provider = AgentProvider::claude},
+        Icon{.name = "provider_codex", .glyph = "", .provider = AgentProvider::codex},
+        Icon{.name = "provider_pi", .glyph = "󰏿", .provider = AgentProvider::pi},
+        Icon{.name = "provider_cursor", .glyph = "󰋘", .provider = AgentProvider::cursor},
+        Icon{.name = "provider_opencode", .glyph = "󰝣", .provider = AgentProvider::opencode},
+        Icon{.name = "app_terminal", .glyph = ""},
+        Icon{.name = "app_editor", .glyph = ""},
+        Icon{.name = "app_git", .glyph = ""},
+        Icon{.name = "agent_unknown", .glyph = ""},
+        Icon{.name = "agent_working_0", .glyph = ""},
+        Icon{.name = "agent_working_1", .glyph = ""},
+        Icon{.name = "agent_working_2", .glyph = ""},
+        Icon{.name = "agent_working_3", .glyph = ""},
+        Icon{.name = "agent_blocked", .glyph = ""},
+        Icon{.name = "agent_ready", .glyph = ""},
+        Icon{.name = "agent_done", .glyph = ""},
+        Icon{.name = "agent_failed", .glyph = ""},
+        Icon{.name = "close", .glyph = ""},
+        Icon{.name = "pane_fullscreen", .glyph = ""},
+        Icon{.name = "telar_mark", .glyph = "▣", .telar = true},
+    };
 
   }
 }

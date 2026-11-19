@@ -16,6 +16,27 @@ import telar.base.ds;
 
 namespace telar::gui::features::configuration {
 
+  namespace {
+
+    void writeScroll(JsonWriter& writer, const Configuration& configuration) {
+      writer.object([&](JsonWriter& scroll) {
+        scroll.member("smooth", configuration.scroll.smooth);
+        scroll.member("wheel_ms", configuration.scroll.wheel_ms);
+        scroll.member("overscan", configuration.scroll.overscan);
+        scroll.member("sticky_headers", configuration.scroll.sticky_headers);
+      });
+    }
+
+    void writeOpacity(JsonWriter& writer, const Configuration& configuration) {
+      writer.object([&](JsonWriter& opacity) {
+        for (std::size_t index = 0; index < BackgroundOpacity::names.size(); ++index) {
+          opacity.member(BackgroundOpacity::names[index], configuration.opacity.resolve(static_cast<BackgroundOpacity::Surface>(index), configuration.background_opacity));
+        }
+      });
+    }
+
+  }
+
   ConfigurationQuery ConfigurationQuery::parse(std::string_view name, std::int64_t index) {
     if (name.empty()) {
       return {.section = Section::client, .index = index};
@@ -47,12 +68,7 @@ namespace telar::gui::features::configuration {
       });
 
       object.member("scroll", [&](JsonWriter& value) {
-        value.object([&](JsonWriter& scroll) {
-          scroll.member("smooth", configuration.scroll.smooth);
-          scroll.member("wheel_ms", configuration.scroll.wheel_ms);
-          scroll.member("overscan", configuration.scroll.overscan);
-          scroll.member("sticky_headers", configuration.scroll.sticky_headers);
-        });
+        writeScroll(value, configuration);
       });
 
       object.member("window", [&](JsonWriter& value) {
@@ -60,11 +76,7 @@ namespace telar::gui::features::configuration {
       });
 
       object.member("opacity", [&](JsonWriter& value) {
-        value.object([&](JsonWriter& opacity) {
-          for (std::size_t index = 0; index < BackgroundOpacity::names.size(); ++index) {
-            opacity.member(BackgroundOpacity::names[index], configuration.opacity.resolve(static_cast<BackgroundOpacity::Surface>(index), configuration.background_opacity));
-          }
-        });
+        writeOpacity(value, configuration);
       });
 
       object.member("chrome", [&](JsonWriter& value) {
@@ -316,28 +328,28 @@ namespace telar::gui::features::configuration {
   template void ActionQuery::write<telar::ConcurrentMemory>(JsonWriter& writer, BindingAction action, const ActionDescriptions<telar::ConcurrentMemory>& descriptions, const runtime::config::RetainedCommandTabRegistry& commands);
 
   bool ActionQuery::writeNamed(JsonWriter& writer, BindingActionKind kind) {
-    constexpr auto directions = ds::Array<NamedAction, 20>{{
-        {.kind = BindingActionKind::scroll_pane_up, .type = "scroll_pane", .value = "up"},
-        {.kind = BindingActionKind::scroll_pane_down, .type = "scroll_pane", .value = "down"},
-        {.kind = BindingActionKind::split_horizontal, .type = "split_pane", .value = "horizontal"},
-        {.kind = BindingActionKind::split_vertical, .type = "split_pane", .value = "vertical"},
-        {.kind = BindingActionKind::focus_left, .type = "focus_pane", .value = "left"},
-        {.kind = BindingActionKind::focus_right, .type = "focus_pane", .value = "right"},
-        {.kind = BindingActionKind::focus_up, .type = "focus_pane", .value = "up"},
-        {.kind = BindingActionKind::focus_down, .type = "focus_pane", .value = "down"},
-        {.kind = BindingActionKind::navigate_left, .type = "navigate_pane", .value = "left"},
-        {.kind = BindingActionKind::navigate_right, .type = "navigate_pane", .value = "right"},
-        {.kind = BindingActionKind::navigate_up, .type = "navigate_pane", .value = "up"},
-        {.kind = BindingActionKind::navigate_down, .type = "navigate_pane", .value = "down"},
-        {.kind = BindingActionKind::resize_left, .type = "resize_pane", .value = "left"},
-        {.kind = BindingActionKind::resize_right, .type = "resize_pane", .value = "right"},
-        {.kind = BindingActionKind::resize_up, .type = "resize_pane", .value = "up"},
-        {.kind = BindingActionKind::resize_down, .type = "resize_pane", .value = "down"},
-        {.kind = BindingActionKind::resize_sidebar_left, .type = "resize_sidebar", .value = "left"},
-        {.kind = BindingActionKind::resize_sidebar_right, .type = "resize_sidebar", .value = "right"},
-        {.kind = BindingActionKind::move_tab_previous, .type = "move_tab", .value = "previous"},
-        {.kind = BindingActionKind::move_tab_next, .type = "move_tab", .value = "next"},
-    }};
+    constexpr auto directions = ds::Array<NamedAction, 20>{
+        NamedAction{.kind = BindingActionKind::scroll_pane_up, .type = "scroll_pane", .value = "up"},
+        NamedAction{.kind = BindingActionKind::scroll_pane_down, .type = "scroll_pane", .value = "down"},
+        NamedAction{.kind = BindingActionKind::split_horizontal, .type = "split_pane", .value = "horizontal"},
+        NamedAction{.kind = BindingActionKind::split_vertical, .type = "split_pane", .value = "vertical"},
+        NamedAction{.kind = BindingActionKind::focus_left, .type = "focus_pane", .value = "left"},
+        NamedAction{.kind = BindingActionKind::focus_right, .type = "focus_pane", .value = "right"},
+        NamedAction{.kind = BindingActionKind::focus_up, .type = "focus_pane", .value = "up"},
+        NamedAction{.kind = BindingActionKind::focus_down, .type = "focus_pane", .value = "down"},
+        NamedAction{.kind = BindingActionKind::navigate_left, .type = "navigate_pane", .value = "left"},
+        NamedAction{.kind = BindingActionKind::navigate_right, .type = "navigate_pane", .value = "right"},
+        NamedAction{.kind = BindingActionKind::navigate_up, .type = "navigate_pane", .value = "up"},
+        NamedAction{.kind = BindingActionKind::navigate_down, .type = "navigate_pane", .value = "down"},
+        NamedAction{.kind = BindingActionKind::resize_left, .type = "resize_pane", .value = "left"},
+        NamedAction{.kind = BindingActionKind::resize_right, .type = "resize_pane", .value = "right"},
+        NamedAction{.kind = BindingActionKind::resize_up, .type = "resize_pane", .value = "up"},
+        NamedAction{.kind = BindingActionKind::resize_down, .type = "resize_pane", .value = "down"},
+        NamedAction{.kind = BindingActionKind::resize_sidebar_left, .type = "resize_sidebar", .value = "left"},
+        NamedAction{.kind = BindingActionKind::resize_sidebar_right, .type = "resize_sidebar", .value = "right"},
+        NamedAction{.kind = BindingActionKind::move_tab_previous, .type = "move_tab", .value = "previous"},
+        NamedAction{.kind = BindingActionKind::move_tab_next, .type = "move_tab", .value = "next"},
+    };
 
     for (const auto& description : directions) {
       if (description.kind == kind) {
@@ -347,41 +359,42 @@ namespace telar::gui::features::configuration {
       }
     }
 
-    constexpr auto voids = ds::Array<std::pair<BindingActionKind, std::string_view>, 33>{{
-        {BindingActionKind::toggle_pane_fullscreen, "toggle_pane_fullscreen"},
-        {BindingActionKind::toggle_sidebar, "toggle_sidebar"},
-        {BindingActionKind::toggle_workspace_list, "toggle_workspace_list"},
-        {BindingActionKind::leave_worktree, "leave_worktree"},
-        {BindingActionKind::forget_gone_worktrees, "forget_gone_worktrees"},
-        {BindingActionKind::new_workspace, "new_workspace"},
-        {BindingActionKind::rename_workspace, "rename_workspace"},
-        {BindingActionKind::close_pane, "close_pane"},
-        {BindingActionKind::new_tab, "new_tab"},
-        {BindingActionKind::rename_tab, "rename_tab"},
-        {BindingActionKind::close_tab, "close_tab"},
-        {BindingActionKind::detach, "detach"},
-        {BindingActionKind::goto_picker, "goto_picker"},
-        {BindingActionKind::history_palette, "history_palette"},
-        {BindingActionKind::path_picker, "path_picker"},
-        {BindingActionKind::suggest_command, "suggest_command"},
-        {BindingActionKind::close_panel, "close_panel"},
-        {BindingActionKind::refresh_panel, "refresh_panel"},
-        {BindingActionKind::machine_picker, "machine_picker"},
-        {BindingActionKind::add_machine, "add_machine"},
-        {BindingActionKind::copy_mode, "enter_copy_mode"},
-        {BindingActionKind::monitor, "monitor"},
-        {BindingActionKind::process_picker, "process_picker"},
-        {BindingActionKind::process_terminate, "process_terminate"},
-        {BindingActionKind::process_kill, "process_kill"},
-        {BindingActionKind::process_stop, "process_stop"},
-        {BindingActionKind::process_continue, "process_continue"},
-        {BindingActionKind::process_lower_priority, "process_lower_priority"},
-        {BindingActionKind::process_copy_command, "process_copy_command"},
-        {BindingActionKind::process_focus_pane, "process_focus_pane"},
-        {BindingActionKind::process_review_stack, "process_review_stack"},
-        {BindingActionKind::process_review_files, "process_review_files"},
-        {BindingActionKind::process_review_logs, "process_review_logs"},
-    }};
+    using VoidAction = std::pair<BindingActionKind, std::string_view>;
+    constexpr auto voids = ds::Array<VoidAction, 33>{
+        VoidAction{BindingActionKind::toggle_pane_fullscreen, "toggle_pane_fullscreen"},
+        VoidAction{BindingActionKind::toggle_sidebar, "toggle_sidebar"},
+        VoidAction{BindingActionKind::toggle_workspace_list, "toggle_workspace_list"},
+        VoidAction{BindingActionKind::leave_worktree, "leave_worktree"},
+        VoidAction{BindingActionKind::forget_gone_worktrees, "forget_gone_worktrees"},
+        VoidAction{BindingActionKind::new_workspace, "new_workspace"},
+        VoidAction{BindingActionKind::rename_workspace, "rename_workspace"},
+        VoidAction{BindingActionKind::close_pane, "close_pane"},
+        VoidAction{BindingActionKind::new_tab, "new_tab"},
+        VoidAction{BindingActionKind::rename_tab, "rename_tab"},
+        VoidAction{BindingActionKind::close_tab, "close_tab"},
+        VoidAction{BindingActionKind::detach, "detach"},
+        VoidAction{BindingActionKind::goto_picker, "goto_picker"},
+        VoidAction{BindingActionKind::history_palette, "history_palette"},
+        VoidAction{BindingActionKind::path_picker, "path_picker"},
+        VoidAction{BindingActionKind::suggest_command, "suggest_command"},
+        VoidAction{BindingActionKind::close_panel, "close_panel"},
+        VoidAction{BindingActionKind::refresh_panel, "refresh_panel"},
+        VoidAction{BindingActionKind::machine_picker, "machine_picker"},
+        VoidAction{BindingActionKind::add_machine, "add_machine"},
+        VoidAction{BindingActionKind::copy_mode, "enter_copy_mode"},
+        VoidAction{BindingActionKind::monitor, "monitor"},
+        VoidAction{BindingActionKind::process_picker, "process_picker"},
+        VoidAction{BindingActionKind::process_terminate, "process_terminate"},
+        VoidAction{BindingActionKind::process_kill, "process_kill"},
+        VoidAction{BindingActionKind::process_stop, "process_stop"},
+        VoidAction{BindingActionKind::process_continue, "process_continue"},
+        VoidAction{BindingActionKind::process_lower_priority, "process_lower_priority"},
+        VoidAction{BindingActionKind::process_copy_command, "process_copy_command"},
+        VoidAction{BindingActionKind::process_focus_pane, "process_focus_pane"},
+        VoidAction{BindingActionKind::process_review_stack, "process_review_stack"},
+        VoidAction{BindingActionKind::process_review_files, "process_review_files"},
+        VoidAction{BindingActionKind::process_review_logs, "process_review_logs"},
+    };
 
     for (const auto& [action_kind, type] : voids) {
       if (kind == action_kind) {

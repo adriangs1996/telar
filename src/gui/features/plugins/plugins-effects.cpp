@@ -84,19 +84,20 @@ namespace telar::gui::features::plugins {
 
   PluginEffects::Effect PluginEffects::decodeEffect(std::span<const Byte>& input) {
     using Kind = BindingActionKind;
-    constexpr auto simple = ds::Array<std::pair<Tag, Kind>, 11>{{
-        {Tag::sidebar, Kind::toggle_sidebar},
-        {Tag::close_pane, Kind::close_pane},
-        {Tag::new_tab, Kind::new_tab},
-        {Tag::rename_tab, Kind::rename_tab},
-        {Tag::close_tab, Kind::close_tab},
-        {Tag::detach, Kind::detach},
-        {Tag::fullscreen, Kind::toggle_pane_fullscreen},
-        {Tag::workspace_list, Kind::toggle_workspace_list},
-        {Tag::new_workspace, Kind::new_workspace},
-        {Tag::rename_workspace, Kind::rename_workspace},
-        {Tag::leave_worktree, Kind::leave_worktree},
-    }};
+    using SimpleEffect = std::pair<Tag, Kind>;
+    constexpr auto simple = ds::Array<SimpleEffect, 11>{
+        SimpleEffect{Tag::sidebar, Kind::toggle_sidebar},
+        SimpleEffect{Tag::close_pane, Kind::close_pane},
+        SimpleEffect{Tag::new_tab, Kind::new_tab},
+        SimpleEffect{Tag::rename_tab, Kind::rename_tab},
+        SimpleEffect{Tag::close_tab, Kind::close_tab},
+        SimpleEffect{Tag::detach, Kind::detach},
+        SimpleEffect{Tag::fullscreen, Kind::toggle_pane_fullscreen},
+        SimpleEffect{Tag::workspace_list, Kind::toggle_workspace_list},
+        SimpleEffect{Tag::new_workspace, Kind::new_workspace},
+        SimpleEffect{Tag::rename_workspace, Kind::rename_workspace},
+        SimpleEffect{Tag::leave_worktree, Kind::leave_worktree},
+    };
 
     const auto tag = static_cast<Tag>(u8::decode(input));
     const auto* found = std::ranges::find(simple, tag, &decltype(simple)::value_type::first);

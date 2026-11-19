@@ -194,143 +194,147 @@ namespace telar::gui::application {
     return static_cast<CursorShape>(std::to_underlying(style) + 1);
   }
 
-  // Records the descriptions and callbacks of the actions BindingActionReader reads, so that a
-  // configured binding keeps only an index into them.
-  template <Allocator Memory>
-  class RecordingActionReader {
-  public:
-    explicit RecordingActionReader(BindingActionReader& reader, ActionDescriptions<Memory>& descriptions, const runtime::config::ClientDefinitions& definitions)
-        : reader_(reader),
-          descriptions_(descriptions),
-          definitions_(definitions) {}
+  namespace {
 
-    [[nodiscard]] ds::Option<BindingAction> read(const runtime::lua::Value& value, bool expression = false) {
-      auto action = reader_.read(value, expression);
-      if (!action) {
-        return {};
+    // Records the descriptions and callbacks of the actions BindingActionReader reads, so that a
+    // configured binding keeps only an index into them.
+    template <Allocator Memory>
+    class RecordingActionReader {
+    public:
+      explicit RecordingActionReader(BindingActionReader& reader, ActionDescriptions<Memory>& descriptions, const runtime::config::ClientDefinitions& definitions)
+          : reader_(reader),
+            descriptions_(descriptions),
+            definitions_(definitions) {}
+
+      [[nodiscard]] ds::Option<BindingAction> read(const runtime::lua::Value& value, bool expression = false) {
+        auto action = reader_.read(value, expression);
+        if (!action) {
+          return {};
+        }
+
+        if (action->kind == BindingActionKind::callback || action->kind == BindingActionKind::expression) {
+          action.getMut().parameter = descriptions_.registerCallback();
+        } else if (action->kind == BindingActionKind::extended) {
+          action.getMut().parameter = descriptions_.retain(ActionDescriptionReader::read(value, definitions_));
+        }
+
+        return action;
       }
 
-      if (action->kind == BindingActionKind::callback || action->kind == BindingActionKind::expression) {
-        action.getMut().parameter = descriptions_.registerCallback();
-      } else if (action->kind == BindingActionKind::extended) {
-        action.getMut().parameter = descriptions_.retain(ActionDescriptionReader::read(value, definitions_));
+    private:
+      BindingActionReader& reader_;
+      ActionDescriptions<Memory>& descriptions_;
+      const runtime::config::ClientDefinitions& definitions_;
+    };
+
+    // Keeps the elements runtime::config::ElementReader reads from what a slot function returned.
+    // It runs on the Lua thread; actions are resolved as they are read and functions are handed to
+    // `callback`, so the result needs no VM.
+    template <Allocator Memory, typename Resolve, typename Callback>
+    class ElementSink {
+    public:
+      using Color = features::components::ComponentColors::Color;
+      using Setting = runtime::config::ElementSetting<Color>;
+
+      static_assert(features::components::Element::maximum_elements == Setting::maximum_elements && features::components::Element::maximum_text_bytes == Setting::maximum_text_bytes);
+      static_assert(features::components::Element::maximum_steps == Setting::maximum_steps && features::components::Element::maximum_actions == Setting::maximum_actions);
+      static_assert(std::ranges::equal(features::components::element_kind_names, runtime::config::element_kind_names));
+
+      ElementSink(features::components::RenderedElements<Memory>& output, const Resolve& resolve, const Callback& callback) noexcept
+          : output_(output),
+            resolve_(resolve),
+            callback_(callback) {}
+
+      std::uint32_t element(const Setting& setting) {
+        features::components::Element element;
+
+        element.kind = static_cast<features::components::ElementKind>(std::to_underlying(setting.kind));
+        element.parent = setting.parent;
+        element.text = store(setting.text);
+        element.key = store(setting.key);
+        element.tooltip = store(setting.tooltip);
+        element.url = store(setting.url);
+        element.padding = setting.padding;
+        element.gap = setting.gap;
+        element.width = setting.width;
+        element.height = setting.height;
+        element.min_width = setting.min_width;
+        element.max_width = setting.max_width;
+        element.min_height = setting.min_height;
+        element.max_height = setting.max_height;
+        element.grow = setting.grow;
+        element.x = setting.x;
+        element.y = setting.y;
+        element.rotation = setting.rotation;
+        element.scale = setting.scale;
+        element.opacity = setting.opacity;
+        element.radius = setting.radius;
+        element.border_width = setting.border_width;
+        element.size = setting.size;
+        element.transition_ms = setting.transition_ms;
+        element.z = setting.z;
+        element.background = color(setting.background);
+        element.border = color(setting.border);
+        element.color = color(setting.color);
+        element.hover = color(setting.hover);
+        element.tone = features::components::ValueMapper::tone(setting.tone);
+        element.align = setting.align;
+        element.justify = setting.justify;
+        element.align_self = setting.align_self;
+        element.easing = setting.easing;
+        element.size_role = setting.size_role;
+        element.max_lines = setting.max_lines;
+        element.bold = setting.bold;
+        element.italic = setting.italic;
+        element.clip = setting.clip;
+        element.shadow = setting.shadow;
+        element.named = setting.named;
+        element.action = setting.action;
+        element.callback = setting.callback;
+        element.steps_offset = setting.steps_offset;
+        element.steps_count = setting.steps_count;
+        element.since = setting.since;
+        output_.elements.push(element);
+
+        return static_cast<std::uint32_t>(output_.elements.size() - 1);
       }
 
-      return action;
-    }
+      void step(const runtime::config::CanvasStepSetting<Color>& setting) {
+        output_.steps.push({.op = setting.op, .count = setting.count, .values = setting.values, .color = color(setting.color), .text = store(setting.text)});
+      }
 
-  private:
-    BindingActionReader& reader_;
-    ActionDescriptions<Memory>& descriptions_;
-    const runtime::config::ClientDefinitions& definitions_;
-  };
+      [[nodiscard]] ds::Option<features::components::ResolvedAction> resolve(const runtime::lua::Value& action) const {
+        return resolve_(action);
+      }
 
-  // Keeps the elements runtime::config::ElementReader reads from what a slot function returned.
-  // It runs on the Lua thread; actions are resolved as they are read and functions are handed to
-  // `callback`, so the result needs no VM.
-  template <Allocator Memory, typename Resolve, typename Callback>
-  class ElementSink {
-  public:
-    using Color = features::components::ComponentColors::Color;
-    using Setting = runtime::config::ElementSetting<Color>;
+      void bind(features::components::ResolvedAction resolved) {
+        output_.bindings.push(resolved.action);
+        output_.actions.add(std::move(resolved));
+      }
 
-    static_assert(features::components::Element::maximum_elements == Setting::maximum_elements && features::components::Element::maximum_text_bytes == Setting::maximum_text_bytes);
-    static_assert(features::components::Element::maximum_steps == Setting::maximum_steps && features::components::Element::maximum_actions == Setting::maximum_actions);
-    static_assert(std::ranges::equal(features::components::element_kind_names, runtime::config::element_kind_names));
+      std::uint32_t callback(const runtime::lua::Value& function) {
+        return callback_(function);
+      }
 
-    ElementSink(features::components::RenderedElements<Memory>& output, const Resolve& resolve, const Callback& callback) noexcept
-        : output_(output),
-          resolve_(resolve),
-          callback_(callback) {}
+    private:
+      static features::components::ElementColor color(const runtime::config::ElementColorSetting<Color>& setting) noexcept {
+        return {.value = setting.value, .alpha = setting.alpha};
+      }
 
-    std::uint32_t element(const Setting& setting) {
-      features::components::Element element;
+      features::components::ElementText store(std::string_view text) {
+        const features::components::ElementText range{.offset = static_cast<std::uint32_t>(output_.text.size()), .length = static_cast<std::uint32_t>(text.size())};
 
-      element.kind = static_cast<features::components::ElementKind>(std::to_underlying(setting.kind));
-      element.parent = setting.parent;
-      element.text = store(setting.text);
-      element.key = store(setting.key);
-      element.tooltip = store(setting.tooltip);
-      element.url = store(setting.url);
-      element.padding = setting.padding;
-      element.gap = setting.gap;
-      element.width = setting.width;
-      element.height = setting.height;
-      element.min_width = setting.min_width;
-      element.max_width = setting.max_width;
-      element.min_height = setting.min_height;
-      element.max_height = setting.max_height;
-      element.grow = setting.grow;
-      element.x = setting.x;
-      element.y = setting.y;
-      element.rotation = setting.rotation;
-      element.scale = setting.scale;
-      element.opacity = setting.opacity;
-      element.radius = setting.radius;
-      element.border_width = setting.border_width;
-      element.size = setting.size;
-      element.transition_ms = setting.transition_ms;
-      element.z = setting.z;
-      element.background = color(setting.background);
-      element.border = color(setting.border);
-      element.color = color(setting.color);
-      element.hover = color(setting.hover);
-      element.tone = features::components::ValueMapper::tone(setting.tone);
-      element.align = setting.align;
-      element.justify = setting.justify;
-      element.align_self = setting.align_self;
-      element.easing = setting.easing;
-      element.size_role = setting.size_role;
-      element.max_lines = setting.max_lines;
-      element.bold = setting.bold;
-      element.italic = setting.italic;
-      element.clip = setting.clip;
-      element.shadow = setting.shadow;
-      element.named = setting.named;
-      element.action = setting.action;
-      element.callback = setting.callback;
-      element.steps_offset = setting.steps_offset;
-      element.steps_count = setting.steps_count;
-      element.since = setting.since;
-      output_.elements.push(element);
+        output_.text.append(text);
 
-      return static_cast<std::uint32_t>(output_.elements.size() - 1);
-    }
+        return range;
+      }
 
-    void step(const runtime::config::CanvasStepSetting<Color>& setting) {
-      output_.steps.push({.op = setting.op, .count = setting.count, .values = setting.values, .color = color(setting.color), .text = store(setting.text)});
-    }
+      features::components::RenderedElements<Memory>& output_;
+      const Resolve& resolve_;
+      const Callback& callback_;
+    };
 
-    [[nodiscard]] ds::Option<features::components::ResolvedAction> resolve(const runtime::lua::Value& action) const {
-      return resolve_(action);
-    }
-
-    void bind(features::components::ResolvedAction resolved) {
-      output_.bindings.push(resolved.action);
-      output_.actions.add(std::move(resolved));
-    }
-
-    std::uint32_t callback(const runtime::lua::Value& function) {
-      return callback_(function);
-    }
-
-  private:
-    static features::components::ElementColor color(const runtime::config::ElementColorSetting<Color>& setting) noexcept {
-      return {.value = setting.value, .alpha = setting.alpha};
-    }
-
-    features::components::ElementText store(std::string_view text) {
-      const features::components::ElementText range{.offset = static_cast<std::uint32_t>(output_.text.size()), .length = static_cast<std::uint32_t>(text.size())};
-
-      output_.text.append(text);
-
-      return range;
-    }
-
-    features::components::RenderedElements<Memory>& output_;
-    const Resolve& resolve_;
-    const Callback& callback_;
-  };
+  }
 
   template <Allocator Memory>
   template <typename Consumer>
@@ -1135,7 +1139,7 @@ namespace telar::gui::application::configuration {
     };
 
     ConfigureTerminalColors colors;
-    ds::Array<Byte, 48> palette{};
+    ds::Array<Byte, DefaultTheme::palette_size * 3> palette{};
     ds::Array<Byte, TerminalTheme::syntax_roles * 3> syntax{};
     ds::Array<Byte, TerminalTheme::chrome_roles * 3> chrome{};
 

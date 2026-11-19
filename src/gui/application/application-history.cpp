@@ -159,7 +159,7 @@ namespace telar::gui::application::history {
     if (prompt::edits(session, pane_id)) {
       prompt::write(session, pane_id, command);
       if (runs) {
-        prompt::key(session, pane_id, prompt::KeyPress{prompt::Key::enter});
+        prompt::key(session, pane_id, prompt::KeyPress{.key = prompt::Key::enter});
       }
 
       return;

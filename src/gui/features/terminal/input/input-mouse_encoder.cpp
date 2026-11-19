@@ -33,7 +33,7 @@ namespace telar::gui::features::terminal::input {
   }
 
   void MouseEncoder::append(std::string_view text) noexcept {
-    std::ranges::copy(text, buffer_.viewMut().begin() + used_);
+    std::ranges::copy(text, buffer_.viewMut().subspan(used_).begin());
     used_ += text.size();
   }
 

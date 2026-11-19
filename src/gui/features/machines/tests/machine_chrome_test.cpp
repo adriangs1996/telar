@@ -66,24 +66,27 @@ namespace {
     const auto second = Geometry::listRow(area, chrome, 1, false);
     constexpr Rect wide_label{.x = 46, .y = 88, .width = 178, .height = 17};
 
-    check(second.bounds.y == 83 && second.stack.empty() && second.label == wide_label, "a row without agents gives the stack's room to its text");
-    check(Geometry::listHeight(chrome, 3) == 129, "machine rows stack at the height of their two lines");
+    check(second.bounds.y == bounds.y + bounds.height && second.stack.empty() && second.label == wide_label, "a row without agents gives the stack's room to its text");
+    check(Geometry::listHeight(chrome, 3) == 3 * bounds.height, "machine rows stack at the height of their two lines");
     constexpr float text_advance = 100;
+    constexpr float natural_width = 146;
+    constexpr float natural_width_with_stack = 194;
 
-    check(Geometry::listNaturalWidth(chrome, text_advance, false) == 146 && Geometry::listNaturalWidth(chrome, text_advance, true) == 194, "the natural width holds the whole text and, when shown, the stack");
+    check(Geometry::listNaturalWidth(chrome, text_advance, false) == natural_width && Geometry::listNaturalWidth(chrome, text_advance, true) == natural_width_with_stack, "the natural width holds the whole text and, when shown, the stack");
     ChromeMetrics enlarged;
 
     enlarged.text_ratio = 2;
-    check(Geometry::listRow(area, enlarged, 0, false).avatar.width == 48 && Geometry::listRow(area, chrome, 0, false).avatar.width == 24, "rows follow the chrome text, whatever the display ratio is");
+    check(Geometry::listRow(area, enlarged, 0, false).avatar.width == avatar.width * enlarged.text_ratio && Geometry::listRow(area, chrome, 0, false).avatar.width == avatar.width, "rows follow the chrome text, whatever the display ratio is");
   }
 
   void machineListStatusCountsActiveAgents() {
     using Geometry = MachineChromeGeometry;
     ds::Array<char, Geometry::list_status_capacity> storage{};
+    constexpr std::size_t several = 12;
 
     check(Geometry::listStatus(false, 3, storage.viewMut()) == "Offline", "a machine whose link is down reads offline, whatever it last reported");
     check(Geometry::listStatus(true, 0, storage.viewMut()) == "No active agents" && Geometry::listStatus(true, 1, storage.viewMut()) == "1 active agent", "an idle machine and a single agent read in plain words");
-    check(Geometry::listStatus(true, 12, storage.viewMut()) == "12 active agents", "several agents read as their count");
+    check(Geometry::listStatus(true, several, storage.viewMut()) == "12 active agents", "several agents read as their count");
     check(Geometry::listStatus(true, std::numeric_limits<std::size_t>::max(), storage.viewMut()) == "active agents", "a count that does not fit drops out instead of overrunning the storage");
   }
 
