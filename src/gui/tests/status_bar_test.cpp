@@ -92,7 +92,7 @@ namespace {
         {QStringLiteral("controller"), QVariant::fromValue(static_cast<QObject*>(nullptr))},
         {QStringLiteral("surface"), QVariantMap{{QStringLiteral("kind"), QStringLiteral("static")}, {QStringLiteral("identity"), QStringLiteral("fixture")}, {QStringLiteral("generation"), QStringLiteral("1")}, {QStringLiteral("source"), 0}, {QStringLiteral("nodes"), nodes}}},
         {QStringLiteral("colors"), themeColors(Configuration{})},
-        {QStringLiteral("typography"), QVariantMap{{QStringLiteral("small"), ChromeMetrics{}.small}, {QStringLiteral("body"), ChromeMetrics{}.body}}},
+        {QStringLiteral("typography"), QVariantMap{{QStringLiteral("small"), ChromeMetrics{}.small}, {QStringLiteral("body"), ChromeMetrics{}.body}, {QStringLiteral("bodyRow"), ChromeMetrics::lineHeight(ChromeMetrics{}.body)}, {QStringLiteral("smallRow"), ChromeMetrics::lineHeight(ChromeMetrics{}.small)}}},
     };
   }
 
