@@ -234,9 +234,10 @@ export {
       static constexpr std::size_t maximum_hosts = 256;
       static constexpr std::size_t maximum_hostname_bytes = ProxyHostname::maximum_bytes;
 
-      explicit ProxyHostPolicy(Memory& memory);
+      // A policy allocates its patterns from the allocator in region `a`.
+      explicit ProxyHostPolicy(tbc::view<Memory&, tbc::lt::a> memory);
       // Copying allocates, so it is explicit; the copy shares this policy's allocator.
-      [[nodiscard]] ProxyHostPolicy clone() const;
+      [[nodiscard]] tbc::view<ProxyHostPolicy, tbc::lt::a> clone() const;
       static bool validPattern(std::string_view pattern) noexcept;
       bool append(std::string_view pattern);
       void finish();
@@ -248,7 +249,7 @@ export {
       bool find(std::string_view pattern) const noexcept;
 
       static constexpr std::string_view wildcard_prefix = "*.";
-      ds::Vec<ds::String<Memory>, Memory> patterns_;
+      tbc::view<ds::Vec<ds::String<Memory>, Memory>, tbc::lt::a> patterns_;
     };
 
   }
@@ -260,12 +261,12 @@ export {
 
     template <Allocator Memory>
     struct ProxyOptions {
-      explicit ProxyOptions(Memory& memory);
+      explicit ProxyOptions(tbc::view<Memory&, tbc::lt::a> memory);
       // Copying allocates, so it is explicit; the copy shares these options' allocator.
-      [[nodiscard]] ProxyOptions clone() const;
+      [[nodiscard]] tbc::view<ProxyOptions, tbc::lt::a> clone() const;
 
-      ds::String<Memory> authority_directory;
-      ProxyHostPolicy<Memory> intercept_hosts;
+      tbc::view<ds::String<Memory>, tbc::lt::a> authority_directory;
+      tbc::view<ProxyHostPolicy<Memory>, tbc::lt::a> intercept_hosts;
       ProxyCaptureLimits capture;
       bool enabled = false;
       bool anonymous_tunnels = false;
@@ -315,32 +316,32 @@ export {
         [[nodiscard]] std::span<const std::string_view> span() const noexcept;
       };
 
-      explicit CommandValues(Memory& memory);
+      explicit CommandValues(tbc::view<Memory&, tbc::lt::a> memory);
       // Copying allocates, so it is explicit; the copy shares these values' allocator.
-      [[nodiscard]] CommandValues clone() const;
+      [[nodiscard]] tbc::view<CommandValues, tbc::lt::a> clone() const;
       [[nodiscard]] Views views() const noexcept;
 
-      ds::Vec<ds::String<Memory>, Memory> arguments;
+      tbc::view<ds::Vec<ds::String<Memory>, Memory>, tbc::lt::a> arguments;
       std::chrono::milliseconds timeout{15'000};
       std::chrono::milliseconds idle_timeout{300'000};
     };
 
     template <Allocator Memory>
     struct RuntimeValues {
-      explicit RuntimeValues(Memory& memory);
+      explicit RuntimeValues(tbc::view<Memory&, tbc::lt::a> memory);
       // Copying allocates, so it is explicit; the copy shares these values' allocator.
-      [[nodiscard]] RuntimeValues clone() const;
+      [[nodiscard]] tbc::view<RuntimeValues, tbc::lt::a> clone() const;
 
-      ds::String<Memory> history_path;
-      ds::String<Memory> session_path;
+      tbc::view<ds::String<Memory>, tbc::lt::a> history_path;
+      tbc::view<ds::String<Memory>, tbc::lt::a> session_path;
       HistoryFilters history_filters;
-      CommandValues<Memory> engine;
-      CommandValues<Memory> descriptions;
-      ProxyOptions<Memory> proxy;
+      tbc::view<CommandValues<Memory>, tbc::lt::a> engine;
+      tbc::view<CommandValues<Memory>, tbc::lt::a> descriptions;
+      tbc::view<ProxyOptions<Memory>, tbc::lt::a> proxy;
       plugins::Specifications plugins;
       FixedText<PATH_MAX> configuration_directory;
       AgentManifests manifests = builtin_manifests;
-      LimitNotices limits;
+      tbc::view<LimitNotices, tbc::lt::a> limits;
       GraphicsLimits graphics;
       control::Policy control_policy{};
       bool capture_output = false;
