@@ -31,6 +31,9 @@ export {
 
       SessionHost sessionHost(AgentProvider provider) const noexcept;
 
+      // The arguments joined by spaces into `output`, cut where it ends.
+      tbc::view<std::string_view, tbc::lt::a> joined(tbc::view<std::span<char>, tbc::lt::a> output) const noexcept;
+
     private:
       static ds::Option<std::string_view> next(std::string_view& remaining) noexcept;
 
@@ -79,6 +82,12 @@ export {
       FixedText<48> name{};
     };
 
+    // A process's command line, its arguments joined by spaces, and the agent it runs.
+    struct CommandLine {
+      std::string_view text;
+      AgentProvider provider = AgentProvider::unknown;
+    };
+
     struct ProcessSnapshot {
       ProcessIdentity identity;
       pid_t terminal_foreground = 0;
@@ -113,6 +122,8 @@ export {
       FixedText<4096> terminal(pid_t process) const noexcept;
       IdentifiedProcess identifyGroup(pid_t group, AgentProvider preferred) const noexcept;
       ListeningPorts listeningPorts(pid_t group) const noexcept;
+      // Of any user's process the system lets the runtime read; the text views `output`.
+      tbc::view<CommandLine, tbc::lt::a> commandLine(pid_t process, tbc::view<std::span<char>, tbc::lt::a> output) const noexcept;
 
     private:
       // The arguments view the caller's buffer.

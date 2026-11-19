@@ -108,6 +108,27 @@ namespace telar::runtime {
     return host;
   }
 
+  std::string_view ProcessArguments::joined(std::span<char> output) const noexcept {
+    auto remaining = arguments_;
+    std::size_t length = 0;
+
+    while (const auto argument = next(remaining)) {
+      if (length != 0 && length < output.size()) {
+        output[length++] = ' ';
+      }
+
+      const auto count = std::min(argument->size(), output.size() - length);
+
+      std::memcpy(output.data() + length, argument->data(), count);
+      length += count;
+      if (length == output.size()) {
+        break;
+      }
+    }
+
+    return {output.data(), length};
+  }
+
   ds::Option<std::string_view> ProcessArguments::next(std::string_view& remaining) noexcept {
     const auto first = remaining.find_first_not_of('\0');
     if (first == std::string_view::npos) {
@@ -220,6 +241,15 @@ namespace telar::runtime {
     ds::Array<char, maximum_process_argument_bytes> arguments;
 
     return readArguments(process, arguments.viewMut()).provider(manifests_, path.view());
+  }
+
+  CommandLine ProcessInspector::commandLine(pid_t process, std::span<char> output) const noexcept {
+    ds::Array<char, maximum_process_argument_bytes> storage;
+    const auto path = executable(process);
+    const auto arguments = readArguments(process, storage.viewMut());
+    const auto provider = path.view().empty() ? AgentProvider::unknown : arguments.provider(manifests_, path.view());
+
+    return {.text = arguments.joined(output), .provider = provider};
   }
 
   IdentifiedProcess ProcessInspector::identifyProcess(pid_t process) const noexcept {
