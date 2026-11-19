@@ -372,9 +372,9 @@ export namespace telar::gui::features::prompt {
   void learn(State& state, std::uint64_t pane_id, std::string_view command, shell::Dialect dialect);
 
   // What an answer to a question about a command found; none when the answer is not one.
-  [[nodiscard]] ds::Option<Settled> settles(State& state, const CompletionWords& message);
+  [[nodiscard]] tbc::view<ds::Option<Settled>, tbc::lt::a> settles(State& state, const CompletionWords& message);
 
-  [[nodiscard]] ds::Option<Settled> settles(State& state, const PathResults& message);
+  [[nodiscard]] tbc::view<ds::Option<Settled>, tbc::lt::a> settles(State& state, const PathResults& message);
 
   // The word `settled` names is marked; true when its pane's line shows the change.
   bool settle(State& state, const Settled& settled);
@@ -387,7 +387,7 @@ export namespace telar::gui::features::prompt {
 
   // The question for `command`'s spec under `request_id`, with the digest of the spec held
   // already. It views `command` and the state until the next use case.
-  [[nodiscard]] RequestCommandSpec askSpec(const State& state, std::uint64_t pane_id, std::string_view command, std::uint64_t request_id) noexcept;
+  [[nodiscard]] tbc::view<RequestCommandSpec, tbc::lt::b> askSpec(const State& state, std::uint64_t pane_id, tbc::view<std::string_view, tbc::lt::b> command, std::uint64_t request_id) noexcept;
 
   // The question `request_id` for `command`'s spec went out, `sent`, and waits; or it could not,
   // and no spec is to be had.
@@ -405,14 +405,14 @@ export namespace telar::gui::features::prompt {
 
   // Tab in the line: the word under the caret and the command it belongs to, as the `dialect`'s
   // shell reads them; none where nothing completes.
-  [[nodiscard]] ds::Option<CompletionContext> completing(State& state, const PaneLine& line, shell::Dialect dialect);
+  [[nodiscard]] tbc::view<ds::Option<CompletionContext>, tbc::lt::a> completing(State& state, const PaneLine& line, shell::Dialect dialect);
 
   // Tab waits for the spec of the line's command, and completes once it arrives (resume).
   void awaitSpec(State& state, const PaneLine& line);
 
   // The choices for `context`: from the spec held for its command when `specified`, and, when
   // `asks`, what only the runtime knows (files under `directory`, commands, branches…).
-  [[nodiscard]] CompletionPlan plan(State& state, const PaneLine& line, CompletionContext context, bool specified, bool asks, std::string_view directory, shell::Dialect dialect);
+  [[nodiscard]] tbc::view<CompletionPlan, tbc::lt::a> plan(State& state, const PaneLine& line, tbc::view<CompletionContext, tbc::lt::a> context, bool specified, bool asks, std::string_view directory, shell::Dialect dialect);
 
   [[nodiscard]] std::size_t questions(const CompletionPlan& plan) noexcept;
 

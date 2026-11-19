@@ -81,7 +81,7 @@ namespace telar::gui::features::prompt {
     }
 
     // The question `request_id` about a command, answered: it no longer waits.
-    Settled take(ds::Map<std::uint64_t, CommandRequest, Memory>& requests, std::uint64_t request_id, CommandPresence presence) {
+    tbc::view<Settled, tbc::lt::a> take(ds::Map<std::uint64_t, CommandRequest, Memory>& requests, std::uint64_t request_id, CommandPresence presence) {
       auto request = requests.remove(request_id);
       auto& [pane_id, word] = request.getMut();
 
@@ -397,7 +397,7 @@ namespace telar::gui::features::prompt {
     }
   }
 
-  ds::Option<Settled> settles(State& state, const CompletionWords& message) {
+  tbc::view<ds::Option<Settled>, tbc::lt::a> settles(State& state, const CompletionWords& message) {
     const auto* checked = state.command_requests.find(message.request_id);
     if (checked == nullptr) {
       return ds::none;
@@ -415,7 +415,7 @@ namespace telar::gui::features::prompt {
                                                                                    : CommandPresence::missing);
   }
 
-  ds::Option<Settled> settles(State& state, const PathResults& message) {
+  tbc::view<ds::Option<Settled>, tbc::lt::a> settles(State& state, const PathResults& message) {
     const auto* checked = state.command_requests.find(message.request_id);
     if (checked == nullptr) {
       return ds::none;
@@ -470,7 +470,7 @@ namespace telar::gui::features::prompt {
     return ds::none;
   }
 
-  RequestCommandSpec askSpec(const State& state, std::uint64_t pane_id, std::string_view command, std::uint64_t request_id) noexcept {
+  tbc::view<RequestCommandSpec, tbc::lt::b> askSpec(const State& state, std::uint64_t pane_id, tbc::view<std::string_view, tbc::lt::b> command, std::uint64_t request_id) noexcept {
     // An alias's spec is its command's: the digest of the one held for what it last stood for.
     const auto* checks = state.command_checks.find(pane_id);
     auto named = command;
@@ -550,7 +550,7 @@ namespace telar::gui::features::prompt {
 
   // ---- completion -------------------------------------------------------------------------------
 
-  ds::Option<CompletionContext> completing(State& state, const PaneLine& line, shell::Dialect dialect) {
+  tbc::view<ds::Option<CompletionContext>, tbc::lt::a> completing(State& state, const PaneLine& line, shell::Dialect dialect) {
     const auto& text = line.line.editor().text();
 
     return completionContext(state.memory, text.view(), text.cursor(), shell::Syntax{.dialect = dialect});
@@ -560,7 +560,7 @@ namespace telar::gui::features::prompt {
     static_cast<void>(state.spec_completions.assign(line.pane_id, Name{state.memory, line.line.editor().text().view()}));
   }
 
-  CompletionPlan plan(State& state, const PaneLine& line, CompletionContext context, bool specified, bool asks, std::string_view directory, shell::Dialect dialect) {
+  tbc::view<CompletionPlan, tbc::lt::a> plan(State& state, const PaneLine& line, tbc::view<CompletionContext, tbc::lt::a> context, bool specified, bool asks, std::string_view directory, shell::Dialect dialect) {
     const auto pane_id = line.pane_id;
     auto& memory = state.memory;
     const auto& specs = state.specs;
