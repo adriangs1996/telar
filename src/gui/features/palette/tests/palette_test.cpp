@@ -161,11 +161,11 @@ namespace {
     for (const auto& operation : telar::monitor_operations) {
       const auto action = builtinBindingAction(operation.binding);
 
-      check(action.hasValue(), std::string{operation.binding});
+      check(action.hasValue(), operation.binding);
 
-      const auto entry = std::ranges::find(palette_actions, action->kind, &PaletteAction::action);
+      const auto* const entry = std::ranges::find(palette_actions, action->kind, &PaletteAction::action);
 
-      check(entry != palette_actions.end() && entry->label == operation.label, std::string{operation.label});
+      check(entry != palette_actions.end() && entry->label == operation.label, operation.label);
     }
   }
 
