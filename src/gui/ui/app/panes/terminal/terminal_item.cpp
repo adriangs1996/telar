@@ -376,7 +376,7 @@ namespace telar::gui::qt {
         continue;
       }
 
-      requestRowFonts(screen.row(row));
+      requestRowFonts(*fonts_, *font_catalog_, screen.row(row));
       revision = screen.rowRevision(row);
     }
 
@@ -384,7 +384,7 @@ namespace telar::gui::qt {
     for (const auto& view : view_rows_) {
       if (view.exists && view.screen_row < 0) {
         if (const auto kept = current->rows.find(current->scrollback_trimmed + view.row)) {
-          requestRowFonts(kept->cells);
+          requestRowFonts(*fonts_, *font_catalog_, kept->cells);
         }
       }
     }
@@ -398,8 +398,8 @@ namespace telar::gui::qt {
     controller_->prepareImagePlacements();
   }
 
-  void TerminalItem::requestRowFonts(std::span<const CellValue> cells) {
-    const auto& primary = fonts_->face(fonts::FontRole::primary);
+  void TerminalItem::requestRowFonts(ResidentFonts& fonts, WindowFontCatalog& catalog, std::span<const CellValue> cells) {
+    const auto& primary = fonts.face(fonts::FontRole::primary);
 
     for (const auto& cell : cells) {
       if (cell.width == CellWidth::continuation || cell.utf8().empty()) {
@@ -408,12 +408,12 @@ namespace telar::gui::qt {
 
       try {
         if (!fonts::FontCoverage::covers(primary, cell.utf8())) {
-          font_catalog_->request(cell.utf8(), fonts::FontRole::primary);
+          catalog.request(cell.utf8(), fonts::FontRole::primary);
         }
       } catch (const std::invalid_argument&) {
         const auto normalized = QString::fromUtf8(cell.utf8()).toUtf8();
 
-        font_catalog_->request({normalized.constData(), static_cast<std::size_t>(normalized.size())}, fonts::FontRole::primary);
+        catalog.request({normalized.constData(), static_cast<std::size_t>(normalized.size())}, fonts::FontRole::primary);
       }
     }
   }
@@ -1213,12 +1213,13 @@ namespace telar::gui::qt {
   void TerminalItem::releaseKeys() {
     const auto* current = pane();
 
-    for (auto& key : pressed_keys_.viewMut()) {
-      if (key.key == 0) {
+    // By index: sending re-enters this item, so no borrow of the keys is held across it.
+    for (std::size_t index = 0; index < pressed_keys_.size(); ++index) {
+      if (pressed_keys_[index].key == 0) {
         continue;
       }
 
-      const auto held = std::exchange(key, PressedKey{});
+      const auto held = std::exchange(pressed_keys_.atMut(index), PressedKey{});
 
       if (current != nullptr) {
         send(held.release(current->screen.modes()), application::PaneInputSource::key_release);
