@@ -27,8 +27,11 @@ namespace telar::gui::qt {
     const char* action = nullptr;
 
     if (modifiers == Qt::ControlModifier) {
-      action = key == Qt::Key_D ? "half_down" : key == Qt::Key_U ? "half_up"
-                                                                 : nullptr;
+      if (key == Qt::Key_D) {
+        action = "half_down";
+      } else if (key == Qt::Key_U) {
+        action = "half_up";
+      }
     } else if (modifiers == Qt::NoModifier) {
       const auto text = event.text();
       if (key == Qt::Key_Down || text == QLatin1StringView{"j"}) {

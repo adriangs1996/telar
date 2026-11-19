@@ -14,6 +14,7 @@ static_assert(true);
 #include <QPointer>
 #include <QQuickItem>
 #include <QRectF>
+#include <QSizeF>
 #include <QString>
 #include <QVariantAnimation>
 #include <QVariantList>
@@ -95,6 +96,10 @@ namespace telar::gui::qt {
   public:
     explicit PromptEditorItem(QQuickItem* parent = nullptr);
     ~PromptEditorItem() override;
+    PromptEditorItem(const PromptEditorItem&) = delete;
+    PromptEditorItem& operator=(const PromptEditorItem&) = delete;
+    PromptEditorItem(PromptEditorItem&&) = delete;
+    PromptEditorItem& operator=(PromptEditorItem&&) = delete;
 
     [[nodiscard]] PromptController* controller() const noexcept;
     void setController(PromptController* controller);
@@ -181,8 +186,38 @@ namespace telar::gui::qt {
       qint64 started_ms = 0;
     };
 
+    // How a run shows: its colour, how far below its place it sits and how opaque it is.
+    struct RunLook {
+      QColor color;
+      qreal lift = 0;
+      qreal opacity = 1;
+    };
+
+    // Where display_'s parts fall: the composition, this many bytes at the cursor, is part of
+    // what was typed, and the suggestion follows it.
+    struct Composed {
+      std::size_t cursor = 0;
+      std::size_t composing = 0;
+      std::size_t typed = 0;
+    };
+
+    static constexpr int default_maximum_columns = 80;
+    static constexpr int default_maximum_rows = 12;
+
+    [[nodiscard]] bool resolveGrid();
+    [[nodiscard]] Composed compose(std::string_view text, std::size_t cursor, std::string_view composing);
+    void styleDisplay(const Composed& composed, const application::Pane<Memory>* pane);
+    void markCommands(std::size_t typed);
+    void groupFresh(const Composed& composed);
+    void lay(std::size_t caret, std::size_t mark);
     void placeRuns();
+    void placeRun(std::size_t index, const application::prompt::Run& run, const RunLook& look, QSizeF cell);
+    [[nodiscard]] RunLook look(const application::prompt::Run& run, QSizeF cell, qint64 now, QVariantList& glows) const;
+    [[nodiscard]] bool rowVisible(std::uint32_t row) const noexcept;
+    void paintSelection(QSGNode& group) const;
+    void paintUnderlines(QSGNode& group) const;
     void track(std::string_view text, bool animate);
+    void animateInsertion(std::size_t prefix, std::string_view added, qint64 now);
     void tick();
     [[nodiscard]] bool animating(qint64 now) const noexcept;
     [[nodiscard]] QColor styleColor(application::prompt::Style style) const;
@@ -222,8 +257,8 @@ namespace telar::gui::qt {
     std::uint64_t pane_id_ = 0;
     std::uint64_t revision_ = 0;
     qreal scale_ = 1;
-    int maximum_columns_ = 80;
-    int maximum_rows_ = 12;
+    int maximum_columns_ = default_maximum_columns;
+    int maximum_rows_ = default_maximum_rows;
     int first_row_ = 0;
     std::uint8_t surface_ = 0;
     bool cursor_hidden_ = false;

@@ -7,6 +7,8 @@
 #include <QVariantList>
 #include <QtQml/qqmlregistration.h>
 
+#include <cstdint>
+
 namespace telar::gui::qt {
 
   // Draws a mod's vector operations. The list arrives already validated and with its colours
@@ -19,28 +21,28 @@ namespace telar::gui::qt {
     Q_PROPERTY(qreal ratio READ ratio WRITE setRatio NOTIFY operationsChanged)
 
   public:
-    enum Operation : int {
-      op_move,
-      op_line,
-      op_curve,
-      op_quad,
-      op_arc,
-      op_rect,
-      op_round_rect,
-      op_circle,
-      op_path,
-      op_close,
-      op_fill,
-      op_stroke,
-      op_width,
-      op_cap,
-      op_join,
-      op_alpha,
-      op_translate,
-      op_rotate,
-      op_scale,
-      op_save,
-      op_restore,
+    enum class Operation : std::uint8_t {
+      move,
+      line,
+      curve,
+      quad,
+      arc,
+      rect,
+      round_rect,
+      circle,
+      path,
+      close,
+      fill,
+      stroke,
+      width,
+      cap,
+      join,
+      alpha,
+      translate,
+      rotate,
+      scale,
+      save,
+      restore,
     };
     Q_ENUM(Operation)
 

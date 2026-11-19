@@ -3,6 +3,7 @@
 static_assert(true);
 #endif
 
+#include "ui/foundation/models/activity_availability.hpp"
 #include "ui/foundation/machines/machine_client.hpp"
 #include "ui/foundation/store/store.hpp"
 #include <algorithm>

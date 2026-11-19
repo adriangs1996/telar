@@ -8,11 +8,16 @@
 
 #include <array>
 #include <cmath>
+#include <cstddef>
 #include <optional>
+#include <utility>
 
 namespace telar::gui::qt {
 
   namespace {
+
+    // The most numbers one SVG path command reads: a cubic curve's two control points and end.
+    constexpr std::size_t cubic_numbers = 6;
 
     // Reads SVG path numbers: optional sign, digits, one dot, exponent; separators are spaces and commas.
     class PathScanner {
@@ -78,6 +83,19 @@ namespace telar::gui::qt {
         return value;
       }
 
+      [[nodiscard]] bool numbers(std::size_t count, ds::Array<qreal, cubic_numbers>& values) {
+        for (std::size_t index = 0; index < count; ++index) {
+          const auto value = number();
+          if (!value) {
+            return false;
+          }
+
+          values.atMut(index) = *value;
+        }
+
+        return true;
+      }
+
     private:
       void skip() {
         while (index_ < data_.size() && (data_[index_].isSpace() || data_[index_] == u',')) {
@@ -103,6 +121,54 @@ namespace telar::gui::qt {
       }
 
       return name == QStringLiteral("bevel") ? Qt::BevelJoin : Qt::MiterJoin;
+    }
+
+    // The numbers an upper-case SVG path command reads; none for a command outside the subset.
+    ds::Option<std::size_t> pathArity(char16_t command) {
+      switch (command) {
+      case u'M':
+      case u'L':
+        return 2;
+      case u'H':
+      case u'V':
+        return 1;
+      case u'C':
+        return cubic_numbers;
+      case u'Q':
+        return 4;
+      case u'Z':
+        return 0;
+      default:
+        return ds::none;
+      }
+    }
+
+    ds::Option<ElementCanvas::Operation> operationOf(const QVariantMap& operation) {
+      const auto code = operation.value(QStringLiteral("op")).toInt();
+      if (code < 0 || std::cmp_greater(code, std::to_underlying(ElementCanvas::Operation::restore))) {
+        return ds::none;
+      }
+
+      return static_cast<ElementCanvas::Operation>(code);
+    }
+
+    // Values are the centre, the radius, then start and end in degrees from twelve o'clock,
+    // clockwise, so a progress ring reads naturally.
+    template <typename Value>
+    void addArc(QPainterPath& path, const Value& value) {
+      const QRectF bounds{value(0) - value(2), value(1) - value(2), 2 * value(2), 2 * value(2)};
+      const auto start = 90 - value(3);
+      const auto sweep = -(value(4) - value(3));
+
+      if (path.elementCount() == 0) {
+        path.arcMoveTo(bounds, start);
+      }
+
+      path.arcTo(bounds, start, sweep);
+    }
+
+    QColor colorOf(const QVariantMap& operation) {
+      return operation.value(QStringLiteral("color")).value<QColor>();
     }
 
   }
@@ -150,81 +216,51 @@ namespace telar::gui::qt {
         return false;
       }
 
+      const auto upper = active.toUpper().unicode();
+      const auto arity = pathArity(upper);
+      ds::Array<qreal, cubic_numbers> values{};
+      if (!arity || !scanner.numbers(*arity, values)) {
+        return false;
+      }
+
       const bool relative = active.isLower();
       const auto origin = relative ? current : QPointF{};
-      const auto read = [&](qsizetype count, ds::Array<qreal, 6>& values) {
-        for (qsizetype index = 0; index < count; ++index) {
-          const auto value = scanner.number();
-          if (!value) {
-            return false;
-          }
-
-          values.atMut(static_cast<std::size_t>(index)) = *value;
-        }
-
-        return true;
+      const auto point = [&](std::size_t first) {
+        return origin + QPointF{values[first], values[first + 1]};
       };
 
-      ds::Array<qreal, 6> values{};
-
-      switch (active.toUpper().unicode()) {
+      switch (upper) {
       case u'M':
-        if (!read(2, values)) {
-          return false;
-        }
-
-        current = origin + QPointF{values[0], values[1]};
+        current = point(0);
         path.moveTo(current);
         // Later pairs after a move are lines, as in SVG.
         active = relative ? u'l' : u'L';
         break;
       case u'L':
-        if (!read(2, values)) {
-          return false;
-        }
-
-        current = origin + QPointF{values[0], values[1]};
+        current = point(0);
         path.lineTo(current);
         break;
       case u'H':
-        if (!read(1, values)) {
-          return false;
-        }
-
         current.setX((relative ? current.x() : 0) + values[0]);
         path.lineTo(current);
         break;
       case u'V':
-        if (!read(1, values)) {
-          return false;
-        }
-
         current.setY((relative ? current.y() : 0) + values[0]);
         path.lineTo(current);
         break;
       case u'C':
-        if (!read(6, values)) {
-          return false;
-        }
-
-        path.cubicTo(origin + QPointF{values[0], values[1]}, origin + QPointF{values[2], values[3]}, origin + QPointF{values[4], values[5]});
-        current = origin + QPointF{values[4], values[5]};
+        path.cubicTo(point(0), point(2), point(4));
+        current = point(4);
         break;
       case u'Q':
-        if (!read(4, values)) {
-          return false;
-        }
-
-        path.quadTo(origin + QPointF{values[0], values[1]}, origin + QPointF{values[2], values[3]});
-        current = origin + QPointF{values[2], values[3]};
+        path.quadTo(point(0), point(2));
+        current = point(2);
         break;
-      case u'Z':
+      default:
         path.closeSubpath();
         current = path.currentPosition();
         active = QChar{};
         break;
-      default:
-        return false;
       }
     }
 
@@ -241,60 +277,60 @@ namespace telar::gui::qt {
 
     for (const auto& entry : operations_) {
       const auto operation = entry.toMap();
+      const auto kind = operationOf(operation);
+      if (!kind) {
+        return;
+      }
+
       const auto values = operation.value(QStringLiteral("values")).toList();
       const auto value = [&](qsizetype index) {
         return index < values.size() ? values[index].toReal() : 0.0;
       };
 
-      switch (operation.value(QStringLiteral("op")).toInt()) {
-      case op_move:
-        path.moveTo(value(0), value(1));
-        break;
-      case op_line:
-        path.lineTo(value(0), value(1));
-        break;
-      case op_curve:
-        path.cubicTo(value(0), value(1), value(2), value(3), value(4), value(5));
-        break;
-      case op_quad:
-        path.quadTo(value(0), value(1), value(2), value(3));
-        break;
-      case op_arc: {
-        // Degrees from twelve o'clock, clockwise, so a progress ring reads naturally.
-        const QRectF bounds{value(0) - value(2), value(1) - value(2), 2 * value(2), 2 * value(2)};
-        const auto start = 90 - value(3);
-        const auto sweep = -(value(4) - value(3));
+      const auto point = [&](qsizetype first) {
+        return QPointF{value(first), value(first + 1)};
+      };
 
-        if (path.elementCount() == 0) {
-          path.arcMoveTo(bounds, start);
-        }
-
-        path.arcTo(bounds, start, sweep);
-      } break;
-      case op_rect:
+      switch (*kind) {
+      case Operation::move:
+        path.moveTo(point(0));
+        break;
+      case Operation::line:
+        path.lineTo(point(0));
+        break;
+      case Operation::curve:
+        path.cubicTo(point(0), point(2), point(4));
+        break;
+      case Operation::quad:
+        path.quadTo(point(0), point(2));
+        break;
+      case Operation::arc:
+        addArc(path, value);
+        break;
+      case Operation::rect:
         path.addRect(value(0), value(1), value(2), value(3));
         break;
-      case op_round_rect:
+      case Operation::round_rect:
         path.addRoundedRect(value(0), value(1), value(2), value(3), value(4), value(4));
         break;
-      case op_circle:
-        path.addEllipse(QPointF{value(0), value(1)}, value(2), value(2));
+      case Operation::circle:
+        path.addEllipse(point(0), value(2), value(2));
         break;
-      case op_path:
+      case Operation::path:
         if (!appendSvgPath(path, operation.value(QStringLiteral("text")).toString())) {
           return;
         }
 
         break;
-      case op_close:
+      case Operation::close:
         path.closeSubpath();
         break;
-      case op_fill:
-        painter->fillPath(path, operation.value(QStringLiteral("color")).value<QColor>());
+      case Operation::fill:
+        painter->fillPath(path, colorOf(operation));
         path = {};
         break;
-      case op_stroke: {
-        QPen pen{operation.value(QStringLiteral("color")).value<QColor>()};
+      case Operation::stroke: {
+        QPen pen{colorOf(operation)};
 
         pen.setWidthF(values.isEmpty() ? line_width : value(0));
         pen.setCapStyle(cap);
@@ -302,35 +338,33 @@ namespace telar::gui::qt {
         painter->strokePath(path, pen);
         path = {};
       } break;
-      case op_width:
+      case Operation::width:
         line_width = value(0);
         break;
-      case op_cap:
+      case Operation::cap:
         cap = capStyle(operation.value(QStringLiteral("text")).toString());
         break;
-      case op_join:
+      case Operation::join:
         join = joinStyle(operation.value(QStringLiteral("text")).toString());
         break;
-      case op_alpha:
+      case Operation::alpha:
         painter->setOpacity(value(0));
         break;
-      case op_translate:
+      case Operation::translate:
         painter->translate(value(0), value(1));
         break;
-      case op_rotate:
+      case Operation::rotate:
         painter->rotate(value(0));
         break;
-      case op_scale:
+      case Operation::scale:
         painter->scale(value(0), values.size() > 1 ? value(1) : value(0));
         break;
-      case op_save:
+      case Operation::save:
         painter->save();
         break;
-      case op_restore:
+      case Operation::restore:
         painter->restore();
         break;
-      default:
-        return;
       }
     }
   }

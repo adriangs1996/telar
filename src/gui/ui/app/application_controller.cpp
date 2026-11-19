@@ -134,24 +134,7 @@ namespace telar::gui::qt {
     palette_.setCommands(commands_.list());
 
     connect(this, &ApplicationController::configurationChanged, &display_, &WindowDisplay::publish);
-    connect(&copy_, &CopyController::paneChanged, &terminals_, &TerminalController::terminalChanged);
-    connect(&copy_, &CopyController::inputStarted, this, [this] {
-      key_bindings_.cancelSequence();
-    });
-
-    connect(&copy_, &CopyController::searchRequested, this, [this] {
-      dialogs_.show(Dialog::copy_search);
-    });
-
-    connect(&copy_, &CopyController::linkRequested, this, [this](qulonglong pane_id, CellPosition cursor) {
-      links_.openAt(pane_id, cursor);
-    });
-
-    connect(&copy_, &CopyController::closeRequested, this, [this] {
-      dialogs_.show(Dialog::none);
-    });
-
-    connect(&copy_, &CopyController::failed, &status_, &WindowStatus::report);
+    initializeCopy();
     connect(&key_bindings_, &KeyBindings::failed, &status_, &WindowStatus::report);
     connect(&pointer_dispatcher_, &PointerDispatcher::failed, &status_, &WindowStatus::report);
     // The search reads the command the dialog's line was opened on.
@@ -170,6 +153,68 @@ namespace telar::gui::qt {
       history_.setMetrics(display_.historyMetrics());
     });
 
+    initializeOverlays();
+    initializeMachineChrome();
+    initializePeekAndMonitor();
+    connect(&panes_, &PanesController::failed, &status_, &WindowStatus::report);
+    connect(&machines_, &MachinesCoordinator::changed, &link_status_, &LinkStatusController::publish);
+    connect(&machines_, &MachinesCoordinator::linkChanged, &link_status_, &LinkStatusController::publish);
+    connect(&links_, &LinksController::openingFailed, this, &ApplicationController::notification);
+    connect(&commands_, &WindowCommands::notified, this, &ApplicationController::notification);
+    connect(&links_, &LinksController::notificationPublished, &notifications_, &NotificationsController::refresh);
+    connect(&tabs_, &TabsController::selectRequested, this, [this](qulonglong tab_id) {
+      commands_.execute(window_actions::Action::select_tab, QString::number(tab_id));
+      restoreTerminalFocus();
+    });
+
+    connect(&documents_, &DocumentsController::measured, this, [this](qulonglong pane_id) {
+      emit terminals_.terminalChanged(pane_id);
+      frames_.request();
+    });
+
+    connect(&machines_, &MachinesCoordinator::changed, &status_, &WindowStatus::publishMetrics);
+    connect(&sidebar_, &SidebarController::widthRequested, &display_, &WindowDisplay::setSidebarWidth);
+
+    refresh_timer_.setSingleShot(true);
+    initializeNotifications();
+    initializeGraphicsRecovery();
+    initializePrompt();
+    initializeConfigurationSource();
+    connect(&refresh_timer_, &QTimer::timeout, this, &ApplicationController::refresh);
+    connect(&machines_, &MachinesCoordinator::listChanged, &sidebar_, &SidebarController::publishMachines);
+    connect(&machines_, &MachinesCoordinator::listChanged, this, [this] {
+      if (!refresh_timer_.isActive()) {
+        refresh_timer_.start();
+      }
+    });
+
+    initializeTerminals();
+    display_.layoutWorkbench();
+    measureDisplay();
+  }
+
+  void ApplicationController::initializeCopy() {
+    connect(&copy_, &CopyController::paneChanged, &terminals_, &TerminalController::terminalChanged);
+    connect(&copy_, &CopyController::inputStarted, this, [this] {
+      key_bindings_.cancelSequence();
+    });
+
+    connect(&copy_, &CopyController::searchRequested, this, [this] {
+      dialogs_.show(Dialog::copy_search);
+    });
+
+    connect(&copy_, &CopyController::linkRequested, this, [this](qulonglong pane_id, CellPosition cursor) {
+      links_.openAt(pane_id, cursor);
+    });
+
+    connect(&copy_, &CopyController::closeRequested, this, [this] {
+      dialogs_.show(Dialog::none);
+    });
+
+    connect(&copy_, &CopyController::failed, &status_, &WindowStatus::report);
+  }
+
+  void ApplicationController::initializeOverlays() {
     connect(&history_, &HistoryController::submitted, this, [this] {
       status_.clear();
     });
@@ -187,7 +232,9 @@ namespace telar::gui::qt {
     connect(&machine_prompt_, &MachinePromptController::closeRequested, this, [this] {
       dialogs_.show(Dialog::none);
     });
+  }
 
+  void ApplicationController::initializeMachineChrome() {
     connect(&machines_, &MachinesCoordinator::listChanged, &machine_chrome_, &MachineChromeController::machinesChanged);
     connect(&machine_chrome_, &MachineChromeController::pickerRequested, this, [this] {
       commands_.execute(window_actions::Action::machine_picker);
@@ -198,7 +245,9 @@ namespace telar::gui::qt {
         machines_.select(token);
       });
     });
+  }
 
+  void ApplicationController::initializePeekAndMonitor() {
     connect(&peek_, &PeekController::closeRequested, this, [this] {
       dialogs_.show(Dialog::none);
     });
@@ -224,31 +273,9 @@ namespace telar::gui::qt {
         status_.report(QStringLiteral("Select a process in the monitor, then run the action again"));
       }
     });
+  }
 
-    connect(&panes_, &PanesController::failed, &status_, &WindowStatus::report);
-    connect(&machines_, &MachinesCoordinator::changed, &link_status_, &LinkStatusController::publish);
-    connect(&machines_, &MachinesCoordinator::linkChanged, &link_status_, &LinkStatusController::publish);
-    connect(&links_, &LinksController::openingFailed, this, &ApplicationController::notification);
-    connect(&commands_, &WindowCommands::notified, this, &ApplicationController::notification);
-    connect(&links_, &LinksController::notificationPublished, &notifications_, &NotificationsController::refresh);
-    connect(&tabs_, &TabsController::selectRequested, this, [this](qulonglong tab_id) {
-      commands_.execute(window_actions::Action::select_tab, QString::number(tab_id));
-      restoreTerminalFocus();
-    });
-
-    connect(&documents_, &DocumentsController::measured, this, [this](qulonglong pane_id) {
-      emit terminals_.terminalChanged(pane_id);
-      frames_.request();
-    });
-
-    connect(&machines_, &MachinesCoordinator::changed, &status_, &WindowStatus::publishMetrics);
-    connect(&sidebar_, &SidebarController::widthRequested, &display_, &WindowDisplay::setSidebarWidth);
-
-    refresh_timer_.setSingleShot(true);
-    initializeNotifications();
-    initializeGraphicsRecovery();
-    initializePrompt();
-
+  void ApplicationController::initializeConfigurationSource() {
     connect(&configuration_source_, &ConfigurationSource::changed, this, [this] {
       status_.clear();
       key_bindings_.configure(configuration_source_.input(), configuration_source_.keymap());
@@ -278,18 +305,6 @@ namespace telar::gui::qt {
       publishConfiguration();
       refresh();
     });
-
-    connect(&refresh_timer_, &QTimer::timeout, this, &ApplicationController::refresh);
-    connect(&machines_, &MachinesCoordinator::listChanged, &sidebar_, &SidebarController::publishMachines);
-    connect(&machines_, &MachinesCoordinator::listChanged, this, [this] {
-      if (!refresh_timer_.isActive()) {
-        refresh_timer_.start();
-      }
-    });
-
-    initializeTerminals();
-    display_.layoutWorkbench();
-    measureDisplay();
   }
 
   void ApplicationController::runtimeDisconnected(application::machines::MachineClientKey key) {
@@ -569,9 +584,10 @@ namespace telar::gui::qt {
       if (auto* current = store_.findMut(key)) {
         if (change == application::Change::stopped || change == application::Change::closed) {
           current->connection.finishSession();
-          if (change == application::Change::closed) {
-            current->session.disconnected();
-          }
+        }
+
+        if (change == application::Change::closed) {
+          current->session.disconnected();
         }
 
         static_cast<void>(current->session.settlePresentation());
@@ -662,9 +678,8 @@ namespace telar::gui::qt {
       QGuiApplication::clipboard()->setText(toQString(session().clipboard()));
       break;
     case application::Change::history:
-      // The store was touched when the payload arrived; the dialog synchronizes on its flush.
-      break;
     case application::Change::notification:
+      // History: the store was touched when the payload arrived; the dialog synchronizes on its flush.
       break;
     case application::Change::metrics:
       status_.publishMetrics();

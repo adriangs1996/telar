@@ -196,8 +196,15 @@ namespace telar::gui::qt {
     record.insert(QStringLiteral("key"), QString::number(tab.location.tab_id));
     record.insert(QStringLiteral("label"), label);
     record.insert(QStringLiteral("application"), toQString(application));
-    auto title = toQString(!tab.label.empty() ? std::string_view{tab.label} : !session_title.empty() ? session_title
-                                                                                                     : application);
+    auto title_text = std::string_view{application};
+
+    if (!tab.label.empty()) {
+      title_text = std::string_view{tab.label};
+    } else if (!session_title.empty()) {
+      title_text = session_title;
+    }
+
+    auto title = toQString(title_text);
 
     if (tab.fullscreen) {
       title.append(toQString(TabCaption::fullscreen_suffix));

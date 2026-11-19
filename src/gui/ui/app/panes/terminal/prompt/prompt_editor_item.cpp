@@ -5,6 +5,7 @@ static_assert(true);
 
 #include "prompt_editor_item.hpp"
 #include "ui/design/controls/native_cell_text.hpp"
+#include "ui/foundation/scene/scene_nodes.hpp"
 #include <QEasingCurve>
 #include <QQuickWindow>
 #include <QSGFlatColorMaterial>
@@ -13,8 +14,10 @@ static_assert(true);
 #include <QSGRectangleNode>
 #include <algorithm>
 #include <exception>
+#include <memory>
 
 import telar.gui.application;
+import telar.gui.foundation.core;
 import telar.shell.syntax;
 import telar.base.ds;
 
@@ -27,6 +30,34 @@ namespace telar::gui::qt {
   static constexpr qint64 sweep_step_ms = 16;
   static constexpr qint64 ghost_ms = 300;
   static constexpr std::size_t maximum_fresh = 200;
+  // A rising character starts this share of a cell below its place.
+  static constexpr qreal rise_lift = 0.15;
+  // The ticker only paces frames, so its period is arbitrary: it loops until nothing moves.
+  static constexpr int ticker_period_ms = 1000;
+
+  namespace {
+
+    // Whether `byte` continues a UTF-8 sequence instead of starting a character.
+    [[nodiscard]] constexpr bool continuationByte(char byte) noexcept {
+      constexpr unsigned prefix_mask = ~Utf8Scalar::continuation_mask;
+
+      return (static_cast<unsigned char>(byte) & prefix_mask) == Utf8Scalar::continuation_prefix;
+    }
+
+    QColor blend(const QColor& from, const QColor& target, qreal amount) {
+      return QColor::fromRgbF(static_cast<float>(from.redF() + ((target.redF() - from.redF()) * amount)), static_cast<float>(from.greenF() + ((target.greenF() - from.greenF()) * amount)), static_cast<float>(from.blueF() + ((target.blueF() - from.blueF()) * amount)), static_cast<float>(from.alphaF() + ((target.alphaF() - from.alphaF()) * amount)));
+    }
+
+    constexpr int menu_page = 8;
+
+    // The page of the menu that holds the selected choice.
+    std::pair<std::size_t, std::size_t> menuPage(const application::prompt::Menu& menu) {
+      const auto first = menu.selected / menu_page * menu_page;
+
+      return {first, std::min(menu.choices.size(), first + menu_page)};
+    }
+
+  }
 
   PromptEditorItem::PromptEditorItem(QQuickItem* parent)
       : QQuickItem(parent),
@@ -35,7 +66,7 @@ namespace telar::gui::qt {
     clock_.start();
     ticker_.setStartValue(0.0);
     ticker_.setEndValue(1.0);
-    ticker_.setDuration(1000);
+    ticker_.setDuration(ticker_period_ms);
     ticker_.setLoopCount(-1);
     connect(&ticker_, &QVariantAnimation::valueChanged, this, &PromptEditorItem::tick);
     cacheColors();
@@ -224,9 +255,10 @@ namespace telar::gui::qt {
   }
 
   int PromptEditorItem::secretKeys() const noexcept {
+    constexpr std::uint32_t maximum_secret_keys = 64;
     const auto line = controller_ == nullptr ? ds::none : controller_->line(pane_id_);
 
-    return !line ? 0 : static_cast<int>(std::min<std::uint32_t>(line->secretKeys(), 64));
+    return !line ? 0 : static_cast<int>(std::min<std::uint32_t>(line->secretKeys(), maximum_secret_keys));
   }
 
   bool PromptEditorItem::failed() const noexcept {
@@ -235,15 +267,6 @@ namespace telar::gui::qt {
 
   bool PromptEditorItem::empty() const noexcept {
     return display_.empty();
-  }
-
-  static constexpr int menu_page = 8;
-
-  // The page of the menu that holds the selected choice.
-  static std::pair<std::size_t, std::size_t> menuPage(const application::prompt::Menu& menu) {
-    const auto first = menu.selected / menu_page * menu_page;
-
-    return {first, std::min(menu.choices.size(), first + menu_page)};
   }
 
   // QML reads the choices on every state change, which a pane's output sends with each frame: the
@@ -280,7 +303,7 @@ namespace telar::gui::qt {
 
       for (std::size_t offset = 0; offset <= choice.text.size(); ++offset) {
         const bool hit = offset < choice.text.size() && matched < typed.size() && fold(choice.text[offset]) == fold(typed[matched]);
-        const bool boundary = offset == choice.text.size() || (hit != marked && (static_cast<unsigned char>(choice.text[offset]) & 0xc0) != 0x80);
+        const bool boundary = offset == choice.text.size() || (hit != marked && !continuationByte(choice.text[offset]));
         if (boundary && offset > start) {
           segments.push_back(QVariantMap{{QStringLiteral("text"), QString::fromUtf8(choice.text.data() + start, static_cast<qsizetype>(offset - start))}, {QStringLiteral("marked"), marked}});
           start = offset;
@@ -351,18 +374,22 @@ namespace telar::gui::qt {
   }
 
   QString PromptEditorItem::interruptKey() const {
+    // Caret notation: a control character reads as ⌃ and the character this far above it.
+    constexpr Byte delete_key = 0x7f;
+    constexpr Byte first_printable = 0x20;
+    constexpr Byte caret_notation_offset = 0x40;
     const auto* pane = controller_ == nullptr ? nullptr : controller_->pane(pane_id_);
     const auto key = pane == nullptr ? Byte{0} : pane->shell.interrupt;
     if (key == 0) {
       return {};
     }
 
-    if (key == 0x7f) {
+    if (key == delete_key) {
       return QStringLiteral("\u2303?");
     }
 
-    if (key < 0x20) {
-      return QStringLiteral("\u2303") + QChar(static_cast<char16_t>(key + 0x40));
+    if (key < first_printable) {
+      return QStringLiteral("\u2303") + QChar(static_cast<char16_t>(key + caret_notation_offset));
     }
 
     return {QChar(static_cast<char16_t>(key))};
@@ -396,6 +423,7 @@ namespace telar::gui::qt {
   }
 
   int PromptEditorItem::progress() const noexcept {
+    constexpr int complete = 100;
     const auto* pane = controller_ == nullptr ? nullptr : controller_->pane(pane_id_);
     if (pane == nullptr || pane->progress_state == PaneProgressState::remove) {
       return -1;
@@ -405,7 +433,7 @@ namespace telar::gui::qt {
       return -2;
     }
 
-    return std::min<int>(100, *pane->progress_percent);
+    return std::min<int>(complete, *pane->progress_percent);
   }
 
   int PromptEditorItem::commands() const noexcept {
@@ -502,6 +530,62 @@ namespace telar::gui::qt {
       return;
     }
 
+    const bool cell_changed = resolveGrid();
+
+    surface_ = static_cast<std::uint8_t>(controller_->surface(pane_id_));
+    cursor_hidden_ = controller_->hidesTerminalCursor(pane_id_);
+    const auto* pane = controller_->pane(pane_id_);
+
+    failed_ = pane != nullptr && pane->shell.commands != 0 && pane->shell.status != 0;
+    maximum_rows_ = std::max<int>(1, controller_->configuration().prompt.max_lines);
+
+    const auto line = controller_->line(pane_id_);
+    const auto text = !line ? std::string_view{} : line->text();
+    const auto cursor = !line ? 0 : line->cursor();
+    const auto anchor = !line ? 0 : line->anchor();
+    const auto composing = preedit_.toUtf8();
+    const auto composed = compose(text, cursor, std::string_view{composing.constData(), static_cast<std::size_t>(composing.size())});
+
+    styleDisplay(composed, pane);
+    groupFresh(composed);
+
+    const auto shifted = [&](std::size_t offset) {
+      return offset >= cursor ? offset + composed.composing : offset;
+    };
+
+    const auto caret = shifted(cursor);
+    const auto mark = shifted(anchor);
+    const auto state_changed = [&] {
+      return previous_surface != surface_ || previous_failed != failed_ || previous_cursor_hidden != cursor_hidden_ || line.hasValue();
+    };
+
+    const bool unchanged = reuse_layout && !cell_changed && !animating(clock_.elapsed()) && display_.view() == laid_.display.view() && std::ranges::equal(styles_.view(), laid_.styles.view()) && std::ranges::equal(groups_.view(), laid_.groups.view()) && caret == laid_.caret && mark == laid_.anchor && maximum_columns_ == laid_.columns && maximum_rows_ == laid_.rows;
+    if (unchanged) {
+      if (state_changed()) {
+        emit stateChanged();
+      }
+
+      return;
+    }
+
+    lay(caret, mark);
+    placeRuns();
+    if (animating(clock_.elapsed()) && ticker_.state() != QAbstractAnimation::Running) {
+      ticker_.start();
+    }
+
+    ++revision_;
+    emit layoutChanged();
+    if (state_changed()) {
+      emit stateChanged();
+    }
+
+    update();
+  }
+
+  // Reads the cell grid at the window's scale, announcing a change of the cell's size; true when
+  // it changed.
+  bool PromptEditorItem::resolveGrid() {
     const auto previous_cell = QSizeF{cellWidth(), cellHeight()};
 
     try {
@@ -516,26 +600,19 @@ namespace telar::gui::qt {
       emit metricsChanged();
     }
 
-    surface_ = static_cast<std::uint8_t>(controller_->surface(pane_id_));
-    cursor_hidden_ = controller_->hidesTerminalCursor(pane_id_);
-    const auto* pane = controller_->pane(pane_id_);
+    return cell_changed;
+  }
 
-    failed_ = pane != nullptr && pane->shell.commands != 0 && pane->shell.status != 0;
-    maximum_rows_ = std::max<int>(1, controller_->configuration().prompt.max_lines);
-
-    const auto line = controller_->line(pane_id_);
-    const auto text = !line ? std::string_view{} : line->text();
-    const auto cursor = !line ? 0 : line->cursor();
-    const auto anchor = !line ? 0 : line->anchor();
-    const auto composing = preedit_.toUtf8();
+  // Fills display_ with the command, the composition at the cursor and the suggestion after them.
+  PromptEditorItem::Composed PromptEditorItem::compose(std::string_view text, std::size_t cursor, std::string_view composing) {
     const bool moving = controller_->configuration().prompt.motion != PromptMotion::none;
 
-    track(text, moving && composing.isEmpty() && static_cast<application::prompt::Surface>(surface_) == application::prompt::Surface::editor);
+    track(text, moving && composing.empty() && static_cast<application::prompt::Surface>(surface_) == application::prompt::Surface::editor);
     display_.assign(text.substr(0, cursor));
-    display_.append(std::string_view{composing.constData(), static_cast<std::size_t>(composing.size())});
+    display_.append(composing);
     display_.append(text.substr(cursor));
     const auto typed = display_.size();
-    const auto ghost = composing.isEmpty() && controller_->configuration().prompt.ghost ? controller_->suggestion(pane_id_) : std::string_view{};
+    const auto ghost = composing.empty() && controller_->configuration().prompt.ghost ? controller_->suggestion(pane_id_) : std::string_view{};
     // A new suggestion fades in; one that still fits what was typed stays as it was.
     if (ghost != ghost_.view()) {
       const bool continues = !ghost.empty() && ghost_.view().ends_with(ghost);
@@ -547,16 +624,28 @@ namespace telar::gui::qt {
     }
 
     display_.append(ghost);
+    return {.cursor = cursor, .composing = composing.size(), .typed = typed};
+  }
+
+  void PromptEditorItem::styleDisplay(const Composed& composed, const application::Pane<Memory>* pane) {
     styles_.clear();
     styles_.resize(display_.size(), application::prompt::Style::plain);
+    const auto typed = composed.typed;
     const auto styles = styles_.viewMut();
+    const auto dialect = pane != nullptr && pane->shell.shell == IntegratedShell::fish ? shell::Dialect::fish : shell::Dialect::posix;
 
     // What was typed alone: the word at its end is still being typed, whatever the suggestion
     // after it would make of it.
-    application::prompt::classify(display_.view().substr(0, typed), styles.first(typed), tokens_, shell::Syntax{.dialect = pane != nullptr && pane->shell.shell == IntegratedShell::fish ? shell::Dialect::fish : shell::Dialect::posix});
-    std::ranges::fill(styles.subspan(cursor, static_cast<std::size_t>(composing.size())), application::prompt::Style::pending);
+    application::prompt::classify(display_.view().substr(0, typed), styles.first(typed), tokens_, shell::Syntax{.dialect = dialect});
+    std::ranges::fill(styles.subspan(composed.cursor, composed.composing), application::prompt::Style::pending);
     std::ranges::fill(styles.subspan(typed), application::prompt::Style::ghost);
-    // A command the shell does not run is marked; one the runtime is still looking for waits.
+    markCommands(typed);
+  }
+
+  // A command the shell does not run is marked; one the runtime is still looking for waits.
+  void PromptEditorItem::markCommands(std::size_t typed) {
+    const auto styles = styles_.viewMut();
+
     for (std::size_t start = 0; start < typed;) {
       if (styles_[start] != application::prompt::Style::command) {
         ++start;
@@ -576,36 +665,31 @@ namespace telar::gui::qt {
 
       start = end;
     }
+  }
 
+  // Marks the typed text of each fresh edit with its group, from 1, for the layout to keep its
+  // runs apart; nothing animates while a composition is under way.
+  void PromptEditorItem::groupFresh(const Composed& composed) {
     groups_.clear();
     groups_.resize(display_.size(), 0);
-    if (composing.isEmpty()) {
-      const auto groups = groups_.viewMut();
-
-      for (std::size_t index = 0; index < fresh_.size(); ++index) {
-        const auto& fresh = fresh_[index];
-        const auto begin = std::min(fresh.start, typed);
-        const auto end = std::min(fresh.end, typed);
-
-        std::ranges::fill(groups.subspan(begin, end - begin), static_cast<std::uint8_t>(index + 1));
-      }
-    }
-
-    const auto shifted = [&](std::size_t offset) {
-      return offset >= cursor ? offset + static_cast<std::size_t>(composing.size()) : offset;
-    };
-
-    const auto caret = shifted(cursor);
-    const auto mark = shifted(anchor);
-    const bool unchanged = reuse_layout && !cell_changed && !animating(clock_.elapsed()) && display_.view() == laid_.display.view() && std::ranges::equal(styles_.view(), laid_.styles.view()) && std::ranges::equal(groups_.view(), laid_.groups.view()) && caret == laid_.caret && mark == laid_.anchor && maximum_columns_ == laid_.columns && maximum_rows_ == laid_.rows;
-    if (unchanged) {
-      if (previous_surface != surface_ || previous_failed != failed_ || previous_cursor_hidden != cursor_hidden_ || line.hasValue()) {
-        emit stateChanged();
-      }
-
+    if (composed.composing != 0) {
       return;
     }
 
+    const auto typed = composed.typed;
+    const auto groups = groups_.viewMut();
+
+    for (std::size_t index = 0; index < fresh_.size(); ++index) {
+      const auto& fresh = fresh_[index];
+      const auto begin = std::min(fresh.start, typed);
+      const auto end = std::min(fresh.end, typed);
+
+      std::ranges::fill(groups.subspan(begin, end - begin), static_cast<std::uint8_t>(index + 1));
+    }
+  }
+
+  // Lays the display out, remembers what from, and scrolls so the caret's row shows.
+  void PromptEditorItem::lay(std::size_t caret, std::size_t mark) {
     application::prompt::layout(layout_, display_.view(), styles_.view(), caret, mark, static_cast<std::uint32_t>(maximum_columns_), groups_.view());
     laid_.display.assign(display_.view());
     laid_.styles.clear();
@@ -625,84 +709,20 @@ namespace telar::gui::qt {
     }
 
     first_row_ = std::clamp(first_row_, 0, std::max(0, static_cast<int>(layout_.rows) - maximum_rows_));
-
-    placeRuns();
-    if (animating(clock_.elapsed()) && ticker_.state() != QAbstractAnimation::Running) {
-      ticker_.start();
-    }
-
-    ++revision_;
-    emit layoutChanged();
-    if (previous_surface != surface_ || previous_failed != failed_ || previous_cursor_hidden != cursor_hidden_ || line.hasValue()) {
-      emit stateChanged();
-    }
-
-    update();
   }
 
   // Each run is a cell text item, reused across edits: an item reshapes only when its own text
   // changes, so typing at the end of a long command reshapes one run.
   void PromptEditorItem::placeRuns() {
-    const auto width = cellWidth();
-    const auto height = cellHeight();
-    const auto last_row = first_row_ + maximum_rows_;
+    const QSizeF cell{cellWidth(), cellHeight()};
     std::size_t used = 0;
     const auto now = clock_.elapsed();
-    const auto place = [&](const QString& text, std::uint32_t row, std::uint32_t column, const QColor& color, qreal lift = 0, qreal opacity = 1) {
-      if (used == runs_.size()) {
-        auto* item = new NativeCellText(this);
-
-        runs_.push(item);
-      }
-
-      auto* item = runs_[used++];
-
-      item->setGrid(grid_);
-      item->setText(text);
-      item->setColor(color);
-      item->setPosition({column * width, ((static_cast<int>(row) - first_row_) * height) + lift});
-      item->setOpacity(opacity);
-      item->setVisible(true);
-    };
-
-    static const QEasingCurve rise_curve{QEasingCurve::OutCubic};
-    static const QEasingCurve sweep_curve{QEasingCurve::OutQuad};
-    const auto accent = accent_;
-    const auto mix = [](const QColor& from, const QColor& to, qreal amount) {
-      return QColor::fromRgbF(static_cast<float>(from.redF() + ((to.redF() - from.redF()) * amount)), static_cast<float>(from.greenF() + ((to.greenF() - from.greenF()) * amount)), static_cast<float>(from.blueF() + ((to.blueF() - from.blueF()) * amount)), static_cast<float>(from.alphaF() + ((to.alphaF() - from.alphaF()) * amount)));
-    };
-
     QVariantList glows;
 
-    for (const auto& run : layout_.runs) {
-      if (std::cmp_greater_equal(run.row, first_row_) && std::cmp_less(run.row, last_row)) {
-        const auto text = QString::fromUtf8(display_.data() + run.start, static_cast<qsizetype>(run.end - run.start));
-        auto color = styleColor(run.style);
-        qreal lift = 0;
-        qreal opacity = 1;
-
-        if (run.group != 0 && run.group <= fresh_.size()) {
-          const auto& fresh = fresh_[run.group - 1];
-          const auto elapsed = static_cast<qreal>(now - fresh.started_ms);
-
-          if (fresh.motion == Motion::rise) {
-            const auto progress = rise_curve.valueForProgress(std::clamp(elapsed / rise_ms, 0.0, 1.0));
-
-            lift = (1 - progress) * height * 0.15;
-            opacity = progress;
-          } else {
-            const auto progress = sweep_curve.valueForProgress(std::clamp(elapsed / sweep_ms, 0.0, 1.0));
-
-            color = mix(accent, color, progress);
-            if (progress < 1) {
-              glows.push_back(QVariantMap{{QStringLiteral("x"), run.column * width}, {QStringLiteral("y"), (static_cast<int>(run.row) - first_row_) * height}, {QStringLiteral("width"), run.columns * width}, {QStringLiteral("height"), height}, {QStringLiteral("strength"), 1 - progress}});
-            }
-          }
-        } else if (run.style == application::prompt::Style::ghost && ghost_started_ms_ >= 0) {
-          opacity = std::clamp(static_cast<qreal>(now - ghost_started_ms_) / ghost_ms, 0.0, 1.0);
-        }
-
-        place(text, run.row, run.column, color, lift, opacity);
+    // By index and a copy of each run: placing one reaches the item, which holds the layout.
+    for (std::size_t index = 0; index < layout_.runs.size(); ++index) {
+      if (const auto run = layout_.runs[index]; rowVisible(run.row)) {
+        placeRun(used++, run, look(run, cell, now, glows), cell);
       }
     }
 
@@ -714,6 +734,65 @@ namespace telar::gui::qt {
       glows_ = std::move(glows);
       emit glowsChanged();
     }
+  }
+
+  // Shows `run` with the run item at `index`, the next after those placed; one more is made when
+  // they run out.
+  void PromptEditorItem::placeRun(std::size_t index, const application::prompt::Run& run, const RunLook& look, QSizeF cell) {
+    if (index == runs_.size()) {
+      runs_.push(std::make_unique<NativeCellText>(this).release());
+    }
+
+    auto* item = runs_[index];
+
+    item->setGrid(grid_);
+    item->setText(QString::fromUtf8(display_.data() + run.start, static_cast<qsizetype>(run.end - run.start)));
+    item->setColor(look.color);
+    item->setPosition({run.column * cell.width(), ((static_cast<int>(run.row) - first_row_) * cell.height()) + look.lift});
+    item->setOpacity(look.opacity);
+    item->setVisible(true);
+  }
+
+  // Fresh text rises into place or sweeps in from the accent, adding where it glows; a new
+  // suggestion fades in.
+  PromptEditorItem::RunLook PromptEditorItem::look(const application::prompt::Run& run, QSizeF cell, qint64 now, QVariantList& glows) const {
+    static const QEasingCurve rise_curve{QEasingCurve::OutCubic};
+    static const QEasingCurve sweep_curve{QEasingCurve::OutQuad};
+    RunLook result{.color = styleColor(run.style)};
+
+    if (run.group == 0 || run.group > fresh_.size()) {
+      if (run.style == application::prompt::Style::ghost && ghost_started_ms_ >= 0) {
+        result.opacity = std::clamp(static_cast<qreal>(now - ghost_started_ms_) / ghost_ms, 0.0, 1.0);
+      }
+
+      return result;
+    }
+
+    const auto& fresh = fresh_[run.group - 1];
+    const auto elapsed = static_cast<qreal>(now - fresh.started_ms);
+    const auto width = cell.width();
+    const auto height = cell.height();
+
+    if (fresh.motion == Motion::rise) {
+      const auto progress = rise_curve.valueForProgress(std::clamp(elapsed / rise_ms, 0.0, 1.0));
+
+      result.lift = (1 - progress) * height * rise_lift;
+      result.opacity = progress;
+      return result;
+    }
+
+    const auto progress = sweep_curve.valueForProgress(std::clamp(elapsed / sweep_ms, 0.0, 1.0));
+
+    result.color = blend(accent_, result.color, progress);
+    if (progress < 1) {
+      glows.push_back(QVariantMap{{QStringLiteral("x"), run.column * width}, {QStringLiteral("y"), (static_cast<int>(run.row) - first_row_) * height}, {QStringLiteral("width"), run.columns * width}, {QStringLiteral("height"), height}, {QStringLiteral("strength"), 1 - progress}});
+    }
+
+    return result;
+  }
+
+  bool PromptEditorItem::rowVisible(std::uint32_t row) const noexcept {
+    return std::cmp_greater_equal(row, first_row_) && std::cmp_less(row, first_row_ + maximum_rows_);
   }
 
   QColor PromptEditorItem::styleColor(application::prompt::Style style) const {
@@ -758,9 +837,10 @@ namespace telar::gui::qt {
     case application::prompt::Style::missing:
       return role("red", "failure");
     case application::prompt::Style::ghost: {
+      constexpr float ghost_alpha = 0.7F;
       auto color = role("overlay1", "muted");
 
-      color.setAlphaF(color.alphaF() * 0.7F);
+      color.setAlphaF(color.alphaF() * ghost_alpha);
       return color;
     }
     case application::prompt::Style::path:
@@ -799,15 +879,11 @@ namespace telar::gui::qt {
     }
 
     // Whole characters: the edit starts and ends on their boundaries.
-    const auto continuation = [](char byte) {
-      return (static_cast<unsigned char>(byte) & 0xc0) == 0x80;
-    };
-
-    while (prefix > 0 && prefix < text.size() && continuation(text[prefix])) {
+    while (prefix > 0 && prefix < text.size() && continuationByte(text[prefix])) {
       --prefix;
     }
 
-    while (suffix > 0 && continuation(text[text.size() - suffix])) {
+    while (suffix > 0 && continuationByte(text[text.size() - suffix])) {
       --suffix;
     }
 
@@ -835,24 +911,28 @@ namespace telar::gui::qt {
       return;
     }
 
-    const auto added = text.substr(prefix, inserted);
+    animateInsertion(prefix, text.substr(prefix, inserted), now);
+  }
+
+  // A single character rises into place; a completion or a suggestion taken sweeps in, each
+  // character after the one before.
+  void PromptEditorItem::animateInsertion(std::size_t prefix, std::string_view added, qint64 now) {
     std::size_t characters = 0;
 
     for (const auto byte : added) {
-      characters += static_cast<std::size_t>(!continuation(byte));
+      characters += static_cast<std::size_t>(!continuationByte(byte));
     }
 
     if (characters == 1) {
-      fresh_.push({.start = prefix, .end = prefix + inserted, .motion = Motion::rise, .started_ms = now});
+      fresh_.push({.start = prefix, .end = prefix + added.size(), .motion = Motion::rise, .started_ms = now});
       return;
     }
 
-    // A completion or a suggestion taken: each character sweeps in after the one before.
     std::size_t start = prefix;
     qint64 delay = 0;
 
     for (std::size_t offset = 1; offset <= added.size() && fresh_.size() < maximum_fresh; ++offset) {
-      if (offset < added.size() && continuation(added[offset])) {
+      if (offset < added.size() && continuationByte(added[offset])) {
         continue;
       }
 
@@ -888,6 +968,11 @@ namespace telar::gui::qt {
 
   namespace {
 
+    // How strongly the selection and the underlines show over the text.
+    constexpr float selection_alpha = 0.28F;
+    constexpr float missing_underline_alpha = 0.8F;
+    constexpr float path_underline_alpha = 0.7F;
+
     // Hands out the children of `parent` in order, creating one when it runs out, and deletes those
     // left over once dropped: a paint node keeps its nodes from one update to the next.
     class ChildNodes {
@@ -898,16 +983,17 @@ namespace telar::gui::qt {
 
       ~ChildNodes() {
         while (next_ != nullptr) {
-          auto* child = next_;
+          std::unique_ptr<QSGNode> child{next_};
 
           next_ = child->nextSibling();
-          parent_.removeChildNode(child);
-          delete child;
+          parent_.removeChildNode(child.get());
         }
       }
 
       ChildNodes(const ChildNodes&) = delete;
       ChildNodes& operator=(const ChildNodes&) = delete;
+      ChildNodes(ChildNodes&&) = delete;
+      ChildNodes& operator=(ChildNodes&&) = delete;
 
       template <typename Node, typename Create>
       Node& take(Create&& create) {
@@ -918,7 +1004,7 @@ namespace telar::gui::qt {
           return *child;
         }
 
-        auto* child = create();
+        auto* child = std::forward<Create>(create)();
 
         parent_.appendChildNode(child);
         return *child;
@@ -929,6 +1015,32 @@ namespace telar::gui::qt {
       QSGNode* next_;
     };
 
+    // An underline: a line strip or a run of dashes in one colour, its geometry and material
+    // held in the node.
+    class UnderlineNode final : public QSGGeometryNode {
+    public:
+      UnderlineNode()
+          : geometry_(QSGGeometry::defaultAttributes_Point2D(), 0) {
+        geometry_.setLineWidth(1);
+        setGeometry(&geometry_);
+        setMaterial(&material_);
+      }
+
+      ~UnderlineNode() override = default;
+      UnderlineNode(const UnderlineNode&) = delete;
+      UnderlineNode& operator=(const UnderlineNode&) = delete;
+      UnderlineNode(UnderlineNode&&) = delete;
+      UnderlineNode& operator=(UnderlineNode&&) = delete;
+
+      void setColor(const QColor& color) {
+        material_.setColor(color);
+      }
+
+    private:
+      QSGGeometry geometry_;
+      QSGFlatColorMaterial material_;
+    };
+
   }
 
   // The root holds two groups, the selection's rectangles and the underlines' lines, so each
@@ -936,34 +1048,31 @@ namespace telar::gui::qt {
   QSGNode* PromptEditorItem::updatePaintNode(QSGNode* previous, [[maybe_unused]] UpdatePaintNodeData* data) {
     auto* root = previous != nullptr ? previous : new QSGNode;
     if (root->childCount() != 2) {
-      while (auto* child = root->firstChild()) {
-        root->removeChildNode(child);
-        delete child;
-      }
-
-      root->appendChildNode(new QSGNode);
-      root->appendChildNode(new QSGNode);
+      clearSceneChildren(*root);
+      appendSceneNode<QSGNode>(*root);
+      appendSceneNode<QSGNode>(*root);
     }
 
-    ChildNodes selections{*root->firstChild()};
-    ChildNodes underlines{*root->lastChild()};
-
     if (window() == nullptr || resolved_.metrics.width <= 0) {
+      clearSceneChildren(*root->firstChild());
+      clearSceneChildren(*root->lastChild());
       return root;
     }
 
+    paintSelection(*root->firstChild());
+    paintUnderlines(*root->lastChild());
+    return root;
+  }
+
+  void PromptEditorItem::paintSelection(QSGNode& group) const {
+    ChildNodes selections{group};
     const auto width = cellWidth();
     const auto height = cellHeight();
-    const auto last_row = first_row_ + maximum_rows_;
-    const auto visible = [&](std::uint32_t row) {
-      return std::cmp_greater_equal(row, first_row_) && std::cmp_less(row, last_row);
-    };
-
     auto selection = accent_;
 
-    selection.setAlphaF(0.28F);
+    selection.setAlphaF(selection_alpha);
     for (const auto& range : layout_.selection) {
-      if (!visible(range.row)) {
+      if (!rowVisible(range.row)) {
         continue;
       }
 
@@ -974,12 +1083,17 @@ namespace telar::gui::qt {
       rectangle.setRect(range.column * width, (static_cast<int>(range.row) - first_row_) * height, range.columns * width, height);
       rectangle.setColor(selection);
     }
+  }
 
-    // A command the shell does not run gets a wavy underline; a path, a dotted one.
+  // A command the shell does not run gets a wavy underline; a path, a dotted one.
+  void PromptEditorItem::paintUnderlines(QSGNode& group) const {
+    ChildNodes underlines{group};
+    const auto width = cellWidth();
+    const auto height = cellHeight();
     const auto pixel = 1.0 / scale_;
 
     for (const auto& run : layout_.runs) {
-      if ((run.style != application::prompt::Style::missing && run.style != application::prompt::Style::path) || !visible(run.row)) {
+      if ((run.style != application::prompt::Style::missing && run.style != application::prompt::Style::path) || !rowVisible(run.row)) {
         continue;
       }
 
@@ -989,15 +1103,8 @@ namespace telar::gui::qt {
       const auto baseline = ((static_cast<int>(run.row) - first_row_ + 1) * height) - (2 * pixel);
       const auto step = wavy ? width / 4 : 3 * pixel;
       const auto points = static_cast<int>(std::ceil((right - left) / step)) + 1;
-      auto& node = underlines.take<QSGGeometryNode>([] {
-        auto* created = new QSGGeometryNode;
-        auto* geometry = new QSGGeometry(QSGGeometry::defaultAttributes_Point2D(), 0);
-
-        geometry->setLineWidth(1);
-        created->setGeometry(geometry);
-        created->setMaterial(new QSGFlatColorMaterial);
-        created->setFlags(QSGNode::OwnsGeometry | QSGNode::OwnsMaterial);
-        return created;
+      auto& node = underlines.take<UnderlineNode>([] {
+        return std::make_unique<UnderlineNode>().release();
       });
 
       auto* geometry = node.geometry();
@@ -1015,12 +1122,10 @@ namespace telar::gui::qt {
 
       auto color = wavy ? styleColor(run.style) : underline_;
 
-      color.setAlphaF(wavy ? 0.8F : 0.7F);
-      static_cast<QSGFlatColorMaterial*>(node.material())->setColor(color);
+      color.setAlphaF(wavy ? missing_underline_alpha : path_underline_alpha);
+      node.setColor(color);
       node.markDirty(QSGNode::DirtyGeometry | QSGNode::DirtyMaterial);
     }
-
-    return root;
   }
 
 }

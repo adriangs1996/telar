@@ -82,7 +82,8 @@ namespace telar::gui::qt {
       const auto entry = command.entry.toUtf8();
       const auto action = command.action.toUtf8();
       const runtime::config::PluginWorkerOptions options{.entry = entry.constData(), .action = action.constData(), .context = command.context};
-      QStringList arguments{QString::fromUtf8(options.command.data(), static_cast<qsizetype>(options.command.size()))};
+      constexpr auto worker_command = runtime::config::PluginWorkerOptions::command;
+      QStringList arguments{QString::fromUtf8(worker_command.data(), static_cast<qsizetype>(worker_command.size()))};
 
       options.eachArgument([&](std::string_view word) {
         arguments.append(QString::fromUtf8(word.data(), static_cast<qsizetype>(word.size())));

@@ -28,7 +28,7 @@ namespace telar::gui::qt {
     [[nodiscard]] qreal ratio() const noexcept;
     void setRatio(qreal ratio);
     [[nodiscard]] qreal pixelSize() const noexcept;
-    void setPixelSize(qreal pixelSize);
+    void setPixelSize(qreal pixel_size);
     [[nodiscard]] QVariantMap measurements() const;
     void setMeasurements(const QVariantMap& measurements);
     [[nodiscard]] QString title() const;

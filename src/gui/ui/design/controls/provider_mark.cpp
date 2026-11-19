@@ -51,9 +51,17 @@ namespace telar::gui::qt {
       painter.fillRect(image.rect(), color);
     }
 
-    QImage coloredMark(AgentProvider provider, int side, const QColor& color, bool telar_mark, bool monochrome, int theme) {
-      auto image = telar_mark ? ProviderArtwork::telar(side, monochrome, theme) : ProviderArtwork::image(provider, side);
-      if (!image.isNull() && (monochrome || (!telar_mark && application::activity::ApplicationMark{.provider = provider}.followsTheme()))) {
+    // The artwork the item's properties pick.
+    struct MarkStyle {
+      AgentProvider provider = AgentProvider::unknown;
+      bool telar_mark = false;
+      bool monochrome = false;
+      int theme = 0;
+    };
+
+    QImage coloredMark(const MarkStyle& style, int side, const QColor& color) {
+      auto image = style.telar_mark ? ProviderArtwork::telar(side, style.monochrome, style.theme) : ProviderArtwork::image(style.provider, side);
+      if (!image.isNull() && (style.monochrome || (!style.telar_mark && application::activity::ApplicationMark{.provider = style.provider}.followsTheme()))) {
         tint(image, color);
       }
 
@@ -194,7 +202,14 @@ namespace telar::gui::qt {
     }
 
     if (dirty_ || !node->texture || node->side != side) {
-      const auto pixels = symbol_.isEmpty() ? coloredMark(provider_, side, color_, telar_mark_, monochrome_, theme_) : coloredSymbol(symbol_, side, color_);
+      const MarkStyle style{
+          .provider = provider_,
+          .telar_mark = telar_mark_,
+          .monochrome = monochrome_,
+          .theme = theme_,
+      };
+
+      const auto pixels = symbol_.isEmpty() ? coloredMark(style, side, color_) : coloredSymbol(symbol_, side, color_);
       if (pixels.isNull()) {
         return nullptr;
       }

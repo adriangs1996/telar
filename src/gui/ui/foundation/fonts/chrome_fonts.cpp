@@ -27,7 +27,7 @@ namespace telar::gui::qt {
     ds::Vec<std::uint8_t, SystemAllocator> fontBytes(SystemAllocator& memory, bool emphasized) {
       const auto bytes = bundledFont(emphasized);
 
-      return ds::Vec<std::uint8_t, SystemAllocator>{memory, {reinterpret_cast<const std::uint8_t*>(bytes.constData()), static_cast<std::size_t>(bytes.size())}};
+      return ds::Vec<std::uint8_t, SystemAllocator>{memory, byteSpan(bytes)};
     }
 
   }

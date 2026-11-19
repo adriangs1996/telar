@@ -148,13 +148,15 @@ namespace telar::gui::qt {
     if (controller_ != nullptr) {
       for (std::size_t index = 0; index < incoming.size(); ++index) {
         const auto slot = static_cast<application::machines::Machines::Slot>(index);
-        if (controller_->store().machines().shown(slot)) {
-          const auto& row = controller_->store().machines().row(slot);
+        if (!controller_->store().machines().shown(slot)) {
+          continue;
+        }
 
-          incoming.atMut(index) = Source{.token = controller_->store().machines().token(slot), .label = row.label, .color = row.color, .active = slot == controller_->store().machines().active(), .attention = row.attention, .live = row.live, .phase = inlineFacts() ? row.phase : application::machines::MachinePhase::connecting, .cpu_percent = inlineFacts() ? row.cpu_percent : ds::none};
-          if (mode_ == Mode::list && !incoming[index]->active) {
-            collectCards(slot, incoming.atMut(index).getMut());
-          }
+        const auto& row = controller_->store().machines().row(slot);
+
+        incoming.atMut(index) = Source{.token = controller_->store().machines().token(slot), .label = row.label, .color = row.color, .active = slot == controller_->store().machines().active(), .attention = row.attention, .live = row.live, .phase = inlineFacts() ? row.phase : application::machines::MachinePhase::connecting, .cpu_percent = inlineFacts() ? row.cpu_percent : ds::none};
+        if (mode_ == Mode::list && !incoming[index]->active) {
+          collectCards(slot, incoming.atMut(index).getMut());
         }
       }
     }

@@ -130,24 +130,25 @@ namespace telar::gui::qt {
   private:
     using Code = KeyChord::Key;
     using Modifier = KeyChord::Modifier;
+    using NamedKey = std::pair<int, Code>;
 
-    static constexpr auto named_keys = ds::Array<std::pair<int, Code>, 15>{{
-        {Qt::Key_Up, Code::up},
-        {Qt::Key_Down, Code::down},
-        {Qt::Key_Left, Code::left},
-        {Qt::Key_Right, Code::right},
-        {Qt::Key_Home, Code::home},
-        {Qt::Key_End, Code::end},
-        {Qt::Key_Delete, Code::erase},
-        {Qt::Key_PageUp, Code::page_up},
-        {Qt::Key_PageDown, Code::page_down},
-        {Qt::Key_Return, Code::enter},
-        {Qt::Key_Enter, Code::enter},
-        {Qt::Key_Escape, Code::escape},
-        {Qt::Key_Backspace, Code::backspace},
-        {Qt::Key_Tab, Code::tab},
-        {Qt::Key_Backtab, Code::tab},
-    }};
+    static constexpr auto named_keys = ds::Array{
+        NamedKey{Qt::Key_Up, Code::up},
+        NamedKey{Qt::Key_Down, Code::down},
+        NamedKey{Qt::Key_Left, Code::left},
+        NamedKey{Qt::Key_Right, Code::right},
+        NamedKey{Qt::Key_Home, Code::home},
+        NamedKey{Qt::Key_End, Code::end},
+        NamedKey{Qt::Key_Delete, Code::erase},
+        NamedKey{Qt::Key_PageUp, Code::page_up},
+        NamedKey{Qt::Key_PageDown, Code::page_down},
+        NamedKey{Qt::Key_Return, Code::enter},
+        NamedKey{Qt::Key_Enter, Code::enter},
+        NamedKey{Qt::Key_Escape, Code::escape},
+        NamedKey{Qt::Key_Backspace, Code::backspace},
+        NamedKey{Qt::Key_Tab, Code::tab},
+        NamedKey{Qt::Key_Backtab, Code::tab},
+    };
 
     static void normalizeTab(TerminalKey& key, bool backwards) noexcept {
       if (key.code != Code::tab) {

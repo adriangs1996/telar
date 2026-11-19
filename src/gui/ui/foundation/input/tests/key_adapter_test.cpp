@@ -55,44 +55,51 @@ namespace {
     check(alt_tab && encoder.encode(*alt_tab, {}) == "\x1b\x1b[Z", "Alt+Shift+Tab must preserve both semantic modifiers");
   }
 
+  struct AltCase {
+    int key{};
+    QString text;
+    char character{};
+  };
+
+  template <typename Adapter>
+  void altPhaseKeepsTerminalText(const AltCase& entry, KeyPhase phase) {
+    const QKeyEvent event{phase == KeyPhase::release ? QEvent::KeyRelease : QEvent::KeyPress, entry.key, Qt::AltModifier, entry.text, phase == KeyPhase::repeat};
+    const auto chord = Adapter::chord(event);
+
+    check(chord.key == Code::character && chord.character == static_cast<unsigned>(entry.character) && chord.modifiers == static_cast<unsigned>(Modifier::alt), "Alt shortcuts must match their base key on press, repeat and release, including dead-key input");
+    if (entry.text.isEmpty()) {
+      return;
+    }
+
+    const auto text = Adapter::terminalKey(event);
+
+    check(text && text->codepoint == static_cast<unsigned>(entry.text.front().unicode()), "binding recognition must preserve the original Option text for terminal input");
+    if (phase == KeyPhase::press) {
+      KeyEncoder encoder;
+      const auto expected = QByteArray{"\x1b"} + entry.text.toUtf8();
+
+      check(encoder.encode(*text, {}) == std::string_view{expected.constData(), static_cast<std::size_t>(expected.size())}, "unbound Alt input must keep its existing terminal encoding");
+    }
+  }
+
   template <system::KeyboardConvention Convention>
   void altShortcutsUseTheKeyWithoutChangingTerminalText() {
     using Adapter = KeyAdapter<Convention>;
 
-    struct Case {
-      int key{};
-      QString text;
-      char character{};
-    };
-
     const telar::ds::Array cases{
-        Case{Qt::Key_H, QStringLiteral("˙"), 'h'},
-        Case{Qt::Key_J, QStringLiteral("∆"), 'j'},
-        Case{Qt::Key_K, QStringLiteral("˚"), 'k'},
-        Case{Qt::Key_L, QStringLiteral("¬"), 'l'},
-        Case{Qt::Key_N, QStringLiteral("˜"), 'n'},
-        Case{Qt::Key_M, QStringLiteral("µ"), 'm'},
-        Case{Qt::Key_N, QString{}, 'n'},
-        Case{Qt::Key_1, QStringLiteral("¡"), '1'},
+        AltCase{.key = Qt::Key_H, .text = QStringLiteral("˙"), .character = 'h'},
+        AltCase{.key = Qt::Key_J, .text = QStringLiteral("∆"), .character = 'j'},
+        AltCase{.key = Qt::Key_K, .text = QStringLiteral("˚"), .character = 'k'},
+        AltCase{.key = Qt::Key_L, .text = QStringLiteral("¬"), .character = 'l'},
+        AltCase{.key = Qt::Key_N, .text = QStringLiteral("˜"), .character = 'n'},
+        AltCase{.key = Qt::Key_M, .text = QStringLiteral("µ"), .character = 'm'},
+        AltCase{.key = Qt::Key_N, .text = QString{}, .character = 'n'},
+        AltCase{.key = Qt::Key_1, .text = QStringLiteral("¡"), .character = '1'},
     };
 
     for (const auto& entry : cases) {
       for (const auto phase : {KeyPhase::press, KeyPhase::repeat, KeyPhase::release}) {
-        const QKeyEvent event{phase == KeyPhase::release ? QEvent::KeyRelease : QEvent::KeyPress, entry.key, Qt::AltModifier, entry.text, phase == KeyPhase::repeat};
-        const auto chord = Adapter::chord(event);
-
-        check(chord.key == Code::character && chord.character == static_cast<unsigned>(entry.character) && chord.modifiers == static_cast<unsigned>(Modifier::alt), "Alt shortcuts must match their base key on press, repeat and release, including dead-key input");
-        if (!entry.text.isEmpty()) {
-          const auto text = Adapter::terminalKey(event);
-
-          check(text && text->codepoint == static_cast<unsigned>(entry.text.front().unicode()), "binding recognition must preserve the original Option text for terminal input");
-          if (phase == KeyPhase::press) {
-            KeyEncoder encoder;
-            const auto expected = QByteArray{"\x1b"} + entry.text.toUtf8();
-
-            check(encoder.encode(*text, {}) == std::string_view{expected.constData(), static_cast<std::size_t>(expected.size())}, "unbound Alt input must keep its existing terminal encoding");
-          }
-        }
+        altPhaseKeepsTerminalText<Adapter>(entry, phase);
       }
 
       const QKeyEvent shortcut{QEvent::ShortcutOverride, entry.key, Qt::AltModifier, entry.text};

@@ -33,7 +33,7 @@ namespace telar::gui::qt {
 
       auto resolved = componentColor(color.value, theme, fallback.valueOr(Color{}));
 
-      resolved.setAlphaF(resolved.alphaF() * color.alpha / std::numeric_limits<std::uint8_t>::max());
+      resolved.setAlphaF(resolved.alphaF() * static_cast<float>(color.alpha) / std::numeric_limits<std::uint8_t>::max());
 
       return resolved;
     }
@@ -51,6 +51,56 @@ namespace telar::gui::qt {
       const auto index = code.toInt();
 
       return QString::fromLatin1(index >= 0 && static_cast<std::size_t>(index) < names.size() ? names[static_cast<std::size_t>(index)] : names.front());
+    }
+
+    QVariantList canvasOperations(const ElementSlots::Rendered& rendered, const application::components::Element& element, const Theme& theme, Color ink) {
+      QVariantList operations;
+
+      operations.reserve(static_cast<qsizetype>(element.steps_count));
+      for (std::uint32_t step_index = element.steps_offset; step_index < element.steps_offset + element.steps_count && step_index < rendered.steps.size(); ++step_index) {
+        const auto& step = rendered.steps[step_index];
+        QVariantList values;
+
+        for (std::uint8_t value = 0; value < step.count; ++value) {
+          values.append(step.values[value]);
+        }
+
+        operations.append(QVariantMap{
+            {QStringLiteral("op"), step.op},
+            {QStringLiteral("values"), values},
+            {QStringLiteral("color"), paint(step.color, theme, ink)},
+            {QStringLiteral("text"), text(rendered.view(step.text))},
+        });
+      }
+
+      return operations;
+    }
+
+    // The fields only one kind of element carries: its glyph, mark or drawing.
+    void addKindFields(QVariantMap& record, const ElementSlots::Rendered& rendered, const application::components::Element& element, const Theme& theme, Color ink) {
+      const auto kind = element.kind;
+
+      if (kind == application::components::ElementKind::icon) {
+        const auto glyph = element.named ? application::components::Icon::find(normalizedIcon(rendered.view(element.text)).toStdString()).glyph : rendered.view(element.text);
+
+        record.insert(QStringLiteral("glyph"), text(glyph));
+      } else if (kind == application::components::ElementKind::mark) {
+        const auto name = rendered.view(element.text);
+        const auto icon = application::components::Icon::find(name == "telar" ? std::string_view{"telar_mark"} : (QStringLiteral("provider_") + text(name)).toStdString());
+
+        record.insert(QStringLiteral("glyph"), text(icon.glyph));
+        record.insert(QStringLiteral("providerMark"), static_cast<int>(icon.provider));
+        record.insert(QStringLiteral("telarMark"), icon.telar);
+      } else if (kind == application::components::ElementKind::tile) {
+        const auto mark = application::activity::ApplicationMark::forApplication(rendered.view(element.text));
+
+        record.insert(QStringLiteral("glyph"), text(mark.glyph));
+        record.insert(QStringLiteral("tile"), text(mark.tile));
+        record.insert(QStringLiteral("ink"), text(mark.ink));
+        record.insert(QStringLiteral("providerMark"), static_cast<int>(mark.provider));
+      } else if (kind == application::components::ElementKind::canvas) {
+        record.insert(QStringLiteral("operations"), canvasOperations(rendered, element, theme, ink));
+      }
     }
   }
 
@@ -231,17 +281,21 @@ namespace telar::gui::qt {
           return;
         }
 
-        if (!outcome.value) {
-          current.error = outcome.error;
-          if (++current.failures == failure_limit) {
-            emit failed(QStringLiteral("components.%1 failed %2 times and fell back to the built-in piece: %3").arg(text(application::components::slot_names[static_cast<std::size_t>(current.slot)])).arg(failure_limit).arg(outcome.error));
-          }
-        } else {
+        const bool succeeded = outcome.value.hasValue();
+
+        if (succeeded) {
           current.failures = 0;
           current.error.clear();
           current.rendered = std::move(outcome.value.getMut()).intoShared();
           current.nodes = project(*current.rendered, source_.configuration().theme);
           current.revision = ++next_revision_;
+        } else {
+          current.error = outcome.error;
+          ++current.failures;
+        }
+
+        if (!succeeded && current.failures == failure_limit) {
+          emit failed(QStringLiteral("components.%1 failed %2 times and fell back to the built-in piece: %3").arg(text(application::components::slot_names[static_cast<std::size_t>(current.slot)])).arg(failure_limit).arg(outcome.error));
         }
 
         if (current.dirty && current.failures < failure_limit) {
@@ -323,46 +377,7 @@ namespace telar::gui::qt {
         record.insert(QStringLiteral("alignSelf"), *element.align_self);
       }
 
-      if (kind == application::components::ElementKind::icon) {
-        const auto glyph = element.named ? application::components::Icon::find(normalizedIcon(rendered.view(element.text)).toStdString()).glyph : rendered.view(element.text);
-
-        record.insert(QStringLiteral("glyph"), text(glyph));
-      } else if (kind == application::components::ElementKind::mark) {
-        const auto name = rendered.view(element.text);
-        const auto icon = application::components::Icon::find(name == "telar" ? std::string_view{"telar_mark"} : (QStringLiteral("provider_") + text(name)).toStdString());
-
-        record.insert(QStringLiteral("glyph"), text(icon.glyph));
-        record.insert(QStringLiteral("providerMark"), static_cast<int>(icon.provider));
-        record.insert(QStringLiteral("telarMark"), icon.telar);
-      } else if (kind == application::components::ElementKind::tile) {
-        const auto mark = application::activity::ApplicationMark::forApplication(rendered.view(element.text));
-
-        record.insert(QStringLiteral("glyph"), text(mark.glyph));
-        record.insert(QStringLiteral("tile"), text(mark.tile));
-        record.insert(QStringLiteral("ink"), text(mark.ink));
-        record.insert(QStringLiteral("providerMark"), static_cast<int>(mark.provider));
-      } else if (kind == application::components::ElementKind::canvas) {
-        QVariantList operations;
-
-        operations.reserve(static_cast<qsizetype>(element.steps_count));
-        for (std::uint32_t step_index = element.steps_offset; step_index < element.steps_offset + element.steps_count && step_index < rendered.steps.size(); ++step_index) {
-          const auto& step = rendered.steps[step_index];
-          QVariantList values;
-
-          for (std::uint8_t value = 0; value < step.count; ++value) {
-            values.append(step.values[value]);
-          }
-
-          operations.append(QVariantMap{
-              {QStringLiteral("op"), step.op},
-              {QStringLiteral("values"), values},
-              {QStringLiteral("color"), paint(step.color, theme, ink)},
-              {QStringLiteral("text"), text(rendered.view(step.text))},
-          });
-        }
-
-        record.insert(QStringLiteral("operations"), operations);
-      }
+      addKindFields(record, rendered, element, theme, ink);
 
       result.append(std::move(record));
     }
@@ -431,11 +446,14 @@ namespace telar::gui::qt {
         {QStringLiteral("status"), statusName(record.value(QStringLiteral("statusCode")))},
         {QStringLiteral("selected"), record.value(QStringLiteral("selected"))},
         {QStringLiteral("depth"), record.value(QStringLiteral("depth"))},
-        {QStringLiteral("plan"), QVariantMap{
-                                     {QStringLiteral("done"), record.value(QStringLiteral("planDone"))},
-                                     {QStringLiteral("total"), record.value(QStringLiteral("planTotal"))},
-                                     {QStringLiteral("step"), record.value(QStringLiteral("planStep"))},
-                                 }},
+        {
+            QStringLiteral("plan"),
+            QVariantMap{
+                {QStringLiteral("done"), record.value(QStringLiteral("planDone"))},
+                {QStringLiteral("total"), record.value(QStringLiteral("planTotal"))},
+                {QStringLiteral("step"), record.value(QStringLiteral("planStep"))},
+            },
+        },
     };
   }
 

@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <utility>
 
 namespace telar::gui::qt {
 
@@ -31,20 +32,30 @@ namespace telar::gui::qt {
       return value.isValid() ? value.toReal() : fallback;
     }
 
-    qreal eased(qreal progress, int easing) {
-      if (easing == easing_linear) {
+    ElementLayout::Easing easingOf(int code) {
+      if (code == easing_linear) {
+        return ElementLayout::Easing::linear;
+      }
+
+      return code == easing_in_out ? ElementLayout::Easing::in_out : ElementLayout::Easing::out;
+    }
+
+    qreal eased(qreal progress, ElementLayout::Easing easing) {
+      if (easing == ElementLayout::Easing::linear) {
         return progress;
       }
 
-      if (easing == easing_in_out) {
-        return progress < 0.5 ? 4 * progress * progress * progress : 1 - (std::pow((-2 * progress) + 2, 3) / 2);
+      if (easing == ElementLayout::Easing::in_out) {
+        constexpr qreal in_out_midpoint = 0.5;
+
+        return progress < in_out_midpoint ? 4 * progress * progress * progress : 1 - (std::pow((-2 * progress) + 2, 3) / 2);
       }
 
       return 1 - std::pow(1 - progress, 3);
     }
 
-    qreal mix(qreal from, qreal to, qreal amount) {
-      return from + ((to - from) * amount);
+    qreal mix(qreal start, qreal end, qreal amount) {
+      return start + ((end - start) * amount);
     }
 
     struct Child {
@@ -55,6 +66,171 @@ namespace telar::gui::qt {
       qreal grow = 0;
       bool fixed_main = false;
     };
+
+    // What one pass reads from the layout, with lengths in device pixels. The main axis is the
+    // flow's; a stack's runs along x.
+    struct LayoutPass {
+      bool row = false;
+      bool stack = false;
+      qreal ratio = 1;
+      qreal left = 0;
+      qreal top = 0;
+      qreal right = 0;
+      qreal bottom = 0;
+      qreal gap = 0;
+      int align = 0;
+      int justify = 0;
+      qreal available_main = 0;
+      qreal available_cross = 0;
+
+      [[nodiscard]] bool horizontal() const noexcept {
+        return row || stack;
+      }
+
+      [[nodiscard]] qreal scaled(qreal value) const noexcept {
+        return value * ratio;
+      }
+    };
+
+    // A child's length along one axis and its offset inside the padding.
+    struct AxisSpan {
+      qreal length = 0;
+      qreal offset = 0;
+    };
+
+    // Where the children start along the main axis and the room between neighbours.
+    struct Spread {
+      qreal offset = 0;
+      qreal spacing = 0;
+    };
+
+    struct NaturalSize {
+      qreal main = 0;
+      qreal cross = 0;
+    };
+
+    // The children reach their items raw, so the list borrows nothing.
+    tbc::view<QList<Child>, tbc::lt::static_storage> measure(const QList<QQuickItem*>& items, const LayoutPass& pass) {
+      QList<Child> children;
+
+      for (auto* item : items) {
+        const auto element = item->property("element").toMap();
+        if (element.isEmpty() || !item->isVisible()) {
+          continue;
+        }
+
+        const auto width = number(element, "width", -1);
+        const auto height = number(element, "height", -1);
+        const auto natural_width = std::clamp(width >= 0 ? pass.scaled(width) : item->implicitWidth(), pass.scaled(number(element, "minWidth", 0)), pass.scaled(number(element, "maxWidth", std::numeric_limits<qreal>::max() / 4)));
+        const auto natural_height = std::clamp(height >= 0 ? pass.scaled(height) : item->implicitHeight(), pass.scaled(number(element, "minHeight", 0)), pass.scaled(number(element, "maxHeight", std::numeric_limits<qreal>::max() / 4)));
+
+        // The items stay Qt's, owned by this item; the list only reaches them by address.
+        children.append({
+            .item = tbc::raw(item),
+            .element = element,
+            .main = pass.row ? natural_width : natural_height,
+            .cross = pass.row ? natural_height : natural_width,
+            .grow = std::max<qreal>(0, number(element, "grow", 0)),
+            .fixed_main = (pass.row ? width : height) >= 0,
+        });
+      }
+
+      return children;
+    }
+
+    NaturalSize naturalSize(const QList<Child>& children, const LayoutPass& pass) {
+      NaturalSize natural;
+
+      for (const auto& child : children) {
+        natural.main = pass.stack ? std::max(natural.main, child.main) : natural.main + child.main;
+        natural.cross = std::max(natural.cross, child.cross);
+      }
+
+      if (!pass.stack && !children.empty()) {
+        natural.main += pass.gap * static_cast<qreal>(children.size() - 1);
+      }
+
+      return natural;
+    }
+
+    // Grows or shrinks a row's or column's children into `remaining`, then justifies what is left.
+    Spread distribute(QList<Child>& children, const LayoutPass& pass, qreal remaining) {
+      qreal growth = 0;
+      qreal flexible = 0;
+
+      for (const auto& child : children) {
+        growth += child.grow;
+        flexible += child.fixed_main ? 0 : child.main;
+      }
+
+      if (remaining > 0 && growth > 0) {
+        for (auto& child : children) {
+          child.main += remaining * child.grow / growth;
+        }
+
+        remaining = 0;
+      } else if (remaining < 0 && flexible > 0) {
+        // Too little room: shrink the children without a set size, so their text elides.
+        const auto factor = std::max<qreal>(0, (flexible + remaining) / flexible);
+
+        for (auto& child : children) {
+          if (!child.fixed_main) {
+            child.main *= factor;
+          }
+        }
+
+        remaining = 0;
+      }
+
+      Spread spread{.offset = 0, .spacing = pass.gap};
+
+      if (remaining > 0) {
+        if (pass.justify == justify_center) {
+          spread.offset = remaining / 2;
+        } else if (pass.justify == justify_end) {
+          spread.offset = remaining;
+        } else if (pass.justify == justify_between && children.size() > 1) {
+          spread.spacing += remaining / static_cast<qreal>(children.size() - 1);
+        }
+      }
+
+      return spread;
+    }
+
+    AxisSpan crossSpan(const Child& child, const LayoutPass& pass) {
+      const auto alignment = child.element.contains(QStringLiteral("alignSelf")) ? child.element.value(QStringLiteral("alignSelf")).toInt() : pass.align;
+      // A child never overflows the cross axis: text inside it elides instead.
+      const auto cross = alignment == align_stretch ? pass.available_cross : std::min(child.cross, std::max<qreal>(0, pass.available_cross));
+
+      if (alignment == align_center) {
+        return {.length = cross, .offset = (pass.available_cross - cross) / 2};
+      }
+
+      if (alignment == align_end) {
+        return {.length = cross, .offset = pass.available_cross - cross};
+      }
+
+      return {.length = cross, .offset = 0};
+    }
+
+    // A stack lays children over each other: `justify` places them along x, `align` along y.
+    AxisSpan mainSpan(const Child& child, const LayoutPass& pass, qreal cursor) {
+      const auto main = pass.stack && pass.justify == justify_between ? pass.available_main : child.main;
+
+      if (!pass.stack) {
+        return {.length = main, .offset = cursor};
+      }
+
+      if (pass.justify == justify_center) {
+        return {.length = main, .offset = (pass.available_main - main) / 2};
+      }
+
+      if (pass.justify == justify_end) {
+        return {.length = main, .offset = pass.available_main - main};
+      }
+
+      return {.length = main, .offset = 0};
+    }
 
   }
 
@@ -160,7 +336,7 @@ namespace telar::gui::qt {
   void ElementLayout::itemChange(ItemChange change, const ItemChangeData& value) {
     if (change == ItemChildAddedChange) {
       // Qt's item, which its parent owns, by address.
-      watch(tbc::raw(value.item));
+      watch(tbc::raw(value.item)); // NOLINT(cppcoreguidelines-pro-type-union-access): Qt hands the added child only through this union.
       polish();
     } else if (change == ItemChildRemovedChange) {
       polish();
@@ -207,7 +383,7 @@ namespace telar::gui::qt {
     }
   }
 
-  ElementLayout::Pose ElementLayout::animate(const QString& key, const Pose& target, qreal transition_ms, int easing, std::uint64_t now_ns) {
+  ElementLayout::Pose ElementLayout::animate(const QString& key, const Pose& target, qreal transition_ms, Easing easing, std::uint64_t now_ns) {
     if (key.isEmpty() || transition_ms <= 0 || clock_.isNull()) {
       motions_.remove(key);
 
@@ -267,149 +443,56 @@ namespace telar::gui::qt {
       motion.seen = false;
     }
 
-    const bool row = direction_ == ElementLayout::row;
-    const bool stack = direction_ == ElementLayout::stack;
-    const auto scaled = [this](qreal value) {
-      return value * ratio_;
+    LayoutPass pass{
+        .row = std::cmp_equal(direction_, std::to_underlying(Direction::row)),
+        .stack = std::cmp_equal(direction_, std::to_underlying(Direction::stack)),
+        .ratio = ratio_,
+        .left = padding_[0] * ratio_,
+        .top = padding_[1] * ratio_,
+        .right = padding_[2] * ratio_,
+        .bottom = padding_[3] * ratio_,
+        .gap = gap_ * ratio_,
+        .align = align_,
+        .justify = justify_,
     };
 
-    const qreal left = scaled(padding_[0]);
-    const qreal top = scaled(padding_[1]);
-    const qreal right = scaled(padding_[2]);
-    const qreal bottom = scaled(padding_[3]);
-    const qreal gap = scaled(gap_);
-    QList<Child> children;
+    auto children = measure(childItems(), pass);
 
-    for (auto* item : childItems()) {
-      const auto element = item->property("element").toMap();
-      if (element.isEmpty() || !item->isVisible()) {
-        continue;
-      }
+    // Read before the implicit size changes, which an item without a set size follows.
+    const qreal inner_width = std::max<qreal>(0, width() - pass.left - pass.right);
+    const qreal inner_height = std::max<qreal>(0, height() - pass.top - pass.bottom);
+    const auto natural = naturalSize(children, pass);
 
-      const auto width = number(element, "width", -1);
-      const auto height = number(element, "height", -1);
-      const auto natural_width = std::clamp(width >= 0 ? scaled(width) : item->implicitWidth(), scaled(number(element, "minWidth", 0)), scaled(number(element, "maxWidth", std::numeric_limits<qreal>::max() / 4)));
-      const auto natural_height = std::clamp(height >= 0 ? scaled(height) : item->implicitHeight(), scaled(number(element, "minHeight", 0)), scaled(number(element, "maxHeight", std::numeric_limits<qreal>::max() / 4)));
+    setImplicitWidth((pass.horizontal() ? natural.main : natural.cross) + pass.left + pass.right);
+    setImplicitHeight((pass.horizontal() ? natural.cross : natural.main) + pass.top + pass.bottom);
+    pass.available_main = pass.horizontal() ? inner_width : inner_height;
+    pass.available_cross = pass.horizontal() ? inner_height : inner_width;
 
-      // The items stay Qt's, owned by this item; the list only reaches them by address.
-      children.append({
-          .item = tbc::raw(item),
-          .element = element,
-          .main = row ? natural_width : natural_height,
-          .cross = row ? natural_height : natural_width,
-          .grow = std::max<qreal>(0, number(element, "grow", 0)),
-          .fixed_main = (row ? width : height) >= 0,
-      });
-    }
-
-    const qreal inner_width = std::max<qreal>(0, width() - left - right);
-    const qreal inner_height = std::max<qreal>(0, height() - top - bottom);
-    qreal natural_main = 0;
-    qreal natural_cross = 0;
+    const auto spread = pass.stack ? Spread{.offset = 0, .spacing = pass.gap} : distribute(children, pass, pass.available_main - natural.main);
+    qreal cursor = spread.offset;
 
     for (const auto& child : children) {
-      natural_main = stack ? std::max(natural_main, child.main) : natural_main + child.main;
-      natural_cross = std::max(natural_cross, child.cross);
-    }
-
-    if (!stack && !children.empty()) {
-      natural_main += gap * static_cast<qreal>(children.size() - 1);
-    }
-
-    setImplicitWidth((row || stack ? natural_main : natural_cross) + left + right);
-    setImplicitHeight((row || stack ? natural_cross : natural_main) + top + bottom);
-
-    const qreal available_main = row || stack ? inner_width : inner_height;
-    const qreal available_cross = row || stack ? inner_height : inner_width;
-    qreal remaining = available_main - natural_main;
-    qreal spacing = gap;
-    qreal offset = 0;
-
-    if (!stack) {
-      qreal growth = 0;
-      qreal flexible = 0;
-
-      for (const auto& child : children) {
-        growth += child.grow;
-        flexible += child.fixed_main ? 0 : child.main;
-      }
-
-      if (remaining > 0 && growth > 0) {
-        for (auto& child : children) {
-          child.main += remaining * child.grow / growth;
-        }
-
-        remaining = 0;
-      } else if (remaining < 0 && flexible > 0) {
-        // Too little room: shrink the children without a set size, so their text elides.
-        const auto factor = std::max<qreal>(0, (flexible + remaining) / flexible);
-
-        for (auto& child : children) {
-          if (!child.fixed_main) {
-            child.main *= factor;
-          }
-        }
-
-        remaining = 0;
-      }
-
-      if (remaining > 0) {
-        if (justify_ == justify_center) {
-          offset = remaining / 2;
-        } else if (justify_ == justify_end) {
-          offset = remaining;
-        } else if (justify_ == justify_between && children.size() > 1) {
-          spacing += remaining / static_cast<qreal>(children.size() - 1);
-        }
-      }
-    }
-
-    qreal cursor = offset;
-
-    for (auto& child : children) {
-      const auto alignment = child.element.contains(QStringLiteral("alignSelf")) ? child.element.value(QStringLiteral("alignSelf")).toInt() : align_;
-      // A child never overflows the cross axis: text inside it elides instead.
-      const auto cross = alignment == align_stretch ? available_cross : std::min(child.cross, std::max<qreal>(0, available_cross));
-      qreal cross_offset = 0;
-
-      if (alignment == align_center) {
-        cross_offset = (available_cross - cross) / 2;
-      } else if (alignment == align_end) {
-        cross_offset = available_cross - cross;
-      }
-
-      // A stack lays children over each other: `justify` places them along x, `align` along y.
-      const auto main = stack && justify_ == justify_between ? available_main : child.main;
-      qreal main_offset = stack ? 0 : cursor;
-
-      if (stack) {
-        if (justify_ == justify_center) {
-          main_offset = (available_main - main) / 2;
-        } else if (justify_ == justify_end) {
-          main_offset = available_main - main;
-        }
-      }
-
-      const auto item_width = row || stack ? main : cross;
-      const auto item_height = row || stack ? cross : main;
+      QQuickItem* const item = child.item;
+      const auto main = mainSpan(child, pass, cursor);
+      const auto cross = crossSpan(child, pass);
       const Pose target{
-          .x = left + (row || stack ? main_offset : cross_offset) + scaled(number(child.element, "x", 0)),
-          .y = top + (row || stack ? cross_offset : main_offset) + scaled(number(child.element, "y", 0)),
+          .x = pass.left + (pass.horizontal() ? main.offset : cross.offset) + pass.scaled(number(child.element, "x", 0)),
+          .y = pass.top + (pass.horizontal() ? cross.offset : main.offset) + pass.scaled(number(child.element, "y", 0)),
           .rotation = number(child.element, "rotation", 0),
           .scale = number(child.element, "scale", 1),
           .opacity = number(child.element, "opacity", 1),
       };
 
-      const auto shown = animate(child.element.value(QStringLiteral("key")).toString(), target, number(child.element, "transition", 0), child.element.value(QStringLiteral("easing")).toInt(), now_ns);
+      const auto shown = animate(child.element.value(QStringLiteral("key")).toString(), target, number(child.element, "transition", 0), easingOf(child.element.value(QStringLiteral("easing")).toInt()), now_ns);
 
-      child.item->setSize({std::max<qreal>(0, item_width), std::max<qreal>(0, item_height)});
-      child.item->setPosition({shown.x, shown.y});
-      child.item->setRotation(shown.rotation);
-      child.item->setScale(shown.scale);
-      child.item->setOpacity(shown.opacity);
-      child.item->setZ(number(child.element, "z", 0));
-      if (!stack) {
-        cursor += child.main + spacing;
+      item->setSize({std::max<qreal>(0, pass.horizontal() ? main.length : cross.length), std::max<qreal>(0, pass.horizontal() ? cross.length : main.length)});
+      item->setPosition({shown.x, shown.y});
+      item->setRotation(shown.rotation);
+      item->setScale(shown.scale);
+      item->setOpacity(shown.opacity);
+      item->setZ(number(child.element, "z", 0));
+      if (!pass.stack) {
+        cursor += child.main + spread.spacing;
       }
     }
 

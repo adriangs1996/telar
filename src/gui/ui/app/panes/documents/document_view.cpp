@@ -25,10 +25,16 @@ namespace telar::gui::qt {
       return QString::fromUtf8(text.data(), static_cast<qsizetype>(text.size()));
     }
 
-    QString color(const QVariantMap& colors, const char* name, const char* fallback) {
-      const auto value = colors.value(QLatin1StringView{name}).toString();
+    // A palette color the theme names, and the one used when the theme leaves it out.
+    struct ColorRole {
+      const char* name;
+      const char* fallback;
+    };
 
-      return value.isEmpty() ? QString::fromLatin1(fallback) : value;
+    QString color(const QVariantMap& colors, ColorRole role) {
+      const auto value = colors.value(QLatin1StringView{role.name}).toString();
+
+      return value.isEmpty() ? QString::fromLatin1(role.fallback) : value;
     }
 
     QString kindName(BlockKind kind) {
@@ -114,31 +120,40 @@ namespace telar::gui::qt {
       }
     }
 
-    // The document a view shows, whether it shows, and what changes when it does.
-    tbc::view<const Document*, tbc::lt::a> findDocument(tbc::view<const DocumentsController*, tbc::lt::a> controller, std::uint64_t pane_id, std::uint64_t document_id, bool& shown, std::uint64_t& version) {
-      const auto* pane = controller == nullptr ? nullptr : controller->pane(pane_id);
+    // A pane's own document (id 0) or one of its inline documents.
+    struct DocumentKey {
+      std::uint64_t pane_id = 0;
+      std::uint64_t document_id = 0;
+    };
 
-      shown = false;
-      version = 0;
+    // Whether a document shows, and what changes when it does.
+    struct DocumentState {
+      bool shown = false;
+      std::uint64_t version = 0;
+    };
+
+    // The document a view shows, with its state.
+    tbc::view<const Document*, tbc::lt::a> findDocument(tbc::view<const DocumentsController*, tbc::lt::a> controller, DocumentKey key, DocumentState& state) {
+      const auto* pane = controller == nullptr ? nullptr : controller->pane(key.pane_id);
+
+      state = {};
       if (pane == nullptr) {
         return nullptr;
       }
 
-      if (document_id == 0) {
-        shown = pane->document_shown;
-        version = pane->document_version;
+      if (key.document_id == 0) {
+        state = {.shown = pane->document_shown, .version = pane->document_version};
         return &pane->document;
       }
 
       using Inline = application::Pane<Memory>::InlineDocument;
-      const auto* const found = std::ranges::find(pane->inline_documents, document_id, &Inline::id);
+      const auto* const found = std::ranges::find(pane->inline_documents, key.document_id, &Inline::id);
       if (found == pane->inline_documents.end()) {
         return nullptr;
       }
 
       // An inline document never changes once whole.
-      shown = found->shown;
-      version = found->whole ? 1 : 0;
+      state = {.shown = found->shown, .version = found->whole ? 1U : 0U};
       return &found->document;
     }
 
@@ -148,9 +163,9 @@ namespace telar::gui::qt {
     public:
       RichText(const Document& document, const QVariantMap& colors, const QString& mono)
           : document_(document),
-            code_style_(QStringLiteral("font-family:'%1'; background-color:%2; color:%3;").arg(mono.toHtmlEscaped(), color(colors, "surface", "#2a2a2a"), color(colors, "teal", "#8bd5ca"))),
-            link_style_(QStringLiteral("color:%1; text-decoration:underline;").arg(color(colors, "accent", "#8aadf4"))),
-            muted_style_(QStringLiteral("color:%1;").arg(color(colors, "muted", "#888888"))) {}
+            code_style_(QStringLiteral("font-family:'%1'; background-color:%2; color:%3;").arg(mono.toHtmlEscaped(), color(colors, {.name = "surface", .fallback = "#2a2a2a"}), color(colors, {.name = "teal", .fallback = "#8bd5ca"}))),
+            link_style_(QStringLiteral("color:%1; text-decoration:underline;").arg(color(colors, {.name = "accent", .fallback = "#8aadf4"}))),
+            muted_style_(QStringLiteral("color:%1;").arg(color(colors, {.name = "muted", .fallback = "#888888"}))) {}
 
       [[nodiscard]] QString runs(std::span<const render::Run> runs) const {
         QString html;
@@ -172,7 +187,7 @@ namespace telar::gui::qt {
             text = QStringLiteral("<span style=\"%1\">[image: %2]</span>").arg(muted_style_, text);
           }
 
-          if ((style & (render::style::code | render::style::math)) != 0) {
+          if ((style & monospaced_styles) != 0) {
             text = QStringLiteral("<span style=\"%1\">&nbsp;%2&nbsp;</span>").arg(code_style_, text);
           }
 
@@ -206,6 +221,9 @@ namespace telar::gui::qt {
       }
 
     private:
+      // Code and math read as one monospaced span.
+      static constexpr std::uint16_t monospaced_styles = render::style::code | render::style::math;
+
       static QString escape(const QString& text) {
         return text.toHtmlEscaped().replace(QLatin1Char('\n'), QStringLiteral("<br/>"));
       }
@@ -215,6 +233,26 @@ namespace telar::gui::qt {
       QString link_style_;
       QString muted_style_;
     };
+
+    // A table's cells, a row of `block.columns` at a time.
+    QVariantList tableRows(const Document& document, const render::Block& block, const RichText& rich) {
+      QVariantList rows;
+      QVariantList row;
+
+      for (const auto& cell : document.cellsOf(block)) {
+        row.append(QVariantMap{
+            {QStringLiteral("html"), rich.runs(document.runsOf(cell))},
+            {QStringLiteral("align"), alignName(cell.align)},
+        });
+
+        if (row.size() == block.columns) {
+          rows.append(QVariant{row});
+          row.clear();
+        }
+      }
+
+      return rows;
+    }
 
   }
 
@@ -302,7 +340,7 @@ namespace telar::gui::qt {
     return blocks_;
   }
 
-  bool DocumentView::openLink(const QString& target) const {
+  bool DocumentView::openLink(const QString& target) const { // NOLINT(readability-convert-member-functions-to-static): QML calls it on the instance, and moc has no static invokables
     const QUrl url{target, QUrl::StrictMode};
     const auto scheme = url.scheme().toLower();
     if (!url.isValid() || (scheme != QLatin1StringView{"https"} && scheme != QLatin1StringView{"http"} && scheme != QLatin1StringView{"mailto"})) {
@@ -322,16 +360,15 @@ namespace telar::gui::qt {
   }
 
   void DocumentView::refresh() {
-    bool shown = false;
-    std::uint64_t version = 0;
+    DocumentState state;
 
-    static_cast<void>(findDocument(controller_, pane_id_, document_id_, shown, version));
-    if (shown == shown_ && version == version_ && !stale_) {
+    static_cast<void>(findDocument(controller_, {.pane_id = pane_id_, .document_id = document_id_}, state));
+    if (state.shown == shown_ && state.version == version_ && !stale_) {
       return;
     }
 
-    shown_ = shown;
-    version_ = version;
+    shown_ = state.shown;
+    version_ = state.version;
     stale_ = false;
     if (shown_) {
       project();
@@ -343,9 +380,8 @@ namespace telar::gui::qt {
   }
 
   void DocumentView::project() {
-    bool shown = false;
-    std::uint64_t version = 0;
-    const auto& document = *findDocument(controller_, pane_id_, document_id_, shown, version);
+    DocumentState state;
+    const auto& document = *findDocument(controller_, {.pane_id = pane_id_, .document_id = document_id_}, state);
     const RichText rich{document, colors_, mono_family_};
 
     blocks_.clear();
@@ -370,29 +406,13 @@ namespace telar::gui::qt {
         break;
       case BlockKind::code:
       case BlockKind::html:
-        item.insert(QStringLiteral("text"), fromUtf8(document.view(render::Span{block.first, block.count})));
+        item.insert(QStringLiteral("text"), fromUtf8(document.view(render::Span{.offset = block.first, .size = block.count})));
         item.insert(QStringLiteral("info"), fromUtf8(document.view(block.info)));
         break;
-      case BlockKind::table: {
-        QVariantList rows;
-        QVariantList row;
-
-        for (const auto& cell : document.cellsOf(block)) {
-          row.append(QVariantMap{
-              {QStringLiteral("html"), rich.runs(document.runsOf(cell))},
-              {QStringLiteral("align"), alignName(cell.align)},
-          });
-
-          if (row.size() == block.columns) {
-            rows.append(QVariant{row});
-            row.clear();
-          }
-        }
-
+      case BlockKind::table:
         item.insert(QStringLiteral("columns"), block.columns);
-        item.insert(QStringLiteral("rows"), rows);
+        item.insert(QStringLiteral("rows"), tableRows(document, block, rich));
         break;
-      }
       case BlockKind::rule:
       case BlockKind::count:
         break;

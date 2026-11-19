@@ -370,7 +370,12 @@ namespace telar::gui::qt {
   }
 
   void KeyBindings::release(Hold hold) {
-    if (hold != hold_epoch_ || holds_ == 0 || --holds_ != 0) {
+    if (hold != hold_epoch_ || holds_ == 0) {
+      return;
+    }
+
+    --holds_;
+    if (holds_ != 0) {
       return;
     }
 

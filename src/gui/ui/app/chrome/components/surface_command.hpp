@@ -54,7 +54,9 @@ namespace telar::gui::qt {
   class SurfaceCommand {
   public:
     // Held inline, never on the heap; what it captures fits in sixteen pointers.
-    using Completion = ds::Function<void(SurfaceCommandResult), 16 * sizeof(void*)>;
+    static constexpr std::size_t completion_pointers = 16;
+    using Completion = ds::Function<void(SurfaceCommandResult), completion_pointers * sizeof(void*)>;
+
     SurfaceCommand();
     ~SurfaceCommand();
     SurfaceCommand(const SurfaceCommand&) = delete;

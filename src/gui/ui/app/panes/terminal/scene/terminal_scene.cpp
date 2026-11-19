@@ -223,6 +223,17 @@ namespace telar::gui::qt {
       appendSceneNode<QSGSimpleRectNode>(parent, QRectF{bounds.right() - thickness, bounds.top(), thickness, bounds.height()}, color);
     }
 
+    // A row's grouped text, taken out of the row: the caller reuses it or lets it go.
+    template <typename Row>
+    std::unique_ptr<QSGNode> detachText(Row& row) {
+      std::unique_ptr<QSGNode> previous{std::exchange(row.text_content, nullptr)};
+      if (previous) {
+        row.text->removeChildNode(previous.get());
+      }
+
+      return previous;
+    }
+
   }
 
   TerminalScene::TerminalScene(QQuickWindow& window)
@@ -281,12 +292,7 @@ namespace telar::gui::qt {
 
   void TerminalScene::paintRow(const TerminalPresentation& frame, std::size_t row_index) {
     auto& row = row_nodes_[static_cast<qsizetype>(row_index)];
-    std::unique_ptr<QSGNode> previous{row.text_content};
-
-    row.text_content = nullptr;
-    if (previous) {
-      row.text->removeChildNode(previous.get());
-    }
+    auto previous = detachText(row);
 
     clearSceneChildren(*row.text);
     clearSceneChildren(*row.background);
@@ -298,7 +304,7 @@ namespace telar::gui::qt {
 
     const auto cells = frame.row(row_index).first(std::min<std::size_t>(columns_, frame.row(row_index).size()));
     const auto screen_row = frame.screenRow(row_index);
-    const auto grouped_text = text_.prepare(cells, {.pixel_height = frame.grid.pixel_height, .cell_width = frame.grid.width, .cursor = cursor_column, .selection = screen_row ? frame.selection : CellSelection{}, .first_cell = screen_row.valueOr(0) * frame.screen.columns()});
+    const auto grouped_text = text_.prepare(cells, {.pixel_height = frame.grid.pixel_height, .cell_width = frame.grid.width, .cursor = cursor_column, .selection = !screen_row ? CellSelection{} : frame.selection, .first_cell = screen_row.valueOr(0) * frame.screen.columns()});
     auto decorations = std::make_unique<QSGNode>();
 
     for (std::size_t column = 0; column < cells.size(); ++column) {
@@ -373,13 +379,7 @@ namespace telar::gui::qt {
       const auto position = static_cast<std::size_t>(index);
       if (frame.hidden(position)) {
         if (!row.hidden) {
-          std::unique_ptr<QSGNode> previous{row.text_content};
-
-          row.text_content = nullptr;
-          if (previous) {
-            row.text->removeChildNode(previous.get());
-          }
-
+          detachText(row);
           clearSceneChildren(*row.text);
           clearSceneChildren(*row.background);
           row.hidden = true;
@@ -393,10 +393,13 @@ namespace telar::gui::qt {
       if (revealed != row.revealed || offset != row.offset) {
         row.revealed = revealed;
         row.offset = offset;
+
+        // A row still coming in sits lower by up to a quarter of a cell.
+        constexpr float reveal_drop_cells = 0.25F;
         const auto settled = 1.0F - ((1.0F - revealed) * (1.0F - revealed) * (1.0F - revealed));
         QMatrix4x4 lift;
 
-        lift.translate(0, (static_cast<float>(frame.font.cell.height()) * 0.25F * (1.0F - settled)) + offset);
+        lift.translate(0, (static_cast<float>(frame.font.cell.height()) * reveal_drop_cells * (1.0F - settled)) + offset);
         row.text->setMatrix(lift);
         row.background->setMatrix(lift);
         row.text_opacity->setOpacity(revealed);

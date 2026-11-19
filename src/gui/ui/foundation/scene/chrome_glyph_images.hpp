@@ -82,8 +82,11 @@ namespace telar::gui::qt {
   struct OpticalGlyphRasterizers {
     // pixels allocates from memory, so the rasterizers keep their address.
     OpticalGlyphRasterizers() = default;
+    ~OpticalGlyphRasterizers() = default;
     OpticalGlyphRasterizers(const OpticalGlyphRasterizers&) = delete;
     OpticalGlyphRasterizers& operator=(const OpticalGlyphRasterizers&) = delete;
+    OpticalGlyphRasterizers(OpticalGlyphRasterizers&&) = delete;
+    OpticalGlyphRasterizers& operator=(OpticalGlyphRasterizers&&) = delete;
 
     fonts::GlyphRasterization settings{.optical = true};
 #ifdef Q_OS_MACOS
@@ -109,6 +112,7 @@ namespace telar::gui::qt {
       }
     }
 
+    ~ChromeGlyphImages() = default;
     ChromeGlyphImages(const ChromeGlyphImages&) = delete;
     ChromeGlyphImages& operator=(const ChromeGlyphImages&) = delete;
     ChromeGlyphImages(ChromeGlyphImages&&) = delete;

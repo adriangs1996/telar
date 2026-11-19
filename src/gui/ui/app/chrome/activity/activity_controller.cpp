@@ -120,6 +120,48 @@ namespace telar::gui::qt {
       return agentRecord(agent, context);
     }
 
+    // The active machine's panes that no agent holds; the other machines are summarized by their
+    // sidebar row.
+    void listProcesses(tbc::view<const Store&, tbc::lt::a> store, std::span<const Order::Source> sources, application::machines::Machines::Slot active, tbc::holds<ds::Vec<ListedProcess, ApplicationAllocator>&, tbc::lt::a> processes) {
+      for (std::size_t index = 0; index < sources.size(); ++index) {
+        if (sources[index].slot != active) {
+          continue;
+        }
+
+        const auto& session = store.client(sources[index].slot).session;
+
+        for (const auto& pane : session.paneList()) {
+          const auto held = std::ranges::any_of(session.agents(), [&](const auto& agent) {
+            return agent.pane_id == pane.pane_id && agent.pane_generation == pane.pane_generation;
+          });
+          if (!held) {
+            processes.push({.source = index, .pane = &pane});
+          }
+        }
+      }
+
+      std::ranges::sort(processes.viewMut(), precedes);
+    }
+
+    // The row's key, and the mod content its slots draw.
+    void keyAgentRecord(QVariantMap& record, const QString& key, ElementSlots& elements) {
+      record.insert(QStringLiteral("key"), key);
+      if (elements.active()) {
+        record.insert(QStringLiteral("elements"), elements.elements(ElementSlots::agent_slots, key, ElementSlots::agentItem(record)));
+      }
+    }
+
+    QVariantMap processRow(const GuiSession& session, const ListedPane& pane, AgentRecordContext context, bool active_source, const QString& key) {
+      const auto* tab = active_source ? session.activeTab() : nullptr;
+
+      context.selected = tab != nullptr && pane.pane_id == tab->focused_pane && sameTab(pane.location, tab->location);
+      auto record = processRecord(pane, workspaceName(session, pane), context);
+
+      record.insert(QStringLiteral("key"), key);
+
+      return record;
+    }
+
   }
 
   ActivityController::ActivityController(Store& store, ElementSlots& elements, ApplicationAllocator& memory, QObject* parent)
@@ -185,7 +227,7 @@ namespace telar::gui::qt {
   void ActivityController::synchronize() {
     const auto active = store_.machines().active();
     // The top bar names the active machine, so only cards from other machines repeat theirs.
-    const auto machineLabel = [active](const SourceVersion& version, application::machines::Machines::Slot slot) {
+    const auto machine_label = [active](const SourceVersion& version, application::machines::Machines::Slot slot) {
       return slot == active ? std::string_view{} : version.label.view();
     };
 
@@ -241,14 +283,10 @@ namespace telar::gui::qt {
 
       const auto target = activityTarget(source, entry);
       const auto key = identity(target);
-      const AgentRecordContext context{.machine = machineLabel(*version, slot), .branch = {}, .connected = version->connected, .coordinator = entry.coordinator, .starts_project = entry.first_in_project, .depth = entry.depth};
+      const AgentRecordContext context{.machine = machine_label(*version, slot), .branch = {}, .connected = version->connected, .coordinator = entry.coordinator, .starts_project = entry.first_in_project, .depth = entry.depth};
       auto record = activityRecord(source.session, entry, context, slot == active);
 
-      record.insert(QStringLiteral("key"), key);
-      if (elements_.active()) {
-        record.insert(QStringLiteral("elements"), elements_.elements(ElementSlots::agent_slots, key, ElementSlots::agentItem(record)));
-      }
-
+      keyAgentRecord(record, key, elements_);
       records.append(std::move(record));
       targets.push({.identity = key, .target = target});
     }
@@ -256,25 +294,7 @@ namespace telar::gui::qt {
     const auto agent_count = static_cast<int>(records.size());
     ds::Vec<ListedProcess, ApplicationAllocator> processes{memory_};
 
-    // Processes are the active machine's; the other machines are summarized by their sidebar row.
-    for (std::size_t index = 0; index < sources.size(); ++index) {
-      if (sources[index].slot != active) {
-        continue;
-      }
-
-      const auto& session = store_.client(sources[index].slot).session;
-
-      for (const auto& pane : session.paneList()) {
-        const auto held = std::ranges::any_of(session.agents(), [&](const auto& agent) {
-          return agent.pane_id == pane.pane_id && agent.pane_generation == pane.pane_generation;
-        });
-        if (!held) {
-          processes.push({.source = index, .pane = &pane});
-        }
-      }
-    }
-
-    std::ranges::sort(processes.viewMut(), precedes);
+    listProcesses(store_, sources.view(), active, processes);
     if (!processes.empty()) {
       records.append(processHeaderRecord(static_cast<qsizetype>(processes.size())));
     }
@@ -288,12 +308,9 @@ namespace telar::gui::qt {
       const auto& pane = *process.pane;
       const application::machines::MachineActivityTarget target{.source = source.key, .runtime_generation = source.runtime_generation, .owner = application::machines::MachineActivityTarget::Process{.pane_id = pane.pane_id, .pane_generation = pane.pane_generation}};
       const auto key = identity(target);
-      const auto* tab = slot == active ? source.session.activeTab() : nullptr;
-      const AgentRecordContext context{.machine = machineLabel(version, slot), .selected = tab != nullptr && pane.pane_id == tab->focused_pane && sameTab(pane.location, tab->location), .connected = version.connected};
-      auto record = processRecord(pane, workspaceName(source.session, pane), context);
+      const AgentRecordContext context{.machine = machine_label(version, slot), .connected = version.connected};
 
-      record.insert(QStringLiteral("key"), key);
-      records.append(std::move(record));
+      records.append(processRow(source.session, pane, context, slot == active, key));
       targets.push({.identity = key, .target = target});
     }
 

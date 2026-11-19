@@ -22,27 +22,29 @@ namespace {
   using namespace telar::gui;
   using namespace telar::gui::qt;
 
-  struct Environment final : telar::runtime::EnvironmentSource {
-    Environment(std::string_view socket_path, std::string_view pane_socket_path, std::string_view runtime_path) noexcept
-        : socket(socket_path),
-          pane_socket(pane_socket_path),
-          runtime_directory(runtime_path) {}
-
+  struct Variables {
     std::string_view socket;
     std::string_view pane_socket;
     std::string_view runtime_directory;
+  };
+
+  struct Environment final : telar::runtime::EnvironmentSource {
+    explicit Environment(const Variables& variables) noexcept
+        : variables(variables) {}
+
+    Variables variables;
 
     [[nodiscard]] std::string_view lookup(const char* name) const noexcept override {
       const std::string_view key{name};
       if (key == "TELAR_SOCKET") {
-        return socket;
+        return variables.socket;
       }
 
       if (key == "TELAR_SOCKET_PATH") {
-        return pane_socket;
+        return variables.pane_socket;
       }
 
-      return key == "XDG_RUNTIME_DIR" ? runtime_directory : std::string_view{};
+      return key == "XDG_RUNTIME_DIR" ? variables.runtime_directory : std::string_view{};
     }
   };
 
@@ -70,7 +72,7 @@ namespace {
       QVERIFY(directory.isValid());
       QVERIFY(QDir{directory.path()}.mkdir(QStringLiteral("telar")));
       const auto base = directory.path().toUtf8();
-      const Environment environment{{}, {}, {base.constData(), static_cast<std::size_t>(base.size())}};
+      const Environment environment{{.runtime_directory = {base.constData(), static_cast<std::size_t>(base.size())}}};
       const auto endpoint = directory.filePath(QStringLiteral("telar/runtime.sock"));
       QLocalServer server;
 
@@ -100,11 +102,11 @@ namespace {
       QVERIFY(pane_server.listen(pane_path));
       const auto explicit_bytes = explicit_path.toUtf8();
       const auto pane_bytes = pane_path.toUtf8();
-      Environment environment{{explicit_bytes.constData(), static_cast<std::size_t>(explicit_bytes.size())}, {pane_bytes.constData(), static_cast<std::size_t>(pane_bytes.size())}, {}};
+      Environment environment{{.socket = {explicit_bytes.constData(), static_cast<std::size_t>(explicit_bytes.size())}, .pane_socket = {pane_bytes.constData(), static_cast<std::size_t>(pane_bytes.size())}}};
       SystemAllocator memory;
 
       QCOMPARE(LocalRuntimeEndpoint<Startup>::resolve(memory, environment), explicit_path);
-      environment.socket = {};
+      environment.variables.socket = {};
       QCOMPARE(LocalRuntimeEndpoint<Startup>::resolve(memory, environment), pane_path);
       QCOMPARE(Startup::calls, std::size_t{0});
     }
@@ -114,7 +116,7 @@ namespace {
 
       QVERIFY(directory.isValid());
       const auto path = directory.filePath(QStringLiteral("missing.sock")).toUtf8();
-      const Environment environment{{path.constData(), static_cast<std::size_t>(path.size())}, {}, {}};
+      const Environment environment{{.socket = {path.constData(), static_cast<std::size_t>(path.size())}}};
       SystemAllocator memory;
 
       QCOMPARE(LocalRuntimeEndpoint<Startup>::resolve(memory, environment), QStringLiteral("/owned-startup/runtime.sock"));
@@ -122,7 +124,7 @@ namespace {
     }
 
     Q_SLOT static void invalidPathsCannotLaunchARuntime() {
-      const Environment environment{"relative.sock", {}, {}};
+      const Environment environment{{.socket = "relative.sock"}};
       SystemAllocator memory;
 
       QVERIFY_THROWS_EXCEPTION(std::invalid_argument, static_cast<void>(LocalRuntimeEndpoint<Startup>::resolve(memory, environment)));

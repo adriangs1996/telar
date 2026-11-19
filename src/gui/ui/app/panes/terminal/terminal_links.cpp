@@ -125,7 +125,7 @@ namespace telar::gui::qt {
     const auto link = [&](std::uint32_t column, std::uint32_t length, std::string_view uri) {
       const auto offset = drawn_uris_.size();
 
-      drawn_uris_.extend({reinterpret_cast<const Byte*>(uri.data()), uri.size()});
+      drawn_uris_.extend(byteView(uri));
       drawn_links_.push({.offset = static_cast<std::uint32_t>(offset), .len = static_cast<std::uint16_t>(uri.size())});
       drawn_runs_.push({.start = static_cast<std::uint32_t>(index * columns) + column, .len = length, .link_index = static_cast<std::uint16_t>(drawn_links_.size() - 1)});
     };

@@ -70,9 +70,12 @@ namespace telar::gui::qt {
   public:
     // The scene paints through the window, region `a`.
     explicit TextScene(tbc::view<QQuickWindow&, tbc::lt::a> window);
+    ~TextScene() = default;
     // The layouts allocate from memory_, so the scene keeps its address.
     TextScene(const TextScene&) = delete;
     TextScene& operator=(const TextScene&) = delete;
+    TextScene(TextScene&&) = delete;
+    TextScene& operator=(TextScene&&) = delete;
 
     void configure(const FontConfiguration& font, FontGrid grid, const std::shared_ptr<const FontCollection>& collection);
     void begin(const QRectF& bounds, qreal scale, const QRectF& clip, std::unique_ptr<QSGNode> previous = {});
@@ -99,9 +102,10 @@ namespace telar::gui::qt {
     std::unique_ptr<QSGNode> takeChunk();
     void appendChunk(std::unique_ptr<QSGNode> node);
     static void appendChunk(QSGNode& text, QSGNode* next_chunk, std::unique_ptr<QSGNode> node);
-    // Paints one chunk through the scene's chunk fields alone, as Rust splits a borrow of self: what it
-    // paints views the row layout beside them.
-    static void paintChunk(QSGNode& text, QSGNode*& next_chunk, QQuickWindow& window, const std::shared_ptr<const FontCollection>& collection, fonts::GlyphRasterization rasterization, const ChromeTextPaint& paint);
+    // Paints one chunk through the scene's chunk cursor alone, as Rust splits a borrow of self: what it
+    // paints views the row layout beside it. The result is the node to append, or none when the
+    // previous chunk was painted in place.
+    static std::unique_ptr<QSGNode> paintChunk(QSGNode*& next_chunk, QQuickWindow& window, const std::shared_ptr<const FontCollection>& collection, fonts::GlyphRasterization rasterization, const ChromeTextPaint& paint);
     void flushCells(std::span<const CellValue> cells);
     void addFallbackCells(const Batch& batch, std::span<const CellValue> cells);
     void addQtText(const QString& text, const QFont& font, const QTextCharFormat& format, TextPlacement placement);

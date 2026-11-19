@@ -21,6 +21,8 @@
 #include <QRectF>
 #include <QRegularExpression>
 #include <QSGRendererInterface>
+#include <QSize>
+#include <QSizeF>
 #include <QString>
 #include <QtCore/qlogging.h>
 #include <QtCore/qnamespace.h>
@@ -175,30 +177,40 @@ namespace {
     }
 
     Q_SLOT static void backgroundReplacementKeepsFinalAlphaAndOpaqueInk() {
+      // A white base, a surface over it that replaces the background, and blue ink on the surface.
+      constexpr QSize window_size{240, 180};
+      constexpr QRectF surface_rect{20, 20, 160, 120};
+      constexpr QRectF ink_rect{80, 60, 20, 20};
+      constexpr float surface_red = 0.2F;
+      constexpr float surface_green = 0.4F;
+      constexpr float surface_blue = 0.6F;
+      constexpr qreal surface_radius = 16;
+      constexpr float backdrop_gray = 0.1F;
+      constexpr float backdrop_alpha = 0.8F;
       QQuickWindow window;
 
-      window.resize(240, 180);
+      window.resize(window_size);
       window.setColor(Qt::transparent);
       NativeRoundedRectangle base{window.contentItem()};
 
-      base.setSize({240, 180});
+      base.setSize(QSizeF{window_size});
       base.setColor(Qt::white);
       NativeRoundedRectangle surface{window.contentItem()};
 
-      surface.setPosition({20, 20});
-      surface.setSize({160, 120});
+      surface.setPosition(surface_rect.topLeft());
+      surface.setSize(surface_rect.size());
       surface.setReplaceBackground(true);
       NativeRoundedRectangle ink{window.contentItem()};
 
-      ink.setPosition({80, 60});
-      ink.setSize({20, 20});
+      ink.setPosition(ink_rect.topLeft());
+      ink.setSize(ink_rect.size());
       ink.setColor(Qt::blue);
       window.show();
       QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
       const auto density = window.effectiveDevicePixelRatio();
 
       for (const auto opacity : {0.0F, 0.25F, 0.75F, 1.0F, 0.25F}) {
-        surface.setColor(QColor::fromRgbF(0.2F, 0.4F, 0.6F, opacity));
+        surface.setColor(QColor::fromRgbF(surface_red, surface_green, surface_blue, opacity));
         const auto frame = window.grabWindow();
 
         QVERIFY(!frame.isNull());
@@ -209,11 +221,11 @@ namespace {
         QCOMPARE(frame.pixelColor(qRound(5 * density), qRound(5 * density)), QColor{Qt::white});
       }
 
-      surface.setRadius(16);
-      surface.setBackdropColor(QColor::fromRgbF(0.1F, 0.1F, 0.1F, 0.8F));
+      surface.setRadius(surface_radius);
+      surface.setBackdropColor(QColor::fromRgbF(backdrop_gray, backdrop_gray, backdrop_gray, backdrop_alpha));
       const auto rounded = window.grabWindow();
 
-      QVERIFY(std::abs(rounded.pixelColor(qRound(20 * density), qRound(20 * density)).alphaF() - 0.8) <= 1.0 / 255);
+      QVERIFY(std::abs(rounded.pixelColor(qRound(20 * density), qRound(20 * density)).alphaF() - backdrop_alpha) <= 1.0 / 255);
       surface.setReplaceBackground(false);
       const auto blended = window.grabWindow();
 

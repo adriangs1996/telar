@@ -46,6 +46,31 @@ namespace {
   using namespace telar::gui;
   using namespace telar::gui::qt;
 
+  std::uint64_t ink(fonts::GlyphBitmapView bitmap) {
+    std::uint64_t coverage = 0;
+
+    for (std::uint32_t row = 0; row < bitmap.height; ++row) {
+      for (const auto value : bitmap.row(row)) {
+        coverage += value;
+      }
+    }
+
+    return coverage;
+  }
+
+  // The pixels a glyph covers only in part.
+  std::uint64_t partial(fonts::GlyphBitmapView bitmap) {
+    std::uint64_t count = 0;
+
+    for (std::uint32_t row = 0; row < bitmap.height; ++row) {
+      for (const auto value : bitmap.row(row)) {
+        count += value != 0 && value != std::numeric_limits<std::uint8_t>::max() ? 1 : 0;
+      }
+    }
+
+    return count;
+  }
+
   class FontResolverTest final : public QObject {
     Q_OBJECT
 
@@ -226,20 +251,8 @@ namespace {
       SystemAllocator memory;
       const FontSource source{memory, FontConfiguration{}};
       fonts::Face face{source.bytes(), source.match()};
-      const auto ink = [](fonts::GlyphBitmapView bitmap) {
-        std::uint64_t coverage = 0;
-
-        for (std::uint32_t row = 0; row < bitmap.height; ++row) {
-          for (const auto value : bitmap.row(row)) {
-            coverage += value;
-          }
-        }
-
-        return coverage;
-      };
-
       constexpr telar::ds::Array<std::uint16_t, 4> heights{13, 26, 39, 96};
-      constexpr telar::ds::Array styles{fonts::GlyphStyle{}, fonts::GlyphStyle{.bold = true}, fonts::GlyphStyle{.italic = true}, fonts::GlyphStyle{.bold = true, .italic = true}};
+      constexpr telar::ds::Array styles{fonts::GlyphStyle{.bold = false}, fonts::GlyphStyle{.bold = true}, fonts::GlyphStyle{.italic = true}, fonts::GlyphStyle{.bold = true, .italic = true}};
       constexpr std::uint8_t medium_strength = 128;
 
       for (const auto height : heights) {
@@ -265,18 +278,6 @@ namespace {
         }
 
         // Grid fitting concentrates the crossbar and stems of "H" into whole pixels.
-        const auto partial = [](fonts::GlyphBitmapView bitmap) {
-          std::uint64_t count = 0;
-
-          for (std::uint32_t row = 0; row < bitmap.height; ++row) {
-            for (const auto value : bitmap.row(row)) {
-              count += value != 0 && value != std::numeric_limits<std::uint8_t>::max() ? 1 : 0;
-            }
-          }
-
-          return count;
-        };
-
         const auto bar = face.shape("H", height).glyph(0).index;
         const auto native_partial = partial(face.rasterize({.index = bar, .pixel_height = height}));
         const auto full = face.rasterize({.index = bar, .pixel_height = height, .hinting = fonts::GlyphHinting::full});

@@ -295,23 +295,25 @@ namespace telar::gui::qt {
     const auto action_advance = measure_action(action);
     const auto accessible = item.link.view().empty() ? toQString(item.title.view()) + QStringLiteral(": ") + toQString(item.message.view()) : toQString(item.title.view()) + QStringLiteral(", opens ") + toQString(item.linkHost()) + QStringLiteral(": ") + toQString(item.message.view());
 
-    return {.record = {
-                {QStringLiteral("key"), controller_->identity(item.id)},
-                {QStringLiteral("title"), toQString(item.title.view())},
-                {QStringLiteral("titleBounds"), logicalBounds(geometry.title(), density_)},
-                {QStringLiteral("body"), body},
-                {QStringLiteral("action"), toQString(action)},
-                {QStringLiteral("actionBounds"), logicalBounds(action_bounds, density_)},
-                {QStringLiteral("iconBounds"), logicalBounds(geometry.icon(), density_)},
-                {QStringLiteral("closeBounds"), logicalBounds(geometry.close(), density_)},
-                {QStringLiteral("symbol"), symbol(item.level)},
-                {QStringLiteral("accent"), accent(item.level)},
-                {QStringLiteral("shadows"), shadows},
-                {QStringLiteral("clickable"), item.clickable()},
-                {QStringLiteral("accessible"), accessible},
-            },
+    return {
+        .record = {
+            {QStringLiteral("key"), controller_->identity(item.id)},
+            {QStringLiteral("title"), toQString(item.title.view())},
+            {QStringLiteral("titleBounds"), logicalBounds(geometry.title(), density_)},
+            {QStringLiteral("body"), body},
+            {QStringLiteral("action"), toQString(action)},
+            {QStringLiteral("actionBounds"), logicalBounds(action_bounds, density_)},
+            {QStringLiteral("iconBounds"), logicalBounds(geometry.icon(), density_)},
+            {QStringLiteral("closeBounds"), logicalBounds(geometry.close(), density_)},
+            {QStringLiteral("symbol"), symbol(item.level)},
+            {QStringLiteral("accent"), accent(item.level)},
+            {QStringLiteral("shadows"), shadows},
+            {QStringLiteral("clickable"), item.clickable()},
+            {QStringLiteral("accessible"), accessible},
+        },
         .action_advance = action_advance,
-        .action_line_height = action_line_height};
+        .action_line_height = action_line_height,
+    };
   }
 
   void NotificationLayout::rebuild() {

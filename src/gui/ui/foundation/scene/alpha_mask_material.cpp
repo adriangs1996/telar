@@ -30,13 +30,24 @@ namespace telar::gui::qt {
       float opacity = 1;
     };
 
+    QString fragmentShader(AlphaMaskSampling sampling) {
+      if (sampling == AlphaMaskSampling::stable_nearest) {
+        return QStringLiteral("nearest_alpha_mask.frag.qsb");
+      }
+
+      if (sampling == AlphaMaskSampling::filtered) {
+        return QStringLiteral("filtered_alpha_mask.frag.qsb");
+      }
+
+      return QStringLiteral("alpha_mask.frag.qsb");
+    }
+
     class MaskShader final : public QSGMaterialShader {
     public:
       MaskShader(AlphaMaskSampling sampling, AlphaMaskBlend blend) {
         setShaderFileName(VertexStage, QStringLiteral(":/telar/shaders/alpha_mask.vert.qsb"));
         const auto prefix = blend == AlphaMaskBlend::straight ? QStringLiteral(":/telar/shaders/straight/") : QStringLiteral(":/telar/shaders/");
-        const auto fragment = sampling == AlphaMaskSampling::stable_nearest ? QStringLiteral("nearest_alpha_mask.frag.qsb") : sampling == AlphaMaskSampling::filtered ? QStringLiteral("filtered_alpha_mask.frag.qsb")
-                                                                                                                                                                      : QStringLiteral("alpha_mask.frag.qsb");
+        const auto fragment = fragmentShader(sampling);
 
         setShaderFileName(FragmentStage, prefix + fragment);
         if (blend == AlphaMaskBlend::straight) {

@@ -51,6 +51,7 @@ namespace telar::gui::qt {
       std::unique_ptr<QSGNode> child{parent.firstChild()};
 
       parent.removeChildNode(child.get());
+      child.reset();
     }
   }
 

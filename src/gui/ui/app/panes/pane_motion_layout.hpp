@@ -11,6 +11,7 @@ static_assert(true);
 #include <QString>
 #include <QtQml/qqmlregistration.h>
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 
@@ -36,6 +37,10 @@ namespace telar::gui::qt {
   public:
     explicit PaneMotionLayout(QQuickItem* parent = nullptr);
     ~PaneMotionLayout() override;
+    PaneMotionLayout(const PaneMotionLayout&) = delete;
+    PaneMotionLayout& operator=(const PaneMotionLayout&) = delete;
+    PaneMotionLayout(PaneMotionLayout&&) = delete;
+    PaneMotionLayout& operator=(PaneMotionLayout&&) = delete;
 
     [[nodiscard]] QAbstractItemModel* model() const noexcept {
       return model_;
@@ -69,8 +74,11 @@ namespace telar::gui::qt {
     void sample(std::uint64_t now_ns);
     void bindClock();
 
+    // One per model signal that moves the panes: data, insert, remove, move, reset and destruction.
+    static constexpr std::size_t model_connection_count = 6;
+
     QPointer<QAbstractItemModel> model_;
-    ds::Array<QMetaObject::Connection, 6> connections_;
+    ds::Array<QMetaObject::Connection, model_connection_count> connections_;
     ListModel items_{this};
     application::workbench::PaneMotions motions_;
     QString context_;

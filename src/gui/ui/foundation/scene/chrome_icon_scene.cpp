@@ -114,7 +114,8 @@ namespace telar::gui::qt {
       SoftwareIcon& operator=(SoftwareIcon&&) = delete;
 
       void paint(IconImages& images, const ChromeIconPaint& paint, const IconProjection& position) {
-        auto colored = images.colored(glyph_.index, paint.pixel_height, glyph_.face, {}, paint.color);
+        constexpr fonts::GlyphStyle plain{};
+        auto colored = images.colored(glyph_.index, paint.pixel_height, glyph_.face, plain, paint.color);
 
         // The texture the colored image keeps, shared by the nodes drawing it, which Qt takes by
         // address without changing it.

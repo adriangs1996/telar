@@ -579,8 +579,8 @@ namespace telar::gui::qt {
         request.timeout = source.timeout;
         request.output = source.has_render ? SurfaceOutputUse::lines : SurfaceOutputUse::line;
         command_owner_ = owner;
-        command_.start(request, [this, owner](SurfaceCommandResult result) {
-          commandFinished(owner, std::move(result));
+        command_.start(request, [this, owner](const SurfaceCommandResult& result) {
+          commandFinished(owner, result);
         });
       }
     } catch (const std::exception& error) {

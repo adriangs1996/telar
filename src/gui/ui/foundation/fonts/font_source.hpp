@@ -5,6 +5,7 @@ static_assert(true);
 
 #include "foundation/core/memory.hpp"
 #include "tbc/view.hpp"
+#include "telar_wire/codecs/telar_wire.hpp"
 #include <QByteArray>
 #include <QString>
 #include <cstdint>
@@ -24,6 +25,11 @@ namespace telar::gui::qt {
     fonts::FontMatch match{};
   };
 
+  // A font file's bytes as the font library reads them.
+  [[nodiscard]] inline std::span<const std::uint8_t> byteSpan(const QByteArray& bytes) noexcept {
+    return telar::byteView({bytes.constData(), static_cast<std::size_t>(bytes.size())});
+  }
+
   FontData loadFontData(const FontConfiguration& font);
   QByteArray loadFontBytes(const QString& path);
   ds::Option<FontData> loadFallbackFontData(const fonts::FontQuery& query);
@@ -37,7 +43,7 @@ namespace telar::gui::qt {
       const auto data = loadFontData(font);
 
       bytes_.clear();
-      bytes_.extend({reinterpret_cast<const std::uint8_t*>(data.bytes.constData()), static_cast<std::size_t>(data.bytes.size())});
+      bytes_.extend(byteSpan(data.bytes));
       match_ = data.match;
     }
 

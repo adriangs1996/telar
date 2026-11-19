@@ -54,7 +54,7 @@ namespace telar::gui::qt {
       auto task = std::make_shared<Task>(Task{.work = std::move(work), .done = std::move(done), .outcome = {}});
 
       ++pending_;
-      QMetaObject::invokeMethod(worker_, [this, task] mutable {
+      QMetaObject::invokeMethod(worker_, [this, task = std::move(task)] mutable {
         try {
           if constexpr (std::is_void_v<Value>) {
             task->work();

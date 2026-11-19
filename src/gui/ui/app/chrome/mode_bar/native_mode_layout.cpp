@@ -113,9 +113,9 @@ namespace telar::gui::qt {
     }
   }
 
-  void NativeModeLayout::setPixelSize(qreal pixelSize) {
-    if (std::isfinite(pixelSize) && pixelSize >= 0 && pixel_size_ != pixelSize) {
-      pixel_size_ = pixelSize;
+  void NativeModeLayout::setPixelSize(qreal pixel_size) {
+    if (std::isfinite(pixel_size) && pixel_size >= 0 && pixel_size_ != pixel_size) {
+      pixel_size_ = pixel_size;
       emit pixelSizeChanged();
       polish();
     }

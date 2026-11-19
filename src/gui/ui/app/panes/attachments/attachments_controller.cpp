@@ -140,7 +140,7 @@ namespace telar::gui::qt {
     const Inputs inputs{
         .host = application::workbench::geometry(session),
         .terminal = display_.geometry.terminal,
-        .reserved = shelf ? tab->layout.reservedArea() : CellRectangle{},
+        .reserved = !shelf ? CellRectangle{} : tab->layout.reservedArea(),
         .density = display_.density,
         .shelf = shelf,
     };

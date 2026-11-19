@@ -280,14 +280,17 @@ namespace telar::gui::qt {
           const auto batch = std::min(batch_glyphs, count - first);
 
           for (std::size_t index = 0; index < batch; ++index) {
-            full.atMut(index) = glyphs[static_cast<qsizetype>(first + index)].bounds(position.origin);
+            const auto glyph_index = first + index;
+
+            full.atMut(index) = glyphs[static_cast<qsizetype>(glyph_index)].bounds(position.origin);
             clipped.atMut(index) = full[index];
           }
 
           Rect::intersectEach(clipped.viewMut().first(batch), position.area);
 
           for (std::size_t index = 0; index < batch; ++index) {
-            const auto& glyph = glyphs[static_cast<qsizetype>(first + index)];
+            const auto glyph_index = first + index;
+            const auto& glyph = glyphs[static_cast<qsizetype>(glyph_index)];
             const auto quad = position.quad(full[index], clipped[index], placement_);
             const auto atlas = glyph.mask->texture->normalizedTextureSubRect();
             const QRectF source{atlas.x() + (quad.source.x() * atlas.width()), atlas.y() + (quad.source.y() * atlas.height()), quad.source.width() * atlas.width(), quad.source.height() * atlas.height()};
@@ -422,6 +425,7 @@ namespace telar::gui::qt {
 
               insertChildNodeBefore(mesh.get(), previous.get());
               meshes_[index] = mesh.release();
+              previous.reset();
             } else {
               meshes_.append(&adoptSceneNode(*this, std::move(mesh)));
             }

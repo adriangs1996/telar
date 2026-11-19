@@ -211,7 +211,12 @@ namespace telar::gui::qt {
   }
 
   const application::components::RenderedContent<application::components::BarContent::capacity, ApplicationAllocator>* ConfigurationSource::fixedBar(application::components::Position position) const noexcept {
-    const auto& bar = fixed_bars_.at(static_cast<std::size_t>(position));
+    const auto index = static_cast<std::size_t>(position);
+    if (index >= fixed_bars_.size()) {
+      return nullptr;
+    }
+
+    const auto& bar = fixed_bars_[index];
 
     return bar ? &bar->get() : nullptr;
   }
@@ -570,9 +575,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    std::shared_ptr<Generation> previous = std::move(generation_).intoShared();
-
-    lua_.post([previous = std::move(previous)] mutable {
+    lua_.post([previous = std::move(generation_)] mutable {
       previous.reset();
     },
         [](const LuaOutcome<void>&) {});

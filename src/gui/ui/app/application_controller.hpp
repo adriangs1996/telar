@@ -272,6 +272,11 @@ namespace telar::gui::qt {
 
     void initializeComponents();
     void initializeElements();
+    void initializeCopy();
+    void initializeOverlays();
+    void initializeMachineChrome();
+    void initializePeekAndMonitor();
+    void initializeConfigurationSource();
     // The mod content a record carries for its slots, keyed by slot name.
     void refreshElementBars();
     void initializePicks();

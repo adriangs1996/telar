@@ -102,7 +102,7 @@ namespace telar::gui::qt {
       explicit FittedText(ConcurrentMemory& memory)
           : glyphs(memory) {}
 
-      void shape(ResidentFonts& fonts, std::string_view text, fonts::TextRequest request);
+      void shape(ResidentFonts& fonts, std::string_view fitted, fonts::TextRequest request);
 
       fonts::TextLayout<ConcurrentMemory> glyphs;
       TextFit::Buffer text{};

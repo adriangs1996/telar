@@ -149,16 +149,18 @@ namespace telar::gui::qt {
     }
   }
 
-  void TextScene::paintChunk(QSGNode& text, QSGNode*& next_chunk, QQuickWindow& window, const std::shared_ptr<const FontCollection>& collection, fonts::GlyphRasterization rasterization, const ChromeTextPaint& paint) {
+  std::unique_ptr<QSGNode> TextScene::paintChunk(QSGNode*& next_chunk, QQuickWindow& window, const std::shared_ptr<const FontCollection>& collection, fonts::GlyphRasterization rasterization, const ChromeTextPaint& paint) {
     auto* previous = next_chunk;
     if (previous != nullptr) {
       next_chunk = previous->nextSibling();
     }
 
     auto* painted = paintTerminalText(previous, window, paint, collection, rasterization);
-    if (painted != previous) {
-      appendChunk(text, next_chunk, std::unique_ptr<QSGNode>{painted});
+    if (painted == previous) {
+      return nullptr;
     }
+
+    return std::unique_ptr<QSGNode>{painted};
   }
 
   void TextScene::flushCells(std::span<const CellValue> cells) {
@@ -182,7 +184,9 @@ namespace telar::gui::qt {
     paint.style = batch.style;
     paint.placement = TextInkPlacement{.origin = bounds_.topLeft(), .baseline = grid_.baseline / scale_, .clip = clip_};
     try {
-      paintChunk(*text_, next_chunk_, window_, collection_, rasterization_, paint);
+      if (auto painted = paintChunk(next_chunk_, window_, collection_, rasterization_, paint)) {
+        appendChunk(*text_, next_chunk_, std::move(painted));
+      }
     } catch (const std::runtime_error&) {
       addFallbackCells(batch, cells);
     }
@@ -228,7 +232,9 @@ namespace telar::gui::qt {
       paint.revision = revision_;
       paint.style = placement.style;
       paint.placement = TextInkPlacement{.origin = placement.origin, .baseline = placement.baseline, .clip = clip_};
-      paintChunk(*text_, next_chunk_, window_, collection_, rasterization_, paint);
+      if (auto painted = paintChunk(next_chunk_, window_, collection_, rasterization_, paint)) {
+        appendChunk(*text_, next_chunk_, std::move(painted));
+      }
     } catch (const std::runtime_error&) {
       addQtText(text, font, format, placement);
     }

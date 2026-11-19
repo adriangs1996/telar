@@ -12,6 +12,7 @@
 #include <array>
 #include <cstdint>
 #include <optional>
+#include <utility>
 
 namespace telar::gui::qt {
 
@@ -31,12 +32,19 @@ namespace telar::gui::qt {
     Q_PROPERTY(qreal ratio READ ratio WRITE setRatio NOTIFY layoutChanged)
 
   public:
-    enum Direction : int {
+    enum class Direction : std::uint8_t {
       row,
       column,
       stack,
     };
     Q_ENUM(Direction)
+
+    // The curve a child eases its pose along; an element's `easing` code picks it.
+    enum class Easing : std::uint8_t {
+      out,
+      linear,
+      in_out,
+    };
 
     explicit ElementLayout(QQuickItem* parent = nullptr);
     ~ElementLayout() override;
@@ -88,15 +96,15 @@ namespace telar::gui::qt {
       Pose shown;
       std::uint64_t start_ns = 0;
       std::uint64_t duration_ns = 0;
-      int easing = 0;
+      Easing easing = Easing::out;
       bool seen = false;
     };
 
     void watch(QQuickItem* child);
     void bindClock();
-    [[nodiscard]] Pose animate(const QString& key, const Pose& target, qreal transition_ms, int easing, std::uint64_t now_ns);
+    [[nodiscard]] Pose animate(const QString& key, const Pose& target, qreal transition_ms, Easing easing, std::uint64_t now_ns);
 
-    int direction_ = row;
+    int direction_ = std::to_underlying(Direction::row);
     qreal gap_ = 0;
     ds::Array<qreal, 4> padding_{};
     int align_ = 0;

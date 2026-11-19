@@ -15,11 +15,11 @@ import telar.base.ds;
 
 namespace telar::gui::qt {
 
-  inline constexpr auto mouse_buttons = ds::Array<std::pair<Qt::MouseButton, application::terminal::input::MouseButton>, 3>{{
-      {Qt::LeftButton, application::terminal::input::MouseButton::left},
-      {Qt::MiddleButton, application::terminal::input::MouseButton::middle},
-      {Qt::RightButton, application::terminal::input::MouseButton::right},
-  }};
+  inline constexpr auto mouse_buttons = ds::Array{
+      std::pair{Qt::LeftButton, application::terminal::input::MouseButton::left},
+      std::pair{Qt::MiddleButton, application::terminal::input::MouseButton::middle},
+      std::pair{Qt::RightButton, application::terminal::input::MouseButton::right},
+  };
 
   inline application::terminal::input::MouseButton mouseButton(Qt::MouseButton button) noexcept {
     const auto* const found = std::ranges::find(mouse_buttons, button, &decltype(mouse_buttons)::value_type::first);

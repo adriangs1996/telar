@@ -19,7 +19,7 @@ namespace telar::gui::qt {
   class FontAsset {
   public:
     explicit FontAsset(const FontData& data)
-        : bytes_(memory_, {reinterpret_cast<const std::uint8_t*>(data.bytes.constData()), static_cast<std::size_t>(data.bytes.size())}),
+        : bytes_(memory_, byteSpan(data.bytes)),
           match_(data.match) {}
 
     ~FontAsset() = default;

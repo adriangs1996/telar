@@ -113,56 +113,58 @@ namespace telar::gui::qt {
     ds::Option<window_actions::Action> nativeAction(BindingActionKind kind) noexcept {
       using Native = window_actions::Action;
       using Binding = BindingActionKind;
-      constexpr auto actions = ds::Array<std::pair<Binding, Native>, 48>{{
-          {Binding::new_tab, Native::new_tab},
-          {Binding::next_tab, Native::next_tab},
-          {Binding::previous_tab, Native::previous_tab},
-          {Binding::move_tab_next, Native::move_tab_next},
-          {Binding::move_tab_previous, Native::move_tab_previous},
-          {Binding::rename_tab, Native::rename_tab},
-          {Binding::close_tab, Native::close_tab},
-          {Binding::new_workspace, Native::new_workspace},
-          {Binding::rename_workspace, Native::rename_workspace},
-          {Binding::focus_left, Native::focus_left},
-          {Binding::focus_right, Native::focus_right},
-          {Binding::focus_up, Native::focus_up},
-          {Binding::focus_down, Native::focus_down},
-          {Binding::resize_left, Native::resize_left},
-          {Binding::resize_right, Native::resize_right},
-          {Binding::resize_up, Native::resize_up},
-          {Binding::resize_down, Native::resize_down},
-          {Binding::split_horizontal, Native::split_horizontal},
-          {Binding::split_vertical, Native::split_vertical},
-          {Binding::close_pane, Native::close_pane},
-          {Binding::toggle_pane_fullscreen, Native::fullscreen},
-          {Binding::toggle_sidebar, Native::toggle_sidebar},
-          {Binding::toggle_workspace_list, Native::toggle_workspace_list},
-          {Binding::history_palette, Native::history},
-          {Binding::palette, Native::palette},
-          {Binding::goto_picker, Native::goto_picker},
-          {Binding::path_picker, Native::path_picker},
-          {Binding::suggest_command, Native::suggest_command},
-          {Binding::leave_worktree, Native::leave_worktree},
-          {Binding::forget_gone_worktrees, Native::forget_gone_worktrees},
-          {Binding::detach, Native::detach},
-          {Binding::copy_mode, Native::copy_mode},
-          {Binding::machine_picker, Native::machine_picker},
-          {Binding::next_machine, Native::next_machine},
-          {Binding::previous_machine, Native::previous_machine},
-          {Binding::add_machine, Native::add_machine},
-          {Binding::monitor, Native::monitor},
-          {Binding::process_picker, Native::process_picker},
-          {Binding::process_terminate, Native::process_terminate},
-          {Binding::process_kill, Native::process_kill},
-          {Binding::process_stop, Native::process_stop},
-          {Binding::process_continue, Native::process_continue},
-          {Binding::process_lower_priority, Native::process_lower_priority},
-          {Binding::process_copy_command, Native::process_copy_command},
-          {Binding::process_focus_pane, Native::process_focus_pane},
-          {Binding::process_review_stack, Native::process_review_stack},
-          {Binding::process_review_files, Native::process_review_files},
-          {Binding::process_review_logs, Native::process_review_logs},
-      }};
+      constexpr auto actions = ds::Array<std::pair<Binding, Native>, 48>{
+          {
+              {Binding::new_tab, Native::new_tab},
+              {Binding::next_tab, Native::next_tab},
+              {Binding::previous_tab, Native::previous_tab},
+              {Binding::move_tab_next, Native::move_tab_next},
+              {Binding::move_tab_previous, Native::move_tab_previous},
+              {Binding::rename_tab, Native::rename_tab},
+              {Binding::close_tab, Native::close_tab},
+              {Binding::new_workspace, Native::new_workspace},
+              {Binding::rename_workspace, Native::rename_workspace},
+              {Binding::focus_left, Native::focus_left},
+              {Binding::focus_right, Native::focus_right},
+              {Binding::focus_up, Native::focus_up},
+              {Binding::focus_down, Native::focus_down},
+              {Binding::resize_left, Native::resize_left},
+              {Binding::resize_right, Native::resize_right},
+              {Binding::resize_up, Native::resize_up},
+              {Binding::resize_down, Native::resize_down},
+              {Binding::split_horizontal, Native::split_horizontal},
+              {Binding::split_vertical, Native::split_vertical},
+              {Binding::close_pane, Native::close_pane},
+              {Binding::toggle_pane_fullscreen, Native::fullscreen},
+              {Binding::toggle_sidebar, Native::toggle_sidebar},
+              {Binding::toggle_workspace_list, Native::toggle_workspace_list},
+              {Binding::history_palette, Native::history},
+              {Binding::palette, Native::palette},
+              {Binding::goto_picker, Native::goto_picker},
+              {Binding::path_picker, Native::path_picker},
+              {Binding::suggest_command, Native::suggest_command},
+              {Binding::leave_worktree, Native::leave_worktree},
+              {Binding::forget_gone_worktrees, Native::forget_gone_worktrees},
+              {Binding::detach, Native::detach},
+              {Binding::copy_mode, Native::copy_mode},
+              {Binding::machine_picker, Native::machine_picker},
+              {Binding::next_machine, Native::next_machine},
+              {Binding::previous_machine, Native::previous_machine},
+              {Binding::add_machine, Native::add_machine},
+              {Binding::monitor, Native::monitor},
+              {Binding::process_picker, Native::process_picker},
+              {Binding::process_terminate, Native::process_terminate},
+              {Binding::process_kill, Native::process_kill},
+              {Binding::process_stop, Native::process_stop},
+              {Binding::process_continue, Native::process_continue},
+              {Binding::process_lower_priority, Native::process_lower_priority},
+              {Binding::process_copy_command, Native::process_copy_command},
+              {Binding::process_focus_pane, Native::process_focus_pane},
+              {Binding::process_review_stack, Native::process_review_stack},
+              {Binding::process_review_files, Native::process_review_files},
+              {Binding::process_review_logs, Native::process_review_logs},
+          },
+      };
 
       const auto* const found = std::ranges::find(actions, kind, &decltype(actions)::value_type::first);
 
@@ -170,12 +172,14 @@ namespace telar::gui::qt {
     }
 
     ds::Option<PaneDirection> navigationDirection(BindingActionKind kind) noexcept {
-      constexpr auto directions = ds::Array<std::pair<BindingActionKind, PaneDirection>, 4>{{
-          {BindingActionKind::navigate_left, PaneDirection::left},
-          {BindingActionKind::navigate_right, PaneDirection::right},
-          {BindingActionKind::navigate_up, PaneDirection::up},
-          {BindingActionKind::navigate_down, PaneDirection::down},
-      }};
+      constexpr auto directions = ds::Array<std::pair<BindingActionKind, PaneDirection>, 4>{
+          {
+              {BindingActionKind::navigate_left, PaneDirection::left},
+              {BindingActionKind::navigate_right, PaneDirection::right},
+              {BindingActionKind::navigate_up, PaneDirection::up},
+              {BindingActionKind::navigate_down, PaneDirection::down},
+          },
+      };
 
       const auto* const found = std::ranges::find(directions, kind, &decltype(directions)::value_type::first);
 
@@ -310,40 +314,38 @@ namespace telar::gui::qt {
     key_bindings_.interrupt();
   }
 
-  bool WindowCommands::runBinding(BindingAction action, const ConfigurationSource::Actions* resolved) {
-    try {
-      const bool configured = action.kind == BindingActionKind::extended || action.kind == BindingActionKind::command_tab;
-      if (resolved != nullptr && ((configured && action.generation != configuration_source_.configurationGeneration()) || !resolved->contains(action) || !components_.actionsLive(*resolved))) {
-        throw std::invalid_argument{"Validated component action expired"};
-      }
-
-      if (action.kind == BindingActionKind::expression) {
-        const auto hold = key_bindings_.hold();
-
-        configuration_source_.expression(action, context(), [this, hold](LuaOutcome<InputExpression> outcome) {
-          luaBindingFinished(hold, outcome.stale, outcome.error, [&] {
-            applyExpression(*outcome.value);
-          });
-        });
-      } else if (action.kind == BindingActionKind::callback) {
-        const auto hold = key_bindings_.hold();
-
-        configuration_source_.invoke(action, context(), [this, hold](LuaOutcome<ConfigurationSource::Effects> outcome) {
-          luaBindingFinished(hold, outcome.stale, outcome.error, [&] {
-            applyEffects(**outcome.value);
-          });
-        });
-      } else {
-        executeBinding(action, resolved);
-        host_.refresh();
-      }
-
-      return true;
-    } catch (const std::exception& error) {
-      status_.fail(error);
-
-      return false;
+  bool WindowCommands::runBinding(BindingAction action, const ConfigurationSource::Actions* resolved) try {
+    const bool configured = action.kind == BindingActionKind::extended || action.kind == BindingActionKind::command_tab;
+    if (resolved != nullptr && ((configured && action.generation != configuration_source_.configurationGeneration()) || !resolved->contains(action) || !components_.actionsLive(*resolved))) {
+      throw std::invalid_argument{"Validated component action expired"};
     }
+
+    if (action.kind == BindingActionKind::expression) {
+      const auto hold = key_bindings_.hold();
+
+      configuration_source_.expression(action, context(), [this, hold](LuaOutcome<InputExpression> outcome) {
+        luaBindingFinished(hold, outcome.stale, outcome.error, [&] {
+          applyExpression(*outcome.value);
+        });
+      });
+    } else if (action.kind == BindingActionKind::callback) {
+      const auto hold = key_bindings_.hold();
+
+      configuration_source_.invoke(action, context(), [this, hold](LuaOutcome<ConfigurationSource::Effects> outcome) {
+        luaBindingFinished(hold, outcome.stale, outcome.error, [&] {
+          applyEffects(**outcome.value);
+        });
+      });
+    } else {
+      executeBinding(action, resolved);
+      host_.refresh();
+    }
+
+    return true;
+  } catch (const std::exception& error) {
+    status_.fail(error);
+
+    return false;
   }
 
   void WindowCommands::applyEffects(const application::components::ResolvedEffects<ApplicationAllocator>& effects) {
@@ -845,7 +847,7 @@ namespace telar::gui::qt {
     components_.openPick(index);
   }
 
-  void WindowCommands::activateElement(const QString& slot, const QString& key, const QString& revision, int element) {
+  void WindowCommands::activateElement(const QString& slot, const QString& key, const QString& revision, int element) try { // NOLINT(bugprone-easily-swappable-parameters): QML invokes it with the elementActivated signal's arguments.
     const auto* instance = element_slots_.find(slot, key);
     if (instance == nullptr || !instance->rendered || QString::number(instance->revision) != revision || element < 0 || static_cast<std::size_t>(element) >= instance->rendered->elements.size()) {
       return;
@@ -855,28 +857,26 @@ namespace telar::gui::qt {
     const auto rendered = instance->rendered;
     const auto& node = rendered->elements[static_cast<std::size_t>(element)];
 
-    try {
-      if (node.callback != application::components::Element::none) {
-        const auto hold = key_bindings_.hold();
+    if (node.callback != application::components::Element::none) {
+      const auto hold = key_bindings_.hold();
 
-        configuration_source_.invokeElement(instance->id, node.callback, components_.context(), instance->item, [this, hold](LuaOutcome<ConfigurationSource::Effects> outcome) {
-          luaBindingFinished(hold, outcome.stale, outcome.error, [&] {
-            applyEffects(**outcome.value);
-          });
-
-          // The function may have changed state any slot reads.
-          element_slots_.invalidate();
+      configuration_source_.invokeElement(instance->id, node.callback, components_.context(), instance->item, [this, hold](LuaOutcome<ConfigurationSource::Effects> outcome) {
+        luaBindingFinished(hold, outcome.stale, outcome.error, [&] {
+          applyEffects(**outcome.value);
         });
-      } else if (node.action != application::components::Element::none && node.action < rendered->bindings.size()) {
-        static_cast<void>(runBinding(rendered->bindings[node.action], &rendered->actions));
-      } else if (const auto url = rendered->view(node.url); !url.empty()) {
-        if (const auto target = application::terminal::links::LinkTarget::fromUri(url)) {
-          static_cast<void>(links_.open(*target));
-        }
+
+        // The function may have changed state any slot reads.
+        element_slots_.invalidate();
+      });
+    } else if (node.action != application::components::Element::none && node.action < rendered->bindings.size()) {
+      static_cast<void>(runBinding(rendered->bindings[node.action], &rendered->actions));
+    } else if (const auto url = rendered->view(node.url); !url.empty()) {
+      if (const auto target = application::terminal::links::LinkTarget::fromUri(url)) {
+        static_cast<void>(links_.open(*target));
       }
-    } catch (const std::exception& error) {
-      status_.fail(error);
     }
+  } catch (const std::exception& error) {
+    status_.fail(error);
   }
 
 }

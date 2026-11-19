@@ -83,8 +83,9 @@ namespace telar::gui::qt {
     using Actions = application::components::ResolvedActions<ApplicationAllocator>;
     using ElementsRender = ds::Box<application::components::RenderedElements<ApplicationAllocator>, ApplicationAllocator>;
     // A callback held inline, never on the heap; what it captures fits in eight pointers.
+    static constexpr std::size_t done_capture_pointers = 8;
     template <typename Value>
-    using Done = ds::Function<void(LuaOutcome<Value>), 8 * sizeof(void*)>;
+    using Done = ds::Function<void(LuaOutcome<Value>), done_capture_pointers * sizeof(void*)>;
 
     // The source keeps the application's allocator, and what is prepared with it, region `a`.
     explicit ConfigurationSource(tbc::view<ApplicationAllocator&, tbc::lt::a> memory, QObject* parent = nullptr);

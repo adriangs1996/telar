@@ -81,6 +81,7 @@ namespace telar::gui::qt {
       effects.setPresented(presented);
     }
 
+    ~MachineClient() = default;
     MachineClient(const MachineClient&) = delete;
     MachineClient& operator=(const MachineClient&) = delete;
     MachineClient(MachineClient&&) = delete;
