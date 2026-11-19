@@ -3,6 +3,9 @@
 static_assert(true);
 #endif
 
+#include <csignal>
+#include <sys/resource.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 import std;
@@ -79,8 +82,32 @@ namespace {
     }
   }
 
+  // A signal or a priority reaches a process only while it is the instance the caller named.
+  void testActsOnTheNamedInstance() {
+    const auto child = ::fork();
+    if (child == 0) {
+      ::pause();
+      ::_exit(0);
+    }
+
+    check(child > 0);
+    const auto found = ProcessTable::find(child);
+
+    check(found.hasValue());
+    check(ProcessTable::signal(child, found->started_seconds + 1, 0, SIGTERM) == ProcessActionResult::gone);
+    check(ProcessTable::prioritize(child, found->started_seconds, found->started_microseconds, 5) == ProcessActionResult::done);
+    check(::getpriority(PRIO_PROCESS, static_cast<id_t>(child)) == 5);
+    check(ProcessTable::signal(child, found->started_seconds, found->started_microseconds, SIGTERM) == ProcessActionResult::done);
+
+    int status = 0;
+
+    check(::waitpid(child, &status, 0) == child && WIFSIGNALED(status) && WTERMSIG(status) == SIGTERM);
+    check(ProcessTable::signal(child, 0, 0, SIGTERM) == ProcessActionResult::gone);
+  }
+
   const telar::testing::Case case_lists_this_process{"process_table.lists_this_process", testListsThisProcess};
   const telar::testing::Case case_reread_keeps_storage{"process_table.reread_keeps_storage", testRereadKeepsStorage};
+  const telar::testing::Case case_acts_on_the_named_instance{"process_table.acts_on_the_named_instance", testActsOnTheNamedInstance};
   const telar::testing::Case case_host_detail{"process_table.host_detail", testHostDetail};
 
 }

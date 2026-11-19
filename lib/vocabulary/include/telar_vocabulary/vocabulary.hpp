@@ -58,6 +58,7 @@ namespace telar {
     agent_not_working = 14,
     interrupt_unsupported = 15,
     foreign_process = 16,
+    process_not_found = 17,
   };
 
 }

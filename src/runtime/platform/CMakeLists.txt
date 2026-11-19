@@ -8,6 +8,7 @@ telar_add_domain(runtime platform
     name_resolutions/name_resolutions.cpp
     private_tunnel/private_tunnel.cpp
     process_probe/process_inspector.cpp
+    process_table/process_table.cpp
     request_worker/request_worker.cpp
     session_host/session_host.cpp
     signals/signals.cpp

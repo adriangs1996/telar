@@ -203,6 +203,7 @@
   },
   "upward_imports": [],
   "interfaces": {
+    "lib/wire/monitor/monitor.cppm": "telar.wire.monitor",
     "src/runtime/platform/process_table/process_table.cppm": "telar.runtime.platform.process_table",
     "lib/plugins/plugins.cppm": "telar.plugins",
     "lib/tls/tls.cppm": "telar.tls",
@@ -949,6 +950,7 @@
     }
   ],
   "implementations": {
+    "src/runtime/platform/process_table/process_table.cpp": "telar.runtime.platform.process_table",
     "src/runtime/platform/process_table/macos/process_table.cpp": "telar.runtime.platform.process_table",
     "src/runtime/platform/process_table/linux/process_table.cpp": "telar.runtime.platform.process_table",
     "lib/wire/agents/agents.cpp": "telar.wire.agents",

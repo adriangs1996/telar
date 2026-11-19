@@ -2,11 +2,14 @@ module telar.runtime.platform.process_table;
 
 import std;
 import telar.sys.posix;
+import telar.sys.linux_api;
+import telar.sys.process;
 
 import telar.runtime.platform.proc_file;
 import telar.platform.fs;
 import telar.platform.primitives;
 import telar.base.memory.allocators;
+import telar.wire.monitor;
 import telar.base.text;
 import telar.base.text.utf8;
 import telar.base.ds;
@@ -104,6 +107,30 @@ namespace telar::runtime {
 
   ds::Option<ProcessRecord> ProcessTable::find(pid_t process) noexcept {
     return record(process);
+  }
+
+  ProcessActionResult ProcessTable::signal(pid_t process, std::uint64_t started_seconds, std::uint64_t started_microseconds, int signal) noexcept {
+    if (process <= 0) {
+      return ProcessActionResult::gone;
+    }
+
+    // The descriptor names this instance: the check below and the signal reach the same process.
+    FileDescriptor instance{static_cast<int>(::syscall(SYS_pidfd_open, process, 0))};
+    if (!instance && sys::lastError() != ENOSYS) {
+      return actionFailure(sys::lastError());
+    }
+
+    if (!sameProcessInstance(process, started_seconds, started_microseconds)) {
+      return ProcessActionResult::gone;
+    }
+
+    // Kernels before 5.3 have no pidfd; they keep the instant between the check and kill.
+    const auto sent = instance ? ::syscall(SYS_pidfd_send_signal, instance.get(), signal, nullptr, 0) : ::kill(process, signal);
+    if (sent != 0) {
+      return actionFailure(sys::lastError());
+    }
+
+    return ProcessActionResult::done;
   }
 
 }

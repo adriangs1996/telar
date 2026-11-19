@@ -9,20 +9,12 @@ import telar.tbc;
 
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
+import telar.wire.monitor;
 import telar.base.ds;
 
 // Interface: platform/process_table.cppm
 export {
   namespace telar::runtime {
-
-    enum class ProcessState : std::uint8_t {
-      unknown,
-      running,
-      sleeping,
-      idle,
-      stopped,
-      zombie,
-    };
 
     // One process as the kernel lists it, of any user.
     struct ProcessRecord {
@@ -45,6 +37,15 @@ export {
       FixedText<name_capacity> name{};
     };
 
+    enum class ProcessActionResult : std::uint8_t {
+      done,
+      // No process has the pid, or another one does now.
+      gone,
+      // The runtime's user may not act on it.
+      denied,
+      failed,
+    };
+
     // Reads the kernel's process table. It keeps the buffer a listing needs between reads, so a read
     // allocates only when the table outgrows every earlier one.
     class ProcessTable {
@@ -57,9 +58,28 @@ export {
       // One process, none once it is gone.
       static ds::Option<ProcessRecord> find(pid_t process) noexcept;
 
+      // Sends the signal to the process if it is still the instance that started then; a start of
+      // zero accepts whichever process has the pid. Linux sends it through a pidfd, so a pid recycled
+      // after the check never receives it; macOS has none, which leaves the instant between the
+      // check and kill.
+      static ProcessActionResult signal(pid_t process, std::uint64_t started_seconds, std::uint64_t started_microseconds, int signal) noexcept;
+
+      // Sets the nice value of the process if it is still that instance.
+      static ProcessActionResult prioritize(pid_t process, std::uint64_t started_seconds, std::uint64_t started_microseconds, int nice) noexcept;
+
     private:
       tbc::view<ds::Vec<std::byte, ConcurrentMemory>, tbc::lt::a> buffer_;
     };
 
   }
+}
+
+// Shared by the platforms' units of this module.
+namespace telar::runtime {
+
+  // Whether the process with the pid is still the instance that started then.
+  bool sameProcessInstance(pid_t process, std::uint64_t started_seconds, std::uint64_t started_microseconds) noexcept;
+
+  ProcessActionResult actionFailure(int error) noexcept;
+
 }

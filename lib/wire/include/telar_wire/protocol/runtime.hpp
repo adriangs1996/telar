@@ -50,7 +50,7 @@ namespace telar {
 
   template <>
   struct MessageSchema<RequestFailed>
-      : Schema<Direction::server, ServerTag::request_failed, Field<&RequestFailed::request_id, u64, "request_id">, Field<&RequestFailed::code, EnumInteger<FailureCode, u16, 1, 16>, "code">, Field<&RequestFailed::message, Utf8Tail<1024>, "message">> {};
+      : Schema<Direction::server, ServerTag::request_failed, Field<&RequestFailed::request_id, u64, "request_id">, Field<&RequestFailed::code, EnumInteger<FailureCode, u16, 1, 17>, "code">, Field<&RequestFailed::message, Utf8Tail<1024>, "message">> {};
 
   struct RuntimeStopping {};
 

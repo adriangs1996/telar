@@ -3,8 +3,10 @@ module telar.runtime.platform.process_table;
 import std;
 import telar.sys.posix;
 import telar.sys.apple;
+import telar.sys.process;
 
 import telar.base.memory.allocators;
+import telar.wire.monitor;
 import telar.base.ds;
 
 namespace telar::runtime {
@@ -131,6 +133,18 @@ namespace telar::runtime {
     }
 
     return record(information);
+  }
+
+  ProcessActionResult ProcessTable::signal(pid_t process, std::uint64_t started_seconds, std::uint64_t started_microseconds, int signal) noexcept {
+    if (process <= 0 || !sameProcessInstance(process, started_seconds, started_microseconds)) {
+      return ProcessActionResult::gone;
+    }
+
+    if (::kill(process, signal) != 0) {
+      return actionFailure(sys::lastError());
+    }
+
+    return ProcessActionResult::done;
   }
 
 }
