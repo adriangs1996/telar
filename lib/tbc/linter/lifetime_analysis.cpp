@@ -1610,7 +1610,7 @@ namespace tbc_lint {
           callee = construction->getConstructor();
         }
 
-        return callee != nullptr && context_.getSourceManager().isInSystemHeader(callee->getLocation());
+        return callee != nullptr && (context_.getSourceManager().isInSystemHeader(callee->getLocation()) || ownerMember(*callee));
       }
 
       static std::string unsupportedName(const clang::Expr* expression) {
@@ -3387,7 +3387,8 @@ namespace tbc_lint {
 
       std::optional<loans> elidedResult(const clang::FunctionDecl& callee, const clang::CallExpr& call, const clang::Expr* object, const state& current) {
         const auto& sources = context_.getSourceManager();
-        if (sources.isInSystemHeader(sources.getExpansionLoc(callee.getLocation()))) {
+        // An owner the project marks is read as the standard library's, whose results its model knows.
+        if (sources.isInSystemHeader(sources.getExpansionLoc(callee.getLocation())) || ownerMember(callee)) {
           return std::nullopt;
         }
 
@@ -3705,8 +3706,9 @@ namespace tbc_lint {
           return receiverContents(object, current);
         }
 
-        // Releasing transfers ownership, which remains an explicit boundary.
-        if (callee.getNameAsString() == "release") {
+        // Releasing transfers ownership, which remains an explicit boundary: the standard library's
+        // `release`, or Rust's `into_raw` on an owner the project marks.
+        if (callee.getNameAsString() == "release" || callee.getNameAsString() == "intoRaw") {
           return std::nullopt;
         }
 
@@ -4780,7 +4782,7 @@ namespace tbc_lint {
           // never an enclosing object that it was merged into.
           // Releasing a unique owner hands its object to an owner the analysis does not see, as Rust's
           // Box::into_raw does: borrows of that object become unchecked, like a raw foreign pointer's.
-          if (uniqueOwner(type) && name == "release") {
+          if (uniqueOwner(type) && (name == "release" || name == "intoRaw")) {
             for (const auto* target : objectTargets(*object, current)) {
               if (sameType(target->getType(), type)) {
                 releaseOwnership(*target, current);

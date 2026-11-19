@@ -568,6 +568,16 @@ Neither `lt::self` nor `lt::static_storage` is a lifetime of the class, as a
 Rust struct's lifetime parameter is: a constructor of a class whose other fields
 carry no label still keeps every argument that lends.
 
+## Owners
+
+A class template marked `TBC_OWNER`, from `<tbc/annotations.hpp>`, owns one value in an
+allocation of its own, as Rust's `Box` does. The checker reads it as the standard library's
+unique owner: its value lies one level below it, so a borrow of the value outlives the owner's
+moves, as a vector of them growing; resetting or reassigning it destroys the value; and
+`intoRaw`, as `Box::into_raw`, hands the value to an owner the analysis does not see, like
+`release`. Its implementation is trusted rather than checked, like the unsafe code behind `Box`,
+and it declares `element_type` and deletes its copy constructor, as `std::unique_ptr` does.
+
 ## Shared types
 
 A class marked `TBC_SHARED`, from `<tbc/annotations.hpp>`, keeps every borrow it hands

@@ -87,3 +87,110 @@ void queueTakenOwner(tbc::view<spec::request_queue&> queue) {
 }
 
 // END CASE
+
+// CASE: runtime.box_growth_keeps_value
+// PAIR: runtime.box_owner
+// SOURCE: lib/base/include/telar_base/ds/containers.hpp :: Box
+// STATUS: implemented
+// CONTRACT: A class marked TBC_OWNER owns its value through an allocation of its own, as the standard library's unique owner does: the value lies one level below it, so moving the owner, as a growing vector does, leaves borrows of the value valid.
+// SCENARIO: A boxed record's name is read after the vector holding the boxes grows; accept.
+namespace spec_box {
+  template <typename Value>
+  class TBC_OWNER box {
+  public:
+    using element_type = Value;
+
+    box() noexcept = default;
+
+    explicit box(Value* value) noexcept
+        : value_(value) {}
+
+    box(const box&) = delete;
+    box& operator=(const box&) = delete;
+
+    box(box&& other) noexcept
+        : value_(std::exchange(other.value_, nullptr)) {}
+
+    box& operator=(box&& other) noexcept {
+      delete value_;
+      value_ = std::exchange(other.value_, nullptr);
+      return *this;
+    }
+
+    ~box() {
+      delete value_;
+    }
+
+    [[nodiscard]] const Value& get() const noexcept {
+      return *value_;
+    }
+
+    [[nodiscard]] Value& getMut() noexcept {
+      return *value_;
+    }
+
+    void reset() noexcept {
+      delete value_;
+      value_ = nullptr;
+    }
+
+    [[nodiscard]] Value* intoRaw() noexcept {
+      return std::exchange(value_, nullptr);
+    }
+
+  private:
+    Value* value_ = nullptr;
+  };
+
+  struct record {
+    std::string name;
+  };
+
+  void observe(std::string_view text);
+}
+
+void runtimeBoxGrowthKeepsValue(std::vector<spec_box::box<spec_box::record>>& boxes) {
+  const std::string_view name = boxes.front().get().name;
+
+  boxes.push_back(spec_box::box<spec_box::record>{new spec_box::record{}});
+  spec_box::observe(name);
+}
+
+// END CASE
+
+// CASE: runtime.box_reset_ends_value
+// PAIR: runtime.box_owner
+// SOURCE: lib/base/include/telar_base/ds/containers.hpp :: Box
+// STATUS: implemented
+// CONTRACT: A class marked TBC_OWNER owns its value through an allocation of its own, as the standard library's unique owner does: resetting it destroys the value, which ends every borrow of it.
+// SCENARIO: A boxed record's name is read after its owner is reset; reject at the reset.
+void runtimeBoxResetEndsValue(spec_box::box<spec_box::record>& owner) {
+  const std::string_view name = owner.get().name;
+
+  owner.reset(); // expected-error [tbc-invalidated-borrow]
+  spec_box::observe(name);
+}
+
+// END CASE
+
+// CASE: runtime.box_into_raw_hands_over
+// PAIR: runtime.box_owner
+// SOURCE: src/runtime/model/slot_store/slot_store.cppm :: SlotStore::insertProvisional
+// STATUS: implemented
+// CONTRACT: A class marked TBC_OWNER owns its value through an allocation of its own, as the standard library's unique owner does: `intoRaw`, as Rust's `Box::into_raw`, hands the value to an owner the analysis does not see, so the pointer it returns borrows nothing of the owner.
+// SCENARIO: A store keeps the raw pointer a boxed parameter hands over; accept.
+namespace spec_box {
+  struct slots {
+    void keep(box<record> value) {
+      items[0] = value.intoRaw();
+    }
+
+    record* items[4]{};
+  };
+
+  record* handOver() {
+    return box<record>{}.intoRaw();
+  }
+}
+
+// END CASE

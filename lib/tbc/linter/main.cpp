@@ -5,6 +5,7 @@
 #include "lifetime_analysis.hpp"
 #include "shared_access.hpp"
 #include "standard_containers.hpp"
+#include "view_type.hpp"
 
 #include <clang/AST/GlobalDecl.h>
 #include <clang/AST/Mangle.h>
@@ -60,7 +61,8 @@ namespace {
       }
 
       const auto* function = result.Nodes.getNodeAs<clang::FunctionDecl>("function");
-      if (compiled_ && function != nullptr && visited_.insert(function->getCanonicalDecl()).second && claim(*function, *result.Context)) {
+      // An owner's implementation is trusted, as the standard library's is.
+      if (compiled_ && function != nullptr && !tbc_lint::ownerMember(*function) && visited_.insert(function->getCanonicalDecl()).second && claim(*function, *result.Context)) {
         analysis_.analyze(*function, *result.Context);
         if (const auto* definition = function->getDefinition()) {
           tbc_lint::checkSharedAccess(*definition, *result.Context, errors_);

@@ -14,6 +14,16 @@
 #define TBC_SHARED
 #endif
 
+// A class template marked TBC_OWNER owns one object in an allocation of its own, as Rust's Box does:
+// the checker reads it as the standard library's unique owner, so its object lies one level below
+// it, moving it hands that object over, and a borrow of the object outlives the owner's moves. Its
+// implementation is trusted rather than checked, like the unsafe code behind Box.
+#if defined(__clang__)
+#define TBC_OWNER [[clang::annotate("tbc::owner")]]
+#else
+#define TBC_OWNER
+#endif
+
 // A function template marked TBC_CONSTRUCTS builds its first template argument from the arguments
 // of its trailing parameter pack, as `Box::new(Value::new(arguments))` does: its result keeps what
 // that type's constructor keeps of them, and borrows its other arguments.

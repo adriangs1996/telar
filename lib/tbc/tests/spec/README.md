@@ -32,8 +32,8 @@ comparison. Notes are permitted but their wording and locations are not yet part
 of the assertion. There is no message-substring match that can accidentally
 accept a different rule's warning.
 
-The corpus contains **395 cases in 181 groups**: 200 accepted and 195 rejected
-examples. There are 344 implemented regressions and 51 explicitly pending
+The corpus contains **398 cases in 182 groups**: 202 accepted and 196 rejected
+examples. There are 347 implemented regressions and 51 explicitly pending
 requirements. The original 58 cases are supplemented by 74 inference cases,
 35 pointer and lambda cases, 45 standard-library cases, 20 third-party library
 cases, 44 storage-place cases, 2 system-macro cases, 2 elided-contract cases,
@@ -55,7 +55,7 @@ A passing pending positive case does not establish support for its contract.
 | `ebnf.cpp` | 4 | `lib/ebnf/parser/parser.cppm`, `node`, `parse`, and `parseRule`: `string_view` text persists in recursively nested vectors of AST children. Moving/copying AST ownership does not deep-copy source text. |
 | `runtime_buffers.cpp` | 8 | `memory/byte_queue.hpp`: growth can deallocate storage and compaction can change element identity. `memory/retained_stream.hpp::read` returns caller-destination storage, not receiver storage. Appended uninitialized bytes require writes before reads. |
 | `runtime_sqlite.cpp` | 6 | `history/database.cpp`: `Statement::text` exposes `sqlite3_column_text`, `next` steps, `reset` resets, destruction finalizes, and text/blob bind uses `SQLITE_TRANSIENT`. `history/result_rows.hpp` copies text before retaining rows. |
-| `runtime_ownership.cpp` | 6 | `memory/allocator.hpp`: `AllocationDeleter` retains an allocator pointer used during destruction; `Owned` is a custom-deleter unique pointer. `platform/request_queue.hpp::take` moves the value and resets the old optional slot. |
+| `runtime_ownership.cpp` | 9 | `memory/allocator.hpp`: `AllocationDeleter` retains an allocator pointer used during destruction; `Owned` is a custom-deleter unique pointer. `platform/request_queue.hpp::take` moves the value and resets the old optional slot. `ds/containers.hpp::Box`, marked TBC_OWNER, is read as the standard unique owner: its value outlives the vector of boxes growing, `reset` destroys it, and `intoRaw` hands it to an owner the analysis does not see. |
 | `gui_fonts.cpp` | 7 | `fonts/face.hpp/.cpp`: a foreign font face retains its font bytes; `shape` resets the HarfBuzz buffer and exposes glyph arrays; `rasterize` reuses the FreeType glyph slot. Copying values differs from retaining those views. Distinct faces have distinct scratch resources. |
 | `gui_history.cpp` | 4 | `history/page_storage.hpp`: decoded text is copied into owned strings; compatible row-vector swaps transfer allocation ownership rather than destroying elements. A view follows the transferred storage's new owner. |
 | `callbacks.cpp` | 7 | GUI machine-profile workers use owning request fields; runtime `OwnedPathQuery::assign` copies root/query text. Compare retained captures with synchronous layout callbacks and context-bounded queued invocation in `ui/app/panes/terminal/scene/window_images.cpp`. A lifetime guard for one context does not protect unrelated captures. |
