@@ -1,6 +1,7 @@
 #include "system_library.hpp"
 
 #include <tbc/annotations.hpp>
+#include <tbc/view.hpp>
 
 #include <cstddef>
 #include <memory>
@@ -228,6 +229,20 @@ namespace constness {
 
   void appendThrough(const rows_view& view) {
     view.rows->push_back(1); // expected-error [tbc-contract-violation]
+  }
+}
+
+// END CASE
+
+// CASE: constness.shared_raw_pointer
+// PAIR: constness.shared_access
+// SOURCE: src/gui/ui/design/elements/element_layout.cpp :: ElementLayout::itemChange (Qt hands the added child item through a const change record)
+// STATUS: implemented
+// CONTRACT: A const method, or a reference to const, lends shared everything its object reaches, as Rust's `&T` does: nothing reached through a reference, a pointer or a smart pointer changes through it, except a shared type, a synchronization primitive or an opaque C object.
+// SCENARIO: A function that receives a view by reference to const takes the pointer the view holds out through tbc::raw, as unsafe Rust reads a `*mut T` out of a `&T`, and appends through it; accept.
+namespace constness {
+  void appendRaw(const rows_view& view) {
+    tbc::raw(view.rows)->push_back(1);
   }
 }
 

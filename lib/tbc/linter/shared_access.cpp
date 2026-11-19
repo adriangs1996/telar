@@ -128,7 +128,10 @@ namespace tbc_lint {
       // An argument bound to a non-const reference may be mutated, and so may what a pointer to
       // non-const designates.
       void arguments(const clang::FunctionDecl* callee, llvm::ArrayRef<const clang::Expr*> arguments) {
-        if (callee == nullptr) {
+        // `tbc::raw` takes a pointer out of the checker's reach, as unsafe Rust reads a `*mut T` out of
+        // a `&T`: whoever writes through it answers for that.
+        const auto* pattern = callee == nullptr ? nullptr : callee->getTemplateInstantiationPattern();
+        if (callee == nullptr || annotated(*callee, "tbc::raw") || (pattern != nullptr && annotated(*pattern, "tbc::raw"))) {
           return;
         }
 

@@ -32,12 +32,12 @@ comparison. Notes are permitted but their wording and locations are not yet part
 of the assertion. There is no message-substring match that can accidentally
 accept a different rule's warning.
 
-The corpus contains **410 cases in 188 groups**: 208 accepted and 202 rejected
-examples. There are 359 implemented regressions and 51 explicitly pending
+The corpus contains **411 cases in 188 groups**: 209 accepted and 202 rejected
+examples. There are 360 implemented regressions and 51 explicitly pending
 requirements. The original 58 cases are supplemented by 74 inference cases,
 37 pointer and lambda cases, 45 standard-library cases, 22 third-party library
 cases, 44 storage-place cases, 2 system-macro cases, 2 elided-contract cases,
-4 retention-path cases, 3 static-result cases, 2 opaque-constructor cases, 18 elision, self-field and labeled-field cases, 2 deduced-result cases, 73 declaration cases, 10 cross-unit cases, and 11 constness cases.
+4 retention-path cases, 3 static-result cases, 2 opaque-constructor cases, 18 elision, self-field and labeled-field cases, 2 deduced-result cases, 73 declaration cases, 10 cross-unit cases, and 12 constness cases.
 A passing pending positive case does not establish support for its contract.
 
 ## Source inventory
@@ -62,7 +62,7 @@ A passing pending positive case does not establish support for its contract.
 | `contracts.cpp` | 27 | Contrast a result tied to region `a` with an independent `b` input, and a function allowed to return either of two `a` inputs. Check an out-of-line method's elided result against its receiver. A `static_storage` result outlives a dying argument at the call site, and its definition may return only literals or static objects. Retain the modeled/unmodeled call-boundary requirements. A constructor without a visible body retains the arguments whose parameters share a region with a field of its class, or, with no labeled field, every argument that can lend. An unannotated declaration follows Rust's lifetime elision, and its out-of-line definition is checked against it, except for an override of a library virtual; a deduced return type is no contract. A field labeled `lt::self` borrows only its pinned object, and those internal borrows survive calls that mutate it and may carry a region the object already keeps; what a labeled field owns is in its region. |
 | `control_flow.cpp` | 8 | Conditional ByteQueue growth and allocator cleanup during exceptions motivate CFG-sensitive checks. One invalidating path is enough if it reaches a use; an early return or an owned copy can remove the conflict. `PtyResponseQueue::append` and `Reply::publish`: one retaining path is enough too, whatever value selects it, while separate copying and retaining functions are checked apart. An owner retained beside a view keeps alive only the object it owns. |
 | `cross_unit.cpp` | 10 | `JsonNode<Memory>` in `lib/base/text/json`, whose accessors and explicit instantiations live in the implementation unit, the CLI's `HistoryPathVisitor`, and the proxy relay's `FlowStream`s over `SocketStream`: a call into a function another unit defines is known by its declaration, as every call is. A const lookup or count ends no borrow of its receiver, while a lookup for mutable access, an append and a truncation do, recursive or not; a virtual call and a final override are bound by the same declaration; wrappers lent to a call keep their own references to their streams whether or not a checked unit defines the streams' reads and writes, and two wrappers over one stream overlap. |
-| `constness.cpp` | 6 | `JsonNode::find`, `DropChannel::take` and `SlotIndexes::forEach` in `lib/base`, and the GUI's library item overrides: a project type never overloads a method on constness, member templates included, while an rvalue-receiver overload and an override, whose signature its base chose, are not such overloads. |
+| `constness.cpp` | 12 | `JsonNode::find`, `DropChannel::take` and `SlotIndexes::forEach` in `lib/base`, and the GUI's library item overrides: a project type never overloads a method on constness, member templates included, while an rvalue-receiver overload and an override, whose signature its base chose, are not such overloads. Shared access lends shared everything its object reaches, except a shared type, a synchronization primitive, an opaque C object, or a pointer taken out through `tbc::raw`. |
 | `access_validity.cpp` | 4 | Glyph bitmap row slicing and allocator null checks motivate bounds/nullability requirements in addition to borrow lifetimes. Unproven bounds are not a claim that every runtime index is actually invalid. |
 
 ### Deliberate reductions and preconditions
