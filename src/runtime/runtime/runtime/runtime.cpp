@@ -25,6 +25,9 @@ namespace telar::runtime {
     ds::Array<AgentSnapshotEntry, AgentRegistry<ConcurrentMemory>::capacity> entries;
     auto& directories = directories_;
     auto& placeholders = placeholders_;
+    // Which entries show their manifest's placeholder: the texts are lent once every one is written,
+    // as Rust lends no element of an array it still indexes mutably.
+    ds::Array<bool, AgentRegistry<ConcurrentMemory>::capacity> placeholder_titles{};
     std::size_t count = 0;
     const auto now = wallMilliseconds();
 
@@ -48,7 +51,10 @@ namespace telar::runtime {
       auto provider = describeProvider(agent->provider);
       const auto* manifest = model.manifests.find(agent->provider);
       if (manifest != nullptr) {
-        provider = {.name = manifest->name.view(), .display_name = manifest->displayName(), .placeholder = manifest->placeholderTitle(placeholders.atMut(count)), .attachments = manifest->attachments};
+        FixedText<96> generated;
+
+        placeholders.atMut(count).assign(manifest->placeholderTitle(generated));
+        provider = {.name = manifest->name.view(), .display_name = manifest->displayName(), .attachments = manifest->attachments};
       }
 
       std::string_view cwd = pane->cwd;
@@ -63,6 +69,10 @@ namespace telar::runtime {
         directories.atMut(count).assign(utf8Prefix(cwd, 48));
       }
 
+      const bool terminal_title = agent->title_source == AgentTitleSource::telar && !pane->terminal.effects.title().empty();
+      const bool placeholder_title = !terminal_title && agent->title.view().empty();
+
+      placeholder_titles.atMut(count) = placeholder_title && manifest != nullptr;
       entries.atMut(count) = {
           .pane_id = pane->id,
           .pane_generation = pane->generation,
@@ -72,11 +82,10 @@ namespace telar::runtime {
           .session_id = agent->session_id,
           .workspace_label = utf8Prefix(workspace->displayName(), 48),
           .tab_label = tab->label,
-          .session_title = agent->title_source == AgentTitleSource::telar && !pane->terminal.effects.title().empty() ? utf8Prefix(pane->terminal.effects.title(), 96) : agent->title.view().empty() ? provider.placeholder
-                                                                                                                                                                                                    : agent->title.view(),
-          .title_source = agent->title_source == AgentTitleSource::telar && !pane->terminal.effects.title().empty() ? AgentTitleSource::terminal : agent->title_source,
+          .session_title = terminal_title ? utf8Prefix(pane->terminal.effects.title(), 96) : placeholder_title ? provider.placeholder
+                                                                                                               : agent->title.view(),
+          .title_source = terminal_title ? AgentTitleSource::terminal : agent->title_source,
           .title_state = agent->title_state,
-          .cwd_label = directories[count].view(),
           .provider = agent->provider,
           .provider_name = provider.name,
           .display_name = provider.display_name,
@@ -100,6 +109,13 @@ namespace telar::runtime {
       };
 
       ++count;
+    }
+
+    for (std::size_t index = 0; index < count; ++index) {
+      entries.atMut(index).cwd_label = directories[index].view();
+      if (placeholder_titles[index]) {
+        entries.atMut(index).session_title = placeholders[index].view();
+      }
     }
 
     client.connection.send(AgentSnapshot{registry.revision() + model.workspace_revision, std::span{entries}.first(count)});
