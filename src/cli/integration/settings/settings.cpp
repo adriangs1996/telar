@@ -659,6 +659,19 @@ namespace telar::runtime::cli::integration {
     return entry;
   }
 
+  bool HookSettings::removeOwnCommands(JsonNode<Memory>& commands, bool& changed) const {
+    for (std::size_t command = 0; command < commands.children().size();) {
+      if (isOwnCommand(commands.children()[command])) {
+        commands.erase(command);
+        changed = true;
+      } else {
+        ++command;
+      }
+    }
+
+    return commands.children().empty();
+  }
+
   bool HookSettings::removeEvents(JsonNode<Memory>& hooks, std::span<const std::string_view> events) const {
     bool changed = false;
 
@@ -676,16 +689,7 @@ namespace telar::runtime::cli::integration {
           empty = isOwnCommand(entry);
           changed = empty || changed;
         } else if (auto* commands = entry.findMut("hooks"); commands != nullptr && commands->kind() == JsonKind::array) {
-          for (std::size_t command = 0; command < commands->children().size();) {
-            if (isOwnCommand(commands->children()[command])) {
-              commands->erase(command);
-              changed = true;
-            } else {
-              ++command;
-            }
-          }
-
-          empty = commands->children().empty();
+          empty = removeOwnCommands(*commands, changed);
         }
 
         if (empty) {

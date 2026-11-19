@@ -88,6 +88,9 @@ export {
       JsonNode<Memory> newEntry(std::string_view command, std::string_view timeout) const;
 
       bool removeEvents(JsonNode<Memory>& hooks, std::span<const std::string_view> events) const;
+      // Erases telar's own hooks from a list of them, noting in `changed` whether it erased any;
+      // whether the list is left empty.
+      bool removeOwnCommands(JsonNode<Memory>& commands, bool& changed) const;
 
       Memory& memory_;
       static constexpr std::string_view worktree_timeout = "360";
