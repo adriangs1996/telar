@@ -316,7 +316,7 @@ namespace telar::runtime {
     return true;
   }
 
-  std::string_view HistoryRows::copy(std::string_view text) {
+  std::string_view HistoryRows::copy(std::string_view text) const {
     const auto offset = text_.size();
 
     text_.append(std::span{reinterpret_cast<const Byte*>(text.data()), text.size()});

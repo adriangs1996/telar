@@ -245,7 +245,9 @@ export {
 
       void clear() noexcept;
       bool append(const Statement& row);
-      std::string_view copy(std::string_view text);
+      // Copies a text into these rows' arena through shared access, as bumpalo's alloc takes &self: the
+      // arena never moves what it holds, so earlier copies stay valid until clear().
+      std::string_view copy(std::string_view text) const;
       std::span<const HistoryEntry> entries() const noexcept;
 
     private:
@@ -256,7 +258,7 @@ export {
       static constexpr std::size_t maximum_entries = 1000;
       static constexpr std::size_t result_header_bytes = sizeof(Byte) + sizeof(std::uint64_t) * 2 + sizeof(std::uint16_t) + sizeof(Byte);
       // Reserved whole and bounded before each copy, so the texts the entries view never move.
-      ByteQueue<ConcurrentMemory> text_;
+      mutable ByteQueue<ConcurrentMemory> text_;
       tbc::view<ds::Vec<HistoryEntry, ConcurrentMemory>, tbc::lt::self> entries_;
       std::size_t encoded_bytes_ = result_header_bytes;
     };
