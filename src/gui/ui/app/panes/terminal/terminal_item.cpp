@@ -96,7 +96,7 @@ namespace telar::gui::qt {
     // At rest, with nothing drawn from them, the rows kept beyond the screen are given back.
     scroll_release_.setSingleShot(true);
     connect(&scroll_release_, &QTimer::timeout, this, [this] {
-      if (auto* current = controller_ == nullptr ? nullptr : controller_->session().findPaneMut(pane_id_); current != nullptr && !motion_.moving() && shift_ == 0 && current->folds.empty()) {
+      if (auto* current = controller_ == nullptr ? nullptr : controller_->sessionMut().findPaneMut(pane_id_); current != nullptr && !motion_.moving() && shift_ == 0 && current->folds.empty()) {
         current->rows.release();
       }
     });
@@ -637,7 +637,7 @@ namespace telar::gui::qt {
 
       const bool telar = controller_->configuration().prompt.mode == PromptMode::telar && current->shell.shell != IntegratedShell::none && !screen.modes().alternate_screen;
       const auto selected = controller_->prompt().selectedBlock(pane_id_);
-      auto& session = controller_->session();
+      auto& session = controller_->sessionMut();
       const auto live_session = liveSession(*current);
       const auto host = current->shell.host.empty() ? QString{} : QString::fromUtf8(current->shell.host.data(), static_cast<qsizetype>(current->shell.host.size()));
 

@@ -48,7 +48,7 @@ namespace telar::gui::qt {
 
   inline void clearSceneChildren(QSGNode& parent) {
     while (parent.firstChild() != nullptr) {
-      const std::unique_ptr<QSGNode> child{parent.firstChild()};
+      std::unique_ptr<QSGNode> child{parent.firstChild()};
 
       parent.removeChildNode(child.get());
     }

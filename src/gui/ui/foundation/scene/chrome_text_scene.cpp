@@ -333,7 +333,9 @@ namespace telar::gui::qt {
         auto colored = images.colored(placed_.glyph.index, paint.pixel_height, placed_.role, paint.style, paint.color);
         const auto quad = position.quad(placed_, MaskSampling::pixel_centers);
 
-        image_.setTexture(colored->texture.get());
+        // The texture the colored image keeps, shared by the nodes drawing it, which Qt takes by
+        // address without changing it.
+        image_.setTexture(tbc::raw(colored->texture.get()));
         colored_ = std::move(colored);
         image_.setRect(quad.bounds);
         image_.setSourceRect({quad.source.x() * placed_.mask->alpha.width(), quad.source.y() * placed_.mask->alpha.height(), quad.source.width() * placed_.mask->alpha.width(), quad.source.height() * placed_.mask->alpha.height()});
@@ -416,7 +418,7 @@ namespace telar::gui::qt {
             auto mesh = std::make_unique<GlyphMesh>(std::move(glyphs), ink(paint), sampling, blend, placement);
 
             if (index < meshes_.size()) {
-              const std::unique_ptr<GlyphMesh> previous{meshes_[index]};
+              std::unique_ptr<GlyphMesh> previous{meshes_[index]};
 
               insertChildNodeBefore(mesh.get(), previous.get());
               meshes_[index] = mesh.release();

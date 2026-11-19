@@ -116,7 +116,9 @@ namespace telar::gui::qt {
       void paint(IconImages& images, const ChromeIconPaint& paint, const IconProjection& position) {
         auto colored = images.colored(glyph_.index, paint.pixel_height, glyph_.face, {}, paint.color);
 
-        image_.setTexture(colored->texture.get());
+        // The texture the colored image keeps, shared by the nodes drawing it, which Qt takes by
+        // address without changing it.
+        image_.setTexture(tbc::raw(colored->texture.get()));
         mask_ = std::move(colored);
         image_.setSourceRect({0, 0, static_cast<qreal>(mask_->alpha.width()), static_cast<qreal>(mask_->alpha.height())});
         image_.setRect(position.map(glyph_.ink));

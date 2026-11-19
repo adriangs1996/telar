@@ -55,7 +55,11 @@ namespace telar::gui::qt {
 
     // What a terminal reads: the active session and its panes, the dialog over the workbench, and
     // what it asks of the controllers it holds.
-    [[nodiscard]] GuiSession& session() const noexcept {
+    [[nodiscard]] const GuiSession& session() const noexcept {
+      return store_.session();
+    }
+
+    [[nodiscard]] GuiSession& sessionMut() noexcept {
       return store_.sessionMut();
     }
 

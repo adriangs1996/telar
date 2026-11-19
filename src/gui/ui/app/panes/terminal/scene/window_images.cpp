@@ -200,8 +200,9 @@ namespace telar::gui::qt {
 
     selectPlacements(sources);
     if (placements_.finish()) {
+      // Each owner is Qt's item, reached by address.
       for (const auto& source : sources) {
-        source.owner->update();
+        tbc::raw(source.owner)->update();
       }
     }
 

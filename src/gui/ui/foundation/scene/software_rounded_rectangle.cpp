@@ -64,7 +64,8 @@ namespace telar::gui::qt {
         }
       }
 
-      void paint(const QRect& bounds) const {
+      // Painting draws through the painter, which it borrows mutably, as Rust's `&mut self` would.
+      void paint(const QRect& bounds) {
         constexpr qreal pixel_center = 0.5;
         const auto interior_begin = static_cast<int>(std::clamp(std::ceil(interior_left_ - pixel_center), static_cast<qreal>(bounds.left()), static_cast<qreal>(bounds.right() + 1)));
         const auto interior_end = static_cast<int>(std::clamp(std::ceil(interior_right_ - pixel_center), static_cast<qreal>(interior_begin), static_cast<qreal>(bounds.right() + 1)));
@@ -103,13 +104,13 @@ namespace telar::gui::qt {
         return shape_.sample(local);
       }
 
-      void paintSpan(int row, int begin, int end, Color color) const {
+      void paintSpan(int row, int begin, int end, Color color) {
         if (end > begin && color.a >= 0 && (color.a > 0 || shape_.style.replace_background)) {
           painter_.fillRect(QRect{begin, row, end - begin, 1}, QColor::fromRgbF(color.r, color.g, color.b, color.a));
         }
       }
 
-      void paintRange(int row, int begin, int end) const {
+      void paintRange(int row, int begin, int end) {
         if (begin >= end) {
           return;
         }

@@ -173,7 +173,7 @@ namespace telar::gui::qt {
       motion_.stop();
       expected_offset_.reset();
       view_rows_.clear();
-      controller_->session().findPaneMut(pane_id_)->shown_top.reset();
+      controller_->sessionMut().findPaneMut(pane_id_)->shown_top.reset();
       top_row_ = current->screen.scroll().offset;
       if (std::exchange(shift_, 0) != 0) {
         emit scrollChanged();
@@ -211,7 +211,7 @@ namespace telar::gui::qt {
 
   // Rows the scrollback dropped above the view: it moves up as far to keep showing its rows.
   void TerminalItem::followDroppedRows(bool following) {
-    const auto dropped = controller_->session().takeDroppedRows(pane_id_);
+    const auto dropped = controller_->sessionMut().takeDroppedRows(pane_id_);
     if (dropped == 0) {
       return;
     }
@@ -489,7 +489,7 @@ namespace telar::gui::qt {
     top_row_ = top;
     placeFoldMotion();
     // The session moves the view from where it is drawn, not from the runtime's view.
-    controller_->session().findPaneMut(pane_id_)->shown_top = top;
+    controller_->sessionMut().findPaneMut(pane_id_)->shown_top = top;
     if (shift != shift_) {
       shift_ = shift;
       emit scrollChanged();
@@ -505,7 +505,7 @@ namespace telar::gui::qt {
       const auto desired = runtimeOffset(top);
       if (!expected_offset_ || *expected_offset_ != desired) {
         expected_offset_ = desired;
-        controller_->session().scrollToRow(pane_id_, desired);
+        controller_->sessionMut().scrollToRow(pane_id_, desired);
         expected_offset_ = current->screen.scroll().offset;
         viewport_requests_ = current->viewport_requests;
       }
@@ -573,7 +573,7 @@ namespace telar::gui::qt {
     const auto margin = moving ? static_cast<std::uint64_t>(std::ceil(controller_->configuration().scroll.overscan * static_cast<float>(rows))) : 0;
     const auto first = top_row_ > margin ? top_row_ - margin : 0;
     const auto last = std::min(shown - 1, top_row_ + rows + margin);
-    auto& session = controller_->session();
+    auto& session = controller_->sessionMut();
     const auto trimmed = current->scrollback_trimmed;
     // Contiguous runs of rows, which folds break apart.
     auto run_first = folds.row(first);
@@ -723,7 +723,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    auto& session = controller_->session();
+    auto& session = controller_->sessionMut();
 
     session.fold(pane_id_, static_cast<std::size_t>(index), !session.folded(pane_id_, static_cast<std::size_t>(index)));
     refresh();
