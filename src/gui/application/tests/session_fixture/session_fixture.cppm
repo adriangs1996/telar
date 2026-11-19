@@ -168,7 +168,7 @@ export {
       explicit CommandHandler(Handler& handler)
           : handler_(handler) {}
 
-      void operator()(const ClientCommand& message, CompleteClientCommand& reply) const override {
+      void operator()(const ClientCommand& message, CompleteClientCommand& reply) override {
         handler_(message, reply);
       }
 
@@ -184,7 +184,7 @@ export {
       if constexpr (std::derived_from<Handler, application::ClientCommandHandler>) {
         return client.consume(bytes, handler);
       } else {
-        const CommandHandler<Handler> adapter{handler};
+        CommandHandler<Handler> adapter{handler};
 
         return client.consume(bytes, adapter);
       }

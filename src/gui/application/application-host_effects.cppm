@@ -41,7 +41,8 @@ export {
     // Runs the client commands the session leaves to its host, and completes `reply`.
     class ClientCommandHandler {
     public:
-      virtual void operator()(const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply) const = 0;
+      // Running a command may change what the handler drives, as a Rust `FnMut` may.
+      virtual void operator()(const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply) = 0;
 
     protected:
       ~ClientCommandHandler() = default;
@@ -49,7 +50,7 @@ export {
 
     // The handler of a headless session: it fails every command.
     struct UnsupportedClientCommand final : ClientCommandHandler {
-      void operator()(const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply) const override;
+      void operator()(const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply) override;
     };
 
   }

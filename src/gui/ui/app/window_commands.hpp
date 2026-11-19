@@ -123,7 +123,7 @@ namespace telar::gui::qt {
           : commands(owner),
             active(is_active) {}
 
-      void operator()(const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply) const override;
+      void operator()(const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply) override;
 
       tbc::view<WindowCommands&, tbc::lt::a> commands;
       bool active = false;

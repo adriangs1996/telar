@@ -36,7 +36,7 @@ namespace telar::gui::application {
     return acknowledged_;
   }
 
-  void UnsupportedClientCommand::operator()([[maybe_unused]] const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply) const {
+  void UnsupportedClientCommand::operator()([[maybe_unused]] const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply) {
     reply.status = ClientCommandStatus::failed;
     reply.text = "Command is not supported by this client";
   }

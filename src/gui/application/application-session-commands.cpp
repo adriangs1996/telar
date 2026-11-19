@@ -16,7 +16,7 @@ import telar.shell.syntax;
 
 namespace telar::gui::application {
 
-  Change Session::apply(const ClientCommand& message, const ClientCommandHandler& handler) {
+  Change Session::apply(const ClientCommand& message, ClientCommandHandler& handler) {
     CompleteClientCommand reply;
 
     static_cast<ClientCommand&>(reply) = message;
@@ -44,7 +44,7 @@ namespace telar::gui::application {
     return change;
   }
 
-  Change Session::executeCommand(const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply, const ClientCommandHandler& handler) {
+  Change Session::executeCommand(const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply, ClientCommandHandler& handler) {
     switch (message.action) {
     case ClientAction::layout_get:
       reply.text = workbench::exportLayout(*this);

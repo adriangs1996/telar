@@ -256,7 +256,7 @@ namespace telar::gui::application {
     return consume(payload, handler);
   }
 
-  Change Session::consume(std::span<const Byte> payload, const ClientCommandHandler& handler) {
+  Change Session::consume(std::span<const Byte> payload, ClientCommandHandler& handler) {
     if (payload.empty()) {
       throw EncodingError{"Empty server message"};
     }
@@ -568,7 +568,7 @@ namespace telar::gui::application {
   }
 
   template <typename Message>
-  Change Session::dispatchMessage(std::span<const Byte> payload, DecodeStorage& storage, const ClientCommandHandler& handler) {
+  Change Session::dispatchMessage(std::span<const Byte> payload, DecodeStorage& storage, ClientCommandHandler& handler) {
     if constexpr (std::same_as<Message, GraphicsSnapshot> || std::same_as<Message, GraphicsImage> || std::same_as<Message, GraphicsSharedImage> || std::same_as<Message, GraphicsImageChunk> || std::same_as<Message, GraphicsPlacementMessage> || std::same_as<Message, GraphicsDeleteImage> || std::same_as<Message, GraphicsDeletePlacement>) {
       try {
         const auto change = apply(Codec::decode<Message>(payload, storage));

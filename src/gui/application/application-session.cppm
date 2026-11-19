@@ -171,7 +171,7 @@ export {
 
       Change consume(std::span<const Byte> payload);
 
-      Change consume(std::span<const Byte> payload, const ClientCommandHandler& handler);
+      Change consume(std::span<const Byte> payload, ClientCommandHandler& handler);
 
       void input(std::uint64_t pane_id, std::string_view bytes, PaneInputSource source = PaneInputSource::keyboard);
 
@@ -478,7 +478,7 @@ export {
       void refreshFolds(Pane<Memory>& pane);
 
       template <typename Message>
-      Change dispatchMessage(std::span<const Byte> payload, DecodeStorage& storage, const ClientCommandHandler& handler);
+      Change dispatchMessage(std::span<const Byte> payload, DecodeStorage& storage, ClientCommandHandler& handler);
 
       void recoverRuntime(std::string_view reason);
 
@@ -595,9 +595,9 @@ export {
 
       Change apply([[maybe_unused]] const RuntimeStopping& message);
 
-      Change apply(const ClientCommand& message, const ClientCommandHandler& handler);
+      Change apply(const ClientCommand& message, ClientCommandHandler& handler);
 
-      Change executeCommand(const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply, const ClientCommandHandler& handler);
+      Change executeCommand(const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply, ClientCommandHandler& handler);
 
       // A command that changes nothing is `applied`,
       // one that starts a change is `admitted`, and the target stays the one the

@@ -467,7 +467,9 @@ namespace telar::gui::qt {
     }
 
     if (expression.kind == InputExpression::Kind::paste) {
-      store_.sessionMut().paste(pane->id, expression.paste.view());
+      const auto pane_id = pane->id;
+
+      store_.sessionMut().paste(pane_id, expression.paste.view());
       prompt_.publishWrite();
     } else {
       for (const auto key : std::span{expression.keys}.first(expression.length)) {
@@ -483,7 +485,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void WindowCommands::HostCommands::operator()(const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply) const {
+  void WindowCommands::HostCommands::operator()(const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply) {
     if (!active) {
       application::UnsupportedClientCommand{}(message, reply);
     } else if (!answerConfiguration(commands, message, reply)) {
@@ -639,7 +641,10 @@ namespace telar::gui::qt {
       application::workbench::createTab(store_.sessionMut());
     } else if (action == window_actions::Action::select_tab) {
       if (const auto* active = store_.session().activeTab()) {
-        application::workbench::selectTab(store_.sessionMut(), {.workspace = active->location.workspace, .tab_id = identity});
+        // The tab is read before the session lends itself to change.
+        const TabLocation tab{.workspace = active->location.workspace, .tab_id = identity};
+
+        application::workbench::selectTab(store_.sessionMut(), tab);
       }
     } else if (action == window_actions::Action::select_tab_index) {
       application::workbench::selectTabAt(store_.sessionMut(), static_cast<std::size_t>(identity));
@@ -649,7 +654,9 @@ namespace telar::gui::qt {
       application::workbench::moveTab(store_.sessionMut(), action == window_actions::Action::move_tab_next ? TabMoveDirection::next : TabMoveDirection::previous);
     } else if (action == window_actions::Action::close_tab) {
       if (const auto* active = store_.session().activeTab()) {
-        application::workbench::closeTab(store_.sessionMut(), {.workspace = active->location.workspace, .tab_id = identity == 0 ? active->location.tab_id : identity});
+        const TabLocation tab{.workspace = active->location.workspace, .tab_id = identity == 0 ? active->location.tab_id : identity};
+
+        application::workbench::closeTab(store_.sessionMut(), tab);
       }
     } else if (action == window_actions::Action::select_workspace) {
       application::workbench::selectWorkspace(store_.sessionMut(), parseLocation(target));
@@ -679,7 +686,9 @@ namespace telar::gui::qt {
       application::workbench::split(store_.sessionMut(), ClientLayoutAxis::vertical);
     } else if (action == window_actions::Action::close_pane) {
       if (const auto* pane = store_.session().focusedPane()) {
-        application::workbench::closePane(store_.sessionMut(), identity == 0 ? pane->id : identity);
+        const auto pane_id = identity == 0 ? pane->id : identity;
+
+        application::workbench::closePane(store_.sessionMut(), pane_id);
       }
     } else if (action == window_actions::Action::fullscreen) {
       application::workbench::toggleFullscreen(store_.sessionMut());

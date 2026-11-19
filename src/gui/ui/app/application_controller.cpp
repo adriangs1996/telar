@@ -515,7 +515,7 @@ namespace telar::gui::qt {
   void ApplicationController::consume(MachineClient& client, QByteArrayView payload) {
     try {
       const bool active = client.key.machine.slot == store_.machines().active();
-      const WindowCommands::HostCommands handler{commands_, active};
+      WindowCommands::HostCommands handler{commands_, active};
       const auto notification_revision = application::notifications::revision(client.session);
       const auto graphics_revision = application::terminal::graphics::recoveryRevision(client.session);
       const auto change = client.session.consume(byteView({payload.data(), static_cast<std::size_t>(payload.size())}), handler);
