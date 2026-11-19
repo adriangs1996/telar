@@ -583,6 +583,12 @@ as `lua_State`, is held as Rust's FFI `*mut T` is: what is done through one
 handle to it invalidates nothing another handle borrows, so many objects may keep
 the same interpreter while each calls into it.
 
+A call through a function pointer borrows by the pointer's own signature, as
+Rust reads a `fn(&'a T) -> &'a U`: a result labeled with a region borrows what
+the parameters of that region lend, and an unlabeled one what its one lending
+parameter lends, or nothing when none lends. With several lending parameters
+and no label the result stays unknown, as Rust asks for a lifetime there.
+
 A pointer field of a C struct that a system header declares, such as zlib's
 `z_stream::next_in`, is a raw pointer, as Rust's `*const T` in an FFI struct
 is: storing a buffer in it keeps no borrow, nor does a value of such a struct,
@@ -827,8 +833,9 @@ has deliberate limits:
 - Deferred captures, general callable type erasure, custom allocator/destructor
   dependencies, ownership transfer through opaque project swaps, and foreign invalidation
   protocols still require further analysis or audited models.
-- Mutable global borrowed state, exception-unwinding analysis, indirect calls,
-  and conflicting redeclaration contracts are not comprehensively checked.
+- Mutable global borrowed state, exception-unwinding analysis, calls through a
+  pointer to member, and conflicting redeclaration contracts are not
+  comprehensively checked.
   Unsupported result dependencies may produce `tbc-missing-contract`.
 - Bounds, nullability, initialization, and concurrency are separate checks and
   remain pending. A pointer annotation is not a non-null promise.

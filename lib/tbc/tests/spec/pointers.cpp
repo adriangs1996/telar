@@ -796,3 +796,59 @@ int pointerOpaqueHandleComplete(pointers::complete_state& state) {
 }
 
 // END CASE
+
+// CASE: pointer.function_signature_elided
+// PAIR: pointer.function_signature
+// SOURCE: src/gui/ui/foundation/scene/window_animation_clock.cpp :: WindowAnimationClock (each lane is made by a function pointer from the arena)
+// STATUS: implemented
+// CONTRACT: A call through a function pointer borrows by the pointer's own signature, as Rust reads a `fn(&'a T) -> &'a U`: a result labeled with a region borrows what that region's parameters lend, and an unlabeled one what its one lending parameter lends.
+// SCENARIO: A name read through a function pointer from the text a caller lends is returned under the caller's region; accept.
+namespace pointers {
+  using ReadName = std::string_view (*)(const std::string& text);
+
+  std::string_view firstWord(const std::string& text);
+}
+
+tbc::view<std::string_view, tbc::lt::a> pointerFunctionSignatureElided(tbc::view<const std::string&, tbc::lt::a> text) {
+  const pointers::ReadName read = &pointers::firstWord;
+
+  return read(text);
+}
+
+// END CASE
+
+// CASE: pointer.function_signature_labeled
+// PAIR: pointer.function_signature
+// SOURCE: lib/base/include/telar_base/ds/containers.hpp :: Function::operator() (the callable's result borrows its storage, never the arguments)
+// STATUS: implemented
+// CONTRACT: A call through a function pointer borrows by the pointer's own signature, as Rust reads a `fn(&'a T) -> &'a U`: a result labeled with a region borrows what that region's parameters lend, and an unlabeled one what its one lending parameter lends.
+// SCENARIO: A pointer whose result borrows only its first parameter is given a local as the second; accept.
+namespace pointers {
+  using PickName = tbc::view<std::string_view, tbc::lt::a> (*)(tbc::view<const std::string&, tbc::lt::a> kept, tbc::view<const std::string&, tbc::lt::b> probe);
+
+  tbc::view<std::string_view, tbc::lt::a> pickName(tbc::view<const std::string&, tbc::lt::a> kept, tbc::view<const std::string&, tbc::lt::b> probe);
+}
+
+tbc::view<std::string_view, tbc::lt::a> pointerFunctionSignatureLabeled(tbc::view<const std::string&, tbc::lt::a> text) {
+  const pointers::PickName pick = &pointers::pickName;
+  const std::string probe = "name";
+
+  return pick(text, probe);
+}
+
+// END CASE
+
+// CASE: pointer.function_signature_local
+// PAIR: pointer.function_signature
+// SOURCE: src/gui/ui/foundation/scene/window_animation_clock.cpp :: WindowAnimationClock (each lane is made by a function pointer from the arena)
+// STATUS: implemented
+// CONTRACT: A call through a function pointer borrows by the pointer's own signature, as Rust reads a `fn(&'a T) -> &'a U`: a result labeled with a region borrows what that region's parameters lend, and an unlabeled one what its one lending parameter lends.
+// SCENARIO: A name read through a function pointer from a local is returned past the local's end; reject at the return.
+std::string_view pointerFunctionSignatureLocal() {
+  const pointers::ReadName read = &pointers::firstWord;
+  const std::string text = "first word";
+
+  return read(text); // expected-error [tbc-dangling-borrow]
+}
+
+// END CASE

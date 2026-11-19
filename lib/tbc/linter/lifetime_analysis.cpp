@@ -3488,16 +3488,19 @@ namespace tbc_lint {
       // object owns, and, as Rust's implied bounds require, what it holds; what a view or a pointer
       // passed by value designates; or what an object passed by value holds, never the copy itself.
       loans lent(const clang::FunctionDecl& callee, const clang::ParmVarDecl& parameter, const clang::Expr& argument, const state& current, const clang::Expr* call = nullptr) {
-        const auto type = parameter.getType();
+        return lentThrough(parameter.getType(), parameterAnnotation(parameter, context_).held, callee.getReturnType()->isReferenceType(), argument, current, call);
+      }
 
+      // What an argument lends through a parameter of `type` to a result, a reference or not.
+      loans lentThrough(clang::QualType type, bool held_only, bool returns_reference, const clang::Expr& argument, const state& current, const clang::Expr* call) {
         // A `&Pane<'a>` lends what the pane holds, never the pane.
-        if (parameterAnnotation(parameter, context_).held) {
+        if (held_only) {
           const auto held = value(&argument, current);
 
-          return callee.getReturnType()->isReferenceType() ? somewhereInside(held, call) : held;
+          return returns_reference ? somewhereInside(held, call) : held;
         }
 
-        if (callee.getReturnType()->isReferenceType()) {
+        if (returns_reference) {
           return somewhereInside(type->isReferenceType() ? reference(&argument, current) : value(&argument, current), call);
         }
 
@@ -3573,6 +3576,10 @@ namespace tbc_lint {
 
         const auto* callee = call.getDirectCallee();
         if (callee == nullptr) {
+          if (auto typed = pointerResult(call, current)) {
+            return std::move(*typed);
+          }
+
           if (call.getType()->isPointerType() && call.getCallee()->getType()->isFunctionPointerType()) {
             return pointeeArguments(call, current);
           }
@@ -3885,6 +3892,79 @@ namespace tbc_lint {
       // A pointer from a C function or a function pointer is, like a raw pointer from Rust's FFI, not
       // borrow-checked, unless it can point into an argument of its own pointee type, as strchr,
       // memchr or fgets do. Otherwise it names a resource of its own: a DIR, a mapping, a library row.
+      // What a call through a function pointer returns, by the pointer's own signature, as Rust reads a
+      // `fn(&'a T) -> &'a U`: a result labeled with a region borrows what the parameters of that region
+      // lend; an unlabeled one borrows what its one lending parameter lends, or nothing when none lends.
+      // Several lending parameters leave it unknown, as Rust asks for a lifetime.
+      std::optional<loans> pointerResult(const clang::CallExpr& call, const state& current) {
+        if (llvm::isa<clang::CXXMemberCallExpr>(call) || llvm::isa<clang::CXXOperatorCallExpr>(call)) {
+          return std::nullopt;
+        }
+
+        auto type = call.getCallee()->IgnoreParenImpCasts()->getType();
+
+        if (type->isPointerType()) {
+          type = type->getPointeeType();
+        } else if (type->isReferenceType()) {
+          type = type.getNonReferenceType();
+        }
+
+        const auto* prototype = type->getAs<clang::FunctionProtoType>();
+        if (prototype == nullptr) {
+          return std::nullopt;
+        }
+
+        const auto returned = prototype->getReturnType();
+        const auto result_annotation = viewAnnotation(returned, context_);
+        if (staticRegion(result_annotation.region)) {
+          return loans{};
+        }
+
+        const bool reference = returned->isReferenceType();
+        const auto count = std::min<unsigned>(prototype->getNumParams(), call.getNumArgs());
+        loans result;
+
+        if (result_annotation.region != nullptr) {
+          for (unsigned index = 0; index < count; ++index) {
+            const auto parameter = prototype->getParamType(index);
+            const auto annotation = viewAnnotation(parameter, context_);
+
+            if (annotation.region == result_annotation.region) {
+              result.merge(lentThrough(parameter, annotation.held, reference, *call.getArg(index), current, &call));
+            }
+          }
+
+          return result;
+        }
+
+        if (result_annotation.present || (!containsViews(returned) && !reference && !returned->isPointerType())) {
+          return std::nullopt;
+        }
+
+        std::optional<unsigned> lending;
+
+        for (unsigned index = 0; index < count; ++index) {
+          const auto parameter = prototype->getParamType(index);
+          if (!parameter->isReferenceType() && !parameter->isPointerType() && !containsViews(parameter)) {
+            continue;
+          }
+
+          if (lending) {
+            return std::nullopt;
+          }
+
+          lending = index;
+        }
+
+        if (!lending) {
+          return result;
+        }
+
+        const auto parameter = prototype->getParamType(*lending);
+
+        return lentThrough(parameter, viewAnnotation(parameter, context_).held, reference, *call.getArg(*lending), current, &call);
+      }
+
       loans pointeeArguments(const clang::CallExpr& call, const state& current) {
         loans result;
         const auto pointee = call.getType()->getPointeeType().getCanonicalType().getUnqualifiedType();
