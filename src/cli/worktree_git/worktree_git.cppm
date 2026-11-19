@@ -229,33 +229,34 @@ export {
 
     class WorktreeGit {
     public:
-      explicit WorktreeGit(Memory& memory);
+      // What it returns is in `memory`, and borrows nothing of it: a run keeps no state between runs.
+      explicit WorktreeGit(tbc::view<Memory&, tbc::lt::a> memory);
 
       // Mutations retain only the tail of diagnostics; diff streams both byte
       // streams. Every invocation uses literal argv and a bounded deadline.
-      Text run(std::span<const std::string_view> arguments, const char* failure = "NotARepository", bool stream = false, bool hardened = false, std::span<const std::pair<std::string_view, std::string_view>> environment = {});
+      tbc::view<Text, tbc::lt::a> run(std::span<const std::string_view> arguments, const char* failure = "NotARepository", bool stream = false, bool hardened = false, std::span<const std::pair<std::string_view, std::string_view>> environment = {}) const;
 
-      Text run(std::initializer_list<std::string_view> arguments, const char* failure = "NotARepository", bool stream = false, bool hardened = false);
+      tbc::view<Text, tbc::lt::a> run(std::initializer_list<std::string_view> arguments, const char* failure = "NotARepository", bool stream = false, bool hardened = false) const;
 
-      Text line(std::initializer_list<std::string_view> arguments, bool hardened = false);
+      tbc::view<Text, tbc::lt::a> line(std::initializer_list<std::string_view> arguments, bool hardened = false) const;
 
-      Text root(std::string_view directory);
+      tbc::view<Text, tbc::lt::a> root(std::string_view directory) const;
 
-      Text currentBranch(std::string_view directory);
+      tbc::view<Text, tbc::lt::a> currentBranch(std::string_view directory) const;
 
-      bool succeeds(std::initializer_list<std::string_view> arguments, bool hardened = false);
+      bool succeeds(std::initializer_list<std::string_view> arguments, bool hardened = false) const;
 
-      void add(std::string_view root, std::string_view directory, std::string_view branch, std::string_view base);
+      void add(std::string_view root, std::string_view directory, std::string_view branch, std::string_view base) const;
 
-      ds::Vec<GitWorktree, Memory> listed(std::string_view directory, const WorktreeFilter& keep);
+      tbc::view<ds::Vec<GitWorktree, Memory>, tbc::lt::a> listed(std::string_view directory, const WorktreeFilter& keep) const;
 
       // The merge check runs through the untrusted Git: hooks, filters and lazy
       // fetches off. A clone that could still fetch lazily, on a Git too old to
       // switch that off, counts as not merged and asks a person.
-      bool merged(std::string_view root, std::string_view branch);
+      bool merged(std::string_view root, std::string_view branch) const;
 
     private:
-      Memory& memory_;
+      tbc::view<Memory&, tbc::lt::a> memory_;
     };
 
   }

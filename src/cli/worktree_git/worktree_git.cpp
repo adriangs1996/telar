@@ -790,10 +790,10 @@ namespace telar::runtime::cli::sessions {
     }
   }
 
-  WorktreeGit::WorktreeGit(Memory& memory)
+  WorktreeGit::WorktreeGit(tbc::view<Memory&, tbc::lt::a> memory)
       : memory_(memory) {}
 
-  Text WorktreeGit::run(std::span<const std::string_view> arguments, const char* failure, bool stream, bool hardened, std::span<const std::pair<std::string_view, std::string_view>> environment) {
+  tbc::view<Text, tbc::lt::a> WorktreeGit::run(std::span<const std::string_view> arguments, const char* failure, bool stream, bool hardened, std::span<const std::pair<std::string_view, std::string_view>> environment) const {
     Command command{memory_, Launch{.arguments = arguments}, CommandPurpose::configured_helper};
 
     for (const auto& [name, value] : environment) {
@@ -850,11 +850,11 @@ namespace telar::runtime::cli::sessions {
     return kept;
   }
 
-  Text WorktreeGit::run(std::initializer_list<std::string_view> arguments, const char* failure, bool stream, bool hardened) {
+  tbc::view<Text, tbc::lt::a> WorktreeGit::run(std::initializer_list<std::string_view> arguments, const char* failure, bool stream, bool hardened) const {
     return run(std::span{arguments.begin(), arguments.size()}, failure, stream, hardened);
   }
 
-  Text WorktreeGit::line(std::initializer_list<std::string_view> arguments, bool hardened) {
+  tbc::view<Text, tbc::lt::a> WorktreeGit::line(std::initializer_list<std::string_view> arguments, bool hardened) const {
     const auto value = run(arguments, "NotARepository", false, hardened);
     const auto trimmed = trimText(value.view(), " \r\n");
     if (trimmed.empty()) {
@@ -864,7 +864,7 @@ namespace telar::runtime::cli::sessions {
     return Text{memory_, trimmed};
   }
 
-  Text WorktreeGit::root(std::string_view directory) {
+  tbc::view<Text, tbc::lt::a> WorktreeGit::root(std::string_view directory) const {
     auto common = line({"git", "-C", directory, "rev-parse", "--path-format=absolute", "--git-common-dir"});
 
     while (common.view().ends_with('/')) {
@@ -880,11 +880,11 @@ namespace telar::runtime::cli::sessions {
     return common;
   }
 
-  Text WorktreeGit::currentBranch(std::string_view directory) {
+  tbc::view<Text, tbc::lt::a> WorktreeGit::currentBranch(std::string_view directory) const {
     return line({"git", "-C", directory, "rev-parse", "--abbrev-ref", "HEAD"});
   }
 
-  bool WorktreeGit::succeeds(std::initializer_list<std::string_view> arguments, bool hardened) {
+  bool WorktreeGit::succeeds(std::initializer_list<std::string_view> arguments, bool hardened) const {
     try {
       run(arguments, "NotARepository", false, hardened);
       return true;
@@ -893,7 +893,7 @@ namespace telar::runtime::cli::sessions {
     }
   }
 
-  void WorktreeGit::add(std::string_view root, std::string_view directory, std::string_view branch, std::string_view base) {
+  void WorktreeGit::add(std::string_view root, std::string_view directory, std::string_view branch, std::string_view base) const {
     const auto reference = ds::format(memory_, "refs/heads/{}", branch);
     if (succeeds({"git", "-C", root, "rev-parse", "--verify", "--quiet", reference})) {
       run({"git", "-C", root, "worktree", "add", "--", directory, branch}, "git worktree add failed");
@@ -902,7 +902,7 @@ namespace telar::runtime::cli::sessions {
     }
   }
 
-  bool WorktreeGit::merged(std::string_view root, std::string_view branch) {
+  bool WorktreeGit::merged(std::string_view root, std::string_view branch) const {
     try {
       repository::Git git{memory_, root};
       Text against{memory_, "HEAD"};
@@ -1074,7 +1074,7 @@ namespace telar::runtime::cli::sessions {
     return self;
   }
 
-  ds::Vec<GitWorktree, Memory> WorktreeGit::listed(std::string_view directory, const WorktreeFilter& keep) {
+  tbc::view<ds::Vec<GitWorktree, Memory>, tbc::lt::a> WorktreeGit::listed(std::string_view directory, const WorktreeFilter& keep) const {
     const auto main = root(directory);
     const auto bytes = run({"git", "-C", main, "worktree", "list", "--porcelain"});
     ds::Vec<GitWorktree, Memory> result{memory_};

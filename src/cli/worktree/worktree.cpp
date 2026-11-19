@@ -1339,8 +1339,9 @@ namespace telar::runtime::cli::sessions {
 
         const auto root = git_.root(entry.path);
 
-        adopted_path_ = entry.path.clone();
-        adopted_branch_ = entry.branch.clone();
+        // Copies in the command's memory, which outlive the list they were found in.
+        adopted_path_ = Text{memory_, entry.path.view()};
+        adopted_branch_ = Text{memory_, entry.branch.view()};
         adopted_base_ = git_.currentBranch(root);
         const auto source = sourceWorkspace(root);
         const auto pane = attributedPane();
