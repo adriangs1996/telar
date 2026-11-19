@@ -1,0 +1,12 @@
+telar monitor disks: Local file systems with their usage, and bytes read and written per second
+
+Usage: telar monitor disks [--json] [--socket PATH]
+
+Effects: read-only; asks the runtime and never starts one.
+
+Results: text Read and Written per second over the physical disks, then PATH, TYPE,
+USED, TOTAL, FREE and USE% per file system. On macOS the volumes of an APFS
+container share its space, so used counts the whole container, as Finder does; the
+system's hidden volumes are left out. On Linux each device under /dev is listed
+once. JSON `read_per_second`, `written_per_second` and `disks`, each with `path`,
+`device`, `type`, `total_bytes`, `used_bytes`, `available_bytes`. Exit 0.

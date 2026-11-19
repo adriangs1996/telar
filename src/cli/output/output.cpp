@@ -37,7 +37,9 @@ namespace telar::runtime::cli {
       "proxy",
       "api",
       "clipboard",
-      "render"
+      "render",
+      "process",
+      "monitor",
   };
 
   std::string_view familyName(Family family) noexcept {

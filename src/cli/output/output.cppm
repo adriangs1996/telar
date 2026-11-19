@@ -73,6 +73,8 @@ export {
       api,
       clipboard,
       render,
+      process,
+      monitor,
       count,
     };
 

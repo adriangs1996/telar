@@ -1,0 +1,12 @@
+telar monitor host: CPU of every core, memory, swap, and how many processes and threads run
+
+Usage: telar monitor host [--json] [--socket PATH]
+
+Effects: read-only; asks the runtime and never starts one.
+
+Results: text CPU (of all cores together), Cores (each one's busy percent), Memory
+(used, total, available, cached), Swap, Processes, Threads. JSON `cpu_permille`,
+`cores` (permille each), `memory_total_bytes`, `memory_used_bytes`,
+`memory_available_bytes`, `memory_cached_bytes` (file-backed pages the system frees
+first), `swap_total_bytes`, `swap_used_bytes`, `process_count`, `thread_count`
+(threads the runtime could read). Exit 0.

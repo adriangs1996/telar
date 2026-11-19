@@ -1,0 +1,9 @@
+telar monitor network: Bytes received and sent per second, and in all, per network interface
+
+Usage: telar monitor network [--json] [--socket PATH]
+
+Effects: read-only; asks the runtime and never starts one.
+
+Results: text INTERFACE, RX/s, TX/s, RX and TX for every interface that is up and has
+carried traffic, loopback left out. JSON `interfaces`, each with `name`,
+`received_per_second`, `sent_per_second`, `received_bytes`, `sent_bytes`. Exit 0.

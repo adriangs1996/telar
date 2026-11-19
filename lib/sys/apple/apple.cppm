@@ -3,6 +3,7 @@ module;
 #include <libproc.h>
 #include <mach-o/dyld.h>
 #include <mach/mach.h>
+#include <mach/mach_time.h>
 #include <mach/mach_vm.h>
 #include <net/if.h>
 #include <net/if_dl.h>
@@ -22,6 +23,7 @@ module;
 #include <sys/event.h>
 #include <sys/ioctl.h>
 #include <sys/kern_control.h>
+#include <sys/mount.h>
 #include <sys/param.h>
 #include <sys/proc_info.h>
 #include <sys/socket.h>
@@ -40,6 +42,7 @@ export module telar.sys.apple;
 export {
   // Process information.
   using ::in_sockinfo;
+  using ::kinfo_proc;
   using ::proc_bsdinfo;
   using ::proc_bsdshortinfo;
   using ::proc_fdinfo;
@@ -49,6 +52,7 @@ export {
   using ::proc_pidfdinfo;
   using ::proc_pidinfo;
   using ::proc_pidpath;
+  using ::proc_taskinfo;
   using ::proc_vnodepathinfo;
   using ::socket_fdinfo;
   using ::SOCKINFO_TCP;
@@ -62,19 +66,29 @@ export {
   // Mach.
   using ::host_cpu_load_info_data_t;
   using ::host_info64_t;
+  using ::host_processor_info;
   using ::host_statistics64;
   using ::kern_return_t;
   using ::mach_host_self;
   using ::mach_msg_type_number_t;
   using ::mach_port_deallocate;
   using ::mach_port_t;
+  using ::mach_timebase_info;
+  using ::mach_timebase_info_data_t;
   using ::mach_vm_address_t;
   using ::mach_vm_read_overwrite;
   using ::mach_vm_size_t;
+  using ::natural_t;
+  using ::processor_cpu_load_info_data_t;
+  using ::processor_info_array_t;
   using ::task_info;
   using ::task_info_t;
   using ::task_vm_info_data_t;
+  using ::vm_address_t;
+  using ::vm_deallocate;
+  using ::vm_size_t;
   using ::vm_statistics64_data_t;
+  using ::xsw_usage;
 
   // The TCP control blocks the net.inet.tcp.pcblist64 sysctl returns.
   using ::xinpcb64;
@@ -82,7 +96,8 @@ export {
   using ::xsocket64;
   using ::xtcpcb64;
 
-  // Routing messages and link-layer addresses.
+  // Routing messages, interface statistics and link-layer addresses.
+  using ::if_msghdr2;
   using ::rt_msghdr;
   using ::sockaddr_dl;
 
@@ -100,6 +115,7 @@ export {
   using ::attrreference_t;
   using ::devname_r;
   using ::getattrlist;
+  using ::getmntinfo;
   using ::getpeereid;
   using ::posix_spawn_file_actions_addchdir;
   using ::pthread_threadid_np;
@@ -114,6 +130,9 @@ export {
   X(ATTR_CMN_NAME)               \
   X(CLOCK_UPTIME_RAW)            \
   X(FSOPT_NOFOLLOW)              \
+  X(MNT_DONTBROWSE)              \
+  X(MNT_LOCAL)                   \
+  X(MNT_NOWAIT)                  \
   X(F_GETPATH)                   \
   X(F_SETNOSIGPIPE)              \
   X(MAXCOMLEN)                   \
@@ -139,22 +158,33 @@ export {
   X(CPU_STATE_SYSTEM)          \
   X(CPU_STATE_USER)            \
   X(CTL_KERN)                  \
+  X(CTL_VM)                    \
   X(HOST_CPU_LOAD_INFO)        \
   X(HOST_CPU_LOAD_INFO_COUNT)  \
   X(HOST_VM_INFO64)            \
   X(HOST_VM_INFO64_COUNT)      \
   X(INI_IPV4)                  \
   X(INI_IPV6)                  \
+  X(KERN_PROC)                 \
   X(KERN_PROCARGS2)            \
+  X(KERN_PROC_ALL)             \
+  X(KERN_PROC_PID)             \
   X(KERN_SUCCESS)              \
   X(PROC_PGRP_ONLY)            \
   X(PROC_PIDFDSOCKETINFO)      \
   X(PROC_PIDLISTFDS)           \
   X(PROC_PIDPATHINFO_MAXSIZE)  \
   X(PROC_PIDTBSDINFO)          \
+  X(PROCESSOR_CPU_LOAD_INFO)   \
+  X(PROC_PIDTASKINFO)          \
   X(PROC_PIDT_SHORTBSDINFO)    \
   X(PROC_PIDVNODEPATHINFO)     \
   X(PROX_FDTYPE_SOCKET)        \
+  X(SIDL)                      \
+  X(SRUN)                      \
+  X(SSLEEP)                    \
+  X(SSTOP)                     \
+  X(SZOMB)                     \
   X(TASK_VM_INFO)              \
   X(TASK_VM_INFO_COUNT)        \
   X(TSI_S_CLOSED)              \
@@ -166,9 +196,11 @@ export {
   X(AF_SYSTEM)               \
   X(AF_SYS_CONTROL)          \
   X(CTLIOCGINFO)             \
+  X(CTL_NET)                 \
   X(INP_IPV4)                \
   X(INP_IPV6)                \
   X(LOCAL_PEERPID)           \
+  X(NET_RT_IFLIST2)          \
   X(PF_SYSTEM)               \
   X(RTAX_GATEWAY)            \
   X(RTAX_MAX)                \
@@ -181,6 +213,7 @@ export {
   X(RTF_REJECT)              \
   X(RTF_UP)                  \
   X(RTM_GET)                 \
+  X(RTM_IFINFO2)             \
   X(RTM_VERSION)             \
   X(SIOCIFCREATE)            \
   X(SIOCIFDESTROY)           \
@@ -209,6 +242,9 @@ namespace telar::sys::captured {
 #undef ATTR_CMN_NAME
 #undef CLOCK_UPTIME_RAW
 #undef FSOPT_NOFOLLOW
+#undef MNT_DONTBROWSE
+#undef MNT_LOCAL
+#undef MNT_NOWAIT
 #undef F_GETPATH
 #undef F_SETNOSIGPIPE
 #undef MAXCOMLEN
@@ -228,6 +264,7 @@ namespace telar::sys::captured {
 #undef CPU_STATE_SYSTEM
 #undef CPU_STATE_USER
 #undef CTL_KERN
+#undef CTL_VM
 #undef HOST_CPU_LOAD_INFO
 #undef HOST_CPU_LOAD_INFO_COUNT
 #undef HOST_VM_INFO64
@@ -235,6 +272,9 @@ namespace telar::sys::captured {
 #undef INI_IPV4
 #undef INI_IPV6
 #undef KERN_PROCARGS2
+#undef KERN_PROC
+#undef KERN_PROC_ALL
+#undef KERN_PROC_PID
 #undef KERN_SUCCESS
 #undef PROC_PGRP_ONLY
 #undef PROC_PIDFDSOCKETINFO
@@ -242,9 +282,16 @@ namespace telar::sys::captured {
 #undef PROC_PIDPATHINFO_MAXSIZE
 #undef PROC_PIDTBSDINFO
 #undef PROC_PIDT_SHORTBSDINFO
+#undef PROCESSOR_CPU_LOAD_INFO
+#undef PROC_PIDTASKINFO
 #undef PROC_PIDVNODEPATHINFO
 #undef PROX_FDTYPE_SOCKET
 #undef TASK_VM_INFO
+#undef SIDL
+#undef SRUN
+#undef SSLEEP
+#undef SSTOP
+#undef SZOMB
 #undef TASK_VM_INFO_COUNT
 #undef TSI_S_CLOSED
 #undef TSI_S_LISTEN
@@ -252,9 +299,11 @@ namespace telar::sys::captured {
 #undef AF_SYSTEM
 #undef AF_SYS_CONTROL
 #undef CTLIOCGINFO
+#undef CTL_NET
 #undef INP_IPV4
 #undef INP_IPV6
 #undef LOCAL_PEERPID
+#undef NET_RT_IFLIST2
 #undef PF_SYSTEM
 #undef RTAX_GATEWAY
 #undef RTAX_MAX
@@ -267,6 +316,7 @@ namespace telar::sys::captured {
 #undef RTF_REJECT
 #undef RTF_UP
 #undef RTM_GET
+#undef RTM_IFINFO2
 #undef RTM_VERSION
 #undef SIOCIFCREATE
 #undef SIOCIFDESTROY
@@ -306,6 +356,14 @@ export namespace telar::sys {
   inline constexpr const in_addr& localAddress(const xinpcb64& block) noexcept {
     return block.inp_laddr;
   }
+
+  // When a process from the kernel's process list started.
+  inline constexpr const timeval& processStarted(const kinfo_proc& process) noexcept {
+    return process.kp_proc.p_starttime;
+  }
+
+  // The statfs the mount table lists; the function of the same name hides the struct's.
+  using FileSystemStatus = struct statfs;
 
   // The foreign IPv4 address of a TCP control block.
   inline constexpr const in_addr& foreignAddress(const xinpcb64& block) noexcept {

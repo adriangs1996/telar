@@ -347,7 +347,7 @@ namespace telar::gui::features::configuration {
       }
     }
 
-    constexpr auto voids = ds::Array<std::pair<BindingActionKind, std::string_view>, 21>{{
+    constexpr auto voids = ds::Array<std::pair<BindingActionKind, std::string_view>, 33>{{
         {BindingActionKind::toggle_pane_fullscreen, "toggle_pane_fullscreen"},
         {BindingActionKind::toggle_sidebar, "toggle_sidebar"},
         {BindingActionKind::toggle_workspace_list, "toggle_workspace_list"},
@@ -369,6 +369,18 @@ namespace telar::gui::features::configuration {
         {BindingActionKind::machine_picker, "machine_picker"},
         {BindingActionKind::add_machine, "add_machine"},
         {BindingActionKind::copy_mode, "enter_copy_mode"},
+        {BindingActionKind::monitor, "monitor"},
+        {BindingActionKind::process_picker, "process_picker"},
+        {BindingActionKind::process_terminate, "process_terminate"},
+        {BindingActionKind::process_kill, "process_kill"},
+        {BindingActionKind::process_stop, "process_stop"},
+        {BindingActionKind::process_continue, "process_continue"},
+        {BindingActionKind::process_lower_priority, "process_lower_priority"},
+        {BindingActionKind::process_copy_command, "process_copy_command"},
+        {BindingActionKind::process_focus_pane, "process_focus_pane"},
+        {BindingActionKind::process_review_stack, "process_review_stack"},
+        {BindingActionKind::process_review_files, "process_review_files"},
+        {BindingActionKind::process_review_logs, "process_review_logs"},
     }};
 
     for (const auto& [action_kind, type] : voids) {

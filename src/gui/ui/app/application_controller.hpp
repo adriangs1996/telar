@@ -21,6 +21,7 @@ static_assert(true);
 #include "ui/app/overlays/link_status/link_status_controller.hpp"
 #include "ui/app/overlays/machine_prompt/machine_profiles_source.hpp"
 #include "ui/app/overlays/machine_prompt/machine_prompt_controller.hpp"
+#include "ui/app/overlays/monitor/monitor_controller.hpp"
 #include "ui/app/overlays/notifications/notifications_controller.hpp"
 #include "ui/app/overlays/notifications/sound_player.hpp"
 #include "ui/app/overlays/notifications/system_notifier.hpp"
@@ -121,6 +122,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(telar::gui::qt::MachinePromptController* machinePrompt READ machinePrompt CONSTANT)
     Q_PROPERTY(telar::gui::qt::MachineChromeController* machineChrome READ machineChrome CONSTANT)
     Q_PROPERTY(telar::gui::qt::PeekController* peek READ peek CONSTANT)
+    Q_PROPERTY(telar::gui::qt::MonitorController* monitor READ monitor CONSTANT)
     Q_PROPERTY(telar::gui::qt::PromptController* prompt READ prompt CONSTANT)
     Q_PROPERTY(telar::gui::qt::DocumentsController* documents READ documents CONSTANT)
     Q_PROPERTY(telar::gui::qt::LinkStatusController* linkStatus READ linkStatus CONSTANT)
@@ -216,6 +218,10 @@ namespace telar::gui::qt {
 
     PeekController* peek() noexcept {
       return &peek_;
+    }
+
+    MonitorController* monitor() noexcept {
+      return &monitor_;
     }
 
     PromptController* prompt() noexcept {
@@ -352,6 +358,7 @@ namespace telar::gui::qt {
     tbc::view<MachinePromptController, tbc::lt::self> machine_prompt_;
     tbc::view<MachineChromeController, tbc::lt::self> machine_chrome_;
     tbc::view<PeekController, tbc::lt::self> peek_;
+    tbc::view<MonitorController, tbc::lt::self> monitor_;
     tbc::view<PromptController, tbc::lt::self> prompt_;
     tbc::view<DocumentsController, tbc::lt::self> documents_;
     tbc::view<LinkStatusController, tbc::lt::self> link_status_;

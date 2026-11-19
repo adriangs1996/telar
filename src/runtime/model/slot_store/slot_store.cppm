@@ -16,6 +16,7 @@ import telar.wire.execution;
 import telar.wire.graphics;
 import telar.wire.history;
 import telar.wire.layout;
+import telar.wire.monitor;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.worktrees;
@@ -180,6 +181,9 @@ export {
         ClientRequest<InterruptAgent, ClientRole::control>,
         ClientRequest<AcknowledgeAgent>,
         ClientRequest<QueryAgents, ClientRole::control>,
+        ClientRequest<QueryMonitor, ClientRole::control>,
+        ClientRequest<RequestProcessSignal, ClientRole::control>,
+        ClientRequest<RequestProcessPriority, ClientRole::control>,
         ClientRequest<ReportAgentCommand, ClientRole::control, RequestLane::service>,
         ClientRequest<FindPaths, ClientRole::interactive, RequestLane::worker>,
         ClientRequest<CompleteWords>,

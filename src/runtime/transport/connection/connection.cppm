@@ -253,6 +253,7 @@ export {
       case ServerTag::clipboard_desktop_execute:
       case ServerTag::clipboard_desktop_cancel:
       case ServerTag::runtime_clipboard_chunk:
+      case ServerTag::monitor_snapshot:
         return DeliveryLane::management;
       }
 

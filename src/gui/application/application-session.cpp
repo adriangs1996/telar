@@ -65,6 +65,7 @@ namespace telar::gui::application {
         pane_list_(memory),
         history(memory),
         peek(memory),
+        monitor(memory),
         decode_(memory),
         clipboard_(memory),
         error_(memory),
@@ -136,9 +137,10 @@ namespace telar::gui::application {
     restore_layout_ = enabled;
   }
 
-  void Session::connected(std::uint64_t identity, bool reads_rows, bool reads_theme) {
+  void Session::connected(std::uint64_t identity, bool reads_rows, bool reads_theme, bool monitors) {
     reads_rows_ = reads_rows;
     reads_theme_ = reads_theme;
+    monitors_ = monitors;
     panes.clear();
     tabs.clear();
     active_tab.reset();
@@ -232,6 +234,7 @@ namespace telar::gui::application {
     features::history::suspend(history);
     features::paths::close(paths);
     features::peek::close(peek);
+    features::monitor::reset(monitor);
     features::palette::discard(palette);
     link.forgetRequests();
     features::terminal::links::suspend(links);
@@ -359,6 +362,8 @@ namespace telar::gui::application {
       return dispatch.template operator()<CommandSuggestion>();
     case ServerTag::system_metrics:
       return dispatch.template operator()<SystemMetrics>();
+    case ServerTag::monitor_snapshot:
+      return dispatch.template operator()<MonitorSnapshot>();
     case ServerTag::proxy_status:
       return dispatch.template operator()<ProxyStatus>();
     case ServerTag::request_failed:
@@ -603,12 +608,24 @@ namespace telar::gui::application {
     return status_bar::receive(*this, message);
   }
 
+  Change Session::apply(const MonitorSnapshot& message) {
+    return features::monitor::receive(monitor, message) ? Change::monitor : Change::none;
+  }
+
+  bool Session::monitors() const noexcept {
+    return monitors_;
+  }
+
   Change Session::apply(const ProxyStatus& message) {
     proxy_ = message;
     return Change::model;
   }
 
   Change Session::apply(const RequestFailed& message) {
+    if (features::monitor::fail(monitor, message.request_id, message.message)) {
+      return Change::monitor;
+    }
+
     for (auto& pane : panes.viewMut()) {
       if (pane.getMut().rows.settle(message.request_id)) {
         return Change::none;
@@ -669,6 +686,10 @@ namespace telar::gui::application {
   }
 
   Change Session::apply(const RequestCompleted& message) {
+    if (features::monitor::complete(monitor, message.request_id)) {
+      return Change::monitor;
+    }
+
     const auto request = link.complete(message.request_id);
     if (request && request->kind == RequestKind::forget_worktree) {
       return Change::none;
@@ -709,6 +730,9 @@ namespace telar::gui::application {
   template void Session::Link::send<ConfigureFrameInterval>(const ConfigureFrameInterval& message);
   template void Session::Link::send<ConfigureShellPrompt>(const ConfigureShellPrompt& message);
   template void Session::Link::send<ConfigureTerminalColors>(const ConfigureTerminalColors& message);
+  template void Session::Link::send<QueryMonitor>(const QueryMonitor& message);
+  template void Session::Link::send<RequestProcessPriority>(const RequestProcessPriority& message);
+  template void Session::Link::send<RequestProcessSignal>(const RequestProcessSignal& message);
   template void Session::Link::send<CopySelection>(const CopySelection& message);
   template void Session::Link::send<CreatePane>(const CreatePane& message);
   template void Session::Link::send<CreateTab>(const CreateTab& message);

@@ -177,6 +177,14 @@ Window {
         colors: telar.colors
     }
 
+    MonitorOverlay {
+        anchors.fill: parent
+        controller: telar.monitor
+        colors: telar.colors
+        typography: root.geometry.typography
+        ratio: root.ratio
+    }
+
     AttachmentModal {
         anchors.fill: parent
         controller: telar.attachments

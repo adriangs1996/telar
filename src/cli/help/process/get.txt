@@ -1,0 +1,16 @@
+telar process get: Show one process: its arguments, directory, ports, children, pane and agent
+
+Usage: telar process get PID [--started SECONDS.MICROSECONDS] [--json] [--socket PATH]
+
+Arguments:
+  PID             The process.
+  --started       Its start as `list` printed it; refuses another process with the pid.
+
+Effects: read-only. The process is read again at the time of the request, so one
+that started after the last reading is found and one that exited is not.
+
+Results: text lines PID, Started, Program, Name, User, State, Parent, Nice, CPU,
+Memory, Threads, Pane, Directory, Command, Ports, Children. JSON the fields of
+`process list` plus `arguments` (every argument, cut to 8 KiB), `directory`, `ports`
+(TCP ports its process group listens on) and `children` (pids). The directory and
+ports are read only for the user's own processes. Exit 0; 2 the process is gone.

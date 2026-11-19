@@ -22,6 +22,10 @@ export {
 
     const char* controlFailureDescription(FailureCode code) noexcept;
 
+    // Prints a command's failure on stderr as `family: what` and returns its exit status: the
+    // failure's own, 2 when the runtime names a pane or process that is gone, 1 otherwise.
+    int commandFailure(const char* family, const std::exception& error);
+
   }
 }
 

@@ -671,6 +671,30 @@ return {api_version = 2, client = {
       QCOMPARE(client_->status()->error(), QString{});
     }
 
+    // The monitor lists every process its runtime reads, and the detail of the one selected; with
+    // TELAR_MONITOR_SHOT set, the window as it shows them is saved there.
+    Q_SLOT void monitorListsTheRuntimeProcesses() {
+      QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+      auto* monitor = client_->monitor();
+
+      client_->commands()->execute(window_actions::Action::monitor);
+      QCOMPARE(client_->dialogs()->kind(), Store::Dialog::monitor);
+      QVERIFY(monitor->available());
+      QTRY_VERIFY_WITH_TIMEOUT(monitor->rows()->rowCount() > 1, runtime_wait_ms);
+      QVERIFY(monitor->host().value(QStringLiteral("processes")).toInt() > 1);
+
+      const auto first = monitor->rows()->index(0, 0).data(ListModel::record_role).toMap();
+
+      monitor->select(first.value(QStringLiteral("pid")).toInt(), first.value(QStringLiteral("started")).toString());
+      QTRY_COMPARE_WITH_TIMEOUT(monitor->detail().value(QStringLiteral("pid")).toInt(), first.value(QStringLiteral("pid")).toInt(), runtime_wait_ms);
+      if (const auto shot = qEnvironmentVariable("TELAR_MONITOR_SHOT"); !shot.isEmpty()) {
+        QVERIFY(window_->grabWindow().save(shot));
+      }
+
+      monitor->close();
+      QCOMPARE(client_->dialogs()->kind(), Store::Dialog::none);
+    }
+
     // A program in a pane hands the window a document: it covers the pane while the program
     // runs, scrolls by key, and goes away when the program quits.
     Q_SLOT void nativeDocumentCoversThePane() {
@@ -3110,9 +3134,9 @@ return {api_version=2, client={keybindings={
     Q_SLOT void paletteActionsUseOriginalLabelsAndReorderExistingTabs() {
       const auto commands = client_->commands()->list();
 
-      QCOMPARE(commands.size(), qsizetype{29});
+      QCOMPARE(commands.size(), qsizetype{41});
       QCOMPARE(commands.front().toMap().value(QStringLiteral("label")).toString(), QStringLiteral("Split right"));
-      const QStringList tail{QStringLiteral("Insert a path"), QStringLiteral("Switch machine"), QStringLiteral("Next machine"), QStringLiteral("Previous machine"), QStringLiteral("Add machine")};
+      const QStringList tail{QStringLiteral("Copy process command"), QStringLiteral("Go to process pane"), QStringLiteral("Review process stack"), QStringLiteral("Review process open files"), QStringLiteral("Review process logs")};
 
       for (qsizetype index = 0; index < tail.size(); ++index) {
         QCOMPARE(commands[commands.size() - tail.size() + index].toMap().value(QStringLiteral("label")).toString(), tail[index]);

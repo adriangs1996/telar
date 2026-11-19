@@ -1,7 +1,10 @@
 module telar.cli.control_session;
 
+import telar.sys.posix;
 import telar.sys.socket;
 import telar.platform.error;
+import telar.client;
+import telar.cli.output;
 
 namespace telar::runtime::cli {
 
@@ -29,9 +32,34 @@ namespace telar::runtime::cli {
       return "that agent declares no interrupt key";
     case FailureCode::foreign_process:
       return "only a process inside that pane may report for its agent";
+    case FailureCode::permission_denied:
+      return "permission denied for the runtime's user";
+    case FailureCode::process_not_found:
+      return "the process is gone, or another process has its pid now";
     default:
       return "runtime refused the request";
     }
+  }
+
+  int commandFailure(const char* family, const std::exception& error) {
+    const auto* system = dynamic_cast<const SystemError*>(&error);
+    const auto socket_timeout = dynamic_cast<const SocketError*>(&error) && (sys::lastError() == EAGAIN || sys::lastError() == EWOULDBLOCK);
+    const auto timeout = socket_timeout || (system && (system->code() == EAGAIN || system->code() == EWOULDBLOCK));
+
+    std::fprintf(stderr, "%s: %s\n", family, timeout ? "RuntimeTimeout" : error.what());
+    if (timeout) {
+      return 1;
+    }
+
+    if (const auto* failure = dynamic_cast<const Failure*>(&error)) {
+      return failure->status();
+    }
+
+    if (const auto* failure = dynamic_cast<const ControlFailure*>(&error)) {
+      return (failure->code() == FailureCode::pane_not_found || failure->code() == FailureCode::pane_exited || failure->code() == FailureCode::process_not_found || (std::string_view{family} == "telar agent" && failure->code() == FailureCode::worktree_not_found)) ? 2 : 1;
+    }
+
+    return 1;
   }
 
   void RuntimeConnection::receiveTimeout(unsigned seconds) {

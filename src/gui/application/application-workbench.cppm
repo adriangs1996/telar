@@ -131,6 +131,8 @@ export namespace telar::gui::application::workbench {
   // Asks the runtime to forget each worktree that is gone; how many it asked for.
   std::size_t forgetGoneWorktrees(Session& session);
 
+  // Splits pane `pane_id` beside a new pane running `arguments`; throws when it cannot.
+  void launchSplit(Session& session, std::uint64_t pane_id, std::span<const std::string_view> arguments);
 }
 
 // What the session's routing and the other use cases hand the workbench; ui never calls these.
@@ -142,9 +144,6 @@ namespace telar::gui::application::workbench {
 
   // Opens a tab, or the first pane, running `arguments` from the default launch's directory.
   void launchTab(Session& session, std::span<const std::string_view> arguments);
-
-  // Splits pane `pane_id` beside a new pane running `arguments`; throws when it cannot.
-  void launchSplit(Session& session, std::uint64_t pane_id, std::span<const std::string_view> arguments);
 
   // The tab at `location` focuses `pane_id`, which the graphics of a paused pane hear.
   void setFocus(Session& session, TabLocation location, std::uint64_t pane_id);

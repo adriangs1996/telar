@@ -289,6 +289,18 @@ for _, name in ipairs({
 	"previous-machine",
 	"machine-picker",
 	"add-machine",
+	"monitor",
+	"process-picker",
+	"process-terminate",
+	"process-kill",
+	"process-stop",
+	"process-continue",
+	"process-lower-priority",
+	"process-copy-command",
+	"process-focus-pane",
+	"process-review-stack",
+	"process-review-files",
+	"process-review-logs",
 }) do
 	local stable_name = name
 	telar.action[name:gsub("-", "_")] = function()

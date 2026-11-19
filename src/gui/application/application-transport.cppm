@@ -94,6 +94,9 @@ export {
       // The schema before the client's whole theme: its ConfigureTerminalColors has no editor
       // colors and it has no ReadPaneTheme. Its other layouts are the current schema's.
       static constexpr SchemaId cqp00004{'c', 'q', 'p', '0', '0', '0', '0', '4'};
+      // The schema before the monitor: its runtime answers no QueryMonitor and acts on no process.
+      // Its other layouts are the current schema's.
+      static constexpr SchemaId cqp00005{'c', 'q', 'p', '0', '0', '0', '0', '5'};
 
       [[nodiscard]] static bool supports(const SchemaId& schema) noexcept;
 

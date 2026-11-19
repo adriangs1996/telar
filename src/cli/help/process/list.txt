@@ -1,0 +1,26 @@
+telar process list: List every process with its CPU, memory, threads, state, pane and command
+
+Usage: telar process list [--sort cpu|memory|threads|pid|name] [--reverse] [--filter TEXT]
+                          [--scope all|telar|agents] [--tree] [--limit N] [--json] [--socket PATH]
+
+Arguments:
+  --sort          Order by CPU (default), resident memory or threads, largest first,
+                  or by pid or name, smallest first.
+  --reverse       The other way round.
+  --filter TEXT   Only processes whose name, command or user contains TEXT, ignoring
+                  case, or whose pid is TEXT. At most 256 bytes.
+  --scope         all (default); telar: those running in a pane; agents: agents and
+                  the processes they started.
+  --tree          Each process under its parent, siblings in the chosen order; a
+                  process whose parent is filtered out starts its own tree.
+  --limit N       At most N rows, 1 to 1024 (default 1024).
+
+Effects: read-only; asks the runtime and never starts one.
+
+Results: text columns PID, USER, CPU% (of one core), MEM (resident), THR, S (R
+running, S sleeping, I idle, T stopped, Z zombie), PANE, PROGRAM, COMMAND, then
+`N of M processes` when the limit cut the list. JSON `matched` and `processes`, each
+with `pid`, `started`, `parent`, `user`, `user_id`, `name`, `program`, `command`
+(cut to 256 bytes), `state`, `measured`, `cpu_permille`, `resident_bytes` and
+`threads` (null when not measured), `nice`, `pane_id` (null outside panes), `agent`
+(null when none) and `depth`. Exit 0.

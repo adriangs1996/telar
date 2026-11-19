@@ -19,6 +19,7 @@ import telar.cli.plugin;
 import telar.cli.worktree;
 import telar.cli.worktree_git;
 import telar.cli.render;
+import telar.cli.monitor;
 import telar.cli.base.command_error;
 import telar.platform.error;
 import telar.base.memory.allocators;
@@ -65,6 +66,9 @@ namespace telar::runtime::cli {
         return file_transfer::run(file_transfer::Options::parse(options));
       case Family::runtime:
         return runRuntime(memory, RuntimeOptions::parse(options));
+      case Family::process:
+      case Family::monitor:
+        return monitor::run(memory, monitor::Options::parse(family, options));
       case Family::diagnostics:
         return diagnostics::run(memory, DiagnosticsOptions::parse(options));
       case Family::api:

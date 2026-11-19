@@ -19,6 +19,7 @@ import telar.gui.foundation.model;
 import telar.gui.features.terminal.links;
 import telar.gui.features.paths;
 import telar.gui.features.peek;
+import telar.gui.features.monitor;
 import telar.gui.foundation.system;
 import :client_view_state;
 import :sidebar;
@@ -36,6 +37,7 @@ import telar.wire.editor;
 import telar.wire.graphics;
 import telar.wire.history;
 import telar.wire.layout;
+import telar.wire.monitor;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
@@ -64,6 +66,8 @@ export {
       suggestion,
       peek,
       document,
+      // The monitor's answer, or what the runtime refused of it.
+      monitor,
     };
 
     // The clock a session reads, monotonic and in nanoseconds.
@@ -158,7 +162,8 @@ export {
 
       // `reads_rows`: the runtime reads its scrollback's rows by stable number (schema cqp00003).
       // `reads_theme`: it keeps the client's whole theme for its panes' programs (schema cqp00005).
-      void connected(std::uint64_t identity, bool reads_rows = true, bool reads_theme = true);
+      // `monitors`: it answers the monitor's queries (schema cqp00006).
+      void connected(std::uint64_t identity, bool reads_rows = true, bool reads_theme = true, bool monitors = true);
 
       [[nodiscard]] bool requestsPending() const noexcept;
 
@@ -194,6 +199,8 @@ export {
 
       // Whether the runtime hears the client's theme, editor colors included.
       [[nodiscard]] bool readsTheme() const noexcept;
+
+      [[nodiscard]] bool monitors() const noexcept;
 
       // Asks for the rows from stable row `first` to `last` the pane holds neither on its screen
       // nor in its cache, a request at a time while requests are free.
@@ -572,6 +579,7 @@ export {
       Change apply(const CommandSuggestion& message);
 
       Change apply(const SystemMetrics& message);
+      Change apply(const MonitorSnapshot& message);
 
       Change apply(const ProxyStatus& message);
 
@@ -735,6 +743,7 @@ export {
     public:
       tbc::view<features::history::State, tbc::lt::a> history;
       tbc::view<features::peek::State, tbc::lt::a> peek;
+      tbc::view<features::monitor::State, tbc::lt::a> monitor;
       features::paths::State paths;
       features::palette::State palette;
 
@@ -766,6 +775,7 @@ export {
       bool ready_ = false;
       bool reads_rows_ = false;
       bool reads_theme_ = false;
+      bool monitors_ = false;
       bool presented_ = true;
       bool leave_pending_ = false;
       bool initial_open_pending_ = false;

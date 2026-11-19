@@ -87,6 +87,9 @@ namespace telar {
     search_pane_rows = 0x4f,
     pane_command = 0x50,
     configure_shell_prompt = 0x51,
+    query_monitor = 0x52,
+    request_process_signal = 0x53,
+    request_process_priority = 0x54,
   };
 
   enum class ServerTag : Byte {
@@ -153,6 +156,7 @@ namespace telar {
     pane_rows = 0xc1,
     pane_scrollback = 0xc2,
     pane_document = 0xc3,
+    monitor_snapshot = 0xc4,
     pane_theme = 0xc5,
   };
 

@@ -40,9 +40,11 @@ export {
 
       // cqp00002 added PaneShell, PaneGit, PaneBlocks, word completion and command specs;
       // cqp00003 added ReadPaneRows, PaneRows, PaneScrollback, SearchPaneRows, PaneCommand and
-      // ConfigureShellPrompt; cqp00004 added PaneDocument; cqp00005 adds the editor colors to
-      // ConfigureTerminalColors, ReadPaneTheme and PaneTheme. Peers without them reject the messages.
-      inline constexpr SchemaId schema_id{'c', 'q', 'p', '0', '0', '0', '0', '5'};
+      // ConfigureShellPrompt; cqp00004 added PaneDocument; cqp00005 added the editor colors to
+      // ConfigureTerminalColors, ReadPaneTheme and PaneTheme; cqp00006 adds QueryMonitor,
+      // MonitorSnapshot, RequestProcessSignal and RequestProcessPriority. Peers without them reject
+      // the messages.
+      inline constexpr SchemaId schema_id{'c', 'q', 'p', '0', '0', '0', '0', '6'};
 
     } // namespace handshake
 

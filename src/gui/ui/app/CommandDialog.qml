@@ -17,7 +17,9 @@ Popup {
     // inspector still opens here, over it.
     readonly property bool lineHosted: telar.dialogs.lineSearch !== Store.Dialog.none && !(historyMode && telar.history.state.inspecting)
     readonly property bool listing: historyMode || paletteMode
-    readonly property bool promptMode: telar.dialogs.kind !== Store.Dialog.none && !customMode
+    // The monitor draws itself over the window; this popup stays closed while it shows.
+    readonly property bool monitorMode: telar.dialogs.kind === Store.Dialog.monitor
+    readonly property bool promptMode: telar.dialogs.kind !== Store.Dialog.none && !customMode && !monitorMode
     readonly property bool workspaceMode: telar.dialogs.kind === Store.Dialog.new_workspace
     readonly property var standardField: workspaceMode ? workspaceForm.field.input : prompt.field.input
     readonly property real dimmingAlpha: 0.25
@@ -95,7 +97,7 @@ Popup {
 
     // The inspector opens and closes over the prompt line's search.
     onLineHostedChanged: {
-        if (telar.dialogs.kind === Store.Dialog.none) {
+        if (telar.dialogs.kind === Store.Dialog.none || root.monitorMode) {
             return;
         }
 
@@ -124,7 +126,9 @@ Popup {
                 workspaceForm.clear();
             }
 
-            if (telar.dialogs.kind !== Store.Dialog.none) {
+            if (root.monitorMode) {
+                root.close();
+            } else if (telar.dialogs.kind !== Store.Dialog.none) {
                 if (!root.paletteMode && !root.pathMode && !root.machineMode && !root.peekMode) {
                     root.activeSearch.text = "";
                 }

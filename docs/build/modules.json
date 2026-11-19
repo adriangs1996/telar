@@ -154,6 +154,7 @@
       "foundation/drawing",
       "foundation/forms",
       "features/peek",
+      "features/monitor",
       "features/palette",
       "features/paths",
       "features/history",
@@ -183,6 +184,7 @@
       "render",
       "command_limit",
       "control_session",
+      "monitor",
       "runtime_observer",
       "server",
       "worktree_git",
@@ -203,6 +205,12 @@
   },
   "upward_imports": [],
   "interfaces": {
+    "src/gui/application/application-monitor.cppm": "telar.gui.application:monitor",
+    "src/gui/features/monitor/monitor.cppm": "telar.gui.features.monitor",
+    "src/cli/monitor/monitor.cppm": "telar.cli.monitor",
+    "src/runtime/metrics/monitor/monitor.cppm": "telar.runtime.metrics.monitor",
+    "lib/wire/monitor/monitor.cppm": "telar.wire.monitor",
+    "src/runtime/platform/process_table/process_table.cppm": "telar.runtime.platform.process_table",
     "lib/plugins/plugins.cppm": "telar.plugins",
     "lib/tls/tls.cppm": "telar.tls",
     "lib/base/memory/allocators/allocators.cppm": "telar.base.memory.allocators",
@@ -671,6 +679,7 @@
     "src/gui/application/application-plugins.cppm": "telar.gui.application:plugins"
   },
   "textual_boundaries": {
+    "src/gui/ui/app/overlays/monitor/monitor_controller.hpp": "Qt moc/QML integration",
     "lib/base/include/telar_base/diagnostics/config.hpp": "Project macro header: TELAR_DIAGNOSTIC, TELAR_DIAGNOSTICS and TELAR_ASSERT; includes nothing",
     "lib/base/include/telar_base/diagnostics/limit_reach.hpp": "Included by other textual headers and tests; module units import its owner module",
     "lib/base/include/telar_base/diagnostics/timing.hpp": "Objective-C++ ABI",
@@ -948,6 +957,12 @@
     }
   ],
   "implementations": {
+    "src/gui/features/monitor/monitor.cpp": "telar.gui.features.monitor",
+    "src/cli/monitor/monitor.cpp": "telar.cli.monitor",
+    "src/runtime/metrics/monitor/monitor.cpp": "telar.runtime.metrics.monitor",
+    "src/runtime/platform/process_table/process_table.cpp": "telar.runtime.platform.process_table",
+    "src/runtime/platform/process_table/macos/process_table.cpp": "telar.runtime.platform.process_table",
+    "src/runtime/platform/process_table/linux/process_table.cpp": "telar.runtime.platform.process_table",
     "lib/wire/agents/agents.cpp": "telar.wire.agents",
     "lib/wire/clients/clients.cpp": "telar.wire.clients",
     "lib/wire/clipboard/clipboard.cpp": "telar.wire.clipboard",
@@ -1177,6 +1192,9 @@
     "lib/client/include/telar_client/codecs/telar_handshake.cppm": "lib/client/include/telar_client/serializers/telar_handshake.cppm"
   },
   "origin_interfaces": {
+    "src/cli/monitor.cppm": "src/cli/monitor/monitor.cppm",
+    "src/runtime/metrics/monitor.cppm": "src/runtime/metrics/monitor/monitor.cppm",
+    "src/runtime/platform/process_table.cppm": "src/runtime/platform/process_table/process_table.cppm",
     "lib/plugins/include/telar_plugins/inspection.cppm": "lib/plugins/plugins.cppm",
     "lib/plugins/include/telar_plugins/paths.cppm": "lib/plugins/plugins.cppm",
     "lib/plugins/include/telar_plugins/package.cppm": "lib/plugins/plugins.cppm",
@@ -2964,6 +2982,7 @@
   },
   "library_owners": {
     "<CoreFoundation/CoreFoundation.h>": "telar.runtime.platform.frameworks",
+    "<IOKit/IOKitLib.h>": "telar.runtime.platform.frameworks",
     "<IOKit/ps/IOPSKeys.h>": "telar.runtime.platform.frameworks",
     "<IOKit/ps/IOPowerSources.h>": "telar.runtime.platform.frameworks",
     "<Security/Security.h>": "telar.runtime.platform.frameworks",

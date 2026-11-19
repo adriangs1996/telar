@@ -219,7 +219,7 @@ namespace telar::gui::qt {
 
         const auto& schema = source->connection.schema();
 
-        source->session.connected(source->identity, application::RuntimeProtocol::readsRows(schema), application::RuntimeProtocol::readsTheme(schema));
+        source->session.connected(source->identity, application::RuntimeProtocol::readsRows(schema), application::RuntimeProtocol::readsTheme(schema), application::RuntimeProtocol::supports(schema, ClientTag::query_monitor));
         summarize(source->key);
         if (key.machine.slot == store_.machines().active()) {
           status_.publish();

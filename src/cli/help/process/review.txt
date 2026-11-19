@@ -1,0 +1,21 @@
+telar process review: Run a system tool on a process: its stack, open files, logs or a debugger
+
+Usage: telar process review PID --tool stack|files|logs|debug [--started SECONDS.MICROSECONDS] [--print] [--socket PATH]
+
+Arguments:
+  PID             The process.
+  --tool          stack: what its threads are doing (`sample` on macOS, `eu-stack` on
+                  Linux); files: its open files and sockets (`lsof`); logs: what it
+                  logs from now on (`log stream` on macOS, `journalctl -f` on Linux);
+                  debug: attach a debugger (`lldb` on macOS, `gdb` on Linux), which
+                  stops the process until it detaches.
+  --started       Its start as `list` printed it; refuses another process with the pid.
+  --print         Print the tool's command line instead of running it.
+
+Effects: asks the runtime whether the process still is the one named, then replaces
+this command with the tool, in this terminal. The tool must be installed; telar
+installs none. Debugging needs the system's permission to attach (on Linux,
+kernel.yama.ptrace_scope).
+
+Results: the tool's own output; with --print, its command line. Exit: the tool's; 2
+the process is gone; 1 when the tool is missing.

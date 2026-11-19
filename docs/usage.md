@@ -103,6 +103,25 @@ tabs and agents, `>` for actions and `:` for machines. For example, `>split`
 searches actions only.
 See [remote machines](remote.md) to configure an SSH destination.
 
+## Watch the machine
+
+`Open monitor` in the palette (`telar.action.monitor()` to bind it) shows what
+btop shows, read by the runtime of the window's machine, local or remote: every
+core, memory and swap, disks with their read and write rates, network
+interfaces, and every process of every user. Click a column title to sort by
+it, again to reverse; type `/` to filter by name, command, user or pid; `In
+panes` and `Agents` keep only the processes telar runs; `Tree` nests each
+process under its parent. Select a process to pause, resume, terminate or kill
+it (Kill asks for a second click), lower its priority, copy its command, go to
+its pane, or review it in a split: its stack, open files or logs, or a debugger
+after a second click. Esc clears the selection, then closes the monitor.
+
+The runtime reads the processes only while the monitor shows, every 2 s. On
+macOS the CPU and memory of other users' processes need root, as they do for
+`top`; their rows show `-`. `telar process list|watch|get|signal|renice|review`
+and `telar monitor host|disks|network` do the same from a shell or an agent,
+and `telar --machine LABEL process list` on another machine.
+
 ## Leave and return
 
 A window is a client of the runtime. Closing it leaves the runtime's processes

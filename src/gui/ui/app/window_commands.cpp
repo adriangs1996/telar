@@ -113,7 +113,7 @@ namespace telar::gui::qt {
     ds::Option<window_actions::Action> nativeAction(BindingActionKind kind) noexcept {
       using Native = window_actions::Action;
       using Binding = BindingActionKind;
-      constexpr auto actions = ds::Array<std::pair<Binding, Native>, 36>{{
+      constexpr auto actions = ds::Array<std::pair<Binding, Native>, 48>{{
           {Binding::new_tab, Native::new_tab},
           {Binding::next_tab, Native::next_tab},
           {Binding::previous_tab, Native::previous_tab},
@@ -150,6 +150,18 @@ namespace telar::gui::qt {
           {Binding::next_machine, Native::next_machine},
           {Binding::previous_machine, Native::previous_machine},
           {Binding::add_machine, Native::add_machine},
+          {Binding::monitor, Native::monitor},
+          {Binding::process_picker, Native::process_picker},
+          {Binding::process_terminate, Native::process_terminate},
+          {Binding::process_kill, Native::process_kill},
+          {Binding::process_stop, Native::process_stop},
+          {Binding::process_continue, Native::process_continue},
+          {Binding::process_lower_priority, Native::process_lower_priority},
+          {Binding::process_copy_command, Native::process_copy_command},
+          {Binding::process_focus_pane, Native::process_focus_pane},
+          {Binding::process_review_stack, Native::process_review_stack},
+          {Binding::process_review_files, Native::process_review_files},
+          {Binding::process_review_logs, Native::process_review_logs},
       }};
 
       const auto* const found = std::ranges::find(actions, kind, &decltype(actions)::value_type::first);
@@ -702,6 +714,12 @@ namespace telar::gui::qt {
 
   void WindowCommands::executeWindowAction(window_actions::Action action) {
     if (executeMachineAction(action)) {
+      return;
+    }
+
+    // The monitor and its process actions belong to the monitor's controller.
+    if (action >= window_actions::Action::monitor && action <= window_actions::Action::process_review_logs) {
+      emit monitorRequested(action);
       return;
     }
 

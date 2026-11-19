@@ -1,5 +1,6 @@
 module;
 #include <CoreFoundation/CoreFoundation.h>
+#include <IOKit/IOKitLib.h>
 #include <IOKit/ps/IOPSKeys.h>
 #include <IOKit/ps/IOPowerSources.h>
 #include <Security/Security.h>
@@ -7,7 +8,7 @@ module;
 export module telar.runtime.platform.frameworks;
 
 // macOS only (MACOS_SOURCES of runtime-platform). The SDK frameworks the runtime reads, and links
-// in runtime-settings: CoreFoundation, IOKit's power sources and Security's keychains. Their
+// in runtime-settings: CoreFoundation, IOKit's power sources and registry, and Security's keychains. Their
 // headers stay in this global module fragment only; importers reach their declarations
 // through these using-declarations instead of including them.
 export {
@@ -27,6 +28,7 @@ export {
   using ::CFDataGetBytePtr;
   using ::CFDataGetLength;
   using ::CFDictionaryCreate;
+  using ::CFDictionaryGetTypeID;
   using ::CFDictionaryGetValue;
   using ::CFGetTypeID;
   using ::CFNumberGetTypeID;
@@ -36,6 +38,7 @@ export {
   using ::kCFAllocatorDefault;
   using ::kCFBooleanTrue;
   using ::kCFNumberSInt32Type;
+  using ::kCFNumberSInt64Type;
   using ::kCFTypeArrayCallBacks;
   using ::kCFTypeDictionaryKeyCallBacks;
   using ::kCFTypeDictionaryValueCallBacks;
@@ -44,6 +47,17 @@ export {
   using ::IOPSCopyPowerSourcesInfo;
   using ::IOPSCopyPowerSourcesList;
   using ::IOPSGetPowerSourceDescription;
+
+  // The IOKit registry, for the block storage drivers' statistics.
+  using ::CFMutableDictionaryRef;
+  using ::io_iterator_t;
+  using ::io_object_t;
+  using ::IOIteratorNext;
+  using ::IOObjectRelease;
+  using ::IORegistryEntryCreateCFProperties;
+  using ::IOServiceGetMatchingServices;
+  using ::IOServiceMatching;
+  using ::kIOMainPortDefault;
 
   // Security keychains and certificates.
   using ::SecCertificateRef;
@@ -64,6 +78,14 @@ export {
   using ::kSecReturnRef;
   using ::kSecUseAuthenticationUI;
   using ::kSecUseAuthenticationUISkip;
+}
+
+// IOBlockStorageDriver.h is a kernel header; these are the keys it names for user space.
+export namespace telar::runtime::block_storage_keys {
+  inline constexpr const char* driver_class = "IOBlockStorageDriver";
+  inline const CFStringRef statistics = CFSTR("Statistics");
+  inline const CFStringRef bytes_read = CFSTR("Bytes (Read)");
+  inline const CFStringRef bytes_written = CFSTR("Bytes (Write)");
 }
 
 // IOPSKeys.h spells its keys as string macros for CFSTR, and neither crosses an import.

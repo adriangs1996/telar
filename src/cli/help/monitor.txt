@@ -1,0 +1,15 @@
+telar monitor: How the machine is doing: its processors, memory, disks and network
+
+Usage: telar monitor COMMAND [--json] [--socket PATH]
+
+Commands:
+  host            CPU of every core, memory, swap, and how many processes and threads run
+  disks           Local file systems with their usage, and bytes read and written per second
+  network         Bytes received and sent per second, and in all, per network interface
+
+The runtime of the machine reads these only while someone asks, as for `telar
+process`; a first request waits about 1 s for a second reading, since a rate needs
+two. `telar --machine LABEL monitor ...` asks another machine. `telar runtime
+metrics` is the lighter sample every window shows.
+
+`telar monitor COMMAND --help` explains a command's results.

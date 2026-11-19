@@ -41,6 +41,8 @@ import telar.wire.execution;
 import telar.wire.graphics;
 import telar.wire.history;
 import telar.wire.layout;
+import telar.wire.monitor;
+import telar.runtime.platform.process_table;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.worktrees;
@@ -720,6 +722,9 @@ export {
       void handle(std::uint64_t identity, const CompleteClientCommand& message);
 
       void handle(std::uint64_t identity, const RequestPaneFocus& message);
+      void handle(std::uint64_t identity, const QueryMonitor& message);
+      void handle(std::uint64_t identity, const RequestProcessSignal& message);
+      void handle(std::uint64_t identity, const RequestProcessPriority& message);
 
       void handle(std::uint64_t identity, const CompletePaneFocus& message);
 
@@ -803,6 +808,7 @@ export {
       Descents descents_;
       checkpoint::SessionStore<Agents> session_;
       HostMetricsService<NativeHostMetrics> metrics_;
+      MonitorService<ProcessTable, NativeHostDetail> monitor_;
       WorkspaceGitService<WorkspaceGitProbe> workspace_git_;
       ShellGitService shell_git_;
       WordService words_;

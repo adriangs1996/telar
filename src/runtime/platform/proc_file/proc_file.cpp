@@ -14,8 +14,17 @@ namespace telar::runtime {
   }
 
   bool ProcDirectory::belongsTo(uid_t user) const noexcept {
+    const auto found = owner();
+    return found && *found == user;
+  }
+
+  ds::Option<uid_t> ProcDirectory::owner() const noexcept {
     struct stat status{};
-    return directory_ && ::fstat(directory_.get(), &status) == 0 && status.st_uid == user;
+    if (!directory_ || ::fstat(directory_.get(), &status) != 0) {
+      return ds::none;
+    }
+
+    return status.st_uid;
   }
 
   ds::Option<std::string_view> ProcDirectory::read(const char* name, std::span<char> buffer) const noexcept {
@@ -58,23 +67,41 @@ namespace telar::runtime {
 
     ProcStat result;
     result.name = input.substr(begin + 1, end - begin - 1);
+    result.state = input[end + 2];
     input.remove_prefix(end + 4);
+
+    // Fields as proc(5) numbers them; the name is 2 and the state 3.
     enum class Field : unsigned {
       parent = 4,
       group = 5,
       foreground = 8,
+      user_time = 14,
+      system_time = 15,
+      nice = 19,
+      threads = 20,
       started = 22,
+      resident = 24,
     };
-    for (unsigned field = static_cast<unsigned>(Field::parent); field <= static_cast<unsigned>(Field::started); ++field) {
+
+    for (unsigned field = static_cast<unsigned>(Field::parent); field <= static_cast<unsigned>(Field::resident); ++field) {
       const auto separator = input.find(' ');
       const auto word = input.substr(0, separator);
       const auto selected = static_cast<Field>(field);
-      if (selected == Field::parent || selected == Field::group || selected == Field::foreground || selected == Field::started) {
+
+      const auto wanted = selected == Field::parent || selected == Field::group || selected == Field::foreground || selected == Field::user_time ||
+                          selected == Field::system_time || selected == Field::nice || selected == Field::threads || selected == Field::started ||
+                          selected == Field::resident;
+      if (wanted) {
         const auto parsed = parseExact<std::int64_t>(word);
         if (!parsed) {
           return ds::none;
         }
+
         const auto value = *parsed;
+        if (value < 0 && selected != Field::nice && selected != Field::foreground) {
+          return ds::none;
+        }
+
         switch (selected) {
         case Field::parent:
           result.parent = static_cast<pid_t>(value);
@@ -85,19 +112,32 @@ namespace telar::runtime {
         case Field::foreground:
           result.foreground = static_cast<pid_t>(value);
           break;
+        case Field::user_time:
+        case Field::system_time:
+          result.cpu_ticks += static_cast<std::uint64_t>(value);
+          break;
+        case Field::nice:
+          result.nice = static_cast<std::int8_t>(std::clamp<std::int64_t>(value, -20, 19));
+          break;
+        case Field::threads:
+          result.threads = static_cast<std::uint32_t>(std::min<std::int64_t>(value, std::numeric_limits<std::uint32_t>::max()));
+          break;
         case Field::started:
-          if (value < 0) {
-            return ds::none;
-          }
           result.started_ticks = static_cast<std::uint64_t>(value);
+          break;
+        case Field::resident:
+          result.resident_pages = static_cast<std::uint64_t>(value);
           break;
         }
       }
+
       if (separator == std::string_view::npos) {
-        return field == static_cast<unsigned>(Field::started) ? ds::Option{result} : ds::none;
+        return field >= static_cast<unsigned>(Field::started) ? ds::Option{result} : ds::none;
       }
+
       input.remove_prefix(separator + 1);
     }
+
     return result;
   }
 

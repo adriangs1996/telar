@@ -8,6 +8,7 @@ telar_add_domain(runtime platform
     name_resolutions/name_resolutions.cpp
     private_tunnel/private_tunnel.cpp
     process_probe/process_inspector.cpp
+    process_table/process_table.cpp
     request_worker/request_worker.cpp
     session_host/session_host.cpp
     signals/signals.cpp
@@ -18,12 +19,14 @@ telar_add_domain(runtime platform
     frameworks/frameworks.cppm
     host_metrics/macos/host_metrics.cpp
     process_probe/macos/process_inspector.cpp
+    process_table/macos/process_table.cpp
   LINUX_SOURCES
     event_loop/linux/event_loop.cpp
     host_metrics/linux/host_metrics.cpp
     proc_file/proc_file.cpp
     proc_file/proc_file.cppm
     process_probe/linux/process_inspector.cpp
+    process_table/linux/process_table.cpp
   DEPS diagnostics transport suggestions)
 
 if(BUILD_TESTING)

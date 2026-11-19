@@ -1317,6 +1317,18 @@ removes it. `telar.action.add_machine()` asks for a new machine's label and
 SSH destination. Each change is written to `machines.json`. They have no
 default binding, and plugins cannot run them.
 
+`telar.action.monitor()` opens the monitor over the window: the processors,
+memory, disks and network of the window's machine, and every process it runs.
+`telar.action.process_picker()` opens it with its filter focused. These act on
+the process selected in the monitor, opening it when it is closed:
+`process_terminate()`, `process_kill()`, `process_stop()` (pause),
+`process_continue()`, `process_lower_priority()` (nice +5),
+`process_copy_command()`, `process_focus_pane()` and
+`process_review_stack()`, `process_review_files()`, `process_review_logs()`,
+which split the focused pane beside one running `telar process review`. They
+have no default binding, and plugins cannot run them. `telar process` and
+`telar monitor` do the same from a shell.
+
 `telar.action.path_picker()` opens a fuzzy finder over the files and
 directories under the focused pane's directory, anchored at its cursor. Enter
 pastes the chosen path relative to the pane's directory, Alt+Enter pastes it

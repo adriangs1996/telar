@@ -355,7 +355,7 @@ namespace {
       const auto slot = remoteSlot(application);
 
       QTRY_VERIFY(MachineProfileWindow::client(application, slot)->session.ready());
-      constexpr qsizetype action_count = 29;
+      constexpr qsizetype action_count = 41;
 
       QCOMPARE(application.commands()->list().size(), action_count);
       application.commands()->execute(window_actions::Action::next_machine);

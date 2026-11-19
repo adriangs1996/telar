@@ -12,6 +12,8 @@ import std;
 import telar.testing;
 import telar.gui.foundation.core;
 import telar.gui.features.palette;
+import telar.gui.foundation.actions;
+import telar.wire.monitor;
 import telar.gui.foundation.text;
 import telar.base.ds;
 
@@ -152,6 +154,22 @@ namespace {
   const telar::testing::Case case_palette_scores_prefer_word_starts_and_runs{"palette.palette_scores_prefer_word_starts_and_runs", paletteScoresPreferWordStartsAndRuns};
   const telar::testing::Case case_labels_retain_only_complete_utf8_at_the_capacity_boundary{"palette.labels_retain_only_complete_utf8_at_the_capacity_boundary", labelsRetainOnlyCompleteUtf8AtTheCapacityBoundary};
   const telar::testing::Case case_palette_regions_fit_small_and_ordinary_windows{"palette.palette_regions_fit_small_and_ordinary_windows", paletteRegionsFitSmallAndOrdinaryWindows};
+
+  // Every monitor operation the CLI offers has its binding action and its palette entry, with the
+  // label the registry names.
+  void monitorOperationsReachThePalette() {
+    for (const auto& operation : telar::monitor_operations) {
+      const auto action = builtinBindingAction(operation.binding);
+
+      check(action.hasValue(), std::string{operation.binding});
+
+      const auto entry = std::ranges::find(palette_actions, action->kind, &PaletteAction::action);
+
+      check(entry != palette_actions.end() && entry->label == operation.label, std::string{operation.label});
+    }
+  }
+
   const telar::testing::Case case_the_visible_window_contains_its_selection_and_group_heading{"palette.the_visible_window_contains_its_selection_and_group_heading", theVisibleWindowContainsItsSelectionAndGroupHeading};
+  const telar::testing::Case case_monitor_operations{"palette.monitor_operations_reach_the_palette", monitorOperationsReachThePalette};
 
 }
