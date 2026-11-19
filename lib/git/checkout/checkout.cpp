@@ -164,7 +164,7 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  HardenedGit<Memory>::HardenedGit(Memory& memory, std::string_view root)
+  HardenedGit<Memory>::HardenedGit(tbc::view<Memory&, tbc::lt::a> memory, std::string_view root)
       : memory_(memory),
         root_(memory, root),
         overrides_(memory) {}

@@ -46,20 +46,21 @@ export {
 
     class Git {
     public:
-      Git(Memory& memory, std::string_view root);
+      // What git prints is read into `memory`, region `a`.
+      Git(tbc::view<Memory&, tbc::lt::a> memory, std::string_view root);
 
-      Text read(std::initializer_list<std::string_view> arguments);
+      tbc::view<Text, tbc::lt::a> read(std::initializer_list<std::string_view> arguments);
 
-      Text read(std::span<const std::string_view> arguments);
+      tbc::view<Text, tbc::lt::a> read(std::span<const std::string_view> arguments);
 
       // `revisions` are rev-list arguments: the ref, then any exclusions.
       void bundle(std::span<const std::string_view> revisions, int descriptor);
 
     private:
-      std::pair<int, Text> execute(Command<Memory>& command, bool bounded);
+      tbc::view<std::pair<int, Text>, tbc::lt::a> execute(Command<Memory>& command, bool bounded);
 
-      Memory& memory_;
-      HardenedGit<Memory> git_;
+      tbc::view<Memory&, tbc::lt::a> memory_;
+      tbc::view<HardenedGit<Memory>, tbc::lt::a> git_;
     };
 
     void ready(Git& git, std::string_view commit);

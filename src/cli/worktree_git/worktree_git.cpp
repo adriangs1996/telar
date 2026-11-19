@@ -448,7 +448,7 @@ namespace telar::runtime::cli::sessions {
 
 namespace telar::runtime::cli::repository {
 
-  Git::Git(Memory& memory, std::string_view root)
+  Git::Git(tbc::view<Memory&, tbc::lt::a> memory, std::string_view root)
       : memory_(memory),
         git_(memory, root) {
     git_.inspect([&](Command<Memory>& command) {
@@ -459,11 +459,11 @@ namespace telar::runtime::cli::repository {
         });
   }
 
-  Text Git::read(std::initializer_list<std::string_view> arguments) {
+  tbc::view<Text, tbc::lt::a> Git::read(std::initializer_list<std::string_view> arguments) {
     return read(std::span{arguments.begin(), arguments.size()});
   }
 
-  Text Git::read(std::span<const std::string_view> arguments) {
+  tbc::view<Text, tbc::lt::a> Git::read(std::span<const std::string_view> arguments) {
     auto [status, output] = git_.with(arguments, [&](Command<Memory>& command) {
       return execute(command, true);
     });
@@ -498,7 +498,7 @@ namespace telar::runtime::cli::repository {
     }
   }
 
-  std::pair<int, Text> Git::execute(Command<Memory>& command, bool bounded) {
+  tbc::view<std::pair<int, Text>, tbc::lt::a> Git::execute(Command<Memory>& command, bool bounded) {
     constexpr std::size_t max_configuration_bytes = 64 * 1024;
     CommandOutput output{memory_, bounded ? max_git_output : max_configuration_bytes};
     const auto status = output.run(command, std::chrono::steady_clock::now() + git_timeout, true);

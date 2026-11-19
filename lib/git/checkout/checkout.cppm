@@ -121,7 +121,8 @@ export {
     template <Allocator Memory>
     class HardenedGit {
     public:
-      HardenedGit(Memory& memory, std::string_view root);
+      // The repository's root and the overrides are copied into `memory`, region `a`.
+      HardenedGit(tbc::view<Memory&, tbc::lt::a> memory, std::string_view root);
       HardenedGit(const HardenedGit&) = delete;
       HardenedGit& operator=(const HardenedGit&) = delete;
 
@@ -147,9 +148,9 @@ export {
 
       // Hands `use` the command `git` with the hardening options and overrides, then `arguments`,
       // in the repository; a command keeps its address, so it lives for this call. The result borrows
-      // only what `use` lends, region `a`.
+      // only what `use` holds, region `a`, never `use` itself, as a Rust closure's result does.
       template <typename Use>
-      TBC_GENERIC tbc::view<std::invoke_result_t<Use&, Command<Memory>&>, tbc::lt::a> with(std::span<const std::string_view> arguments, tbc::view<Use&&, tbc::lt::a> use) const {
+      TBC_GENERIC tbc::view<std::invoke_result_t<Use&, Command<Memory>&>, tbc::lt::a> with(std::span<const std::string_view> arguments, tbc::holds<Use&&, tbc::lt::a> use) const {
         // Stays generic over the caller's use of the command; its command line is built in the implementation unit.
         auto command = commandFor(arguments);
 
@@ -158,7 +159,7 @@ export {
       }
 
       template <typename Use>
-      TBC_GENERIC tbc::view<std::invoke_result_t<Use&, Command<Memory>&>, tbc::lt::a> with(std::initializer_list<std::string_view> arguments, tbc::view<Use&&, tbc::lt::a> use) const {
+      TBC_GENERIC tbc::view<std::invoke_result_t<Use&, Command<Memory>&>, tbc::lt::a> with(std::initializer_list<std::string_view> arguments, tbc::holds<Use&&, tbc::lt::a> use) const {
         // Stays generic over the caller's use of the command.
         return with(std::span{arguments.begin(), arguments.size()}, std::forward<Use>(use));
       }
@@ -178,9 +179,9 @@ export {
       // `git`, the hardening options and overrides, then `arguments`, run in the repository.
       Command<Memory> commandFor(std::span<const std::string_view> arguments) const;
 
-      Memory& memory_;
-      ds::String<Memory> root_;
-      ds::Vec<ds::String<Memory>, Memory> overrides_;
+      tbc::view<Memory&, tbc::lt::a> memory_;
+      tbc::view<ds::String<Memory>, tbc::lt::a> root_;
+      tbc::view<ds::Vec<ds::String<Memory>, Memory>, tbc::lt::a> overrides_;
     };
 
     extern template class HardenedGit<Memory>;
