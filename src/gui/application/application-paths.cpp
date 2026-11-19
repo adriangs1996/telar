@@ -40,7 +40,7 @@ namespace telar::gui::application::paths {
   }
 
   bool open(Session& session) {
-    const auto* pane = session.focusedPane();
+    const auto* pane = focusedPane(session.panes, session.tabs, session.active_tab);
     if (!session.ready() || terminal::copy_mode::view(session).active() || pane == nullptr || !pane->attached || pane->exited || !std::string_view{pane->cwd}.starts_with('/')) {
       return false;
     }
@@ -108,7 +108,7 @@ namespace telar::gui::application::paths {
       return false;
     }
 
-    const auto* pane = session.focusedPane();
+    const auto* pane = focusedPane(session.panes, session.tabs, session.active_tab);
     if (!session.ready() || pane == nullptr || !pane->attached || pane->exited || terminal::copy_mode::view(session).active()) {
       features::paths::report(state, "Input is busy; retry");
 
@@ -121,11 +121,15 @@ namespace telar::gui::application::paths {
       return false;
     }
 
+    // The paste lives in the picker's state, which writing it into the line may reach.
+    const auto pane_id = pane->id;
+    const ds::String<Memory> text{session.memory, paste->view()};
+
     try {
       if (!editor) {
-        session.input(pane->id, paste->view());
-      } else if (!replaceSeed(session, pane->id, paste->view())) {
-        prompt::text(session, pane->id, paste->view());
+        session.input(pane_id, text.view());
+      } else if (!replaceSeed(session, pane_id, text.view())) {
+        prompt::text(session, pane_id, text.view());
       }
     } catch (const std::length_error&) {
       features::paths::report(state, "Input is busy; retry");

@@ -70,7 +70,9 @@ namespace telar::gui::application::terminal::graphics {
 
     template <typename Message, typename Source = std::nullptr_t>
     Change apply(Session& session, const Message& message, Source source = nullptr) {
-      auto* pane = findPaneMut(session.panes, message.header.pane_id);
+      const auto pane_id = message.header.pane_id;
+      const auto clock = Access::clock(session);
+      auto* pane = findPaneMut(session.panes, pane_id);
       if (pane == nullptr || !pane->attached) {
         return Change::none;
       }
@@ -81,7 +83,7 @@ namespace telar::gui::application::terminal::graphics {
         if constexpr (std::same_as<Message, GraphicsSnapshot>) {
           changed = pane->graphics.snapshot(message);
           if (changed) {
-            feature::receive(session.graphics, pane->id, message.phase, Access::now(session));
+            feature::receive(session.graphics, pane_id, message.phase, clock());
           }
         } else if constexpr (std::same_as<Message, GraphicsImage>) {
           changed = pane->graphics.image(message);
@@ -95,17 +97,18 @@ namespace telar::gui::application::terminal::graphics {
           changed = pane->graphics.erase(message);
         }
       } catch (const feature::GraphicsLimitError& error) {
-        pause(session, pane->id, error);
+        pause(session, pane_id, error);
       } catch (const feature::GraphicsResyncRequired&) {
-        requestSnapshot(session, pane->id);
+        requestSnapshot(session, pane_id);
       }
 
-      const auto credit = pane->graphics.takeCredit();
-      if (credit != 0) {
-        send(session, GraphicsCredit{pane->id, credit});
+      // Pausing and asking again reach the session, so the pane is found again for its credit.
+      pane = findPaneMut(session.panes, pane_id);
+      if (const auto credit = pane == nullptr ? 0 : pane->graphics.takeCredit(); credit != 0) {
+        send(session, GraphicsCredit{pane_id, credit});
       }
 
-      Access::changedPane(session) = pane->id;
+      Access::changedPane(session) = pane_id;
 
       return changed ? Change::terminal : Change::none;
     }

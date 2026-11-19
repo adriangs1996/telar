@@ -114,7 +114,7 @@ namespace telar::gui::application::notifications {
       bool delivered = false;
 
       try {
-        delivered = Access::report(session, *report);
+        delivered = session.link.report(*report);
       } catch (const std::exception&) {
         delivered = false;
       }

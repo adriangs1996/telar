@@ -89,6 +89,9 @@ export {
     // The same tab, to change it.
     [[nodiscard]] tbc::view<Tab<Memory>*, tbc::lt::a> activeTabMut(tbc::view<Tabs&, tbc::lt::a> tabs, ds::Option<TabLocation> active) noexcept;
 
+    // The pane the tab at `active` focuses, among `panes`, which it borrows alone.
+    [[nodiscard]] tbc::view<const Pane<Memory>*, tbc::lt::a> focusedPane(tbc::view<const Panes&, tbc::lt::a> panes, const Tabs& tabs, ds::Option<TabLocation> active) noexcept;
+
     class Session {
       // The use cases of application::<feature> reach the members below through it.
       friend struct Access;
@@ -382,6 +385,9 @@ export {
 
         template <typename Message>
         void send(const Message& message);
+
+        // Sends a limit report unless the transport is too busy for one; false when it dropped it.
+        bool report(const ReportLimit& report);
 
         // Sends `request` under a new pending id of `kind`, once `fill` recorded in the pending entry
         // what the reply will need; a request the transport refuses leaves nothing pending.
@@ -715,7 +721,12 @@ export {
       tbc::view<WorkspaceReplica<Memory>, tbc::lt::a> workspace_list;
 
     private:
-      tbc::view<AgentReplica<Memory>, tbc::lt::a> agents_;
+
+    public:
+      // The agents the runtime reports, a field the use cases read while they send.
+      tbc::view<AgentReplica<Memory>, tbc::lt::a> agent_list;
+
+    private:
       tbc::view<PaneListReplica<Memory>, tbc::lt::a> pane_list_;
       AgentAcknowledgement agent_acknowledgement_;
 

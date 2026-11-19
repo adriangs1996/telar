@@ -41,8 +41,8 @@ namespace telar::gui::application::peek {
     }
 
     // What an agent's task changed, in a worktree terminal of its own.
-    void openDiff(Session& session, const Agent<Memory>& agent) {
-      const auto* row = features::activity::AgentOrder::taskRow(session.workspace_list, agent);
+    void openDiff(const WorkspaceReplica<Memory>& workspaces, Session::Link& link, const Agent<Memory>& agent) {
+      const auto* row = features::activity::AgentOrder::taskRow(workspaces, agent);
       if (row == nullptr) {
         return;
       }
@@ -51,7 +51,7 @@ namespace telar::gui::application::peek {
       constexpr TerminalSize size{.cols = 160, .rows = 48, .cell_width_px = 0, .cell_height_px = 0};
       const ds::Array<std::string_view, 5> arguments{"sh", "-c", script, "sh", row->branch};
 
-      session.link.sendRegistered(Access::RequestKind::peek_diff, LaunchWorktree{.worktree = row->id, .label = "diff", .size = size, .launch = {.cwd = row->path.empty() ? std::string_view{"/"} : std::string_view{row->path}, .arguments = arguments}}, agent.pane_id);
+      link.sendRegistered(Access::RequestKind::peek_diff, LaunchWorktree{.worktree = row->id, .label = "diff", .size = size, .launch = {.cwd = row->path.empty() ? std::string_view{"/"} : std::string_view{row->path}, .arguments = arguments}}, agent.pane_id);
     }
 
   }
@@ -81,7 +81,7 @@ namespace telar::gui::application::peek {
   }
 
   bool submit(Session& session, std::string_view text) {
-    const auto* peeked = session.ready() && session.presented() ? agent(session) : nullptr;
+    const auto* peeked = session.ready() && session.presented() ? features::peek::agent(session.peek, session.agent_list.entries()) : nullptr;
     if (peeked == nullptr) {
       close(session);
 
@@ -98,7 +98,7 @@ namespace telar::gui::application::peek {
       session.link.sendRegistered(Access::RequestKind::peek_action, InterruptAgent{.pane_id = peeked->pane_id, .pane_generation = peeked->pane_generation}, peeked->pane_id);
       break;
     case features::peek::PeekCommand::diff:
-      openDiff(session, *peeked);
+      openDiff(session.workspace_list, session.link, *peeked);
       break;
     case features::peek::PeekCommand::message:
       session.link.sendRegistered(Access::RequestKind::peek_action, SendPaneText{.pane_id = peeked->pane_id, .pane_generation = peeked->pane_generation, .mode = PaneTextMode::prompt, .text = submission.message, .sender = {}}, peeked->pane_id);

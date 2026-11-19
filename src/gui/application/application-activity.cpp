@@ -13,7 +13,7 @@ import telar.base.ds;
 namespace telar::gui::application::activity {
 
   bool chooseAgent(Session& session, std::uint64_t pane_id, std::uint64_t generation) {
-    if (features::activity::find(Access::agents(session).entries(), pane_id, generation) == nullptr) {
+    if (features::activity::find(session.agents(), pane_id, generation) == nullptr) {
       return false;
     }
 
@@ -42,7 +42,7 @@ namespace telar::gui::application::activity {
       return;
     }
 
-    const auto* agent = features::activity::focused(Access::agents(session).entries(), *active);
+    const auto* agent = features::activity::focused(session.agents(), *active);
     const auto focused = agent == nullptr ? ds::none : ds::Option{FocusedAgent{.pane_id = agent->pane_id, .pane_generation = agent->pane_generation, .status = agent->status}};
 
     if (const auto request = Access::agentAcknowledgement(session).take(focused)) {
@@ -52,7 +52,7 @@ namespace telar::gui::application::activity {
 
   Change receive(Session& session, const AgentSnapshot& message) {
     const auto now_ns = Access::now(session);
-    auto& agents = Access::agents(session);
+    auto& agents = session.agent_list;
     if (!agents.apply(message, now_ns)) {
       return Change::none;
     }

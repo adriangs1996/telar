@@ -50,10 +50,10 @@ export namespace telar::gui::features::terminal::copy_mode {
   public:
     static constexpr std::size_t maximum_matches = CopyMode::maximum_matches;
 
-    inline explicit CopyModeView(const CopyMode& mode) noexcept
+    inline explicit CopyModeView(tbc::view<const CopyMode&, tbc::lt::a> mode) noexcept
         : mode_(&mode) {}
 
-    [[nodiscard]] TBC_HOT_PATH inline const ds::Option<CopyState>& state() const noexcept {
+    [[nodiscard]] TBC_HOT_PATH inline tbc::view<const ds::Option<CopyState>&, tbc::lt::a> state() const noexcept {
       return mode_->state();
     }
 
@@ -69,15 +69,15 @@ export namespace telar::gui::features::terminal::copy_mode {
       return mode_->pointerOwner();
     }
 
-    [[nodiscard]] TBC_HOT_PATH inline std::span<const PaneMatch> matches() const noexcept {
+    [[nodiscard]] TBC_HOT_PATH inline tbc::view<std::span<const PaneMatch>, tbc::lt::a> matches() const noexcept {
       return mode_->matches();
     }
 
   private:
-    const CopyMode* mode_;
+    tbc::view<const CopyMode*, tbc::lt::a> mode_;
   };
 
-  [[nodiscard]] inline CopyModeView view(const State& state) noexcept;
+  [[nodiscard]] inline tbc::view<CopyModeView, tbc::lt::a> view(tbc::view<const State&, tbc::lt::a> state) noexcept;
 
   // ---- entering and leaving ---------------------------------------------------------------------
 
@@ -196,7 +196,7 @@ namespace telar::gui::features::terminal::copy_mode {
     }
   };
 
-  inline CopyModeView view(const State& state) noexcept {
+  inline tbc::view<CopyModeView, tbc::lt::a> view(tbc::view<const State&, tbc::lt::a> state) noexcept {
     return CopyModeView{Access::mode(state)};
   }
 

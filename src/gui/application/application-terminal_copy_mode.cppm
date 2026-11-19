@@ -74,7 +74,7 @@ export namespace telar::gui::application::terminal::copy_mode {
 namespace telar::gui::application::terminal::copy_mode {
 
   // The attached pane copy mode is on; none, and copy mode closed, once that pane is gone.
-  Pane<Memory>* pane(Session& session) noexcept;
+  [[nodiscard]] tbc::view<Pane<Memory>*, tbc::lt::a> pane(features::terminal::copy_mode::State& state, tbc::view<Panes&, tbc::lt::a> panes) noexcept;
 
   Change receive(Session& session, const PaneMatches& message);
 

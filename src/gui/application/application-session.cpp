@@ -43,6 +43,10 @@ namespace telar::gui::application {
     transport.send(encode(message));
   }
 
+  bool Session::Link::report(const ReportLimit& report) {
+    return transport.report(encode(report));
+  }
+
   Session::Session(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<RuntimeTransport&, tbc::lt::a> transport, tbc::view<MonotonicNow, tbc::lt::static_storage> now)
       : Session(memory, transport, discard_effects_, now) {}
 
@@ -57,7 +61,7 @@ namespace telar::gui::application {
         panes(memory),
         tabs(memory),
         workspace_list(memory),
-        agents_(memory),
+        agent_list(memory),
         pane_list_(memory),
         history(memory),
         peek(memory),
@@ -219,7 +223,7 @@ namespace telar::gui::application {
     ++view_version.host;
     ready_ = false;
     features::terminal::graphics::suspend(graphics);
-    agents_.resetSource();
+    agent_list.resetSource();
     pane_list_.resetSource();
     workspace_list.resetSource();
     features::terminal::copy_mode::close(copy_mode);
@@ -411,10 +415,14 @@ namespace telar::gui::application {
     return application::activeTabMut(tabs, active_tab);
   }
 
-  const Pane<Memory>* Session::focusedPane() const noexcept {
-    const auto* tab = activeTab();
+  tbc::view<const Pane<Memory>*, tbc::lt::a> focusedPane(tbc::view<const Panes&, tbc::lt::a> panes, const Tabs& tabs, ds::Option<TabLocation> active) noexcept {
+    const auto* tab = application::activeTab(tabs, active);
 
-    return tab == nullptr ? nullptr : findPane(tab->focused_pane);
+    return tab == nullptr ? nullptr : application::findPane(panes, tab->focused_pane);
+  }
+
+  const Pane<Memory>* Session::focusedPane() const noexcept {
+    return application::focusedPane(panes, tabs, active_tab);
   }
 
   Pane<Memory>* Session::focusedPaneMut() noexcept {
@@ -428,11 +436,11 @@ namespace telar::gui::application {
   }
 
   const ds::Vec<Agent<Memory>, Memory>& Session::agents() const noexcept {
-    return agents_.entries();
+    return agent_list.entries();
   }
 
   std::uint64_t Session::agentRevision() const noexcept {
-    return agents_.revision();
+    return agent_list.revision();
   }
 
   std::span<const ListedPane> Session::paneList() const noexcept {

@@ -12,7 +12,7 @@ namespace telar::gui::application::window {
 
   WindowTitle title(const Session& session, std::string_view hostname) {
     const auto* tab = activeTab(session.tabs, session.active_tab);
-    const auto* pane = session.focusedPane();
+    const auto* pane = focusedPane(session.panes, session.tabs, session.active_tab);
     WindowTitle::Tokens tokens{.workspace = {}, .tab = {}, .pane_title = pane != nullptr ? std::string_view{pane->title} : std::string_view{}, .hostname = hostname};
 
     if (tab != nullptr) {

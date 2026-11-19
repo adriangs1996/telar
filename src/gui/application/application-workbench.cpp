@@ -80,7 +80,7 @@ namespace telar::gui::application::workbench {
 
       DisplayText16<maximum_label_bytes>::validate(label);
       const auto* tab = activeTab(session.tabs, session.active_tab);
-      const auto* pane = session.focusedPane();
+      const auto* pane = focusedPane(session.panes, session.tabs, session.active_tab);
       if (tab == nullptr || pane == nullptr || !pane->attached || !sameTab(pane->location, tab->location)) {
         return TabCreationOutcome::unavailable;
       }
@@ -162,7 +162,7 @@ namespace telar::gui::application::workbench {
       }
     }
 
-    if (const auto* copy_pane = terminal::copy_mode::pane(session); copy_pane != nullptr && !sameTab(copy_pane->location, location)) {
+    if (const auto* copy_pane = terminal::copy_mode::pane(session.copy_mode, session.panes); copy_pane != nullptr && !sameTab(copy_pane->location, location)) {
       features::terminal::copy_mode::close(session.copy_mode);
     }
 
@@ -285,7 +285,7 @@ namespace telar::gui::application::workbench {
   }
 
   void navigate(Session& session, PaneDirection direction) {
-    const auto* pane = session.focusedPane();
+    const auto* pane = focusedPane(session.panes, session.tabs, session.active_tab);
     if (pane == nullptr || pane->foreground != "nvim") {
       focusToward(session, direction);
 
@@ -417,7 +417,7 @@ namespace telar::gui::application::workbench {
 
     if (!draft.path.empty()) {
       launch.cwd = draft.path;
-    } else if (const auto* pane = session.focusedPane(); pane != nullptr) {
+    } else if (const auto* pane = focusedPane(session.panes, session.tabs, session.active_tab); pane != nullptr) {
       launch.cwd_source = pane->id;
     }
 

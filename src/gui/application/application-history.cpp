@@ -13,13 +13,29 @@ namespace telar::gui::application::history {
 
   namespace {
 
-    // Sends a history request; one the transport refuses fails in the panel too.
+    // Sends a history request, handing back what the transport threw. A request views the
+    // history's state, so the panel fails a refused one only once the request is done with.
     template <typename Request>
-    void send(Session& session, const Request& request) {
+    [[nodiscard]] std::exception_ptr refusal(Session::Link& link, const Request& request) noexcept {
       try {
-        session.link.send(request);
+        link.send(request);
+      } catch (...) {
+        return std::current_exception();
+      }
+
+      return nullptr;
+    }
+
+    // Fails request `request_id` in the panel when the transport refused it, and throws again.
+    void settle(features::history::State& history, std::uint64_t request_id, const std::exception_ptr& refused) {
+      if (!refused) {
+        return;
+      }
+
+      try {
+        std::rethrow_exception(refused);
       } catch (const std::exception& error) {
-        features::history::fail(session.history, request.request_id, error.what());
+        features::history::fail(history, request_id, error.what());
         throw;
       }
     }
@@ -29,19 +45,26 @@ namespace telar::gui::application::history {
       auto& state = session.history;
 
       if (const auto request = features::history::readCommand(state, session.link.nextRequest())) {
-        send(session, *request);
+        const auto request_id = request->request_id;
+        const auto refused = refusal(session.link, *request);
+
+        settle(state, request_id, refused);
       }
 
       if (const auto request = features::history::readOutput(state, session.link.nextRequest())) {
-        send(session, *request);
+        const auto request_id = request->request_id;
+        const auto refused = refusal(session.link, *request);
+
+        settle(state, request_id, refused);
       }
     }
 
     // Narrows `request` to the focused pane, its directory or the active workspace's directory,
     // as `scope` asks; it stays global when the scope names nothing.
-    void resolveScope(const Session& session, QueryHistory& request, HistoryScope scope) {
+    // It views what it names in the session's panes and workspaces, and nothing else of it.
+    void resolveScope(const Session& session, tbc::view<QueryHistory&, tbc::lt::a> request, HistoryScope scope, tbc::view<const Panes&, tbc::lt::a> panes, tbc::view<const WorkspaceReplica<Memory>&, tbc::lt::a> workspace_list) {
       if (scope == HistoryScope::pane || scope == HistoryScope::cwd) {
-        const auto* pane = session.focusedPane();
+        const auto* pane = focusedPane(panes, session.tabs, session.active_tab);
         if (pane == nullptr) {
           return;
         }
@@ -55,7 +78,7 @@ namespace telar::gui::application::history {
         }
       } else if (const auto& active = session.active_tab; scope == HistoryScope::workspace && active) {
         const auto location = active->workspace;
-        const auto& workspaces = session.workspaces();
+        const auto& workspaces = workspace_list.entries();
         const auto workspace = std::ranges::find_if(workspaces, [&](const auto& entry) {
           return entry.location.kind == WorkspaceLocation::Kind::workspace && sameWorkspace(entry.location, location);
         });
@@ -76,14 +99,20 @@ namespace telar::gui::application::history {
     // Each command once, at its newest run that passes the filters.
     QueryHistory request{.request_id = session.link.nextRequest(), .query = query, .failed_only = filters.failed_only, .author = filters.author, .match = session.configuration.history.match_fts ? HistoryMatch::fts : HistoryMatch::fuzzy, .distinct = true};
 
-    resolveScope(session, request, filters.scope);
-    send(session, features::history::search(session.history, request));
+    resolveScope(session, request, filters.scope, session.panes, session.workspace_list);
+
+    const auto searched = features::history::search(session.history, request);
+    const auto refused = refusal(session.link, searched);
+
+    settle(session.history, request.request_id, refused);
   }
 
   bool page(Session& session, HistoryPage direction) {
     if (const auto request = features::history::page(session.history, direction, session.link.nextRequest())) {
-      send(session, *request);
+      const auto request_id = request->request_id;
+      const auto refused = refusal(session.link, *request);
 
+      settle(session.history, request_id, refused);
       return true;
     }
 
@@ -117,26 +146,29 @@ namespace telar::gui::application::history {
     // The entry is copied out of the history, which pasting must not be able to reach.
     const ds::String<Memory> entry{session.memory, view(session).command(entry_id)};
     const std::string_view command = entry;
-    const auto* pane = session.focusedPane();
+    const auto* pane = focusedPane(session.panes, session.tabs, session.active_tab);
     if (pane == nullptr || !pane->attached || pane->exited) {
       throw EncodingError{"No terminal is ready for input"};
     }
 
     const auto runs = session.configuration.history.enter_runs != alternate;
 
-    if (prompt::edits(session, pane->id)) {
-      prompt::write(session, pane->id, command);
+    const auto pane_id = pane->id;
+    const bool bracketed = pane->screen.modes().bracketed_paste;
+
+    if (prompt::edits(session, pane_id)) {
+      prompt::write(session, pane_id, command);
       if (runs) {
-        prompt::key(session, pane->id, prompt::KeyPress{prompt::Key::enter});
+        prompt::key(session, pane_id, prompt::KeyPress{prompt::Key::enter});
       }
 
       return;
     }
 
-    HistoryText::validate(command, pane->screen.modes().bracketed_paste);
-    session.paste(pane->id, command);
+    HistoryText::validate(command, bracketed);
+    session.paste(pane_id, command);
     if (runs) {
-      session.input(pane->id, "\r");
+      session.input(pane_id, "\r");
     }
   }
 
@@ -149,7 +181,9 @@ namespace telar::gui::application::history {
   }
 
   void remove(Session& session, std::uint64_t entry_id) {
-    send(session, features::history::erase(session.history, entry_id, session.link.nextRequest()));
+    const auto request = features::history::erase(session.history, entry_id, session.link.nextRequest());
+
+    settle(session.history, request.request_id, refusal(session.link, request));
   }
 
   Change receive(Session& session, const HistoryResults& results) {
@@ -172,7 +206,10 @@ namespace telar::gui::application::history {
       return Change::none;
     }
 
-    send(session, features::history::refresh(state, session.link.nextRequest()));
+    const auto request = features::history::refresh(state, session.link.nextRequest());
+    const auto refused = refusal(session.link, request);
+
+    settle(state, request.request_id, refused);
 
     return Change::history;
   }

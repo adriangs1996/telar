@@ -6,7 +6,6 @@ import std;
 
 import :session;
 import telar.gui.features.paths;
-import telar.gui.features.history;
 import telar.gui.features.prompt;
 import telar.gui.features.peek;
 import telar.gui.features.terminal.copy_mode;
@@ -41,11 +40,7 @@ namespace telar::gui::application {
       return session.changed_pane_;
     }
 
-    // The agents the runtime reports and the panes it lists, which the session replicates.
-    [[nodiscard]] static constexpr AgentReplica<Memory>& agents(Session& session) noexcept {
-      return session.agents_;
-    }
-
+    // The panes the runtime lists, which the session replicates.
     [[nodiscard]] static constexpr PaneListReplica<Memory>& paneList(Session& session) noexcept {
       return session.pane_list_;
     }
@@ -124,9 +119,6 @@ namespace telar::gui::application {
     // ---- the connection with the runtime ----------------------------------------------------
 
     // Sends a limit report unless the transport is too busy for one; false when it dropped it.
-    static bool report(Session& session, const ReportLimit& report) {
-      return session.link.transport.report(session.link.encode(report));
-    }
 
     // Whether the transport hands images over in shared memory.
     [[nodiscard]] static bool sharesImages(const Session& session) noexcept {

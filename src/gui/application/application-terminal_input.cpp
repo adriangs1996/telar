@@ -10,16 +10,18 @@ import telar.gui.foundation.terminal;
 namespace telar::gui::application::terminal::input {
 
   void scroll(Session& session, ScrollDirection direction) {
-    const auto* pane = session.focusedPane();
+    const auto* pane = focusedPane(session.panes, session.tabs, session.active_tab);
     if (pane == nullptr || !pane->attached || pane->exited) {
       return;
     }
+
+    const auto pane_id = pane->id;
 
     switch (wheelRoute(pane->screen)) {
     case WheelRoute::report: {
       MouseEncoder encoder;
 
-      session.input(pane->id, encoder.encode(direction == ScrollDirection::up ? MouseEncoder::wheel_up : MouseEncoder::wheel_down, 1, 1, false, true), PaneInputSource::mouse);
+      session.input(pane_id, encoder.encode(direction == ScrollDirection::up ? MouseEncoder::wheel_up : MouseEncoder::wheel_down, 1, 1, false, true), PaneInputSource::mouse);
       return;
     }
     case WheelRoute::keys: {
@@ -27,7 +29,7 @@ namespace telar::gui::application::terminal::input {
       const auto bytes = encoder.alternateScroll(direction == ScrollDirection::up, pane->screen.modes());
 
       for (std::int32_t step = 0; step < WheelAccumulator::rows_per_line; ++step) {
-        session.input(pane->id, bytes, PaneInputSource::mouse);
+        session.input(pane_id, bytes, PaneInputSource::mouse);
       }
 
       return;

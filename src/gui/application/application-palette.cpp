@@ -25,7 +25,7 @@ namespace telar::gui::application::palette {
   bool submit(Session& session, std::string_view task) {
     using Kind = features::palette::Submission::Kind;
     auto& state = session.palette;
-    const auto* pane = session.focusedPane();
+    const auto* pane = focusedPane(session.panes, session.tabs, session.active_tab);
     const auto submission = features::palette::submit(state, task);
 
     if (submission.kind == Kind::insert) {
@@ -33,8 +33,13 @@ namespace telar::gui::application::palette {
         return false;
       }
 
-      if (prompt::edits(session, pane->id)) {
-        prompt::text(session, pane->id, submission.text);
+      // The text lives in the palette's state, which writing it into the line may reach.
+      const auto pane_id = pane->id;
+
+      if (prompt::edits(session, pane_id)) {
+        const ds::String<Memory> text{session.memory, submission.text};
+
+        prompt::text(session, pane_id, text.view());
         return true;
       }
 
