@@ -145,7 +145,8 @@ export {
       void finish() noexcept;
 
     private:
-      [[nodiscard]] TabCardMotion* find(std::uint64_t pane) noexcept;
+      // Where a pane's motion is among the entries: an index, as the entries change while it is kept.
+      [[nodiscard]] ds::Option<std::size_t> find(std::uint64_t pane) const noexcept;
 
       ds::Array<TabCardMotion, capacity> entries_{};
       std::size_t count_ = 0;

@@ -348,7 +348,8 @@ export {
           decision.outcome = Outcome::replay;
           decision.held_count = depth_;
           std::copy_n(held_.begin(), depth_, decision.held.dataMut());
-          for (const auto& held : std::span{held_}.first(depth_)) {
+          // The copies replay: each transfer changes this router, held keys included.
+          for (const auto& held : std::span{decision.held}.first(decision.held_count)) {
             transfer(held.physical);
           }
         }

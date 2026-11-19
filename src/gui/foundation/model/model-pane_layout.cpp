@@ -346,12 +346,15 @@ namespace telar::gui::inline foundation::inline model {
   }
 
   bool PaneLayout::moveDivider(std::size_t index, bool decreasing, CellRectangle area, Metrics metrics) noexcept {
-    const auto* split = std::get_if<ClientLayoutSplit>(&nodes_[index]);
-    if (split == nullptr) {
+    const auto* found = std::get_if<ClientLayoutSplit>(&nodes_[index]);
+    if (found == nullptr) {
       return false;
     }
 
-    const auto previous_ratio = split->ratio;
+    // A copy: arranging the layout below borrows its nodes whole.
+    const auto split = *found;
+
+    const auto previous_ratio = split.ratio;
     const auto adjusted = decreasing ? previous_ratio - resize_step : previous_ratio + resize_step;
 
     const auto ratio = static_cast<std::uint16_t>(std::clamp(adjusted, static_cast<int>(ratio_minimum), static_cast<int>(ratio_maximum_split)));
@@ -362,12 +365,12 @@ namespace telar::gui::inline foundation::inline model {
       return false;
     }
 
-    const auto proposed = partition(divider->parent_bounds, {.axis = split->axis, .ratio = ratio}, metrics.gap);
-    const auto horizontal = split->axis == ClientLayoutAxis::horizontal;
+    const auto proposed = partition(divider->parent_bounds, {.axis = split.axis, .ratio = ratio}, metrics.gap);
+    const auto horizontal = split.axis == ClientLayoutAxis::horizontal;
     const auto first_extent = horizontal ? proposed.first.width : proposed.first.height;
     const auto second_extent = horizontal ? proposed.second.width : proposed.second.height;
     const auto second = subtreeEnd(index + 1);
-    if (first_extent < minimumExtent(index + 1, split->axis, metrics) || second_extent < minimumExtent(second, split->axis, metrics)) {
+    if (first_extent < minimumExtent(index + 1, split.axis, metrics) || second_extent < minimumExtent(second, split.axis, metrics)) {
       return false;
     }
 

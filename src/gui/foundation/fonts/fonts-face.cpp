@@ -272,8 +272,10 @@ namespace telar::gui::inline foundation::inline fonts {
       return;
     }
 
-    auto* found = std::ranges::find(sizes_.dataMut(), sizes_.dataMut() + sizes_.size(), pixel_height, &SizeEntry::height);
-    if (found == sizes_.dataMut() + sizes_.size()) {
+    auto* const begin = sizes_.dataMut();
+    auto* const end = begin + sizes_.size();
+    auto* found = std::ranges::find(begin, end, pixel_height, &SizeEntry::height);
+    if (found == end) {
       auto candidate = createSize(pixel_height);
 
       found = sizes_.dataMut() + static_cast<std::ptrdiff_t>(next_size_slot_);

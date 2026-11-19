@@ -131,35 +131,40 @@ namespace telar::gui::features::workbench {
   }
 
   std::size_t TabCardMotions::place(std::span<const TabCardInput> panes, std::span<TabCardPlacement> placed, TabMotionFrame& frame) noexcept {
-    ds::Array<TabCardMotion*, capacity> ordered{};
+    // Indices into the entries, which grow while the order is gathered, as Rust keeps them.
+    ds::Array<std::size_t, capacity> ordered{};
     std::size_t known = 0;
 
     for (const auto& pane : panes) {
-      auto* motion = find(pane.pane);
-      const auto fresh = motion == nullptr;
+      auto index = find(pane.pane);
+      const auto fresh = !index;
       if (fresh && count_ < entries_.size()) {
-        motion = &entries_.atMut(count_++);
-        *motion = {.pane = pane.pane};
+        index = count_++;
+        entries_.atMut(*index) = {.pane = pane.pane};
       }
 
-      if (motion == nullptr) {
+      if (!index) {
         continue;
       }
 
-      motion->seen = true;
+      auto& motion = entries_.atMut(*index);
+
+      motion.seen = true;
       // A newly seen tab settles immediately instead of playing its whole history.
-      if (pane.focused && (fresh || motion->rank != 0)) {
-        motion->used = ++clock_;
+      if (pane.focused && (fresh || motion.rank != 0)) {
+        motion.used = ++clock_;
       }
 
-      ordered.atMut(known++) = motion;
+      ordered.atMut(known++) = *index;
     }
 
-    const auto input = [&](const TabCardMotion* motion) {
-      return *std::ranges::find(panes, motion->pane, &TabCardInput::pane);
+    const auto input = [&](const TabCardMotion& motion) {
+      return *std::ranges::find(panes, motion.pane, &TabCardInput::pane);
     };
 
-    std::stable_sort(ordered.dataMut(), ordered.dataMut() + known, [&](const TabCardMotion* left, const TabCardMotion* right) {
+    std::stable_sort(ordered.dataMut(), ordered.dataMut() + known, [&](std::size_t first, std::size_t second) {
+      const auto& left = entries_[first];
+      const auto& right = entries_[second];
       const auto a = input(left);
       const auto b = input(right);
       if (a.focused != b.focused) {
@@ -170,13 +175,13 @@ namespace telar::gui::features::workbench {
         return a.attention;
       }
 
-      return left->used != right->used ? left->used > right->used : left->pane < right->pane;
+      return left.used != right.used ? left.used > right.used : left.pane < right.pane;
     });
 
     std::size_t written = 0;
 
     for (std::size_t rank = 0; rank < known; ++rank) {
-      auto& motion = *ordered[rank];
+      auto& motion = entries_.atMut(ordered[rank]);
       const auto target = TabCardMotion::rest[std::min(rank, TabCardMotion::rest.size() - 1)];
       if (motion.to != target) {
         const auto settled = motion.to == TabCardPose{};
@@ -216,14 +221,14 @@ namespace telar::gui::features::workbench {
     count_ = kept;
   }
 
-  TabCardMotion* TabCardMotions::find(std::uint64_t pane) noexcept {
-    for (auto& motion : entries_.viewMut().first(count_)) {
-      if (motion.pane == pane) {
-        return &motion;
+  ds::Option<std::size_t> TabCardMotions::find(std::uint64_t pane) const noexcept {
+    for (std::size_t index = 0; index < count_; ++index) {
+      if (entries_[index].pane == pane) {
+        return index;
       }
     }
 
-    return nullptr;
+    return ds::none;
   }
 
   void PaneMotions::update(std::span<const PaneMotionSlot> placements, std::uint64_t now_ns, bool immediate) noexcept {
@@ -401,7 +406,8 @@ namespace telar::gui::features::workbench {
     std::size_t kept = 0;
 
     for (std::size_t index = 0; index < count_; ++index) {
-      const auto& motion = entries_[index];
+      // A copy, as Rust copies an element before storing it at another index of the same array.
+      const auto motion = entries_[index];
       if (motion.seen) {
         if (kept != index) {
           entries_.atMut(kept) = motion;

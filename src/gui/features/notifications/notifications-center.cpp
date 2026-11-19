@@ -189,9 +189,10 @@ namespace telar::gui::features::notifications {
 
       changed = item.advance(now_ns) || changed;
       if (item.phase == NotificationItem::Phase::exiting && item.transition_position_ns == 0) {
-        const auto tail = std::span{items_}.subspan(index + 1, count_ - index - 1);
+        // The later items shift down within one mutable borrow, as Rust's copy_within does.
+        const auto items = items_.viewMut();
 
-        std::ranges::move(tail, items_.viewMut().begin() + static_cast<std::ptrdiff_t>(index));
+        std::move(items.begin() + static_cast<std::ptrdiff_t>(index) + 1, items.begin() + static_cast<std::ptrdiff_t>(count_), items.begin() + static_cast<std::ptrdiff_t>(index));
         --count_;
         changed = true;
       } else {

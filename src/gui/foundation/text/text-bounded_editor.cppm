@@ -1,6 +1,7 @@
 export module telar.gui.foundation.text:bounded_editor;
 
 import std;
+import telar.tbc;
 import telar.base.ds;
 
 // Interface: text/grapheme_cursor.cppm
@@ -211,14 +212,15 @@ export {
 export {
   namespace telar::gui::inline foundation::inline text {
 
+    // The lines of a text it views, region `a`: each line views the text, not these lines.
     class WrappedLines {
     public:
-      explicit WrappedLines(std::string_view text, std::uint16_t columns, bool words = false) noexcept;
+      explicit WrappedLines(tbc::view<std::string_view, tbc::lt::a> text, std::uint16_t columns, bool words = false) noexcept;
 
-      [[nodiscard]] ds::Option<std::string_view> next() noexcept;
+      [[nodiscard]] tbc::view<ds::Option<std::string_view>, tbc::lt::a> next() noexcept;
 
     private:
-      std::string_view text_;
+      tbc::view<std::string_view, tbc::lt::a> text_;
       std::size_t position_ = 0;
       std::uint16_t columns_;
       bool words_;

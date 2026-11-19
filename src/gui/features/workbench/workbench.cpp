@@ -1,6 +1,7 @@
 module telar.gui.features.workbench;
 
 import std;
+import telar.tbc;
 import telar.base.memory.allocators;
 import telar.base.text.utf8;
 import telar.gui.foundation.model;
@@ -11,8 +12,9 @@ namespace telar::gui::features::workbench {
 
   namespace {
 
-    // The tabs of the workspace `active` shows, in the order it shows them.
-    std::size_t ordered(Tabs tabs, ds::Option<TabLocation> active, ds::Array<const Tab<Memory>*, maximum_tabs>& output) noexcept {
+    // The tabs of the workspace `active` shows, in the order it shows them, into `output`, which views
+    // them for as long as `tabs` does, region `a`.
+    std::size_t ordered(tbc::view<Tabs, tbc::lt::a> tabs, ds::Option<TabLocation> active, tbc::view<ds::Array<const Tab<Memory>*, maximum_tabs>&, tbc::lt::a> output) noexcept {
       std::size_t count = 0;
 
       if (!active) {
