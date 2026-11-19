@@ -346,3 +346,31 @@ void libraryDetachEndsBuffer(library::shared_text& text) {
 }
 
 // END CASE
+
+// CASE: library.range_loop_keeps_iterators
+// PAIR: library.range_loop
+// SOURCE: src/gui/ui/design/elements/element_layout.cpp :: ElementLayout::updatePolish (each motion marked unseen)
+// STATUS: implemented
+// CONTRACT: A range loop calls `begin` before `end`, so a copy-on-write container's detach on `begin` leaves the loop's iterators valid, while the container's other non-const methods still end them.
+// SCENARIO: A range loop writes each element through the iterator; accept.
+void libraryRangeLoopKeepsIterators(library::list<int>& items) {
+  for (auto& item : items) {
+    item = 0;
+  }
+}
+
+// END CASE
+
+// CASE: library.range_loop_append_ends_storage
+// PAIR: library.range_loop
+// SOURCE: src/gui/ui/design/elements/element_layout.cpp :: ElementLayout::updatePolish (each motion marked unseen)
+// STATUS: implemented
+// CONTRACT: A range loop calls `begin` before `end`, so a copy-on-write container's detach on `begin` leaves the loop's iterators valid, while the container's other non-const methods still end them.
+// SCENARIO: The loop appends to the list it walks, which can move the storage its iterator designates; reject at the append.
+void libraryRangeLoopAppendEndsStorage(library::list<int>& items) {
+  for (auto& item : items) {
+    items.append(item); // expected-error [tbc-invalidated-borrow]
+  }
+}
+
+// END CASE

@@ -5375,6 +5375,37 @@ namespace tbc_lint {
         }
       }
 
+      // Whether a call initializes a range loop's `begin` iterator.
+      [[nodiscard]] bool rangeBegin(const clang::CallExpr& call) const {
+        auto parents = context_.getParents(call);
+
+        // The call reaches its variable through the compiler's temporaries.
+        while (parents.size() == 1) {
+          const auto* expression = parents[0].get<clang::Expr>();
+          if (expression == nullptr || !(llvm::isa<clang::ImplicitCastExpr>(expression) || llvm::isa<clang::ExprWithCleanups>(expression) || llvm::isa<clang::MaterializeTemporaryExpr>(expression) || llvm::isa<clang::CXXBindTemporaryExpr>(expression) || llvm::isa<clang::CXXConstructExpr>(expression))) {
+            break;
+          }
+
+          parents = context_.getParents(*expression);
+        }
+
+        const auto* variable = parents.size() == 1 ? parents[0].get<clang::VarDecl>() : nullptr;
+        if (variable == nullptr) {
+          return false;
+        }
+
+        const auto declarations = context_.getParents(*variable);
+        const auto* declaration = declarations.size() == 1 ? declarations[0].get<clang::DeclStmt>() : nullptr;
+        if (declaration == nullptr) {
+          return false;
+        }
+
+        const auto loops = context_.getParents(*declaration);
+        const auto* loop = loops.size() == 1 ? loops[0].get<clang::CXXForRangeStmt>() : nullptr;
+
+        return loop != nullptr && loop->getBeginStmt() == declaration;
+      }
+
       // A project function known by its declaration alone: any but a closure or a member the compiler
       // writes, whose bodies their callers see.
       [[nodiscard]] bool declaredCall(const clang::FunctionDecl& callee) const {
@@ -5399,6 +5430,12 @@ namespace tbc_lint {
         // A copy-on-write container detaches on its first non-const access, so the `end` a range loop
         // or a lookup asks for after `begin` or `find` moves nothing.
         if (library && callee->getIdentifier() != nullptr && (callee->getName() == "end" || callee->getName() == "cend")) {
+          return;
+        }
+
+        // A range loop calls `begin` before `end`, though clang's CFG lists the `begin` after: the
+        // detach it may do comes before the `end` exists.
+        if (library && rangeBegin(call)) {
           return;
         }
 

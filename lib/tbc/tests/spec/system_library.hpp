@@ -62,7 +62,24 @@ namespace library {
   public:
     using value_type = type;
 
+    struct forward_tag {};
+
+    // As a Qt container's iterator: a position in the list's storage.
+    class iterator {
+    public:
+      using iterator_category = forward_tag;
+
+      type& operator*() const;
+      iterator& operator++();
+      bool operator!=(const iterator& other) const;
+
+    private:
+      type* at_;
+    };
+
     list();
+    iterator begin();
+    iterator end();
     ~list();
     void append(const type& item);
     [[nodiscard]] const type& at(int index) const;

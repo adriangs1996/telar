@@ -231,7 +231,9 @@ kind instead, as described above. Any other third-party type, such as Qt's, is
 known by its declarations like a project type: a non-`const` method lends the
 object exclusively, which a copy-on-write type's detach needs. Read such types
 through `const` access (`std::as_const`, `constData`, `at`) where a borrow of
-them must survive.
+them must survive. A range loop over such a type calls `begin` before `end`, as
+the language orders them, so the loop's iterators survive the detach `begin` may
+do, though clang's CFG lists that call after `end`.
 
 Shared access is deep, as Rust's `&T` is: a `const` method, or a reference or
 pointer to `const`, lends shared everything its object reaches, so its body may
