@@ -121,7 +121,8 @@ export {
       explicit ResponseProjection(ConcurrentMemory& memory, RuntimeModel& model) noexcept;
 
       // Kept here: `send` is the connection's callable, an open set no unit can instantiate ahead.
-      TBC_GENERIC inline void operator()(const DeferredResponse& response, auto&& send) const {
+      // Reading a pane's text moves its terminal, so projecting is a Rust `FnMut`, not an `Fn`.
+      TBC_GENERIC inline void operator()(const DeferredResponse& response, auto&& send) {
         TELAR_TRACE("runtime.projectResponse");
         std::visit([&](const auto& request) {
           project(request, send);
@@ -137,7 +138,7 @@ export {
       [[nodiscard]] static std::string_view snapshotDirectory(std::string_view cwd) noexcept;
 
       // Kept here: `send` is the connection's callable, an open set no unit can instantiate ahead.
-      TBC_GENERIC inline void project(const ReadPane& request, auto& send) const {
+      TBC_GENERIC inline void project(const ReadPane& request, auto& send) {
         // Generation 0 reads whatever generation the pane has, as clients that predate generations ask.
         auto* pane = request.pane_generation == 0 ? model_.panes.find(request.pane_id) : findPane(model_.panes, request.pane_id, request.pane_generation);
         if (pane == nullptr) {
@@ -158,7 +159,7 @@ export {
       }
 
       // Kept here: `send` is the connection's callable, an open set no unit can instantiate ahead.
-      TBC_GENERIC inline void project(const RequestTabSnapshot& request, auto& send) const {
+      TBC_GENERIC inline void project(const RequestTabSnapshot& request, auto& send) {
         ds::Array<PaneDescriptor, 64> descriptors;
         std::size_t count = 0;
 
@@ -172,7 +173,7 @@ export {
       }
 
       // Kept here: `send` is the connection's callable, an open set no unit can instantiate ahead.
-      TBC_GENERIC inline void project(const RequestWorkspaceSnapshot& request, auto& send) const {
+      TBC_GENERIC inline void project(const RequestWorkspaceSnapshot& request, auto& send) {
         const auto* workspace = model_.workspaces.find(request.workspace.id);
         if (request.workspace.kind != WorkspaceLocation::Kind::workspace || workspace == nullptr) {
           send(RequestFailed{.request_id = request.request_id, .code = FailureCode::workspace_not_found, .message = "workspace closed before its snapshot was sent"});
@@ -206,7 +207,7 @@ export {
       }
 
       // Kept here: `send` is the connection's callable, an open set no unit can instantiate ahead.
-      TBC_GENERIC inline void project(const QueryLimits& request, auto& send) const {
+      TBC_GENERIC inline void project(const QueryLimits& request, auto& send) {
         ds::Array<LimitListEntry, 2 * LimitLedger::capacity> entries;
         std::size_t count = 0;
 
