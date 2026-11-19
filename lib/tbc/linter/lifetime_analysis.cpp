@@ -5444,7 +5444,8 @@ namespace tbc_lint {
       }
 
       // Whether a reference or a pointer lets its holder mutate what it designates: a non-const object of
-      // a type that is not shared.
+      // a type that is not shared. An opaque C object, whose type is never complete, is held as Rust's FFI
+      // `*mut T` is: what is done through one handle to it invalidates nothing another handle borrows.
       [[nodiscard]] static bool mutableReferent(clang::QualType type) {
         clang::QualType pointee;
 
@@ -5456,7 +5457,14 @@ namespace tbc_lint {
           return false;
         }
 
-        return !pointee.isConstQualified() && !pointee->isFunctionType() && !sharedType(pointee);
+        return !pointee.isConstQualified() && !pointee->isFunctionType() && !sharedType(pointee) && !opaqueRecord(pointee);
+      }
+
+      // A record type no unit completes, as a C library's handle such as `lua_State`.
+      [[nodiscard]] static bool opaqueRecord(clang::QualType type) {
+        const auto* record = type->getAsRecordDecl();
+
+        return record != nullptr && record->getDefinition() == nullptr;
       }
 
       // Whether a parameter lets the callee mutate what the argument designates.

@@ -575,6 +575,11 @@ callbacks re-entering the object that owns their state, or Qt's items, which
 their parent item owns. An operation through such a pointer lands in no place
 the checker follows, so it invalidates nothing, not even what holds the pointer.
 
+A reference or pointer to an opaque C object, whose type no unit completes, such
+as `lua_State`, is held as Rust's FFI `*mut T` is: what is done through one
+handle to it invalidates nothing another handle borrows, so many objects may keep
+the same interpreter while each calls into it.
+
 A pointer field of a C struct that a system header declares, such as zlib's
 `z_stream::next_in`, is a raw pointer, as Rust's `*const T` in an FFI struct
 is: storing a buffer in it keeps no borrow, nor does a value of such a struct,

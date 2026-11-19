@@ -735,3 +735,64 @@ void pointerRawPointeeTracked(pointers::value_owner& owner) {
 }
 
 // END CASE
+
+// CASE: pointer.opaque_handle_shared
+// PAIR: pointer.opaque_handle
+// SOURCE: src/gui/application/application-configuration_readers.cpp :: ComponentSnapshot::read (a Lua state held by the snapshot, its staged references and its reader)
+// STATUS: implemented
+// CONTRACT: A reference or pointer to an opaque C object, whose type no unit completes, is held as Rust's FFI `*mut T` is: what is done through one handle to it invalidates nothing another handle borrows.
+// SCENARIO: Staged references keep the interpreter while a reader runs scripts through its own reference to it; accept.
+namespace pointers {
+  struct interpreter;
+
+  struct staged_references {
+    explicit staged_references(interpreter& state) noexcept
+        : state_(&state) {}
+
+    void keep(int reference);
+
+    interpreter* state_;
+  };
+
+  struct script_reader {
+    void read(int value);
+
+    interpreter& state;
+  };
+}
+
+void pointerOpaqueHandleShared(pointers::interpreter& state) {
+  pointers::staged_references pending{state};
+
+  pointers::script_reader{state}.read(1);
+  pending.keep(1);
+}
+
+// END CASE
+
+// CASE: pointer.opaque_handle_complete
+// PAIR: pointer.opaque_handle
+// SOURCE: src/gui/application/application-configuration_readers.cpp :: ComponentSnapshot::read (a Lua state held by the snapshot, its staged references and its reader)
+// STATUS: implemented
+// CONTRACT: A reference or pointer to an opaque C object, whose type no unit completes, is held as Rust's FFI `*mut T` is: what is done through one handle to it invalidates nothing another handle borrows.
+// SCENARIO: A value inside a complete object is kept while a reader mutates the object through its reference; reject at the read.
+namespace pointers {
+  struct complete_state {
+    std::vector<int> values;
+  };
+
+  struct complete_reader {
+    void read(int value);
+
+    complete_state& state;
+  };
+}
+
+int pointerOpaqueHandleComplete(pointers::complete_state& state) {
+  const int& first = state.values[0];
+
+  pointers::complete_reader{state}.read(1); // expected-error [tbc-invalidated-borrow]
+  return first;
+}
+
+// END CASE
