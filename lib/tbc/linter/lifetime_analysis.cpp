@@ -5208,6 +5208,37 @@ namespace tbc_lint {
         return ownVariable(receiver(call));
       }
 
+      // The reference or pointer a call's receiver is reached through, as `item` in `item.mutate()` or
+      // `slot` in `slot->graphics.stage()`, when the receiver is no object of its own.
+      [[nodiscard]] const clang::ValueDecl* receiverBorrower(const clang::CallExpr& call) const {
+        const auto* object = receiver(call);
+
+        while (object != nullptr) {
+          object = clean(object);
+          if (const auto* member = llvm::dyn_cast<clang::MemberExpr>(object)) {
+            object = member->getBase();
+            if (member->isArrow()) {
+              break;
+            }
+          } else if (const auto* unary = llvm::dyn_cast<clang::UnaryOperator>(object); unary != nullptr && unary->getOpcode() == clang::UO_Deref) {
+            object = unary->getSubExpr();
+            break;
+          } else {
+            break;
+          }
+        }
+
+        const auto* name = object == nullptr ? nullptr : llvm::dyn_cast<clang::DeclRefExpr>(clean(object));
+        const auto* variable = name == nullptr ? nullptr : llvm::dyn_cast<clang::VarDecl>(name->getDecl());
+        if (variable == nullptr) {
+          return nullptr;
+        }
+
+        const auto type = variable->getType();
+
+        return type->isReferenceType() || type->isPointerType() ? variable : nullptr;
+      }
+
       // The variable an argument or a receiver is, when it is an object of its own.
       [[nodiscard]] const clang::ValueDecl* ownVariable(const clang::Expr* object) const {
         if (object == nullptr) {
@@ -5544,13 +5575,16 @@ namespace tbc_lint {
         }
 
         llvm::SmallVector<invalidation, 8> places;
+        // The receiver's own places. A call through a reference or a pointer reborrows what it designates,
+        // as a Rust `&mut` does, so it invalidates other borrows of those objects, not that variable's.
+        llvm::SmallVector<invalidation, 8> received;
         // What the receiver reaches through its own mutable references it borrows exclusively, as a Rust
         // `&mut` field is: the call may invalidate other borrows of those objects, not the receiver's.
         llvm::SmallVector<invalidation, 8> reached;
         llvm::SmallVector<const clang::FieldDecl*, 4> fields;
         const auto* method = llvm::dyn_cast<clang::CXXMethodDecl>(callee);
         if (const auto* object = receiver(call); object != nullptr && method != nullptr && method->isInstance() && !method->isConst() && !sharedType(objectType(*object))) {
-          receiverPlaces(call, owned_storage, current, places);
+          receiverPlaces(call, owned_storage, current, received);
           if (!library) {
             mutableReferenceFields(objectType(*object), fields);
           }
@@ -5573,7 +5607,7 @@ namespace tbc_lint {
         }
 
         if (library) {
-          invalidateAll(places, &call, current);
+          invalidateAll(received, &call, current);
           return;
         }
 
@@ -5618,6 +5652,10 @@ namespace tbc_lint {
           if (!designated.empty()) {
             invalidateAll(designated, &call, current, false, by_reference ? ownVariable(argument) : nullptr);
           }
+        }
+
+        if (!received.empty()) {
+          invalidateAll(received, &call, current, false, receiverBorrower(call));
         }
 
         invalidateAll(places, &call, current);

@@ -142,7 +142,11 @@ uses only the callee's signature:
   reaches what the input's own non-const references and pointers designate, as
   `&mut T` reaches what a `&'a mut U` field of `T` designates; other borrows of
   those objects end, while the input keeps its own, as a Rust `&mut` reborrows
-  what its fields lend. Nothing a reference to const designates, nor a constant
+  what its fields lend. A receiver reached through a reference or a pointer is
+  reborrowed the same way: the call ends other borrows of what that variable
+  designates, never the variable's own, also when it borrows two places at
+  once, as one found in a field or made through its owner does. Nothing a
+  reference to const designates, nor a constant
   with static storage, is invalidated through it, as a Rust `&T` lends nothing
   to mutate. The callee's body never narrows this: a function another unit
   defines, a recursive one, a virtual one and a `final` override are all known

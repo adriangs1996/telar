@@ -908,3 +908,66 @@ void placeReborrowRepeated(places::menu_holder& holder) {
 }
 
 // END CASE
+
+// CASE: place.write_through_merged
+// PAIR: place.write_through
+// SOURCE: src/runtime/runtime/runtime/runtime.cpp :: AgentService::report (an agent found in the registry, or made for its pane)
+// STATUS: implemented
+// CONTRACT: A call through a reference or a pointer reborrows what it designates, as a Rust `&mut` does: it invalidates other borrows of those objects, never the variable's own, even when the variable borrows two places at once.
+// SCENARIO: An entry is found in a field, or made through the object holding it, then changed through the one reference and reported; accept.
+namespace places {
+  struct registry_entry {
+    std::vector<int> values;
+    bool change(int by);
+  };
+
+  struct entry_table {
+    registry_entry* findMut(int id) noexcept;
+  };
+
+  void report(const registry_entry& entry);
+
+  class entry_service {
+  public:
+    registry_entry& ensure(int id);
+    void update(int id);
+    int updateKept(int id);
+
+  private:
+    entry_table entries_;
+  };
+}
+
+void places::entry_service::update(int id) {
+  auto* existing = entries_.findMut(id);
+  if (existing == nullptr) {
+    existing = &ensure(id);
+  }
+
+  auto& entry = *existing;
+  if (entry.change(1)) {
+    report(entry);
+  }
+}
+
+// END CASE
+
+// CASE: place.write_through_inner
+// PAIR: place.write_through
+// SOURCE: src/runtime/runtime/runtime/runtime.cpp :: AgentService::report (an agent found in the registry, or made for its pane)
+// STATUS: implemented
+// CONTRACT: A call through a reference or a pointer reborrows what it designates, as a Rust `&mut` does: it invalidates other borrows of those objects, never the variable's own, even when the variable borrows two places at once.
+// SCENARIO: A value inside the entry is kept across the change, which may replace it; reject at the change.
+int places::entry_service::updateKept(int id) {
+  auto* existing = entries_.findMut(id);
+  if (existing == nullptr) {
+    existing = &ensure(id);
+  }
+
+  auto& entry = *existing;
+  const int& first = entry.values[0];
+  entry.change(1); // expected-error [tbc-invalidated-borrow]
+  return first;
+}
+
+// END CASE
