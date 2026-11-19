@@ -66,8 +66,8 @@ socket, including in the server's environment for nested executions.
 ## Native schema
 
 `api schema` derives the handshake identifier from `handshake::schema_id`:
-`schema_version` is `cqp00004`; `fingerprint` is the hexadecimal encoding of those
-eight bytes, `6371703030303031`. It describes the actual C++ tag enums, including
+`schema_version` is `cqp00005`; `fingerprint` is the hexadecimal encoding of those
+eight bytes, `6371703030303035`. It describes the actual C++ tag enums, including
 the three native clipboard requests and three clipboard server messages. Tag
 tables are checked against the C++ declarations by CTest. `runtime status`
 reports the same native identifier.

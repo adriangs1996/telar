@@ -91,6 +91,9 @@ export {
       // The schema before documents: its runtime sends no PaneDocument. Its other layouts are the
       // current schema's.
       static constexpr SchemaId cqp00003{'c', 'q', 'p', '0', '0', '0', '0', '3'};
+      // The schema before the monitor: its runtime answers no QueryMonitor and acts on no process.
+      // Its other layouts are the current schema's.
+      static constexpr SchemaId cqp00004{'c', 'q', 'p', '0', '0', '0', '0', '4'};
 
       [[nodiscard]] static bool supports(const SchemaId& schema) noexcept;
 

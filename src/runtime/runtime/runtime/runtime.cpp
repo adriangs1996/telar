@@ -1703,6 +1703,7 @@ namespace telar::runtime {
         descents_(process_inspector_),
         session_(memory),
         metrics_(Clock::now()),
+        monitor_(memory, process_inspector_, ProcessTable{memory}, NativeHostDetail{}),
         workspace_git_(limits_, memory),
         shell_git_(memory),
         words_(memory, options.configuration_directory),
@@ -1731,6 +1732,7 @@ namespace telar::runtime {
     poller_.watch(media_.descriptor(), eventToken(EventSource::worker, 0));
     poller_.watch(descents_.descriptor(), eventToken(EventSource::worker, 0));
     poller_.watch(metrics_.descriptor(), eventToken(EventSource::worker, 0));
+    poller_.watch(monitor_.descriptor(), eventToken(EventSource::worker, 0));
     poller_.watch(runtime_clipboard_.descriptor(), eventToken(EventSource::worker, 0));
     poller_.watch(workspace_git_.descriptor(), eventToken(EventSource::worker, 0));
     poller_.watch(shell_git_.descriptor(), eventToken(EventSource::worker, 0));
@@ -2573,6 +2575,36 @@ namespace telar::runtime {
 
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const QueryMonitor& message) {
+    monitor_.query(identity, message, Clock::now());
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const RequestProcessSignal& message) {
+    monitor_.act({
+        .client = identity,
+        .request_id = message.request_id,
+        .process = message.process,
+        .signal = message.signal,
+        .peer = requireClient(clients_, identity).peer_identity,
+    });
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const RequestProcessPriority& message) {
+    monitor_.act({
+        .client = identity,
+        .request_id = message.request_id,
+        .process = message.process,
+        .nice = message.nice,
+        .peer = requireClient(clients_, identity).peer_identity,
+    });
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const CompletePaneFocus& message) {
     Control::completeFocus(clients_, identity, message);
   }
@@ -2692,6 +2724,11 @@ namespace telar::runtime {
     descents_.collect(clients_, model_.panes);
     answerDeferredReports();
     metrics_.collect();
+    monitor_.collect([&](std::uint64_t identity, const auto& message) {
+      if (auto* client = clients_.find(identity)) {
+        client->connection.send(message);
+      }
+    });
     runtime_clipboard_.collect(clients_);
     workspace_git_.collect(model_, Clock::now());
     shell_git_.collect([&](const ShellGitResult& result) {
@@ -2897,6 +2934,23 @@ namespace telar::runtime {
     workspaces_.collectExited(model_, panes_, clients_);
     timeout = std::min(timeout, session_.tick(model_, client_layouts_, agents_, now));
     timeout = std::min(timeout, metrics_.tick(now));
+    timeout = std::min(timeout, monitor_.tick(now, [&](MonitorWork& work) {
+      // Each pane's shell, and whether an agent runs in the pane now.
+      for (const auto* pane : model_.panes.items()) {
+        if (work.root_count == work.roots.size()) {
+          break;
+        }
+
+        if (pane == nullptr || pane->exit_status || pane->process->processId() <= 0) {
+          continue;
+        }
+
+        const auto* agent = agents_.find(pane->id, pane->generation);
+        const auto working = agent != nullptr && agent->status != AgentStatus::done && agent->status != AgentStatus::failed;
+
+        work.roots.atMut(work.root_count++) = {.process = pane->process->processId(), .pane_id = pane->id, .agent = working};
+      }
+    }));
     timeout = std::min(timeout, workspace_git_.tick(model_, now));
     deliverQueued();
 

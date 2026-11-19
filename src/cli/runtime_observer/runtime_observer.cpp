@@ -152,6 +152,9 @@ namespace telar::runtime::cli::api {
       NamedValue{.name = "search_pane_rows", .value = static_cast<std::uint64_t>(ClientTag::search_pane_rows)},
       NamedValue{.name = "pane_command", .value = static_cast<std::uint64_t>(ClientTag::pane_command)},
       NamedValue{.name = "configure_shell_prompt", .value = static_cast<std::uint64_t>(ClientTag::configure_shell_prompt)},
+      NamedValue{.name = "query_monitor", .value = static_cast<std::uint64_t>(ClientTag::query_monitor)},
+      NamedValue{.name = "request_process_signal", .value = static_cast<std::uint64_t>(ClientTag::request_process_signal)},
+      NamedValue{.name = "request_process_priority", .value = static_cast<std::uint64_t>(ClientTag::request_process_priority)},
   };
 
   constexpr ds::Array server_messages{
@@ -218,6 +221,7 @@ namespace telar::runtime::cli::api {
       NamedValue{.name = "pane_rows", .value = static_cast<std::uint64_t>(ServerTag::pane_rows)},
       NamedValue{.name = "pane_scrollback", .value = static_cast<std::uint64_t>(ServerTag::pane_scrollback)},
       NamedValue{.name = "pane_document", .value = static_cast<std::uint64_t>(ServerTag::pane_document)},
+      NamedValue{.name = "monitor_snapshot", .value = static_cast<std::uint64_t>(ServerTag::monitor_snapshot)},
   };
 
   constexpr ds::Array agent_statuses{

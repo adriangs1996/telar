@@ -24,6 +24,8 @@ export {
     struct PaneRoot {
       pid_t process = 0;
       std::uint64_t pane_id = 0;
+      // An agent runs in the pane now.
+      bool agent = false;
     };
 
     // What one query asks, as the sampler answers it.

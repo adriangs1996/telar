@@ -80,17 +80,18 @@ namespace telar::gui::application {
   template class FrameStream<telar::ConcurrentMemory>;
 
   bool RuntimeProtocol::supports(const SchemaId& schema) noexcept {
-    return schema == handshake::schema_id || schema == cqp00003 || schema == cqp00002 || schema == schema87;
+    return schema == handshake::schema_id || schema == cqp00004 || schema == cqp00003 || schema == cqp00002 || schema == schema87;
   }
 
   bool RuntimeProtocol::supports(const SchemaId& schema, ClientTag tag) noexcept {
     const bool current = tag == ClientTag::read_pane_rows || tag == ClientTag::search_pane_rows || tag == ClientTag::pane_command || tag == ClientTag::configure_shell_prompt;
+    const bool monitor = tag == ClientTag::query_monitor || tag == ClientTag::request_process_signal || tag == ClientTag::request_process_priority;
 
-    return supports(schema) && (schema != schema87 || tag != ClientTag::hold_tab) && (!current || readsRows(schema));
+    return supports(schema) && (schema != schema87 || tag != ClientTag::hold_tab) && (!current || readsRows(schema)) && (!monitor || schema == handshake::schema_id);
   }
 
   bool RuntimeProtocol::readsRows(const SchemaId& schema) noexcept {
-    return schema == handshake::schema_id || schema == cqp00003;
+    return schema == handshake::schema_id || schema == cqp00004 || schema == cqp00003;
   }
 
   ds::Option<SchemaId> RuntimeProtocol::retry(std::span<const Byte> payload, const SchemaId& requested) {

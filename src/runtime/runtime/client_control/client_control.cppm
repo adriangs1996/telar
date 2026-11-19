@@ -15,6 +15,10 @@ import telar.runtime.model.client_layouts;
 import telar.runtime.platform.process_probe;
 
 import telar.runtime.metrics.host_sampler;
+import telar.runtime.metrics.monitor;
+import telar.runtime.platform.process_table;
+import telar.sys.process;
+import telar.wire.monitor;
 
 import telar.runtime.observation.processor;
 
@@ -545,6 +549,365 @@ export {
       ObservationWorker<HostMetricsReader<Probe>> worker_;
       HostSampler sampler_;
       Clock::time_point next_sample_;
+    };
+
+  }
+}
+
+// Interface: runtime/monitor_service.cppm
+export {
+  namespace telar::runtime {
+
+    template <typename Processes>
+    concept ProcessTableProbe = requires(Processes& processes, ds::Vec<ProcessRecord, ConcurrentMemory>& records) {
+      { processes.read(records) } -> std::same_as<bool>;
+    };
+
+    struct MonitorLimitsOfWork {
+      static constexpr std::size_t maximum_roots = 256;
+      static constexpr std::size_t maximum_queries = MonitorSampler::maximum_answers;
+      static constexpr std::size_t maximum_actions = 16;
+    };
+
+    struct MonitorQueryTicket {
+      std::uint64_t client = 0;
+      std::uint64_t request_id = 0;
+      MonitorView view{};
+    };
+
+    // A signal, or a nice value when `signal` is none, for one process instance.
+    struct MonitorActionTicket {
+      std::uint64_t client = 0;
+      std::uint64_t request_id = 0;
+      ProcessInstance process{};
+      ds::Option<ProcessSignal> signal{};
+      std::int32_t nice = 0;
+      // The process that asked, when the runtime could name it.
+      ds::Option<ProcessIdentity> peer{};
+    };
+
+    // What the runtime hands the monitor's worker: take a reading, answer queries, act on processes.
+    struct MonitorWork {
+      bool sample = false;
+      ds::Array<PaneRoot, MonitorLimitsOfWork::maximum_roots> roots{};
+      std::uint16_t root_count = 0;
+      ds::Array<MonitorQueryTicket, MonitorLimitsOfWork::maximum_queries> queries{};
+      std::uint8_t query_count = 0;
+      ds::Array<MonitorActionTicket, MonitorLimitsOfWork::maximum_actions> actions{};
+      std::uint8_t action_count = 0;
+    };
+
+    struct MonitorAnswer {
+      // Valid until the next work is submitted: it views the sampler.
+      ds::Option<MonitorSnapshot> snapshot{};
+    };
+
+    struct MonitorActionOutcome {
+      ds::Option<FailureCode> failure{};
+      std::string_view message{};
+    };
+
+    struct MonitorOutcome {
+      bool sampled = false;
+      // False when the sampler had too few readings to answer the queries, which wait for the next.
+      bool answered = false;
+      ds::Array<MonitorAnswer, MonitorLimitsOfWork::maximum_queries> answers{};
+      ds::Array<MonitorActionOutcome, MonitorLimitsOfWork::maximum_actions> actions{};
+    };
+
+    // The monitor's worker: reads the processes and the host, keeps the sampler, and signals.
+    // Kept whole: tests instantiate it with their own fake probes.
+    template <typename Processes, typename Host>
+      requires ProcessTableProbe<Processes> && HostDetailProbe<Host>
+    class TBC_GENERIC MonitorReader {
+    public:
+      using Request = MonitorWork;
+      using Result = MonitorOutcome;
+
+      inline MonitorReader(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const ProcessInspector& inspector, Processes processes, Host host)
+          : inspector_(inspector),
+            processes_(std::move(processes)),
+            host_(std::move(host)),
+            sampler_(memory, inspector),
+            records_(memory) {}
+
+      inline Result observe(const Request& work) noexcept {
+        MonitorOutcome outcome;
+
+        for (std::size_t index = 0; index < work.action_count; ++index) {
+          outcome.actions.atMut(index) = act(work, work.actions[index]);
+        }
+
+        try {
+          if (work.sample && processes_.read(records_) && host_.read(detail_)) {
+            sampler_.update(records_, detail_, std::chrono::steady_clock::now(), {work.roots.data(), work.root_count});
+            outcome.sampled = true;
+          }
+
+          if (work.query_count != 0 && sampler_.ready()) {
+            std::size_t rows = 0;
+
+            for (std::size_t index = 0; index < work.query_count; ++index) {
+              rows += work.queries[index].view.limit;
+            }
+
+            sampler_.beginAnswers(work.query_count, rows);
+            for (std::size_t index = 0; index < work.query_count; ++index) {
+              const auto& query = work.queries[index];
+              MonitorSnapshot snapshot{.request_id = query.request_id};
+              if (sampler_.answer(query.view, snapshot)) {
+                outcome.answers.atMut(index).snapshot = snapshot;
+              }
+            }
+
+            outcome.answered = true;
+          }
+        } catch (...) {
+          records_.clear();
+        }
+
+        return outcome;
+      }
+
+      inline void stop() noexcept {}
+
+    private:
+      inline static int nativeSignal(ProcessSignal signal) noexcept {
+        switch (signal) {
+        case ProcessSignal::terminate:
+          return SIGTERM;
+        case ProcessSignal::kill:
+          return SIGKILL;
+        case ProcessSignal::stop:
+          return SIGSTOP;
+        case ProcessSignal::resume:
+          return SIGCONT;
+        case ProcessSignal::hang_up:
+          return SIGHUP;
+        case ProcessSignal::interrupt:
+          return SIGINT;
+        }
+
+        return SIGTERM;
+      }
+
+      // An agent may act only on the processes of the pane it runs in; anything else asks the user.
+      inline MonitorActionOutcome act(const MonitorWork& work, const MonitorActionTicket& action) const noexcept {
+        if (action.peer) {
+          for (std::size_t index = 0; index < work.root_count; ++index) {
+            const auto& root = work.roots[index];
+            if (!root.agent || !inspector_.descendsFrom(*action.peer, root.process)) {
+              continue;
+            }
+
+            const auto target = inspector_.identity(action.process.pid);
+            if (!target || !inspector_.descendsFrom(*target, root.process)) {
+              return {.failure = FailureCode::foreign_process, .message = "An agent may act only on the processes of its own pane"};
+            }
+
+            break;
+          }
+        }
+
+        const auto& process = action.process;
+        const auto result = action.signal ? ProcessTable::signal(process.pid, process.started_seconds, process.started_microseconds, nativeSignal(*action.signal))
+                                          : ProcessTable::prioritize(process.pid, process.started_seconds, process.started_microseconds, action.nice);
+
+        switch (result) {
+        case ProcessActionResult::done:
+          return {};
+        case ProcessActionResult::gone:
+          return {.failure = FailureCode::process_not_found, .message = "The process is gone, or another process has its pid now"};
+        case ProcessActionResult::denied:
+          return {.failure = FailureCode::permission_denied, .message = "The runtime's user may not act on this process"};
+        case ProcessActionResult::failed:
+          break;
+        }
+
+        return {.failure = FailureCode::internal, .message = "The system refused the request"};
+      }
+
+      ProcessInspector inspector_;
+      Processes processes_;
+      Host host_;
+      MonitorSampler sampler_;
+      tbc::view<ds::Vec<ProcessRecord, ConcurrentMemory>, tbc::lt::a> records_;
+      HostDetail detail_{};
+    };
+
+    // Reads the processes only while someone asks: every 2 s for 10 s after the last query. A query
+    // that finds the sampler cold waits for two readings 1 s apart, since a CPU share needs both.
+    // Kept whole: tests instantiate it with their own fake probes.
+    template <typename Processes, typename Host>
+      requires ProcessTableProbe<Processes> && HostDetailProbe<Host>
+    class TBC_GENERIC MonitorService {
+    public:
+      using Clock = std::chrono::steady_clock;
+      static constexpr auto sample_interval = std::chrono::seconds{2};
+      static constexpr auto warm_interval = std::chrono::seconds{1};
+      static constexpr auto idle_after = std::chrono::seconds{10};
+
+      inline MonitorService(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const ProcessInspector& inspector, Processes processes, Host host)
+          : worker_(std::in_place, memory, inspector, std::move(processes), std::move(host)) {}
+
+      inline void query(std::uint64_t client, const QueryMonitor& message, Clock::time_point now) {
+        if (pending_queries_ == MonitorLimitsOfWork::maximum_queries) {
+          throw RequestError{FailureCode::resource_limit, "Too many monitor queries are waiting"};
+        }
+
+        auto& ticket = queries_.atMut(pending_queries_++);
+
+        ticket = {.client = client, .request_id = message.request_id};
+        ticket.view = {
+            .sections = message.sections,
+            .sort = message.sort,
+            .reverse = message.reverse,
+            .scope = message.scope,
+            .tree = message.tree,
+            .limit = message.limit,
+            .detail = message.detail,
+        };
+        ticket.view.filter.assign(message.filter);
+        wake(now);
+      }
+
+      inline void act(const MonitorActionTicket& action) {
+        if (pending_actions_ == MonitorLimitsOfWork::maximum_actions) {
+          throw RequestError{FailureCode::resource_limit, "Too many process requests are waiting"};
+        }
+
+        actions_.atMut(pending_actions_++) = action;
+      }
+
+      // Submits the work that is due; `roots` fills the panes' shells into the work. Returns the time
+      // until work is next due.
+      template <typename Roots>
+      inline std::chrono::nanoseconds tick(Clock::time_point now, Roots&& roots) {
+        constexpr auto idle = std::chrono::hours{1};
+        const auto active = now < active_until_;
+        if (!active && readings_ != 0) {
+          readings_ = 0;
+        }
+
+        if (busy_) {
+          return active ? std::max<std::chrono::nanoseconds>(next_sample_ - now, std::chrono::milliseconds{1}) : idle;
+        }
+
+        const auto due = active && now >= next_sample_;
+        // Queries go with a reading that makes the sampler ready, or alone once it is.
+        const auto answerable = pending_queries_ != 0 && (readings_ >= 2 || (due && readings_ == 1));
+        if (!due && !answerable && pending_actions_ == 0) {
+          return active ? next_sample_ - now : idle;
+        }
+
+        work_.sample = due;
+        work_.root_count = 0;
+        roots(work_);
+        work_.query_count = answerable ? static_cast<std::uint8_t>(pending_queries_) : 0;
+        for (std::size_t index = 0; index < work_.query_count; ++index) {
+          work_.queries.atMut(index) = queries_[index];
+        }
+
+        work_.action_count = static_cast<std::uint8_t>(pending_actions_);
+        for (std::size_t index = 0; index < pending_actions_; ++index) {
+          work_.actions.atMut(index) = actions_[index];
+        }
+
+        if (!worker_.submit(work_)) {
+          return std::chrono::milliseconds{1};
+        }
+
+        busy_ = true;
+        pending_actions_ = 0;
+        if (answerable) {
+          pending_queries_ = 0;
+        }
+
+        if (due) {
+          next_sample_ = now + (readings_ == 0 ? warm_interval : sample_interval);
+        }
+
+        return active ? next_sample_ - now : idle;
+      }
+
+      // Calls `reply(client, message)` with each answer and each failure, while the answers still
+      // view the worker's sampler.
+      template <typename Reply>
+      inline void collect(Reply&& reply) {
+        worker_.collect([&](MonitorOutcome& outcome) {
+          busy_ = false;
+          if (outcome.sampled && readings_ < 2) {
+            ++readings_;
+          }
+
+          for (std::size_t index = 0; index < work_.action_count; ++index) {
+            const auto& action = work_.actions[index];
+            const auto& result = outcome.actions[index];
+
+            if (result.failure) {
+              reply(action.client, RequestFailed{.request_id = action.request_id, .code = *result.failure, .message = result.message});
+            } else {
+              reply(action.client, RequestCompleted{.request_id = action.request_id});
+            }
+          }
+
+          if (!outcome.answered) {
+            requeue();
+            return;
+          }
+
+          for (std::size_t index = 0; index < work_.query_count; ++index) {
+            const auto& query = work_.queries[index];
+            const auto& answer = outcome.answers[index].snapshot;
+
+            if (answer) {
+              reply(query.client, *answer);
+            } else {
+              reply(query.client, RequestFailed{.request_id = query.request_id, .code = FailureCode::process_not_found, .message = "The process is gone, or another process has its pid now"});
+            }
+          }
+        });
+      }
+
+      inline int descriptor() const noexcept {
+        return worker_.descriptor();
+      }
+
+    private:
+      inline void wake(Clock::time_point now) {
+        if (now >= active_until_) {
+          readings_ = 0;
+          next_sample_ = now;
+        }
+
+        active_until_ = now + idle_after;
+      }
+
+      // Puts the queries the worker could not answer back in front of the ones that came since.
+      inline void requeue() {
+        const auto returned = std::min<std::size_t>(work_.query_count, MonitorLimitsOfWork::maximum_queries - pending_queries_);
+
+        for (auto index = pending_queries_; index-- > 0;) {
+          queries_.atMut(index + returned) = queries_[index];
+        }
+
+        for (std::size_t index = 0; index < returned; ++index) {
+          queries_.atMut(index) = work_.queries[index];
+        }
+
+        pending_queries_ += returned;
+      }
+
+      ObservationWorker<MonitorReader<Processes, Host>> worker_;
+      MonitorWork work_{};
+      ds::Array<MonitorQueryTicket, MonitorLimitsOfWork::maximum_queries> queries_{};
+      std::size_t pending_queries_ = 0;
+      ds::Array<MonitorActionTicket, MonitorLimitsOfWork::maximum_actions> actions_{};
+      std::size_t pending_actions_ = 0;
+      Clock::time_point active_until_{};
+      Clock::time_point next_sample_{};
+      std::uint8_t readings_ = 0;
+      bool busy_ = false;
     };
 
   }
