@@ -15,10 +15,12 @@ namespace telar::runtime {
   }
 
   tbc::view<std::string_view, tbc::lt::static_storage> processHome() noexcept {
-    static const std::string_view home = [] {
+    // Copied once into storage of its own, which outlives every caller, as the environment it came
+    // from may not once something replaces it.
+    static const std::string home = [] {
       const char* value = std::getenv("HOME");
 
-      return value == nullptr ? std::string_view{} : std::string_view{value};
+      return value == nullptr ? std::string{} : std::string{value};
     }();
 
     return home;
