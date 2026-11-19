@@ -100,7 +100,7 @@ namespace contracts {
 
 // CASE: contract.static_result_caller
 // PAIR: contract.static_result
-// SOURCE: lib/clipboard/includes/clipboard.hpp :: read / content::mime_type
+// SOURCE: lib/clipboard/include/telar_clipboard/clipboard.hpp :: read / content::mime_type
 // STATUS: implemented
 // CONTRACT: A static result borrows storage that outlives every caller, never an argument.
 // SCENARIO: The declaration has no visible body; its result stays valid after the temporary argument dies.

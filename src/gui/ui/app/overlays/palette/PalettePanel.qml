@@ -15,21 +15,32 @@ Item {
     property real ratio: 1
     readonly property var state: controller.state
     readonly property var regions: controller.geometry
+    readonly property int allMode: 0
     readonly property int navigateMode: "@".charCodeAt(0)
     readonly property int actionsMode: ">".charCodeAt(0)
     readonly property int machinesMode: ":".charCodeAt(0)
     readonly property int suggestMode: "?".charCodeAt(0)
     readonly property bool suggesting: state.mode === suggestMode
+    readonly property string selectedKind: state.selectedKind ?? ""
     property string restoredEditorRevision: ""
     readonly property real detailAlpha: 0.65
-    readonly property real groupInset: 10 * ratio
-    readonly property real emptyInset: 20 * ratio
-    readonly property real tabInset: 12 * ratio
-    readonly property real tabRightInset: 8 * ratio
-    readonly property real tabVerticalInset: 5 * ratio
-    readonly property real tabGap: 4 * ratio
-    readonly property real tabLabelPadding: 20 * ratio
+    // Content starts 16 px in: the list band is inset 8 px and its rows another 8.
+    readonly property real groupInset: 8 * ratio
+    readonly property real emptyInset: 16 * ratio
     readonly property real headingAlpha: 0.75
+    readonly property var footerHints: {
+        const hints = [{keys: ["↑", "↓"], word: "Navigate", action: ""}];
+        if (root.state.count === 0) {
+            return hints;
+        }
+
+        if (root.selectedKind === "machine") {
+            return hints.concat([{keys: ["↵"], word: "Show", action: "submit"}, {keys: ["⇧", "↵"], word: "Enable/disable", action: "alternate"}, {keys: ["^R"], word: "Rename", action: ""}, {keys: ["^D"], word: "Remove", action: ""}]);
+        }
+
+        const word = root.selectedKind === "action" ? "Run" : root.selectedKind === "suggestion" ? "Suggest" : "Open";
+        return hints.concat([{keys: ["↵"], word: word, action: "submit"}]);
+    }
     property alias queryField: query
     // Escape on an empty composition, or back from a suggestion: the window closes the palette.
     signal cancelled()
@@ -101,7 +112,8 @@ Item {
 
         readonly property real inset: Math.min(16 * root.ratio, width / 8)
         readonly property real iconWidth: Math.min(18 * root.ratio, width / 8)
-        readonly property real closeWidth: Math.min(30 * root.ratio, width / 6)
+        readonly property real iconGap: 8 * root.ratio
+        readonly property real closeWidth: Math.min(closeKeycap.implicitWidth, width / 4)
         readonly property real closeGap: 8 * root.ratio
 
         ChromeIcon {
@@ -116,7 +128,7 @@ Item {
         FormTextField {
             id: query
             objectName: "commandSearch"
-            x: searchBand.inset + searchBand.iconWidth
+            x: searchBand.inset + searchBand.iconWidth + searchBand.iconGap
             width: Math.max(0, closeButton.x - searchBand.closeGap - x)
             height: searchBand.height
             colors: root.colors
@@ -124,7 +136,7 @@ Item {
             ratio: root.ratio
             maximumBytes: root.state.maximumQueryBytes
             placeholderPrefix: root.state.editorText.length > 0 && ["@", ">", ":", "?"].includes(root.state.editorText[0]) ? root.state.editorText[0] : ""
-            placeholderText: root.state.mode === root.navigateMode ? "Search contexts, tabs and agents…" : root.state.mode === root.actionsMode ? "Search actions…" : root.state.mode === root.machinesMode ? "Search machines…" : "What would you like to do?"
+            placeholderText: root.state.mode === root.allMode ? "Search contexts, tabs, agents and actions…" : root.state.mode === root.navigateMode ? "Search contexts, tabs and agents…" : root.state.mode === root.actionsMode ? "Search actions…" : root.state.mode === root.machinesMode ? "Search machines…" : "What would you like to do?"
             onTextEdited: root.controller.search(text)
             onLimitReached: requested => root.controller.reportQueryLimit(requested)
             Keys.onDownPressed: root.controller.move(1)
@@ -132,7 +144,7 @@ Item {
             Keys.onReturnPressed: event => root.submit((event.modifiers & Qt.ShiftModifier) !== 0)
             Keys.onEnterPressed: event => root.submit((event.modifiers & Qt.ShiftModifier) !== 0)
             Keys.onPressed: event => {
-                if (root.state.mode !== root.machinesMode || (event.modifiers & root.controlModifier) === 0) {
+                if (root.selectedKind !== "machine" || (event.modifiers & root.controlModifier) === 0) {
                     event.accepted = false;
                     return;
                 }
@@ -168,6 +180,7 @@ Item {
         }
 
         PaletteKeycap {
+            id: closeKeycap
             anchors.fill: closeButton
             colors: root.colors
             typography: root.typography
@@ -180,57 +193,6 @@ Item {
             width: parent.width
             height: Math.min(root.ratio, parent.height)
             color: root.colors.surface1
-        }
-    }
-
-    Loader {
-        x: root.regions.tabs.x + root.tabInset
-        y: root.regions.tabs.y + root.tabVerticalInset
-        active: root.regions.tabs.height > 0
-        sourceComponent: Row {
-            spacing: root.tabGap
-
-            Repeater {
-                model: [{prefix: "@", label: "Navigate  @"}, {prefix: ">", label: "Actions  >"}, {prefix: ":", label: "Machines  :"}]
-                delegate: Item {
-                    id: modeTab
-                    required property var modelData
-                    readonly property real labelInset: 4 * root.ratio
-                    width: Math.min(modeLabel.implicitWidth + root.tabLabelPadding, Math.max(0, root.regions.tabs.width - root.tabRightInset - root.tabInset - x))
-                    height: Math.max(0, root.regions.tabs.height - root.tabVerticalInset * 2)
-
-                    NativeRoundedRectangle {
-                        anchors.fill: parent
-                        radius: 5 * root.ratio
-                        color: root.colors.surface0
-                        visible: root.state.mode === modeTab.modelData.prefix.charCodeAt(0)
-                    }
-
-                    PaletteButton {
-                        anchors.fill: parent
-                        colors: root.colors
-                        text: ""
-                        accessibleLabel: modeTab.modelData.label
-                        pixelSize: root.typography.small
-                        ratio: root.ratio
-                        onActivated: {
-                            root.controller.setMode(modeTab.modelData.prefix.charCodeAt(0));
-                            query.forceActiveFocus();
-                        }
-                    }
-
-                    ChromeText {
-                        id: modeLabel
-                        x: modeTab.labelInset
-                        y: modeTab.labelInset
-                        width: Math.max(0, parent.width - modeTab.labelInset * 2)
-                        height: Math.max(0, parent.height - modeTab.labelInset * 2)
-                        text: modeTab.modelData.label
-                        pixelSize: root.typography.small
-                        color: root.colors.text
-                    }
-                }
-            }
         }
     }
 
@@ -290,68 +252,18 @@ Item {
         }
     }
 
-    Item {
+    KeyHintBar {
         id: footerBand
         visible: !root.suggesting
         x: root.regions.footer.x
         y: root.regions.footer.y
         width: root.regions.footer.width
         height: root.regions.footer.height
-        readonly property real inset: Math.min(14 * root.ratio, width / 8)
-        readonly property real keyWidth: Math.min(22 * root.ratio, width / 10)
-        readonly property real keyGap: 4 * root.ratio
-        readonly property real labelGap: 14 * root.ratio
-        readonly property real actionWidth: Math.min(112 * root.ratio, width / 2)
-        readonly property real actionInset: 4 * root.ratio
-        readonly property real captionMinimumWidth: 320 * root.ratio
-
-        Rectangle {
-            width: parent.width
-            height: Math.min(root.ratio, parent.height)
-            color: root.colors.surface1
-        }
-
-        PaletteKeycap {
-            x: footerBand.inset
-            width: footerBand.keyWidth
-            height: footerBand.height
-            colors: root.colors
-            typography: root.typography
-            text: "↑"
-            ratio: root.ratio
-        }
-
-        PaletteKeycap {
-            x: footerBand.inset + footerBand.keyWidth + footerBand.keyGap
-            width: footerBand.keyWidth
-            height: footerBand.height
-            colors: root.colors
-            typography: root.typography
-            text: "↓"
-            ratio: root.ratio
-        }
-
-        ChromeText {
-            x: footerBand.inset + footerBand.keyWidth * 2 + footerBand.labelGap
-            width: Math.max(0, footerBand.width - x - footerBand.actionWidth - footerBand.inset)
-            height: footerBand.height
-            text: root.state.mode === root.machinesMode ? "⇧↵ enable/disable · ^R rename · ^D remove" : "Navigate"
-            pixelSize: root.typography.small
-            color: Qt.alpha(root.colors.text, root.detailAlpha)
-            visible: footerBand.width > footerBand.captionMinimumWidth
-        }
-
-        PaletteButton {
-            x: footerBand.width - footerBand.actionWidth - footerBand.inset
-            y: footerBand.actionInset
-            width: footerBand.actionWidth
-            height: Math.max(0, footerBand.height - footerBand.actionInset * 2)
-            colors: root.colors
-            text: root.state.mode === root.navigateMode ? "Open  ↵" : root.state.mode === root.actionsMode ? "Run  ↵" : "Show  ↵"
-            pixelSize: root.typography.body
-            ratio: root.ratio
-            interactive: root.state.count > 0
-            onActivated: root.submit()
-        }
+        colors: root.colors
+        typography: root.typography
+        ratio: root.ratio
+        hints: root.footerHints
+        trailing: root.state.mode === root.allMode ? {keys: [">", "@", ":"], word: "Filter"} : null
+        onActivated: action => root.submit(action === "alternate")
     }
 }

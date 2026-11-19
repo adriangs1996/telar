@@ -1,4 +1,4 @@
-#include <clipboard.hpp>
+#include <telar_clipboard/clipboard.hpp>
 #include <expected>
 #ifdef __clangd__
 // Keep textual ABI declarations and module imports in one clangd parse.

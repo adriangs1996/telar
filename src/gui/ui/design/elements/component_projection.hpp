@@ -133,6 +133,7 @@ namespace telar::gui::qt {
           {QStringLiteral("accessibleName"), text},
           {QStringLiteral("detail"), componentText(content.text(node.detail))},
           {QStringLiteral("clickable"), action.hasValue() || node.url.length != 0},
+          {QStringLiteral("link"), !action.hasValue() && node.url.length != 0},
           {QStringLiteral("actionIdentity"), componentActionIdentity(action, content.text(node.url), named)},
           {QStringLiteral("ink"), componentColor(node.style.foreground, theme, ink)},
           // 0 neutral, 1 muted, 2 accent, 3 success, 4 warning, 5 danger: bar chrome tints by the worst of a group.

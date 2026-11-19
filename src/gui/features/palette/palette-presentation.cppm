@@ -32,8 +32,6 @@ export {
       static constexpr float heading_padding = 12;
       static constexpr float search_minimum = 60;
       static constexpr float search_padding = 24;
-      static constexpr float tabs_minimum = 38;
-      static constexpr float tabs_padding = 16;
       static constexpr float footer_minimum = 40;
       static constexpr float footer_padding = 16;
       static constexpr float list_padding = 22;
@@ -43,14 +41,12 @@ export {
       static constexpr std::uint16_t maximum_pick_rows = 8;
       static constexpr float heading_divisor = 6;
       static constexpr float search_divisor = 2;
-      static constexpr float tabs_divisor = 4;
       static constexpr float footer_divisor = 3;
 
       Rect viewport;
       Rect bounds;
       Rect heading;
       Rect search;
-      Rect tabs;
       Rect results;
       Rect footer;
       float row_height = 0;
@@ -78,6 +74,8 @@ export {
       action,
       machine,
       pick,
+      // The row that asks for a command suggestion; it sits under the groups, without a heading.
+      suggestion,
     };
 
     struct PaletteRowWindow {
@@ -98,6 +96,8 @@ export {
 
     private:
       [[nodiscard]] static float rowHeight(PaletteRowKind kind, const PaletteGeometry& geometry) noexcept;
+      // Whether a group of this kind opens with a heading.
+      [[nodiscard]] static bool headed(PaletteRowKind kind) noexcept;
     };
 
   }

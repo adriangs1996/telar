@@ -831,7 +831,6 @@ panels = {
         ui.meter_row({ label = "Current session", detail = "Resets at 13:20", value = quota.session / 100, marker = 0.7 }),
         ui.actions({
           ui.button({ text = "Open in browser", url = "https://example.com/usage" }),
-          ui.button({ text = "Refresh", action = telar.action.refresh_panel() }),
         }),
       }
     end,
@@ -857,16 +856,19 @@ A panel's content is any list of components plus these blocks:
 | `ui.text` | `text` (shorthand), `tone`, wrapped to three lines |
 | `ui.meter_row` | `label`, `detail`, `value` 0..1, `marker` 0..1, `tone` |
 | `ui.kv` | `key`, `value`, `tone` |
-| `ui.callout` | `icon`, `text`, `detail`, one `button` |
+| `ui.callout` | `icon`, `text`, `detail`, one `button`, `tone` (any but `neutral` and `muted` tints the card and its title) |
 | `ui.actions` | buttons in its list part, right aligned |
-| `ui.button` | `text`, `action` or `url`, `primary` |
+| `ui.button` | `text`, `action` or `url` (a link: unframed, with an arrow), `primary` |
 | `ui.divider` | none |
 
 A panel holds at most 128 components, 16 KiB of text, 1024 sparkline samples
 and 32 actions; a render that returns more keeps what fits by priority, like
-a bar slot, and reports the `panels.*` limits. Its header shows the title,
-the time of the last successful render and a close control. A failed render
-keeps the last content and says so.
+a bar slot, and reports the `panels.*` limits. Its header shows the title and
+refresh and close controls. Its footer says how long ago the last successful
+render was and holds the content's last block when that block is `ui.actions`.
+A meter row shows its label and value on one line, the bar under them and its
+detail and `marker` (as "pace") under the bar. A failed render keeps the last
+content and says so.
 
 `telar.action.open_panel("name")` opens or closes a panel from a key binding
 too; it appears above the bar component that opens the same panel.

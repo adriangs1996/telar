@@ -4,6 +4,8 @@ import QtQuick
 import QtQuick.Controls
 import Telar.Gui
 
+// A configured pick, drawn as the palette draws a nested list: a heading, the search band, whole
+// rows and the shortcut bar, in the bands the palette geometry measures for it.
 Popup {
     id: root
 
@@ -13,18 +15,26 @@ Popup {
     property real ratio: 1
     readonly property var state: controller.pick
     readonly property var rows: state.rows ?? []
-    readonly property real margin: 16 * ratio
-    readonly property real fieldHeight: 36 * ratio
-    readonly property real rowHeight: 48 * ratio
+    readonly property var regions: state.geometry ?? ({})
+    readonly property rect bounds: regions.bounds ?? Qt.rect(0, 0, 0, 0)
+    readonly property rect heading: regions.heading ?? Qt.rect(0, 0, 0, 0)
+    readonly property rect search: regions.search ?? Qt.rect(0, 0, 0, 0)
+    readonly property rect results: regions.results ?? Qt.rect(0, 0, 0, 0)
+    readonly property rect footer: regions.footer ?? Qt.rect(0, 0, 0, 0)
+    readonly property real inset: 16 * ratio
+    readonly property real iconWidth: 18 * ratio
+    readonly property real iconGap: 8 * ratio
+    readonly property real closeGap: 8 * ratio
+    readonly property string status: state.error?.length > 0 ? state.error : state.loading ? "Loading…" : rows.length === 0 ? "No matching choices" : state.selecting ? "The previous choice is running…" : ""
     property int selection: 0
     visible: state.open ?? false
     focus: true
     modal: true
-    padding: margin
-    width: Math.max(0, Math.min(640 * ratio, (parent?.width ?? 640) - 2 * margin))
-    height: Math.max(0, Math.min(520 * ratio, (parent?.height ?? 520) - 2 * margin))
-    x: ((parent?.width ?? width) - width) / 2
-    y: ((parent?.height ?? height) - height) / 2
+    padding: 0
+    x: bounds.x
+    y: bounds.y
+    width: bounds.width
+    height: bounds.height
     objectName: "configuredPick"
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     background: DialogSurface { colors: root.colors; ratio: root.ratio }
@@ -38,7 +48,7 @@ Popup {
             Qt.callLater(function () { query.forceActiveFocus(); });
         }
     }
-    onSelectionChanged: results.positionViewAtIndex(selection, ListView.Contain)
+    onSelectionChanged: list.positionViewAtIndex(selection, ListView.Contain)
 
     function move(delta) {
         if (rows.length > 0) selection = Math.max(0, Math.min(rows.length - 1, selection + delta));
@@ -49,120 +59,157 @@ Popup {
     }
 
     contentItem: Item {
-        ChromeText {
-            width: Math.max(0, parent.width - root.fieldHeight)
-            height: root.fieldHeight
-            text: root.state.title ?? ""
-            color: root.colors.text
-            pixelSize: root.typography.body
-            emphasized: true
-        }
-        ChromeButton {
-            x: parent.width - root.fieldHeight
-            width: root.fieldHeight
-            height: root.fieldHeight
-            colors: root.colors
-            text: "×"
-            pixelSize: root.typography.body
-            Accessible.name: "Close pick"
-            onClicked: root.controller.closePick()
-        }
-        FormTextField {
-            id: query
-            objectName: "configuredPickQuery"
-            y: root.fieldHeight + root.margin / 2
-            width: parent.width
-            height: root.fieldHeight
+        OverlayHeader {
+            x: root.heading.x + root.inset
+            y: root.heading.y
+            width: Math.max(0, root.heading.width - 2 * root.inset)
+            height: root.heading.height
             colors: root.colors
             typography: root.typography
             ratio: root.ratio
-            formControl: true
-            maximumBytes: 512
-            placeholderText: root.state.placeholder ?? "Filter choices…"
-            onTextEdited: root.controller.filterPick(text)
-            onAccepted: root.choose()
-            Keys.priority: Keys.BeforeItem
-            Keys.onUpPressed: root.move(-1)
-            Keys.onDownPressed: root.move(1)
-            Keys.onEscapePressed: {
-                if (!query.cancelComposition()) root.controller.closePick();
+            title: root.state.title ?? ""
+        }
+
+        Item {
+            id: searchBand
+            x: root.search.x
+            y: root.search.y
+            width: root.search.width
+            height: root.search.height
+
+            ChromeIcon {
+                x: root.inset
+                width: root.iconWidth
+                height: searchBand.height
+                glyph: "\uf002"
+                pixelSize: root.typography.body
+                color: root.colors.subtext0
+            }
+
+            FormTextField {
+                id: query
+                objectName: "configuredPickQuery"
+                x: root.inset + root.iconWidth + root.iconGap
+                width: Math.max(0, closeButton.x - root.closeGap - x)
+                height: searchBand.height
+                colors: root.colors
+                typography: root.typography
+                ratio: root.ratio
+                maximumBytes: 512
+                placeholderText: root.state.placeholder ?? "Filter choices…"
+                onTextEdited: root.controller.filterPick(text)
+                onAccepted: root.choose()
+                Keys.priority: Keys.BeforeItem
+                Keys.onUpPressed: root.move(-1)
+                Keys.onDownPressed: root.move(1)
+                Keys.onEscapePressed: {
+                    if (!query.cancelComposition()) root.controller.closePick();
+                }
+            }
+
+            PaletteButton {
+                id: closeButton
+                x: searchBand.width - root.inset - width
+                width: closeKeycap.implicitWidth
+                height: searchBand.height
+                text: ""
+                accessibleLabel: "Close pick"
+                colors: root.colors
+                pixelSize: root.typography.body
+                ratio: root.ratio
+                onActivated: root.controller.closePick()
+            }
+
+            PaletteKeycap {
+                id: closeKeycap
+                anchors.fill: closeButton
+                colors: root.colors
+                typography: root.typography
+                text: "esc"
+                ratio: root.ratio
+            }
+
+            Rectangle {
+                y: parent.height - height
+                width: parent.width
+                height: Math.min(root.ratio, parent.height)
+                color: root.colors.surface1
             }
         }
+
         ListView {
-            id: results
+            id: list
             objectName: "configuredPickRows"
-            y: query.y + query.height + root.margin / 2
-            width: parent.width
-            height: Math.max(0, parent.height - y - root.fieldHeight)
+            x: root.results.x
+            y: root.results.y
+            width: root.results.width
+            height: root.results.height
             clip: true
             model: root.rows
             currentIndex: root.selection
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollBar {}
-            delegate: Rectangle {
-                id: option
+            delegate: PaletteRow {
                 required property int index
                 required property var modelData
-                width: results.width
-                height: root.rowHeight
-                radius: 5 * root.ratio
-                color: index === root.selection ? root.colors.surface1 : "transparent"
-                readonly property real inset: 8 * root.ratio
-                readonly property real swatchWidth: modelData.swatch?.length > 0 ? 48 * root.ratio : 0
-                ChromeText {
-                    x: option.inset
-                    y: 2 * root.ratio
-                    width: Math.max(0, parent.width - 2 * option.inset - option.swatchWidth)
-                    height: root.rowHeight / 2
-                    text: (option.modelData.selected ? "✓ " : "") + option.modelData.label
-                    color: root.colors.text
-                    pixelSize: root.typography.body
-                }
-                ChromeText {
-                    x: option.inset
-                    y: root.rowHeight / 2
-                    width: Math.max(0, parent.width - 2 * option.inset - option.swatchWidth)
-                    height: root.rowHeight / 2 - 2 * root.ratio
-                    text: option.modelData.detail
-                    color: root.colors.subtext0
-                    pixelSize: root.typography.small
-                }
-                Row {
-                    x: parent.width - option.swatchWidth - option.inset
-                    y: (parent.height - 12 * root.ratio) / 2
-                    spacing: 2 * root.ratio
-                    Repeater {
-                        model: option.modelData.swatch ?? []
-                        Rectangle {
-                            required property var modelData
-                            width: 12 * root.ratio
-                            height: width
-                            radius: 2 * root.ratio
-                            color: modelData
-                        }
-                    }
-                }
-                MouseArea {
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onPositionChanged: root.selection = option.index
-                    onClicked: { root.selection = option.index; root.choose(); }
+                width: list.width
+                height: root.regions.rowHeight ?? 0
+                colors: root.colors
+                typography: root.typography
+                ratio: root.ratio
+                revision: root.state.identity ?? ""
+                selected: index === root.selection
+                record: ({
+                    key: String(index),
+                    icon: "",
+                    primary: modelData.label,
+                    secondary: modelData.detail,
+                    hint: "",
+                    shortcut: false,
+                    detailBelow: false,
+                    swatch: modelData.swatch,
+                    checked: modelData.selected,
+                })
+                onActivated: {
+                    root.selection = index;
+                    root.choose();
                 }
             }
         }
-        Text {
-            y: parent.height - root.fieldHeight
-            width: parent.width
-            height: root.fieldHeight
-            text: root.state.error?.length > 0 ? root.state.error : root.state.loading ? "Loading…" : root.rows.length === 0 ? "No matching choices" : root.state.selecting ? "The previous choice is running…" : "↑ ↓ to navigate · Enter to choose · Escape to close"
+
+        ChromeText {
+            x: root.results.x + root.inset / 2
+            y: root.results.y
+            width: Math.max(0, root.results.width - root.inset)
+            height: root.typography.bodyRow + root.inset
+            text: root.status
             color: root.state.error?.length > 0 ? root.colors.red : root.colors.subtext0
-            font.family: "IBM Plex Sans"
-            font.pixelSize: root.typography.small
-            textFormat: Text.PlainText
-            renderType: Text.NativeRendering
-            wrapMode: Text.Wrap
-            maximumLineCount: 2
+            pixelSize: root.typography.body
+            visible: root.status.length > 0 && (root.rows.length === 0 || root.state.loading)
+        }
+
+        KeyHintBar {
+            x: root.footer.x
+            y: root.footer.y
+            width: root.footer.width
+            height: root.footer.height
+            colors: root.colors
+            typography: root.typography
+            ratio: root.ratio
+            hints: root.rows.length > 0 ? [{keys: ["↑", "↓"], word: "Navigate", action: ""}, {keys: ["↵"], word: "Choose", action: "submit"}] : []
+            visible: !(root.status.length > 0 && root.rows.length > 0)
+            onActivated: root.choose()
+        }
+
+        ChromeText {
+            x: root.footer.x + root.inset
+            y: root.footer.y
+            width: Math.max(0, root.footer.width - 2 * root.inset)
+            height: root.footer.height
+            text: root.status
+            color: root.state.error?.length > 0 ? root.colors.red : root.colors.subtext0
+            pixelSize: root.typography.small
+            visible: root.status.length > 0 && root.rows.length > 0
         }
     }
 }

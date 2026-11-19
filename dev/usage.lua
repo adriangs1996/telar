@@ -151,7 +151,7 @@ function usage.group(provider, options)
 	return ui.group(group)
 end
 
--- One sentence on the pace of the tightest window.
+-- The pace of the tightest window: a tone, a short verdict and a sentence.
 function usage.headline(provider, ctx)
 	local tightest
 	for _, window in ipairs(provider.windows or {}) do
@@ -164,21 +164,26 @@ function usage.headline(provider, ctx)
 		end
 	end
 	if not tightest then
-		return "Usage this period."
+		return { tone = "neutral", text = "Usage this period" }
 	end
 	local resets = usage.when(ctx, usage.epoch(tightest.window.resets_at))
 	if tightest.pace <= 0.9 then
-		return "On track. You reach the reset " .. resets .. " with room to spare."
+		return { tone = "success", text = "On track", detail = "You reach the reset " .. resets .. " with room to spare." }
 	end
 	if tightest.pace <= 1.1 then
-		return "On pace to use it all by the reset " .. resets .. "."
+		return { tone = "neutral", text = "On pace", detail = "You use it all by the reset " .. resets .. "." }
 	end
-	return "Ahead of pace. " .. (tightest.window.title or tightest.window.id) .. " may run out before " .. resets .. "."
+	return {
+		tone = "warning",
+		text = "Ahead of pace",
+		detail = (tightest.window.title or tightest.window.id) .. " may run out before " .. resets .. ".",
+	}
 end
 
--- The provider's panel: the pace, a row per window, credits and links.
+-- The provider's panel: the pace, a row per window, credits and a link. The panel's
+-- header refreshes it, and a trailing `ui.actions` sits in the panel's footer.
 function usage.panel(provider, ctx)
-	local blocks = { ui.heading(usage.headline(provider, ctx)), ui.divider() }
+	local blocks = { ui.callout(usage.headline(provider, ctx)) }
 	for _, window in ipairs(provider.windows or {}) do
 		local resets = usage.epoch(window.resets_at)
 		blocks[#blocks + 1] = ui.meter_row({
@@ -198,11 +203,9 @@ function usage.panel(provider, ctx)
 			button = provider.url and ui.button({ text = "Open", url = provider.url }) or nil,
 		})
 	end
-	local buttons = { ui.button({ text = "Refresh", action = telar.action.refresh_panel() }) }
 	if provider.url then
-		table.insert(buttons, 1, ui.button({ text = "Open in browser", url = provider.url }))
+		blocks[#blocks + 1] = ui.actions({ ui.button({ text = "Open in browser", url = provider.url }) })
 	end
-	blocks[#blocks + 1] = ui.actions(buttons)
 	return blocks
 end
 

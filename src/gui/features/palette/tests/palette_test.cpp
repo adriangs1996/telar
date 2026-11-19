@@ -34,7 +34,7 @@ namespace {
     for (const auto text : {std::string_view{}, std::string_view{"context"}, std::string_view{" @context"}, std::string_view{"éclair"}}) {
       const auto query = PaletteQuery::parse(text);
 
-      check(query.mode == PaletteMode::navigate && query.text == text, "plain or empty input must remain a navigation query");
+      check(query.mode == PaletteMode::all && query.text == text, "plain or empty input must search every kind of row");
     }
   }
 
@@ -56,6 +56,21 @@ namespace {
     matches.add(2, "second", "");
     matches.add(1, "first", "");
     check(matches.rows().size() == 2 && matches.rows().front().target == 2, "an empty query must preserve canonical source order");
+  }
+
+  void paletteScoresPreferWordStartsAndRuns() {
+    const auto score = [](std::string_view label, std::string_view query) {
+      return PaletteScore::of(label, query).valueOr(0);
+    };
+
+    check(PaletteScore::of("Split right", "") == 1U, "an empty query must keep every row with the same score");
+    check(!PaletteScore::of("Split right", "rs").hasValue(), "a query out of order must not match");
+    check(score("SPLIT right", "split") == score("Split right", "split"), "matching must ignore ASCII case");
+    check(score("telar  lifetime-speed", "ter") > score("Enter copy mode", "ter"), "a word start must outrank a match inside a word");
+    check(score("tab Claude Code", "code") > score("Enter copy mode", "code"), "a whole word must outrank scattered letters");
+    check(score("Close tab", "ct") > score("Rename context", "ct"), "word starts must outrank letters inside words");
+    check(score("Split right", "split") > score("Split down", "sd"), "a contiguous run must outrank a gapped match");
+    check(score("xxab", "ab") < score("ab", "ab"), "a match at a word start must outrank one inside a word");
   }
 
   void labelsRetainOnlyCompleteUtf8AtTheCapacityBoundary() {
@@ -86,18 +101,18 @@ namespace {
     const ChromeMetrics chrome;
     constexpr float viewport_width = 1600;
     constexpr float viewport_height = 1000;
-    constexpr float ordinary_height = 464;
+    constexpr float ordinary_height = 426;
     constexpr float ordinary_top = 110;
     const auto geometry = PaletteGeometry::measure({.width = viewport_width, .height = viewport_height}, chrome, {});
 
     check(geometry.bounds.width == PaletteGeometry::maximum_width && geometry.bounds.height == ordinary_height && geometry.bounds.y == ordinary_top, "ordinary palette bounds must follow the native reference");
-    check(geometry.heading.height == 0 && geometry.tabs.height == PaletteGeometry::tabs_minimum, "the unified palette must reserve tabs but no nested heading");
+    check(geometry.heading.height == 0, "the unified palette must not reserve a nested heading");
 
     for (const auto extent : {0.0F, 1.0F, 2.0F, PaletteGeometry::margin}) {
       const auto tiny = PaletteGeometry::measure({.width = extent, .height = extent}, chrome, {});
 
       check(tiny.bounds.width >= 0 && tiny.bounds.height >= 0 && tiny.results.height >= 0 && tiny.footer.height >= 0, "small windows must never create negative regions");
-      const telar::ds::Array bands{tiny.heading, tiny.search, tiny.tabs, tiny.results, tiny.footer};
+      const telar::ds::Array bands{tiny.heading, tiny.search, tiny.results, tiny.footer};
       const auto tolerance = std::numeric_limits<float>::epsilon() * std::max(1.0F, tiny.bounds.height) * static_cast<float>(bands.size());
       auto bottom = tiny.bounds.y;
 
@@ -134,6 +149,7 @@ namespace {
 
   const telar::testing::Case case_query_modes_preserve_the_actual_search{"palette.query_modes_preserve_the_actual_search", queryModesPreserveTheActualSearch};
   const telar::testing::Case case_fuzzy_ranking_keeps_stable_ties_and_bounded_storage{"palette.fuzzy_ranking_keeps_stable_ties_and_bounded_storage", fuzzyRankingKeepsStableTiesAndBoundedStorage};
+  const telar::testing::Case case_palette_scores_prefer_word_starts_and_runs{"palette.palette_scores_prefer_word_starts_and_runs", paletteScoresPreferWordStartsAndRuns};
   const telar::testing::Case case_labels_retain_only_complete_utf8_at_the_capacity_boundary{"palette.labels_retain_only_complete_utf8_at_the_capacity_boundary", labelsRetainOnlyCompleteUtf8AtTheCapacityBoundary};
   const telar::testing::Case case_palette_regions_fit_small_and_ordinary_windows{"palette.palette_regions_fit_small_and_ordinary_windows", paletteRegionsFitSmallAndOrdinaryWindows};
   const telar::testing::Case case_the_visible_window_contains_its_selection_and_group_heading{"palette.the_visible_window_contains_its_selection_and_group_heading", theVisibleWindowContainsItsSelectionAndGroupHeading};

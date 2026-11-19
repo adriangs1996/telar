@@ -11,6 +11,7 @@ import :profiles;
 
 import telar.gui.foundation.model;
 import telar.gui.foundation.text;
+import telar.base.history;
 import telar.base.memory.containers;
 import telar.wire.vocabulary;
 import telar.base.ds;
@@ -181,6 +182,8 @@ export {
 
     struct MachinePicker {
       using Matches = RankedMatches<MachineToken, Machines::capacity>;
+      // Scores a label against a query; nothing when it does not match.
+      using Scorer = ds::Option<std::uint32_t> (*)(std::string_view label, std::string_view query) noexcept;
 
       enum class Intent : std::uint8_t {
         none,
@@ -191,7 +194,7 @@ export {
         disable,
       };
 
-      [[nodiscard]] static Matches collect(const Machines& machines, std::string_view query);
+      [[nodiscard]] static Matches collect(const Machines& machines, std::string_view query, Scorer score = runtime::historyScore);
 
       [[nodiscard]] static Intent choose(const Machines& machines, ds::Option<MachineToken> chosen, bool alternate);
     };

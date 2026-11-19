@@ -19,7 +19,6 @@ set_target_properties(telar-lua-vm PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 telar_add_library(telar-lua
   SOURCES lua.cpp
-  INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/include"
   DEPS telar-lua-vm telar::base)
 
 if(BUILD_TESTING)

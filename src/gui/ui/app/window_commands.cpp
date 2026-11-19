@@ -240,6 +240,7 @@ namespace telar::gui::qt {
           {QStringLiteral("action"), QVariant::fromValue(*action)},
           {QStringLiteral("label"), toQString(entry.label)},
           {QStringLiteral("shortcut"), bindingShortcut(entry.action)},
+          {QStringLiteral("destructive"), entry.destructive},
       });
     }
 
@@ -716,7 +717,7 @@ namespace telar::gui::qt {
       dialogs_.show(Dialog::history);
       history_.open();
     } else if (action == window_actions::Action::palette || action == window_actions::Action::goto_picker) {
-      dialogs_.showPalette(action == window_actions::Action::palette ? application::palette::PaletteMode::actions : application::palette::PaletteMode::navigate);
+      dialogs_.showPalette(action == window_actions::Action::palette ? application::palette::PaletteMode::all : application::palette::PaletteMode::navigate);
     } else if (action == window_actions::Action::path_picker) {
       dialogs_.showPaths();
     } else if (action == window_actions::Action::suggest_command) {

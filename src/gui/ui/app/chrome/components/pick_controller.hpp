@@ -51,6 +51,11 @@ namespace telar::gui::qt {
       return index_.hasValue();
     }
 
+    // Every choice the pick lists before a filter, which sizes the list so typing never resizes it.
+    [[nodiscard]] std::size_t itemCount() const noexcept {
+      return items_ ? items_->size() : 0;
+    }
+
     [[nodiscard]] QVariantMap state() const {
       return {
           {QStringLiteral("open"), isOpen()},

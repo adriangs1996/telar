@@ -18,6 +18,7 @@ export namespace telar::gui::application::palette {
   using features::palette::PaletteQuery;
   using features::palette::PaletteRowKind;
   using features::palette::PaletteRowWindow;
+  using features::palette::PaletteScore;
   using features::palette::Suggestion;
   using features::palette::SuggestionGeometry;
   using features::palette::SuggestionLabels;

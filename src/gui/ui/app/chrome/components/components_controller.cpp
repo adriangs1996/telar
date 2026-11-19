@@ -34,6 +34,7 @@ static_assert(true);
 #include <cstring>
 #include <exception>
 #include <initializer_list>
+#include <limits>
 #include <optional>
 #include <span>
 #include <stdexcept>
@@ -251,7 +252,42 @@ namespace telar::gui::qt {
   }
 
   QVariantMap ComponentsController::pick() const {
-    return pick_.state();
+    auto state = pick_.state();
+
+    if (pick_.isOpen()) {
+      state.insert(QStringLiteral("geometry"), pickGeometry());
+    }
+
+    return state;
+  }
+
+  QVariantMap ComponentsController::pickGeometry() const {
+    const auto density = display_.density;
+    const Rect viewport{.width = static_cast<float>(display_.viewport.width), .height = static_cast<float>(display_.viewport.height)};
+    const auto rows = static_cast<std::uint16_t>(std::min<std::size_t>(pick_.itemCount(), std::numeric_limits<std::uint16_t>::max()));
+    const auto geometry = application::palette::PaletteGeometry::measure(viewport, display_.chrome, {.pick_rows = rows});
+    const auto local = [&](Rect area) {
+      area.x -= geometry.bounds.x;
+      area.y -= geometry.bounds.y;
+
+      return toQRectF(area, density);
+    };
+
+    return {
+        {QStringLiteral("bounds"), toQRectF(geometry.bounds, density)},
+        {QStringLiteral("heading"), local(geometry.heading)},
+        {QStringLiteral("search"), local(geometry.search)},
+        {QStringLiteral("results"), local(application::palette::PaletteGeometry::inset(geometry.results, display_.chrome.px(application::palette::PaletteRowWindow::content_inset)))},
+        {QStringLiteral("footer"), local(geometry.footer)},
+        {QStringLiteral("rowHeight"), geometry.row_height / density},
+    };
+  }
+
+  void ComponentsController::setDisplay(const application::window::DisplayMetrics& display) {
+    display_ = display;
+    if (pick_.isOpen()) {
+      emit pickChanged();
+    }
   }
 
   void ComponentsController::activate(int source, int node, const QString& generation, const QString& revision, const QPointF& anchor) {
@@ -577,7 +613,7 @@ namespace telar::gui::qt {
       } else {
         if constexpr (std::is_same_v<decltype(outcome.value.getMut()), ConfigurationSource::PanelRender&>) {
           current.panel = std::move(outcome.value.getMut()).intoShared();
-          surfaces_.last_render = QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss"));
+          surfaces_.last_render_ms = QDateTime::currentMSecsSinceEpoch();
         } else {
           current.bar = std::move(outcome.value.getMut()).intoShared();
         }
@@ -740,7 +776,7 @@ namespace telar::gui::qt {
         {QStringLiteral("width"), definition.width},
         {QStringLiteral("nodes"), state.nodes},
         {QStringLiteral("error"), state.error},
-        {QStringLiteral("lastRender"), surfaces_.last_render},
+        {QStringLiteral("renderedAt"), surfaces_.last_render_ms},
         {QStringLiteral("generation"), QString::number(surfaces_.generation)},
         {QStringLiteral("revision"), QString::number(state.revision)},
         {QStringLiteral("identity"), QString::number(state.identity)},
@@ -777,7 +813,7 @@ namespace telar::gui::qt {
 
     surfaces_.open_panel.reset();
     surfaces_.panel = {};
-    surfaces_.last_render.clear();
+    surfaces_.last_render_ms = 0;
     configuration_.closePanel();
     emit changed();
     arm();

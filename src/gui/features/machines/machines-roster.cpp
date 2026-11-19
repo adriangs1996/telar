@@ -1,6 +1,5 @@
 module telar.gui.features.machines;
 
-import telar.base.history;
 import telar.base.ds;
 
 namespace telar::gui::features::machines {
@@ -251,7 +250,7 @@ namespace telar::gui::features::machines {
     return ds::none;
   }
 
-  MachinePicker::Matches MachinePicker::collect(const Machines& machines, std::string_view query) {
+  MachinePicker::Matches MachinePicker::collect(const Machines& machines, std::string_view query, Scorer score_of) {
     Matches matches;
 
     for (std::size_t index = 0; index < Machines::capacity; ++index) {
@@ -261,9 +260,9 @@ namespace telar::gui::features::machines {
         continue;
       }
 
-      auto score = runtime::historyScore(row.label.view(), query);
+      auto score = score_of(row.label.view(), query);
       if (!score) {
-        score = runtime::historyScore(row.destination.view(), query);
+        score = score_of(row.destination.view(), query);
       }
 
       if (score) {
