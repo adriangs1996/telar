@@ -2859,10 +2859,13 @@ namespace telar::runtime {
 
       // Back at the prompt after a command, or in another directory: read its repository.
       if (pane != nullptr && pane->shell_zones && !pane->shell_state.remote && pane->shell_state.phase == ShellPhase::prompt) {
-        const auto directory = pane->shell_zones->directory();
-        if (pane->git_commands != pane->shell_state.commands || pane->git_directory.view() != directory) {
+        // The zones are read and the repository's directory written apart, as Rust splits a borrow of a pane.
+        const auto& zones = *pane->shell_zones;
+        auto& git_directory = pane->git_directory;
+        const auto directory = zones.directory();
+        if (pane->git_commands != pane->shell_state.commands || git_directory.view() != directory) {
           pane->git_commands = pane->shell_state.commands;
-          pane->git_directory.assign(directory);
+          git_directory.assign(directory);
           shell_git_.request(pane->id, pane->generation, directory);
         }
       }
