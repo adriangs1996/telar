@@ -1,4 +1,4 @@
-telar_add_library(telar-shell SOURCES syntax/syntax.cpp)
+telar_add_library(telar-shell SOURCES syntax/syntax.cpp DEPS telar::tbc)
 
 if(BUILD_TESTING)
   telar_add_tests(telar-shell-tests LABEL lib.shell LINK telar::shell)

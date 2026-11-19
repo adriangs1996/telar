@@ -316,7 +316,7 @@ namespace telar::runtime::cli::hooks {
   }
 
   // The title an agent sets, on one line without control bytes, which the codec refuses in a title.
-  ds::Option<ReportAgentTitle> titleReport(Payload& input, FixedText<96>& text) {
+  tbc::view<ds::Option<ReportAgentTitle>, tbc::lt::a> titleReport(Payload& input, tbc::view<FixedText<96>&, tbc::lt::a> text) {
     ds::Option<std::string_view> title;
 
     if (input.provider == AgentProvider::claude) {

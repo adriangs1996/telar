@@ -2136,7 +2136,7 @@ namespace telar::shell {
     return count;
   }
 
-  CommandAt commandAt(std::string_view line, Syntax syntax, std::span<const Token> tokens, const Lexed& lexed, std::span<Word> words, std::span<char> text) noexcept {
+  tbc::view<CommandAt, tbc::lt::a> commandAt(tbc::view<std::string_view, tbc::lt::a> line, Syntax syntax, std::span<const Token> tokens, const Lexed& lexed, std::span<Word> words, tbc::view<std::span<char>, tbc::lt::a> text) noexcept {
     CommandAt at;
 
     if (!lexed.cursor_completable || lexed.cursor > line.size()) {

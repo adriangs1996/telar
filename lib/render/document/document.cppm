@@ -4,6 +4,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.base.text;
 import telar.base.ds;
+import telar.tbc;
 
 export namespace telar::render {
 
@@ -214,7 +215,7 @@ export namespace telar::render {
     [[nodiscard]] DecodeError decodeCells(std::span<const std::uint8_t> input, const Counts& counts, std::span<Cell> cells) noexcept;
     [[nodiscard]] DecodeError decodeRuns(std::span<const std::uint8_t> input, const Counts& counts, std::span<Run> runs) noexcept;
     [[nodiscard]] DecodeError checkBlocks(std::span<const std::uint8_t> input, const Counts& counts, std::span<const Block> blocks) noexcept;
-    [[nodiscard]] std::string_view text(std::span<const std::uint8_t> input, const Counts& counts) noexcept;
+    [[nodiscard]] tbc::view<std::string_view, tbc::lt::a> text(tbc::view<std::span<const std::uint8_t>, tbc::lt::a> input, const Counts& counts) noexcept;
   }
 
   // The encoded size, or nothing when the document exceeds max_document_bytes.

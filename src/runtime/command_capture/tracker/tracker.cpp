@@ -28,7 +28,7 @@ namespace telar::runtime {
     }
 
     // The value of `key` among `;`-separated options, or nothing.
-    std::string_view option(std::string_view options, std::string_view key) noexcept {
+    tbc::view<std::string_view, tbc::lt::a> option(tbc::view<std::string_view, tbc::lt::a> options, std::string_view key) noexcept {
       while (!options.empty()) {
         const auto end = options.find(';');
         const auto entry = options.substr(0, end);

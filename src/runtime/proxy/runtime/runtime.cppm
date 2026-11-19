@@ -3579,7 +3579,7 @@ export {
         return nullptr;
       }
 
-      inline static ds::String<ConcurrentMemory> directoryPath(ConcurrentMemory& memory, const ProxyOptions<ConcurrentMemory>& options) {
+      inline static tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> directoryPath(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<const ProxyOptions<ConcurrentMemory>&, tbc::lt::a> options) {
         if (!options.authority_directory.empty()) {
           return options.authority_directory.clone();
         }

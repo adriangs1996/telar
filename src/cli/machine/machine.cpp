@@ -1353,7 +1353,7 @@ fetch() {
     std::string_view instructions;
   };
 
-  ds::Option<LoginPlan> planFor(std::string_view agent, ds::Option<std::string_view> provider) {
+  tbc::view<ds::Option<LoginPlan>, tbc::lt::static_storage> planFor(std::string_view agent, ds::Option<std::string_view> provider) {
     static constexpr ds::Array<std::string_view, 2> auth_login{"auth", "login"};
     static constexpr ds::Array<std::string_view, 2> device_login{"login", "--device-auth"};
     static constexpr ds::Array<std::string_view, 1> login{"login"};

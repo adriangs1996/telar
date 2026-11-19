@@ -1,6 +1,7 @@
 export module telar.shell.syntax;
 
 import std;
+import telar.tbc;
 
 // Lexes and segments an interactive command line in one linear pass. Nothing
 // allocates: tokens, words and unquoted text land in caller buffers, and a full
@@ -148,6 +149,6 @@ export namespace telar::shell {
   // The words of the simple command at lexed.cursor. tokens must be the ones
   // lex() produced for line. words.size() >= line.size() and
   // text.size() >= 2 * line.size() guarantee no overflow.
-  [[nodiscard]] CommandAt commandAt(std::string_view line, Syntax syntax, std::span<const Token> tokens, const Lexed& lexed, std::span<Word> words, std::span<char> text) noexcept;
+  [[nodiscard]] tbc::view<CommandAt, tbc::lt::a> commandAt(tbc::view<std::string_view, tbc::lt::a> line, Syntax syntax, std::span<const Token> tokens, const Lexed& lexed, std::span<Word> words, tbc::view<std::span<char>, tbc::lt::a> text) noexcept;
 
 }

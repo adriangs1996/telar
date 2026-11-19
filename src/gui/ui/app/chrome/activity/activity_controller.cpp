@@ -81,7 +81,7 @@ namespace telar::gui::qt {
       return std::tie(left.source, left.pane->pane_id) < std::tie(right.source, right.pane->pane_id);
     }
 
-    std::string_view workspaceName(const GuiSession& session, const ListedPane& pane) {
+    tbc::view<std::string_view, tbc::lt::a> workspaceName(tbc::view<const GuiSession&, tbc::lt::a> session, const ListedPane& pane) {
       if (pane.location.workspace.kind != WorkspaceLocation::Kind::workspace) {
         return {};
       }

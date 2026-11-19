@@ -642,7 +642,7 @@ namespace telar::runtime::plugins {
     return path;
   }
 
-  ds::String<Memory> Paths::installationDirectory(ds::String<Memory> data, const Package& package) {
+  tbc::view<ds::String<Memory>, tbc::lt::a> Paths::installationDirectory(tbc::view<ds::String<Memory>, tbc::lt::a> data, const Package& package) {
     auto path = required(std::move(data));
 
     path.append("/telar/plugins/");

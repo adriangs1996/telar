@@ -7,6 +7,7 @@ include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/deps/ghostty.cmake")
 telar_add_library(telar-ghostty
   SOURCES wuffs/wuffs.cpp
   INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/include" "$<TARGET_PROPERTY:deps::ghostty_vt,INTERFACE_INCLUDE_DIRECTORIES>"
+  DEPS telar::tbc
   CHECKS lint blank_lines interface_bodies)
 
 if(BUILD_TESTING)

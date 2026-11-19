@@ -27,7 +27,7 @@ namespace telar::ghostty::wuffs {
     wuffs_base__pixel_config__set(config, format, subsampling, width, height);
   }
 
-  wuffs_base__status setPixelBuffer(wuffs_base__pixel_buffer* buffer, const wuffs_base__pixel_config* config, wuffs_base__slice_u8 memory) noexcept {
+  tbc::view<wuffs_base__status, tbc::lt::static_storage> setPixelBuffer(wuffs_base__pixel_buffer* buffer, const wuffs_base__pixel_config* config, wuffs_base__slice_u8 memory) noexcept {
     return wuffs_base__pixel_buffer__set_from_slice(buffer, config, memory);
   }
 

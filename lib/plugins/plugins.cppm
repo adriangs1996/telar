@@ -536,7 +536,7 @@ export {
       template <Allocator Memory>
       static ds::String<Memory> trustFile(ds::String<Memory> home);
 
-      static ds::String<Memory> installationDirectory(ds::String<Memory> data, const Package& package);
+      static tbc::view<ds::String<Memory>, tbc::lt::a> installationDirectory(tbc::view<ds::String<Memory>, tbc::lt::a> data, const Package& package);
     };
 
     extern template ds::String<Memory> Paths::trustFile<Memory>(ds::String<Memory> home);

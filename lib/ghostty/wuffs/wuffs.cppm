@@ -4,6 +4,7 @@ module;
 export module telar.ghostty.wuffs;
 
 import std;
+import telar.tbc;
 
 // The PNG codec of the pinned libghostty-vt archive. Its header stays in this global module
 // fragment only; importers decode through these declarations instead of including it.
@@ -30,7 +31,7 @@ export namespace telar::ghostty::wuffs {
   std::uint32_t pixelWidth(const wuffs_base__pixel_config* config) noexcept;
   std::uint32_t pixelHeight(const wuffs_base__pixel_config* config) noexcept;
   void setPixelConfig(wuffs_base__pixel_config* config, std::uint32_t format, std::uint32_t subsampling, std::uint32_t width, std::uint32_t height) noexcept;
-  wuffs_base__status setPixelBuffer(wuffs_base__pixel_buffer* buffer, const wuffs_base__pixel_config* config, wuffs_base__slice_u8 memory) noexcept;
+  tbc::view<wuffs_base__status, tbc::lt::static_storage> setPixelBuffer(wuffs_base__pixel_buffer* buffer, const wuffs_base__pixel_config* config, wuffs_base__slice_u8 memory) noexcept;
 }
 
 // Macros do not cross an import. Each constant the tree reads is captured while the header still

@@ -6,12 +6,16 @@
     ],
     "sys": [],
     "vocabulary": [],
-    "ghostty": [],
+    "ghostty": [
+      "tbc"
+    ],
     "native": [],
     "clipboard": [
       "sys"
     ],
-    "shell": [],
+    "shell": [
+      "tbc"
+    ],
     "ebnf": [
       "tbc"
     ],
@@ -32,7 +36,8 @@
       "tbc"
     ],
     "render": [
-      "base"
+      "base",
+      "tbc"
     ],
     "platform": [
       "base",

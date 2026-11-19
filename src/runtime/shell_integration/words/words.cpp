@@ -11,6 +11,7 @@ import telar.platform.fs;
 import telar.platform.primitives;
 import telar.ebnf.matcher;
 import telar.base.ds;
+import telar.tbc;
 
 namespace telar::runtime {
 
@@ -90,7 +91,7 @@ namespace telar::runtime {
     }
 
     // Reads a regular file of at most `limit` bytes; empty when it is missing or larger.
-    Text readSmall(ConcurrentMemory& memory, int directory, const char* name, std::size_t limit = WordReader::maximum_file) {
+    tbc::view<Text, tbc::lt::a> readSmall(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, int directory, const char* name, std::size_t limit = WordReader::maximum_file) {
       Text bytes{memory};
       FileDescriptor file{::openat(directory, name, O_RDONLY | O_CLOEXEC | O_NONBLOCK)};
       struct stat state{};
@@ -130,7 +131,7 @@ namespace telar::runtime {
 
     // The first of `names` that `directory` or one of its parents holds, read whole; as the
     // tools find their files. Empty when there is none.
-    Text nearest(ConcurrentMemory& memory, std::string_view directory, std::span<const std::string_view> names) {
+    tbc::view<Text, tbc::lt::a> nearest(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, std::string_view directory, std::span<const std::string_view> names) {
       Text current{memory, directory};
       Text file{memory};
 
@@ -160,7 +161,7 @@ namespace telar::runtime {
     // What the alias `name` stands for, as the shell reported it (name=words, %-encoded),
     // followed through aliases of aliases; empty when it is no alias of plain words. An alias
     // that starts with its own name (ls='ls -G') stands for that command.
-    Text expand(ConcurrentMemory& memory, std::string_view names, std::string_view name) {
+    tbc::view<Text, tbc::lt::a> expand(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, std::string_view names, std::string_view name) {
       Text words{memory, name};
       Text decoded{memory};
       bool expanded = false;

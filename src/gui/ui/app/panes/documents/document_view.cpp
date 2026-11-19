@@ -115,7 +115,7 @@ namespace telar::gui::qt {
     }
 
     // The document a view shows, whether it shows, and what changes when it does.
-    const Document* findDocument(const DocumentsController* controller, std::uint64_t pane_id, std::uint64_t document_id, bool& shown, std::uint64_t& version) {
+    tbc::view<const Document*, tbc::lt::a> findDocument(tbc::view<const DocumentsController*, tbc::lt::a> controller, std::uint64_t pane_id, std::uint64_t document_id, bool& shown, std::uint64_t& version) {
       const auto* pane = controller == nullptr ? nullptr : controller->pane(pane_id);
 
       shown = false;
