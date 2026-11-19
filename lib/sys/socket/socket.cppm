@@ -1,4 +1,5 @@
 module;
+#include "tbc/annotations.hpp"
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 #include <net/if.h>
@@ -239,8 +240,10 @@ export {
   // glibc's address classes call a static byte swap that an inline body would expose to importers,
   // so these are defined in socket.cpp, where the macros are.
   unsigned char* CMSG_DATA(cmsghdr* header) noexcept;
-  cmsghdr* CMSG_FIRSTHDR(msghdr* message) noexcept;
-  cmsghdr* CMSG_NXTHDR(msghdr* message, cmsghdr* header) noexcept;
+  // The control headers are handed out by address, as Rust's libc::CMSG_FIRSTHDR and CMSG_NXTHDR
+  // return raw pointers: the caller answers for the control buffer outliving the walk.
+  TBC_RAW cmsghdr* CMSG_FIRSTHDR(msghdr* message) noexcept;
+  TBC_RAW cmsghdr* CMSG_NXTHDR(msghdr* message, cmsghdr* header) noexcept;
 
   inline constexpr bool IN_MULTICAST(in_addr_t address) noexcept {
     return telar::sys::captured::IN_MULTICAST_(address);
