@@ -13,6 +13,7 @@ import telar.gui.foundation.core;
 import telar.gui.features.components;
 import telar.plugins;
 import telar.wire.vocabulary;
+import telar.wire.pane_io;
 import telar.base.memory.allocators;
 import telar.config.core;
 import telar.config.gui;
@@ -305,6 +306,14 @@ export namespace telar::gui::application::configuration {
   // The session shows `theme`, picked by the system's appearance, without reading the
   // configuration again.
   void setTheme(Session& session, const Theme& theme);
+
+  // `theme` as a pane's programs read it: the terminal's colors and the editor colors, every
+  // color the theme leaves to the terminal resolved against it.
+  [[nodiscard]] ConfigureTerminalColors terminalColors(const Theme& theme) noexcept;
+
+  // Gives the runtime the theme the session shows, for the programs in the panes of the
+  // workspaces whose geometry it owns. A runtime before schema cqp00005 cannot hear it.
+  void configureTerminal(Session& session);
 
   // Writes the section of the loaded configuration `query` names, the binding at its index or
   // the client's state in `context`, into the output, region `a`. `commands` holds the command

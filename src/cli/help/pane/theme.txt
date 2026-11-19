@@ -1,0 +1,20 @@
+telar pane theme: Print the theme of the window that owns this pane's workspace, as JSON
+
+Usage: telar pane theme --current [--json] [--socket PATH]
+
+For a program in this pane that paints with the window's colors, such as Neovim with
+telar's integration (`telar integration install neovim`). The window gives the runtime
+its theme when it connects and whenever the theme changes; programs see the terminal's
+part of it through OSC 4, 10, 11 and 12, and a change is announced to those that enabled
+DEC mode 2031.
+
+Results: one JSON object. `foreground`, `background` and `cursor` are "#rrggbb"; `ansi`
+holds the 16 ANSI colors in order; `syntax` maps each syntax role (plain, keyword,
+string, number, comment, constant, builtin_constant, builtin, func, type, parameter,
+property, namespace, operator, punctuation) to its `color`, `italic` and `bold`;
+`chrome` maps each palette role (accent, panel_bg, surface0, surface1, surface_dim,
+overlay0, overlay1, text, subtext0, mauve, green, yellow, red, blue, teal, peach) to
+its color. A value the window did not give is null.
+
+Needs a running runtime; never starts one. Exit 0; 1 when no window owns the pane's
+workspace (`NoTheme`) or TELAR_PANE_ID is missing; 2 when the pane is gone.

@@ -43,9 +43,12 @@ export namespace telar {
   using telar::PaneProgress;
   using telar::PaneResize;
   using telar::PaneShell;
+  using telar::PaneTheme;
   using telar::PaneTitle;
+  using telar::ReadPaneTheme;
   using telar::RequestSnapshot;
   using telar::SendPaneText;
   using telar::SetPaneViewport;
+  using telar::TerminalTheme;
   using telar::VerifyPaneDescent;
 }

@@ -15,7 +15,7 @@ EXTENSIONS = {'pi': '.pi/agent/extensions/telar.ts', 'opencode': 'config/opencod
 
 def environment(root):
     result = {k: v for k, v in os.environ.items()
-              if not k.startswith(('TELAR_', 'XDG_')) and k not in ('CODEX_HOME', 'CLAUDE_CONFIG_DIR', 'PI_CODING_AGENT_DIR')}
+              if not k.startswith(('TELAR_', 'XDG_')) and k not in ('CODEX_HOME', 'CLAUDE_CONFIG_DIR', 'PI_CODING_AGENT_DIR', 'NVIM_APPNAME')}
     for key, name in (('HOME', 'home'), ('XDG_CONFIG_HOME', 'home/config'), ('XDG_DATA_HOME', 'home/data'), ('XDG_STATE_HOME', 'home/state'), ('TMPDIR', 'tmp')):
         path = root / name
         path.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -125,6 +125,47 @@ def extensions(home):
         path.unlink()
 
 
+def neovim(home):
+    """The Neovim plugin goes under Neovim's site directory, every file marked as telar's: a
+    second install rewrites nothing, a file that is not telar's stops it, uninstall removes only
+    telar's files, NVIM_APPNAME picks another site and a file the plugin dropped goes on install."""
+    site = Path(home.env['XDG_DATA_HOME']) / 'nvim/site'
+    plugin = site / 'plugin/telar.lua'
+    files = (plugin, site / 'colors/telar.lua', site / 'lua/telar/init.lua', site / 'lua/telar/theme.lua', site / 'lua/telar/tint.lua')
+    assert b'absent' in home.run('integration', 'status', 'neovim').stdout
+    first = home.run('integration', 'install', 'neovim').stdout
+    assert b'already present' not in first and all(path.read_text().startswith('-- telar-integration: neovim\n') for path in files), first
+    before = identity(plugin)
+    second = home.run('integration', 'install', 'neovim').stdout
+    assert b'installed' not in second and b'updated' not in second and identity(plugin) == before, second
+    status = home.run('integration', 'status', 'neovim').stdout
+    assert b'foreign' not in status and b'absent' not in status, status
+    stale = site / 'lua/telar/old.lua'
+    stale.write_text('-- telar-integration: neovim\nreturn {}\n')
+    mine = site / 'lua/telar/mine.lua'
+    mine.write_text('return {}\n')
+    home.run('integration', 'install', 'neovim')
+    assert not stale.exists() and mine.exists()
+    home.run('integration', 'uninstall', 'neovim')
+    assert not any(path.exists() for path in files) and mine.exists()
+    plugin.write_text('-- my own plugin\n')
+    home.run('integration', 'install', 'neovim', status=1)
+    assert plugin.read_text() == '-- my own plugin\n' and not (site / 'lua/telar/theme.lua').exists()
+    home.run('integration', 'uninstall', 'neovim', status=1)
+    assert plugin.read_text() == '-- my own plugin\n'
+    plugin.unlink()
+    home.env['NVIM_APPNAME'] = 'nvim-work'
+    home.run('integration', 'install', 'neovim')
+    assert (Path(home.env['XDG_DATA_HOME']) / 'nvim-work/site/plugin/telar.lua').exists()
+    home.env['NVIM_APPNAME'] = '../escape'
+    home.run('integration', 'install', 'neovim', status=1)
+    del home.env['NVIM_APPNAME']
+    home.run('integration', 'uninstall', 'neovim', '--legacy', status=1)
+    elsewhere = home.root / 'site'
+    home.run('integration', 'install', 'neovim', '--settings', elsewhere)
+    assert (elsewhere / 'plugin/telar.lua').exists()
+
+
 def linked_settings(home):
     """Settings kept as a link into a dotfiles checkout stay a link, and the file it names
     gets the hooks with its own permissions; settings under missing directories get them."""
@@ -207,7 +248,7 @@ def main():
     parser.add_argument('--scratch', type=Path)
     args = parser.parse_args()
     count = 0
-    for check in (install_output, unparseable_settings, skills, extensions, plugin_trust, linked_settings, legacy_settings, proxy_trust_status):
+    for check in (install_output, unparseable_settings, skills, extensions, neovim, plugin_trust, linked_settings, legacy_settings, proxy_trust_status):
         with tempfile.TemporaryDirectory(prefix='integration-', dir=args.scratch) as directory:
             home = Home(args.telar.resolve(), Path(directory).resolve())
             check(home)

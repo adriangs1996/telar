@@ -1,9 +1,10 @@
-telar integration status: Report which hooks, files and skills are installed for an agent
+telar integration status: Report which hooks, files and skills are installed for an agent, or for Neovim
 
-Usage: telar integration status claude|codex|pi|cursor|opencode [--settings PATH]
+Usage: telar integration status claude|codex|pi|cursor|opencode|neovim [--settings PATH]
 
 Effects: reads the files; changes nothing.
 
 Results: for hook agents one `EVENT: installed|absent` line per event, then one per
 skill; for pi and opencode `telar extension|plugin: absent|installed|foreign at
-PATH` and the skills. A note names hooks left in a legacy file. Exit 0.
+PATH` and the skills; for neovim `neovim FILE: absent|installed|foreign at PATH` per
+file of the plugin. A note names hooks left in a legacy file. Exit 0.

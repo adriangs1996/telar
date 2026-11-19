@@ -136,8 +136,9 @@ namespace telar::gui::application {
     restore_layout_ = enabled;
   }
 
-  void Session::connected(std::uint64_t identity, bool reads_rows) {
+  void Session::connected(std::uint64_t identity, bool reads_rows, bool reads_theme) {
     reads_rows_ = reads_rows;
+    reads_theme_ = reads_theme;
     panes.clear();
     tabs.clear();
     active_tab.reset();
@@ -157,6 +158,7 @@ namespace telar::gui::application {
     link.send(ConfigureGraphics{supportsSharedGraphics()});
     window::pace(*this);
     prompt::configureShell(*this);
+    configuration::configureTerminal(*this);
   }
 
   bool Session::requestsPending() const noexcept {
@@ -706,6 +708,7 @@ namespace telar::gui::application {
   template void Session::Link::send<CompleteWords>(const CompleteWords& message);
   template void Session::Link::send<ConfigureFrameInterval>(const ConfigureFrameInterval& message);
   template void Session::Link::send<ConfigureShellPrompt>(const ConfigureShellPrompt& message);
+  template void Session::Link::send<ConfigureTerminalColors>(const ConfigureTerminalColors& message);
   template void Session::Link::send<CopySelection>(const CopySelection& message);
   template void Session::Link::send<CreatePane>(const CreatePane& message);
   template void Session::Link::send<CreateTab>(const CreateTab& message);

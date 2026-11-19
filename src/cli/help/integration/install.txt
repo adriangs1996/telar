@@ -1,15 +1,25 @@
-telar integration install: Add telar's hooks (or extension/plugin) and skills for an agent
+telar integration install: Add telar's hooks (or extension/plugin) and skills for an agent, or its Neovim plugin
 
-Usage: telar integration install claude|codex|pi|cursor|opencode [--settings PATH]
+Usage: telar integration install claude|codex|pi|cursor|opencode|neovim [--settings PATH]
 
 Arguments:
-  --settings PATH  An absolute path to write instead of the agent's default file.
+  --settings PATH  An absolute path to write instead of the agent's default file; for
+                   neovim, the site directory to write the plugin under.
 
 Effects: for claude, codex and cursor, adds telar's command hook to each event that
 lacks it and rewrites a stale one (another path, an older guard), keeping every
 other hook; writes the JSON atomically through symlinks with the file's mode. For
 pi and opencode, writes the TypeScript file, replacing only telar's own. Then
 writes both skills beside them, so a newer telar refreshes them on install.
+
+For neovim, writes the plugin's Lua files under Neovim's site directory,
+$XDG_DATA_HOME/$NVIM_APPNAME/site (~/.local/share/nvim/site by default), which Neovim
+and lazy.nvim load without any configuration, and removes telar's files a newer
+plugin no longer has. Inside a telar pane the plugin paints the window's theme
+(`telar pane theme`) and maps ctrl+h/j/k/l to move across Neovim's windows and
+telar's panes; elsewhere it does nothing. Each file starts with
+`-- telar-integration: neovim`, and a file without that line stops the install
+before anything is written.
 
 Results: one line per thing installed, already present or updated. Exit 0; 1 when
 the settings are not a JSON object or a file at the path is not telar's.

@@ -157,7 +157,8 @@ export {
       void setRestoreLayout(bool enabled) noexcept;
 
       // `reads_rows`: the runtime reads its scrollback's rows by stable number (schema cqp00003).
-      void connected(std::uint64_t identity, bool reads_rows = true);
+      // `reads_theme`: it keeps the client's whole theme for its panes' programs (schema cqp00005).
+      void connected(std::uint64_t identity, bool reads_rows = true, bool reads_theme = true);
 
       [[nodiscard]] bool requestsPending() const noexcept;
 
@@ -190,6 +191,9 @@ export {
       // Whether the runtime sends rows of a scrollback apart from its screen, for a view that
       // scrolls by pixels or folds commands. Without them the view moves by whole rows.
       [[nodiscard]] bool readsRows() const noexcept;
+
+      // Whether the runtime hears the client's theme, editor colors included.
+      [[nodiscard]] bool readsTheme() const noexcept;
 
       // Asks for the rows from stable row `first` to `last` the pane holds neither on its screen
       // nor in its cache, a request at a time while requests are free.
@@ -264,10 +268,7 @@ export {
 
       [[nodiscard]] Pane<Memory>* focusedPaneMut() noexcept;
 
-
-
       [[nodiscard]] const ds::Vec<Workspace<Memory>, Memory>& workspaces() const noexcept;
-
 
       [[nodiscard]] const ds::Vec<Agent<Memory>, Memory>& agents() const noexcept;
 
@@ -295,7 +296,6 @@ export {
 
       [[nodiscard]] std::uint64_t changedPane() const noexcept;
 
-
       [[nodiscard]] ClientViewState clientViewState() const noexcept;
 
       [[nodiscard]] ViewVersion viewVersion() const noexcept;
@@ -315,7 +315,6 @@ export {
       [[nodiscard]] const ProxyStatus& proxyStatus() const noexcept;
 
     private:
-
       enum class RequestKind : std::uint8_t {
         open_default,
         attach,
@@ -421,7 +420,6 @@ export {
       };
 
     private:
-
       Pane<Memory>& allocateSplitPane(const Pending& request, const PaneOpened& message);
 
       Change adoptSplit(const Pending& request, const PaneOpened& message);
@@ -455,7 +453,6 @@ export {
 
       void confirmAttachment(Pane<Memory>& pane);
 
-
       void synchronizeAttachments();
 
       // Detaches pane `pane_id` from the runtime, closing copy mode when it reads that pane. Static,
@@ -468,7 +465,6 @@ export {
       static void resizePane(Panes& panes, Link& link, ViewVersion& view_version, std::uint64_t pane_id, TerminalSize size);
 
     private:
-
       Change apply(const PaneMatches& message);
 
       Change apply(const PaneFrame& message);
@@ -618,19 +614,16 @@ export {
 
       Change apply(const PaneFocusCommand& message);
 
-
     public:
       // The configuration the session runs with, a field the use cases read beside a feature's state.
       Configuration configuration;
 
     private:
-
     public:
       // What a view of the session has to redraw: a use case that moves a pane's view bumps it.
       ViewVersion view_version;
 
     private:
-
       // The keys of the command blocks, ahead of the editor. From the normal mode: Ctrl-U and
       // Ctrl-D, or [[ and ]], step through the blocks, [f and ]f through the failed ones, Ctrl-O and
       // Ctrl-I back and forth through the jumps. On a selected block: j and k move the view a row,
@@ -695,7 +688,6 @@ export {
       tbc::view<Memory&, tbc::lt::a> memory;
 
     private:
-
     public:
       tbc::view<Link, tbc::lt::a> link;
 
@@ -714,22 +706,18 @@ export {
       features::terminal::graphics::GraphicsBudget graphics_budget_;
 
     public:
-
     private:
-
     public:
       // The panes and tabs the runtime reported, which the use cases search as fields of their own.
       tbc::view<Panes, tbc::lt::a> panes;
       tbc::view<Tabs, tbc::lt::a> tabs;
 
     private:
-
     public:
       // The workspaces and worktrees the runtime lists, a field the use cases walk while they send.
       tbc::view<WorkspaceReplica<Memory>, tbc::lt::a> workspace_list;
 
     private:
-
     public:
       // The agents the runtime reports, a field the use cases read while they send.
       tbc::view<AgentReplica<Memory>, tbc::lt::a> agent_list;
@@ -762,13 +750,11 @@ export {
       tbc::view<LaunchDefaults, tbc::lt::a> launch_defaults;
 
     private:
-
     public:
       // The tab the session shows, by location, whether or not its record arrived.
       ds::Option<TabLocation> active_tab;
 
     private:
-
     public:
       features::workbench::State workbench;
 
@@ -779,6 +765,7 @@ export {
       std::uint64_t changed_pane_ = 0;
       bool ready_ = false;
       bool reads_rows_ = false;
+      bool reads_theme_ = false;
       bool presented_ = true;
       bool leave_pending_ = false;
       bool initial_open_pending_ = false;

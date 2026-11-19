@@ -1,11 +1,11 @@
-telar integration: Register telar's lifecycle hooks and skills with an agent CLI, or remove and inspect them
+telar integration: Register telar's lifecycle hooks and skills with an agent CLI, or its plugin with Neovim; remove and inspect them
 
-Usage: telar integration install|uninstall|status claude|codex|pi|cursor|opencode [--settings PATH] [--legacy]
+Usage: telar integration install|uninstall|status claude|codex|pi|cursor|opencode|neovim [--settings PATH] [--legacy]
 
 Commands:
-  install         Add telar's hooks (or extension/plugin) and skills for an agent
-  uninstall       Remove telar's hooks (or extension/plugin) and skills for an agent
-  status          Report which hooks, files and skills are installed for an agent
+  install         Add telar's hooks (or extension/plugin) and skills for an agent, or its Neovim plugin
+  uninstall       Remove telar's hooks (or extension/plugin) and skills for an agent, or its Neovim plugin
+  status          Report which hooks, files and skills are installed for an agent, or for Neovim
 
 Files per agent, under the agent's own directory ($CLAUDE_CONFIG_DIR, $CODEX_HOME,
 $PI_CODING_AGENT_DIR, $XDG_CONFIG_HOME/opencode; Cursor always under ~):
@@ -19,6 +19,10 @@ $PI_CODING_AGENT_DIR, $XDG_CONFIG_HOME/opencode; Cursor always under ~):
 and beside them `skills/telar/SKILL.md` (how to discover and drive telar) and
 `skills/telar-coordinator/SKILL.md` (delegating tasks to worktree agents), each
 marked as telar's so only telar's copies are ever replaced or removed.
+
+neovim writes its plugin under $XDG_DATA_HOME/$NVIM_APPNAME/site (by default
+~/.local/share/nvim/site): in a telar pane it paints the window's theme and moves
+across Neovim's windows and telar's panes with ctrl+h/j/k/l.
 
 The hooks run `telar hook AGENT` with the pane's TELAR_BIN_PATH, falling back to
 the executable that installed them, and run only inside a pane. The runtime learns an agent's

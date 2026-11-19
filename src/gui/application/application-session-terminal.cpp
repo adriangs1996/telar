@@ -88,6 +88,10 @@ namespace telar::gui::application {
     return reads_rows_ && ready_;
   }
 
+  bool Session::readsTheme() const noexcept {
+    return reads_theme_ && ready_;
+  }
+
   void Session::requestRows(std::uint64_t pane_id, std::uint64_t first, std::uint64_t last) {
     auto* pane = findPaneMut(pane_id);
     if (pane == nullptr || !pane->attached || !readsRows() || pane->scrollback_generation == 0 || last < first) {

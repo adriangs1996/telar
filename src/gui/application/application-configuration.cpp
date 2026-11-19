@@ -10,6 +10,7 @@ import telar.gui.foundation.core;
 import telar.gui.features.components;
 import telar.plugins;
 import telar.wire.vocabulary;
+import telar.wire.pane_io;
 import telar.base.memory.allocators;
 import telar.config.core;
 import telar.config.gui;
@@ -1085,12 +1086,17 @@ namespace telar::gui::application::configuration {
   void configure(Session& session, const Configuration& configuration) {
     auto& shown = session.configuration;
     const bool prompt_changed = shown.prompt.mode != configuration.prompt.mode;
+    const bool theme_changed = shown.theme != configuration.theme;
 
     shown = configuration;
     features::notifications::configure(session.notifications, configuration.sound);
     ++session.view_version.configuration;
     if (prompt_changed) {
       prompt::configureShell(session);
+    }
+
+    if (theme_changed) {
+      configureTerminal(session);
     }
   }
 
@@ -1102,6 +1108,68 @@ namespace telar::gui::application::configuration {
 
     shown.theme = theme;
     ++session.view_version.configuration;
+    configureTerminal(session);
+  }
+
+  ConfigureTerminalColors terminalColors(const Theme& theme) noexcept {
+    constexpr auto same = [](const auto& names, const auto& wire) {
+      return names.size() == wire.size() && std::ranges::equal(names, wire, [](std::string_view name, std::string_view wire_name) {
+        return name == wire_name;
+      });
+    };
+
+    static_assert(same(syntax_names, TerminalTheme::syntax_names) && same(palette_names, TerminalTheme::chrome_names), "the theme's roles travel in the wire's order");
+    constexpr float channel_max = 255;
+    const auto bytes = [](Color color) {
+      const auto channel = [](float value) {
+        return static_cast<Byte>(std::lround(std::clamp(value, 0.0F, 1.0F) * channel_max));
+      };
+
+      return ds::Array<Byte, 3>{channel(color.r), channel(color.g), channel(color.b)};
+    };
+
+    const auto write = [&](auto& target, std::size_t index, Color color) {
+      const auto rgb = bytes(color);
+
+      std::ranges::copy(rgb, target.viewMut().begin() + static_cast<std::ptrdiff_t>(index * 3));
+    };
+
+    ConfigureTerminalColors colors;
+    ds::Array<Byte, 48> palette{};
+    ds::Array<Byte, TerminalTheme::syntax_roles * 3> syntax{};
+    ds::Array<Byte, TerminalTheme::chrome_roles * 3> chrome{};
+
+    for (std::size_t index = 0; index < theme.palette.size(); ++index) {
+      write(palette, index, theme.palette[index]);
+    }
+
+    for (std::size_t index = 0; index < theme.syntax.size(); ++index) {
+      write(syntax, index, theme.resolve(theme.syntax[index], theme.foreground));
+    }
+
+    // A surface the theme leaves unset is the terminal's background; any other color its text.
+    for (std::size_t index = 0; index < theme.chrome.size(); ++index) {
+      const auto role = static_cast<PaletteRole>(index);
+      const bool surface = role == PaletteRole::panel_bg || role == PaletteRole::surface0 || role == PaletteRole::surface1 || role == PaletteRole::surface_dim;
+
+      write(chrome, index, theme.resolve(theme.chrome[index], surface ? theme.background : theme.foreground));
+    }
+
+    colors.foreground = bytes(theme.foreground);
+    colors.background = bytes(theme.background);
+    colors.palette = palette;
+    colors.cursor = bytes(theme.cursor);
+    colors.syntax = syntax;
+    colors.syntax_italic = theme.syntax_italic;
+    colors.syntax_bold = theme.syntax_bold;
+    colors.chrome = chrome;
+    return colors;
+  }
+
+  void configureTerminal(Session& session) {
+    if (session.readsTheme()) {
+      session.link.send(terminalColors(session.configuration.theme));
+    }
   }
 
   template <Allocator Memory>

@@ -265,12 +265,28 @@ namespace {
       panes.resize(model, reconnected.session(), PaneResize{.pane_id = pane.id, .size = {120, 60, 8, 16}});
       ptyReports(pane, panes, "");
       check(query(pane.terminal, "\x1b[?2031h", *pane.media).empty());
-      ConfigureTerminalColors colors{.foreground = ds::Array<Byte, 3>{22, 33, 44}};
+      ConfigureTerminalColors colors{{.foreground = ds::Array<Byte, 3>{22, 33, 44}}};
 
       panes.configureColors(model, reconnected.session(), colors);
       ptyReports(pane, panes, "\x1b[?997;1n");
       panes.configureColors(model, reconnected.session(), colors);
       ptyReports(pane, panes, "");
+
+      // Only the editor colors changed: the pane's programs see no new colors, and the theme they
+      // read through `telar pane theme` has them.
+      colors.syntax = ds::Array<Byte, TerminalTheme::syntax_roles * 3>{};
+      colors.syntax.getMut().atMut(0) = 7;
+      colors.syntax_italic = 0b10;
+      panes.configureColors(model, reconnected.session(), colors);
+      ptyReports(pane, panes, "");
+      panes.readTheme(model.panes, reconnected.session(), &reconnected.session().colors, ReadPaneTheme{.request_id = 9, .pane_id = pane.id, .pane_generation = pane.generation});
+
+      const auto theme = reconnected.receive<PaneTheme>();
+
+      check(theme.request_id == 9 && theme.pane_id == pane.id);
+      check(theme.theme.hasValue() && *theme.theme == static_cast<const TerminalTheme&>(colors));
+      panes.readTheme(model.panes, reconnected.session(), nullptr, ReadPaneTheme{.request_id = 10, .pane_id = pane.id, .pane_generation = pane.generation});
+      check(!reconnected.receive<PaneTheme>().theme.hasValue());
       panes.remove(model, clients, pane.id);
     }
 

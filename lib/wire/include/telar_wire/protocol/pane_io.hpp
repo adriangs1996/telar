@@ -128,20 +128,74 @@ namespace telar {
   struct MessageSchema<SendPaneText>
       : Schema<Direction::client, ClientTag::send_pane_text, Field<&SendPaneText::request_id, NonzeroU64, "request_id">, Field<&SendPaneText::pane_id, NonzeroU64, "pane_id">, Field<&SendPaneText::pane_generation, u64, "pane_generation">, Field<&SendPaneText::mode, EnumByte<PaneTextMode, 2>, "mode">, Field<&SendPaneText::text, Text32<65536>, "text">, Field<&SendPaneText::sender, OptionalValue<NonzeroU64>, "sender">> {};
 
-  struct ConfigureTerminalColors {
+  // A client's theme as RGB triples. Programs in a pane read the terminal's part (foreground,
+  // background, cursor and the 16 ANSI colors) through OSC 4, 10, 11 and 12; `telar pane theme`
+  // also gives them the editor colors a telar theme adds. `syntax` holds one color per telar
+  // syntax role and `chrome` one per palette role, in the order the GUI's theme declares them;
+  // bit N of `syntax_italic` and `syntax_bold` styles syntax role N.
+  struct TerminalTheme {
+    static constexpr std::size_t syntax_roles = 15;
+    static constexpr std::size_t chrome_roles = 16;
+    static constexpr std::uint16_t syntax_mask = (1u << syntax_roles) - 1;
+    static constexpr ds::Array<std::string_view, syntax_roles> syntax_names{"plain", "keyword", "string", "number", "comment", "constant", "builtin_constant", "builtin", "func", "type", "parameter", "property", "namespace", "operator", "punctuation"};
+    static constexpr ds::Array<std::string_view, chrome_roles> chrome_names{"accent", "panel_bg", "surface0", "surface1", "surface_dim", "overlay0", "overlay1", "text", "subtext0", "mauve", "green", "yellow", "red", "blue", "teal", "peach"};
+
     ds::Option<ds::Array<Byte, 3>> foreground{};
     ds::Option<ds::Array<Byte, 3>> background{};
     ds::Option<ds::Array<Byte, 48>> palette{};
+    ds::Option<ds::Array<Byte, 3>> cursor{};
+    ds::Option<ds::Array<Byte, syntax_roles * 3>> syntax{};
+    std::uint16_t syntax_italic{};
+    std::uint16_t syntax_bold{};
+    ds::Option<ds::Array<Byte, chrome_roles * 3>> chrome{};
+
+    bool operator==(const TerminalTheme&) const = default;
+
+    // Whether a pane's terminal shows `other` as it shows this: the editor colors stay out of it.
+    [[nodiscard]] bool sameTerminalColors(const TerminalTheme& other) const noexcept {
+      return foreground == other.foreground && background == other.background && palette == other.palette && cursor == other.cursor;
+    }
   };
 
   template <>
-  struct MessageSchema<ConfigureTerminalColors>
-      : Schema<
-            Direction::client,
-            ClientTag::configure_terminal_colors,
-            Field<&ConfigureTerminalColors::foreground, OptionalValue<FixedBytes<3>>, "foreground">,
-            Field<&ConfigureTerminalColors::background, OptionalValue<FixedBytes<3>>, "background">,
-            Field<&ConfigureTerminalColors::palette, OptionalValue<FixedBytes<48>>, "palette">> {};
+  struct BodySchema<TerminalTheme>
+      : Serializer<
+            Field<&TerminalTheme::foreground, OptionalValue<FixedBytes<3>>, "foreground">,
+            Field<&TerminalTheme::background, OptionalValue<FixedBytes<3>>, "background">,
+            Field<&TerminalTheme::palette, OptionalValue<FixedBytes<48>>, "palette">,
+            Field<&TerminalTheme::cursor, OptionalValue<FixedBytes<3>>, "cursor">,
+            Field<&TerminalTheme::syntax, OptionalValue<FixedBytes<TerminalTheme::syntax_roles * 3>>, "syntax">,
+            Field<&TerminalTheme::syntax_italic, BoundedInteger<u16, 0, TerminalTheme::syntax_mask>, "syntax_italic">,
+            Field<&TerminalTheme::syntax_bold, BoundedInteger<u16, 0, TerminalTheme::syntax_mask>, "syntax_bold">,
+            Field<&TerminalTheme::chrome, OptionalValue<FixedBytes<TerminalTheme::chrome_roles * 3>>, "chrome">> {};
+
+  // The theme of the client that sends it, for the panes of the workspaces whose geometry it owns.
+  struct ConfigureTerminalColors : TerminalTheme {};
+
+  template <>
+  struct MessageSchema<ConfigureTerminalColors> : MessageLayout<Direction::client, ClientTag::configure_terminal_colors, BodySchema<TerminalTheme>> {};
+
+  // Asks for the theme of the client that owns a pane's workspace. Answered by `PaneTheme`.
+  struct ReadPaneTheme {
+    std::uint64_t request_id{};
+    std::uint64_t pane_id{};
+    std::uint64_t pane_generation{};
+  };
+
+  template <>
+  struct MessageSchema<ReadPaneTheme>
+      : Schema<Direction::client, ClientTag::read_pane_theme, Field<&ReadPaneTheme::request_id, NonzeroU64, "request_id">, Field<&ReadPaneTheme::pane_id, NonzeroU64, "pane_id">, Field<&ReadPaneTheme::pane_generation, u64, "pane_generation">> {};
+
+  // No theme when no client owns the pane's workspace.
+  struct PaneTheme {
+    std::uint64_t request_id{};
+    std::uint64_t pane_id{};
+    ds::Option<TerminalTheme> theme{};
+  };
+
+  template <>
+  struct MessageSchema<PaneTheme>
+      : Schema<Direction::server, ServerTag::pane_theme, Field<&PaneTheme::request_id, NonzeroU64, "request_id">, Field<&PaneTheme::pane_id, NonzeroU64, "pane_id">, Field<&PaneTheme::theme, OptionalValue<ValueCodec<TerminalTheme>>, "theme">> {};
 
   struct ConfigurePaneDesktop {
     std::uint64_t pane_id{};

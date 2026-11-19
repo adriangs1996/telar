@@ -607,6 +607,58 @@ namespace {
     check(refused<OpenEditor>(patched(editor, text("/editor-sentinel"), text("xeditor-sentinel"))));
   }
 
+  // A client's theme reaches the runtime and comes back to a pane's program whole: every color,
+  // and the style bits of each syntax role, with a theme absent when no client owns the pane.
+  void testTerminalThemeRoundTrips() {
+    TerminalTheme theme{
+        .foreground = ds::Array<Byte, 3>{0xdc, 0xdc, 0xcc},
+        .background = ds::Array<Byte, 3>{0x2b, 0x2b, 0x2b},
+        .palette = ds::Array<Byte, 48>{},
+        .cursor = ds::Array<Byte, 3>{0xff, 0xff, 0xef},
+        .syntax = ds::Array<Byte, TerminalTheme::syntax_roles * 3>{},
+        .syntax_italic = 0b100,
+        .syntax_bold = TerminalTheme::syntax_mask,
+        .chrome = ds::Array<Byte, TerminalTheme::chrome_roles * 3>{},
+    };
+
+    theme.syntax.getMut().atMut(9) = 0xbf;
+    theme.chrome.getMut().atMut(47) = 0xdf;
+
+    Storage storage{1024};
+    ConfigureTerminalColors configure;
+
+    static_cast<TerminalTheme&>(configure) = theme;
+    check(decodes<ConfigureTerminalColors>(encoded(configure), storage, [&](const ConfigureTerminalColors& decoded) {
+      check(static_cast<const TerminalTheme&>(decoded) == theme);
+    }));
+
+    check(decodes<PaneTheme>(encoded(PaneTheme{.request_id = 1, .pane_id = 2, .theme = theme}), storage, [&](const PaneTheme& decoded) {
+      check(decoded.theme.hasValue() && *decoded.theme == theme);
+    }));
+
+    check(decodes<PaneTheme>(encoded(PaneTheme{.request_id = 1, .pane_id = 2}), storage, [](const PaneTheme& decoded) {
+      check(!decoded.theme.hasValue());
+    }));
+
+    // A style bit past the last syntax role names no role, sent or received.
+    ConfigureTerminalColors stray;
+
+    stray.syntax_italic = TerminalTheme::syntax_mask + 1;
+    check(encodeRefused(stray));
+    stray.syntax_italic = 0x1234;
+
+    const auto valid = encoded(stray);
+    Bytes marked(u16::width);
+    Bytes beyond(u16::width);
+    std::span<Byte> marked_output{marked};
+    std::span<Byte> beyond_output{beyond};
+
+    u16::encode(0x1234, marked_output);
+    u16::encode(TerminalTheme::syntax_mask + 1, beyond_output);
+    check(!refused<ConfigureTerminalColors>(valid));
+    check(refused<ConfigureTerminalColors>(patched(valid, marked, beyond)));
+  }
+
 #ifdef TELAR_DEBUG
   // The debug printer names each field and shows its value, escaping text, with its scratch text in
   // the allocator it is given and none of it left behind.
@@ -647,5 +699,6 @@ namespace {
   const telar::testing::Case case_launch_nul{"wire.launch_text_rejects_embedded_nul", testLaunchTextRejectsEmbeddedNul};
   const telar::testing::Case case_oversized_encode{"wire.oversized_encode_is_refused", testOversizedEncodeIsRefused};
   const telar::testing::Case case_message_invariants{"wire.decode_enforces_message_invariants", testDecodeEnforcesMessageInvariants};
+  const telar::testing::Case case_terminal_theme{"wire.terminal_theme_round_trips", testTerminalThemeRoundTrips};
 
 }

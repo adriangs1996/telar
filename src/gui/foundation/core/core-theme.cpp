@@ -186,7 +186,12 @@ namespace telar::gui::inline foundation::inline core {
     result.cursor_text = values.terminal.cursor_text_color ? ds::Option{themeRgb(*values.terminal.cursor_text_color)} : ds::none;
     result.chrome = values.palette;
     for (std::size_t index = 0; index < result.syntax.size(); ++index) {
-      result.syntax.atMut(index) = values.syntaxStyle(static_cast<SyntaxRole>(index)).color;
+      const auto style = values.syntaxStyle(static_cast<SyntaxRole>(index));
+      const auto bit = static_cast<std::uint16_t>(1u << index);
+
+      result.syntax.atMut(index) = style.color;
+      result.syntax_italic |= style.italic ? bit : 0;
+      result.syntax_bold |= style.bold ? bit : 0;
     }
 
     result.surface = result.resolve(values.color(PaletteRole::surface0), result.background);

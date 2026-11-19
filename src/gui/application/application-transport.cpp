@@ -80,17 +80,22 @@ namespace telar::gui::application {
   template class FrameStream<telar::ConcurrentMemory>;
 
   bool RuntimeProtocol::supports(const SchemaId& schema) noexcept {
-    return schema == handshake::schema_id || schema == cqp00003 || schema == cqp00002 || schema == schema87;
+    return schema == handshake::schema_id || schema == cqp00004 || schema == cqp00003 || schema == cqp00002 || schema == schema87;
   }
 
   bool RuntimeProtocol::supports(const SchemaId& schema, ClientTag tag) noexcept {
-    const bool current = tag == ClientTag::read_pane_rows || tag == ClientTag::search_pane_rows || tag == ClientTag::pane_command || tag == ClientTag::configure_shell_prompt;
+    const bool rows = tag == ClientTag::read_pane_rows || tag == ClientTag::search_pane_rows || tag == ClientTag::pane_command || tag == ClientTag::configure_shell_prompt;
+    const bool theme = tag == ClientTag::configure_terminal_colors || tag == ClientTag::read_pane_theme;
 
-    return supports(schema) && (schema != schema87 || tag != ClientTag::hold_tab) && (!current || readsRows(schema));
+    return supports(schema) && (schema != schema87 || tag != ClientTag::hold_tab) && (!rows || readsRows(schema)) && (!theme || readsTheme(schema));
   }
 
   bool RuntimeProtocol::readsRows(const SchemaId& schema) noexcept {
-    return schema == handshake::schema_id || schema == cqp00003;
+    return schema == handshake::schema_id || schema == cqp00004 || schema == cqp00003;
+  }
+
+  bool RuntimeProtocol::readsTheme(const SchemaId& schema) noexcept {
+    return schema == handshake::schema_id;
   }
 
   ds::Option<SchemaId> RuntimeProtocol::retry(std::span<const Byte> payload, const SchemaId& requested) {

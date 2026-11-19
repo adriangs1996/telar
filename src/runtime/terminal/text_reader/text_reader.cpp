@@ -729,12 +729,14 @@ namespace telar::runtime {
     return size_ == size;
   }
 
-  void Terminal::configureColors(const ConfigureTerminalColors& colors) {
+  void Terminal::configureColors(const TerminalTheme& colors) {
     const auto foreground = colors.foreground ? GhosttyColorRgb{(*colors.foreground)[0], (*colors.foreground)[1], (*colors.foreground)[2]} : GhosttyColorRgb{255, 255, 255};
     const auto background = colors.background ? GhosttyColorRgb{(*colors.background)[0], (*colors.background)[1], (*colors.background)[2]} : GhosttyColorRgb{};
+    const auto cursor = colors.cursor ? GhosttyColorRgb{(*colors.cursor)[0], (*colors.cursor)[1], (*colors.cursor)[2]} : GhosttyColorRgb{};
 
     checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_COLOR_FOREGROUND, &foreground));
     checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_COLOR_BACKGROUND, &background));
+    checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_COLOR_CURSOR, colors.cursor ? &cursor : nullptr));
     auto palette = default_palette_;
 
     if (colors.palette) {
@@ -747,14 +749,6 @@ namespace telar::runtime {
     control_.externalColorsChanged();
     dirty_ = true;
     force_ = true;
-  }
-
-  void Terminal::configureCursorColor(ds::Option<ds::Array<Byte, 3>> color) {
-    const GhosttyColorRgb rgb = color ? GhosttyColorRgb{(*color)[0], (*color)[1], (*color)[2]} : GhosttyColorRgb{};
-
-    checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_COLOR_CURSOR, color ? &rgb : nullptr));
-    control_.externalColorsChanged();
-    dirty_ = true;
   }
 
   bool Terminal::mode(GhosttyMode mode) const {

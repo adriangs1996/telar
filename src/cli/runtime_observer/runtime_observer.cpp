@@ -124,6 +124,7 @@ namespace telar::runtime::cli::api {
       NamedValue{.name = "report_agent_command", .value = static_cast<std::uint64_t>(ClientTag::report_agent_command)},
       NamedValue{.name = "report_agent_title", .value = static_cast<std::uint64_t>(ClientTag::report_agent_title)},
       NamedValue{.name = "configure_terminal_colors", .value = static_cast<std::uint64_t>(ClientTag::configure_terminal_colors)},
+      NamedValue{.name = "read_pane_theme", .value = static_cast<std::uint64_t>(ClientTag::read_pane_theme)},
       NamedValue{.name = "query_clients", .value = static_cast<std::uint64_t>(ClientTag::query_clients)},
       NamedValue{.name = "detach_client", .value = static_cast<std::uint64_t>(ClientTag::detach_client)},
       NamedValue{.name = "request_client_command", .value = static_cast<std::uint64_t>(ClientTag::request_client_command)},
@@ -218,6 +219,7 @@ namespace telar::runtime::cli::api {
       NamedValue{.name = "pane_rows", .value = static_cast<std::uint64_t>(ServerTag::pane_rows)},
       NamedValue{.name = "pane_scrollback", .value = static_cast<std::uint64_t>(ServerTag::pane_scrollback)},
       NamedValue{.name = "pane_document", .value = static_cast<std::uint64_t>(ServerTag::pane_document)},
+      NamedValue{.name = "pane_theme", .value = static_cast<std::uint64_t>(ServerTag::pane_theme)},
   };
 
   constexpr ds::Array agent_statuses{

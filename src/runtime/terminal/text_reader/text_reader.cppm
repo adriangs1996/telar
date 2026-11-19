@@ -375,9 +375,8 @@ export {
 
       bool hasSize(TerminalSize size) const noexcept;
 
-      void configureColors(const ConfigureTerminalColors& colors);
-
-      void configureCursorColor(ds::Option<ds::Array<Byte, 3>> color);
+      // The colors its programs read and its client draws by default; the editor colors stay out.
+      void configureColors(const TerminalTheme& colors);
 
       bool mode(GhosttyMode mode) const;
 

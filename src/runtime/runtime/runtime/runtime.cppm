@@ -685,6 +685,8 @@ export {
 
       void handle(std::uint64_t identity, const ConfigureTerminalColors& message);
 
+      void handle(std::uint64_t identity, const ReadPaneTheme& message);
+
       void handle(std::uint64_t identity, const SearchPane& message);
 
       void handle(std::uint64_t identity, const SearchPaneRows& message);

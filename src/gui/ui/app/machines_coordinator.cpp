@@ -216,7 +216,10 @@ namespace telar::gui::qt {
         ++source->runtime_generation;
         source->phase = application::machines::MachinePhase::connected;
         source->needs_setup = false;
-        source->session.connected(source->identity, application::RuntimeProtocol::readsRows(source->connection.schema()));
+
+        const auto& schema = source->connection.schema();
+
+        source->session.connected(source->identity, application::RuntimeProtocol::readsRows(schema), application::RuntimeProtocol::readsTheme(schema));
         summarize(source->key);
         if (key.machine.slot == store_.machines().active()) {
           status_.publish();

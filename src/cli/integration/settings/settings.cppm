@@ -24,6 +24,8 @@ export {
     struct IntegrationOptions {
       IntegrationAction action = IntegrationAction::status;
       AgentProvider provider = AgentProvider::unknown;
+      // Neovim instead of an agent: `settings` then names its site directory.
+      bool neovim = false;
       std::string_view settings;
       bool legacy = false;
 
@@ -59,6 +61,19 @@ export {
     template <EnvironmentLookup Environment>
     int runExtension(Memory& memory, const IntegrationOptions& options, const Environment& environment, std::string_view executable);
     extern template int runExtension<ProcessEnvironment>(Memory& memory, const IntegrationOptions& options, const ProcessEnvironment& environment, std::string_view executable);
+
+  }
+}
+
+// Interface: integration/neovim.cppm
+export {
+  namespace telar::runtime::cli::integration {
+
+    // Installs, removes or reports telar's Neovim plugin under Neovim's site directory,
+    // $XDG_DATA_HOME/$NVIM_APPNAME/site, which Neovim and lazy.nvim load without configuration.
+    template <EnvironmentLookup Environment>
+    int runNeovim(Memory& memory, const IntegrationOptions& options, const Environment& environment);
+    extern template int runNeovim<ProcessEnvironment>(Memory& memory, const IntegrationOptions& options, const ProcessEnvironment& environment);
 
   }
 }

@@ -25,6 +25,9 @@ import telar.base.text.utf8;
 import telar.gui.features.configuration;
 import telar.gui.foundation.core;
 import telar.gui.application;
+import telar.gui.application.tests.session_fixture;
+import telar.wire.pane_io;
+import telar.wire.vocabulary;
 import telar.base.ds;
 
 namespace {
@@ -174,6 +177,72 @@ namespace {
     check(default_theme_values == zenburn, "Zenburn must be the default theme");
   }
 
+  // Zenburn's numbers and properties have no ANSI color: a pane's programs get them from the
+  // editor colors, beside the terminal colors the terminal shows.
+  void terminalColorsCarryTheEditorColors() {
+    const auto zenburn = themeValuesByName("zenburn");
+    const auto colors = application::configuration::terminalColors(projectTheme(zenburn));
+    const auto syntax = [&](SyntaxRole role) {
+      const auto index = static_cast<std::size_t>(role) * 3;
+
+      return ThemeRgb{(*colors.syntax)[index], (*colors.syntax)[index + 1], (*colors.syntax)[index + 2]};
+    };
+
+    check(colors.background && *colors.background == zenburn.terminal.background && colors.foreground && *colors.foreground == zenburn.terminal.foreground, "the terminal colors are the theme's");
+
+    bool palette_kept = colors.palette.hasValue();
+
+    for (std::size_t index = 0; palette_kept && index < zenburn.terminal.palette.size(); ++index) {
+      palette_kept = ThemeRgb{(*colors.palette)[index * 3], (*colors.palette)[index * 3 + 1], (*colors.palette)[index * 3 + 2]} == zenburn.terminal.palette[index];
+    }
+
+    check(palette_kept, "the 16 ANSI colors are the theme's terminal palette");
+    check(colors.syntax && syntax(SyntaxRole::number) == ThemeRgb{191, 235, 191} && syntax(SyntaxRole::property) == ThemeRgb{223, 175, 143}, "every syntax role keeps its own color");
+    check(colors.chrome && colors.syntax_italic == 0 && colors.syntax_bold == 0, "the chrome colors travel, and Zenburn styles no role");
+
+    const auto dragon = application::configuration::terminalColors(projectTheme(themeValuesByName("kanagawa_dragon")));
+    const auto bit = [](SyntaxRole role) {
+      return static_cast<std::uint16_t>(1u << static_cast<unsigned>(role));
+    };
+
+    check((dragon.syntax_italic & bit(SyntaxRole::keyword)) != 0 && (dragon.syntax_italic & bit(SyntaxRole::comment)) != 0, "italic syntax roles travel as their bits");
+  }
+
+  // The runtime hears the theme when the session connects and whenever it changes, never from a
+  // session on a runtime that cannot read it.
+  void sessionGivesTheRuntimeItsTheme() {
+    using namespace application::tests::session_fixture;
+
+    telar::SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    client.connected(1);
+    check(transport.count(telar::ClientTag::configure_terminal_colors) == 1, "connecting gives the runtime the theme");
+
+    auto theme = client.configuration.theme;
+
+    application::configuration::setTheme(client, theme);
+    check(transport.count(telar::ClientTag::configure_terminal_colors) == 1, "an unchanged theme is not sent again");
+    theme.syntax_italic = 1;
+    application::configuration::setTheme(client, theme);
+    check(transport.count(telar::ClientTag::configure_terminal_colors) == 2 && transport.last<telar::ConfigureTerminalColors>().syntax_italic == 1, "a changed theme reaches the runtime");
+
+    auto configuration = client.configuration;
+
+    configuration.theme.syntax_bold = 1;
+    application::configuration::configure(client, configuration);
+    check(transport.count(telar::ClientTag::configure_terminal_colors) == 3 && transport.last<telar::ConfigureTerminalColors>().syntax_bold == 1, "a configuration with a new theme reaches the runtime");
+
+    Transport legacy_transport;
+    TestSession legacy{memory, legacy_transport};
+
+    legacy.connected(1, true, false);
+    theme.syntax_italic = 2;
+    application::configuration::setTheme(legacy, theme);
+    check(legacy_transport.count(telar::ClientTag::configure_terminal_colors) == 0, "a runtime before themes never hears one");
+  }
+
   void utf8InspectionPreservesValidationErrors() {
     constexpr telar::ds::Array texts{
         std::string_view{"\xff"},
@@ -200,6 +269,8 @@ namespace {
   const telar::testing::Case case_complete_theme_inheritance_and_projection{"theme.complete_theme_inheritance_and_projection", completeThemeInheritanceAndProjection};
   const telar::testing::Case case_theme_queries_retain_values_without_allocation{"theme.theme_queries_retain_values_without_allocation", themeQueriesRetainValuesWithoutAllocation};
   const telar::testing::Case case_syntax_fallback_and_aliases{"theme.syntax_fallback_and_aliases", syntaxFallbackAndAliases};
+  const telar::testing::Case case_terminal_colors_carry_the_editor_colors{"theme.terminal_colors_carry_the_editor_colors", terminalColorsCarryTheEditorColors};
+  const telar::testing::Case case_session_gives_the_runtime_its_theme{"theme.session_gives_the_runtime_its_theme", sessionGivesTheRuntimeItsTheme};
   const telar::testing::Case case_utf8_inspection_preserves_validation_errors{"theme.utf8_inspection_preserves_validation_errors", utf8InspectionPreservesValidationErrors};
 
 }

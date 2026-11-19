@@ -2445,6 +2445,15 @@ namespace telar::runtime {
 
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const ReadPaneTheme& message) {
+    const auto* pane = findPane(model_.panes, message.pane_id, message.pane_generation);
+    const auto* owner_colors = pane == nullptr ? nullptr : Workspaces::ownerColors(model_.workspaces, clients_, pane->location.workspace.id);
+
+    Panes::readTheme(model_.panes, requireClient(clients_, identity), owner_colors, message);
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const SearchPane& message) {
     Panes::search(model_.panes, requireClient(clients_, identity), message);
   }

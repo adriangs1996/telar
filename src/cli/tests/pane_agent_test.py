@@ -73,6 +73,7 @@ class Fixture:
         self.bump_on_send = False
         self.ack_ignored = False
         self.duplicate = False
+        self.theme = None
         self.workers = []
         self.thread = threading.Thread(target=self.accept)
         self.thread.start()
@@ -120,6 +121,8 @@ class Fixture:
                         send(connection, reply)
                     elif tag == 0x27:
                         send(connection, b'\xa8' + request + b'\0' + integer(19))
+                    elif tag == 0x2d:
+                        send(connection, b'\xc5' + request + frame[9:17] + (b'\x01' + self.theme if self.theme else b'\0'))
                     elif tag == 0x14:
                         entry = integer(3) + text('Workspace') + text('/fixture') + integer(1, 'H') + text('') + b'\0'
                         trees = b''.join(integer(identity) + integer(3) + b'\0\0\0\0' + text('/fixture/tree') + text(branch) + text('main') + text(title) + text('') + text('') + self.coordinator(identity) + integer(0, 'I') * 4 + text('') + b'\0' + integer(0, 'i') for identity, branch, title in self.trees)
@@ -293,6 +296,26 @@ def check(binary, root):
         run('pane', 'create', '--client', '99', status=2)
         focus = run('pane', 'focus', '--current', '--direction', 'left', '--json', extra={'TELAR_PANE_ID': '17', 'TELAR_PANE_GENERATION': '29'})
         assert json.loads(focus.stdout) == {'changed': True, 'focused_pane_id': 19, 'reason': 'focused'}
+        # A program in the pane reads the theme of the window owning its workspace.
+        current = {'TELAR_PANE_ID': '17', 'TELAR_PANE_GENERATION': '29'}
+        run('pane', 'theme', '17', status=1)
+        run('pane', 'theme', '--current', status=1)
+        assert b'NoTheme' in run('pane', 'theme', '--current', extra=current, status=1).stderr
+        assert fixture.frames[-1][1][9:25] == integer(17) + integer(29)
+        rgb = bytes.fromhex
+        palette = bytearray(48)
+        palette[3:6] = rgb('cc9393')
+        syntax = bytearray(45)
+        syntax[9:12] = rgb('bfebbf')
+        chrome = bytearray(48)
+        chrome[45:48] = rgb('dfaf8f')
+        fixture.theme = (b'\x01' + rgb('dcdccc') + b'\x01' + rgb('2b2b2b') + b'\x01' + palette + b'\0' + b'\x01' + syntax
+                         + integer(0b10, 'H') + integer(0, 'H') + b'\x01' + chrome)
+        theme = json.loads(run('pane', 'theme', '--current', '--json', extra=current).stdout)
+        assert theme['foreground'] == '#dcdccc' and theme['background'] == '#2b2b2b' and theme['cursor'] is None, theme
+        assert len(theme['ansi']) == 16 and theme['ansi'][1] == '#cc9393', theme
+        assert theme['syntax']['number'] == {'color': '#bfebbf', 'italic': False, 'bold': False} and theme['syntax']['keyword']['italic'], theme
+        assert len(theme['chrome']) == 16 and theme['chrome']['peach'] == '#dfaf8f', theme
         run('agent', 'report-title', '17', 'bad\n', status=1)
         assert b'WorktreeCatalogMissing' in run('agent', 'report-title', 'worktree:missing', 'Title', status=1).stderr
         run('pane', 'read', '17', '--lines', '+4', status=1)

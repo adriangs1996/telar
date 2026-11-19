@@ -229,6 +229,7 @@ export {
       case ServerTag::notification_shown:
       case ServerTag::agent_sound:
       case ServerTag::pane_text:
+      case ServerTag::pane_theme:
       case ServerTag::request_completed:
       case ServerTag::pane_matches:
       case ServerTag::pane_rows:

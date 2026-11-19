@@ -143,6 +143,7 @@ export {
         ClientRequest<PastePaneClipboard>,
         ClientRequest<ConfigurePaneDesktop>,
         ClientRequest<ConfigureTerminalColors>,
+        ClientRequest<ReadPaneTheme, ClientRole::control>,
         ClientRequest<SearchPane, ClientRole::control>,
         ClientRequest<CopySelection>,
         ClientRequest<ReadPane, ClientRole::control>,

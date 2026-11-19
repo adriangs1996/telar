@@ -540,12 +540,16 @@ export {
         flushInput(require(model.panes, pane));
       }
 
+      // A change of only the editor colors leaves the terminals alone: applying colors repaints a
+      // pane whole.
       inline void configureColors(RuntimeModel& model, ClientSession& client, const ConfigureTerminalColors& request) {
-        if (client.colors.foreground == request.foreground && client.colors.background == request.background && client.colors.palette == request.palette) {
+        const bool repaint = !client.colors.sameTerminalColors(request);
+
+        client.colors = request;
+        if (!repaint) {
           return;
         }
 
-        client.colors = request;
         for (auto* pane : model.panes.items()) {
           const auto* workspace = pane == nullptr ? nullptr : model.workspaces.find(pane->location.workspace.id);
           if (workspace != nullptr && workspace->geometry_client == client.id && !pane->desktop_theme) {
@@ -681,6 +685,32 @@ export {
         client.search.emplace(request, pane.terminal.contentRevision());
       }
 
+      // The theme a pane's programs read their colors from: that of the client owning its
+      // workspace, with the terminal colors a desktop gave the pane in their place.
+      inline static void readTheme(const PaneStore& panes, ClientSession& client, const ConfigureTerminalColors* owner_colors, const ReadPaneTheme& request) {
+        const auto* pane = findPane(panes, request.pane_id, request.pane_generation);
+        if (pane == nullptr || pane->exit_status) {
+          throw RequestError{FailureCode::pane_not_found, "Pane not found"};
+        }
+
+        PaneTheme reply{.request_id = request.request_id, .pane_id = pane->id};
+
+        if (owner_colors != nullptr) {
+          reply.theme = static_cast<const TerminalTheme&>(*owner_colors);
+        }
+
+        if (const auto& desktop = pane->desktop_theme) {
+          auto& theme = reply.theme ? reply.theme.getMut() : reply.theme.emplace();
+
+          theme.foreground = desktop->foreground;
+          theme.background = desktop->background;
+          theme.palette = desktop->palette;
+          theme.cursor = desktop->cursor;
+        }
+
+        client.connection.send(reply);
+      }
+
       // Rows of an attached pane's scrollback, which its client draws while it scrolls.
       inline static void readRows(PaneStore& panes, ClientSession& client, const ReadPaneRows& request) {
         auto& pane = require(panes, request.pane_id);
@@ -761,8 +791,7 @@ export {
           facts.light = theme->light;
           const auto& previous = pane.desktop_theme;
           if (!previous || previous->foreground != theme->foreground || previous->background != theme->background || previous->palette != theme->palette || previous->cursor != theme->cursor) {
-            pane.terminal.configureColors({theme->foreground, theme->background, theme->palette});
-            pane.terminal.configureCursorColor(theme->cursor);
+            pane.terminal.configureColors({theme->foreground, theme->background, theme->palette, theme->cursor});
           }
 
           pane.desktop_theme = *theme;
@@ -772,7 +801,6 @@ export {
           const auto* owner = workspace != nullptr && workspace->geometry_client ? clients.find(*workspace->geometry_client) : nullptr;
 
           pane.terminal.configureColors(owner != nullptr && !owner->connection.closing ? owner->colors : ConfigureTerminalColors{});
-          pane.terminal.configureCursorColor(ds::none);
         }
 
         pane.terminal.configureClientFacts(facts);

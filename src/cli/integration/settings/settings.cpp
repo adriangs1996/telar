@@ -449,7 +449,133 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
     return 0;
   }
 
+  // The first line of every file telar's Neovim plugin writes: only those are replaced or removed.
+  constexpr std::string_view neovim_marker = "-- telar-integration: neovim\n";
+  constexpr std::size_t maximum_neovim_file_bytes = 256 * 1024;
+
+  // $XDG_DATA_HOME/$NVIM_APPNAME/site, as Neovim's stdpath("data") .. "/site" names it.
+  template <EnvironmentLookup Environment>
+  tbc::view<ds::String<Memory>, tbc::lt::a> neovimSite(tbc::view<Memory&, tbc::lt::a> memory, const Environment& environment) {
+    const auto application = environment.lookup("NVIM_APPNAME");
+    if (application.starts_with('/') || application.contains("..")) {
+      throw std::invalid_argument{"InvalidNvimAppName"};
+    }
+
+    ds::String<Memory> data{memory, environment.lookup("XDG_DATA_HOME")};
+
+    if (!data.view().starts_with('/')) {
+      data.assign(environment.lookup("HOME"));
+      if (data.empty()) {
+        throw std::invalid_argument{"Home directory unavailable for integration"};
+      }
+
+      data.append("/.local/share");
+    }
+
+    return joinPath(memory, joinPath(memory, data, application.empty() ? "nvim" : application), "site");
+  }
+
+  // The telar-owned files under the package's directories that the package no longer has.
+  template <Allocator Memory>
+  void removeStaleNeovimFiles(Memory& memory, std::string_view site) noexcept {
+    ds::Array<std::string_view, std::size(assets::neovim_files)> directories{};
+    std::size_t count = 0;
+
+    for (const auto& file : assets::neovim_files) {
+      const auto directory = file.path.substr(0, file.path.rfind('/'));
+      if (std::ranges::find(directories.view().first(count), directory) == directories.view().first(count).end()) {
+        directories.atMut(count++) = directory;
+      }
+    }
+
+    for (const auto directory : directories.view().first(count)) {
+      try {
+        const auto path = joinPath(memory, site, directory);
+        std::unique_ptr<DIR, decltype(&::closedir)> listing{::opendir(path.data()), &::closedir};
+        if (!listing) {
+          continue;
+        }
+
+        while (const auto* entry = ::readdir(listing.get())) {
+          const std::string_view name = entry->d_name;
+          if (!name.ends_with(".lua")) {
+            continue;
+          }
+
+          const auto packaged = std::ranges::any_of(assets::neovim_files, [&](const auto& file) {
+            return file.path.starts_with(directory) && file.path.size() == directory.size() + 1 + name.size() && file.path.ends_with(name);
+          });
+
+          const auto stale = joinPath(memory, path, name);
+          const auto existing = packaged ? ds::Option<ds::String<Memory>>{} : read(memory, stale, maximum_neovim_file_bytes);
+          if (existing && existing->view().starts_with(neovim_marker)) {
+            ::unlink(stale.data());
+            std::printf("telar integration: neovim %s removed, no longer part of the plugin\n", stale.data());
+          }
+        }
+      } catch (...) {
+      }
+    }
+  }
+
+  template <EnvironmentLookup Environment>
+  int runNeovim(Memory& memory, const IntegrationOptions& options, const Environment& environment) {
+    const auto site = options.settings.empty() ? neovimSite(memory, environment) : ds::String<Memory>{memory, options.settings};
+    bool foreign = false;
+
+    // A file another tool or the user wrote stops the whole install, before anything changes.
+    for (const auto& file : assets::neovim_files) {
+      const auto path = joinPath(memory, site, file.path);
+      const auto existing = read(memory, path, maximum_neovim_file_bytes);
+      const auto ownership = !existing ? Ownership::absent : existing->view().starts_with(neovim_marker) ? Ownership::owned
+                                                                                                         : Ownership::foreign;
+
+      if (options.action == IntegrationAction::status) {
+        std::printf("neovim %.*s: %s at %s\n", static_cast<int>(file.path.size()), file.path.data(), ownershipName(ownership).data(), path.data());
+      } else if (ownership == Ownership::foreign) {
+        std::fprintf(stderr, "telar integration: %s is not telar's neovim plugin; %s\n", path.data(), options.action == IntegrationAction::install ? "move it first" : "left untouched");
+        foreign = true;
+      }
+    }
+
+    if (options.action == IntegrationAction::status || (foreign && options.action == IntegrationAction::install)) {
+      return foreign ? 1 : 0;
+    }
+
+    for (const auto& file : assets::neovim_files) {
+      const auto path = joinPath(memory, site, file.path);
+      const auto existing = read(memory, path, maximum_neovim_file_bytes);
+      if (existing && !existing->view().starts_with(neovim_marker)) {
+        continue;
+      }
+
+      if (options.action == IntegrationAction::uninstall) {
+        if (existing && ::unlink(path.data()) != 0) {
+          throw SystemError{"Remove integration file"};
+        }
+
+        std::printf("telar integration: neovim %.*s %s %s\n", static_cast<int>(file.path.size()), file.path.data(), existing ? "removed from" : "not present at", path.data());
+        continue;
+      }
+
+      ds::String<Memory> contents{memory, neovim_marker};
+      const char* state = "already present";
+
+      contents.append(file.text);
+      if (!existing || *existing != contents) {
+        write(memory, path, contents, false);
+        state = existing ? "updated" : "installed";
+      }
+
+      std::printf("telar integration: neovim %.*s %s at %s\n", static_cast<int>(file.path.size()), file.path.data(), state, path.data());
+    }
+
+    removeStaleNeovimFiles(memory, site);
+    return foreign ? 1 : 0;
+  }
+
   template int runExtension<ProcessEnvironment>(Memory& memory, const IntegrationOptions& options, const ProcessEnvironment& environment, std::string_view executable);
+  template int runNeovim<ProcessEnvironment>(Memory& memory, const IntegrationOptions& options, const ProcessEnvironment& environment);
   template int runSettings<ProcessEnvironment>(Memory& memory, const IntegrationOptions& options, const ProcessEnvironment& environment, std::string_view executable);
 
 }
@@ -471,14 +597,15 @@ namespace telar::runtime::cli {
       throw std::invalid_argument{"UnknownIntegrationAction"};
     }
 
-    options.provider = providerNamed(arguments[1]);
-    if (options.provider == AgentProvider::unknown) {
+    options.neovim = std::string_view{arguments[1]} == "neovim";
+    options.provider = options.neovim ? AgentProvider::unknown : providerNamed(arguments[1]);
+    if (!options.neovim && options.provider == AgentProvider::unknown) {
       throw std::invalid_argument{"UnknownHookAgent"};
     }
 
     for (std::size_t index = 2; index < arguments.size(); ++index) {
       const std::string_view option = arguments[index];
-      if (option == "--legacy" && options.action == IntegrationAction::uninstall) {
+      if (option == "--legacy" && options.action == IntegrationAction::uninstall && !options.neovim) {
         options.legacy = true;
         continue;
       }

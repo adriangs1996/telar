@@ -213,6 +213,9 @@ export {
       ds::Array<CellColor, palette_names.size()> chrome{};
       // Syntax colors for text the GUI highlights itself, such as the prompt editor.
       ds::Array<CellColor, syntax_names.size()> syntax{};
+      // Bit N styles syntax role N.
+      std::uint16_t syntax_italic = 0;
+      std::uint16_t syntax_bold = 0;
 
       [[nodiscard]] Color chromeColor(PaletteRole role) const noexcept;
 

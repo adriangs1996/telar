@@ -89,6 +89,8 @@ namespace {
 
     check(application::RuntimeProtocol::supports(handshake::schema_id, ClientTag::hold_tab) && !application::RuntimeProtocol::supports(application::RuntimeProtocol::schema87, ClientTag::hold_tab), "The new hold_tab request must stay blocked on schema 87");
     check(application::RuntimeProtocol::supports(application::RuntimeProtocol::schema87, ClientTag::pane_input) && !application::RuntimeProtocol::supports(unknown), "Common terminal traffic may use the audited legacy dialect exclusively");
+    check(application::RuntimeProtocol::supports(application::RuntimeProtocol::cqp00004) && application::RuntimeProtocol::readsRows(application::RuntimeProtocol::cqp00004), "The schema before themes keeps its scrollback rows");
+    check(application::RuntimeProtocol::supports(handshake::schema_id, ClientTag::configure_terminal_colors) && !application::RuntimeProtocol::supports(application::RuntimeProtocol::cqp00004, ClientTag::configure_terminal_colors) && !application::RuntimeProtocol::supports(application::RuntimeProtocol::cqp00004, ClientTag::read_pane_theme), "A runtime before themes never hears the client's theme in a layout it cannot read");
   }
 
   void malformedResponsesKeepOriginalDecoderErrors() {

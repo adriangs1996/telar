@@ -10,6 +10,7 @@ Commands:
   list            List every pane with its workspace, tab, generation and lifecycle
   get             Show one pane, agent or not, from the same topology
   focus           Focus a pane in a window; or, from Neovim, move focus out of this pane by direction
+  theme           Print the theme of the window that owns this pane's workspace, as JSON
   create          Create a terminal pane in a window by splitting its focused pane
   split           Focus a pane in a window and split it horizontally (left/right) or vertically (top/bottom)
   close           Focus a pane in a window and request its closure
@@ -22,7 +23,7 @@ A pane is one terminal the runtime owns; a pane id names it for its whole life, 
 its generation changes when its command is relaunched. `--current` is this pane,
 from TELAR_PANE_ID. Titles are not accepted here: use `telar agent` for agents.
 
-`read`, `send-keys`, `search`, `watch`, `list` and `get` work on the runtime alone
+`read`, `send-keys`, `search`, `watch`, `list`, `get` and `theme` work on the runtime alone
 without selecting a window; input can change the pane's visible output.
 `create`, `split`, `close`, `focus ID`, `resize`,
 `fullscreen`, `scroll` and `copy` act through one attached window (`--client ID`),

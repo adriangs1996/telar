@@ -1,0 +1,118 @@
+{
+  "foreground": "#dcdccc",
+  "background": "#2b2b2b",
+  "cursor": "#ffffef",
+  "ansi": [
+    "#4f4f4f",
+    "#cc9393",
+    "#8fb28f",
+    "#e0cf9f",
+    "#94bff3",
+    "#dc8cc3",
+    "#8cd0d3",
+    "#dcdccc",
+    "#709080",
+    "#dca3a3",
+    "#afd8af",
+    "#f0dfaf",
+    "#bde0f3",
+    "#ec93d3",
+    "#93e0e3",
+    "#ffffef"
+  ],
+  "syntax": {
+    "plain": {
+      "color": "#dcdccc",
+      "italic": false,
+      "bold": false
+    },
+    "keyword": {
+      "color": "#f0dfaf",
+      "italic": false,
+      "bold": false
+    },
+    "string": {
+      "color": "#cc9393",
+      "italic": false,
+      "bold": false
+    },
+    "number": {
+      "color": "#bfebbf",
+      "italic": false,
+      "bold": false
+    },
+    "comment": {
+      "color": "#7f9f7f",
+      "italic": false,
+      "bold": false
+    },
+    "constant": {
+      "color": "#bfebbf",
+      "italic": false,
+      "bold": false
+    },
+    "builtin_constant": {
+      "color": "#bfebbf",
+      "italic": false,
+      "bold": false
+    },
+    "builtin": {
+      "color": "#a7d1ce",
+      "italic": false,
+      "bold": false
+    },
+    "func": {
+      "color": "#a7d1ce",
+      "italic": false,
+      "bold": false
+    },
+    "type": {
+      "color": "#bde0f3",
+      "italic": false,
+      "bold": false
+    },
+    "parameter": {
+      "color": "#dcdccc",
+      "italic": false,
+      "bold": false
+    },
+    "property": {
+      "color": "#dfaf8f",
+      "italic": false,
+      "bold": false
+    },
+    "namespace": {
+      "color": "#dcdccc",
+      "italic": false,
+      "bold": false
+    },
+    "operator": {
+      "color": "#f0efd0",
+      "italic": false,
+      "bold": false
+    },
+    "punctuation": {
+      "color": "#989890",
+      "italic": false,
+      "bold": false
+    }
+  },
+  "chrome": {
+    "accent": "#f0dfaf",
+    "panel_bg": "#2b2b2b",
+    "surface0": "#383838",
+    "surface1": "#4f4f4f",
+    "surface_dim": "#303030",
+    "overlay0": "#5f5f5f",
+    "overlay1": "#6f6f6f",
+    "text": "#dcdccc",
+    "subtext0": "#989890",
+    "mauve": "#dc8cc3",
+    "green": "#8fb28f",
+    "yellow": "#f0dfaf",
+    "red": "#e37170",
+    "blue": "#8cd0d3",
+    "teal": "#7cb8bb",
+    "peach": "#dfaf8f"
+  }
+}

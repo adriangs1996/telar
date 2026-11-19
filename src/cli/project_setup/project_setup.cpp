@@ -68,7 +68,7 @@ namespace telar::runtime::cli::pane_agents {
     Cursor cursor{words};
     Options options{.action = cursor.take("MissingPaneAction")};
     const auto action = options.action;
-    if (action != "read" && action != "send-keys" && action != "focus" && action != "list" && action != "get" && action != "watch" && action != "search") {
+    if (action != "read" && action != "send-keys" && action != "focus" && action != "theme" && action != "list" && action != "get" && action != "watch" && action != "search") {
       usage("UnknownPaneAction");
     }
 
@@ -79,8 +79,8 @@ namespace telar::runtime::cli::pane_agents {
       }
     }
 
-    if (action == "focus" && options.target != "--current") {
-      usage("FocusRequiresCurrentPane");
+    if ((action == "focus" || action == "theme") && options.target != "--current") {
+      usage(action == "focus" ? "FocusRequiresCurrentPane" : "ThemeRequiresCurrentPane");
     }
 
     if (action == "search" || action == "send-keys") {
@@ -1158,6 +1158,80 @@ namespace telar::runtime::cli::pane_agents {
     }
   }
 
+  // `bytes` as "#rrggbb", or null when absent.
+  void writeColor(Output& out, std::span<const Byte> bytes) {
+    constexpr std::string_view digits = "0123456789abcdef";
+    ds::Array<char, 9> text{'"', '#'};
+
+    for (std::size_t index = 0; index < 3; ++index) {
+      text.atMut(2 + index * 2) = digits[bytes[index] >> 4];
+      text.atMut(3 + index * 2) = digits[bytes[index] & 0x0f];
+    }
+
+    text.atMut(8) = '"';
+    out.text({text.data(), text.size()});
+  }
+
+  template <std::size_t Size>
+  void writeOptionalColor(Output& out, const ds::Option<ds::Array<Byte, Size>>& bytes) {
+    if (bytes) {
+      writeColor(out, bytes->view());
+    } else {
+      out.text("null");
+    }
+  }
+
+  // The theme as JSON: the terminal's colors, the 16 ANSI colors in `ansi`, each syntax role's
+  // color and style, and each chrome role's color, by the names telar's themes give them.
+  void writeTheme(Output& out, const TerminalTheme& theme) {
+    out.text("{\"foreground\":");
+    writeOptionalColor(out, theme.foreground);
+    out.text(",\"background\":");
+    writeOptionalColor(out, theme.background);
+    out.text(",\"cursor\":");
+    writeOptionalColor(out, theme.cursor);
+    out.text(",\"ansi\":");
+    if (theme.palette) {
+      for (std::size_t index = 0; index < theme.palette->size() / 3; ++index) {
+        out.text(index == 0 ? "[" : ",");
+        writeColor(out, theme.palette->view().subspan(index * 3, 3));
+      }
+
+      out.text("]");
+    } else {
+      out.text("null");
+    }
+
+    out.text(",\"syntax\":");
+    if (theme.syntax) {
+      for (std::size_t index = 0; index < TerminalTheme::syntax_roles; ++index) {
+        const auto bit = 1u << index;
+
+        out.text(index == 0 ? "{" : ",").json(TerminalTheme::syntax_names[index]).text(":{\"color\":");
+        writeColor(out, theme.syntax->view().subspan(index * 3, 3));
+        out.text(",\"italic\":").boolean((theme.syntax_italic & bit) != 0).text(",\"bold\":").boolean((theme.syntax_bold & bit) != 0).text("}");
+      }
+
+      out.text("}");
+    } else {
+      out.text("null");
+    }
+
+    out.text(",\"chrome\":");
+    if (theme.chrome) {
+      for (std::size_t index = 0; index < TerminalTheme::chrome_roles; ++index) {
+        out.text(index == 0 ? "{" : ",").json(TerminalTheme::chrome_names[index]).text(":");
+        writeColor(out, theme.chrome->view().subspan(index * 3, 3));
+      }
+
+      out.text("}");
+    } else {
+      out.text("null");
+    }
+
+    out.text("}\n");
+  }
+
   int executePane(Memory& memory, const RuntimePaths<Memory>& paths, Options options, Output& out) {
     ControlSession session{memory, paths.socket.data()};
 
@@ -1212,7 +1286,7 @@ namespace telar::runtime::cli::pane_agents {
 
     std::uint64_t generation = 0;
 
-    if (options.action == "focus") {
+    if (options.action == "focus" || options.action == "theme") {
       generation = current("TELAR_PANE_GENERATION", true);
     } else {
       const auto snapshot = session.template exchange<AgentSnapshot>(QueryAgents{});
@@ -1261,6 +1335,13 @@ namespace telar::runtime::cli::pane_agents {
       if (options.json) {
         out.text("]}\n");
       }
+    } else if (options.action == "theme") {
+      const auto reply = session.template exchange<PaneTheme>(ReadPaneTheme{.pane_id = wanted, .pane_generation = generation});
+      if (!reply.theme) {
+        throw Failure{"NoTheme"};
+      }
+
+      writeTheme(out, *reply.theme);
     } else if (options.action == "focus") {
       const auto reply = session.template exchange<PaneFocusResult>(RequestPaneFocus{.pane_id = wanted, .pane_generation = generation, .direction = *options.direction});
 
@@ -1592,7 +1673,7 @@ namespace telar::runtime::cli::project_setup {
       const auto id = prepare(memory, options.cwd, true, options.detach, {});
 
       writeFormatted(STDOUT_FILENO, "{{\"execution_id\":{},\"environment\":{},\"ready\":{}}}\n", orNull(id), quoteJson(!id ? "not_declared" : options.detach ? "running"
-                                                                                                                                                                            : "ready"),
+                                                                                                                                                             : "ready"),
           jsonBoolean(id && !options.detach));
       return 0;
     } catch (const std::exception& error) {

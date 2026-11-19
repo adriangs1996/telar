@@ -91,6 +91,9 @@ export {
       // The schema before documents: its runtime sends no PaneDocument. Its other layouts are the
       // current schema's.
       static constexpr SchemaId cqp00003{'c', 'q', 'p', '0', '0', '0', '0', '3'};
+      // The schema before the client's whole theme: its ConfigureTerminalColors has no editor
+      // colors and it has no ReadPaneTheme. Its other layouts are the current schema's.
+      static constexpr SchemaId cqp00004{'c', 'q', 'p', '0', '0', '0', '0', '4'};
 
       [[nodiscard]] static bool supports(const SchemaId& schema) noexcept;
 
@@ -98,6 +101,9 @@ export {
 
       // Whether the runtime reads rows of a scrollback by their stable number.
       [[nodiscard]] static bool readsRows(const SchemaId& schema) noexcept;
+
+      // Whether the runtime keeps the client's whole theme, editor colors included.
+      [[nodiscard]] static bool readsTheme(const SchemaId& schema) noexcept;
 
       [[nodiscard]] static ds::Option<SchemaId> retry(std::span<const Byte> payload, const SchemaId& requested);
     };

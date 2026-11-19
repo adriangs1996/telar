@@ -58,6 +58,7 @@ namespace telar {
     report_agent_command = 0x2a,
     report_agent_title = 0x2b,
     configure_terminal_colors = 0x2c,
+    read_pane_theme = 0x2d,
     query_clients = 0x33,
     detach_client = 0x34,
     request_client_command = 0x35,
@@ -152,6 +153,7 @@ namespace telar {
     pane_rows = 0xc1,
     pane_scrollback = 0xc2,
     pane_document = 0xc3,
+    pane_theme = 0xc5,
   };
 
   struct RequestRuntimeState {
