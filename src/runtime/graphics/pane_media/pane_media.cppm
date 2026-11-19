@@ -320,7 +320,13 @@ export {
 export {
   namespace telar::runtime {
 
-    class PaneMedia final : public TerminalMedia {
+    // Shared by the runtime's thread and the media worker, which hand it over rather than lock it:
+    // the runtime seals a batch and marks the media busy; until it collects the result and
+    // completes, the worker alone processes the sealed batch and owns the terminal, the prepared
+    // images and the transfer requests, and the runtime reaches them only while the media is not
+    // busy. The request queue's mutex orders each handover; only the runtime seals, completes and
+    // cancels.
+    class TBC_SHARED PaneMedia final : public TerminalMedia {
     public:
       using AllocatedMemory = MediaAllocator<ConcurrentMemory>;
 
