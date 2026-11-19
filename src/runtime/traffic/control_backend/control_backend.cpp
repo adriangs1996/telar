@@ -742,7 +742,8 @@ namespace telar::runtime::traffic {
       while (auto frame = injections_.tryReceive()) {
         const auto event = Protocol::decode((*frame)->bytes.bytes());
 
-        publish(event, std::move(frame.getMut()));
+        // A share of the frame, as Rust clones an Arc: the event views the bytes this one keeps.
+        publish(event, *frame);
       }
     }
 

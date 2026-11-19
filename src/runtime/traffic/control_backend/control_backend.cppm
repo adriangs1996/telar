@@ -627,7 +627,8 @@ export {
       }
 
     private:
-      inline static recording::Page describe(Session& session, std::uint64_t contention_drops) noexcept {
+      // The session's counters, copied: the page views no rows yet, so it borrows nothing of the session.
+      inline static tbc::view<recording::Page, tbc::lt::static_storage> describe(Session& session, std::uint64_t contention_drops) noexcept {
         return {
             .id = session.id,
             .active = session.active,
@@ -667,7 +668,8 @@ export {
         return false;
       }
 
-      inline void refreshInterest() noexcept {
+      // Reads the sessions and publishes their interest through an atomic: shared access, as Rust's &self.
+      inline void refreshInterest() const noexcept {
         Byte mask = 0;
 
         for (const auto& session : sessions_) {
@@ -683,7 +685,8 @@ export {
       tbc::view<ds::Array<ds::Option<Session>, recording::Limits::sessions>, tbc::lt::a> sessions_;
       std::uint64_t next_id_;
       std::mutex mutex_;
-      std::atomic<Byte> interest_{0};
+      // Written through shared access, as Rust's AtomicU8 is.
+      mutable std::atomic<Byte> interest_{0};
       std::atomic<std::uint64_t> contention_drops_{0};
     };
 
@@ -1489,7 +1492,9 @@ export {
           }
 
           const auto request = Protocol::request(peer.input.bytesMut().subspan(Protocol::prefix_bytes, peer.expected - Protocol::prefix_bytes));
-          const auto output = peer.output.bytesMut().subspan(Protocol::prefix_bytes);
+          // One mutable borrow of the output: the reply is encoded past its prefix, then the prefix written.
+          const auto buffer = peer.output.bytesMut();
+          const auto output = buffer.subspan(Protocol::prefix_bytes);
           std::span<const Byte> reply;
 
           try {
@@ -1500,7 +1505,7 @@ export {
 
           const auto prefix = Protocol::prefix(reply.size());
 
-          std::ranges::copy(prefix, peer.output.bytesMut().begin());
+          std::ranges::copy(prefix, buffer.begin());
           peer.reply_bytes = prefix.size() + reply.size();
           peer.deadline = Clock::now() + std::chrono::seconds{5};
           return false;
