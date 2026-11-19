@@ -42,7 +42,10 @@ namespace telar::gui::features::prompt {
     return true;
   }
 
-  ebnf::match_scratch& Specs::scratch() {
+  MatchScratch::MatchScratch(Memory& memory)
+      : memory_(memory) {}
+
+  ebnf::match_scratch& MatchScratch::lend() {
     if (!scratch_) {
       scratch_ = makeOwned<ebnf::match_scratch>(memory_);
     }

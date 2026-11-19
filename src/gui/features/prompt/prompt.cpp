@@ -20,21 +20,23 @@ namespace telar::gui::features::prompt {
 
   namespace {
 
-    // The pane's checks, made empty the first time. Valid until the next pane's are made.
-    CommandChecks& checksOf(State& state, std::uint64_t pane_id) {
-      auto& all = Access::commandChecks(state);
+    using Checks = ds::Map<std::uint64_t, CommandChecks, Memory>;
+    using Lines = ds::Map<std::uint64_t, Owned<PaneLine, Memory>, Memory>;
+
+    // The pane's checks, made empty in `memory` the first time. Valid until the next pane's are made.
+    tbc::view<CommandChecks&, tbc::lt::a> checksOf(tbc::view<Checks&, tbc::lt::a> all, tbc::view<Memory&, tbc::lt::a> memory, std::uint64_t pane_id) {
       if (auto* found = all.findMut(pane_id)) {
         return *found;
       }
 
-      static_cast<void>(all.insert(pane_id, CommandChecks{Access::memory(state)}));
+      static_cast<void>(all.insert(pane_id, CommandChecks{memory}));
       return *all.findMut(pane_id);
     }
 
     // What the pane learned of its shell's commands, forgotten after each command and change of
     // directory: either may change which commands run.
-    CommandChecks& commandChecks(State& state, const Commands& commands) {
-      auto& checks = checksOf(state, commands.pane_id);
+    tbc::view<CommandChecks&, tbc::lt::a> commandChecks(tbc::view<Checks&, tbc::lt::a> all, tbc::view<Memory&, tbc::lt::a> memory, const Commands& commands) {
+      auto& checks = checksOf(all, memory, commands.pane_id);
       if (checks.commands != commands.commands || checks.directory.view() != commands.directory || checks.words.size() > 512 || checks.listed.size() > 64) {
         checks.commands = commands.commands;
         checks.directory.assign(commands.directory);
@@ -47,10 +49,17 @@ namespace telar::gui::features::prompt {
       return checks;
     }
 
+    // Pane `pane_id`'s line, or null.
+    PaneLine* lineOf(Lines& lines, std::uint64_t pane_id) noexcept {
+      auto* found = lines.findMut(pane_id);
+
+      return found == nullptr ? nullptr : found->get();
+    }
+
     // Keeps every command an answer listed under the word it was asked for, while what the pane
     // knows of its commands is still the one it asked from.
     void listCommands(State& state, std::uint64_t pane_id, std::string_view prefix, std::span<const CompletionWord> words) {
-      auto* checks = Access::commandChecks(state).findMut(pane_id);
+      auto* checks = state.command_checks.findMut(pane_id);
       if (checks == nullptr) {
         return;
       }
@@ -60,7 +69,7 @@ namespace telar::gui::features::prompt {
         return;
       }
 
-      auto& memory = Access::memory(state);
+      auto& memory = state.memory;
       ds::Vec<Name, Memory> listed{memory};
 
       listed.reserve(words.size());
@@ -72,8 +81,8 @@ namespace telar::gui::features::prompt {
     }
 
     // The question `request_id` about a command, answered: it no longer waits.
-    Settled take(State& state, std::uint64_t request_id, CommandPresence presence) {
-      auto request = Access::commandRequests(state).remove(request_id);
+    Settled take(ds::Map<std::uint64_t, CommandRequest, Memory>& requests, std::uint64_t request_id, CommandPresence presence) {
+      auto request = requests.remove(request_id);
       auto& [pane_id, word] = request.getMut();
 
       return {.pane_id = pane_id, .word = std::move(word), .presence = presence};
@@ -91,33 +100,34 @@ namespace telar::gui::features::prompt {
         alias_targets(memory) {}
 
   CompletionPlan::CompletionPlan(Memory& memory)
-      : context_(memory),
-        completion_(memory),
-        label_(memory),
-        questions_(memory) {}
+      : context(memory),
+        completion(memory),
+        label(memory),
+        questions(memory) {}
 
   State::State(tbc::view<Memory&, tbc::lt::a> memory)
-      : memory_(memory),
-        specs_(memory),
-        history_(memory),
-        completions_(memory),
-        command_requests_(memory),
-        command_checks_(memory),
-        spec_requests_(memory),
-        spec_completions_(memory),
-        command_root_(memory),
-        lines_(memory) {}
+      : memory(memory),
+        specs(memory),
+        scratch(memory),
+        history(memory),
+        completions(memory),
+        command_requests(memory),
+        command_checks(memory),
+        spec_requests(memory),
+        spec_completions(memory),
+        command_root(memory),
+        lines(memory) {}
 
   // ---- lines ------------------------------------------------------------------------------------
 
   Opened open(State& state, std::uint64_t pane_id, Keymap keymap) {
-    const bool wants_history = Access::history(state).empty();
-    auto& lines = Access::lines(state);
+    const bool wants_history = state.history.empty();
+    auto& lines = state.lines;
     auto* found = lines.findMut(pane_id);
     const bool inserted = found == nullptr;
 
     if (inserted) {
-      auto& memory = Access::memory(state);
+      auto& memory = state.memory;
 
       static_cast<void>(lines.insert(pane_id, makeOwned<PaneLine>(memory, memory, pane_id, keymap)));
       found = lines.findMut(pane_id);
@@ -125,7 +135,7 @@ namespace telar::gui::features::prompt {
 
     auto& line = **found;
 
-    Access::line(line).setKeymap(keymap);
+    line.line.setKeymap(keymap);
     return {.line = line, .wants_history = inserted && wants_history};
   }
 
@@ -134,12 +144,12 @@ namespace telar::gui::features::prompt {
       return value.pane_id != pane_id;
     };
 
-    static_cast<void>(Access::commandRequests(state).retain(other));
-    static_cast<void>(Access::specRequests(state).retain(other));
-    static_cast<void>(Access::completions(state).retain(other));
-    static_cast<void>(Access::commandChecks(state).remove(pane_id));
-    static_cast<void>(Access::specCompletions(state).remove(pane_id));
-    static_cast<void>(Access::lines(state).remove(pane_id));
+    static_cast<void>(state.command_requests.retain(other));
+    static_cast<void>(state.spec_requests.retain(other));
+    static_cast<void>(state.completions.retain(other));
+    static_cast<void>(state.command_checks.remove(pane_id));
+    static_cast<void>(state.spec_completions.remove(pane_id));
+    static_cast<void>(state.lines.remove(pane_id));
   }
 
   // ---- keys and text ----------------------------------------------------------------------------
@@ -204,9 +214,9 @@ namespace telar::gui::features::prompt {
   }
 
   void remember(State& state, std::string_view command) {
-    auto& history = Access::history(state);
+    auto& history = state.history;
     // Copied first: `command` may be one of the entries the history drops.
-    Name entry{Access::memory(state), command};
+    Name entry{state.memory, command};
 
     static_cast<void>(history.retain([&entry](const Name& kept) {
       return kept.view() != entry.view();
@@ -216,7 +226,7 @@ namespace telar::gui::features::prompt {
   }
 
   void insert(State& state, PaneLine& line, std::string_view text) {
-    Name clean{Access::memory(state)};
+    Name clean{state.memory};
 
     clean.reserve(text.size());
     for (const auto byte : text) {
@@ -226,25 +236,25 @@ namespace telar::gui::features::prompt {
       }
     }
 
-    Access::line(line).insertText(clean.view());
-    Access::written(state) = Access::paneId(line);
+    line.line.insertText(clean.view());
+    state.written = line.pane_id;
   }
 
   void write(State& state, PaneLine& line, std::string_view command) {
-    auto& text = Access::line(line).editorMut().textMut();
+    auto& text = line.line.editorMut().textMut();
 
     text.assign(command);
     text.moveTo(text.size());
-    Access::written(state) = Access::paneId(line);
+    state.written = line.pane_id;
   }
 
   bool replace(State& state, std::uint64_t pane_id, std::size_t begin, std::string_view word, std::string_view text) {
-    auto* line = find(state, pane_id);
+    auto* line = lineOf(state.lines, pane_id);
     if (line == nullptr) {
       return false;
     }
 
-    auto& typed = Access::line(*line);
+    auto& typed = line->line;
     const auto& current = typed.editor().text();
     const auto end = begin + word.size();
     if (current.cursor() != end || current.view().substr(begin, word.size()) != word) {
@@ -252,18 +262,18 @@ namespace telar::gui::features::prompt {
     }
 
     typed.replaceText(begin, end, text);
-    Access::written(state) = pane_id;
+    state.written = pane_id;
     return true;
   }
 
   ds::Option<std::uint64_t> takeWrite(State& state) noexcept {
-    const auto written = std::exchange(Access::written(state), 0);
+    const auto written = std::exchange(state.written, 0);
 
     return written == 0 ? ds::none : ds::Option{written};
   }
 
   ds::Option<Outcome> follow(PaneLine& line, const PaneShell& previous, const PaneShell& current) {
-    auto& typed = Access::line(line);
+    auto& typed = line.line;
 
     if (current.phase != ShellPhase::running || current.echo) {
       typed.clearSecret();
@@ -277,7 +287,7 @@ namespace telar::gui::features::prompt {
   }
 
   void useClipboard(PaneLine& line, Clipboard clipboard) {
-    Access::line(line).editorMut().setClipboard(std::move(clipboard));
+    line.line.editorMut().setClipboard(std::move(clipboard));
   }
 
   // ---- the commands the shell runs --------------------------------------------------------------
@@ -287,7 +297,7 @@ namespace telar::gui::features::prompt {
       return CommandPresence::unknown;
     }
 
-    auto& checks = commandChecks(state, commands);
+    auto& checks = commandChecks(state.command_checks, state.memory, commands);
     if (checks.learned.contains(word)) {
       return CommandPresence::found;
     }
@@ -304,7 +314,7 @@ namespace telar::gui::features::prompt {
           });
           const auto presence = listed ? CommandPresence::found : CommandPresence::missing;
 
-          static_cast<void>(checks.words.insert(Name{Access::memory(state), word}, presence));
+          static_cast<void>(checks.words.insert(Name{state.memory, word}, presence));
           return presence;
         }
       }
@@ -320,7 +330,7 @@ namespace telar::gui::features::prompt {
     }
 
     // A command named by its path: a file there, from the directory the shell is in.
-    auto& root = Access::commandRoot(state);
+    auto& root = state.command_root;
 
     root.assign(word.starts_with('/') ? std::string_view{} : commands.directory);
     if (!word.starts_with('/')) {
@@ -341,19 +351,19 @@ namespace telar::gui::features::prompt {
   }
 
   void asked(State& state, std::uint64_t pane_id, std::string_view word, std::uint64_t request_id, bool sent) {
-    auto& memory = Access::memory(state);
-    auto& checks = checksOf(state, pane_id);
+    auto& memory = state.memory;
+    auto& checks = checksOf(state.command_checks, state.memory, pane_id);
     if (!sent) {
       static_cast<void>(checks.words.insert(Name{memory, word}, CommandPresence::unknown));
       return;
     }
 
     static_cast<void>(checks.words.insert(Name{memory, word}, CommandPresence::pending));
-    static_cast<void>(Access::commandRequests(state).insert(request_id, CommandRequest{pane_id, Name{memory, word}}));
+    static_cast<void>(state.command_requests.insert(request_id, CommandRequest{pane_id, Name{memory, word}}));
   }
 
   void learn(State& state, std::uint64_t pane_id, std::string_view command, shell::Dialect dialect) {
-    auto& memory = Access::memory(state);
+    auto& memory = state.memory;
     ds::Vec<Style, Memory> styles{memory};
     ds::Vec<shell::Token, Memory> tokens{memory};
 
@@ -374,7 +384,7 @@ namespace telar::gui::features::prompt {
       ++end;
     }
 
-    auto& checks = checksOf(state, pane_id);
+    auto& checks = checksOf(state.command_checks, state.memory, pane_id);
     if (checks.learned.size() >= 256) {
       checks.learned.clear();
     }
@@ -388,7 +398,7 @@ namespace telar::gui::features::prompt {
   }
 
   ds::Option<Settled> settles(State& state, const CompletionWords& message) {
-    const auto* checked = Access::commandRequests(state).find(message.request_id);
+    const auto* checked = state.command_requests.find(message.request_id);
     if (checked == nullptr) {
       return ds::none;
     }
@@ -401,12 +411,12 @@ namespace telar::gui::features::prompt {
       listCommands(state, checked->pane_id, checked->word.view(), message.words);
     }
 
-    return take(state, message.request_id, found ? CommandPresence::found : message.truncated ? CommandPresence::unknown
+    return take(state.command_requests, message.request_id, found ? CommandPresence::found : message.truncated ? CommandPresence::unknown
                                                                                    : CommandPresence::missing);
   }
 
   ds::Option<Settled> settles(State& state, const PathResults& message) {
-    const auto* checked = Access::commandRequests(state).find(message.request_id);
+    const auto* checked = state.command_requests.find(message.request_id);
     if (checked == nullptr) {
       return ds::none;
     }
@@ -417,23 +427,32 @@ namespace telar::gui::features::prompt {
       return match.kind != PathKind::directory && match.path == name;
     });
 
-    return take(state, message.request_id, found ? CommandPresence::found : message.truncated ? CommandPresence::unknown
+    return take(state.command_requests, message.request_id, found ? CommandPresence::found : message.truncated ? CommandPresence::unknown
                                                                                    : CommandPresence::missing);
   }
 
+  namespace {
+
+    // The word `settled` names is marked in `all`; true when it was waited for.
+    bool settleIn(Checks& all, const Settled& settled) {
+      auto* checks = all.findMut(settled.pane_id);
+      if (checks == nullptr) {
+        return false;
+      }
+
+      auto* known = checks->words.findMut(settled.word.view());
+      if (known == nullptr || *known != CommandPresence::pending) {
+        return false;
+      }
+
+      *known = settled.presence;
+      return true;
+    }
+
+  }
+
   bool settle(State& state, const Settled& settled) {
-    auto* checks = Access::commandChecks(state).findMut(settled.pane_id);
-    if (checks == nullptr) {
-      return false;
-    }
-
-    auto* known = checks->words.findMut(settled.word.view());
-    if (known == nullptr || *known != CommandPresence::pending) {
-      return false;
-    }
-
-    *known = settled.presence;
-    return true;
+    return settleIn(state.command_checks, settled);
   }
 
   // ---- completion specs -------------------------------------------------------------------------
@@ -443,7 +462,7 @@ namespace telar::gui::features::prompt {
       return SpecState::unavailable;
     }
 
-    auto& checks = commandChecks(state, commands);
+    auto& checks = commandChecks(state.command_checks, state.memory, commands);
     if (const auto* known = checks.specs.find(command)) {
       return *known;
     }
@@ -453,7 +472,7 @@ namespace telar::gui::features::prompt {
 
   RequestCommandSpec askSpec(const State& state, std::uint64_t pane_id, std::string_view command, std::uint64_t request_id) noexcept {
     // An alias's spec is its command's: the digest of the one held for what it last stood for.
-    const auto* checks = Access::commandChecks(state).find(pane_id);
+    const auto* checks = state.command_checks.find(pane_id);
     auto named = command;
 
     if (checks != nullptr) {
@@ -462,34 +481,34 @@ namespace telar::gui::features::prompt {
       }
     }
 
-    return {.request_id = request_id, .pane_id = pane_id, .command = command, .known_digest = Access::specs(state).digest(named)};
+    return {.request_id = request_id, .pane_id = pane_id, .command = command, .known_digest = state.specs.digest(named)};
   }
 
   void askedSpec(State& state, std::uint64_t pane_id, std::string_view command, std::uint64_t request_id, bool sent) {
-    auto& memory = Access::memory(state);
-    auto& checks = checksOf(state, pane_id);
+    auto& memory = state.memory;
+    auto& checks = checksOf(state.command_checks, state.memory, pane_id);
     if (!sent) {
       static_cast<void>(checks.specs.insert(Name{memory, command}, SpecState::unavailable));
       return;
     }
 
     static_cast<void>(checks.specs.insert(Name{memory, command}, SpecState::pending));
-    static_cast<void>(Access::specRequests(state).insert(request_id, CommandRequest{pane_id, Name{memory, command}}));
+    static_cast<void>(state.spec_requests.insert(request_id, CommandRequest{pane_id, Name{memory, command}}));
   }
 
   ds::Option<std::uint64_t> receive(State& state, const CommandSpec& message) {
-    auto request = Access::specRequests(state).remove(message.request_id);
+    auto request = state.spec_requests.remove(message.request_id);
     if (!request) {
       return ds::none;
     }
 
-    auto& memory = Access::memory(state);
+    auto& memory = state.memory;
     const auto pane_id = request->pane_id;
     const auto command = request->word.view();
     // An alias's spec is the one of the command it stands for, kept under that command's name.
     const auto expansion = message.command == command ? message.expansion : std::string_view{};
     const auto target = expansion.empty() ? command : expansion.substr(0, expansion.find(' '));
-    auto& specs = Access::specs(state);
+    auto& specs = state.specs;
     auto available = SpecState::unavailable;
 
     if (message.state == CommandSpecState::available && message.command == command) {
@@ -498,7 +517,7 @@ namespace telar::gui::features::prompt {
       available = SpecState::available;
     }
 
-    auto& checks = checksOf(state, pane_id);
+    auto& checks = checksOf(state.command_checks, state.memory, pane_id);
     if (auto* known = checks.specs.findMut(command)) {
       *known = available;
     }
@@ -516,14 +535,14 @@ namespace telar::gui::features::prompt {
   }
 
   bool resume(State& state, std::uint64_t pane_id) {
-    auto& waiting = Access::specCompletions(state);
+    auto& waiting = state.spec_completions;
     const auto* found = waiting.find(pane_id);
-    const auto* line = find(state, pane_id);
+    const auto* line = lineOf(state.lines, pane_id);
     if (found == nullptr || line == nullptr) {
       return false;
     }
 
-    const bool same = found->view() == Access::line(*line).editor().text().view();
+    const bool same = found->view() == line->line.editor().text().view();
 
     static_cast<void>(waiting.remove(pane_id));
     return same;
@@ -532,24 +551,25 @@ namespace telar::gui::features::prompt {
   // ---- completion -------------------------------------------------------------------------------
 
   ds::Option<CompletionContext> completing(State& state, const PaneLine& line, shell::Dialect dialect) {
-    const auto& text = Access::line(line).editor().text();
+    const auto& text = line.line.editor().text();
 
-    return completionContext(Access::memory(state), text.view(), text.cursor(), shell::Syntax{.dialect = dialect});
+    return completionContext(state.memory, text.view(), text.cursor(), shell::Syntax{.dialect = dialect});
   }
 
   void awaitSpec(State& state, const PaneLine& line) {
-    static_cast<void>(Access::specCompletions(state).assign(Access::paneId(line), Name{Access::memory(state), Access::line(line).editor().text().view()}));
+    static_cast<void>(state.spec_completions.assign(line.pane_id, Name{state.memory, line.line.editor().text().view()}));
   }
 
   CompletionPlan plan(State& state, const PaneLine& line, CompletionContext context, bool specified, bool asks, std::string_view directory, shell::Dialect dialect) {
-    const auto pane_id = Access::paneId(line);
-    auto& memory = Access::memory(state);
-    auto& specs = Access::specs(state);
+    const auto pane_id = line.pane_id;
+    auto& memory = state.memory;
+    const auto& specs = state.specs;
+    const auto* checks = state.command_checks.find(pane_id);
     const ebnf::command_spec* found = nullptr;
 
     if (specified) {
       // An alias completes as the words it stands for: `gst -` as `git status -`.
-      if (const auto* alias = checksOf(state, pane_id).aliases.find(context.command.view())) {
+      if (const auto* alias = checks == nullptr ? nullptr : checks->aliases.find(context.command.view())) {
         ds::Vec<Name, Memory> words{memory};
 
         for (auto rest = alias->view(); !rest.empty();) {
@@ -576,9 +596,9 @@ namespace telar::gui::features::prompt {
     }
 
     CompletionPlan result{memory};
-    auto& completion = Access::completion(result);
+    auto& completion = result.completion;
 
-    completion = complete(memory, context, found, specs.scratch(), Access::line(line).recent());
+    completion = complete(memory, context, found, state.scratch.lend(), line.line.recent());
     const auto wants = [&](std::string_view provider) {
       return std::ranges::any_of(completion.providers, [provider](const Name& name) {
         return name.view() == provider;
@@ -590,7 +610,7 @@ namespace telar::gui::features::prompt {
       partial.remove_prefix(completion.provider_prefix.size());
     }
 
-    auto& questions = Access::questions(result);
+    auto& questions = result.questions;
 
     // A remote shell's files, branches and commands are on its host: only the spec's own choices
     // apply there.
@@ -655,18 +675,18 @@ namespace telar::gui::features::prompt {
       return context.command.view();
     };
 
-    Access::label(result).assign(label());
-    Access::dialect(result) = dialect;
-    Access::context(result) = std::move(context);
+    result.label.assign(label());
+    result.dialect = dialect;
+    result.context = std::move(context);
     return result;
   }
 
   std::size_t questions(const CompletionPlan& plan) noexcept {
-    return Access::questions(plan).size();
+    return plan.questions.size();
   }
 
   std::variant<FindPaths, CompleteWords> request(const CompletionPlan& plan, std::size_t index, std::uint64_t pane_id, std::uint64_t request_id) noexcept {
-    const auto& question = Access::questions(plan)[index];
+    const auto& question = plan.questions[index];
     if (question.paths) {
       return FindPaths{.request_id = request_id, .root = question.root.view(), .query = question.query.view(), .kind = question.kind, .limit = 50};
     }
@@ -675,39 +695,39 @@ namespace telar::gui::features::prompt {
   }
 
   void sent(CompletionPlan& plan, std::size_t index, std::uint64_t request_id) noexcept {
-    Access::questions(plan).atMut(index).request_id = request_id;
+    plan.questions.atMut(index).request_id = request_id;
   }
 
-  void offer(State& state, PaneLine& line, CompletionPlan plan) {
-    const auto pane_id = Access::paneId(line);
-    auto& completions = Access::completions(state);
-    ds::Vec<std::uint64_t, Memory> requests{Access::memory(state)};
+  void offer(tbc::view<State&, tbc::lt::a> state, PaneLine& line, tbc::view<CompletionPlan, tbc::lt::a> plan) {
+    const auto pane_id = line.pane_id;
+    auto& completions = state.completions;
+    ds::Vec<std::uint64_t, Memory> requests{state.memory};
 
-    for (auto& question : Access::questions(plan).viewMut()) {
+    for (auto& question : plan.questions.viewMut()) {
       if (question.request_id != 0) {
         requests.push(question.request_id);
         static_cast<void>(completions.insert(question.request_id, PathCompletion{pane_id, std::move(question.base), std::move(question.query)}));
       }
     }
 
-    const auto& context = Access::context(plan);
+    const auto& context = plan.context;
 
-    Access::line(line).offer(std::move(Access::completion(plan).choices), context.replace_begin, context.replace_end, std::move(requests), Access::dialect(plan), Access::label(plan).view());
+    line.line.offer(std::move(plan.completion.choices), context.replace_begin, context.replace_end, std::move(requests), plan.dialect, plan.label.view());
   }
 
   ds::Option<std::uint64_t> receive(State& state, const CompletionWords& message) {
-    const auto pending = Access::completions(state).remove(message.request_id);
+    const auto pending = state.completions.remove(message.request_id);
     if (!pending) {
       return ds::none;
     }
 
     const auto& [pane_id, base, query] = *pending;
-    auto* line = find(state, pane_id);
+    auto* line = lineOf(state.lines, pane_id);
     if (line == nullptr) {
       return 0;
     }
 
-    auto& memory = Access::memory(state);
+    auto& memory = state.memory;
     Choices words{memory};
 
     words.reserve(message.words.size());
@@ -718,25 +738,25 @@ namespace telar::gui::features::prompt {
       words.push(Choice{.text = std::move(text), .description = Name{memory, word.description}});
     }
 
-    Access::line(*line).receive(message.request_id, words.view(), message.truncated);
+    line->line.receive(message.request_id, words.view(), message.truncated);
     return pane_id;
   }
 
   ds::Option<std::uint64_t> receive(State& state, const PathResults& message) {
-    const auto pending = Access::completions(state).remove(message.request_id);
+    const auto pending = state.completions.remove(message.request_id);
     if (!pending) {
       return ds::none;
     }
 
     const auto& [pane_id, base, query] = *pending;
-    auto* line = find(state, pane_id);
+    auto* line = lineOf(state.lines, pane_id);
     if (line == nullptr) {
       return 0;
     }
 
     // The shell completes one directory at a time: children of the root that start with what was
     // typed, not the deeper matches the search also finds.
-    auto& memory = Access::memory(state);
+    auto& memory = state.memory;
     Choices paths{memory};
 
     for (const auto& match : message.matches) {
@@ -751,36 +771,36 @@ namespace telar::gui::features::prompt {
       }
     }
 
-    Access::line(*line).receive(message.request_id, paths.view(), message.truncated);
+    line->line.receive(message.request_id, paths.view(), message.truncated);
     return pane_id;
   }
 
   // ---- requests that fail -----------------------------------------------------------------------
 
   ds::Option<std::uint64_t> fail(State& state, std::uint64_t request_id) {
-    if (Access::commandRequests(state).contains(request_id)) {
-      const auto settled = take(state, request_id, CommandPresence::unknown);
+    if (state.command_requests.contains(request_id)) {
+      const auto settled = take(state.command_requests, request_id, CommandPresence::unknown);
 
-      return settle(state, settled) ? settled.pane_id : 0;
+      return settleIn(state.command_checks, settled) ? settled.pane_id : 0;
     }
 
-    if (const auto request = Access::specRequests(state).remove(request_id)) {
+    if (const auto request = state.spec_requests.remove(request_id)) {
       const auto pane_id = request->pane_id;
 
-      if (auto* checks = Access::commandChecks(state).findMut(pane_id)) {
+      if (auto* checks = state.command_checks.findMut(pane_id)) {
         if (auto* known = checks->specs.findMut(request->word.view()); known != nullptr && *known == SpecState::pending) {
           *known = SpecState::unavailable;
         }
       }
 
-      static_cast<void>(Access::specCompletions(state).remove(pane_id));
+      static_cast<void>(state.spec_completions.remove(pane_id));
       return 0;
     }
 
-    if (const auto pending = Access::completions(state).remove(request_id)) {
+    if (const auto pending = state.completions.remove(request_id)) {
       const auto pane_id = pending->pane_id;
-      auto* line = find(state, pane_id);
-      if (line == nullptr || !Access::line(*line).receive(request_id, {}, true)) {
+      auto* line = lineOf(state.lines, pane_id);
+      if (line == nullptr || !line->line.receive(request_id, {}, true)) {
         return 0;
       }
 
@@ -791,9 +811,9 @@ namespace telar::gui::features::prompt {
   }
 
   void failAll(State& state) noexcept {
-    auto& commands = Access::commandRequests(state);
-    auto& specs = Access::specRequests(state);
-    auto& completions = Access::completions(state);
+    auto& commands = state.command_requests;
+    auto& specs = state.spec_requests;
+    auto& completions = state.completions;
 
     try {
       while (!commands.empty()) {
@@ -811,7 +831,7 @@ namespace telar::gui::features::prompt {
       // A menu that could not settle keeps its choices; no answer is waited for any more.
       commands.clear();
       specs.clear();
-      Access::specCompletions(state).clear();
+      state.spec_completions.clear();
       completions.clear();
     }
   }
@@ -819,7 +839,7 @@ namespace telar::gui::features::prompt {
   // ---- the history the suggestions read --------------------------------------------------------
 
   bool historyAsked(const State& state) noexcept {
-    return Access::historyRequest(state) != 0;
+    return state.history_request != 0;
   }
 
   QueryHistory historyQuery(std::uint64_t request_id) noexcept {
@@ -827,22 +847,22 @@ namespace telar::gui::features::prompt {
   }
 
   void askedHistory(State& state, std::uint64_t request_id) noexcept {
-    Access::historyRequest(state) = request_id;
+    state.history_request = request_id;
   }
 
   bool receive(State& state, const HistoryResults& message) {
-    auto& request = Access::historyRequest(state);
+    auto& request = state.history_request;
     if (message.request_id != request || request == 0) {
       return false;
     }
 
-    auto& history = Access::history(state);
+    auto& history = state.history;
 
     request = 0;
     history.clear();
     for (const auto& entry : message.entries) {
       if (!entry.command_truncated && !entry.command.empty()) {
-        history.emplace(Access::memory(state), entry.command);
+        history.emplace(state.memory, entry.command);
       }
     }
 
@@ -852,49 +872,49 @@ namespace telar::gui::features::prompt {
   // ---- the command block selected from the line -------------------------------------------------
 
   ds::Option<std::size_t> selectedBlock(const State& state, std::uint64_t pane_id) noexcept {
-    const auto* found = Access::lines(state).find(pane_id);
+    const auto* found = state.lines.find(pane_id);
 
-    return found == nullptr ? ds::none : Access::block(std::as_const(**found));
+    return found == nullptr ? ds::none : std::as_const(**found).block;
   }
 
   ds::Option<std::size_t> selectedBlock(const PaneLine& line) noexcept {
-    return Access::block(line);
+    return line.block;
   }
 
   void selectBlock(PaneLine& line, ds::Option<std::size_t> index, ds::Option<std::uint32_t> live_prompt) noexcept {
-    auto& block = Access::block(line);
+    auto& block = line.block;
 
-    Access::chord(line) = 0;
+    line.chord = 0;
     if (!index) {
       block.reset();
       return;
     }
 
     if (!block) {
-      Access::livePrompt(line) = live_prompt;
+      line.live_prompt = live_prompt;
     }
 
     block = index;
   }
 
   ds::Option<std::uint32_t> livePrompt(const State& state, std::uint64_t pane_id) noexcept {
-    const auto* found = Access::lines(state).find(pane_id);
+    const auto* found = state.lines.find(pane_id);
 
-    return found == nullptr ? ds::none : Access::livePrompt(std::as_const(**found));
+    return found == nullptr ? ds::none : std::as_const(**found).live_prompt;
   }
 
   void beginChord(PaneLine& line, char first) noexcept {
-    Access::chord(line) = first;
+    line.chord = first;
   }
 
   char takeChord(PaneLine& line) noexcept {
-    return std::exchange(Access::chord(line), 0);
+    return std::exchange(line.chord, 0);
   }
 
   void recordJump(PaneLine& line, std::uint64_t here) {
     constexpr std::size_t maximum_jumps = 64;
-    auto& jumps = Access::jumps(line);
-    auto& jump = Access::jump(line);
+    auto& jumps = line.jumps;
+    auto& jump = line.jump;
 
     jumps.truncate(std::min(jump, jumps.size()));
     if (jumps.empty() || jumps.back() != here) {
@@ -909,8 +929,8 @@ namespace telar::gui::features::prompt {
   }
 
   ds::Option<std::uint64_t> jump(PaneLine& line, std::uint64_t here, bool back) {
-    auto& jumps = Access::jumps(line);
-    auto& at = Access::jump(line);
+    auto& jumps = line.jumps;
+    auto& at = line.jump;
 
     if (back) {
       if (at == 0 || jumps.empty()) {

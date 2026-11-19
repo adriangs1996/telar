@@ -16,7 +16,7 @@ namespace telar::gui::features::prompt {
   public:
     static constexpr std::size_t capacity = 256;
 
-    // The specs and the matcher's scratch live in `memory`.
+    // The specs live in `memory`.
     explicit Specs(Memory& memory);
 
     const ebnf::command_spec* find(std::string_view command) const;
@@ -27,8 +27,6 @@ namespace telar::gui::features::prompt {
     // Compiles and keeps `source`; a spec that does not compile is dropped.
     bool install(std::string_view command, std::uint64_t digest, std::string_view source);
 
-    ebnf::match_scratch& scratch();
-
   private:
     struct Entry {
       std::uint64_t digest = 0;
@@ -37,6 +35,17 @@ namespace telar::gui::features::prompt {
 
     Memory& memory_;
     ds::Map<ds::String<Memory>, Entry, Memory> entries_;
+  };
+
+  // The matcher's working space, made in `memory` the first time a spec completes.
+  class MatchScratch {
+  public:
+    explicit MatchScratch(Memory& memory);
+
+    ebnf::match_scratch& lend();
+
+  private:
+    Memory& memory_;
     ds::Option<Owned<ebnf::match_scratch, Memory>> scratch_;
   };
 
