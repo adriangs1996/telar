@@ -34,13 +34,14 @@ namespace {
     Mapped(AgentProvider provider, std::string_view input)
         : adapter(system),
           payload(adapter, provider, JsonValue::parse(input)) {
-      map(payload, reports, files, process_environment);
+      map(payload, reports, texts, files, process_environment);
     }
 
     SystemAllocator system;
     MemoryAdapter<SystemAllocator> adapter;
     Payload payload;
     Reports reports;
+    ReportTexts texts;
     SessionFiles files;
   };
 

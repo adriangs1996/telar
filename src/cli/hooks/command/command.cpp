@@ -23,6 +23,7 @@ namespace telar::runtime::cli::hooks {
     });
 
     indexMembers();
+    decodeStrings();
   }
 
   ds::Option<JsonValue> Object::value(std::string_view name) const {
@@ -34,8 +35,8 @@ namespace telar::runtime::cli::hooks {
     return member == nullptr ? ds::none : ds::Option{member->value};
   }
 
-  ds::Option<std::string_view> Object::optionalText(std::string_view name) {
-    auto* member = findMut(name);
+  ds::Option<std::string_view> Object::optionalText(std::string_view name) const {
+    const auto* member = find(name);
     if (member == nullptr) {
       return ds::none;
     }
@@ -45,16 +46,16 @@ namespace telar::runtime::cli::hooks {
       return ds::none;
     }
 
-    return decode(*member);
+    return decoded(*member);
   }
 
-  std::string_view Object::text(std::string_view name) {
-    auto* member = findMut(name);
+  std::string_view Object::text(std::string_view name) const {
+    const auto* member = find(name);
 
-    return member == nullptr ? std::string_view{} : decode(*member);
+    return member == nullptr ? std::string_view{} : decoded(*member);
   }
 
-  ds::Option<std::string_view> Object::stringField(std::string_view name) {
+  ds::Option<std::string_view> Object::stringField(std::string_view name) const {
     const auto field = value(name);
 
     return field && field->encoded().starts_with('"') ? optionalText(name) : ds::none;
@@ -88,17 +89,13 @@ namespace telar::runtime::cli::hooks {
     }
   }
 
-  auto Object::findMut(std::string_view name) noexcept -> Member* {
-    const auto members = members_.viewMut();
+  auto Object::find(std::string_view name) const noexcept -> const Member* {
+    const auto members = members_.view();
     const auto found = std::lower_bound(members.begin(), members.end(), name, [](const Member& member, std::string_view key) {
       return member.name < key;
     });
 
     return found != members.end() && found->name == name ? &*found : nullptr;
-  }
-
-  auto Object::find(std::string_view name) const noexcept -> const Member* {
-    return const_cast<Object*>(this)->findMut(name);
   }
 
   void Object::indexMembers() {
@@ -124,13 +121,25 @@ namespace telar::runtime::cli::hooks {
     members_.truncate(unique);
   }
 
-  auto Object::decode(tbc::view<Member&, tbc::lt::a> member) -> tbc::view<std::string_view, tbc::lt::a> {
+  void Object::decodeStrings() {
+    for (auto& member : members_.viewMut()) {
+      if (member.value.encoded().starts_with('"')) {
+        ds::String<Memory> decoded{memory_};
+
+        member.value.string(decoded);
+        member.text = std::move(decoded);
+      }
+    }
+  }
+
+  tbc::view<std::string_view, tbc::lt::a> Object::decoded(tbc::view<const Member&, tbc::lt::a> member) const {
     checkUnique(member);
     if (!member.text) {
-      ds::String<Memory> decoded{memory_};
+      // Not a string: reading it as one fails as it always did.
+      ds::String<Memory> failed{memory_};
 
-      member.value.string(decoded);
-      member.text = std::move(decoded);
+      member.value.string(failed);
+      return {};
     }
 
     return *member.text;
@@ -230,15 +239,15 @@ namespace telar::runtime::cli::hooks {
     }
   }
 
-  std::string_view Payload::event() {
+  std::string_view Payload::event() const {
     return fields.text(provider == AgentProvider::pi || provider == AgentProvider::opencode ? "event" : "hook_event_name");
   }
 
-  std::string_view Payload::session() {
+  std::string_view Payload::session() const {
     return fields.text(provider == AgentProvider::cursor ? "conversation_id" : "session_id");
   }
 
-  bool Payload::subagent() {
+  bool Payload::subagent() const {
     return !fields.optionalText("agent_id").valueOr("").empty();
   }
 
@@ -246,7 +255,7 @@ namespace telar::runtime::cli::hooks {
     return workspace_ ? std::string_view{*workspace_} : std::string_view{};
   }
 
-  std::string_view Payload::toolEvent() {
+  std::string_view Payload::toolEvent() const {
     const auto name = event();
 
     if (provider != AgentProvider::cursor) {
@@ -264,7 +273,7 @@ namespace telar::runtime::cli::hooks {
     return name;
   }
 
-  AgentBlockedReason Payload::blockedReason() {
+  AgentBlockedReason Payload::blockedReason() const {
     const auto name = fields.value("blocked") ? fields.text("blocked") : "none";
     constexpr ds::Array names{"none", "permission", "question", "plan", "other"};
     const auto found = std::ranges::find(names, name);
@@ -418,7 +427,7 @@ namespace telar::runtime::cli::hooks {
     return false;
   }
 
-  void toolEvent(FixedText<96>& output, Payload& input) {
+  void toolEvent(FixedText<96>& output, const Payload& input) {
     const auto name = input.fields.text("tool_name");
     if (name.empty()) {
       output.assign({});
@@ -447,7 +456,7 @@ namespace telar::runtime::cli::hooks {
     eventLine(output, {buffer.data(), length});
   }
 
-  bool questionEvent(FixedText<96>& output, Payload& input) {
+  bool questionEvent(FixedText<96>& output, const Payload& input) {
     const auto questions = input.tools.value("questions");
     if (!questions || !questions->encoded().starts_with('[')) {
       return false;
@@ -471,7 +480,7 @@ namespace telar::runtime::cli::hooks {
     return found;
   }
 
-  ds::Option<std::int32_t> commandExitCode(Payload& input) {
+  ds::Option<std::int32_t> commandExitCode(const Payload& input) {
     if (input.provider == AgentProvider::claude) {
       return input.event() == "PostToolUse" ? ds::Option<std::int32_t>{0} : ds::none;
     }
@@ -497,7 +506,7 @@ namespace telar::runtime::cli::hooks {
     }
   }
 
-  ds::Option<ReportAgentCommand> commandReport(Payload& input) {
+  ds::Option<ReportAgentCommand> commandReport(const Payload& input) {
     if ((input.provider == AgentProvider::claude || input.provider == AgentProvider::codex) && input.subagent()) {
       return ds::none;
     }

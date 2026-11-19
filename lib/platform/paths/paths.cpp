@@ -247,7 +247,7 @@ namespace telar::runtime::cli {
   }
 
   template <Allocator Memory>
-  RuntimePaths<Memory>::RuntimePaths(Memory& memory, const ServerOptions& options, const EnvironmentSource& environment)
+  RuntimePaths<Memory>::RuntimePaths(tbc::view<Memory&, tbc::lt::a> memory, const ServerOptions& options, const EnvironmentSource& environment)
       : socket(memory),
         history(memory),
         session(memory),

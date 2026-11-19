@@ -38,14 +38,14 @@ export {
       explicit Object(Memory& memory, JsonValue value, bool reject_duplicates = false);
 
       ds::Option<JsonValue> value(std::string_view name) const;
-      ds::Option<std::string_view> optionalText(std::string_view name);
-      std::string_view text(std::string_view name);
-      ds::Option<std::string_view> stringField(std::string_view name);
+      ds::Option<std::string_view> optionalText(std::string_view name) const;
+      std::string_view text(std::string_view name) const;
+      ds::Option<std::string_view> stringField(std::string_view name) const;
       ds::Option<bool> boolean(std::string_view name) const;
 
       // Generic over the caller's integer type, so it stays here and reads the field through text.
       template <typename Integer>
-      TBC_GENERIC inline ds::Option<Integer> integer(std::string_view name) {
+      TBC_GENERIC inline ds::Option<Integer> integer(std::string_view name) const {
         const auto field = value(name);
         if (!field || field->encoded() == "null") {
           return ds::none;
@@ -74,10 +74,11 @@ export {
         bool duplicate = false;
       };
 
-      Member* findMut(std::string_view name) noexcept;
       const Member* find(std::string_view name) const noexcept;
       void indexMembers();
-      tbc::view<std::string_view, tbc::lt::a> decode(tbc::view<Member&, tbc::lt::a> member);
+      // Each string member is decoded once, as the object is built, so reading one reads nothing new.
+      void decodeStrings();
+      tbc::view<std::string_view, tbc::lt::a> decoded(tbc::view<const Member&, tbc::lt::a> member) const;
       void checkUnique(const Member& member) const;
 
       Memory& memory_;
@@ -114,12 +115,12 @@ export {
       Payload(const Payload&) = delete;
       Payload& operator=(const Payload&) = delete;
 
-      std::string_view event();
-      std::string_view session();
-      bool subagent();
+      std::string_view event() const;
+      std::string_view session() const;
+      bool subagent() const;
       std::string_view workspace() const noexcept;
-      std::string_view toolEvent();
-      AgentBlockedReason blockedReason();
+      std::string_view toolEvent() const;
+      AgentBlockedReason blockedReason() const;
 
       Memory& memory;
       AgentProvider provider;
@@ -162,7 +163,7 @@ export {
 export {
   namespace telar::runtime::cli::hooks {
 
-    ds::Option<ReportAgentCommand> commandReport(Payload& input);
+    ds::Option<ReportAgentCommand> commandReport(const Payload& input);
 
   }
 }
@@ -171,9 +172,9 @@ export {
 export {
   namespace telar::runtime::cli::hooks {
 
-    void toolEvent(FixedText<96>& output, Payload& input);
+    void toolEvent(FixedText<96>& output, const Payload& input);
 
-    bool questionEvent(FixedText<96>& output, Payload& input);
+    bool questionEvent(FixedText<96>& output, const Payload& input);
 
     void backgroundEvent(FixedText<96>& output, std::size_t count);
 

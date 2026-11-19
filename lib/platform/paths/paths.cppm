@@ -164,7 +164,8 @@ export {
     template <Allocator Memory>
     class RuntimePaths {
     public:
-      explicit RuntimePaths(Memory& memory, const ServerOptions& options, const EnvironmentSource& environment);
+      // Keeps nothing of the options or the environment: its paths are copies in `memory`.
+      explicit RuntimePaths(tbc::view<Memory&, tbc::lt::a> memory, const ServerOptions& options, const EnvironmentSource& environment);
 
       void resolveStorage(const ServerOptions& options, const EnvironmentSource& environment);
       void prepareSocket() const;
@@ -179,11 +180,11 @@ export {
 
       void prepareStorage() const;
 
-      ds::String<Memory> socket;
-      ds::String<Memory> history;
-      ds::String<Memory> session;
+      tbc::view<ds::String<Memory>, tbc::lt::a> socket;
+      tbc::view<ds::String<Memory>, tbc::lt::a> history;
+      tbc::view<ds::String<Memory>, tbc::lt::a> session;
       // XDG_DATA_HOME, or ~/.local/share; empty without either.
-      ds::String<Memory> data_home;
+      tbc::view<ds::String<Memory>, tbc::lt::a> data_home;
       bool socket_managed = false;
       bool history_managed = false;
 

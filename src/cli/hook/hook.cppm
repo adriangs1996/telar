@@ -53,7 +53,7 @@ export {
       std::string_view codex(const Environment& environment) noexcept;
 
       template <EnvironmentLookup Environment>
-      std::string_view cursor(Payload& input, const Environment& environment) noexcept;
+      std::string_view cursor(const Payload& input, const Environment& environment) noexcept;
 
     private:
       template <EnvironmentLookup Environment>
@@ -78,8 +78,8 @@ export {
 
     template <EnvironmentLookup Environment>
     // The reports view the payload, the files and their own texts, all region `a`.
-    void map(tbc::view<Payload&, tbc::lt::a> input, tbc::view<Reports&, tbc::lt::a> reports, tbc::view<SessionFiles&, tbc::lt::a> files, const Environment& environment);
-    extern template void map<ProcessEnvironment>(tbc::view<Payload&, tbc::lt::a> input, tbc::view<Reports&, tbc::lt::a> reports, tbc::view<SessionFiles&, tbc::lt::a> files, const ProcessEnvironment& environment);
+    void map(tbc::view<Payload&, tbc::lt::a> input, tbc::view<Reports&, tbc::lt::a> reports, tbc::view<ReportTexts&, tbc::lt::a> texts, tbc::view<SessionFiles&, tbc::lt::a> files, const Environment& environment);
+    extern template void map<ProcessEnvironment>(tbc::view<Payload&, tbc::lt::a> input, tbc::view<Reports&, tbc::lt::a> reports, tbc::view<ReportTexts&, tbc::lt::a> texts, tbc::view<SessionFiles&, tbc::lt::a> files, const ProcessEnvironment& environment);
 
   }
 }

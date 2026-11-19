@@ -46,10 +46,11 @@ namespace {
       try {
         Payload payload{memory, AgentProvider::claude, JsonValue::parse(input)};
         Reports reports;
+        ReportTexts texts;
         SessionFiles files;
 
         // A Claude payload maps without reading the environment.
-        map(payload, reports, files, process_environment);
+        map(payload, reports, texts, files, process_environment);
         check(reports.progress && reports.progress->plan_total == 1);
         check(reports.progress->plan_text == "Step with enough text to require allocated storage");
         completed = true;

@@ -23,7 +23,7 @@ import telar.base.text.json;
 
 namespace telar::runtime::cli::hooks {
 
-  tbc::view<ds::Option<ReportAgent>, tbc::lt::a> claudeLifecycle(tbc::view<Payload&, tbc::lt::a> input, tbc::view<FixedText<96>&, tbc::lt::a> event) {
+  tbc::view<ds::Option<ReportAgent>, tbc::lt::a> claudeLifecycle(tbc::view<const Payload&, tbc::lt::a> input, tbc::view<FixedText<96>&, tbc::lt::a> event) {
     const auto name = input.event();
 
     if (input.subagent()) {
@@ -77,7 +77,7 @@ namespace telar::runtime::cli::hooks {
     return report;
   }
 
-  tbc::view<ds::Option<ReportAgent>, tbc::lt::a> codexLifecycle(tbc::view<Payload&, tbc::lt::a> input, tbc::view<FixedText<96>&, tbc::lt::a> event, tbc::view<std::string_view, tbc::lt::a> database) {
+  tbc::view<ds::Option<ReportAgent>, tbc::lt::a> codexLifecycle(tbc::view<const Payload&, tbc::lt::a> input, tbc::view<FixedText<96>&, tbc::lt::a> event, tbc::view<std::string_view, tbc::lt::a> database) {
     const auto name = input.event();
 
     if (input.subagent()) {
@@ -125,7 +125,7 @@ namespace telar::runtime::cli::hooks {
     return report;
   }
 
-  ds::Option<ReportAgent> piLifecycle(Payload& input) {
+  ds::Option<ReportAgent> piLifecycle(const Payload& input) {
     const auto name = input.event();
     ReportAgent report{.session = sessionReference(input.session())};
 
@@ -152,7 +152,7 @@ namespace telar::runtime::cli::hooks {
     return report;
   }
 
-  tbc::view<ds::Option<ReportAgent>, tbc::lt::a> openCodeLifecycle(tbc::view<Payload&, tbc::lt::a> input, tbc::view<FixedText<96>&, tbc::lt::a> event) {
+  tbc::view<ds::Option<ReportAgent>, tbc::lt::a> openCodeLifecycle(tbc::view<const Payload&, tbc::lt::a> input, tbc::view<FixedText<96>&, tbc::lt::a> event) {
     const auto name = input.event();
     const auto blocked = input.blockedReason();
     ReportAgent report{.session = sessionReference(input.session())};
@@ -186,7 +186,7 @@ namespace telar::runtime::cli::hooks {
     return report;
   }
 
-  tbc::view<ds::Option<ReportAgent>, tbc::lt::a> cursorLifecycle(tbc::view<Payload&, tbc::lt::a> input, tbc::view<FixedText<96>&, tbc::lt::a> event, tbc::view<std::string_view, tbc::lt::a> metadata) {
+  tbc::view<ds::Option<ReportAgent>, tbc::lt::a> cursorLifecycle(tbc::view<const Payload&, tbc::lt::a> input, tbc::view<FixedText<96>&, tbc::lt::a> event, tbc::view<std::string_view, tbc::lt::a> metadata) {
     const auto name = input.event();
     ReportAgent report{.session = sessionReference(input.session()), .session_file = metadata.size() <= 1024 ? metadata : "", .session_file_kind = AgentSessionFileKind::cursor_meta};
 
@@ -215,7 +215,7 @@ namespace telar::runtime::cli::hooks {
     return found == names.end() ? ds::none : ds::Option{static_cast<AgentPlanStatus>(found - names.begin())};
   }
 
-  void setPlan(tbc::view<Payload&, tbc::lt::a> input, tbc::view<Reports&, tbc::lt::a> reports, tbc::view<ReportAgentProgress&, tbc::lt::a> report) {
+  void setPlan(tbc::view<const Payload&, tbc::lt::a> input, tbc::view<FixedText<96>&, tbc::lt::a> step, tbc::view<ReportAgentProgress&, tbc::lt::a> report) {
     const bool todo = input.fields.text("tool_name") == "TodoWrite";
     const auto items = input.tools.value(todo ? "todos" : "plan");
     if (!items || !items->encoded().starts_with('[')) {
@@ -247,11 +247,11 @@ namespace telar::runtime::cli::hooks {
     });
 
     report.plan_op = AgentPlanOp::set;
-    displayText(reports.step, current.empty() ? std::string_view{pending} : std::string_view{current}, false);
-    report.plan_text = reports.step.view();
+    displayText(step, current.empty() ? std::string_view{pending} : std::string_view{current}, false);
+    report.plan_text = step.view();
   }
 
-  void updatePlan(tbc::view<Payload&, tbc::lt::a> input, tbc::view<Reports&, tbc::lt::a> reports, tbc::view<ReportAgentProgress&, tbc::lt::a> report) {
+  void updatePlan(tbc::view<const Payload&, tbc::lt::a> input, tbc::view<FixedText<96>&, tbc::lt::a> step, tbc::view<ReportAgentProgress&, tbc::lt::a> report) {
     if (input.event() == "SessionStart") {
       report.plan_op = AgentPlanOp::set;
       return;
@@ -265,8 +265,8 @@ namespace telar::runtime::cli::hooks {
     if (tool == "TaskCreate") {
       if (const auto subject = input.tools.stringField("subject")) {
         report.plan_op = AgentPlanOp::add;
-        displayText(reports.step, *subject, false);
-        report.plan_text = reports.step.view();
+        displayText(step, *subject, false);
+        report.plan_text = step.view();
       }
     } else if (tool == "TaskUpdate") {
       const auto text = input.tools.stringField("taskId");
@@ -282,11 +282,11 @@ namespace telar::runtime::cli::hooks {
         report.plan_status = *status;
       }
     } else if (tool == "TodoWrite" || tool == "update_plan") {
-      setPlan(input, reports, report);
+      setPlan(input, step, report);
     }
   }
 
-  tbc::view<ds::Option<ReportAgentProgress>, tbc::lt::a> progressReport(tbc::view<Payload&, tbc::lt::a> input, tbc::view<Reports&, tbc::lt::a> reports) {
+  tbc::view<ds::Option<ReportAgentProgress>, tbc::lt::a> progressReport(tbc::view<const Payload&, tbc::lt::a> input, tbc::view<ReportTexts&, tbc::lt::a> texts) {
     if ((input.provider != AgentProvider::claude && input.provider != AgentProvider::codex) || input.subagent()) {
       return ds::none;
     }
@@ -294,9 +294,17 @@ namespace telar::runtime::cli::hooks {
     ReportAgentProgress report;
     const auto changed = input.provider == AgentProvider::claude ? input.fields.text("new_cwd") : std::string_view{};
     const auto cwd = changed.empty() ? input.fields.text("cwd") : changed;
+
+    updatePlan(input, texts.step, report);
+    if (input.event() == "Stop") {
+      displayText(texts.message, input.fields.optionalText("last_assistant_message").valueOr(""), true);
+      report.final_message = texts.message.view();
+    }
+
+    // Last: the worktree it names is viewed once the texts are written.
     if (cwd.starts_with('/') && cwd.size() <= 4096) {
       report.cwd = cwd;
-      if (const auto linked = reports.worktree.find(cwd)) {
+      if (const auto linked = texts.worktree.find(cwd)) {
         try {
           DisplayText16<200>::validate(linked->branch);
           report.work_tree_path = cwd.substr(0, linked->root_length);
@@ -306,17 +314,11 @@ namespace telar::runtime::cli::hooks {
       }
     }
 
-    updatePlan(input, reports, report);
-    if (input.event() == "Stop") {
-      displayText(reports.message, input.fields.optionalText("last_assistant_message").valueOr(""), true);
-      report.final_message = reports.message.view();
-    }
-
     return report.cwd.empty() && report.plan_op == AgentPlanOp::none && report.final_message.empty() ? ds::none : ds::Option{report};
   }
 
   // The title an agent sets, on one line without control bytes, which the codec refuses in a title.
-  tbc::view<ds::Option<ReportAgentTitle>, tbc::lt::a> titleReport(Payload& input, tbc::view<FixedText<96>&, tbc::lt::a> text) {
+  tbc::view<ds::Option<ReportAgentTitle>, tbc::lt::a> titleReport(const Payload& input, tbc::view<FixedText<96>&, tbc::lt::a> text) {
     ds::Option<std::string_view> title;
 
     if (input.provider == AgentProvider::claude) {
@@ -346,14 +348,14 @@ namespace telar::runtime::cli::hooks {
 
   template <EnvironmentLookup Environment>
   // The reports view the payload, the files and their own texts, all region `a`.
-  void map(tbc::view<Payload&, tbc::lt::a> input, tbc::view<Reports&, tbc::lt::a> reports, tbc::view<SessionFiles&, tbc::lt::a> files, const Environment& environment) {
+  void map(tbc::view<Payload&, tbc::lt::a> input, tbc::view<Reports&, tbc::lt::a> reports, tbc::view<ReportTexts&, tbc::lt::a> texts, tbc::view<SessionFiles&, tbc::lt::a> files, const Environment& environment) {
     TELAR_TRACE("hooks.mapReports");
     reports.command = commandReport(input);
-    reports.title = titleReport(input, reports.title_text);
-    reports.progress = progressReport(input, reports);
+    reports.title = titleReport(input, texts.title_text);
+    reports.progress = progressReport(input, texts);
     switch (input.provider) {
     case AgentProvider::claude:
-      reports.lifecycle = claudeLifecycle(input, reports.event);
+      reports.lifecycle = claudeLifecycle(input, texts.event);
       break;
     case AgentProvider::codex: {
       if (input.event() == "Stop" || input.event() == "Interrupt" || input.event() == "SubagentStop") {
@@ -366,17 +368,17 @@ namespace telar::runtime::cli::hooks {
       const auto database = files.codex(environment);
       const bool has_home = !environment.lookup("CODEX_HOME").empty() || !environment.lookup("HOME").empty();
 
-      reports.lifecycle = codexLifecycle(input, reports.event, has_home ? database : input.fields.text("state_database"));
+      reports.lifecycle = codexLifecycle(input, texts.event, has_home ? database : input.fields.text("state_database"));
       break;
     }
     case AgentProvider::pi:
       reports.lifecycle = piLifecycle(input);
       break;
     case AgentProvider::opencode:
-      reports.lifecycle = openCodeLifecycle(input, reports.event);
+      reports.lifecycle = openCodeLifecycle(input, texts.event);
       break;
     case AgentProvider::cursor:
-      reports.lifecycle = cursorLifecycle(input, reports.event, files.cursor(input, environment));
+      reports.lifecycle = cursorLifecycle(input, texts.event, files.cursor(input, environment));
       break;
     default:
       break;
@@ -739,9 +741,10 @@ namespace telar::runtime::cli {
       if (!worktree_status && target) {
         hooks::Payload payload{memory, options.provider, std::move(fields)};
         hooks::Reports reports;
+        hooks::ReportTexts texts;
         hooks::SessionFiles files;
 
-        hooks::map(payload, reports, files, environment);
+        hooks::map(payload, reports, texts, files, environment);
         if (!reports.empty()) {
           ServerOptions server;
 
@@ -786,7 +789,7 @@ namespace telar::runtime::cli {
 
 namespace telar::runtime::cli::hooks {
 
-  template void map<ProcessEnvironment>(tbc::view<Payload&, tbc::lt::a> input, tbc::view<Reports&, tbc::lt::a> reports, tbc::view<SessionFiles&, tbc::lt::a> files, const ProcessEnvironment& environment);
+  template void map<ProcessEnvironment>(tbc::view<Payload&, tbc::lt::a> input, tbc::view<Reports&, tbc::lt::a> reports, tbc::view<ReportTexts&, tbc::lt::a> texts, tbc::view<SessionFiles&, tbc::lt::a> files, const ProcessEnvironment& environment);
 
   Input::Input(Memory& memory)
       : text_(memory) {}
@@ -949,7 +952,7 @@ namespace telar::runtime::cli::hooks {
   }
 
   template <EnvironmentLookup Environment>
-  std::string_view SessionFiles::cursor(Payload& input, const Environment& environment) noexcept {
+  std::string_view SessionFiles::cursor(const Payload& input, const Environment& environment) noexcept {
     try {
       if (input.event() != "sessionStart" && input.event() != "beforeSubmitPrompt") {
         return {};

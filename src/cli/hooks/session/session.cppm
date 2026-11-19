@@ -47,16 +47,21 @@ export {
 export {
   namespace telar::runtime::cli::hooks {
 
-    struct Reports {
-      ds::Option<ReportAgent> lifecycle;
-      ds::Option<ReportAgentCommand> command;
-      ds::Option<ReportAgentTitle> title;
-      ds::Option<ReportAgentProgress> progress;
+    // The text the reports show, apart from them: a report views these and the payload, as a Rust
+    // `Reports<'a>` borrows the buffers it does not own.
+    struct ReportTexts {
       FixedText<96> event;
       FixedText<96> step;
       FixedText<96> title_text;
       FixedText<2048> message;
       LinkedWorktree worktree;
+    };
+
+    struct Reports {
+      ds::Option<ReportAgent> lifecycle;
+      ds::Option<ReportAgentCommand> command;
+      ds::Option<ReportAgentTitle> title;
+      ds::Option<ReportAgentProgress> progress;
 
       bool empty() const noexcept;
     };
