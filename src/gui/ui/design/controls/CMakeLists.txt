@@ -30,6 +30,7 @@ telar_add_qml_sources(gui-quick
     ApplicationTile.qml
     CellText.qml
     ChromeButton.qml
+    ChromeIconButton.qml
     ChromeIcon.qml
     ChromeText.qml
     ChromeToolTip.qml
@@ -38,6 +39,7 @@ telar_add_qml_sources(gui-quick
     FormButton.qml
     FormTextField.qml
     KeyboardAction.qml
+    OverlayHeader.qml
   FP_CONTRACT_OFF
     modal_reveal_layout.cpp
     native_agent_status.cpp

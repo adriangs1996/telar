@@ -15,7 +15,7 @@ Item {
     property bool selected: false
     signal activated(string key, string revision)
 
-    readonly property real horizontalInset: Math.min(10 * ratio, width / 8)
+    readonly property real horizontalInset: Math.min(8 * ratio, width / 8)
     readonly property real iconSide: Math.min(20 * ratio, width - horizontalInset * 2)
     readonly property real iconGap: 10 * ratio
     readonly property real hintGap: 12 * ratio
@@ -23,12 +23,21 @@ Item {
     readonly property real hintShare: 0.45
     readonly property real cornerRadius: ChromeStyle.controlRadius * ratio
     readonly property real selectionAlpha: ChromeStyle.selectionAlpha
-    readonly property real outlineAlpha: ChromeStyle.outlineAlpha
     readonly property real detailAlpha: 0.65
     readonly property bool hasIcon: record.icon.length > 0
-    readonly property real iconWidth: hasIcon ? Math.min(Math.max(0, width - horizontalInset * 2), iconSide + iconGap) : 0
+    // A pick's choice can carry colours, drawn as a small preview instead of an icon.
+    readonly property var swatch: record.swatch ?? []
+    readonly property bool hasSwatch: swatch.length > 0
+    readonly property real swatchWidth: 30 * ratio
+    readonly property real swatchHeight: 20 * ratio
+    readonly property real leadingSide: hasSwatch ? swatchWidth : hasIcon ? iconSide : 0
+    readonly property real iconWidth: leadingSide > 0 ? Math.min(Math.max(0, width - horizontalInset * 2), leadingSide + iconGap) : 0
+    // A row that can be the current choice keeps a column for its check, checked or not.
+    readonly property bool checkable: record.checked !== undefined
+    readonly property real checkSide: 16 * ratio
+    readonly property real checkWidth: checkable ? checkSide + hintGap : 0
     readonly property real bodyLeft: horizontalInset + iconWidth
-    readonly property real bodyWidth: Math.max(0, width - horizontalInset * 2 - iconWidth)
+    readonly property real bodyWidth: Math.max(0, width - horizontalInset * 2 - iconWidth - checkWidth)
     readonly property string hint: record.hint.length > 0 ? record.hint : record.detailBelow ? "" : record.secondary
     readonly property real hintWidth: hint.length > 0 ? Math.min(hintLabel.implicitWidth + (record.shortcut ? shortcutPadding : 0), bodyWidth * hintShare) : 0
     readonly property real labelWidth: Math.max(0, bodyWidth - hintWidth - (hint.length > 0 ? hintGap : 0))
@@ -49,25 +58,61 @@ Item {
         visible: root.selected
     }
 
-    NativeRoundedRectangle {
-        anchors.fill: parent
-        radius: root.cornerRadius
-        color: "transparent"
-        borderWidth: 1 / Screen.devicePixelRatio
-        borderColor: root.colors.text
-        borderAlpha: root.outlineAlpha
-        visible: root.selected
-    }
-
     ChromeIcon {
         x: root.horizontalInset
         y: (root.height - height) / 2
         width: root.iconSide
         height: Math.min(width, root.height)
         glyph: root.record.icon
-        color: Qt.alpha(root.colors.text, root.detailAlpha)
+        color: root.record.destructive ?? false ? root.colors.red : Qt.alpha(root.colors.text, root.detailAlpha)
         pixelSize: root.typography.body
-        visible: root.hasIcon
+        visible: root.hasIcon && !root.hasSwatch
+    }
+
+    Item {
+        x: root.horizontalInset
+        y: (root.height - height) / 2
+        width: root.swatchWidth
+        height: root.swatchHeight
+        visible: root.hasSwatch
+
+        NativeRoundedRectangle {
+            anchors.fill: parent
+            radius: ChromeStyle.smallRadius * root.ratio
+            color: root.swatch[0] ?? "transparent"
+            borderWidth: 1 / Screen.devicePixelRatio
+            borderColor: root.colors.text
+            borderAlpha: ChromeStyle.outlineAlpha
+        }
+
+        NativeRoundedRectangle {
+            x: 5 * root.ratio
+            y: 6 * root.ratio
+            width: 14 * root.ratio
+            height: 3 * root.ratio
+            radius: height / 2
+            color: root.swatch[1] ?? "transparent"
+        }
+
+        NativeRoundedRectangle {
+            x: 5 * root.ratio
+            y: 11 * root.ratio
+            width: 9 * root.ratio
+            height: 3 * root.ratio
+            radius: height / 2
+            color: root.swatch[2] ?? "transparent"
+        }
+    }
+
+    ChromeIcon {
+        x: root.width - root.horizontalInset - width
+        y: (root.height - height) / 2
+        width: root.checkSide
+        height: Math.min(width, root.height)
+        glyph: "\uf00c"
+        color: root.colors.accent
+        pixelSize: root.typography.small
+        visible: root.checkable && root.record.checked
     }
 
     ChromeText {

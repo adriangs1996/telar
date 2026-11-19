@@ -326,19 +326,24 @@ KeyboardAction {
         id: meter
         Item {
             readonly property bool panel: root.node.kind === "meter_row"
-            readonly property real lineHeight: 18 * root.ratio
-            readonly property real detailHeight: 16 * root.ratio
-            readonly property real detailedHeight: 36 * root.ratio
-            readonly property real columnGap: 14 * root.ratio
-            readonly property real numberWidth: 40 * root.ratio
-            readonly property real labelShare: 0.38
-            readonly property real labelWidth: Math.round(width * labelShare)
+            // In a panel: the label and the value on one line, the bar under them, then the detail
+            // and where usage would be at an even pace.
+            readonly property real labelRow: root.typography.bodyRow
+            readonly property real detailRow: root.typography.smallRow
+            readonly property real barHeight: 6 * root.ratio
+            readonly property real barGap: 6 * root.ratio
+            readonly property real valueGap: 12 * root.ratio
+            readonly property real markerWidth: 2 * root.ratio
+            readonly property real markerHalo: 2 * root.ratio
+            readonly property bool hasMarker: root.node.marker !== undefined && root.node.marker !== null
+            readonly property bool detailed: panel && (root.node.detail.length > 0 || hasMarker)
+            readonly property real detailTop: labelRow + barGap + barHeight + barGap
             readonly property real track: !panel && !root.compact ? root.trackWidth : 0
             // In the bar the ring leads: ring, label, value.
             readonly property real ringWidth: track > 0 ? track + root.meterGap : 0
             readonly property real labelGap: !panel && root.node.text.length > 0 ? root.meterGap : 0
-            implicitWidth: meterLabel.implicitWidth + (panel ? 0 : ringWidth + labelGap + meterValue.implicitWidth)
-            implicitHeight: panel ? (root.node.detail.length > 0 ? detailedHeight : lineHeight) : root.rowHeight
+            implicitWidth: panel ? meterLabel.implicitWidth + valueGap + meterValue.implicitWidth : meterLabel.implicitWidth + ringWidth + labelGap + meterValue.implicitWidth
+            implicitHeight: panel ? (detailed ? detailTop + detailRow : labelRow + barGap + barHeight) : root.rowHeight
             BarRing {
                 objectName: "componentMeterRing"
                 y: Math.round((parent.height - height) / 2)
@@ -355,44 +360,31 @@ KeyboardAction {
                 id: meterLabel
                 objectName: "componentMeterLabel"
                 x: parent.panel ? 0 : parent.ringWidth
-                width: parent.panel ? parent.labelWidth : implicitWidth
-                height: parent.panel ? parent.lineHeight : parent.height
+                width: parent.panel ? Math.max(0, parent.width - meterValue.width - parent.valueGap) : implicitWidth
+                height: parent.panel ? parent.labelRow : parent.height
                 text: root.node.text
                 color: parent.panel ? root.colors.text : root.colors.subtext0
                 pixelSize: parent.panel ? root.typography.body : root.typography.small
-                elide: Text.ElideNone
-            }
-            ChromeText {
-                objectName: "componentMeterDetail"
-                y: parent.lineHeight
-                width: parent.labelWidth
-                height: parent.detailHeight
-                text: root.node.detail
-                visible: parent.panel && text.length > 0
-                color: root.colors.subtext0
-                pixelSize: root.typography.small
-                elide: Text.ElideNone
+                elide: parent.panel ? Text.ElideRight : Text.ElideNone
             }
             ChromeText {
                 id: meterValue
                 objectName: "componentMeterValue"
                 x: parent.panel ? parent.width - width : meterLabel.x + meterLabel.width + parent.labelGap
-                width: parent.panel ? Math.min(parent.width, parent.numberWidth) : implicitWidth
-                height: parent.height
+                width: implicitWidth
+                height: parent.panel ? parent.labelRow : parent.height
                 text: !parent.panel && root.node.detail.length > 0 ? root.node.detail : Math.round(root.node.value * 100) + "%"
                 color: root.node.ink
                 pixelSize: parent.panel ? root.typography.body : root.typography.small
-                horizontalAlignment: Text.AlignRight
                 elide: Text.ElideNone
             }
             Item {
                 // An id named "track" shadows the numeric property used to measure the meter.
                 id: meterTrack
                 objectName: "componentMeterTrack"
-                x: parent.labelWidth + parent.columnGap
-                y: Math.round((parent.height - height) / 2)
-                width: Math.max(0, parent.width - parent.numberWidth - parent.columnGap - x)
-                height: 4 * root.ratio
+                y: parent.labelRow + parent.barGap
+                width: parent.width
+                height: parent.barHeight
                 visible: parent.panel
                 NativeRoundedRectangle {
                     anchors.fill: parent
@@ -400,18 +392,64 @@ KeyboardAction {
                     radius: parent.height / 2
                 }
                 NativeRoundedRectangle {
-                    width: parent.width * root.node.value
+                    width: parent.width * Math.max(0, Math.min(1, root.node.value))
                     height: parent.height
                     color: root.node.ink
                     radius: parent.height / 2
                 }
-                Rectangle {
-                    x: Math.max(0, Math.min(parent.width - width, parent.width * (root.node.marker ?? 0)))
-                    y: -2 * root.ratio
-                    width: root.ratio
-                    height: parent.height + 4 * root.ratio
+                NativeRoundedRectangle {
+                    readonly property real centre: parent.width * Math.max(0, Math.min(1, root.node.marker ?? 0))
+                    x: Math.max(0, Math.min(parent.width - width, centre - width / 2))
+                    y: -parent.height / 2
+                    width: meterTrack.parent.markerWidth + 2 * meterTrack.parent.markerHalo
+                    height: parent.height * 2
+                    radius: width / 2
+                    color: root.colors.panel_bg
+                    visible: meterTrack.parent.hasMarker
+                    NativeRoundedRectangle {
+                        x: meterTrack.parent.markerHalo
+                        width: meterTrack.parent.markerWidth
+                        height: parent.height
+                        radius: width / 2
+                        color: root.colors.text
+                    }
+                }
+            }
+            ChromeText {
+                objectName: "componentMeterDetail"
+                y: parent.detailTop
+                width: Math.max(0, parent.width - (pace.visible ? pace.width + parent.valueGap : 0))
+                height: parent.detailRow
+                text: root.node.detail
+                visible: parent.panel && text.length > 0
+                color: root.colors.subtext0
+                pixelSize: root.typography.small
+            }
+            Item {
+                id: pace
+                objectName: "componentMeterPace"
+                x: parent.width - width
+                y: parent.detailTop
+                width: paceMark.width + parent.barGap + paceText.implicitWidth
+                height: parent.detailRow
+                visible: parent.panel && parent.hasMarker
+                NativeRoundedRectangle {
+                    id: paceMark
+                    y: (parent.height - height) / 2
+                    width: pace.parent.markerWidth
+                    height: Math.round(parent.height * 0.6)
+                    radius: width / 2
                     color: root.colors.text
-                    visible: root.node.marker !== undefined && root.node.marker !== null
+                }
+                ChromeText {
+                    id: paceText
+                    x: paceMark.width + pace.parent.barGap
+                    width: implicitWidth
+                    height: parent.height
+                    text: "pace " + Math.round((root.node.marker ?? 0) * 100) + "%"
+                    color: root.colors.subtext0
+                    pixelSize: root.typography.small
+                    elide: Text.ElideNone
                 }
             }
         }
@@ -537,10 +575,12 @@ KeyboardAction {
                 height: parent.height
                 colors: root.colors
                 pixelSize: root.typography.small
-                radius: 5 * root.ratio
+                radius: ChromeStyle.controlRadius * root.ratio
                 disabledAlpha: 0.5
                 pressedAlpha: 0.7
-                text: root.node.text
+                // A button that opens a link reads as one: no frame until pointed at, and an arrow.
+                quiet: root.node.link ?? false
+                text: root.node.text + (root.node.link ?? false ? "  ↗" : "")
                 primary: root.node.primary
                 labelColor: root.node.ink
                 onActivated: root.activate()
@@ -553,19 +593,20 @@ KeyboardAction {
         Item {
             id: card
             readonly property real padding: 12 * root.ratio
-            readonly property real titleHeight: 18 * root.ratio
-            readonly property real detailHeight: 16 * root.ratio
+            // A callout with a tone states something: its fill and title take the tone's colour.
+            readonly property bool toned: root.node.tone >= 2
+            readonly property real toneAlpha: 0.1
             readonly property real markWidth: root.hasIcon ? root.iconSide + padding : 0
             readonly property var actionNode: (root.surface.nodes ?? []).find(child => child.parent === root.node.index && child.kind === "button" && !child.tooltip) ?? null
             readonly property real actionWidth: actionNode !== null ? calloutButton.width + padding : 0
-            implicitHeight: 52 * root.ratio
+            implicitHeight: Math.max(actionNode !== null ? root.rowHeight : 0, lines.implicitHeight) + 2 * padding
 
             NativeRoundedRectangle {
                 anchors.fill: parent
-                color: root.colors.panel_bg
+                color: card.toned ? Qt.alpha(root.node.ink, card.toneAlpha) : root.colors.panel_bg
                 borderColor: root.colors.surface1
-                borderWidth: root.ratio
-                radius: 8 * root.ratio
+                borderWidth: card.toned ? 0 : root.ratio
+                radius: ChromeStyle.surfaceRadius * root.ratio
             }
             Loader {
                 x: card.padding
@@ -576,25 +617,31 @@ KeyboardAction {
                 sourceComponent: icon
             }
             Column {
+                id: lines
                 x: card.padding + card.markWidth
                 anchors.verticalCenter: parent.verticalCenter
                 width: Math.max(0, parent.width - 2 * card.padding - card.markWidth - card.actionWidth)
+                spacing: 2 * root.ratio
                 ChromeText {
                     width: parent.width
-                    height: card.titleHeight
+                    height: root.typography.bodyRow
                     text: root.node.text
-                    color: root.colors.text
+                    color: card.toned ? root.node.ink : root.colors.text
                     pixelSize: root.typography.body
-                    elide: Text.ElideNone
+                    emphasized: card.toned
                 }
-                ChromeText {
+                Text {
                     width: parent.width
-                    height: visible ? card.detailHeight : 0
                     visible: root.node.detail.length > 0
                     text: root.node.detail
-                    color: root.colors.subtext0
-                    pixelSize: root.typography.small
-                    elide: Text.ElideNone
+                    color: card.toned ? root.colors.text : root.colors.subtext0
+                    font.family: "IBM Plex Sans"
+                    font.pixelSize: root.typography.small
+                    textFormat: Text.PlainText
+                    renderType: Text.NativeRendering
+                    wrapMode: Text.Wrap
+                    maximumLineCount: 3
+                    elide: Text.ElideRight
                 }
             }
             ComponentBranch {

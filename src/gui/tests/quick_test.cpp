@@ -2579,11 +2579,6 @@ return {api_version=2, client={keybindings={
       client_->palette()->activate({{QStringLiteral("key"), key}, {QStringLiteral("revision"), revision}});
       QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::palette);
       QCOMPARE(client_->panes()->rows()->rowCount(), original_panes);
-      client_->palette()->search(QStringLiteral("@context query"));
-      client_->palette()->setMode('>');
-      QCOMPARE(client_->palette()->state().value(QStringLiteral("editorText")).toString(), QStringLiteral(">context query"));
-      client_->palette()->setMode('@');
-      QCOMPARE(client_->palette()->state().value(QStringLiteral("editorText")).toString(), QStringLiteral("@context query"));
       client_->palette()->search(QStringLiteral(">Split right"));
       const auto previous = client_->palette()->state();
 
@@ -2593,6 +2588,31 @@ return {api_version=2, client={keybindings={
       client_->palette()->activate({{QStringLiteral("key"), previous.value(QStringLiteral("selectedKey"))}, {QStringLiteral("revision"), previous.value(QStringLiteral("revision"))}});
       QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::palette);
       QCOMPARE(client_->panes()->rows()->rowCount(), original_panes);
+      client_->commands()->execute(window_actions::Action::cancel);
+      QCOMPARE(client_->status()->error(), QString{});
+    }
+
+    Q_SLOT void paletteSearchesEveryKindWithoutPrefix() {
+      const auto rows = [&] {
+        return client_->palette()->geometry().value(QStringLiteral("rows")).toList();
+      };
+
+      client_->commands()->execute(window_actions::Action::palette);
+      QCOMPARE(client_->palette()->state().value(QStringLiteral("editorText")).toString(), QString{});
+      QCOMPARE(client_->palette()->state().value(QStringLiteral("mode")).toInt(), static_cast<int>(application::palette::PaletteMode::all));
+      client_->palette()->search(QStringLiteral("Split right"));
+      QCOMPARE(client_->palette()->state().value(QStringLiteral("selectedKind")).toString(), QStringLiteral("action"));
+      QVERIFY(rows().size() >= 2);
+      QCOMPARE(rows().back().toMap().value(QStringLiteral("key")).toString(), QStringLiteral("suggest:query"));
+
+      // "cl" also matches Close tab and Close pane, which a two-letter guess must not preselect.
+      client_->palette()->search(QStringLiteral("cl"));
+      QVERIFY(!rows().empty());
+      QVERIFY(!rows().front().toMap().value(QStringLiteral("destructive")).toBool());
+
+      // A prefix narrows the search to one kind and drops the suggestion row.
+      client_->palette()->search(QStringLiteral(">Split right"));
+      QCOMPARE(client_->palette()->state().value(QStringLiteral("count")).toInt(), 1);
       client_->commands()->execute(window_actions::Action::cancel);
       QCOMPARE(client_->status()->error(), QString{});
     }
@@ -5851,9 +5871,8 @@ return {api_version=2, client={keybindings={
       QVERIFY(callout != nullptr && dismiss != nullptr);
       const auto card_bounds = callout->mapRectToScene(callout->boundingRect());
       const auto action_bounds = dismiss->mapRectToScene(dismiss->boundingRect());
-      constexpr qreal callout_height = 52;
 
-      QCOMPARE(callout->height(), callout_height * callout->property("ratio").toReal());
+      QVERIFY(callout->height() >= callout->implicitHeight());
       QVERIFY(card_bounds.contains(action_bounds));
       QCOMPARE(action_bounds.center().y(), card_bounds.center().y());
       const auto frame = window_->grabWindow();
@@ -8542,19 +8561,30 @@ return {api_version=2, client={keybindings={
       const auto track_bounds = meter_track->mapRectToScene(meter_track->boundingRect());
       const auto value_bounds = meter_value->mapRectToScene(meter_value->boundingRect());
 
-      QVERIFY(track_bounds.left() > label_bounds.right());
-      QVERIFY(track_bounds.right() < value_bounds.left());
+      const auto meter_bounds = detailed_meter->mapRectToScene(detailed_meter->boundingRect());
+
+      // The label and the value share the first line, the bar spans the row under them, and the
+      // detail sits under the bar, all inside the row.
+      QVERIFY(label_bounds.right() <= value_bounds.left());
+      QCOMPARE(value_bounds.top(), label_bounds.top());
+      QVERIFY(track_bounds.top() >= label_bounds.bottom());
+      QVERIFY(detail_bounds.top() >= track_bounds.bottom());
+      QCOMPARE(track_bounds.left(), meter_bounds.left());
+      QCOMPARE(track_bounds.right(), meter_bounds.right());
+      QCOMPARE(value_bounds.right(), meter_bounds.right());
+      QVERIFY(detail_bounds.bottom() <= meter_bounds.bottom());
+      QVERIFY(meter_value->width() >= meter_value->implicitWidth());
       QCOMPARE(meter_value->property("text").toString(), QStringLiteral("75%"));
       QCOMPARE(meter_label->property("text").toString(), QStringLiteral("Daily quota λ"));
-      constexpr qreal detailed_meter_height = 36;
-      constexpr qreal simple_meter_height = 18;
-      const auto ratio = detailed_meter->property("ratio").toReal();
+      const auto* pace = detailed_meter->findChild<QQuickItem*>(QStringLiteral("componentMeterPace"));
 
-      QCOMPARE(detailed_meter->height(), detailed_meter_height * ratio);
+      QVERIFY(pace != nullptr && pace->isVisible());
+      QVERIFY(pace->mapRectToScene(pace->boundingRect()).left() >= detail_bounds.right());
       const auto* simple_meter = componentItem(QStringLiteral("meter_row"), QStringLiteral("Session"));
 
       QVERIFY(simple_meter != nullptr);
-      QCOMPARE(simple_meter->height(), simple_meter_height * ratio);
+      QVERIFY(simple_meter->height() < detailed_meter->height());
+      QVERIFY(!simple_meter->findChild<QQuickItem*>(QStringLiteral("componentMeterPace"))->isVisible());
     }
 
     [[nodiscard]] bool configuredKeyboardGroupsReady() const {
@@ -9042,7 +9072,7 @@ return {api_version=2, client={keybindings={
 
     [[nodiscard]] static QQuickItem* popupCloseButton(const QObject& popup) {
       for (auto* item : popup.findChildren<QQuickItem*>()) {
-        if (item->inherits("QQuickAbstractButton") && item->property("text").toString() == QStringLiteral("×")) {
+        if (item->inherits("QQuickAbstractButton") && (item->property("text").toString() == QStringLiteral("×") || item->objectName() == QStringLiteral("overlayClose"))) {
           return item;
         }
       }

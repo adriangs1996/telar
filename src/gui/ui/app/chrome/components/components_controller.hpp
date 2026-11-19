@@ -90,6 +90,8 @@ namespace telar::gui::qt {
     Q_INVOKABLE void activate(int source, int node, const QString& generation, const QString& revision, const QPointF& anchor);
 
     void setWindow(QQuickWindow& window);
+    // The display the pick measures its palette geometry against.
+    void setDisplay(const application::window::DisplayMetrics& display);
     // Remembers what has the keyboard, to give it back when the pick closes, unless the pick is
     // open already.
     void rememberPickFocus();
@@ -129,6 +131,8 @@ namespace telar::gui::qt {
     [[nodiscard]] std::optional<Activation> activation(int source, int node, const QString& generation, const QString& revision) const;
     // The panel the pick was opened over takes the keyboard back; without one, the terminal does.
     void restorePickFocus();
+    // Where the pick's bands sit, as the palette lays out a nested list.
+    [[nodiscard]] QVariantMap pickGeometry() const;
     void tick();
     void arm();
     void project();
@@ -159,6 +163,7 @@ namespace telar::gui::qt {
     QPointer<QQuickWindow> window_;
     QPointer<QQuickItem> pick_return_focus_;
     QVariantMap element_bars_;
+    application::window::DisplayMetrics display_{};
   };
 
 }

@@ -9,6 +9,8 @@ telar_add_qml_sources(gui-quick
     BarRing.qml
     BarSparkline.qml
     HistoryHint.qml
+    KeyHint.qml
+    KeyHintBar.qml
     PaletteButton.qml
     PaletteKeycap.qml
     PromptActions.qml

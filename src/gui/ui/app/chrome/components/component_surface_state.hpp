@@ -43,7 +43,8 @@ namespace telar::gui::qt {
     std::array<ComponentSlotState, bar_slots> bars;
     ComponentSlotState panel;
     std::optional<std::size_t> open_panel = std::nullopt;
-    QString last_render;
+    // When the open panel last rendered, in milliseconds since the epoch; 0 before its first render.
+    qint64 last_render_ms = 0;
     std::uint64_t generation = 0;
     // Changes on every reset, so a render started before it is dropped.
     std::uint64_t epoch = 0;

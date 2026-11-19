@@ -650,6 +650,7 @@ namespace telar::gui::qt {
     notifications_.setDisplay(display, display_.grid());
     machine_chrome_.setDisplay(display);
     sidebar_.setDisplay(display);
+    components_.setDisplay(display);
     terminals_.setChromeRatio(display_.chromeRatio());
   }
 

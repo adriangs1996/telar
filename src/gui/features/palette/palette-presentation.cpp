@@ -16,7 +16,6 @@ namespace telar::gui::features::palette {
     const bool nested = options.pick_rows.has_value() || options.suggest;
     const auto heading_height = nested ? std::max(chrome.px(heading_minimum), ChromeMetrics::lineHeight(chrome.small) + chrome.px(heading_padding)) : 0;
     const auto search_height = std::max(chrome.px(search_minimum), ChromeMetrics::lineHeight(chrome.title) + chrome.px(search_padding));
-    const auto tabs_height = nested ? 0 : std::max(chrome.px(tabs_minimum), ChromeMetrics::lineHeight(chrome.small) + chrome.px(tabs_padding));
     const auto footer_height = std::max(chrome.px(footer_minimum), ChromeMetrics::lineHeight(chrome.small) + chrome.px(footer_padding));
     auto list_height = (row_height * maximum_pick_rows) + chrome.px(list_padding);
 
@@ -26,17 +25,16 @@ namespace telar::gui::features::palette {
       list_height = (row_height * static_cast<float>(std::clamp(*options.pick_rows, minimum_pick_rows, maximum_pick_rows))) + chrome.px(pick_padding);
     }
 
-    const auto height = std::max(0.0F, std::min(heading_height + search_height + tabs_height + list_height + footer_height, viewport.height - (inset * 2)));
+    const auto height = std::max(0.0F, std::min(heading_height + search_height + list_height + footer_height, viewport.height - (inset * 2)));
     const auto top = std::min(std::max(inset, viewport.height * top_share), std::max(inset, viewport.height - inset - height));
     const Rect bounds{.x = std::floor((viewport.width - width) / 2), .y = std::floor(top), .width = width, .height = height};
     auto rest = bounds;
     const auto heading = takeTop(rest, std::min(heading_height, height / heading_divisor));
     const auto search = takeTop(rest, std::min(search_height, rest.height / search_divisor));
-    const auto tabs = takeTop(rest, std::min(tabs_height, rest.height / tabs_divisor));
     const auto footer_size = std::min(footer_height, rest.height / footer_divisor);
     const auto results = takeTop(rest, rest.height - footer_size);
 
-    return {.viewport = viewport, .bounds = bounds, .heading = heading, .search = search, .tabs = tabs, .results = results, .footer = rest, .row_height = row_height, .agent_height = agent_height, .group_height = group_height};
+    return {.viewport = viewport, .bounds = bounds, .heading = heading, .search = search, .results = results, .footer = rest, .row_height = row_height, .agent_height = agent_height, .group_height = group_height};
   }
 
   Rect PaletteGeometry::inset(Rect bounds, float amount) noexcept {
@@ -70,7 +68,7 @@ namespace telar::gui::features::palette {
 
     while (start != 0 && selected - start + 1 < capacity) {
       const auto preceding = start - 1;
-      const auto extra = rowHeight(kinds[preceding], geometry) + (grouped && kinds[preceding] != kinds[start] ? geometry.group_height : 0);
+      const auto extra = rowHeight(kinds[preceding], geometry) + (grouped && kinds[preceding] != kinds[start] && headed(kinds[start]) ? geometry.group_height : 0);
       if (used + extra > bounds.height) {
         break;
       }
@@ -87,7 +85,7 @@ namespace telar::gui::features::palette {
       const auto height = rowHeight(kinds[index], geometry);
       Rect group;
 
-      if (grouped && previous != kinds[index]) {
+      if (grouped && previous != kinds[index] && headed(kinds[index])) {
         if (y + geometry.group_height + height > bounds.bottom()) {
           break;
         }
@@ -106,6 +104,10 @@ namespace telar::gui::features::palette {
     }
 
     return result;
+  }
+
+  bool PaletteRowWindow::headed(PaletteRowKind kind) noexcept {
+    return kind != PaletteRowKind::suggestion;
   }
 
   float PaletteRowWindow::rowHeight(PaletteRowKind kind, const PaletteGeometry& geometry) noexcept {

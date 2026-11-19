@@ -32,11 +32,17 @@ namespace telar::gui::qt {
     int value = 0;
   };
 
-  using PaletteTarget = std::variant<NavigationTarget, PaletteAction, application::machines::MachinePickerTarget>;
+  // The last row of a search over every kind: it opens the suggestion with the query as its task.
+  struct PaletteAsk {
+    friend bool operator==(PaletteAsk, PaletteAsk) = default;
+  };
+
+  using PaletteTarget = std::variant<NavigationTarget, PaletteAction, application::machines::MachinePickerTarget, PaletteAsk>;
 
   // The command palette: its query, the rows it matches among the active session's contexts, tabs
-  // and agents, the window's actions or the machines, which row is selected, and where each is
-  // drawn. The command suggestion is one of its modes and shares its query, and the actions
+  // and agents, the window's actions and the machines, which row is selected, and where each is
+  // drawn. A query without a prefix searches every kind at once, grouped by kind; a prefix narrows
+  // it to one. The command suggestion is one of its modes and shares its query, and the actions
   // palette it was opened from.
   //
   // It reads the store and the display and commands the window pushes. A row that names a
@@ -87,7 +93,6 @@ namespace telar::gui::qt {
 
     Q_INVOKABLE void search(const QString& text);
     Q_INVOKABLE void move(int delta);
-    Q_INVOKABLE void setMode(int mode);
     Q_INVOKABLE void reportQueryLimit(qulonglong requested_bytes);
     // Uses the row a choice from QML names, while it is the one the palette shows.
     Q_INVOKABLE void activate(const QVariantMap& choice);
@@ -131,14 +136,19 @@ namespace telar::gui::qt {
     void actionRequested(telar::gui::qt::PaletteAction action);
 
   private:
-    static constexpr std::size_t capacity = WorkspaceReplica<Memory>::maximum_workspaces + GuiSession::maximum_workspace_tabs + AgentReplica<Memory>::capacity;
+    // Every row a search over all kinds can hold, the suggestion row included.
+    static constexpr std::size_t capacity = WorkspaceReplica<Memory>::maximum_workspaces + GuiSession::maximum_workspace_tabs + AgentReplica<Memory>::capacity + application::palette::palette_actions.size() + application::machines::Machines::capacity + 1;
+    // A query shorter than this never ranks a destructive action above another match.
+    static constexpr std::size_t destructive_query_bytes = 3;
     using Matches = RankedMatches<PaletteTarget, capacity>;
 
     [[nodiscard]] bool isOpen() const noexcept;
     bool updateResults();
     bool updateMachineResults(std::string_view query);
     void collectNavigation(Matches& matches, std::string_view query) const;
-    [[nodiscard]] QVariantMap record(const PaletteTarget& target, bool queried) const;
+    void collectActions(Matches& matches, std::string_view query) const;
+    void collectMachines(Matches& matches, std::string_view query) const;
+    [[nodiscard]] QVariantMap record(const PaletteTarget& target, std::string_view query) const;
     [[nodiscard]] QVariantMap machineRecord(application::machines::MachinePickerTarget target) const;
     // The row a choice from QML names, while it is the one the palette shows.
     [[nodiscard]] std::optional<Choice> chosen(const QVariantMap& choice) const;

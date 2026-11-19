@@ -83,19 +83,24 @@ close the window instead.
 
 ## Find an action
 
-Press `Ctrl+b`, then `g` to open the command palette. Select **Actions** and
-type `split` to find the split commands. Use Up/Down to select a result and
-Enter to run it; Escape closes the palette.
+Press `Ctrl+b`, then `g` to open the command palette and type `split` to find
+the split commands. Use Up/Down to select a result and Enter to run it; Escape
+closes the palette.
 
 ![The Actions tab of the command palette lists split and pane-focus commands alongside their shortcuts](images/telar-command-palette.png)
 
 The shortcuts beside each action reflect your active keybindings. The screenshot
 uses a custom prefix, so those labels differ from this guide's defaults.
 
-Choose **Navigate** to find workspaces, tabs and agents, or **Machines** to
-switch to a configured machine. The search field also accepts mode prefixes:
-`@` for navigation, `>` for actions and `:` for machines. For example, replace
-the field's contents with `>split` to search actions directly.
+One search covers workspaces, tabs, agents, actions and machines. Results are
+grouped by kind, and a group comes first when it holds the best match. Matches
+that start words rank above letters inside words, and an action that closes
+something never comes first for a query shorter than three characters. The
+last row asks for a command suggestion for what you typed.
+
+To search one kind only, start the query with a prefix: `@` for workspaces,
+tabs and agents, `>` for actions and `:` for machines. For example, `>split`
+searches actions only.
 See [remote machines](remote.md) to configure an SSH destination.
 
 ## Leave and return
