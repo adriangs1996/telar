@@ -91,7 +91,7 @@ namespace {
       const auto parsed_inode = std::from_chars(inode_text.data(), inode_text.data() + inode_text.size(), inode);
       struct stat metadata{};
 
-      if (parsed.ec != std::errc{} || parsed_inode.ec != std::errc{} || descriptor < 0 || std::filesystem::current_path() != "/") {
+      if (std::make_error_code(parsed.ec) || std::make_error_code(parsed_inode.ec) || descriptor < 0 || std::filesystem::current_path() != "/") {
         return EXIT_FAILURE;
       }
 

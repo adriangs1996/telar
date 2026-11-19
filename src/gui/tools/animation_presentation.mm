@@ -14,44 +14,72 @@
 namespace telar::gui::probe {
   namespace {
 
-    IMP original_next;
-    id<CAMetalDrawable> current_drawable;
-    QJsonArray presentations;
-    std::atomic<bool> synchronized_display{true};
+    struct Presentation {
+      id<CAMetalDrawable> current_drawable;
+      QJsonArray presentations;
+      std::atomic<bool> synchronized_display{true};
+    };
 
-    id nextDrawable(CAMetalLayer* layer, SEL selector) {
-      current_drawable = std::bit_cast<id (*)(id, SEL)>(original_next)(layer, selector);
-      if (!layer.displaySyncEnabled) {
-        synchronized_display.store(false, std::memory_order_relaxed);
-      }
+    Presentation& presentation() {
+      static Presentation state;
 
-      return current_drawable;
+      return state;
     }
 
   }
+}
 
-  void observeAnimationPresentation() {
-    original_next = method_setImplementation(class_getInstanceMethod(CAMetalLayer.class, @selector(nextDrawable)), std::bit_cast<IMP>(&nextDrawable));
+@interface CAMetalLayer (TelarAnimationProbe)
+- (id<CAMetalDrawable>)telarProbeNextDrawable;
+@end
+
+@implementation CAMetalLayer (TelarAnimationProbe)
+
+- (id<CAMetalDrawable>)telarProbeNextDrawable {
+  auto& state = telar::gui::probe::presentation();
+
+  // The implementations are exchanged, so this message runs the original -nextDrawable.
+  state.current_drawable = [self telarProbeNextDrawable];
+  if (!self.displaySyncEnabled) {
+    state.synchronized_display.store(false, std::memory_order_relaxed);
   }
 
-  void recordAnimationPresentation(std::uint64_t cycle, double value) {
-    if (current_drawable == nil || cycle == 0) {
+  return state.current_drawable;
+}
+
+@end
+
+namespace telar::gui::probe {
+
+  void observeAnimationPresentation() {
+    const Method original = class_getInstanceMethod(CAMetalLayer.class, @selector(nextDrawable));
+    const Method replacement = class_getInstanceMethod(CAMetalLayer.class, @selector(telarProbeNextDrawable));
+    if (original == nullptr || replacement == nullptr) {
       return;
     }
 
-    [current_drawable addPresentedHandler:^(id<MTLDrawable> drawable) {
+    method_exchangeImplementations(original, replacement);
+  }
+
+  void recordAnimationPresentation(std::uint64_t cycle, double value) {
+    auto& state = presentation();
+    if (state.current_drawable == nil || cycle == 0) {
+      return;
+    }
+
+    [state.current_drawable addPresentedHandler:^(id<MTLDrawable> drawable) {
       const auto timestamp = drawable.presentedTime;
 
       dispatch_async(dispatch_get_main_queue(), ^{
-        presentations.append(QJsonObject{{QStringLiteral("cycle"), static_cast<qint64>(cycle)}, {QStringLiteral("value"), value}, {QStringLiteral("presented_seconds"), timestamp}});
+        presentation().presentations.append(QJsonObject{{QStringLiteral("cycle"), static_cast<qint64>(cycle)}, {QStringLiteral("value"), value}, {QStringLiteral("presented_seconds"), timestamp}});
       });
     }];
 
-    current_drawable = nil;
+    state.current_drawable = nil;
   }
 
   QJsonArray animationPresentations() {
-    return presentations;
+    return presentation().presentations;
   }
 
   QJsonObject animationDisplay(const QQuickWindow& window) {
@@ -61,7 +89,7 @@ namespace telar::gui::probe {
     return {
         {QStringLiteral("name"), QString::fromNSString(screen.localizedName)},
         {QStringLiteral("maximum_fps"), static_cast<int>(screen.maximumFramesPerSecond)},
-        {QStringLiteral("display_sync_enabled"), synchronized_display.load(std::memory_order_relaxed)},
+        {QStringLiteral("display_sync_enabled"), presentation().synchronized_display.load(std::memory_order_relaxed)},
         {QStringLiteral("device_pixel_ratio"), window.effectiveDevicePixelRatio()},
     };
   }

@@ -28,7 +28,7 @@ namespace {
   std::uint64_t number(std::string_view value) {
     std::uint64_t result = 0;
     const auto parsed = std::from_chars(value.data(), value.data() + value.size(), result);
-    if (parsed.ec != std::errc{} || parsed.ptr != value.data() + value.size() || result > maximum_iterations) {
+    if (std::make_error_code(parsed.ec) || parsed.ptr != value.data() + value.size() || result > maximum_iterations) {
       throw std::invalid_argument{"Expected an iteration count up to 100000000"};
     }
 
@@ -66,10 +66,14 @@ namespace {
 
   template <std::size_t Capacity>
   double consume(const Ink<Capacity>& ink) {
+    // Each field weighs differently, so the checksum tells swapped fields apart.
+    constexpr float y_weight = 2;
+    constexpr float width_weight = 3;
+    constexpr float height_weight = 5;
     double sum = ink.coverage();
 
     for (const auto rectangle : ink.rectangles()) {
-      sum += rectangle.x + (2 * rectangle.y) + (3 * rectangle.width) + (5 * rectangle.height);
+      sum += rectangle.x + (y_weight * rectangle.y) + (width_weight * rectangle.width) + (height_weight * rectangle.height);
     }
 
     return sum;
@@ -124,25 +128,32 @@ namespace {
     std::println();
   }
 
+  void dumpCell(const Rect& cell) {
+    for (auto codepoint = Symbol::first_block; codepoint <= Symbol::last_block; ++codepoint) {
+      print(Block::draw(cell, codepoint));
+    }
+
+    for (auto codepoint = Symbol::first_box; codepoint <= Symbol::last_box; ++codepoint) {
+      if (straightBox(codepoint)) {
+        print(Box::draw(codepoint, cell, box_thickness));
+      }
+    }
+
+    for (unsigned dots = 0; dots <= std::numeric_limits<std::uint8_t>::max(); ++dots) {
+      print(Braille::draw(cell, static_cast<std::uint8_t>(dots)));
+    }
+  }
+
   // Every glyph in cells from 0x0 to 40x80, by quarter pixels across and three quarters down.
   void dump() {
-    for (int width = 0; width <= 160; ++width) {
-      for (int height = 0; height <= 320; height += 3) {
+    constexpr int widest_quarters = 160;
+    constexpr int tallest_quarters = 320;
+
+    for (int width = 0; width <= widest_quarters; ++width) {
+      for (int height = 0; height <= tallest_quarters; height += 3) {
         const Rect cell{.x = 1.25F, .y = 2.5F, .width = static_cast<float>(width) / 4, .height = static_cast<float>(height) / 4};
 
-        for (auto codepoint = Symbol::first_block; codepoint <= Symbol::last_block; ++codepoint) {
-          print(Block::draw(cell, codepoint));
-        }
-
-        for (auto codepoint = Symbol::first_box; codepoint <= Symbol::last_box; ++codepoint) {
-          if (straightBox(codepoint)) {
-            print(Box::draw(codepoint, cell, box_thickness));
-          }
-        }
-
-        for (unsigned dots = 0; dots <= std::numeric_limits<std::uint8_t>::max(); ++dots) {
-          print(Braille::draw(cell, static_cast<std::uint8_t>(dots)));
-        }
+        dumpCell(cell);
       }
     }
   }
@@ -174,7 +185,7 @@ int main(int argc, char** argv) {
 
     std::println(R"({{"workload":"{}","iterations":{},"warmup":{},"elapsed_ns":{},"checksum":"{:a}"}})", options.workload, options.iterations, options.warmup, std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count(), checksum);
   } catch (const std::exception& error) {
-    std::println(std::cerr, "{}", error.what());
+    std::cerr << error.what() << '\n';
     return 1;
   }
 }

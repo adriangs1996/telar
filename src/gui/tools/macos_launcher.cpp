@@ -75,7 +75,7 @@ namespace {
     command.reserve(arguments.size() + 1);
     for (const auto& argument : arguments) {
       // execv takes char* const[] for C's sake and writes none of it.
-      command.push(const_cast<char*>(argument.data()));
+      command.push(const_cast<char*>(argument.data())); // NOLINT(cppcoreguidelines-pro-type-const-cast): execv's C signature.
     }
 
     command.push(nullptr);

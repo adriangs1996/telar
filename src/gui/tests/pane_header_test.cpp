@@ -212,7 +212,9 @@ namespace {
       QQmlEngine engine;
       QQuickWindow window;
 
-      window.resize(120, header_height);
+      constexpr int title_size = 15;
+
+      window.resize(compact_header_width, header_height);
       const ChromeMetrics chrome;
       auto record = headerRecord();
 
@@ -223,10 +225,10 @@ namespace {
       record.insert(QStringLiteral("progressText"), QString{});
       record.remove(QStringLiteral("progressSample"));
       record.insert(QStringLiteral("activityKind"), static_cast<int>(TabActivity::Kind::none));
-      auto item = createChrome(engine, QStringLiteral("PaneHeader"), {{QStringLiteral("record"), record}, {QStringLiteral("colors"), themeColors(Configuration{})}, {QStringLiteral("typography"), QVariantMap{{QStringLiteral("title"), 15}, {QStringLiteral("body"), chrome.body}, {QStringLiteral("small"), chrome.small}}}});
+      auto item = createChrome(engine, QStringLiteral("PaneHeader"), {{QStringLiteral("record"), record}, {QStringLiteral("colors"), themeColors(Configuration{})}, {QStringLiteral("typography"), QVariantMap{{QStringLiteral("title"), title_size}, {QStringLiteral("body"), chrome.body}, {QStringLiteral("small"), chrome.small}}}});
 
       item->setParentItem(window.contentItem());
-      item->setSize({120, header_height});
+      item->setSize({compact_header_width, header_height});
       window.show();
       QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
       const auto* program = named(*item, QStringLiteral("paneProgram"));

@@ -31,6 +31,7 @@ namespace {
     int received = 0;
     bool request_again = false;
 
+  protected:
     bool event(QEvent* event) override {
       if (event->type() == QEvent::UpdateRequest) {
         ++received;

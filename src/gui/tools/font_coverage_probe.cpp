@@ -6,6 +6,7 @@ static_assert(true);
 #include "foundation/core/memory.hpp"
 #include "platform/font.h"
 #include "tbc/view.hpp"
+#include <algorithm>
 #include <array>
 #include <cerrno>
 #include <cstddef>
@@ -71,6 +72,15 @@ namespace {
     return result;
   }
 
+  // The bytes are allocated from memory, region `a`.
+  tbc::view<telar::ds::Vec<std::uint8_t, SystemAllocator>, tbc::lt::a> fontBytes(std::string_view source, tbc::view<SystemAllocator&, tbc::lt::a> memory) {
+    telar::ds::Vec<std::uint8_t, SystemAllocator> result{memory};
+
+    result.resize(source.size());
+    std::ranges::copy(source, result.viewMut().begin());
+    return result;
+  }
+
   void exerciseFace(fonts::Face& face, std::uint16_t height) {
     static_cast<void>(face.metrics(height));
     constexpr std::string_view text = "AV fi e\u0301 \u4e2d \uf07b \U0001f600";
@@ -94,7 +104,7 @@ namespace {
   void runProbe(const char* path, std::string_view variant) {
     SystemAllocator memory;
     const auto source = telar::runtime::readFile(memory, path, telar_font_max_bytes);
-    const telar::ds::Vec<std::uint8_t, SystemAllocator> bytes{memory, {reinterpret_cast<const std::uint8_t*>(source.data()), source.size()}};
+    const auto bytes = fontBytes(source.view(), memory);
     fonts::Face face{bytes, matchVariant(variant)};
     const auto expected = coverage(face, memory);
     constexpr telar::ds::Array<std::uint16_t, 3> heights{9, 13, 31};

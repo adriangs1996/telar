@@ -58,12 +58,14 @@ namespace {
   constexpr TabLocation location{.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 1}, .tab_id = 1};
   constexpr std::uint16_t columns = 100;
   constexpr std::uint16_t rows = 48;
+  constexpr QSize window_size{960, 820};
 
   std::int64_t threadCpuNanoseconds() {
+    constexpr std::int64_t nanoseconds_per_second = 1'000'000'000;
     timespec now{};
 
     ::clock_gettime(CLOCK_THREAD_CPUTIME_ID, &now);
-    return (static_cast<std::int64_t>(now.tv_sec) * 1'000'000'000) + now.tv_nsec;
+    return (static_cast<std::int64_t>(now.tv_sec) * nanoseconds_per_second) + now.tv_nsec;
   }
 
   void require(bool condition, const char* failure) {
@@ -93,19 +95,31 @@ namespace {
   }
 
   void sendScreen(WireRuntime& runtime) {
+    // A bound on the encoded size of a blank cell.
+    constexpr std::size_t encoded_cell_bytes = 16;
     std::vector<Cell> cells(static_cast<std::size_t>(columns) * rows, Cell{.text = byteView(" ")});
-    std::vector<Byte> encoded(cells.size() * 16);
+    std::vector<Byte> encoded(cells.size() * encoded_cell_bytes);
     const ds::Array spans{FrameSpan{.start = 0, .count = static_cast<std::uint32_t>(cells.size()), .cells = CellRunCodec::encode(cells, encoded)}};
     const ds::Array<Byte, rows> flags{};
 
     runtime.send(PaneFrame{FrameBody{.pane_id = pane_id, .frame_id = 1, .cols = columns, .rows = rows, .cursor = {.visible = true, .x = 0, .y = rows - 1}, .scroll = {.total_rows = rows}, .text_metadata = TextMetadata{.row_flags = flags}, .spans = spans}});
   }
 
+  constexpr unsigned default_iterations = 60;
+  constexpr unsigned default_warmup = 10;
+  constexpr unsigned default_blocks = 20;
+  constexpr unsigned maximum_refreshes = 10000;
+
   struct Options {
-    unsigned iterations = 60;
-    unsigned warmup = 10;
-    unsigned blocks = 20;
+    unsigned iterations = default_iterations;
+    unsigned warmup = default_warmup;
+    unsigned blocks = default_blocks;
     QString output;
+  };
+
+  struct Timing {
+    std::int64_t cpu = 0;
+    std::int64_t wall = 0;
   };
 
   Options parse(const QGuiApplication& application) {
@@ -119,9 +133,64 @@ namespace {
     parser.process(application);
     Options options{.iterations = parser.value("iterations").toUInt(), .warmup = parser.value("warmup").toUInt(), .blocks = parser.value("blocks").toUInt(), .output = parser.value("output")};
 
-    require(options.iterations != 0 && options.iterations <= 10000 && options.warmup <= 10000, "Expected 1..10000 iterations and up to 10000 warmup refreshes");
+    require(options.iterations != 0 && options.iterations <= maximum_refreshes && options.warmup <= maximum_refreshes, "Expected 1..10000 iterations and up to 10000 warmup refreshes");
     require(options.blocks != 0 && options.blocks <= (rows / 2) - 1, "Expected 1 to 23 blocks");
     return options;
+  }
+
+  // Separators belong to Telar's prompt over an integrated shell.
+  void configurePrompt(ApplicationController& client, const QTemporaryDir& directory) {
+    const auto configuration = directory.filePath(QStringLiteral("config.lua"));
+    QFile file{configuration};
+
+    require(file.open(QIODevice::WriteOnly) && file.write("return {api_version=2,client={prompt={mode='telar'}}}") > 0, "Cannot write the configuration");
+    file.close();
+    client.loadConfiguration(configuration, {}, {});
+    require(client.status()->error().isEmpty(), "The configuration did not load");
+  }
+
+  // Two screens of the same finished commands, the second a row lower: each refresh moves
+  // every separator. The blocks view the names in commands.
+  ds::Array<std::vector<CommandBlock>, 2> commandScreens(const std::vector<std::string>& commands) {
+    constexpr std::uint32_t base_duration_ms = 100;
+    ds::Array<std::vector<CommandBlock>, 2> screens;
+
+    for (unsigned shift = 0; shift < 2; ++shift) {
+      for (unsigned index = 0; index < commands.size(); ++index) {
+        screens.atMut(shift).push_back(CommandBlock{.row = (index * 2) + shift, .rows = 1, .lines = 0, .state = index % 3 == 0 ? CommandBlockState::failed : CommandBlockState::succeeded, .status = index % 3 == 0 ? 2 : 0, .duration_ms = base_duration_ms + index, .command = commands[index]});
+      }
+    }
+
+    return screens;
+  }
+
+  int firstRow(const TerminalItem& terminal, unsigned blocks) {
+    const auto listed = terminal.separators();
+
+    return listed.size() == static_cast<qsizetype>(blocks) ? listed.front().toMap().value(QStringLiteral("row")).toInt() : -1;
+  }
+
+  Timing measure(WireRuntime& runtime, const TerminalItem& terminal, const Options& options, const ds::Array<std::vector<CommandBlock>, 2>& screens) {
+    Timing timing;
+
+    for (unsigned step = 1; step <= options.warmup + options.iterations; ++step) {
+      const auto shift = step % 2;
+      const auto started_cpu = threadCpuNanoseconds();
+      const auto started_wall = std::chrono::steady_clock::now();
+
+      runtime.send(PaneBlocks{.pane_id = pane_id, .blocks = screens[shift]});
+      require(waitForGuiCondition([&] {
+        return firstRow(terminal, options.blocks) == static_cast<int>(shift);
+      },
+                  wait_ms),
+          "A refresh did not reach the separators");
+      if (step > options.warmup) {
+        timing.cpu += threadCpuNanoseconds() - started_cpu;
+        timing.wall += std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - started_wall).count();
+      }
+    }
+
+    return timing;
   }
 
   int run(const QGuiApplication& application) {
@@ -133,20 +202,14 @@ namespace {
     ApplicationMemory application_memory;
     ApplicationAllocator& memory = application_memory.memory();
     ApplicationController client{memory};
-    // Separators belong to Telar's prompt over an integrated shell.
-    const auto configuration = directory.filePath(QStringLiteral("config.lua"));
-    QFile file{configuration};
 
-    require(file.open(QIODevice::WriteOnly) && file.write("return {api_version=2,client={prompt={mode='telar'}}}") > 0, "Cannot write the configuration");
-    file.close();
-    client.loadConfiguration(configuration, {}, {});
-    require(client.status()->error().isEmpty(), "The configuration did not load");
+    configurePrompt(client, directory);
     QLocalServer listener;
 
     require(listener.listen(directory.filePath(QStringLiteral("runtime.sock"))), "Cannot listen");
     QQuickWindow window;
 
-    window.resize(QSize{960, 820});
+    window.resize(window_size);
     client.setWindow(window);
     client.machines()->open(listener.fullServerName());
     require(waitForGuiCondition([&] {
@@ -174,15 +237,13 @@ namespace {
 
     terminal.setController(client.terminals());
     terminal.setPaneId(QString::number(pane_id));
-    terminal.setSize(QSizeF{960, 820});
+    terminal.setSize(QSizeF{window_size});
     QQmlEngine engine;
     auto separators = createChrome(engine, QStringLiteral("CommandSeparators"), {{QStringLiteral("view"), QVariant::fromValue(static_cast<QObject*>(&terminal))}, {QStringLiteral("colors"), colors}, {QStringLiteral("grid"), grid}});
 
     separators->setParentItem(&terminal);
     window.show();
 
-    // Two screens of the same finished commands, the second a row lower: each refresh moves
-    // every separator.
     // Every command is named before any block views its name.
     std::vector<std::string> commands;
 
@@ -191,59 +252,31 @@ namespace {
       commands.push_back("make target-" + std::to_string(index));
     }
 
-    ds::Array<std::vector<CommandBlock>, 2> screens;
-
-    for (unsigned shift = 0; shift < 2; ++shift) {
-      for (unsigned index = 0; index < options.blocks; ++index) {
-        screens.atMut(shift).push_back(CommandBlock{.row = (index * 2) + shift, .rows = 1, .lines = 0, .state = index % 3 == 0 ? CommandBlockState::failed : CommandBlockState::succeeded, .status = index % 3 == 0 ? 2 : 0, .duration_ms = 100 + index, .command = commands[index]});
-      }
-    }
-
-    const auto first_row = [&] {
-      const auto listed = terminal.separators();
-
-      return listed.size() == static_cast<qsizetype>(options.blocks) ? listed.front().toMap().value(QStringLiteral("row")).toInt() : -1;
-    };
+    const auto screens = commandScreens(commands);
 
     runtime.send(PaneBlocks{.pane_id = pane_id, .blocks = screens[0]});
     require(waitForGuiCondition([&] {
-      return first_row() == 0;
+      return firstRow(terminal, options.blocks) == 0;
     },
                 wait_ms),
         "The separators did not appear");
 
-    std::int64_t cpu = 0;
-    std::int64_t wall = 0;
-
-    for (unsigned step = 1; step <= options.warmup + options.iterations; ++step) {
-      const auto shift = step % 2;
-      const auto started_cpu = threadCpuNanoseconds();
-      const auto started_wall = std::chrono::steady_clock::now();
-
-      runtime.send(PaneBlocks{.pane_id = pane_id, .blocks = screens[shift]});
-      require(waitForGuiCondition([&] {
-        return first_row() == static_cast<int>(shift);
-      },
-                  wait_ms),
-          "A refresh did not reach the separators");
-      if (step > options.warmup) {
-        cpu += threadCpuNanoseconds() - started_cpu;
-        wall += std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - started_wall).count();
-      }
-    }
+    const auto timing = measure(runtime, terminal, options, screens);
 
     // Entrances and colour changes finish before the oracle reads the window.
+    constexpr int settle_ms = 1500;
+
     waitForGuiCondition([] {
       return false;
     },
-        1500);
+        settle_ms);
     const auto listed = QJsonDocument{QJsonArray::fromVariantList(terminal.separators())}.toJson(QJsonDocument::Compact);
 
     if (!options.output.isEmpty()) {
       require(window.grabWindow().save(options.output, "PNG"), "Cannot save the final window");
     }
 
-    const QJsonObject result{{"iterations", static_cast<int>(options.iterations)}, {"warmup", static_cast<int>(options.warmup)}, {"blocks", static_cast<int>(options.blocks)}, {"cpu_ns", qint64{cpu}}, {"wall_ns", qint64{wall}}, {"separators_sha256", QString::fromLatin1(QCryptographicHash::hash(listed, QCryptographicHash::Sha256).toHex())}};
+    const QJsonObject result{{"iterations", static_cast<int>(options.iterations)}, {"warmup", static_cast<int>(options.warmup)}, {"blocks", static_cast<int>(options.blocks)}, {"cpu_ns", qint64{timing.cpu}}, {"wall_ns", qint64{timing.wall}}, {"separators_sha256", QString::fromLatin1(QCryptographicHash::hash(listed, QCryptographicHash::Sha256).toHex())}};
 
     std::cout << QJsonDocument{result}.toJson(QJsonDocument::Compact).constData() << '\n';
     return 0;
@@ -252,7 +285,7 @@ namespace {
 }
 
 int main(int argc, char** argv) {
-  QGuiApplication application{argc, argv};
+  const QGuiApplication application{argc, argv};
 
   try {
     return run(application);

@@ -271,6 +271,13 @@ namespace {
     std::uint64_t pane_id = 0;
   };
 
+  // A mouse button pressed over a history card, and where it is to be released.
+  struct HeldCardPress {
+    Qt::MouseButton button = Qt::LeftButton;
+    QPoint position;
+    bool held = false;
+  };
+
   enum class ChildMouseEncoding : std::uint8_t {
     sgr,
     legacy,
@@ -307,6 +314,18 @@ return {api_version = 2, client = {
     if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate) || file.write(source) < 0) {
       throw std::runtime_error{"Cannot write GUI integration fixture"};
     }
+  }
+
+  // The command a history submission test imports; it prints GUI_HISTORY_RENDER_DONE_<tag> when run.
+  QString renderedHistoryCommand(const QString& tag) {
+    return QStringLiteral("printf 'GUI_HISTORY_RENDER_%s_%1\\n' DONE").arg(tag);
+  }
+
+  // A file's bytes, or none while nothing has written it yet.
+  QByteArray readTestFile(const QString& path) {
+    QFile file{path};
+
+    return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray{};
   }
 
   telar::ds::Option<std::uint32_t> logicalRowStart(const Screen<telar::Memory>& screen, std::size_t requested_line) {
@@ -712,7 +731,10 @@ return {api_version = 2, client = {
       QByteArray markdown = "# Native document\n\nSome **strong** text, `code` and a [link](https://example.com).\n\n"
                             "> [!NOTE]\n> A callout.\n\n| Name | Value |\n| :--- | ----: |\n| one | 1 |\n\n```sh\necho code\n```\n\n";
 
-      for (int index = 0; index < 60; ++index) {
+      // Enough items that the document overflows the pane and the view scrolls.
+      constexpr int list_items = 60;
+
+      for (int index = 0; index < list_items; ++index) {
         markdown += "- item " + QByteArray::number(index) + "\n";
       }
 
@@ -723,22 +745,8 @@ return {api_version = 2, client = {
 
       QVERIFY(client_->terminals()->input(pane_id, command.toUtf8()));
       QTRY_VERIFY_WITH_TIMEOUT(firstPane()->document_shown, runtime_wait_ms);
-      const auto named = [](this const auto& self, QQuickItem* item, QStringView name) -> QQuickItem* {
-        if (item->objectName() == name) {
-          return item;
-        }
-
-        for (auto* child : item->childItems()) {
-          if (auto* found = self(child, name)) {
-            return found;
-          }
-        }
-
-        return nullptr;
-      };
-
-      const auto* view = named(window_->contentItem(), u"documentView");
-      const auto* list = named(window_->contentItem(), u"documentList");
+      const auto* view = test::visualItems(*window_->contentItem(), QStringLiteral("documentView")).value(0);
+      const auto* list = test::visualItems(*window_->contentItem(), QStringLiteral("documentList")).value(0);
 
       QVERIFY(view != nullptr && list != nullptr);
       QTRY_VERIFY(view->isVisible() && list->property("count").toInt() == static_cast<int>(firstPane()->document.blocks.size()));
@@ -793,7 +801,9 @@ return {api_version = 2, client = {
       QFile tall{directory.filePath(QStringLiteral("tall.md"))};
 
       QVERIFY(tall.open(QIODevice::WriteOnly));
-      for (int section = 0; section < 12; ++section) {
+      constexpr int tall_sections = 12;
+
+      for (int section = 0; section < tall_sections; ++section) {
         tall.write("## Section " + QByteArray::number(section) + "\n\nA paragraph long enough to wrap in a narrow pane, with **strong** text.\n\n- one\n- two\n\n");
       }
 
@@ -866,8 +876,10 @@ return {api_version = 2, client = {
 
     Q_SLOT void singlePaneIsFramedInsideTheWorkbench() {
       const auto* terminal = terminalIn(window_->contentItem());
+      if (terminal == nullptr) {
+        QFAIL("Required terminal fixture is missing");
+      }
 
-      QVERIFY(terminal != nullptr);
       QCOMPARE(client_->panes()->rows()->rowCount(), 1);
       const auto fits_framed_content = [this, terminal] {
         const auto bounds = client_->display()->geometry().value(QStringLiteral("terminal")).toRectF();
@@ -1089,7 +1101,7 @@ return {api_version = 2, client = {
         QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
         const QQuickItem* target = nullptr;
 
-        for (auto* mark : test::visualItems(*window_->contentItem(), QStringLiteral("projectSwitcherMark"))) {
+        for (const auto* mark : test::visualItems(*window_->contentItem(), QStringLiteral("projectSwitcherMark"))) {
           if (mark->property("record").toMap().value(QStringLiteral("key")).toString() == key) {
             target = mark;
             break;
@@ -1210,8 +1222,10 @@ return {api_version = 2, client = {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       auto* terminal = terminalIn(window_->contentItem());
       const auto* pane = firstPane();
+      if (terminal == nullptr || pane == nullptr) {
+        QFAIL("Required terminal and pane fixtures are missing");
+      }
 
-      QVERIFY(terminal != nullptr && pane != nullptr);
       constexpr auto path = QLatin1StringView("/tmp/telar/file.cpp");
 
       client_->terminals()->input(pane->id, "printf '\\033[2J\\033[H/tmp/telar/file.cpp\\n'\r");
@@ -1272,8 +1286,10 @@ return {api_version = 2, client = {
       QTRY_VERIFY_WITH_TIMEOUT(window_->isActive(), runtime_wait_ms);
       auto* terminal = terminalIn(window_->contentItem());
       const auto* pane = firstPane();
+      if (terminal == nullptr || pane == nullptr) {
+        QFAIL("Required terminal and pane fixtures are missing");
+      }
 
-      QVERIFY(terminal != nullptr && pane != nullptr);
       auto* clipboard = QGuiApplication::clipboard();
       const auto restore_clipboard = qScopeGuard([clipboard, saved = test::copyClipboard()] mutable {
         clipboard->setMimeData(saved.release());
@@ -1347,8 +1363,10 @@ return {api_version = 2, client = {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       auto* terminal = terminalIn(window_->contentItem());
       const auto* pane = firstPane();
+      if (terminal == nullptr || pane == nullptr) {
+        QFAIL("Required terminal and pane fixtures are missing");
+      }
 
-      QVERIFY(terminal != nullptr && pane != nullptr);
       terminal->forceActiveFocus();
       constexpr std::string_view expected = "\x1b[<0;1;1M\x1b[<0;2;1m\x1b[<68;1;1M\x1b[<64;1;1M";
       const auto capture = QStringLiteral("stty raw -echo; printf '\\033[?1000h\\033[?1006h'; dd bs=1 count=%1 2>/dev/null | od -An -tx1 | tr -d ' \\n'; printf '\\033[?1000l\\033[?1006l'; stty sane\r").arg(expected.size());
@@ -1462,8 +1480,11 @@ return {api_version = 2, client = {
         client_->commands()->execute(window_actions::Action::split_horizontal);
         QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 2, runtime_wait_ms);
         auto* other = focusedTerminalBeside(window, terminal);
+        if (other == nullptr) {
+          QFAIL("Required second terminal fixture is missing");
+        }
 
-        QVERIFY(other != nullptr && other != &terminal);
+        QVERIFY(other != &terminal);
         QVERIFY(other->mapToScene({}).x() > terminal.mapToScene({terminal.width(), 0}).x());
         constexpr std::string_view other_expected = "\x1b[<1;1;1M\x1b[<33;1;2M\x1b[<1;2;2m";
 
@@ -1574,8 +1595,10 @@ return {api_version = 2, client = {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       auto* terminal = terminalIn(window_->contentItem());
       const auto* pane = firstPane();
+      if (terminal == nullptr || pane == nullptr) {
+        QFAIL("Required terminal and pane fixtures are missing");
+      }
 
-      QVERIFY(terminal != nullptr && pane != nullptr);
       client_->terminals()->input(pane->id, "printf 'COPY_MODE_WORD_1\\nCOPY_MODE_WORD_2\\n'\r");
       QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen).contains(QLatin1StringView("COPY_MODE_WORD_2")), runtime_wait_ms);
       terminal->forceActiveFocus();
@@ -1852,13 +1875,7 @@ return {api_version = 2, client = {
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, std::uint64_t{1}, runtime_wait_ms);
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::admitted);
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 2, runtime_wait_ms);
-      const auto arguments = [&] {
-        QFile file{editor_path + QStringLiteral(".args")};
-
-        return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray{};
-      };
-
-      QTRY_COMPARE_WITH_TIMEOUT(arguments(), file_path.toUtf8() + '\n', runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(readTestFile(editor_path + QStringLiteral(".args")), file_path.toUtf8() + '\n', runtime_wait_ms);
       const auto editor_ready = [&] {
         for (int row = 0; row < client_->panes()->rows()->rowCount(); ++row) {
           const auto record = client_->panes()->rows()->data(client_->panes()->rows()->index(row, 0), ListModel::record_role).toMap();
@@ -1892,13 +1909,7 @@ return {api_version = 2, client = {
       peer.request(telar::ClientAction::client_open_link, 2, {positioned_uri.constData(), static_cast<std::size_t>(positioned_uri.size())});
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, std::uint64_t{2}, runtime_wait_ms);
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::admitted);
-      const auto positioned_arguments = [&] {
-        QFile file{next_editor + QStringLiteral(".args")};
-
-        return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray{};
-      };
-
-      QTRY_COMPARE_WITH_TIMEOUT(positioned_arguments(), QByteArray{"+call cursor(12, 3)\n"} + file_path.toUtf8() + '\n', runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(readTestFile(next_editor + QStringLiteral(".args")), QByteArray{"+call cursor(12, 3)\n"} + file_path.toUtf8() + '\n', runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 3, runtime_wait_ms);
       client_->commands()->execute(window_actions::Action::focus_pane, QString::number(source_id));
       const QSignalSpy feedback{client_->notifications(), &NotificationsController::changed};
@@ -1935,8 +1946,10 @@ return {api_version = 2, client = {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       auto* terminal = terminalIn(window_->contentItem());
       const auto* pane = firstPane();
+      if (terminal == nullptr || pane == nullptr) {
+        QFAIL("Required terminal and pane fixtures are missing");
+      }
 
-      QVERIFY(terminal != nullptr && pane != nullptr);
       terminal->forceActiveFocus();
       constexpr telar::Byte kitty_flags = 31;
       constexpr std::string_view expected = "\x1b[100;5u\x1b[100;5:3u";
@@ -2155,8 +2168,10 @@ return {api_version = 2, client = {
 
       auto* terminal = terminalIn(window_->contentItem());
       const auto* pane = firstPane();
+      if (terminal == nullptr || pane == nullptr) {
+        QFAIL("Required terminal and pane fixtures are missing");
+      }
 
-      QVERIFY(terminal != nullptr && pane != nullptr);
       const auto clear_input = qScopeGuard([this, identity = pane->id] {
         client_->terminals()->input(identity, "\x15");
       });
@@ -2216,23 +2231,29 @@ return {api_version = 2, client = {
       QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen).contains(QLatin1StringView("gk")), runtime_wait_ms);
       client_->terminals()->input(pane->id, "\x15");
 
+      verifyExpressionBindings(*pane);
+      QVERIFY(!QTest::currentTestFailed());
+      QCOMPARE(client_->status()->error(), QString{});
+    }
+
+    // The expression bindings of binding_configuration paste text, type keys and consume a key.
+    void verifyExpressionBindings(const application::Pane<telar::Memory>& pane) {
       QTest::keyClick(window_, Qt::Key_P, Qt::AltModifier);
       QTest::keyClick(window_, Qt::Key_Return);
-      QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen).contains(QLatin1StringView("GUI_BINDING_PASTE")), runtime_wait_ms);
-      client_->terminals()->input(pane->id, "printf '");
+      QTRY_VERIFY_WITH_TIMEOUT(screenText(pane.screen).contains(QLatin1StringView("GUI_BINDING_PASTE")), runtime_wait_ms);
+      client_->terminals()->input(pane.id, "printf '");
       QTest::keyClick(window_, Qt::Key_K, Qt::AltModifier);
       settleLua();
-      client_->terminals()->input(pane->id, "\\n'\r");
-      QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen).contains(QLatin1StringView("\nGUI_BINDING_KEYS ")), runtime_wait_ms);
+      client_->terminals()->input(pane.id, "\\n'\r");
+      QTRY_VERIFY_WITH_TIMEOUT(screenText(pane.screen).contains(QLatin1StringView("\nGUI_BINDING_KEYS ")), runtime_wait_ms);
       QTest::qWait(frame_settle_ms);
-      const auto before_consume = screenText(pane->screen);
+      const auto before_consume = screenText(pane.screen);
 
       QTest::keyClick(window_, Qt::Key_V, Qt::AltModifier);
       QTest::qWait(frame_settle_ms);
-      const auto after_consume = screenText(pane->screen);
+      const auto after_consume = screenText(pane.screen);
 
       QVERIFY2(after_consume == before_consume, qPrintable(QStringLiteral("Before consume:\n%1\nAfter consume:\n%2\n%3").arg(before_consume, after_consume, windowObservation(*window_))));
-      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void bindingReloadOwnership() {
@@ -2304,8 +2325,10 @@ return {api_version = 2, client = {
       }
 
       // Focus is a full accent frame on one pane; the others keep a faint hairline.
+      constexpr qreal accent_alpha_threshold = 0.5;
+
       QCOMPARE(std::ranges::count_if(frames, [](const auto* frame) {
-        return frame->property("borderAlpha").toReal() > 0.5;
+        return frame->property("borderAlpha").toReal() > accent_alpha_threshold;
       }),
           1);
       captureArtifact(QStringLiteral("chrome-split-panes"));
@@ -3471,14 +3494,10 @@ return {api_version=2, client={keybindings={
       client_->commands()->execute(window_actions::Action::history);
       client_->history()->search(QStringLiteral("GUI_HISTORY_RETAINED"));
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 2, runtime_wait_ms);
-      const auto selected_copy = [this] {
-        return historyCardHint(*window_, client_->history()->state().value(QStringLiteral("selection")).toInt(), QStringLiteral("copy"));
-      };
-
       test::activateWindow(*window_);
 
-      QTRY_VERIFY_WITH_TIMEOUT(selected_copy() != nullptr, runtime_wait_ms);
-      QPointer<QQuickItem> previous = selected_copy();
+      QTRY_VERIFY_WITH_TIMEOUT(selectedHistoryCopy() != nullptr, runtime_wait_ms);
+      QPointer<QQuickItem> previous = selectedHistoryCopy();
 
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       auto* clipboard = QGuiApplication::clipboard();
@@ -3490,93 +3509,114 @@ return {api_version=2, client={keybindings={
       const auto sentinel = QStringLiteral("GUI_HISTORY_RETAINED_UNCHANGED");
 
       clipboard->setText(sentinel);
-      auto release_position = previous->mapToScene(QPointF{previous->width() / 2, previous->height() / 2}).toPoint();
-      bool held = true;
-      auto held_button = Qt::LeftButton;
+      HeldCardPress press{.position = previous->mapToScene(QPointF{previous->width() / 2, previous->height() / 2}).toPoint(), .held = true};
       const auto release = qScopeGuard([&] {
-        if (held) {
-          QTest::mouseRelease(window_, held_button, Qt::NoModifier, release_position);
+        if (press.held) {
+          QTest::mouseRelease(window_, press.button, Qt::NoModifier, press.position);
         }
       });
 
       const test::HistoryCardWaitTrace trace{*window_};
 
-      QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, release_position);
+      QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, press.position);
       client_->history()->select(1);
       QTRY_COMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 1);
       QTRY_VERIFY_WITH_TIMEOUT(previous.isNull(), runtime_wait_ms);
-      QTRY_VERIFY_WITH_TIMEOUT(selected_copy() != nullptr, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(selectedHistoryCopy() != nullptr, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       test::FramePacing::presentSwapped(*client_);
-      const auto* current = selected_copy();
+      const auto* current = selectedHistoryCopy();
 
-      release_position = current->mapToScene(QPointF{current->width() / 2, current->height() / 2}).toPoint();
-      QTest::mouseMove(window_, release_position);
-      QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, release_position);
-      held = false;
+      press.position = current->mapToScene(QPointF{current->width() / 2, current->height() / 2}).toPoint();
+      QTest::mouseMove(window_, press.position);
+      QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, press.position);
+      press.held = false;
       // The zero-open frame retires card targets and consumes this old release.
       QCOMPARE(clipboard->text(), sentinel);
-      QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, release_position);
+      QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, press.position);
       QCOMPARE(clipboard->text(), QStringLiteral("echo GUI_HISTORY_RETAINED_ONE"));
       QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
-      previous = selected_copy();
+      previous = selectedHistoryCopy();
       clipboard->setText(sentinel);
-      release_position = previous->mapToScene(QPointF{previous->width() / 2, previous->height() / 2}).toPoint();
-      held = true;
-      QTest::mousePress(window_, held_button, Qt::NoModifier, release_position);
+      press.position = previous->mapToScene(QPointF{previous->width() / 2, previous->height() / 2}).toPoint();
+      press.held = true;
+      QTest::mousePress(window_, press.button, Qt::NoModifier, press.position);
       client_->commands()->execute(window_actions::Action::cancel);
       client_->commands()->execute(window_actions::Action::history);
       client_->history()->search(QStringLiteral("GUI_HISTORY_RETAINED"));
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 2, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(previous.isNull(), runtime_wait_ms);
-      QTRY_VERIFY_WITH_TIMEOUT(selected_copy() != nullptr, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(selectedHistoryCopy() != nullptr, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-      current = selected_copy();
-      release_position = current->mapToScene(QPointF{current->width() / 2, current->height() / 2}).toPoint();
-      QTest::mouseMove(window_, release_position);
-      QTest::mouseRelease(window_, held_button, Qt::NoModifier, release_position);
-      held = false;
+      current = selectedHistoryCopy();
+      press.position = current->mapToScene(QPointF{current->width() / 2, current->height() / 2}).toPoint();
+      QTest::mouseMove(window_, press.position);
+      QTest::mouseRelease(window_, press.button, Qt::NoModifier, press.position);
+      press.held = false;
       QCOMPARE(clipboard->text(), sentinel);
       QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
       for (const auto button : {Qt::MiddleButton, Qt::RightButton}) {
-        previous = selected_copy();
-        release_position = previous->mapToScene(QPointF{previous->width() / 2, previous->height() / 2}).toPoint();
-        held_button = button;
-        held = true;
-        QTest::mousePress(window_, held_button, Qt::NoModifier, release_position);
-        const auto next = 1 - client_->history()->state().value(QStringLiteral("selection")).toInt();
-
-        client_->history()->select(next);
-        QTRY_COMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), next);
-        QTRY_VERIFY_WITH_TIMEOUT(previous.isNull(), runtime_wait_ms);
-        QTRY_VERIFY_WITH_TIMEOUT(selected_copy() != nullptr, runtime_wait_ms);
-        QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-        current = selected_copy();
-        release_position = current->mapToScene(QPointF{current->width() / 2, current->height() / 2}).toPoint();
-        QTest::mouseMove(window_, release_position);
-        QTest::mouseRelease(window_, held_button, Qt::NoModifier, release_position);
-        held = false;
-        QCOMPARE(clipboard->text(), sentinel);
-        QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
+        verifyHeldCopyOutlivesSelection(press, button, sentinel);
+        QVERIFY(!QTest::currentTestFailed());
       }
 
-      held_button = Qt::LeftButton;
-      previous = selected_copy();
-      release_position = previous->mapToScene(QPointF{previous->width() / 2, previous->height() / 2}).toPoint();
-      held = true;
-      QTest::mousePress(window_, held_button, Qt::NoModifier, release_position);
+      verifyHeldCopyOutlivesHiddenWindow(press, sentinel);
+    }
+
+    [[nodiscard]] QQuickItem* selectedHistoryCopy() const {
+      return historyCardHint(*window_, client_->history()->state().value(QStringLiteral("selection")).toInt(), QStringLiteral("copy"));
+    }
+
+    // A button held over the selected card's copy action while the selection moves releases
+    // over the new card without copying.
+    void verifyHeldCopyOutlivesSelection(HeldCardPress& press, Qt::MouseButton button, const QString& sentinel) {
+      const QPointer<QQuickItem> previous = selectedHistoryCopy();
+
+      press.position = previous->mapToScene(QPointF{previous->width() / 2, previous->height() / 2}).toPoint();
+      press.button = button;
+      press.held = true;
+      QTest::mousePress(window_, press.button, Qt::NoModifier, press.position);
+      const auto next = 1 - client_->history()->state().value(QStringLiteral("selection")).toInt();
+
+      client_->history()->select(next);
+      QTRY_COMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), next);
+      QTRY_VERIFY_WITH_TIMEOUT(previous.isNull(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(selectedHistoryCopy() != nullptr, runtime_wait_ms);
+      QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+      const auto* current = selectedHistoryCopy();
+
+      press.position = current->mapToScene(QPointF{current->width() / 2, current->height() / 2}).toPoint();
+      QTest::mouseMove(window_, press.position);
+      QTest::mouseRelease(window_, press.button, Qt::NoModifier, press.position);
+      press.held = false;
+      QCOMPARE(QGuiApplication::clipboard()->text(), sentinel);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
+    }
+
+    // A left button held over the copy action while the window hides and returns releases
+    // without copying.
+    void verifyHeldCopyOutlivesHiddenWindow(HeldCardPress& press, const QString& sentinel) {
+      const auto* previous = selectedHistoryCopy();
+
+      press.button = Qt::LeftButton;
+      press.position = previous->mapToScene(QPointF{previous->width() / 2, previous->height() / 2}).toPoint();
+      press.held = true;
+      QTest::mousePress(window_, press.button, Qt::NoModifier, press.position);
       test::hideWindow(*window_);
       QTRY_VERIFY_WITH_TIMEOUT(!window_->isActive(), runtime_wait_ms);
       window_->show();
       test::activateWindow(*window_);
       QTRY_VERIFY_WITH_TIMEOUT(window_->isActive(), runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-      current = selected_copy();
-      QVERIFY(current != nullptr);
-      release_position = current->mapToScene(QPointF{current->width() / 2, current->height() / 2}).toPoint();
-      QTest::mouseRelease(window_, held_button, Qt::NoModifier, release_position);
-      held = false;
-      QCOMPARE(clipboard->text(), sentinel);
+      const auto* current = selectedHistoryCopy();
+      if (current == nullptr) {
+        QFAIL("Required selected history copy action is missing");
+      }
+
+      press.position = current->mapToScene(QPointF{current->width() / 2, current->height() / 2}).toPoint();
+      QTest::mouseRelease(window_, press.button, Qt::NoModifier, press.position);
+      press.held = false;
+      QCOMPARE(QGuiApplication::clipboard()->text(), sentinel);
     }
 
     Q_SLOT void historySelectionLeavesTheWorkbenchProjectionsAlone() {
@@ -4136,15 +4176,8 @@ return {api_version=2, client={keybindings={
 
       client_->loadConfiguration(initial_path, {}, {});
       QTRY_COMPARE_WITH_TIMEOUT(client_->configuration().history.enter_runs, !enter_runs, runtime_wait_ms);
-      const auto command = QStringLiteral("printf 'GUI_HISTORY_RENDER_%s_%1\\n' DONE").arg(tag);
-      const auto encoded = command.toUtf8();
-      const telar::ds::Array entries{telar::ImportHistoryEntry{.started_at_ms = 100, .command = std::string_view{encoded.constData(), static_cast<std::size_t>(encoded.size())}}};
-      const auto source = QByteArray{"gui-history-render-"} + tag.toUtf8();
-
-      importHistory(entries, source.constData());
-      client_->commands()->execute(window_actions::Action::history);
-      client_->history()->search(QStringLiteral("GUI_HISTORY_RENDER_%s_%1").arg(tag));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 1, runtime_wait_ms);
+      openRenderedHistoryCommand(tag);
+      QVERIFY(!QTest::currentTestFailed());
       const auto action = alternate ? QStringLiteral("alternate") : QStringLiteral("submit");
       QPointer<QQuickItem> pressed;
       bool held = false;
@@ -4163,12 +4196,8 @@ return {api_version=2, client={keybindings={
         QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, position);
         held = true;
       } else {
-        window_->hide();
-        QTRY_VERIFY_WITH_TIMEOUT(!window_->isExposed(), runtime_wait_ms);
-        test::FramePacing::presentSwapped(*client_);
-        window_->beforeSynchronizing();
-        window_->frameSwapped();
-        test::FramePacing::presentSwapped(*client_);
+        presentWhileHidden();
+        QVERIFY(!QTest::currentTestFailed());
       }
 
       const auto previous_revision = client_->history()->state().value(QStringLiteral("revision")).toString();
@@ -4202,19 +4231,46 @@ return {api_version=2, client={keybindings={
 
       QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none);
       QVERIFY(test::showWindow(*window_, runtime_wait_ms));
+      verifyRenderedHistorySubmission(tag, enter_runs != alternate);
+      QVERIFY(!QTest::currentTestFailed());
+      QCOMPARE(client_->status()->error(), QString{});
+    }
+
+    // Imports the command tagged `tag` as the only entry of its source and opens history on it.
+    void openRenderedHistoryCommand(const QString& tag) {
+      const auto encoded = renderedHistoryCommand(tag).toUtf8();
+      const telar::ds::Array entries{telar::ImportHistoryEntry{.started_at_ms = 100, .command = std::string_view{encoded.constData(), static_cast<std::size_t>(encoded.size())}}};
+      const auto source = QByteArray{"gui-history-render-"} + tag.toUtf8();
+
+      importHistory(entries, source.constData());
+      client_->commands()->execute(window_actions::Action::history);
+      client_->history()->search(QStringLiteral("GUI_HISTORY_RENDER_%s_%1").arg(tag));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 1, runtime_wait_ms);
+    }
+
+    // Hides the window and presents frames while it is hidden.
+    void presentWhileHidden() {
+      window_->hide();
+      QTRY_VERIFY_WITH_TIMEOUT(!window_->isExposed(), runtime_wait_ms);
+      test::FramePacing::presentSwapped(*client_);
+      window_->beforeSynchronizing();
+      window_->frameSwapped();
+      test::FramePacing::presentSwapped(*client_);
+    }
+
+    // A command history ran shows its output in the pane; one it pasted shows only its text.
+    void verifyRenderedHistorySubmission(const QString& tag, bool ran) {
       const auto* pane = firstPane();
 
       QVERIFY(pane != nullptr);
       const auto output = QStringLiteral("GUI_HISTORY_RENDER_DONE_%1").arg(tag);
 
-      if (enter_runs != alternate) {
+      if (ran) {
         QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen, ScreenTextLayout::logical).contains(output), runtime_wait_ms);
       } else {
-        QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen, ScreenTextLayout::logical).contains(command), runtime_wait_ms);
+        QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen, ScreenTextLayout::logical).contains(renderedHistoryCommand(tag)), runtime_wait_ms);
         QVERIFY(!screenText(pane->screen, ScreenTextLayout::logical).contains(output));
       }
-
-      QCOMPARE(client_->status()->error(), QString{});
     }
 
     Q_SLOT void historyPagesAndActions() {
@@ -5214,6 +5270,14 @@ return {api_version=2, client={keybindings={
       const auto frame = window_->grabWindow();
 
       QVERIFY(!frame.isNull());
+      // The opacities the configuration above gives each surface.
+      constexpr qreal topbar_opacity = 0.2;
+      constexpr qreal sidebar_opacity = 0.4;
+      constexpr qreal bottombar_opacity = 0.6;
+      constexpr qreal workspace_opacity = 0.8;
+      constexpr qreal pane_opacity = 0.3;
+      // Samples sit this far inside a surface's edge, clear of its border.
+      constexpr qreal edge_inset = 2.0;
       const auto verify = [&](QPointF logical, double opacity) {
         const auto position = (logical * window_->devicePixelRatio()).toPoint();
         const auto actual = frame.pixelColor(position).alphaF();
@@ -5221,17 +5285,17 @@ return {api_version=2, client={keybindings={
         QVERIFY2(std::abs(actual - opacity) <= 1.0 / 255, qPrintable(QStringLiteral("At %1,%2: alpha %3, expected %4").arg(logical.x()).arg(logical.y()).arg(actual).arg(opacity)));
       };
 
-      verify({window_->width() - 2.0, navigation.bottom() - 2}, 0.2);
-      verify({sidebar.right() - 2, sidebar.bottom() - 2}, 0.4);
-      verify({window_->width() - 2.0, status.bottom() - 2}, 0.6);
+      verify({window_->width() - edge_inset, navigation.bottom() - edge_inset}, topbar_opacity);
+      verify({sidebar.right() - edge_inset, sidebar.bottom() - edge_inset}, sidebar_opacity);
+      verify({window_->width() - edge_inset, status.bottom() - edge_inset}, bottombar_opacity);
       // The sidebar runs the full height and the bottom bar starts at its right edge,
       // so the workspace shows just above the bottom bar.
-      verify({sidebar.right() + 4, status.top() - 2}, 0.8);
+      verify({sidebar.right() + 4, status.top() - edge_inset}, workspace_opacity);
       const auto backgrounds = test::visualItems(*window_->contentItem(), QStringLiteral("paneTerminalBackground"));
 
       QVERIFY(!backgrounds.isEmpty());
       for (const auto* background : backgrounds) {
-        verify(background->mapToScene({background->width() - 2, background->height() - 2}), 0.3);
+        verify(background->mapToScene({background->width() - edge_inset, background->height() - edge_inset}), pane_opacity);
       }
 
       captureArtifact(QStringLiteral("chrome-independent-opacity"));
@@ -5406,9 +5470,18 @@ return {api_version=2, client={keybindings={
         }
       }
 
-      QVERIFY(hidden != nullptr && hidden->isVisible());
+      if (hidden == nullptr) {
+        QFAIL("Required hidden pane entry is missing");
+      }
+
+      QVERIFY(hidden->isVisible());
+      const auto* terminal = terminalIn(window_->contentItem());
+      if (terminal == nullptr) {
+        QFAIL("Required terminal fixture is missing");
+      }
+
       // The selectors live in the pane's header, above its content.
-      QVERIFY(hidden->mapToScene({0, hidden->height()}).y() <= terminalIn(window_->contentItem())->mapToScene({0, 0}).y());
+      QVERIFY(hidden->mapToScene({0, hidden->height()}).y() <= terminal->mapToScene({0, 0}).y());
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, hidden->mapToScene({hidden->width() / 2, hidden->height() / 2}).toPoint());
       QTRY_COMPARE_WITH_TIMEOUT(firstPane()->id, source_id, runtime_wait_ms);
       QCOMPARE(client_->panes()->rows()->rowCount(), 1);
@@ -5430,6 +5503,15 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 2, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(entries().isEmpty(), runtime_wait_ms);
       QCOMPARE(client_->status()->error(), QString{});
+    }
+
+    // Reports `title` for the agent in pane `pane_id` through the runtime's command line.
+    void reportAgentTitle(std::uint64_t pane_id, const QString& title) {
+      QProcess title_report;
+
+      title_report.start(runtime_.program(), {QStringLiteral("agent"), QStringLiteral("report-title"), QString::number(pane_id), title, QStringLiteral("--socket"), socket_});
+      QVERIFY(title_report.waitForFinished(runtime_wait_ms));
+      QCOMPARE(title_report.exitCode(), 0);
     }
 
     Q_SLOT void attentionRingsFollowUnfocusedAttachedPanes() {
@@ -5459,11 +5541,8 @@ return {api_version=2, client={keybindings={
 
       client_->terminals()->input(source_id, report.toUtf8());
       QTRY_VERIFY2_WITH_TIMEOUT(screenText(client_->pane(source_id)->screen, ScreenTextLayout::logical).contains(QStringLiteral("GUI_ATTENTION_READY")), qPrintable(screenText(client_->pane(source_id)->screen)), runtime_wait_ms);
-      QProcess title_report;
-
-      title_report.start(runtime_.program(), {QStringLiteral("agent"), QStringLiteral("report-title"), QString::number(source_id), QStringLiteral("Visual state check"), QStringLiteral("--socket"), socket_});
-      QVERIFY(title_report.waitForFinished(runtime_wait_ms));
-      QCOMPARE(title_report.exitCode(), 0);
+      reportAgentTitle(source_id, QStringLiteral("Visual state check"));
+      QVERIFY(!QTest::currentTestFailed());
       // The header names the program and, beside it, what the agent reports.
       const auto captions = test::visualItems(*source_terminal->parentItem()->parentItem(), QStringLiteral("paneProgram"));
       const auto contexts = test::visualItems(*source_terminal->parentItem()->parentItem(), QStringLiteral("paneContext"));
@@ -5507,7 +5586,9 @@ return {api_version=2, client={keybindings={
       client_->commands()->execute(window_actions::Action::focus_pane, QString::number(source_id));
       QTRY_VERIFY_WITH_TIMEOUT(source_terminal->hasActiveFocus(), runtime_wait_ms);
       captureArtifact(QStringLiteral("ready-focused"));
-      window_->resize(1600, original_window_size.height());
+      constexpr int wide_window_width = 1600;
+
+      window_->resize(wide_window_width, original_window_size.height());
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       QVERIFY(source_terminal != nullptr && other_terminal != nullptr);
       captureArtifact(QStringLiteral("ready-focused-wide"));
@@ -5579,11 +5660,13 @@ return {api_version=2, client={keybindings={
         const char* argument;
       };
 
-      constexpr auto cases = telar::ds::Array<CommandCase, 3>{{
-          {.key = Qt::Key_S, .label = "command-static", .marker = "STATIC", .argument = "quoted \"中\" $HOME $(printf IGNORED)"},
-          {.key = Qt::Key_C, .label = "command-callback", .marker = "CALLBACK", .argument = "callback 1"},
-          {.key = Qt::Key_C, .label = "command-callback", .marker = "CALLBACK", .argument = "callback 2"},
-      }};
+      constexpr auto cases = telar::ds::Array<CommandCase, 3>{
+          {
+              {.key = Qt::Key_S, .label = "command-static", .marker = "STATIC", .argument = "quoted \"中\" $HOME $(printf IGNORED)"},
+              {.key = Qt::Key_C, .label = "command-callback", .marker = "CALLBACK", .argument = "callback 1"},
+              {.key = Qt::Key_C, .label = "command-callback", .marker = "CALLBACK", .argument = "callback 2"},
+          },
+      };
 
       for (const auto& command : cases) {
         auto* terminal = terminalIn(window_->contentItem());
@@ -5766,35 +5849,8 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY2_WITH_TIMEOUT(!client_->display()->sidebarVisible(), qPrintable(client_->status()->error()), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_S, Qt::AltModifier);
       QTRY_VERIFY2_WITH_TIMEOUT(client_->display()->sidebarVisible(), qPrintable(client_->status()->error()), runtime_wait_ms);
-      {
-        auto& pool = *QThreadPool::globalInstance();
-        const int previous_threads = pool.maxThreadCount();
-
-        pool.setMaxThreadCount(1);
-        QSemaphore started;
-        QSemaphore resume;
-        const auto restore_pool = qScopeGuard([&] {
-          resume.release();
-          pool.waitForDone();
-          pool.setMaxThreadCount(previous_threads);
-        });
-
-        pool.start([&] {
-          started.release();
-          resume.acquire();
-        });
-
-        started.acquire();
-        const auto stale_request = denied_request + 1;
-
-        peer.request(telar::ClientCommand{.request_id = stale_request, .action = telar::ClientAction::plugin_run, .target_id = telar::runtime::plugins::stableId("toggle"), .text = "sample"});
-        QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, stale_request, runtime_wait_ms);
-        QCOMPARE(peer.result().status, telar::ClientCommandStatus::admitted);
-        client_->loadConfiguration(path, {}, {}, directory.filePath(QStringLiteral("trust.json")));
-        QCOMPARE(client_->status()->error(), QString{});
-        QVERIFY(client_->display()->sidebarVisible());
-      }
-
+      verifyReloadWhilePluginPoolBusy(peer, denied_request + 1, path, directory.filePath(QStringLiteral("trust.json")));
+      QVERIFY(!QTest::currentTestFailed());
       auto barrier_request = denied_request + 1;
 
       QTRY_VERIFY_WITH_TIMEOUT(([&] {
@@ -5815,6 +5871,35 @@ return {api_version=2, client={keybindings={
 
       QVERIFY(retained.open(QIODevice::ReadOnly));
       QCOMPARE(retained.readAll(), QByteArray{configuration});
+    }
+
+    // A toggle admitted while the plugin worker's pool is busy, then a reload, leaves the reload
+    // clean and the sidebar as it was.
+    void verifyReloadWhilePluginPoolBusy(CommandPeer& peer, std::uint64_t stale_request, const QString& path, const QString& trust) {
+      auto& pool = *QThreadPool::globalInstance();
+      const int previous_threads = pool.maxThreadCount();
+
+      pool.setMaxThreadCount(1);
+      QSemaphore started;
+      QSemaphore resume;
+      const auto restore_pool = qScopeGuard([&] {
+        resume.release();
+        pool.waitForDone();
+        pool.setMaxThreadCount(previous_threads);
+      });
+
+      pool.start([&] {
+        started.release();
+        resume.acquire();
+      });
+
+      started.acquire();
+      peer.request(telar::ClientCommand{.request_id = stale_request, .action = telar::ClientAction::plugin_run, .target_id = telar::runtime::plugins::stableId("toggle"), .text = "sample"});
+      QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, stale_request, runtime_wait_ms);
+      QCOMPARE(peer.result().status, telar::ClientCommandStatus::admitted);
+      client_->loadConfiguration(path, {}, {}, trust);
+      QCOMPARE(client_->status()->error(), QString{});
+      QVERIFY(client_->display()->sidebarVisible());
     }
 
     Q_SLOT void configuredBarsAndPanels() {
@@ -5883,6 +5968,37 @@ return {api_version=2, client={keybindings={
       QVERIFY(std::ranges::is_sorted(entrance_samples));
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       verifyComponentMeters();
+      verifyConfiguredPanelText();
+      QVERIFY(!QTest::currentTestFailed());
+      QTest::keyClick(window_, Qt::Key_Escape);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      const auto left = slot("left");
+
+      client_->components()->activate(left.value(QStringLiteral("source")).toInt(), 0, left.value(QStringLiteral("generation")).toString(), left.value(QStringLiteral("revision")).toString(), QPointF{});
+      QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      client_->components()->activate(left.value(QStringLiteral("source")).toInt(), 0, left.value(QStringLiteral("generation")).toString(), left.value(QStringLiteral("revision")).toString(), QPointF{});
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      // The panel opens empty; its nodes arrive when the Lua thread renders it.
+      QTRY_VERIFY_WITH_TIMEOUT(componentItem(QStringLiteral("button"), QStringLiteral("Dismiss")) != nullptr, runtime_wait_ms);
+      const auto* dismiss_action = componentItem(QStringLiteral("button"), QStringLiteral("Dismiss"));
+
+      QVERIFY(dismiss_action != nullptr);
+      QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+      const auto action_center = dismiss_action->mapToScene(dismiss_action->boundingRect().center()).toPoint();
+
+      QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, action_center);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      client_->commands()->execute(window_actions::Action::history);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history, runtime_wait_ms);
+      client_->commands()->execute(window_actions::Action::cancel);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none, runtime_wait_ms);
+    }
+
+    // The usage panel of configuredBarsAndPanels wraps its paragraph and centers the callout's
+    // action in its card.
+    void verifyConfiguredPanelText() const {
       const auto* paragraph = componentItem(QStringLiteral("text"));
 
       QVERIFY(paragraph != nullptr);
@@ -5908,31 +6024,6 @@ return {api_version=2, client={keybindings={
       if (!screenshot.isEmpty()) {
         QVERIFY(frame.save(screenshot, "PNG"));
       }
-
-      QTest::keyClick(window_, Qt::Key_Escape);
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
-      const auto left = slot("left");
-
-      client_->components()->activate(left.value(QStringLiteral("source")).toInt(), 0, left.value(QStringLiteral("generation")).toString(), left.value(QStringLiteral("revision")).toString(), QPointF{});
-      QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
-      client_->components()->activate(left.value(QStringLiteral("source")).toInt(), 0, left.value(QStringLiteral("generation")).toString(), left.value(QStringLiteral("revision")).toString(), QPointF{});
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
-      QTest::keyClick(window_, Qt::Key_U, Qt::AltModifier);
-      QTRY_VERIFY_WITH_TIMEOUT(client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
-      // The panel opens empty; its nodes arrive when the Lua thread renders it.
-      QTRY_VERIFY_WITH_TIMEOUT(componentItem(QStringLiteral("button"), QStringLiteral("Dismiss")) != nullptr, runtime_wait_ms);
-      const auto* dismiss_action = componentItem(QStringLiteral("button"), QStringLiteral("Dismiss"));
-
-      QVERIFY(dismiss_action != nullptr);
-      QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-      const auto action_center = dismiss_action->mapToScene(dismiss_action->boundingRect().center()).toPoint();
-
-      QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, action_center);
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
-      client_->commands()->execute(window_actions::Action::history);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history, runtime_wait_ms);
-      client_->commands()->execute(window_actions::Action::cancel);
-      QTRY_COMPARE_WITH_TIMEOUT(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none, runtime_wait_ms);
     }
 
     Q_SLOT void configuredTooltipsYieldToOpenSurfaces() {
@@ -6018,25 +6109,26 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(client_->components()->pick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(!pick_tooltip->property("visible").toBool(), runtime_wait_ms);
 
-      const auto pickRowArea = [this] -> QQuickItem* {
-        auto* rows = window_->findChild<QQuickItem*>(QStringLiteral("configuredPickRows"));
-        if (rows == nullptr) {
-          return nullptr;
-        }
-
-        for (auto* item : test::visualItems(*rows, QString{})) {
-          if (item->inherits("QQuickMouseArea") && item->isVisible() && item->width() > 0) {
-            return item;
-          }
-        }
-
-        return nullptr;
-      };
-
-      QTRY_VERIFY_WITH_TIMEOUT(pickRowArea() != nullptr, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(configuredPickRowArea() != nullptr, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-      QTest::mouseMove(window_, center(*pickRowArea()));
+      QTest::mouseMove(window_, center(*configuredPickRowArea()));
       QTRY_COMPARE_WITH_TIMEOUT(window_->cursor().shape(), Qt::PointingHandCursor, runtime_wait_ms);
+    }
+
+    // The mouse area of the open pick's first visible row.
+    [[nodiscard]] QQuickItem* configuredPickRowArea() const {
+      auto* rows = window_->findChild<QQuickItem*>(QStringLiteral("configuredPickRows"));
+      if (rows == nullptr) {
+        return nullptr;
+      }
+
+      for (auto* item : test::visualItems(*rows, QString{})) {
+        if (item->inherits("QQuickMouseArea") && item->isVisible() && item->width() > 0) {
+          return item;
+        }
+      }
+
+      return nullptr;
     }
 
     Q_SLOT void configuredPanelKeyboardActions() {
@@ -7325,23 +7417,10 @@ return {api_version=2, client={keybindings={
 
       QTest::keyClick(window_, Qt::Key_Return);
       QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->pick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
-      QTRY_VERIFY_WITH_TIMEOUT(([&] {
-        QFile file{marker};
-        return file.open(QIODevice::ReadOnly) && file.readAll() == QByteArray::fromHex("c3a120cebb3b24286c69746572616c29");
-      })(),
-          runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(readTestFile(marker) == QByteArray::fromHex("c3a120cebb3b24286c69746572616c29"), runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->pick().value(QStringLiteral("selecting")).toBool(), runtime_wait_ms);
       QVERIFY(client_->components()->panel().value(QStringLiteral("open")).toBool());
-      const auto panel_focused = [this] {
-        const auto* popup = window_->findChild<QObject*>(QStringLiteral("configuredPanel"));
-        const auto* content = popup != nullptr ? popup->property("contentItem").value<QQuickItem*>() : nullptr;
-        const auto* scope = content != nullptr ? content->parentItem() : nullptr;
-        const auto* focus = window_->activeFocusItem();
-
-        return scope != nullptr && focus != nullptr && (scope == focus || scope->isAncestorOf(focus));
-      };
-
-      QTRY_VERIFY_WITH_TIMEOUT(panel_focused(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(configuredPanelFocused(), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_O, Qt::AltModifier);
       QTRY_VERIFY_WITH_TIMEOUT(client_->components()->pick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_Escape);
@@ -7353,6 +7432,16 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->pick().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
       client_->components()->closePanel();
+    }
+
+    // Whether the focus is in the open configured panel.
+    [[nodiscard]] bool configuredPanelFocused() const {
+      const auto* popup = window_->findChild<QObject*>(QStringLiteral("configuredPanel"));
+      const auto* content = popup != nullptr ? popup->property("contentItem").value<QQuickItem*>() : nullptr;
+      const auto* scope = content != nullptr ? content->parentItem() : nullptr;
+      const auto* focus = window_->activeFocusItem();
+
+      return scope != nullptr && focus != nullptr && (scope == focus || scope->isAncestorOf(focus));
     }
 
     Q_SLOT void routedPluginCatalog() {
@@ -7421,17 +7510,8 @@ return {api_version=2, client={keybindings={
       QCOMPARE(peer.result().value, std::int64_t{1});
       text = peer.result().text.toUtf8();
       parsed = telar::runtime::JsonValue::parse({text.constData(), static_cast<std::size_t>(text.size())});
-      const auto entries = requiredJsonField(parsed, "entries");
-      std::size_t entry_count = 0;
-
-      entries.eachElement([&](const auto& entry) {
-        ++entry_count;
-        QVERIFY(requiredJsonField(entry, "digest").equals(expected_digest.toStdString()));
-        QVERIFY(requiredJsonField(entry, "path").equals("example"));
-        QVERIFY(requiredJsonField(entry, "capabilities").encoded() == R"(["workspace.read","notifications"])");
-      });
-
-      QCOMPARE(entry_count, std::size_t{1});
+      verifyPluginCatalogEntry(parsed, expected_digest);
+      QVERIFY(!QTest::currentTestFailed());
       peer.request(telar::ClientCommand{.request_id = pluginCatalogRequestId(PluginCatalogRequest::first_action), .action = telar::ClientAction::plugin_get, .target_id = generation, .value = 1, .text = "example"});
       QTRY_COMPARE_WITH_TIMEOUT(peer.result().request_id, pluginCatalogRequestId(PluginCatalogRequest::first_action), runtime_wait_ms);
       QCOMPARE(peer.result().status, telar::ClientCommandStatus::applied);
@@ -7457,6 +7537,21 @@ return {api_version=2, client={keybindings={
       verifyPluginCatalogReload(peer, path, generation, expected_digest);
       QCOMPARE(peer.error(), QString{});
       QCOMPARE(client_->status()->error(), QString{});
+    }
+
+    // The metadata of the catalog's one plugin names its package, digest and capabilities.
+    static void verifyPluginCatalogEntry(const telar::runtime::JsonValue& metadata, const QString& expected_digest) {
+      const auto entries = requiredJsonField(metadata, "entries");
+      std::size_t entry_count = 0;
+
+      entries.eachElement([&](const auto& entry) {
+        ++entry_count;
+        QVERIFY(requiredJsonField(entry, "digest").equals(expected_digest.toStdString()));
+        QVERIFY(requiredJsonField(entry, "path").equals("example"));
+        QVERIFY(requiredJsonField(entry, "capabilities").encoded() == R"(["workspace.read","notifications"])");
+      });
+
+      QCOMPARE(entry_count, std::size_t{1});
     }
 
     void verifyPluginCatalogReload(CommandPeer& peer, const QString& path, std::uint64_t generation, const QString& expected_digest) {
@@ -8407,8 +8502,10 @@ return {api_version=2, client={keybindings={
     void verifyTerminalFrameAdmission(TerminalSuppression suppression) {
       auto* terminal = terminalIn(window_->contentItem());
       const auto* pane = firstPane();
+      if (terminal == nullptr || pane == nullptr) {
+        QFAIL("Required terminal and pane fixtures are missing");
+      }
 
-      QVERIFY(terminal != nullptr && pane != nullptr);
       QTRY_COMPARE_WITH_TIMEOUT(pane->acknowledged_frame, pane->screen.frameId(), runtime_wait_ms);
       const auto restore = qScopeGuard([terminal] {
         terminal->setVisible(true);
@@ -8454,8 +8551,10 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id != original_identity, runtime_wait_ms);
       auto* terminal = terminalIn(window_->contentItem());
       const auto* pane = firstPane();
+      if (terminal == nullptr || pane == nullptr) {
+        QFAIL("Required terminal and pane fixtures are missing");
+      }
 
-      QVERIFY(terminal != nullptr && pane != nullptr);
       terminal->forceActiveFocus();
       beginChildMouseCapture(*terminal, expected.size(), encoding);
       std::forward<Gesture>(gesture)(*window_, *terminal);

@@ -329,6 +329,15 @@ namespace {
     runtime.send(PaneFrame{FrameBody{.pane_id = pane_id, .frame_id = 2, .cols = columns, .rows = 1, .cursor = {.visible = true, .x = marker.size()}, .scroll = {.total_rows = 1}, .text_metadata = TextMetadata{.row_flags = flags}, .spans = spans}});
   }
 
+  // The mouse areas under root that show the pointing cursor.
+  qsizetype pointingAreaCount(QQuickItem& root) {
+    const auto items = visualItems(root, QString{});
+
+    return std::ranges::count_if(items, [](const QQuickItem* item) {
+      return item->inherits("QQuickMouseArea") && item->cursor().shape() == Qt::PointingHandCursor;
+    });
+  }
+
   bool captureAttachmentImage(const QImage& image, const char* setting) {
     const auto path = qEnvironmentVariable(setting);
 
@@ -531,6 +540,82 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(application.attachments()->shelf()->hoverReady(), wait_ms);
     }
 
+    static qreal paneRowHeight(ApplicationController& application) {
+      return application.panes()->rows()->data(application.panes()->rows()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("height")).toReal();
+    }
+
+    // Connects the machine and gives its pane an agent that accepts ordered attachments.
+    static void openClipboardAgent(MachineFixture& fixture, QQuickWindow& window, QSize size) {
+      auto& application = fixture.application;
+
+      window.resize(size);
+      application.setWindow(window);
+      QVERIFY(fixture.start());
+      fixture.local_runtime->send(ClientLayoutSnapshot{});
+      QVERIFY(finishOpening(*fixture.local_runtime));
+      sendFrame(*fixture.local_runtime);
+      auto agent = activityAgent("Clipboard");
+
+      agent.attachments = AgentAttachmentMarkers::ordered;
+      const ds::Array agents{agent};
+
+      fixture.local_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
+      QTRY_VERIFY_WITH_TIMEOUT(application.attachments()->shelf()->prompt().hasValue(), wait_ms);
+    }
+
+    static void copyRedPng(PrivateClipboard& board) {
+      QImage image{2, 3, QImage::Format_RGBA8888};
+
+      image.fill(Qt::red);
+      QByteArray png;
+      QBuffer output{&png};
+
+      QVERIFY(output.open(QIODevice::WriteOnly) && image.save(&output, "PNG"));
+      board.setPng(std::as_bytes(std::span{png.constData(), static_cast<std::size_t>(png.size())}));
+    }
+
+    static void verifyShelfReservesPaneRows(ApplicationController& application, qreal before) {
+      const auto after = paneRowHeight(application);
+      const auto rows = application.display()->geometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid")).toMap().value(QStringLiteral("cellHeight")).toReal();
+
+      QCOMPARE(before - after, PaneBottomReservation::shelf_rows * rows);
+    }
+
+    static void verifyModalOwnsKeys(ApplicationController& application, TerminalItem& terminal) {
+      QKeyEvent blocked{QEvent::KeyPress, Qt::Key_X, Qt::NoModifier, QStringLiteral("x")};
+
+      QVERIFY(application.commands()->handleKey(blocked, terminal));
+      QKeyEvent escape{QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier};
+
+      QVERIFY(application.commands()->handleKey(escape, terminal));
+      QVERIFY(application.attachments()->shelf()->modal().isEmpty());
+    }
+
+    static void verifyDismissDeletesTheMarker(MachineFixture& fixture, qreal before, const QString& identity, std::size_t previous_input) {
+      auto& application = fixture.application;
+
+      sendAttachmentFrame(*fixture.local_runtime);
+      QTRY_COMPARE_WITH_TIMEOUT(application.pane(pane_id)->screen.cursor().x, 10, wait_ms);
+      application.attachments()->shelf()->dismiss(identity);
+      QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::pane_input), previous_input + 2, wait_ms);
+      QCOMPARE(textView(fixture.local_runtime->last<PaneInput>().bytes), std::string_view{"\x7f"});
+      QTRY_VERIFY_WITH_TIMEOUT(application.attachments()->shelf()->items().isEmpty() && application.attachments()->geometry().isEmpty(), wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(paneRowHeight(application), before, wait_ms);
+    }
+
+    static void verifySubmitSendsTheShelf(MachineFixture& fixture, TerminalItem& terminal, QKeyEvent& paste, std::size_t previous_input) {
+      auto& application = fixture.application;
+
+      QCoreApplication::sendEvent(&terminal, &paste);
+      QTRY_COMPARE_WITH_TIMEOUT(application.attachments()->shelf()->items().size(), 1, wait_ms);
+      QKeyEvent submit{QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier};
+
+      QCoreApplication::sendEvent(&terminal, &submit);
+      QTRY_VERIFY_WITH_TIMEOUT(application.attachments()->shelf()->items().isEmpty() && application.attachments()->geometry().isEmpty(), wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::pane_input), previous_input + 4, wait_ms);
+      QCOMPARE(textView(fixture.local_runtime->last<PaneInput>().bytes), std::string_view{"\r"});
+    }
+
     static void verifyAttachmentModalHost(ApplicationController& application) {
       const auto modal_geometry = application.attachments()->modalGeometry();
       const auto modal_host = modal_geometry.value(QStringLiteral("host")).toRectF();
@@ -568,29 +653,12 @@ namespace {
       QQuickWindow window;
       constexpr QSize size{800, 600};
 
-      window.resize(size);
-      application.setWindow(window);
-      QVERIFY(fixture.start());
-      fixture.local_runtime->send(ClientLayoutSnapshot{});
-      QVERIFY(finishOpening(*fixture.local_runtime));
-      sendFrame(*fixture.local_runtime);
-      auto agent = activityAgent("Clipboard");
+      openClipboardAgent(fixture, window, size);
+      QVERIFY(!QTest::currentTestFailed());
+      const auto before = paneRowHeight(application);
 
-      agent.attachments = AgentAttachmentMarkers::ordered;
-      const ds::Array agents{agent};
-
-      fixture.local_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
-      QTRY_VERIFY_WITH_TIMEOUT(application.attachments()->shelf()->prompt().hasValue(), wait_ms);
-      const auto before = application.panes()->rows()->data(application.panes()->rows()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("height")).toReal();
-
-      QImage image{2, 3, QImage::Format_RGBA8888};
-
-      image.fill(Qt::red);
-      QByteArray png;
-      QBuffer output{&png};
-
-      QVERIFY(output.open(QIODevice::WriteOnly) && image.save(&output, "PNG"));
-      board.setPng(std::as_bytes(std::span{png.constData(), static_cast<std::size_t>(png.size())}));
+      copyRedPng(board);
+      QVERIFY(!QTest::currentTestFailed());
       TerminalItem terminal{window.contentItem()};
 
       terminal.setController(application.terminals());
@@ -646,20 +714,10 @@ namespace {
       QVERIFY(!shelf_pixels.isNull());
       QVERIFY(attachmentRendererMatchesRequest(window));
       QVERIFY(captureAttachmentImage(shelf_pixels, "TELAR_GUI_TEST_ATTACHMENT_SHELF_CAPTURE"));
-      const auto pointingAreas = [](QQuickItem& root) {
-        const auto items = visualItems(root, QString{});
-
-        return std::ranges::count_if(items, [](const QQuickItem* item) {
-          return item->inherits("QQuickMouseArea") && item->cursor().shape() == Qt::PointingHandCursor;
-        });
-      };
-
-      QCOMPARE(pointingAreas(*shelf_view), 2);
-      QCOMPARE(pointingAreas(*modal_view), 1);
-      const auto after = application.panes()->rows()->data(application.panes()->rows()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("height")).toReal();
-      const auto rows = application.display()->geometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid")).toMap().value(QStringLiteral("cellHeight")).toReal();
-
-      QCOMPARE(before - after, PaneBottomReservation::shelf_rows * rows);
+      QCOMPARE(pointingAreaCount(*shelf_view), 2);
+      QCOMPARE(pointingAreaCount(*modal_view), 1);
+      verifyShelfReservesPaneRows(application, before);
+      QVERIFY(!QTest::currentTestFailed());
 
       const auto identity = application.attachments()->shelf()->items().front().toMap().value(QStringLiteral("id")).toString();
 
@@ -672,33 +730,16 @@ namespace {
 
       QVERIFY(!modal_pixels.isNull() && modal_pixels != shelf_pixels);
       QVERIFY(captureAttachmentImage(modal_pixels, "TELAR_GUI_TEST_ATTACHMENT_MODAL_CAPTURE"));
-      QKeyEvent blocked{QEvent::KeyPress, Qt::Key_X, Qt::NoModifier, QStringLiteral("x")};
-
-      QVERIFY(application.commands()->handleKey(blocked, terminal));
-      QKeyEvent escape{QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier};
-
-      QVERIFY(application.commands()->handleKey(escape, terminal));
-      QVERIFY(application.attachments()->shelf()->modal().isEmpty());
+      verifyModalOwnsKeys(application, terminal);
+      QVERIFY(!QTest::currentTestFailed());
       verifyAttachmentHoverReactivation(application, window);
       verifyAttachmentBackdropOwnership(application, window, identity);
       QCOMPARE(fixture.local_runtime->count(ClientTag::pane_input), previous_input + 1);
 
-      sendAttachmentFrame(*fixture.local_runtime);
-      QTRY_COMPARE_WITH_TIMEOUT(application.pane(pane_id)->screen.cursor().x, 10, wait_ms);
-      application.attachments()->shelf()->dismiss(identity);
-      QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::pane_input), previous_input + 2, wait_ms);
-      QCOMPARE(textView(fixture.local_runtime->last<PaneInput>().bytes), std::string_view{"\x7f"});
-      QTRY_VERIFY_WITH_TIMEOUT(application.attachments()->shelf()->items().isEmpty() && application.attachments()->geometry().isEmpty(), wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(application.panes()->rows()->data(application.panes()->rows()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("height")).toReal(), before, wait_ms);
+      verifyDismissDeletesTheMarker(fixture, before, identity, previous_input);
+      QVERIFY(!QTest::currentTestFailed());
 
-      QCoreApplication::sendEvent(&terminal, &paste);
-      QTRY_COMPARE_WITH_TIMEOUT(application.attachments()->shelf()->items().size(), 1, wait_ms);
-      QKeyEvent submit{QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier};
-
-      QCoreApplication::sendEvent(&terminal, &submit);
-      QTRY_VERIFY_WITH_TIMEOUT(application.attachments()->shelf()->items().isEmpty() && application.attachments()->geometry().isEmpty(), wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(fixture.local_runtime->count(ClientTag::pane_input), previous_input + 4, wait_ms);
-      QCOMPARE(textView(fixture.local_runtime->last<PaneInput>().bytes), std::string_view{"\r"});
+      verifySubmitSendsTheShelf(fixture, terminal, paste, previous_input);
     }
 #endif
 

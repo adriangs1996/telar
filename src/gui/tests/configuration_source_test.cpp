@@ -57,26 +57,28 @@ import telar.plugins;
 import telar.base.ds;
 
 namespace telar::gui::qt {
+  namespace {
 
-  // Waits for the Lua thread, as a binding does before it applies its effects.
-  inline BindingEffects invokeNow(ConfigurationSource& source, BindingAction action, BindingContext context) {
-    ds::Option<LuaOutcome<ConfigurationSource::Effects>> result;
+    // Waits for the Lua thread, as a binding does before it applies its effects.
+    inline BindingEffects invokeNow(ConfigurationSource& source, BindingAction action, BindingContext context) {
+      ds::Option<LuaOutcome<ConfigurationSource::Effects>> result;
 
-    source.invoke(action, context, [&](LuaOutcome<ConfigurationSource::Effects> outcome) {
-      result.emplace(std::move(outcome));
-    });
+      source.invoke(action, context, [&](LuaOutcome<ConfigurationSource::Effects> outcome) {
+        result.emplace(std::move(outcome));
+      });
 
-    while (!result) {
-      QCoreApplication::processEvents(QEventLoop::WaitForMoreEvents);
+      while (!result) {
+        QCoreApplication::processEvents(QEventLoop::WaitForMoreEvents);
+      }
+
+      if (!result->value) {
+        throw std::runtime_error{result->error.toStdString()};
+      }
+
+      return (*result->value)->effects;
     }
 
-    if (!result->value) {
-      throw std::runtime_error{result->error.toStdString()};
-    }
-
-    return (*result->value)->effects;
   }
-
 }
 
 namespace {
@@ -758,9 +760,10 @@ namespace {
       QCOMPARE(source.error(), QString{});
       telar::ds::Option<LuaOutcome<ConfigurationSource::BarRender>> result;
       QElapsedTimer clock;
+      const features::components::Context context{};
 
       clock.start();
-      source.renderBar(features::components::Position::bottom_left, {}, [&](LuaOutcome<ConfigurationSource::BarRender> outcome) {
+      source.renderBar(features::components::Position::bottom_left, context, [&](LuaOutcome<ConfigurationSource::BarRender> outcome) {
         result.emplace(std::move(outcome));
       });
 

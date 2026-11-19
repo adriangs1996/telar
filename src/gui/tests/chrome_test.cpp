@@ -90,6 +90,7 @@ namespace {
   constexpr int fixture_sidebar_width = 280;
   constexpr int fixture_rail_width = 52;
   constexpr int fixture_wait_ms = 5'000;
+  constexpr int tab_font_pixel_size = 13;
 
   // How many rows a fixture holds and which one is selected.
   struct Selection {
@@ -133,6 +134,25 @@ namespace {
     properties.insert(QStringLiteral("controlsInset"), 0);
 
     return properties;
+  }
+
+  // The key of the one tab whose caption is selected, "multiple" when several are.
+  QString selectedTabKey(QQuickItem& strip) {
+    QString selected;
+
+    for (const auto* caption : visualItems(strip, QStringLiteral("tabCaption"))) {
+      if (!caption->parentItem()->property("source").toMap().value(QStringLiteral("selected")).toBool()) {
+        continue;
+      }
+
+      if (!selected.isEmpty()) {
+        return QStringLiteral("multiple");
+      }
+
+      selected = caption->parentItem()->property("tabKey").toString();
+    }
+
+    return selected;
   }
 
   QRectF tabBounds(const QAbstractItemModel& model, int row) {
@@ -198,6 +218,24 @@ namespace {
     };
   }
 
+  // The bands whose background takes a role other than the top bar's.
+  struct ChromeBands {
+    const QQuickItem* sidebar = nullptr;
+    const QQuickItem* status = nullptr;
+  };
+
+  QString bandBackgroundRole(const QQuickItem* band, ChromeBands bands) {
+    if (band == bands.status) {
+      return QStringLiteral("bottombarBackground");
+    }
+
+    if (band == bands.sidebar) {
+      return QStringLiteral("sidebarBackground");
+    }
+
+    return QStringLiteral("topbarBackground");
+  }
+
   class ChromeTest final : public QObject {
     Q_OBJECT
 
@@ -210,17 +248,18 @@ namespace {
     Q_SLOT static void syntaxColorsReachQml() {
       Configuration configuration;
       const auto keyword = QStringLiteral("syntax_keyword");
+      constexpr CellColor keyword_color{.kind = CellColor::Kind::rgb, .channels = {0x95, 0xa7, 0xba}};
 
       QCOMPARE(themeColors(configuration).value(keyword).value<QColor>(), toQColor(configuration.theme.foreground));
-      configuration.theme.syntax.atMut(static_cast<std::size_t>(SyntaxRole::keyword)) = CellColor{.kind = CellColor::Kind::rgb, .channels = {0x95, 0xa7, 0xba}};
-      QCOMPARE(themeColors(configuration).value(keyword).value<QColor>(), QColor(0x95, 0xa7, 0xba));
+      configuration.theme.syntax.atMut(static_cast<std::size_t>(SyntaxRole::keyword)) = keyword_color;
+      QCOMPARE(themeColors(configuration).value(keyword).value<QColor>(), QColor(keyword_color.channels[0], keyword_color.channels[1], keyword_color.channels[2]));
     }
 
     Q_SLOT static void chromeBandsKeepThemeRelativeSurfacesAndWindowTransparency() {
       QQuickWindow window;
       QQmlEngine engine;
       ListModel tabs;
-      ListModel workspaces;
+      const ListModel workspaces;
       ListModel agents;
       constexpr int width = 1000;
       const ChromeMetrics chrome;
@@ -251,10 +290,11 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), fixture_wait_ms);
       Configuration configuration;
       constexpr auto explicit_panel = Color::rgb(0x405060);
+      constexpr CellColor explicit_panel_cell{.kind = CellColor::Kind::rgb, .channels = {0x40, 0x50, 0x60}};
       constexpr telar::ds::Array opacities{0.0F, 0.25F, 0.75F, 1.0F, 0.5F};
 
       for (const bool custom_panel : {false, true}) {
-        configuration.theme.chrome.atMut(static_cast<std::size_t>(PaletteRole::panel_bg)) = custom_panel ? CellColor{.kind = CellColor::Kind::rgb, .channels = {0x40, 0x50, 0x60}} : CellColor{};
+        configuration.theme.chrome.atMut(static_cast<std::size_t>(PaletteRole::panel_bg)) = custom_panel ? explicit_panel_cell : CellColor{};
         const auto covering = toQColor(custom_panel ? explicit_panel : configuration.theme.background);
 
         for (const auto opacity : opacities) {
@@ -266,8 +306,7 @@ namespace {
           QCOMPARE(colors.value(QStringLiteral("panel_bg")).value<QColor>(), covering);
           for (auto* band : bands) {
             QVERIFY(band->setProperty("colors", colors));
-            const auto role = band == status.get() ? QStringLiteral("bottombarBackground") : band == sidebar.get() ? QStringLiteral("sidebarBackground")
-                                                                                                                   : QStringLiteral("topbarBackground");
+            const auto role = bandBackgroundRole(band, {.sidebar = sidebar.get(), .status = status.get()});
             const auto band_color = colors.value(role).value<QColor>();
 
             QCOMPARE(band->property("color").value<QColor>(), band_color);
@@ -344,12 +383,14 @@ namespace {
       QQmlEngine engine;
       ListModel tabs;
 
+      constexpr int width = 1000;
+
       tabs.reconcile(tabRecords({.count = 2, .active = 0}));
-      const auto properties = navigationProperties(tabs, 1000);
+      const auto properties = navigationProperties(tabs, width);
       const auto navigation = createChrome(engine, QStringLiteral("NavigationBar"), properties);
 
       navigation->setParentItem(window.contentItem());
-      window.resize(1000, ChromeMetrics{}.top_bar);
+      window.resize(width, ChromeMetrics{}.top_bar);
       window.show();
       QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), fixture_wait_ms);
       const auto* strip = navigation->findChild<TabStripLayout*>(QStringLiteral("tabStripLayout"));
@@ -378,38 +419,24 @@ namespace {
       QQmlEngine engine;
       ListModel tabs;
 
+      constexpr int width = 600;
+
       tabs.reconcile(tabRecords({.count = 2, .active = 0}));
-      auto strip = createChrome(engine, QStringLiteral("TerminalTabs"), tabProperties(tabs, 600));
+      auto strip = createChrome(engine, QStringLiteral("TerminalTabs"), tabProperties(tabs, width));
 
       strip->setParentItem(window.contentItem());
       auto* layout = strip->findChild<TabStripLayout*>(QStringLiteral("tabStripLayout"));
 
       QVERIFY(layout != nullptr);
-      window.resize(600, ChromeMetrics{}.top_bar);
+      window.resize(width, ChromeMetrics{}.top_bar);
       window.show();
       QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), fixture_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 2, fixture_wait_ms);
-      const auto selected_caption = [&] {
-        QString selected;
-
-        for (const auto* caption : visualItems(*strip, QStringLiteral("tabCaption"))) {
-          if (caption->parentItem()->property("source").toMap().value(QStringLiteral("selected")).toBool()) {
-            if (!selected.isEmpty()) {
-              return QStringLiteral("multiple");
-            }
-
-            selected = caption->parentItem()->property("tabKey").toString();
-          }
-        }
-
-        return selected;
-      };
-
-      QTRY_COMPARE_WITH_TIMEOUT(selected_caption(), QStringLiteral("tab:0"), fixture_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(selectedTabKey(*strip), QStringLiteral("tab:0"), fixture_wait_ms);
       const telar::ds::Array before{tabBounds(*layout->items(), 0), tabBounds(*layout->items(), 1)};
 
       tabs.reconcile(tabRecords({.count = 2, .active = 1}));
-      QTRY_COMPARE_WITH_TIMEOUT(selected_caption(), QStringLiteral("tab:1"), fixture_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(selectedTabKey(*strip), QStringLiteral("tab:1"), fixture_wait_ms);
       QCOMPARE(tabBounds(*layout->items(), 0), before[0]);
       QCOMPARE(tabBounds(*layout->items(), 1), before[1]);
     }
@@ -422,17 +449,20 @@ namespace {
       QQmlEngine engine;
       ListModel tabs;
 
+      constexpr int width = 1000;
+      constexpr int controls_inset = 80;
+
       tabs.reconcile(tabRecords({.count = 3, .active = 0}));
-      auto properties = navigationProperties(tabs, 1000);
+      auto properties = navigationProperties(tabs, width);
 
       properties.insert(QStringLiteral("tabs"), QVariant::fromValue(application.tabs()));
       properties.insert(QStringLiteral("machineContext"), application.machines()->context());
       properties.insert(QStringLiteral("workspace"), QVariantMap{{QStringLiteral("name"), QStringLiteral("telar")}});
-      properties.insert(QStringLiteral("controlsInset"), 80);
+      properties.insert(QStringLiteral("controlsInset"), controls_inset);
       const auto navigation = createChrome(engine, QStringLiteral("NavigationBar"), properties);
 
       navigation->setParentItem(window.contentItem());
-      window.resize(1000, ChromeMetrics{}.top_bar);
+      window.resize(width, ChromeMetrics{}.top_bar);
       window.show();
       QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
       const auto* layout = navigation->findChild<TabStripLayout*>(QStringLiteral("tabStripLayout"));
@@ -456,7 +486,7 @@ namespace {
         const auto name_bounds = name->mapRectToItem(navigation.get(), name->boundingRect());
         const auto machine_bounds = machine->mapRectToItem(navigation.get(), machine->boundingRect());
 
-        QVERIFY(machine_bounds.left() >= 80);
+        QVERIFY(machine_bounds.left() >= controls_inset);
         QVERIFY(machine_bounds.right() <= name_bounds.left());
         QVERIFY(name_bounds.right() < layout->mapToItem(navigation.get(), QPointF{}).x());
       }
@@ -467,11 +497,13 @@ namespace {
       QQmlEngine engine;
       ListModel tabs;
 
+      constexpr int width = 800;
+
       tabs.reconcile(tabRecords({.count = 3, .active = 0}));
-      const auto strip = createChrome(engine, QStringLiteral("TerminalTabs"), tabProperties(tabs, 800));
+      const auto strip = createChrome(engine, QStringLiteral("TerminalTabs"), tabProperties(tabs, width));
 
       strip->setParentItem(window.contentItem());
-      window.resize(800, ChromeMetrics{}.top_bar);
+      window.resize(width, ChromeMetrics{}.top_bar);
       window.show();
       QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
       auto* layout = strip->findChild<TabStripLayout*>(QStringLiteral("tabStripLayout"));
@@ -498,23 +530,32 @@ namespace {
       QVERIFY(!well->isVisible() && !selection->isVisible());
     }
 
+    // NOLINTNEXTLINE(readability-identifier-naming): Qt requires the _data suffix.
     Q_SLOT static void tabWellFitsNarrowAndScaledStrips_data() {
+      constexpr int narrow_width = 48;
+      constexpr int overflow_width = 120;
+      constexpr int fractional_width = 180;
+      constexpr qreal fractional_ratio = 1.5;
+      constexpr int double_width = 800;
+
       QTest::addColumn<int>("width");
       QTest::addColumn<qreal>("ratio");
-      QTest::newRow("narrow") << 48 << qreal{1};
-      QTest::newRow("overflow") << 120 << qreal{1};
-      QTest::newRow("fractional") << 180 << qreal{1.5};
-      QTest::newRow("double") << 800 << qreal{2};
+      QTest::newRow("narrow") << narrow_width << qreal{1};
+      QTest::newRow("overflow") << overflow_width << qreal{1};
+      QTest::newRow("fractional") << fractional_width << fractional_ratio;
+      QTest::newRow("double") << double_width << qreal{2};
     }
 
     Q_SLOT static void tabWellFitsNarrowAndScaledStrips() {
-      QFETCH(int, width);
-      QFETCH(qreal, ratio);
+      QFETCH(const int, width);
+      QFETCH(const qreal, ratio);
       QQuickWindow window;
       QQmlEngine engine;
       ListModel tabs;
 
-      tabs.reconcile(tabRecords({.count = 64, .active = 32}));
+      constexpr std::size_t tab_count = 64;
+
+      tabs.reconcile(tabRecords({.count = tab_count, .active = tab_count / 2}));
       auto properties = tabProperties(tabs, width);
       const auto height = ChromeMetrics::logical_top_bar * ratio;
 
@@ -789,7 +830,7 @@ namespace {
       tab.observePanes(panes);
       telar::ds::Array agents{Agent{memory}};
 
-      agents.atMut(0).pane_id = 5;
+      agents.atMut(0).pane_id = panes[1].pane_id;
       agents.atMut(0).location = location;
       agents.atMut(0).status = telar::AgentStatus::blocked;
       const auto record = tabRecord(tab, static_cast<const application::Pane<telar::Memory>*>(nullptr), std::span<const application::Pane<telar::Memory>* const>{}, std::span<const Agent<telar::Memory>>{agents}, false);
@@ -813,6 +854,7 @@ namespace {
       ListModel tabs;
       QList<QVariantMap> rows;
       constexpr int tab_count = 4;
+      constexpr QSize strip_size{800, 42};
 
       for (int id = 1; id <= tab_count; ++id) {
         rows.append({{QStringLiteral("key"), QString::number(id)}, {QStringLiteral("label"), QStringLiteral("Terminal")}});
@@ -821,19 +863,19 @@ namespace {
       tabs.reconcile(rows);
       TabStripLayout layout{window.contentItem()};
 
-      layout.setSize(QSizeF{800, 42});
+      layout.setSize(QSizeF{strip_size});
       layout.setContext(1, telar::WorkspaceLocation{.id = 1});
       QFont font{QStringLiteral("IBM Plex Sans")};
 
-      font.setPixelSize(13);
+      font.setPixelSize(tab_font_pixel_size);
       layout.setFont(font);
-      layout.setPixelSize(13);
+      layout.setPixelSize(tab_font_pixel_size);
       layout.setModel(&tabs);
-      window.resize(800, 42);
+      window.resize(strip_size);
       window.show();
       QVERIFY(QTest::qWaitForWindowExposed(&window, fixture_wait_ms));
       QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
-      std::reverse(rows.begin(), rows.end());
+      std::ranges::reverse(rows);
       tabs.reconcile(rows);
       QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
       QVERIFY(layout.transitioning());
@@ -868,15 +910,17 @@ namespace {
       tabs.reconcile(rows);
       TabStripLayout layout{window.contentItem()};
 
-      layout.setSize(QSizeF{800, ChromeMetrics::logical_top_bar});
+      constexpr int strip_width = 800;
+
+      layout.setSize(QSizeF{strip_width, ChromeMetrics::logical_top_bar});
       layout.setContext(1, telar::WorkspaceLocation{.id = 1});
       QFont font{QStringLiteral("IBM Plex Sans")};
 
-      font.setPixelSize(13);
+      font.setPixelSize(tab_font_pixel_size);
       layout.setFont(font);
-      layout.setPixelSize(13);
+      layout.setPixelSize(tab_font_pixel_size);
       layout.setModel(&tabs);
-      window.resize(800, static_cast<int>(ChromeMetrics::logical_top_bar));
+      window.resize(strip_width, static_cast<int>(ChromeMetrics::logical_top_bar));
       window.show();
       QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
       QCOMPARE(layout.selectionBounds(), tabBounds(*layout.items(), 0));
@@ -919,9 +963,10 @@ namespace {
         QCOMPARE(plan.widths[index], sizes[index].whole(metrics));
       }
 
-      const auto single = Geometry::arrange(std::span{sizes}.first(1), 0, {.width = 150, .metrics = metrics});
+      constexpr float single_room = 150.0F;
+      const auto single = Geometry::arrange(std::span{sizes}.first(1), 0, {.width = single_room, .metrics = metrics});
 
-      QCOMPARE(single.widths[0], 150.0F);
+      QCOMPARE(single.widths[0], single_room);
       QCOMPARE(single.fits[0], Geometry::Fit::truncated);
     }
 
@@ -930,7 +975,9 @@ namespace {
       const auto metrics = Geometry::Metrics::scaled(1);
       telar::ds::Array<Geometry::Measure, 3> sizes;
 
-      sizes.fill({.caption = 400, .chip = Geometry::chip_widths[0]});
+      constexpr float long_caption = 400;
+
+      sizes.fill({.caption = long_caption, .chip = Geometry::chip_widths[0]});
       const auto minimum_room = (sizes[0].truncated(metrics) * static_cast<float>(sizes.size())) + (metrics.gap * static_cast<float>(sizes.size() - 1));
 
       for (const auto room : {minimum_room, minimum_room + 30}) {
@@ -952,27 +999,30 @@ namespace {
       ListModel tabs;
       TabStripLayout layout{window.contentItem()};
       QFont font{QStringLiteral("IBM Plex Sans")};
+      constexpr int narrow_width = 180;
+      constexpr int wide_width = 400;
+      constexpr int label_length = 64;
 
-      font.setPixelSize(13);
+      font.setPixelSize(tab_font_pixel_size);
       layout.setFont(font);
-      layout.setPixelSize(13);
+      layout.setPixelSize(tab_font_pixel_size);
       layout.setContext(1, telar::WorkspaceLocation{.id = 1});
       layout.setModel(&tabs);
       layout.setHovered(true);
-      layout.setSize(QSizeF{180, ChromeMetrics::logical_top_bar});
-      window.resize(400, static_cast<int>(ChromeMetrics::logical_top_bar));
+      layout.setSize(QSizeF{narrow_width, ChromeMetrics::logical_top_bar});
+      window.resize(wide_width, static_cast<int>(ChromeMetrics::logical_top_bar));
       window.show();
       QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
       QList<QVariantMap> rows;
 
       for (int id = 1; id <= 3; ++id) {
-        rows.append({{QStringLiteral("key"), QString::number(id)}, {QStringLiteral("label"), QString(64, QLatin1Char('W'))}, {QStringLiteral("selected"), id == 1}});
+        rows.append({{QStringLiteral("key"), QString::number(id)}, {QStringLiteral("label"), QString(label_length, QLatin1Char('W'))}, {QStringLiteral("selected"), id == 1}});
       }
 
       tabs.reconcile(rows);
       QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
       QVERIFY(!layout.counter().isEmpty());
-      layout.setWidth(400);
+      layout.setWidth(wide_width);
       QTRY_VERIFY_WITH_TIMEOUT(!layout.transitioning() && layout.items()->rowCount() == 3, fixture_wait_ms);
       const auto record = [&](int index) {
         return layout.items()->data(layout.items()->index(index, 0), ListModel::record_role).toMap();
@@ -1184,9 +1234,11 @@ namespace {
       workspaces.reconcile(workspaceRecords({.count = workspace_count, .active = 0}));
       QVERIFY(switcher->setProperty("selectedIndex", 0));
       QTRY_VERIFY_WITH_TIMEOUT(selected() != nullptr && switcher->boundingRect().contains(selected()->mapRectToItem(switcher.get(), selected()->boundingRect())), fixture_wait_ms);
-      switcher->setWidth(20);
+      constexpr qreal squeezed_width = 20;
+
+      switcher->setWidth(squeezed_width);
       QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
-      QCOMPARE(overflow.front()->width(), qreal{20});
+      QCOMPARE(overflow.front()->width(), squeezed_width);
       QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, overflow.front()->mapRectToScene(overflow.front()->boundingRect()).center().toPoint());
       QTRY_COMPARE_WITH_TIMEOUT(requested.size(), 2, fixture_wait_ms);
       workspaces.reconcile({});
@@ -1202,15 +1254,17 @@ namespace {
       ListModel workspaces;
 
       tabs.reconcile(tabRecords({.count = 4, .active = 0}));
+      constexpr int width = 1000;
+
       workspaces.reconcile(workspaceRecords({.count = 3, .active = 0}));
-      auto properties = navigationProperties(tabs, 1000);
+      auto properties = navigationProperties(tabs, width);
 
       properties.insert(QStringLiteral("workspaceModel"), QVariant::fromValue(static_cast<QAbstractItemModel*>(&workspaces)));
       properties.insert(QStringLiteral("workspace"), QVariantMap{{QStringLiteral("index"), 0}});
       const auto navigation = createChrome(engine, QStringLiteral("NavigationBar"), properties);
 
       navigation->setParentItem(window.contentItem());
-      window.resize(1000, static_cast<int>(ChromeMetrics::logical_top_bar));
+      window.resize(width, static_cast<int>(ChromeMetrics::logical_top_bar));
       window.show();
       QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
       const auto* strip = navigation->findChild<TabStripLayout*>(QStringLiteral("tabStripLayout"));
@@ -1250,7 +1304,7 @@ namespace {
       window.resize(strip_width, static_cast<int>(ChromeMetrics::logical_top_bar));
       window.show();
       QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), fixture_wait_ms);
-      const auto firstArea = [&] -> QQuickItem* {
+      const auto first_area = [&] -> QQuickItem* {
         for (auto* item : visualItems(*strip, QString{})) {
           if (item->inherits("QQuickMouseArea") && item->isVisible() && item->width() > 0) {
             return item;
@@ -1260,13 +1314,14 @@ namespace {
         return nullptr;
       };
 
-      QTRY_VERIFY_WITH_TIMEOUT(firstArea() != nullptr, fixture_wait_ms);
-      const auto* area = firstArea();
+      QTRY_VERIFY_WITH_TIMEOUT(first_area() != nullptr, fixture_wait_ms);
+      const auto* area = first_area();
 
       QTest::mouseMove(&window, area->mapRectToScene(area->boundingRect()).center().toPoint());
       QTRY_COMPARE_WITH_TIMEOUT(window.cursor().shape(), Qt::PointingHandCursor, fixture_wait_ms);
     }
 
+    // NOLINTNEXTLINE(readability-identifier-naming): Qt requires the _data suffix.
     Q_SLOT static void buttonsShowThePointingCursorOnlyWhileEnabled_data() {
       QTest::addColumn<QString>("type");
       QTest::addColumn<QByteArray>("availability");
@@ -1275,8 +1330,8 @@ namespace {
     }
 
     Q_SLOT static void buttonsShowThePointingCursorOnlyWhileEnabled() {
-      QFETCH(QString, type);
-      QFETCH(QByteArray, availability);
+      QFETCH(const QString, type);
+      QFETCH(const QByteArray, availability);
       QQuickWindow window;
       QQmlEngine engine;
       const ChromeMetrics chrome;
@@ -1325,11 +1380,13 @@ namespace {
       QQmlEngine engine;
       ListModel workspaces;
 
+      constexpr int width = 120;
+
       workspaces.reconcile(workspaceRecords({.count = 3, .active = 0}));
-      const auto switcher = createChrome(engine, QStringLiteral("ProjectSwitcher"), projectSwitcherProperties(workspaces, 120, 0));
+      const auto switcher = createChrome(engine, QStringLiteral("ProjectSwitcher"), projectSwitcherProperties(workspaces, width, 0));
 
       switcher->setParentItem(window.contentItem());
-      window.resize(120, static_cast<int>(ChromeMetrics::logical_top_bar));
+      window.resize(width, static_cast<int>(ChromeMetrics::logical_top_bar));
       const auto signal = switcher->metaObject()->method(switcher->metaObject()->indexOfSignal("selected(QString)"));
 
       QVERIFY(signal.isValid());

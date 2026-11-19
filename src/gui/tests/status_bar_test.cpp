@@ -52,6 +52,7 @@ namespace {
   constexpr int wait_ms = 5000;
   constexpr int bar_width = 640;
   constexpr int bar_height = 26;
+  constexpr int tree_width = 1000;
   constexpr std::uint8_t initial_cpu = 42;
   constexpr std::uint16_t initial_memory = 128;
   constexpr std::uint16_t updated_memory = 129;
@@ -81,18 +82,24 @@ namespace {
   }
 
   QVariantMap treeProperties(const BarContent& content) {
-    const auto nodes = componentRecords(content, Configuration{}.theme, {}, [](BindingAction) -> telar::ds::Option<NamedActionDescription> {
+    const features::components::Time time{};
+    const auto nodes = componentRecords(content, Configuration{}.theme, time, [](BindingAction) -> telar::ds::Option<NamedActionDescription> {
       return telar::ds::none;
     });
 
     return {
-        {QStringLiteral("width"), 1000},
+        {QStringLiteral("width"), tree_width},
         {QStringLiteral("height"), bar_height},
         {QStringLiteral("controller"), QVariant::fromValue(static_cast<QObject*>(nullptr))},
         {QStringLiteral("surface"), QVariantMap{{QStringLiteral("kind"), QStringLiteral("static")}, {QStringLiteral("identity"), QStringLiteral("fixture")}, {QStringLiteral("generation"), QStringLiteral("1")}, {QStringLiteral("source"), 0}, {QStringLiteral("nodes"), nodes}}},
         {QStringLiteral("colors"), themeColors(Configuration{})},
         {QStringLiteral("typography"), QVariantMap{{QStringLiteral("small"), ChromeMetrics{}.small}, {QStringLiteral("body"), ChromeMetrics{}.body}, {QStringLiteral("bodyRow"), ChromeMetrics::lineHeight(ChromeMetrics{}.body)}, {QStringLiteral("smallRow"), ChromeMetrics::lineHeight(ChromeMetrics{}.small)}}},
     };
+  }
+
+  // The value a meter without a detail shows: the 7d fixture meter is empty, every other one full.
+  QString defaultMeterValue(const QQuickItem& label) {
+    return label.property("text").toString() == QStringLiteral("7d") ? QStringLiteral("0%") : QStringLiteral("100%");
   }
 
   class StatusBarTest final : public QObject {
@@ -172,7 +179,7 @@ namespace {
       QVERIFY(bar->setProperty("diagnostic", QStringLiteral("The configuration could not be loaded")));
       window.show();
       QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
-      const auto findArea = [&] -> QQuickItem* {
+      const auto find_area = [&] -> QQuickItem* {
         for (auto* item : visualItems(*bar, QString{})) {
           if (item->inherits("QQuickMouseArea") && item->isVisible() && item->width() > 0) {
             return item;
@@ -182,14 +189,17 @@ namespace {
         return nullptr;
       };
 
-      QTRY_VERIFY_WITH_TIMEOUT(findArea() != nullptr, wait_ms);
-      const auto* area = findArea();
+      QTRY_VERIFY_WITH_TIMEOUT(find_area() != nullptr, wait_ms);
+      const auto* area = find_area();
 
       QTest::mouseMove(&window, area->mapRectToScene(area->boundingRect()).center().toPoint());
       QTRY_COMPARE_WITH_TIMEOUT(window.cursor().shape(), Qt::PointingHandCursor, wait_ms);
     }
 
+    // NOLINTNEXTLINE(readability-identifier-naming): Qt requires the _data suffix.
     Q_SLOT static void inlineMetersLeadWithARing_data() {
+      constexpr qreal scaled_ratio = 1.5;
+
       QTest::addColumn<bool>("compact");
       QTest::addColumn<bool>("labelled");
       QTest::addColumn<QString>("detail");
@@ -199,14 +209,14 @@ namespace {
       QTest::newRow("unlabelled") << false << false << QString{} << qreal{1};
       QTest::newRow("unlabelled-compact") << true << false << QString{} << qreal{1};
       QTest::newRow("custom-value") << false << true << QStringLiteral("20 / 100") << qreal{1};
-      QTest::newRow("scaled") << false << true << QString{} << qreal{1.5};
+      QTest::newRow("scaled") << false << true << QString{} << scaled_ratio;
     }
 
     Q_SLOT static void inlineMetersLeadWithARing() {
-      QFETCH(bool, compact);
-      QFETCH(bool, labelled);
-      QFETCH(QString, detail);
-      QFETCH(qreal, ratio);
+      QFETCH(const bool, compact);
+      QFETCH(const bool, labelled);
+      QFETCH(const QString, detail);
+      QFETCH(const qreal, ratio);
       QQuickWindow window;
       QQmlEngine engine;
       BarContent content;
@@ -226,7 +236,7 @@ namespace {
       auto tree = createChrome(engine, QStringLiteral("ComponentTree"), properties);
 
       tree->setParentItem(window.contentItem());
-      window.resize(1000, bar_height);
+      window.resize(tree_width, bar_height);
       window.show();
       QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(visualItems(*tree, QStringLiteral("componentMeterRing")).size(), 2, wait_ms);
@@ -240,7 +250,7 @@ namespace {
         QVERIFY(value->isVisible());
         QTRY_VERIFY_WITH_TIMEOUT(value->implicitWidth() > 0, wait_ms);
         QCOMPARE(label->property("text").toString().contains(QLatin1Char{'%'}), false);
-        const auto expected_value = detail.isEmpty() ? (label->property("text").toString() == QStringLiteral("7d") ? QStringLiteral("0%") : QStringLiteral("100%")) : detail;
+        const auto expected_value = detail.isEmpty() ? defaultMeterValue(*label) : detail;
 
         if (labelled || !detail.isEmpty()) {
           QCOMPARE(value->property("text").toString(), expected_value);
@@ -270,9 +280,11 @@ namespace {
       QQuickWindow window;
       QQmlEngine engine;
       BarContent content;
-      telar::ds::Array<std::uint8_t, 60> samples{};
+      constexpr std::size_t sample_count = 60;
+      constexpr std::uint8_t full_sample = 100;
+      telar::ds::Array<std::uint8_t, sample_count> samples{};
 
-      samples.atMut(samples.size() - 1) = 100;
+      samples.atMut(samples.size() - 1) = full_sample;
       features::components::Input input{};
 
       input.node.kind = features::components::Kind::sparkline;
@@ -281,7 +293,7 @@ namespace {
       const auto tree = createChrome(engine, QStringLiteral("ComponentTree"), treeProperties(content));
 
       tree->setParentItem(window.contentItem());
-      window.resize(1000, bar_height);
+      window.resize(tree_width, bar_height);
       window.show();
       QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(tree->implicitWidth(), qreal{26}, wait_ms);
@@ -291,13 +303,14 @@ namespace {
       int full_samples = 0;
 
       for (const auto* column : columns) {
-        full_samples += static_cast<int>(column->property("modelData").toInt() == 100);
+        full_samples += static_cast<int>(column->property("modelData").toInt() == full_sample);
       }
 
       QCOMPARE(full_samples, 1);
     }
 
     Q_SLOT static void onlyClickableGroupsGetAPillTintedByTheirAlert() {
+      constexpr std::uint16_t warning_value = 600;
       QQuickWindow window;
       QQmlEngine engine;
       BarContent content;
@@ -305,11 +318,11 @@ namespace {
       appendNode(content, {.kind = features::components::Kind::group});
       appendNode(content, {.kind = features::components::Kind::label, .parent = 0}, "Clock");
       appendNode(content, {.kind = features::components::Kind::group}, {}, {}, "https://example.com");
-      appendNode(content, {.kind = features::components::Kind::meter, .parent = 2, .tone = features::components::Tone::warning, .value = 600}, "7d");
+      appendNode(content, {.kind = features::components::Kind::meter, .parent = 2, .tone = features::components::Tone::warning, .value = warning_value}, "7d");
       const auto tree = createChrome(engine, QStringLiteral("ComponentTree"), treeProperties(content));
 
       tree->setParentItem(window.contentItem());
-      window.resize(1000, bar_height);
+      window.resize(tree_width, bar_height);
       window.show();
       QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(visualItems(*tree, QStringLiteral("barPill")).size(), 1, wait_ms);
@@ -321,18 +334,21 @@ namespace {
     }
 
     Q_SLOT static void summariesNameTheWorstEntryAndCountTheRest() {
+      constexpr std::uint16_t disk_value = 300;
+      constexpr std::uint16_t net_value = 920;
+      constexpr std::uint16_t gpu_value = 990;
       QQuickWindow window;
       QQmlEngine engine;
       BarContent content;
 
       appendNode(content, {.kind = features::components::Kind::group}, "system");
-      appendNode(content, {.kind = features::components::Kind::meter, .parent = 0, .value = 300}, "disk");
-      appendNode(content, {.kind = features::components::Kind::meter, .parent = 0, .tone = features::components::Tone::warning, .value = 920}, "net");
-      appendNode(content, {.kind = features::components::Kind::meter, .parent = 0, .tone = features::components::Tone::danger, .value = 990}, "gpu");
+      appendNode(content, {.kind = features::components::Kind::meter, .parent = 0, .value = disk_value}, "disk");
+      appendNode(content, {.kind = features::components::Kind::meter, .parent = 0, .tone = features::components::Tone::warning, .value = net_value}, "net");
+      appendNode(content, {.kind = features::components::Kind::meter, .parent = 0, .tone = features::components::Tone::danger, .value = gpu_value}, "gpu");
       const auto tree = createChrome(engine, QStringLiteral("ComponentTree"), treeProperties(content));
 
       tree->setParentItem(window.contentItem());
-      window.resize(1000, bar_height);
+      window.resize(tree_width, bar_height);
       window.show();
       QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(visualItems(*tree, QStringLiteral("barRingArc")).size(), 3, wait_ms);

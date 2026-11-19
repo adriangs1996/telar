@@ -175,6 +175,8 @@ namespace {
 
   constexpr std::uint16_t scroll_columns = 8;
   constexpr std::uint16_t scroll_rows = 7;
+  constexpr std::uint32_t history_rows = 100;
+  constexpr Cursor hidden_cursor{};
 
   ds::Array<Cell, static_cast<std::size_t>(scroll_columns) * scroll_rows> scrollCells(std::uint32_t offset) {
     constexpr std::size_t palette_size = 16;
@@ -444,6 +446,8 @@ namespace {
     // Draws the screen's rows from `first` on, then `kept` rows as if the runtime sent them
     // apart from the screen.
     void drawShiftedRows(std::size_t first, std::span<const std::vector<CellValue>> kept) {
+      constexpr std::uint64_t kept_source_bit = std::uint64_t{1} << 63U;
+
       kept_ = {kept.begin(), kept.end()};
       std::vector<TerminalRow> rows;
 
@@ -452,7 +456,7 @@ namespace {
       }
 
       for (std::size_t index = 0; index < kept_.size(); ++index) {
-        rows.push_back({.cells = kept_[index], .revision = index + 1, .source = (std::uint64_t{1} << 63U) | index});
+        rows.push_back({.cells = kept_[index], .revision = index + 1, .source = kept_source_bit | index});
       }
 
       item_.drawRows(std::move(rows));
@@ -752,8 +756,8 @@ namespace {
         expected.atMut((lowered * scroll_columns) + column) = Cell{.text = byteView(" ")};
       }
 
-      reference.setGrid(expected, scroll_columns, {}, {.total_rows = 100, .offset = offset});
-      moved.setGrid(cells, scroll_columns, {}, {.total_rows = 100, .offset = offset});
+      reference.setGrid(expected, scroll_columns, hidden_cursor, {.total_rows = history_rows, .offset = offset});
+      moved.setGrid(cells, scroll_columns, hidden_cursor, {.total_rows = history_rows, .offset = offset});
       moved.lowerRowsFrom(lowered);
       QVERIFY2(moved.capture() == reference.capture(), "rows drawn below their places must leave the rows above them as they were");
     }
@@ -766,10 +770,10 @@ namespace {
       SceneFixture drawn{CursorShape::block, false};
       const auto expected = scrollCells(offset);
 
-      reference.setGrid(expected, scroll_columns, {}, {.total_rows = 100, .offset = offset});
+      reference.setGrid(expected, scroll_columns, hidden_cursor, {.total_rows = history_rows, .offset = offset});
       const auto earlier = scrollCells(offset - 1);
 
-      drawn.setGrid(earlier, scroll_columns, {}, {.total_rows = 100, .offset = offset - 1});
+      drawn.setGrid(earlier, scroll_columns, hidden_cursor, {.total_rows = history_rows, .offset = offset - 1});
       const auto after = scrollCells(offset + scroll_rows - 1);
       std::vector<CellValue> last;
 
@@ -813,7 +817,6 @@ namespace {
 
     static void applyScrollStep(SceneFixture& fixture, std::span<const Cell> cells, ScrollStep action, std::uint32_t offset) {
       constexpr std::uint16_t oversized_pixel_height = 80;
-      constexpr std::uint32_t history_rows = 100;
       constexpr auto replacement_palette_color = Color::rgb(0x4860a2);
       const auto step = static_cast<std::size_t>(action);
       const CellSelection selection = step % 3 == 0 ? CellSelection{.anchor = 5, .head = 30} : CellSelection{};
@@ -847,6 +850,7 @@ namespace {
       }
     }
 
+    // NOLINTNEXTLINE(readability-identifier-naming): Qt requires the _data suffix.
     Q_SLOT static void changingTextAndInlineDecorationsMatchesFreshRows_data() {
       QTest::addColumn<bool>("optical");
       QTest::newRow("standard") << false;
@@ -854,7 +858,7 @@ namespace {
     }
 
     Q_SLOT static void changingTextAndInlineDecorationsMatchesFreshRows() {
-      QFETCH(bool, optical);
+      QFETCH(const bool, optical);
       constexpr ds::Array<std::string_view, 5> contents{"ffi!=->M", "ABCDEFGH", "        ", "01234567", "ffi!=->M"};
       constexpr std::size_t columns = 8;
       constexpr unsigned underline_shift = 8;

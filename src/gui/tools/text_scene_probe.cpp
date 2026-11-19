@@ -161,6 +161,9 @@ namespace {
   public:
     TextCase(const TextCase&) = delete;
     TextCase& operator=(const TextCase&) = delete;
+    TextCase(TextCase&&) = delete;
+    TextCase& operator=(TextCase&&) = delete;
+    ~TextCase() = default;
 
     // The case paints through the window, region `a`, whose glyph cache it keeps warm.
     TextCase(tbc::view<QQuickWindow&, tbc::lt::a> window, const std::shared_ptr<const FontCollection>& collection, unsigned length)

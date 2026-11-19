@@ -106,6 +106,8 @@ namespace {
   }
 
   std::vector<std::unique_ptr<NativePaneAttention>> createAtlas(const QQuickWindow& window, const QJsonObject& source) {
+    // This atlas records the original six-pixel shader shape, not the current chrome style.
+    constexpr qreal atlas_radius = 6;
     std::vector<std::unique_ptr<NativePaneAttention>> items;
     const auto density = window.effectiveDevicePixelRatio();
 
@@ -118,8 +120,7 @@ namespace {
       item->setSize({bounds[2].toDouble() / density, bounds[3].toDouble() / density});
       item->setPosition({bounds[0].toDouble() / density, bounds[1].toDouble() / density});
       item->setRatio(record.value(QStringLiteral("ratio")).toDouble() / density);
-      // This atlas records the original six-pixel shader shape, not the current chrome style.
-      item->setRadius(6);
+      item->setRadius(atlas_radius);
       item->setColor(QColor::fromRgb(record.value(QStringLiteral("rgb")).toInt()));
       items.push_back(std::move(item));
     }

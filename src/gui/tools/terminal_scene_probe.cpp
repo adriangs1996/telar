@@ -296,6 +296,20 @@ namespace {
         return;
       }
 
+      const bool unicode = options_.snapshot_workload == "unicode";
+
+      for (unsigned row = 0; row < terminal_rows; ++row) {
+        const auto phase = options_.snapshot_workload == "retained" || (options_.snapshot_workload == "sparse" && row != 0) ? 0U : frame;
+
+        for (unsigned column = 0; column < terminal_columns; ++column) {
+          prepareSnapshotCell(row, column, phase, unicode);
+        }
+      }
+
+      apply();
+    }
+
+    void prepareSnapshotCell(unsigned row, unsigned column, unsigned phase, bool unicode) {
       constexpr unsigned printable_first = 33;
       constexpr unsigned printable_count = 94;
       constexpr unsigned row_stride = 37;
@@ -308,38 +322,28 @@ namespace {
       // `unicode` changes every row like `full`, with letters outside ASCII that the primary font
       // covers: accented Latin, Greek and Cyrillic, each a multi-byte cell.
       static constexpr std::u32string_view letters = U"áéíóúñüçàèâêîôûäëïöÿßæøåαβγδεζηθλμπσφψωабвгдежзиклмнопрстуфхцчшщ";
-      const bool unicode = options_.snapshot_workload == "unicode";
+      const auto offset = (row * terminal_columns) + column;
+      const auto value = (row * row_stride) + (column * column_stride) + phase;
+      auto text = std::span{characters_}.subspan(offset, 1);
 
-      for (unsigned row = 0; row < terminal_rows; ++row) {
-        const auto phase = options_.snapshot_workload == "retained" || (options_.snapshot_workload == "sparse" && row != 0) ? 0U : frame;
+      if (unicode) {
+        const auto bytes = Utf8Scalar::encode(letters[value % letters.size()]);
 
-        for (unsigned column = 0; column < terminal_columns; ++column) {
-          const auto offset = (row * terminal_columns) + column;
-          const auto value = (row * row_stride) + (column * column_stride) + phase;
-          auto text = std::span{characters_}.subspan(offset, 1);
-
-          if (unicode) {
-            const auto bytes = Utf8Scalar::encode(letters[value % letters.size()]);
-
-            text = std::span{characters_}.subspan(offset * utf8_slot, bytes.view().size());
-            std::ranges::transform(bytes.view(), text.begin(), [](char byte) {
-              return static_cast<Byte>(byte);
-            });
-          } else {
-            characters_[offset] = static_cast<Byte>(printable_first + (value % printable_count));
-          }
-
-          const auto green = (column + row + phase) % bright_period == 0 ? bright_green : dim_green;
-
-          cells_[offset] = {.width = CellWidth::single, .style = {.foreground = {.kind = CellColor::Kind::rgb, .channels = {0, green, 0}}}, .text = text};
-
-          if (options_.colored_backgrounds && column % bright_period != 0) {
-            cells_[offset].style.background = {.kind = CellColor::Kind::rgb, .channels = {background_red, 0, static_cast<Byte>((row + phase) % background_blue_period)}};
-          }
-        }
+        text = std::span{characters_}.subspan(offset * utf8_slot, bytes.view().size());
+        std::ranges::transform(bytes.view(), text.begin(), [](char byte) {
+          return static_cast<Byte>(byte);
+        });
+      } else {
+        characters_[offset] = static_cast<Byte>(printable_first + (value % printable_count));
       }
 
-      apply();
+      const auto green = (column + row + phase) % bright_period == 0 ? bright_green : dim_green;
+
+      cells_[offset] = {.width = CellWidth::single, .style = {.foreground = {.kind = CellColor::Kind::rgb, .channels = {0, green, 0}}}, .text = text};
+
+      if (options_.colored_backgrounds && column % bright_period != 0) {
+        cells_[offset].style.background = {.kind = CellColor::Kind::rgb, .channels = {background_red, 0, static_cast<Byte>((row + phase) % background_blue_period)}};
+      }
     }
 
     void apply() {
