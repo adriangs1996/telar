@@ -248,7 +248,7 @@ namespace telar::gui::features::paths {
     seed.text.assign(word.text);
   }
 
-  FindPaths search(const State& state, std::string_view query, std::uint64_t request_id) noexcept {
+  tbc::view<FindPaths, tbc::lt::a> search(tbc::view<const State&, tbc::lt::a> state, tbc::view<std::string_view, tbc::lt::a> query, std::uint64_t request_id) noexcept {
     const auto& picker = Access::picker(state);
 
     return {

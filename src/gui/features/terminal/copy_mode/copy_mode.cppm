@@ -94,7 +94,7 @@ export namespace telar::gui::features::terminal::copy_mode {
   bool searchOutput(State& state, std::uint64_t pane_id, const CopyGrid& grid, CopySearchRows rows, bool scoped) noexcept;
 
   // The plan that leaves copy mode where it was entered.
-  [[nodiscard]] CopyPlan leave(const State& state, const CopyGrid& grid) noexcept;
+  [[nodiscard]] tbc::view<CopyPlan, tbc::lt::static_storage> leave(const State& state, const CopyGrid& grid) noexcept;
 
   // Copy mode ends without a pane to leave: its pane went away or another tab shows.
   void close(State& state) noexcept;
@@ -106,16 +106,16 @@ export namespace telar::gui::features::terminal::copy_mode {
 
   // The plan a key asks for; none when copy mode does not take keys. A key that begins a search
   // begins it from where the cursor is now.
-  [[nodiscard]] TBC_HOT_PATH inline ds::Option<CopyPlan> key(State& state, const TerminalKey& key, const CopyGrid& grid);
+  [[nodiscard]] TBC_HOT_PATH inline tbc::view<ds::Option<CopyPlan>, tbc::lt::static_storage> key(State& state, const TerminalKey& key, const CopyGrid& grid);
 
   // A press at `press.position` selects from there, a word or a line on a second or third click.
   TBC_HOT_PATH inline bool press(State& state, CopyPress press, const CopyGrid& grid) noexcept;
 
   // The plan a drag to `local` asks for, ending the gesture when `released`.
-  [[nodiscard]] TBC_HOT_PATH inline ds::Option<CopyPlan> drag(const State& state, CopyPoint local, const CopyGrid& grid, bool released) noexcept;
+  [[nodiscard]] TBC_HOT_PATH inline tbc::view<ds::Option<CopyPlan>, tbc::lt::static_storage> drag(const State& state, CopyPoint local, const CopyGrid& grid, bool released) noexcept;
 
   // The plan a wheel step of `rows` asks for.
-  [[nodiscard]] TBC_HOT_PATH inline ds::Option<CopyPlan> scroll(const State& state, std::int32_t rows, const CopyGrid& grid) noexcept;
+  [[nodiscard]] TBC_HOT_PATH inline tbc::view<ds::Option<CopyPlan>, tbc::lt::static_storage> scroll(const State& state, std::int32_t rows, const CopyGrid& grid) noexcept;
 
   // Typing drops a selection the pointer made; false when there was none.
   TBC_HOT_PATH inline bool clearPointer(State& state) noexcept;
@@ -139,7 +139,7 @@ export namespace telar::gui::features::terminal::copy_mode {
 
   // The search typed so far is `needle`; it begins where the first letter found the cursor. With
   // nothing to look for, the plan back to where it began, and no answer awaited.
-  [[nodiscard]] ds::Option<CopyPlan> type(State& state, std::string_view needle, const CopyGrid& grid);
+  [[nodiscard]] tbc::view<ds::Option<CopyPlan>, tbc::lt::static_storage> type(State& state, std::string_view needle, const CopyGrid& grid);
 
   // The search of pane `pane_id` under `request_id`: through a command's output when it is
   // confined there and the runtime reads rows, else through the whole scrollback. The request
@@ -153,7 +153,7 @@ export namespace telar::gui::features::terminal::copy_mode {
   [[nodiscard]] bool awaits(const State& state, const PaneMatches& message) noexcept;
 
   // The matches arrived: the plan that takes the cursor to the first, which views them.
-  [[nodiscard]] ds::Option<CopyPlan> receive(State& state, const PaneMatches& message, const CopyGrid& grid);
+  [[nodiscard]] tbc::view<ds::Option<CopyPlan>, tbc::lt::a> receive(State& state, tbc::view<const PaneMatches&, tbc::lt::a> message, const CopyGrid& grid);
 
   // The search typed so far ends: its matches stay for n and N, from wherever they took the
   // cursor.
@@ -208,7 +208,7 @@ namespace telar::gui::features::terminal::copy_mode {
     Access::mode(state).onFrame(previous_offset, grid);
   }
 
-  inline ds::Option<CopyPlan> key(State& state, const TerminalKey& key, const CopyGrid& grid) {
+  inline tbc::view<ds::Option<CopyPlan>, tbc::lt::static_storage> key(State& state, const TerminalKey& key, const CopyGrid& grid) {
     auto plan = Access::mode(state).key(key, grid);
     if (plan && plan->effect.search) {
       auto& search = Access::search(state);
@@ -224,11 +224,11 @@ namespace telar::gui::features::terminal::copy_mode {
     return Access::mode(state).beginPointer(press, grid);
   }
 
-  inline ds::Option<CopyPlan> drag(const State& state, CopyPoint local, const CopyGrid& grid, bool released) noexcept {
+  inline tbc::view<ds::Option<CopyPlan>, tbc::lt::static_storage> drag(const State& state, CopyPoint local, const CopyGrid& grid, bool released) noexcept {
     return Access::mode(state).pointer(local, grid, released);
   }
 
-  inline ds::Option<CopyPlan> scroll(const State& state, std::int32_t rows, const CopyGrid& grid) noexcept {
+  inline tbc::view<ds::Option<CopyPlan>, tbc::lt::static_storage> scroll(const State& state, std::int32_t rows, const CopyGrid& grid) noexcept {
     return Access::mode(state).vertical(rows, grid);
   }
 

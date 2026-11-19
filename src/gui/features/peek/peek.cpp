@@ -122,7 +122,7 @@ namespace telar::gui::features::peek {
     return Access::screen(state).reading();
   }
 
-  const Agent<Memory>* find(std::span<const Agent<Memory>> agents, const PeekTarget& target) noexcept {
+  tbc::view<const Agent<Memory>*, tbc::lt::a> find(tbc::view<std::span<const Agent<Memory>>, tbc::lt::a> agents, const PeekTarget& target) noexcept {
     const auto found = std::ranges::find_if(agents, [&](const auto& agent) {
       return agent.pane_id == target.agent.pane_id && agent.pane_generation == target.agent.pane_generation && agent.session_id == target.session;
     });
@@ -130,7 +130,7 @@ namespace telar::gui::features::peek {
     return found == agents.end() ? nullptr : std::addressof(*found);
   }
 
-  const Agent<Memory>* agent(const State& state, std::span<const Agent<Memory>> agents) noexcept {
+  tbc::view<const Agent<Memory>*, tbc::lt::a> agent(const State& state, tbc::view<std::span<const Agent<Memory>>, tbc::lt::a> agents) noexcept {
     const auto& opened = target(state);
 
     return opened ? find(agents, *opened) : nullptr;

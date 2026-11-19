@@ -15,15 +15,16 @@ import std;
 import telar.base.memory.allocators;
 import telar.gui.foundation.model;
 import telar.base.ds;
+import telar.tbc;
 
 export namespace telar::gui::features::activity {
 
   // The agent the runtime reports in pane `pane_id`, at `generation` when one is given: the one a
   // card the user chose shows, if it still does.
-  [[nodiscard]] const Agent<Memory>* find(std::span<const Agent<Memory>> agents, std::uint64_t pane_id, ds::Option<std::uint64_t> generation = ds::none) noexcept;
+  [[nodiscard]] tbc::view<const Agent<Memory>*, tbc::lt::a> find(tbc::view<std::span<const Agent<Memory>>, tbc::lt::a> agents, std::uint64_t pane_id, ds::Option<std::uint64_t> generation = ds::none) noexcept;
 
   // The agent in the pane `tab` focuses, if one runs there.
-  [[nodiscard]] const Agent<Memory>* focused(std::span<const Agent<Memory>> agents, const Tab<Memory>& tab) noexcept;
+  [[nodiscard]] tbc::view<const Agent<Memory>*, tbc::lt::a> focused(tbc::view<std::span<const Agent<Memory>>, tbc::lt::a> agents, const Tab<Memory>& tab) noexcept;
 
   // The workspace the pane the user chose lives in, by what the runtime reports of it as an agent
   // or else lists of it: where to go when the pane is gone. None when neither knows it at

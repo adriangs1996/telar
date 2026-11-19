@@ -11,7 +11,7 @@ namespace telar::gui::features::history {
   State::State(Memory& memory)
       : browser_(memory) {}
 
-  QueryHistory search(State& state, QueryHistory request) {
+  tbc::view<QueryHistory, tbc::lt::a> search(tbc::view<State&, tbc::lt::a> state, QueryHistory request) {
     const auto parsed = HistorySearch::parse(request.query, request.failed_only);
 
     request.query = parsed.query;

@@ -34,7 +34,7 @@ namespace telar::gui::application::terminal::links {
 
   }
 
-  ds::Option<std::string_view> base(const Session& session, const FilePath& path, std::string_view executable, ds::Option<std::uint64_t> source_id) {
+  tbc::view<ds::Option<std::string_view>, tbc::lt::a> base(tbc::view<const Session&, tbc::lt::a> session, const FilePath& path, std::string_view executable, ds::Option<std::uint64_t> source_id) {
     if (executable.empty()) {
       throw std::runtime_error{"EditorUnavailable"};
     }

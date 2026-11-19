@@ -90,7 +90,7 @@ namespace telar::runtime {
 
     wuffs_base__image_config config{};
 
-    status = wuffs_png__decoder__decode_image_config(decoder, &config, &source);
+    status = ghostty::wuffs::decodeImageConfig(decoder, &config, &source);
     if (!ghostty::wuffs::isOk(&status)) {
       return false;
     }
@@ -127,7 +127,7 @@ namespace telar::runtime {
       return false;
     }
 
-    status = wuffs_png__decoder__decode_frame(decoder, &destination, &source, WUFFS_BASE__PIXEL_BLEND__SRC, ghostty::wuffs::makeSlice(workspace.data(), workspace.size()), nullptr);
+    status = ghostty::wuffs::decodeFrame(decoder, &destination, &source, WUFFS_BASE__PIXEL_BLEND__SRC, ghostty::wuffs::makeSlice(workspace.data(), workspace.size()));
     if (!ghostty::wuffs::isOk(&status)) {
       return false;
     }

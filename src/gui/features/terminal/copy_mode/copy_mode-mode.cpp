@@ -365,7 +365,7 @@ namespace telar::gui::features::terminal::copy_mode {
     return true;
   }
 
-  ds::Option<CopyPlan> CopyMode::pointer(CopyPoint local, const CopyGrid& grid, bool released) const noexcept {
+  tbc::view<ds::Option<CopyPlan>, tbc::lt::static_storage> CopyMode::pointer(CopyPoint local, const CopyGrid& grid, bool released) const noexcept {
     if (!state_ || !state_->pointer || gesture_ != state_->pane_id) {
       return {};
     }
@@ -434,7 +434,7 @@ namespace telar::gui::features::terminal::copy_mode {
     return true;
   }
 
-  ds::Option<CopyPlan> CopyMode::key(const TerminalKey& key, const CopyGrid& grid) const noexcept {
+  tbc::view<ds::Option<CopyPlan>, tbc::lt::static_storage> CopyMode::key(const TerminalKey& key, const CopyGrid& grid) const noexcept {
     if (!state_ || state_->pointer) {
       return {};
     }
@@ -471,7 +471,7 @@ namespace telar::gui::features::terminal::copy_mode {
     return plan(next, grid, effect);
   }
 
-  ds::Option<CopyPlan> CopyMode::vertical(std::int32_t rows, const CopyGrid& grid) const noexcept {
+  tbc::view<ds::Option<CopyPlan>, tbc::lt::static_storage> CopyMode::vertical(std::int32_t rows, const CopyGrid& grid) const noexcept {
     if (!state_) {
       return {};
     }
@@ -483,7 +483,7 @@ namespace telar::gui::features::terminal::copy_mode {
     return next == *state_ ? ds::none : ds::Option{plan(next, grid)};
   }
 
-  CopyPlan CopyMode::leave(const CopyGrid& grid) const noexcept {
+  tbc::view<CopyPlan, tbc::lt::static_storage> CopyMode::leave(const CopyGrid& grid) const noexcept {
     CopyPlan result{.revision = revision_, .effect = {.exit = true}};
 
     if (state_ && !state_->pointer) {
@@ -575,7 +575,7 @@ namespace telar::gui::features::terminal::copy_mode {
     return SetPaneViewport{.pane_id = state_->pane_id, .offset = offset};
   }
 
-  CopyPlan CopyMode::plan(CopyState next, const CopyGrid& grid, CopyEffect effect) const noexcept {
+  tbc::view<CopyPlan, tbc::lt::static_storage> CopyMode::plan(CopyState next, const CopyGrid& grid, CopyEffect effect) const noexcept {
     return {.revision = revision_, .next = next, .effect = effect, .viewport = viewport(next.viewport_offset, grid)};
   }
 

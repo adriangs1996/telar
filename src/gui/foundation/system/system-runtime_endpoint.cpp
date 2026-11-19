@@ -50,7 +50,7 @@ namespace telar::gui::inline foundation::inline system {
     // Reads both streams until telar closes them, then waits for it to exit, all within one
     // deadline; a telar still running at the deadline is killed with its process group. Only the
     // standard streams reach telar, never another descriptor of this process.
-    Answer ask(telar::SystemAllocator& memory, std::span<const std::string_view> words) {
+    tbc::view<Answer, tbc::lt::a> ask(tbc::view<telar::SystemAllocator&, tbc::lt::a> memory, std::span<const std::string_view> words) {
       telar::runtime::Command command{memory, telar::Launch{.arguments = words}, telar::runtime::CommandPurpose::configured_helper};
       telar::runtime::CommandOutput<telar::SystemAllocator> process{memory, 0};
       Answer answer{.output = Text{memory}, .errors = Text{memory}};

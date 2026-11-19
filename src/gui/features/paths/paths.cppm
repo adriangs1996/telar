@@ -13,6 +13,7 @@ import telar.base.memory.containers;
 import telar.wire.editor;
 import telar.wire.runtime;
 import telar.base.ds;
+import telar.tbc;
 
 namespace telar::gui::features::paths {
 
@@ -55,7 +56,7 @@ export namespace telar::gui::features::paths {
 
   // The search for `query` under the picker's root, under `request_id`, while the picker is open
   // (page(state).paneId() is not 0).
-  [[nodiscard]] FindPaths search(const State& state, std::string_view query, std::uint64_t request_id) noexcept;
+  [[nodiscard]] tbc::view<FindPaths, tbc::lt::a> search(tbc::view<const State&, tbc::lt::a> state, tbc::view<std::string_view, tbc::lt::a> query, std::uint64_t request_id) noexcept;
 
   // The search `request_id` went out: its answer is the one awaited.
   void wait(State& state, std::uint64_t request_id) noexcept;

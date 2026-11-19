@@ -31,7 +31,7 @@ namespace telar::gui::features::terminal::links {
     pending_.reset();
   }
 
-  OpenEditor open(State& state, const EditorRequest& request) {
+  tbc::view<OpenEditor, tbc::lt::a> open(State& state, tbc::view<const EditorRequest&, tbc::lt::a> request) {
     auto& opening = Access::opening(state);
 
     opening.begin(request);

@@ -49,7 +49,7 @@ namespace telar::gui::qt {
     std::uint64_t revision = 0;
 
     // A screen's own rows, as it shows them; `cells` keeps their spans.
-    [[nodiscard]] static ImageRows of(const Screen<Memory>& screen, ds::Vec<std::span<const CellValue>, Memory>& cells) {
+    [[nodiscard]] static tbc::view<ImageRows, tbc::lt::a> of(tbc::view<const Screen<Memory>&, tbc::lt::a> screen, tbc::view<ds::Vec<std::span<const CellValue>, Memory>&, tbc::lt::a> cells) {
       cells.clear();
       for (std::size_t row = 0; row < screen.rows(); ++row) {
         cells.push(screen.row(row));

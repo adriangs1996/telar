@@ -17,6 +17,7 @@ import telar.base.memory.allocators;
 import telar.wire.history;
 import telar.wire.vocabulary;
 import telar.base.ds;
+import telar.tbc;
 
 namespace telar::gui::features::history {
 
@@ -134,7 +135,7 @@ export namespace telar::gui::features::history {
   // A new search: `request` says what to look for, its query text read by HistorySearch (a
   // leading '!' asks for failures only). Returns the request to send; throws EncodingError when
   // too many requests are in flight, the panel showing why.
-  [[nodiscard]] QueryHistory search(State& state, QueryHistory request);
+  [[nodiscard]] tbc::view<QueryHistory, tbc::lt::a> search(tbc::view<State&, tbc::lt::a> state, QueryHistory request);
 
   // The next older or newer page of the search; none at its end or while a page loads.
   [[nodiscard]] ds::Option<QueryHistory> page(State& state, HistoryPage direction, std::uint64_t request_id);

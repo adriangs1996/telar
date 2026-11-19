@@ -11,6 +11,7 @@ export import :suggestion_state;
 import std;
 
 import telar.wire.editor;
+import telar.tbc;
 
 namespace telar::gui::features::palette {
 
@@ -37,7 +38,7 @@ export namespace telar::gui::features::palette {
   void discard(State& state) noexcept;
 
   // What submitting `task` does.
-  [[nodiscard]] Submission submit(const State& state, std::string_view task) noexcept;
+  [[nodiscard]] tbc::view<Submission, tbc::lt::a> submit(tbc::view<const State&, tbc::lt::a> state, tbc::view<std::string_view, tbc::lt::a> task) noexcept;
 
   // The runtime was asked under `request_id`; its answer is the one awaited.
   void wait(State& state, std::uint64_t request_id) noexcept;
