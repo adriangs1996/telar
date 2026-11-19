@@ -116,27 +116,29 @@ namespace telar::gui::qt {
   }
 
   void MachinesCoordinator::configure() {
-    for (auto& client : store_.clientsMut().viewMut()) {
-      if (!client) {
+    // By slot: a session's effects reach the store its client lies in.
+    for (std::size_t slot = 0; slot < store_.clients().size(); ++slot) {
+      if (!store_.clients()[slot]) {
         continue;
       }
 
-      application::configuration::configure(client.getMut().getMut().session, configuration_source_.configuration());
-      if ((*client)->session.ready()) {
-        application::window::pace(client.getMut().getMut().session);
+      application::configuration::configure(store_.clientsMut().atMut(slot).getMut().getMut().session, configuration_source_.configuration());
+      if (store_.clients()[slot]->get().session.ready()) {
+        application::window::pace(store_.clientsMut().atMut(slot).getMut().getMut().session);
       }
     }
   }
 
   void MachinesCoordinator::setDisplayRefresh(std::uint16_t fps) {
-    for (auto& client : store_.clientsMut().viewMut()) {
-      if (!client) {
+    // By slot: a session's effects reach the store its client lies in.
+    for (std::size_t slot = 0; slot < store_.clients().size(); ++slot) {
+      if (!store_.clients()[slot]) {
         continue;
       }
 
-      application::window::setRefreshRate(client.getMut().getMut().session, fps);
-      if ((*client)->session.ready()) {
-        application::window::pace(client.getMut().getMut().session);
+      application::window::setRefreshRate(store_.clientsMut().atMut(slot).getMut().getMut().session, fps);
+      if (store_.clients()[slot]->get().session.ready()) {
+        application::window::pace(store_.clientsMut().atMut(slot).getMut().getMut().session);
       }
     }
   }
