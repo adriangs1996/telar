@@ -13,7 +13,6 @@ import telar.wire.monitor;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;
-import telar.base.text.json;
 import telar.base.ds;
 
 namespace telar::runtime::cli::monitor {
