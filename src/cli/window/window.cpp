@@ -284,7 +284,12 @@ namespace telar::runtime::cli::window {
     }
 
     if (reply.action == ClientAction::plugin_list || reply.action == ClientAction::plugin_get) {
-      plugins(session, command, reply, output);
+      // The first page leaves the session's storage, which answering the next one reuses.
+      const Text first{output.memory(), reply.text};
+      auto page = reply;
+
+      page.text = first;
+      plugins(session, command, page, output);
     } else if (reply.action == ClientAction::config_show) {
       appendJson(output, JsonValue::parse(reply.text), !options.json);
       output.push('\n');

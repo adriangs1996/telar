@@ -618,8 +618,9 @@ namespace telar::runtime::cli::pane_agents {
     return 1;
   }
 
-  void interruptAgent(ControlSession& session, const AgentSnapshotEntry& agent) {
-    session.template exchange<RequestCompleted>(InterruptAgent{.pane_id = agent.pane_id, .pane_generation = agent.pane_generation});
+  // The pane by its ids: an entry of a snapshot views the session's storage, which the exchange reuses.
+  void interruptAgent(ControlSession& session, std::uint64_t pane, std::uint64_t generation) {
+    session.template exchange<RequestCompleted>(InterruptAgent{.pane_id = pane, .pane_generation = generation});
   }
 
   int waitAgent(ControlSession& session, const Options& options, ds::Option<std::uint64_t> worktree, Output& out) {
@@ -642,10 +643,8 @@ namespace telar::runtime::cli::pane_agents {
     }
   }
 
-  void settleAgent(ControlSession& session, AgentSnapshotEntry agent) {
-    const auto pane = agent.pane_id;
-
-    interruptAgent(session, agent);
+  void settleAgent(ControlSession& session, std::uint64_t pane, std::uint64_t generation) {
+    interruptAgent(session, pane, generation);
     const auto deadline = std::chrono::system_clock::now() + interrupt_settle;
 
     while (std::chrono::system_clock::now() < deadline) {
@@ -666,12 +665,9 @@ namespace telar::runtime::cli::pane_agents {
     throw Failure{"InterruptNotSettled"};
   }
 
-  int promptAgent(ControlSession& session, const Options& options, AgentSnapshotEntry agent, Output& out) {
-    const auto pane = agent.pane_id;
-    const auto generation = agent.pane_generation;
-
-    if (options.interrupt && agent.status == AgentStatus::working) {
-      settleAgent(session, agent);
+  int promptAgent(ControlSession& session, const Options& options, std::uint64_t pane, std::uint64_t generation, AgentStatus status, Output& out) {
+    if (options.interrupt && status == AgentStatus::working) {
+      settleAgent(session, pane, generation);
     }
 
     session.template exchange<RequestCompleted>(SendPaneText{.pane_id = pane, .pane_generation = generation, .mode = PaneTextMode::prompt, .text = options.text, .sender = senderPane(options, pane)});
@@ -692,7 +688,7 @@ namespace telar::runtime::cli::pane_agents {
         throw Failure{"no agent matches that target", 2};
       }
 
-      agent = *found;
+      const auto& agent = *found;
       if (agent.status == AgentStatus::working) {
         started = true;
       } else if (started || agent.status == AgentStatus::blocked || agent.status == AgentStatus::failed) {
@@ -801,7 +797,7 @@ namespace telar::runtime::cli::pane_agents {
       const auto refreshed = session.template exchange<AgentSnapshot>(QueryAgents{});
       const auto again = resolve(refreshed, options.target, tree);
 
-      return promptAgent(session, options, again, out);
+      return promptAgent(session, options, again.pane_id, again.pane_generation, again.status, out);
     }
 
     const auto agent = resolve(snapshot, options.target, tree);
@@ -818,7 +814,7 @@ namespace telar::runtime::cli::pane_agents {
       Output saved{memory};
 
       writeOne(saved, agent, options.json);
-      interruptAgent(session, agent);
+      interruptAgent(session, agent.pane_id, agent.pane_generation);
       out.text(saved.data);
     } else if (options.action == "acknowledge") {
       const auto pane = agent.pane_id;
@@ -950,7 +946,10 @@ namespace telar::runtime::cli::execution {
     }
   }
 
-  int observe(ControlSession& session, ExecutionRequest request, ExecutionReply reply, const ExecutionOptions& options) {
+  // Sends the request and follows the execution it starts or names. Each reply views the session's
+  // storage, so it is asked for here, where the next exchange replaces it.
+  int observe(ControlSession& session, ExecutionRequest request, const ExecutionOptions& options) {
+    auto reply = exchange(session, request);
     const auto started = std::chrono::steady_clock::now();
     bool stdin_open = request.stdin_open;
     const auto stdout_end = reply.stdout_total;
@@ -1038,14 +1037,12 @@ namespace telar::runtime::cli::execution {
     };
 
     try {
-      const auto reply = exchange(session, request);
-
       if (options.action == ExecutionOptions::Action::status || options.action == ExecutionOptions::Action::cancel || options.action == ExecutionOptions::Action::forget || options.detach) {
-        writeStatusJson(reply);
+        writeStatusJson(exchange(session, request));
         return 0;
       }
 
-      return observe(session, request, reply, options);
+      return observe(session, request, options);
     } catch (...) {
       if (options.action == ExecutionOptions::Action::start) {
         writeFormatted(STDERR_FILENO, "telar exec: query execution {} before retrying an uncertain launch\n", request.execution_id);
@@ -1506,7 +1503,11 @@ namespace telar::runtime::cli::project_setup {
     return recipeArguments(memory, text);
   }
 
-  void awaitSetup(ControlSession& session, ExecutionRequest request, ExecutionReply reply) {
+  // Starts the recipe and waits for it to succeed. Each reply views the session's storage, so it is
+  // asked for here, where the next exchange replaces it.
+  void awaitSetup(ControlSession& session, ExecutionRequest request) {
+    auto reply = execution::exchange(session, request);
+
     request.action = ExecutionAction::status;
     request.arguments = {};
     const auto started = std::chrono::steady_clock::now();
@@ -1549,10 +1550,10 @@ namespace telar::runtime::cli::project_setup {
     ExecutionRequest request{.action = ExecutionAction::start, .execution_id = id, .cwd = cwd, .arguments = std::span{argv}.first(recipe.size())};
 
     writeFormatted(STDERR_FILENO, "telar project: setup execution {}; each explicit invocation repeats the recipe\n", id);
-    const auto reply = execution::exchange(session, request);
-
-    if (!detach) {
-      awaitSetup(session, request, reply);
+    if (detach) {
+      static_cast<void>(execution::exchange(session, request));
+    } else {
+      awaitSetup(session, request);
     }
 
     return id;
