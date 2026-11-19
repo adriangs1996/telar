@@ -605,13 +605,13 @@ namespace telar::runtime {
 
   }
 
-  WordResult::WordResult(ConcurrentMemory& memory)
+  WordResult::WordResult(tbc::view<ConcurrentMemory&, tbc::lt::a> memory)
       : words(memory),
         command(memory),
         source(memory),
         expansion(memory) {}
 
-  WordReader::WordReader(ConcurrentMemory& memory, std::string_view configuration_directory)
+  WordReader::WordReader(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, std::string_view configuration_directory)
       : memory_(memory),
         completions_(memory),
         git_(memory),
@@ -622,7 +622,7 @@ namespace telar::runtime {
     }
   }
 
-  WordReader::Result WordReader::observe(const Request& request) noexcept {
+  tbc::view<WordReader::Result, tbc::lt::a> WordReader::observe(const Request& request) noexcept {
     Result result{memory_};
 
     result.client = request.client;
@@ -733,7 +733,7 @@ namespace telar::runtime {
 
   void WordReader::stop() noexcept {}
 
-  void WordReader::spec(const Request& request, Result& result) {
+  void WordReader::spec(const Request& request, tbc::view<Result&, tbc::lt::a> result) {
     auto name = request.prefix.view();
     if (!specName(name)) {
       return;
@@ -780,7 +780,7 @@ namespace telar::runtime {
     return shipped::specs.view();
   }
 
-  ds::String<ConcurrentMemory> WordReader::userSpec(std::string_view name) {
+  tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> WordReader::userSpec(std::string_view name) {
     Text source{memory_};
     if (completions_.empty()) {
       return source;
@@ -825,7 +825,7 @@ namespace telar::runtime {
     return source;
   }
 
-  WordService::WordService(ConcurrentMemory& memory, std::string_view configuration_directory)
+  WordService::WordService(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, std::string_view configuration_directory)
       : worker_(std::in_place, memory, configuration_directory),
         queue_(memory) {}
 

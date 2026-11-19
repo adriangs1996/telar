@@ -13,6 +13,7 @@ import telar.runtime.platform.request_worker;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.base.ds;
+import telar.tbc;
 
 // The values a completion spec leaves to the runtime, found where the shell runs: commands on
 // its PATH, the repository's branches, the hosts in the SSH configuration and the targets of
@@ -38,31 +39,31 @@ export namespace telar::runtime {
   };
 
   struct Word {
-    ds::String<ConcurrentMemory> text;
-    ds::String<ConcurrentMemory> description;
+    tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> text;
+    tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> description;
 
     bool operator==(const Word&) const = default;
     auto operator<=>(const Word&) const = default;
   };
 
   // Built on the worker's thread and dropped on the runtime's, so its text lives in memory both
-  // can reach.
+  // can reach, region `a`.
   struct WordResult {
-    explicit WordResult(ConcurrentMemory& memory);
+    explicit WordResult(tbc::view<ConcurrentMemory&, tbc::lt::a> memory);
 
     std::uint64_t client = 0;
     std::uint64_t request = 0;
-    ds::Vec<Word, ConcurrentMemory> words;
+    tbc::view<ds::Vec<Word, ConcurrentMemory>, tbc::lt::a> words;
     bool truncated = false;
     // For a spec request: the command, whether a spec describes it where the shell runs, and
     // the spec when the client does not hold it already.
     bool spec = false;
-    ds::String<ConcurrentMemory> command;
+    tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> command;
     CommandSpecState spec_state = CommandSpecState::unavailable;
     std::uint64_t digest = 0;
-    ds::String<ConcurrentMemory> source;
+    tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> source;
     // The words an alias stands for, when the command is one.
-    ds::String<ConcurrentMemory> expansion;
+    tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> expansion;
   };
 
   // The completion specs telar ships, by the command they describe.
@@ -79,32 +80,32 @@ export namespace telar::runtime {
 
     // User specs come from `completions` in the configuration directory the runtime resolved.
     // What it reads and returns lives in `memory`, which must outlive the reader and its results.
-    explicit WordReader(ConcurrentMemory& memory, std::string_view configuration_directory = {});
+    explicit WordReader(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, std::string_view configuration_directory = {});
 
-    Result observe(const Request& request) noexcept;
+    tbc::view<Result, tbc::lt::a> observe(const Request& request) noexcept;
 
     void stop() noexcept;
 
   private:
     // The spec of the command the request names, when the shell runs it: the user's own from
     // the completions directory when it compiles, else the one telar ships.
-    void spec(const Request& request, Result& result);
+    void spec(const Request& request, tbc::view<Result&, tbc::lt::a> result);
 
     // The user's spec for `name`, from the completions directory beside the configuration;
     // empty when there is none or it does not compile.
-    ds::String<ConcurrentMemory> userSpec(std::string_view name);
+    tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> userSpec(std::string_view name);
 
-    ConcurrentMemory& memory_;
-    ds::String<ConcurrentMemory> completions_;
-    git::StatusReader git_;
+    tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
+    tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> completions_;
+    tbc::view<git::StatusReader, tbc::lt::a> git_;
     // Whether each user spec, by digest, compiled: a spec is compiled once, not per request.
-    ds::Map<std::uint64_t, bool, ConcurrentMemory> compiled_;
+    tbc::view<ds::Map<std::uint64_t, bool, ConcurrentMemory>, tbc::lt::a> compiled_;
   };
 
   // One query at a time; later ones wait in order, at most a few per client.
   class WordService {
   public:
-    explicit WordService(ConcurrentMemory& memory, std::string_view configuration_directory = {});
+    explicit WordService(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, std::string_view configuration_directory = {});
 
     void request(const WordRequest& request);
 
@@ -117,8 +118,8 @@ export namespace telar::runtime {
     int descriptor() const noexcept;
 
   private:
-    ObservationWorker<WordReader> worker_;
-    SerialQueue<WordRequest> queue_;
+    tbc::view<ObservationWorker<WordReader>, tbc::lt::a> worker_;
+    tbc::view<SerialQueue<WordRequest>, tbc::lt::a> queue_;
   };
 
 }
