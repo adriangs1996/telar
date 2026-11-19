@@ -747,7 +747,8 @@ namespace telar::ds {
     static constexpr std::size_t minimum_capacity = std::max<std::size_t>(1, 64 / sizeof(Value));
 
     tbc::view<Memory*, tbc::lt::a> memory_;
-    Value* items_ = nullptr;
+    // The values live in storage from the allocator, region `a`, as a Rust `Vec<'a, T>` in an arena keeps them.
+    tbc::view<Value*, tbc::lt::a> items_ = nullptr;
     std::size_t size_ = 0;
     std::size_t capacity_ = 0;
   };
