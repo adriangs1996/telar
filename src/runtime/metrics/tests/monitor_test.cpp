@@ -178,23 +178,30 @@ namespace {
     check(fixture.list(view)[0].depth == 0);
   }
 
-  // A detail names an instance: the reply refuses a pid that is gone or now another process.
+  // A detail names a live instance: the reply refuses a pid that is gone or now another process,
+  // and reads one that started after the last reading.
   void testDetailNamesAnInstance() {
     Fixture fixture;
+    const auto self = ProcessTable::find(::getpid());
 
-    fixture.read({process(1, 0, "init", 0), process(2, 1, "child", 0)});
+    check(self.hasValue());
+
+    auto child = process(1, 0, "child", 0);
+
+    child.parent = ::getpid();
+    fixture.read({child, process(2, 0, "gone", 0)});
 
     MonitorSnapshot snapshot{};
     MonitorView view{.sections = 0};
 
-    view.detail = {.pid = base + 1, .started_seconds = 1001};
+    view.detail = {.pid = ::getpid(), .started_seconds = self->started_seconds, .started_microseconds = self->started_microseconds};
     fixture.sampler.beginAnswers(3, 0);
     check(fixture.sampler.answer(view, snapshot));
-    check(snapshot.detail && snapshot.detail->process.name == "init");
-    check(snapshot.detail->children.size() == 1 && snapshot.detail->children[0] == base + 2);
-    view.detail.started_seconds = 999;
+    check(snapshot.detail && snapshot.detail->process.instance.pid == ::getpid());
+    check(snapshot.detail->children.size() == 1 && snapshot.detail->children[0] == base + 1);
+    view.detail.started_seconds += 1;
     check(!fixture.sampler.answer(view, snapshot));
-    view.detail = {.pid = base + 9};
+    view.detail = {.pid = base + 2};
     check(!fixture.sampler.answer(view, snapshot));
   }
 

@@ -1,0 +1,17 @@
+telar process signal: Send TERM, KILL, STOP, CONT, HUP or INT to a process
+
+Usage: telar process signal PID SIGNAL [--started SECONDS.MICROSECONDS] [--json] [--socket PATH]
+
+Arguments:
+  PID             The process.
+  SIGNAL          TERM asks it to end, KILL ends it, STOP pauses it, CONT resumes it,
+                  HUP and INT as a terminal would send them.
+  --started       Its start as `list` printed it; refuses another process with the pid.
+
+Effects: the runtime reads the process again right before the signal, and sends
+nothing when the pid names another process. On Linux it holds a pidfd across that
+check, so a recycled pid never receives the signal; macOS has none, which leaves an
+instant between the check and the signal. A process of another user needs root.
+
+Results: text `Sent SIGNAL to PID`; JSON `pid` and `signal`. Exit 0; 2 the process is
+gone or another one has its pid; 1 not permitted, or refused for an agent.

@@ -3,7 +3,6 @@ module telar.cli.project_setup;
 import telar.tbc;
 import telar.cli.base.command_error;
 import telar.cli.control_session;
-import telar.client;
 import telar.platform.error;
 import telar.platform.sha256;
 import telar.sys.posix;
@@ -596,27 +595,6 @@ namespace telar::runtime::cli::pane_agents {
     }
 
     return id;
-  }
-
-  int commandFailure(const char* family, const std::exception& error) {
-    const auto* system = dynamic_cast<const SystemError*>(&error);
-    const auto socket_timeout = dynamic_cast<const SocketError*>(&error) && (sys::lastError() == EAGAIN || sys::lastError() == EWOULDBLOCK);
-    const auto timeout = socket_timeout || (system && (system->code() == EAGAIN || system->code() == EWOULDBLOCK));
-
-    std::fprintf(stderr, "%s: %s\n", family, timeout ? "RuntimeTimeout" : error.what());
-    if (timeout) {
-      return 1;
-    }
-
-    if (const auto* failure = dynamic_cast<const Failure*>(&error)) {
-      return failure->status();
-    }
-
-    if (const auto* failure = dynamic_cast<const ControlFailure*>(&error)) {
-      return (failure->code() == FailureCode::pane_not_found || failure->code() == FailureCode::pane_exited || (std::string_view{family} == "telar agent" && failure->code() == FailureCode::worktree_not_found)) ? 2 : 1;
-    }
-
-    return 1;
   }
 
   // The pane by its ids: an entry of a snapshot views the session's storage, which the exchange reuses.
@@ -1592,7 +1570,7 @@ namespace telar::runtime::cli::project_setup {
       const auto id = prepare(memory, options.cwd, true, options.detach, {});
 
       writeFormatted(STDOUT_FILENO, "{{\"execution_id\":{},\"environment\":{},\"ready\":{}}}\n", orNull(id), quoteJson(!id ? "not_declared" : options.detach ? "running"
-                                                                                                                                                                            : "ready"),
+                                                                                                                                                             : "ready"),
           jsonBoolean(id && !options.detach));
       return 0;
     } catch (const std::exception& error) {

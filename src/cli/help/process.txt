@@ -1,0 +1,31 @@
+telar process: List, watch and inspect every process of the machine; signal it, change its priority or review it
+
+Usage: telar process COMMAND [PID] [options]
+
+Commands:
+  list            List every process with its CPU, memory, threads, state, pane and command
+  watch           List the processes again and again, as text or JSON lines
+  get             Show one process: its arguments, directory, ports, children, pane and agent
+  signal          Send TERM, KILL, STOP, CONT, HUP or INT to a process
+  renice          Change a process's nice value
+  review          Run a system tool on a process: its stack, open files, logs or a debugger
+
+The runtime of the machine reads its own process table, every user's process
+included, and only while someone asks: every 2 s, for 10 s after the last request.
+A first request waits about 1 s for a second reading, since a CPU share needs two.
+`telar --machine LABEL process ...` asks another machine's runtime the same way.
+
+CPU is a share of one core: 100.0 is a whole core, and a process with many threads
+can pass it. On macOS the CPU, memory and threads of other users' processes need
+root; their rows show `-`. PANE is the telar pane the process runs in, PROGRAM the
+agent telar recognizes in it or the process's own name.
+
+A process is named by its pid and its start, which `list` and `get` print as
+`started`. With `--started`, a command that acts on a process refuses a pid that a
+newer process took since. Exit codes: 0; 2 the process is gone or another one has
+its pid; 1 anything else, with the reason on stderr.
+
+A command run from a pane where an agent works may act only on that pane's
+processes; anything else is for a person to do.
+
+`telar process COMMAND --help` explains a command's arguments, effects and results.

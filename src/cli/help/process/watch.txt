@@ -1,0 +1,16 @@
+telar process watch: List the processes again and again, as text or JSON lines
+
+Usage: telar process watch [list options] [--interval-ms N] [--count N] [--jsonl] [--socket PATH]
+
+Arguments:
+  list options    --sort, --reverse, --filter, --scope, --tree and --limit, as for
+                  `telar process list`; the limit defaults to 20.
+  --interval-ms N Time between listings, 100 to 60000 (default 2000). The runtime
+                  reads the processes every 2 s, so shorter intervals repeat a reading.
+  --count N       Stop after N listings; without it, run until interrupted.
+  --jsonl         One JSON object per listing and line, as `process list --json` prints.
+
+Effects: read-only; keeps the runtime reading the processes while it runs.
+
+Results: each listing as `process list` prints it, text listings separated by an
+empty line. Exit 0 after --count listings; 1 when the runtime stops.

@@ -466,10 +466,31 @@ namespace telar::runtime {
 
   bool MonitorSampler::answer(const MonitorView& view, MonitorSnapshot& snapshot) {
     const MonitorEntry* detailed = nullptr;
+    DetailText* text = nullptr;
     if (view.detail.pid != 0) {
-      detailed = find(view.detail);
-      if (detailed == nullptr || details_.size() == details_.capacity()) {
+      if (details_.size() == details_.capacity()) {
         return false;
+      }
+
+      // The process as it is now: the last reading may still list one that exited since.
+      const auto record = ProcessTable::find(view.detail.pid);
+      const auto any = view.detail.started_seconds == 0 && view.detail.started_microseconds == 0;
+      if (!record || (!any && (record->started_seconds != view.detail.started_seconds || record->started_microseconds != view.detail.started_microseconds))) {
+        return false;
+      }
+
+      text = &details_.push(DetailText{});
+      detailed = find({.pid = record->pid, .started_seconds = record->started_seconds, .started_microseconds = record->started_microseconds});
+      if (detailed == nullptr) {
+        // Started after the last reading: described now, with the pane and agent of its parent.
+        text->fresh.record = *record;
+        describe(text->fresh);
+        if (const auto parent = indexOf(record->parent)) {
+          text->fresh.pane_id = entries_[*parent].pane_id;
+          text->fresh.under_agent = entries_[*parent].under_agent || text->fresh.agent != AgentProvider::unknown;
+        }
+
+        detailed = &text->fresh;
       }
     }
 
@@ -512,28 +533,28 @@ namespace telar::runtime {
     }
 
     if (detailed != nullptr) {
-      auto& text = details_.push(DetailText{});
+      auto& detail = *text;
       ds::Array<char, MonitorLimits::arguments_bytes> arguments;
       const auto pid = detailed->record.pid;
 
-      displayCopy(text.arguments, inspector_.commandLine(pid, arguments.viewMut()).text);
-      displayCopy(text.directory, inspector_.directory(pid).view());
+      displayCopy(detail.arguments, inspector_.commandLine(pid, arguments.viewMut()).text);
+      displayCopy(detail.directory, inspector_.directory(pid).view());
       if (const auto identity = inspector_.identity(pid)) {
-        text.ports = inspector_.listeningPorts(identity->process_group);
+        detail.ports = inspector_.listeningPorts(identity->process_group);
       }
 
       for (const auto& entry : entries_) {
-        if (entry.record.parent == pid && entry.record.pid != pid && text.child_count < MonitorLimits::maximum_children) {
-          text.children.atMut(text.child_count++) = entry.record.pid;
+        if (entry.record.parent == pid && entry.record.pid != pid && detail.child_count < MonitorLimits::maximum_children) {
+          detail.children.atMut(detail.child_count++) = entry.record.pid;
         }
       }
 
       snapshot.detail = MonitorDetail{
           .process = row(*detailed, 0),
-          .arguments = text.arguments.view(),
-          .directory = text.directory.view(),
-          .ports = text.ports.view(),
-          .children = {text.children.data(), text.child_count},
+          .arguments = detail.arguments.view(),
+          .directory = detail.directory.view(),
+          .ports = detail.ports.view(),
+          .children = {detail.children.data(), detail.child_count},
       };
     }
 

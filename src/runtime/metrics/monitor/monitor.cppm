@@ -92,6 +92,8 @@ export {
       };
 
       struct DetailText {
+        // A process that started after the last reading, read for this answer.
+        MonitorEntry fresh{};
         FixedText<MonitorLimits::arguments_bytes> arguments{};
         FixedText<MonitorLimits::directory_bytes> directory{};
         ListeningPorts ports{};

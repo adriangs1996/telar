@@ -183,6 +183,7 @@
       "render",
       "command_limit",
       "control_session",
+      "monitor",
       "runtime_observer",
       "server",
       "worktree_git",
@@ -203,6 +204,7 @@
   },
   "upward_imports": [],
   "interfaces": {
+    "src/cli/monitor/monitor.cppm": "telar.cli.monitor",
     "src/runtime/metrics/monitor/monitor.cppm": "telar.runtime.metrics.monitor",
     "lib/wire/monitor/monitor.cppm": "telar.wire.monitor",
     "src/runtime/platform/process_table/process_table.cppm": "telar.runtime.platform.process_table",
@@ -951,6 +953,7 @@
     }
   ],
   "implementations": {
+    "src/cli/monitor/monitor.cpp": "telar.cli.monitor",
     "src/runtime/metrics/monitor/monitor.cpp": "telar.runtime.metrics.monitor",
     "src/runtime/platform/process_table/process_table.cpp": "telar.runtime.platform.process_table",
     "src/runtime/platform/process_table/macos/process_table.cpp": "telar.runtime.platform.process_table",
@@ -1184,6 +1187,7 @@
     "lib/client/include/telar_client/codecs/telar_handshake.cppm": "lib/client/include/telar_client/serializers/telar_handshake.cppm"
   },
   "origin_interfaces": {
+    "src/cli/monitor.cppm": "src/cli/monitor/monitor.cppm",
     "src/runtime/metrics/monitor.cppm": "src/runtime/metrics/monitor/monitor.cppm",
     "src/runtime/platform/process_table.cppm": "src/runtime/platform/process_table/process_table.cppm",
     "lib/plugins/include/telar_plugins/inspection.cppm": "lib/plugins/plugins.cppm",

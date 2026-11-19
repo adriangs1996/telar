@@ -67,6 +67,10 @@ namespace telar::runtime {
         result.cpu_nanoseconds = nanoseconds(task.pti_total_user + task.pti_total_system);
         result.resident_bytes = task.pti_resident_size;
         result.threads = static_cast<std::uint32_t>(std::max(task.pti_threadnum, 0));
+        // The kernel lists a sleeping process as runnable; its threads tell them apart, as for top.
+        if (result.state == ProcessState::running && task.pti_numrunning == 0) {
+          result.state = ProcessState::sleeping;
+        }
       }
 
       return result;

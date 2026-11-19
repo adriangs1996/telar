@@ -1,0 +1,15 @@
+telar process renice: Change a process's nice value
+
+Usage: telar process renice PID NICE [--started SECONDS.MICROSECONDS] [--json] [--socket PATH]
+
+Arguments:
+  PID             The process.
+  NICE            -20 (most favored) to 20 (least). Lowering a process's nice value
+                  needs root on most systems.
+  --started       Its start as `list` printed it; refuses another process with the pid.
+
+Effects: the runtime reads the process again right before setting the value, and
+sets nothing when the pid names another process.
+
+Results: text `Set the nice value of PID to NICE`; JSON `pid` and `nice`. Exit 0; 2
+the process is gone or another one has its pid; 1 not permitted.

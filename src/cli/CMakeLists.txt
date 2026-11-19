@@ -25,7 +25,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 endif()
 
 # The domains of docs/build/modules.json (process_layers), lowest first.
-foreach(domain IN ITEMS base output render command_limit control_session runtime_observer server
+foreach(domain IN ITEMS base output render command_limit control_session monitor runtime_observer server
     worktree_git history hooks integration plugin project_setup window hook machine_ssh tab worktree
     machine launch_commands)
   add_subdirectory(${domain})
@@ -38,7 +38,7 @@ target_link_libraries(cli-launch PUBLIC cli-output cli-server cli-plugin cli-win
 target_link_libraries(cli-launch PRIVATE ebnf::ebnf)
 
 add_executable(telar main.cpp)
-target_link_libraries(telar PRIVATE cli-base cli-output cli-render cli-command_limit cli-control_session
+target_link_libraries(telar PRIVATE cli-base cli-output cli-render cli-command_limit cli-control_session cli-monitor
   cli-runtime_observer cli-server cli-worktree_git cli-history cli-hooks cli-integration cli-plugin
   cli-project_setup cli-window cli-hook cli-tab cli-worktree cli-launch_commands cli-launch)
 # Nothing loads symbols from telar. Exporting none spares dyld from coalescing

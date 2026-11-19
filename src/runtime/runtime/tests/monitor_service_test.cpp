@@ -13,7 +13,6 @@ import telar.testing;
 import telar.testing.test_memory;
 import telar.runtime.runtime.tests.client_peer;
 import telar.runtime.runtime.client_control;
-import telar.runtime.metrics.monitor;
 import telar.runtime.model.client_layouts;
 import telar.runtime.model.slot_store;
 import telar.runtime.platform.host_metrics;
