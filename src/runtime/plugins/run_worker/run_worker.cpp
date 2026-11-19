@@ -986,14 +986,16 @@ namespace telar::runtime::plugins {
       decision.onlyFields({"action", "message"});
       const auto message = LuaTrafficValue::message(decision.field("message"));
       constexpr auto header_bytes = 2 * sizeof(Byte) + sizeof(std::uint64_t) + sizeof(std::uint32_t);
-      const auto payload = HttpMessageCodec::encode(scratch_.bytesMut().subspan(header_bytes), message);
-      FrameWriter writer{scratch_.bytesMut().first(header_bytes)};
+      // One mutable borrow of the scratch: the payload is encoded past the header, then the header written.
+      const auto scratch = scratch_.bytesMut();
+      const auto payload = HttpMessageCodec::encode(scratch.subspan(header_bytes), message);
+      FrameWriter writer{scratch.first(header_bytes)};
 
       writer.tag(traffic::InterceptionCodec::Command::decision);
       writer.integer(ticket);
       writer.tag(verdict);
       writer.integer(static_cast<std::uint32_t>(payload.size()));
-      encoded = scratch_.bytes().first(header_bytes + payload.size());
+      encoded = scratch.first(header_bytes + payload.size());
     } else {
       decision.onlyFields(verdict == traffic::Verdict::replace ? std::initializer_list<std::string_view>{"action", "bytes"} : std::initializer_list<std::string_view>{"action"});
       const auto bytes = verdict == traffic::Verdict::replace ? decision.field("bytes").string() : std::string_view{};
@@ -1224,9 +1226,11 @@ namespace telar::runtime::plugins {
 
     Host host{memory, entry_path, specification ? &*specification : nullptr};
     SensitiveAllocation output{memory, traffic ? TrafficLimits::reply_bytes : Limits::effect_bytes};
+    // One mutable borrow of the output, which each reply is encoded into and erased from.
+    const auto buffer = output.bytesMut();
 
     if (traffic) {
-      channel.send(host.trafficSetup(output.bytesMut()));
+      channel.send(host.trafficSetup(buffer));
     }
 
     while (auto frame = channel.receive(memory, Limits::frame_bytes)) {
@@ -1234,13 +1238,13 @@ namespace telar::runtime::plugins {
       std::span<const Byte> encoded;
 
       if (traffic && (bytes.front() == static_cast<Byte>(FrameKind::traffic_event) || bytes.front() == static_cast<Byte>(FrameKind::traffic_control_event))) {
-        encoded = host.invokeTraffic(TrafficProtocol::event(bytes), output.bytesMut());
+        encoded = host.invokeTraffic(TrafficProtocol::event(bytes), buffer);
       } else {
-        encoded = host.invoke(Protocol::decodeExchange(bytes), output.bytesMut().first(Limits::effect_bytes));
+        encoded = host.invoke(Protocol::decodeExchange(bytes), buffer.first(Limits::effect_bytes));
       }
 
       channel.send(encoded);
-      eraseSensitive(output.bytesMut().data(), encoded.size());
+      eraseSensitive(buffer.data(), encoded.size());
     }
   }
 

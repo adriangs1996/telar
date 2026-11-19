@@ -725,7 +725,9 @@ export {
 
       static void fail(Connection& connection, const traffic::FlowEvent& flow);
 
-      Connection* find(std::uint32_t id) noexcept;
+      // The connection of registration `id` among `connections` alone, so the reply naming it stays
+      // borrowed meanwhile.
+      static Connection* find(std::span<ds::Option<Connection>> connections, std::uint32_t id) noexcept;
 
       // What the reply decided views the input, region `a`; its registrations land in the bridge.
       tbc::view<TrafficOutcome, tbc::lt::a> apply(std::uint64_t event_id, tbc::view<std::span<const Byte>, tbc::lt::a> input);

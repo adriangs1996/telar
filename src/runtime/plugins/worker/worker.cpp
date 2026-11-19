@@ -586,8 +586,8 @@ namespace telar::runtime::plugins {
     enqueue(connection, traffic::InterceptionCodec::decision(decision.viewMut(), flow.ticket, connection.registration.fail_closed ? traffic::Verdict::reject : traffic::Verdict::allow));
   }
 
-  auto TrafficBridge::find(std::uint32_t id) noexcept -> Connection* {
-    for (auto& connection : connections_.viewMut()) {
+  auto TrafficBridge::find(std::span<ds::Option<Connection>> connections, std::uint32_t id) noexcept -> Connection* {
+    for (auto& connection : connections) {
       if (connection && connection->registration.id == id) {
         return &connection.getMut();
       }
@@ -634,7 +634,7 @@ namespace telar::runtime::plugins {
       }
 
       for (const auto& registration : registrations) {
-        if (auto* existing = find(registration.id)) {
+        if (auto* existing = find(connections_.viewMut(), registration.id)) {
           const auto& before = existing->registration;
           if (before != registration) {
             throw EncodingError{"Traffic registrations are immutable"};
@@ -672,7 +672,7 @@ namespace telar::runtime::plugins {
     }
 
     for (const auto& decision : std::span{outcome.decisions}.first(outcome.decision_count)) {
-      auto* connection = find(decision.registration);
+      auto* connection = find(connections_.viewMut(), decision.registration);
       if (!connection) {
         continue;
       }
