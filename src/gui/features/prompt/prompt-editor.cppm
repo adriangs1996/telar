@@ -9,6 +9,7 @@ import :keys;
 import :text;
 import telar.base.ds;
 import telar.base.memory.allocators;
+import telar.tbc;
 
 namespace telar::gui::features::prompt {
 
@@ -80,10 +81,11 @@ namespace telar::gui::features::prompt {
     };
 
     struct Recorded {
-      KeyPress key;
-      ds::String<Memory> text;
+      tbc::view<KeyPress, tbc::lt::a> key;
+      tbc::view<ds::String<Memory>, tbc::lt::a> text;
 
-      Recorded clone() const {
+      // The copy lives in the text's memory, region `a`, with the key it was recorded for.
+      tbc::view<Recorded, tbc::lt::a> clone() const {
         return {key, text.clone()};
       }
     };

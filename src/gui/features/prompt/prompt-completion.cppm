@@ -15,11 +15,12 @@ import telar.base.memory.allocators;
 export namespace telar::gui::features::prompt {
 
   struct Choice {
-    ds::String<Memory> text;
-    ds::String<Memory> description;
+    tbc::view<ds::String<Memory>, tbc::lt::a> text;
+    tbc::view<ds::String<Memory>, tbc::lt::a> description;
     bool directory = false;
 
-    Choice clone() const {
+    // The copy lives in the strings' memory, region `a`, and borrows nothing else of this choice.
+    tbc::view<Choice, tbc::lt::a> clone() const {
       return {text.clone(), description.clone(), directory};
     }
   };
