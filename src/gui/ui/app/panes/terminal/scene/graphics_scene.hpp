@@ -37,28 +37,43 @@ class QQuickWindow;
 
 namespace telar::gui::qt {
 
+  // A row a scrolled or folded view draws: the screen's own row `screen_row`, or a row the
+  // runtime sent apart from the screen (`screen_row` -1). `source` names where it came from and
+  // `revision` its content there, so a painter knows when the row it drew is another.
+  struct TerminalRow {
+    std::span<const CellValue> cells;
+    std::uint64_t revision = 0;
+    std::uint64_t source = 0;
+    std::int32_t screen_row = -1;
+  };
+
   // Where the rows images sit on are drawn. An image's row counts from the active screen's first,
   // `live_top` rows from the top of the scrollback; a view shows the rows its folds leave from shown
-  // row `top`. `rows` are the rows drawn, for the images their placeholder cells show, and
-  // `revision` changes whenever any of this does.
+  // row `top`. The rows drawn, for the images their placeholder cells show, are read where they lie:
+  // a view's own rows, `view_rows`, when it has any, the screen's own otherwise. `revision` changes whenever
+  // any of this does.
   struct ImageRows {
     std::uint64_t live_top = 0;
     std::uint64_t top = 0;
     const application::FoldMap<>* folds = nullptr;
-    std::span<const std::span<const CellValue>> rows;
+    const Screen<Memory>* screen = nullptr;
+    std::span<const TerminalRow> view_rows;
     std::uint64_t revision = 0;
 
-    // A screen's own rows, as it shows them; `cells` keeps their spans.
-    [[nodiscard]] static tbc::view<ImageRows, tbc::lt::a> of(tbc::view<const Screen<Memory>&, tbc::lt::a> screen, tbc::view<ds::Vec<std::span<const CellValue>, Memory>&, tbc::lt::a> cells) {
-      cells.clear();
-      for (std::size_t row = 0; row < screen.rows(); ++row) {
-        cells.push(screen.row(row));
-      }
-
+    // A screen's own rows, as it shows them.
+    [[nodiscard]] static tbc::view<ImageRows, tbc::lt::a> of(tbc::view<const Screen<Memory>&, tbc::lt::a> screen) {
       const auto& scroll = screen.scroll();
       const auto rows = static_cast<std::uint64_t>(screen.rows());
 
-      return {.live_top = scroll.total_rows > rows ? scroll.total_rows - rows : 0, .top = scroll.offset, .rows = cells.view(), .revision = screen.revision()};
+      return {.live_top = scroll.total_rows > rows ? scroll.total_rows - rows : 0, .top = scroll.offset, .screen = &screen, .revision = screen.revision()};
+    }
+
+    [[nodiscard]] std::size_t count() const noexcept {
+      return !view_rows.empty() ? view_rows.size() : screen != nullptr ? screen->rows() : 0;
+    }
+
+    [[nodiscard]] std::span<const CellValue> row(std::size_t index) const noexcept {
+      return !view_rows.empty() ? view_rows[index].cells : screen->row(index);
     }
 
     // The drawn row of `row`, counted from the top of the scrollback; nothing when a fold hides it.

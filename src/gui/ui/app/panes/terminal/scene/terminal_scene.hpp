@@ -44,16 +44,6 @@ import telar.base.ds;
 
 namespace telar::gui::qt {
 
-  // A row a scrolled or folded view draws: the screen's own row `screen_row`, or a row the
-  // runtime sent apart from the screen (`screen_row` -1). `source` names where it came from and
-  // `revision` its content there, so a painter knows when the row it drew is another.
-  struct TerminalRow {
-    std::span<const CellValue> cells;
-    std::uint64_t revision = 0;
-    std::uint64_t source = 0;
-    std::int32_t screen_row = -1;
-  };
-
   // A search match drawn: on drawn row `row`, `length` cells from `column`; `current` is the one
   // the copy-mode cursor is on.
   struct MatchMark {
@@ -253,7 +243,6 @@ namespace telar::gui::qt {
     SystemAllocator memory_;
     MemoryAdapter<SystemAllocator> adapter_{memory_};
     // The cells of each row drawn, for the images their placeholders show.
-    ds::Vec<std::span<const CellValue>, Memory> drawn_cells_{adapter_};
     // The matches as last lit, with the row offsets they were lit at.
     ds::Vec<MatchMark, Memory> lit_matches_{adapter_};
     ds::Vec<float, Memory> lit_offsets_{adapter_};

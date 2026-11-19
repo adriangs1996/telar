@@ -92,13 +92,10 @@ namespace {
     ImageNode& operator=(ImageNode&&) = delete;
 
     void synchronize(QQuickItem& owner, const GraphicsStore<Memory>& store, const Screen<Memory>& screen, QSizeF cell) {
-      images_.synchronize(owner, store, ImageRows::of(screen, rows_), cell, owner.window()->devicePixelRatio());
+      images_.synchronize(owner, store, ImageRows::of(screen), cell, owner.window()->devicePixelRatio());
     }
 
   private:
-    SystemAllocator memory_;
-    MemoryAdapter<SystemAllocator> adapter_{memory_};
-    ds::Vec<std::span<const CellValue>, Memory> rows_{adapter_};
     QSGTransformNode& below_background_;
     QSGTransformNode& below_text_;
     QSGTransformNode& above_text_;

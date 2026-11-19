@@ -228,8 +228,8 @@ namespace telar::gui::qt {
       return;
     }
 
-    for (std::size_t row_index = 0; row_index < rows.rows.size(); ++row_index) {
-      placeholderRow(store, rows.rows[row_index], static_cast<std::uint16_t>(row_index));
+    for (std::size_t row_index = 0; row_index < rows.count(); ++row_index) {
+      placeholderRow(store, rows.row(row_index), static_cast<std::uint16_t>(row_index));
     }
   }
 

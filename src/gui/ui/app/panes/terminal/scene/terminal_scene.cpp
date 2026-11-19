@@ -411,18 +411,13 @@ namespace telar::gui::qt {
       }
     }
 
-    auto image_rows = ImageRows::of(frame.screen, drawn_cells_);
+    auto image_rows = ImageRows::of(frame.screen);
 
     if (!frame.rows.empty()) {
       // A view's own rows: from its top shown row, through its folds.
-      drawn_cells_.clear();
-      for (std::size_t index = 0; index < frame.rowCount(); ++index) {
-        drawn_cells_.push(frame.row(index));
-      }
-
       image_rows.top = frame.top_row;
       image_rows.folds = frame.folds;
-      image_rows.rows = drawn_cells_.view();
+      image_rows.view_rows = frame.rows;
       image_rows.revision = frame.view_revision;
     }
 
