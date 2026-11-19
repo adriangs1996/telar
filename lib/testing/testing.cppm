@@ -15,6 +15,12 @@ export namespace telar::testing {
   public:
     Case(std::string_view name, void (*run)()) noexcept;
 
+    // From a literal without string_view's constructor from a pointer, which may throw:
+    // a case is a static whose initializer runs before main can catch anything.
+    template <std::size_t Size>
+    Case(const char (&name)[Size], void (*run)()) noexcept
+        : Case(std::string_view(name, Size - 1), run) {}
+
     Case(const Case&) = delete;
     Case& operator=(const Case&) = delete;
 
@@ -33,6 +39,10 @@ export namespace telar::testing {
   class Mode {
   public:
     Mode(std::string_view flag, int (*run)(int argc, char** argv)) noexcept;
+
+    template <std::size_t Size>
+    Mode(const char (&flag)[Size], int (*run)(int argc, char** argv)) noexcept
+        : Mode(std::string_view(flag, Size - 1), run) {}
 
     Mode(const Mode&) = delete;
     Mode& operator=(const Mode&) = delete;
