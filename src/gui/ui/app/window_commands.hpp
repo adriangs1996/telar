@@ -109,7 +109,8 @@ namespace telar::gui::qt {
       CommandsHost& host;
     };
 
-    explicit WindowCommands(const Parts& parts, QObject* parent = nullptr);
+    // Keeps what the parts refer to, region `a`, not the parts themselves.
+    explicit WindowCommands(tbc::holds<const Parts&, tbc::lt::a> parts, QObject* parent = nullptr);
     ~WindowCommands() override = default;
     WindowCommands(const WindowCommands&) = delete;
     WindowCommands& operator=(const WindowCommands&) = delete;
@@ -184,28 +185,28 @@ namespace telar::gui::qt {
     [[nodiscard]] static bool answerConfiguration(tbc::view<WindowCommands&, tbc::lt::a> commands, const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply);
     void executeHostCommand(const ClientCommand& message, CompleteClientCommand& reply);
 
-    Store& store_;
-    ConfigurationSource& configuration_source_;
-    KeyBindings& key_bindings_;
-    Dialogs& dialogs_;
-    MachinesCoordinator& machines_;
-    MachineProfilesSource& machine_profiles_;
-    ActivitySelection& activity_selection_;
-    WindowDisplay& display_;
-    WindowStatus& status_;
-    PaletteController& palette_;
-    HistoryController& history_;
-    WorkspaceFormController& workspace_form_;
-    CopyController& copy_;
-    PromptController& prompt_;
-    TerminalController& terminals_;
-    ComponentsController& components_;
-    AttachmentsController& attachments_;
-    PluginRunner& plugins_;
-    NotificationsController& notifications_;
-    LinksController& links_;
-    ElementSlots& element_slots_;
-    CommandsHost& host_;
+    tbc::view<Store&, tbc::lt::a> store_;
+    tbc::view<ConfigurationSource&, tbc::lt::a> configuration_source_;
+    tbc::view<KeyBindings&, tbc::lt::a> key_bindings_;
+    tbc::view<Dialogs&, tbc::lt::a> dialogs_;
+    tbc::view<MachinesCoordinator&, tbc::lt::a> machines_;
+    tbc::view<MachineProfilesSource&, tbc::lt::a> machine_profiles_;
+    tbc::view<ActivitySelection&, tbc::lt::a> activity_selection_;
+    tbc::view<WindowDisplay&, tbc::lt::a> display_;
+    tbc::view<WindowStatus&, tbc::lt::a> status_;
+    tbc::view<PaletteController&, tbc::lt::a> palette_;
+    tbc::view<HistoryController&, tbc::lt::a> history_;
+    tbc::view<WorkspaceFormController&, tbc::lt::a> workspace_form_;
+    tbc::view<CopyController&, tbc::lt::a> copy_;
+    tbc::view<PromptController&, tbc::lt::a> prompt_;
+    tbc::view<TerminalController&, tbc::lt::a> terminals_;
+    tbc::view<ComponentsController&, tbc::lt::a> components_;
+    tbc::view<AttachmentsController&, tbc::lt::a> attachments_;
+    tbc::view<PluginRunner&, tbc::lt::a> plugins_;
+    tbc::view<NotificationsController&, tbc::lt::a> notifications_;
+    tbc::view<LinksController&, tbc::lt::a> links_;
+    tbc::view<ElementSlots&, tbc::lt::a> element_slots_;
+    tbc::view<CommandsHost&, tbc::lt::a> host_;
     // Where the pressed component action that is running was pressed, for a panel it opens.
     ds::Option<QPointF> component_action_anchor_;
   };

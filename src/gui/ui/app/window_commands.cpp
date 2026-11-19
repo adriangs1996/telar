@@ -186,7 +186,7 @@ namespace telar::gui::qt {
 
   }
 
-  WindowCommands::WindowCommands(const Parts& parts, QObject* parent)
+  WindowCommands::WindowCommands(tbc::holds<const Parts&, tbc::lt::a> parts, QObject* parent)
       : QObject(parent),
         store_(parts.store),
         configuration_source_(parts.configuration),

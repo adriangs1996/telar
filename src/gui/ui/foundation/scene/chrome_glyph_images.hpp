@@ -93,8 +93,7 @@ namespace telar::gui::qt {
     static constexpr auto font_roles = static_cast<std::size_t>(fonts::FontRole::fallback_7) + 1;
     SystemAllocator memory;
     ds::Vec<std::uint8_t, SystemAllocator> pixels{memory};
-    // Each views `pixels`, sized once before the first is made.
-    tbc::view<ds::Array<std::unique_ptr<fonts::GlyphRasterizer>, font_roles>, tbc::lt::self> fonts{};
+    ds::Array<std::unique_ptr<fonts::GlyphRasterizer>, font_roles> fonts{};
 #endif
   };
 
@@ -112,6 +111,11 @@ namespace telar::gui::qt {
         rasterization_.settings = rasterization;
       }
     }
+
+    ChromeGlyphImages(const ChromeGlyphImages&) = delete;
+    ChromeGlyphImages& operator=(const ChromeGlyphImages&) = delete;
+    ChromeGlyphImages(ChromeGlyphImages&&) = delete;
+    ChromeGlyphImages& operator=(ChromeGlyphImages&&) = delete;
 
     [[nodiscard]] bool software() const noexcept {
       return software_;
@@ -300,7 +304,8 @@ namespace telar::gui::qt {
     QHash<quint64, CachedGlyph> images_;
     std::size_t mask_bytes_ = 0;
     bool software_ = false;
-    [[no_unique_address]] std::conditional_t<optical, OpticalGlyphRasterizers, StandardGlyphRasterizers> rasterization_;
+    // Its rasterizers view its pixels, sized once before the first is made.
+    [[no_unique_address]] tbc::view<std::conditional_t<optical, OpticalGlyphRasterizers, StandardGlyphRasterizers>, tbc::lt::self> rasterization_;
   };
 
 }
