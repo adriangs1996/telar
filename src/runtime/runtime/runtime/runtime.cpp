@@ -699,13 +699,13 @@ namespace telar::runtime {
   template class AgentService<NativeEventLoop<ConcurrentMemory>, RuntimeBackground>;
   template class AgentService<NativeEventLoop<ConcurrentMemory>, DiscardedHistory>;
 
-  void ownDirectory(tbc::view<Launch&, tbc::lt::a> launch, tbc::view<LaunchDirectory&, tbc::lt::a> storage, std::string_view directory) {
+  tbc::view<std::string_view, tbc::lt::a> ownDirectory(tbc::view<LaunchDirectory&, tbc::lt::a> storage, std::string_view directory) {
     if (directory.size() > 4096) {
       throw RequestError{FailureCode::invalid_request, "working directory is too long"};
     }
 
     storage.assign(directory);
-    launch.cwd = storage.view();
+    return storage.view();
   }
 
   tbc::view<Launch, tbc::lt::a> resolveLaunchDirectory(const RuntimeModel& model, const ClientSession& client, tbc::view<Launch, tbc::lt::a> launch, tbc::view<LaunchDirectory&, tbc::lt::a> directory, LaunchDirectoryScope scope) {
@@ -732,7 +732,7 @@ namespace telar::runtime {
       throw RequestError{FailureCode::invalid_request, "cwd source pane is unavailable"};
     }
 
-    ownDirectory(launch, directory, pane->cwd);
+    launch.cwd = ownDirectory(directory, pane->cwd);
     launch.cwd_source = 0;
     return launch;
   }
@@ -934,7 +934,7 @@ namespace telar::runtime {
       LaunchDirectory directory;
 
       if (launch.cwd.empty()) {
-        ownDirectory(launch, directory, workspace.path);
+        launch.cwd = ownDirectory(directory, workspace.path);
       }
 
       const auto pane = panes.launch(model, owner_colors, bare_prompt, launch, TabLocation{.workspace = {.id = request.workspace}, .tab_id = tab_id}, request.size).id;
@@ -1384,8 +1384,11 @@ namespace telar::runtime {
       throw RequestError{FailureCode::resource_limit, "Tab pane limit reached"};
     }
 
+    // The workspace's directory has storage of its own: the launch may still view `directory`.
+    LaunchDirectory fallback;
+
     if (launch.cwd.empty()) {
-      ownDirectory(launch, directory, require(model.workspaces, location.workspace).path);
+      launch.cwd = ownDirectory(fallback, require(model.workspaces, location.workspace).path);
     }
 
     const auto pane = panes.launch(model, &client.colors, client.bare_prompt, launch, location, size).id;
@@ -1500,7 +1503,7 @@ namespace telar::runtime {
       auto launch = request.launch;
       LaunchDirectory directory;
 
-      ownDirectory(launch, directory, require(model.worktrees, request.worktree).path);
+      launch.cwd = ownDirectory(directory, require(model.worktrees, request.worktree).path);
       launch.cwd_source = 0;
       pane = workspaces.launchBackground(model, panes, Workspaces::ownerColors(model.workspaces, clients, workspace), Workspaces::ownerBarePrompt(model.workspaces, clients, workspace), LaunchTab{request.request_id, workspace, request.label, request.size, launch});
     } catch (...) {

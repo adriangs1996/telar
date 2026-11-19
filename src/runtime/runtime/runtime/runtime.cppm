@@ -215,8 +215,9 @@ export {
     // the model a launch then changes.
     using LaunchDirectory = FixedText<4096>;
 
-    // Points a launch at a copy of a directory.
-    void ownDirectory(tbc::view<Launch&, tbc::lt::a> launch, tbc::view<LaunchDirectory&, tbc::lt::a> storage, std::string_view directory);
+    // A copy of a directory in `storage`, for a launch's cwd: assigning it replaces what that field
+    // viewed, as Rust's `launch.cwd = own(&mut storage, directory)` does.
+    tbc::view<std::string_view, tbc::lt::a> ownDirectory(tbc::view<LaunchDirectory&, tbc::lt::a> storage, std::string_view directory);
 
     // The launch with the directory of the pane it names as its source, copied into `directory`.
     tbc::view<Launch, tbc::lt::a> resolveLaunchDirectory(const RuntimeModel& model, const ClientSession& client, tbc::view<Launch, tbc::lt::a> launch, tbc::view<LaunchDirectory&, tbc::lt::a> directory, LaunchDirectoryScope scope = {});
