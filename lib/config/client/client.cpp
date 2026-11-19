@@ -354,7 +354,7 @@ namespace telar::runtime::config {
         commands_(commands) {}
 
   template <CommandTabStore Commands>
-  bool BasicActionValidator<Commands>::validate(const lua::Value& action, bool expression) const {
+  bool BasicActionValidator<Commands>::validate(const lua::Value& action, bool expression) {
     if (action.is(LUA_TFUNCTION)) {
       return true;
     }
@@ -407,7 +407,7 @@ namespace telar::runtime::config {
   }
 
   template <CommandTabStore Commands>
-  bool BasicActionValidator<Commands>::component(const lua::Value& action) const {
+  bool BasicActionValidator<Commands>::component(const lua::Value& action) {
     if (action.is(LUA_TFUNCTION)) {
       action.fail("cannot be a callback in a static component");
     }
@@ -416,7 +416,7 @@ namespace telar::runtime::config {
   }
 
   template <CommandTabStore Commands>
-  tbc::view<ds::Option<ActionSetting>, tbc::lt::a> BasicActionValidator<Commands>::read(const lua::Value& action, bool expression) const {
+  tbc::view<ds::Option<ActionSetting>, tbc::lt::a> BasicActionValidator<Commands>::read(const lua::Value& action, bool expression) {
     if (!validate(action, expression)) {
       return ds::none;
     }
@@ -551,7 +551,7 @@ namespace telar::runtime::config {
   }
 
   template <CommandTabStore Commands>
-  bool BasicActionValidator<Commands>::commandTab(const lua::Value& action) const {
+  bool BasicActionValidator<Commands>::commandTab(const lua::Value& action) {
     action.onlyFields({"kind", "command", "label"});
     const auto command = action.field("command");
     const auto count = command.listLength();
@@ -605,7 +605,7 @@ namespace telar::runtime::config {
   }
 
   template <CommandTabStore Commands>
-  void BasicActionValidator<Commands>::notification(const lua::Value& action) const {
+  void BasicActionValidator<Commands>::notification(const lua::Value& action) {
     action.onlyFields({"kind", "title", "body", "level", "duration_ms", "pane_id", "tab_id", "workspace_id"});
     optionalChoice(action.field("level"), {"info", "success", "warning", "failure"});
     NotificationBody body{.duration_ms = static_cast<std::uint32_t>(action.field("duration_ms").boundedInteger(default_notification_duration_ms, min_notification_duration_ms, max_notification_duration_ms))};
@@ -634,7 +634,7 @@ namespace telar::runtime::config {
   }
 
   template <CommandTabStore Commands>
-  tbc::view<std::string_view, tbc::lt::a> BasicActionValidator<Commands>::fitted(tbc::view<std::string_view, tbc::lt::a> text, tbc::view<LimitReach, tbc::lt::b> limit) const {
+  tbc::view<std::string_view, tbc::lt::a> BasicActionValidator<Commands>::fitted(tbc::view<std::string_view, tbc::lt::a> text, tbc::view<LimitReach, tbc::lt::b> limit) {
     if (text.size() > limit.value) {
       limit.requested = text.size();
       limits_.add(limit);
@@ -1223,7 +1223,7 @@ namespace telar::runtime::config {
     }
   }
 
-  ds::Option<ComponentParent> ComponentTreeWalker::node(const lua::Value& value, const ComponentShape& shape, const ComponentPosition& position) const {
+  ds::Option<ComponentParent> ComponentTreeWalker::node(const lua::Value& value, const ComponentShape& shape, const ComponentPosition& position) {
     if (!componentAllowed(shape.kind, position.place)) {
       value.fail("contains a component unsupported in this position");
     }
@@ -1312,7 +1312,7 @@ namespace telar::runtime::config {
   template <CommandTabStore Commands>
   class ComponentValidator {
   public:
-    inline explicit ComponentValidator(const BasicActionValidator<Commands>& actions, LimitNotices& limits)
+    inline explicit ComponentValidator(BasicActionValidator<Commands>& actions, LimitNotices& limits)
         : actions_(actions),
           limits_(limits) {}
 
@@ -1444,7 +1444,7 @@ namespace telar::runtime::config {
     static constexpr unsigned maximum_list_depth = 4;
     static constexpr unsigned default_priority = 50;
     static constexpr std::size_t maximum_url_bytes = 1024;
-    const BasicActionValidator<Commands>& actions_;
+    BasicActionValidator<Commands>& actions_;
     LimitNotices& limits_;
     ComponentBudget budget_;
     bool counting_ = true;
@@ -1453,11 +1453,11 @@ namespace telar::runtime::config {
   template <CommandTabStore Commands>
   class BarsValidator {
   public:
-    inline explicit BarsValidator(const BasicActionValidator<Commands>& actions, LimitNotices& limits)
+    inline explicit BarsValidator(BasicActionValidator<Commands>& actions, LimitNotices& limits)
         : actions_(actions),
           limits_(limits) {}
 
-    inline void validate(const lua::Value& bars) const {
+    inline void validate(const lua::Value& bars) {
       if (!bars.present()) {
         return;
       }
@@ -1494,7 +1494,7 @@ namespace telar::runtime::config {
       tabs,
     };
 
-    inline void bottom(const lua::Value& bar) const {
+    inline void bottom(const lua::Value& bar) {
       if (!bar.present()) {
         return;
       }
@@ -1514,7 +1514,7 @@ namespace telar::runtime::config {
       }
     }
 
-    inline Source source(const lua::Value& value) const {
+    inline Source source(const lua::Value& value) {
       const auto kind_value = value.field("bar_kind");
       const auto kind = kind_value.string();
       if (kind == "tabs" || kind == "metrics" || kind == "machines") {
@@ -1533,7 +1533,7 @@ namespace telar::runtime::config {
     }
 
     static constexpr std::size_t maximum_footer_slots = 3;
-    const BasicActionValidator<Commands>& actions_;
+    BasicActionValidator<Commands>& actions_;
     LimitNotices& limits_;
   };
 
@@ -1725,7 +1725,7 @@ namespace telar::runtime::config {
   }
 
   template <CommandTabStore Commands>
-  void BindingValidator::validate(const lua::Value& bindings, const BasicActionValidator<Commands>& actions, BindingKeymap& keymap, LimitNotices& limits) {
+  void BindingValidator::validate(const lua::Value& bindings, BasicActionValidator<Commands>& actions, BindingKeymap& keymap, LimitNotices& limits) {
     if (!bindings.present()) {
       return;
     }
@@ -2217,7 +2217,7 @@ namespace telar::runtime::config {
 
     static_cast<void>(ClientDefinitionsReader::read(client, limits, [](std::size_t, const PanelSetting&, const lua::Value&) {}, [](std::size_t, const PickSetting&, const lua::Value&) {}));
     const ClientDefinitions definitions{client, inherited};
-    const BasicActionValidator actions{definitions, limits, state.commands};
+    BasicActionValidator actions{definitions, limits, state.commands};
 
     BindingValidator::validate(client.field("keybindings"), actions, state.keymap, limits);
     BarsValidator{actions, limits}.validate(client.field("bars"));
@@ -2228,8 +2228,8 @@ namespace telar::runtime::config {
   template class CommandTabStorage<CommandTabLifetime::retained>;
   template class BasicActionValidator<CommandTabRegistry>;
   template class BasicActionValidator<RetainedCommandTabRegistry>;
-  template void BindingValidator::validate<CommandTabRegistry>(const lua::Value& bindings, const BasicActionValidator<CommandTabRegistry>& actions, BindingKeymap& keymap, LimitNotices& limits);
-  template void BindingValidator::validate<RetainedCommandTabRegistry>(const lua::Value& bindings, const BasicActionValidator<RetainedCommandTabRegistry>& actions, BindingKeymap& keymap, LimitNotices& limits);
+  template void BindingValidator::validate<CommandTabRegistry>(const lua::Value& bindings, BasicActionValidator<CommandTabRegistry>& actions, BindingKeymap& keymap, LimitNotices& limits);
+  template void BindingValidator::validate<RetainedCommandTabRegistry>(const lua::Value& bindings, BasicActionValidator<RetainedCommandTabRegistry>& actions, BindingKeymap& keymap, LimitNotices& limits);
   template void ClientValidator::validate<CommandTabRegistry>(const lua::Value& client, LimitNotices& limits, BasicClientValidationState<CommandTabRegistry>& state, const lua::Value* inherited);
   template void ClientValidator::validate<RetainedCommandTabRegistry>(const lua::Value& client, LimitNotices& limits, BasicClientValidationState<RetainedCommandTabRegistry>& state, const lua::Value* inherited);
 

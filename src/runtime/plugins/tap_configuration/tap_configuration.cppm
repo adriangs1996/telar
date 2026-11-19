@@ -29,12 +29,13 @@ export {
 
     class ActionEncoder {
     public:
-      explicit ActionEncoder(const config::RetainedActionValidator& validator);
+      explicit ActionEncoder(config::RetainedActionValidator& validator);
 
       std::span<const Byte> encode(const lua::Value& result);
 
     private:
-      bool append(const lua::Value& value, std::span<Byte>& output) const;
+      // Validates and encodes one action; static, so a call takes the validator and the output apart.
+      static bool append(config::RetainedActionValidator& validator, const lua::Value& value, std::span<Byte>& output);
 
       static void tag(ActionTag value, std::span<Byte>& output);
 
@@ -46,7 +47,7 @@ export {
 
       static void notification(const lua::Value& value, std::span<Byte>& output);
 
-      const config::RetainedActionValidator& validator_;
+      config::RetainedActionValidator& validator_;
       ds::Array<Byte, ActionProtocol::maximum_bytes> storage_;
     };
 

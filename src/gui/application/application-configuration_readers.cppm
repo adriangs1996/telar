@@ -33,9 +33,9 @@ namespace telar::gui::application {
 
   class BindingActionReader {
   public:
-    explicit BindingActionReader(lua_State& state, const runtime::config::RetainedActionValidator& validator, runtime::config::RetainedCommandTabRegistry& commands, std::uint64_t generation);
+    explicit BindingActionReader(lua_State& state, runtime::config::RetainedActionValidator& validator, runtime::config::RetainedCommandTabRegistry& commands, std::uint64_t generation);
 
-    [[nodiscard]] ds::Option<BindingAction> read(const runtime::lua::Value& value, bool expression = false) const;
+    [[nodiscard]] ds::Option<BindingAction> read(const runtime::lua::Value& value, bool expression = false);
 
   private:
     [[nodiscard]] BindingAction command(const runtime::config::CommandTabView& command) const;
@@ -46,13 +46,13 @@ namespace telar::gui::application {
     [[nodiscard]] BindingAction referenced(const runtime::lua::Value& value, BindingActionKind kind) const;
 
     lua_State& state_;
-    const runtime::config::RetainedActionValidator& validator_;
+    runtime::config::RetainedActionValidator& validator_;
     runtime::config::RetainedCommandTabRegistry& commands_;
     std::uint64_t generation_;
   };
 
   template <typename Reader>
-  concept BindingActionSource = requires(const Reader& reader, const runtime::lua::Value& value) {
+  concept BindingActionSource = requires(Reader& reader, const runtime::lua::Value& value) {
     { reader.read(value, false) } -> std::same_as<ds::Option<BindingAction>>;
   };
 
@@ -64,7 +64,7 @@ namespace telar::gui::application {
     static_assert(BindingLimits::keys == runtime::config::BindingSetting::maximum_keys);
 
     template <BindingActionSource Actions>
-    TBC_GENERIC static void apply(const runtime::lua::Value& client, InputConfiguration& input, const Actions& actions) {
+    TBC_GENERIC static void apply(const runtime::lua::Value& client, InputConfiguration& input, Actions& actions) {
       const auto settings = Reader::input(client);
       if (settings.prefix) {
         input.setPrefix(*settings.prefix);
@@ -129,7 +129,7 @@ namespace telar::gui::application {
   // What reads a component's click action from its configuration value.
   class ComponentActions {
   public:
-    [[nodiscard]] virtual ds::Option<BindingAction> read(const runtime::lua::Value& value) const = 0;
+    [[nodiscard]] virtual ds::Option<BindingAction> read(const runtime::lua::Value& value) = 0;
 
   protected:
     ComponentActions() noexcept = default;
@@ -142,15 +142,15 @@ namespace telar::gui::application {
   template <typename Reader>
   class TBC_GENERIC ComponentActionsOf final : public ComponentActions {
   public:
-    explicit ComponentActionsOf(const Reader& reader) noexcept
+    explicit ComponentActionsOf(Reader& reader) noexcept
         : reader_(reader) {}
 
-    [[nodiscard]] ds::Option<BindingAction> read(const runtime::lua::Value& value) const override {
+    [[nodiscard]] ds::Option<BindingAction> read(const runtime::lua::Value& value) override {
       return reader_.read(value);
     }
 
   private:
-    const Reader& reader_;
+    Reader& reader_;
   };
 
   using StagedActionReferences = ActionReferences<features::components::StagedContent::capacity.actions>;
@@ -163,12 +163,12 @@ namespace telar::gui::application {
   // decides which ones stay.
   class ComponentActionReader final : public ComponentActions {
   public:
-    explicit ComponentActionReader(const ComponentActions& reader, StagedActionReferences& references, std::uint32_t& next_reference) noexcept;
+    explicit ComponentActionReader(ComponentActions& reader, StagedActionReferences& references, std::uint32_t& next_reference) noexcept;
 
-    [[nodiscard]] ds::Option<BindingAction> read(const runtime::lua::Value& value) const override;
+    [[nodiscard]] ds::Option<BindingAction> read(const runtime::lua::Value& value) override;
 
   private:
-    const ComponentActions& reader_;
+    ComponentActions& reader_;
     StagedActionReferences& references_;
     std::uint32_t& next_reference_;
   };
@@ -187,7 +187,7 @@ namespace telar::gui::application {
   public:
     static_assert(features::components::Node::no_parent == Position::no_parent && features::components::Node::default_priority == Position::default_priority);
 
-    explicit ContentReader(lua_State& state, const ComponentActions& actions, runtime::config::LimitNotices& limits, features::components::StagedContent& staged, ComponentSurface surface = ComponentSurface::bar);
+    explicit ContentReader(lua_State& state, ComponentActions& actions, runtime::config::LimitNotices& limits, features::components::StagedContent& staged, ComponentSurface surface = ComponentSurface::bar);
 
     // Count before retaining actions so omitted components cannot retain commands.
     template <features::components::Capacity Bounds>
@@ -204,7 +204,7 @@ namespace telar::gui::application {
 
       void report(features::components::Capacity bounds);
 
-      const ComponentActions& actions_;
+      ComponentActions& actions_;
       runtime::config::LimitNotices& limits_;
       features::components::StagedContent& staged_;
       ComponentSurface surface_;
@@ -226,7 +226,7 @@ namespace telar::gui::application {
   public:
     explicit ComponentSnapshot(lua_State& state) noexcept;
 
-    void read(const runtime::lua::Value& value, const ComponentActions& actions, runtime::config::LimitNotices& limits, features::components::StagedContent& staged, std::uint32_t& next_reference);
+    void read(const runtime::lua::Value& value, ComponentActions& actions, runtime::config::LimitNotices& limits, features::components::StagedContent& staged, std::uint32_t& next_reference);
 
     [[nodiscard]] const features::components::Content<Bounds>& content() const noexcept;
 
@@ -281,18 +281,24 @@ export namespace telar::gui::application {
     void readDefinitions(const runtime::lua::Value& client);
 
     template <typename Actions>
-    TBC_GENERIC void readFixed(const Actions& actions, runtime::config::LimitNotices& limits) {
-      readFixedSources(ComponentActionsOf<Actions>{actions}, limits);
+    TBC_GENERIC void readFixed(Actions& actions, runtime::config::LimitNotices& limits) {
+      ComponentActionsOf<Actions> reader{actions};
+
+      readFixedSources(reader, limits);
     }
 
     template <typename Actions>
-    TBC_GENERIC void readBar(features::components::Position position, const runtime::lua::Value& value, const Actions& actions, runtime::config::LimitNotices& limits) {
-      readBarContent(position, value, ComponentActionsOf<Actions>{actions}, limits);
+    TBC_GENERIC void readBar(features::components::Position position, const runtime::lua::Value& value, Actions& actions, runtime::config::LimitNotices& limits) {
+      ComponentActionsOf<Actions> reader{actions};
+
+      readBarContent(position, value, reader, limits);
     }
 
     template <typename Actions>
-    TBC_GENERIC void readPanel(const runtime::lua::Value& value, const Actions& actions, runtime::config::LimitNotices& limits) {
-      readPanelContent(value, ComponentActionsOf<Actions>{actions}, limits);
+    TBC_GENERIC void readPanel(const runtime::lua::Value& value, Actions& actions, runtime::config::LimitNotices& limits) {
+      ComponentActionsOf<Actions> reader{actions};
+
+      readPanelContent(value, reader, limits);
     }
 
     [[nodiscard]] const features::components::BarContent& bar(features::components::Position position) const;
@@ -326,11 +332,11 @@ export namespace telar::gui::application {
 
     [[nodiscard]] features::components::Source readSource(const runtime::lua::Value& value, const runtime::config::SourceSetting& setting);
 
-    void readFixedSources(const ComponentActions& actions, runtime::config::LimitNotices& limits);
+    void readFixedSources(ComponentActions& actions, runtime::config::LimitNotices& limits);
 
-    void readBarContent(features::components::Position position, const runtime::lua::Value& value, const ComponentActions& actions, runtime::config::LimitNotices& limits);
+    void readBarContent(features::components::Position position, const runtime::lua::Value& value, ComponentActions& actions, runtime::config::LimitNotices& limits);
 
-    void readPanelContent(const runtime::lua::Value& value, const ComponentActions& actions, runtime::config::LimitNotices& limits);
+    void readPanelContent(const runtime::lua::Value& value, ComponentActions& actions, runtime::config::LimitNotices& limits);
 
     lua_State& state_;
     features::components::Definitions definitions_;

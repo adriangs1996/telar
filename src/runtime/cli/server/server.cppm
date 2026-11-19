@@ -18,7 +18,7 @@ export namespace telar::runtime::cli {
   // Keep the reference worker lexical scope and its mutable Lua binding factory.
   tbc::view<ds::String<Memory>, tbc::lt::a> pluginCallbackSource(tbc::view<Memory&, tbc::lt::a> memory, std::string_view source, std::string_view action);
 
-  int retainPluginCallback(lua_State* state, const config::RetainedActionValidator& validator, config::LimitNotices& limits);
+  int retainPluginCallback(lua_State* state, config::RetainedActionValidator& validator, config::LimitNotices& limits);
 
   void runPluginWorker(Memory& memory, const PluginWorkerOptions& options);
 

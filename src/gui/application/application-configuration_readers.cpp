@@ -45,13 +45,13 @@ namespace telar::gui::application {
     return DefinitionActionDescription{.kind = setting.panel ? DefinitionActionDescription::Kind::panel : DefinitionActionDescription::Kind::pick, .index = setting.index};
   }
 
-  BindingActionReader::BindingActionReader(lua_State& state, const runtime::config::RetainedActionValidator& validator, runtime::config::RetainedCommandTabRegistry& commands, std::uint64_t generation)
+  BindingActionReader::BindingActionReader(lua_State& state, runtime::config::RetainedActionValidator& validator, runtime::config::RetainedCommandTabRegistry& commands, std::uint64_t generation)
       : state_(state),
         validator_(validator),
         commands_(commands),
         generation_(generation) {}
 
-  ds::Option<BindingAction> BindingActionReader::read(const runtime::lua::Value& value, bool expression) const {
+  ds::Option<BindingAction> BindingActionReader::read(const runtime::lua::Value& value, bool expression) {
     using Kind = runtime::config::ActionKind;
 
     const auto setting = validator_.read(value, expression);
@@ -171,12 +171,12 @@ namespace telar::gui::application {
     count_ = 0;
   }
 
-  ComponentActionReader::ComponentActionReader(const ComponentActions& reader, StagedActionReferences& references, std::uint32_t& next_reference) noexcept
+  ComponentActionReader::ComponentActionReader(ComponentActions& reader, StagedActionReferences& references, std::uint32_t& next_reference) noexcept
       : reader_(reader),
         references_(references),
         next_reference_(next_reference) {}
 
-  ds::Option<BindingAction> ComponentActionReader::read(const runtime::lua::Value& value) const {
+  ds::Option<BindingAction> ComponentActionReader::read(const runtime::lua::Value& value) {
     auto action = reader_.read(value);
     if (action && action->kind == BindingActionKind::extended) {
       if (next_reference_ == static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max())) {
@@ -192,7 +192,7 @@ namespace telar::gui::application {
     return action;
   }
 
-  ContentReader::ContentReader(lua_State& state, const ComponentActions& actions, runtime::config::LimitNotices& limits, features::components::StagedContent& staged, ComponentSurface surface)
+  ContentReader::ContentReader(lua_State& state, ComponentActions& actions, runtime::config::LimitNotices& limits, features::components::StagedContent& staged, ComponentSurface surface)
       : state_(state),
         builder_{.actions_ = actions, .limits_ = limits, .staged_ = staged, .surface_ = surface} {}
 
@@ -302,9 +302,9 @@ namespace telar::gui::application {
         references_(state) {}
 
   template <features::components::Capacity Bounds>
-  void ComponentSnapshot<Bounds>::read(const runtime::lua::Value& value, const ComponentActions& actions, runtime::config::LimitNotices& limits, features::components::StagedContent& staged, std::uint32_t& next_reference) {
+  void ComponentSnapshot<Bounds>::read(const runtime::lua::Value& value, ComponentActions& actions, runtime::config::LimitNotices& limits, features::components::StagedContent& staged, std::uint32_t& next_reference) {
     StagedActionReferences pending{state_};
-    const ComponentActionReader reader{actions, pending, next_reference};
+    ComponentActionReader reader{actions, pending, next_reference};
     features::components::Content<Bounds> next;
     constexpr auto surface = Bounds.nodes == features::components::PanelContent::capacity.nodes ? ComponentSurface::panel : ComponentSurface::bar;
 
@@ -414,7 +414,7 @@ namespace telar::gui::application {
     return result;
   }
 
-  void ComponentConfiguration::readFixedSources(const ComponentActions& actions, runtime::config::LimitNotices& limits) {
+  void ComponentConfiguration::readFixedSources(ComponentActions& actions, runtime::config::LimitNotices& limits) {
     const runtime::lua::Value registry{&state_, LUA_REGISTRYINDEX, "bar registry"};
 
     for (std::size_t index = 0; index < bars_.size(); ++index) {
@@ -427,11 +427,11 @@ namespace telar::gui::application {
     }
   }
 
-  void ComponentConfiguration::readBarContent(features::components::Position position, const runtime::lua::Value& value, const ComponentActions& actions, runtime::config::LimitNotices& limits) {
+  void ComponentConfiguration::readBarContent(features::components::Position position, const runtime::lua::Value& value, ComponentActions& actions, runtime::config::LimitNotices& limits) {
     bars_.atCheckedMut(static_cast<std::size_t>(position)).read(value, actions, limits, staged_, next_reference_);
   }
 
-  void ComponentConfiguration::readPanelContent(const runtime::lua::Value& value, const ComponentActions& actions, runtime::config::LimitNotices& limits) {
+  void ComponentConfiguration::readPanelContent(const runtime::lua::Value& value, ComponentActions& actions, runtime::config::LimitNotices& limits) {
     panel_.read(value, actions, limits, staged_, next_reference_);
   }
 

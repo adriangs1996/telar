@@ -6,7 +6,7 @@ import telar.base.ds;
 
 namespace telar::runtime::plugins {
 
-  ActionEncoder::ActionEncoder(const config::RetainedActionValidator& validator)
+  ActionEncoder::ActionEncoder(config::RetainedActionValidator& validator)
       : validator_(validator) {}
 
   std::span<const Byte> ActionEncoder::encode(const lua::Value& result) {
@@ -14,12 +14,12 @@ namespace telar::runtime::plugins {
     Byte count = 0;
 
     if (result.field("kind").present()) {
-      count = static_cast<Byte>(append(result, output));
+      count = static_cast<Byte>(append(validator_, result, output));
     } else {
       const auto length = std::min(result.listLength(), ActionProtocol::maximum_effects);
 
       for (std::size_t index = 0; index < length; ++index) {
-        count += static_cast<Byte>(append(result.element(static_cast<lua_Integer>(index) + 1), output));
+        count += static_cast<Byte>(append(validator_, result.element(static_cast<lua_Integer>(index) + 1), output));
       }
     }
 
@@ -27,12 +27,12 @@ namespace telar::runtime::plugins {
     return std::span{storage_}.first(storage_.size() - output.size());
   }
 
-  bool ActionEncoder::append(const lua::Value& value, std::span<Byte>& output) const {
+  bool ActionEncoder::append(config::RetainedActionValidator& validator, const lua::Value& value, std::span<Byte>& output) {
     if (value.is(LUA_TFUNCTION)) {
       value.fail("cannot return another callback");
     }
 
-    if (!validator_.validate(value)) {
+    if (!validator.validate(value)) {
       return false;
     }
 

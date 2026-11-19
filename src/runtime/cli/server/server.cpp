@@ -57,7 +57,7 @@ namespace telar::runtime::cli {
     return wrapped;
   }
 
-  int retainPluginCallback(lua_State* state, const config::RetainedActionValidator& validator, config::LimitNotices& limits) {
+  int retainPluginCallback(lua_State* state, config::RetainedActionValidator& validator, config::LimitNotices& limits) {
     const auto bindings = lua::Value{state, -1, "plugin binding"};
     config::BindingKeymap keymap;
 
@@ -93,7 +93,7 @@ namespace telar::runtime::cli {
     lua_pushnil(vm.state());
     const lua::Value empty{vm.state(), -1, "client"};
     const config::ClientDefinitions definitions{empty};
-    const config::RetainedActionValidator validator{definitions, limits, commands};
+    config::RetainedActionValidator validator{definitions, limits, commands};
 
     vm.execute(wrapped, "@plugin-worker.lua");
     const int reference = retainPluginCallback(vm.state(), validator, limits);

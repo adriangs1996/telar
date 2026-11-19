@@ -233,7 +233,7 @@ export {
 
       void invokeFunction(int reference, BindingContext context);
 
-      BindingEffects effects(const runtime::lua::Value& result, const BindingActionReader& reader);
+      BindingEffects effects(const runtime::lua::Value& result, BindingActionReader& reader);
 
       tbc::view<Memory&, tbc::lt::a> memory_;
       tbc::view<runtime::lua::Vm<Memory>, tbc::lt::a> machine_;

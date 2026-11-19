@@ -199,12 +199,12 @@ namespace telar::gui::application {
   template <Allocator Memory>
   class RecordingActionReader {
   public:
-    explicit RecordingActionReader(const BindingActionReader& reader, ActionDescriptions<Memory>& descriptions, const runtime::config::ClientDefinitions& definitions)
+    explicit RecordingActionReader(BindingActionReader& reader, ActionDescriptions<Memory>& descriptions, const runtime::config::ClientDefinitions& definitions)
         : reader_(reader),
           descriptions_(descriptions),
           definitions_(definitions) {}
 
-    [[nodiscard]] ds::Option<BindingAction> read(const runtime::lua::Value& value, bool expression = false) const {
+    [[nodiscard]] ds::Option<BindingAction> read(const runtime::lua::Value& value, bool expression = false) {
       auto action = reader_.read(value, expression);
       if (!action) {
         return {};
@@ -220,7 +220,7 @@ namespace telar::gui::application {
     }
 
   private:
-    const BindingActionReader& reader_;
+    BindingActionReader& reader_;
     ActionDescriptions<Memory>& descriptions_;
     const runtime::config::ClientDefinitions& definitions_;
   };
@@ -353,8 +353,8 @@ namespace telar::gui::application {
 
     return runtime::config::ConfigurationLayers::client(root, profile_.view(), [&](const runtime::lua::Value& client, const runtime::lua::Value* inherited) {
       const runtime::config::ClientDefinitions definitions{client, inherited};
-      const runtime::config::RetainedActionValidator validator{definitions, notices_, client_state_.commands};
-      const BindingActionReader reader{*machine_.state(), validator, client_state_.commands, number_};
+      runtime::config::RetainedActionValidator validator{definitions, notices_, client_state_.commands};
+      BindingActionReader reader{*machine_.state(), validator, client_state_.commands, number_};
 
       return std::forward<Consumer>(consume)(reader);
     });
@@ -388,7 +388,7 @@ namespace telar::gui::application {
 
       const runtime::lua::Value result{machine_.state(), -1, "component render result"};
 
-      withActions([&](const auto& actions) {
+      withActions([&](auto& actions) {
         consume(result, actions);
       });
     } catch (...) {
@@ -441,7 +441,7 @@ namespace telar::gui::application {
   void ConfigurationGeneration<Memory>::renderBar(features::components::Position position, const features::components::Context& context) {
     const auto source = components_->definitions().source(position);
 
-    renderComponents(source, context, [&](const auto& value, const auto& actions) {
+    renderComponents(source, context, [&](const auto& value, auto& actions) {
       components_.getMut().readBar(position, value, actions, notices_);
     });
   }
@@ -455,7 +455,7 @@ namespace telar::gui::application {
 
     const auto source = panels[index].source;
 
-    renderComponents(source, context, [&](const auto& value, const auto& actions) {
+    renderComponents(source, context, [&](const auto& value, auto& actions) {
       components_.getMut().readPanel(value, actions, notices_);
     });
   }
@@ -600,7 +600,7 @@ namespace telar::gui::application {
     auto result = ds::makeBox<features::components::ResolvedEffects<Memory>>(memory_, memory_);
     const runtime::lua::Value value{machine_.state(), -1, "click result"};
     if (value.present()) {
-      result.getMut().effects = withActions([&](const auto& reader) {
+      result.getMut().effects = withActions([&](auto& reader) {
         return effects(value, reader);
       });
     }
@@ -773,7 +773,7 @@ namespace telar::gui::application {
     invokeFunction(action.reference, context);
     const runtime::lua::Value result{machine_.state(), -1, "callback result"};
 
-    return withActions([&](const auto& reader) {
+    return withActions([&](auto& reader) {
       return effects(result, reader);
     });
   }
@@ -818,7 +818,7 @@ namespace telar::gui::application {
 
   template <Allocator Memory>
   ds::Option<features::components::ResolvedAction> ConfigurationGeneration<Memory>::elementAction(const runtime::lua::Value& value, std::uint32_t index) {
-    const auto action = withActions([&](const auto& reader) {
+    const auto action = withActions([&](auto& reader) {
       return reader.read(value);
     });
 
@@ -900,7 +900,7 @@ namespace telar::gui::application {
 
     rebindDefinitions();
     keymap_ = input_.compile();
-    withActions([&](const auto& reader) {
+    withActions([&](auto& reader) {
       components_.getMut().readFixed(reader, notices_);
     });
 
@@ -949,14 +949,14 @@ namespace telar::gui::application {
   void ConfigurationGeneration<Memory>::readClient(const runtime::lua::Value& client, const runtime::lua::Value* inherited) {
     components_.getMut().readDefinitions(client);
     const runtime::config::ClientDefinitions definitions{client, inherited};
-    const runtime::config::RetainedActionValidator validator{definitions, notices_, client_state_.commands};
-    const BindingActionReader reader{*machine_.state(), validator, client_state_.commands, number_};
+    runtime::config::RetainedActionValidator validator{definitions, notices_, client_state_.commands};
+    BindingActionReader reader{*machine_.state(), validator, client_state_.commands, number_};
 
     if (runtime::config::ClientReader::listsBindings(client)) {
       descriptions_.replaceBindings();
     }
 
-    const RecordingActionReader actions{reader, descriptions_, definitions};
+    RecordingActionReader actions{reader, descriptions_, definitions};
 
     BindingReader::apply(client, input_, actions);
   }
@@ -994,7 +994,7 @@ namespace telar::gui::application {
   }
 
   template <Allocator Memory>
-  BindingEffects ConfigurationGeneration<Memory>::effects(const runtime::lua::Value& result, const BindingActionReader& reader) {
+  BindingEffects ConfigurationGeneration<Memory>::effects(const runtime::lua::Value& result, BindingActionReader& reader) {
     BindingEffects batch;
     const auto past = runtime::config::CallbackResultReader::actions(result, BindingEffects::maximum_effects, [&](const runtime::lua::Value& value) {
       if (auto action = reader.read(value)) {

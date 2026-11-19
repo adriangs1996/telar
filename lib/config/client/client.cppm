@@ -261,11 +261,11 @@ export {
     class BasicActionValidator {
     public:
       explicit BasicActionValidator(tbc::view<const ClientDefinitions&, tbc::lt::b> definitions, tbc::view<LimitNotices&, tbc::lt::b> limits, tbc::view<Commands&, tbc::lt::b> commands);
-      bool validate(const lua::Value& action, bool expression = false) const;
-      bool component(const lua::Value& action) const;
+      bool validate(const lua::Value& action, bool expression = false);
+      bool component(const lua::Value& action);
 
       // Validates the action and reads it; nothing when a limit drops it.
-      [[nodiscard]] tbc::view<ds::Option<ActionSetting>, tbc::lt::a> read(const lua::Value& action, bool expression = false) const;
+      [[nodiscard]] tbc::view<ds::Option<ActionSetting>, tbc::lt::a> read(const lua::Value& action, bool expression = false);
 
     private:
       static void command(const lua::Value& action, tbc::view<CommandTabView&, tbc::lt::a> command);
@@ -281,9 +281,9 @@ export {
       static void requiredInteger(const lua::Value& value, lua_Integer minimum, lua_Integer maximum);
       static void direction(const lua::Value& action, std::initializer_list<std::string_view> choices);
       void reference(const lua::Value& action, const char* field, const char* section) const;
-      bool commandTab(const lua::Value& action) const;
-      void notification(const lua::Value& action) const;
-      tbc::view<std::string_view, tbc::lt::a> fitted(tbc::view<std::string_view, tbc::lt::a> text, tbc::view<LimitReach, tbc::lt::b> limit) const;
+      bool commandTab(const lua::Value& action);
+      void notification(const lua::Value& action);
+      tbc::view<std::string_view, tbc::lt::a> fitted(tbc::view<std::string_view, tbc::lt::a> text, tbc::view<LimitReach, tbc::lt::b> limit);
 
       tbc::view<const ClientDefinitions&, tbc::lt::b> definitions_;
       tbc::view<LimitNotices&, tbc::lt::b> limits_;
@@ -659,7 +659,7 @@ export {
 
       // Places a node on the builder, which the walk reaches through a reference: the walk itself
       // does not change.
-      virtual ds::Option<ComponentParent> place(const lua::Value& value, const ComponentShape& shape, const ComponentPosition& position) const = 0;
+      virtual ds::Option<ComponentParent> place(const lua::Value& value, const ComponentShape& shape, const ComponentPosition& position) = 0;
 
     private:
       enum class Phase : std::uint8_t {
@@ -692,7 +692,7 @@ export {
       // Each reads the frame on top of the stack, which stays there while they run.
       void visit();
       void component();
-      ds::Option<ComponentParent> node(const lua::Value& value, const ComponentShape& shape, const ComponentPosition& position) const;
+      ds::Option<ComponentParent> node(const lua::Value& value, const ComponentShape& shape, const ComponentPosition& position);
 
       lua_State& state_;
       LimitNotices& limits_;
@@ -710,7 +710,7 @@ export {
             builder_(builder) {}
 
     private:
-      inline ds::Option<ComponentParent> place(const lua::Value& value, const ComponentShape& shape, const ComponentPosition& position) const override {
+      inline ds::Option<ComponentParent> place(const lua::Value& value, const ComponentShape& shape, const ComponentPosition& position) override {
         return builder_.node(value, shape, position);
       }
 
@@ -1673,7 +1673,7 @@ export {
     class BindingValidator {
     public:
       template <CommandTabStore Commands>
-      static void validate(const lua::Value& bindings, const BasicActionValidator<Commands>& actions, BindingKeymap& keymap, LimitNotices& limits);
+      static void validate(const lua::Value& bindings, BasicActionValidator<Commands>& actions, BindingKeymap& keymap, LimitNotices& limits);
     };
 
   }
@@ -2214,8 +2214,8 @@ namespace telar::runtime::config {
   extern template class CommandTabStorage<CommandTabLifetime::retained>;
   extern template class BasicActionValidator<CommandTabRegistry>;
   extern template class BasicActionValidator<RetainedCommandTabRegistry>;
-  extern template void BindingValidator::validate<CommandTabRegistry>(const lua::Value& bindings, const BasicActionValidator<CommandTabRegistry>& actions, BindingKeymap& keymap, LimitNotices& limits);
-  extern template void BindingValidator::validate<RetainedCommandTabRegistry>(const lua::Value& bindings, const BasicActionValidator<RetainedCommandTabRegistry>& actions, BindingKeymap& keymap, LimitNotices& limits);
+  extern template void BindingValidator::validate<CommandTabRegistry>(const lua::Value& bindings, BasicActionValidator<CommandTabRegistry>& actions, BindingKeymap& keymap, LimitNotices& limits);
+  extern template void BindingValidator::validate<RetainedCommandTabRegistry>(const lua::Value& bindings, BasicActionValidator<RetainedCommandTabRegistry>& actions, BindingKeymap& keymap, LimitNotices& limits);
   extern template void ClientValidator::validate<CommandTabRegistry>(const lua::Value& client, LimitNotices& limits, BasicClientValidationState<CommandTabRegistry>& state, const lua::Value* inherited);
   extern template void ClientValidator::validate<RetainedCommandTabRegistry>(const lua::Value& client, LimitNotices& limits, BasicClientValidationState<RetainedCommandTabRegistry>& state, const lua::Value* inherited);
 
