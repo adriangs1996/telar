@@ -767,7 +767,7 @@ namespace telar::runtime::redirect {
     if (owners_ || allowsIncoming(direction_) || std::ranges::any_of(std::span{mappings_}.first(count_), [](const auto& mapping) {
           return mapping.target.host.view() == "::1";
         })) {
-      packet_log_.emplace(state, uid, direction_);
+      packet_log_.emplace(session.stateMut(), uid, direction_);
       session.replace(plan(uid, identity));
       std::fprintf(stderr, "telar redirect: TCP discovery on pflog%u\n", packet_log_->index());
     }

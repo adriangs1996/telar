@@ -522,13 +522,16 @@ namespace telar::runtime {
       return administration_;
     }
 
-    const char* home = std::getenv("HOME");
-    if (home == nullptr || home[0] != '/') {
+    // HOME as it is now, copied as Rust's env::var does: any later call may replace the environment.
+    const char* value = std::getenv("HOME");
+    if (value == nullptr || value[0] != '/') {
       throw RequestError{FailureCode::invalid_request, "DestinationHomeUnavailable"};
     }
 
+    const ds::String<ConcurrentMemory> home{memory_, std::string_view{value}};
+
     const auto identity = model.workspaces.nextId();
-    auto workspace = ds::makeBox<Workspace>(memory_, memory_, identity, home, "Administration");
+    auto workspace = ds::makeBox<Workspace>(memory_, memory_, identity, home.view(), "Administration");
 
     model.workspaces.insert(identity, std::move(workspace));
     administration_ = identity;

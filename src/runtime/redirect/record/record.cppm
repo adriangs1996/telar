@@ -132,7 +132,7 @@ export {
     template <Allocator Memory>
     class RecordFile {
     public:
-      explicit RecordFile(Memory& memory, std::string_view name, RecordLock mode = RecordLock::owner);
+      explicit RecordFile(tbc::view<Memory&, tbc::lt::a> memory, std::string_view name, RecordLock mode = RecordLock::owner);
 
       ds::Option<ds::String<Memory>> load();
 
@@ -143,8 +143,8 @@ export {
     private:
       static void validate(int descriptor);
 
-      Memory& memory_;
-      ds::String<Memory> name_;
+      tbc::view<Memory&, tbc::lt::a> memory_;
+      tbc::view<ds::String<Memory>, tbc::lt::a> name_;
       FileDescriptor directory_;
       FileDescriptor lock_;
     };

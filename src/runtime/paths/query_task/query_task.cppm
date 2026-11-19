@@ -238,12 +238,16 @@ export {
         ds::Array<PathMatch, 50> matches;
         ds::Array<ds::Array<std::uint16_t, 64>, 50> positions;
 
+        // Every row's positions are written before any match views them, as Rust fills the rows with
+        // one mutable borrow and then lends them out shared.
+        for (std::size_t index = 0; index < count; ++index) {
+          matcher_.score(path(storage_.entry(ranked[index].entry)), request.query, positions.atMut(index).viewMut());
+        }
+
         for (std::size_t index = 0; index < count; ++index) {
           const auto& entry = storage_.entry(ranked[index].entry);
-          const auto value = path(entry);
 
-          matcher_.score(value, request.query, positions.atMut(index).viewMut());
-          matches.atMut(index) = {value, entry.kind, std::span{positions[index]}.first(request.query.size())};
+          matches.atMut(index) = {path(entry), entry.kind, std::span{positions[index]}.first(request.query.size())};
         }
 
         reply.send(PathResults{request.request_id, root_, static_cast<std::uint32_t>(published), complete, complete && storage_.truncated, std::span{matches}.first(count)});

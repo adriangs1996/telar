@@ -118,6 +118,11 @@ export {
       PfSession(const PfSession&) = delete;
       PfSession& operator=(const PfSession&) = delete;
 
+      // The state the session records into, lent through it: nothing else may write it while the session runs.
+      inline State& stateMut() noexcept {
+        return state_;
+      }
+
       inline void recover() {
         token_ = state_.load();
         stop();
