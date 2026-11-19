@@ -2165,6 +2165,84 @@ void declarationRegionSharedMutated(declarations::region_state& state) {
 
 // END CASE
 
+// CASE: declaration.region_value_assigned
+// PAIR: declaration.region_value
+// SOURCE: lib/config/runtime/runtime.cpp :: RuntimeValues::clone (a copy built in the values' memory takes clones of their fields)
+// STATUS: implemented
+// CONTRACT: A result in a class region that refers to a shared object is the receiver's one field there referring to one, as a `&'a Memory` copied out of a `Values<'a>` is: assigning a clone into an object of the region leaves that memory valid, while a view of the text a field owns ends when the field is replaced.
+// SCENARIO: A copy built in the memory of one field takes clones of the others; accept.
+namespace declarations {
+  class region_string {
+  public:
+    explicit region_string(tbc::view<region_memory&, tbc::lt::a> memory) noexcept
+        : memory_(&memory) {}
+
+    region_string(region_string&& other) noexcept;
+    region_string& operator=(region_string&& other) noexcept;
+
+    [[nodiscard]] tbc::view<region_string, tbc::lt::a> clone() const;
+
+    [[nodiscard]] tbc::view<region_memory&, tbc::lt::a> memory() const noexcept {
+      return *memory_;
+    }
+
+    [[nodiscard]] std::string_view view() const noexcept {
+      return {bytes_, 1};
+    }
+
+  private:
+    tbc::view<region_memory*, tbc::lt::a> memory_;
+    tbc::view<char*, tbc::lt::a> bytes_ = nullptr;
+  };
+
+  struct region_values {
+    explicit region_values(tbc::view<region_memory&, tbc::lt::a> memory)
+        : first(memory),
+          second(memory),
+          third(memory) {}
+
+    [[nodiscard]] tbc::view<region_values, tbc::lt::a> clone() const;
+
+    tbc::view<region_string, tbc::lt::a> first;
+    tbc::view<region_string, tbc::lt::a> second;
+    tbc::view<region_string, tbc::lt::a> third;
+  };
+}
+
+tbc::view<declarations::region_values, tbc::lt::a> declarations::region_values::clone() const {
+  region_values copy{first.memory()};
+
+  copy.second = second.clone();
+  copy.third = third.clone();
+  return copy;
+}
+
+// END CASE
+
+// CASE: declaration.region_value_replaced
+// PAIR: declaration.region_value
+// SOURCE: lib/config/runtime/runtime.cpp :: RuntimeValues::clone (a copy built in the values' memory takes clones of their fields)
+// STATUS: implemented
+// CONTRACT: A result in a class region that refers to a shared object is the receiver's one field there referring to one, as a `&'a Memory` copied out of a `Values<'a>` is: assigning a clone into an object of the region leaves that memory valid, while a view of the text a field owns ends when the field is replaced.
+// SCENARIO: A view of a field's text is read after the field is replaced by a clone of another; reject at the assignment.
+namespace declarations {
+  struct region_named {
+    std::size_t replaced();
+
+    tbc::view<region_string, tbc::lt::a> first;
+    tbc::view<region_string, tbc::lt::a> second;
+  };
+}
+
+std::size_t declarations::region_named::replaced() {
+  const auto text = first.view();
+
+  first = second.clone(); // expected-error [tbc-invalidated-borrow]
+  return text.size();
+}
+
+// END CASE
+
 // CASE: declaration.output_shared_only_copied
 // PAIR: declaration.output_shared_only
 // SOURCE: src/gui/features/prompt/prompt.cpp :: ask (the root a path's question names is written in a buffer of the state)

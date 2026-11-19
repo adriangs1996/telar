@@ -610,9 +610,11 @@ every other borrow of it, valid.
 
 The same holds for a shared object an input refers to. A result in a class region
 whose type refers to a shared type is what the one field of that region referring
-to one holds, as a `&'a Memory` copied out of a `State<'a>` is that field's. A
-call that mutates the state, or an object that keeps the memory, then leaves that
-borrow and the state's other parts valid:
+to one holds, as a `&'a Memory` copied out of a `State<'a>` is that field's,
+whether the state is an argument or the receiver. A call that mutates the state,
+or an object that keeps the memory, then leaves that borrow and the state's other
+parts valid, so a clone assigned into a copy built in the state's memory leaves
+the state alone:
 
 ```cpp
 tbc::view<Memory &, tbc::lt::a> memoryOf(const State &state); // state.memory_

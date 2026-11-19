@@ -3644,11 +3644,23 @@ namespace tbc_lint {
 
         // A receiver field with the result's region is another input that can supply it.
         if (selected_region != nullptr && object != nullptr && receiverHasRegion(*callee, selected_region)) {
-          if (!hasMatchingParameter(*callee, selected_region)) {
-            return receiverContents(*object, current);
+          auto contents = receiverContents(*object, current);
+
+          // The receiver's one field in the region that refers to a shared object holds it, as for an
+          // argument below.
+          if (const auto* field = sharedRegionField(objectType(*object), selected_region, callee->getReturnType())) {
+            for (auto& source : contents.values) {
+              if (standsForInput(source) && source.select.empty()) {
+                source.select.push_back({.field = field, .level = storage_kind::object});
+              }
+            }
           }
 
-          result.merge(receiverContents(*object, current));
+          if (!hasMatchingParameter(*callee, selected_region)) {
+            return contents;
+          }
+
+          result.merge(std::move(contents));
         }
 
         // A region also comes from what the arguments of a type that carries it hold.
