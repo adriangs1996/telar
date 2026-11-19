@@ -998,6 +998,7 @@ namespace telar::gui::qt {
   ds::Option<TerminalKey> TerminalItem::type(const QKeyEvent& event) {
     const auto* current = pane();
     ds::Option<TerminalKey> typed;
+
     if (current == nullptr || controller_ == nullptr) {
       return typed;
     }

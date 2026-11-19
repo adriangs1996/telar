@@ -356,6 +356,7 @@ namespace telar::ds {
 
     ~Vec() {
       static_assert(std::is_nothrow_move_constructible_v<Value>, "a Vec relocates its values without throwing, as Rust moves them");
+
       release();
     }
 
@@ -1026,6 +1027,7 @@ namespace telar::ds {
     // this String: it is read before any byte it lies in is written.
     void replace(std::size_t index, std::size_t count, std::string_view text) {
       const auto size = this->size();
+
       TELAR_ASSERT(index <= size);
       count = std::min(count, size - index);
       if (text.size() > maximum_capacity - (size - count)) {
@@ -1050,6 +1052,7 @@ namespace telar::ds {
             .size = result,
             .capacity = capacity | heap_flag,
         };
+
         return;
       }
 

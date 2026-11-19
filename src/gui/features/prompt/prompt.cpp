@@ -218,6 +218,7 @@ namespace telar::gui::features::prompt {
     static_cast<void>(history.retain([&entry](const Name& kept) {
       return kept.view() != entry.view();
     }));
+
     history.insert(0, std::move(entry));
     history.truncate(State::history_limit);
   }
@@ -309,6 +310,7 @@ namespace telar::gui::features::prompt {
           const auto listed = std::ranges::any_of(entry.value, [word](const Name& command) {
             return command.view() == word;
           });
+
           const auto presence = listed ? CommandPresence::found : CommandPresence::missing;
 
           static_cast<void>(checks.words.insert(Name{state.memory, word}, presence));
@@ -348,6 +350,7 @@ namespace telar::gui::features::prompt {
   void asked(State& state, std::uint64_t pane_id, std::string_view word, std::uint64_t request_id, bool sent) {
     auto& memory = state.memory;
     auto& checks = checksOf(state.command_checks, state.memory, pane_id);
+
     if (!sent) {
       static_cast<void>(checks.words.insert(Name{memory, word}, CommandPresence::unknown));
       return;
@@ -482,6 +485,7 @@ namespace telar::gui::features::prompt {
   void askedSpec(State& state, std::uint64_t pane_id, std::string_view command, std::uint64_t request_id, bool sent) {
     auto& memory = state.memory;
     auto& checks = checksOf(state.command_checks, state.memory, pane_id);
+
     if (!sent) {
       static_cast<void>(checks.specs.insert(Name{memory, command}, SpecState::unavailable));
       return;

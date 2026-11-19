@@ -153,6 +153,7 @@ namespace telar::gui::qt {
           .native = {native, CFRelease},
           .synthesized = synthesized,
       });
+
       return font_count++;
     }
 

@@ -77,6 +77,7 @@ namespace {
     check(failure<std::invalid_argument>([] {
       traffic::connect("relative/traffic.sock");
     }).hasValue());
+
     check(failure<std::invalid_argument>([&] {
       traffic::connect(directory.file(std::string{"traffic\0.sock", 13}));
     }).hasValue());
@@ -130,6 +131,7 @@ namespace {
     check(failure<SystemError>([&] {
       traffic::sendAll(connected.get(), frame);
     }).hasValue());
+
     check(::unlink(path.c_str()) == 0);
   }
 

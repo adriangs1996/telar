@@ -164,6 +164,7 @@ namespace {
 
       return bytes;
     }();
+
     const std::string_view long_text{filler.data(), filler.size()};
 
     writeFormatted(pipe[1], "<{}|{}|{}|{}|{}>", long_text, orNull(ds::Option<int>{-3}), orNull(ds::Option<std::uint64_t>{}), quoteJson("q\"\n"), EscapedField{"a\tb\x01"});

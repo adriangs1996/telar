@@ -294,6 +294,7 @@ export {
 
         // The attachment as the client keeps it, once its box is in the client's list.
         auto& result = client.attachments.push(std::move(attachment)).getMut();
+
         client.workspace = workspace->id;
         pane.observers |= client.observerBit();
         return result;

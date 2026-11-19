@@ -555,6 +555,7 @@ namespace telar::gui::application {
     features::workbench::restore(workbench, tab, [&](std::uint64_t pane_id) {
       workbench::setFocus(*this, tab.location, pane_id);
     });
+
     tab.loaded = true;
     tab.loading = false;
     ++chrome_revision_;

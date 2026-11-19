@@ -905,6 +905,7 @@ fetch() {
         }
 
         const auto child = ds::format(memory_, "{}/{}", local, name);
+
         if (S_ISDIR(state.st_mode)) {
           addTree(child, target, depth + 1);
         } else if (S_ISREG(state.st_mode)) {
@@ -1162,6 +1163,7 @@ fetch() {
 
         runs = false;
       });
+
       return runs;
     }
 
@@ -2103,6 +2105,7 @@ fetch() {
           return entry == ds::Option{outcome};
         });
       };
+
       const bool failed = has(MachineLogin::failed);
       const bool pending = has(MachineLogin::pending);
       const auto status = failed ? Status::failed : !any  ? Status::skipped

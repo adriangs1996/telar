@@ -58,6 +58,7 @@ namespace telar::gui::application::peek {
 
   bool open(Session& session, PeekTarget target) {
     auto& state = session.peek;
+
     if (!session.ready() || !session.presented() || features::peek::find(session.agents(), target) == nullptr) {
       return false;
     }

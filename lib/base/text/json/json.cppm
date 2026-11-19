@@ -196,6 +196,7 @@ struct std::formatter<telar::runtime::JsonQuoted, char> {
     telar::runtime::escapeJson(quoted.text, quoted.escapes, [&](std::string_view piece) {
       output = std::ranges::copy(piece, output).out;
     });
+
     *output++ = '"';
     return output;
   }

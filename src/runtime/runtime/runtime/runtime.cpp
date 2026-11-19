@@ -1067,6 +1067,7 @@ namespace telar::runtime {
       tab->panes.retain([&](const auto& value) {
         return value != identity;
       });
+
       releaseEmptyTab(model, panes, clients, location);
       leaveEmptyViews(model, panes, clients, location.workspace.id);
     }

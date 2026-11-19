@@ -410,12 +410,14 @@ namespace {
     const auto styled = [&memory](std::string_view text) {
       return styleOf(memory, text);
     };
+
     const auto layout = [&memory](std::string_view text, std::span<const Style> styles, std::size_t cursor, std::size_t anchor, std::uint32_t columns, std::span<const std::uint8_t> groups = {}) {
       Layout result{memory};
 
       feature::layout(result, text, styles, cursor, anchor, columns, groups);
       return result;
     };
+
     const std::string_view command = "sudo git commit -m \"wip $USER\" | tee log # done";
     const auto styles = styled(command);
 

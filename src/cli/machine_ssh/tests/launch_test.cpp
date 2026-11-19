@@ -120,11 +120,13 @@ namespace {
     dispatch.retain([](const auto& word) {
       return word != "-T";
     });
+
     dispatch.truncate(dispatch.size() - 3);
     check(dispatch.back() != "--");
     expect(std::ranges::equal(words, dispatch, [](const std::string& word, const Text& argument) {
       return argument == std::string_view{word};
     }));
+
     expect(std::ranges::find(words, "ForwardAgent=no") != words.end());
     expect(std::ranges::find(words, "BatchMode=yes") != words.end());
 
@@ -134,6 +136,7 @@ namespace {
     expect(failure([&] {
       machine::gitSshCommand(memory, "dev@host");
     }) == "UnquotableSshOption");
+
     std::filesystem::remove_all(directory.data());
   }
 
@@ -206,6 +209,7 @@ namespace {
     check(!failure([&] {
       windowOptions(long_command);
     }).empty());
+
     long_command.pop_back();
     check(windowOptions(long_command).command().size() == 64);
   }

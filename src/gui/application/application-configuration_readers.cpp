@@ -206,6 +206,7 @@ namespace telar::gui::application {
     builder_.counting_ = true;
     builder_.staged_.clear();
     const Position root{.place = builder_.surface_ == ComponentSurface::bar ? Place::bar : Place::panel};
+
     // A walk borrows the builder, so the budget is prepared between two walks.
     {
       runtime::config::ComponentWalker walker{state_, builder_, builder_.limits_};
@@ -220,6 +221,7 @@ namespace telar::gui::application {
 
       walker.walk(value, root);
     }
+
     output.keepFitting(builder_.staged_, &builder_.had_children_);
     builder_.report(Bounds);
   }

@@ -203,6 +203,7 @@ namespace telar::gui::features::prompt {
   bool Text::travel(bool back) {
     auto& from = back ? undo_ : redo_;
     auto& to = back ? redo_ : undo_;
+
     if (from.empty()) {
       return false;
     }

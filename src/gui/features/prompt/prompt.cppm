@@ -530,6 +530,7 @@ namespace telar::gui::features::prompt {
     const auto incomplete = [&memory = state.memory, syntax](std::string_view text) {
       return prompt::incomplete(memory, text, syntax);
     };
+
     const auto action = bound(key, edited.editor(), configuration);
 
     return action ? edited.perform(surface, *action, incomplete, history(state)) : edited.press(surface, key, incomplete, history(state));

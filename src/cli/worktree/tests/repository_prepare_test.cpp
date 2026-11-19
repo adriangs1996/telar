@@ -114,6 +114,7 @@ namespace {
     check(!prepared(memory, Receiver{memory, [](std::string_view) {
       return std::string{"not json"};
     }}).starts_with('/'));
+
     check(transfers().empty());
 
     const auto refused = ds::Array<std::string (*)(std::string_view), 3>{

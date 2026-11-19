@@ -579,6 +579,7 @@ namespace telar::runtime::cli::pane_agents {
     // A later lookup may overwrite the storage an earlier one returned.
     const auto socket_path = environment.lookup("TELAR_SOCKET_PATH");
     FixedText<PATH_MAX> own;
+
     if (!id || *id == target || socket_path.empty() || socket_path.size() > PATH_MAX) {
       return ds::none;
     }

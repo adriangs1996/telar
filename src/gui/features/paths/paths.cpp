@@ -345,6 +345,7 @@ namespace telar::gui::features::paths {
   ds::Option<bool> fail(State& state, const RequestFailed& failure) {
     auto& picker = Access::picker(state);
     const auto revision = picker.revision();
+
     if (!picker.fail(failure)) {
       return ds::none;
     }

@@ -165,6 +165,7 @@ namespace telar::gui::application {
         return trimmed + block.row == key;
       });
     });
+
     if (!std::ranges::equal(pane.folds.spans(), spans.view())) {
       pane.folds.assign(spans.view());
       ++pane.fold_revision;

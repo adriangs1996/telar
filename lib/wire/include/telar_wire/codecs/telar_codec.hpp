@@ -117,6 +117,7 @@ namespace telar {
       const auto column = [&](Text<Memory> label, std::span<const Byte> raw, std::string_view text) {
         columns.push(Column<Memory>{std::move(label), raw, Text<Memory>{memory, text}});
       };
+
       const auto visitor = [&](const char* field, std::span<const Byte> raw, const auto& entry) {
         appendColumns(columns, joined(name, ".", field), raw, entry);
       };

@@ -145,6 +145,7 @@ namespace telar::runtime::shell_files {
     std::ranges::transform(text.view(), bytes.viewMut().begin(), [](char byte) {
       return static_cast<std::uint8_t>(byte);
     });
+
     return bytes;
   }();
 

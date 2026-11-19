@@ -152,6 +152,7 @@ enum {
 static bool covers(CTFontRef font, NSString* text) {
   telar::ds::Array<unichar, max_query_units> units{};
   telar::ds::Array<CGGlyph, max_query_units> glyphs{};
+
   if (text.length > units.size()) {
     return false;
   }

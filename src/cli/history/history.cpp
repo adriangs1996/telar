@@ -832,6 +832,7 @@ namespace telar::runtime::cli::history {
       ::gmtime_r(&seconds, &utc);
       ds::Array<char, 16> code;
       std::string_view status = entry.status == HistoryStatus::running ? "RUN" : entry.status == HistoryStatus::interrupted ? "INT" : "?";
+
       if (entry.status != HistoryStatus::running && entry.status != HistoryStatus::interrupted && entry.exit_code) {
         status = {code.data(), std::format_to_n(code.dataMut(), code.size(), "{}", *entry.exit_code).out};
       }

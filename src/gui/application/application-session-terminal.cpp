@@ -303,11 +303,13 @@ namespace telar::gui::application {
     const auto pane_id = pane->id;
     const bool host_changed = pane->shell_host.view() != message.host;
     const auto previous = pane->setShell(message);
+
     // The pane's header names the host and the link.
     chrome_changed_ |= previous.remote != message.remote || host_changed || previous.link_ms != message.link_ms;
     if (chrome_changed_) {
       ++chrome_revision_;
     }
+
     prompt::follow(*this, pane_id, previous, message);
 
     changed_pane_ = pane_id;

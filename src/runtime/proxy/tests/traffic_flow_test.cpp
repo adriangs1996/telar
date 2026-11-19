@@ -494,6 +494,7 @@ namespace {
         {":authority", "fixture.test"},
         {":path", "/prior-knowledge"},
     }};
+
     constexpr ds::Array<std::pair<std::string_view, std::string_view>, 1> response_fields{{{":status", "200"}}};
     const auto http2 = std::string{Http2DirectionObserver<SystemAllocator>::client_preface} + http2Frame(Http2FrameKind::settings, 0, 0, {}) + http2Frame(Http2FrameKind::headers, 5, 1, hpackFields(request_fields));
     const auto prior = relayed(http2, http2Frame(Http2FrameKind::settings, 0, 0, {}) + http2Frame(Http2FrameKind::headers, 5, 1, hpackFields(response_fields)));

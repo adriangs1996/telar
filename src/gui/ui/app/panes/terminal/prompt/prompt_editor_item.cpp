@@ -550,6 +550,7 @@ namespace telar::gui::qt {
     styles_.clear();
     styles_.resize(display_.size(), application::prompt::Style::plain);
     const auto styles = styles_.viewMut();
+
     // What was typed alone: the word at its end is still being typed, whatever the suggestion
     // after it would make of it.
     application::prompt::classify(display_.view().substr(0, typed), styles.first(typed), tokens_, shell::Syntax{.dialect = pane != nullptr && pane->shell.shell == IntegratedShell::fish ? shell::Dialect::fish : shell::Dialect::posix});

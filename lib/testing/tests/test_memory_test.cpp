@@ -37,6 +37,7 @@ namespace {
   // A test whose code leaks fails: the memory going while bytes are held aborts the process.
   void failsOnALeak() {
     const auto child = ::fork();
+
     check(child >= 0, "fork");
     if (child == 0) {
       {

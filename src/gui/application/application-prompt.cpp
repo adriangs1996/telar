@@ -57,6 +57,7 @@ namespace telar::gui::application::prompt {
     // held.
     features::prompt::SpecState specState(features::prompt::State& state, Session::Link& link, const Pane<Memory>& pane, std::string_view command) {
       using features::prompt::SpecState;
+
       if (const auto known = features::prompt::spec(state, commands(pane), command)) {
         return *known;
       }

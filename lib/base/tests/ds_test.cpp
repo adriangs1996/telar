@@ -931,6 +931,7 @@ namespace {
       ds::Function<int(int)> twice = [](int value) {
         return value * 2;
       };
+
       ds::Function<int(int)> counted = [kept = Counted{5, alive}](int value) {
         return value + kept.value;
       };

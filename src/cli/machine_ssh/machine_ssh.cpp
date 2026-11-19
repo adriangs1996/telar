@@ -108,6 +108,7 @@ namespace telar::runtime::cli::config_receive {
   // `name` as a C string, which a path component no longer than NAME_MAX always fits.
   ds::Array<char, NAME_MAX + 1> component(std::string_view name) {
     ds::Array<char, NAME_MAX + 1> bytes{};
+
     if (name.size() > NAME_MAX) {
       throw fileError(ENAMETOOLONG);
     }
@@ -959,6 +960,7 @@ namespace telar::runtime::cli::machine::filter {
   bool secretKey(std::string_view name, Kind kind) {
     static constexpr auto dropped = ds::Array<std::string_view, 21>{"env", "environment", "headers", "http_headers", "env_http_headers", "auth", "authInfo", "apiKeyHelper", "awsAuthRefresh", "awsCredentialExport", "otelHeadersHelper", "mcpServers", "mcp", "mcp_servers", "token", "accessToken", "access_token", "refreshToken", "refresh_token", "idToken", "id_token"};
     static constexpr auto fragments = ds::Array<std::string_view, 12>{"secret", "password", "passphrase", "apikey", "api_key", "api-key", "credential", "bearer", "private_key", "privatekey", "authorization", "cookie"};
+
     return std::ranges::find(dropped, name) != dropped.end() || std::ranges::any_of(fragments, [&](auto fragment) {
       return asciiContainsIgnoreCase(name, fragment);
     }) || (kind != Kind::scalar && (asciiContainsIgnoreCase(name, "token") || asciiContainsIgnoreCase(name, "auth")));

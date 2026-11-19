@@ -782,6 +782,7 @@ namespace telar::runtime {
 
   tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> WordReader::userSpec(std::string_view name) {
     Text source{memory_};
+
     if (completions_.empty()) {
       return source;
     }

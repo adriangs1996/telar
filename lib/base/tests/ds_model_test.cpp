@@ -172,6 +172,7 @@ namespace {
           check(mine.retain(keep) == std::erase_if(model, [&](const std::string& value) {
             return !keep(value);
           }));
+
           break;
         }
         default:
@@ -475,6 +476,7 @@ namespace {
             const auto keep = [&](std::uint64_t candidate) {
               return candidate % modulus != residue;
             };
+
             const auto dropped = mine.retain([&](const std::uint64_t& entry, std::string& value) {
               if (!keep(entry)) {
                 return false;
@@ -487,6 +489,7 @@ namespace {
             check(dropped == std::erase_if(model, [&](const auto& entry) {
               return !keep(entry.first);
             }));
+
             for (auto& [entry, value] : model) {
               value.append("~");
             }
