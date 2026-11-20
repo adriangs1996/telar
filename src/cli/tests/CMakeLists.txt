@@ -2,7 +2,7 @@
 # runtime run only where the runtime builds beside the CLI. The tests of one domain live in its
 # own tests/ folder, and a C++ test that reaches domains no single domain builds on goes here.
 telar_add_test(repository-prepare-probe NO_TEST SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/repository_prepare_probe.cpp
-  LIBRARIES cli-command_limit cli-worktree_git cli-worktree)
+  LIBRARIES cli-console-command_limit cli-commands-worktree_git cli-commands-worktree)
 
 telar_add_test(cli-help-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/help_test.py"
   --telar "$<TARGET_FILE:telar>" --help-directory "${TELAR_PROCESS_SOURCE_DIR}/help" --version "${TELAR_VERSION}"
@@ -59,6 +59,6 @@ telar_add_test(render-cli-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT
 telar_add_test(completions-cli-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/completions_test.py"
   --telar "$<TARGET_FILE:telar>"
   LABELS cli.e2e)
-telar_add_test(cli-window-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/window_test.py"
+telar_add_test(cli-commands-window-tests COMMAND Python3::Interpreter -B "${CMAKE_CURRENT_SOURCE_DIR}/window_test.py"
   --telar "$<TARGET_FILE:telar>"
   LABELS cli.e2e)

@@ -180,27 +180,27 @@
       "tests"
     ],
     "cli": [
-      "base",
-      "output",
-      "render",
-      "command_limit",
-      "control_session",
-      "monitor",
-      "runtime_observer",
-      "server",
-      "worktree_git",
-      "history",
-      "hooks",
-      "integration",
-      "plugin",
-      "project_setup",
-      "window",
-      "hook",
-      "machine_ssh",
-      "tab",
-      "worktree",
-      "machine",
-      "launch_commands",
+      "console/command_error",
+      "console/output",
+      "console/render",
+      "console/command_limit",
+      "session/control_session",
+      "commands/monitor",
+      "session/runtime_observer",
+      "session/server",
+      "commands/worktree_git",
+      "commands/history",
+      "commands/hooks",
+      "commands/integration",
+      "commands/plugin",
+      "commands/project_setup",
+      "commands/window",
+      "commands/hook",
+      "commands/machine_ssh",
+      "commands/tab",
+      "commands/worktree",
+      "commands/machine",
+      "commands/launch_commands",
       "tests"
     ]
   },
@@ -208,7 +208,7 @@
   "interfaces": {
     "src/gui/application/application-monitor.cppm": "telar.gui.application:monitor",
     "src/gui/features/monitor/monitor.cppm": "telar.gui.features.monitor",
-    "src/cli/monitor/monitor.cppm": "telar.cli.monitor",
+    "src/cli/commands/monitor/monitor.cppm": "telar.cli.commands.monitor",
     "src/runtime/metrics/monitor/monitor.cppm": "telar.runtime.metrics.monitor",
     "lib/wire/monitor/monitor.cppm": "telar.wire.monitor",
     "src/runtime/host/process_table/process_table.cppm": "telar.runtime.host.process_table",
@@ -321,26 +321,26 @@
     "src/runtime/terminal/graphics/prepared_images/prepared_images.cppm": "telar.runtime.terminal.graphics.prepared_images",
     "src/runtime/terminal/graphics/synchronizer/synchronizer.cppm": "telar.runtime.terminal.graphics.synchronizer",
     "src/runtime/agents/observation/processor/processor.cppm": "telar.runtime.agents.observation.processor",
-    "src/cli/command_limit/command_limit.cppm": "telar.cli.command_limit",
-    "src/cli/worktree_git/worktree_git.cppm": "telar.cli.worktree_git",
-    "src/cli/runtime_observer/runtime_observer.cppm": "telar.cli.runtime_observer",
-    "src/cli/control_session/control_session.cppm": "telar.cli.control_session",
-    "src/cli/plugin/plugin.cppm": "telar.cli.plugin",
-    "src/cli/machine/machine.cppm": "telar.cli.machine",
-    "src/cli/window/window.cppm": "telar.cli.window",
-    "src/cli/launch_commands/launch_commands.cppm": "telar.cli.launch_commands",
-    "src/cli/machine_ssh/machine_ssh.cppm": "telar.cli.machine_ssh",
-    "src/cli/worktree/worktree.cppm": "telar.cli.worktree",
-    "src/cli/project_setup/project_setup.cppm": "telar.cli.project_setup",
-    "src/cli/server/server.cppm": "telar.cli.server",
-    "src/cli/tab/tab.cppm": "telar.cli.tab",
-    "src/cli/output/output.cppm": "telar.cli.output",
-    "src/cli/hook/hook.cppm": "telar.cli.hook",
-    "src/cli/history/history.cppm": "telar.cli.history",
-    "src/cli/hooks/command/command.cppm": "telar.cli.hooks.command",
-    "src/cli/integration/settings/settings.cppm": "telar.cli.integration.settings",
-    "src/cli/base/command_error/command_error.cppm": "telar.cli.base.command_error",
-    "src/cli/hooks/session/session.cppm": "telar.cli.hooks.session",
+    "src/cli/console/command_limit/command_limit.cppm": "telar.cli.console.command_limit",
+    "src/cli/commands/worktree_git/worktree_git.cppm": "telar.cli.commands.worktree_git",
+    "src/cli/session/runtime_observer/runtime_observer.cppm": "telar.cli.session.runtime_observer",
+    "src/cli/session/control_session/control_session.cppm": "telar.cli.session.control_session",
+    "src/cli/commands/plugin/plugin.cppm": "telar.cli.commands.plugin",
+    "src/cli/commands/machine/machine.cppm": "telar.cli.commands.machine",
+    "src/cli/commands/window/window.cppm": "telar.cli.commands.window",
+    "src/cli/commands/launch_commands/launch_commands.cppm": "telar.cli.commands.launch_commands",
+    "src/cli/commands/machine_ssh/machine_ssh.cppm": "telar.cli.commands.machine_ssh",
+    "src/cli/commands/worktree/worktree.cppm": "telar.cli.commands.worktree",
+    "src/cli/commands/project_setup/project_setup.cppm": "telar.cli.commands.project_setup",
+    "src/cli/session/server/server.cppm": "telar.cli.session.server",
+    "src/cli/commands/tab/tab.cppm": "telar.cli.commands.tab",
+    "src/cli/console/output/output.cppm": "telar.cli.console.output",
+    "src/cli/commands/hook/hook.cppm": "telar.cli.commands.hook",
+    "src/cli/commands/history/history.cppm": "telar.cli.commands.history",
+    "src/cli/commands/hooks/command/command.cppm": "telar.cli.commands.hooks.command",
+    "src/cli/commands/integration/settings/settings.cppm": "telar.cli.commands.integration.settings",
+    "src/cli/console/command_error/command_error.cppm": "telar.cli.console.command_error",
+    "src/cli/commands/hooks/session/session.cppm": "telar.cli.commands.hooks.session",
     "src/gui/platform/platform.cppm": "telar.gui.platform",
     "src/gui/platform/platform-clipboard_image_pipe.cppm": "telar.gui.platform:clipboard_image_pipe",
     "src/gui/platform/platform-clipboard_image_transfer.cppm": "telar.gui.platform:clipboard_image_transfer",
@@ -406,7 +406,7 @@
     "lib/render/document/document.cppm": "telar.render.document",
     "lib/render/terminal/terminal.cppm": "telar.render.terminal",
     "lib/render/markdown/markdown.cppm": "telar.render.markdown",
-    "src/cli/render/render.cppm": "telar.cli.render",
+    "src/cli/console/render/render.cppm": "telar.cli.console.render",
     "lib/wire/vocabulary/vocabulary.cppm": "telar.wire.vocabulary",
     "lib/sys/posix/posix.cppm": "telar.sys.posix",
     "lib/sys/socket/socket.cppm": "telar.sys.socket",
@@ -1197,69 +1197,59 @@
       "telar.wire.vocabulary",
       "telar.wire.worktrees"
     ],
-    "src/cli/base": [
-      "telar.cli.base.command_error"
+    "src/cli/commands/history": [
+      "telar.cli.commands.history"
     ],
-    "src/cli/command_limit": [
-      "telar.cli.command_limit"
+    "src/cli/commands/hook": [
+      "telar.cli.commands.hook"
     ],
-    "src/cli/control_session": [
-      "telar.cli.control_session"
+    "src/cli/commands/hooks": [
+      "telar.cli.commands.hooks.command",
+      "telar.cli.commands.hooks.session"
     ],
-    "src/cli/history": [
-      "telar.cli.history"
+    "src/cli/commands/integration": [
+      "telar.cli.commands.integration.settings"
     ],
-    "src/cli/hook": [
-      "telar.cli.hook"
+    "src/cli/commands/launch_commands": [
+      "telar.cli.commands.launch_commands"
     ],
-    "src/cli/hooks": [
-      "telar.cli.hooks.command",
-      "telar.cli.hooks.session"
+    "src/cli/commands/machine": [
+      "telar.cli.commands.machine"
     ],
-    "src/cli/integration": [
-      "telar.cli.integration.settings"
+    "src/cli/commands/machine_ssh": [
+      "telar.cli.commands.machine_ssh"
     ],
-    "src/cli/launch_commands": [
-      "telar.cli.launch_commands"
+    "src/cli/commands/monitor": [
+      "telar.cli.commands.monitor"
     ],
-    "src/cli/machine": [
-      "telar.cli.machine"
+    "src/cli/commands/plugin": [
+      "telar.cli.commands.plugin"
     ],
-    "src/cli/machine_ssh": [
-      "telar.cli.machine_ssh"
+    "src/cli/commands/project_setup": [
+      "telar.cli.commands.project_setup"
     ],
-    "src/cli/monitor": [
-      "telar.cli.monitor"
+    "src/cli/commands/tab": [
+      "telar.cli.commands.tab"
     ],
-    "src/cli/output": [
-      "telar.cli.output"
+    "src/cli/commands/window": [
+      "telar.cli.commands.window"
     ],
-    "src/cli/plugin": [
-      "telar.cli.plugin"
+    "src/cli/commands/worktree": [
+      "telar.cli.commands.worktree"
     ],
-    "src/cli/project_setup": [
-      "telar.cli.project_setup"
+    "src/cli/commands/worktree_git": [
+      "telar.cli.commands.worktree_git"
     ],
-    "src/cli/render": [
-      "telar.cli.render"
+    "src/cli/console": [
+      "telar.cli.console.command_error",
+      "telar.cli.console.command_limit",
+      "telar.cli.console.output",
+      "telar.cli.console.render"
     ],
-    "src/cli/runtime_observer": [
-      "telar.cli.runtime_observer"
-    ],
-    "src/cli/server": [
-      "telar.cli.server"
-    ],
-    "src/cli/tab": [
-      "telar.cli.tab"
-    ],
-    "src/cli/window": [
-      "telar.cli.window"
-    ],
-    "src/cli/worktree": [
-      "telar.cli.worktree"
-    ],
-    "src/cli/worktree_git": [
-      "telar.cli.worktree_git"
+    "src/cli/session": [
+      "telar.cli.session.control_session",
+      "telar.cli.session.runtime_observer",
+      "telar.cli.session.server"
     ],
     "src/gui/application": [
       "telar.gui.application"

@@ -32,7 +32,7 @@ NAMES = ('justfile', '.clangd', '.tbc.json')
 SKIPPED = ('vendor/', 'site/', 'tools/diagram-renderer/', 'tools/tests/', 'docs/audits/', 'TODO.md',
            'tools/move-cpp-domain.py')
 # A line that selects tests by label.
-LABEL_LINE_RE = re.compile(r'ctest|tools/cpp test|just [\w-]*test|-LE? |LABELS?\b')
+LABEL_LINE_RE = re.compile(r'ctest|tools/cpp test|just [\w-]*test|-LE? |LABELS?\b|add_test\(|set_tests_properties\(')
 CODE = ('.cpp', '.cppm', '.hpp', '.h', '.mm', '.m', '.c')
 CMAKE = ('.cmake', 'CMakeLists.txt')
 

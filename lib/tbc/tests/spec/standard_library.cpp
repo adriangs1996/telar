@@ -90,7 +90,7 @@ std::string_view uniqueGetRead(std::string_view text) {
 
 // CASE: std.value_or_dangling
 // PAIR: std.value_or
-// SOURCE: src/cli/hook/hook.cppm :: optionalText
+// SOURCE: src/cli/commands/hook/hook.cppm :: optionalText
 // STATUS: implemented
 // CONTRACT: value_or copies a contained view, keeping that view's dependency.
 // SCENARIO: The contained view's source dies before the copy is read.
@@ -108,7 +108,7 @@ void valueOrDangling() {
 
 // CASE: std.value_or_temporary
 // PAIR: std.value_or
-// SOURCE: src/cli/hook/hook.cppm :: optionalText
+// SOURCE: src/cli/commands/hook/hook.cppm :: optionalText
 // STATUS: implemented
 // CONTRACT: value_or on a temporary optional does not borrow the temporary optional.
 // SCENARIO: The copied view outlives the optional that held it; accept.
@@ -264,7 +264,7 @@ const std::string_view* getIfParameter(const std::variant<std::string_view, int>
 
 // CASE: std.map_escape
 // PAIR: std.map
-// SOURCE: src/cli/hooks/command/command.cppm :: Object::find
+// SOURCE: src/cli/commands/hooks/command/command.cppm :: Object::find
 // STATUS: implemented
 // CONTRACT: Associative containers are tracked like other standard containers.
 // SCENARIO: A view into a local map's string is returned.
@@ -277,7 +277,7 @@ std::string_view mapEscape() {
 
 // CASE: std.map_view
 // PAIR: std.map
-// SOURCE: src/cli/hooks/command/command.cppm :: Object::find
+// SOURCE: src/cli/commands/hooks/command/command.cppm :: Object::find
 // STATUS: implemented
 // CONTRACT: A view stored in a map keeps its own source rather than the map.
 // SCENARIO: The mapped view outlives the local map; accept.

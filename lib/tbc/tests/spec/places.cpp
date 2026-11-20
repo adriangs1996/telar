@@ -201,7 +201,7 @@ void placeElementSlotGrowth(std::vector<std::unique_ptr<places::pane>>& panes) {
 
 // CASE: place.nested_child_mutation
 // PAIR: place.nested
-// SOURCE: src/cli/integration/settings/settings.cppm :: HookSettings::installEvents
+// SOURCE: src/cli/commands/integration/settings/settings.cppm :: HookSettings::installEvents
 // STATUS: implemented
 // CONTRACT: Growing a child's own children leaves the child where it is inside its parent.
 // SCENARIO: A child node is extended twice through the same reference; accept.
@@ -215,7 +215,7 @@ void placeNestedChildMutation(places::tree& root) {
 
 // CASE: place.sibling_iteration_mutation
 // PAIR: place.nested
-// SOURCE: src/cli/integration/settings/settings.cppm :: HookSettings::installEvents
+// SOURCE: src/cli/commands/integration/settings/settings.cppm :: HookSettings::installEvents
 // STATUS: implemented
 // CONTRACT: Growing one node's children leaves its siblings, and the iteration over them, in place.
 // SCENARIO: Every child of a node gains a child while the range loop iterates the children; accept.
@@ -229,7 +229,7 @@ void placeSiblingIterationMutation(places::tree& root) {
 
 // CASE: place.nested_grandchild_growth
 // PAIR: place.nested
-// SOURCE: src/cli/integration/settings/settings.cppm :: HookSettings::installEvents
+// SOURCE: src/cli/commands/integration/settings/settings.cppm :: HookSettings::installEvents
 // STATUS: implemented
 // CONTRACT: Growing a child's children can move them, so a reference to a grandchild is invalidated.
 // SCENARIO: A grandchild reference is used after another grandchild is added.
@@ -1149,7 +1149,7 @@ int placeWriteThroughCallbackGrows(std::vector<int>& values) {
 
 // CASE: place.write_through_callback_this
 // PAIR: place.write_through_inferred
-// SOURCE: src/cli/hooks/command/command.cpp :: Event (a workspace root is kept from each element of a list)
+// SOURCE: src/cli/commands/hooks/command/command.cpp :: Event (a workspace root is kept from each element of a list)
 // STATUS: implemented
 // CONTRACT: A call through a reference to an object whose callee the checker reads, as a lambda's call operator, reborrows that reference, as Rust calls an `&mut impl FnMut` again and again: it ends other borrows, never the reference's own.
 // SCENARIO: A method hands each element to a consumer that captures this object and changes one of its fields; accept.

@@ -46,12 +46,12 @@ static_assert(true);
 import std;
 import telar.base.memory.allocators;
 import telar.platform.primitives;
-import telar.cli.worktree;
+import telar.cli.commands.worktree;
 import telar.vocabulary;
-import telar.cli.command_limit;
+import telar.cli.console.command_limit;
 import telar.platform.process;
-import telar.cli.worktree_git;
-import telar.cli.command_limit;
+import telar.cli.commands.worktree_git;
+import telar.cli.console.command_limit;
 import telar.base.ds;
 
 namespace {

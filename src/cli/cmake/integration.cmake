@@ -1,5 +1,5 @@
 function(read_integration_asset output path)
-  set(source "${CMAKE_CURRENT_SOURCE_DIR}/integration/assets/${path}")
+  set(source "${CMAKE_CURRENT_SOURCE_DIR}/commands/integration/assets/${path}")
   file(READ "${source}" contents)
   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${source}")
   set(${output} "${contents}" PARENT_SCOPE)
@@ -33,4 +33,4 @@ foreach(neovim_file IN LISTS neovim_files)
   string(APPEND TELAR_NEOVIM_FILES "    NeovimFile{.path = \"${neovim_file}\", .text = R\"TelarAsset(${neovim_text})TelarAsset\"},\n")
 endforeach()
 
-configure_file(integration/assets.inc.in "${CMAKE_CURRENT_BINARY_DIR}/generated/integration_assets.inc" @ONLY)
+configure_file(commands/integration/assets.inc.in "${CMAKE_CURRENT_BINARY_DIR}/generated/integration_assets.inc" @ONLY)

@@ -114,7 +114,7 @@ void pointerReferentLive() {
 
 // CASE: pointer.write_through_dead
 // PAIR: pointer.write_through
-// SOURCE: src/cli/integration/settings/settings.cppm :: installEvents
+// SOURCE: src/cli/commands/integration/settings/settings.cppm :: installEvents
 // STATUS: implemented
 // CONTRACT: Writing through a pointer updates the variable it designates.
 // SCENARIO: A view stored through the pointer outlives its source.
@@ -132,7 +132,7 @@ void pointerWriteThroughDead() {
 
 // CASE: pointer.write_through_live
 // PAIR: pointer.write_through
-// SOURCE: src/cli/integration/settings/settings.cppm :: installEvents
+// SOURCE: src/cli/commands/integration/settings/settings.cppm :: installEvents
 // STATUS: implemented
 // CONTRACT: A view written through a pointer may be read while its source is alive.
 // SCENARIO: The source outlives the read of the designated variable; accept.
@@ -147,7 +147,7 @@ void pointerWriteThroughLive(std::string_view text) {
 
 // CASE: pointer.arrow_call_dead
 // PAIR: pointer.arrow_call
-// SOURCE: src/cli/integration/settings/settings.cppm :: installEvents
+// SOURCE: src/cli/commands/integration/settings/settings.cppm :: installEvents
 // STATUS: implemented
 // CONTRACT: A method called through a pointer writes the pointee's state.
 // SCENARIO: The pointee keeps a view of a source that dies before the read.
@@ -165,7 +165,7 @@ void pointerArrowCallDead() {
 
 // CASE: pointer.arrow_call_live
 // PAIR: pointer.arrow_call
-// SOURCE: src/cli/integration/settings/settings.cppm :: installEvents
+// SOURCE: src/cli/commands/integration/settings/settings.cppm :: installEvents
 // STATUS: implemented
 // CONTRACT: State written through a pointer may be read while its source is alive.
 // SCENARIO: The kept source outlives the read; accept.
@@ -635,7 +635,7 @@ bool cFunctionArgument() {
 
 // CASE: pointer.function_pointer_resource
 // PAIR: pointer.c_function
-// SOURCE: src/cli/tab/tab.cppm :: sqlite3_column_text through a loaded symbol
+// SOURCE: src/cli/commands/tab/tab.cppm :: sqlite3_column_text through a loaded symbol
 // STATUS: implemented
 // CONTRACT: A C function's pointer borrows only arguments of its own pointee type; otherwise, like a raw pointer from Rust's FFI, it names an unchecked resource.
 // SCENARIO: A column read through a function pointer is a library row, not a view of the statement handle; accept.

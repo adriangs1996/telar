@@ -86,7 +86,7 @@ std::size_t crossUnitTruncate(cross_unit::node<int>& root) {
 
 // CASE: cross_unit.virtual_const_visit_keeps_children
 // PAIR: cross_unit.virtual
-// SOURCE: src/cli/tab/tab.cppm :: HistoryPathVisitor
+// SOURCE: src/cli/commands/tab/tab.cppm :: HistoryPathVisitor
 // STATUS: implemented
 // CONTRACT: Virtual or final, a call is known by its declaration, which binds every override.
 // SCENARIO: The visitor receives the node by reference to const, so no override can invalidate it; accept.
@@ -101,7 +101,7 @@ std::size_t crossUnitVirtualConstVisit(cross_unit::visitor& visit, cross_unit::n
 
 // CASE: cross_unit.final_mutable_visit_ends_children
 // PAIR: cross_unit.virtual
-// SOURCE: src/cli/tab/tab.cppm :: HistoryPathVisitor
+// SOURCE: src/cli/commands/tab/tab.cppm :: HistoryPathVisitor
 // STATUS: implemented
 // CONTRACT: Virtual or final, a call is known by its declaration, which binds every override.
 // SCENARIO: The final counter's prune only counts, but it receives the node by mutable reference, so the call can invalidate it; reject at the call.

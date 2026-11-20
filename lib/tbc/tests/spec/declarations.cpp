@@ -528,7 +528,7 @@ std::size_t declarationLendingOutputDead(const std::string& text) {
 
 // CASE: declaration.value_parameter_copy
 // PAIR: declaration.parameter_write
-// SOURCE: src/cli/window/window.cpp :: plugins
+// SOURCE: src/cli/commands/window/window.cpp :: plugins
 // STATUS: implemented
 // CONTRACT: Only a parameter that designates the caller's object hands a write back to the caller; a parameter passed by value is the callee's own copy.
 // SCENARIO: A view passed by value is pointed at another argument and read before the function returns; accept.
@@ -541,7 +541,7 @@ std::size_t declarationValueParameterCopy(std::string_view text, const std::stri
 
 // CASE: declaration.reference_parameter_kept
 // PAIR: declaration.parameter_write
-// SOURCE: src/cli/window/window.cpp :: plugins
+// SOURCE: src/cli/commands/window/window.cpp :: plugins
 // STATUS: implemented
 // CONTRACT: Only a parameter that designates the caller's object hands a write back to the caller; a parameter passed by value is the callee's own copy.
 // SCENARIO: A view passed by reference is pointed at another argument the declaration does not let it keep; reject the write.

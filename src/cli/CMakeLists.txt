@@ -25,22 +25,30 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 endif()
 
 # The domains of docs/build/modules.json (process_layers), lowest first.
-foreach(domain IN ITEMS base output render command_limit control_session monitor runtime_observer server
-    worktree_git history hooks integration plugin project_setup window hook machine_ssh tab worktree
-    machine launch_commands)
+#   console/   what a command prints and how it fails
+#   session/   reaching a runtime: finding or starting it and exchanging requests
+#   commands/  one folder per family of `telar FAMILY ...`
+foreach(domain IN ITEMS console/command_error console/output console/render console/command_limit
+    session/control_session commands/monitor session/runtime_observer session/server
+    commands/worktree_git commands/history commands/hooks commands/integration commands/plugin
+    commands/project_setup commands/window commands/hook commands/machine_ssh commands/tab
+    commands/worktree commands/machine commands/launch_commands)
   add_subdirectory(${domain})
 endforeach()
 
 # The launch commands' bodies, which only telar links.
-add_library(cli-launch STATIC launch_commands/launch_commands.cpp launch_commands/completions.cpp)
-target_link_libraries(cli-launch PUBLIC cli-output cli-server cli-plugin cli-window cli-machine_ssh cli-machine cli-launch_commands)
+add_library(cli-launch STATIC commands/launch_commands/launch_commands.cpp commands/launch_commands/completions.cpp)
+target_link_libraries(cli-launch PUBLIC cli-console-output cli-session-server cli-commands-plugin
+  cli-commands-window cli-commands-machine_ssh cli-commands-machine cli-commands-launch_commands)
 # `completions check` compiles a spec with the matcher the runtime uses.
 target_link_libraries(cli-launch PRIVATE ebnf::ebnf)
 
 add_executable(telar main.cpp)
-target_link_libraries(telar PRIVATE cli-base cli-output cli-render cli-command_limit cli-control_session cli-monitor
-  cli-runtime_observer cli-server cli-worktree_git cli-history cli-hooks cli-integration cli-plugin
-  cli-project_setup cli-window cli-hook cli-tab cli-worktree cli-launch_commands cli-launch)
+target_link_libraries(telar PRIVATE cli-console-command_error cli-console-output cli-console-render
+  cli-console-command_limit cli-session-control_session cli-commands-monitor cli-session-runtime_observer
+  cli-session-server cli-commands-worktree_git cli-commands-history cli-commands-hooks
+  cli-commands-integration cli-commands-plugin cli-commands-project_setup cli-commands-window
+  cli-commands-hook cli-commands-tab cli-commands-worktree cli-commands-launch_commands cli-launch)
 # Nothing loads symbols from telar. Exporting none spares dyld from coalescing
 # every weak template instantiation against libc++ on each start, which
 # `hook` pays per agent event.

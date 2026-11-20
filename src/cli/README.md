@@ -31,8 +31,11 @@ The helper links `telar-config`, Lua and libghostty for agent icon width validat
 these dependencies are kept out of the hook process. Its Lua bootstrap is
 `lib/config/bootstrap.lua`, shared with the runtime and the GUI.
 
-`help/` holds every help text `telar` prints, and `tools/` the regression and
-latency checks.
+The sources are in three folders. `commands/` has one folder per family of
+`telar FAMILY ...`. `session/` reaches a runtime: finding or starting it and
+exchanging requests with it. `console/` is what a command prints and how it
+fails. `help/` holds every help text `telar` prints, and `tools/` the regression
+and latency checks.
 
 [Execution and runtime contracts](exec-runtime.md) documents the interfaces for
 remote machine/worktree commands, the deliberate native wire differences and
