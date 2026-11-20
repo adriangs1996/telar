@@ -94,12 +94,16 @@ namespace {
     return socket;
   }
 
+  // Sends `event` as one frame in one write: the service may close a peer the frame breaks its role
+  // as soon as it reads the prefix, which would fail a second write.
   void publish(int socket, const traffic::Event& event) {
     std::vector<Byte> output(Limits::frame_bytes);
     const auto body = Protocol::encode(output, event);
+    const auto prefix = Protocol::prefix(body.size());
+    std::vector<Byte> frame(prefix.begin(), prefix.end());
 
-    sendAll(socket, Protocol::prefix(body.size()));
-    sendAll(socket, body);
+    frame.insert(frame.end(), body.begin(), body.end());
+    sendAll(socket, frame);
   }
 
   struct Socket {
@@ -159,11 +163,8 @@ namespace {
     }
 
     const ds::Array<Byte, 4> body{'s', 'u', 'b', 's'};
-    std::vector<Byte> output(Limits::frame_bytes);
-    const auto frame = Protocol::encode(output, traffic::Event{.link_type = DLT_RAW, .original_bytes = body.size(), .interface = "subscriber", .bytes = body});
 
-    sendAll(watcher.get(), Protocol::prefix(frame.size()));
-    sendAll(watcher.get(), frame);
+    publish(watcher.get(), traffic::Event{.link_type = DLT_RAW, .original_bytes = body.size(), .interface = "subscriber", .bytes = body});
     closed(watcher.get());
   }
 

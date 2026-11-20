@@ -67,15 +67,6 @@ namespace {
 
   void noRoots(MonitorWork&) {}
 
-  // Waits for the worker and hands its outcome to `reply`.
-  template <typename Reply>
-  void finish(Service& service, Reply&& reply) {
-    pollfd completion{.fd = service.descriptor(), .events = POLLIN, .revents = 0};
-
-    check(::poll(&completion, 1, 2000) == 1);
-    service.collect(reply);
-  }
-
   // A cold query waits for two readings, a second apart, and is answered after the second.
   void testColdQueryWaitsForTwoReadings() {
     telar::testing::TestMemory adapter;
@@ -94,10 +85,10 @@ namespace {
 
     service.query(client.session().id, QueryMonitor{.request_id = 5, .sections = MonitorSections::host | MonitorSections::processes, .limit = 10}, started);
     check(service.tick(started, noRoots) == Service::warm_interval);
-    finish(service, reply);
+    collectCompleted(service, reply);
     check(replies == 0);
     check(service.tick(started + Service::warm_interval, noRoots) == Service::sample_interval);
-    finish(service, reply);
+    collectCompleted(service, reply);
     check(replies == 1);
 
     const auto snapshot = client.receive<MonitorSnapshot>();
@@ -118,7 +109,7 @@ namespace {
     check(service.tick(started, noRoots) == std::chrono::hours{1});
     service.query(1, QueryMonitor{.request_id = 1, .sections = MonitorSections::host}, started);
     service.tick(started, noRoots);
-    finish(service, [](std::uint64_t, const auto&) {});
+    collectCompleted(service, [](std::uint64_t, const auto&) {});
     check(service.tick(started + Service::idle_after, noRoots) == std::chrono::hours{1});
   }
 
@@ -139,7 +130,7 @@ namespace {
 
     service.act({.client = client.session().id, .request_id = 3, .process = {.pid = 4'000'009}, .signal = ProcessSignal::terminate});
     service.tick(started, noRoots);
-    finish(service, reply);
+    collectCompleted(service, reply);
 
     const auto gone = client.receive<RequestFailed>();
 
@@ -155,7 +146,7 @@ namespace {
       work.roots.atMut(work.root_count++) = {.process = ::getpid(), .pane_id = 9, .agent = true};
     });
 
-    finish(service, reply);
+    collectCompleted(service, reply);
     check(client.receive<RequestFailed>().code == FailureCode::foreign_process);
   }
 

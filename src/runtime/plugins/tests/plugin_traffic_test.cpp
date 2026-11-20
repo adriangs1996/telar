@@ -231,6 +231,32 @@ return {}
     return ::recv(descriptor, &value, 1, 0) == 0;
   }
 
+  // Reads `bytes` whole from a channel the service hands out non-blocking, where MSG_WAITALL returns
+  // what has arrived so far.
+  bool receiveExactly(int descriptor, std::span<Byte> bytes) {
+    while (!bytes.empty()) {
+      pollfd ready{descriptor, POLLIN, 0};
+
+      if (::poll(&ready, 1, 5000) <= 0) {
+        return false;
+      }
+
+      const auto count = ::recv(descriptor, bytes.data(), bytes.size(), 0);
+
+      if (count < 0 && (errno == EAGAIN || errno == EINTR)) {
+        continue;
+      }
+
+      if (count <= 0) {
+        return false;
+      }
+
+      bytes = bytes.subspan(static_cast<std::size_t>(count));
+    }
+
+    return true;
+  }
+
   void packageChannels() {
     SystemAllocator system;
     BudgetAllocator budget{system, 64 * 1024 * 1024};
@@ -260,12 +286,12 @@ return {}
       check(::poll(&ready, 1, 5000) > 0);
       ds::Array<Byte, traffic::Protocol::prefix_bytes> prefix;
 
-      check(::recv(approved.get(), prefix.dataMut(), prefix.size(), MSG_WAITALL) == static_cast<ssize_t>(prefix.size()));
+      check(receiveExactly(approved.get(), prefix.viewMut()));
       app::FrameReader reader{prefix};
       const auto length = reader.integer<std::uint32_t>();
       std::vector<Byte> reply(length);
 
-      check(::recv(approved.get(), reply.data(), reply.size(), MSG_WAITALL) == static_cast<ssize_t>(reply.size()));
+      check(receiveExactly(approved.get(), reply));
       check(traffic::Protocol::decode(reply).kind == traffic::Kind::ready);
     }
 

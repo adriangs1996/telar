@@ -115,12 +115,13 @@ namespace {
     inline static std::atomic<bool> released = false;
   };
 
+  // Fails at the caller's line, which names what never became ready.
   template <typename Predicate>
-  void await(Predicate ready) {
+  void await(Predicate ready, std::source_location location = std::source_location::current()) {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
 
     while (!ready()) {
-      check(std::chrono::steady_clock::now() < deadline);
+      check(std::chrono::steady_clock::now() < deadline, "not ready within 5 s", location);
       std::this_thread::sleep_for(std::chrono::milliseconds{1});
     }
   }
