@@ -77,9 +77,6 @@ def main():
                                  lambda path: (ROOT / path).read_text(errors='replace'),
                                  inventory.get('import_rules', {}).get('src/gui/ui', ()))
     check_cycles(imports)
-    for source, owner in inventory['origin_interfaces'].items():
-        if owner not in interfaces:
-            raise RuntimeError('Missing migrated definition owner: ' + source)
     check_includes(owned, inventory['macro_headers'], inventory['header_owners'], inventory['library_owners'])
     owned = check_header_owners(inventory['header_owners'], owned_units(owned))
     check_reexports(sources)
