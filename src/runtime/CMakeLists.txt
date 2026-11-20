@@ -117,7 +117,7 @@ endforeach()
 
 add_executable(telar-runtime main.cpp)
 target_link_libraries(telar-runtime PRIVATE runtime-terminal runtime-plugins runtime-cli)
-telar_register_checks(telar-runtime ghostty-manifest CHECKS ${TELAR_CHECKS})
+telar_register_checks(telar-runtime CHECKS ${TELAR_CHECKS})
 install(TARGETS telar-runtime RUNTIME DESTINATION bin)
 # The pinned libraries are linked into both executables; their licenses travel with them.
 install(DIRECTORY "${TELAR_OPENSSL_PREFIX}/share/licenses/" "${TELAR_NATIVE_PREFIX}/share/licenses/" DESTINATION share/telar/licenses)

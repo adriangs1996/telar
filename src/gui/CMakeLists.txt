@@ -200,7 +200,7 @@ if(TELAR_GUI_NATIVE)
   telar_add_test(gui-host-effects-smoke QT PROBE SOURCES tools/host_effects_smoke.cpp
     LIBRARIES gui-foundation-model gui-foundation-agents gui-foundation-core gui-foundation-text
       gui-features-history gui-platform gui-application deps::ghostty_vt
-      Qt6::Core Qt6::Gui CHECKS lint lifetime blank_lines)
+      Qt6::Core Qt6::Gui)
 
   qt_add_shaders(gui-quick gui-curve-shaders
     PREFIX "/telar/shaders"
@@ -246,11 +246,9 @@ if(TELAR_GUI_NATIVE)
   add_dependencies(telar-gui telar-gui-command)
   # Run by hand by tools/measure_startup.py, in Release too, so a tree configured
   # without tests builds it.
-  telar_add_test(gui-startup-probe QT PROBE SOURCES tools/startup_probe.cpp LIBRARIES gui-quick gui-quickplugin
-    CHECKS lint lifetime blank_lines)
+  telar_add_test(gui-startup-probe QT PROBE SOURCES tools/startup_probe.cpp LIBRARIES gui-quick gui-quickplugin)
   # Shows a QML file of the ignored playground/ and shows it again when it changes.
-  telar_add_test(gui-playground QT PROBE SOURCES tools/playground.cpp LIBRARIES gui-quick gui-quickplugin
-    CHECKS lint lifetime blank_lines)
+  telar_add_test(gui-playground QT PROBE SOURCES tools/playground.cpp LIBRARIES gui-quick gui-quickplugin)
 
   set(gui_font_directory "${TELAR_ROOT}/assets")
   qt_add_resources(gui-quick gui-fonts

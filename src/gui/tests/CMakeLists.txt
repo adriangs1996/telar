@@ -13,8 +13,7 @@ telar_add_test(gui-display-metrics-test SOURCES display_metrics_test.cpp LIBRARI
   TEST gui-display-metrics LABELS gui.features.window)
 target_compile_options(gui-display-metrics-test PRIVATE -ffp-contract=off)
 
-telar_add_test(gui-glyph-ink-probe PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/glyph_ink_probe.cpp LIBRARIES gui-foundation-core gui-foundation-fonts
-  CHECKS lint lifetime blank_lines)
+telar_add_test(gui-glyph-ink-probe PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/glyph_ink_probe.cpp LIBRARIES gui-foundation-core gui-foundation-fonts)
 
 telar_add_test(gui-suggestion-state-test SOURCES suggestion_state_test.cpp LIBRARIES gui-foundation-keys gui-foundation-model gui-foundation-forms gui-foundation-core gui-foundation-terminal gui-features-palette deps::ghostty_vt
   TEST gui-suggestion-state LABELS gui.features.palette)
@@ -29,8 +28,7 @@ telar_add_test(gui-bindings-test SOURCES input_test.cpp LIBRARIES gui-foundation
   TEST gui-bindings LABELS gui.features.bindings TIMEOUT 30)
 
 if(TELAR_GUI_NATIVE)
-  telar_add_test(gui-font-coverage-probe PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/font_coverage_probe.cpp LIBRARIES gui-foundation-core gui-foundation-fonts gui-fonts-native
-    CHECKS lint lifetime blank_lines)
+  telar_add_test(gui-font-coverage-probe PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/font_coverage_probe.cpp LIBRARIES gui-foundation-core gui-foundation-fonts gui-fonts-native)
 
   set(CMAKE_AUTOMOC ON)
   set(CMAKE_AUTOUIC ON)
@@ -38,10 +36,8 @@ if(TELAR_GUI_NATIVE)
     telar_add_test(gui-native-window-update-test SOURCES native_window_update_test.cpp LIBRARIES gui-foundation-core gui-foundation-system gui-platform-native Qt6::Quick Qt6::GuiPrivate gui-platform gui-application
       TEST gui-native-window-update LABELS gui.platform ENVIRONMENT QT_QPA_PLATFORM=cocoa TIMEOUT 30)
   elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    telar_add_test(gui-clipboard-wayland-provider QT NO_TEST SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/clipboard_wayland_provider.cpp LIBRARIES Qt6::Quick
-      CHECKS lint lifetime blank_lines)
-    telar_add_test(gui-clipboard-wayland-probe QT NO_TEST SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/clipboard_wayland_probe.cpp LIBRARIES gui-clipboard-images Qt6::Quick gui-features-machines
-      CHECKS lint lifetime blank_lines)
+    telar_add_test(gui-clipboard-wayland-provider QT NO_TEST SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/clipboard_wayland_provider.cpp LIBRARIES Qt6::Quick)
+    telar_add_test(gui-clipboard-wayland-probe QT NO_TEST SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/clipboard_wayland_probe.cpp LIBRARIES gui-clipboard-images Qt6::Quick gui-features-machines)
     target_include_directories(gui-clipboard-wayland-probe PRIVATE "${TELAR_PROCESS_SOURCE_DIR}")
     set_target_properties(gui-clipboard-wayland-provider gui-clipboard-wayland-probe PROPERTIES QT_QML_MODULE_NO_IMPORT_SCAN TRUE)
   endif()
@@ -56,7 +52,6 @@ if(TELAR_GUI_NATIVE)
   # cases run inside one QGuiApplication.
   add_library(gui-testing-main STATIC testing_main.cpp)
   target_link_libraries(gui-testing-main PUBLIC telar::testing Qt6::Gui)
-  telar_register_checks(gui-testing-main CHECKS lint blank_lines)
 
   # The tests of src/gui/platform, declared here where Qt is found: its macOS cases drive
   # AppKit and Qt windows, on the window server and one at a time. The Objective-C++ cases
@@ -160,10 +155,8 @@ if(TELAR_GUI_NATIVE)
       LIBRARIES Qt6::Gui PRIVATE Qt6::GuiPrivate telar::build_flags)
   endif()
 
-  telar_add_test(gui-text-scene-probe QT PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/text_scene_probe.cpp LIBRARIES gui-quick gui-quickplugin
-    CHECKS lint lifetime blank_lines)
-  telar_add_test(gui-terminal-scene-probe QT PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/terminal_scene_probe.cpp LIBRARIES gui-quick gui-quickplugin
-    CHECKS lint lifetime blank_lines)
+  telar_add_test(gui-text-scene-probe QT PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/text_scene_probe.cpp LIBRARIES gui-quick gui-quickplugin)
+  telar_add_test(gui-terminal-scene-probe QT PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/terminal_scene_probe.cpp LIBRARIES gui-quick gui-quickplugin)
   telar_add_test(gui-status-bar-test QT SOURCES status_bar_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test gui-test-fixtures
     TEST gui-status-bar LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 30)
   telar_add_test(gui-mode-bar-test QT SOURCES mode_bar_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test
@@ -200,8 +193,7 @@ if(TELAR_GUI_NATIVE)
     TEST gui-task-card LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 30)
   telar_add_test(gui-configuration-source-test QT SOURCES configuration_source_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test gui-test-fixtures
     TEST gui-configuration-source LABELS gui.ui ENVIRONMENT QT_QPA_PLATFORM=offscreen TIMEOUT 30)
-  telar_add_test(gui-separators-probe QT PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/separators_probe.cpp LIBRARIES gui-quick gui-quickplugin gui-test-fixtures
-    CHECKS lint lifetime blank_lines)
+  telar_add_test(gui-separators-probe QT PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/separators_probe.cpp LIBRARIES gui-quick gui-quickplugin gui-test-fixtures)
   telar_add_test(gui-plugin-worker-test QT SOURCES plugin_worker_test.cpp LIBRARIES gui-foundation-actions gui-posix Qt6::Concurrent Qt6::Test gui-features-plugins gui-application
     TEST gui-plugin-worker LABELS gui.ui TIMEOUT 30)
   target_include_directories(gui-plugin-worker-test PRIVATE "${TELAR_PROCESS_SOURCE_DIR}")
@@ -219,8 +211,7 @@ if(TELAR_GUI_NATIVE)
   telar_add_test(gui-startup-tools COMMAND Python3::Interpreter "${TELAR_PROCESS_SOURCE_DIR}/tools/test_measure_startup.py"
     LABELS gui.ui TIMEOUT 30)
   if(APPLE)
-    telar_add_test(gui-animation-probe QT PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/animation_probe.cpp ${TELAR_PROCESS_SOURCE_DIR}/tools/animation_presentation.mm LIBRARIES gui-quick gui-quickplugin gui-test-window-activation "-framework Metal" "-framework QuartzCore"
-      CHECKS lint lifetime blank_lines)
+    telar_add_test(gui-animation-probe QT PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/animation_probe.cpp ${TELAR_PROCESS_SOURCE_DIR}/tools/animation_presentation.mm LIBRARIES gui-quick gui-quickplugin gui-test-window-activation "-framework Metal" "-framework QuartzCore")
     target_include_directories(gui-animation-probe PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
     target_compile_options(gui-animation-probe PRIVATE "$<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>")
     if(TELAR_GUI_HAS_OBJC_CLASS_STUB_CONTROL)

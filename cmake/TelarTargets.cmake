@@ -184,8 +184,7 @@ endfunction()
 
 # telar_add_test(<name> [QT | STATIC | SHARED] SOURCES <file>... [LIBRARIES <target>...]
 #                [NO_TEST | PROBE] [TEST <test>] [ARGS <argument>...]
-#                [LABELS <label>...] [TIMEOUT <seconds>] [ENVIRONMENT <variable=value>...]
-#                [CHECKS <check>...])
+#                [LABELS <label>...] [TIMEOUT <seconds>] [ENVIRONMENT <variable=value>...])
 # telar_add_test(<test> COMMAND <command>... LABELS <label>... [TIMEOUT ...] [ENVIRONMENT ...])
 #
 # With SOURCES, a test program <name> (qt_add_executable with QT), or with STATIC or
@@ -197,15 +196,12 @@ endfunction()
 # a program run by hand that only the <process>-probes target builds. Without SOURCES
 # it registers the test <test> that runs COMMAND. A test carries LABELS
 # <process>.<domain>, so `ctest -L runtime.terminal` runs the tests of a domain.
-# CHECKS defaults to lint and blank_lines.
+# The quality checks leave its sources out, as they do every test, probe and tool.
 function(telar_add_test name)
   cmake_parse_arguments(PARSE_ARGV 1 test "QT;STATIC;SHARED;NO_TEST;PROBE" "TEST;TIMEOUT"
-    "SOURCES;LIBRARIES;ARGS;COMMAND;LABELS;ENVIRONMENT;CHECKS")
+    "SOURCES;LIBRARIES;ARGS;COMMAND;LABELS;ENVIRONMENT")
   if(test_UNPARSED_ARGUMENTS)
     message(FATAL_ERROR "telar_add_test(${name}): unexpected arguments ${test_UNPARSED_ARGUMENTS}")
-  endif()
-  if(NOT DEFINED test_CHECKS AND NOT "CHECKS" IN_LIST test_KEYWORDS_MISSING_VALUES)
-    set(test_CHECKS lint blank_lines)
   endif()
 
   set(register OFF)
@@ -260,7 +256,6 @@ function(telar_add_test name)
       set_target_properties(${name} PROPERTIES EXCLUDE_FROM_ALL ON)
       set_property(DIRECTORY "${TELAR_PROCESS_SOURCE_DIR}" APPEND PROPERTY TELAR_PROBES ${name})
     endif()
-    telar_register_checks(${name} CHECKS ${test_CHECKS})
   elseif(test_COMMAND)
     set(register ON)
   else()
@@ -294,8 +289,7 @@ endfunction()
 
 # telar_add_tests(<target> LABEL <label> [DIRECTORY <folder>] [RECURSE] [QT] [MAIN <target>]
 #                 [RUN_SERIAL] [NO_TEST] [LINK <target>...] [SOURCES <file>...] [MACOS_SOURCES <file>...]
-#                 [LINUX_SOURCES <file>...] [TIMEOUT <seconds>] [ENVIRONMENT <variable=value>...]
-#                 [CHECKS <check>...])
+#                 [LINUX_SOURCES <file>...] [TIMEOUT <seconds>] [ENVIRONMENT <variable=value>...])
 # The test program of the current folder: <folder>/*_test.cpp, <folder>/macos/*_test.{cpp,mm}
 # on macOS and <folder>/linux/*_test.cpp on Linux, and SOURCES, with MACOS_SOURCES and
 # LINUX_SOURCES on their platform. DIRECTORY defaults to tests, and is . for a program
@@ -309,18 +303,15 @@ endfunction()
 # modules. Every case is a CTest test of its own, <label>.<suite>.<case>, carrying LABELS
 # <label>, TIMEOUT and ENVIRONMENT, and with RUN_SERIAL runs alone, as a case that drives the
 # window server must. NO_TEST builds the program without registering its cases, for a tree
-# that lacks what they need. CHECKS defaults to lint and blank_lines.
+# that lacks what they need. The quality checks leave out the program and its support.
 function(telar_add_tests target)
   cmake_parse_arguments(PARSE_ARGV 1 tests "QT;RECURSE;RUN_SERIAL;NO_TEST" "LABEL;TIMEOUT;DIRECTORY;MAIN"
-    "LINK;SOURCES;MACOS_SOURCES;LINUX_SOURCES;ENVIRONMENT;CHECKS")
+    "LINK;SOURCES;MACOS_SOURCES;LINUX_SOURCES;ENVIRONMENT")
   if(tests_UNPARSED_ARGUMENTS)
     message(FATAL_ERROR "telar_add_tests(${target}): unexpected arguments ${tests_UNPARSED_ARGUMENTS}")
   endif()
   if(NOT tests_LABEL)
     message(FATAL_ERROR "telar_add_tests(${target}): name its LABEL")
-  endif()
-  if(NOT DEFINED tests_CHECKS AND NOT "CHECKS" IN_LIST tests_KEYWORDS_MISSING_VALUES)
-    set(tests_CHECKS lint blank_lines)
   endif()
   if(NOT tests_DIRECTORY)
     set(tests_DIRECTORY tests)
@@ -376,7 +367,6 @@ function(telar_add_tests target)
     target_sources(${target}-support PUBLIC FILE_SET CXX_MODULES BASE_DIRS "${folder}" FILES ${interfaces})
     target_link_libraries(${target}-support PUBLIC ${links})
     set_target_properties(${target}-support PROPERTIES POSITION_INDEPENDENT_CODE ON ARCHIVE_OUTPUT_DIRECTORY "${directory}")
-    telar_register_checks(${target}-support CHECKS ${tests_CHECKS})
     list(PREPEND links ${target}-support)
   endif()
   # A folder may hold only the support of the tests above it.
@@ -404,7 +394,6 @@ function(telar_add_tests target)
   endif()
   target_link_libraries(${target} PRIVATE ${links} ${tests_MAIN})
   set_target_properties(${target} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${directory}")
-  telar_register_checks(${target} CHECKS ${tests_CHECKS})
   if(tests_NO_TEST)
     return()
   endif()

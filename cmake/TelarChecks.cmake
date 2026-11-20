@@ -12,7 +12,8 @@ include_guard(GLOBAL)
 #   standard_containers  tbc-lint's rule that telar code uses telar::ds, not the standard
 #                     containers it replaces
 #
-# and format and format-check run cmake/scripts/format.cmake over every C++ file Git
+# Tests, their support, the harness of lib/testing, probes and tools register for none of
+# them. format and format-check run cmake/scripts/format.cmake over every C++ file Git
 # tracks.
 
 # The quality checks a target can register for.

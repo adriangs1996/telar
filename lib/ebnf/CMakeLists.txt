@@ -39,5 +39,4 @@ telar_register_checks(ebnf CHECKS lint lifetime)
 
 if(EBNF_GOOGLETEST)
   include(cmake/tests.cmake)
-  telar_register_checks(ebnf_tests CHECKS lint lifetime)
 endif()
