@@ -9,6 +9,30 @@ import telar.base.ds;
 
 namespace telar::runtime {
 
+  namespace {
+
+    // The bits of a byte's low hexadecimal digit.
+    constexpr unsigned low_nibble_mask = 0x0FU;
+
+    // text.substr(offset, count) without its throw: an offset past the end gives an empty view.
+    constexpr std::string_view substring(std::string_view text, std::size_t offset, std::size_t count = std::string_view::npos) noexcept {
+      text.remove_prefix(std::min(offset, text.size()));
+      text.remove_suffix(text.size() - std::min(count, text.size()));
+      return text;
+    }
+
+    tbc::val_a<std::string_view> textOf(tbc::val_a<std::span<const std::uint8_t>> bytes) noexcept {
+      return {reinterpret_cast<const char*>(bytes.data()), bytes.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): char may alias the bytes, and no cast-free view reads bytes as text
+    }
+
+  }
+
+  tbc::val_a<std::span<char>> charsOf(tbc::val_a<std::span<std::uint8_t>> bytes) noexcept {
+#pragma clang unsafe_buffer_usage begin
+    return {reinterpret_cast<char*>(bytes.data()), bytes.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): char may alias the bytes, and no cast-free view writes bytes as text
+#pragma clang unsafe_buffer_usage end
+  }
+
   ProxySecret ProxySecret::generate() noexcept {
     ProxySecret secret;
 
@@ -30,7 +54,7 @@ namespace telar::runtime {
         return ds::none;
       }
 
-      secret.bytes_.atMut(index) = static_cast<std::uint8_t>((*high << 4) | *low);
+      secret.bytes_.atMut(index) = static_cast<std::uint8_t>((*high << 4U) | *low);
     }
 
     return secret;
@@ -44,7 +68,7 @@ namespace telar::runtime {
     volatile unsigned difference = 0;
 
     for (std::size_t index = 0; index < byte_count; ++index) {
-      difference = difference | (bytes_[index] ^ other.bytes_[index]);
+      difference = difference | static_cast<unsigned>(bytes_[index] ^ other.bytes_[index]);
     }
 
     return difference == 0;
@@ -56,8 +80,8 @@ namespace telar::runtime {
     }
 
     for (std::size_t index = 0; index < byte_count; ++index) {
-      destination[index * 2] = hexadecimal[bytes_[index] >> 4];
-      destination[(index * 2) + 1] = hexadecimal[bytes_[index] & 15];
+      destination[index * 2] = hexadecimal[bytes_[index] >> 4U];
+      destination[(index * 2) + 1] = hexadecimal[bytes_[index] & low_nibble_mask];
     }
 
     return std::string_view{destination.data(), hexadecimal_bytes};
@@ -71,16 +95,17 @@ namespace telar::runtime {
       return ds::none;
     }
 
-    auto* end = std::copy(prefix.begin(), prefix.end(), destination.data());
+    std::ranges::copy(prefix, destination.begin());
+    static_cast<void>(formatHexadecimal(destination.subspan(prefix.size(), hexadecimal_bytes)));
+    std::ranges::copy(address, destination.subspan(prefix.size() + hexadecimal_bytes).begin());
 
-    formatHexadecimal({end, hexadecimal_bytes});
-    end += hexadecimal_bytes;
-    end = std::copy(address.begin(), address.end(), end);
-    end = std::to_chars(end, destination.data() + destination.size(), port).ptr;
+    const auto digits = destination.subspan(prefix.size() + hexadecimal_bytes + address.size());
+    const auto* const end = std::to_chars(digits.data(), std::to_address(digits.end()), port).ptr;
+
     return std::string_view{destination.data(), static_cast<std::size_t>(end - destination.data())};
   }
 
-  ProxySecret::ProxySecret() noexcept {}
+  ProxySecret::ProxySecret() noexcept = default;
 
   ds::Option<unsigned> ProxySecret::digit(char character) noexcept {
     const auto position = hexadecimal.find(asciiLower(character));
@@ -89,36 +114,37 @@ namespace telar::runtime {
   }
 
   ds::Option<ProxySecret> ProxyAuthorization::parse(std::string_view head) noexcept {
-    ds::Option<ProxySecret> secret;
-
-    while (const auto value = next(head)) {
-      if (secret) {
-        return ds::none;
-      }
-
-      const auto authorization = trimText(*value, " \t");
-      if (authorization.size() < 7 || !asciiEqualIgnoreCase(authorization.substr(0, 5), "basic") || authorization[5] != ' ') {
-        return ds::none;
-      }
-
-      SensitiveBuffer<decoded_capacity> decoded;
-      const auto length = base64::decode(trimText(authorization.substr(6), " \t"), decoded.bytes());
-      if (!length || *length != userinfo_prefix.size() + ProxySecret::hexadecimal_bytes) {
-        return ds::none;
-      }
-
-      const std::string_view userinfo{reinterpret_cast<const char*>(decoded.bytes().data()), *length};
-      if (!userinfo.starts_with(userinfo_prefix)) {
-        return ds::none;
-      }
-
-      secret = ProxySecret::fromHexadecimal(userinfo.substr(userinfo_prefix.size()));
-      if (!secret) {
-        return ds::none;
-      }
+    // A head presenting no credential, or more than one, authenticates nothing.
+    const auto value = next(head);
+    if (!value || next(head)) {
+      return ds::none;
     }
 
-    return secret;
+    return credential(*value);
+  }
+
+  ds::Option<ProxySecret> ProxyAuthorization::credential(std::string_view value) noexcept {
+    constexpr std::string_view scheme = "basic";
+    // The scheme, the space after it and at least one character of credentials.
+    constexpr std::size_t minimum_bytes = scheme.size() + 2;
+
+    const auto authorization = trimText(value, " \t");
+    if (authorization.size() < minimum_bytes || !asciiEqualIgnoreCase(substring(authorization, 0, scheme.size()), scheme) || authorization[scheme.size()] != ' ') {
+      return ds::none;
+    }
+
+    SensitiveBuffer<decoded_capacity> decoded;
+    const auto length = base64::decode(trimText(substring(authorization, scheme.size() + 1), " \t"), decoded.bytes());
+    if (!length || *length != userinfo_prefix.size() + ProxySecret::hexadecimal_bytes) {
+      return ds::none;
+    }
+
+    const auto userinfo = substring(textOf(decoded.bytes()), 0, *length);
+    if (!userinfo.starts_with(userinfo_prefix)) {
+      return ds::none;
+    }
+
+    return ProxySecret::fromHexadecimal(substring(userinfo, userinfo_prefix.size()));
   }
 
   bool ProxyAuthorization::present(std::string_view head) noexcept {
@@ -126,22 +152,24 @@ namespace telar::runtime {
   }
 
   ds::Option<std::string_view> ProxyAuthorization::next(std::string_view& head) noexcept {
-    auto line_end = head.find("\r\n");
+    constexpr std::string_view line_break = "\r\n";
+
+    auto line_end = head.find(line_break);
     if (line_end == std::string_view::npos) {
       head = {};
       return ds::none;
     }
 
-    head.remove_prefix(line_end + 2);
+    head.remove_prefix(line_end + line_break.size());
     while (!head.empty()) {
-      line_end = head.find("\r\n");
-      const auto line = head.substr(0, line_end);
+      line_end = head.find(line_break);
+      const auto line = substring(head, 0, line_end);
       const auto colon = line.find(':');
-      if (colon != std::string_view::npos && asciiEqualIgnoreCase(line.substr(0, colon), "proxy-authorization")) {
-        return line.substr(colon + 1);
+      if (colon != std::string_view::npos && asciiEqualIgnoreCase(substring(line, 0, colon), "proxy-authorization")) {
+        return substring(line, colon + 1);
       }
 
-      head.remove_prefix(line_end == std::string_view::npos ? head.size() : line_end + 2);
+      head.remove_prefix(line_end == std::string_view::npos ? head.size() : line_end + line_break.size());
     }
 
     return ds::none;
@@ -194,7 +222,7 @@ namespace telar::runtime {
       return ds::none;
     }
 
-    std::string_view text{reinterpret_cast<const char*>(bytes.data()), bytes.size()};
+    auto text = textOf(bytes.view());
 
     while (!text.empty() && (text.back() == '\r' || text.back() == '\n')) {
       text.remove_suffix(1);
@@ -217,8 +245,10 @@ namespace telar::runtime {
     const auto secret = ProxySecret::generate();
     SensitiveBuffer<ProxySecret::hexadecimal_bytes + 1> line;
 
-    secret.formatHexadecimal({reinterpret_cast<char*>(line.bytes().data()), ProxySecret::hexadecimal_bytes});
-    line.bytes().back() = '\n';
+    const auto bytes = line.bytes();
+
+    static_cast<void>(secret.formatHexadecimal(charsOf(bytes).first(ProxySecret::hexadecimal_bytes)));
+    bytes.back() = '\n';
     const auto failure = writePrivateFile(directory, filename, line.bytes(), PrivateFileMode::create_only);
     if (failure != 0) {
       throw SystemError{"Create proxy secret", failure};

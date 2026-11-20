@@ -19,6 +19,7 @@ import telar.wire.agents;
 import telar.wire.history;
 import telar.platform.primitives;
 import telar.runtime.history.command;
+import telar.base.text;
 import telar.base.ds;
 
 // Interface: history/database.cppm
@@ -27,7 +28,7 @@ export {
 
     void checkSqlite(int result);
 
-    enum class DatabaseAccess {
+    enum class DatabaseAccess : std::uint8_t {
       private_history,
       read_only,
     };
@@ -38,6 +39,8 @@ export {
       ~Database();
       Database(const Database&) = delete;
       Database& operator=(const Database&) = delete;
+      Database(Database&&) = delete;
+      Database& operator=(Database&&) = delete;
 
       void execute(const char* sql);
       bool tryExecute(const char* sql) noexcept;
@@ -55,6 +58,8 @@ export {
       ~Statement();
       Statement(const Statement&) = delete;
       Statement& operator=(const Statement&) = delete;
+      Statement(Statement&&) = delete;
+      Statement& operator=(Statement&&) = delete;
 
       void bind(int index, std::int64_t value);
       void bind(int index, std::string_view value);
@@ -75,6 +80,10 @@ export {
     public:
       explicit Transaction(Database& database);
       ~Transaction();
+      Transaction(const Transaction&) = delete;
+      Transaction& operator=(const Transaction&) = delete;
+      Transaction(Transaction&&) = delete;
+      Transaction& operator=(Transaction&&) = delete;
 
       void commit();
 
@@ -148,14 +157,8 @@ export {
       // These identifiers must match existing imports, including the pinned Wyhash variant.
       static std::uint64_t hash(std::uint64_t seed, std::string_view input) noexcept;
 
-      ds::Array<std::uint8_t, 16> session{};
+      ds::Array<std::uint8_t, history_session_bytes> session{};
       std::uint64_t pane = 0;
-
-    private:
-      template <typename Integer>
-      static std::uint64_t read(const char* bytes) noexcept;
-
-      static std::uint64_t mix(std::uint64_t left, std::uint64_t right) noexcept;
     };
 
   }
@@ -371,7 +374,8 @@ export {
       static constexpr std::uint64_t command_hash_seed = 0x74656c6172;
       static constexpr std::size_t maximum_fuzzy_candidates = 10'000;
       static constexpr std::string_view fuzzy_candidate_limit = "10000";
-      static_assert(maximum_fuzzy_candidates == 10'000 && fuzzy_candidate_limit == "10000");
+      // The SQL spells the cap out, so both must name the same number.
+      static_assert(unsignedNumber<std::size_t>(fuzzy_candidate_limit).value_or(0) == maximum_fuzzy_candidates);
       static constexpr std::size_t maximum_stats_candidates = 400;
       static constexpr std::size_t maximum_stats_results = 10;
       // A set: each command hash maps to nothing.

@@ -24,7 +24,12 @@ namespace telar::runtime {
 
     for (std::size_t prefix = overlap; prefix != 0; --prefix) {
       const auto suffix = delimiter.size() - prefix;
-      if (suffix <= incoming.size() && previous.ends_with(delimiter.substr(0, prefix)) && incoming.starts_with(delimiter.substr(prefix))) {
+      auto head = delimiter;
+      auto tail = delimiter;
+
+      head.remove_suffix(suffix);
+      tail.remove_prefix(prefix);
+      if (suffix <= incoming.size() && previous.ends_with(head) && incoming.starts_with(tail)) {
         return suffix;
       }
     }
@@ -47,7 +52,7 @@ namespace telar::runtime {
   std::size_t StreamReadBuffer<Capacity>::copyTo(std::span<std::uint8_t> destination) noexcept {
     const auto count = std::min(destination.size(), length_ - offset_);
     if (count != 0) {
-      std::memcpy(destination.data(), storage_.bytes().data() + offset_, count);
+      std::ranges::copy(storage_.bytes().subspan(offset_, count), destination.begin());
       consume(count);
     }
 
@@ -65,6 +70,6 @@ namespace telar::runtime {
     return offset_ == length_;
   }
 
-  template class StreamReadBuffer<16 * 1024>;
+  template class StreamReadBuffer<stream_read_capacity>;
 
 }

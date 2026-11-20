@@ -5,11 +5,58 @@ import telar.sys.socket;
 
 import telar.platform.net;
 import telar.platform.error;
+import telar.platform.primitives;
 import telar.platform.fs;
 import telar.sys.posix;
 import telar.base.ds;
 
 namespace telar::runtime {
+
+  namespace {
+
+    // Only the owner may read or write the socket and its lock.
+    constexpr mode_t owner_only_mode = 0600;
+    // The permission bits of the group and of everyone else.
+    constexpr mode_t shared_mode_bits = 0077;
+    constexpr int listen_backlog = 32;
+
+    const sockaddr* genericAddress(const sockaddr_un& address) noexcept {
+      return reinterpret_cast<const sockaddr*>(&address); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the socket API passes every address family as a sockaddr
+    }
+
+    // Whether accept found no connection to take yet. POSIX lets EWOULDBLOCK differ from EAGAIN,
+    // though Linux and macOS spell one error twice.
+    bool nothingPending(int error) noexcept {
+      constexpr bool distinct_would_block = EWOULDBLOCK != EAGAIN;
+
+      return error == EAGAIN || (distinct_would_block && error == EWOULDBLOCK) || error == EINTR;
+    }
+
+    // Readies an accepted connection for the event loop; false when its peer may not connect, or
+    // when it closed during admission.
+    bool admit(int connection, LocalPeerPolicy policy) {
+      const auto peer = peerCredentials(connection);
+      if (!peer || (peer->user != ::geteuid() && (policy != LocalPeerPolicy::same_user_or_root || peer->user != 0))) {
+        return false;
+      }
+
+      setCloseOnExec(connection);
+      setNonblocking(connection);
+      try {
+        suppressSocketSignals(connection);
+      } catch (const SystemError& error) {
+        // A peer closing during admission can invalidate its socket options on macOS.
+        if (error.code() != EINVAL) {
+          throw;
+        }
+
+        return false;
+      }
+
+      return true;
+    }
+
+  }
 
   LocalListener::LocalListener(std::string_view path) {
     const auto separator = path.rfind('/');
@@ -17,31 +64,34 @@ namespace telar::runtime {
       throw SystemError{"invalid absolute runtime socket path", EINVAL};
     }
 
-    std::copy(path.begin(), path.end(), path_.dataMut());
+    std::ranges::copy(path, path_.viewMut().begin());
     auto parent = openPrivateParent(path);
 
-    ds::Array<char, sizeof(sockaddr_un::sun_path) + sizeof(".lock")> lock_path{};
+    constexpr std::string_view lock_suffix = ".lock";
+    // Zeroed, so the path ends terminated.
+    ds::Array<char, sizeof(sockaddr_un::sun_path) + lock_suffix.size() + 1> lock_path{};
 
-    std::copy(path.begin(), path.end(), lock_path.dataMut());
-    std::memcpy(lock_path.dataMut() + path.size(), ".lock", sizeof(".lock"));
-    lock_.reset(::open(lock_path.data(), O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0600));
+    std::ranges::copy(path, lock_path.viewMut().begin());
+    std::ranges::copy(lock_suffix, lock_path.viewMut().subspan(path.size()).begin());
+    lock_.reset(::open(lock_path.data(), combineFlags(O_RDWR, O_CREAT, O_CLOEXEC, O_NOFOLLOW), owner_only_mode)); // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
     struct stat lock_info{};
     if (!lock_ || ::fstat(lock_.get(), &lock_info) != 0) {
       throw SystemError{"open runtime socket lock"};
     }
 
-    if (!S_ISREG(lock_info.st_mode) || lock_info.st_uid != ::geteuid() || lock_info.st_nlink != 1 || (lock_info.st_mode & 0077) != 0) {
+    if (!S_ISREG(lock_info.st_mode) || lock_info.st_uid != ::geteuid() || lock_info.st_nlink != 1 || (lock_info.st_mode & shared_mode_bits) != 0) {
       throw SystemError{"unsafe runtime socket lock", EACCES};
     }
 
-    if (::flock(lock_.get(), LOCK_EX | LOCK_NB) != 0) {
+    if (::flock(lock_.get(), combineFlags(LOCK_EX, LOCK_NB)) != 0) {
       throw SystemError{"runtime is already running"};
     }
 
     sockaddr_un address{};
 
     address.sun_family = AF_UNIX;
-    std::memcpy(address.sun_path, path_.data(), path.size() + 1);
+    // The address is zeroed, so the path ends terminated.
+    std::ranges::copy(path, std::span{address.sun_path}.begin());
     removeStaleSocket(address);
     socket_.reset(::socket(AF_UNIX, SOCK_STREAM, 0));
     if (!socket_) {
@@ -50,7 +100,7 @@ namespace telar::runtime {
 
     setCloseOnExec(socket_.get());
     setNonblocking(socket_.get());
-    if (::bind(socket_.get(), reinterpret_cast<const sockaddr*>(&address), sizeof(address)) != 0) {
+    if (::bind(socket_.get(), genericAddress(address), sizeof(address)) != 0) {
       throw SystemError{"bind runtime socket"};
     }
 
@@ -63,7 +113,7 @@ namespace telar::runtime {
     inode_ = socket_info.st_ino;
     bound_ = true;
 
-    if (::chmod(path_.data(), 0600) != 0 || ::listen(socket_.get(), 32) != 0) {
+    if (::chmod(path_.data(), owner_only_mode) != 0 || ::listen(socket_.get(), listen_backlog) != 0) {
       const int failure = sys::lastError();
 
       cleanup();
@@ -91,7 +141,7 @@ namespace telar::runtime {
     }
 
     setNonblocking(probe.get());
-    if (::connect(probe.get(), reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0 || sys::lastError() != ECONNREFUSED) {
+    if (::connect(probe.get(), genericAddress(address), sizeof(address)) == 0 || sys::lastError() != ECONNREFUSED) {
       throw SystemError{"runtime endpoint is in use", EADDRINUSE};
     }
 
@@ -129,29 +179,15 @@ namespace telar::runtime {
   FileDescriptor LocalListener::accept(LocalPeerPolicy policy) {
     FileDescriptor connection{::accept(socket_.get(), nullptr, nullptr)};
     if (!connection) {
-      if (sys::lastError() == EAGAIN || sys::lastError() == EWOULDBLOCK || sys::lastError() == EINTR) {
+      if (nothingPending(sys::lastError())) {
         return connection;
       }
 
       throw SystemError{"accept runtime client"};
     }
 
-    const auto peer = peerCredentials(connection.get());
-    if (!peer || (peer->user != ::geteuid() && !(policy == LocalPeerPolicy::same_user_or_root && peer->user == 0))) {
-      return FileDescriptor{};
-    }
-
-    setCloseOnExec(connection.get());
-    setNonblocking(connection.get());
-    try {
-      suppressSocketSignals(connection.get());
-    } catch (const SystemError& error) {
-      // A peer closing during admission can invalidate its socket options on macOS.
-      if (error.code() != EINVAL) {
-        throw;
-      }
-
-      return FileDescriptor{};
+    if (!admit(connection.get(), policy)) {
+      connection.reset();
     }
 
     return connection;

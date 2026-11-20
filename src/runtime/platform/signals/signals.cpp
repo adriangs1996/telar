@@ -28,19 +28,21 @@ namespace telar::runtime {
   }
 
   void CompletionSignal::drain() noexcept {
-    ds::Array<std::uint8_t, 64> bytes;
+    // Each notification writes one byte; a drain reads them in batches.
+    constexpr std::size_t drain_bytes = 64;
+    ds::Array<std::uint8_t, drain_bytes> bytes{};
 
     while (::read(reader_.get(), bytes.dataMut(), bytes.size()) > 0) {
     }
   }
 
   bool CompletionSignal::consume() noexcept {
-    std::uint8_t byte;
-    ssize_t count;
+    std::uint8_t byte = 0;
+    auto count = ::read(reader_.get(), &byte, sizeof(byte));
 
-    do {
+    while (count < 0 && sys::lastError() == EINTR) {
       count = ::read(reader_.get(), &byte, sizeof(byte));
-    } while (count < 0 && sys::lastError() == EINTR);
+    }
 
     return count == sizeof(byte);
   }

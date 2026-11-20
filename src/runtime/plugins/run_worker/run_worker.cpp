@@ -59,7 +59,7 @@ namespace telar::runtime::plugins {
 
     batch.count = static_cast<Byte>(count);
     for (std::size_t effect = 0; effect < count; ++effect) {
-      lua_geti(state_, absolute, static_cast<lua_Integer>(effect + 1));
+      lua_geti(state_, absolute, static_cast<lua_Integer>(effect) + 1);
       if (!lua_istable(state_, -1)) {
         throw lua::Error{"Invalid effect"};
       }
@@ -133,13 +133,16 @@ namespace telar::runtime::plugins {
   }
 
   void LuaExchange::push(lua_State* state, const ExchangeView& exchange, bool traffic) {
+    // The fields of an exchange's table.
+    constexpr int exchange_fields = 13;
+
     if (!exchange.request && !exchange.response) {
-      luaL_error(state, "exchange has no captured half");
+      luaL_error(state, "exchange has no captured half"); // NOLINT(cppcoreguidelines-pro-type-vararg): luaL_error's C signature is variadic
     }
 
     const auto& final_half = exchange.response ? *exchange.response : *exchange.request;
 
-    lua_createtable(state, 0, 13);
+    lua_createtable(state, 0, exchange_fields);
     if (traffic) {
       setIdentity(state, "id", exchange.identity.id);
     } else {
@@ -169,10 +172,14 @@ namespace telar::runtime::plugins {
   }
 
   void LuaExchange::setIdentity(lua_State* state, const char* name, std::uint64_t value) {
-    ds::Array<char, 32> text;
-    const auto result = std::to_chars(text.dataMut(), text.dataMut() + text.size(), value);
+    // Room for the decimal digits of any identity.
+    constexpr std::size_t digits_capacity = 32;
 
-    lua::setField(state, name, {text.data(), static_cast<std::size_t>(result.ptr - text.data())});
+    ds::Array<char, digits_capacity> text{};
+    const auto digits = text.viewMut();
+    const auto result = std::to_chars(digits.data(), std::to_address(digits.end()), value);
+
+    lua::setField(state, name, {text.data(), static_cast<std::size_t>(result.ptr - digits.data())});
   }
 
   std::string_view LuaExchange::protocolName(ExchangeProtocol protocol) noexcept {
@@ -207,10 +214,13 @@ namespace telar::runtime::plugins {
       return;
     }
 
-    lua_createtable(state, 0, 5);
+    // The fields of a half's table.
+    constexpr int half_fields = 5;
+
+    lua_createtable(state, 0, half_fields);
     pushHead(state, half->head, traffic);
     lua_setfield(state, -2, "head");
-    lua::setField(state, "body", {reinterpret_cast<const char*>(half->body.data()), half->body.size()});
+    lua::setField(state, "body", textView(half->body));
     lua::setField(state, "body_truncated", half->body_truncated);
     lua::setField(state, "body_encoding", half->encoding);
     lua::setField(state, "body_decoded", half->decoded);
@@ -225,7 +235,7 @@ namespace telar::runtime::plugins {
   }
 
   void LuaExchange::pushHead(lua_State* state, std::span<const std::uint8_t> bytes, bool traffic) {
-    std::string_view remaining{reinterpret_cast<const char*>(bytes.data()), bytes.size()};
+    auto remaining = textView(bytes);
 
     lua_createtable(state, 0, 2);
     lua::setField(state, "raw", remaining);
@@ -267,7 +277,12 @@ namespace telar::runtime::plugins {
   }
 
   void LuaTrafficValue::push(lua_State* state, const traffic::Event& event, std::uint64_t dropped) {
-    lua_createtable(state, 0, 24);
+    // The fields of an event's table, and where an ICMP echo keeps its identifier and sequence.
+    constexpr int event_fields = 24;
+    constexpr std::size_t icmp_identifier_offset = 4;
+    constexpr std::size_t icmp_sequence_offset = 6;
+
+    lua_createtable(state, 0, event_fields);
     lua::setField(state, "kind", traffic::Protocol::name(event.kind));
     lua::setDecimal(state, "session_id", event.session);
     lua::setDecimal(state, "sequence", event.sequence);
@@ -284,9 +299,9 @@ namespace telar::runtime::plugins {
     lua::setField(state, "interface", event.interface);
     lua::setField(state, "offline", event.offline);
     lua::setField(state, "truncated", event.kind == traffic::Kind::packet && event.bytes.size() < event.original_bytes);
-    lua::setField(state, "bytes", std::string_view{reinterpret_cast<const char*>(event.bytes.data()), event.bytes.size()});
+    lua::setField(state, "bytes", textView(event.bytes));
     if (event.kind == traffic::Kind::ready && !event.bytes.empty()) {
-      lua::setField(state, "reason", std::string_view{reinterpret_cast<const char*>(event.bytes.data()), event.bytes.size()});
+      lua::setField(state, "reason", textView(event.bytes));
     }
 
     if (traffic::isFlow(event.kind) || event.kind == traffic::Kind::intercept_request || event.kind == traffic::Kind::http_intercept_request) {
@@ -302,7 +317,7 @@ namespace telar::runtime::plugins {
       lua::setField(state, "source", std::string_view{flow.source == traffic::FlowSource::proxy ? "proxy" : "capture"});
       lua::setField(state, "direction", std::string_view{flow.direction == traffic::Direction::outbound ? "outbound" : "inbound"});
       lua::setField(state, "visibility", std::string_view{flow.visibility == traffic::Visibility::plaintext ? "plaintext" : "wire"});
-      lua::setField(state, "bytes", std::string_view{reinterpret_cast<const char*>(flow.bytes.data()), flow.bytes.size()});
+      lua::setField(state, "bytes", textView(flow.bytes));
       lua::setField(state, "captured_bytes", static_cast<lua_Integer>(flow.bytes.size()));
       lua::setField(state, "original_bytes", static_cast<lua_Integer>(flow.bytes.size()));
       if (event.kind == traffic::Kind::http_intercept_request) {
@@ -318,7 +333,7 @@ namespace telar::runtime::plugins {
       lua::setField(state, "ipv6", item.ipv6);
       lua::setField(state, "source_address", std::string_view{traffic::IpPayload::addressText(item.source_address, item.ipv6).data()});
       lua::setField(state, "destination_address", std::string_view{traffic::IpPayload::addressText(item.destination_address, item.ipv6).data()});
-      lua::setField(state, "bytes", std::string_view{reinterpret_cast<const char*>(item.bytes.data()), item.bytes.size()});
+      lua::setField(state, "bytes", textView(item.bytes));
       lua::setField(state, "truncated", item.truncated);
       lua::setField(state, "captured_bytes", static_cast<lua_Integer>(item.bytes.size()));
       lua::setField(state, "original_bytes", static_cast<lua_Integer>(item.original_bytes));
@@ -329,8 +344,8 @@ namespace telar::runtime::plugins {
         lua::setField(state, "icmp_type", static_cast<lua_Integer>(item.icmp_type));
         lua::setField(state, "icmp_code", static_cast<lua_Integer>(item.icmp_code));
         if (item.echo()) {
-          lua::setField(state, "icmp_identifier", static_cast<lua_Integer>(traffic::NetworkPacket::word(item.bytes, 4)));
-          lua::setField(state, "icmp_sequence", static_cast<lua_Integer>(traffic::NetworkPacket::word(item.bytes, 6)));
+          lua::setField(state, "icmp_identifier", static_cast<lua_Integer>(traffic::NetworkPacket::word(item.bytes, icmp_identifier_offset)));
+          lua::setField(state, "icmp_sequence", static_cast<lua_Integer>(traffic::NetworkPacket::word(item.bytes, icmp_sequence_offset)));
         }
       }
     } else if (event.kind == traffic::Kind::exchange) {
@@ -368,7 +383,7 @@ namespace telar::runtime::plugins {
       throw lua::Error{"Traffic events must select packet, flow, exchange or datagram"};
     }
 
-    return static_cast<traffic::Selection>(mask);
+    return static_cast<traffic::Selection>(mask); // NOLINT(clang-analyzer-optin.core.EnumCastOutOfRange): Selection is a set of bits, whose unions name no enumerator
   }
 
   tbc::val_a<HttpMessageView> LuaTrafficValue::message(const lua::Value& value) {
@@ -379,8 +394,13 @@ namespace telar::runtime::plugins {
       throw EncodingError{"Invalid HTTP protocol"};
     }
 
-    message.version = protocol == "h2" ? HttpVersion::http2 : protocol == "http10" ? HttpVersion::http10
-                                                                                   : HttpVersion::http11;
+    message.version = HttpVersion::http11;
+    if (protocol == "h2") {
+      message.version = HttpVersion::http2;
+    } else if (protocol == "http10") {
+      message.version = HttpVersion::http10;
+    }
+
     message.response = value.field("response").boolean(false);
     message.response_to_head = value.field("response_to_head").boolean(false);
     message.stream = static_cast<std::uint32_t>(value.field("stream_id").boundedInteger(0, 0, std::numeric_limits<std::int32_t>::max()));
@@ -389,12 +409,15 @@ namespace telar::runtime::plugins {
     message.reason = value.field("reason").string();
     message.scheme = value.field("scheme").string();
     message.authority = value.field("authority").string();
-    message.status = static_cast<std::uint16_t>(value.field("status").boundedInteger(0, 0, 599));
+    // The largest status HTTP defines.
+    constexpr std::uint64_t last_status = 599;
+
+    message.status = static_cast<std::uint16_t>(value.field("status").boundedInteger(0, 0, last_status));
     message.header_count = fields(value.field("headers"), message.headers.viewMut());
     message.trailer_count = fields(value.field("trailers"), message.trailers.viewMut());
     const auto body = value.field("body").string();
 
-    message.body = {reinterpret_cast<const Byte*>(body.data()), body.size()};
+    message.body = byteView(body);
     return message;
   }
 
@@ -405,7 +428,7 @@ namespace telar::runtime::plugins {
     }
 
     for (std::size_t index = 0; index < count; ++index) {
-      const auto entry = value.element(static_cast<lua_Integer>(index + 1));
+      const auto entry = value.element(static_cast<lua_Integer>(index) + 1);
 
       entry.onlyFields({"name", "value"});
       fields[index] = {.name = entry.field("name").string(), .value = entry.field("value").string()};
@@ -428,8 +451,10 @@ namespace telar::runtime::plugins {
 
   void LuaTrafficValue::pushMessage(lua_State* state, const HttpMessageView& message) {
     constexpr ds::Array protocols{std::string_view{"http10"}, std::string_view{"http11"}, std::string_view{"h2"}};
+    // The fields of a message's table.
+    constexpr int message_fields = 15;
 
-    lua_createtable(state, 0, 15);
+    lua_createtable(state, 0, message_fields);
     lua::setField(state, "protocol", protocols[static_cast<std::size_t>(message.version)]);
     lua::setField(state, "response", message.response);
     lua::setField(state, "response_to_head", message.response_to_head);
@@ -440,7 +465,7 @@ namespace telar::runtime::plugins {
     lua::setField(state, "scheme", message.scheme);
     lua::setField(state, "authority", message.authority);
     lua::setField(state, "status", static_cast<lua_Integer>(message.status));
-    lua::setField(state, "body", std::string_view{reinterpret_cast<const char*>(message.body.data()), message.body.size()});
+    lua::setField(state, "body", textView(message.body));
     lua::setField(state, "body_decoded", true);
     pushFields(state, std::span{message.headers}.first(message.header_count));
     lua_setfield(state, -2, "headers");
@@ -459,9 +484,10 @@ namespace telar::runtime::plugins {
       recording.id = identity(options.field("id"));
       recording.cursor = identity(options.field("cursor"));
       recording.max_bytes = options.field("max_bytes").boundedInteger(recording.max_bytes, 1, recording::Limits::session_bytes);
-      recording.max_events = options.field("max_events").boundedInteger(recording.max_events, 1, recording::Limits::events);
-      recording.max_age_ms = options.field("max_age_ms").boundedInteger(recording.max_age_ms, 1, recording::Limits::age_ms);
-      recording.limit = options.field("limit").boundedInteger(recording.limit, 1, recording::Limits::page_events);
+      // Each is bounded by a limit of its own width, so it fits.
+      recording.max_events = static_cast<std::uint32_t>(options.field("max_events").boundedInteger(recording.max_events, 1, recording::Limits::events));
+      recording.max_age_ms = static_cast<std::uint32_t>(options.field("max_age_ms").boundedInteger(recording.max_age_ms, 1, recording::Limits::age_ms));
+      recording.limit = static_cast<std::uint32_t>(options.field("limit").boundedInteger(recording.limit, 1, recording::Limits::page_events));
       recording.selection = LuaTrafficValue::selection(options.field("events"), recording.selection);
       const auto filter = options.field("filter");
       const auto host = options.field("host");
@@ -488,7 +514,7 @@ namespace telar::runtime::plugins {
       }
 
       for (std::size_t index = 0; index < request.target_count; ++index) {
-        request.targets.atMut(index) = targets.element(index + 1).string();
+        request.targets.atMut(index) = targets.element(static_cast<lua_Integer>(index) + 1).string();
       }
 
       const auto processes = options.field("processes");
@@ -499,7 +525,7 @@ namespace telar::runtime::plugins {
         }
 
         for (std::size_t index = 0; index < request.process_count; ++index) {
-          request.processes.atMut(index) = processes.element(index + 1).boundedInteger(0, 1, std::numeric_limits<std::int32_t>::max());
+          request.processes.atMut(index) = static_cast<std::uint32_t>(processes.element(static_cast<lua_Integer>(index) + 1).boundedInteger(0, 1, std::numeric_limits<std::int32_t>::max()));
         }
       }
     } else {
@@ -515,16 +541,20 @@ namespace telar::runtime::plugins {
     constexpr ds::Array redirect{"disabled", "idle", "starting", "active", "stopping", "cleanup_required"};
     constexpr ds::Array trust{"absent", "installed", "stale"};
 
-    lua_createtable(state, 0, 10);
+    // The fields of the reply's table, and of its proxy's.
+    constexpr int reply_fields = 10;
+    constexpr int proxy_fields = 5;
+
+    lua_createtable(state, 0, reply_fields);
     lua::setField(state, "result", std::string_view{results[static_cast<std::size_t>(reply.result)]});
     lua::setField(state, "message", reply.message);
     lua::setField(state, "administration_enabled", reply.status.administration);
-    lua_createtable(state, reply.argument_count, 0);
+    lua_createtable(state, static_cast<int>(reply.argument_count), 0);
     for (std::size_t index = 0; index < reply.argument_count; ++index) {
       const auto argument = reply.authorization[index];
 
       lua_pushlstring(state, argument.data(), argument.size());
-      lua_rawseti(state, -2, index + 1);
+      lua_rawseti(state, -2, static_cast<lua_Integer>(index) + 1);
     }
 
     lua_setfield(state, -2, "authorization_argv");
@@ -537,7 +567,7 @@ namespace telar::runtime::plugins {
     lua_createtable(state, 0, 1);
     lua::setField(state, "state", std::string_view{redirect[static_cast<std::size_t>(reply.status.redirect)]});
     lua_setfield(state, -2, "redirect");
-    lua_createtable(state, 0, 5);
+    lua_createtable(state, 0, proxy_fields);
     lua::setField(state, "active", reply.status.proxy);
     lua::setField(state, "port", static_cast<lua_Integer>(reply.status.port));
     lua::setField(state, "transparent_tls", reply.status.transparent_tls);
@@ -548,7 +578,7 @@ namespace telar::runtime::plugins {
     lua::setField(state, "trust_record", std::string_view{trust[static_cast<std::size_t>(reply.status.trust)]});
     lua::setField(state, "fingerprint_sha1", reply.fingerprint_sha1);
     lua::setField(state, "fingerprint_sha256", reply.fingerprint_sha256);
-    lua::setField(state, "certificate", std::string_view{reinterpret_cast<const char*>(reply.certificate.data()), reply.certificate.size()});
+    lua::setField(state, "certificate", textView(reply.certificate));
     lua_setfield(state, -2, "ca");
     if (!reply.recording.empty()) {
       recordings(state, traffic::recording::Protocol::page(reply.recording));
@@ -570,7 +600,10 @@ namespace telar::runtime::plugins {
   }
 
   void LuaTrafficControl::metadata(lua_State* state, const traffic::recording::Page& page) {
-    lua_createtable(state, 0, 12);
+    // The fields of a recording's table.
+    constexpr int recording_fields = 12;
+
+    lua_createtable(state, 0, recording_fields);
     lua::setDecimal(state, "id", page.id);
     lua::setField(state, "active", page.active);
     lua::setField(state, "gap", page.gap);
@@ -587,7 +620,7 @@ namespace telar::runtime::plugins {
     namespace recording = traffic::recording;
 
     if (page.format == recording::Format::list) {
-      lua_createtable(state, page.count, 0);
+      lua_createtable(state, static_cast<int>(page.count), 0);
       FrameReader rows{page.rows};
 
       for (std::uint32_t index = 0; index < page.count; ++index) {
@@ -601,8 +634,8 @@ namespace telar::runtime::plugins {
     }
 
     metadata(state, page);
-    lua::setField(state, "pcapng", page.format == recording::Format::pcapng ? std::string_view{reinterpret_cast<const char*>(page.rows.data()), page.rows.size()} : std::string_view{});
-    lua_createtable(state, page.format == recording::Format::events ? page.count : 0, 0);
+    lua::setField(state, "pcapng", page.format == recording::Format::pcapng ? textView(page.rows) : std::string_view{});
+    lua_createtable(state, page.format == recording::Format::events ? static_cast<int>(page.count) : 0, 0);
     if (page.format == recording::Format::events) {
       FrameReader rows{page.rows};
 
@@ -623,9 +656,9 @@ namespace telar::runtime::plugins {
 
   template <Allocator Memory>
   LuaTraffic<Memory>::LuaTraffic(Memory& memory, ServiceSpec specification)
-      : specification_(specification),
-        scratch_(memory, HttpMessageLimits::message_bytes + 32),
-        decisions_(memory, 3 * 1024 * 1024),
+      : specification_(std::move(specification)),
+        scratch_(memory, HttpMessageLimits::message_bytes + scratch_overhead),
+        decisions_(memory, decision_queue_bytes),
         effects_(memory, Limits::effect_bytes),
         reply_(ds::makeBox<TrafficReply>(memory)) {}
 
@@ -641,7 +674,6 @@ namespace telar::runtime::plugins {
     lua_pushvalue(state, -1);
     lua_setfield(state, -3, "traffic");
     lua_remove(state, -2);
-    lua_createtable(state, 0, 5);
     constexpr ds::Array operations{
         std::pair{"traffic_subscribe", Operation::subscribe},
         std::pair{"traffic_intercept", Operation::intercept},
@@ -650,6 +682,7 @@ namespace telar::runtime::plugins {
         std::pair{"traffic_control", Operation::control},
     };
 
+    lua_createtable(state, 0, static_cast<int>(operations.size()));
     for (const auto& [name, operation] : operations) {
       lua_pushlightuserdata(state, this);
       lua_pushinteger(state, static_cast<int>(operation));
@@ -706,7 +739,7 @@ namespace telar::runtime::plugins {
     lua_createtable(state, 0, 3);
     lua::setField(state, "id", specification_.name.view());
     lua::setDecimal(state, "generation", specification_.generation);
-    ds::Array<char, 64> digest;
+    ds::Array<char, 2 * package_digest_bytes> digest{};
 
     lua::setField(state, "digest", encodeLowerHex(specification_.digest, digest.viewMut()));
     lua_setfield(state, -2, "app");
@@ -752,9 +785,12 @@ namespace telar::runtime::plugins {
 
   template <Allocator Memory>
   int LuaTraffic<Memory>::call(lua_State* state) {
+    // Room for the message of an error, which Lua raises after the exception is gone.
+    constexpr std::size_t error_capacity = 1024;
+
     auto& self = *static_cast<LuaTraffic*>(lua_touserdata(state, lua_upvalueindex(1)));
     const auto operation = static_cast<Operation>(lua_tointeger(state, lua_upvalueindex(2)));
-    ds::Array<char, 1024> error{};
+    ds::Array<char, error_capacity> error{};
 
     try {
       switch (operation) {
@@ -767,23 +803,27 @@ namespace telar::runtime::plugins {
       case Operation::decide:
         lua_pushboolean(state, self.decide(state));
         return 1;
-      case Operation::cancel: {
-        const auto id = identifier(state, 1);
-        if (auto* binding = self.find(id)) {
-          self.unbind(state, *binding);
-        }
-
-        return 0;
-      }
+      case Operation::cancel:
+        return self.cancel(state);
       case Operation::control:
         lua_pushinteger(state, self.registerControl(state));
         return 1;
       }
     } catch (const std::exception& failure) {
-      std::snprintf(error.dataMut(), error.size(), "%s", failure.what());
+      std::ranges::copy(std::string_view{failure.what()}.substr(0, error.size() - 1), error.viewMut().begin());
     }
 
-    return luaL_error(state, "%s", error.data());
+    return luaL_error(state, "%s", error.data()); // NOLINT(cppcoreguidelines-pro-type-vararg): luaL_error's C signature is variadic
+  }
+
+  template <Allocator Memory>
+  int LuaTraffic<Memory>::cancel(lua_State* state) {
+    const auto id = identifier(state, 1);
+    if (auto* binding = find(id)) {
+      unbind(state, *binding);
+    }
+
+    return 0;
   }
 
   template <Allocator Memory>
@@ -831,7 +871,7 @@ namespace telar::runtime::plugins {
     TrafficRegistration registration;
 
     registration.stage = TrafficStage::control;
-    registration.request.assign({reinterpret_cast<const char*>(encoded.data()), encoded.size()});
+    registration.request.assign(textView(encoded));
     return bind(state, registration);
   }
 
@@ -922,26 +962,14 @@ namespace telar::runtime::plugins {
     registration.stage = stage_name == "http" ? TrafficStage::http : TrafficStage::stream;
     const auto direction = options.field("direction");
     if (direction.present()) {
-      const auto name = direction.string();
-      if (name != "outbound" && name != "inbound" && name != "both") {
-        throw lua::Error{"Invalid interception direction"};
-      }
-
-      registration.directions = name == "outbound" ? 1 : name == "inbound" ? 2
-                                                                           : 3;
+      registration.directions = directionsOf(direction.string());
     }
 
     const auto visibility = options.field("visibility");
 
     registration.visibility = registration.stage == TrafficStage::http ? 3 : 2;
     if (visibility.present()) {
-      const auto name = visibility.string();
-      if (name != "wire" && name != "plaintext" && name != "both") {
-        throw lua::Error{"Invalid interception visibility"};
-      }
-
-      registration.visibility = name == "wire" ? 1 : name == "plaintext" ? 2
-                                                                         : 3;
+      registration.visibility = visibilityOf(visibility.string());
     }
 
     registration.timeout_ms = static_cast<std::uint32_t>(options.field("timeout_ms").boundedInteger(traffic::default_timeout_ms, 1, traffic::maximum_timeout_ms));
@@ -954,6 +982,55 @@ namespace telar::runtime::plugins {
 
       registration.fail_closed = name == "reject";
     }
+  }
+
+  template <Allocator Memory>
+  Byte LuaTraffic<Memory>::directionsOf(std::string_view name) {
+    // One bit per direction: outbound, inbound, or both.
+    if (name == "outbound") {
+      return 1;
+    }
+
+    if (name == "inbound") {
+      return 2;
+    }
+
+    if (name == "both") {
+      return 3;
+    }
+
+    throw lua::Error{"Invalid interception direction"};
+  }
+
+  template <Allocator Memory>
+  Byte LuaTraffic<Memory>::visibilityOf(std::string_view name) {
+    // One bit per visibility: wire, plaintext, or both.
+    if (name == "wire") {
+      return 1;
+    }
+
+    if (name == "plaintext") {
+      return 2;
+    }
+
+    if (name == "both") {
+      return 3;
+    }
+
+    throw lua::Error{"Invalid interception visibility"};
+  }
+
+  template <Allocator Memory>
+  traffic::Verdict LuaTraffic<Memory>::verdictOf(std::string_view action) noexcept {
+    if (action == "allow") {
+      return traffic::Verdict::allow;
+    }
+
+    if (action == "replace") {
+      return traffic::Verdict::replace;
+    }
+
+    return action == "reject" ? traffic::Verdict::reject : traffic::Verdict::pending;
   }
 
   template <Allocator Memory>
@@ -973,9 +1050,7 @@ namespace telar::runtime::plugins {
 
     const lua::Value decision{state, 3, "Interception decision"};
     const auto action = decision.field("action").string();
-    const auto verdict = action == "allow" ? traffic::Verdict::allow : action == "replace" ? traffic::Verdict::replace
-                                                                   : action == "reject"    ? traffic::Verdict::reject
-                                                                                           : traffic::Verdict::pending;
+    const auto verdict = verdictOf(action);
     if (verdict == traffic::Verdict::pending) {
       throw lua::Error{"Invalid interception action"};
     }
@@ -1003,7 +1078,7 @@ namespace telar::runtime::plugins {
         throw lua::Error{"Stream replacement exceeds its bound"};
       }
 
-      encoded = traffic::InterceptionCodec::decision(scratch_.bytesMut(), ticket, verdict, {reinterpret_cast<const Byte*>(bytes.data()), bytes.size()});
+      encoded = traffic::InterceptionCodec::decision(scratch_.bytesMut(), ticket, verdict, byteView(bytes));
     }
 
     if (decision_count_ == queued_.size()) {
@@ -1020,7 +1095,7 @@ namespace telar::runtime::plugins {
   Host::Host(Memory& memory, const char* entry_path, const ServiceSpec* traffic)
       : memory_(memory),
         vm_(erased_, {.memory = Limits::lua_bytes, .instructions = Limits::lua_instructions, .deadline = Limits::callback_deadline}) {
-    ds::Array<char, PATH_MAX> resolved;
+    ds::Array<char, PATH_MAX> resolved{};
     if (::realpath(entry_path, resolved.dataMut()) == nullptr) {
       throw SystemError{"Resolve tap entrypoint"};
     }
@@ -1103,16 +1178,19 @@ namespace telar::runtime::plugins {
   int Host::invokeTrafficCallback(lua_State* state) {
     auto& invocation = *static_cast<TrafficInvocation*>(callContext(state));
     const auto event = invocation.event;
-    ds::Array<char, 1024> error{};
+    // Room for the message of an error, which Lua raises after the exception is gone.
+    constexpr std::size_t error_capacity = 1024;
+
+    ds::Array<char, error_capacity> error{};
 
     try {
       invocation.host.traffic_.getMut().invoke(state, event);
       return 0;
     } catch (const std::exception& failure) {
-      std::snprintf(error.dataMut(), error.size(), "%s", failure.what());
+      std::ranges::copy(std::string_view{failure.what()}.substr(0, error.size() - 1), error.viewMut().begin());
     }
 
-    return luaL_error(state, "%s", error.data());
+    return luaL_error(state, "%s", error.data()); // NOLINT(cppcoreguidelines-pro-type-vararg): luaL_error's C signature is variadic
   }
 
   auto Host::context(lua_State* state) noexcept -> tbc::mut_static<Host> {
@@ -1143,7 +1221,7 @@ namespace telar::runtime::plugins {
 
       return 0;
     } catch (const std::exception& error) {
-      return luaL_error(state, "%s", error.what());
+      return luaL_error(state, "%s", error.what()); // NOLINT(cppcoreguidelines-pro-type-vararg): luaL_error's C signature is variadic
     }
   }
 
@@ -1155,7 +1233,7 @@ namespace telar::runtime::plugins {
 
     lua_call(state, 0, 1);
     if (!lua_istable(state, -1)) {
-      return luaL_error(state, "Invalid tap plugin");
+      return luaL_error(state, "Invalid tap plugin"); // NOLINT(cppcoreguidelines-pro-type-vararg): luaL_error's C signature is variadic
     }
 
     lua_getfield(state, -1, "on_exchange");
@@ -1165,7 +1243,7 @@ namespace telar::runtime::plugins {
         return 0;
       }
 
-      return luaL_error(state, "Missing exchange handler");
+      return luaL_error(state, "Missing exchange handler"); // NOLINT(cppcoreguidelines-pro-type-vararg): luaL_error's C signature is variadic
     }
 
     entry.host.callback_reference_ = luaL_ref(state, LUA_REGISTRYINDEX);
@@ -1233,7 +1311,7 @@ namespace telar::runtime::plugins {
       channel.send(host.trafficSetup(buffer));
     }
 
-    while (auto frame = channel.receive(memory, Limits::frame_bytes)) {
+    while (const auto frame = channel.receive(memory, Limits::frame_bytes)) {
       const auto bytes = frame->bytes();
       std::span<const Byte> encoded;
 

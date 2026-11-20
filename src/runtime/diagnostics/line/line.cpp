@@ -4,15 +4,16 @@ import telar.base.ds;
 namespace telar::runtime::diagnostics {
 
   void Line::reset() noexcept {
-    length_ = 0;
-    append("{");
+    bytes_.atMut(0) = '{';
+    length_ = 1;
   }
 
   void Line::field(std::string_view name, std::uint64_t value) {
     key(name);
 
-    const auto result = std::to_chars(bytes_.dataMut() + length_, bytes_.dataMut() + bytes_.size(), value);
-    if (result.ec != std::errc{}) {
+    const auto free = bytes_.viewMut().subspan(length_);
+    const auto result = std::to_chars(free.data(), std::to_address(free.end()), value);
+    if (result.ec == std::errc::value_too_large) {
       throw std::length_error{"Diagnostics line capacity exceeded"};
     }
 
@@ -33,8 +34,10 @@ namespace telar::runtime::diagnostics {
   }
 
   void Line::timing(std::string_view average_name, std::string_view maximum_name, const Timing& value) {
-    field(average_name, value.average() / 1000);
-    field(maximum_name, value.maximum_ns / 1000);
+    constexpr std::uint64_t nanoseconds_per_microsecond = 1000;
+
+    field(average_name, value.average() / nanoseconds_per_microsecond);
+    field(maximum_name, value.maximum_ns / nanoseconds_per_microsecond);
   }
 
   std::string_view Line::finish() {
@@ -53,7 +56,7 @@ namespace telar::runtime::diagnostics {
       throw std::length_error{"Diagnostics line capacity exceeded"};
     }
 
-    std::ranges::copy(text, bytes_.viewMut().begin() + length_);
+    std::ranges::copy(text, bytes_.viewMut().subspan(length_).begin());
     length_ += text.size();
   }
 

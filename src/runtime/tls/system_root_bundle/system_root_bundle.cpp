@@ -9,7 +9,9 @@ namespace telar::runtime {
   SystemRootBundle::SystemRootBundle(ConcurrentMemory& memory)
       : bytes_(memory, maximum_bytes + 1) {
     const auto storage = bytes_.appendUninitialized(maximum_bytes + 1);
-    const std::span<char> destination{reinterpret_cast<char*>(storage.data()), storage.size()};
+#pragma clang unsafe_buffer_usage begin
+    const std::span<char> destination{reinterpret_cast<char*>(storage.data()), storage.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): char may alias the bytes, and no cast-free view writes bytes as text
+#pragma clang unsafe_buffer_usage end
 
     for (const auto path : paths) {
       const auto contents = readRegularFile(path, destination);

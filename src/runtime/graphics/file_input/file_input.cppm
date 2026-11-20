@@ -13,7 +13,7 @@ import telar.base.ds;
 export {
   namespace telar::runtime {
 
-    enum class GraphicsInputMedium {
+    enum class GraphicsInputMedium : std::uint8_t {
       shared_memory,
       file,
     };
@@ -107,6 +107,8 @@ export {
       MediaInputSink() = default;
       MediaInputSink(const MediaInputSink&) = default;
       MediaInputSink& operator=(const MediaInputSink&) = default;
+      MediaInputSink(MediaInputSink&&) = default;
+      MediaInputSink& operator=(MediaInputSink&&) = default;
       ~MediaInputSink() = default;
     };
 
@@ -135,6 +137,10 @@ export {
       };
 
       static bool forward(const Transmission& request, MediaInputSink& sink);
+      // Forwards a frame that transmits a file; false leaves the frame to pass through.
+      static bool forwardFrame(std::span<const std::uint8_t> bytes, std::size_t storage_limit, MediaInputSink& sink);
+      // Reads a batch, or its first chunk when the whole batch cannot be read; false when neither can.
+      static bool readBatch(const GraphicsChildFile& file, std::span<std::uint8_t>& batch, std::uint64_t offset) noexcept;
 
       static tbc::val_a<std::span<const std::uint8_t>> encodeChunk(tbc::val_a<std::span<char>> chunk, std::string_view control, std::span<const std::uint8_t> raw, bool more);
 
@@ -164,6 +170,8 @@ export {
 
       ImageAllocation(const ImageAllocation&) = delete;
       ImageAllocation& operator=(const ImageAllocation&) = delete;
+      ImageAllocation(ImageAllocation&&) = delete;
+      ImageAllocation& operator=(ImageAllocation&&) = delete;
 
       explicit operator bool() const noexcept;
 
@@ -187,9 +195,9 @@ export {
 export {
   namespace telar::runtime {
 
-    class MediaBatch {
+    class MediaBatch { // NOLINT(cppcoreguidelines-pro-type-member-init): append writes the bytes an event covers before it is read, so zeroing 64 KiB per batch is work no read needs
     public:
-      static constexpr std::size_t byte_capacity = 64 * 1024;
+      static constexpr std::size_t byte_capacity = std::size_t{64} * 1024;
       static constexpr std::size_t event_capacity = 64;
 
       struct Output {
@@ -213,14 +221,31 @@ export {
 
       [[nodiscard]] bool hasReadCapacity(std::size_t bytes) const noexcept;
 
-      bool reset_before = false;
-      bool kitty = false;
+      // The terminal resets before it reads this batch.
+      constexpr void requestReset() noexcept {
+        reset_before_ = true;
+      }
+
+      [[nodiscard]] constexpr bool resetBefore() const noexcept {
+        return reset_before_;
+      }
+
+      // The batch holds Kitty graphics.
+      constexpr void noteKitty(bool kitty) noexcept {
+        kitty_ = kitty_ || kitty;
+      }
+
+      [[nodiscard]] constexpr bool kitty() const noexcept {
+        return kitty_;
+      }
 
     private:
       ds::Array<Byte, byte_capacity> bytes_;
       ds::Array<Event, event_capacity> events_;
       std::size_t byte_count_ = 0;
       std::size_t event_count_ = 0;
+      bool reset_before_ = false;
+      bool kitty_ = false;
     };
 
   }

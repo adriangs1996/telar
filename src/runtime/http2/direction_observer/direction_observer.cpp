@@ -43,9 +43,8 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   HpackDecoder<Memory>::HpackDecoder(Memory& memory) noexcept
-      : memory_(memory) {
-    ready_ = nghttp2_hd_inflate_new2(&inflater_, memory_.callbacks()) == 0 && nghttp2_hd_inflate_change_table_size(inflater_, maximum_table_bytes) == 0;
-  }
+      : memory_(memory),
+        ready_(nghttp2_hd_inflate_new2(&inflater_, memory_.callbacks()) == 0 && nghttp2_hd_inflate_change_table_size(inflater_, maximum_table_bytes) == 0) {}
 
   template <Allocator Memory>
   HpackDecoder<Memory>::~HpackDecoder() {

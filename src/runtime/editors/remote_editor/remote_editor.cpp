@@ -12,21 +12,26 @@ import telar.base.ds;
 namespace telar::runtime {
 
   namespace {
+
+    // A host name, as gethostname writes it.
+    constexpr std::size_t host_name_bytes = 256;
+
     // A path the environment names, copied with its NUL, as Rust's env::var returns its own String: a
     // later lookup may replace the environment it lives in. A path too long to use reads as absent.
     class EnvironmentPath {
     public:
       explicit EnvironmentPath(const char* name) noexcept {
         // Asked for before the lookup, which any later call into the project may replace.
-        auto* destination = text_.dataMut();
-        const char* value = std::getenv(name);
+        const auto destination = text_.viewMut();
+        const char* value = std::getenv(name); // NOLINT(concurrency-mt-unsafe): POSIX has no thread-safe read of the environment
         if (value == nullptr) {
           return;
         }
 
-        const auto length = std::strlen(value);
-        if (length < PATH_MAX) {
-          std::memcpy(destination, value, length + 1);
+        const std::string_view text{value};
+        if (text.size() < PATH_MAX) {
+          std::ranges::copy(text, destination.begin());
+          destination[text.size()] = '\0';
           present_ = true;
         }
       }
@@ -47,7 +52,9 @@ namespace telar::runtime {
         expression_(memory),
         path_(memory),
         editor_(memory) {
-    expression_.reserve(10 * 1024);
+    constexpr std::size_t expression_bytes = std::size_t{10} * 1024;
+
+    expression_.reserve(expression_bytes);
   }
 
   void RemoteEditor::open(const OpenEditor& request, const RequestContext& context, EncodedReply<ConcurrentMemory>& reply) {
@@ -108,24 +115,26 @@ namespace telar::runtime {
   }
 
   bool RemoteEditor::ownedPath(const char* path, bool directory) noexcept {
+    // Group and others may write.
+    constexpr mode_t shared_write = 0022;
     struct stat status{};
 
-    return path[0] == '/' && ::lstat(path, &status) == 0 && status.st_uid == ::geteuid() && (status.st_mode & 0022) == 0 && (directory ? S_ISDIR(status.st_mode) : S_ISSOCK(status.st_mode));
+    return path[0] == '/' && ::lstat(path, &status) == 0 && status.st_uid == ::geteuid() && (status.st_mode & shared_write) == 0 && (directory ? S_ISDIR(status.st_mode) : S_ISSOCK(status.st_mode));
   }
 
-  void RemoteEditor::scan(Session& session, std::string_view root, bool descend) {
+  void RemoteEditor::scan(Session& session, std::string_view root, bool descend) { // NOLINT(misc-no-recursion): a scan descends one level at most, as the nested one does not descend
     if (session.opened != nullptr || root.size() >= PATH_MAX) {
       return;
     }
 
     ds::Array<char, PATH_MAX> directory{};
 
-    std::copy(root.begin(), root.end(), directory.dataMut());
+    std::ranges::copy(root, directory.viewMut().begin());
     if (!ownedPath(directory.data(), true)) {
       return;
     }
 
-    FileDescriptor descriptor{::open(directory.data(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
+    FileDescriptor descriptor{::open(directory.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_NOFOLLOW, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
     if (!descriptor) {
       return;
     }
@@ -137,19 +146,21 @@ namespace telar::runtime {
 
     descriptor.release();
     while (session.entries_left != 0 && session.endpoints_left != 0 && session.opened == nullptr) {
-      const auto* entry = ::readdir(stream.get());
+      const auto* entry = ::readdir(stream.get()); // NOLINT(concurrency-mt-unsafe): readdir is unsafe only on a stream that another thread reads too, and this stream is the call's own
       if (entry == nullptr) {
         break;
       }
 
       --session.entries_left;
-      if (std::string_view{entry->d_name} == "." || std::string_view{entry->d_name} == "..") {
+      const std::string_view name{std::data(entry->d_name)};
+      if (name == "." || name == "..") {
         continue;
       }
 
+      // Its bytes past the formatted path stay zero, so a path that fits is terminated.
       ds::Array<char, PATH_MAX> path{};
-      const int count = std::snprintf(path.dataMut(), path.size(), "%s/%s", directory.data(), entry->d_name);
-      if (count < 0 || static_cast<std::size_t>(count) >= path.size()) {
+      const auto formatted = std::format_to_n(path.dataMut(), static_cast<std::ptrdiff_t>(path.size() - 1), "{}/{}", std::string_view{directory.data()}, name);
+      if (std::cmp_greater_equal(formatted.size, path.size())) {
         continue;
       }
 
@@ -159,7 +170,7 @@ namespace telar::runtime {
         --session.endpoints_left;
         if (session.kind == EditorKind::emacs) {
           emacsEndpoint(session, path.data());
-        } else if (std::string_view{entry->d_name}.starts_with("nvim.")) {
+        } else if (name.starts_with("nvim.")) {
           vimEndpoint(session, path.data());
         }
       }
@@ -173,8 +184,8 @@ namespace telar::runtime {
 
     // A later lookup may overwrite what getenv returned, so the name is copied first.
     const EnvironmentPath user{"USER"};
-    const char* name = user.get();
-    if (session.opened != nullptr || name == nullptr || *name == '\0' || std::strchr(name, '/') != nullptr) {
+    const std::string_view name = user.get() == nullptr ? std::string_view{} : std::string_view{user.get()};
+    if (session.opened != nullptr || name.empty() || name.contains('/')) {
       return;
     }
 
@@ -186,8 +197,8 @@ namespace telar::runtime {
       }
 
       ds::Array<char, PATH_MAX> directory{};
-      const int count = std::snprintf(directory.dataMut(), directory.size(), "%s/nvim.%s", root, name);
-      if (count > 0 && static_cast<std::size_t>(count) < directory.size()) {
+      const auto formatted = std::format_to_n(directory.dataMut(), static_cast<std::ptrdiff_t>(directory.size() - 1), "{}/nvim.{}", std::string_view{root}, name);
+      if (std::cmp_less(formatted.size, directory.size())) {
         scan(session, directory.data(), true);
       }
     }
@@ -253,8 +264,9 @@ namespace telar::runtime {
   }
 
   void RemoteEditor::number(std::uint32_t value) {
-    ds::Array<char, 16> bytes;
-    const auto result = std::to_chars(bytes.dataMut(), bytes.dataMut() + bytes.size(), value);
+    constexpr std::size_t decimal_digits = 16;
+    ds::Array<char, decimal_digits> bytes{};
+    const auto result = std::to_chars(bytes.dataMut(), std::to_address(bytes.viewMut().end()), value);
 
     expression_.append(std::string_view{bytes.data(), static_cast<std::size_t>(result.ptr - bytes.data())});
   }
@@ -276,12 +288,15 @@ namespace telar::runtime {
     }
 
     pid_t pid = 0;
-    const auto parsed = std::from_chars(identity.data(), identity.data() + split, pid);
-    if (parsed.ec != std::errc{} || parsed.ptr != identity.data() + split) {
+    const auto digits = identity.substr(0, split);
+    const auto* const digits_end = std::to_address(digits.end());
+    const auto parsed = std::from_chars(digits.data(), digits_end, pid);
+    // from_chars reports success as the errc of value 0, which names no error.
+    if (std::to_underlying(parsed.ec) != 0 || parsed.ptr != digits_end) {
       return;
     }
 
-    ds::Array<char, 256> host{};
+    ds::Array<char, host_name_bytes> host{};
     if (::gethostname(host.dataMut(), host.size() - 1) != 0 || trimText(identity.substr(split), " \r\n\t") != host.data()) {
       return;
     }
@@ -292,7 +307,7 @@ namespace telar::runtime {
     }
 
     expression_.assign("getpid() == ");
-    number(pid);
+    number(static_cast<std::uint32_t>(pid));
     expression_.append(" && hostname() == ");
     quote(host.data(), false);
     expression_.append(" ? [execute('drop ' . fnameescape(");
@@ -302,7 +317,7 @@ namespace telar::runtime {
       expression_.append(", cursor(");
       number(session.request.line);
       expression_.append(", ");
-      number(std::max(session.request.column, 1u));
+      number(std::max(session.request.column, 1U));
       expression_.push(')');
     }
 
@@ -322,8 +337,8 @@ namespace telar::runtime {
 
     if (const EnvironmentPath root{"XDG_RUNTIME_DIR"}; root.get() != nullptr) {
       ds::Array<char, PATH_MAX> path{};
-      const int count = std::snprintf(path.dataMut(), path.size(), "%s/emacs", root.get());
-      if (count > 0 && static_cast<std::size_t>(count) < path.size()) {
+      const auto formatted = std::format_to_n(path.dataMut(), static_cast<std::ptrdiff_t>(path.size() - 1), "{}/emacs", std::string_view{root.get()});
+      if (std::cmp_less(formatted.size, path.size())) {
         scan(session, path.data(), false);
       }
     }
@@ -336,8 +351,8 @@ namespace telar::runtime {
       }
 
       ds::Array<char, PATH_MAX> path{};
-      const int count = std::snprintf(path.dataMut(), path.size(), "%s/emacs%u", root, ::getuid());
-      if (count > 0 && static_cast<std::size_t>(count) < path.size()) {
+      const auto formatted = std::format_to_n(path.dataMut(), static_cast<std::ptrdiff_t>(path.size() - 1), "{}/emacs{}", std::string_view{root}, ::getuid());
+      if (std::cmp_less(formatted.size, path.size())) {
         scan(session, path.data(), false);
       }
     }
@@ -367,7 +382,7 @@ namespace telar::runtime {
     }
 
     const auto pid = *parsed;
-    ds::Array<char, 256> host{};
+    ds::Array<char, host_name_bytes> host{};
     if (::gethostname(host.dataMut(), host.size() - 1) != 0) {
       return;
     }
@@ -383,7 +398,7 @@ namespace telar::runtime {
       }
 
       expression_.assign("(if (and (= (emacs-pid) ");
-      number(pid);
+      number(static_cast<std::uint32_t>(pid));
       expression_.append(") (equal (system-name) ");
       quote(host.data(), true);
       expression_.append(")) (let ((f (catch 'found (dolist (f (frame-list)) (when (and (not (display-graphic-p f)) (equal (terminal-name (frame-terminal f)) (concat \"/dev/\" ");

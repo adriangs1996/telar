@@ -87,7 +87,7 @@ export {
     public:
       // Generic over the caller's integer and enumeration types, so these stay here.
       template <std::unsigned_integral Integer>
-      TBC_GENERIC inline void integer(Integer) {
+      TBC_GENERIC inline void integer([[maybe_unused]] Integer value) {
         add(sizeof(Integer));
       }
 
@@ -97,7 +97,7 @@ export {
 
       template <typename Enum>
         requires std::is_enum_v<Enum>
-      TBC_GENERIC void tag(Enum) {
+      TBC_GENERIC void tag([[maybe_unused]] Enum value) {
         integer(Byte{});
       }
 

@@ -24,7 +24,12 @@ export {
 
     class DescriptionCapture {
     public:
+      DescriptionCapture() = default;
       ~DescriptionCapture();
+      DescriptionCapture(const DescriptionCapture&) = default;
+      DescriptionCapture& operator=(const DescriptionCapture&) = default;
+      DescriptionCapture(DescriptionCapture&&) = default;
+      DescriptionCapture& operator=(DescriptionCapture&&) = default;
 
       bool feed(std::span<const Byte> input);
       void clear() noexcept;
@@ -35,9 +40,11 @@ export {
       static constexpr Byte erase_word = 0x17;
 
       static void skipEscape(std::string_view& remaining) noexcept;
-      static std::string_view nextScalar(unsigned char byte, std::string_view remaining);
+      // The UTF-8 scalar text starts with.
+      static std::string_view nextScalar(std::string_view text);
       static void appendSpace(DescriptionQuery& query);
       static void removeScalar(DescriptionQuery& query) noexcept;
+      static void eraseWord(DescriptionQuery& query) noexcept;
 
       DescriptionQuery raw_;
       InputScanner scanner_;
@@ -51,7 +58,7 @@ export {
 export {
   namespace telar::runtime {
 
-    enum class DescriptionPhase {
+    enum class DescriptionPhase : std::uint8_t {
       waiting_query,
       waiting_work,
       queued,
@@ -60,7 +67,7 @@ export {
       failed,
     };
 
-    enum class DescriptionStatus {
+    enum class DescriptionStatus : std::uint8_t {
       success,
       unavailable,
       timeout,
@@ -68,15 +75,20 @@ export {
       failed,
     };
 
+    // A generated title fits an agent's title; an agent's history session has an id of 16 bytes.
+    inline constexpr std::size_t description_title_bytes = 96;
+    inline constexpr std::size_t agent_session_id_bytes = 16;
+
     struct DescriptionOptions {
+      static constexpr std::chrono::milliseconds default_timeout{15'000};
       std::span<const std::string_view> arguments;
-      std::chrono::milliseconds timeout{15'000};
+      std::chrono::milliseconds timeout{default_timeout};
     };
 
     struct DescriptionIdentity {
       std::uint64_t pane = 0;
       std::uint64_t generation = 0;
-      ds::Array<Byte, 16> session{};
+      ds::Array<Byte, agent_session_id_bytes> session{};
       std::uint64_t revision = 0;
 
       bool operator==(const DescriptionIdentity&) const = default;
@@ -90,10 +102,10 @@ export {
     struct DescriptionResult {
       DescriptionIdentity identity;
       DescriptionStatus status = DescriptionStatus::failed;
-      FixedText<96> title;
+      FixedText<description_title_bytes> title;
     };
 
-    FixedText<96> normalizeDescriptionTitle(std::string_view output);
+    FixedText<description_title_bytes> normalizeDescriptionTitle(std::string_view output);
 
   }
 }

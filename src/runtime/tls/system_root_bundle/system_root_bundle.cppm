@@ -17,12 +17,12 @@ export {
       [[nodiscard]] std::span<const std::uint8_t> bytes() const noexcept;
 
     private:
-      static constexpr std::size_t maximum_bytes = 4 * 1024 * 1024;
+      static constexpr std::size_t maximum_bytes = std::size_t{4} * 1024 * 1024;
       static constexpr ds::Array<std::string_view, 4> paths{
           "/etc/ssl/cert.pem",
           "/etc/ssl/certs/ca-certificates.crt",
           "/etc/pki/tls/certs/ca-bundle.crt",
-          "/etc/ssl/ca-bundle.pem"
+          "/etc/ssl/ca-bundle.pem",
       };
       ByteQueue<ConcurrentMemory> bytes_;
     };

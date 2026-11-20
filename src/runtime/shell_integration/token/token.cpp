@@ -8,7 +8,7 @@ import telar.base.ds;
 namespace telar::runtime {
 
   ShellToken ShellToken::generate() noexcept {
-    ds::Array<unsigned char, length / 2> random;
+    ds::Array<unsigned char, length / 2> random{};
 
     randomBytes(random.dataMut(), random.size());
     ShellToken token;

@@ -7,6 +7,122 @@ import telar.base.ds;
 
 namespace telar::runtime {
 
+  namespace {
+
+    // Space, below which ASCII bytes are controls, and DEL, the control above the printable ones.
+    constexpr unsigned char ascii_space = 32;
+    constexpr unsigned char ascii_delete = 127;
+
+    // The bounds of a request's line and pseudo-fields.
+    constexpr std::size_t maximum_method_bytes = 64;
+    constexpr std::size_t maximum_target_bytes = 8192;
+    constexpr std::size_t maximum_scheme_bytes = 16;
+    constexpr std::size_t maximum_authority_bytes = 512;
+
+    constexpr std::string_view blanks = " \t";
+
+    // Whether a byte may not appear in a Host field or :authority: a control, space, DEL, or a delimiter.
+    bool invalidAuthorityByte(unsigned char byte) noexcept {
+      return byte <= ascii_space || byte >= ascii_delete || std::string_view{"/,#?@\\"}.contains(static_cast<char>(byte));
+    }
+
+    // Whether a field is one HTTP/2 forbids, as it only means something to an HTTP/1 connection.
+    bool connectionSpecific(std::string_view name, std::string_view value) noexcept {
+      return asciiEqualIgnoreCase(name, "connection") || asciiEqualIgnoreCase(name, "keep-alive") || asciiEqualIgnoreCase(name, "proxy-connection") || asciiEqualIgnoreCase(name, "transfer-encoding") || asciiEqualIgnoreCase(name, "upgrade") || (asciiEqualIgnoreCase(name, "te") && !asciiEqualIgnoreCase(value, "trailers"));
+    }
+
+    // Folds a Content-Length field's values into `length`, throwing when one is invalid or disagrees.
+    void readLengths(std::string_view value, ds::Option<std::size_t>& length) {
+      TextFields values{value, ","};
+
+      while (const auto part = values.next()) {
+        const auto parsed = parseHttpNumber<http_decimal>(trimText(*part, blanks));
+        if (!parsed) {
+          throw std::invalid_argument{"Invalid HTTP length"};
+        }
+
+        if (length && *length != *parsed) {
+          throw std::invalid_argument{"Conflicting HTTP lengths"};
+        }
+
+        length = parsed;
+      }
+    }
+
+    // Whether a Connection field lists `name` as hop-by-hop.
+    template <typename Field>
+    bool listsToken(const Field& connection, std::string_view name) noexcept {
+      TextFields tokens{connection.value(), ","};
+
+      while (const auto token = tokens.next()) {
+        if (asciiEqualIgnoreCase(name, trimText(*token, blanks))) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    template <Allocator Memory>
+    std::size_t brotliEncode(DecoderMemory<Memory>& memory, std::span<const std::uint8_t> input, std::span<std::uint8_t> output, unsigned quality) {
+      auto remaining_input = input.size();
+      auto remaining_output = output.size();
+      const auto* next_input = input.data();
+      auto* next_output = output.data();
+      auto state = std::unique_ptr<BrotliEncoderState, decltype(&BrotliEncoderDestroyInstance)>{BrotliEncoderCreateInstance(&DecoderMemory<Memory>::allocate, &DecoderMemory<Memory>::release, &memory), &BrotliEncoderDestroyInstance};
+      if (!state) {
+        throw std::bad_alloc{};
+      }
+
+      if (BrotliEncoderSetParameter(state.get(), BROTLI_PARAM_QUALITY, quality) == 0) {
+        throw std::invalid_argument{"Invalid Brotli parameters"};
+      }
+
+      while (BrotliEncoderIsFinished(state.get()) == 0) {
+        const auto before_input = remaining_input;
+        const auto before_output = remaining_output;
+
+        if (BrotliEncoderCompressStream(state.get(), BROTLI_OPERATION_FINISH, &remaining_input, &next_input, &remaining_output, &next_output, nullptr) == 0) {
+          throw std::invalid_argument{"Brotli encoding failed"};
+        }
+
+        if (BrotliEncoderIsFinished(state.get()) != 0) {
+          break;
+        }
+
+        if (remaining_output == 0 || (remaining_input == before_input && remaining_output == before_output)) {
+          throw std::length_error{"HTTP entity exceeds its limit"};
+        }
+      }
+
+      return output.size() - remaining_output;
+    }
+
+    template <Allocator Memory>
+    std::size_t brotliDecode(DecoderMemory<Memory>& memory, std::span<const std::uint8_t> input, std::span<std::uint8_t> output) {
+      auto remaining_input = input.size();
+      auto remaining_output = output.size();
+      const auto* next_input = input.data();
+      auto* next_output = output.data();
+      auto state = std::unique_ptr<BrotliDecoderState, decltype(&BrotliDecoderDestroyInstance)>{BrotliDecoderCreateInstance(&DecoderMemory<Memory>::allocate, &DecoderMemory<Memory>::release, &memory), &BrotliDecoderDestroyInstance};
+      if (!state) {
+        throw std::bad_alloc{};
+      }
+
+      const auto result = BrotliDecoderDecompressStream(state.get(), &remaining_input, &next_input, &remaining_output, &next_output, nullptr);
+      if (remaining_output == 0 && result == BROTLI_DECODER_RESULT_NEEDS_MORE_OUTPUT) {
+        throw std::length_error{"HTTP entity exceeds its limit"};
+      }
+
+      if (result != BROTLI_DECODER_RESULT_SUCCESS || remaining_input != 0) {
+        throw std::invalid_argument{"Invalid or incomplete Brotli entity"};
+      }
+
+      return output.size() - remaining_output;
+    }
+
+  }
+
   template <Allocator Memory>
   HttpContentCodec<Memory>::Flate::Flate(Memory& upstream, bool encode, int window)
       : memory(upstream),
@@ -146,7 +262,7 @@ namespace telar::runtime {
     Flate state{memory_, encode, window};
     auto& stream = state.stream;
 
-    stream.next_in = const_cast<std::uint8_t*>(input.data());
+    stream.next_in = const_cast<std::uint8_t*>(input.data()); // NOLINT(cppcoreguidelines-pro-type-const-cast): zlib's z_stream takes its input as non-const, which inflate and deflate only read
     stream.avail_in = static_cast<uInt>(input.size());
     stream.next_out = output.data();
     stream.avail_out = static_cast<uInt>(output.size());
@@ -178,60 +294,14 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   auto HttpContentCodec<Memory>::brotli(std::span<const std::uint8_t> input, std::span<std::uint8_t> output, bool encode) -> std::size_t {
-    DecoderMemory memory{memory_};
-    auto remaining_input = input.size();
-    auto remaining_output = output.size();
-    const auto* next_input = input.data();
-    auto* next_output = output.data();
+    DecoderMemory<Memory> memory{memory_};
 
-    if (encode) {
-      auto state = std::unique_ptr<BrotliEncoderState, decltype(&BrotliEncoderDestroyInstance)>{BrotliEncoderCreateInstance(&DecoderMemory<Memory>::allocate, &DecoderMemory<Memory>::release, &memory), &BrotliEncoderDestroyInstance};
-      if (!state) {
-        throw std::bad_alloc{};
-      }
-
-      if (BrotliEncoderSetParameter(state.get(), BROTLI_PARAM_QUALITY, brotli_quality) == 0) {
-        throw std::invalid_argument{"Invalid Brotli parameters"};
-      }
-
-      while (BrotliEncoderIsFinished(state.get()) == 0) {
-        const auto before_input = remaining_input;
-        const auto before_output = remaining_output;
-
-        if (BrotliEncoderCompressStream(state.get(), BROTLI_OPERATION_FINISH, &remaining_input, &next_input, &remaining_output, &next_output, nullptr) == 0) {
-          throw std::invalid_argument{"Brotli encoding failed"};
-        }
-
-        if (BrotliEncoderIsFinished(state.get()) != 0) {
-          break;
-        }
-
-        if (remaining_output == 0 || (remaining_input == before_input && remaining_output == before_output)) {
-          throw std::length_error{"HTTP entity exceeds its limit"};
-        }
-      }
-    } else {
-      auto state = std::unique_ptr<BrotliDecoderState, decltype(&BrotliDecoderDestroyInstance)>{BrotliDecoderCreateInstance(&DecoderMemory<Memory>::allocate, &DecoderMemory<Memory>::release, &memory), &BrotliDecoderDestroyInstance};
-      if (!state) {
-        throw std::bad_alloc{};
-      }
-
-      const auto result = BrotliDecoderDecompressStream(state.get(), &remaining_input, &next_input, &remaining_output, &next_output, nullptr);
-      if (remaining_output == 0 && result == BROTLI_DECODER_RESULT_NEEDS_MORE_OUTPUT) {
-        throw std::length_error{"HTTP entity exceeds its limit"};
-      }
-
-      if (result != BROTLI_DECODER_RESULT_SUCCESS || remaining_input != 0) {
-        throw std::invalid_argument{"Invalid or incomplete Brotli entity"};
-      }
-    }
-
-    return output.size() - remaining_output;
+    return encode ? brotliEncode(memory, input, output, brotli_quality) : brotliDecode(memory, input, output);
   }
 
   template <Allocator Memory>
   auto HttpContentCodec<Memory>::zstd(std::span<const std::uint8_t> input, std::span<std::uint8_t> output, bool encode) -> std::size_t {
-    DecoderMemory memory{memory_};
+    DecoderMemory<Memory> memory{memory_};
     const ZSTD_customMem allocator{&DecoderMemory<Memory>::allocate, &DecoderMemory<Memory>::release, &memory};
 
     if (encode) {
@@ -240,12 +310,12 @@ namespace telar::runtime {
         throw std::bad_alloc{};
       }
 
-      if (ZSTD_isError(ZSTD_CCtx_setParameter(state.get(), ZSTD_c_checksumFlag, 1)) != 0u) {
+      if (ZSTD_isError(ZSTD_CCtx_setParameter(state.get(), ZSTD_c_checksumFlag, 1)) != 0U) {
         throw std::invalid_argument{"Invalid Zstd parameters"};
       }
 
       const auto size = ZSTD_compress2(state.get(), output.data(), output.size(), input.data(), input.size());
-      if (ZSTD_isError(size) != 0u) {
+      if (ZSTD_isError(size) != 0U) {
         throw std::length_error{"HTTP Zstd encoding exceeds its limit"};
       }
 
@@ -257,7 +327,7 @@ namespace telar::runtime {
       throw std::bad_alloc{};
     }
 
-    if (ZSTD_isError(ZSTD_DCtx_setParameter(state.get(), ZSTD_d_windowLogMax, maximum_window_log)) != 0u) {
+    if (ZSTD_isError(ZSTD_DCtx_setParameter(state.get(), ZSTD_d_windowLogMax, maximum_window_log)) != 0U) {
       throw std::invalid_argument{"Invalid Zstd parameters"};
     }
 
@@ -268,7 +338,7 @@ namespace telar::runtime {
       const auto before_input = source.pos;
       const auto before_output = destination.pos;
       const auto remaining = ZSTD_decompressStream(state.get(), &destination, &source);
-      if (ZSTD_isError(remaining) != 0u) {
+      if (ZSTD_isError(remaining) != 0U) {
         throw std::invalid_argument{"Invalid Zstd entity"};
       }
 
@@ -293,7 +363,7 @@ namespace telar::runtime {
     auto bytes = storage_.bytesMut();
 
     std::ranges::copy(name, bytes.begin());
-    std::ranges::copy(value, bytes.begin() + name.size());
+    std::ranges::copy(value, bytes.subspan(name.size()).begin());
   }
 
   template <Allocator Memory>
@@ -310,7 +380,7 @@ namespace telar::runtime {
   auto HttpFields<Memory>::Field::text() const noexcept -> std::string_view {
     const auto bytes = storage_.bytes();
 
-    return {reinterpret_cast<const char*>(bytes.data()), bytes.size()};
+    return textView(bytes);
   }
 
   template <Allocator Memory>
@@ -417,14 +487,14 @@ namespace telar::runtime {
     }
 
     return std::ranges::all_of(text, [](unsigned char byte) {
-      return (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') || std::string_view{"!#$%&'*+-.^_`|~"}.find(byte) != std::string_view::npos;
+      return (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') || std::string_view{"!#$%&'*+-.^_`|~"}.contains(static_cast<char>(byte));
     });
   }
 
   template <Allocator Memory>
   void HttpFields<Memory>::validate(std::string_view name, std::string_view value) {
     if (!token(name) || name.size() > maximum_bytes || value.size() > maximum_bytes || std::ranges::any_of(value, [](unsigned char byte) {
-          return (byte < 32 && byte != '\t') || byte == 127;
+          return (byte < ascii_space && byte != '\t') || byte == ascii_delete;
         })) {
       throw std::invalid_argument{"Invalid HTTP field"};
     }
@@ -498,7 +568,7 @@ namespace telar::runtime {
   }
 
   void HttpMessageCodec::validate(const HttpMessageView& message) {
-    if (static_cast<Byte>(message.version) > static_cast<Byte>(HttpVersion::http2) || message.header_count > message.headers.size() || message.trailer_count > message.trailers.size() || message.body.size() > HttpMessageLimits::body_bytes || message.method.size() > 64 || message.target.size() > 8192 || message.reason.size() > HttpMessageLimits::head_bytes || message.scheme.size() > 16 || message.authority.size() > 512) {
+    if (static_cast<Byte>(message.version) > static_cast<Byte>(HttpVersion::http2) || message.header_count > message.headers.size() || message.trailer_count > message.trailers.size() || message.body.size() > HttpMessageLimits::body_bytes || message.method.size() > maximum_method_bytes || message.target.size() > maximum_target_bytes || message.reason.size() > HttpMessageLimits::head_bytes || message.scheme.size() > maximum_scheme_bytes || message.authority.size() > maximum_authority_bytes) {
       throw EncodingError{"Invalid HTTP message bounds"};
     }
 
@@ -519,18 +589,17 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  HttpMessage<Memory>::HttpMessage(Memory& memory, bool response)
-      : upstream_(memory),
-        memory_(memory),
-        response(response),
-        method(memory_),
-        target(memory_),
-        reason(memory_),
-        scheme(memory_),
-        authority(memory_),
+  HttpMessage<Memory>::HttpMessage(Memory& memory, bool is_response)
+      : HttpMessageMemory<Memory>{memory},
+        response(is_response),
+        method(this->memory),
+        target(this->memory),
+        reason(this->memory),
+        scheme(this->memory),
+        authority(this->memory),
         headers(memory),
         trailers(memory),
-        body(memory_) {}
+        body(this->memory) {}
 
   template <Allocator Memory>
   auto HttpMessage<Memory>::readHttp1Head(std::string_view input, bool head_response) -> Http1Head {
@@ -558,11 +627,15 @@ namespace telar::runtime {
     const auto start = *lines.next();
 
     if (response) {
-      if (start.size() < status_line_prefix_bytes || start[8] != ' ' || start[12] != ' ') {
+      // "HTTP/1.1 200 ": the version, then the status code between two spaces.
+      constexpr std::size_t version_bytes = 8;
+      constexpr std::size_t status_end = 12;
+
+      if (start.size() < status_line_prefix_bytes || start[version_bytes] != ' ' || start[status_end] != ' ') {
         throw std::invalid_argument{"Invalid HTTP status line"};
       }
 
-      version = readVersion(start.substr(0, 8));
+      version = readVersion(start.substr(0, version_bytes));
       status = analyzed->status;
       reason.assign(start.substr(status_line_prefix_bytes));
       HttpFields<Memory>::validate("reason", reason);
@@ -589,7 +662,7 @@ namespace telar::runtime {
         throw std::invalid_argument{"Invalid HTTP field line"};
       }
 
-      headers.append(line->substr(0, colon), trimText(line->substr(colon + 1), " \t"));
+      headers.append(line->substr(0, colon), trimText(line->substr(colon + 1), blanks));
     }
 
     validateHost();
@@ -600,13 +673,17 @@ namespace telar::runtime {
   template <Allocator Memory>
   void HttpMessage<Memory>::decodeBody(std::span<const std::uint8_t> wire) {
     const auto coding = contentEncoding();
-    const auto decoded = HttpContentCodec{upstream_}.decodeView(wire, coding, maximum_body_bytes);
+    const auto decoded = HttpContentCodec<Memory>{this->upstream}.decodeView(wire, coding, maximum_body_bytes);
     const auto bytes = decoded.bytes();
-    const std::less_equal<const std::uint8_t*> before;
-    if (!decoded.storage && !body.empty() && before(body.data(), bytes.data()) && before(bytes.data() + bytes.size(), body.data() + body.size())) {
+    const std::less_equal<> before;
+    if (!decoded.storage && !body.empty() && before(body.data(), bytes.data()) && before(std::to_address(bytes.end()), body.end())) {
       // An identity entity already in the body only has to be cut to the bytes it spans.
-      // The bytes lie inside the body: they move to its front, which the copy reads before it writes.
-      std::memmove(body.dataMut(), bytes.data(), bytes.size());
+      // The bytes lie inside the body: unless they start it, they move to its front, ahead of where
+      // the copy reads.
+      if (bytes.data() != body.data()) {
+        std::ranges::copy(bytes, body.viewMut().begin());
+      }
+
       body.truncate(bytes.size());
     } else {
       body.clear();
@@ -640,7 +717,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   auto HttpMessage<Memory>::encodeBody() -> HttpContentCodec<Memory>::Coded {
-    return HttpContentCodec{upstream_}.encodeView(body, contentEncoding(), maximum_body_bytes + content_overhead_bytes);
+    return HttpContentCodec<Memory>{this->upstream}.encodeView(body, contentEncoding(), maximum_body_bytes + content_overhead_bytes);
   }
 
   template <Allocator Memory>
@@ -649,44 +726,45 @@ namespace telar::runtime {
       throw std::invalid_argument{"Invalid HTTP/2 message bounds"};
     }
 
-    if (response) {
-      if (status < 100 || status > 599 || status == 101) {
-        throw std::invalid_argument{"Invalid HTTP/2 status"};
-      }
-    } else {
-      if (!HttpFields<Memory>::token(method) || method.size() > maximum_method_bytes || authority.empty() || authority.size() > 512) {
-        throw std::invalid_argument{"Invalid HTTP/2 request"};
-      }
-
-      if (method == "CONNECT") {
-        if (!scheme.empty() || !target.empty()) {
-          throw std::invalid_argument{"Invalid HTTP/2 CONNECT"};
-        }
-      } else {
-        validateRequest();
-        if ((scheme != "http" && scheme != "https") || (!target.view().starts_with('/') && !(method == "OPTIONS" && target == "*"))) {
-          throw std::invalid_argument{"Invalid HTTP/2 target"};
-        }
-      }
-
-      if (std::ranges::any_of(authority.view(), [](unsigned char byte) {
-            return byte <= 32 || byte >= 127 || std::string_view{"/,#?@\\"}.contains(byte);
-          })) {
-        throw std::invalid_argument{"Invalid HTTP/2 authority"};
-      }
+    if (!response) {
+      validateHttp2Request();
+    } else if (status < HttpStatus::minimum || status > HttpStatus::maximum || status == HttpStatus::switching_protocols) {
+      throw std::invalid_argument{"Invalid HTTP/2 status"};
     }
 
     validateTrailers();
     for (const auto& field : headers.fields()) {
-      if (asciiEqualIgnoreCase(field.name(), "connection") || asciiEqualIgnoreCase(field.name(), "keep-alive") || asciiEqualIgnoreCase(field.name(), "proxy-connection") || asciiEqualIgnoreCase(field.name(), "transfer-encoding") || asciiEqualIgnoreCase(field.name(), "upgrade") || (asciiEqualIgnoreCase(field.name(), "te") && !asciiEqualIgnoreCase(field.value(), "trailers"))) {
+      if (connectionSpecific(field.name(), field.value())) {
         throw std::invalid_argument{"Connection-specific HTTP/2 field"};
       }
     }
   }
 
   template <Allocator Memory>
+  void HttpMessage<Memory>::validateHttp2Request() const {
+    if (!HttpFields<Memory>::token(method) || method.size() > maximum_method_bytes || authority.empty() || authority.size() > maximum_authority_bytes) {
+      throw std::invalid_argument{"Invalid HTTP/2 request"};
+    }
+
+    if (method == "CONNECT") {
+      if (!scheme.empty() || !target.empty()) {
+        throw std::invalid_argument{"Invalid HTTP/2 CONNECT"};
+      }
+    } else {
+      validateRequest();
+      if ((scheme != "http" && scheme != "https") || (!target.view().starts_with('/') && !(method == "OPTIONS" && target == "*"))) {
+        throw std::invalid_argument{"Invalid HTTP/2 target"};
+      }
+    }
+
+    if (std::ranges::any_of(authority.view(), invalidAuthorityByte)) {
+      throw std::invalid_argument{"Invalid HTTP/2 authority"};
+    }
+  }
+
+  template <Allocator Memory>
   auto HttpMessage<Memory>::serializeHttp1() -> Bytes {
-    Bytes output{memory_};
+    Bytes output{this->memory};
 
     serializeHttp1(output);
     return output;
@@ -695,6 +773,35 @@ namespace telar::runtime {
   template <Allocator Memory>
   void HttpMessage<Memory>::serializeHttp1(Bytes& output) {
     output.clear();
+    validateHttp1();
+    writeStartLine(output);
+    for (const auto& field : headers.fields()) {
+      if (!framingField(field.name())) {
+        fieldLine(output, {.name = field.name(), .value = field.value()});
+      }
+    }
+
+    if (bodyless()) {
+      writeBodylessEnd(output);
+      return;
+    }
+
+    const auto encoded = encodeBody();
+    const auto entity = encoded.bytes();
+
+    if (!trailers.fields().empty()) {
+      writeChunked(output, entity);
+    } else {
+      append(output, "Content-Length: ");
+      number(output, entity.size());
+      append(output, "\r\n\r\n");
+      validateHeadSize(output);
+      append(output, entity);
+    }
+  }
+
+  template <Allocator Memory>
+  void HttpMessage<Memory>::validateHttp1() const {
     if (version == HttpVersion::http2) {
       throw std::invalid_argument{"HTTP/2 messages require an HTTP/2 endpoint"};
     }
@@ -704,7 +811,7 @@ namespace telar::runtime {
     }
 
     if (response) {
-      if (status < 100 || status > 599) {
+      if (status < HttpStatus::minimum || status > HttpStatus::maximum) {
         throw std::invalid_argument{"Invalid HTTP status"};
       }
 
@@ -714,13 +821,15 @@ namespace telar::runtime {
       validateHost();
     }
 
-    const bool without_body = bodyless();
-    const bool chunked = !without_body && !trailers.fields().empty();
-    if (chunked && version == HttpVersion::http10) {
+    if (!bodyless() && !trailers.fields().empty() && version == HttpVersion::http10) {
       throw std::invalid_argument{"HTTP/1.0 cannot carry trailers"};
     }
 
     validateTrailers();
+  }
+
+  template <Allocator Memory>
+  void HttpMessage<Memory>::writeStartLine(Bytes& output) const {
     const auto* const protocol = version == HttpVersion::http10 ? "HTTP/1.0" : "HTTP/1.1";
 
     if (response) {
@@ -738,71 +847,57 @@ namespace telar::runtime {
       append(output, protocol);
       append(output, "\r\n");
     }
+  }
 
-    for (const auto& field : headers.fields()) {
-      if (!framingField(field.name())) {
-        fieldLine(output, field.name(), field.value());
-      }
-    }
+  template <Allocator Memory>
+  void HttpMessage<Memory>::writeBodylessEnd(Bytes& output) {
+    if (response_to_head && !bodylessResponse(status, false) && (body_materialized || !body.empty())) {
+      const auto entity = encodeBody();
 
-    if (without_body) {
-      if (response_to_head && !bodylessResponse(status, false) && (body_materialized || !body.empty())) {
-        const auto entity = encodeBody();
-
-        append(output, "Content-Length: ");
-        number(output, entity.bytes().size());
-        append(output, "\r\n");
-      } else if (status >= 200 && status != 204 && status != 205 && (response_to_head || status == 304) && headers.get("content-length")) {
-        validateLengths();
-        fieldLine(output, "Content-Length", *headers.get("content-length"));
-      } else if (status == 205) {
-        fieldLine(output, "Content-Length", "0");
-      }
-
-      append(output, "\r\n");
-      validateHeadSize(output);
-      return;
-    }
-
-    const auto encoded = encodeBody();
-    const auto entity = encoded.bytes();
-
-    if (chunked) {
-      fieldLine(output, "Transfer-Encoding", "chunked");
-      append(output, "Trailer: ");
-      bool first = true;
-
-      for (const auto& field : trailers.fields()) {
-        if (!first) {
-          append(output, ", ");
-        }
-
-        append(output, field.name());
-        first = false;
-      }
-
-      append(output, "\r\n\r\n");
-      validateHeadSize(output);
-      if (!entity.empty()) {
-        number(output, entity.size(), 16);
-        append(output, "\r\n");
-        append(output, entity);
-        append(output, "\r\n");
-      }
-
-      append(output, "0\r\n");
-      for (const auto& field : trailers.fields()) {
-        fieldLine(output, field.name(), field.value());
-      }
-
-      append(output, "\r\n");
-    } else {
       append(output, "Content-Length: ");
-      number(output, entity.size());
-      append(output, "\r\n\r\n");
-      validateHeadSize(output);
-      append(output, entity);
+      number(output, entity.bytes().size());
+      append(output, "\r\n");
+    } else if (status >= HttpStatus::first_success && status != HttpStatus::no_content && status != HttpStatus::reset_content && (response_to_head || status == HttpStatus::not_modified) && headers.get("content-length")) {
+      validateLengths();
+      fieldLine(output, {.name = "Content-Length", .value = *headers.get("content-length")});
+    } else if (status == HttpStatus::reset_content) {
+      fieldLine(output, {.name = "Content-Length", .value = "0"});
     }
+
+    append(output, "\r\n");
+    validateHeadSize(output);
+  }
+
+  template <Allocator Memory>
+  void HttpMessage<Memory>::writeChunked(Bytes& output, std::span<const std::uint8_t> entity) const {
+    fieldLine(output, {.name = "Transfer-Encoding", .value = "chunked"});
+    append(output, "Trailer: ");
+    bool first = true;
+
+    for (const auto& field : trailers.fields()) {
+      if (!first) {
+        append(output, ", ");
+      }
+
+      append(output, field.name());
+      first = false;
+    }
+
+    append(output, "\r\n\r\n");
+    validateHeadSize(output);
+    if (!entity.empty()) {
+      number(output, entity.size(), http_hexadecimal);
+      append(output, "\r\n");
+      append(output, entity);
+      append(output, "\r\n");
+    }
+
+    append(output, "0\r\n");
+    for (const auto& field : trailers.fields()) {
+      fieldLine(output, {.name = field.name(), .value = field.value()});
+    }
+
+    append(output, "\r\n");
   }
 
   template <Allocator Memory>
@@ -821,7 +916,7 @@ namespace telar::runtime {
   template <Allocator Memory>
   void HttpMessage<Memory>::validateRequest() const {
     if (!HttpFields<Memory>::token(method) || method.size() > maximum_method_bytes || target.empty() || target.size() > maximum_target_bytes || std::ranges::any_of(target.view(), [](unsigned char byte) {
-          return byte <= 32 || byte >= 127;
+          return byte <= ascii_space || byte >= ascii_delete;
         })) {
       throw std::invalid_argument{"Invalid HTTP request line"};
     }
@@ -837,9 +932,7 @@ namespace telar::runtime {
 
     for (const auto& field : headers.fields()) {
       if (asciiEqualIgnoreCase(field.name(), "host")) {
-        if (field.value().empty() || std::ranges::any_of(field.value(), [](unsigned char byte) {
-              return byte <= 32 || byte >= 127 || std::string_view{"/,#?@\\"}.contains(byte);
-            })) {
+        if (field.value().empty() || std::ranges::any_of(field.value(), invalidAuthorityByte)) {
           throw std::invalid_argument{"Invalid HTTP Host field"};
         }
 
@@ -859,20 +952,7 @@ namespace telar::runtime {
 
     for (const auto& field : headers.fields()) {
       if (asciiEqualIgnoreCase(field.name(), "content-length")) {
-        TextFields values{field.value(), ","};
-
-        while (const auto value = values.next()) {
-          const auto parsed = parseHttpNumber<10>(trimText(*value, " \t"));
-          if (!parsed) {
-            throw std::invalid_argument{"Invalid HTTP length"};
-          }
-
-          if (length && *length != *parsed) {
-            throw std::invalid_argument{"Conflicting HTTP lengths"};
-          }
-
-          length = parsed;
-        }
+        readLengths(field.value(), length);
       }
 
       if (asciiEqualIgnoreCase(field.name(), "transfer-encoding")) {
@@ -900,16 +980,8 @@ namespace telar::runtime {
       }
 
       for (const auto& header : headers.fields()) {
-        if (!asciiEqualIgnoreCase(header.name(), "connection")) {
-          continue;
-        }
-
-        TextFields tokens{header.value(), ","};
-
-        while (const auto token = tokens.next()) {
-          if (asciiEqualIgnoreCase(field.name(), trimText(*token, " \t"))) {
-            throw std::invalid_argument{"Hop-by-hop HTTP trailer"};
-          }
+        if (asciiEqualIgnoreCase(header.name(), "connection") && listsToken(header, field.name())) {
+          throw std::invalid_argument{"Hop-by-hop HTTP trailer"};
         }
       }
     }
@@ -917,11 +989,11 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   auto HttpMessage<Memory>::contentEncoding() -> Text {
-    Text encoding{memory_};
+    Text encoding{this->memory};
 
     for (const auto& field : headers.fields()) {
       if (asciiEqualIgnoreCase(field.name(), "content-encoding")) {
-        if (trimText(field.value(), " \t").empty()) {
+        if (trimText(field.value(), blanks).empty()) {
           throw std::invalid_argument{"Empty HTTP content coding"};
         }
 
@@ -952,14 +1024,15 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   void HttpMessage<Memory>::append(Bytes& output, std::string_view text) {
-    append(output, std::span{reinterpret_cast<const std::uint8_t*>(text.data()), text.size()});
+    append(output, byteView(text));
   }
 
   template <Allocator Memory>
-  void HttpMessage<Memory>::number(Bytes& output, std::size_t value, int base) {
-    ds::Array<char, std::numeric_limits<std::size_t>::digits10 + 1> text;
-    const auto result = std::to_chars(text.dataMut(), text.dataMut() + text.size(), value, base);
-    if (result.ec != std::errc{}) {
+  void HttpMessage<Memory>::number(Bytes& output, std::size_t value, unsigned base) {
+    ds::Array<char, std::numeric_limits<std::size_t>::digits10 + 1> text{};
+    const auto digits = text.viewMut();
+    const auto result = std::to_chars(digits.data(), std::to_address(digits.end()), value, static_cast<int>(base));
+    if (result.ec == std::errc::value_too_large) {
       throw std::length_error{"Invalid HTTP length"};
     }
 
@@ -967,10 +1040,10 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  void HttpMessage<Memory>::fieldLine(Bytes& output, std::string_view name, std::string_view value) {
-    append(output, name);
+  void HttpMessage<Memory>::fieldLine(Bytes& output, const HttpMessageView::Field& field) {
+    append(output, field.name);
     append(output, ": ");
-    append(output, value);
+    append(output, field.value);
     append(output, "\r\n");
   }
 

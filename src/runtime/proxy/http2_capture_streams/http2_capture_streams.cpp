@@ -5,7 +5,7 @@ import telar.base.ds;
 
 namespace telar::runtime {
 
-  ConnectHead::ConnectHead() noexcept {}
+  ConnectHead::ConnectHead() noexcept = default;
 
   auto ConnectHead::receive(int socket) noexcept -> Read {
     SocketStream stream{socket};
@@ -14,7 +14,7 @@ namespace telar::runtime {
   }
 
   std::string_view ConnectHead::text() noexcept {
-    return {reinterpret_cast<const char*>(storage_.bytes().data()), reader_.length()};
+    return {reinterpret_cast<const char*>(storage_.bytes().data()), reader_.length()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): char may alias the head's bytes, and no cast-free view reads bytes as text
   }
 
   void ConnectHead::erase() noexcept {
@@ -61,9 +61,14 @@ namespace telar::runtime {
       return now - since_ >= establishment_timeout ? Closure::establishment_timeout : Closure::none;
     case Phase::half_closed:
       return now - active_ >= half_closed_timeout ? Closure::half_closed_timeout : Closure::none;
-    default:
+    case Phase::open:
+    case Phase::idle:
+    case Phase::closing:
       return Closure::none;
     }
+
+    // A phase outside the enumeration has no deadline either.
+    return Closure::none;
   }
 
   bool ProxyConnectionPolicy::evictable(Closure reason, Time now) const noexcept {
@@ -74,9 +79,15 @@ namespace telar::runtime {
       return phase_ == Phase::idle && exchanges_ == 0 && now - active_ >= evictable_idle_age;
     case Closure::evict_silent:
       return phase_ == Phase::open && exchanges_ == 0 && now - active_ >= evictable_silent_age;
-    default:
+    case Closure::none:
+    case Closure::head_timeout:
+    case Closure::establishment_timeout:
+    case Closure::half_closed_timeout:
       return false;
     }
+
+    // A reason outside the enumeration evicts nothing either.
+    return false;
   }
 
   void ProxyCounters::record(ProxyCounter counter, std::uint64_t count) noexcept {
@@ -88,7 +99,7 @@ namespace telar::runtime {
   }
 
   auto ProxyCounters::snapshot() const noexcept -> ds::Array<std::uint64_t, capacity> {
-    ds::Array<std::uint64_t, capacity> result;
+    ds::Array<std::uint64_t, capacity> result{};
 
     for (std::size_t index = 0; index != capacity; ++index) {
       result.atMut(index) = counters_[index].load(std::memory_order_relaxed);

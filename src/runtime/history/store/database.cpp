@@ -13,59 +13,71 @@ import telar.base.ds;
 
 namespace telar::runtime {
 
+  namespace {
+
+    ds::Array<char, PATH_MAX> prepareDatabaseFile(const char* path) {
+      constexpr mode_t private_file_mode = 0600;
+      ds::Array<char, PATH_MAX> canonical{};
+
+      if (std::string_view{path} == ":memory:") {
+        // The array is zeroed, so the copy stays terminated.
+        std::ranges::copy(std::string_view{path}, canonical.viewMut().begin());
+        return canonical;
+      }
+
+      auto parent = openPrivateParent(path);
+      FileDescriptor file{::open(path, combineFlags(O_RDWR, O_CREAT, O_CLOEXEC, O_NOFOLLOW), private_file_mode)}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+      if (!file) {
+        throw SystemError{"open history database"};
+      }
+
+      struct stat state{};
+      if (::fstat(file.get(), &state) != 0 || !S_ISREG(state.st_mode) || state.st_uid != ::geteuid() || state.st_nlink != 1) {
+        throw RequestError{FailureCode::permission_denied, "History database must be an owned regular file"};
+      }
+
+      if (::fchmod(file.get(), private_file_mode) != 0) {
+        throw SystemError{"restrict history database permissions"};
+      }
+
+      canonical = descriptorPath(parent.get());
+
+      const std::string_view parent_text{canonical.data(), canonical.size()};
+      const auto parent_length = std::min(parent_text.find('\0'), parent_text.size());
+      const std::string_view input{path};
+      const auto filename = input.substr(input.rfind('/') + 1);
+      if (parent_length + 1 + filename.size() >= canonical.size()) {
+        throw SystemError{"history database path is too long", ENAMETOOLONG};
+      }
+
+      canonical.atMut(parent_length) = '/';
+      std::ranges::copy(filename, canonical.viewMut().subspan(parent_length + 1).begin());
+      return canonical;
+    }
+
+  }
+
   void checkSqlite(int result) {
+    // An extended result code keeps its primary code in the low byte.
+    constexpr unsigned primary_result_mask = 0xff;
+
     if (result == SQLITE_OK) {
       return;
     }
 
-    if ((result & 0xff) == SQLITE_NOMEM) {
+    if (static_cast<int>(static_cast<unsigned>(result) & primary_result_mask) == SQLITE_NOMEM) {
       throw std::bad_alloc{};
     }
 
     throw RequestError{FailureCode::internal, sqlite3_errstr(result)};
   }
 
-  static ds::Array<char, PATH_MAX> prepareDatabaseFile(const char* path) {
-    ds::Array<char, PATH_MAX> canonical{};
-
-    if (std::string_view{path} == ":memory:") {
-      std::memcpy(canonical.dataMut(), path, sizeof(":memory:"));
-      return canonical;
-    }
-
-    auto parent = openPrivateParent(path);
-    FileDescriptor file{::open(path, O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0600)};
-    if (!file) {
-      throw SystemError{"open history database"};
-    }
-
-    struct stat state{};
-    if (::fstat(file.get(), &state) != 0 || !S_ISREG(state.st_mode) || state.st_uid != ::geteuid() || state.st_nlink != 1) {
-      throw RequestError{FailureCode::permission_denied, "History database must be an owned regular file"};
-    }
-
-    if (::fchmod(file.get(), 0600) != 0) {
-      throw SystemError{"restrict history database permissions"};
-    }
-
-    canonical = descriptorPath(parent.get());
-
-    const auto parent_length = std::strlen(canonical.data());
-    const std::string_view input{path};
-    const auto filename = input.substr(input.rfind('/') + 1);
-    if (parent_length + 1 + filename.size() >= canonical.size()) {
-      throw SystemError{"history database path is too long", ENAMETOOLONG};
-    }
-
-    canonical.atMut(parent_length) = '/';
-    std::memcpy(canonical.dataMut() + parent_length + 1, filename.data(), filename.size());
-    return canonical;
-  }
-
   Database::Database(const char* path, DatabaseAccess access) {
+    constexpr int reader_busy_timeout_ms = 200;
+    constexpr int writer_busy_timeout_ms = 2000;
     const bool read_only = access == DatabaseAccess::read_only;
     const auto canonical = read_only ? ds::Array<char, PATH_MAX>{} : prepareDatabaseFile(path);
-    const int flags = read_only ? SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX : SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX | SQLITE_OPEN_NOFOLLOW;
+    const int flags = read_only ? combineFlags(SQLITE_OPEN_READONLY, SQLITE_OPEN_NOMUTEX) : combineFlags(SQLITE_OPEN_READWRITE, SQLITE_OPEN_CREATE, SQLITE_OPEN_NOMUTEX, SQLITE_OPEN_NOFOLLOW);
     const int result = sqlite3_open_v2(read_only ? path : canonical.data(), &database_, flags, nullptr);
     if (result != SQLITE_OK) {
       sqlite3_close(database_);
@@ -75,7 +87,7 @@ namespace telar::runtime {
 
     sqlite3_extended_result_codes(database_, 1);
     sqlite3_limit(database_, SQLITE_LIMIT_LENGTH, static_cast<int>(max_payload_size));
-    sqlite3_busy_timeout(database_, read_only ? 200 : 2000);
+    sqlite3_busy_timeout(database_, read_only ? reader_busy_timeout_ms : writer_busy_timeout_ms);
   }
 
   Database::~Database() {
@@ -175,7 +187,7 @@ namespace telar::runtime {
       return {};
     }
 
-    return {reinterpret_cast<const char*>(bytes), static_cast<std::size_t>(length)};
+    return {reinterpret_cast<const char*>(bytes), static_cast<std::size_t>(length)}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): SQLite hands text as unsigned char, which char may alias
   }
 
   bool Statement::isNull(int column) const noexcept {

@@ -19,13 +19,13 @@ import telar.base.ds;
 export {
   namespace telar::runtime {
 
-    enum class Http2Direction {
+    enum class Http2Direction : std::uint8_t {
       request,
       response,
     };
 
     struct Http2Event {
-      enum class Kind {
+      enum class Kind : std::uint8_t {
         request_started,
         response_activity,
         response_ended,
@@ -88,7 +88,7 @@ export {
     template <Allocator Memory>
     class HpackDecoder {
     public:
-      static constexpr std::size_t maximum_table_bytes = 128 * 1024;
+      static constexpr std::size_t maximum_table_bytes = std::size_t{128} * 1024;
 
       explicit HpackDecoder(Memory& memory) noexcept;
 
@@ -96,6 +96,8 @@ export {
 
       HpackDecoder(const HpackDecoder&) = delete;
       HpackDecoder& operator=(const HpackDecoder&) = delete;
+      HpackDecoder(HpackDecoder&&) = delete;
+      HpackDecoder& operator=(HpackDecoder&&) = delete;
 
       [[nodiscard]] bool ready() const noexcept;
 
@@ -119,16 +121,18 @@ export {
           }
 
           bytes = bytes.subspan(static_cast<std::size_t>(consumed));
-          if ((flags & NGHTTP2_HD_INFLATE_EMIT) != 0) {
-            visit({reinterpret_cast<const char*>(field.name), field.namelen}, {reinterpret_cast<const char*>(field.value), field.valuelen});
+          const auto raised = static_cast<unsigned>(flags);
+          const bool emitted = (raised & emit_flag) != 0;
+          if (emitted) {
+            visit({reinterpret_cast<const char*>(field.name), field.namelen}, {reinterpret_cast<const char*>(field.value), field.valuelen}); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): nghttp2 hands a header's name and value as bytes, which char may alias
           }
 
-          if ((flags & NGHTTP2_HD_INFLATE_FINAL) != 0) {
+          if ((raised & final_flag) != 0) {
             ready_ = nghttp2_hd_inflate_end_headers(inflater_) == 0;
             return ready_;
           }
 
-          if (consumed == 0 && (flags & NGHTTP2_HD_INFLATE_EMIT) == 0) {
+          if (consumed == 0 && !emitted) {
             ready_ = false;
             return false;
           }
@@ -136,6 +140,9 @@ export {
       }
 
     private:
+      static constexpr unsigned emit_flag = NGHTTP2_HD_INFLATE_EMIT;
+      static constexpr unsigned final_flag = NGHTTP2_HD_INFLATE_FINAL;
+
       // The inflater retains the callback address; memory_ must outlive it.
       Http2Memory<Memory> memory_;
       nghttp2_hd_inflater* inflater_ = nullptr;
@@ -178,7 +185,7 @@ export {
     template <Allocator Memory>
     class Http2Observer {
     public:
-      static constexpr std::size_t maximum_header_bytes = 128 * 1024;
+      static constexpr std::size_t maximum_header_bytes = std::size_t{128} * 1024;
 
       struct Statistics {
         bool decode_failed = false;
@@ -213,11 +220,14 @@ export {
       [[nodiscard]] const Statistics& statistics() const noexcept;
 
     private:
-      enum class BlockKind {
+      enum class BlockKind : std::uint8_t {
         none,
         headers,
         push_promise,
       };
+
+      // A status of 200 or more ends a response's header blocks; 1xx ones are interim.
+      static constexpr std::uint16_t final_status = 200;
 
       void beginFrame(const Http2Frame& frame) noexcept;
 
@@ -228,7 +238,7 @@ export {
 
           if (direction_ == Http2Direction::response) {
             response = streams_.response(event.frame.stream);
-            sink.emit({Http2Event::Kind::response_activity, event.frame.stream, response.status});
+            sink.emit({.kind = Http2Event::Kind::response_activity, .stream = event.frame.stream, .status = response.status});
           }
 
           const auto body = fragment_.body(event);
@@ -277,13 +287,13 @@ export {
         }
 
         if (frame.kind == Http2FrameKind::reset_stream && frame.stream != 0) {
-          sink.emit({Http2Event::Kind::stream_reset, frame.stream, streams_.response(frame.stream).status});
+          sink.emit({.kind = Http2Event::Kind::stream_reset, .stream = frame.stream, .status = streams_.response(frame.stream).status});
           streams_.finishResponse(frame.stream);
           if (direction_ == Http2Direction::request) {
             streams_.finishRequest(frame.stream);
           }
         } else if (direction_ == Http2Direction::response && frame.kind == Http2FrameKind::goaway && streams_.hasResponses()) {
-          sink.emit({Http2Event::Kind::connection_lost});
+          sink.emit({.kind = Http2Event::Kind::connection_lost});
         } else if (frame.kind == Http2FrameKind::data && frame.stream != 0 && frame.has(Http2Flag::end_stream)) {
           finishStream(frame.stream, sink);
         }
@@ -296,11 +306,11 @@ export {
         if (block_kind_ == BlockKind::headers) {
           if (direction_ == Http2Direction::request) {
             if (metadata.request() && streams_.startRequest(block_stream_)) {
-              sink.emit({Http2Event::Kind::request_started, block_stream_});
+              sink.emit({.kind = Http2Event::Kind::request_started, .stream = block_stream_});
             } else if (metadata.request() && streams_.requestsFull()) {
               recordUntracked();
             }
-          } else if (metadata.status() >= 200 && !streams_.setResponse({block_stream_, metadata.status(), metadata.eventStream()})) {
+          } else if (metadata.status() >= final_status && !streams_.setResponse({block_stream_, metadata.status(), metadata.eventStream()})) {
             recordUntracked();
           }
 
@@ -317,10 +327,10 @@ export {
       template <Http2EventSink Sink>
       TBC_GENERIC void finishStream(std::uint32_t stream, Sink& sink) noexcept {
         if (direction_ == Http2Direction::request) {
-          sink.emit({Http2Event::Kind::request_finished, stream});
+          sink.emit({.kind = Http2Event::Kind::request_finished, .stream = stream});
           streams_.finishRequest(stream);
         } else {
-          sink.emit({Http2Event::Kind::response_ended, stream, streams_.response(stream).status});
+          sink.emit({.kind = Http2Event::Kind::response_ended, .stream = stream, .status = streams_.response(stream).status});
           streams_.finishResponse(stream);
         }
       }

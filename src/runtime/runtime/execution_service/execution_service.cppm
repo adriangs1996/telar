@@ -70,9 +70,9 @@ export {
       };
 
       struct Reached {
-        FixedText<64> name;
-        FixedText<32> noun;
-        FixedText<32> route;
+        FixedText<LimitLedger::Row::name_bytes> name;
+        FixedText<LimitLedger::Row::noun_bytes> noun;
+        FixedText<LimitLedger::Row::route_bytes> route;
         std::uint64_t value = 0;
         ds::Option<std::uint64_t> requested;
       };
@@ -84,10 +84,14 @@ export {
       static void show(ClientStore& clients, const LimitLedger::Row& row) noexcept;
 
       static constexpr unsigned reports_per_second = 32;
-      ds::Array<Reached, 32> reached_{};
+      // The reports and shows held between two deliveries.
+      static constexpr std::size_t held_reports = 32;
+      static constexpr std::size_t held_shows = 64;
+
+      ds::Array<Reached, held_reports> reached_{};
       std::size_t reports_ = 0;
       std::uint64_t dropped_ = 0;
-      ds::Array<std::pair<Ledger, std::size_t>, 64> shown_{};
+      ds::Array<std::pair<Ledger, std::size_t>, held_shows> shown_{};
       std::size_t shows_ = 0;
     };
 
@@ -105,6 +109,11 @@ export {
 
       ~ClientAdmission();
 
+      ClientAdmission(const ClientAdmission&) = delete;
+      ClientAdmission& operator=(const ClientAdmission&) = delete;
+      ClientAdmission(ClientAdmission&&) = delete;
+      ClientAdmission& operator=(ClientAdmission&&) = delete;
+
       void begin(std::size_t clients, FileDescriptor descriptor);
 
       // Generic over the caller's admission, a callable; the handshake advances in the implementation unit.
@@ -117,7 +126,7 @@ export {
 
         try {
           admit(std::move(descriptor.getMut()));
-        } catch (const std::exception&) {
+        } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): a client the runtime cannot admit is closed with its descriptor; the others carry on
         }
       }
 
@@ -204,7 +213,7 @@ export {
     // Generic over the pane type of its caller; an empty observer importers inline away.
     struct IgnorePaneInput {
       template <typename PaneType>
-      TBC_GENERIC inline void operator()(const PaneType&, std::span<const Byte>) const noexcept {}
+      TBC_GENERIC inline void operator()(const PaneType& /*pane*/, std::span<const Byte> /*bytes*/) const noexcept {}
     };
 
     // Kept whole: tests instantiate it with their own fake Poller and History (launch_failure_test's
@@ -213,7 +222,7 @@ export {
     class TBC_GENERIC PaneService {
     public:
       // The panes it launches keep the allocator, and the service keeps what it is given, all in region `a`.
-      inline explicit PaneService(tbc::mut_a<ConcurrentMemory> memory, tbc::mut_a<Poller> poller, tbc::mut_a<LimitService> limits, tbc::val_a<PaneLaunchOptions> options, tbc::mut_a<History> history = discarded_history)
+      inline explicit PaneService(tbc::mut_a<ConcurrentMemory> memory, tbc::mut_a<Poller> poller, tbc::mut_a<LimitService> limits, tbc::val_a<PaneLaunchOptions> options, tbc::mut_a<History> history = discarded_history) // NOLINT(performance-unnecessary-value-param): taken by value, the label says the views the options hold live in region `a`; a reference would demand it of the options themselves
           : memory_(memory),
             poller_(poller),
             limits_(limits),
@@ -255,11 +264,11 @@ export {
 
         Command command{memory_, launch};
 
-        return launchPrepared(model, owner_colors, bare_prompt, command, location, size, identity);
+        return launchPrepared(model, {.owner_colors = owner_colors, .bare_prompt = bare_prompt, .location = location, .size = size}, command, identity);
       }
 
       inline tbc::mut_a<Pane> launch(tbc::mut_a<RuntimeModel> model, const ConfigureTerminalColors* owner_colors, bool bare_prompt, Command<ConcurrentMemory>& command, TabLocation location, TerminalSize size, std::uint64_t restored_identity = 0) {
-        return launchPrepared(model, owner_colors, bare_prompt, command, location, size, allocateIdentity(model, restored_identity));
+        return launchPrepared(model, {.owner_colors = owner_colors, .bare_prompt = bare_prompt, .location = location, .size = size}, command, allocateIdentity(model, restored_identity));
       }
 
       inline tbc::mut_a<Attachment> attach(RuntimeModel& model, tbc::mut_a<ClientSession> client, std::uint64_t pane_id, TerminalSize size) {
@@ -384,7 +393,14 @@ export {
           refreshAfterDetach(model, clients, identity);
         }
 
-        auto& removed = require(model.panes, identity);
+        // Found again: refreshing borrowed the panes whole. Nothing erased it, so a pane gone here is a
+        // broken invariant, which stops the runtime as the throw out of this noexcept function did.
+        auto* const found = model.panes.find(identity);
+        if (found == nullptr) {
+          std::abort();
+        }
+
+        auto& removed = *found;
 
         poller_.remove(removed.process->descriptor());
         if (removed.exit_status && !removed.exit_observed) {
@@ -422,7 +438,7 @@ export {
           flushInput(pane);
         }
 
-        recordInputOrigin(model, clients, client_id, request.pane_id);
+        recordInputOrigin(model, clients, {.client = client_id, .pane = request.pane_id});
         ClipboardService::configure(clients, require(model.panes, request.pane_id));
       }
 
@@ -430,43 +446,50 @@ export {
         return BracketedPaste::size(text.size(), paste) + enter.size();
       }
 
-      // Types a line at a pane: the prefix and the text, as one paste when `paste`, then `enter`. The
+      // A line typed at a pane: the prefix and the text, as one paste when `paste`, then `enter`. The
       // prefix ends in a space, so no terminator spans it and the text.
+      struct TypedLine {
+        bool paste = false;
+        std::span<const Byte> prefix;
+        std::span<const Byte> text;
+        std::span<const Byte> enter;
+      };
+
       template <typename Observer>
-      inline static void type(Pane& pane, bool paste, std::span<const Byte> prefix, std::span<const Byte> text, std::span<const Byte> enter, const Observer& observe) {
+      inline static void type(Pane& pane, const TypedLine& line, const Observer& observe) {
         const auto forward = [&](std::span<const Byte> bytes) {
           pane.enqueueInput(bytes);
           observe(pane, bytes);
         };
 
-        if (!paste) {
-          forward(prefix);
-          forward(text);
+        if (!line.paste) {
+          forward(line.prefix);
+          forward(line.text);
         } else {
           const auto piece = [&](std::string_view bytes) {
-            forward({reinterpret_cast<const Byte*>(bytes.data()), bytes.size()});
+            forward(byteView(bytes));
           };
 
           piece(BracketedPaste::begin);
-          BracketedPaste::body(textView(prefix), piece);
-          BracketedPaste::body(textView(text), piece);
+          BracketedPaste::body(textView(line.prefix), piece);
+          BracketedPaste::body(textView(line.text), piece);
           piece(BracketedPaste::end);
         }
 
-        if (!enter.empty()) {
-          forward(enter);
+        if (!line.enter.empty()) {
+          forward(line.enter);
         }
       }
 
       // Writes a paste to a pane's input queue, framed when its program asked for bracketed paste.
       inline static void paste(Pane& pane, std::span<const Byte> text, bool bracketed) {
         BracketedPaste::encode(textView(text), bracketed, [&](std::string_view bytes) {
-          pane.enqueueInput({reinterpret_cast<const Byte*>(bytes.data()), bytes.size()});
+          pane.enqueueInput(byteView(bytes));
         });
       }
 
       [[nodiscard]] inline static std::string_view textView(std::span<const Byte> bytes) noexcept {
-        return {reinterpret_cast<const char*>(bytes.data()), bytes.size()};
+        return ::telar::textView(bytes);
       }
 
       inline bool admitInput(Pane& pane, std::size_t bytes) {
@@ -569,7 +592,7 @@ export {
         }
 
         auto& pane = require(panes, request.pane_id);
-        constexpr std::size_t clipboard_limit = 1024 * 1024;
+        constexpr std::size_t clipboard_limit = std::size_t{1024} * 1024;
         TextReader reader{memory_, pane.terminal, clipboard_limit};
 
         reader.copy(request);
@@ -594,16 +617,16 @@ export {
         }
 
         const bool paste = pane.terminal.mode(GHOSTTY_MODE_BRACKETED_PASTE);
-        ds::Array<Byte, 128> encoded_enter;
+        ds::Array<Byte, encoded_key_bytes> encoded_enter{};
         const auto enter = pane.terminal.encodeKey(GHOSTTY_KEY_ENTER, 0, encoded_enter.viewMut());
         if (admitInput(pane, typedSize(paste, request.text, enter))) {
           pane.submitCommand(request.text);
-          type(pane, paste, {}, request.text, enter, observe);
+          type(pane, {.paste = paste, .text = request.text, .enter = enter}, observe);
           pane.last_input = std::chrono::steady_clock::now();
           flushInput(pane);
         }
 
-        recordInputOrigin(model, clients, client_id, request.pane_id);
+        recordInputOrigin(model, clients, {.client = client_id, .pane = request.pane_id});
         ClipboardService::configure(clients, require(model.panes, request.pane_id));
       }
 
@@ -614,21 +637,23 @@ export {
           throw RequestError{FailureCode::pane_exited, "Pane process has exited"};
         }
 
-        const auto text = std::span<const Byte>{reinterpret_cast<const Byte*>(request.text.data()), request.text.size()};
+        const auto text = byteView(request.text);
         const bool paste = request.mode == PaneTextMode::prompt && pane.terminal.mode(GHOSTTY_MODE_BRACKETED_PASTE);
-        ds::Array<Byte, 128> encoded_enter;
+        ds::Array<Byte, encoded_key_bytes> encoded_enter{};
         const auto enter = request.mode == PaneTextMode::raw ? std::span<const Byte>{} : pane.terminal.encodeKey(GHOSTTY_KEY_ENTER, 0, encoded_enter.viewMut());
         const auto required = prefix.size() + typedSize(paste, text, enter);
         if (!admitInput(pane, required)) {
-          ds::Array<char, 160> message;
-          const auto length = std::snprintf(message.dataMut(), message.size(), "the pane's input queue holds its limit of %zu bytes; the program in it is not reading input", Pane::input_limit);
+          constexpr std::size_t message_bytes = 160;
+          ds::Array<char, message_bytes> message{};
+          const auto written = std::format_to_n(message.dataMut(), static_cast<std::ptrdiff_t>(message.size()), "the pane's input queue holds its limit of {} bytes; the program in it is not reading input", Pane::input_limit);
+          const auto length = std::min(static_cast<std::size_t>(written.size), message.size());
 
-          client.connection.send(RequestFailed{.request_id = request.request_id, .code = FailureCode::resource_limit, .message = {message.data(), static_cast<std::size_t>(length)}});
+          client.connection.send(RequestFailed{.request_id = request.request_id, .code = FailureCode::resource_limit, .message = {message.data(), length}});
           return;
         }
 
-        type(pane, paste, {reinterpret_cast<const Byte*>(prefix.data()), prefix.size()}, text, enter, observe);
-        if (request.mode != PaneTextMode::raw || request.text.find('\r') != std::string_view::npos) {
+        type(pane, {.paste = paste, .prefix = byteView(prefix), .text = text, .enter = enter}, observe);
+        if (request.mode != PaneTextMode::raw || request.text.contains('\r')) {
           pane.observer->noteInjectedSubmission();
         }
 
@@ -639,7 +664,7 @@ export {
 
       inline void pasteClipboard(RuntimeModel& model, ClientStore& clients, std::uint64_t client_id, const PastePaneClipboard& request) {
         auto& pane = requireGeneration(model.panes, request.pane_id, request.pane_generation);
-        auto* client = clients.find(client_id);
+        const auto* client = clients.find(client_id);
         if (client == nullptr || !ClipboardService::eligible(*client, pane) || pane.output_closed) {
           throw RequestError{FailureCode::invalid_request, "Clipboard paste requires a live visible attachment"};
         }
@@ -662,7 +687,7 @@ export {
           paste(pane, request.text, bracketed);
         }
 
-        recordInputOrigin(model, clients, client_id, request.pane_id);
+        recordInputOrigin(model, clients, {.client = client_id, .pane = request.pane_id});
         flushInput(require(model.panes, request.pane_id));
         if (auto* current = clients.find(client_id)) {
           current->connection.send(RequestCompleted{.request_id = request.request_id});
@@ -743,7 +768,23 @@ export {
       }
 
     private:
-      inline static void recordInputOrigin(RuntimeModel& model, ClientStore& clients, std::uint64_t client_id, std::uint64_t pane) noexcept {
+      // The client whose input reached a pane.
+      struct InputOrigin {
+        std::uint64_t client;
+        std::uint64_t pane;
+      };
+
+      // Where a pane launches, and how its terminal and shell start.
+      struct Placement {
+        const ConfigureTerminalColors* owner_colors = nullptr;
+        bool bare_prompt = false;
+        TabLocation location;
+        TerminalSize size{};
+      };
+
+      static constexpr std::size_t encoded_key_bytes = 128;
+
+      inline static void recordInputOrigin(RuntimeModel& model, ClientStore& clients, InputOrigin origin) noexcept {
         ++model.input_sequence;
         if (model.input_sequence == 0) {
           for (auto* session : clients.items()) {
@@ -755,8 +796,8 @@ export {
           model.input_sequence = 1;
         }
 
-        if (auto* client = clients.find(client_id)) {
-          client->last_input_pane = pane;
+        if (auto* client = clients.find(origin.client)) {
+          client->last_input_pane = origin.pane;
           client->last_input_sequence = model.input_sequence;
         }
       }
@@ -829,38 +870,39 @@ export {
         return {identity, model.next_pane_generation++};
       }
 
-      inline tbc::mut_a<Pane> launchPrepared(tbc::mut_a<RuntimeModel> model, const ConfigureTerminalColors* owner_colors, bool bare_prompt, Command<ConcurrentMemory>& command, TabLocation location, TerminalSize size, Identity identity) {
-        const auto setIdentity = [&](std::string_view name, std::uint64_t value) {
-          ds::Array<char, 32> text{};
+      inline tbc::mut_a<Pane> launchPrepared(tbc::mut_a<RuntimeModel> model, const Placement& placement, Command<ConcurrentMemory>& command, Identity identity) {
+        constexpr std::size_t identity_text_bytes = 32;
+        const auto set_identity = [&](std::string_view name, std::uint64_t value) {
+          ds::Array<char, identity_text_bytes> text{};
           const auto converted = std::to_chars(text.dataMut(), text.dataMut() + text.size(), value);
 
           command.setEnvironment(name, {text.data(), static_cast<std::size_t>(converted.ptr - text.data())});
         };
 
-        setIdentity("TELAR_PANE_ID", identity.id);
-        setIdentity("TELAR_PANE_GENERATION", identity.generation);
-        setIdentity("TELAR_WORKSPACE_ID", location.workspace.id);
-        setIdentity("TELAR_TAB_ID", location.tab_id);
+        set_identity("TELAR_PANE_ID", identity.id);
+        set_identity("TELAR_PANE_GENERATION", identity.generation);
+        set_identity("TELAR_WORKSPACE_ID", placement.location.workspace.id);
+        set_identity("TELAR_TAB_ID", placement.location.tab_id);
         command.setEnvironment("TELAR_SOCKET_PATH", socket_path_);
         if (!model.cli_executable.empty()) {
           command.setEnvironment("TELAR_BIN_PATH", model.cli_executable);
         }
 
         proxy_.apply(command);
-        const auto shell = shell_integration_.apply(command, bare_prompt);
-        auto pane = ds::makeBox<Pane>(memory_, memory_, identity.id, location, command, PaneLaunch{.size = size, .media_budget = model.media_budget, .graphics = model.graphics_limits, .shell = shell});
+        const auto shell = shell_integration_.apply(command, placement.bare_prompt);
+        auto pane = ds::makeBox<Pane>(memory_, memory_, identity.id, placement.location, command, PaneLaunch{.size = placement.size, .media_budget = model.media_budget, .graphics = model.graphics_limits, .shell = shell});
 
         TELAR_DIAGNOSTIC(pane.getMut().counters = &model.metrics.panes);
         pane.getMut().generation = identity.generation;
         pane.getMut().terminal.controlPolicy() = control_policy_;
-        const auto* workspace = model.workspaces.find(location.workspace.id);
-        const HistorySession session{.id = pane->history_session, .pane = pane->id, .location = location, .started_at_ms = ObservationTime::now().milliseconds, .workspace_path = workspace == nullptr ? std::string_view{} : std::string_view{workspace->path}, .shell = command.arguments().front()};
+        const auto* workspace = model.workspaces.find(placement.location.workspace.id);
+        const HistorySession session{.id = pane->history_session, .pane = pane->id, .location = placement.location, .started_at_ms = ObservationTime::now().milliseconds, .workspace_path = workspace == nullptr ? std::string_view{} : std::string_view{workspace->path}, .shell = command.arguments().front()};
         auto phase = LaunchPhase::pane_registration;
         bool registered = false;
 
         try {
-          if (owner_colors != nullptr) {
-            pane.getMut().terminal.configureColors(*owner_colors);
+          if (placement.owner_colors != nullptr) {
+            pane.getMut().terminal.configureColors(*placement.owner_colors);
           }
 
           pane->observer->configureHistory(session, model.capture_output);
@@ -928,6 +970,11 @@ export {
       explicit ExecutionService(ConcurrentMemory& memory, Poller& poller, LimitService& limits);
 
       ~ExecutionService();
+
+      ExecutionService(const ExecutionService&) = delete;
+      ExecutionService& operator=(const ExecutionService&) = delete;
+      ExecutionService(ExecutionService&&) = delete;
+      ExecutionService& operator=(ExecutionService&&) = delete;
 
       void request(RuntimeModel& model, ClientSession& client, const ExecutionRequest& request);
 

@@ -16,12 +16,12 @@ export {
     template <Allocator Memory>
     class Execution {
     public:
-      explicit Execution(Memory& memory, std::uint64_t token, const ExecutionRequest& request, std::uint64_t workspace, std::string_view cwd);
+      explicit Execution(Memory& memory, std::uint64_t execution_token, const ExecutionRequest& request, std::uint64_t workspace_id, std::string_view cwd);
 
       [[nodiscard]] bool matches(const ExecutionRequest& request) const noexcept;
 
-      static constexpr std::size_t retained_capacity = 1024 * 1024;
-      static constexpr std::size_t input_capacity = 64 * 1024;
+      static constexpr std::size_t retained_capacity = std::size_t{1024} * 1024;
+      static constexpr std::size_t input_capacity = std::size_t{64} * 1024;
       std::uint64_t token;
       std::uint64_t id;
       std::uint64_t workspace;

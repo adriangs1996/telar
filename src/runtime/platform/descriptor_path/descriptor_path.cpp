@@ -16,7 +16,7 @@ namespace telar::runtime {
     // errno set, when the system cannot tell or the path does not fit.
     bool resolve(int descriptor, ds::Array<char, PATH_MAX>& path) noexcept {
 #ifdef __APPLE__
-      return ::fcntl(descriptor, F_GETPATH, path.data()) == 0;
+      return ::fcntl(descriptor, F_GETPATH, path.dataMut()) == 0; // NOLINT(cppcoreguidelines-pro-type-vararg): fcntl's C signature is variadic
 #elifdef __linux__
       ds::Array<char, sizeof("/proc/self/fd/") + std::numeric_limits<int>::digits10 + 1> link{};
 

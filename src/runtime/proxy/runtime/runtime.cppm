@@ -50,6 +50,26 @@ import telar.runtime.platform.name_resolutions;
 import telar.runtime.platform.signals;
 import telar.base.ds;
 
+namespace telar::runtime {
+
+  // text.substr(offset, count) without its throw: an offset past the end gives an empty view.
+  constexpr std::string_view substring(std::string_view text, std::size_t offset, std::size_t count = std::string_view::npos) noexcept {
+    text.remove_prefix(std::min(offset, text.size()));
+    text.remove_suffix(text.size() - std::min(count, text.size()));
+    return text;
+  }
+
+  // The status classes of HTTP the capture and the interception tell apart.
+  inline constexpr std::uint16_t first_successful_status = 200;
+  inline constexpr std::uint16_t reset_content_status = 205;
+  inline constexpr std::uint16_t first_redirection_status = 300;
+  inline constexpr std::uint16_t first_error_status = 400;
+
+  // Writes a line on stderr of what befell the proxy's `subject`, for a failure nothing else hears of.
+  void reportProxy(std::string_view subject, std::string_view detail, std::string_view more = {}) noexcept;
+
+}
+
 // Interface: proxy/http1_capture_policy.cppm
 export {
   namespace telar::runtime {
@@ -68,13 +88,13 @@ export {
     struct IgnoreHttp1Capture {
       constexpr void begin() noexcept {}
 
-      constexpr void head(CaptureSide, std::string_view) noexcept {}
+      constexpr void head(CaptureSide /*side*/, std::string_view /*bytes*/) noexcept {}
 
-      constexpr void payload(CaptureSide, std::span<const std::uint8_t>) noexcept {}
+      constexpr void payload(CaptureSide /*side*/, std::span<const std::uint8_t> /*bytes*/) noexcept {}
 
       constexpr void finishRequest() noexcept {}
 
-      constexpr void finishResponse(std::uint16_t, bool = true) noexcept {}
+      constexpr void finishResponse(std::uint16_t /*status*/, bool /*complete*/ = true) noexcept {}
 
       constexpr void discardInformational() noexcept {}
 
@@ -96,7 +116,7 @@ export {
     public:
       inline explicit Http1Capture(ConcurrentMemory& memory, CaptureProducer* producer, CaptureStart context) noexcept
           : producer_(producer),
-            context_(context),
+            context_(std::move(context)),
             exchange_(memory) {}
 
       inline void begin() noexcept {
@@ -134,7 +154,7 @@ export {
           exchange_.response.getMut().status_code = status;
         }
 
-        finish(CaptureSide::response, !complete || status >= 400 ? CaptureOutcome::failed : CaptureOutcome::finished);
+        finish(CaptureSide::response, !complete || status >= first_error_status ? CaptureOutcome::failed : CaptureOutcome::finished);
       }
 
       inline void discardInformational() noexcept {
@@ -267,7 +287,7 @@ export {
           : counters_(counters),
             capture_(std::move(capture)),
             request_(memory, context, false),
-            response_(memory, context, true) {
+            response_(memory, std::move(context), true) {
         capture_.begin();
       }
 
@@ -281,63 +301,25 @@ export {
         bool active = false;
 
         for (std::size_t round = 0; round < maximum_rounds && !finished_ && !upgraded_; ++round) {
-          bool request_progress = advanceMessage(request_, CaptureSide::request, counters_, capture_, child, origin, readiness);
+          const auto request = requestTurn(child, origin, readiness);
 
-          active = active || request_progress;
-          if (sendContinue(child)) {
-            active = true;
-            request_progress = advanceMessage(request_, CaptureSide::request, counters_, capture_, child, origin, TunnelReadiness::available()) || request_progress;
-          }
-
-          if (request_.state() == State::head_too_large) {
-            rejectHead(true);
+          active = active || request.active;
+          if (request.round == Round::rejected) {
             return sendRejection(child) || active;
           }
 
-          if (request_.state() == State::failed) {
-            if (request_.head()) {
-              capture_.fail();
-            }
-
-            finished_ = true;
+          if (request.round == Round::stopped) {
             break;
           }
 
-          if (request_.state() == State::complete) {
-            capture_.finishRequest();
-          }
+          const auto response = responseTurn(child, origin, readiness);
 
-          if (!response_started_ && request_.head()) {
-            response_.reset(true, request_.head()->head_request);
-            response_.destinationHead(request_.originalHead());
-            response_started_ = true;
-          }
-
-          if (!response_started_) {
-            break;
-          }
-
-          const bool response_progress = advanceMessage(response_, CaptureSide::response, counters_, capture_, origin, child, {readiness.origin, readiness.child});
-
-          active = active || response_progress;
-          if (response_.state() == State::head_too_large) {
-            capture_.fail();
-            rejectHead(false);
+          active = active || response.active;
+          if (response.round == Round::rejected) {
             return sendRejection(child) || active;
           }
 
-          if (response_.state() == State::failed) {
-            capture_.fail();
-            finished_ = true;
-            break;
-          }
-
-          if (response_.state() == State::complete) {
-            finishResponse();
-            continue;
-          }
-
-          if (!request_progress && !response_progress) {
+          if (response.round == Round::stopped || (response.round == Round::going && !request.progress && !response.progress)) {
             break;
           }
         }
@@ -411,15 +393,96 @@ export {
     private:
       using State = Http1MessageRelay::State;
 
+      // How a round of the exchange left off after one of its messages: going on, done with the
+      // message so the next round starts (`finished`), stopped for now, or rejecting the head.
+      enum class Round : std::uint8_t {
+        going,
+        finished,
+        stopped,
+        rejected,
+      };
+
+      // What one message did in a round: whether it moved, and whether the round was active at all,
+      // which an interim 100 Continue makes it.
+      struct Turn {
+        Round round = Round::going;
+        bool progress = false;
+        bool active = false;
+      };
+
+      template <PeekableByteStream Child, PeekableByteStream Origin>
+      inline Turn requestTurn(Child& child, Origin& origin, TunnelReadiness readiness) noexcept {
+        Turn turn{.progress = advanceMessage(request_, Observer{counters_, capture_, CaptureSide::request}, child, origin, readiness)};
+
+        turn.active = turn.progress;
+        if (sendContinue(child)) {
+          turn.active = true;
+          turn.progress = advanceMessage(request_, Observer{counters_, capture_, CaptureSide::request}, child, origin, TunnelReadiness::available()) || turn.progress;
+        }
+
+        if (request_.state() == State::head_too_large) {
+          rejectHead(true);
+          turn.round = Round::rejected;
+          return turn;
+        }
+
+        if (request_.state() == State::failed) {
+          if (request_.head()) {
+            capture_.fail();
+          }
+
+          finished_ = true;
+          turn.round = Round::stopped;
+          return turn;
+        }
+
+        if (request_.state() == State::complete) {
+          capture_.finishRequest();
+        }
+
+        if (!response_started_ && request_.head()) {
+          response_.reset(true, request_.head()->head_request);
+          response_.destinationHead(request_.originalHead());
+          response_started_ = true;
+        }
+
+        if (!response_started_) {
+          turn.round = Round::stopped;
+        }
+
+        return turn;
+      }
+
+      template <PeekableByteStream Child, PeekableByteStream Origin>
+      inline Turn responseTurn(Child& child, Origin& origin, TunnelReadiness readiness) noexcept {
+        Turn turn{.progress = advanceMessage(response_, Observer{counters_, capture_, CaptureSide::response}, origin, child, {readiness.origin, readiness.child})};
+
+        turn.active = turn.progress;
+        if (response_.state() == State::head_too_large) {
+          capture_.fail();
+          rejectHead(false);
+          turn.round = Round::rejected;
+        } else if (response_.state() == State::failed) {
+          capture_.fail();
+          finished_ = true;
+          turn.round = Round::stopped;
+        } else if (response_.state() == State::complete) {
+          finishResponse();
+          turn.round = Round::finished;
+        }
+
+        return turn;
+      }
+
+      using Observer = Http1TransportObserver<Capture>;
+
       template <PeekableByteStream Source, ByteStream Destination>
-      inline static bool advanceMessage(Relay& message, CaptureSide side, ProxyCounters& counters, Capture& capture, Source& source, Destination& destination, TunnelReadiness readiness) noexcept {
+      inline static bool advanceMessage(Relay& message, Observer observer, Source& source, Destination& destination, TunnelReadiness readiness) noexcept {
         const auto deadline = message.deadline();
         const bool expired = deadline && std::chrono::steady_clock::now() >= *deadline;
         if (!expired && !readiness.child.satisfies(message.sourceInterest()) && !readiness.origin.satisfies(message.destinationInterest())) {
           return false;
         }
-
-        Http1TransportObserver observer{counters, capture, side};
 
         return message.advance(source, destination, observer);
       }
@@ -459,11 +522,9 @@ export {
         }
 
         capture_.finishResponse(head.status, !response_.captureIncomplete());
-        if (request_.state() != State::complete) {
-          finished_ = true;
-        } else if (head.upgrade) {
+        if (request_.state() == State::complete && head.upgrade) {
           upgraded_ = true;
-        } else if (head.closes) {
+        } else if (request_.state() != State::complete || head.closes) {
           finished_ = true;
         } else {
           request_.reset(false);
@@ -642,7 +703,7 @@ export {
         return active;
       }
 
-      static constexpr std::size_t maximum_transfer_bytes = 128 * 1024;
+      static constexpr std::size_t maximum_transfer_bytes = std::size_t{128} * 1024;
       static_assert(BufferCapacity <= maximum_transfer_bytes);
       static constexpr std::size_t maximum_rounds = maximum_transfer_bytes / BufferCapacity;
       Direction outbound_;
@@ -722,6 +783,8 @@ export {
       FlowState() = default;
       FlowState(const FlowState&) = delete;
       FlowState& operator=(const FlowState&) = delete;
+      FlowState(FlowState&&) = delete;
+      FlowState& operator=(FlowState&&) = delete;
 
       ~FlowState();
 
@@ -900,7 +963,7 @@ export {
           streams.finish(event.stream, CaptureOutcome::finished);
           break;
         case Http2Event::Kind::response_ended:
-          streams.finish(event.stream, event.status >= 400 ? CaptureOutcome::failed : CaptureOutcome::finished);
+          streams.finish(event.stream, event.status >= first_error_status ? CaptureOutcome::failed : CaptureOutcome::finished);
           break;
         case Http2Event::Kind::stream_reset:
         case Http2Event::Kind::connection_lost:
@@ -946,6 +1009,11 @@ export {
         settle();
       }
 
+      Http2Connection(const Http2Connection&) = delete;
+      Http2Connection& operator=(const Http2Connection&) = delete;
+      Http2Connection(Http2Connection&&) = delete;
+      Http2Connection& operator=(Http2Connection&&) = delete;
+
       template <ByteStream Child, ByteStream Origin>
       inline bool advance(Child& child, Origin& origin, TunnelReadiness readiness) noexcept {
         TELAR_TRACE("proxy.http2Exchange");
@@ -953,8 +1021,8 @@ export {
           return false;
         }
 
-        const bool outgoing = transfer(request_, streams_, capture_, child, origin, readiness);
-        const bool incoming = transfer(response_, streams_, capture_, origin, child, {readiness.origin, readiness.child});
+        const bool outgoing = transfer(request_, DirectionSink{streams_, capture_, request_.kind}, child, origin, readiness);
+        const bool incoming = transfer(response_, DirectionSink{streams_, capture_, response_.kind}, origin, child, {readiness.origin, readiness.child});
 
         if (finished()) {
           origin.halfClose();
@@ -1039,7 +1107,7 @@ export {
       };
 
       template <ByteStream Source, ByteStream Destination>
-      inline static bool transfer(Direction& direction, Streams& streams, Capture& capture, Source& source, Destination& destination, TunnelReadiness readiness) noexcept {
+      inline static bool transfer(Direction& direction, DirectionSink sink, Source& source, Destination& destination, TunnelReadiness readiness) noexcept {
         if (!readiness.child.satisfies(direction.relay.sourceInterest()) && !readiness.origin.satisfies(direction.relay.destinationInterest())) {
           return false;
         }
@@ -1050,8 +1118,6 @@ export {
           const auto progress = direction.relay.advance(source, destination, [&](RelayDirection<>::Observation stage, std::span<const std::uint8_t> bytes) noexcept {
             const bool request = direction.kind == Http2Direction::request;
             if ((request && stage == RelayDirection<>::Observation::received) || (!request && stage == RelayDirection<>::Observation::forwarded)) {
-              DirectionSink sink{streams, capture, direction.kind};
-
               direction.observer.observe(bytes, sink);
             }
           });
@@ -1063,7 +1129,7 @@ export {
         }
 
         if (direction.relay.finished()) {
-          capture.finish(direction.kind);
+          sink.capture.finish(direction.kind);
         }
 
         return active;
@@ -1113,8 +1179,8 @@ export {
     template <ConcurrentAllocator Memory, Http2CapturePolicy Capture = IgnoreHttp2Capture>
     class TBC_GENERIC Http2EndpointConnection {
       static constexpr std::size_t maximum_streams = 64;
-      static constexpr std::size_t connection_bytes = 16 * 1024 * 1024;
-      static constexpr std::size_t io_bytes = 16 * 1024;
+      static constexpr std::size_t connection_bytes = std::size_t{16} * 1024 * 1024;
+      static constexpr std::size_t io_bytes = std::size_t{16} * 1024;
       static constexpr std::size_t wire_body_bytes = HttpMessageLimits::body_bytes + HttpMessageLimits::head_bytes;
       using Local = SynchronizedAllocator<BudgetAllocator<Memory>>;
       using Secure = ErasingAllocator<Local>;
@@ -1123,17 +1189,20 @@ export {
       struct Endpoint;
 
       struct Half {
-        inline Half(Local& memory, Stream& stream, bool response)
+        inline Half(Local& memory, Stream& holder, bool response)
             : secure(memory),
               message(memory, response),
               queue(secure, wire_body_bytes),
-              stream(stream) {
+              stream(holder) {
           message.version = HttpVersion::http2;
         }
 
         // The queue keeps the allocator beside it, so a half stays inside its stream.
         Half(const Half&) = delete;
         Half& operator=(const Half&) = delete;
+        Half(Half&&) = delete;
+        Half& operator=(Half&&) = delete;
+        ~Half() = default;
         Secure secure;
         HttpMessage<Local> message;
         ByteQueue<Secure> queue;
@@ -1154,6 +1223,10 @@ export {
 
         Stream(const Stream&) = delete;
         Stream& operator=(const Stream&) = delete;
+        Stream(Stream&&) = delete;
+        Stream& operator=(Stream&&) = delete;
+        ~Stream() = default;
+
         std::int32_t child_id, origin_id = 0;
         // Each half names the stream that holds it, which stays where nghttp2 was told it is.
         tbc::val_self<Half> request, response;
@@ -1161,10 +1234,10 @@ export {
       };
 
       struct Endpoint {
-        inline Endpoint(Local& memory, Http2EndpointConnection* owner, bool child)
-            : memory(memory),
-              owner(owner),
-              child(child) {
+        inline Endpoint(Local& local, Http2EndpointConnection* connection, bool child_side) // NOLINT(cppcoreguidelines-pro-type-member-init): the input is written by each read before it is parsed
+            : memory(local),
+              owner(connection),
+              child(child_side) {
           nghttp2_session_callbacks* raw_callbacks = nullptr;
           if (nghttp2_session_callbacks_new(&raw_callbacks) != 0) {
             throw std::bad_alloc{};
@@ -1205,6 +1278,8 @@ export {
 
         Endpoint(const Endpoint&) = delete;
         Endpoint& operator=(const Endpoint&) = delete;
+        Endpoint(Endpoint&&) = delete;
+        Endpoint& operator=(Endpoint&&) = delete;
 
         inline void close() noexcept {
           if (session != nullptr) {
@@ -1218,7 +1293,7 @@ export {
           return tbc::raw(static_cast<Stream*>(nghttp2_session_get_stream_user_data(session, id)));
         }
 
-        inline static int beginHeaders(nghttp2_session*, const nghttp2_frame* frame, void* context) noexcept {
+        inline static int beginHeaders(nghttp2_session* /*session*/, const nghttp2_frame* frame, void* context) noexcept {
           auto& endpoint = *static_cast<Endpoint*>(context);
 
           try {
@@ -1229,7 +1304,7 @@ export {
         }
 
         // These signatures are fixed by nghttp2's C callback ABI.
-        inline static int header(nghttp2_session*, const nghttp2_frame* frame, const std::uint8_t* name, std::size_t name_size, const std::uint8_t* value, std::size_t value_size, std::uint8_t, void* context) noexcept {
+        inline static int header(nghttp2_session* /*session*/, const nghttp2_frame* frame, const std::uint8_t* name, std::size_t name_size, const std::uint8_t* value, std::size_t value_size, std::uint8_t /*flags*/, void* context) noexcept { // NOLINT(readability-function-size): nghttp2's header callback takes eight parameters
           auto& endpoint = *static_cast<Endpoint*>(context);
           auto* stream = endpoint.stream(frame->hd.stream_id);
           if ((stream == nullptr) || stream->rejected) {
@@ -1237,7 +1312,7 @@ export {
           }
 
           try {
-            endpoint.owner->header(endpoint.child, *stream, {reinterpret_cast<const char*>(name), name_size}, {reinterpret_cast<const char*>(value), value_size});
+            endpoint.owner->header(endpoint.child, *stream, {reinterpret_cast<const char*>(name), name_size}, {reinterpret_cast<const char*>(value), value_size}); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): nghttp2 hands a field as bytes, which char may alias
             return 0;
           } catch (...) {
             endpoint.owner->reject(*stream, "http2_invalid_headers");
@@ -1245,7 +1320,7 @@ export {
           }
         }
 
-        inline static int data(nghttp2_session*, std::uint8_t flags, std::int32_t id, const std::uint8_t* data, std::size_t size, void* context) noexcept {
+        inline static int data(nghttp2_session* /*session*/, std::uint8_t flags, std::int32_t id, const std::uint8_t* data, std::size_t size, void* context) noexcept { // NOLINT(readability-function-size,bugprone-easily-swappable-parameters): nghttp2's data callback fixes these six parameters
           auto& endpoint = *static_cast<Endpoint*>(context);
           if (nghttp2_session_consume_connection(endpoint.session, size) != 0) {
             return NGHTTP2_ERR_CALLBACK_FAILURE;
@@ -1265,7 +1340,7 @@ export {
           return 0;
         }
 
-        inline static int frame(nghttp2_session*, const nghttp2_frame* frame, void* context) noexcept {
+        inline static int frame(nghttp2_session* /*session*/, const nghttp2_frame* frame, void* context) noexcept {
           auto& endpoint = *static_cast<Endpoint*>(context);
 
           try {
@@ -1281,7 +1356,7 @@ export {
           }
         }
 
-        inline static int closed(nghttp2_session*, std::int32_t id, std::uint32_t error, void* context) noexcept {
+        inline static int closed(nghttp2_session* /*session*/, std::int32_t id, std::uint32_t error, void* context) noexcept { // NOLINT(bugprone-easily-swappable-parameters): nghttp2's stream close callback fixes these parameters
           auto& endpoint = *static_cast<Endpoint*>(context);
           if (auto* stream = endpoint.stream(id)) {
             (endpoint.child ? stream->child_closed : stream->origin_closed) = true;
@@ -1302,7 +1377,7 @@ export {
           return 0;
         }
 
-        inline static int notSent(nghttp2_session*, const nghttp2_frame* frame, int, void* context) noexcept {
+        inline static int notSent(nghttp2_session* /*session*/, const nghttp2_frame* frame, int /*error*/, void* context) noexcept {
           auto& endpoint = *static_cast<Endpoint*>(context);
 
           if (frame->hd.type != NGHTTP2_HEADERS) {
@@ -1341,6 +1416,11 @@ export {
 
       class Fields {
       public:
+        struct Field {
+          std::string_view name;
+          std::string_view value;
+        };
+
         inline explicit Fields(Secure& memory)
             : names_(memory),
               fields_(memory) {
@@ -1348,12 +1428,12 @@ export {
           fields_.reserve(HttpFields<Local>::maximum_fields + 4);
         }
 
-        inline void add(std::string_view name, std::string_view value) {
-          names_.emplace(names_.memory(), name);
+        inline void add(Field field) {
+          names_.emplace(names_.memory(), field.name);
           auto& lower = names_.backMut();
 
           std::ranges::transform(lower.view(), lower.dataMut(), asciiLower);
-          fields_.push({reinterpret_cast<std::uint8_t*>(lower.dataMut()), reinterpret_cast<std::uint8_t*>(const_cast<char*>(value.data())), lower.size(), value.size(), NGHTTP2_NV_FLAG_NONE});
+          fields_.push({reinterpret_cast<std::uint8_t*>(lower.dataMut()), reinterpret_cast<std::uint8_t*>(const_cast<char*>(field.value.data())), lower.size(), field.value.size(), NGHTTP2_NV_FLAG_NONE}); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast,cppcoreguidelines-pro-type-const-cast): nghttp2_nv takes a field's text as mutable bytes, which it only reads
         }
 
         [[nodiscard]] inline auto bytes() const noexcept -> std::span<const nghttp2_nv> {
@@ -1381,6 +1461,8 @@ export {
 
       Http2EndpointConnection(const Http2EndpointConnection&) = delete;
       Http2EndpointConnection& operator=(const Http2EndpointConnection&) = delete;
+      Http2EndpointConnection(Http2EndpointConnection&&) = delete;
+      Http2EndpointConnection& operator=(Http2EndpointConnection&&) = delete;
 
       inline ~Http2EndpointConnection() {
         closing_ = true;
@@ -1413,31 +1495,14 @@ export {
           progress = send(false, origin, readiness.origin) || progress;
           progress = receive(true, child, readiness.child) || progress;
           progress = receive(false, origin, readiness.origin) || progress;
-          // By index: what each stream does borrows this connection.
-          for (std::size_t index = 0; index < streams_.size(); ++index) {
-            auto* stream = tbc::raw(streams_[index] ? &streams_.atMut(index).getMut() : nullptr);
-            if (!stream) {
-              continue;
-            }
-
-            if (!stream->rejected) {
-              resolve(stream->request);
-              resolve(stream->response);
-            }
-
-            if (stream->child_closed && (stream->origin_closed || stream->origin_id == 0)) {
-              streams_.atMut(index).reset();
-            }
-          }
-
+          settleStreams();
           active |= progress;
           if (!progress || failed_) {
             break;
           }
         }
 
-        const bool drained_origin = origin_.eof || (origin_.output_size == 0 && !nghttp2_session_want_write(origin_.session));
-        if ((origin_.eof || child_.eof || draining_) && inflight() == 0 && child_.output_size == 0 && !nghttp2_session_want_write(child_.session) && drained_origin) {
+        if (drained()) {
           failed_ = true;
         }
 
@@ -1488,9 +1553,7 @@ export {
           }
 
           for (const auto* half : {&stream->request, &stream->response}) {
-            const auto& interception = half->interception;
-            const auto next = interception.waiting() ? interception.deadline(control_) : interception.policy().enabled && half->headers_complete && !half->ended && !half->streaming ? ds::Option{interception.collectUntil()}
-                                                                                                                                                                                     : ds::none;
+            const auto next = halfDeadline(*half);
             if (next && (!result || *next < *result)) {
               result = next;
             }
@@ -1501,6 +1564,48 @@ export {
       }
 
     private:
+      // Resolves each stream's interceptions and drops the streams both sides closed.
+      inline void settleStreams() noexcept {
+        // By index: what each stream does borrows this connection.
+        for (std::size_t index = 0; index < streams_.size(); ++index) {
+          auto* stream = tbc::raw(streams_[index] ? &streams_.atMut(index).getMut() : nullptr);
+          if (stream == nullptr) {
+            continue;
+          }
+
+          if (!stream->rejected) {
+            resolve(stream->request);
+            resolve(stream->response);
+          }
+
+          if (stream->child_closed && (stream->origin_closed || stream->origin_id == 0)) {
+            streams_.atMut(index).reset();
+          }
+        }
+      }
+
+      // Whether a side ended or the origin went away, and nothing is left in flight or to send.
+      [[nodiscard]] inline bool drained() const noexcept {
+        const bool drained_origin = origin_.eof || (origin_.output_size == 0 && !nghttp2_session_want_write(origin_.session));
+
+        return (origin_.eof || child_.eof || draining_) && inflight() == 0 && child_.output_size == 0 && !nghttp2_session_want_write(child_.session) && drained_origin;
+      }
+
+      // When the half's message is next due: its hook's deadline while one decides, the end of its
+      // collection while it is buffered, and none otherwise.
+      [[nodiscard]] inline ds::Option<Time> halfDeadline(const Half& half) const noexcept {
+        const auto& interception = half.interception;
+        if (interception.waiting()) {
+          return interception.deadline(control_);
+        }
+
+        if (interception.policy().enabled && half.headers_complete && !half.ended && !half.streaming) {
+          return interception.collectUntil();
+        }
+
+        return ds::none;
+      }
+
       // An endpoint is named by its side, so a callback that reaches the connection lends nothing of it.
       inline auto side(bool child) noexcept -> Endpoint& {
         return child ? child_ : origin_;
@@ -1557,7 +1662,7 @@ export {
         }
 
         const bool head_request = stream->request.message.method == "HEAD";
-        auto& half = this->half(child, *stream);
+        auto& half = Http2EndpointConnection::half(child, *stream);
 
         half.trailer_block = half.headers_complete;
         if (!half.trailer_block) {
@@ -1573,7 +1678,7 @@ export {
       }
 
       inline void header(bool child, Stream& stream, std::string_view name, std::string_view value) {
-        auto& half = this->half(child, stream);
+        auto& half = Http2EndpointConnection::half(child, stream);
         if (name.size() + value.size() + 4 > HttpMessageLimits::head_bytes - half.header_bytes) {
           throw std::length_error{"HTTP/2 header limit"};
         }
@@ -1611,18 +1716,7 @@ export {
 
       inline void frame(bool child, const nghttp2_frame& frame) {
         if (frame.hd.type == NGHTTP2_GOAWAY) {
-          draining_ = true;
-          if (!child) {
-            // By index: what each stream does borrows this connection.
-            for (std::size_t index = 0; index < streams_.size(); ++index) {
-              auto* stream = tbc::raw(streams_[index] ? &streams_.atMut(index).getMut() : nullptr);
-              if (stream && (stream->origin_id == 0 || stream->origin_id > frame.goaway.last_stream_id)) {
-                reject(*stream, "http2_origin_goaway", NGHTTP2_REFUSED_STREAM);
-              }
-            }
-          }
-
-          check(nghttp2_submit_goaway(side(!child).session, NGHTTP2_FLAG_NONE, child ? 0 : highest_forwarded_, frame.goaway.error_code, nullptr, 0));
+          goaway(child, frame);
           return;
         }
 
@@ -1631,68 +1725,116 @@ export {
           return;
         }
 
-        auto& half = this->half(child, *stream);
-        if (frame.hd.type == NGHTTP2_HEADERS && !half.trailer_block) {
-          if (!child && half.message.status < 200) {
-            informational(half);
-            return;
-          }
+        auto& half = Http2EndpointConnection::half(child, *stream);
+        if (frame.hd.type == NGHTTP2_HEADERS && !half.trailer_block && !headers(child, half, frame)) {
+          return;
+        }
 
-          half.headers_complete = true;
-          if (child) {
-            stream->original_head = half.message.method == "HEAD";
-            if (half.message.authority.empty()) {
-              if (const auto host = half.message.headers.get("host")) {
-                half.message.authority.assign(*host);
-              }
-            }
-          }
+        if ((frame.hd.flags & NGHTTP2_FLAG_END_STREAM) && !stream->rejected) {
+          endStream(child, half);
+        }
+      }
 
-          half.message.validateHttp2();
-          const auto& policy = half.interception.select(control_, context(half));
-
-          half.streaming = !policy.enabled;
-          if (policy.enabled) {
-            if (const auto length = half.message.headers.get("content-length")) {
-              if (const auto size = parseExact<std::uint64_t>(*length); size && *size > wire_body_bytes) {
-                unavailable(half, "http2_body_limit");
-              }
-            }
-          }
-
-          const bool tunnel = child ? half.message.method == "CONNECT" : stream->request.message.method == "CONNECT" && half.message.status >= 200 && half.message.status < 300;
-          if (policy.enabled && (tunnel || half.message.streamingBody())) {
-            unavailable(half, tunnel ? "http2_tunnel_body" : "http2_streaming_body");
-          }
-
-          if (half.streaming && !stream->rejected) {
-            forward(half, false);
-          }
-
-          if (child && policy.enabled && !half.streaming && !stream->rejected) {
-            if (half.message.expectation() == HttpExpectation::continue_ && ((frame.hd.flags & NGHTTP2_FLAG_END_STREAM) == 0)) {
-              Fields fields{secure_};
-
-              fields.add(":status", "100");
-              check(nghttp2_submit_headers(child_.session, NGHTTP2_FLAG_NONE, stream->child_id, nullptr, fields.bytes().data(), fields.bytes().size(), nullptr));
-              half.message.headers.remove("expect");
+      // A side stops taking streams: the origin's refuses the streams it will not answer, and the
+      // other side is told.
+      inline void goaway(bool child, const nghttp2_frame& frame) {
+        draining_ = true;
+        if (!child) {
+          // By index: what each stream does borrows this connection.
+          for (std::size_t index = 0; index < streams_.size(); ++index) {
+            auto* stream = tbc::raw(streams_[index] ? &streams_.atMut(index).getMut() : nullptr);
+            if (stream && (stream->origin_id == 0 || stream->origin_id > frame.goaway.last_stream_id)) {
+              reject(*stream, "http2_origin_goaway", NGHTTP2_REFUSED_STREAM);
             }
           }
         }
 
-        if ((frame.hd.flags & NGHTTP2_FLAG_END_STREAM) && !stream->rejected) {
-          half.ended = true;
-          capture_.observe(child ? Http2Direction::request : Http2Direction::response, {.kind = child ? Http2Event::Kind::request_finished : Http2Event::Kind::response_ended, .stream = static_cast<std::uint32_t>(stream->child_id), .status = half.message.status});
-          if (half.streaming) {
-            resume(half);
-          } else {
-            complete(half);
+        check(nghttp2_submit_goaway(side(!child).session, NGHTTP2_FLAG_NONE, child ? 0 : highest_forwarded_, frame.goaway.error_code, nullptr, 0));
+      }
+
+      // A half's head arrived whole; false when it was an interim response, which goes on apart.
+      inline bool headers(bool child, Half& half, const nghttp2_frame& frame) {
+        if (!child && half.message.status < first_successful_status) {
+          informational(half);
+          return false;
+        }
+
+        half.headers_complete = true;
+        if (child) {
+          completeRequestHead(half);
+        }
+
+        half.message.validateHttp2();
+        const auto& policy = half.interception.select(control_, context(half));
+
+        half.streaming = !policy.enabled;
+        if (policy.enabled) {
+          limitBody(child, half);
+        }
+
+        if (half.streaming && !half.stream.rejected) {
+          forward(half, false);
+        }
+
+        if (child && policy.enabled && !half.streaming && !half.stream.rejected && ((frame.hd.flags & NGHTTP2_FLAG_END_STREAM) == 0)) {
+          answerContinue(half);
+        }
+
+        return true;
+      }
+
+      // A request remembers whether it asked for a head only, and takes its authority from Host
+      // when it names none.
+      inline void completeRequestHead(Half& half) {
+        half.stream.original_head = half.message.method == "HEAD";
+        if (half.message.authority.empty()) {
+          if (const auto host = half.message.headers.get("host")) {
+            half.message.authority.assign(*host);
           }
         }
       }
 
+      // Gives up intercepting a message whose body cannot be collected: one over the limit, a
+      // tunnel's, or one that streams without end.
+      inline void limitBody(bool child, Half& half) {
+        if (const auto length = half.message.headers.get("content-length")) {
+          if (const auto size = parseExact<std::uint64_t>(*length); size && *size > wire_body_bytes) {
+            unavailable(half, "http2_body_limit");
+          }
+        }
+
+        const auto status = half.message.status;
+        const bool tunnel = child ? half.message.method == "CONNECT" : half.stream.request.message.method == "CONNECT" && status >= first_successful_status && status < first_redirection_status;
+        if (tunnel || half.message.streamingBody()) {
+          unavailable(half, tunnel ? "http2_tunnel_body" : "http2_streaming_body");
+        }
+      }
+
+      // Answers the child's Expect: 100-continue itself, as the hook waits for the body it holds back.
+      inline void answerContinue(Half& half) {
+        if (half.message.expectation() != HttpExpectation::continue_) {
+          return;
+        }
+
+        Fields fields{secure_};
+
+        fields.add({.name = ":status", .value = "100"});
+        check(nghttp2_submit_headers(child_.session, NGHTTP2_FLAG_NONE, half.stream.child_id, nullptr, fields.bytes().data(), fields.bytes().size(), nullptr));
+        half.message.headers.remove("expect");
+      }
+
+      inline void endStream(bool child, Half& half) {
+        half.ended = true;
+        capture_.observe(child ? Http2Direction::request : Http2Direction::response, {.kind = child ? Http2Event::Kind::request_finished : Http2Event::Kind::response_ended, .stream = static_cast<std::uint32_t>(half.stream.child_id), .status = half.message.status});
+        if (half.streaming) {
+          resume(half);
+        } else {
+          complete(half);
+        }
+      }
+
       inline void data(bool child, Stream& stream, std::span<const Byte> bytes, bool end) {
-        auto& half = this->half(child, stream);
+        auto& half = Http2EndpointConnection::half(child, stream);
 
         half.uncredited += bytes.size();
         capture_.observe(child ? Http2Direction::request : Http2Direction::response, {.kind = child ? Http2Event::Kind::request_body : Http2Event::Kind::response_body, .stream = static_cast<std::uint32_t>(stream.child_id), .bytes = bytes});
@@ -1788,9 +1930,9 @@ export {
         ds::Array<char, 3> status{};
 
         std::to_chars(status.dataMut(), status.dataMut() + status.size(), half.message.status);
-        fields.add(":status", {status.data(), status.size()});
+        fields.add({.name = ":status", .value = {status.data(), status.size()}});
         for (const auto& field : half.message.headers.fields()) {
-          fields.add(field.name(), field.value());
+          fields.add({.name = field.name(), .value = field.value()});
         }
 
         check(nghttp2_submit_headers(child_.session, NGHTTP2_FLAG_NONE, half.stream.child_id, nullptr, fields.bytes().data(), fields.bytes().size(), nullptr));
@@ -1811,25 +1953,7 @@ export {
         }
 
         if (changed) {
-          half.queue.clear();
-          const bool head_representation = half.message.response && half.message.response_to_head && !bodylessResponse(half.message.status, false);
-          const bool materialized_head = head_representation && (half.message.body_materialized || !half.message.body.empty());
-          if (!half.message.bodyless() || materialized_head) {
-            const auto body = half.message.encodeBody();
-
-            half.queue.append(body.bytes());
-          }
-
-          if (!head_representation || materialized_head) {
-            half.message.headers.remove("content-length");
-          }
-
-          if (!half.message.bodyless() || half.message.status == 205 || materialized_head) {
-            ds::Array<char, 32> length;
-            const auto formatted = std::to_chars(length.dataMut(), length.dataMut() + length.size(), half.queue.size());
-
-            half.message.headers.append("content-length", {length.data(), static_cast<std::size_t>(formatted.ptr - length.data())});
-          }
+          rewriteBody(half);
         }
 
         Fields fields{secure_};
@@ -1837,19 +1961,19 @@ export {
 
         if (half.message.response) {
           std::to_chars(status.dataMut(), status.dataMut() + status.size(), half.message.status);
-          fields.add(":status", {status.data(), status.size()});
+          fields.add({.name = ":status", .value = {status.data(), status.size()}});
         } else {
-          fields.add(":method", half.message.method);
+          fields.add({.name = ":method", .value = half.message.method});
           if (half.message.method != "CONNECT") {
-            fields.add(":scheme", half.message.scheme);
-            fields.add(":path", half.message.target);
+            fields.add({.name = ":scheme", .value = half.message.scheme});
+            fields.add({.name = ":path", .value = half.message.target});
           }
 
-          fields.add(":authority", half.message.authority);
+          fields.add({.name = ":authority", .value = half.message.authority});
         }
 
         for (const auto& field : half.message.headers.fields()) {
-          fields.add(field.name(), field.value());
+          fields.add({.name = field.name(), .value = field.value()});
         }
 
         nghttp2_data_provider2 provider{.source = {.ptr = &half}, .read_callback = &readBody};
@@ -1879,8 +2003,35 @@ export {
         half.interception.release();
       }
 
+      // Re-encodes the body a hook or a head change left the message with, and sets its length.
+      inline void rewriteBody(Half& half) {
+        half.queue.clear();
+        const bool head_representation = half.message.response && half.message.response_to_head && !bodylessResponse(half.message.status, false);
+        const bool materialized_head = head_representation && (half.message.body_materialized || !half.message.body.empty());
+        if (!half.message.bodyless() || materialized_head) {
+          const auto body = half.message.encodeBody();
+
+          half.queue.append(body.bytes());
+        }
+
+        if (!head_representation || materialized_head) {
+          half.message.headers.remove("content-length");
+        }
+
+        if (!half.message.bodyless() || half.message.status == reset_content_status || materialized_head) {
+          // Room for the decimal digits of any length.
+          constexpr std::size_t length_capacity = 32;
+
+          ds::Array<char, length_capacity> length{};
+          const auto digits = length.viewMut();
+          const auto formatted = std::to_chars(digits.data(), std::to_address(digits.end()), half.queue.size());
+
+          half.message.headers.append("content-length", {length.data(), static_cast<std::size_t>(formatted.ptr - digits.data())});
+        }
+      }
+
       // Returning DEFERRED parks only this data provider; nghttp2 can send every other stream.
-      inline static nghttp2_ssize readBody(nghttp2_session* session, std::int32_t id, std::uint8_t* output, std::size_t capacity, std::uint32_t* flags, nghttp2_data_source* source, void* context) noexcept {
+      inline static nghttp2_ssize readBody(nghttp2_session* session, std::int32_t id, std::uint8_t* output, std::size_t capacity, std::uint32_t* flags, nghttp2_data_source* source, void* context) noexcept { // NOLINT(readability-function-size): nghttp2's read callback takes seven parameters
         auto& endpoint = *static_cast<Endpoint*>(context);
         auto& half = *static_cast<Half*>(source->ptr);
         if (half.stream.rejected) {
@@ -1908,7 +2059,7 @@ export {
               Fields fields{endpoint.owner->secure_};
 
               for (const auto& field : half.message.trailers.fields()) {
-                fields.add(field.name(), field.value());
+                fields.add({.name = field.name(), .value = field.value()});
               }
 
               *flags |= NGHTTP2_DATA_FLAG_NO_END_STREAM;
@@ -1925,7 +2076,7 @@ export {
 
       inline void credit(Half& half, std::size_t count) noexcept {
         count = std::min(count, half.uncredited);
-        if (count != 0u) {
+        if (count != 0U) {
           nghttp2_session_consume_stream(source(half).session, sourceId(half), count);
           half.uncredited -= count;
         }
@@ -1984,15 +2135,7 @@ export {
         if (read.state == StreamResult::State::ended || read.state == StreamResult::State::failed) {
           side(child).eof = true;
           if (!child) {
-            draining_ = true;
-            side(child).output.reset();
-            side(child).output_size = 0;
-            // By index: what each stream does borrows this connection.
-            for (std::size_t index = 0; index < streams_.size(); ++index) {
-              if (auto* stream = tbc::raw(streams_[index] ? &streams_.atMut(index).getMut() : nullptr); stream && !stream->origin_closed) {
-                reject(*stream, "http2_origin_closed");
-              }
-            }
+            closeOrigin();
           }
 
           return true;
@@ -2008,6 +2151,19 @@ export {
         }
 
         return read.bytes != 0;
+      }
+
+      // The origin ended: nothing more is sent to it, and every stream it left open fails.
+      inline void closeOrigin() noexcept {
+        draining_ = true;
+        origin_.output.reset();
+        origin_.output_size = 0;
+        // By index: what each stream does borrows this connection.
+        for (std::size_t index = 0; index < streams_.size(); ++index) {
+          if (auto* stream = tbc::raw(streams_[index] ? &streams_.atMut(index).getMut() : nullptr); stream && !stream->origin_closed) {
+            reject(*stream, "http2_origin_closed");
+          }
+        }
       }
 
       template <ByteStream Destination>
@@ -2215,36 +2371,9 @@ export {
         bool active = false;
 
         if (!protocol_) {
-          const auto read = prefix_.fill(child_stream);
-
-          active = read.state == StreamResult::State::data;
-          identify();
-          ds::Array<Byte, Http2Frame::header_bytes> banner{};
-          const auto origin = origin_stream.peek(banner.viewMut());
-
-          if (!protocol_ && prefix_.empty() && (origin.state == StreamResult::State::data || origin.state == StreamResult::State::ended || origin.state == StreamResult::State::failed)) {
-            ds::Option<Http2Frame> initial;
-            Http2FrameReader reader;
-
-            reader.feed(std::span{banner}.first(origin.bytes), [&](const Http2FrameEvent& event) noexcept -> auto {
-              if (event.kind == Http2FrameEvent::Kind::begin) {
-                initial = event.frame;
-              }
-            });
-
-            const bool h2_settings = initial && initial->kind == Http2FrameKind::settings && initial->stream == 0 && initial->flags == 0 && initial->length % Http2Frame::settings_entry_bytes == 0;
-
-            protocol_ = h2_settings ? HttpProtocol::http2 : HttpProtocol::other;
-          }
-
+          active = sniff(child_stream, origin_stream);
           if (!protocol_) {
-            if (!protocol_ && (read.state == StreamResult::State::ended || read.state == StreamResult::State::failed)) {
-              protocol_ = HttpProtocol::other;
-            }
-
-            if (!protocol_) {
-              return active;
-            }
+            return active;
           }
         }
 
@@ -2282,7 +2411,36 @@ export {
       using Http2 = Http2Connection<ConcurrentMemory, Http2Capture<>>;
       using Http2Endpoint = Http2EndpointConnection<ConcurrentMemory, Http2Capture<>>;
 
+      // Reads what the child sends first and tells its protocol by it, or by the origin speaking
+      // first; whether anything was read.
+      template <PeekableByteStream Child, PeekableByteStream Origin>
+      TBC_GENERIC bool sniff(Child& child_stream, Origin& origin_stream) noexcept {
+        const auto read = prefix_.fill(child_stream);
+        const bool active = read.state == StreamResult::State::data;
+
+        identify();
+        ds::Array<Byte, Http2Frame::header_bytes> banner{};
+        const auto origin = origin_stream.peek(banner.viewMut());
+
+        if (!protocol_ && prefix_.empty() && (origin.state == StreamResult::State::data || origin.state == StreamResult::State::ended || origin.state == StreamResult::State::failed)) {
+          identifyOrigin(banner.view().first(origin.bytes));
+        }
+
+        if (!protocol_ && (read.state == StreamResult::State::ended || read.state == StreamResult::State::failed)) {
+          protocol_ = HttpProtocol::other;
+        }
+
+        return active;
+      }
+
+      // An origin that speaks first is HTTP/2 when it opens with its SETTINGS frame.
+      void identifyOrigin(std::span<const Byte> banner) noexcept;
+
       void identify() noexcept;
+
+      // What a child's first bytes say of HTTP/1: http11 or other once its request line tells, none
+      // while it may still be one.
+      static ds::Option<HttpProtocol> http1Request(std::string_view head) noexcept;
 
       // The relays and what they are built from, apart from the prefix a child stream drains: a transfer
       // lends the prefix to the stream and the relays to the call.
@@ -2294,38 +2452,12 @@ export {
         template <PeekableByteStream Child, PeekableByteStream Origin>
         TBC_GENERIC auto transfer(HttpProtocol protocol, Child& child, Origin& origin, TunnelReadiness readiness, FlowState* flow) noexcept -> bool {
           if (protocol == HttpProtocol::http2) {
-            if (!http2_ && !http2_endpoint_) {
-              try {
-                Http2Capture capture{observation_.captures, observation_.counters, captureStart(CaptureProtocol::http2)};
-                auto* control = observation_.flows ? observation_.flows->http() : nullptr;
-                if (control) {
-                  const auto event = flow ? flow->context() : traffic::FlowEvent{.id = observation_.identity, .host = hostname_.view()};
-
-                  http2_endpoint_ = ds::makeBox<Http2Endpoint>(memory_, memory_, std::move(capture), control, event);
-                } else {
-                  http2_ = ds::makeBox<Http2>(memory_, memory_, observation_.counters, std::move(capture));
-                }
-              } catch (...) {
-                failed_ = true;
-                return false;
-              }
-            }
-
-            return http2_endpoint_ ? http2_endpoint_.getMut().advance(child, origin, readiness) : http2_.getMut().advance(child, origin, readiness);
+            return transferHttp2(child, origin, readiness, flow);
           }
 
           if (protocol == HttpProtocol::http11) {
-            if (!http1_) {
-              try {
-                Http1Capture capture{memory_, observation_.captures, captureStart(CaptureProtocol::http1)};
-                const auto event = flow ? flow->context() : traffic::FlowEvent{.id = observation_.identity, .host = hostname_.view()};
-                const HttpRelayContext context{.control = observation_.flows ? observation_.flows->http() : nullptr, .identity = traffic::FlowIdentity::of(event)};
-
-                http1_ = ds::makeBox<Http1>(memory_, memory_, observation_.counters, std::move(capture), context);
-              } catch (...) {
-                failed_ = true;
-                return false;
-              }
+            if (!http1_ && !startHttp1(flow)) {
+              return false;
             }
 
             if (!http1_->upgraded()) {
@@ -2341,6 +2473,31 @@ export {
 
           return duplex_.advance(child, origin, readiness);
         }
+
+        template <PeekableByteStream Child, PeekableByteStream Origin>
+        TBC_GENERIC bool transferHttp2(Child& child, Origin& origin, TunnelReadiness readiness, FlowState* flow) noexcept {
+          if (!http2_ && !http2_endpoint_) {
+            try {
+              Http2Capture<> capture{observation_.captures, observation_.counters, captureStart(CaptureProtocol::http2)};
+              auto* control = observation_.flows != nullptr ? observation_.flows->http() : nullptr;
+              if (control != nullptr) {
+                const auto event = flow != nullptr ? flow->context() : traffic::FlowEvent{.id = observation_.identity, .host = hostname_.view()};
+
+                http2_endpoint_ = ds::makeBox<Http2Endpoint>(memory_, memory_, std::move(capture), control, event);
+              } else {
+                http2_ = ds::makeBox<Http2>(memory_, memory_, observation_.counters, std::move(capture));
+              }
+            } catch (...) {
+              failed_ = true;
+              return false;
+            }
+          }
+
+          return http2_endpoint_ ? http2_endpoint_.getMut().advance(child, origin, readiness) : http2_.getMut().advance(child, origin, readiness);
+        }
+
+        // Builds the HTTP/1 relay; false, and the relay failed, when it cannot be built.
+        bool startHttp1(FlowState* flow) noexcept;
 
         tbc::mut_a<ConcurrentMemory> memory_;
         tbc::val_a<ConnectionObservation> observation_;
@@ -2400,12 +2557,18 @@ export {
 export {
   namespace telar::runtime {
 
+    // The sockets a tunnel relays between and the host the child asked for, which the tunnel copies.
+    struct TunnelRoute {
+      TunnelSockets sockets;
+      std::string_view hostname;
+    };
+
     class TlsTunnel {
     public:
       // The tunnel keeps the allocator, the interception and the observation, region `a`, and its session
       // and relay copy the host.
       // `offer` is the child's ClientHello when the handshake already read it, or null.
-      explicit TlsTunnel(tbc::mut_a<ConcurrentMemory> memory, tbc::ref_a<TlsInterception> interception, TunnelSockets sockets, std::string_view hostname, tbc::val_a<ds::Box<AlpnOffer, ConcurrentMemory>> offer, tbc::val_a<ConnectionObservation> observation);
+      explicit TlsTunnel(tbc::mut_a<ConcurrentMemory> memory, tbc::ref_a<TlsInterception> interception, TunnelRoute route, tbc::val_a<ds::Box<AlpnOffer, ConcurrentMemory>> offer, tbc::val_a<ConnectionObservation> observation);
 
       // `flow` is the connection's flow, or null when no hook watches it.
       auto advance(TunnelReadiness readiness, FlowState* flow) noexcept -> bool;
@@ -2458,7 +2621,7 @@ export {
         const TunnelSockets sockets{handshake.childDescriptor(), handshake.originDescriptor()};
 
         if (handshake.intercept()) {
-          tls_ = ds::makeBox<TlsTunnel>(memory_, memory_, interception, sockets, handshake.hostname(), handshake.takeOffer(), observation);
+          tls_ = ds::makeBox<TlsTunnel>(memory_, memory_, interception, TunnelRoute{.sockets = sockets, .hostname = handshake.hostname()}, handshake.takeOffer(), observation);
         } else {
           plain_ = ds::makeBox<PlainTunnel>(memory_, memory_, sockets, handshake.hostname(), observation);
           observation.counters.record(ProxyCounter::passthrough_connection);
@@ -2511,10 +2674,17 @@ export {
 
       ConnectionObservation connection() noexcept;
 
-      ProxyCounters counters;
-      CaptureProducer captures;
+      [[nodiscard]] const ProxyCounters& counters() const noexcept;
+
+      ProxyCounters& countersMut() noexcept;
+
+      [[nodiscard]] const CaptureProducer& captures() const noexcept;
+
+      CaptureProducer& capturesMut() noexcept;
 
     private:
+      ProxyCounters counters_;
+      CaptureProducer captures_;
       bool capture_enabled_;
       traffic::FlowControl* flows_;
       std::uint64_t next_connection_ = 1;
@@ -2554,40 +2724,11 @@ export {
         }
 
         if (!transport_.opened()) {
-          handshake_.advance(readiness.origin.writable, now);
-          if (!observation_ && !handshake_.hostname().empty()) {
-            observation_.emplace(observations.connection());
-          }
-
-          if (handshake_.state() == Handshake::State::closed) {
-            if (observation_ && (observation_->flows != nullptr)) {
-              observation_->flows->observeFlow(traffic::Kind::flow_error, {.id = observation_->identity, .host = handshake_.hostname(), .reason = handshake_.failure()});
-            }
-
-            closed_ = true;
+          if (!establish(interception, observations, readiness.origin.writable, now)) {
             return;
           }
 
-          if (handshake_.state() != Handshake::State::reading && policy_.phase() == Phase::connect_head) {
-            enter(Phase::establishing, now);
-          }
-
-          if (handshake_.state() != Handshake::State::established) {
-            return;
-          }
-
-          try {
-            transport_.open(interception, handshake_, *observation_);
-            readiness = TunnelReadiness::available();
-          } catch (...) {
-            if (handshake_.intercept()) {
-              counters_.record(ProxyCounter::tls_context_failure);
-            }
-
-            transport_.error(handshake_.intercept() ? "tls_context_failed" : "transport_setup_failed");
-            closed_ = true;
-            return;
-          }
+          readiness = TunnelReadiness::available();
         }
 
         if (transport_.advance(readiness)) {
@@ -2676,6 +2817,45 @@ export {
     private:
       using Handshake = ConnectHandshake<ConcurrentMemory, Resolver>;
       using Phase = ProxyConnectionPolicy::Phase;
+
+      // Advances the CONNECT handshake and opens the transport once it is established; whether the
+      // transport opened now.
+      inline bool establish(tbc::ref_a<TlsInterception> interception, tbc::mut_a<ProxyObservations> observations, bool origin_writable, Time now) noexcept {
+        handshake_.advance(origin_writable, now);
+        if (!observation_ && !handshake_.hostname().empty()) {
+          observation_.emplace(observations.connection());
+        }
+
+        if (handshake_.state() == Handshake::State::closed) {
+          if (observation_ && (observation_->flows != nullptr)) {
+            observation_->flows->observeFlow(traffic::Kind::flow_error, {.id = observation_->identity, .host = handshake_.hostname(), .reason = handshake_.failure()});
+          }
+
+          closed_ = true;
+          return false;
+        }
+
+        if (handshake_.state() != Handshake::State::reading && policy_.phase() == Phase::connect_head) {
+          enter(Phase::establishing, now);
+        }
+
+        if (handshake_.state() != Handshake::State::established) {
+          return false;
+        }
+
+        try {
+          transport_.open(interception, handshake_, *observation_);
+          return true;
+        } catch (...) {
+          if (handshake_.intercept()) {
+            counters_.record(ProxyCounter::tls_context_failure);
+          }
+
+          transport_.error(handshake_.intercept() ? "tls_context_failed" : "transport_setup_failed");
+          closed_ = true;
+          return false;
+        }
+      }
 
       inline void enter(Phase phase, Time now) noexcept {
         if (policy_.phase() != phase) {
@@ -2813,7 +2993,7 @@ export {
 
     private:
       struct Record {
-        std::uint16_t port;
+        std::uint16_t port = 0;
         std::string_view endpoint;
       };
 
@@ -2829,7 +3009,7 @@ export {
       template <typename Visitor>
       TBC_GENERIC void scan(const Visitor& visit) const noexcept {
         try {
-          FileDescriptor descriptor{::openat(directory_, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
+          FileDescriptor descriptor{::openat(directory_, ".", combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
           if (!descriptor) {
             return;
           }
@@ -2844,7 +3024,7 @@ export {
           ds::Vec<unsigned char, Memory> bytes{memory_};
 
           for (std::size_t scanned = 0; scanned < maximum_scanned_entries; ++scanned) {
-            const auto* entry = ::readdir(directory.get());
+            const auto* entry = ::readdir(directory.get()); // NOLINT(concurrency-mt-unsafe): the directory stream is this call's own, which no other thread reads
             if (entry == nullptr) {
               return;
             }
@@ -2859,6 +3039,8 @@ export {
             }
           }
         } catch (...) {
+          // A directory that cannot be read holds no port to reserve or reclaim.
+          return;
         }
       }
 
@@ -2870,7 +3052,7 @@ export {
 
       static constexpr std::string_view file_prefix = "proxy-port-";
       static constexpr std::string_view hexadecimal = "0123456789abcdef";
-      static constexpr char legacy_name[] = "proxy-port";
+      static constexpr std::string_view legacy_name = "proxy-port";
       static constexpr std::size_t digest_bytes = 8;
       static constexpr std::size_t filename_bytes = file_prefix.size() + (digest_bytes * 2);
       static constexpr std::size_t maximum_scanned_entries = 4096;
@@ -2878,7 +3060,7 @@ export {
       Memory& memory_;
       int directory_;
       ds::String<Memory> endpoint_;
-      ds::Array<char, filename_bytes + 1> name_;
+      ds::Array<char, filename_bytes + 1> name_{};
       ProxyPortRange::Set reserved_;
       ds::Option<std::uint16_t> own_;
       ds::Option<std::uint16_t> legacy_;
@@ -2948,9 +3130,11 @@ export {
           poller_.watch(flows_->descriptor(), flow_token);
         }
 
-        worker_ = std::thread{[this] {
-          run();
-        }};
+        worker_ = std::thread{
+            [this] {
+              run();
+            },
+        };
       }
 
       inline ~ProxyService() {
@@ -2961,21 +3145,23 @@ export {
 
       ProxyService(const ProxyService&) = delete;
       ProxyService& operator=(const ProxyService&) = delete;
+      ProxyService(ProxyService&&) = delete;
+      ProxyService& operator=(ProxyService&&) = delete;
 
       inline std::uint16_t port() const noexcept {
         return listener_.port();
       }
 
       inline const ProxyCounters& counters() const noexcept {
-        return observations_.counters;
+        return observations_.counters();
       }
 
       inline CaptureProducer& capturesMut() noexcept {
-        return observations_.captures;
+        return observations_.capturesMut();
       }
 
       inline const CaptureProducer& captures() const noexcept {
-        return observations_.captures;
+        return observations_.captures();
       }
 
       inline std::uint32_t active() const noexcept {
@@ -3010,8 +3196,8 @@ export {
       using Connection = ProxyConnection<Resolver>;
 
       struct Slot {
-        inline explicit Slot(ds::Box<Connection, ConcurrentMemory> connection, std::uint64_t generation) noexcept
-            : connection(std::move(connection)),
+        inline explicit Slot(ds::Box<Connection, ConcurrentMemory> accepted, std::uint64_t generation) noexcept
+            : connection(std::move(accepted)),
               child_generation(generation) {}
 
         ds::Box<Connection, ConcurrentMemory> connection;
@@ -3032,55 +3218,22 @@ export {
             const auto now = Policy::Clock::now();
             auto wake_at = reap_at;
 
-            advanceRefusal(now);
-            if (refusal_) {
-              wake_at = std::min(wake_at, refusal_->deadline());
-            } else if (accept_after_ != Time{}) {
-              if (now >= accept_after_) {
-                accept_after_ = {};
-                poller_.readInterest(listener_.descriptor(), listener_token, true);
-              } else {
-                wake_at = std::min(wake_at, accept_after_);
-              }
+            if (const auto due = resumeAccepting(now)) {
+              wake_at = std::min(wake_at, *due);
             }
 
             occupied_.forEach([&](std::size_t index) {
-              auto& slot = slots_.atMut(index);
-
-              if (now >= reap_at) {
-                slot.getMut().connection.getMut().expire(now);
-                advance(index, {}, now);
-              } else if (slot->connection->buffered() || (slot->connection->deadline() && now >= *slot->connection->deadline())) {
-                advance(index, TunnelReadiness::available(), now);
-              }
-
-              if (slot) {
-                if (const auto deadline = slot->connection->deadline()) {
-                  wake_at = std::min(wake_at, *deadline);
-                }
-
-                if (slot->connection->buffered()) {
-                  wake_at = now;
-                }
-              }
+              wake_at = sweep(index, now, now >= reap_at, wake_at);
             });
 
             if (now >= reap_at) {
               reap_at = now + reap_interval;
             }
 
-            const auto events = poller_.wait(wake_at - Policy::Clock::now(), ready.viewMut());
-
-            for (const auto& event : events) {
-              if (stopping_.load(std::memory_order_acquire)) {
-                break;
-              }
-
-              dispatch(event, Policy::Clock::now());
-            }
+            dispatchAll(poller_.wait(wake_at - Policy::Clock::now(), ready.viewMut()));
           }
         } catch (const std::exception& error) {
-          std::fprintf(stderr, "telar proxy service: %s\n", error.what());
+          reportProxy("service", error.what());
           failed_.store(true, std::memory_order_release);
         } catch (...) {
           failed_.store(true, std::memory_order_release);
@@ -3095,6 +3248,60 @@ export {
         adoptions_.close();
         poller_.remove(listener_.descriptor());
         listener_.close();
+      }
+
+      // Advances the refusal and takes the listener back once the backoff passed; when the loop must
+      // wake for them, if it must.
+      inline ds::Option<Time> resumeAccepting(Time now) {
+        advanceRefusal(now);
+        if (refusal_) {
+          return refusal_->deadline();
+        }
+
+        if (accept_after_ == Time{}) {
+          return ds::none;
+        }
+
+        if (now < accept_after_) {
+          return accept_after_;
+        }
+
+        accept_after_ = {};
+        poller_.readInterest(listener_.descriptor(), listener_token, true);
+        return ds::none;
+      }
+
+      // Expires the slot's connection when `reap` says so, or advances one with work due; when the
+      // loop must wake for it next, at `wake_at` at the latest.
+      inline Time sweep(std::size_t index, Time now, bool reap, Time wake_at) {
+        auto& slot = slots_.atMut(index);
+
+        if (reap) {
+          slot.getMut().connection.getMut().expire(now);
+          advance(index, {}, now);
+        } else if (slot->connection->buffered() || (slot->connection->deadline() && now >= *slot->connection->deadline())) {
+          advance(index, TunnelReadiness::available(), now);
+        }
+
+        if (!slot) {
+          return wake_at;
+        }
+
+        if (const auto deadline = slot->connection->deadline()) {
+          wake_at = std::min(wake_at, *deadline);
+        }
+
+        return slot->connection->buffered() ? now : wake_at;
+      }
+
+      inline void dispatchAll(std::span<const Event> events) {
+        for (const auto& event : events) {
+          if (stopping_.load(std::memory_order_acquire)) {
+            break;
+          }
+
+          dispatch(event, Policy::Clock::now());
+        }
       }
 
       inline void dispatch(const Event& event, Time now) {
@@ -3117,33 +3324,43 @@ export {
             advance(index, TunnelReadiness::available(), now);
           });
         } else if (event.token == adoption_token) {
-          adoption_signal_.drain();
-          while (auto connection = adoptions_.tryReceive()) {
-            const auto index = admit(now, true);
-            if (!index) {
-              continue;
-            }
-
-            try {
-              keep(ds::makeBox<Connection>(memory_, memory_, std::move(connection.getMut()), options_, secret_, observations_.counters), *index, now);
-            } catch (...) {
-              release(*index);
-            }
-          }
+          adoptConnections(now);
         } else if (event.token == refusal_token) {
           if (refusal_watch_.matches(event)) {
             advanceRefusal(now);
           }
         } else {
-          const auto index = (event.token >> side_bits) & slot_mask;
-          auto& slot = slots_[index];
-          if (slot && (slot->child.matches(event) || slot->origin.matches(event))) {
-            TunnelReadiness readiness;
-            auto& side = slot->origin.matches(event) ? readiness.origin : readiness.child;
+          dispatchSlot(event, now);
+        }
+      }
 
-            side = {.readable = event.kind == EventKind::readable, .writable = event.kind == EventKind::writable};
-            advance(index, readiness, now);
+      // Takes in each connection the redirect handed over.
+      inline void adoptConnections(Time now) {
+        adoption_signal_.drain();
+        while (auto connection = adoptions_.tryReceive()) {
+          const auto index = admit(now, true);
+          if (!index) {
+            continue;
           }
+
+          try {
+            keep(ds::makeBox<Connection>(memory_, memory_, std::move(connection.getMut()), options_, secret_, observations_.countersMut()), *index, now);
+          } catch (...) {
+            release(*index);
+          }
+        }
+      }
+
+      // Advances the connection whose socket the event names, when it still is that slot's.
+      inline void dispatchSlot(const Event& event, Time now) noexcept {
+        const auto index = (event.token >> side_bits) & slot_mask;
+        auto& slot = slots_[index];
+        if (slot && (slot->child.matches(event) || slot->origin.matches(event))) {
+          TunnelReadiness readiness;
+          auto& side = slot->origin.matches(event) ? readiness.origin : readiness.child;
+
+          side = {.readable = event.kind == EventKind::readable, .writable = event.kind == EventKind::writable};
+          advance(index, readiness, now);
         }
       }
 
@@ -3176,7 +3393,7 @@ export {
           }
 
           try {
-            auto connection = ds::makeBox<Connection>(memory_, memory_, std::move(child), options_, secret_, observations_.counters);
+            auto connection = ds::makeBox<Connection>(memory_, memory_, std::move(child), options_, secret_, observations_.countersMut());
 
             keep(std::move(connection), *index, now);
           } catch (...) {
@@ -3202,9 +3419,9 @@ export {
         if (!authenticated && unauthenticated >= Policy::maximum_unauthenticated) {
           if (const auto evicted = oldest(Policy::Closure::evict_head, now)) {
             release(*evicted);
-            observations_.counters.record(ProxyCounter::unauthenticated_eviction);
+            observations_.countersMut().record(ProxyCounter::unauthenticated_eviction);
           } else {
-            observations_.counters.record(ProxyCounter::unauthenticated_refusal);
+            observations_.countersMut().record(ProxyCounter::unauthenticated_refusal);
             return ds::none;
           }
         }
@@ -3216,7 +3433,7 @@ export {
         for (const auto reason : {Policy::Closure::evict_head, Policy::Closure::evict_idle, Policy::Closure::evict_silent}) {
           if (const auto evicted = oldest(reason, now)) {
             release(*evicted);
-            observations_.counters.record(ProxyCounter::eviction);
+            observations_.countersMut().record(ProxyCounter::eviction);
             return evicted;
           }
         }
@@ -3259,7 +3476,7 @@ export {
           slot.child.update(poller_, slot.connection->descriptor(TlsSide::child), token(index, slot.child_generation, TlsSide::child), slot.connection->interest(TlsSide::child));
           slot.origin.update(poller_, slot.connection->descriptor(TlsSide::origin), token(index, slot.origin_generation, TlsSide::origin), slot.connection->interest(TlsSide::origin));
         } catch (const std::exception& error) {
-          std::fprintf(stderr, "telar proxy watch: %s\n", error.what());
+          reportProxy("watch", error.what());
           release(index);
         } catch (...) {
           release(index);
@@ -3292,7 +3509,7 @@ export {
       }
 
       inline static std::uint64_t token(std::size_t index, std::uint64_t generation, TlsSide side) noexcept {
-        return (generation << generation_shift) | (index << side_bits) | (side == TlsSide::origin ? 1 : 0);
+        return (generation << generation_shift) | (index << side_bits) | (side == TlsSide::origin ? 1U : 0U);
       }
 
       inline std::uint64_t nextGeneration() {
@@ -3316,7 +3533,8 @@ export {
       static constexpr std::size_t maximum_accept_batch = 32;
       static constexpr auto reap_interval = std::chrono::seconds{1};
       static constexpr auto descriptor_backoff = std::chrono::milliseconds{100};
-      static_assert(Policy::capacity == 1 << slot_bits);
+      static constexpr std::size_t adoption_capacity = 32;
+      static_assert(Policy::capacity == 1U << slot_bits);
 
       ConcurrentMemory& memory_;
       const ProxyOptions<ConcurrentMemory>& options_;
@@ -3328,7 +3546,7 @@ export {
       CompletionSignal stop_signal_;
       CompletionSignal resolution_signal_;
       CompletionSignal adoption_signal_;
-      DropChannel<redirect::Connection, 32> adoptions_;
+      DropChannel<redirect::Connection, adoption_capacity> adoptions_;
       NameResolutions<Resolver>::Notifications resolutions_;
       traffic::FlowControl* flows_;
       ds::Array<ds::Option<Slot>, Policy::capacity> slots_;
@@ -3358,7 +3576,7 @@ export {
     public:
       inline explicit ProxyRuntime(ConcurrentMemory& memory, const ProxyOptions<ConcurrentMemory>& options, std::string_view endpoint, bool inherit_legacy)
         requires std::same_as<Tap, IgnoreCaptureTap>
-          : ProxyRuntime(memory, options, endpoint, inherit_legacy, ignored_tap_) {}
+          : ProxyRuntime(memory, options, endpoint, inherit_legacy, ignored_tap) {}
 
       inline explicit ProxyRuntime(ConcurrentMemory& memory, const ProxyOptions<ConcurrentMemory>& options, std::string_view endpoint, bool inherit_legacy, Tap& tap)
           : memory_(memory),
@@ -3380,7 +3598,7 @@ export {
         proxy_trust::SystemCommand trust_command{memory, stderr};
         proxy_trust::Service system_trust{memory, *library_, trust_paths, trust_command, destination};
         if (const auto rotated = system_trust.rotateIfNeeded()) {
-          std::fprintf(stderr, "telar proxy trust: installed %.*s\n", static_cast<int>(rotated->fingerprint.size()), rotated->fingerprint.data());
+          reportProxy("trust", "installed ", {rotated->fingerprint.data(), rotated->fingerprint.size()});
         }
 
         const bool system_trusted = system_trust.inspect().status == proxy_trust::Status::installed;
@@ -3391,7 +3609,7 @@ export {
 
         raiseDescriptorLimit();
         createPrivateDirectory(path);
-        FileDescriptor directory{::open(path.data(), O_DIRECTORY | O_RDONLY | O_NOFOLLOW | O_CLOEXEC)};
+        FileDescriptor directory{::open(path.data(), combineFlags(O_DIRECTORY, O_RDONLY, O_NOFOLLOW, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
         if (!directory) {
           throw SystemError{"Open proxy authority directory"};
         }
@@ -3481,11 +3699,15 @@ export {
       }
 
       struct AuthorityStatus {
+        // The hexadecimal digits of a SHA-1 and of a SHA-256 digest.
+        static constexpr std::size_t sha1_digits = 40;
+        static constexpr std::size_t sha256_digits = 64;
+
         bool active = false;
         bool accepting = false;
         proxy_trust::Status trust = proxy_trust::Status::absent;
-        ds::Array<char, 40> fingerprint_sha1{};
-        ds::Array<char, 64> fingerprint_sha256{};
+        ds::Array<char, sha1_digits> fingerprint_sha1{};
+        ds::Array<char, sha256_digits> fingerprint_sha256{};
         ds::Array<Byte, PemDocument::maximum_bytes> certificate{};
         std::size_t certificate_bytes = 0;
       };
@@ -3598,7 +3820,8 @@ export {
         constexpr rlim_t descriptors_per_connection = 2;
         constexpr rlim_t reserved_descriptors = 448;
         constexpr rlim_t wanted = (ProxyConnectionPolicy::capacity * descriptors_per_connection) + NameResolutions<Resolver>::capacity + reserved_descriptors;
-        static_assert(wanted == 1024);
+        constexpr rlim_t descriptor_limit = 1024;
+        static_assert(wanted == descriptor_limit);
         rlimit limit;
         if (::getrlimit(RLIMIT_NOFILE, &limit) == 0 && limit.rlim_cur < wanted) {
           limit.rlim_cur = std::min(limit.rlim_max, wanted);
@@ -3620,7 +3843,7 @@ export {
       ds::Option<ProxyService<Poller, Resolver>> service_;
       ds::Option<CapturePipeline<Tap>> captures_;
       ds::Option<redirect::Ingress<ProxyService<Poller, Resolver>>> redirect_;
-      inline static IgnoreCaptureTap ignored_tap_;
+      inline static IgnoreCaptureTap ignored_tap;
     };
 
   }

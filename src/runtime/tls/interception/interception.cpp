@@ -9,7 +9,39 @@ import telar.base.ds;
 
 namespace telar::runtime {
 
-  AlpnOffer::AlpnOffer() noexcept {}
+  namespace {
+
+    constexpr unsigned byte_bits = 8;
+
+    // A 16-bit big-endian number, as TLS writes its lengths and kinds.
+    std::size_t bigEndian16(std::span<const std::uint8_t> bytes) noexcept {
+      return (std::size_t{bytes[0]} << byte_bits) | std::size_t{bytes[1]};
+    }
+
+    // A 24-bit big-endian number, as TLS writes a handshake's length.
+    std::size_t bigEndian24(std::span<const std::uint8_t> bytes) noexcept {
+      return (std::size_t{bytes[0]} << (2 * byte_bits)) | bigEndian16(bytes.subspan(1));
+    }
+
+    std::string_view textOf(std::span<const std::uint8_t> bytes) noexcept {
+      return {reinterpret_cast<const char*>(bytes.data()), bytes.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): char may alias the bytes, and no cast-free view reads bytes as text
+    }
+
+    // The length a record header declares, or nothing when it heads no handshake record within bounds.
+    ds::Option<std::size_t> handshakeRecordLength(std::span<const std::uint8_t> header, std::uint8_t handshake_record, std::size_t maximum) noexcept {
+      constexpr std::uint8_t tls_major_version = 3;
+      const auto length = bigEndian16(header.subspan(3));
+      if (header[0] != handshake_record || header[1] != tls_major_version || length == 0 || length > maximum) {
+        return ds::none;
+      }
+
+      return length;
+    }
+
+  }
+
+  // User-provided, so that allocating an offer leaves its 64 KiB unwritten until a hello is copied in.
+  AlpnOffer::AlpnOffer() noexcept {} // NOLINT(modernize-use-equals-default,cppcoreguidelines-pro-type-member-init): peek and parse write the bytes before they are read
 
   auto AlpnOffer::peek(int socket) noexcept -> Read {
     const auto count = ::recv(socket, bytes_.dataMut(), bytes_.size(), MSG_PEEK);
@@ -23,31 +55,32 @@ namespace telar::runtime {
     }
 
     const auto available = static_cast<std::size_t>(count);
-    std::size_t cursor = 0, collected = 0;
+    std::size_t cursor = 0;
+    std::size_t collected = 0;
     // One mutable borrow of the bytes: the records are read from it and their bodies gathered at its
     // front, as Rust's copy_within does.
-    const std::span<std::uint8_t> buffer{bytes_.dataMut(), bytes_.size()};
+    const std::span<std::uint8_t> buffer = bytes_.viewMut();
 
     while (cursor < available) {
       if (available - cursor < record_header_bytes) {
         return incomplete(available);
       }
 
-      const auto* header = buffer.data() + cursor;
-      const std::size_t length = (std::size_t{header[3]} << 8) | header[4];
-      if (header[0] != handshake_record || header[1] != 3 || length == 0 || length > maximum_record_bytes) {
+      const auto length = handshakeRecordLength(buffer.subspan(cursor, record_header_bytes), handshake_record, maximum_record_bytes);
+      if (!length) {
         return Read::complete;
       }
 
-      if (available - cursor - record_header_bytes < length) {
+      if (available - cursor - record_header_bytes < *length) {
         return incomplete(available);
       }
 
-      std::memmove(buffer.data() + collected, header + record_header_bytes, length);
-      collected += length;
-      cursor += record_header_bytes + length;
+      // The body moves toward the front, ahead of where the copy reads.
+      std::ranges::copy(buffer.subspan(cursor + record_header_bytes, *length), buffer.subspan(collected).begin());
+      collected += *length;
+      cursor += record_header_bytes + *length;
       if (collected >= 4) {
-        const auto expected = (std::size_t{buffer[1]} << 16) | (std::size_t{buffer[2]} << 8) | buffer[3];
+        const auto expected = bigEndian24(buffer.subspan(1));
         if (expected > maximum_hello_bytes - 4 || buffer[0] != client_hello) {
           return Read::complete;
         }
@@ -95,17 +128,18 @@ namespace telar::runtime {
   void AlpnOffer::parseStored(std::size_t size) noexcept {
     const auto handshake = std::span<const std::uint8_t>{bytes_}.first(size);
 
-    protocols_offset_ = protocols_size_ = 0;
+    protocols_offset_ = 0;
+    protocols_size_ = 0;
     valid_ = false;
     encrypted_ = false;
-    server_name_.assign({});
+    server_name_ = {};
     Cursor record{handshake};
     if (record.byte() != client_hello) {
       return;
     }
 
     const auto declared = record.take(handshake_length_bytes);
-    if (declared.size() != 3 || ((std::size_t{declared[0]} << 16) | (std::size_t{declared[1]} << 8) | declared[2]) != record.remaining()) {
+    if (declared.size() != 3 || bigEndian24(declared) != record.remaining()) {
       return;
     }
 
@@ -133,7 +167,18 @@ namespace telar::runtime {
       return;
     }
 
-    bool seen_alpn = false, seen_name = false;
+    const auto extensions = readExtensions(extension_bytes, static_cast<std::size_t>(extension_bytes.data() - handshake.data()), server_name_);
+
+    protocols_offset_ = extensions.protocols_offset;
+    protocols_size_ = extensions.protocols_size;
+    encrypted_ = extensions.encrypted;
+    valid_ = extensions.valid;
+  }
+
+  auto AlpnOffer::readExtensions(std::span<const std::uint8_t> extension_bytes, std::size_t offset, FixedText<ProxyHostname::maximum_bytes>& name) noexcept -> Extensions {
+    Extensions result;
+    bool seen_alpn = false;
+    bool seen_name = false;
     Cursor extensions{extension_bytes};
 
     while (!extensions.empty()) {
@@ -141,33 +186,30 @@ namespace telar::runtime {
       const auto body = extensions.take(extensions.word());
 
       if (extensions.failed()) {
-        return;
+        return result;
       }
 
       if (kind == alpn_extension) {
-        if (seen_alpn) {
-          return;
+        if (seen_alpn || !protocols(body)) {
+          return result;
         }
 
         seen_alpn = true;
-        if (!protocols(body)) {
-          return;
-        }
-
-        protocols_offset_ = static_cast<std::size_t>(body.data() - handshake.data()) + 2;
-        protocols_size_ = body.size() - 2;
-      } else if (kind == 0) {
-        if (seen_name || !serverName(body, server_name_)) {
-          return;
+        result.protocols_offset = offset + static_cast<std::size_t>(body.data() - extension_bytes.data()) + 2;
+        result.protocols_size = body.size() - 2;
+      } else if (kind == server_name_extension) {
+        if (seen_name || !serverName(body, name)) {
+          return result;
         }
 
         seen_name = true;
-      } else if (kind == 0xfe0d) {
-        encrypted_ = true;
+      } else if (kind == encrypted_hello_extension) {
+        result.encrypted = true;
       }
     }
 
-    valid_ = true;
+    result.valid = true;
+    return result;
   }
 
   AlpnOffer::Cursor::Cursor(std::span<const std::uint8_t> bytes) noexcept
@@ -195,7 +237,7 @@ namespace telar::runtime {
   std::uint16_t AlpnOffer::Cursor::word() noexcept {
     const auto value = take(2);
 
-    return value.empty() ? 0 : static_cast<std::uint16_t>((std::uint16_t{value[0]} << 8) | value[1]);
+    return value.empty() ? 0 : static_cast<std::uint16_t>(bigEndian16(value));
   }
 
   bool AlpnOffer::Cursor::failed() const noexcept {
@@ -214,7 +256,7 @@ namespace telar::runtime {
     return count == bytes_.size() ? Read::complete : Read::pending;
   }
 
-  bool AlpnOffer::serverName(std::span<const std::uint8_t> extension, FixedText<ProxyHostname::maximum_bytes>& name) noexcept {
+  bool AlpnOffer::serverName(std::span<const std::uint8_t> extension, FixedText<ProxyHostname::maximum_bytes>& name) noexcept { // NOLINT(bugprone-exception-escape): assign throws only past the capacity validTarget keeps the host within
     Cursor names{extension};
     const auto length = names.word();
     if (names.failed() || length != names.remaining()) {
@@ -230,7 +272,7 @@ namespace telar::runtime {
       }
 
       if (type == 0) {
-        const std::string_view host{reinterpret_cast<const char*>(value.data()), value.size()};
+        const auto host = textOf(value);
         if (!name.view().empty() || !ProxyHostname::validTarget(host)) {
           return false;
         }
@@ -266,7 +308,7 @@ namespace telar::runtime {
       return false;
     }
 
-    std::copy(protocol.begin(), protocol.end(), name_.dataMut());
+    std::ranges::copy(protocol, name_.viewMut().begin());
     length_ = static_cast<unsigned char>(protocol.size());
     return true;
   }
@@ -275,13 +317,16 @@ namespace telar::runtime {
     return std::span{name_}.first(length_);
   }
 
-  int AlpnSelection::select(SSL* connection, const unsigned char** selected, unsigned char* length, const unsigned char* offered, unsigned offered_length, void*) noexcept {
+  int AlpnSelection::select(SSL* connection, const unsigned char** selected, unsigned char* length, const unsigned char* offered, unsigned offered_length, [[maybe_unused]] void* argument) noexcept { // NOLINT(readability-function-size): OpenSSL's ALPN callback takes six parameters
     const auto* selection = static_cast<const AlpnSelection*>(SSL_get_app_data(connection));
     if (selection == nullptr || selection->length_ == 0) {
       return SSL_TLSEXT_ERR_NOACK;
     }
 
+#pragma clang unsafe_buffer_usage begin
+    // OpenSSL hands the offer as a pointer and its length.
     std::span<const unsigned char> names{offered, offered_length};
+#pragma clang unsafe_buffer_usage end
 
     while (!names.empty()) {
       const auto size = names.front();
@@ -313,14 +358,14 @@ namespace telar::runtime {
   void TlsTrustStore::addDer(std::span<const unsigned char> encoded) {
     requireTls(!encoded.empty() && encoded.size() <= maximum_certificate_bytes, "Invalid TLS root certificate size");
     const auto* position = encoded.data();
-    TlsCertificate certificate{d2i_X509(nullptr, &position, static_cast<long>(encoded.size()))};
+    TlsCertificate certificate{d2i_X509(nullptr, &position, static_cast<long>(encoded.size()))}; // NOLINT(misc-const-correctness): an owning handle stays mutable, as tbc reads const as deep and OpenSSL writes through it
 
-    requireTls(certificate != nullptr && position == encoded.data() + encoded.size(), "Decode TLS root certificate");
+    requireTls(certificate != nullptr && position == std::to_address(encoded.end()), "Decode TLS root certificate");
     add(certificate.get());
   }
 
   void TlsTrustStore::add(X509* certificate) {
-    TlsHandle<ASN1_TIME, ASN1_TIME_free> now{ASN1_TIME_set(nullptr, std::time(nullptr))};
+    TlsHandle<ASN1_TIME, ASN1_TIME_free> now{ASN1_TIME_set(nullptr, std::time(nullptr))}; // NOLINT(misc-const-correctness): an owning handle stays mutable, as tbc reads const as deep
 
     requireTls(now != nullptr, "Read TLS trust validation time");
     const int expiration = ASN1_TIME_compare(X509_get0_notAfter(certificate), now.get());
@@ -415,30 +460,8 @@ namespace telar::runtime {
         initialize();
       }
 
-      if (state_ == State::offer) {
-        if (!offered_) {
-          const auto now = std::chrono::steady_clock::now();
-          if (now < offer_after_) {
-            return state_;
-          }
-
-          const auto read = offer_.getMut().peek(sockets_.child);
-          if (read == AlpnOffer::Read::pending) {
-            offer_after_ = now + std::chrono::milliseconds{2};
-            return state_;
-          }
-
-          failure_ = Failure::client_hello;
-          requireTls(read == AlpnOffer::Read::complete, "Read TLS ClientHello");
-        }
-
-        const auto names = offer_->encoded();
-
-        failure_ = Failure::origin_handshake;
-        // OpenSSL copies the protocols, so the offer is done with.
-        requireTls(SSL_set_alpn_protos(origin_.get(), names.data(), static_cast<unsigned>(names.size())) == 0, "Set TLS origin ALPN offer");
-        offer_.reset();
-        state_ = State::origin;
+      if (state_ == State::offer && !offerProtocols()) {
+        return state_;
       }
 
       if (state_ == State::origin && handshake(origin_.get(), origin_waiting_)) {
@@ -458,6 +481,33 @@ namespace telar::runtime {
     return state_;
   }
 
+  bool TlsSession::offerProtocols() {
+    if (!offered_) {
+      const auto now = std::chrono::steady_clock::now();
+      if (now < offer_after_) {
+        return false;
+      }
+
+      const auto read = offer_.getMut().peek(sockets_.child);
+      if (read == AlpnOffer::Read::pending) {
+        offer_after_ = now + std::chrono::milliseconds{2};
+        return false;
+      }
+
+      failure_ = Failure::client_hello;
+      requireTls(read == AlpnOffer::Read::complete, "Read TLS ClientHello");
+    }
+
+    const auto names = offer_->encoded();
+
+    failure_ = Failure::origin_handshake;
+    // OpenSSL copies the protocols, so the offer is done with.
+    requireTls(SSL_set_alpn_protos(origin_.get(), names.data(), static_cast<unsigned>(names.size())) == 0, "Set TLS origin ALPN offer");
+    offer_.reset();
+    state_ = State::origin;
+    return true;
+  }
+
   auto TlsSession::state() const noexcept -> State {
     return state_;
   }
@@ -467,9 +517,12 @@ namespace telar::runtime {
   }
 
   StreamReadiness TlsSession::waiting(TlsSide side) const noexcept {
+    if (side == TlsSide::child && state_ == State::offer) {
+      return offer_after_ == std::chrono::steady_clock::time_point{} ? StreamReadiness::readable : StreamReadiness::none;
+    }
+
     if (side == TlsSide::child) {
-      return state_ == State::offer ? (offer_after_ == std::chrono::steady_clock::time_point{} ? StreamReadiness::readable : StreamReadiness::none) : state_ == State::child ? child_waiting_
-                                                                                                                                                                             : StreamReadiness::none;
+      return state_ == State::child ? child_waiting_ : StreamReadiness::none;
     }
 
     return state_ == State::origin ? origin_waiting_ : StreamReadiness::none;
@@ -522,9 +575,8 @@ namespace telar::runtime {
 
   StreamResult TlsSession::peek(TlsSide side, std::span<std::uint8_t> destination) noexcept {
     const auto visible = peekView(side, destination.size());
-    if (!visible.bytes.empty()) {
-      std::memcpy(destination.data(), visible.bytes.data(), visible.bytes.size());
-    }
+
+    std::ranges::copy(visible.bytes, destination.begin());
 
     return {.state = visible.state, .bytes = visible.bytes.size(), .waiting = visible.waiting};
   }
@@ -610,7 +662,12 @@ namespace telar::runtime {
     unsigned length = 0;
 
     SSL_get0_alpn_selected(origin_.get(), &selected, &length);
-    requireTls(selection_.assign({selected, length}), "Invalid TLS origin ALPN selection");
+#pragma clang unsafe_buffer_usage begin
+    // OpenSSL hands the selection as a pointer and its length.
+    const std::span<const unsigned char> protocol{selected, length};
+#pragma clang unsafe_buffer_usage end
+
+    requireTls(selection_.assign(protocol), "Invalid TLS origin ALPN selection");
   }
 
   StreamResult TlsSession::ioFailure(SSL* connection, int result) noexcept {
@@ -644,13 +701,13 @@ namespace telar::runtime {
   }
 
   tbc::val_a<std::shared_ptr<const CertificateAuthority>> TlsInterception::snapshot() const noexcept {
-    std::lock_guard lock{mutex_};
+    const std::scoped_lock lock{mutex_};
 
     return replacement_;
   }
 
   void TlsInterception::replace(tbc::val_a<std::shared_ptr<const CertificateAuthority>> authority) noexcept {
-    std::lock_guard lock{mutex_};
+    const std::scoped_lock lock{mutex_};
 
     replacement_.swap(authority);
   }

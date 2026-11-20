@@ -53,7 +53,7 @@ namespace telar::runtime::plugins {
         tag(ActionTag::tab_offset, output);
         u8::encode(static_cast<Byte>(value.field("offset").integer()), output);
       } else if (name == "split-pane" || name == "focus-pane" || name == "resize-pane" || name == "resize-sidebar" || name == "move-tab") {
-        directional(name, value.field("direction").string(), output);
+        directional({.kind = name, .direction = value.field("direction").string()}, output);
       } else {
         builtin(name, output);
       }
@@ -66,16 +66,19 @@ namespace telar::runtime::plugins {
     u8::encode(static_cast<Byte>(value), output);
   }
 
-  void ActionEncoder::directional(std::string_view name, std::string_view direction, std::span<Byte>& output) {
-    constexpr auto kinds = ds::Array<std::pair<std::string_view, ActionTag>, 5>{{
-        {"split-pane", ActionTag::split},
-        {"focus-pane", ActionTag::focus},
-        {"resize-pane", ActionTag::resize},
-        {"resize-sidebar", ActionTag::resize_sidebar},
-        {"move-tab", ActionTag::move_tab},
-    }};
+  void ActionEncoder::directional(Directional action, std::span<Byte>& output) {
+    constexpr auto kinds = ds::Array<std::pair<std::string_view, ActionTag>, 5>{
+        {
+            {"split-pane", ActionTag::split},
+            {"focus-pane", ActionTag::focus},
+            {"resize-pane", ActionTag::resize},
+            {"resize-sidebar", ActionTag::resize_sidebar},
+            {"move-tab", ActionTag::move_tab},
+        },
+    };
 
-    const auto* found = std::ranges::find(kinds, name, &decltype(kinds)::value_type::first);
+    const auto direction = action.direction;
+    const auto* found = std::ranges::find(kinds, action.kind, &decltype(kinds)::value_type::first);
     if (found == kinds.end()) {
       throw lua::Error{"Unsupported directional plugin effect"};
     }
@@ -97,19 +100,21 @@ namespace telar::runtime::plugins {
   }
 
   void ActionEncoder::builtin(std::string_view name, std::span<Byte>& output) {
-    constexpr auto simple = ds::Array<std::pair<std::string_view, ActionTag>, 11>{{
-        {"toggle-sidebar", ActionTag::sidebar},
-        {"close-pane", ActionTag::close_pane},
-        {"new-tab", ActionTag::new_tab},
-        {"rename-tab", ActionTag::rename_tab},
-        {"close-tab", ActionTag::close_tab},
-        {"detach", ActionTag::detach},
-        {"toggle-pane-fullscreen", ActionTag::fullscreen},
-        {"toggle-workspace-list", ActionTag::workspace_list},
-        {"new-workspace", ActionTag::new_workspace},
-        {"rename-workspace", ActionTag::rename_workspace},
-        {"leave-worktree", ActionTag::leave_worktree},
-    }};
+    constexpr auto simple = ds::Array<std::pair<std::string_view, ActionTag>, 11>{
+        {
+            {"toggle-sidebar", ActionTag::sidebar},
+            {"close-pane", ActionTag::close_pane},
+            {"new-tab", ActionTag::new_tab},
+            {"rename-tab", ActionTag::rename_tab},
+            {"close-tab", ActionTag::close_tab},
+            {"detach", ActionTag::detach},
+            {"toggle-pane-fullscreen", ActionTag::fullscreen},
+            {"toggle-workspace-list", ActionTag::workspace_list},
+            {"new-workspace", ActionTag::new_workspace},
+            {"rename-workspace", ActionTag::rename_workspace},
+            {"leave-worktree", ActionTag::leave_worktree},
+        },
+    };
 
     for (const auto& [known, value] : simple) {
       if (name == known) {
@@ -124,17 +129,19 @@ namespace telar::runtime::plugins {
       return;
     }
 
-    constexpr auto stems = ds::Array<std::pair<std::string_view, std::string_view>, 5>{{
-        {"resize-sidebar-", "resize-sidebar"},
-        {"move-tab-", "move-tab"},
-        {"split-", "split-pane"},
-        {"focus-", "focus-pane"},
-        {"resize-", "resize-pane"},
-    }};
+    constexpr auto stems = ds::Array<std::pair<std::string_view, std::string_view>, 5>{
+        {
+            {"resize-sidebar-", "resize-sidebar"},
+            {"move-tab-", "move-tab"},
+            {"split-", "split-pane"},
+            {"focus-", "focus-pane"},
+            {"resize-", "resize-pane"},
+        },
+    };
 
     for (const auto& [prefix, kind] : stems) {
       if (name.starts_with(prefix)) {
-        directional(kind, name.substr(prefix.size()), output);
+        directional({.kind = kind, .direction = name.substr(prefix.size())}, output);
         return;
       }
     }
@@ -206,21 +213,28 @@ namespace telar::runtime::plugins {
       directory_.emplace("/tmp/telar-tap-workers-XXXXXX");
     }
 
-    ds::Array<char, 32> name;
+    // Room for the prefix, the decimal digits of any index and the terminator.
+    constexpr std::size_t name_capacity = 32;
+    // Only the runtime that copies the package may enter its snapshot.
+    constexpr mode_t snapshot_mode = 0700;
     constexpr std::string_view prefix = "package-";
 
-    std::copy(prefix.begin(), prefix.end(), name.dataMut());
-    auto suffix = std::to_chars(name.dataMut() + prefix.size(), name.dataMut() + name.size() - 1, index);
-    if (suffix.ec != std::errc{}) {
+    ds::Array<char, name_capacity> name{};
+    const auto view = name.viewMut();
+    const auto digits = view.subspan(prefix.size(), view.size() - prefix.size() - 1);
+
+    std::ranges::copy(prefix, view.begin());
+    const auto suffix = std::to_chars(digits.data(), std::to_address(digits.end()), index);
+    if (suffix.ec == std::errc::value_too_large) {
       throw std::length_error{"Plugin package index exceeds its limit"};
     }
 
-    *suffix.ptr = '\0';
-    if (::mkdirat(directory_->descriptor(), name.data(), 0700) != 0) {
+    view[static_cast<std::size_t>(suffix.ptr - view.data())] = '\0';
+    if (::mkdirat(directory_->descriptor(), name.data(), snapshot_mode) != 0) {
       throw SystemError{"Create plugin snapshot"};
     }
 
-    auto target = openBeneath(directory_->descriptor(), name.data(), O_RDONLY | O_DIRECTORY);
+    auto target = openBeneath(directory_->descriptor(), name.data(), combineFlags(O_RDONLY, O_DIRECTORY));
     ds::String<Memory> destination{memory_, directory_->path()};
 
     destination.push('/');
@@ -243,7 +257,7 @@ namespace telar::runtime::plugins {
       return true;
     }
 
-    std::move(restarts_.dataMut() + 1, (restarts_.dataMut() + restarts_.size()), restarts_.dataMut());
+    std::ranges::move(restarts_.viewMut().subspan(1), restarts_.viewMut().begin());
     restarts_.atMut(restarts_.size() - 1) = now;
     return false;
   }
@@ -280,10 +294,10 @@ namespace telar::runtime::plugins {
     return dropped_.load(std::memory_order_relaxed);
   }
 
-  SharedExchange::SharedExchange(TapBudget::Charge charge, std::uint64_t event_id, CapturedExchange exchange) noexcept
-      : charge(std::move(charge)),
-        event_id(event_id),
-        exchange(std::move(exchange)) {}
+  SharedExchange::SharedExchange(TapBudget::Charge held, std::uint64_t id, CapturedExchange captured) noexcept
+      : charge(std::move(held)),
+        event_id(id),
+        exchange(std::move(captured)) {}
 
   std::size_t SharedExchange::capturedBytes(const CapturedExchange& exchange) noexcept {
     return (exchange.request ? exchange.request->capturedBytes() : 0) + (exchange.response ? exchange.response->capturedBytes() : 0);

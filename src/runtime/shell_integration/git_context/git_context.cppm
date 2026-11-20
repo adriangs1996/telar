@@ -23,9 +23,11 @@ export namespace telar::runtime {
   };
 
   struct ShellGitSummary {
+    static constexpr std::size_t branch_bytes = 256;
+
     bool repository = false;
     bool detached = false;
-    FixedText<256> branch;
+    FixedText<branch_bytes> branch;
     bool divergence_known = false;
     std::uint32_t ahead = 0;
     std::uint32_t behind = 0;

@@ -17,7 +17,7 @@ namespace telar::runtime::plugins {
   std::size_t Protocol::exchangeBytes(const CapturedExchange& exchange) {
     FrameSize size;
 
-    writeExchange(size, {}, exchange);
+    writeExchange(size, ExchangeIdentity(), exchange);
     return size.finish();
   }
 
@@ -108,11 +108,11 @@ namespace telar::runtime::plugins {
 
   template <FrameOutput Output>
   void Protocol::writeExchange(Output& writer, ExchangeIdentity identity, const CapturedExchange& exchange, std::size_t part_limit) {
-    const auto* representative = exchange.request ? &exchange.request.get() : exchange.response ? &exchange.response.get()
-                                                                                                : nullptr;
-    if (representative == nullptr) {
+    if (!exchange.request && !exchange.response) {
       throw EncodingError{"Cannot encode an empty capture"};
     }
+
+    const auto* representative = exchange.request ? &exchange.request.get() : &exchange.response.get();
 
     writer.tag(FrameKind::exchange);
     writer.integer(identity.id);
@@ -206,10 +206,12 @@ namespace telar::runtime::traffic {
       throw std::invalid_argument{"Invalid traffic endpoint"};
     }
 
-    std::ranges::copy(path, address.sun_path);
+    std::ranges::copy(path, std::begin(address.sun_path));
     address.sun_family = AF_UNIX;
+    // The permission bits of the socket's group and of others, which a private socket leaves clear.
+    constexpr mode_t shared_permissions = 0077;
     struct stat before{};
-    if (::lstat(address.sun_path, &before) != 0 || !S_ISSOCK(before.st_mode) || (before.st_mode & 0077) != 0) {
+    if (::lstat(std::data(address.sun_path), &before) != 0 || !S_ISSOCK(before.st_mode) || (before.st_mode & shared_permissions) != 0) {
       throw SystemError{"Traffic endpoint must be a private socket", EACCES};
     }
 
@@ -220,13 +222,13 @@ namespace telar::runtime::traffic {
 
     setCloseOnExec(socket.get());
     suppressSocketSignals(socket.get());
-    if (::connect(socket.get(), reinterpret_cast<const sockaddr*>(&address), sizeof(address)) != 0) {
+    if (::connect(socket.get(), reinterpret_cast<const sockaddr*>(&address), sizeof(address)) != 0) { // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the socket API passes every address family as a sockaddr
       throw SystemError{"Connect traffic endpoint"};
     }
 
     struct stat after{};
     const auto credentials = peerCredentials(socket.get());
-    if (!credentials || credentials->user != before.st_uid || (::geteuid() != 0 && credentials->user != ::geteuid()) || ::lstat(address.sun_path, &after) != 0 || before.st_dev != after.st_dev || before.st_ino != after.st_ino) {
+    if (!credentials || credentials->user != before.st_uid || (::geteuid() != 0 && credentials->user != ::geteuid()) || ::lstat(std::data(address.sun_path), &after) != 0 || before.st_dev != after.st_dev || before.st_ino != after.st_ino) {
       throw SystemError{"Traffic endpoint identity changed", EACCES};
     }
 

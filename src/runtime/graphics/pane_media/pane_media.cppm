@@ -41,6 +41,8 @@ export {
       AtomicFrameSource() = default;
       AtomicFrameSource(const AtomicFrameSource&) = default;
       AtomicFrameSource& operator=(const AtomicFrameSource&) = default;
+      AtomicFrameSource(AtomicFrameSource&&) = default;
+      AtomicFrameSource& operator=(AtomicFrameSource&&) = default;
       ~AtomicFrameSource() = default;
     };
 
@@ -55,6 +57,8 @@ export {
       AtomicFrameSink() = default;
       AtomicFrameSink(const AtomicFrameSink&) = default;
       AtomicFrameSink& operator=(const AtomicFrameSink&) = default;
+      AtomicFrameSink(AtomicFrameSink&&) = default;
+      AtomicFrameSink& operator=(AtomicFrameSink&&) = default;
       ~AtomicFrameSink() = default;
     };
 
@@ -81,7 +85,21 @@ export {
         ds::Option<std::size_t> selected;
       };
 
+      // Where a feed sends the frames it reads.
+      struct FeedTarget {
+        std::size_t storage_limit;
+        AtomicFrameSource& source;
+        AtomicFrameSink& sink;
+        Statistics& statistics;
+      };
+
       static bool record(std::span<SelectedFrame> entries, std::size_t& count, const AtomicFrame& frame) noexcept;
+
+      // Picks, for each placement, its newest frame whose upload is available.
+      static void choose(std::span<SelectedFrame> entries, std::string_view text, FeedTarget& target);
+
+      // Hands the sink the frame chosen for its placement, and releases the uploads of the others.
+      static void emit(const AtomicFrame& frame, std::span<const std::uint8_t> bytes, ds::Option<std::size_t> chosen, FeedTarget& target);
 
       static ds::Option<std::size_t> selectedStart(std::span<const SelectedFrame> entries, AtomicFrameKey key) noexcept;
 
@@ -189,11 +207,11 @@ export {
 
       void ordinary(std::span<const Byte> bytes);
 
-      [[nodiscard]] bool enquire() const noexcept;
+      [[nodiscard]] static bool enquire() noexcept;
 
       // Documents stream past the media terminal, which ignores them, instead of being buffered
       // whole: the interactive terminal keeps them.
-      [[nodiscard]] bool streamable(control::Sequence sequence) const noexcept;
+      [[nodiscard]] static bool streamable(control::Sequence sequence) noexcept;
 
       bool complete(control::Sequence sequence);
 
@@ -236,7 +254,7 @@ export {
       GraphicsStorage<telar::runtime::MediaAllocator<ConcurrentMemory>> graphics;
 
     private:
-      struct ResponseFailure {};
+      struct ResponseFailure : std::exception {};
 
       void write(std::span<const Byte> bytes, const GraphicsUploadLimits::Observation& observation);
 

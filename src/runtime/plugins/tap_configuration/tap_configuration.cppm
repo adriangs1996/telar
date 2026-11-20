@@ -39,7 +39,13 @@ export {
 
       static void tag(ActionTag value, std::span<Byte>& output);
 
-      static void directional(std::string_view name, std::string_view direction, std::span<Byte>& output);
+      // A directional action: its kind, as the configuration names it, and the direction it goes.
+      struct Directional {
+        std::string_view kind;
+        std::string_view direction;
+      };
+
+      static void directional(Directional action, std::span<Byte>& output);
 
       static void builtin(std::string_view name, std::span<Byte>& output);
 
@@ -48,7 +54,7 @@ export {
       static void notification(const lua::Value& value, std::span<Byte>& output);
 
       config::RetainedActionValidator& validator_;
-      ds::Array<Byte, ActionProtocol::maximum_bytes> storage_;
+      ds::Array<Byte, ActionProtocol::maximum_bytes> storage_{};
     };
 
   }
@@ -89,11 +95,11 @@ export {
     };
 
     struct BlockingPipeWait {
-      [[nodiscard]] constexpr bool active() const noexcept {
+      [[nodiscard]] static constexpr bool active() noexcept {
         return true;
       }
 
-      [[nodiscard]] constexpr bool ready(int, short) const noexcept {
+      [[nodiscard]] static constexpr bool ready(int /*descriptor*/, short /*events*/) noexcept {
         return true;
       }
     };
@@ -122,7 +128,7 @@ export {
             continue;
           }
 
-          if (count < 0 && (sys::lastError() == EAGAIN || sys::lastError() == EWOULDBLOCK) && wait_.ready(input_, POLLIN)) {
+          if (count < 0 && socketWouldBlock(sys::lastError()) && wait_.ready(input_, POLLIN)) {
             continue;
           }
 
@@ -142,8 +148,8 @@ export {
 
       inline void write(std::span<const std::uint8_t> prefix, std::span<const std::uint8_t> payload) {
         ds::Array vectors{
-            iovec{.iov_base = const_cast<std::uint8_t*>(prefix.data()), .iov_len = prefix.size()},
-            iovec{.iov_base = const_cast<std::uint8_t*>(payload.data()), .iov_len = payload.size()},
+            iovec{.iov_base = const_cast<std::uint8_t*>(prefix.data()), .iov_len = prefix.size()},   // NOLINT(cppcoreguidelines-pro-type-const-cast): writev's iovec takes a mutable base it only reads
+            iovec{.iov_base = const_cast<std::uint8_t*>(payload.data()), .iov_len = payload.size()}, // NOLINT(cppcoreguidelines-pro-type-const-cast): writev's iovec takes a mutable base it only reads
         };
 
         std::size_t first = 0;
@@ -158,7 +164,7 @@ export {
             continue;
           }
 
-          if (count < 0 && (sys::lastError() == EAGAIN || sys::lastError() == EWOULDBLOCK) && wait_.ready(output_, POLLOUT)) {
+          if (count < 0 && socketWouldBlock(sys::lastError()) && wait_.ready(output_, POLLOUT)) {
             continue;
           }
 
@@ -203,7 +209,7 @@ export {
       bool record(std::chrono::milliseconds now) noexcept;
 
     private:
-      ds::Array<std::chrono::milliseconds, Limits::restarts> restarts_;
+      ds::Array<std::chrono::milliseconds, Limits::restarts> restarts_{};
       std::size_t count_ = 0;
     };
 
@@ -226,6 +232,7 @@ export {
         Charge& operator=(const Charge&) = delete;
 
         Charge(Charge&& other) noexcept;
+        Charge& operator=(Charge&&) = delete;
 
       private:
         CaptureQuota& quota_;
@@ -253,7 +260,7 @@ export {
   namespace telar::runtime::plugins {
 
     struct SharedExchange {
-      explicit SharedExchange(TapBudget::Charge charge, std::uint64_t event_id, CapturedExchange exchange) noexcept;
+      explicit SharedExchange(TapBudget::Charge held, std::uint64_t id, CapturedExchange captured) noexcept;
 
       static std::size_t capturedBytes(const CapturedExchange& exchange) noexcept;
 

@@ -74,11 +74,13 @@ export {
       struct Output {
         Connection<ConcurrentMemory>& connection;
         ds::Option<std::uint64_t>& completing_exit;
-        std::chrono::nanoseconds frame_interval;
+        std::chrono::nanoseconds frame_interval{};
         [[maybe_unused]] diagnostics::RuntimeCounters& metrics;
+        Clock::time_point now;
+        std::chrono::nanoseconds& timeout;
       };
 
-      bool prepare(Output& output, Attachment& attachment, Pane& pane, DeliveryLane lane, Clock::time_point now, std::chrono::nanoseconds& timeout);
+      bool prepare(Output& output, Attachment& attachment, Pane& pane, DeliveryLane lane);
 
       template <typename Message>
       static bool metadata(Connection<ConcurrentMemory>& connection, std::uint64_t& observed, std::uint64_t revision, const Message& message);
@@ -163,7 +165,7 @@ export {
 
       // Kept here: `send` is the connection's callable, an open set no unit can instantiate ahead.
       TBC_GENERIC inline void project(const RequestTabSnapshot& request, auto& send) {
-        ds::Array<PaneDescriptor, 64> descriptors;
+        ds::Array<PaneDescriptor, max_snapshot_tab_panes> descriptors;
         std::size_t count = 0;
 
         for (const auto* pane : model_.panes.items()) {
@@ -183,10 +185,10 @@ export {
           return;
         }
 
-        ds::Array<TabDescriptor, 64> descriptors;
-        ds::Array<TabPane, 256> panes;
+        ds::Array<TabDescriptor, max_snapshot_workspace_tabs> descriptors;
+        ds::Array<TabPane, PaneStore::capacity> panes;
         // Where each tab's panes start: they are lent to the descriptors only once every pane is written.
-        ds::Array<std::size_t, 64> firsts{};
+        ds::Array<std::size_t, max_snapshot_workspace_tabs> firsts{};
         std::size_t pane_count = 0;
         std::size_t count = 0;
 
@@ -406,9 +408,30 @@ export {
           }
 
           return false;
-        default:
+        case DeliveryLane::stopping:
+        case DeliveryLane::management:
+        case DeliveryLane::resync:
+        case DeliveryLane::clipboard:
+        case DeliveryLane::shell:
+        case DeliveryLane::scrollback:
+        case DeliveryLane::cells:
+        case DeliveryLane::panes:
+        case DeliveryLane::cwd:
+        case DeliveryLane::foreground:
+        case DeliveryLane::title:
+        case DeliveryLane::progress:
+        case DeliveryLane::git:
+        case DeliveryLane::blocks:
+        case DeliveryLane::exit:
+        case DeliveryLane::graphics:
+        case DeliveryLane::document:
+        case DeliveryLane::observation:
+        case DeliveryLane::count:
           return false;
         }
+
+        // A lane outside the enum projects nothing, as the lanes the runtime's state does not own.
+        return false;
       }
 
     private:

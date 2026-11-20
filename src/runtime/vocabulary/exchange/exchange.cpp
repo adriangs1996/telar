@@ -8,6 +8,38 @@ import telar.base.text;
 
 namespace telar::runtime {
 
+  namespace {
+
+    constexpr std::string_view blanks = " \t";
+
+    // The `count` bytes of a buffer's allocation, as a view the copies below stay within.
+    template <typename Element>
+    std::span<Element> allocationBytes(Element* storage, std::size_t count) noexcept {
+#pragma clang unsafe_buffer_usage begin
+      return {storage, count};
+#pragma clang unsafe_buffer_usage end
+    }
+
+    std::span<const std::uint8_t> asBytes(std::string_view text) noexcept {
+#pragma clang unsafe_buffer_usage begin
+      return {reinterpret_cast<const std::uint8_t*>(text.data()), text.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the bytes may alias char, and no cast-free view reads text as bytes
+#pragma clang unsafe_buffer_usage end
+    }
+
+    // The first `count` characters of text, or all of it: substr(0, count) without its throw.
+    constexpr std::string_view textPrefix(std::string_view text, std::size_t count) noexcept {
+      text.remove_suffix(text.size() - std::min(count, text.size()));
+      return text;
+    }
+
+    // Text past its first `offset` characters, or nothing: substr(offset) without its throw.
+    constexpr std::string_view textAfter(std::string_view text, std::size_t offset) noexcept {
+      text.remove_prefix(std::min(offset, text.size()));
+      return text;
+    }
+
+  }
+
   CaptureQuota::CaptureQuota(std::size_t limit) noexcept
       : limit_(limit) {}
 
@@ -62,7 +94,7 @@ namespace telar::runtime {
     const auto allowed = std::min(input.size(), limit_ - size_);
     const auto accepted = reserveAdditional(allowed);
     if (accepted != 0) {
-      std::memcpy(storage_ + size_, input.data(), accepted);
+      std::ranges::copy(input.first(accepted), allocationBytes(storage_, capacity_).subspan(size_).begin());
       size_ += accepted;
     }
 
@@ -77,7 +109,7 @@ namespace telar::runtime {
   }
 
   std::span<const std::uint8_t> CaptureBuffer::bytes() const noexcept {
-    return {static_cast<const std::uint8_t*>(storage_), size_};
+    return allocationBytes(static_cast<const std::uint8_t*>(storage_), size_);
   }
 
   std::size_t CaptureBuffer::size() const noexcept {
@@ -121,7 +153,7 @@ namespace telar::runtime {
     }
 
     if (size_ != 0) {
-      std::memcpy(replacement, storage_, size_);
+      std::ranges::copy(allocationBytes(static_cast<const std::uint8_t*>(storage_), size_), replacement);
     }
 
     memory_.deallocate(storage_, capacity_, alignof(std::uint8_t));
@@ -139,7 +171,7 @@ namespace telar::runtime {
     return oversized_;
   }
 
-  CaptureHalf::CaptureHalf(tbc::mut_a<ConcurrentMemory> memory, tbc::mut_a<CaptureQuota> quota, const ProxyCaptureLimits& limits, CaptureStart start)
+  CaptureHalf::CaptureHalf(tbc::mut_a<ConcurrentMemory> memory, tbc::mut_a<CaptureQuota> quota, const ProxyCaptureLimits& limits, const CaptureStart& start)
       : key(start.key),
         side(start.side),
         protocol(start.protocol),
@@ -177,7 +209,7 @@ namespace telar::runtime {
   }
 
   bool CaptureHalf::append(CapturePart part, std::string_view input) noexcept {
-    return append(part, {reinterpret_cast<const std::uint8_t*>(input.data()), input.size()});
+    return append(part, asBytes(input));
   }
 
   void CaptureHalf::appendHead(std::string_view bytes) noexcept {
@@ -188,7 +220,7 @@ namespace telar::runtime {
         return;
       }
 
-      TextFields fields{bytes.substr(0, line_end), " "};
+      TextFields fields{textPrefix(bytes, line_end), " "};
       const auto method = fields.next();
       const auto target = fields.next();
       if (!method || !target) {
@@ -204,8 +236,8 @@ namespace telar::runtime {
     lines.next();
     while (const auto line = lines.next()) {
       const auto colon = line->find(':');
-      if (colon != std::string_view::npos && asciiEqualIgnoreCase(trimText(line->substr(0, colon), " \t"), "content-encoding")) {
-        setEncoding(trimText(line->substr(colon + 1), " \t"));
+      if (colon != std::string_view::npos && asciiEqualIgnoreCase(trimText(textPrefix(*line, colon), blanks), "content-encoding")) {
+        setEncoding(trimText(textAfter(*line, colon + 1), blanks));
         return;
       }
     }
@@ -219,9 +251,9 @@ namespace telar::runtime {
     setRouteField(head.truncated, target_, value);
   }
 
-  void CaptureHalf::setEncoding(std::string_view value) noexcept {
+  void CaptureHalf::setEncoding(std::string_view value) noexcept { // NOLINT(bugprone-exception-escape): append throws only past the capacity the cleared text keeps the value within
     encoding_.clear();
-    encoding_.append(value.substr(0, maximum_encoding_bytes));
+    encoding_.append(textPrefix(value, maximum_encoding_bytes));
     body.truncated = body.truncated || value.size() > maximum_encoding_bytes;
   }
 
@@ -292,7 +324,7 @@ namespace telar::runtime {
     return nullptr;
   }
 
-  CapturedExchange::CapturedExchange(tbc::mut_a<ConcurrentMemory>) noexcept {}
+  CapturedExchange::CapturedExchange([[maybe_unused]] tbc::mut_a<ConcurrentMemory> memory) noexcept {}
 
   void CapturedExchange::include(tbc::val_a<Half> half) noexcept {
     (half->side == CaptureSide::request ? request : response) = std::move(half);
@@ -303,7 +335,10 @@ namespace telar::runtime {
       constexpr std::size_t header_size = 2;
       constexpr unsigned compression_method = 8;
       constexpr unsigned maximum_window_bits = 7;
-      if (input.size() < header_size || (input[0] & 15) != compression_method || (input[0] >> 4) > maximum_window_bits) {
+      // The first byte holds the method in its low nibble and the window size in its high one.
+      constexpr unsigned method_mask = 0x0f;
+      constexpr unsigned window_shift = 4;
+      if (input.size() < header_size || (static_cast<unsigned>(input[0]) & method_mask) != compression_method || (static_cast<unsigned>(input[0]) >> window_shift) > maximum_window_bits) {
         return ds::none;
       }
 
@@ -321,12 +356,13 @@ namespace telar::runtime {
     const auto flags = input[3];
     auto offset = header_size;
 
-    if ((flags & static_cast<unsigned>(GzipFlag::extra)) != 0u) {
+    if ((flags & static_cast<unsigned>(GzipFlag::extra)) != 0U) {
       if (input.size() - offset < sizeof(std::uint16_t)) {
         return ds::none;
       }
 
-      const auto length = static_cast<std::size_t>(input[offset] | (input[offset + 1] << 8));
+      constexpr unsigned byte_bits = 8;
+      const auto length = static_cast<std::size_t>(static_cast<unsigned>(input[offset]) | (static_cast<unsigned>(input[offset + 1]) << byte_bits));
 
       offset += sizeof(std::uint16_t);
       if (length > input.size() - offset) {
@@ -337,7 +373,7 @@ namespace telar::runtime {
     }
 
     for (const auto field : {GzipFlag::name, GzipFlag::comment}) {
-      if ((flags & static_cast<unsigned>(field)) != 0u) {
+      if ((flags & static_cast<unsigned>(field)) != 0U) {
         while (offset < input.size() && input[offset] != 0) {
           ++offset;
         }
@@ -350,7 +386,7 @@ namespace telar::runtime {
       }
     }
 
-    if ((flags & static_cast<unsigned>(GzipFlag::header_checksum)) != 0u) {
+    if ((flags & static_cast<unsigned>(GzipFlag::header_checksum)) != 0U) {
       if (input.size() - offset < sizeof(std::uint16_t)) {
         return ds::none;
       }

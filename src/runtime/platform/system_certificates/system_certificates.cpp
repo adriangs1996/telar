@@ -84,15 +84,17 @@ namespace telar::runtime {
     }
 
     const Resource keychain{opened, &CFRelease};
-    const void* search_items[]{opened};
-    const Resource search{CFArrayCreate(kCFAllocatorDefault, search_items, 1, &kCFTypeArrayCallBacks), &CFRelease};
+    // CFArrayCreate takes its values through a mutable pointer, though it only reads them.
+    ds::Array<const void*, 1> search_items{opened};
+    const Resource search{CFArrayCreate(kCFAllocatorDefault, search_items.dataMut(), static_cast<CFIndex>(search_items.size()), &kCFTypeArrayCallBacks), &CFRelease};
     if (!search) {
       throw std::bad_alloc{};
     }
 
-    const void* keys[]{kSecClass, kSecMatchSearchList, kSecMatchLimit, kSecReturnRef, kSecUseAuthenticationUI};
-    const void* values[]{kSecClassCertificate, search.get(), kSecMatchLimitAll, kCFBooleanTrue, kSecUseAuthenticationUISkip};
-    const Resource query{CFDictionaryCreate(kCFAllocatorDefault, keys, values, std::size(keys), &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks), &CFRelease};
+    constexpr std::size_t query_fields = 5;
+    ds::Array<const void*, query_fields> keys{kSecClass, kSecMatchSearchList, kSecMatchLimit, kSecReturnRef, kSecUseAuthenticationUI};
+    ds::Array<const void*, query_fields> values{kSecClassCertificate, search.get(), kSecMatchLimitAll, kCFBooleanTrue, kSecUseAuthenticationUISkip};
+    const Resource query{CFDictionaryCreate(kCFAllocatorDefault, keys.dataMut(), values.dataMut(), static_cast<CFIndex>(keys.size()), &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks), &CFRelease};
     if (!query) {
       throw std::bad_alloc{};
     }
@@ -117,15 +119,19 @@ namespace telar::runtime {
         throw SystemError{"Invalid system certificate entry", EINVAL};
       }
 
-      auto* const certificate = static_cast<SecCertificateRef>(const_cast<void*>(item));
+      auto* const certificate = static_cast<SecCertificateRef>(const_cast<void*>(item)); // NOLINT(cppcoreguidelines-pro-type-const-cast): CFArray hands its objects out as const void*, and Security takes a certificate as a mutable reference
       const Resource encoded{SecCertificateCopyData(certificate), &CFRelease};
       if (!encoded) {
         throw std::bad_alloc{};
       }
 
       const auto* const data = static_cast<CFDataRef>(encoded.get());
+      // CFData hands its bytes over as a pointer and a length.
+#pragma clang unsafe_buffer_usage begin
+      const std::span<const std::uint8_t> bytes{CFDataGetBytePtr(data), static_cast<std::size_t>(CFDataGetLength(data))};
+#pragma clang unsafe_buffer_usage end
 
-      consume(target, std::span<const std::uint8_t>{CFDataGetBytePtr(data), static_cast<std::size_t>(CFDataGetLength(data))});
+      consume(target, bytes);
     }
   }
 

@@ -54,6 +54,9 @@ import telar.base.ds;
 export {
   namespace telar::runtime {
 
+    // The workers a background pool runs, one descriptor each: history, paths, editors, suggestions and worktrees.
+    inline constexpr std::size_t background_worker_count = 5;
+
     // The workers behind history, paths, editors, suggestions and worktrees, which the runtime's services
     // and their own workers share: each queue it holds is synchronized, and what it hands a consumer lives
     // for the callback.
@@ -62,7 +65,7 @@ export {
     public:
       explicit BackgroundPool(ConcurrentMemory& memory, History& history, Paths& paths, Editor& editor, Suggestions& suggestions);
 
-      ds::Array<int, 5> descriptors() const noexcept;
+      ds::Array<int, background_worker_count> descriptors() const noexcept;
 
       bool suggestionsAvailable() const noexcept;
 
@@ -92,7 +95,7 @@ export {
 
       // Kept here: the consumer is the caller's callable, an open set no unit can instantiate ahead.
       template <typename Consumer>
-      TBC_GENERIC inline void collect(Consumer&& consumer) {
+      TBC_GENERIC inline void collect(const Consumer& consumer) {
         history_.collect(consumer);
         path_service_.collect(consumer);
         editor_.collect(consumer);
@@ -114,7 +117,7 @@ export {
       // Kept here: the consumer is the caller's callable, an open set no unit can instantiate ahead.
       template <typename Consumer>
       TBC_GENERIC inline void collectWorktrees(Consumer&& consume) {
-        worktrees_.collect(consume);
+        worktrees_.collect(std::forward<Consumer>(consume));
       }
 
       void cancel(std::uint64_t client) noexcept;
@@ -174,7 +177,7 @@ export {
       template <typename Message>
       void execute(const Message& request, EncodedReply<ConcurrentMemory>& reply, const RequestContext& context);
 
-      static constexpr std::size_t decode_capacity = 128 * 1024;
+      static constexpr std::size_t decode_capacity = std::size_t{128} * 1024;
       std::variant<HistoryFilters, HistoryStore> history_;
 #if TELAR_DIAGNOSTICS
       diagnostics::FileStorage<ConcurrentMemory> storage_;
@@ -204,7 +207,7 @@ export {
 
       ds::Option<DescriptionRequest> nextDescription(AgentRegistry<ConcurrentMemory>& agents);
 
-      ds::Option<HistorySessionTitle> completeDescription(AgentRegistry<ConcurrentMemory>& agents, const DescriptionResult& result);
+      static ds::Option<HistorySessionTitle> completeDescription(AgentRegistry<ConcurrentMemory>& agents, const DescriptionResult& result);
 
     private:
       static constexpr std::size_t description_queue_capacity = 8;
@@ -345,6 +348,11 @@ export {
         stop();
       }
 
+      PathService(const PathService&) = delete;
+      PathService& operator=(const PathService&) = delete;
+      PathService(PathService&&) = delete;
+      PathService& operator=(PathService&&) = delete;
+
       inline void stop() noexcept {
         for (auto& slot : slots_.viewMut()) {
           if (slot) {
@@ -381,7 +389,7 @@ export {
       }
 
       template <typename Consumer>
-      inline void collect(Consumer&& consume) {
+      inline void collect(const Consumer& consume) {
         completion_.drain();
         for (auto& owned : slots_.viewMut()) {
           if (!owned) {
@@ -434,8 +442,8 @@ export {
 
     private:
       struct Slot {
-        inline explicit Slot(Memory& memory, CompletionSignal& completion, std::uint64_t client)
-            : client(client),
+        inline explicit Slot(Memory& memory, CompletionSignal& completion, std::uint64_t owner)
+            : client(owner),
               index(memory),
               build_worker(&completion, std::in_place, index),
               query_worker(&completion, std::in_place, memory, index) {}
@@ -443,6 +451,9 @@ export {
         // The workers keep the slot's index, so the slot stays where it was built.
         Slot(const Slot&) = delete;
         Slot& operator=(const Slot&) = delete;
+        Slot(Slot&&) = delete;
+        Slot& operator=(Slot&&) = delete;
+        ~Slot() = default;
 
         std::uint64_t client;
         std::uint64_t used = 0;
@@ -561,11 +572,11 @@ export {
           return next_check_ - now;
         }
 
-        Workspace* oldest = nullptr;
+        const Workspace* oldest = nullptr;
 
         next_check_ = now + probe_interval;
         checked_revision_ = model.workspace_revision;
-        for (auto* workspace : model.workspaces.items()) {
+        for (const auto* workspace : model.workspaces.items()) {
           if (workspace == nullptr) {
             continue;
           }

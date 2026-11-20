@@ -50,9 +50,11 @@ export {
   namespace telar::runtime {
 
     struct ProcessLineage {
+      static constexpr std::size_t maximum_ancestors = 64;
+
       [[nodiscard]] std::span<const pid_t> ancestors() const noexcept;
 
-      ds::Array<pid_t, 64> processes{};
+      ds::Array<pid_t, maximum_ancestors> processes{};
       unsigned count = 0;
       bool descends = false;
     };
@@ -63,6 +65,10 @@ export {
 // Interface: platform/process_inspector.cppm
 export {
   namespace telar::runtime {
+
+    // The longest process name, and the longest path, an inspector reports.
+    inline constexpr std::size_t process_name_bytes = 48;
+    inline constexpr std::size_t process_path_bytes = 4096;
 
     struct ProcessIdentity {
       pid_t pid = 0;
@@ -79,7 +85,7 @@ export {
       ds::Option<ProcessIdentity> identity;
       AgentProvider provider = AgentProvider::unknown;
       SessionHost session_host = SessionHost::unknown;
-      FixedText<48> name;
+      FixedText<process_name_bytes> name;
     };
 
     // A process's command line, its arguments joined by spaces, and the agent it runs.
@@ -117,9 +123,9 @@ export {
       [[nodiscard]] bool descendsFrom(const ProcessIdentity& process, pid_t root) const noexcept;
       [[nodiscard]] ProcessLineage lineage(const ProcessIdentity& process, pid_t root) const noexcept;
       [[nodiscard]] AgentProvider provider(pid_t process) const noexcept;
-      [[nodiscard]] FixedText<48> name(pid_t process) const noexcept;
-      [[nodiscard]] FixedText<4096> directory(pid_t process) const noexcept;
-      [[nodiscard]] FixedText<4096> terminal(pid_t process) const noexcept;
+      [[nodiscard]] FixedText<process_name_bytes> name(pid_t process) const noexcept;
+      [[nodiscard]] FixedText<process_path_bytes> directory(pid_t process) const noexcept;
+      [[nodiscard]] FixedText<process_path_bytes> terminal(pid_t process) const noexcept;
       [[nodiscard]] IdentifiedProcess identifyGroup(pid_t group, AgentProvider preferred) const noexcept;
       [[nodiscard]] ListeningPorts listeningPorts(pid_t group) const noexcept;
       // Of any user's process the system lets the runtime read; the text views `output`.
@@ -128,7 +134,7 @@ export {
     private:
       // The arguments view the caller's buffer.
       static tbc::val_a<ProcessArguments> readArguments(pid_t process, tbc::val_a<std::span<char>> buffer) noexcept;
-      static FixedText<4096> executable(pid_t process) noexcept;
+      static FixedText<process_path_bytes> executable(pid_t process) noexcept;
       static std::size_t groupMembers(pid_t group, std::span<pid_t> members) noexcept;
       [[nodiscard]] IdentifiedProcess identifyProcess(pid_t process) const noexcept;
       const AgentManifests& manifests_;
@@ -161,8 +167,10 @@ export {
     template <LineageInspector Inspector>
     class TBC_GENERIC DescentProbe {
     public:
+      static constexpr std::size_t batch_capacity = 32;
+
       struct Request {
-        ds::Array<DescentCheck, 32> checks;
+        ds::Array<DescentCheck, batch_capacity> checks;
         std::size_t count = 0;
       };
 
@@ -172,7 +180,7 @@ export {
       };
 
       struct Result {
-        ds::Array<Completion, 32> checks;
+        ds::Array<Completion, batch_capacity> checks;
         std::size_t count = 0;
       };
 
@@ -241,8 +249,8 @@ export {
       ProcessProbeRequest request;
       ds::Option<ProcessIdentity> identity;
       AgentProvider provider = AgentProvider::unknown;
-      FixedText<48> name;
-      FixedText<4096> cwd;
+      FixedText<process_name_bytes> name;
+      FixedText<process_path_bytes> cwd;
       bool shell_foreground = false;
       ds::Option<ProcessIdentity> agent_identity;
       SessionHost session_host = SessionHost::unknown;
@@ -257,7 +265,7 @@ export {
     concept ProcessProbeInspector = requires(const Inspector& inspector, pid_t process) {
       { inspector.identity(process) } noexcept -> std::same_as<ds::Option<ProcessIdentity>>;
       { inspector.snapshot(process) } noexcept -> std::same_as<ds::Option<ProcessSnapshot>>;
-      { inspector.directory(process) } noexcept -> std::same_as<FixedText<4096>>;
+      { inspector.directory(process) } noexcept -> std::same_as<FixedText<process_path_bytes>>;
       { inspector.identifyGroup(process, AgentProvider::unknown) } noexcept -> std::same_as<IdentifiedProcess>;
       { inspector.listeningPorts(process) } noexcept -> std::same_as<ListeningPorts>;
     };
@@ -333,7 +341,7 @@ export {
 
       inline void stop() noexcept {}
 
-      [[nodiscard]] inline FixedText<4096> directory(pid_t process) const noexcept {
+      [[nodiscard]] inline FixedText<process_path_bytes> directory(pid_t process) const noexcept {
         return inspector_.directory(process);
       }
 

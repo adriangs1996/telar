@@ -56,7 +56,7 @@ export {
 
     class ConnectHead {
     public:
-      static constexpr std::size_t capacity = 16 * 1024;
+      static constexpr std::size_t capacity = std::size_t{16} * 1024;
       using Read = DelimitedRead::Result;
 
       // The storage is written before it is read: allocating a head does not zero 16 KiB.
@@ -94,7 +94,7 @@ export {
       static constexpr auto evictable_idle_age = std::chrono::seconds{60};
       static constexpr auto evictable_silent_age = std::chrono::minutes{10};
 
-      enum class Phase {
+      enum class Phase : std::uint8_t {
         connect_head,
         establishing,
         open,
@@ -103,7 +103,7 @@ export {
         closing,
       };
 
-      enum class Closure {
+      enum class Closure : std::uint8_t {
         none,
         head_timeout,
         establishment_timeout,
@@ -145,7 +145,7 @@ export {
 export {
   namespace telar::runtime {
 
-    enum class ProxyCounter : std::size_t {
+    enum class ProxyCounter : std::uint8_t {
       rejected_connection,
       invalid_authorization_rejection,
       unknown_credential_rejection,
@@ -203,7 +203,7 @@ export {
           "h2_header_block_too_large",
           "h2_stream_untracked",
           "resolution_refusal",
-          "resolution_truncated"
+          "resolution_truncated",
       };
 
       void record(ProxyCounter counter, std::uint64_t count = 1) noexcept;
@@ -229,7 +229,7 @@ export {
     public:
       using Time = ProxyConnectionPolicy::Time;
 
-      enum class State {
+      enum class State : std::uint8_t {
         reading,
         probing,
         establishing,
@@ -383,7 +383,7 @@ export {
 
       inline void inspect(Time now) noexcept {
         if (!hello_->tls()) {
-          std::uint8_t byte;
+          std::uint8_t byte = 0;
           const auto count = ::recv(adopted_origin_.get(), &byte, 1, MSG_PEEK);
           if (count > 0) {
             state_ = State::established;
@@ -582,9 +582,9 @@ export {
     };
 
     struct IgnoreHttp2Capture {
-      constexpr void observe(Http2Direction, const Http2Event&) noexcept {}
+      constexpr void observe(Http2Direction /*direction*/, const Http2Event& /*event*/) noexcept {}
 
-      constexpr void finish(Http2Direction) noexcept {}
+      constexpr void finish(Http2Direction /*direction*/) noexcept {}
     };
 
     static_assert(Http2CapturePolicy<IgnoreHttp2Capture>);
@@ -603,14 +603,14 @@ export {
       inline explicit Http2CaptureStreams(CaptureProducer* producer, ProxyCounters& counters, CaptureStart context, CaptureSide side) noexcept
           : producer_(producer),
             counters_(counters),
-            context_(context) {
+            context_(std::move(context)) {
         context_.side = side;
       }
 
       inline Http2CaptureStreams(Http2CaptureStreams&& other) noexcept
           : producer_(other.producer_),
             counters_(other.counters_),
-            context_(other.context_),
+            context_(std::move(other.context_)),
             slots_(std::move(other.slots_)),
             occupied_(std::exchange(other.occupied_, {})) {}
 
@@ -642,8 +642,12 @@ export {
             half->setTarget(event.value);
           }
         } else if (event.name == ":status") {
+          // An informational (1xx) response precedes the final one, whose head replaces it.
+          constexpr std::uint16_t first_informational_status = 100;
+          constexpr std::uint16_t first_successful_status = 200;
+
           half->status_code = parseHttpStatus(event.value).valueOr(0);
-          if (half->status_code >= 100 && half->status_code < 200) {
+          if (half->status_code >= first_informational_status && half->status_code < first_successful_status) {
             half->head.reset();
           }
         }

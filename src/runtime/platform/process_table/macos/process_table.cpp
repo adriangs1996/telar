@@ -15,6 +15,13 @@ namespace telar::runtime {
     // Tries the listing again when processes appear between sizing the buffer and filling it.
     constexpr int listing_attempts = 4;
 
+    // A NUL-padded field's text: up to its first NUL, or all of it.
+    std::string_view fieldText(std::span<const char> field) noexcept {
+      const auto end = std::ranges::find(field, '\0');
+
+      return {field.data(), static_cast<std::size_t>(end - field.begin())};
+    }
+
     ProcessState processState(char status) noexcept {
       switch (status) {
       case SIDL:
@@ -46,9 +53,9 @@ namespace telar::runtime {
       return (ticks / timebase.denom * timebase.numer) + (ticks % timebase.denom * timebase.numer / timebase.denom);
     }
 
-    ProcessRecord record(const kinfo_proc& process) noexcept {
+    ProcessRecord record(const kinfo_proc& process) noexcept { // NOLINT(bugprone-exception-escape): assign throws only past its capacity, which the name is cut to
       const auto& started = sys::processStarted(process);
-      const auto& command = process.kp_proc.p_comm;
+      const auto command = fieldText(process.kp_proc.p_comm);
       ProcessRecord result{
           .pid = process.kp_proc.p_pid,
           .parent = process.kp_eproc.e_ppid,
@@ -59,7 +66,7 @@ namespace telar::runtime {
           .state = processState(process.kp_proc.p_stat),
       };
 
-      result.name.assign({command, std::min(::strnlen(command, sizeof(command)), ProcessRecord::name_capacity)});
+      result.name.assign({command.data(), std::min(command.size(), ProcessRecord::name_capacity)});
 
       proc_taskinfo task{};
       if (::proc_pidinfo(result.pid, PROC_PIDTASKINFO, 0, &task, sizeof(task)) == sizeof(task)) {
@@ -83,11 +90,12 @@ namespace telar::runtime {
 
   bool ProcessTable::read(ds::Vec<ProcessRecord, ConcurrentMemory>& records) {
     records.clear();
-    int selector[]{CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0};
+    // KERN_PROC_ALL takes no argument, so the calls pass the first three words.
+    ds::Array selector{CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0};
 
     for (int attempt = 0; attempt < listing_attempts; ++attempt) {
       std::size_t length = 0;
-      if (::sysctl(selector, 3, nullptr, &length, nullptr, 0) != 0) {
+      if (::sysctl(selector.dataMut(), 3, nullptr, &length, nullptr, 0) != 0) {
         return false;
       }
 
@@ -98,7 +106,7 @@ namespace telar::runtime {
       }
 
       length = buffer_.size();
-      if (::sysctl(selector, 3, buffer_.dataMut(), &length, nullptr, 0) != 0) {
+      if (::sysctl(selector.dataMut(), 3, buffer_.dataMut(), &length, nullptr, 0) != 0) {
         if (sys::lastError() == ENOMEM) {
           continue;
         }
@@ -112,7 +120,7 @@ namespace telar::runtime {
       for (std::size_t index = 0; index < count; ++index) {
         kinfo_proc process;
 
-        std::memcpy(&process, buffer_.data() + (index * sizeof(kinfo_proc)), sizeof(kinfo_proc));
+        std::ranges::copy(buffer_.view().subspan(index * sizeof(kinfo_proc), sizeof(kinfo_proc)), std::as_writable_bytes(std::span{&process, 1}).begin());
         if (process.kp_proc.p_pid > 0) {
           records.push(record(process));
         }
@@ -129,10 +137,10 @@ namespace telar::runtime {
       return ds::none;
     }
 
-    int selector[]{CTL_KERN, KERN_PROC, KERN_PROC_PID, process};
+    ds::Array selector{CTL_KERN, KERN_PROC, KERN_PROC_PID, process};
     kinfo_proc information{};
     std::size_t length = sizeof(information);
-    if (::sysctl(selector, 4, &information, &length, nullptr, 0) != 0 || length != sizeof(information) || information.kp_proc.p_pid != process) {
+    if (::sysctl(selector.dataMut(), static_cast<unsigned>(selector.size()), &information, &length, nullptr, 0) != 0 || length != sizeof(information) || information.kp_proc.p_pid != process) {
       return ds::none;
     }
 

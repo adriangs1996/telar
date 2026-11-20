@@ -33,7 +33,12 @@ namespace telar::runtime {
         throw std::bad_alloc{};
       }
 
-      std::memcpy(pixels_, pixels.data(), pixels.size());
+      // The allocator hands the storage as a pointer to byte_count_ bytes.
+#pragma clang unsafe_buffer_usage begin
+      std::span<std::uint8_t> destination{pixels_, byte_count_};
+#pragma clang unsafe_buffer_usage end
+
+      std::ranges::copy(pixels, destination.begin());
     } catch (...) {
       reset();
       throw;
@@ -58,7 +63,10 @@ namespace telar::runtime {
   }
 
   std::span<const std::uint8_t> FrozenImage::pixels() const noexcept {
+    // The allocator hands the storage as a pointer to byte_count_ bytes.
+#pragma clang unsafe_buffer_usage begin
     return {static_cast<const std::uint8_t*>(pixels_), pixels_ == nullptr ? 0 : byte_count_};
+#pragma clang unsafe_buffer_usage end
   }
 
   std::size_t FrozenImage::byteCount() const noexcept {
@@ -88,7 +96,7 @@ namespace telar::runtime {
       return false;
     }
 
-    std::memcpy(shared.getMut().mapping().bytes().data(), pixels.data(), pixels.size());
+    std::ranges::copy(pixels, shared.getMut().mapping().bytes().begin());
     name_ = shared.getMut().takeName();
     owns_name_ = true;
     return true;
@@ -155,7 +163,7 @@ namespace telar::runtime {
         slot->emplace(Entry{.key = image.description.key, .frozen = std::move(frozen)});
         remember(image.description.key);
         TELAR_DIAGNOSTIC(diagnostics::accumulate(prepared_count_));
-      } catch (...) {
+      } catch (...) { // NOLINT(bugprone-empty-catch): preparing ahead is best effort; an image left unprepared is frozen on request instead
       }
     }
   }
@@ -320,8 +328,8 @@ namespace telar::runtime {
         continue;
       }
 
-      const auto image = std::ranges::find_if(images, [&](const auto& image) {
-        return sameImage(entry->key, image.description.key);
+      const auto image = std::ranges::find_if(images, [&](const auto& candidate) {
+        return sameImage(entry->key, candidate.description.key);
       });
       if (image == images.end()) {
         entry.reset();

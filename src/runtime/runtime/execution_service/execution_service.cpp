@@ -13,6 +13,39 @@ import telar.base.ds;
 
 namespace telar::runtime {
 
+  namespace {
+
+    // A notification's text, written into a fixed buffer that keeps what fits, as snprintf truncates.
+    class NotificationText {
+    public:
+      void appendText(std::string_view part) noexcept {
+        const auto count = std::min(part.size(), bytes_.size() - length_);
+
+        std::ranges::copy(std::span<const char>{part}.first(count), bytes_.viewMut().subspan(length_).begin());
+        length_ += count;
+      }
+
+      void appendNumber(std::uint64_t value) noexcept {
+        ds::Array<char, std::numeric_limits<std::uint64_t>::digits10 + 1> digits{};
+        const auto view = digits.viewMut();
+        const auto* const end = std::to_chars(view.data(), std::to_address(view.end()), value).ptr;
+
+        appendText({view.data(), end});
+      }
+
+      [[nodiscard]] std::string_view view() const noexcept {
+        return {bytes_.data(), length_};
+      }
+
+    private:
+      static constexpr std::size_t capacity = 255;
+
+      ds::Array<char, capacity> bytes_{};
+      std::size_t length_ = 0;
+    };
+
+  }
+
   void LimitService::receive(RuntimeLimits& limits, ClientSession& client, const ReportLimit& message) {
     if (!admit(limits, client)) {
       return;
@@ -24,7 +57,7 @@ namespace telar::runtime {
     }
   }
 
-  void LimitService::report(const LimitReach& reach) noexcept {
+  void LimitService::report(const LimitReach& reach) noexcept { // NOLINT(bugprone-exception-escape): every reach is named by the runtime's own literals, which fit the ledger's texts
     if (reports_ == reached_.size()) {
       dropped_ = saturatedAdd(dropped_, 1);
       return;
@@ -90,24 +123,35 @@ namespace telar::runtime {
   }
 
   void LimitService::show(ClientStore& clients, const LimitLedger::Row& row) noexcept {
-    ds::Array<char, 256> text{};
+    NotificationText text;
     const auto reach = row.reach();
-    const char* separator = reach.noun.empty() ? "" : " ";
-    int length = 0;
+    const std::string_view separator = reach.noun.empty() ? "" : " ";
 
+    text.appendText(reach.name);
     if (reach.requested) {
-      length = std::snprintf(text.dataMut(), text.size(), "%.*s: %llu%s%.*s; limit %llu", static_cast<int>(reach.name.size()), reach.name.data(), static_cast<unsigned long long>(*reach.requested), separator, static_cast<int>(reach.noun.size()), reach.noun.data(), static_cast<unsigned long long>(reach.value));
+      text.appendText(": ");
+      text.appendNumber(*reach.requested);
+      text.appendText(separator);
+      text.appendText(reach.noun);
+      text.appendText("; limit ");
+      text.appendNumber(reach.value);
     } else if (reach.value == 0) {
-      length = std::snprintf(text.dataMut(), text.size(), "%.*s: limit reached", static_cast<int>(reach.name.size()), reach.name.data());
+      text.appendText(": limit reached");
     } else {
-      length = std::snprintf(text.dataMut(), text.size(), "%.*s: limit %llu%s%.*s reached", static_cast<int>(reach.name.size()), reach.name.data(), static_cast<unsigned long long>(reach.value), separator, static_cast<int>(reach.noun.size()), reach.noun.data());
+      text.appendText(": limit ");
+      text.appendNumber(reach.value);
+      text.appendText(separator);
+      text.appendText(reach.noun);
+      text.appendText(" reached");
     }
 
     if (row.hits > 1) {
-      length += std::snprintf(text.dataMut() + length, text.size() - length, " (%llu times)", static_cast<unsigned long long>(row.hits));
+      text.appendText(" (");
+      text.appendNumber(row.hits);
+      text.appendText(" times)");
     }
 
-    const Notification notification{NotificationBody{.level = NotificationLevel::warning, .duration_ms = 8000, .title = "Limit reached", .message = {text.data(), static_cast<std::size_t>(length)}}};
+    const Notification notification{NotificationBody{.level = NotificationLevel::warning, .duration_ms = 8000, .title = "Limit reached", .message = text.view()}};
 
     broadcast(clients, [](const ClientSession& client) {
       return client.role == ClientRole::interactive;
@@ -240,7 +284,7 @@ namespace telar::runtime {
 
   template class ClientAdmission<NativeEventLoop<ConcurrentMemory>>;
 
-  void notifyWorkspaceObservers(ClientStore& clients, std::uint64_t workspace, std::uint64_t origin, ds::Option<std::uint64_t> previous) noexcept {
+  void notifyWorkspaceObservers(ClientStore& clients, std::uint64_t workspace, std::uint64_t origin, ds::Option<std::uint64_t> previous) noexcept { // NOLINT(misc-const-correctness): the clients are written through the store's slots, a mutation tbc sees through the store
     for (auto* client : clients.items()) {
       if (client != nullptr && client->id != origin && client->connection.negotiated && !client->connection.closing && client->workspace == workspace) {
         client->workspace_resync = ResyncRequired{.workspace = {.id = workspace}, .previous_workspace = previous};
@@ -269,9 +313,9 @@ namespace telar::runtime {
     return ds::none;
   }
 
-  bool acquireGeometry(PaneStore& panes, [[maybe_unused]] diagnostics::RuntimeCounters& metrics, const ClientSession& client, Workspace& workspace) {
+  bool acquireGeometry(PaneStore& panes, [[maybe_unused]] diagnostics::RuntimeCounters& metrics, const ClientSession& client, Workspace& workspace) { // NOLINT(misc-const-correctness): the panes are written through the store's slots, a mutation tbc sees through the store
     if (workspace.geometry_client) {
-      TELAR_DIAGNOSTIC(if (*workspace.geometry_client != client.id) { diagnostics::accumulate(metrics.geometry_rejections); });
+      TELAR_DIAGNOSTIC(diagnostics::accumulate(metrics.geometry_rejections, static_cast<std::uint64_t>(*workspace.geometry_client != client.id)));
       return *workspace.geometry_client == client.id;
     }
 
@@ -295,7 +339,7 @@ namespace telar::runtime {
     }
   }
 
-  void releaseAllGeometry(WorkspaceStore& workspaces, ClientStore& clients, std::uint64_t client) noexcept {
+  void releaseAllGeometry(WorkspaceStore& workspaces, ClientStore& clients, std::uint64_t client) noexcept { // NOLINT(misc-const-correctness): the workspaces are written through the store's slots, a mutation tbc sees through the store
     for (auto* workspace : workspaces.items()) {
       if (workspace != nullptr) {
         releaseGeometry(clients, client, *workspace);
@@ -376,7 +420,9 @@ namespace telar::runtime {
       }
 
       break;
-    default:
+    case ExecutionAction::start:
+    case ExecutionAction::status:
+    case ExecutionAction::list:
       break;
     }
 
@@ -411,7 +457,8 @@ namespace telar::runtime {
       return;
     }
 
-    ds::Array<Byte, 16 * 1024> bytes;
+    constexpr std::size_t read_chunk_bytes = std::size_t{16} * 1024;
+    ds::Array<Byte, read_chunk_bytes> bytes; // NOLINT(cppcoreguidelines-pro-type-member-init): the read fills what it returns; zeroing 16 KiB on every output event is work no read needs
     const auto count = ::read(descriptor, bytes.dataMut(), bytes.size());
     if (count > 0) {
       (standard_output ? execution->output : execution->error).append(std::span{bytes}.first(static_cast<std::size_t>(count)));
@@ -523,7 +570,7 @@ namespace telar::runtime {
     }
 
     // HOME as it is now, copied as Rust's env::var does: any later call may replace the environment.
-    const char* value = std::getenv("HOME");
+    const char* value = std::getenv("HOME"); // NOLINT(concurrency-mt-unsafe): POSIX has no thread-safe read of the environment
     if (value == nullptr || value[0] != '/') {
       throw RequestError{FailureCode::invalid_request, "DestinationHomeUnavailable"};
     }
@@ -644,8 +691,8 @@ namespace telar::runtime {
   template <EventLoop Poller>
   void ExecutionService<Poller>::send(ClientSession& client, const Execution<ConcurrentMemory>& execution, const ExecutionRequest& request, bool started) {
     const auto state = started && execution.state == ExecutionState::running ? ExecutionState::starting : execution.state;
-    ds::Array<Byte, 4096> output;
-    ds::Array<Byte, 4096> error;
+    ds::Array<Byte, ExecutionReply::maximum_output_bytes> output; // NOLINT(cppcoreguidelines-pro-type-member-init): the stream's read writes the bytes it returns, so zeroing 4 KiB per reply is work no read needs
+    ds::Array<Byte, ExecutionReply::maximum_output_bytes> error;  // NOLINT(cppcoreguidelines-pro-type-member-init): the stream's read writes the bytes it returns, so zeroing 4 KiB per reply is work no read needs
     const auto output_offset = std::max(request.stdout_offset, execution.output.retainedOffset());
     const auto error_offset = std::max(request.stderr_offset, execution.error.retainedOffset());
     // Output older than the retained megabyte is gone; report that limit.
@@ -666,7 +713,7 @@ namespace telar::runtime {
         .state = state,
         .exit_code = execution.exit_code,
         .stdin_open = !execution.eof,
-        .failure = {reinterpret_cast<const Byte*>(execution.failure_name.data()), execution.failure_name.size()},
+        .failure = byteView(execution.failure_name),
         .stdout_bytes = execution.output.read(output_offset, output.viewMut()),
         .stderr_bytes = execution.error.read(error_offset, error.viewMut()),
     });

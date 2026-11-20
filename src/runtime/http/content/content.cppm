@@ -123,8 +123,12 @@ export {
     public:
       explicit Http2Memory(Memory& memory) noexcept;
 
+      ~Http2Memory() = default;
+
       Http2Memory(const Http2Memory&) = delete;
       Http2Memory& operator=(const Http2Memory&) = delete;
+      Http2Memory(Http2Memory&&) = delete;
+      Http2Memory& operator=(Http2Memory&&) = delete;
 
       auto callbacks() noexcept -> nghttp2_mem*;
 

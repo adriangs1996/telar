@@ -38,17 +38,17 @@ export {
     };
 
     struct IgnoreEvents {
-      [[nodiscard]] constexpr int descriptor() const noexcept {
+      [[nodiscard]] static constexpr int descriptor() noexcept {
         return -1;
       }
 
-      [[nodiscard]] constexpr TapMetrics metrics() const noexcept {
+      [[nodiscard]] static constexpr TapMetrics metrics() noexcept {
         return {};
       }
 
       // Generic over the caller's consumer.
       template <typename Consumer>
-      TBC_GENERIC constexpr void collect(Consumer&&) const noexcept {}
+      TBC_GENERIC constexpr void collect(Consumer /*consumer*/) const noexcept {}
     };
 
   }
@@ -69,6 +69,8 @@ export {
 
       Service(const Service&) = delete;
       Service& operator=(const Service&) = delete;
+      Service(Service&&) = delete;
+      Service& operator=(Service&&) = delete;
 
       void watchTrust(std::string_view path);
 
@@ -80,9 +82,9 @@ export {
 
       void submit(CapturedExchange& captured) noexcept;
 
-      // Generic over the caller's consumer.
+      // Generic over the caller's consumer; takes it itself, as the lambdas callers pass build it in place.
       template <typename Consumer>
-      TBC_GENERIC void collect(Consumer&& consumer) {
+      TBC_GENERIC void collect(Consumer consumer) {
         results_.collect([&](const auto& result) {
           if (result.package_index < workers_.size() && !workers_[result.package_index]->revoked() && result.authorized(workers_[result.package_index]->specification())) {
             consumer(result.batch());
@@ -117,6 +119,8 @@ export {
 
       ShutdownGuard(const ShutdownGuard&) = delete;
       ShutdownGuard& operator=(const ShutdownGuard&) = delete;
+      ShutdownGuard(ShutdownGuard&&) = delete;
+      ShutdownGuard& operator=(ShutdownGuard&&) = delete;
 
     private:
       Service& service_;

@@ -19,6 +19,16 @@ namespace telar::runtime {
 
     using Text = ds::String<ConcurrentMemory>;
 
+    // The control bytes below the space and DEL.
+    constexpr unsigned char first_printable = 0x20;
+    constexpr unsigned char delete_byte = 0x7f;
+
+    // The longest word, description or alias expansion a completion carries.
+    constexpr std::size_t maximum_text_bytes = 256;
+
+    // How far up from a directory a project file is looked for.
+    constexpr int maximum_parent_depth = 32;
+
     // The completion specs telar ships, by the command they describe.
     namespace shipped {
 
@@ -28,7 +38,9 @@ namespace telar::runtime {
 
     bool printable(std::string_view word) noexcept {
       return std::ranges::none_of(word, [](char byte) {
-        return static_cast<unsigned char>(byte) < 0x20 || byte == 0x7f;
+        const auto value = static_cast<unsigned char>(byte);
+
+        return value < first_printable || value == delete_byte;
       });
     }
 
@@ -68,10 +80,10 @@ namespace telar::runtime {
 
     // Opens each absolute directory of `path`, a colon-separated list, and hands its descriptor
     // to `visit` until `visit` returns false. Relative, over-long and unopenable entries are
-    // passed over.
+    // passed over. Takes the visitor itself, as the lambdas callers pass build it in place.
     template <typename Visit>
-    void forEachPathDirectory(std::string_view path, Visit&& visit) {
-      ds::Array<char, PATH_MAX> name;
+    void forEachPathDirectory(std::string_view path, Visit visit) {
+      ds::Array<char, PATH_MAX> name{};
 
       while (!path.empty()) {
         const auto separator = path.find(':');
@@ -83,7 +95,7 @@ namespace telar::runtime {
         }
 
         *std::ranges::copy(entry, name.dataMut()).out = '\0';
-        FileDescriptor directory{::open(name.data(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
+        FileDescriptor directory{::open(name.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
         if (directory && !visit(directory.get())) {
           return;
         }
@@ -93,9 +105,9 @@ namespace telar::runtime {
     // Reads a regular file of at most `limit` bytes; empty when it is missing or larger.
     tbc::val_a<Text> readSmall(tbc::mut_a<ConcurrentMemory> memory, int directory, const char* name, std::size_t limit = WordReader::maximum_file) {
       Text bytes{memory};
-      FileDescriptor file{::openat(directory, name, O_RDONLY | O_CLOEXEC | O_NONBLOCK)};
+      FileDescriptor file{::openat(directory, name, combineFlags(O_RDONLY, O_CLOEXEC, O_NONBLOCK))}; // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
       struct stat state{};
-      if (!file || ::fstat(file.get(), &state) != 0 || !S_ISREG(state.st_mode) || static_cast<std::size_t>(state.st_size) > limit) {
+      if (!file || ::fstat(file.get(), &state) != 0 || !S_ISREG(state.st_mode) || std::cmp_greater(state.st_size, limit)) {
         return bytes;
       }
 
@@ -103,7 +115,8 @@ namespace telar::runtime {
       std::size_t done = 0;
 
       while (done < bytes.size()) {
-        const auto count = ::read(file.get(), bytes.dataMut() + done, bytes.size() - done);
+        const auto unread = bytes.viewMut().subspan(done);
+        const auto count = ::read(file.get(), unread.data(), unread.size());
         if (count <= 0) {
           break;
         }
@@ -115,8 +128,9 @@ namespace telar::runtime {
       return bytes;
     }
 
+    // Takes the visitor itself, as the lambdas callers pass build it in place.
     template <typename Visit>
-    void lines(std::string_view text, Visit&& visit) {
+    void lines(std::string_view text, Visit visit) {
       while (!text.empty()) {
         const auto end = text.find('\n');
         auto line = text.substr(0, end);
@@ -129,20 +143,30 @@ namespace telar::runtime {
       }
     }
 
+    // The first of `names` that `folder` holds, read whole; empty when it holds none. `file` is
+    // scratch for the terminated name.
+    tbc::val_a<Text> firstOf(tbc::mut_a<ConcurrentMemory> memory, int folder, std::span<const std::string_view> names, Text& file) {
+      for (const auto name : names) {
+        file.assign(name);
+        if (auto bytes = readSmall(memory, folder, file.data()); !bytes.empty()) {
+          return bytes;
+        }
+      }
+
+      return Text{memory};
+    }
+
     // The first of `names` that `directory` or one of its parents holds, read whole; as the
     // tools find their files. Empty when there is none.
     tbc::val_a<Text> nearest(tbc::mut_a<ConcurrentMemory> memory, std::string_view directory, std::span<const std::string_view> names) {
       Text current{memory, directory};
       Text file{memory};
 
-      for (int depth = 0; depth < 32 && current.view().starts_with('/'); ++depth) {
-        FileDescriptor folder{::open(current.data(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
+      for (int depth = 0; depth < maximum_parent_depth && current.view().starts_with('/'); ++depth) {
+        FileDescriptor folder{::open(current.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
         if (folder) {
-          for (const auto name : names) {
-            file.assign(name);
-            if (auto bytes = readSmall(memory, folder.get(), file.data()); !bytes.empty()) {
-              return bytes;
-            }
+          if (auto bytes = firstOf(memory, folder.get(), names, file); !bytes.empty()) {
+            return bytes;
           }
         }
 
@@ -195,8 +219,9 @@ namespace telar::runtime {
           }
         }
 
-        if (decoded.empty() || decoded.size() > 256 || !printable(decoded) || decoded.view().front() == ' ') {
-          return Text{memory};
+        if (decoded.empty() || decoded.size() > maximum_text_bytes || !printable(decoded) || decoded.view().front() == ' ') {
+          words.clear();
+          return words;
         }
 
         const bool same = decoded.view().substr(0, decoded.view().find(' ')) == first;
@@ -218,7 +243,9 @@ namespace telar::runtime {
 
     // A spec is named after its command: letters, digits and ., _, + or -, not leading with a dot.
     bool specName(std::string_view name) noexcept {
-      return !name.empty() && name.size() <= 64 && name.front() != '.' && std::ranges::all_of(name, [](char byte) {
+      constexpr std::size_t maximum_spec_name = 64;
+
+      return !name.empty() && name.size() <= maximum_spec_name && name.front() != '.' && std::ranges::all_of(name, [](char byte) {
         return (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') || byte == '.' || byte == '_' || byte == '+' || byte == '-';
       });
     }
@@ -267,7 +294,7 @@ namespace telar::runtime {
       }
 
       // No directory holds a file whose name is longer than NAME_MAX.
-      ds::Array<char, NAME_MAX + 1> file;
+      ds::Array<char, NAME_MAX + 1> file{};
       if (found || name.size() >= file.size()) {
         return found;
       }
@@ -283,6 +310,79 @@ namespace telar::runtime {
       return found;
     }
 
+    // What a justfile's lines carry to the recipe after them: its comment and whether it is private.
+    struct RecipeNotes {
+      std::string_view comment;
+      bool hidden = false;
+    };
+
+    // Reads a line that annotates the next recipe, or ends what annotated it; false for a recipe,
+    // an alias or a setting.
+    bool recipeAnnotation(tbc::val_a<std::string_view> line, tbc::mut_a<RecipeNotes> notes) {
+      if (line.empty() || line.front() == ' ' || line.front() == '\t') {
+        notes = {};
+        return true;
+      }
+
+      if (line.front() == '#') {
+        notes.comment = trimText(line.substr(line.find_first_not_of('#')), " \t");
+        return true;
+      }
+
+      if (line.front() != '[') {
+        return false;
+      }
+
+      notes.hidden |= line.contains("private");
+      if (const auto doc = line.find("doc("); doc != std::string_view::npos) {
+        const auto open = line.find_first_of("\"'", doc);
+        const auto close = open == std::string_view::npos ? open : line.find(line[open], open + 1);
+        if (close != std::string_view::npos) {
+          notes.comment = line.substr(open + 1, close - open - 1);
+        }
+      }
+
+      return true;
+    }
+
+    // The recipe a line declares; empty when it declares none.
+    std::string_view recipeName(std::string_view line) {
+      for (const auto* const keyword : {"set ", "import ", "mod ", "export "}) {
+        if (line.starts_with(keyword)) {
+          return {};
+        }
+      }
+
+      const auto header = line.front() == '@' ? line.substr(1) : line;
+      const auto end = header.find_first_of(" :");
+      const auto colon = header.find(':');
+      if (end == std::string_view::npos || colon == std::string_view::npos || header.substr(colon).starts_with(":=")) {
+        return {};
+      }
+
+      const auto name = header.substr(0, end);
+      const bool valid = !name.empty() && (std::isalpha(static_cast<unsigned char>(name.front())) != 0 || name.front() == '_') && std::ranges::all_of(name, [](char byte) {
+        return std::isalnum(static_cast<unsigned char>(byte)) != 0 || byte == '_' || byte == '-';
+      });
+
+      return valid ? name : std::string_view{};
+    }
+
+    // An `alias name := recipe` line, offered as the name with what it stands for.
+    template <typename Add>
+    void justAlias(std::string_view line, Text& alias, Add& add) {
+      constexpr std::string_view keyword = "alias ";
+      const auto rest = trimText(line.substr(keyword.size()), " \t");
+      const auto assign = rest.find(":=");
+      if (assign == std::string_view::npos) {
+        return;
+      }
+
+      alias.assign("Alias of ");
+      alias.append(trimText(rest.substr(assign + 2), " \t"));
+      add(trimText(rest.substr(0, assign), " \t"), alias.view());
+    }
+
     // The public recipes of the nearest justfile, each with the comment above it, and its
     // aliases.
     template <typename Add>
@@ -290,67 +390,23 @@ namespace telar::runtime {
       static constexpr ds::Array<std::string_view, 3> names{"justfile", "Justfile", ".justfile"};
       const auto source = nearest(memory, directory, names);
       Text alias{memory};
-      std::string_view comment;
-      bool hidden = false;
+      RecipeNotes notes;
 
       lines(source, [&](std::string_view line) {
-        if (line.empty() || line.front() == ' ' || line.front() == '\t') {
-          comment = {};
-          hidden = false;
+        if (recipeAnnotation(line, notes)) {
           return;
         }
 
-        if (line.front() == '#') {
-          comment = trimText(line.substr(line.find_first_not_of('#')), " \t");
-          return;
-        }
-
-        if (line.front() == '[') {
-          hidden |= line.find("private") != std::string_view::npos;
-          if (const auto doc = line.find("doc("); doc != std::string_view::npos) {
-            const auto open = line.find_first_of("\"'", doc);
-            const auto close = open == std::string_view::npos ? open : line.find(line[open], open + 1);
-            if (close != std::string_view::npos) {
-              comment = line.substr(open + 1, close - open - 1);
-            }
-          }
-
-          return;
-        }
-
-        const auto description = std::exchange(comment, std::string_view{});
-        const bool private_recipe = std::exchange(hidden, false);
+        const auto description = std::exchange(notes.comment, std::string_view{});
+        const bool private_recipe = std::exchange(notes.hidden, false);
 
         if (line.starts_with("alias ")) {
-          const auto rest = trimText(line.substr(6), " \t");
-          const auto assign = rest.find(":=");
-          if (assign != std::string_view::npos) {
-            alias.assign("Alias of ");
-            alias.append(trimText(rest.substr(assign + 2), " \t"));
-            add(trimText(rest.substr(0, assign), " \t"), alias.view());
-          }
-
+          justAlias(line, alias, add);
           return;
         }
 
-        for (const auto* const keyword : {"set ", "import ", "mod ", "export "}) {
-          if (line.starts_with(keyword)) {
-            return;
-          }
-        }
-
-        auto header = line.front() == '@' ? line.substr(1) : line;
-        const auto end = header.find_first_of(" :");
-        const auto colon = header.find(':');
-        if (end == std::string_view::npos || colon == std::string_view::npos || header.substr(colon).starts_with(":=")) {
-          return;
-        }
-
-        const auto name = header.substr(0, end);
-        const bool valid = !name.empty() && (std::isalpha(static_cast<unsigned char>(name.front())) || name.front() == '_') && std::ranges::all_of(name, [](char byte) {
-          return std::isalnum(static_cast<unsigned char>(byte)) || byte == '_' || byte == '-';
-        });
-        if (valid && name.front() != '_' && !private_recipe) {
+        const auto name = recipeName(line);
+        if (!name.empty() && name.front() != '_' && !private_recipe) {
           add(name, description);
         }
       });
@@ -382,7 +438,7 @@ namespace telar::runtime {
           command.clear();
         }
 
-        add(std::string_view{name}, std::string_view{command}.substr(0, 256));
+        add(std::string_view{name}, std::string_view{command}.substr(0, maximum_text_bytes));
       });
     }
 
@@ -429,12 +485,18 @@ namespace telar::runtime {
       });
     }
 
-    // Executables in each absolute directory of `path` whose names start with `prefix`.
+    // The executables to look for: those in each absolute directory of `path` whose names start
+    // with `prefix`.
+    struct CommandSearch {
+      std::string_view path;
+      std::string_view prefix;
+    };
+
     template <typename Add>
-    void commands(std::string_view path, std::string_view prefix, Add& add) {
+    void commands(CommandSearch search, Add& add) {
       std::size_t scanned = 0;
 
-      forEachPathDirectory(path, [&](int directory) {
+      forEachPathDirectory(search.path, [&](int directory) {
         DirectoryStream entries{directory};
 
         while (const auto* found = entries.next()) {
@@ -442,13 +504,14 @@ namespace telar::runtime {
             return false;
           }
 
-          const std::string_view name{found->d_name};
-          if (!name.starts_with(prefix) || name.starts_with('.')) {
+          const auto* const terminated = std::data(found->d_name);
+          const std::string_view name{terminated};
+          if (!name.starts_with(search.prefix) || name.starts_with('.')) {
             continue;
           }
 
           struct stat state{};
-          if (::fstatat(directory, found->d_name, &state, 0) == 0 && S_ISREG(state.st_mode) && ::faccessat(directory, found->d_name, X_OK, 0) == 0) {
+          if (::fstatat(directory, terminated, &state, 0) == 0 && S_ISREG(state.st_mode) && ::faccessat(directory, terminated, X_OK, 0) == 0) {
             add(name);
           }
         }
@@ -467,7 +530,7 @@ namespace telar::runtime {
       Text directory_name{memory, home};
 
       directory_name.append("/.ssh");
-      FileDescriptor directory{::open(directory_name.data(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
+      FileDescriptor directory{::open(directory_name.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
       if (!directory) {
         return;
       }
@@ -475,12 +538,18 @@ namespace telar::runtime {
       const auto text = readSmall(memory, directory.get(), "config");
 
       lines(text, [&](std::string_view line) {
+        constexpr std::string_view keyword = "host";
+
         line = trimText(line, " \t");
-        if (line.size() < 5 || (line[0] | 0x20) != 'h' || (line[1] | 0x20) != 'o' || (line[2] | 0x20) != 's' || (line[3] | 0x20) != 't' || (line[4] != ' ' && line[4] != '\t' && line[4] != '=')) {
+        if (line.size() <= keyword.size() || !asciiStartsWithIgnoreCase(line, keyword)) {
           return;
         }
 
-        auto names = line.substr(5);
+        if (const char separator = line[keyword.size()]; separator != ' ' && separator != '\t' && separator != '=') {
+          return;
+        }
+
+        auto names = line.substr(keyword.size() + 1);
 
         while (!names.empty()) {
           names = trimText(names, " \t");
@@ -503,7 +572,7 @@ namespace telar::runtime {
       }
 
       const Text directory_name{memory, directory_path};
-      FileDescriptor directory{::open(directory_name.data(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
+      FileDescriptor directory{::open(directory_name.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
       if (!directory) {
         return;
       }
@@ -544,12 +613,14 @@ namespace telar::runtime {
     void processes(ConcurrentMemory& memory, Add& add) {
       ds::Vec<std::pair<int, Text>, ConcurrentMemory> found{memory};
 #ifdef __APPLE__
+      constexpr std::size_t maximum_processes = 4096;
       ds::Vec<pid_t, ConcurrentMemory> pids{memory};
 
-      pids.resize(4096);
+      pids.resize(maximum_processes);
       const auto count = ::proc_listallpids(pids.dataMut(), static_cast<int>(pids.size() * sizeof(pid_t)));
+      const auto listed = std::min(static_cast<std::size_t>(std::max(0, count)), pids.size());
 
-      for (int index = 0; index < count && index < static_cast<int>(pids.size()); ++index) {
+      for (std::size_t index = 0; index < listed; ++index) {
         proc_bsdshortinfo info{};
         if (pids[index] <= 0 || ::proc_pidinfo(pids[index], PROC_PIDT_SHORTBSDINFO, 0, &info, sizeof(info)) != sizeof(info) || info.pbsi_uid != ::geteuid()) {
           continue;
@@ -596,8 +667,9 @@ namespace telar::runtime {
 #endif
       std::ranges::sort(found.viewMut(), std::greater{}, &std::pair<int, Text>::first);
       for (const auto& [pid, name] : found) {
-        ds::Array<char, 16> digits;
-        auto* const end = std::to_chars(digits.dataMut(), digits.dataMut() + digits.size(), pid).ptr;
+        constexpr std::size_t pid_digits = 16;
+        ds::Array<char, pid_digits> digits{};
+        auto* const end = std::to_chars(digits.dataMut(), std::to_address(digits.viewMut().end()), pid).ptr;
 
         add(std::string_view{digits.data(), end}, name.view());
       }
@@ -622,7 +694,7 @@ namespace telar::runtime {
     }
   }
 
-  tbc::val_a<WordReader::Result> WordReader::observe(const Request& request) noexcept {
+  tbc::val_a<WordReader::Result> WordReader::observe(const Request& request) noexcept { // NOLINT(bugprone-exception-escape): only the command's copy allocates outside the guarded calls, and a process without memory for it ends, as noexcept states
     Result result{memory_};
 
     result.client = request.client;
@@ -642,93 +714,99 @@ namespace telar::runtime {
     }
 
     try {
-      const auto prefix = request.prefix.view();
-      const auto add = [&](std::string_view word, std::string_view description = {}) {
-        if (word.empty() || !word.starts_with(prefix) || word.size() > 256 || !printable(word)) {
-          return;
-        }
-
-        if (result.words.size() >= maximum_words * 4) {
-          result.truncated = true;
-          return;
-        }
-
-        result.words.push(Word{.text = Text{memory_, word}, .description = Text{memory_, printable(description) ? description.substr(0, 256) : std::string_view{}}});
-      };
-
-      const auto add_word = [&](std::string_view word) {
-        add(word);
-      };
-
-      switch (request.provider) {
-      case CompletionProvider::command:
-        commands(request.path.view(), prefix, add);
-        builtins(request.shell, add_word);
-        if (request.names) {
-          words(request.names->view(), add_word);
-        } else {
-          result.truncated = true;
-        }
-
-        break;
-      case CompletionProvider::branch:
-        git_.read(request.directory.view());
-        git_.branches(maximum_entries, add_word);
-        break;
-      case CompletionProvider::remote:
-        git_.read(request.directory.view());
-        git_.remotes(add_word);
-        break;
-      case CompletionProvider::stash: {
-        git_.read(request.directory.view());
-        const auto count = git_.stashes(maximum_words);
-
-        for (std::size_t index = 0; index < count; ++index) {
-          ds::Array<char, 32> stash;
-          const auto written = std::format_to_n(stash.dataMut(), stash.size(), "stash@{{{}}}", index);
-
-          add(std::string_view{stash.data(), static_cast<std::size_t>(written.out - stash.data())});
-        }
-
-        break;
-      }
-      case CompletionProvider::process:
-        processes(memory_, add);
-        break;
-      case CompletionProvider::ssh_host:
-        sshHosts(memory_, request.home.view(), add);
-        break;
-      case CompletionProvider::make_target:
-        makeTargets(memory_, request.directory.view(), add);
-        break;
-      case CompletionProvider::just_recipe:
-        justRecipes(memory_, request.directory.view(), add);
-        break;
-      case CompletionProvider::package_script:
-        packageScripts(memory_, request.directory.view(), add);
-        break;
-      case CompletionProvider::compose_service:
-        composeServices(memory_, request.directory.view(), add);
-        break;
-      }
-
-      // Processes keep the newest first; everything else reads best sorted.
-      if (request.provider != CompletionProvider::process) {
-        std::ranges::sort(result.words.viewMut());
-      }
-
-      const auto duplicates = std::ranges::unique(result.words.viewMut(), {}, &Word::text);
-
-      result.words.truncate(result.words.size() - duplicates.size());
-      if (result.words.size() > maximum_words) {
-        result.words.truncate(maximum_words);
-        result.truncated = true;
-      }
+      collect(request, result);
     } catch (...) {
       result.words.clear();
     }
 
     return result;
+  }
+
+  void WordReader::collect(const Request& request, tbc::mut_a<Result> result) {
+    const auto prefix = request.prefix.view();
+    const auto add = [&](std::string_view word, std::string_view description = {}) {
+      if (word.empty() || !word.starts_with(prefix) || word.size() > maximum_text_bytes || !printable(word)) {
+        return;
+      }
+
+      if (result.words.size() >= maximum_words * 4) {
+        result.truncated = true;
+        return;
+      }
+
+      result.words.push(Word{.text = Text{memory_, word}, .description = Text{memory_, printable(description) ? description.substr(0, maximum_text_bytes) : std::string_view{}}});
+    };
+
+    const auto add_word = [&](std::string_view word) {
+      add(word);
+    };
+
+    switch (request.provider) {
+    case CompletionProvider::command:
+      commands({.path = request.path.view(), .prefix = prefix}, add);
+      builtins(request.shell, add_word);
+      if (request.names) {
+        words(request.names->view(), add_word);
+      } else {
+        result.truncated = true;
+      }
+
+      break;
+    case CompletionProvider::branch:
+      git_.read(request.directory.view());
+      git_.branches(maximum_entries, add_word);
+      break;
+    case CompletionProvider::remote:
+      git_.read(request.directory.view());
+      git_.remotes(add_word);
+      break;
+    case CompletionProvider::stash: {
+      constexpr std::size_t stash_name_bytes = 32;
+
+      git_.read(request.directory.view());
+      const auto count = git_.stashes(maximum_words);
+
+      for (std::size_t index = 0; index < count; ++index) {
+        ds::Array<char, stash_name_bytes> stash{};
+        const auto written = std::format_to_n(stash.dataMut(), stash.size(), "stash@{{{}}}", index);
+
+        add(std::string_view{stash.data(), static_cast<std::size_t>(written.out - stash.data())});
+      }
+
+      break;
+    }
+    case CompletionProvider::process:
+      processes(memory_, add);
+      break;
+    case CompletionProvider::ssh_host:
+      sshHosts(memory_, request.home.view(), add);
+      break;
+    case CompletionProvider::make_target:
+      makeTargets(memory_, request.directory.view(), add);
+      break;
+    case CompletionProvider::just_recipe:
+      justRecipes(memory_, request.directory.view(), add);
+      break;
+    case CompletionProvider::package_script:
+      packageScripts(memory_, request.directory.view(), add);
+      break;
+    case CompletionProvider::compose_service:
+      composeServices(memory_, request.directory.view(), add);
+      break;
+    }
+
+    // Processes keep the newest first; everything else reads best sorted.
+    if (request.provider != CompletionProvider::process) {
+      std::ranges::sort(result.words.viewMut());
+    }
+
+    const auto duplicates = std::ranges::unique(result.words.viewMut(), {}, &Word::text);
+
+    result.words.truncate(result.words.size() - duplicates.size());
+    if (result.words.size() > maximum_words) {
+      result.words.truncate(maximum_words);
+      result.truncated = true;
+    }
   }
 
   void WordReader::stop() noexcept {}
@@ -787,7 +865,7 @@ namespace telar::runtime {
       return source;
     }
 
-    FileDescriptor folder{::open(completions_.data(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
+    FileDescriptor folder{::open(completions_.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
     if (!folder) {
       return source;
     }
@@ -812,7 +890,9 @@ namespace telar::runtime {
         compiles = false;
       }
 
-      if (compiled_.size() >= 256) {
+      constexpr std::size_t compiled_capacity = 256;
+
+      if (compiled_.size() >= compiled_capacity) {
         compiled_.clear();
       }
 

@@ -41,7 +41,7 @@ export {
     class CaptureJoiner {
     public:
       using Half = CapturedExchange::Half;
-      enum class State {
+      enum class State : std::uint8_t {
         pending,
         complete,
         partial,
@@ -116,11 +116,11 @@ export {
     };
 
     struct IgnoreCaptureTap {
-      [[nodiscard]] constexpr bool listening() const noexcept {
+      [[nodiscard]] static constexpr bool listening() noexcept {
         return false;
       }
 
-      constexpr void submit(CapturedExchange&) noexcept {}
+      constexpr void submit(CapturedExchange& /*exchange*/) noexcept {}
     };
 
   }

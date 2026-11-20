@@ -13,9 +13,36 @@ import telar.base.ds;
 
 namespace telar::runtime {
 
+  namespace {
+
+    AgentProvider projectedProvider(const AgentEvidenceState& evidence, const AgentEvidence& selected) noexcept {
+      if (evidence.process) {
+        return evidence.process->provider;
+      }
+
+      if (selected.provider != AgentProvider::unknown) {
+        return selected.provider;
+      }
+
+      return evidence.screen ? evidence.screen->provider : AgentProvider::unknown;
+    }
+
+    AgentBlockedReason projectedReason(AgentStatus status, const AgentEvidenceState& evidence, const AgentEvidence& selected) noexcept {
+      if (status != AgentStatus::blocked) {
+        return AgentBlockedReason::none;
+      }
+
+      return selected.source == AgentSource::lifecycle_report && evidence.report_reason != AgentBlockedReason::none ? evidence.report_reason : AgentBlockedReason::other;
+    }
+
+  }
+
   AgentProvider AgentEvidenceState::provider() const noexcept {
-    return process ? process->provider : screen ? screen->provider
-                                                : AgentProvider::unknown;
+    if (process) {
+      return process->provider;
+    }
+
+    return screen ? screen->provider : AgentProvider::unknown;
   }
 
   bool AgentEvidenceState::accepts(AgentProvider incoming) const noexcept {
@@ -86,8 +113,14 @@ namespace telar::runtime {
       return false;
     }
 
-    const auto known = process_provider != AgentProvider::unknown ? process_provider : signal.provider != AgentProvider::unknown ? signal.provider
-                                                                                                                                 : provider();
+    auto known = provider();
+
+    if (process_provider != AgentProvider::unknown) {
+      known = process_provider;
+    } else if (signal.provider != AgentProvider::unknown) {
+      known = signal.provider;
+    }
+
     if (known == AgentProvider::unknown || (signal.status == AgentStatus::ready && !signal.identity_confirmed && provider() != signal.provider)) {
       return false;
     }
@@ -96,28 +129,8 @@ namespace telar::runtime {
       return false;
     }
 
-    if (known == AgentProvider::codex) {
-      if (screen && now.before(screen->observed)) {
-        return false;
-      }
-
-      if (report) {
-        if (!report->observed.before(now)) {
-          return false;
-        }
-
-        if (signal.status == AgentStatus::ready) {
-          if (!signal.ready_confirmed || (report->status == AgentStatus::working && report_state != AgentReportState::settling && !report->expired(now.milliseconds))) {
-            return false;
-          }
-
-          if (!interrupted) {
-            report.reset();
-          }
-        } else if (report->status == AgentStatus::ready) {
-          report.reset();
-        }
-      }
+    if (known == AgentProvider::codex && !applyCodexScreen(signal, now, interrupted)) {
+      return false;
     }
 
     screen = AgentEvidence::screen(known, signal, now);
@@ -128,20 +141,48 @@ namespace telar::runtime {
     return true;
   }
 
+  bool AgentEvidenceState::applyCodexScreen(AgentSignal signal, ObservationTime now, bool interrupted) noexcept {
+    if (screen && now.before(screen->observed)) {
+      return false;
+    }
+
+    if (!report) {
+      return true;
+    }
+
+    if (!report->observed.before(now)) {
+      return false;
+    }
+
+    if (signal.status == AgentStatus::ready) {
+      if (!signal.ready_confirmed || (report->status == AgentStatus::working && report_state != AgentReportState::settling && !report->expired(now.milliseconds))) {
+        return false;
+      }
+
+      if (!interrupted) {
+        report.reset();
+      }
+    } else if (report->status == AgentStatus::ready) {
+      report.reset();
+    }
+
+    return true;
+  }
+
   ds::Option<AgentEvidence> AgentEvidenceState::choose(std::int64_t now) const noexcept {
-    const auto shown = screen && !screen->expired(now) ? screen : ds::none;
+    const bool shown = screen && !screen->expired(now);
 
     if (report && !report->expired(now)) {
       const auto since = work ? work->observed : report->observed;
-      if (shown && shown->status == AgentStatus::blocked && provider() == AgentProvider::cursor && since.before(shown->observed)) {
-        return shown;
+      if (shown && screen->status == AgentStatus::blocked && provider() == AgentProvider::cursor && since.before(screen->observed)) {
+        return screen;
       }
 
       return report;
     }
 
     if (shown) {
-      return shown;
+      return screen;
     }
 
     auto presence = process;
@@ -166,7 +207,7 @@ namespace telar::runtime {
     report.reset();
     report_state = AgentReportState::ready;
     report_reason = AgentBlockedReason::none;
-    report_event.assign({});
+    report_event = {};
   }
 
   bool AgentProgress::apply(const ReportAgentProgress& report) {
@@ -209,7 +250,7 @@ namespace telar::runtime {
       return done_;
     }
 
-    return static_cast<std::uint16_t>(std::count_if(tasks_.begin(), tasks_.begin() + count_, [](const Task& task) {
+    return static_cast<std::uint16_t>(std::ranges::count_if(tasks_.view().first(count_), [](const Task& task) {
       return task.status == AgentPlanStatus::completed;
     }));
   }
@@ -219,7 +260,7 @@ namespace telar::runtime {
       return total_;
     }
 
-    return static_cast<std::uint16_t>(std::count_if(tasks_.begin(), tasks_.begin() + count_, [](const Task& task) {
+    return static_cast<std::uint16_t>(std::ranges::count_if(tasks_.view().first(count_), [](const Task& task) {
       return task.status != AgentPlanStatus::deleted;
     }));
   }
@@ -233,7 +274,8 @@ namespace telar::runtime {
 
     for (const auto& task : std::span{tasks_}.first(count_)) {
       if (task.status == AgentPlanStatus::in_progress) {
-        return task.subject.view();
+        pending = task.subject.view();
+        break;
       }
 
       if (task.status == AgentPlanStatus::pending && pending.empty()) {
@@ -256,8 +298,8 @@ namespace telar::runtime {
   }
 
   void SessionFileWatch::clear() noexcept {
-    session.assign({});
-    path.assign({});
+    session = {};
+    path = {};
     resetProgress();
   }
 
@@ -277,9 +319,9 @@ namespace telar::runtime {
     checked_at = {};
   }
 
-  Agent::Agent(std::uint64_t pane, std::uint64_t generation)
-      : pane(pane),
-        generation(generation) {}
+  Agent::Agent(std::uint64_t pane_id, std::uint64_t pane_generation)
+      : pane(pane_id),
+        generation(pane_generation) {}
 
   void Agent::setSession(std::string_view value) {
     if (!value.empty()) {
@@ -400,10 +442,8 @@ namespace telar::runtime {
       next_status = acknowledged ? AgentStatus::ready : AgentStatus::done;
     }
 
-    const auto next_provider = evidence.process ? evidence.process->provider : selected->provider != AgentProvider::unknown ? selected->provider
-                                                                           : evidence.screen                                ? evidence.screen->provider
-                                                                                                                            : AgentProvider::unknown;
-    const auto next_reason = next_status == AgentStatus::blocked ? (selected->source == AgentSource::lifecycle_report && evidence.report_reason != AgentBlockedReason::none ? evidence.report_reason : AgentBlockedReason::other) : AgentBlockedReason::none;
+    const auto next_provider = projectedProvider(evidence, *selected);
+    const auto next_reason = projectedReason(next_status, evidence, *selected);
     const auto next_event = eventFor(*selected, now);
     const bool changed = provider != next_provider || status != next_status || source != selected->source || authority != evidence.authority || confidence != selected->confidence || observed_at != selected->observed.milliseconds || expires_at != selected->expires_at || blocked_reason != next_reason || event.view() != next_event || projected_process != process_identity;
 
@@ -455,9 +495,13 @@ namespace telar::runtime {
       return true;
     }
 
+    // Control characters: C0 and DEL.
+    constexpr unsigned char first_printable = 0x20;
+    constexpr unsigned char delete_byte = 0x7f;
+
     validateUtf8(value);
-    if (value.size() > 96 || std::ranges::any_of(value, [](unsigned char byte) {
-          return byte < 0x20 || byte == 0x7f;
+    if (value.size() > agent_report_title_bytes || std::ranges::any_of(value, [](unsigned char byte) {
+          return byte < first_printable || byte == delete_byte;
         })) {
       throw EncodingError{"Invalid agent session title"};
     }
@@ -585,7 +629,7 @@ namespace telar::runtime {
         cursor(request.watch, result);
         break;
       }
-    } catch (const std::exception&) {
+    } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): the title is best effort, and a session file that cannot be read yields what was read before it failed
     }
 
     return result;
@@ -607,7 +651,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   bool SessionFileReader<Memory>::cursorPath(std::string_view path, std::string_view session) noexcept {
-    if (session.empty() || session.size() > 64 || !std::ranges::all_of(session, [](char byte) {
+    if (session.empty() || session.size() > agent_report_session_bytes || !std::ranges::all_of(session, [](char byte) {
           return (byte >= '0' && byte <= '9') || (byte >= 'a' && byte <= 'f') || (byte >= 'A' && byte <= 'F') || byte == '-';
         })) {
       return false;
@@ -618,7 +662,7 @@ namespace telar::runtime {
     }
 
     path.remove_suffix(sizeof("/meta.json") - 1);
-    return path.substr(path.rfind('/') + 1) == session;
+    return control::textAfter(path, path.rfind('/') + 1) == session;
   }
 
   template <Allocator Memory>
@@ -627,7 +671,7 @@ namespace telar::runtime {
       return;
     }
 
-    FileDescriptor file{::open(path_.data(), O_RDONLY | O_NONBLOCK | O_CLOEXEC)};
+    FileDescriptor file{::open(path_.data(), combineFlags(O_RDONLY, O_NONBLOCK, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
     const auto size = regularFileSize(file);
     if (!size || *size >= metadata_capacity) {
       return;
@@ -643,7 +687,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   void SessionFileReader<Memory>::claude(const SessionFileWatch& watch, Result& result) {
-    FileDescriptor file{::open(path_.data(), O_RDONLY | O_NONBLOCK | O_CLOEXEC)};
+    FileDescriptor file{::open(path_.data(), combineFlags(O_RDONLY, O_NONBLOCK, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
     if (!file) {
       if (!watch.offset) {
         result.offset = 0;
@@ -683,7 +727,7 @@ namespace telar::runtime {
         if (const auto title = readTitle(line, watch.session.view())) {
           result.title = title;
         }
-      } catch (const std::exception&) {
+      } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): a title line that does not parse is skipped, as the lines that are no title are
       }
     }
 
@@ -691,10 +735,10 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  ds::Option<FixedText<96>> SessionFileReader<Memory>::readTitle(std::string_view input, ds::Option<std::string_view> session) {
+  ds::Option<FixedText<agent_report_title_bytes>> SessionFileReader<Memory>::readTitle(std::string_view input, ds::Option<std::string_view> session) {
     validateUtf8(input);
     const auto object = JsonValue::parse(input);
-    FixedText<96> title;
+    FixedText<agent_report_title_bytes> title;
     bool has_title = false;
     bool has_session = false;
     bool matches_session = !session;
@@ -743,7 +787,7 @@ namespace telar::runtime {
         throw EncodingError{"Agent session file offset is outside its bounds"};
       }
 
-      const auto count = ::pread(descriptor, bytes_.dataMut() + filled, limit - filled, static_cast<off_t>(offset + filled));
+      const auto count = ::pread(descriptor, bytes_.viewMut().subspan(filled).data(), limit - filled, static_cast<off_t>(offset + filled));
       if (count < 0 && sys::lastError() == EINTR) {
         continue;
       }

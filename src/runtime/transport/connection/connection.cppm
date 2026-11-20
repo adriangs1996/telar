@@ -25,7 +25,7 @@ export {
 
     class ClientHandshake {
     public:
-      enum class Stage {
+      enum class Stage : std::uint8_t {
         prefix,
         hello,
         reply,
@@ -56,7 +56,7 @@ export {
       void reply(const Message& message);
 
       FileDescriptor descriptor_;
-      ds::Array<Byte, frame_prefix_size + HandshakeCodec::max_message_size> bytes_;
+      ds::Array<Byte, frame_prefix_size + HandshakeCodec::max_message_size> bytes_{};
       std::size_t used_bytes_ = 0;
       std::size_t expected_bytes_ = frame_prefix_size;
       std::chrono::steady_clock::time_point started_at_ = std::chrono::steady_clock::now();
@@ -79,7 +79,7 @@ export {
 
     struct RejectDeferredResponse {
       // Generic over the caller's consumer, so it stays a template here.
-      TBC_GENERIC inline void operator()(const DeferredResponse&, auto&&) const {
+      TBC_GENERIC inline void operator()(const DeferredResponse& /*response*/, auto&& /*consume*/) const {
         throw std::logic_error{"A deferred response requires an encoder"};
       }
     };
@@ -114,7 +114,7 @@ export {
 
     private:
       struct Entry {
-        std::size_t offset;
+        std::size_t offset = 0;
         DeferredResponse response;
       };
 
@@ -362,7 +362,7 @@ export {
 
         if (lane == DeliveryLane::management && deferred_.precedes(offset)) {
           offset = deferred_.offset();
-          resolve(encode);
+          resolve(std::forward<Encoder>(encode));
         }
 
         const auto frame = inspect(offset);
@@ -410,11 +410,11 @@ export {
     private:
       // Generic over the caller's encoder, so it stays a template here.
       template <DeferredResponseEncoder Encoder>
-      TBC_GENERIC inline void resolve(Encoder& encode) {
+      TBC_GENERIC inline void resolve(Encoder&& encode) {
         const auto offset = deferred_.offset();
         std::size_t resolved_size = 0;
 
-        encode(deferred_.response(), [&](const auto& message) {
+        std::forward<Encoder>(encode)(deferred_.response(), [&](const auto& message) {
           using Message = std::remove_cvref_t<decltype(message)>;
           static_assert(deliveryLane(MessageSchema<Message>::tag) == DeliveryLane::management);
 
@@ -505,9 +505,9 @@ export {
 
       // Hands each complete frame to a visitor while the client is ready for more, at most one batch;
       // whether a complete frame remains. Generic over the caller's predicate and visitor, so it stays a
-      // template here.
+      // template here; takes both themselves, as the lambdas callers pass build them in place.
       template <typename Ready, typename Visitor>
-      TBC_GENERIC inline static bool dispatch(Frames& frames, Ready&& ready, Visitor&& visitor) {
+      TBC_GENERIC inline static bool dispatch(Frames& frames, Ready ready, Visitor visitor) {
         constexpr unsigned messages_per_batch = 64;
 
         for (unsigned index = 0; index < messages_per_batch; ++index) {
@@ -541,7 +541,7 @@ export {
       // Generic over the caller's encoder, so it stays a template here.
       template <DeferredResponseEncoder Encoder = RejectDeferredResponse>
       TBC_GENERIC inline void write(Encoder&& encode = {}) {
-        constexpr std::size_t write_batch_size = 256 * 1024;
+        constexpr std::size_t write_batch_size = std::size_t{256} * 1024;
         const auto bytes = output_.prepare(write_batch_size, std::forward<Encoder>(encode));
         if (bytes.empty()) {
           return;
@@ -630,8 +630,8 @@ export {
       bool read_interest = true;
 
     private:
-      static constexpr std::size_t read_batch_size = 64 * 1024;
-      static constexpr std::size_t decode_capacity = 128 * 1024;
+      static constexpr std::size_t read_batch_size = std::size_t{64} * 1024;
+      static constexpr std::size_t decode_capacity = std::size_t{128} * 1024;
       static constexpr std::size_t input_limit = max_payload_size + read_batch_size + frame_prefix_size;
       FileDescriptor descriptor_;
       ByteQueue<Memory> input_;

@@ -48,17 +48,20 @@ namespace telar::runtime {
   }
 
   DescriptionQuery DescriptionCapture::normalized() const {
+    constexpr std::string_view paste_start = "\x1b[200~";
+    constexpr std::string_view paste_end = "\x1b[201~";
     DescriptionQuery query;
     auto remaining = raw_.view();
     bool pasted = false;
 
     while (!remaining.empty()) {
-      if (remaining.starts_with("\x1b[200~") || remaining.starts_with("\x1b[201~")) {
-        pasted = remaining[4] == '0';
-        remaining.remove_prefix(6);
+      if (remaining.starts_with(paste_start) || remaining.starts_with(paste_end)) {
+        pasted = remaining.starts_with(paste_start);
+        remaining.remove_prefix(paste_start.size());
         continue;
       }
 
+      const auto current = remaining;
       const auto byte = static_cast<unsigned char>(remaining.front());
 
       remaining.remove_prefix(1);
@@ -77,15 +80,9 @@ namespace telar::runtime {
       } else if (byte == clear_line) {
         query.clear();
       } else if (byte == erase_word) {
-        while (query.view().ends_with(' ')) {
-          query.truncate(query.view().size() - 1);
-        }
-
-        while (!query.view().empty() && !query.view().ends_with(' ')) {
-          removeScalar(query);
-        }
+        eraseWord(query);
       } else if (byte >= ' ') {
-        const auto scalar = nextScalar(byte, remaining);
+        const auto scalar = nextScalar(current);
 
         validateUtf8(scalar);
         query.append(scalar);
@@ -105,6 +102,10 @@ namespace telar::runtime {
   }
 
   void DescriptionCapture::skipEscape(std::string_view& remaining) noexcept {
+    // A CSI sequence ends at its final byte, one of @ through ~.
+    constexpr unsigned char final_first = 0x40;
+    constexpr unsigned char final_last = 0x7e;
+
     if (remaining.empty()) {
       return;
     }
@@ -117,22 +118,34 @@ namespace telar::runtime {
         const auto byte = static_cast<unsigned char>(remaining.front());
 
         remaining.remove_prefix(1);
-        if (byte >= 0x40 && byte <= 0x7e) {
+        if (byte >= final_first && byte <= final_last) {
           break;
         }
       }
     }
   }
 
-  std::string_view DescriptionCapture::nextScalar(unsigned char byte, std::string_view remaining) {
-    const std::size_t length = byte < 0x80 ? 1 : byte < 0xe0 ? 2
-                                             : byte < 0xf0   ? 3
-                                                             : 4;
-    if (remaining.size() < length - 1) {
+  std::string_view DescriptionCapture::nextScalar(std::string_view text) {
+    // The lead byte tells the length: one byte below 0x80, two below 0xe0, three below 0xf0, else four.
+    constexpr unsigned char single_end = 0x80;
+    constexpr unsigned char pair_end = 0xe0;
+    constexpr unsigned char triple_end = 0xf0;
+    const auto byte = static_cast<unsigned char>(text.front());
+    std::size_t length = 4;
+
+    if (byte < single_end) {
+      length = 1;
+    } else if (byte < pair_end) {
+      length = 2;
+    } else if (byte < triple_end) {
+      length = 3;
+    }
+
+    if (text.size() < length) {
       throw EncodingError{"Incomplete description query UTF-8"};
     }
 
-    return {remaining.data() - 1, length};
+    return text.substr(0, length);
   }
 
   void DescriptionCapture::appendSpace(DescriptionQuery& query) {
@@ -147,16 +160,33 @@ namespace telar::runtime {
       return;
     }
 
+    // A UTF-8 continuation byte is 10xxxxxx.
+    constexpr unsigned continuation_mask = 0xc0;
+    constexpr unsigned continuation_tag = 0x80;
     std::size_t length = text.size() - 1;
 
-    while (length != 0 && (static_cast<unsigned char>(text[length]) & 0xc0) == 0x80) {
+    while (length != 0 && (static_cast<unsigned char>(text[length]) & continuation_mask) == continuation_tag) {
       --length;
     }
 
     query.truncate(length);
   }
 
-  FixedText<96> normalizeDescriptionTitle(std::string_view output) {
+  void DescriptionCapture::eraseWord(DescriptionQuery& query) noexcept {
+    while (query.view().ends_with(' ')) {
+      query.truncate(query.view().size() - 1);
+    }
+
+    while (!query.view().empty() && !query.view().ends_with(' ')) {
+      removeScalar(query);
+    }
+  }
+
+  FixedText<description_title_bytes> normalizeDescriptionTitle(std::string_view output) {
+    // Control characters: C0 and DEL.
+    constexpr unsigned char first_printable = 0x20;
+    constexpr unsigned char delete_byte = 0x7f;
+
     output = trimText(output, " \t\r\n");
     if (output.empty()) {
       throw EncodingError{"Empty generated title"};
@@ -168,14 +198,14 @@ namespace telar::runtime {
       output = trimText(output, " \t");
     }
 
-    if (output.empty() || output.size() > 96 || std::ranges::any_of(output, [](unsigned char byte) {
-          return byte < 0x20 || byte == 0x7f;
+    if (output.empty() || output.size() > description_title_bytes || std::ranges::any_of(output, [](unsigned char byte) {
+          return byte < first_printable || byte == delete_byte;
         })) {
       throw EncodingError{"Invalid generated title"};
     }
 
     validateUtf8(output);
-    FixedText<96> title;
+    FixedText<description_title_bytes> title;
 
     title.assign(output);
     return title;
@@ -215,6 +245,7 @@ namespace telar::runtime {
     } catch (const SystemError& error) {
       result.status = error.code() == ENOENT ? DescriptionStatus::unavailable : DescriptionStatus::failed;
     } catch (const std::exception&) {
+      result.status = DescriptionStatus::failed;
     }
 
     return result;

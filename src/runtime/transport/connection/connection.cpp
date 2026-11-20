@@ -13,8 +13,8 @@ namespace telar::runtime {
 
   void ClientHandshake::read() {
     for (unsigned attempt = 0; attempt < 2 && (stage_ == Stage::prefix || stage_ == Stage::hello); ++attempt) {
-      const auto remaining = expected_bytes_ - used_bytes_;
-      const auto count = ::read(descriptor_.get(), bytes_.dataMut() + used_bytes_, remaining);
+      const auto unread = bytes_.viewMut().subspan(used_bytes_, expected_bytes_ - used_bytes_);
+      const auto count = ::read(descriptor_.get(), unread.data(), unread.size());
       if (count < 0 && socketWouldBlock(sys::lastError())) {
         return;
       }
@@ -29,7 +29,7 @@ namespace telar::runtime {
       }
 
       if (stage_ == Stage::prefix) {
-        std::span<const Byte> prefix{bytes_.data(), frame_prefix_size};
+        std::span<const Byte> prefix = bytes_.view().first(frame_prefix_size);
         if (u32::decode(prefix) != HandshakeSchema<ClientHello>::payload_size) {
           throw EncodingError{"Invalid client hello size"};
         }
@@ -47,7 +47,8 @@ namespace telar::runtime {
       return;
     }
 
-    const auto count = ::write(descriptor_.get(), bytes_.data() + used_bytes_, expected_bytes_ - used_bytes_);
+    const auto unsent = bytes_.view().subspan(used_bytes_, expected_bytes_ - used_bytes_);
+    const auto count = ::write(descriptor_.get(), unsent.data(), unsent.size());
     if (count < 0 && socketWouldBlock(sys::lastError())) {
       return;
     }
@@ -268,7 +269,7 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  OutgoingFrames<Memory>::Frame OutgoingFrames<Memory>::inspect(std::size_t offset) const noexcept {
+  OutgoingFrames<Memory>::Frame OutgoingFrames<Memory>::inspect(std::size_t offset) const noexcept { // NOLINT(bugprone-exception-escape): a frame starts at every offset it is given, so its prefix is there to decode
     auto payload = bytes_.readable().subspan(offset);
     const auto size = u32::decode(payload);
 
@@ -328,7 +329,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   bool Connection<Memory>::read() {
-    ds::Array<Byte, read_batch_size> buffer;
+    ds::Array<Byte, read_batch_size> buffer; // NOLINT(cppcoreguidelines-pro-type-member-init): every client read passes through it, and only the bytes read(2) wrote are read
     const auto count = ::read(descriptor_.get(), buffer.dataMut(), buffer.size());
     if (count > 0) {
       input_.append(std::span<const Byte>{buffer}.first(static_cast<std::size_t>(count)));
@@ -359,8 +360,8 @@ namespace telar::runtime {
     try {
       output_.appendPayload(payload);
       return true;
-    } catch (const ResponseQueueFull&) {
-    } catch (const std::bad_alloc&) {
+    } catch (const ResponseQueueFull&) { // NOLINT(bugprone-empty-catch): a full queue refuses the payload, as the result reports
+    } catch (const std::bad_alloc&) {    // NOLINT(bugprone-empty-catch): without memory the payload is refused, as the result reports
     }
 
     return false;

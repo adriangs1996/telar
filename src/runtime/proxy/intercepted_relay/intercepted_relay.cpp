@@ -35,9 +35,17 @@ namespace telar::runtime {
       return reader_.waiting();
     case State::reading_body:
       return read_waiting_;
-    default:
+    case State::writing_head:
+    case State::writing_body:
+    case State::writing_line:
+    case State::complete:
+    case State::failed:
+    case State::head_too_large:
       return StreamReadiness::none;
     }
+
+    // A state outside the enumeration reads nothing either.
+    return StreamReadiness::none;
   }
 
   StreamReadiness Http1MessageRelay::destinationInterest() const noexcept {
@@ -69,7 +77,7 @@ namespace telar::runtime {
       body_stage_ = BodyStage::until_close;
       state_ = State::reading_body;
       break;
-    default:
+    case Http1Framing::Kind::none:
       break;
     }
   }
@@ -105,7 +113,7 @@ namespace telar::runtime {
     }
 
     const auto line = trimText(text(write_length_), " \t\r\n");
-    const auto length = parseHttpNumber<16>(line.substr(0, line.find(';')));
+    const auto length = parseHttpNumber<16>(substring(line, 0, line.find(';')));
     if (!length) {
       state_ = State::failed;
     } else if (*length == 0) {
@@ -130,7 +138,7 @@ namespace telar::runtime {
   }
 
   std::string_view Http1MessageRelay::text(std::size_t length) noexcept {
-    return {reinterpret_cast<const char*>(storage_.bytes().data()), length};
+    return {reinterpret_cast<const char*>(storage_.bytes().data()), length}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): char may alias the stored bytes, and no cast-free view reads bytes as text
   }
 
   template <Allocator Memory>
@@ -157,7 +165,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   auto HttpInterceptionSlot<Memory>::deadline(traffic::HttpControl* control) const noexcept -> ds::Option<Time> {
-    return (ticket_ != 0u) ? control->httpDeadline(ticket_) : ds::none;
+    return (ticket_ != 0U) ? control->httpDeadline(ticket_) : ds::none;
   }
 
   template <Allocator Memory>
@@ -167,10 +175,12 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   void HttpInterceptionSlot<Memory>::cancel(traffic::HttpControl* control) noexcept {
-    if (ticket_ != 0u) {
+    // Only a control hands out tickets, so a ticket always has one to cancel it.
+    if (ticket_ != 0U && control != nullptr) {
       control->cancelHttp(ticket_);
-      ticket_ = 0;
     }
+
+    ticket_ = 0;
 
     decision_.reset();
   }
@@ -189,7 +199,7 @@ namespace telar::runtime {
       : memory_(memory),
         secure_(memory),
         control_(context.control),
-        identity_(context.identity),
+        identity_(std::move(context.identity)),
         direction_(response ? traffic::Direction::inbound : traffic::Direction::outbound),
         message_(memory, response),
         wire_(secure_) {
@@ -332,23 +342,30 @@ namespace telar::runtime {
       }
 
       if (!message_.response) {
-        if (const auto expectation = message_.expectation(); expectation != HttpExpectation::none) {
-          if (expectation != HttpExpectation::continue_) {
-            unavailable("http_unsupported_expectation");
-            return;
-          }
-
-          if (parsed.framing.hasBody()) {
-            continue_ = StaticReply{continue_response};
-          }
-
-          regenerate_ = parsed.framing.hasBody();
-          message_.headers.remove("expect");
-        }
+        readExpectation(parsed.framing.hasBody());
       }
     } catch (...) {
       unavailable("http_invalid_head");
     }
+  }
+
+  void Http1InterceptedRelay::readExpectation(bool body) {
+    const auto expectation = message_.expectation();
+    if (expectation == HttpExpectation::none) {
+      return;
+    }
+
+    if (expectation != HttpExpectation::continue_) {
+      unavailable("http_unsupported_expectation");
+      return;
+    }
+
+    if (body) {
+      continue_ = StaticReply{continue_response};
+    }
+
+    regenerate_ = body;
+    message_.headers.remove("expect");
   }
 
   void Http1InterceptedRelay::unavailable(std::string_view reason) noexcept {
@@ -433,7 +450,7 @@ namespace telar::runtime {
       message_.response_to_head = source_head;
     }
 
-    const std::string_view text{reinterpret_cast<const char*>(wire_.data()), wire_.size()};
+    const std::string_view text{reinterpret_cast<const char*>(wire_.data()), wire_.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): char may alias the wire's bytes, and no cast-free view reads bytes as text
 
     head_bytes_ = text.find("\r\n\r\n") + 4;
     mode_ = Mode::forwarding;

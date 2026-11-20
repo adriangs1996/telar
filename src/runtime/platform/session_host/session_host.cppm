@@ -9,7 +9,7 @@ import telar.base.ds;
 export {
   namespace telar::runtime {
 
-    enum class SessionHost {
+    enum class SessionHost : std::uint8_t {
       unknown,
       pane,
       shared_server,
@@ -48,7 +48,7 @@ export {
         "--help",
         "-h",
         "--version",
-        "-V"
+        "-V",
     };
 
     bool isCodexBatchArgument(std::string_view argument) noexcept;

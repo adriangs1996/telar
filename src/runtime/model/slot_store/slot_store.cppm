@@ -30,7 +30,7 @@ import telar.base.ds;
 export {
   namespace telar::runtime {
 
-    enum class ClientRole {
+    enum class ClientRole : std::uint8_t {
       undecided,
       interactive,
       control,
@@ -60,9 +60,10 @@ export {
     template <typename... Requests>
     struct TBC_GENERIC ClientRequestList {
       // Calls `consume.template operator()<Message>()` for the request `tag` names, when its lane is at
-      // least `Lane`; false when no such request has that tag.
+      // least `Lane`; false when no such request has that tag. Takes the consumer itself, as the lambdas
+      // callers pass build it in place.
       template <RequestLane Lane = RequestLane::runtime, typename Consumer>
-      inline static bool dispatch(ClientTag tag, Consumer&& consume) {
+      inline static bool dispatch(ClientTag tag, Consumer consume) {
         return (dispatchOne<Lane, Requests>(tag, consume) || ...);
       }
 
@@ -75,6 +76,9 @@ export {
       }
 
     private:
+      // A request's tag is one byte: one entry for each value it can take.
+      static constexpr std::size_t tag_values = 256;
+
       // Inlined into dispatch, so the compiler sees one chain of tag comparisons and lowers it to a
       // jump table, as the switch it replaces was.
       template <RequestLane Lane, typename Request, typename Consumer>
@@ -92,21 +96,21 @@ export {
       }
 
       static constexpr auto roles = [] {
-        ds::Array<ClientRole, 256> result;
+        ds::Array<ClientRole, tag_values> result{};
 
         result.fill(ClientRole::interactive);
         ((result.atMut(std::to_underlying(Requests::tag)) = Requests::role), ...);
         return result;
       }();
       static constexpr auto lanes = [] {
-        ds::Array<RequestLane, 256> result;
+        ds::Array<RequestLane, tag_values> result{};
 
         result.fill(RequestLane::runtime);
         ((result.atMut(std::to_underlying(Requests::tag)) = Requests::lane), ...);
         return result;
       }();
       static_assert([] {
-        ds::Array<bool, 256> seen{};
+        ds::Array<bool, tag_values> seen{};
 
         return ((!std::exchange(seen.atMut(std::to_underlying(Requests::tag)), true)) && ...);
       }(),
@@ -217,7 +221,7 @@ export {
     class ExitedPanes {
     public:
       static constexpr std::size_t capacity = 16;
-      static constexpr std::size_t maximum_bytes = 16 * 1024;
+      static constexpr std::size_t maximum_bytes = std::size_t{16} * 1024;
       static constexpr std::uint16_t kept_rows = 200;
 
       struct Record {
@@ -318,6 +322,8 @@ export {
 
       SlotStore(const SlotStore&) = delete;
       SlotStore& operator=(const SlotStore&) = delete;
+      SlotStore(SlotStore&&) = delete;
+      SlotStore& operator=(SlotStore&&) = delete;
 
       [[nodiscard]] inline std::uint64_t nextId() const {
         if (count_ == Capacity || next_id_ == 0) {

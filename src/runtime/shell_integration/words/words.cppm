@@ -21,13 +21,16 @@ import telar.tbc;
 export namespace telar::runtime {
 
   struct WordRequest {
+    static constexpr std::size_t prefix_bytes = 256;
+    static constexpr std::size_t path_bytes = 8192;
+
     std::uint64_t client = 0;
     std::uint64_t request = 0;
     CompletionProvider provider = CompletionProvider::command;
-    FixedText<256> prefix;
+    FixedText<prefix_bytes> prefix;
     FixedText<PATH_MAX> directory;
     FixedText<PATH_MAX> home;
-    FixedText<8192> path;
+    FixedText<path_bytes> path;
     // The shell whose builtins and keywords count as commands, and the aliases and functions
     // it reported; without them a missing command cannot be told from an unreported one.
     IntegratedShell shell = IntegratedShell::none;
@@ -75,7 +78,7 @@ export namespace telar::runtime {
     using Result = WordResult;
 
     static constexpr std::size_t maximum_words = 256;
-    static constexpr std::size_t maximum_file = 1 << 20;
+    static constexpr std::size_t maximum_file = std::size_t{1024} * 1024;
     static constexpr std::size_t maximum_entries = 65536;
 
     // User specs come from `completions` in the configuration directory the runtime resolved.
@@ -87,6 +90,9 @@ export namespace telar::runtime {
     void stop() noexcept;
 
   private:
+    // The words the request's provider offers that start with its prefix, sorted but for processes.
+    void collect(const Request& request, tbc::mut_a<Result> result);
+
     // The spec of the command the request names, when the shell runs it: the user's own from
     // the completions directory when it compiles, else the one telar ships.
     void spec(const Request& request, tbc::mut_a<Result> result);

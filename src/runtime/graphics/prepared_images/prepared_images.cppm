@@ -59,7 +59,7 @@ export {
       std::uint8_t* pixels_ = nullptr;
       std::size_t byte_count_ = 0;
       std::size_t reserved_bytes_ = 0;
-      ds::Array<char, 32> name_{};
+      SharedImageStorage::Name name_{};
       bool owns_name_ = false;
     };
 
@@ -156,7 +156,7 @@ export {
 #endif
 
     private:
-      enum class State {
+      enum class State : std::uint8_t {
         pending,
         ready,
         failed,
@@ -169,9 +169,10 @@ export {
         ds::Option<FrozenImage> frozen;
       };
 
+      static constexpr std::size_t request_capacity = 8;
       ConcurrentMemory& memory_;
       MediaAllocator<ConcurrentMemory>& budget_;
-      ds::Array<ds::Option<Entry>, 8> entries_;
+      ds::Array<ds::Option<Entry>, request_capacity> entries_;
     };
 
   }

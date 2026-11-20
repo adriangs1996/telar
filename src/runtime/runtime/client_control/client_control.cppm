@@ -150,7 +150,7 @@ export {
 export {
   namespace telar::runtime {
 
-    enum class ReportDecision {
+    enum class ReportDecision : std::uint8_t {
       accepted,
       deferred,
       rejected,
@@ -244,7 +244,7 @@ export {
           return due;
         }
 
-        ds::Array<const ClientSession*, client_capacity> ready;
+        ds::Array<const ClientSession*, client_capacity> ready{};
 
         for (auto* client : clients.items()) {
           if (client == nullptr || !client->deferred_report.pending) {
@@ -278,7 +278,7 @@ export {
 
       // Releases a due report to be answered and exchanges its payload with the caller's empty one, which
       // must share the client's allocator, as Rust's `mem::swap`.
-      inline void open(ClientSession& client, ds::Vec<Byte, ConcurrentMemory>& payload) noexcept {
+      inline void open(ClientSession& client, ds::Vec<Byte, ConcurrentMemory>& payload) noexcept { // NOLINT(bugprone-exception-escape): the payloads share the client's allocator, so the swap hands storage over without allocating
         cancel(client);
         client.deferred_report.answering = true;
         client.connection.read_paused = false;
@@ -286,7 +286,7 @@ export {
       }
 
       // Ends the answer and gives the payload's storage back to the client.
-      inline static void close(ClientSession& client, ds::Vec<Byte, ConcurrentMemory>& payload) noexcept {
+      inline static void close(ClientSession& client, ds::Vec<Byte, ConcurrentMemory>& payload) noexcept { // NOLINT(bugprone-exception-escape): the payloads share the client's allocator, so the swap hands storage over without allocating
         payload.clear();
         std::swap(payload, client.deferred_report.payload);
         client.deferred_report.answering = false;
@@ -394,7 +394,7 @@ export {
 
         typename DescentProbe<Inspector>::Request request;
 
-        for (auto* client : clients.items()) {
+        for (const auto* client : clients.items()) {
           if (client != nullptr && client->pending_descent && !client->descent_running && !client->connection.closing) {
             request.checks.atMut(request.count++) = *client->pending_descent;
           }
@@ -645,24 +645,7 @@ export {
           }
 
           if (work.query_count != 0 && sampler_.ready()) {
-            ds::Array<MonitorView, MonitorLimitsOfWork::maximum_queries> views{};
-
-            for (std::size_t index = 0; index < work.query_count; ++index) {
-              views.atMut(index) = work.queries[index].view;
-            }
-
-            const auto answers = sampler_.answer({views.data(), work.query_count});
-
-            for (std::size_t index = 0; index < work.query_count; ++index) {
-              auto& answer = outcome.answers.atMut(index).snapshot;
-
-              answer = answers[index];
-              if (answer) {
-                answer.getMut().request_id = work.queries[index].request_id;
-              }
-            }
-
-            outcome.answered = true;
+            answerQueries(work, outcome);
           }
         } catch (...) {
           records_.clear();
@@ -674,6 +657,28 @@ export {
       inline void stop() noexcept {}
 
     private:
+      // The answers view the sampler, region `a`, until the next work is submitted.
+      inline void answerQueries(const Request& work, tbc::mut_a<MonitorOutcome> outcome) {
+        ds::Array<MonitorView, MonitorLimitsOfWork::maximum_queries> views{};
+
+        for (std::size_t index = 0; index < work.query_count; ++index) {
+          views.atMut(index) = work.queries[index].view;
+        }
+
+        const auto answers = sampler_.answer({views.data(), work.query_count});
+
+        for (std::size_t index = 0; index < work.query_count; ++index) {
+          auto& answer = outcome.answers.atMut(index).snapshot;
+
+          answer = answers[index];
+          if (answer) {
+            answer.getMut().request_id = work.queries[index].request_id;
+          }
+        }
+
+        outcome.answered = true;
+      }
+
       inline static int nativeSignal(ProcessSignal signal) noexcept {
         switch (signal) {
         case ProcessSignal::terminate:
@@ -805,7 +810,7 @@ export {
 
         work_.sample = due;
         work_.root_count = 0;
-        roots(work_);
+        std::forward<Roots>(roots)(work_);
         work_.query_count = answerable ? static_cast<std::uint8_t>(pending_queries_) : 0;
         for (std::size_t index = 0; index < work_.query_count; ++index) {
           work_.queries.atMut(index) = queries_[index];
@@ -836,7 +841,7 @@ export {
       // Calls `reply(client, message)` with each answer and each failure, while the answers still
       // view the worker's sampler.
       template <typename Reply>
-      inline void collect(Reply&& reply) {
+      inline void collect(const Reply& reply) {
         worker_.collect([&](MonitorOutcome& outcome) {
           busy_ = false;
           if (outcome.sampled && readings_ < 2) {
@@ -1014,11 +1019,13 @@ export {
           typename Processor::Request request;
 
           for (auto* pane : model.panes.items()) {
-            if (pane != nullptr && pane->observer->seal()) {
-              request.entries.atMut(request.count++).observer = pane->observer;
-              if (request.count == request.entries.size()) {
-                break;
-              }
+            if (pane == nullptr || !pane->observer->seal()) {
+              continue;
+            }
+
+            request.entries.atMut(request.count++).observer = pane->observer;
+            if (request.count == request.entries.size()) {
+              break;
             }
           }
 
@@ -1048,44 +1055,49 @@ export {
             limits_.report(LimitReach{.name = "history.observation_failures", .noun = "failed observations", .route = "history"});
           }
 
-          auto* pane = findPane(model.panes, entry.pane, entry.generation);
-          if (pane == nullptr || pane->exit_status) {
-            continue;
-          }
+          applyEntry(model, agents, entry);
+        }
+      }
 
-          if (entry.process_recheck) {
-            pane->process_recheck_running = false;
-            ++pane->process_rechecks;
-          }
+      // Applies one pane's observation, unless the pane is gone or exited since it was taken.
+      inline static void applyEntry(RuntimeModel& model, Agents& agents, const Processor::ResultEntry& entry) {
+        auto* pane = findPane(model.panes, entry.pane, entry.generation);
+        if (pane == nullptr || pane->exit_status) {
+          return;
+        }
 
-          pane->shell_markers = entry.screen.shell_markers && !entry.screen.failed;
-          if (pane->input_revision == entry.input_revision) {
-            pane->needs_foreground_observation = entry.screen.needs_foreground;
-          }
+        if (entry.process_recheck) {
+          pane->process_recheck_running = false;
+          ++pane->process_rechecks;
+        }
 
-          const auto directory = entry.observer->observedDirectory();
-          if (pane->cwd_revision == entry.cwd_revision && !directory.empty() && pane->cwd != directory) {
-            pane->cwd.assign(directory);
-            ++pane->cwd_revision;
-          }
+        pane->shell_markers = entry.screen.shell_markers && !entry.screen.failed;
+        if (pane->input_revision == entry.input_revision) {
+          pane->needs_foreground_observation = entry.screen.needs_foreground;
+        }
 
-          // Whether the observation still describes the pane's process, asked once: it reads the
-          // terminal's foreground group with a system call.
-          const bool current = entry.process_result && (entry.process_result->inspected || entry.process_result->ports_inspected) && observes(*pane, *entry.process_result);
+        const auto directory = entry.observer->observedDirectory();
+        if (pane->cwd_revision == entry.cwd_revision && !directory.empty() && pane->cwd != directory) {
+          pane->cwd.assign(directory);
+          ++pane->cwd_revision;
+        }
 
-          if (entry.process_result && entry.process_result->inspected) {
-            TELAR_DIAGNOSTIC(diagnostics::accumulate(model.metrics.agent_process_inspections));
-            TELAR_DIAGNOSTIC(diagnostics::accumulate(model.metrics.agent_process_misses, entry.process_result->provider == AgentProvider::unknown));
-            model.pane_revision += current && applyProcess(agents, *pane, *entry.process_result);
-          }
+        // Whether the observation still describes the pane's process, asked once: it reads the
+        // terminal's foreground group with a system call.
+        const bool current = entry.process_result && (entry.process_result->inspected || entry.process_result->ports_inspected) && observes(*pane, *entry.process_result);
 
-          if (entry.process_result && entry.process_result->ports_inspected) {
-            model.pane_revision += current && applyPorts(*pane, *entry.process_result);
-          }
+        if (entry.process_result && entry.process_result->inspected) {
+          TELAR_DIAGNOSTIC(diagnostics::accumulate(model.metrics.agent_process_inspections));
+          TELAR_DIAGNOSTIC(diagnostics::accumulate(model.metrics.agent_process_misses, entry.process_result->provider == AgentProvider::unknown));
+          model.pane_revision += current && applyProcess(agents, *pane, *entry.process_result);
+        }
 
-          if (entry.screen.signal) {
-            agents.observeScreen(*pane, *entry.screen.signal, entry.screen.time);
-          }
+        if (entry.process_result && entry.process_result->ports_inspected) {
+          model.pane_revision += current && applyPorts(*pane, *entry.process_result);
+        }
+
+        if (entry.screen.signal) {
+          agents.observeScreen(*pane, *entry.screen.signal, entry.screen.time);
         }
       }
 
@@ -1114,7 +1126,7 @@ export {
       // A sole pane discovers its foreground group on the worker; others read it here. A program's
       // listening ports are read again every `ports_interval`, output or not.
       inline void enqueue(tbc::mut_a<typename Processor::Request> request, const Agents& agents, tbc::mut_a<Pane> pane, bool sole, std::chrono::steady_clock::time_point now) {
-        if (auto drop = pane.observer->takeDrop()) {
+        if (const auto drop = pane.observer->takeDrop()) {
           limits_.report(*drop);
         }
 
@@ -1217,7 +1229,7 @@ export {
       using Request = bool;
       using Result = std::expected<clipboard::content, clipboard::read_error>;
 
-      Result observe(const Request&) noexcept;
+      static Result observe(const Request& /*request*/) noexcept;
 
       void stop() noexcept;
     };
@@ -1393,7 +1405,7 @@ export {
       inline void collect(RuntimeModel& model) {
         worker_.collect([&](const WorktreeDetectionResult& result) {
           pending_ = false;
-          auto* pane = findPane(model.panes, result.pane, result.generation);
+          const auto* pane = findPane(model.panes, result.pane, result.generation);
           if (pane == nullptr || pane->cwd_revision != result.cwd_revision || result.root_length == 0 || result.root_length > pane->cwd.size() || pane->location.workspace.kind != WorkspaceLocation::Kind::workspace) {
             return;
           }
@@ -1407,7 +1419,7 @@ export {
             });
 
             model.workspace_revision += registered.created;
-          } catch (const RequestError&) {
+          } catch (const RequestError&) { // NOLINT(bugprone-empty-catch): a checkout the catalog refuses stays unlisted, as one never detected
           }
         });
       }

@@ -16,6 +16,46 @@ import telar.base.ds;
 
 namespace telar::runtime {
 
+  namespace {
+
+    // Tells the client that held the pane's clipboard request that it is withdrawn; the client being gone
+    // withdraws it too.
+    void sendCancellation(ClientSession* client, const control::Clipboard::Cancellation& cancellation, control::Clipboard& clipboard) {
+      if (client == nullptr || client->generation != cancellation.route.generation || client->connection.closing) {
+        clipboard.cancelled();
+        return;
+      }
+
+      try {
+        client->connection.send(CancelClipboardDesktop{cancellation.ticket});
+        clipboard.cancelled();
+      } catch (const ResponseQueueFull&) { // NOLINT(bugprone-empty-catch): the cancellation stays pending and is sent again on the next turn
+      } catch (const std::bad_alloc&) {    // NOLINT(bugprone-empty-catch): the cancellation stays pending and is sent again on the next turn
+      }
+    }
+
+    // Sends the routed client the pane's request, or once it is announced, the execution it settled on.
+    void sendRequest(ClientSession& client, Pane& pane) {
+      auto& clipboard = pane.terminal.clipboardControl();
+
+      try {
+        if (const auto request = clipboard.request(pane.id, pane.generation)) {
+          client.connection.send(*request);
+          clipboard.announced();
+        } else {
+          clipboard.expire(std::chrono::steady_clock::now());
+          if (const auto execution = clipboard.execution()) {
+            client.connection.send(*execution);
+            clipboard.committed();
+          }
+        }
+      } catch (const ResponseQueueFull&) { // NOLINT(bugprone-empty-catch): the owned request survives queue pressure until its deadline
+      } catch (const std::bad_alloc&) {    // NOLINT(bugprone-empty-catch): the deadline also bounds retries under the runtime memory budget
+      }
+    }
+
+  }
+
   bool ClipboardService::eligible(const ClientSession& client, const Pane& pane) noexcept {
     const auto* attachment = client.attachment(pane.id);
 
@@ -50,17 +90,7 @@ namespace telar::runtime {
 
     clipboard.expire(now);
     if (const auto cancellation = clipboard.cancellation()) {
-      auto* client = clients.find(cancellation->route.client);
-      if (client == nullptr || client->generation != cancellation->route.generation || client->connection.closing) {
-        clipboard.cancelled();
-      } else {
-        try {
-          client->connection.send(CancelClipboardDesktop{cancellation->ticket});
-          clipboard.cancelled();
-        } catch (const ResponseQueueFull&) {
-        } catch (const std::bad_alloc&) {
-        }
-      }
+      sendCancellation(clients.find(cancellation->route.client), *cancellation, clipboard);
     }
 
     const auto route = clipboard.route();
@@ -69,22 +99,7 @@ namespace telar::runtime {
       if (client == nullptr || client->generation != route->generation || !eligible(*client, pane)) {
         configure(clients, pane);
       } else {
-        try {
-          if (const auto request = clipboard.request(pane.id, pane.generation)) {
-            client->connection.send(*request);
-            clipboard.announced();
-          } else {
-            clipboard.expire(std::chrono::steady_clock::now());
-            if (const auto execution = clipboard.execution()) {
-              client->connection.send(*execution);
-              clipboard.committed();
-            }
-          }
-        } catch (const ResponseQueueFull&) {
-          // The owned request survives queue pressure until its deadline.
-        } catch (const std::bad_alloc&) {
-          // The deadline also bounds retries under the runtime memory budget.
-        }
+        sendRequest(*client, pane);
       }
     }
 
@@ -125,7 +140,7 @@ namespace telar::runtime {
     return candidate_input != current_input ? candidate_input > current_input : candidate.id < current.id;
   }
 
-  AttachmentDelivery::AttachmentDelivery(const RuntimeModel& model, const ClientSession& client) {
+  AttachmentDelivery::AttachmentDelivery(const RuntimeModel& model, const ClientSession& client) { // NOLINT(cppcoreguidelines-pro-type-member-init): a slot is read only where occupied_ marks it written, so zeroing every slot on each write is work no read needs
     for (std::size_t index = 0; index < client.attachments.size(); ++index) {
       const auto& attachment = *client.attachments[index];
       if (model.panes.find(attachment.pane_id) != nullptr && !attachment.exit_sent) {
@@ -140,13 +155,13 @@ namespace telar::runtime {
     auto candidates = std::rotr(occupied_, static_cast<int>(start));
 
     while (candidates != 0) {
-      const auto slot = (start + std::countr_zero(candidates)) % ClientSession::attachment_capacity;
+      const auto slot = (start + static_cast<std::size_t>(std::countr_zero(candidates))) % ClientSession::attachment_capacity;
 
       candidates &= candidates - 1;
       auto& attachment = client.attachments.atMut(slots_[slot].index).getMut();
       auto& pane = *model.panes.find(attachment.pane_id);
-      Output output{.connection = client.connection, .completing_exit = client.completing_exit, .frame_interval = client.frame_interval, .metrics = model.metrics};
-      if (prepare(output, attachment, pane, lane, now, timeout)) {
+      Output output{.connection = client.connection, .completing_exit = client.completing_exit, .frame_interval = client.frame_interval, .metrics = model.metrics, .now = now, .timeout = timeout};
+      if (prepare(output, attachment, pane, lane)) {
         client.next_attachment = (slot + 1) % ClientSession::attachment_capacity;
         return true;
       }
@@ -155,14 +170,14 @@ namespace telar::runtime {
     return false;
   }
 
-  bool AttachmentDelivery::prepare(Output& output, Attachment& attachment, Pane& pane, DeliveryLane lane, Clock::time_point now, std::chrono::nanoseconds& timeout) {
+  bool AttachmentDelivery::prepare(Output& output, Attachment& attachment, Pane& pane, DeliveryLane lane) {
     const auto& effects = pane.terminal.effects;
 
     switch (lane) {
     case DeliveryLane::scrollback:
       return scrollback(output.connection, attachment, pane);
     case DeliveryLane::cells:
-      return cells(output, attachment, pane, now, timeout);
+      return cells(output, attachment, pane, output.now, output.timeout);
     case DeliveryLane::cwd:
       return metadata(output.connection, attachment.cwd_revision, pane.cwd_revision + 1, PaneCwd{.pane_id = pane.id, .cwd = pane.cwd});
     case DeliveryLane::foreground:
@@ -180,12 +195,26 @@ namespace telar::runtime {
     case DeliveryLane::exit:
       return exit(output, attachment, pane);
     case DeliveryLane::graphics:
-      return graphics(output, attachment, pane, timeout);
+      return graphics(output, attachment, pane, output.timeout);
     case DeliveryLane::document:
       return document(output.connection, attachment, pane) || inlineDocuments(output.connection, attachment, pane);
-    default:
+    case DeliveryLane::stopping:
+    case DeliveryLane::management:
+    case DeliveryLane::resync:
+    case DeliveryLane::clipboard:
+    case DeliveryLane::layout:
+    case DeliveryLane::proxy:
+    case DeliveryLane::agents:
+    case DeliveryLane::metrics:
+    case DeliveryLane::workspaces:
+    case DeliveryLane::panes:
+    case DeliveryLane::observation:
+    case DeliveryLane::count:
       return false;
     }
+
+    // A lane outside the enum delivers nothing, as the lanes no attachment owns.
+    return false;
   }
 
   template <typename Message>
@@ -413,7 +442,7 @@ namespace telar::runtime {
       return connection.queuedBytes() != queued;
     }
 
-    auto* terminal = pane.media->terminal();
+    const auto* terminal = pane.media->terminal();
 
     try {
       const bool pending = terminal == nullptr ? attachment.graphics.publish(connection, pane.terminal.graphics) : attachment.graphics.publish(connection, terminal->graphics);
@@ -438,7 +467,7 @@ namespace telar::runtime {
   [[nodiscard]] std::string_view ResponseProjection::snapshotDirectory(std::string_view cwd) noexcept {
     constexpr std::size_t maximum_bytes = 4096;
 
-    return cwd.size() <= maximum_bytes && cwd.find('\0') == std::string_view::npos ? cwd : std::string_view{};
+    return cwd.size() <= maximum_bytes && !cwd.contains('\0') ? cwd : std::string_view{};
   }
 
   ClientDelivery::ClientDelivery(ConcurrentMemory& memory, RuntimeModel& model)
@@ -545,7 +574,8 @@ namespace telar::runtime {
       : editor_(memory) {}
 
   void EditorService::process(std::span<const Byte> payload, EncodedReply<ConcurrentMemory>& reply, const RequestContext& context) {
-    ds::Array<Byte, 1024> scratch;
+    constexpr std::size_t decode_scratch_bytes = 1024;
+    ds::Array<Byte, decode_scratch_bytes> scratch{};
     DecodeStorage storage{scratch.viewMut()};
 
     editor_.open(Codec::decode<OpenEditor>(payload, storage), context, reply);

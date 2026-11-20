@@ -37,7 +37,12 @@ export namespace telar::runtime {
     virtual void emit(const CapturedCommand& command) = 0;
 
   protected:
+    CapturedCommandEmitter() = default;
     ~CapturedCommandEmitter() = default;
+    CapturedCommandEmitter(const CapturedCommandEmitter&) = default;
+    CapturedCommandEmitter& operator=(const CapturedCommandEmitter&) = default;
+    CapturedCommandEmitter(CapturedCommandEmitter&&) = default;
+    CapturedCommandEmitter& operator=(CapturedCommandEmitter&&) = default;
   };
 
   template <CapturedCommandSink Sink>
@@ -72,7 +77,7 @@ export namespace telar::runtime {
     [[nodiscard]] ds::Option<std::string_view> typedText() const noexcept;
 
   private:
-    enum class State {
+    enum class State : std::uint8_t {
       ground,
       escape,
       sequence,
@@ -83,6 +88,7 @@ export namespace telar::runtime {
     static constexpr Byte escape = 0x1b;
     static constexpr unsigned paste_start = 200;
     static constexpr unsigned paste_end = 201;
+    static constexpr std::size_t typed_capacity = 255;
 
     void ground(Byte byte, Event& event) noexcept;
     void beginSequence(Byte byte, bool pasted) noexcept;
@@ -91,7 +97,7 @@ export namespace telar::runtime {
     State state_ = State::ground;
     unsigned parameter_ = 0;
     bool has_parameter_ = false;
-    ds::Array<char, 255> typed_{};
+    ds::Array<char, typed_capacity> typed_{};
     std::size_t typed_count_ = 0;
     bool typed_exact_ = true;
   };
@@ -123,7 +129,12 @@ export namespace telar::runtime {
     virtual void mark(CommandMark mark) = 0;
 
   protected:
+    CommandZoneSink() = default;
     ~CommandZoneSink() = default;
+    CommandZoneSink(const CommandZoneSink&) = default;
+    CommandZoneSink& operator=(const CommandZoneSink&) = default;
+    CommandZoneSink(CommandZoneSink&&) = default;
+    CommandZoneSink& operator=(CommandZoneSink&&) = default;
   };
 
   template <CommandCompletionSink Sink>
@@ -203,13 +214,13 @@ export namespace telar::runtime {
 #endif
 
   private:
-    enum class ParserState {
+    enum class ParserState : std::uint8_t {
       ground,
       escape,
       osc,
       osc_escape,
     };
-    enum class Zone {
+    enum class Zone : std::uint8_t {
       unknown,
       prompt,
       input,
@@ -221,6 +232,7 @@ export namespace telar::runtime {
     static constexpr std::size_t path_capacity = 8192;
     static constexpr std::size_t host_capacity = 255;
     static constexpr std::string_view private_code = "6973";
+    static constexpr std::size_t sequence_capacity = std::size_t{16} * 1024;
 
     // What the shell's marks and reports said, apart from the sequence being read, so a report's
     // body, which views that sequence, is handed to it.
@@ -230,6 +242,9 @@ export namespace telar::runtime {
       // stack pages.
       [[gnu::noinline]] bool privateReport(std::string_view body);
       void semantic(std::string_view body, ObservationTime time, CommandZoneSink& sink, std::size_t end);
+      // Whether a mark's signature is the pane's shell's or the remote one's; the pane's own ends a
+      // session `ssh` nested, and an A or D mark of it, `clears_nest`, drops the nonce it handed.
+      bool signedMark(std::string_view options, bool clears_nest, CommandZoneSink& sink, std::size_t end);
       [[gnu::noinline]] void directoryReport(std::string_view body);
 
 #if TELAR_DIAGNOSTICS
@@ -252,11 +267,13 @@ export namespace telar::runtime {
       std::shared_ptr<const ds::String<ConcurrentMemory>> names_;
     };
 
+    // Reads one byte of an escape sequence; `end` is the offset just past it.
+    void step(Byte byte, ObservationTime time, CommandZoneSink& sink, std::size_t end);
     void finishSequence(ObservationTime time, CommandZoneSink& sink, std::size_t end);
 
     Shell shell_;
     ParserState parser_ = ParserState::ground;
-    ds::Array<char, 16 * 1024> bytes_{};
+    ds::Array<char, sequence_capacity> bytes_{};
     std::size_t length_ = 0;
     bool overflow_ = false;
   };
@@ -265,7 +282,7 @@ export namespace telar::runtime {
   // keeps nothing.
   class CommandOutputWindow {
   public:
-    static constexpr std::size_t capacity = 64 * 1024;
+    static constexpr std::size_t capacity = std::size_t{64} * 1024;
 
     void append(std::span<std::uint8_t> storage, std::span<const std::uint8_t> bytes) noexcept;
     [[nodiscard]] tbc::val_a<std::span<const std::uint8_t>> bytes(tbc::val_a<std::span<const std::uint8_t>> storage) const noexcept;
@@ -329,13 +346,13 @@ export namespace telar::runtime {
   // terminal's screen. Anchors that follow the rows as the terminal scrolls keep where it starts.
   class CommandSelection {
   public:
-    static constexpr std::size_t maximum_bytes = 64 * 1024;
+    static constexpr std::size_t maximum_bytes = std::size_t{64} * 1024;
     // A buffer that holds maximum_bytes and the rest of a scalar cut at its end.
     static constexpr std::size_t buffer_bytes = maximum_bytes + 4;
 
     explicit CommandSelection(GhosttyTerminal terminal);
 
-    [[nodiscard]] bool primary(CommandScreen screen) const;
+    [[nodiscard]] static bool primary(CommandScreen screen);
     void begin(CommandScreen screen);
     void rebase(CommandScreen screen, ds::Option<std::string_view> typed);
 
@@ -358,7 +375,7 @@ export namespace telar::runtime {
   };
 
   // Reads `selection` into `destination`. Whether it was cut short, or nothing when it is empty.
-  ds::Option<bool> captureCommandText(Terminal& terminal, const GhosttySelection& selection, ds::Vec<Byte, ConcurrentMemory>& destination);
+  ds::Option<bool> captureCommandText(const Terminal& terminal, const GhosttySelection& selection, ds::Vec<Byte, ConcurrentMemory>& destination);
 
   // The commands a pane's integrated shell ran, each anchored to the row its prompt starts on
   // in the pane's own terminal, so a client can mark them in the scrollback and jump to them.
@@ -371,6 +388,8 @@ export namespace telar::runtime {
 
     CommandBlockRing(const CommandBlockRing&) = delete;
     CommandBlockRing& operator=(const CommandBlockRing&) = delete;
+    CommandBlockRing(CommandBlockRing&&) = delete;
+    CommandBlockRing& operator=(CommandBlockRing&&) = delete;
 
     // A signed mark, reached by the terminal as the shell printed it.
     void mark(char action, std::chrono::steady_clock::time_point now);
@@ -473,6 +492,8 @@ export namespace telar::runtime {
   public:
     CommandTrackerCore(const CommandTrackerCore&) = delete;
     CommandTrackerCore& operator=(const CommandTrackerCore&) = delete;
+    CommandTrackerCore(CommandTrackerCore&&) = delete;
+    CommandTrackerCore& operator=(CommandTrackerCore&&) = delete;
 
     std::size_t input(const CommandByteObservation& observation, CapturedCommandEmitter& emitter);
     void output(CommandByteObservation observation, CapturedCommandEmitter& emitter);
@@ -493,7 +514,7 @@ export namespace telar::runtime {
     ~CommandTrackerCore() = default;
 
   private:
-    enum class Phase {
+    enum class Phase : std::uint8_t {
       idle,
       editing,
       awaiting_commit,
@@ -501,6 +522,8 @@ export namespace telar::runtime {
     };
 
     class CompletionRelay;
+
+    static constexpr std::size_t directory_capacity = 4096;
 
     [[nodiscard]] virtual CommandScreen screen() const noexcept = 0;
 
@@ -529,7 +552,7 @@ export namespace telar::runtime {
     CommandZones zones_;
     CommandOutputWindow output_;
     CommandInputScanner input_;
-    FixedText<4096> command_directory_;
+    FixedText<directory_capacity> command_directory_;
     ObservationTime started_;
     std::int64_t last_output_ns_ = 0;
     Phase phase_ = Phase::idle;

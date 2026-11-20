@@ -28,7 +28,7 @@ namespace telar::runtime::plugins {
   tbc::val_a<std::string_view> FrameReader::text() {
     const auto value = bytes();
 
-    return {reinterpret_cast<const char*>(value.data()), value.size()};
+    return textView(value);
   }
 
   void FrameReader::finish() const {
@@ -37,11 +37,11 @@ namespace telar::runtime::plugins {
     }
   }
 
-  void FrameSize::timestamp(std::int64_t) {
+  void FrameSize::timestamp([[maybe_unused]] std::int64_t value) {
     integer(std::uint64_t{});
   }
 
-  void FrameSize::boolean(bool) {
+  void FrameSize::boolean([[maybe_unused]] bool value) {
     integer(Byte{});
   }
 
@@ -55,7 +55,7 @@ namespace telar::runtime::plugins {
   }
 
   void FrameSize::text(std::string_view value) {
-    bytes({reinterpret_cast<const Byte*>(value.data()), value.size()});
+    bytes(byteView(value));
   }
 
   std::size_t FrameSize::finish() const noexcept {
@@ -84,15 +84,13 @@ namespace telar::runtime::plugins {
     }
 
     integer(static_cast<std::uint32_t>(value.size()));
-    if (!value.empty()) {
-      std::memcpy(remaining_.data(), value.data(), value.size());
-    }
+    std::ranges::copy(value, remaining_.begin());
 
     remaining_ = remaining_.subspan(value.size());
   }
 
   void FrameWriter::text(std::string_view value) {
-    bytes({reinterpret_cast<const Byte*>(value.data()), value.size()});
+    bytes(byteView(value));
   }
 
   void FrameWriter::append(std::span<const Byte> value) {
@@ -100,9 +98,7 @@ namespace telar::runtime::plugins {
       throw EncodingError{"Tap data exceeds its frame buffer"};
     }
 
-    if (!value.empty()) {
-      std::memcpy(remaining_.data(), value.data(), value.size());
-    }
+    std::ranges::copy(value, remaining_.begin());
 
     remaining_ = remaining_.subspan(value.size());
   }

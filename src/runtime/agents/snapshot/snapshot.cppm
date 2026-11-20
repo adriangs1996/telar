@@ -44,8 +44,12 @@ export {
       AgentAuthority authority = AgentAuthority::candidate;
       AgentReportState report_state = AgentReportState::ready;
       AgentBlockedReason report_reason = AgentBlockedReason::none;
-      FixedText<96> report_event;
+      FixedText<agent_report_event_bytes> report_event;
       bool hooks_seen = false;
+
+    private:
+      // Codex's own screen and reports: whether the screen's signal may replace what the report says.
+      bool applyCodexScreen(AgentSignal signal, ObservationTime now, bool interrupted) noexcept;
     };
 
   }
@@ -62,12 +66,12 @@ export {
       [[nodiscard]] std::uint16_t total() const noexcept;
       [[nodiscard]] std::string_view step() const noexcept;
 
-      FixedText<2048> final_message;
+      FixedText<agent_report_message_bytes> final_message;
       static constexpr std::size_t task_capacity = 128;
 
     private:
       struct Task {
-        FixedText<96> subject;
+        FixedText<agent_report_plan_bytes> subject;
         AgentPlanStatus status = AgentPlanStatus::pending;
       };
 
@@ -76,7 +80,7 @@ export {
       bool uses_tasks_ = false;
       std::uint16_t done_ = 0;
       std::uint16_t total_ = 0;
-      FixedText<96> step_;
+      FixedText<agent_report_plan_bytes> step_;
     };
 
   }
@@ -91,11 +95,11 @@ export {
       void clear() noexcept;
       bool remember(std::string_view title);
 
-      FixedText<64> session;
-      FixedText<1024> path;
+      FixedText<agent_report_session_bytes> session;
+      FixedText<agent_report_session_file_bytes> path;
       AgentSessionFileKind kind = AgentSessionFileKind::claude_transcript;
       ds::Option<std::uint64_t> offset;
-      ds::Option<FixedText<96>> last_title;
+      ds::Option<FixedText<agent_report_title_bytes>> last_title;
       std::chrono::steady_clock::time_point checked_at;
       std::uint64_t revision = 0;
 
@@ -112,7 +116,7 @@ export {
     struct SessionFileResult {
       SessionFileRequest request;
       ds::Option<std::uint64_t> offset;
-      ds::Option<FixedText<96>> title;
+      ds::Option<FixedText<agent_report_title_bytes>> title;
     };
 
   }
@@ -150,11 +154,11 @@ export {
       Byte confidence = 0;
       AgentTitleSource title_source = AgentTitleSource::telar;
       AgentTitleState title_state = AgentTitleState::placeholder;
-      ds::Array<Byte, 16> session_id{};
-      FixedText<64> session;
+      ds::Array<Byte, agent_session_id_bytes> session_id{};
+      FixedText<agent_report_session_bytes> session;
       SessionFileWatch file_watch;
-      FixedText<96> event;
-      FixedText<96> title;
+      FixedText<agent_report_event_bytes> event;
+      FixedText<agent_report_title_bytes> title;
       DescriptionCapture description_capture;
       DescriptionPhase description_phase = DescriptionPhase::waiting_query;
       std::uint64_t description_revision = 0;
@@ -198,7 +202,7 @@ export {
 
       // The predicate is the caller's type, so this member keeps its body here.
       template <typename Predicate>
-      TBC_GENERIC inline void removeIf(Predicate&& predicate) {
+      TBC_GENERIC inline void removeIf(const Predicate& predicate) {
         if (records_.retain([&](const auto& agent) {
               return !predicate(*agent);
             }) != 0) {
@@ -247,13 +251,13 @@ export {
       static bool cursorPath(std::string_view path, std::string_view session) noexcept;
       void cursor(const SessionFileWatch& watch, Result& result);
       void claude(const SessionFileWatch& watch, Result& result);
-      ds::Option<FixedText<96>> readTitle(std::string_view input, ds::Option<std::string_view> session);
+      ds::Option<FixedText<agent_report_title_bytes>> readTitle(std::string_view input, ds::Option<std::string_view> session);
       static ds::Option<std::uint64_t> regularFileSize(const FileDescriptor& file) noexcept;
       std::string_view read(int descriptor, std::uint64_t offset, std::size_t limit);
 
       static constexpr std::size_t title_capacity = 96;
-      static constexpr std::size_t metadata_capacity = 16 * 1024;
-      static constexpr std::size_t transcript_capacity = 64 * 1024;
+      static constexpr std::size_t metadata_capacity = std::size_t{16} * 1024;
+      static constexpr std::size_t transcript_capacity = std::size_t{64} * 1024;
       static constexpr std::size_t line_capacity = 4096;
       ds::String<Memory> path_;
       ds::Vec<char, Memory> bytes_;

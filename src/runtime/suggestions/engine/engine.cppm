@@ -15,9 +15,12 @@ export {
   namespace telar::runtime {
 
     struct SuggestionOptions {
+      static constexpr std::chrono::milliseconds default_timeout{30'000};
+      static constexpr std::chrono::milliseconds default_idle_timeout{300'000};
+
       std::span<const std::string_view> arguments;
-      std::chrono::milliseconds timeout{30'000};
-      std::chrono::milliseconds idle_timeout{300'000};
+      std::chrono::milliseconds timeout = default_timeout;
+      std::chrono::milliseconds idle_timeout = default_idle_timeout;
     };
 
     class SuggestionEngine {
@@ -32,16 +35,25 @@ export {
     private:
       using Clock = std::chrono::steady_clock;
 
-      struct Timeout {};
+      struct Timeout : std::exception {};
 
-      struct Rejected {};
+      struct Rejected : std::exception {};
+
+      // Starts the agent when it is not running and hands it the prompt, until it settles.
+      void ask(std::string_view prompt);
+
+      // The command the agent's last answer holds.
+      std::string_view answer();
+
+      // Whether a record of the agent says it settled; one that refuses the prompt throws.
+      static bool settles(std::string_view line);
 
       static std::string_view extract(std::string_view text) noexcept;
       void poll(bool writing);
       void write(std::string_view bytes);
       void nextLine();
 
-      static constexpr std::size_t maximum_record = 64 * 1024;
+      static constexpr std::size_t maximum_record = std::size_t{64} * 1024;
       ConcurrentMemory& memory_;
       SuggestionOptions options_;
       ds::Option<PipeProcess> process_;

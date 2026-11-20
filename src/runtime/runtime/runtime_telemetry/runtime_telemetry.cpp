@@ -16,6 +16,37 @@ import telar.runtime.platform.proc_file;
 
 namespace telar::runtime::diagnostics {
 
+  namespace {
+
+    // A log is an orphan once the process that wrote it is gone; a process number no pid_t holds names none.
+    bool writerAlive(std::uint32_t process) noexcept {
+      if (process > static_cast<std::uint32_t>(std::numeric_limits<pid_t>::max())) {
+        return false;
+      }
+
+      return ::kill(static_cast<pid_t>(process), 0) == 0 || sys::lastError() != ESRCH;
+    }
+
+    // Removes the entry when it is a regular log file of this endpoint, or of any socket, whose writer is gone.
+    void removeIfOrphan(int directory, const dirent& entry, std::string_view endpoint_name) noexcept {
+      const std::span<const char> name_bytes{entry.d_name};
+      const auto name = LogName::parse({name_bytes.begin(), std::ranges::find(name_bytes, '\0')});
+      if (!name || (name->endpoint != endpoint_name && !name->endpoint.ends_with(".sock"))) {
+        return;
+      }
+
+      struct stat status{};
+      if (::fstatat(directory, name_bytes.data(), &status, AT_SYMLINK_NOFOLLOW) != 0 || !S_ISREG(status.st_mode)) {
+        return;
+      }
+
+      if (!writerAlive(name->process)) {
+        ::unlinkat(directory, name_bytes.data(), 0);
+      }
+    }
+
+  }
+
   void writeHistorySample(Line& line, const HistoryMetrics& metrics) {
     line.field("history_available", static_cast<std::uint64_t>(metrics.available));
     line.field("history_sqlite_bytes", metrics.sqlite_bytes);
@@ -49,22 +80,31 @@ namespace telar::runtime::diagnostics {
       return ds::none;
     }
 
-    const auto process = unsignedDecimal<std::uint32_t>(name.substr(dash + 1)).valueOr(0);
+    // Each cut below sits at a position rfind found inside the name, so none can fall outside it.
+    auto digits = name;
+
+    digits.remove_prefix(dash + 1);
+    name.remove_suffix(name.size() - dash);
+
+    const auto process = unsignedDecimal<std::uint32_t>(digits).valueOr(0);
     if (process == 0) {
       return ds::none;
     }
 
-    const auto dot = name.substr(0, dash).rfind('.');
+    const auto dot = name.rfind('.');
     if (dot == std::string_view::npos) {
       return ds::none;
     }
 
-    const auto role = name.substr(dot + 1, dash - dot - 1);
+    auto role = name;
+
+    role.remove_prefix(dot + 1);
+    name.remove_suffix(name.size() - dot);
     if (role != "runtime" && role != "client") {
       return ds::none;
     }
 
-    return LogName{.endpoint = name.substr(0, dot), .role = role == "runtime" ? Role::runtime : Role::client, .process = process, .rotated = rotated};
+    return LogName{.endpoint = name, .role = role == "runtime" ? Role::runtime : Role::client, .process = process, .rotated = rotated};
   }
 
   LogSink::LogSink(std::string_view endpoint, pid_t process, std::size_t limit) noexcept
@@ -73,12 +113,28 @@ namespace telar::runtime::diagnostics {
       return;
     }
 
-    const auto length = std::snprintf(path_.dataMut(), path_.size(), "%.*s.runtime-%d.log", static_cast<int>(endpoint.size()), endpoint.data(), process);
-    if (length < 0 || static_cast<std::size_t>(length) >= path_.size()) {
+    // The path is "<endpoint>.runtime-<process>.log"; one that does not fit with the terminator open needs is
+    // refused, as a truncated one would name another file.
+    constexpr std::string_view infix{".runtime-"};
+    constexpr std::string_view suffix{".log"};
+    const std::span<char> path{path_.viewMut()};
+    const auto digits_at = endpoint.size() + infix.size();
+    if (digits_at >= path.size()) {
       return;
     }
 
-    path_length_ = static_cast<std::size_t>(length);
+    std::ranges::copy(infix, std::ranges::copy(endpoint, path.begin()).out);
+
+    const auto digits = path.subspan(digits_at);
+    const auto converted = std::to_chars(digits.data(), std::to_address(digits.end()), process);
+    const auto suffix_at = digits_at + static_cast<std::size_t>(converted.ptr - digits.data());
+    if (converted.ec == std::errc::value_too_large || suffix_at + suffix.size() >= path.size()) {
+      return;
+    }
+
+    std::ranges::copy(suffix, path.subspan(suffix_at).begin());
+    path_length_ = suffix_at + suffix.size();
+    path_.atMut(path_length_) = '\0';
     open();
   }
 
@@ -99,11 +155,9 @@ namespace telar::runtime::diagnostics {
       return false;
     }
 
-    if (written_ != 0 && (written_ > limit_ || bytes.size() > limit_ - written_)) {
-      if (!rotate()) {
-        disable();
-        return false;
-      }
+    if (written_ != 0 && (written_ > limit_ || bytes.size() > limit_ - written_) && !rotate()) {
+      disable();
+      return false;
     }
 
     while (!bytes.empty()) {
@@ -130,14 +184,15 @@ namespace telar::runtime::diagnostics {
       return;
     }
 
-    ds::Array<char, PATH_MAX> directory_path;
+    ds::Array<char, PATH_MAX> directory_path{};
     const auto directory_length = std::max<std::size_t>(1, slash);
 
     std::copy_n(endpoint.begin(), directory_length, directory_path.dataMut());
     directory_path.atMut(directory_length) = '\0';
 
     try {
-      DirectoryStream directory{FileDescriptor{::open(directory_path.data(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)}};
+      DirectoryStream directory{FileDescriptor{::open(directory_path.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+      const auto endpoint_name = endpoint.substr(slash + 1);
 
       for (std::size_t scanned = 0; scanned < cleanup_limit; ++scanned) {
         const auto* entry = directory.next();
@@ -145,38 +200,23 @@ namespace telar::runtime::diagnostics {
           break;
         }
 
-        const auto name = LogName::parse({entry->d_name, std::strlen(entry->d_name)});
-        if (!name || (name->endpoint != endpoint.substr(slash + 1) && !name->endpoint.ends_with(".sock"))) {
-          continue;
-        }
-
-        struct stat status;
-        if (::fstatat(directory.descriptor(), entry->d_name, &status, AT_SYMLINK_NOFOLLOW) != 0 || !S_ISREG(status.st_mode)) {
-          continue;
-        }
-
-        if (name->process <= static_cast<std::uint32_t>(std::numeric_limits<pid_t>::max())) {
-          const auto process = static_cast<pid_t>(name->process);
-          if (::kill(process, 0) == 0 || sys::lastError() != ESRCH) {
-            continue;
-          }
-        }
-
-        ::unlinkat(directory.descriptor(), entry->d_name, 0);
+        removeIfOrphan(directory.descriptor(), *entry, endpoint_name);
       }
-    } catch (...) {
+    } catch (...) { // NOLINT(bugprone-empty-catch): removing stale logs is best effort; a directory that cannot be read keeps them
     }
   }
 
   void LogSink::open() noexcept {
-    file_.reset(::open(path_.data(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600));
+    constexpr mode_t owner_read_write = 0600;
+
+    file_.reset(::open(path_.data(), combineFlags(O_WRONLY, O_CREAT, O_EXCL, O_CLOEXEC, O_NOFOLLOW), owner_read_write)); // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
   }
 
   bool LogSink::rotate() noexcept {
-    ds::Array<char, PATH_MAX + 2> previous;
+    constexpr std::string_view rotated_suffix{".1\0", 3};
+    ds::Array<char, PATH_MAX + 2> previous{};
 
-    std::copy_n(path_.begin(), path_length_, previous.dataMut());
-    std::copy_n(".1", 3, previous.dataMut() + path_length_);
+    std::ranges::copy(rotated_suffix, std::ranges::copy(path(), previous.dataMut()).out);
     file_.reset();
     if (::rename(path_.data(), previous.data()) != 0) {
       return false;
@@ -205,7 +245,7 @@ namespace telar::runtime::diagnostics {
     if (writer.available()) {
       try {
         worker_.emplace(std::in_place, std::move(writer));
-      } catch (...) {
+      } catch (...) { // NOLINT(bugprone-empty-catch): without a worker the session writes no samples, as when the log cannot open
       }
     }
   }
@@ -225,7 +265,7 @@ namespace telar::runtime::diagnostics {
 #ifdef __APPLE__
     task_vm_info_data_t information{};
     mach_msg_type_number_t count = TASK_VM_INFO_COUNT;
-    if (::task_info(::mach_task_self(), TASK_VM_INFO, reinterpret_cast<task_info_t>(&information), &count) != KERN_SUCCESS) {
+    if (::task_info(::mach_task_self(), TASK_VM_INFO, reinterpret_cast<task_info_t>(&information), &count) != KERN_SUCCESS) { // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): task_info returns every flavor through an integer array
       return 0;
     }
 
@@ -306,7 +346,7 @@ namespace telar::runtime::diagnostics {
 
   // The sample reads counters that only a diagnostics build keeps.
 #if TELAR_DIAGNOSTICS
-  void writeRuntimeSample(Line& line, RuntimeModel& model, const ClientStore& clients) {
+  void writeRuntimeSample(Line& line, RuntimeModel& model, const ClientStore& clients) { // NOLINT(misc-const-correctness): each pane's media is sampled through its shared handle, a mutation tbc sees through the model
     std::size_t tabs = 0;
     std::size_t attachments = 0;
     std::size_t outstanding_frames = 0;
@@ -347,7 +387,7 @@ namespace telar::runtime::diagnostics {
       }
     }
 
-    for (auto* pane : model.panes.items()) {
+    for (auto* pane : model.panes.items()) { // NOLINT(misc-const-correctness): the pane's media is sampled through its shared handle, a mutation tbc sees through the pane
       if (pane == nullptr) {
         continue;
       }

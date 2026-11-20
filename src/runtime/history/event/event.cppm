@@ -43,8 +43,11 @@ export {
 export {
   namespace telar::runtime {
 
+    // A history session's id, as SQLite stores it.
+    inline constexpr std::size_t history_session_bytes = 16;
+
     struct HistorySession {
-      ds::Array<Byte, 16> id{};
+      ds::Array<Byte, history_session_bytes> id{};
       std::uint64_t pane = 0;
       TabLocation location{};
       std::int64_t started_at_ms = 0;
@@ -52,7 +55,7 @@ export {
       std::string_view shell;
     };
 
-    enum class HistoryEventKind {
+    enum class HistoryEventKind : std::uint8_t {
       session_started,
       command_finished,
       session_finished,
@@ -61,8 +64,8 @@ export {
     };
 
     struct HistorySessionTitle {
-      ds::Array<Byte, 16> session{};
-      FixedText<96> title;
+      ds::Array<Byte, history_session_bytes> session{};
+      FixedText<agent_report_title_bytes> title;
       AgentTitleSource source = AgentTitleSource::telar;
       AgentTitleState state = AgentTitleState::failed;
     };
@@ -98,10 +101,10 @@ export {
     };
 
     struct DiscardedHistory {
-      bool recordHistory(const HistoryEventView& event) noexcept;
+      static bool recordHistory(const HistoryEventView& event) noexcept;
     };
 
-    inline DiscardedHistory discarded_history;
+    inline DiscardedHistory discarded_history; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables): the services bind their history sink by mutable reference, and this sink that keeps nothing is their default
 
   }
 }
@@ -187,6 +190,8 @@ export {
 
       SqliteAllocator(const SqliteAllocator&) = delete;
       SqliteAllocator& operator=(const SqliteAllocator&) = delete;
+      SqliteAllocator(SqliteAllocator&&) = delete;
+      SqliteAllocator& operator=(SqliteAllocator&&) = delete;
 
     private:
       struct alignas(std::max_align_t) Header {
@@ -194,14 +199,14 @@ export {
       };
 
       static int initialize(void* context) noexcept;
-      static void shutdown(void*) noexcept;
+      static void shutdown(void* context) noexcept;
       static void* allocate(int bytes) noexcept;
       static void deallocate(void* pointer) noexcept;
       static void* reallocate(void* pointer, int bytes) noexcept;
       static int allocationSize(void* pointer) noexcept;
       static int roundedSize(int bytes) noexcept;
 
-      inline static ConcurrentMemory* active_ = nullptr;
+      inline static ConcurrentMemory* active_memory = nullptr;
       sqlite3_mem_methods previous_{};
     };
 

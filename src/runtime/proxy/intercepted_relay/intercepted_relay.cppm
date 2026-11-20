@@ -19,11 +19,22 @@ import telar.wire.vocabulary;
 import telar.platform.net;
 import telar.base.ds;
 
+namespace telar::runtime {
+
+  // text.substr(offset, count) without its throw: an offset past the end gives an empty view.
+  constexpr std::string_view substring(std::string_view text, std::size_t offset, std::size_t count = std::string_view::npos) noexcept {
+    text.remove_prefix(std::min(offset, text.size()));
+    text.remove_suffix(text.size() - std::min(count, text.size()));
+    return text;
+  }
+
+}
+
 // Interface: http1/observer.cppm
 export {
   namespace telar::runtime {
 
-    enum class Http1Line {
+    enum class Http1Line : std::uint8_t {
       chunk_size,
       trailer,
     };
@@ -46,9 +57,9 @@ export {
     class Http1MessageRelay {
     public:
       static constexpr std::size_t chunk_line_capacity = 1024;
-      static constexpr std::size_t trailer_line_capacity = 8 * 1024;
+      static constexpr std::size_t trailer_line_capacity = std::size_t{8} * 1024;
 
-      enum class State {
+      enum class State : std::uint8_t {
         reading_head,
         writing_head,
         reading_body,
@@ -67,53 +78,7 @@ export {
       TBC_GENERIC bool advance(Source& source, Destination& destination, Observer& observer) noexcept {
         active_ = false;
         for (std::size_t round = 0; round < maximum_rounds; ++round) {
-          bool continued = false;
-
-          switch (state_) {
-          case State::reading_head:
-            continued = readHead(source, observer);
-            break;
-          case State::reading_body:
-            continued = readBody(source);
-            break;
-          case State::reading_line:
-            continued = readLine(source);
-            break;
-          case State::writing_head:
-          case State::writing_body:
-          case State::writing_line: {
-            // A borrowed body fragment stays in the source, stable through every write retry, until it is
-            // consumed; everything else waits in the relay's own storage.
-            const bool body_pending = state_ == State::writing_body;
-            ds::Option<std::span<const std::uint8_t>> borrowed;
-            auto available = std::min(write_length_, storage_.bytes().size());
-
-            if constexpr (BufferedByteStream<Source>) {
-              if (body_pending) {
-                borrowed.emplace(source.peekView(write_length_).bytes);
-                available = borrowed->size();
-              }
-            }
-
-            if (available != write_length_) {
-              state_ = State::failed;
-              return active_;
-            }
-
-            continued = writePending(destination, observer, borrowed);
-            if constexpr (BufferedByteStream<Source>) {
-              if (body_pending && state_ != State::writing_body) {
-                source.consume(write_length_);
-              }
-            }
-
-            break;
-          }
-          default:
-            return active_;
-          }
-
-          if (!continued) {
+          if (!step(source, destination, observer)) {
             break;
           }
         }
@@ -132,7 +97,7 @@ export {
       [[nodiscard]] StreamReadiness destinationInterest() const noexcept;
 
     private:
-      enum class BodyStage {
+      enum class BodyStage : std::uint8_t {
         content,
         until_close,
         chunk_size,
@@ -140,6 +105,61 @@ export {
         chunk_separator,
         trailer,
       };
+
+      // One read or write of the message; false once the relay can go no further for now.
+      template <PeekableByteStream Source, ByteStream Destination, Http1Observer Observer>
+      TBC_GENERIC bool step(Source& source, Destination& destination, Observer& observer) noexcept {
+        switch (state_) {
+        case State::reading_head:
+          return readHead(source, observer);
+        case State::reading_body:
+          return readBody(source);
+        case State::reading_line:
+          return readLine(source);
+        case State::writing_head:
+        case State::writing_body:
+        case State::writing_line:
+          return writeStep(source, destination, observer);
+        case State::complete:
+        case State::failed:
+        case State::head_too_large:
+          return false;
+        }
+
+        // A state outside the enumeration stops the relay as a finished one does.
+        return false;
+      }
+
+      template <PeekableByteStream Source, ByteStream Destination, Http1Observer Observer>
+      TBC_GENERIC bool writeStep(Source& source, Destination& destination, Observer& observer) noexcept {
+        // A borrowed body fragment stays in the source, stable through every write retry, until it is
+        // consumed; everything else waits in the relay's own storage.
+        const bool body_pending = state_ == State::writing_body;
+        ds::Option<std::span<const std::uint8_t>> borrowed;
+        auto available = std::min(write_length_, storage_.bytes().size());
+
+        if constexpr (BufferedByteStream<Source>) {
+          if (body_pending) {
+            borrowed.emplace(source.peekView(write_length_).bytes);
+            available = borrowed->size();
+          }
+        }
+
+        if (available != write_length_) {
+          state_ = State::failed;
+          return false;
+        }
+
+        const bool continued = writePending(destination, observer, borrowed);
+
+        if constexpr (BufferedByteStream<Source>) {
+          if (body_pending && state_ != State::writing_body) {
+            source.consume(write_length_);
+          }
+        }
+
+        return continued;
+      }
 
       template <PeekableByteStream Source, Http1Observer Observer>
       TBC_GENERIC bool readHead(Source& source, Observer& observer) noexcept {
@@ -253,9 +273,17 @@ export {
         active_ = true;
         write_waiting_ = StreamReadiness::writable;
         write_offset_ += sent.bytes;
-        if (write_offset_ != write_length_) {
-          return true;
+        if (write_offset_ == write_length_) {
+          finishWrite(observer, borrowed);
         }
+
+        return true;
+      }
+
+      // Hands the observer what the write just finished and moves on to what follows it.
+      template <Http1Observer Observer>
+      TBC_GENERIC void finishWrite(Observer& observer, ds::Option<std::span<const std::uint8_t>> borrowed) noexcept {
+        const auto pending = borrowed ? *borrowed : storage_.bytes().first(write_length_);
 
         switch (state_) {
         case State::writing_head:
@@ -272,26 +300,33 @@ export {
           finishBodyBuffer();
           break;
         case State::writing_line:
-          recordLineLimit(observer);
-          if constexpr (requires { { observer.chunkLine(std::string_view{}) } noexcept -> std::same_as<void>; }) {
-            if (body_stage_ == BodyStage::chunk_size && line_result_ == DelimitedRead::Result::complete) {
-              observer.chunkLine(text(write_length_));
-            }
-          }
-
-          if constexpr (requires { { observer.trailer(std::string_view{}) } noexcept -> std::same_as<void>; }) {
-            if (body_stage_ == BodyStage::trailer && line_result_ == DelimitedRead::Result::complete && write_length_ > chunk_separator_bytes) {
-              observer.trailer(text(write_length_).substr(0, write_length_ - chunk_separator_bytes));
-            }
-          }
-
+          observeLine(observer);
           finishLine();
           break;
-        default:
+        case State::reading_head:
+        case State::reading_body:
+        case State::reading_line:
+        case State::complete:
+        case State::failed:
+        case State::head_too_large:
           break;
         }
+      }
 
-        return true;
+      template <Http1Observer Observer>
+      TBC_GENERIC void observeLine(Observer& observer) noexcept {
+        recordLineLimit(observer);
+        if constexpr (requires { { observer.chunkLine(std::string_view{}) } noexcept -> std::same_as<void>; }) {
+          if (body_stage_ == BodyStage::chunk_size && line_result_ == DelimitedRead::Result::complete) {
+            observer.chunkLine(text(write_length_));
+          }
+        }
+
+        if constexpr (requires { { observer.trailer(std::string_view{}) } noexcept -> std::same_as<void>; }) {
+          if (body_stage_ == BodyStage::trailer && line_result_ == DelimitedRead::Result::complete && write_length_ > chunk_separator_bytes) {
+            observer.trailer(substring(text(write_length_), 0, write_length_ - chunk_separator_bytes));
+          }
+        }
       }
 
       void finishHead() noexcept;
@@ -313,7 +348,7 @@ export {
 
       std::string_view text(std::size_t length) noexcept;
 
-      static constexpr std::size_t body_capacity = 16 * 1024;
+      static constexpr std::size_t body_capacity = std::size_t{16} * 1024;
       static constexpr std::size_t chunk_separator_bytes = 2;
       static constexpr std::size_t maximum_rounds = 32;
       SensitiveBuffer<Http1Head::capacity> storage_;
@@ -346,7 +381,7 @@ export {
     class HttpInterceptionSlot {
     public:
       using Time = traffic::FlowControl::Time;
-      enum class Outcome {
+      enum class Outcome : std::uint8_t {
         pending,
         rejected,
         allowed,
@@ -434,7 +469,7 @@ export {
     class Http1InterceptedRelay {
       using Secure = ErasingAllocator<ConcurrentMemory>;
       using Bytes = ds::Vec<Byte, Secure>;
-      enum class Mode {
+      enum class Mode : std::uint8_t {
         undecided,
         buffering,
         waiting,
@@ -504,16 +539,20 @@ export {
             return;
           }
 
+          // The control characters a chunk-size line rejects: all below the space but tab, and DEL.
+          constexpr unsigned char first_printable = 0x20;
+          constexpr unsigned char delete_character = 0x7F;
+
           line.remove_suffix(2);
           if (std::ranges::any_of(line, [](unsigned char byte) {
-                return (byte < 32 && byte != '\t') || byte == 127;
+                return (byte < first_printable && byte != '\t') || byte == delete_character;
               })) {
             relay.unavailable("http_invalid_chunk_size");
             return;
           }
 
-          const auto size = trimText(line.substr(0, line.find(';')), " \t");
-          if (size.empty() || !std::ranges::all_of(size, [](unsigned char byte) {
+          const auto size = trimText(substring(line, 0, line.find(';')), " \t");
+          if (size.empty() || !std::ranges::all_of(size, [](char byte) {
                 return (byte >= '0' && byte <= '9') || (asciiLower(byte) >= 'a' && asciiLower(byte) <= 'f');
               })) {
             relay.unavailable("http_invalid_chunk_size");
@@ -525,8 +564,11 @@ export {
             return;
           }
 
+          constexpr Byte line_feed = '\n';
+          constexpr Byte carriage_return = '\r';
+
           for (const auto byte : bytes) {
-            if (byte != (relay.separator_lf_ ? '\n' : '\r')) {
+            if (byte != (relay.separator_lf_ ? line_feed : carriage_return)) {
               relay.unavailable("http_invalid_chunk_separator");
               return;
             }
@@ -547,7 +589,7 @@ export {
         Http1InterceptedRelay& relay;
         Destination& destination;
 
-        inline StreamResult read(std::span<Byte>) noexcept {
+        inline StreamResult read(std::span<Byte> /*bytes*/) noexcept {
           return {.state = StreamResult::State::failed};
         }
 
@@ -589,6 +631,11 @@ export {
       Http1InterceptedRelay(ConcurrentMemory& memory, HttpRelayContext context, bool response);
 
       ~Http1InterceptedRelay();
+
+      Http1InterceptedRelay(const Http1InterceptedRelay&) = delete;
+      Http1InterceptedRelay& operator=(const Http1InterceptedRelay&) = delete;
+      Http1InterceptedRelay(Http1InterceptedRelay&&) = delete;
+      Http1InterceptedRelay& operator=(Http1InterceptedRelay&&) = delete;
 
       void reset(bool response, bool response_to_head = false) noexcept;
 
@@ -675,6 +722,10 @@ export {
 
       void repairHead();
 
+      // Answers a request's Expect: 100-continue for the child; any other expectation ends the
+      // interception. Throws when the head cannot change.
+      void readExpectation(bool body);
+
       template <ByteStream Destination>
       TBC_GENERIC bool flush(Destination& destination) noexcept {
         if (!continue_.remaining().empty()) {
@@ -699,7 +750,7 @@ export {
         write_offset_ += written.bytes;
         waiting_ = StreamReadiness::writable;
         if (!forwarded_head_ && write_offset_ >= head_bytes_) {
-          forwarded_head_ = Http1Head::analyze({reinterpret_cast<const char*>(wire_.data()), head_bytes_}, message_.response, message_.response ? destination_head_ : message_.response_to_head);
+          forwarded_head_ = Http1Head::analyze({reinterpret_cast<const char*>(wire_.data()), head_bytes_}, message_.response, message_.response ? destination_head_ : message_.response_to_head); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): char may alias the wire's bytes, and no cast-free view reads bytes as text
           if (forwarded_head_ && parser_.head() && parser_.head()->closes) {
             forwarded_head_.getMut().closes = true;
           }

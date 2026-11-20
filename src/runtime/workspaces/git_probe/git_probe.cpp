@@ -11,12 +11,14 @@ namespace telar::runtime {
   WorkspaceGitProbe::WorkspaceGitProbe(ConcurrentMemory& memory) noexcept
       : reader_(memory) {}
 
-  WorkspaceGitResult WorkspaceGitProbe::observe(const Request& request) noexcept {
+  WorkspaceGitResult WorkspaceGitProbe::observe(const Request& request) noexcept { // NOLINT(bugprone-exception-escape): assign throws only past the capacity the branch is cut to
     TELAR_TRACE("workspaces.gitProbe");
     const auto observed = reader_.read(request.path.view());
     Result result{.identity = request.identity};
+    auto branch = observed.branch.view();
 
-    result.branch.assign(observed.branch.view().substr(0, 200));
+    branch.remove_suffix(branch.size() - std::min(branch.size(), workspace_branch_bytes));
+    result.branch.assign(branch);
     result.dirty = observed.dirty;
     result.present = observed.present;
     result.timed_out = observed.timed_out;

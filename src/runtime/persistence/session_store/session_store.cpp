@@ -7,8 +7,39 @@ import telar.base.ds;
 
 namespace telar::runtime::checkpoint {
 
+  namespace {
+
+    // The versions that changed a record: titles, labels every tab has, the pane a resumed agent
+    // ran in, its arguments' 32-bit length, a worktree's dispatcher and its coordinator.
+    constexpr std::uint16_t titled_version = 2;
+    constexpr std::uint16_t labeled_version = 3;
+    constexpr std::uint16_t dropped_pane_version = 4;
+    constexpr std::uint16_t dispatched_version = 7;
+    constexpr std::uint16_t in_pane_version = 8;
+    constexpr std::uint16_t long_arguments_version = 9;
+    constexpr std::uint16_t coordinator_version = 10;
+
+    constexpr std::size_t maximum_title_bytes = 96;
+
+    // The permission bits of a file's group and of others, which a private file leaves clear.
+    constexpr mode_t shared_permissions = 0077;
+
+    // Writes `name` and `suffix` into `destination` as a C string; false when they do not fit.
+    bool suffixedName(std::span<char> destination, std::string_view name, std::string_view suffix) noexcept {
+      if (name.size() + suffix.size() >= destination.size()) {
+        return false;
+      }
+
+      const auto rest = std::ranges::copy(name, destination.begin()).out;
+
+      *std::ranges::copy(suffix, rest).out = '\0';
+      return true;
+    }
+
+  }
+
   void validatePath(std::string_view path) {
-    if (path.empty() || path.size() > 4096 || path.find('\0') != std::string_view::npos) {
+    if (path.empty() || path.size() > maximum_path_bytes || path.contains('\0')) {
       throw EncodingError{"Invalid checkpoint directory"};
     }
   }
@@ -22,7 +53,7 @@ namespace telar::runtime::checkpoint {
       return;
     }
 
-    DisplayText16<96, false>::validate(title);
+    DisplayText16<maximum_title_bytes, false>::validate(title);
     if (source != AgentTitleSource::generated && source != AgentTitleSource::manual && source != AgentTitleSource::agent) {
       throw EncodingError{"Checkpoint title is not durable"};
     }
@@ -40,9 +71,8 @@ namespace telar::runtime::checkpoint {
 
   template <Allocator Memory>
   FileDescriptor FileStore<Memory>::lock() const {
-    ds::Array<char, NAME_MAX + 1> name;
-    const auto length = std::snprintf(name.dataMut(), name.size(), "%s.lock", name_.data());
-    if (length < 0 || static_cast<std::size_t>(length) >= name.size()) {
+    ds::Array<char, NAME_MAX + 1> name{};
+    if (!suffixedName(name.viewMut(), name_.view(), ".lock")) {
       throw SystemError{"Session lock path is too long", ENAMETOOLONG};
     }
 
@@ -52,7 +82,7 @@ namespace telar::runtime::checkpoint {
       throw SystemError{"Open session lock"};
     }
 
-    if (!S_ISREG(state.st_mode) || state.st_uid != ::geteuid() || state.st_nlink != 1 || (state.st_mode & 0077) != 0) {
+    if (!S_ISREG(state.st_mode) || state.st_uid != ::geteuid() || state.st_nlink != 1 || (state.st_mode & shared_permissions) != 0) {
       throw SystemError{"Unsafe session lock", EACCES};
     }
 
@@ -72,9 +102,8 @@ namespace telar::runtime::checkpoint {
 
   template <Allocator Memory>
   void FileStore<Memory>::quarantine() noexcept {
-    ds::Array<char, NAME_MAX + 1> destination;
-    const auto length = std::snprintf(destination.dataMut(), destination.size(), "%s.corrupt", name_.data());
-    if (length >= 0 && static_cast<std::size_t>(length) < destination.size()) {
+    ds::Array<char, NAME_MAX + 1> destination{};
+    if (suffixedName(destination.viewMut(), name_.view(), ".corrupt")) {
       ::renameat(parent_.get(), name_.data(), parent_.get(), destination.data());
     }
   }
@@ -128,7 +157,7 @@ namespace telar::runtime::checkpoint {
       throw EncodingError{"Truncated checkpoint text"};
     }
 
-    const std::string_view result{reinterpret_cast<const char*>(input_.data()), length};
+    const auto result = textView(input_.first(length));
 
     input_ = input_.subspan(length);
     return result;
@@ -139,17 +168,60 @@ namespace telar::runtime::checkpoint {
   }
 
   std::span<const Byte> Reader::bytes32() {
-    const auto value = text(u32::decode(input_));
+    return byteView(text(u32::decode(input_)));
+  }
 
-    return {reinterpret_cast<const Byte*>(value.data()), value.size()};
+  WorkspaceRecord Reader::workspace() {
+    const WorkspaceRecord record{.id = u64::decode(input_), .path = text16(), .name = text16(), .first_tab = u64::decode(input_), .first_label = text16()};
+
+    validatePath(record.path);
+    if (record.name.size() > maximum_name_bytes || record.first_label.size() > maximum_label_bytes || (version_ < labeled_version && record.first_label.empty())) {
+      throw EncodingError{"Invalid checkpoint workspace label"};
+    }
+
+    return record;
+  }
+
+  TabRecord Reader::tab() {
+    const TabRecord record{.workspace = u64::decode(input_), .id = u64::decode(input_), .label = text16()};
+    if (record.label.size() > maximum_label_bytes || (version_ < labeled_version && record.label.empty())) {
+      throw EncodingError{"Invalid checkpoint tab label"};
+    }
+
+    return record;
+  }
+
+  LayoutRecord Reader::layout() {
+    const LayoutRecord record{.identity = u64::decode(input_), .last_used = u64::decode(input_), .payload = bytes32()};
+    if (record.payload.empty() || record.payload.size() > maximum_layout_bytes) {
+      throw EncodingError{"Invalid checkpoint layout size"};
+    }
+
+    return record;
+  }
+
+  bool Reader::accepted(const WorktreeRecord& record) {
+    try {
+      validatePath(record.registration.path);
+      if (record.id == 0) {
+        throw EncodingError{"Invalid checkpoint worktree identity"};
+      }
+
+      Codec::encodedSize(record.registration);
+    } catch (const EncodingError&) {
+      ++skipped_worktrees_;
+      return false;
+    }
+
+    return true;
   }
 
   ds::Option<PaneRecord> Reader::pane() {
     PaneRecord record{.id = u64::decode(input_), .workspace = u64::decode(input_), .tab = u64::decode(input_), .cwd = text16(), .columns = u16::decode(input_), .rows = u16::decode(input_), .argument_count = u16::decode(input_), .arguments = {}};
 
-    record.arguments = version_ >= 9 ? text(u32::decode(input_)) : text16();
+    record.arguments = version_ >= long_arguments_version ? text(u32::decode(input_)) : text16();
     validatePath(record.cwd);
-    if (record.argument_count > 64 || record.arguments.size() > 128 * 1024 || std::ranges::count(record.arguments, '\0') != record.argument_count) {
+    if (record.argument_count > maximum_arguments || record.arguments.size() > maximum_argument_bytes || std::ranges::count(record.arguments, '\0') != record.argument_count) {
       throw EncodingError{"Invalid checkpoint launch arguments"};
     }
 
@@ -159,20 +231,24 @@ namespace telar::runtime::checkpoint {
       validateAgentSession(record.session, false);
     }
 
-    if (version_ >= 2) {
+    if (version_ >= titled_version) {
       record.title = text16();
       record.title_source = static_cast<AgentTitleSource>(u8::decode(input_));
     }
 
     validateTitle(record.title, record.title_source);
 
-    record.in_pane = version_ >= 8 && boolean();
-    if (version_ == 4 && boolean()) {
+    record.in_pane = version_ >= in_pane_version && boolean();
+    if (version_ == dropped_pane_version && boolean()) {
       return ds::none;
     }
 
     if (record.argument_count == 0) {
       throw EncodingError{"Checkpoint launch has no arguments"};
+    }
+
+    if (++pane_count_ > maximum_panes) {
+      throw EncodingError{"Checkpoint has too many panes"};
     }
 
     return record;
@@ -198,15 +274,15 @@ namespace telar::runtime::checkpoint {
     registration.base = text16();
     registration.title = text16();
     registration.brief = text16();
-    if (version_ >= 7) {
+    if (version_ >= dispatched_version) {
       registration.dispatched_from = text16();
     }
 
-    if (version_ >= 10 && boolean()) {
+    if (version_ >= coordinator_version && boolean()) {
       CoordinatorReference coordinator;
       const auto session = text(coordinator.session_id.size());
 
-      std::copy(session.begin(), session.end(), coordinator.session_id.dataMut());
+      std::ranges::copy(session, coordinator.session_id.viewMut().begin());
       coordinator.pane_id = u64::decode(input_);
       coordinator.pane_generation = u64::decode(input_);
       registration.coordinator = coordinator;
@@ -233,8 +309,8 @@ namespace telar::runtime::checkpoint {
 
   template <typename Record>
   void Writer::append(const Record& record) {
-    if (dropped != 0) {
-      ++dropped;
+    if (dropped_ != 0) {
+      ++dropped_;
       return;
     }
 
@@ -244,8 +320,12 @@ namespace telar::runtime::checkpoint {
       write(record);
     } catch (const CapacityReached&) {
       remaining_ = previous;
-      dropped = 1;
+      dropped_ = 1;
     }
+  }
+
+  std::size_t Writer::dropped() const noexcept {
+    return dropped_;
   }
 
   tbc::val_a<std::span<const Byte>> Writer::finish() {
@@ -269,7 +349,7 @@ namespace telar::runtime::checkpoint {
 
   void Writer::raw(std::string_view value) {
     require(value.size());
-    std::copy(value.begin(), value.end(), remaining_.begin());
+    std::ranges::copy(value, remaining_.begin());
     remaining_ = remaining_.subspan(value.size());
   }
 
@@ -297,7 +377,7 @@ namespace telar::runtime::checkpoint {
 
   void Writer::write(const WorkspaceRecord& record) {
     validatePath(record.path);
-    if (record.name.size() > 256 || record.first_label.size() > 128) {
+    if (record.name.size() > maximum_name_bytes || record.first_label.size() > maximum_label_bytes) {
       throw EncodingError{"Invalid checkpoint workspace label"};
     }
 
@@ -319,7 +399,7 @@ namespace telar::runtime::checkpoint {
   void Writer::write(const PaneRecord& record) {
     validatePath(record.cwd);
     validateTitle(record.title, record.title_source);
-    if (record.argument_count == 0 || record.argument_count > 64 || record.arguments.size() > 128 * 1024 || record.session.size() > 64) {
+    if (record.argument_count == 0 || record.argument_count > maximum_arguments || record.arguments.size() > maximum_argument_bytes || record.session.size() > maximum_session_bytes) {
       throw EncodingError{"Invalid checkpoint launch record"};
     }
 
@@ -365,21 +445,21 @@ namespace telar::runtime::checkpoint {
     if (registration.coordinator) {
       const auto& coordinator = *registration.coordinator;
 
-      raw({reinterpret_cast<const char*>(coordinator.session_id.data()), coordinator.session_id.size()});
+      raw(textView(coordinator.session_id.view()));
       integer(coordinator.pane_id);
       integer(coordinator.pane_generation);
     }
   }
 
   void Writer::write(const LayoutRecord& record) {
-    if (record.payload.empty() || record.payload.size() > 16 * 1024) {
+    if (record.payload.empty() || record.payload.size() > maximum_layout_bytes) {
       throw EncodingError{"Invalid checkpoint layout size"};
     }
 
     kind(Kind::layout);
     integer(record.identity);
     integer(record.last_used);
-    text32({reinterpret_cast<const char*>(record.payload.data()), record.payload.size()});
+    text32(textView(record.payload));
   }
 
   template void Writer::append<WorkspaceRecord>(const WorkspaceRecord& record);

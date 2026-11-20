@@ -10,6 +10,73 @@ import telar.base.ds;
 
 namespace telar::runtime {
 
+  namespace {
+
+    // The longest relative path the index keeps, as a client is sent it.
+    constexpr std::size_t relative_path_bytes = 1024;
+
+    // The marker a repository's root holds, terminated.
+    constexpr std::string_view git_marker = "/.git";
+
+    // The path `git ls-files -z` is streaming, gathered a byte at a time; one longer than the index
+    // keeps is passed over whole.
+    class TrackedPath {
+    public:
+      // Takes the next byte; true when it ends a path to keep, which `path` then views.
+      bool push(Byte byte) noexcept {
+        if (byte != 0) {
+          if (length_ < bytes_.size()) {
+            bytes_.atMut(length_++) = static_cast<char>(byte);
+          } else {
+            oversized_ = true;
+          }
+
+          return false;
+        }
+
+        const bool kept = !oversized_;
+
+        ended_ = std::exchange(length_, 0);
+        oversized_ = false;
+        return kept;
+      }
+
+      [[nodiscard]] std::string_view path() const noexcept {
+        return std::string_view{bytes_.view().first(ended_)};
+      }
+
+      // Hands each path `bytes` completes to `append` until it refuses one or the build is
+      // cancelled; whether to read on.
+      template <typename Append>
+      bool feed(std::span<const Byte> bytes, const std::atomic<bool>& cancelled, Append& append) {
+        return std::ranges::all_of(bytes, [&](Byte byte) {
+          return !cancelled.load(std::memory_order_relaxed) && (!push(byte) || append(path()));
+        });
+      }
+
+    private:
+      ds::Array<char, relative_path_bytes> bytes_{};
+      std::size_t length_ = 0;
+      std::size_t ended_ = 0;
+      bool oversized_ = false;
+    };
+
+    // Storage the allocator handed out for `count` values; empty when it had none.
+    template <typename Value, Allocator Memory>
+    std::span<Value> allocateValues(Memory& memory, std::size_t count) {
+      auto* const values = static_cast<Value*>(memory.allocate(count * sizeof(Value), alignof(Value)));
+      if (values == nullptr) {
+        return {};
+      }
+
+      // The allocator hands out raw storage of the size it was asked for.
+#pragma clang unsafe_buffer_usage begin
+      return std::span<Value>{values, count};
+#pragma clang unsafe_buffer_usage end
+    }
+
+  }
+
   template <Allocator Memory>
   FuzzyMatch<Memory>::FuzzyMatch(Memory& memory)
       : matrix_(memory) {
@@ -26,26 +93,9 @@ namespace telar::runtime {
       return ds::none;
     }
 
-    ds::Array<std::uint16_t, maximum_needle> first_matches;
-    std::size_t offset = 0;
-
-    for (std::size_t matched = 0; matched < query.size(); ++matched) {
-      const char wanted = lower(query[matched]);
-
-      while (offset < path.size() && lower(path[offset]) != wanted) {
-        ++offset;
-      }
-
-      if (offset == path.size()) {
-        return ds::none;
-      }
-
-      first_matches.atMut(matched) = static_cast<std::uint16_t>(offset);
-      if (!positions.empty()) {
-        positions[matched] = first_matches[matched];
-      }
-
-      ++offset;
+    ds::Array<std::uint16_t, maximum_needle> first_matches; // NOLINT(cppcoreguidelines-pro-type-member-init): scored for every indexed path, and only the query's first matches are written and read
+    if (!firstMatches(path, query, first_matches, positions)) {
+      return ds::none;
     }
 
     if (path.size() > maximum_path) {
@@ -56,7 +106,7 @@ namespace telar::runtime {
       return std::numeric_limits<std::int32_t>::max() / 2;
     }
 
-    ds::Array<std::int32_t, maximum_path> bonuses;
+    ds::Array<std::int32_t, maximum_path> bonuses; // NOLINT(cppcoreguidelines-pro-type-member-init): scored for every indexed path, and only the path's bonuses are written and read
     char previous = '/';
 
     for (std::size_t index = 0; index < path.size(); ++index) {
@@ -66,9 +116,52 @@ namespace telar::runtime {
 
     const bool retain_rows = !positions.empty();
 
+    align(path, query, first_matches, bonuses, retain_rows);
+    if (retain_rows) {
+      trace(path.size(), first_matches.view().first(query.size()), positions);
+    }
+
+    return row(retain_rows ? query.size() - 1 : (query.size() - 1) % 2, true)[path.size() - 1];
+  }
+
+  template <Allocator Memory>
+  bool FuzzyMatch<Memory>::firstMatches(std::string_view path, std::string_view query, ds::Array<std::uint16_t, maximum_needle>& matches, std::span<std::uint16_t> positions) noexcept {
+    std::size_t offset = 0;
+
+    for (std::size_t matched = 0; matched < query.size(); ++matched) {
+      const char wanted = lower(query[matched]);
+
+      while (offset < path.size() && lower(path[offset]) != wanted) {
+        ++offset;
+      }
+
+      if (offset == path.size()) {
+        return false;
+      }
+
+      matches.atMut(matched) = static_cast<std::uint16_t>(offset);
+      if (!positions.empty()) {
+        positions[matched] = matches[matched];
+      }
+
+      ++offset;
+    }
+
+    return true;
+  }
+
+  template <Allocator Memory>
+  void FuzzyMatch<Memory>::align(std::string_view path, std::string_view query, const ds::Array<std::uint16_t, maximum_needle>& first_matches, const ds::Array<std::int32_t, maximum_path>& bonuses, bool retain_rows) noexcept {
     for (std::size_t index = 0; index < query.size(); ++index) {
       const auto current = retain_rows ? index : index % 2;
-      const auto preceding = retain_rows ? (index == 0 ? 0 : index - 1) : 1 - current;
+      std::size_t preceding = 0;
+
+      if (retain_rows) {
+        preceding = index == 0 ? 0 : index - 1;
+      } else {
+        preceding = 1 - current;
+      }
+
       const auto ending = row(current, false);
       const auto best = row(current, true);
       const auto previous_ending = row(preceding, false);
@@ -100,28 +193,27 @@ namespace telar::runtime {
         best[column] = running;
       }
     }
+  }
 
-    if (retain_rows) {
-      bool required = false;
-      std::size_t column = path.size();
+  template <Allocator Memory>
+  void FuzzyMatch<Memory>::trace(std::size_t path_size, std::span<const std::uint16_t> first_matches, std::span<std::uint16_t> positions) noexcept {
+    bool required = false;
+    std::size_t column = path_size;
 
-      for (std::size_t index = query.size(); index != 0;) {
-        --index;
-        while (column > first_matches[index]) {
-          --column;
-          const auto cell = row(index, false)[column];
-          if (cell == minimum_score || (!required && cell != row(index, true)[column])) {
-            continue;
-          }
-
-          required = index != 0 && column != 0 && cell == plus(row(index - 1, false)[column - 1], consecutive_score);
-          positions[index] = static_cast<std::uint16_t>(column);
-          break;
+    for (std::size_t index = first_matches.size(); index != 0;) {
+      --index;
+      while (column > first_matches[index]) {
+        --column;
+        const auto cell = row(index, false)[column];
+        if (cell == minimum_score || (!required && cell != row(index, true)[column])) {
+          continue;
         }
+
+        required = index != 0 && column != 0 && cell == plus(row(index - 1, false)[column - 1], consecutive_score);
+        positions[index] = static_cast<std::uint16_t>(column);
+        break;
       }
     }
-
-    return row(retain_rows ? query.size() - 1 : (query.size() - 1) % 2, true)[path.size() - 1];
   }
 
   template <Allocator Memory>
@@ -136,22 +228,28 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   int FuzzyMatch<Memory>::bonus(char previous, char value) noexcept {
+    // A match that starts a path segment counts most, then one after a separator, a camel-case
+    // hump and an extension.
+    constexpr int segment_bonus = 900;
+    constexpr int separator_bonus = 800;
+    constexpr int camel_bonus = 700;
+    constexpr int extension_bonus = 600;
     const char folded = lower(value);
-    if (!((folded >= 'a' && folded <= 'z') || (value >= '0' && value <= '9'))) {
+    if ((folded < 'a' || folded > 'z') && (value < '0' || value > '9')) {
       return 0;
     }
 
     switch (previous) {
     case '/':
-      return 900;
+      return segment_bonus;
     case '-':
     case '_':
     case ' ':
-      return 800;
+      return separator_bonus;
     case '.':
-      return 600;
+      return extension_bonus;
     default:
-      return previous >= 'a' && previous <= 'z' && value >= 'A' && value <= 'Z' ? 700 : 0;
+      return previous >= 'a' && previous <= 'z' && value >= 'A' && value <= 'Z' ? camel_bonus : 0;
     }
   }
 
@@ -165,23 +263,23 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   PathIndexStorage<Memory>::PathIndexStorage(Memory& memory)
-      : memory_(memory) {
-    bytes_ = static_cast<char*>(memory_.allocate(maximum_bytes, alignof(char)));
-    if (bytes_ == nullptr) {
+      : memory_(memory),
+        bytes_(allocateValues<char>(memory_, maximum_bytes)) {
+    if (bytes_.empty()) {
       throw std::bad_alloc{};
     }
 
-    entries_ = static_cast<IndexedPath*>(memory_.allocate(entry_bytes, alignof(IndexedPath)));
-    if (entries_ == nullptr) {
-      memory_.deallocate(bytes_, maximum_bytes, alignof(char));
+    entries_ = allocateValues<IndexedPath>(memory_, maximum_entries);
+    if (entries_.empty()) {
+      memory_.deallocate(bytes_.data(), maximum_bytes, alignof(char));
       throw std::bad_alloc{};
     }
   }
 
   template <Allocator Memory>
   PathIndexStorage<Memory>::~PathIndexStorage() {
-    memory_.deallocate(entries_, entry_bytes, alignof(IndexedPath));
-    memory_.deallocate(bytes_, maximum_bytes, alignof(char));
+    memory_.deallocate(entries_.data(), entry_bytes, alignof(IndexedPath));
+    memory_.deallocate(bytes_.data(), maximum_bytes, alignof(char));
   }
 
   template <Allocator Memory>
@@ -202,7 +300,7 @@ namespace telar::runtime {
       return false;
     }
 
-    std::copy(relative.begin(), relative.end(), bytes_ + bytes_used);
+    std::ranges::copy(relative, bytes_.subspan(bytes_used).begin());
     entries_[count++] = {.offset = static_cast<std::uint32_t>(bytes_used), .length = static_cast<std::uint16_t>(relative.size()), .kind = kind};
     bytes_used += relative.size();
     if (count % publication_batch == 0) {
@@ -219,7 +317,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   std::string_view PathIndexStorage<Memory>::path(const IndexedPath& entry) const noexcept {
-    return {bytes_ + entry.offset, entry.length};
+    return std::string_view{bytes_.subspan(entry.offset, entry.length)};
   }
 
   template <Allocator Memory>
@@ -238,7 +336,7 @@ namespace telar::runtime {
   void PathIndexBuilder::build(const char* root) noexcept {
     TELAR_TRACE("paths.build");
     try {
-      FileDescriptor directory{::open(root, O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
+      FileDescriptor directory{::open(root, combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
       if (!directory) {
         storage_.failure = PathBuildFailure::unreadable;
       } else {
@@ -261,7 +359,7 @@ namespace telar::runtime {
 
   bool PathIndexBuilder::acceptable(std::string_view relative) noexcept {
     try {
-      DisplayText16<1024, false>::validate(relative);
+      DisplayText16<relative_path_bytes, false>::validate(relative);
       return !relative.empty();
     } catch (const EncodingError&) {
       return false;
@@ -269,19 +367,21 @@ namespace telar::runtime {
   }
 
   bool PathIndexBuilder::insideGit(std::string_view path) noexcept {
-    ds::Array<char, 4102> marker;
+    ds::Array<char, OwnedPathQuery::root_bytes + git_marker.size() + 1> marker{};
 
     while (!path.empty() && path.ends_with('/')) {
       path.remove_suffix(1);
     }
 
     for (;;) {
-      if (path.size() + 6 > marker.size()) {
+      if (path.size() + git_marker.size() + 1 > marker.size()) {
         return false;
       }
 
-      std::copy(path.begin(), path.end(), marker.dataMut());
-      std::memcpy(marker.dataMut() + path.size(), "/.git", 6);
+      const auto written = marker.viewMut();
+      const auto after = std::ranges::copy(path, written.begin()).out;
+
+      *std::ranges::copy(git_marker, after).out = '\0';
       if (::access(marker.data(), F_OK) == 0) {
         return true;
       }
@@ -291,7 +391,7 @@ namespace telar::runtime {
         return false;
       }
 
-      path = path.substr(0, parent);
+      path.remove_suffix(path.size() - parent);
     }
   }
 
@@ -321,39 +421,21 @@ namespace telar::runtime {
       const auto configuration_deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
       GitRepository git{memory_, root, configuration_deadline, storage_.cancelled};
       Directories directories{memory_};
-      ds::Array<char, 1024> relative;
-      std::size_t length = 0;
-      bool oversized = false;
+      TrackedPath current;
+      const auto append = [&](std::string_view relative) {
+        return appendTracked(relative, directories);
+      };
 
       git.stream({"ls-files", "-z", "--cached", "--others", "--exclude-standard"}, [&](std::span<const Byte> bytes) {
-        for (const auto byte : bytes) {
-          if (storage_.cancelled.load(std::memory_order_relaxed)) {
-            return false;
-          }
-
-          if (byte == 0) {
-            if (!oversized && !appendTracked({relative.data(), length}, directories)) {
-              return false;
-            }
-
-            length = 0;
-            oversized = false;
-          } else if (length < relative.size()) {
-            relative.atMut(length++) = static_cast<char>(byte);
-          } else {
-            oversized = true;
-          }
-        }
-
-        return true;
+        return current.feed(bytes, storage_.cancelled, append);
       });
-    } catch (const SystemError&) {
-    } catch (const RequestError&) {
+    } catch (const SystemError&) {  // NOLINT(bugprone-empty-catch): without git the walk lists the directory instead
+    } catch (const RequestError&) { // NOLINT(bugprone-empty-catch): without git the walk lists the directory instead
     }
   }
 
   FileDescriptor PathIndexBuilder::openRelative(int root, std::string_view relative) {
-    FileDescriptor current{::fcntl(root, F_DUPFD_CLOEXEC, 3)};
+    FileDescriptor current{::fcntl(root, F_DUPFD_CLOEXEC, 3)}; // NOLINT(cppcoreguidelines-pro-type-vararg): fcntl's C signature is variadic
 
     while (current && !relative.empty()) {
       const auto separator = relative.find('/');
@@ -361,11 +443,12 @@ namespace telar::runtime {
       ds::Array<char, NAME_MAX + 1> component{};
 
       if (name.empty() || name.size() > NAME_MAX || name == "..") {
-        return FileDescriptor{};
+        current.reset();
+        return current;
       }
 
-      std::copy(name.begin(), name.end(), component.dataMut());
-      current.reset(::openat(current.get(), component.data(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
+      std::ranges::copy(name, component.viewMut().begin());
+      current.reset(::openat(current.get(), component.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_NOFOLLOW, O_CLOEXEC))); // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
       if (separator == std::string_view::npos) {
         break;
       }
@@ -397,25 +480,26 @@ namespace telar::runtime {
   }
 
   void PathIndexBuilder::list(int directory, std::string_view prefix) {
-    FileDescriptor copy{::fcntl(directory, F_DUPFD_CLOEXEC, 3)};
+    FileDescriptor copy{::fcntl(directory, F_DUPFD_CLOEXEC, 3)}; // NOLINT(cppcoreguidelines-pro-type-vararg): fcntl's C signature is variadic
     std::unique_ptr<DIR, decltype(&::closedir)> stream{::fdopendir(copy.get()), ::closedir};
     if (!stream) {
       return;
     }
 
     copy.release();
-    while (const auto* entry = ::readdir(stream.get())) {
+    while (const auto* entry = ::readdir(stream.get())) { // NOLINT(concurrency-mt-unsafe): readdir is unsafe only on a stream that another thread reads too, and this stream is the call's own
       if (storage_.cancelled.load(std::memory_order_relaxed)) {
         return;
       }
 
-      const std::string_view name{entry->d_name};
+      const auto* const terminated = std::data(entry->d_name);
+      const std::string_view name{terminated};
       if (name.starts_with('.')) {
         continue;
       }
 
       struct stat status{};
-      if (::fstatat(directory, entry->d_name, &status, AT_SYMLINK_NOFOLLOW) != 0) {
+      if (::fstatat(directory, terminated, &status, AT_SYMLINK_NOFOLLOW) != 0) {
         continue;
       }
 
@@ -424,14 +508,14 @@ namespace telar::runtime {
         continue;
       }
 
-      ds::Array<char, 1024> relative;
+      ds::Array<char, relative_path_bytes> relative; // NOLINT(cppcoreguidelines-pro-type-member-init): built for every entry the walk lists, and only the bytes written are read
       const auto length = prefix.size() + name.size() + static_cast<std::size_t>(child_directory);
       if (length > relative.size()) {
         continue;
       }
 
-      std::copy(prefix.begin(), prefix.end(), relative.dataMut());
-      std::copy(name.begin(), name.end(), relative.dataMut() + prefix.size());
+      std::ranges::copy(prefix, relative.viewMut().begin());
+      std::ranges::copy(name, relative.viewMut().subspan(prefix.size()).begin());
       if (child_directory) {
         relative.atMut(length - 1) = '/';
       }
@@ -448,7 +532,7 @@ namespace telar::runtime {
         storage_(memory),
         builder_(memory, storage_),
         matcher_(memory) {
-    root_.reserve(4096);
+    root_.reserve(OwnedPathQuery::root_bytes);
   }
 
   void PathIndex::stop() noexcept {
@@ -474,7 +558,7 @@ namespace telar::runtime {
 
   bool PathIndex::canQueryInline(const FindPaths& request) const noexcept {
     constexpr std::size_t maximum_inline_entries = 256;
-    constexpr std::size_t maximum_inline_steps = 16 * 1024;
+    constexpr std::size_t maximum_inline_steps = std::size_t{16} * 1024;
     const auto query_length = std::max<std::size_t>(1, request.query.size());
 
     return complete() && !request.refresh && root_ == request.root && storage_.count <= maximum_inline_entries && storage_.bytes_used <= maximum_inline_steps / query_length;
@@ -489,7 +573,7 @@ namespace telar::runtime {
       path.remove_suffix(1);
     }
 
-    return std::count(path.begin(), path.end(), '/');
+    return static_cast<std::size_t>(std::ranges::count(path, '/'));
   }
 
   bool PathIndex::better(const Candidate& left, const Candidate& right, bool browse) const noexcept {

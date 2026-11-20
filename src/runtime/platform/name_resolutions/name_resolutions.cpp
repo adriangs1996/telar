@@ -11,11 +11,12 @@ namespace telar::runtime {
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
     addrinfo* entries = nullptr;
-    int error;
+    int error = ::getaddrinfo(hostname, nullptr, &hints, &entries);
 
-    do {
+    // A signal that interrupts the lookup fails it with EAI_SYSTEM and EINTR.
+    while (error == EAI_SYSTEM && sys::lastError() == EINTR) {
       error = ::getaddrinfo(hostname, nullptr, &hints, &entries);
-    } while (error == EAI_SYSTEM && sys::lastError() == EINTR);
+    }
 
     if (error != 0) {
       return {.error = error};

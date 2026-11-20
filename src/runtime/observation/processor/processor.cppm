@@ -37,7 +37,7 @@ import telar.base.ds;
 export {
   namespace telar::runtime {
 
-    enum class ObservationKind {
+    enum class ObservationKind : std::uint8_t {
       input,
       // The text of a command a client runs, ahead of the input that types it.
       command,
@@ -62,7 +62,7 @@ export {
 
       [[nodiscard]] std::span<const Byte> bytesOf(const ObservationEvent& event) const noexcept;
 
-      static constexpr std::size_t byte_capacity = 128 * 1024;
+      static constexpr std::size_t byte_capacity = std::size_t{128} * 1024;
       static constexpr std::size_t event_capacity = 512;
       ds::Array<Byte, byte_capacity> bytes;
       ds::Array<ObservationEvent, event_capacity> events;
@@ -149,40 +149,7 @@ export {
             TELAR_DIAGNOSTIC(result.metrics.resets = 1);
           }
 
-          bool output = false;
-
-          for (const auto& event : std::span{batch.events}.first(batch.event_count)) {
-            switch (event.kind) {
-            case ObservationKind::output:
-              tracker_.output({batch.bytesOf(event), event.time, event.shell_foreground}, commands);
-              result.time = event.time;
-              output = true;
-              break;
-            case ObservationKind::resize:
-              initial_size_ = event.size;
-              terminal_.resize(event.size);
-              break;
-            case ObservationKind::input: {
-              [[maybe_unused]] const auto candidate_bytes = tracker_.input({batch.bytesOf(event), event.time, event.shell_foreground}, commands);
-
-              TELAR_DIAGNOSTIC(diagnostics::accumulate(result.metrics.candidate_input_bytes, candidate_bytes));
-              break;
-            }
-            case ObservationKind::command:
-              tracker_.submitCommand(batch.bytesOf(event));
-              break;
-            case ObservationKind::shell_exit:
-              tracker_.complete({event.time, event.exit_code}, commands);
-              break;
-            case ObservationKind::session_end:
-              tracker_.complete({event.time, ds::none, HistoryStatus::interrupted}, commands);
-              if (session_.pane != 0) {
-                history.recordHistory({.kind = HistoryEventKind::session_finished, .session = session_, .finished_at_ms = event.time.milliseconds});
-              }
-
-              break;
-            }
-          }
+          const bool output = replay(batch, commands, result);
 
           if (output && inspect_screen) {
             result.signal = inference_.observe(terminal_, manifests, provider, result.time);
@@ -231,6 +198,48 @@ export {
         }
       };
 
+      // Replays the sealed batch's events into the tracker and the terminal; whether any was output.
+      // Generic over the caller's history sink, as observe.
+      template <HistoryEventSink History>
+      TBC_GENERIC inline bool replay(const ObservationBatch& batch, CommandRelay<History>& commands, ScreenObservationResult& result) {
+        bool output = false;
+
+        for (const auto& event : std::span{batch.events}.first(batch.event_count)) {
+          switch (event.kind) {
+          case ObservationKind::output:
+            tracker_.output({batch.bytesOf(event), event.time, event.shell_foreground}, commands);
+            result.time = event.time;
+            output = true;
+            break;
+          case ObservationKind::resize:
+            initial_size_ = event.size;
+            terminal_.resize(event.size);
+            break;
+          case ObservationKind::input: {
+            [[maybe_unused]] const auto candidate_bytes = tracker_.input({batch.bytesOf(event), event.time, event.shell_foreground}, commands);
+
+            TELAR_DIAGNOSTIC(diagnostics::accumulate(result.metrics.candidate_input_bytes, candidate_bytes));
+            break;
+          }
+          case ObservationKind::command:
+            tracker_.submitCommand(batch.bytesOf(event));
+            break;
+          case ObservationKind::shell_exit:
+            tracker_.complete({event.time, event.exit_code}, commands);
+            break;
+          case ObservationKind::session_end:
+            tracker_.complete({event.time, ds::none, HistoryStatus::interrupted}, commands);
+            if (session_.pane != 0) {
+              commands.history.recordHistory({.kind = HistoryEventKind::session_finished, .session = session_, .finished_at_ms = event.time.milliseconds});
+            }
+
+            break;
+          }
+        }
+
+        return output;
+      }
+
       void control(const ObservationEvent& event) noexcept;
 
       void drop(std::size_t incoming) noexcept;
@@ -259,15 +268,21 @@ export {
 export {
   namespace telar::runtime {
 
+    // The working directory a process probe reads, as Linux bounds a path.
+    inline constexpr std::size_t probed_directory_bytes = 4096;
+
     template <typename Probe>
     concept PaneProcessProbe = ObservationService<Probe> && requires(Probe& probe, pid_t process) {
-      { probe.directory(process) } noexcept -> std::same_as<FixedText<4096>>;
+      { probe.directory(process) } noexcept -> std::same_as<FixedText<probed_directory_bytes>>;
     };
 
     // Generic over the caller's process probe and history sink, so it stays here whole.
     template <PaneProcessProbe Probe, HistoryEventSink History>
     class TBC_GENERIC ObservationProcessor {
     public:
+      // The panes one observation round reads.
+      static constexpr std::size_t batch_capacity = 8;
+
       struct RequestEntry {
         std::uint64_t pane = 0;
         std::uint64_t generation = 0;
@@ -280,7 +295,7 @@ export {
       };
 
       struct Request {
-        ds::Array<RequestEntry, 8> entries;
+        ds::Array<RequestEntry, batch_capacity> entries;
         std::size_t count = 0;
       };
 
@@ -296,7 +311,7 @@ export {
       };
 
       struct Result {
-        ds::Array<ResultEntry, 8> entries;
+        ds::Array<ResultEntry, batch_capacity> entries;
         std::size_t count = 0;
       };
 
@@ -331,35 +346,11 @@ export {
           observed.input_revision = entry.input_revision;
           observed.process_recheck = entry.process_request.recheck;
           observed.observer = entry.observer;
-          auto provider = entry.provider;
-
-          if (processes) {
-            for (const auto& process : std::span{processes->panes}.first(processes->count)) {
-              if (process.request.pane != entry.pane) {
-                continue;
-              }
-
-              observed.process_result = process;
-              provider = process.provider;
-              if (const auto* manifest = manifests_.find(provider)) {
-                observed.process_result.getMut().name.assign(manifest->displayName());
-              }
-
-              break;
-            }
-          }
+          const auto provider = processes ? attachProcess(entry, *processes, observed) : entry.provider;
 
           observed.screen = entry.observer->observe(manifests_, provider, history_, entry.tracked_agent || provider != AgentProvider::unknown);
-
           // Process snapshots follow the sealed input batch in time; applying their CWD first can rewrite a cd command's source directory.
-          if (observed.process_result && !observed.process_result->cwd.view().empty()) {
-            entry.observer->updateDirectory(observed.process_result->cwd.view());
-          } else if (!observed.process_result && entry.process_request.root > 0) {
-            const auto directory = probe_.directory(entry.process_request.root);
-            if (!directory.view().empty()) {
-              entry.observer->updateDirectory(directory.view());
-            }
-          }
+          updateDirectory(entry, observed);
         }
 
         return result;
@@ -368,6 +359,37 @@ export {
       inline void stop() noexcept {}
 
     private:
+      // The probe's reading of the entry's pane, its agent named as its manifest names it; the
+      // agent it found, or the request's when it read none.
+      inline AgentProvider attachProcess(const RequestEntry& entry, const Probe::Result& processes, ResultEntry& observed) {
+        for (const auto& process : std::span{processes.panes}.first(processes.count)) {
+          if (process.request.pane != entry.pane) {
+            continue;
+          }
+
+          observed.process_result = process;
+          if (const auto* manifest = manifests_.find(process.provider)) {
+            observed.process_result.getMut().name.assign(manifest->displayName());
+          }
+
+          return process.provider;
+        }
+
+        return entry.provider;
+      }
+
+      // Moves the observer to the directory the probe read, or to the root process's when it read none.
+      inline void updateDirectory(const RequestEntry& entry, const ResultEntry& observed) {
+        if (observed.process_result && !observed.process_result->cwd.view().empty()) {
+          entry.observer->updateDirectory(observed.process_result->cwd.view());
+        } else if (!observed.process_result && entry.process_request.root > 0) {
+          const auto directory = probe_.directory(entry.process_request.root);
+          if (!directory.view().empty()) {
+            entry.observer->updateDirectory(directory.view());
+          }
+        }
+      }
+
       const AgentManifests& manifests_;
       Probe& probe_;
       History& history_;

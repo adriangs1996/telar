@@ -22,23 +22,31 @@ namespace telar::runtime {
     constexpr double nanoseconds_per_second = 1e9;
     constexpr std::uint32_t permille = 1000;
 
+    // The control bytes below the space and DEL, and the first byte past ASCII.
+    constexpr unsigned char first_printable = 0x20;
+    constexpr unsigned char delete_byte = 0x7f;
+    constexpr unsigned char first_non_ascii = 0x80;
+
+    // Room for a process or user id in decimal.
+    constexpr std::size_t id_digits = 16;
+
     // Text a process chose, such as its arguments, made fit for display: control bytes become spaces,
     // and bytes that are not UTF-8 become question marks.
     template <std::size_t Capacity>
-    void displayCopy(FixedText<Capacity>& output, std::string_view text) noexcept {
-      ds::Array<char, Capacity> bytes;
+    void displayCopy(FixedText<Capacity>& output, std::string_view text) noexcept { // NOLINT(bugprone-exception-escape): assign throws only past its capacity, and the text is cut to it
+      ds::Array<char, Capacity> bytes{};
       const auto length = std::min(text.size(), Capacity);
 
       for (std::size_t index = 0; index < length; ++index) {
         const auto byte = static_cast<unsigned char>(text[index]);
 
-        bytes.atMut(index) = byte < 0x20 || byte == 0x7f ? ' ' : static_cast<char>(byte);
+        bytes.atMut(index) = byte < first_printable || byte == delete_byte ? ' ' : static_cast<char>(byte);
       }
 
       const auto valid = inspectUtf8(utf8Prefix({bytes.data(), length}, Capacity)) == Utf8Validation::valid;
       if (!valid) {
         for (std::size_t index = 0; index < length; ++index) {
-          if (static_cast<unsigned char>(bytes[index]) >= 0x80) {
+          if (static_cast<unsigned char>(bytes[index]) >= first_non_ascii) {
             bytes.atMut(index) = '?';
           }
         }
@@ -77,12 +85,12 @@ namespace telar::runtime {
       UserName found{.user = user};
       passwd record{};
       passwd* result = nullptr;
-      ds::Array<char, user_record_bytes> storage;
+      ds::Array<char, user_record_bytes> storage{};
       if (::getpwuid_r(user, &record, storage.dataMut(), storage.size(), &result) == 0 && result != nullptr && result->pw_name != nullptr) {
         displayCopy(found.name, std::string_view{result->pw_name});
       } else {
-        ds::Array<char, 16> digits;
-        const auto converted = std::to_chars(digits.dataMut(), digits.dataMut() + digits.size(), user);
+        ds::Array<char, id_digits> digits{};
+        const auto converted = std::to_chars(digits.dataMut(), std::to_address(digits.viewMut().end()), user);
 
         found.name.assign({digits.data(), static_cast<std::size_t>(converted.ptr - digits.data())});
       }
@@ -95,7 +103,7 @@ namespace telar::runtime {
     }
 
     void describe(MonitorEntry& entry, const ProcessInspector& inspector, ds::Vec<UserName, ConcurrentMemory>& users) {
-      ds::Array<char, MonitorLimits::command_bytes> text;
+      ds::Array<char, MonitorLimits::command_bytes> text{};
       const auto line = inspector.commandLine(entry.record.pid, text.viewMut());
       const auto first = line.text.substr(0, line.text.find(' '));
       const auto program = processBasename(first);
@@ -336,7 +344,7 @@ namespace telar::runtime {
     }
   }
 
-  bool MonitorSampler::matches(const MonitorEntry& entry, const MonitorView& view) const noexcept {
+  bool MonitorSampler::matches(const MonitorEntry& entry, const MonitorView& view) noexcept {
     if ((view.scope == MonitorScope::telar && entry.pane_id == 0) || (view.scope == MonitorScope::agents && !entry.under_agent)) {
       return false;
     }
@@ -346,14 +354,14 @@ namespace telar::runtime {
       return true;
     }
 
-    ds::Array<char, 16> digits;
-    const auto converted = std::to_chars(digits.dataMut(), digits.dataMut() + digits.size(), entry.record.pid);
+    ds::Array<char, id_digits> digits{};
+    const auto converted = std::to_chars(digits.dataMut(), std::to_address(digits.viewMut().end()), entry.record.pid);
     const std::string_view pid{digits.data(), static_cast<std::size_t>(converted.ptr - digits.data())};
 
     return pid == filter || containsInsensitive(entry.name.view(), filter) || containsInsensitive(entry.command.view(), filter) || containsInsensitive(entry.user.view(), filter);
   }
 
-  bool MonitorSampler::before(const MonitorEntry& left, const MonitorEntry& right, const MonitorView& view) const noexcept {
+  bool MonitorSampler::before(const MonitorEntry& left, const MonitorEntry& right, const MonitorView& view) noexcept {
     // Larger first for amounts, smaller first for names and pids; reverse flips either.
     const auto order = [&](auto first, auto second, bool descending) {
       if (first == second) {
@@ -410,13 +418,13 @@ namespace telar::runtime {
   // whose parent is not selected starts a tree of its own.
   void MonitorSampler::selectTree(const MonitorView& view) {
     constexpr std::size_t deepest = std::numeric_limits<std::uint8_t>::max();
-    const auto parentOf = [&](std::uint32_t index) {
+    const auto parent_of = [&](std::uint32_t index) {
       return entries_[index].record.parent;
     };
 
     std::ranges::sort(selected_.viewMut(), [&](std::uint32_t left, std::uint32_t right) {
-      const auto left_parent = parentOf(left);
-      const auto right_parent = parentOf(right);
+      const auto left_parent = parent_of(left);
+      const auto right_parent = parent_of(right);
 
       return left_parent != right_parent ? left_parent < right_parent : before(entries_[left], entries_[right], view);
     });
@@ -431,7 +439,7 @@ namespace telar::runtime {
     // Roots in reverse order, so the first is taken first.
     for (auto position = selected_.size(); position-- > 0;) {
       const auto index = selected_[position];
-      const auto parent = indexOf(parentOf(index));
+      const auto parent = indexOf(parent_of(index));
       if (!parent || *parent == index || flags_[*parent] == 0) {
         stack_.push({index, 0});
       }
@@ -448,70 +456,26 @@ namespace telar::runtime {
       ordered_.push(index);
       depths_.push(depth);
 
-      const auto children = std::ranges::equal_range(selected_, pid, {}, parentOf);
+      const auto children = std::ranges::equal_range(selected_, pid, {}, parent_of);
 
-      for (const auto* child = children.end(); child != children.begin();) {
-        --child;
-        if (*child != index) {
-          stack_.push({*child, static_cast<std::uint8_t>(std::min<std::size_t>(depth + 1u, deepest))});
+      // Pushed last first, so the first is taken first.
+      for (const auto child : std::views::reverse(children)) {
+        if (child != index) {
+          stack_.push({child, static_cast<std::uint8_t>(std::min<std::size_t>(depth + 1U, deepest))});
         }
       }
     }
   }
 
   MonitorAnswers MonitorSampler::answer(std::span<const MonitorView> views) {
-    // Where each query's rows and detail are; every row and detail is written before any answer
-    // views them.
-    struct Written {
-      bool found = true;
-      std::size_t first = 0;
-      std::size_t count = 0;
-      std::uint32_t matched = 0;
-      ds::Option<std::size_t> detail;
-    };
-
     const auto queries = std::min(views.size(), maximum_answers);
-    ds::Array<Written, maximum_answers> written{};
-    std::size_t rows = 0;
-
-    for (std::size_t query = 0; query < queries; ++query) {
-      rows += views[query].limit;
-    }
-
-    rows_.clear();
-    details_.clear();
-    rows_.reserve(rows);
-    details_.reserve(queries);
-    for (std::size_t query = 0; query < queries; ++query) {
-      const auto& view = views[query];
-      auto& place = written.atMut(query);
-
-      if (view.detail.pid != 0) {
-        place.found = detail(view.detail);
-        if (!place.found) {
-          continue;
-        }
-
-        place.detail = details_.size() - 1;
-      }
-
-      if ((view.sections & MonitorSections::processes) != 0) {
-        select(view);
-        place.first = rows_.size();
-        place.count = std::min(ordered_.size(), rows_.capacity() - place.first);
-        place.matched = static_cast<std::uint32_t>(selected_.size());
-        for (std::size_t index = 0; index < place.count; ++index) {
-          rows_.push(row(entries_[ordered_[index]], depths_[index]));
-        }
-      }
-    }
-
+    const auto written = place(views.first(queries));
     MonitorAnswers answers{};
 
     for (std::size_t query = 0; query < queries; ++query) {
       const auto& view = views[query];
-      const auto& place = written[query];
-      if (!place.found) {
+      const auto& placement = written[query];
+      if (!placement.found) {
         continue;
       }
 
@@ -520,7 +484,7 @@ namespace telar::runtime {
       snapshot.sections = view.sections;
       if ((view.sections & MonitorSections::host) != 0) {
         snapshot.cpu_permille = cpu_permille_;
-        snapshot.cores = {cores_.data(), host_.core_count};
+        snapshot.cores = cores_.view().first(host_.core_count);
         snapshot.memory_total_bytes = host_.memory_total_bytes;
         snapshot.memory_used_bytes = host_.memory_used_bytes;
         snapshot.memory_available_bytes = host_.memory_available_bytes;
@@ -532,22 +496,22 @@ namespace telar::runtime {
       }
 
       if ((view.sections & MonitorSections::disks) != 0) {
-        snapshot.disks = {disks_.data(), host_.mount_count};
+        snapshot.disks = disks_.view().first(host_.mount_count);
         snapshot.disk_read_per_second = disk_read_per_second_;
         snapshot.disk_written_per_second = disk_written_per_second_;
       }
 
       if ((view.sections & MonitorSections::network) != 0) {
-        snapshot.interfaces = {interfaces_.data(), host_.interface_count};
+        snapshot.interfaces = interfaces_.view().first(host_.interface_count);
       }
 
       if ((view.sections & MonitorSections::processes) != 0) {
-        snapshot.matched = place.matched;
-        snapshot.processes = rows_.view().subspan(place.first, place.count);
+        snapshot.matched = placement.matched;
+        snapshot.processes = rows_.view().subspan(placement.first, placement.count);
       }
 
-      if (place.detail) {
-        const auto& text = details_[*place.detail];
+      if (placement.detail) {
+        const auto& text = details_[*placement.detail];
         const auto& entry = text.entry ? entries_[*text.entry] : text.fresh;
 
         snapshot.detail = MonitorDetail{
@@ -563,6 +527,46 @@ namespace telar::runtime {
     return answers;
   }
 
+  // Every row and detail is written before any answer views them.
+  auto MonitorSampler::place(std::span<const MonitorView> views) -> Placements {
+    Placements written{};
+    std::size_t rows = 0;
+
+    for (const auto& view : views) {
+      rows += view.limit;
+    }
+
+    rows_.clear();
+    details_.clear();
+    rows_.reserve(rows);
+    details_.reserve(views.size());
+    for (std::size_t query = 0; query < views.size(); ++query) {
+      const auto& view = views[query];
+      auto& placement = written.atMut(query);
+
+      if (view.detail.pid != 0) {
+        placement.found = detail(view.detail);
+        if (!placement.found) {
+          continue;
+        }
+
+        placement.detail = details_.size() - 1;
+      }
+
+      if ((view.sections & MonitorSections::processes) != 0) {
+        select(view);
+        placement.first = rows_.size();
+        placement.count = std::min(ordered_.size(), rows_.capacity() - placement.first);
+        placement.matched = static_cast<std::uint32_t>(selected_.size());
+        for (std::size_t index = 0; index < placement.count; ++index) {
+          rows_.push(row(entries_[ordered_[index]], depths_[index]));
+        }
+      }
+    }
+
+    return written;
+  }
+
   // Reads the detail of the instance into a new DetailText; false when it is gone or was replaced.
   bool MonitorSampler::detail(const ProcessInstance& instance) {
     // The process as it is now: the last reading may still list one that exited since.
@@ -575,7 +579,7 @@ namespace telar::runtime {
     auto& text = details_.push(DetailText{});
     const auto index = indexOf(record->pid);
     const auto listed = index && sameInstance(entries_[*index].record, *record);
-    ds::Array<char, MonitorLimits::arguments_bytes> arguments;
+    ds::Array<char, MonitorLimits::arguments_bytes> arguments{};
     const auto pid = record->pid;
 
     if (listed) {

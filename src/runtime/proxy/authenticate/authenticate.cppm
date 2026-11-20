@@ -26,6 +26,8 @@ export {
 
       ProxySecret(const ProxySecret&) = default;
       ProxySecret& operator=(const ProxySecret&) = default;
+      ProxySecret(ProxySecret&&) noexcept = default;
+      ProxySecret& operator=(ProxySecret&&) noexcept = default;
 
       [[nodiscard]] bool matches(const ProxySecret& other) const noexcept;
 
@@ -39,7 +41,7 @@ export {
       static ds::Option<unsigned> digit(char character) noexcept;
 
       static constexpr std::string_view hexadecimal = "0123456789abcdef";
-      ds::Array<std::uint8_t, byte_count> bytes_;
+      ds::Array<std::uint8_t, byte_count> bytes_{};
     };
 
   }
@@ -58,6 +60,9 @@ export {
     private:
       static ds::Option<std::string_view> next(std::string_view& head) noexcept;
 
+      // The secret one Proxy-Authorization value presents, or none when it is no telar credential.
+      static ds::Option<ProxySecret> credential(std::string_view value) noexcept;
+
       static constexpr std::string_view userinfo_prefix = "telar:";
       static constexpr std::size_t decoded_capacity = 192;
     };
@@ -71,11 +76,11 @@ export {
 
     struct ProxyAdmission {
       ProxyTarget target;
-      bool authenticated;
+      bool authenticated = false;
     };
 
     struct ProxyRejection {
-      enum class Reason {
+      enum class Reason : std::uint8_t {
         invalid_authorization,
         unknown_credential,
         invalid_target,
@@ -97,6 +102,13 @@ export {
   }
 }
 
+namespace telar::runtime {
+
+  // The bytes as the characters they hold, for ProxySecretFile::ensure to write a secret's text.
+  tbc::val_a<std::span<char>> charsOf(tbc::val_a<std::span<std::uint8_t>> bytes) noexcept;
+
+}
+
 // Interface: proxy/secret_file.cppm
 export {
   namespace telar::runtime {
@@ -109,7 +121,7 @@ export {
       static ProxySecret ensure(Memory& memory, int directory);
 
     private:
-      static constexpr char filename[] = "proxy-secret";
+      static constexpr std::string_view filename = "proxy-secret";
       static constexpr std::size_t maximum_file_bytes = ProxySecret::hexadecimal_bytes + 8;
     };
 

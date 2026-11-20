@@ -29,7 +29,7 @@ export {
       template <typename Consumer>
       TBC_GENERIC inline int stream(std::initializer_list<std::string_view> arguments, Consumer&& consume, Clock::time_point deadline = Clock::time_point::max()) {
         return withCommand(arguments, [&](auto& command) {
-          return output_.stream(command, deadline, consume);
+          return output_.stream(command, deadline, std::forward<Consumer>(consume));
         });
       }
 
@@ -37,12 +37,12 @@ export {
       // Generic over the caller's operation, so it stays a template here.
       template <typename Operation>
       TBC_GENERIC inline int withCommand(std::initializer_list<std::string_view> arguments, Operation&& operation) {
-        return git_.with(arguments, operation);
+        return git_.with(arguments, std::forward<Operation>(operation));
       }
 
       [[noreturn]] static void reject();
 
-      static constexpr std::size_t maximum_output = 64 * 1024;
+      static constexpr std::size_t maximum_output = std::size_t{64} * 1024;
       Clock::time_point deadline_;
       CommandOutput<ConcurrentMemory> output_;
       HardenedGit<ConcurrentMemory> git_;
@@ -58,7 +58,9 @@ export {
     inline constexpr auto git_status_timeout = std::chrono::seconds{10};
 
     struct GitStatus {
-      FixedText<4096> branch;
+      static constexpr std::size_t branch_capacity = 4096;
+
+      FixedText<branch_capacity> branch;
       ds::Option<bool> dirty;
       bool present = false;
       bool timed_out = false;

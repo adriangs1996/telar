@@ -50,7 +50,7 @@ export {
 
       template <Allocator Memory>
       inline tbc::val_a<ds::Option<SensitiveAllocation<Memory>>> receive(tbc::mut_a<Memory> memory, std::size_t maximum_bytes) {
-        ds::Array<Byte, Protocol::prefix_bytes> prefix;
+        ds::Array<Byte, Protocol::prefix_bytes> prefix{};
         if (!readExact(prefix.viewMut())) {
           return ds::none;
         }
@@ -74,7 +74,7 @@ export {
           throw EncodingError{"Invalid tap frame length"};
         }
 
-        ds::Array<Byte, Protocol::prefix_bytes> prefix;
+        ds::Array<Byte, Protocol::prefix_bytes> prefix{};
         std::span<Byte> remaining{prefix.viewMut()};
 
         LittleEndian<std::uint32_t>::encode(static_cast<std::uint32_t>(payload.size()), remaining);
@@ -118,7 +118,7 @@ export {
         }
       }
 
-      static constexpr std::size_t input_capacity = 16 * 1024;
+      static constexpr std::size_t input_capacity = std::size_t{16} * 1024;
       Stream& stream_;
       StreamReadBuffer<input_capacity> input_;
     };
@@ -137,7 +137,13 @@ export {
     // region `a`, and keeps where the effects lie in it; the batch is decoded from there when read.
     template <Allocator Memory>
     struct Result {
-      explicit Result(const ServiceSpec& specification, tbc::val_a<SensitiveAllocation<Memory>> storage, std::size_t effects_offset, std::size_t effects_size, bool traffic = false);
+      // Where the effects lie in the storage.
+      struct Effects {
+        std::size_t offset = 0;
+        std::size_t size = 0;
+      };
+
+      explicit Result(const ServiceSpec& specification, tbc::val_a<SensitiveAllocation<Memory>> owned, std::size_t effects_offset, std::size_t effects_size, bool from_traffic = false);
 
       // The batch views the result's storage.
       [[nodiscard]] EffectBatch batch() const;
@@ -152,12 +158,10 @@ export {
       std::size_t batch_count = 0;
       tbc::val_a<SensitiveAllocation<Memory>> storage;
       bool traffic = false;
+      Effects effects;
 
     private:
       [[nodiscard]] std::span<const Byte> effectBytes() const;
-
-      std::size_t effects_offset_;
-      std::size_t effects_size_;
     };
 
     extern template struct Result<Memory>;
@@ -183,9 +187,9 @@ export {
       // The queue keeps the results, and what they keep of the allocator: region `a`.
       void publish(tbc::val_a<OwnedResult<Memory>> result) noexcept;
 
-      // Generic over the caller's consumer.
+      // Generic over the caller's consumer; takes it itself, as the lambdas callers pass build it in place.
       template <typename Consumer>
-      TBC_GENERIC void collect(Consumer&& consumer) {
+      TBC_GENERIC void collect(Consumer consumer) {
         if (!ready_ || !ready_.getMut().consume()) {
           return;
         }
@@ -232,7 +236,7 @@ export {
     private:
       using Clock = std::chrono::steady_clock;
       static constexpr std::size_t error_chunk_bytes = 1024;
-      static constexpr std::size_t maximum_error_drain_bytes = 64 * 1024;
+      static constexpr std::size_t maximum_error_drain_bytes = std::size_t{64} * 1024;
 
       [[nodiscard]] int remainingMilliseconds() const noexcept;
 
@@ -260,14 +264,18 @@ export {
       // The words after the command.
       static TapWorkerOptions parse(std::span<char* const> words);
 
+      // The worker's argv: the executable, the command, the entry, two flags with the trace's path,
+      // and the null that ends it.
+      static constexpr std::size_t argument_capacity = 7;
+
       // The worker's argv, `executable` first and null last; a trace only in Debug builds.
       // The words view `executable` and the strings `options` names, region `a`.
-      static tbc::val_a<ds::Array<char*, 7>> arguments(tbc::ref_a<TapWorkerOptions> options, tbc::val_a<const char*> executable) noexcept;
+      static tbc::val_a<ds::Array<char*, argument_capacity>> arguments(tbc::ref_a<TapWorkerOptions> options, tbc::val_a<const char*> executable) noexcept;
     };
 
     struct SessionOptions {
-      const char* executable;
-      const char* entry;
+      const char* executable = nullptr;
+      const char* entry = nullptr;
       const CancellationSignal& cancellation;
       std::chrono::milliseconds timeout = Limits::reply_deadline;
       const char* trace_path = nullptr;
@@ -283,6 +291,8 @@ export {
 
       Session(const Session&) = delete;
       Session& operator=(const Session&) = delete;
+      Session(Session&&) = delete;
+      Session& operator=(Session&&) = delete;
 
       OwnedResult<Memory> exchange(const ServiceSpec& specification, std::uint64_t event_id, std::span<const Byte> frame);
 
@@ -326,7 +336,9 @@ export {
       static constexpr std::size_t registrations = 32;
       static constexpr std::size_t decisions = 32;
       static constexpr std::size_t controls = 8;
-      static constexpr std::size_t reply_bytes = 4 * 1024 * 1024;
+      static constexpr std::size_t reply_bytes = std::size_t{4} * 1024 * 1024;
+      // The longest error a control callback hears of, or reports.
+      static constexpr std::size_t error_bytes = 1024;
     };
 
     enum class TrafficStage : Byte {
@@ -384,17 +396,23 @@ export {
       std::string_view error;
     };
 
+    // Which event a frame is, and of which registration.
+    struct TrafficEventId {
+      std::uint64_t event_id = 0;
+      std::uint32_t registration = 0;
+    };
+
     class TrafficProtocol {
     public:
       static tbc::val_a<std::span<const Byte>> setup(tbc::val_a<std::span<Byte>> output, const ServiceSpec& specification);
 
       static ServiceSpec setup(std::span<const Byte> input);
 
-      static tbc::val_a<std::span<const Byte>> event(tbc::val_a<std::span<Byte>> output, std::uint64_t event_id, std::uint32_t registration, std::span<const Byte> frame, std::uint64_t dropped = 0);
+      static tbc::val_a<std::span<const Byte>> event(tbc::val_a<std::span<Byte>> output, TrafficEventId id, std::span<const Byte> frame, std::uint64_t dropped = 0);
 
       static TrafficEvent event(std::span<const Byte> input);
 
-      static tbc::val_a<std::span<const Byte>> controlEvent(tbc::val_a<std::span<Byte>> output, std::uint64_t event_id, std::uint32_t registration, std::span<const Byte> frame, std::string_view error = {});
+      static tbc::val_a<std::span<const Byte>> controlEvent(tbc::val_a<std::span<Byte>> output, TrafficEventId id, std::span<const Byte> frame, std::string_view error = {});
 
       static tbc::val_a<std::span<const Byte>> reply(tbc::val_a<std::span<Byte>> output, const TrafficReply& reply, const TrafficOutcome& outcome);
 
@@ -420,13 +438,16 @@ export {
       using Secure = ErasingAllocator<ConcurrentMemory>;
 
       struct Connection {
-        explicit Connection(tbc::mut_a<Secure> memory, TrafficRegistration registration, traffic::PackageChannel channel);
+        // How long a control connection may take to open and answer.
+        static constexpr auto control_timeout = std::chrono::seconds{45};
+
+        explicit Connection(tbc::mut_a<Secure> memory, TrafficRegistration declared, traffic::PackageChannel channel);
 
         TrafficRegistration registration;
         FileDescriptor socket;
         std::uint64_t owner;
         tbc::val_a<ByteQueue<Secure>> output;
-        ds::Array<Byte, traffic::Protocol::prefix_bytes> prefix;
+        ds::Array<Byte, traffic::Protocol::prefix_bytes> prefix{};
         std::size_t prefix_bytes = 0;
         std::uint64_t dropped = 0;
         tbc::val_a<ds::Option<SensitiveAllocation<ConcurrentMemory>>> input;
@@ -434,14 +455,35 @@ export {
         bool registration_ack;
         bool ready = false;
         bool notify_ready = false;
-        std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds{45};
-        FixedText<1024> error;
+        std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + control_timeout;
+        FixedText<TrafficLimits::error_bytes> error;
       };
+
+      // The order one step serves its connections in: interceptors first, as a flow waits on them.
+      enum class Priority : std::uint8_t {
+        intercept,
+        observe,
+        control,
+      };
+
+      // The poll events that fail a connection, that it reads on, and that it writes on.
+      static constexpr unsigned failure_events = static_cast<unsigned>(POLLERR) | static_cast<unsigned>(POLLNVAL);
+      static constexpr unsigned input_events = static_cast<unsigned>(POLLIN) | static_cast<unsigned>(POLLHUP);
+      static constexpr unsigned output_events = POLLOUT;
+      // How long a step waits for traffic when nothing is due at once.
+      static constexpr int poll_timeout_ms = 100;
+      // The descriptors a step watches before its connections': the wake, the cancellation and the session.
+      static constexpr std::size_t fixed_watches = 3;
+      // The bytes a request adds to the frame it carries, for an event and for a control event.
+      static constexpr std::size_t event_overhead = 64;
+      static constexpr std::size_t control_event_overhead = 128;
+      // Room for the frame that tells a registration its worker restarted.
+      static constexpr std::size_t ready_frame_bytes = 128;
 
     public:
       // The bridge keeps the allocator and the port, region `a`, and its own copy of the specification. The
       // session it talks to is the worker's, lent to each call.
-      explicit TrafficBridge(tbc::mut_a<ConcurrentMemory> memory, const ServiceSpec& specification, tbc::mut_a<traffic::PackagePort> port);
+      explicit TrafficBridge(tbc::mut_a<ConcurrentMemory> memory, ServiceSpec specification, tbc::mut_a<traffic::PackagePort> port);
 
       void attach(Session<ConcurrentMemory>& session);
 
@@ -451,65 +493,23 @@ export {
 
       [[nodiscard]] bool transportFailed() const noexcept;
 
-      // `session` is the worker's session, or null while it restarts.
+      // `session` is the worker's session, or null while it restarts. Takes the consumer itself, as the
+      // lambdas callers pass build it in place.
       template <typename Consumer>
-      TBC_GENERIC void step(Session<ConcurrentMemory>* session, int wake, const CancellationSignal& cancellation, Consumer&& consume, bool immediate = false) {
-        for (std::size_t index = 0; index < connections_.size(); ++index) {
-          auto& connection = connections_.atMut(index);
-          if (!connection || connection->registration.stage != TrafficStage::control) {
-            continue;
-          }
-
-          if (std::chrono::steady_clock::now() >= connection->deadline) {
-            connection.getMut().error.assign("Network control deadline exceeded");
-          }
-
-          if (!connection->socket && connection->error.view().empty()) {
-            try {
-              connection.getMut().socket = port_.openControl(specification_);
-            } catch (const SystemError& failure) {
-              if (failure.code() != EAGAIN) {
-                connection.getMut().error.assign(std::string_view{failure.what()}.substr(0, 1024));
-              }
-            } catch (const std::exception& failure) {
-              connection.getMut().error.assign(std::string_view{failure.what()}.substr(0, 1024));
-            }
-          }
-
-          if (!connection->error.view().empty()) {
-            const auto error = connection->error;
-
-            dispatchControl(session, index, {}, error.view(), consume);
-            return;
-          }
+      TBC_GENERIC void step(Session<ConcurrentMemory>* session, int wake, const CancellationSignal& cancellation, Consumer consume, bool immediate = false) {
+        if (openControls(session, consume)) {
+          return;
         }
 
-        for (std::size_t index = 0; index < connections_.size(); ++index) {
-          auto& connection = connections_.atMut(index);
-          if (connection && connection->notify_ready) {
-            connection.getMut().notify_ready = false;
-            constexpr std::string_view reason = "worker_restarted";
-            ds::Array<Byte, 128> output;
-            const auto ready = traffic::Protocol::encode(output.viewMut(), {.kind = traffic::Kind::ready, .bytes = {reinterpret_cast<const Byte*>(reason.data()), reason.size()}});
-
-            dispatch(session, index, ready, connection->dropped, consume);
-          }
-        }
-
-        ds::Array<pollfd, TrafficLimits::registrations + 3> descriptors{};
+        announceRestart(session, consume);
+        ds::Array<pollfd, TrafficLimits::registrations + fixed_watches> descriptors{};
         ds::Array<std::uint32_t, TrafficLimits::registrations> identities{};
 
         descriptors.atMut(0) = {.fd = wake, .events = POLLIN, .revents = 0};
         descriptors.atMut(1) = {.fd = cancellation.descriptor(), .events = POLLIN, .revents = 0};
         descriptors.atMut(2) = {.fd = session ? session->outputDescriptor() : -1, .events = POLLIN, .revents = 0};
-        for (std::size_t index = 0; index < connections_.size(); ++index) {
-          const auto& connection = connections_[index];
-
-          identities.atMut(index) = connection ? connection->registration.id : 0;
-          descriptors.atMut(index + 3) = {.fd = connection ? connection->socket.get() : -1, .events = static_cast<short>(POLLIN | (connection && !connection->output.empty() ? POLLOUT : 0)), .revents = 0};
-        }
-
-        if (::poll(descriptors.dataMut(), descriptors.size(), immediate ? 0 : 100) < 0) {
+        watchConnections(descriptors.viewMut().subspan(fixed_watches), identities.viewMut());
+        if (::poll(descriptors.dataMut(), descriptors.size(), immediate ? 0 : poll_timeout_ms) < 0) {
           if (sys::lastError() == EINTR) {
             return;
           }
@@ -525,111 +525,175 @@ export {
           throw SystemError{"Traffic worker sent an unsolicited reply or exited", EPIPE};
         }
 
-        enum class Priority {
-          intercept,
-          observe,
-          control,
-        };
-
         for (const auto priority : {Priority::intercept, Priority::observe, Priority::control}) {
           for (std::size_t index = 0; index < connections_.size(); ++index) {
-            auto& connection = connections_.atMut(index);
-            if (!connection) {
+            if (!due(index, priority, identities[index])) {
               continue;
             }
 
-            const auto stage = connection->registration.stage;
-            const auto selected = stage == TrafficStage::control ? Priority::control : stage == TrafficStage::observe ? Priority::observe
-                                                                                                                      : Priority::intercept;
-            if (selected != priority) {
-              continue;
-            }
+            const auto& watch = descriptors[index + fixed_watches];
 
-            if (connection->registration.id != identities[index]) {
-              continue;
-            }
-
-            const auto readiness = descriptors[index + 3].revents;
-
-            if (stage == TrafficStage::control) {
-              ds::Option<SensitiveAllocation<ConcurrentMemory>> frame;
-
-              try {
-                if (readiness & (POLLERR | POLLNVAL)) {
-                  throw SystemError{"Package control channel failed", EPIPE};
-                }
-
-                if (readiness & POLLOUT) {
-                  write(connection.getMut());
-                }
-
-                if (readiness & (POLLIN | POLLHUP)) {
-                  frame = read(memory_, connection.getMut());
-                }
-              } catch (const std::exception& failure) {
-                connection.getMut().error.assign(std::string_view{failure.what()}.substr(0, 1024));
-              }
-
-              if (!connection->error.view().empty()) {
-                const auto error = connection->error;
-
-                dispatchControl(session, index, {}, error.view(), consume);
-              } else if (frame) {
-                traffic::control::Protocol::reply(frame->bytes());
-                dispatchControl(session, index, frame->bytes(), {}, consume);
-              }
-
-              continue;
-            }
-
-            if (readiness & (POLLERR | POLLNVAL)) {
-              transport_failed_ = true;
-              throw SystemError{"Package traffic channel failed", EPIPE};
-            }
-
-            try {
-              if (readiness & POLLOUT) {
-                write(connection.getMut());
-              }
-            } catch (...) {
-              transport_failed_ = true;
-              throw;
-            }
-
-            if (readiness & (POLLIN | POLLHUP)) {
-              ds::Option<SensitiveAllocation<ConcurrentMemory>> frame;
-
-              try {
-                frame = read(memory_, connection.getMut());
-              } catch (...) {
-                transport_failed_ = true;
-                throw;
-              }
-
-              if (!frame) {
-                continue;
-              }
-
-              const auto kind = traffic::Protocol::decode(frame->bytes()).kind;
-              if (connection->registration_ack && kind == traffic::Kind::ready) {
-                connection.getMut().registration_ack = false;
-                continue;
-              }
-
-              if (kind == traffic::Kind::ready) {
-                connection.getMut().ready = true;
-              }
-
-              dispatch(session, index, frame->bytes(), connection->dropped, consume);
+            if (priority == Priority::control) {
+              serveControl(session, index, watch, consume);
+            } else {
+              serveTraffic(session, index, watch, consume);
             }
           }
         }
       }
 
     private:
+      // Opens each control connection not yet open, and dispatches the first that failed or timed out;
+      // whether it dispatched one, which ends the step.
+      template <typename Consumer>
+      TBC_GENERIC bool openControls(Session<ConcurrentMemory>* session, Consumer& consume) {
+        for (std::size_t index = 0; index < connections_.size(); ++index) {
+          auto& connection = connections_.atMut(index);
+          if (!connection || connection->registration.stage != TrafficStage::control) {
+            continue;
+          }
+
+          if (std::chrono::steady_clock::now() >= connection->deadline) {
+            connection.getMut().error.assign("Network control deadline exceeded");
+          }
+
+          if (!connection->socket && connection->error.view().empty()) {
+            openControl(port_, specification_, connection.getMut());
+          }
+
+          if (!connection->error.view().empty()) {
+            const auto error = connection->error;
+
+            dispatchControl(session, index, {}, error.view(), consume);
+            return true;
+          }
+        }
+
+        return false;
+      }
+
+      // Tells each registration that waits for it that its worker restarted.
+      template <typename Consumer>
+      TBC_GENERIC void announceRestart(Session<ConcurrentMemory>* session, Consumer& consume) {
+        for (std::size_t index = 0; index < connections_.size(); ++index) {
+          auto& connection = connections_.atMut(index);
+          if (connection && connection->notify_ready) {
+            connection.getMut().notify_ready = false;
+            constexpr std::string_view reason = "worker_restarted";
+            ds::Array<Byte, ready_frame_bytes> output{};
+            const auto ready = traffic::Protocol::encode(output.viewMut(), {.kind = traffic::Kind::ready, .bytes = byteView(reason)});
+
+            dispatch(session, index, ready, connection->dropped, consume);
+          }
+        }
+      }
+
+      template <typename Consumer>
+      TBC_GENERIC void serveControl(Session<ConcurrentMemory>* session, std::size_t index, const pollfd& watch, Consumer& consume) {
+        const auto readiness = watch.revents;
+        auto& connection = connections_.atMut(index);
+        ds::Option<SensitiveAllocation<ConcurrentMemory>> frame;
+
+        try {
+          if (signaled(readiness, failure_events)) {
+            throw SystemError{"Package control channel failed", EPIPE};
+          }
+
+          if (signaled(readiness, output_events)) {
+            write(connection.getMut());
+          }
+
+          if (signaled(readiness, input_events)) {
+            frame = read(memory_, connection.getMut());
+          }
+        } catch (const std::exception& failure) {
+          connection.getMut().error.assign(std::string_view{failure.what()}.substr(0, TrafficLimits::error_bytes));
+        }
+
+        if (!connection->error.view().empty()) {
+          const auto error = connection->error;
+
+          dispatchControl(session, index, {}, error.view(), consume);
+        } else if (frame) {
+          traffic::control::Protocol::reply(frame->bytes());
+          dispatchControl(session, index, frame->bytes(), {}, consume);
+        }
+      }
+
+      template <typename Consumer>
+      TBC_GENERIC void serveTraffic(Session<ConcurrentMemory>* session, std::size_t index, const pollfd& watch, Consumer& consume) {
+        const auto readiness = watch.revents;
+        auto& connection = connections_.atMut(index);
+
+        if (signaled(readiness, failure_events)) {
+          transport_failed_ = true;
+          throw SystemError{"Package traffic channel failed", EPIPE};
+        }
+
+        try {
+          if (signaled(readiness, output_events)) {
+            write(connection.getMut());
+          }
+        } catch (...) {
+          transport_failed_ = true;
+          throw;
+        }
+
+        if (!signaled(readiness, input_events)) {
+          return;
+        }
+
+        ds::Option<SensitiveAllocation<ConcurrentMemory>> frame;
+
+        try {
+          frame = read(memory_, connection.getMut());
+        } catch (...) {
+          transport_failed_ = true;
+          throw;
+        }
+
+        if (!frame) {
+          return;
+        }
+
+        const auto kind = traffic::Protocol::decode(frame->bytes()).kind;
+        if (connection->registration_ack && kind == traffic::Kind::ready) {
+          connection.getMut().registration_ack = false;
+          return;
+        }
+
+        if (kind == traffic::Kind::ready) {
+          connection.getMut().ready = true;
+        }
+
+        dispatch(session, index, frame->bytes(), connection->dropped, consume);
+      }
+
+      // Opens a control connection's socket; a failure other than a busy port is its error.
+      static void openControl(traffic::PackagePort& port, const ServiceSpec& specification, Connection& connection);
+
+      // The descriptor each connection is polled on, and the registration it served when polled.
+      void watchConnections(std::span<pollfd> descriptors, std::span<std::uint32_t> identities) const noexcept;
+
+      // Whether the connection in slot `index` is served at `priority`, and still the registration
+      // `identity` it was polled as.
+      [[nodiscard]] bool due(std::size_t index, Priority priority, std::uint32_t identity) const noexcept;
+
+      static constexpr Priority priorityOf(TrafficStage stage) noexcept {
+        if (stage == TrafficStage::control) {
+          return Priority::control;
+        }
+
+        return stage == TrafficStage::observe ? Priority::observe : Priority::intercept;
+      }
+
+      static constexpr bool signaled(short revents, unsigned events) noexcept {
+        return (static_cast<unsigned>(static_cast<unsigned short>(revents)) & events) != 0;
+      }
+
       // A control connection is spent once its event is sent; the callback's reply may change the table.
       template <typename Consumer>
-      TBC_GENERIC void dispatchControl(Session<ConcurrentMemory>* session, std::size_t index, std::span<const Byte> frame, std::string_view error, Consumer&& consume) {
+      TBC_GENERIC void dispatchControl(Session<ConcurrentMemory>* session, std::size_t index, std::span<const Byte> frame, std::string_view error, Consumer& consume) {
         auto& connection = connections_.atMut(index);
 
         if (!session) {
@@ -637,9 +701,9 @@ export {
           return;
         }
 
-        SensitiveAllocation request{memory_, frame.size() + error.size() + 128};
+        SensitiveAllocation request{memory_, frame.size() + error.size() + control_event_overhead};
         const auto event_id = ++next_event_;
-        const auto encoded = TrafficProtocol::controlEvent(request.bytesMut(), event_id, connection->registration.id, frame, error);
+        const auto encoded = TrafficProtocol::controlEvent(request.bytesMut(), {.event_id = event_id, .registration = connection->registration.id}, frame, error);
 
         connection.reset();
         auto response = session->request(encoded, TrafficLimits::reply_bytes);
@@ -659,7 +723,7 @@ export {
 
       // The result owns the reply and finds its effects again where the outcome saw them.
       template <typename Consumer>
-      TBC_GENERIC void publishEffects(std::uint64_t event_id, SensitiveAllocation<ConcurrentMemory> response, std::span<const Byte> effects, Consumer&& consume) {
+      TBC_GENERIC void publishEffects(std::uint64_t event_id, SensitiveAllocation<ConcurrentMemory> response, std::span<const Byte> effects, Consumer& consume) {
         if (effects.empty()) {
           return;
         }
@@ -677,7 +741,7 @@ export {
 
       // The connection is named by its slot, as the callback's reply may change the table it lives in.
       template <typename Consumer>
-      TBC_GENERIC void dispatch(Session<ConcurrentMemory>* session, std::size_t index, std::span<const Byte> frame, std::uint64_t dropped, Consumer&& consume) {
+      TBC_GENERIC void dispatch(Session<ConcurrentMemory>* session, std::size_t index, std::span<const Byte> frame, std::uint64_t dropped, Consumer& consume) {
         auto& connection = connections_.atMut(index).getMut();
         const auto event = traffic::Protocol::decode(frame);
         const bool control = event.kind == traffic::Kind::intercept_request || event.kind == traffic::Kind::http_intercept_request;
@@ -700,9 +764,9 @@ export {
           return;
         }
 
-        SensitiveAllocation request{memory_, frame.size() + 64};
+        SensitiveAllocation request{memory_, frame.size() + event_overhead};
         const auto event_id = ++next_event_;
-        auto response = session->request(TrafficProtocol::event(request.bytesMut(), event_id, connection.registration.id, frame, dropped + dropped_observations_), TrafficLimits::reply_bytes);
+        auto response = session->request(TrafficProtocol::event(request.bytesMut(), {.event_id = event_id, .registration = connection.registration.id}, frame, dropped + dropped_observations_), TrafficLimits::reply_bytes);
         if (response.bytes().front() == static_cast<Byte>(FrameKind::error)) {
           const auto error = Protocol::decodeError(response.bytes());
           if (error.event_id != event_id) {
@@ -731,6 +795,18 @@ export {
 
       // What the reply decided views the input, region `a`; its registrations land in the bridge.
       tbc::val_a<TrafficOutcome> apply(std::uint64_t event_id, tbc::val_a<std::span<const Byte>> input);
+
+      // The checks a changed reply's registrations pass before the bridge takes them.
+      void checkRegistrations() const;
+
+      // Closes each connection whose registration the reply dropped.
+      void dropUnregistered() noexcept;
+
+      // Opens a connection for each registration the reply added; an existing one must not change.
+      void openRegistered();
+
+      // Hands each decision of the outcome to the interceptor it names.
+      void applyDecisions(const TrafficOutcome& outcome);
 
       static void enqueue(Connection& connection, std::span<const Byte> frame);
 
@@ -794,6 +870,8 @@ export {
 
       Worker(const Worker&) = delete;
       Worker& operator=(const Worker&) = delete;
+      Worker(Worker&&) = delete;
+      Worker& operator=(Worker&&) = delete;
 
       void stop() noexcept;
       void revoke() noexcept;
@@ -810,6 +888,12 @@ export {
 
       void run() noexcept;
       void runTraffic() noexcept;
+
+      // Waits while the worker is disabled for either cancellation; false when the wait failed.
+      bool awaitCancellation() noexcept;
+
+      // Starts the session and its traffic bridge, and hands the bridge the session.
+      void startTraffic();
       void process(const SharedExchange& shared) noexcept;
       void exchange(std::uint64_t event_id, std::span<const Byte> payload) noexcept;
 

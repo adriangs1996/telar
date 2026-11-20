@@ -28,7 +28,7 @@ export namespace telar::runtime {
 
   // A shell telar integrated with, and the token its marks carry.
   struct ShellLaunch {
-    IntegratedShell shell;
+    IntegratedShell shell = IntegratedShell::none;
     ShellToken token;
   };
 

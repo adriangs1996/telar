@@ -52,22 +52,21 @@ export {
 
     public:
       template <typename... Arguments>
-      inline explicit ObservationWorker(std::in_place_t, Arguments&&... arguments)
+      inline explicit ObservationWorker(std::in_place_t /*in_place*/, Arguments&&... arguments)
           : ObservationWorker(nullptr, std::in_place, std::forward<Arguments>(arguments)...) {}
 
       // The completion is signaled after every result, besides the worker's own descriptor.
       template <typename... Arguments>
-      inline ObservationWorker(CompletionSignal* completion, std::in_place_t, Arguments&&... arguments)
+      inline ObservationWorker(CompletionSignal* completion, std::in_place_t /*in_place*/, Arguments&&... arguments)
           : service_(std::forward<Arguments>(arguments)...),
-            completion_(completion) {
-        thread_ = startThread("Start observation worker", [this] {
-          run();
-        });
-      }
+            completion_(completion),
+            thread_(startThread("Start observation worker", [this] {
+              run();
+            })) {}
 
       inline ~ObservationWorker() {
         {
-          const std::lock_guard lock{mutex_};
+          const std::scoped_lock lock{mutex_};
 
           stopping_ = true;
         }
@@ -79,10 +78,12 @@ export {
 
       ObservationWorker(const ObservationWorker&) = delete;
       ObservationWorker& operator=(const ObservationWorker&) = delete;
+      ObservationWorker(ObservationWorker&&) = delete;
+      ObservationWorker& operator=(ObservationWorker&&) = delete;
 
       // The worker keeps the request, region `a`, until its result is collected.
       inline bool submit(tbc::val_a<Request> request) {
-        const std::lock_guard lock{mutex_};
+        const std::scoped_lock lock{mutex_};
 
         if (busy_ || stopping_) {
           return false;
@@ -115,7 +116,7 @@ export {
         }
 
         signal_.drain();
-        consume(result.getMut());
+        std::forward<Consumer>(consume)(result.getMut());
       }
 
       inline int descriptor() const noexcept {
@@ -144,7 +145,7 @@ export {
         }
 
         signal_.drain();
-        consume(*result);
+        std::forward<Consumer>(consume)(*result);
       }
 
     private:
@@ -169,7 +170,7 @@ export {
           auto result = service_.observe(*processing_);
 
           {
-            const std::lock_guard lock{mutex_};
+            const std::scoped_lock lock{mutex_};
 
             result_ = std::move(result);
             signal_.notify();
@@ -187,7 +188,6 @@ export {
       Service service_;
       CompletionSignal* completion_;
       CompletionSignal signal_;
-      std::jthread thread_;
       std::mutex mutex_;
       std::condition_variable ready_;
       std::condition_variable completed_;
@@ -200,6 +200,8 @@ export {
       bool busy_ = false;
       std::atomic<bool> result_ready_{false};
       bool stopping_ = false;
+      // Last, so the thread starts once every member it reads is built.
+      std::jthread thread_;
     };
 
   }
@@ -235,7 +237,7 @@ export {
       }
 
       template <typename Predicate>
-      inline void dropWaiting(Predicate&& matches) {
+      inline void dropWaiting(const Predicate& matches) {
         waiting_.retain([&](const Request& entry) {
           return !matches(entry);
         });
@@ -245,7 +247,7 @@ export {
       inline void collect(Worker& worker, Consumer&& consume) {
         worker.collect([&](const auto& result) {
           busy_ = false;
-          consume(result);
+          std::forward<Consumer>(consume)(result);
         });
 
         while (!busy_ && !waiting_.empty()) {
@@ -387,15 +389,14 @@ export {
             service_(service),
             requests_(memory),
             batch_(memory),
-            completions_(memory) {
-        thread_ = startThread("start request worker", [this] {
-          run();
-        });
-      }
+            completions_(memory),
+            thread_(startThread("start request worker", [this] {
+              run();
+            })) {}
 
       inline ~RequestWorker() {
         {
-          const std::lock_guard lock{mutex_};
+          const std::scoped_lock lock{mutex_};
 
           stopping_ = true;
           active_cancelled_ = true;
@@ -415,23 +416,17 @@ export {
 
       RequestWorker(const RequestWorker&) = delete;
       RequestWorker& operator=(const RequestWorker&) = delete;
+      RequestWorker(RequestWorker&&) = delete;
+      RequestWorker& operator=(RequestWorker&&) = delete;
 
       template <typename Message>
       inline void submit(std::uint64_t client, const Message& message, RequestContext context = {}) {
         static_assert(MessageSchema<Message>::direction == Direction::client);
-        const std::lock_guard lock{mutex_};
+        const std::scoped_lock lock{mutex_};
 
         if constexpr (std::same_as<Message, FindPaths>) {
-          for (auto* queue : {&batch_, &requests_}) {
-            for (std::size_t index = 0; index < queue->size(); ++index) {
-              auto& queued = (*queue)[index];
-              if (!queued.cancelled && queued.client == client) {
-                queued.request.resize(Codec::encodedSize(message));
-                Codec::encode(message, queued.request);
-                queued.request_id = message.request_id;
-                return;
-              }
-            }
+          if (replaceQueued(client, message)) {
+            return;
           }
         }
 
@@ -444,7 +439,7 @@ export {
           }
         }
 
-        auto& job = requests_.emplace(memory_, client, message.request_id);
+        auto& job = requests_.emplace(memory_, JobOrigin{.client = client, .request_id = message.request_id});
 
         try {
           // The job owns its texts; the views the caller's context carries are rebuilt from them when it runs.
@@ -477,14 +472,14 @@ export {
       }
 
       template <typename Consumer>
-      inline void collect(Consumer&& consume) {
+      inline void collect(const Consumer& consume) {
         signal_.drain();
 
         for (;;) {
           ds::Option<Completion> completed;
 
           {
-            const std::lock_guard lock{mutex_};
+            const std::scoped_lock lock{mutex_};
 
             if (completions_.empty()) {
               return;
@@ -508,14 +503,14 @@ export {
           }
         }
 
-        const std::lock_guard lock{mutex_};
+        const std::scoped_lock lock{mutex_};
 
         if (admissionFull() || stopping_) {
           TELAR_DIAGNOSTIC(++queue_metrics_.dropped);
           throw RequestError{FailureCode::resource_limit, queue_full_message};
         }
 
-        auto& job = requests_.emplace(memory_, 0, 0);
+        auto& job = requests_.emplace(memory_, JobOrigin{});
 
         try {
           job.internal.emplace(memory_, event);
@@ -535,7 +530,7 @@ export {
       }
 
       inline void cancel(std::uint64_t client) noexcept {
-        const std::lock_guard lock{mutex_};
+        const std::scoped_lock lock{mutex_};
 
         if (active_client_ == client) {
           active_cancelled_ = true;
@@ -547,7 +542,7 @@ export {
       }
 
       inline bool pending() noexcept {
-        const std::lock_guard lock{mutex_};
+        const std::scoped_lock lock{mutex_};
 
         return outstanding_ != 0;
       }
@@ -558,7 +553,7 @@ export {
 
 #if TELAR_DIAGNOSTICS
       inline diagnostics::RequestQueueSnapshot queueMetrics() const noexcept {
-        const std::lock_guard lock{mutex_};
+        const std::scoped_lock lock{mutex_};
         auto snapshot = queue_metrics_;
 
         snapshot.depth = queuedCount();
@@ -572,10 +567,24 @@ export {
       static constexpr std::size_t completion_capacity = history_queue ? 4 : 32;
       static constexpr const char* queue_full_message = history_queue ? "history queue is full" : "Background request queue is full";
 
+      // The client a job answers and the request it carries; zero for the worker's own jobs.
+      struct JobOrigin {
+        std::uint64_t client = 0;
+        std::uint64_t request_id = 0;
+      };
+
+      // What the worker does once it wakes.
+      enum class Step : std::uint8_t {
+        run,
+        idle,
+        skip,
+        stop,
+      };
+
       struct Job {
-        inline explicit Job(Memory& memory, std::uint64_t client_id, std::uint64_t request_identity)
-            : client(client_id),
-              request_id(request_identity),
+        inline explicit Job(Memory& memory, JobOrigin origin)
+            : client(origin.client),
+              request_id(origin.request_id),
               request(memory),
               reply(memory),
               workspace_path(memory),
@@ -610,7 +619,8 @@ export {
       };
 
       struct Completion {
-        inline explicit Completion(Job&& job) noexcept
+        // Takes the job's reply.
+        inline explicit Completion(Job& job) noexcept
             : client(job.client),
               tag(static_cast<ClientTag>(job.request.front())),
               reply(std::move(job.reply)) {}
@@ -628,8 +638,25 @@ export {
         return requests_.size() + (history_queue ? 0 : batch_.size());
       }
 
+      // A client's newer path query takes the place of the one it still has queued.
+      inline bool replaceQueued(std::uint64_t client, const FindPaths& message) {
+        for (auto* queue : {&batch_, &requests_}) {
+          for (std::size_t index = 0; index < queue->size(); ++index) {
+            auto& queued = (*queue)[index];
+            if (!queued.cancelled && queued.client == client) {
+              queued.request.resize(Codec::encodedSize(message));
+              Codec::encode(message, queued.request);
+              queued.request_id = message.request_id;
+              return true;
+            }
+          }
+        }
+
+        return false;
+      }
+
       template <typename Predicate>
-      inline void cancelQueued(Predicate&& matches) noexcept {
+      inline void cancelQueued(const Predicate& matches) noexcept {
         for (auto* queue : {&batch_, &requests_}) {
           for (std::size_t index = 0; index < queue->size(); ++index) {
             auto& job = queue->atMut(index);
@@ -643,45 +670,56 @@ export {
       inline void run() noexcept {
         for (;;) {
           ds::Option<Job> job;
-
-          {
-            std::unique_lock lock{mutex_};
-
-            ready_.wait_for(lock, std::chrono::seconds{1}, [&] {
-              return stopping_ || !batch_.empty() || !requests_.empty();
-            });
-
-            if (stopping_ && batch_.empty() && requests_.empty()) {
-              return;
-            }
-
-            if (batch_.empty() && requests_.empty()) {
-              lock.unlock();
-              if constexpr (requires { service_.idle(); }) {
-                service_.idle();
-              }
-
-              continue;
-            }
-
-            if (batch_.empty()) {
-              batch_.swap(requests_);
-            }
-
-            job.emplace(batch_.take());
-            if (job->cancelled) {
-              --outstanding_;
-              continue;
-            }
-
-            job.getMut().superseded = historySuperseded(*job);
-            active_client_ = job->client;
-            active_cancelled_ = false;
+          const auto step = take(job);
+          if (step == Step::stop) {
+            return;
           }
 
-          execute(job.getMut());
-          complete(job.getMut());
+          if (step == Step::idle) {
+            if constexpr (requires { service_.idle(); }) {
+              service_.idle();
+            }
+
+            continue;
+          }
+
+          if (step == Step::run) {
+            execute(job.getMut());
+            complete(job.getMut());
+          }
         }
+      }
+
+      // Waits up to a second for a job and moves the next one into `job`, under the lock.
+      inline Step take(ds::Option<Job>& job) noexcept {
+        std::unique_lock lock{mutex_};
+
+        ready_.wait_for(lock, std::chrono::seconds{1}, [&] {
+          return stopping_ || !batch_.empty() || !requests_.empty();
+        });
+
+        if (stopping_ && batch_.empty() && requests_.empty()) {
+          return Step::stop;
+        }
+
+        if (batch_.empty() && requests_.empty()) {
+          return Step::idle;
+        }
+
+        if (batch_.empty()) {
+          batch_.swap(requests_);
+        }
+
+        job.emplace(batch_.take());
+        if (job->cancelled) {
+          --outstanding_;
+          return Step::skip;
+        }
+
+        job.getMut().superseded = historySuperseded(*job);
+        active_client_ = job->client;
+        active_cancelled_ = false;
+        return Step::run;
       }
 
       inline void complete(Job& job) noexcept {
@@ -703,7 +741,7 @@ export {
           return;
         }
 
-        completions_.emplace(std::move(job));
+        completions_.emplace(job);
         lock.unlock();
         signal_.notify();
       }
@@ -773,7 +811,6 @@ export {
       static constexpr std::size_t maximum_failure_message = 192;
       Service& service_;
       CompletionSignal signal_;
-      std::jthread thread_;
       mutable std::mutex mutex_;
       std::condition_variable ready_;
       std::condition_variable completion_available_;
@@ -788,6 +825,8 @@ export {
 #if TELAR_DIAGNOSTICS
       diagnostics::RequestQueueSnapshot queue_metrics_;
 #endif
+      // Last, so the thread starts once every member it reads is built.
+      std::jthread thread_;
     };
 
   }

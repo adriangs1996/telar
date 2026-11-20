@@ -31,7 +31,7 @@ namespace telar::runtime {
     return result;
   }
 
-  bool DiscardedHistory::recordHistory(const HistoryEventView&) noexcept {
+  bool DiscardedHistory::recordHistory(const HistoryEventView& /*event*/) noexcept {
     return true;
   }
 
@@ -42,7 +42,7 @@ namespace telar::runtime {
 #endif
 
   SqliteAllocator::SqliteAllocator(ConcurrentMemory& memory) {
-    if (active_ != nullptr || sqlite3_config(SQLITE_CONFIG_GETMALLOC, &previous_) != SQLITE_OK) {
+    if (active_memory != nullptr || sqlite3_config(SQLITE_CONFIG_GETMALLOC, &previous_) != SQLITE_OK) { // NOLINT(cppcoreguidelines-pro-type-vararg): sqlite3_config's C signature is variadic
       throw std::logic_error{"SQLite allocation must be configured before opening databases"};
     }
 
@@ -56,43 +56,46 @@ namespace telar::runtime {
         .xShutdown = &shutdown,
         .pAppData = &memory,
     };
-    if (sqlite3_config(SQLITE_CONFIG_MALLOC, &methods) != SQLITE_OK) {
+    if (sqlite3_config(SQLITE_CONFIG_MALLOC, &methods) != SQLITE_OK) { // NOLINT(cppcoreguidelines-pro-type-vararg): sqlite3_config's C signature is variadic
       throw std::logic_error{"Cannot install the SQLite allocator"};
     }
 
     if (sqlite3_initialize() != SQLITE_OK) {
       sqlite3_shutdown();
-      sqlite3_config(SQLITE_CONFIG_MALLOC, &previous_);
-      active_ = nullptr;
+      sqlite3_config(SQLITE_CONFIG_MALLOC, &previous_); // NOLINT(cppcoreguidelines-pro-type-vararg): sqlite3_config's C signature is variadic
+      active_memory = nullptr;
       throw std::bad_alloc{};
     }
   }
 
   SqliteAllocator::~SqliteAllocator() {
     sqlite3_shutdown();
-    sqlite3_config(SQLITE_CONFIG_MALLOC, &previous_);
-    active_ = nullptr;
+    sqlite3_config(SQLITE_CONFIG_MALLOC, &previous_); // NOLINT(cppcoreguidelines-pro-type-vararg): sqlite3_config's C signature is variadic
+    active_memory = nullptr;
   }
 
   int SqliteAllocator::initialize(void* context) noexcept {
-    active_ = static_cast<ConcurrentMemory*>(context);
+    active_memory = static_cast<ConcurrentMemory*>(context);
     return SQLITE_OK;
   }
 
-  void SqliteAllocator::shutdown(void*) noexcept {}
+  void SqliteAllocator::shutdown(void* /*context*/) noexcept {}
 
   void* SqliteAllocator::allocate(int bytes) noexcept {
     if (bytes <= 0) {
       return nullptr;
     }
 
-    auto* header = static_cast<Header*>(active_->allocate(sizeof(Header) + static_cast<std::size_t>(bytes), alignof(Header)));
+    auto* header = static_cast<Header*>(active_memory->allocate(sizeof(Header) + static_cast<std::size_t>(bytes), alignof(Header)));
     if (header == nullptr) {
       return nullptr;
     }
 
     header->bytes = bytes;
+    // SQLite gets the bytes after the header, and hands that pointer back to the hooks below.
+#pragma clang unsafe_buffer_usage begin
     return header + 1;
+#pragma clang unsafe_buffer_usage end
   }
 
   void SqliteAllocator::deallocate(void* pointer) noexcept {
@@ -100,9 +103,12 @@ namespace telar::runtime {
       return;
     }
 
+    // The header sits right before the bytes allocate handed SQLite.
+#pragma clang unsafe_buffer_usage begin
     auto* header = static_cast<Header*>(pointer) - 1;
+#pragma clang unsafe_buffer_usage end
 
-    active_->deallocate(header, sizeof(Header) + static_cast<std::size_t>(header->bytes), alignof(Header));
+    active_memory->deallocate(header, sizeof(Header) + static_cast<std::size_t>(header->bytes), alignof(Header));
   }
 
   void* SqliteAllocator::reallocate(void* pointer, int bytes) noexcept {
@@ -113,7 +119,10 @@ namespace telar::runtime {
 
     void* replacement = allocate(bytes);
     if (replacement != nullptr && pointer != nullptr) {
+      // Both blocks come from allocate, which sizes each by its header.
+#pragma clang unsafe_buffer_usage begin
       std::memcpy(replacement, pointer, static_cast<std::size_t>(std::min(allocationSize(pointer), bytes)));
+#pragma clang unsafe_buffer_usage end
       deallocate(pointer);
     }
 
@@ -121,7 +130,10 @@ namespace telar::runtime {
   }
 
   int SqliteAllocator::allocationSize(void* pointer) noexcept {
+    // The header sits right before the bytes allocate handed SQLite.
+#pragma clang unsafe_buffer_usage begin
     return (static_cast<Header*>(pointer) - 1)->bytes;
+#pragma clang unsafe_buffer_usage end
   }
 
   int SqliteAllocator::roundedSize(int bytes) noexcept {
@@ -130,7 +142,9 @@ namespace telar::runtime {
       return 0;
     }
 
-    return (bytes + alignment - 1) & ~(alignment - 1);
+    constexpr auto alignment_mask = ~static_cast<unsigned>(alignment - 1);
+
+    return static_cast<int>(static_cast<unsigned>(bytes + alignment - 1) & alignment_mask);
   }
 
 }

@@ -12,7 +12,7 @@ export namespace telar::runtime::diagnostics {
 
   // One diagnostics record as a line of JSON, written into a fixed buffer: reset, then fields,
   // then finish. A line past the capacity throws std::length_error.
-  class Line {
+  class Line { // NOLINT(cppcoreguidelines-pro-type-member-init): a line writes its bytes before it reads them, so constructing one leaves its 12 KiB unwritten
   public:
     static constexpr std::size_t capacity = 12288;
 

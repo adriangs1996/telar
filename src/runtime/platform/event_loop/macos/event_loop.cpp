@@ -15,6 +15,35 @@ import telar.base.ds;
 
 namespace telar::runtime {
 
+  namespace {
+
+    // A kevent with either flag reports its descriptor closed.
+    constexpr auto closed_flags = static_cast<std::uint16_t>(combineFlags(EV_EOF, EV_ERROR));
+
+    // The kevent flags that add a filter, enabled or disabled.
+    constexpr std::uint16_t interestFlags(bool enabled) noexcept {
+      return static_cast<std::uint16_t>(combineFlags(EV_ADD, enabled ? EV_ENABLE : EV_DISABLE));
+    }
+
+    constexpr EventKind eventKind(std::int16_t filter) noexcept {
+      if (filter == EVFILT_SIGNAL) {
+        return EventKind::signal;
+      }
+
+      return filter == EVFILT_WRITE ? EventKind::writable : EventKind::readable;
+    }
+
+    // kevent carries the caller's token in its pointer-sized udata.
+    void* tokenData(std::uint64_t token) noexcept {
+      return reinterpret_cast<void*>(token); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast,performance-no-int-to-ptr): kevent's udata is the only field that carries the token
+    }
+
+    std::uint64_t dataToken(const void* data) noexcept {
+      return reinterpret_cast<std::uintptr_t>(data); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): kevent's udata is the only field that carries the token
+    }
+
+  }
+
   Kqueue::Kqueue()
       : queue_(::kqueue()) {
     if (!queue_) {
@@ -25,7 +54,7 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  Kqueue::Kqueue(Memory&)
+  Kqueue::Kqueue(Memory& /*memory*/)
       : Kqueue() {}
 
   void Kqueue::change(const struct kevent& event) {
@@ -41,32 +70,32 @@ namespace telar::runtime {
   void Kqueue::readInterest(int descriptor, std::uint64_t token, bool enabled) {
     struct kevent event{};
 
-    EV_SET(&event, descriptor, EVFILT_READ, EV_ADD | (enabled ? EV_ENABLE : EV_DISABLE), 0, 0, reinterpret_cast<void*>(token));
+    EV_SET(&event, static_cast<std::uintptr_t>(descriptor), EVFILT_READ, interestFlags(enabled), 0, 0, tokenData(token));
     change(event);
   }
 
   void Kqueue::writeInterest(int descriptor, std::uint64_t token, bool enabled) {
     struct kevent event{};
 
-    EV_SET(&event, descriptor, EVFILT_WRITE, EV_ADD | (enabled ? EV_ENABLE : EV_DISABLE), 0, 0, reinterpret_cast<void*>(token));
+    EV_SET(&event, static_cast<std::uintptr_t>(descriptor), EVFILT_WRITE, interestFlags(enabled), 0, 0, tokenData(token));
     change(event);
   }
 
   void Kqueue::remove(int descriptor) noexcept {
     ds::Array<struct kevent, 2> events{};
 
-    EV_SET(&events.atMut(0), descriptor, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
-    EV_SET(&events.atMut(1), descriptor, EVFILT_WRITE, EV_DELETE, 0, 0, nullptr);
+    EV_SET(&events.atMut(0), static_cast<std::uintptr_t>(descriptor), EVFILT_READ, EV_DELETE, 0, 0, nullptr);
+    EV_SET(&events.atMut(1), static_cast<std::uintptr_t>(descriptor), EVFILT_WRITE, EV_DELETE, 0, 0, nullptr);
     ::kevent(queue_.get(), events.data(), static_cast<int>(events.size()), nullptr, 0, nullptr);
   }
 
   void Kqueue::watchSignal(int signal_number) {
     struct kevent event{};
 
-    EV_SET(&event, signal_number, EVFILT_SIGNAL, EV_ADD | EV_ENABLE, 0, 0, nullptr);
+    EV_SET(&event, static_cast<std::uintptr_t>(signal_number), EVFILT_SIGNAL, interestFlags(true), 0, 0, nullptr);
     change(event);
     // Ignoring SIGCHLD discards the wait status; the event loop must reap it.
-    ::signal(signal_number, signal_number == SIGCHLD ? +[](int) {} : SIG_IGN);
+    static_cast<void>(::signal(signal_number, signal_number == SIGCHLD ? +[](int) {} : SIG_IGN));
   }
 
   tbc::val_a<std::span<const Event>> Kqueue::wait(std::chrono::nanoseconds timeout, tbc::val_a<std::span<Event>> events) {
@@ -84,19 +113,20 @@ namespace telar::runtime {
       throw SystemError{"wait for runtime event"};
     }
 
-    for (int index = 0; index < count; ++index) {
+    const auto received = static_cast<std::size_t>(count);
+
+    for (std::size_t index = 0; index < received; ++index) {
       const auto& source = kernel_events_[index];
 
       events[index] = Event{
-          .kind = source.filter == EVFILT_SIGNAL ? EventKind::signal : source.filter == EVFILT_WRITE ? EventKind::writable
-                                                                                                     : EventKind::readable,
+          .kind = eventKind(source.filter),
           .descriptor = static_cast<int>(source.ident),
-          .token = reinterpret_cast<std::uintptr_t>(source.udata),
-          .closed = (source.flags & (EV_EOF | EV_ERROR)) != 0,
+          .token = dataToken(source.udata),
+          .closed = (source.flags & closed_flags) != 0,
       };
     }
 
-    return std::span<const Event>{events}.first(static_cast<std::size_t>(count));
+    return std::span<const Event>{events}.first(received);
   }
 
   template Kqueue::Kqueue(SystemAllocator&);

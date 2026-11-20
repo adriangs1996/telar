@@ -36,6 +36,8 @@ export {
 
       LuaEffects(const LuaEffects&) = delete;
       LuaEffects& operator=(const LuaEffects&) = delete;
+      LuaEffects(LuaEffects&&) = delete;
+      LuaEffects& operator=(LuaEffects&&) = delete;
 
       EffectBatch read(int index);
 
@@ -139,7 +141,7 @@ export {
         std::size_t offset;
         std::size_t bytes;
       };
-      enum class Operation {
+      enum class Operation : std::uint8_t {
         subscribe,
         intercept,
         decide,
@@ -161,7 +163,23 @@ export {
       tbc::val_a<std::span<const Byte>> finish(std::uint64_t event_id, tbc::val_a<std::span<Byte>> output);
 
     private:
+      // The scratch's room past a message for the frame around it, and the decisions one callback
+      // may queue in all.
+      static constexpr std::size_t scratch_overhead = 32;
+      static constexpr std::size_t decision_queue_bytes = std::size_t{3} * 1024 * 1024;
+
       static int call(lua_State* state);
+
+      // Unbinds the registration the call names, if any.
+      int cancel(lua_State* state);
+
+      // The directions and the visibility an interception's options name, as the registration holds them.
+      static Byte directionsOf(std::string_view name);
+
+      static Byte visibilityOf(std::string_view name);
+
+      // The verdict a decision's action names; pending for an unknown one.
+      static traffic::Verdict verdictOf(std::string_view action) noexcept;
 
       static std::uint32_t identifier(lua_State* state, int index);
 
@@ -210,6 +228,9 @@ export {
 
       Host(const Host&) = delete;
       Host& operator=(const Host&) = delete;
+      Host(Host&&) = delete;
+      Host& operator=(Host&&) = delete;
+      ~Host() = default;
 
       tbc::val_a<std::span<const Byte>> trafficSetup(tbc::val_a<std::span<Byte>> output);
 

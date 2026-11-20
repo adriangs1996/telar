@@ -51,7 +51,7 @@ export {
   namespace telar::runtime {
 
     struct Http2FrameEvent {
-      enum class Kind {
+      enum class Kind : std::uint8_t {
         begin,
         payload,
         end,
@@ -105,8 +105,7 @@ export {
     private:
       void decodeHeader() noexcept;
 
-      static constexpr std::uint8_t stream_high_mask = 0x7f;
-      ds::Array<std::uint8_t, Http2Frame::header_bytes> header_;
+      ds::Array<std::uint8_t, Http2Frame::header_bytes> header_{};
       Http2Frame frame_;
       std::size_t header_length_ = 0;
       std::size_t payload_offset_ = 0;
@@ -134,8 +133,6 @@ export {
       ds::Array<std::uint32_t, Capacity> ids_{};
       std::uint32_t count_ = 0;
     };
-
-    extern template class Http2StreamIds<256>;
 
   }
 }
@@ -173,6 +170,9 @@ export {
       ds::Array<Response, capacity> responses_{};
       std::size_t response_count_ = 0;
     };
+
+    // The proxy tracks both directions' streams of a connection.
+    extern template class Http2StreamIds<2 * Http2StreamTracker::capacity>;
 
   }
 }

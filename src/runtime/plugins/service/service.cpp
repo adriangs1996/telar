@@ -117,6 +117,8 @@ namespace telar::runtime::plugins {
         worker.getMut().submit(shared);
       }
     } catch (const std::bad_alloc&) {
+      // An exchange that cannot be shared is dropped, as one over the budget is.
+      return;
     }
   }
 

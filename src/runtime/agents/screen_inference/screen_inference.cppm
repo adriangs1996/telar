@@ -32,7 +32,8 @@ export {
 
       static constexpr std::chrono::seconds window{60};
       static constexpr unsigned prompts_per_window = 8;
-      ds::Array<Pair, 32> pairs_{};
+      static constexpr std::size_t pair_capacity = 32;
+      ds::Array<Pair, pair_capacity> pairs_{};
     };
 
   }
@@ -42,10 +43,14 @@ export {
 export {
   namespace telar::runtime {
 
+    // The limits of a resumed agent's session id and title.
+    inline constexpr std::size_t agent_resume_session_bytes = 64;
+    inline constexpr std::size_t agent_resume_title_bytes = 96;
+
     struct AgentResume {
       AgentProvider provider = AgentProvider::unknown;
-      FixedText<64> session;
-      FixedText<96> title;
+      FixedText<agent_resume_session_bytes> session;
+      FixedText<agent_resume_title_bytes> title;
       AgentTitleSource title_source = AgentTitleSource::telar;
       bool in_pane = false;
     };
@@ -72,7 +77,8 @@ export {
     std::uint32_t cellCodepoint(const ScreenCell& cell) noexcept;
 
     struct AgentScreenRow {
-      ds::Array<char, 1024> bytes{};
+      static constexpr std::size_t capacity = 1024;
+      ds::Array<char, capacity> bytes{};
       std::size_t length = 0;
       std::uint32_t first = 0;
       std::size_t column = 0;
@@ -102,9 +108,10 @@ export {
 
     private:
       [[nodiscard]] std::span<const ScreenCell> rowCells(std::size_t row) const noexcept;
-      [[nodiscard]] AgentScreenRow row(std::size_t y) const noexcept;
-      static bool blank(std::uint32_t codepoint) noexcept;
+      [[nodiscard]] AgentScreenRow row(std::size_t index) const noexcept;
       [[nodiscard]] AgentScreenObservation claude() const noexcept;
+      // Whether Claude's prompt sits just left of the visible cursor.
+      [[nodiscard]] bool cursorAtClaudePrompt() const noexcept;
       static bool codexStatus(const AgentScreenRow& row) noexcept;
       [[nodiscard]] AgentScreenObservation codex() const noexcept;
       [[nodiscard]] AgentScreenObservation cursor() const noexcept;
@@ -132,7 +139,8 @@ export {
       bool prepend(std::string_view bytes) noexcept;
       [[nodiscard]] std::string_view text() const noexcept;
 
-      ds::Array<char, 16 * 1024> bytes_{};
+      static constexpr std::size_t capacity = std::size_t{16} * 1024;
+      ds::Array<char, capacity> bytes_{};
       std::size_t start_ = bytes_.size();
     };
 
@@ -144,6 +152,10 @@ export {
 
     private:
       ds::Option<AgentSignal> infer(const AgentScreenReader& reader, AgentScreenView screen, const AgentManifests& manifests, AgentProvider provider, ObservationTime now);
+      // What the screen says for the provider, before the signal is deduplicated.
+      ds::Option<AgentSignal> screenSignal(const AgentScreenReader& reader, AgentScreenView screen, const AgentManifests& manifests, AgentProvider provider);
+      // Whether a composer's signal waits for the work that brings the composer back.
+      bool composerLost(const ds::Option<AgentSignal>& signal) noexcept;
 
       static constexpr std::chrono::milliseconds signal_refresh{15'000};
       AgentScreenSample sample_;

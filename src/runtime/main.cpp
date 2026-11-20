@@ -15,11 +15,32 @@ import telar.runtime.plugins.run_worker;
 import telar.runtime.plugins.worker;
 import telar.runtime.terminal.ghostty;
 
+namespace {
+
+  // Prints the failure that ended the runtime on stderr, as each kind of failure reads.
+  void reportFailure(const std::exception& error) {
+    using namespace telar;
+    using namespace telar::runtime;
+
+    if (const auto* system = dynamic_cast<const SystemError*>(&error)) {
+      std::println(stderr, "telar runtime: {}: {}", system->what(), std::system_category().message(system->code()));
+    } else if (const auto* terminal = dynamic_cast<const TerminalError*>(&error)) {
+      std::println(stderr, "{}:{}: {} ({})", terminal->location().file_name(), terminal->location().line(), terminal->what(), static_cast<int>(terminal->result()));
+    } else {
+      std::println(stderr, "telar runtime: {}", error.what());
+    }
+  }
+
+}
+
 auto main(int argc, char** argv) -> int {
   using namespace telar;
   using namespace telar::runtime;
 
-  const std::span<char*> args(argv, argc);
+  // main receives its arguments as the C array and count the C runtime gives it.
+#pragma clang unsafe_buffer_usage begin
+  const std::span<char*> args(argv, static_cast<std::size_t>(argc));
+#pragma clang unsafe_buffer_usage end
   const std::string_view command = argc >= 2 ? args[1] : "";
 
   try {
@@ -44,7 +65,7 @@ auto main(int argc, char** argv) -> int {
 
       requireTracingBuild(options.trace_path != nullptr);
 #if TELAR_DEBUG
-      trace::Session tracing{memory, options.trace_path};
+      const trace::Session tracing{memory, options.trace_path};
 
 #endif
       plugins::runWorker(memory, options.entry, options.traffic);
@@ -58,12 +79,13 @@ auto main(int argc, char** argv) -> int {
 
     cli::runServer(shared, cli::ServerOptions::parse(args.subspan<1>()));
     return 0;
-  } catch (const SystemError& error) {
-    std::fprintf(stderr, "telar runtime: %s: %s\n", error.what(), std::strerror(error.code()));
-  } catch (const TerminalError& error) {
-    std::fprintf(stderr, "%s:%u: %s (%d)\n", error.location().file_name(), error.location().line(), error.what(), static_cast<int>(error.result()));
   } catch (const std::exception& error) {
-    std::fprintf(stderr, "telar runtime: %s\n", error.what());
+    try {
+      reportFailure(error);
+    } catch (const std::exception&) {
+      // stderr refused the report too, and nothing is left to tell it to.
+      return 1;
+    }
   }
 
   return 1;

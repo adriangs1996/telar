@@ -10,6 +10,25 @@ import telar.base.ds;
 
 namespace telar::runtime {
 
+  namespace {
+
+    tbc::val_a<std::span<char>> charsOf(tbc::val_a<std::span<std::uint8_t>> bytes) noexcept {
+#pragma clang unsafe_buffer_usage begin
+      return {reinterpret_cast<char*>(bytes.data()), bytes.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): char may alias the bytes, and no cast-free view writes bytes as text
+#pragma clang unsafe_buffer_usage end
+    }
+
+  }
+
+  void reportProxy(std::string_view subject, std::string_view detail, std::string_view more) noexcept {
+    try {
+      std::println(stderr, "telar proxy {}: {}{}", subject, detail, more);
+    } catch (...) {
+      // A stderr that cannot be written leaves the failure unreported, as it would any line.
+      return;
+    }
+  }
+
   void SocketInterest::include(StreamReadiness readiness) noexcept {
     readable = readable || readiness == StreamReadiness::readable;
     writable = writable || readiness == StreamReadiness::writable;
@@ -39,11 +58,16 @@ namespace telar::runtime {
 
     auto closed = event(traffic::Direction::outbound);
 
-    closed.reason = outbound_.rejected_ ? outbound_.failure_ : inbound_.rejected_ ? inbound_.failure_
-                                                                                  : reason_;
+    closed.reason = reason_;
+    if (outbound_.rejected_) {
+      closed.reason = outbound_.failure_;
+    } else if (inbound_.rejected_) {
+      closed.reason = inbound_.failure_;
+    }
+
     control_->observeFlow(traffic::Kind::flow_close, closed);
     for (const auto* gate : {&outbound_, &inbound_}) {
-      if (gate->ticket_ != 0u) {
+      if (gate->ticket_ != 0U) {
         control_->cancel(gate->ticket_);
       }
     }
@@ -54,7 +78,13 @@ namespace telar::runtime {
     identity_.id = id;
     endpoint(child, identity_.client);
     endpoint(origin, identity_.server);
-    identity_.host.assign(host.substr(0, ProxyHostname::maximum_bytes));
+    // The host is cut to its capacity first, so the assignment never throws.
+    try {
+      identity_.host.assign(substring(host, 0, ProxyHostname::maximum_bytes));
+    } catch (...) {
+      std::abort();
+    }
+
     if (control_ != nullptr) {
       control_->observeFlow(traffic::Kind::flow_open, event(traffic::Direction::outbound));
     }
@@ -90,7 +120,7 @@ namespace telar::runtime {
     ds::Option<traffic::FlowControl::Time> soonest;
 
     for (const auto* gate : {&outbound_, &inbound_}) {
-      if (const auto due = (gate->ticket_ != 0u) ? control_->deadline(gate->ticket_) : ds::none) {
+      if (const auto due = (gate->ticket_ != 0U) ? control_->deadline(gate->ticket_) : ds::none) {
         soonest = earliest(soonest, due);
       }
     }
@@ -139,13 +169,26 @@ namespace telar::runtime {
   void FlowState::endpoint(int socket, FixedText<traffic::FlowIdentity::endpoint_bytes>& result) noexcept {
     sockaddr_storage address{};
     socklen_t size = sizeof(address);
+    auto* const generic = reinterpret_cast<sockaddr*>(&address); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the socket API passes every address family as a sockaddr
     ds::Array<char, NI_MAXHOST> host{};
     ds::Array<char, NI_MAXSERV> port{};
-    if (::getpeername(socket, reinterpret_cast<sockaddr*>(&address), &size) == 0 && ::getnameinfo(reinterpret_cast<sockaddr*>(&address), size, host.dataMut(), host.size(), port.dataMut(), port.size(), NI_NUMERICHOST | NI_NUMERICSERV) == 0) {
-      ds::Array<char, 128> text{};
+    if (::getpeername(socket, generic, &size) != 0 || ::getnameinfo(generic, size, host.dataMut(), host.size(), port.dataMut(), port.size(), combineFlags(NI_NUMERICHOST, NI_NUMERICSERV)) != 0) {
+      return;
+    }
 
-      std::snprintf(text.dataMut(), text.size(), address.ss_family == AF_INET6 ? "[%s]:%s" : "%s:%s", host.dataMut(), port.dataMut());
-      result.assign(text.data());
+    // The endpoint is cut to one byte less than its capacity, as it always was, so neither the
+    // formatting nor the assignment throws.
+    ds::Array<char, traffic::FlowIdentity::endpoint_bytes> text{};
+    const std::string_view name{host.data()};
+    const std::string_view service{port.data()};
+    const auto limit = static_cast<std::ptrdiff_t>(text.size() - 1);
+
+    try {
+      const auto written = address.ss_family == AF_INET6 ? std::format_to_n(text.dataMut(), limit, "[{}]:{}", name, service) : std::format_to_n(text.dataMut(), limit, "{}:{}", name, service);
+
+      result.assign({text.data(), static_cast<std::size_t>(std::min(written.size, limit))});
+    } catch (...) {
+      std::abort();
     }
   }
 
@@ -164,6 +207,20 @@ namespace telar::runtime {
   ApplicationRelay::ApplicationRelay(tbc::mut_a<ConcurrentMemory> memory, tbc::val_a<ConnectionObservation> observation, std::string_view hostname)
       : relays_{.memory_ = memory, .observation_ = observation, .http1_ = {}, .http2_ = {}, .http2_endpoint_ = {}} {
     relays_.hostname_.assign(hostname.substr(0, ProxyHostname::maximum_bytes));
+  }
+
+  bool ApplicationRelay::Relays::startHttp1(FlowState* flow) noexcept {
+    try {
+      Http1Capture<> capture{memory_, observation_.captures, captureStart(CaptureProtocol::http1)};
+      const auto event = flow != nullptr ? flow->context() : traffic::FlowEvent{.id = observation_.identity, .host = hostname_.view()};
+      const HttpRelayContext context{.control = observation_.flows != nullptr ? observation_.flows->http() : nullptr, .identity = traffic::FlowIdentity::of(event)};
+
+      http1_ = ds::makeBox<Http1>(memory_, memory_, observation_.counters, std::move(capture), context);
+      return true;
+    } catch (...) {
+      failed_ = true;
+      return false;
+    }
   }
 
   void ApplicationRelay::select(HttpProtocol protocol, bool unnegotiated) noexcept {
@@ -197,8 +254,11 @@ namespace telar::runtime {
       return relays_.http2_endpoint_->inflight();
     }
 
-    return relays_.http2_ ? relays_.http2_->inflight() : relays_.http1_ ? relays_.http1_->inflight()
-                                                                        : 0;
+    if (relays_.http2_) {
+      return relays_.http2_->inflight();
+    }
+
+    return relays_.http1_ ? relays_.http1_->inflight() : 0;
   }
 
   [[nodiscard]] auto ApplicationRelay::buffered() const noexcept -> bool {
@@ -210,8 +270,11 @@ namespace telar::runtime {
       return relays_.http2_endpoint_->readsChild();
     }
 
-    return relays_.http2_ ? relays_.http2_->readsChild() : relays_.http1_ && !relays_.http1_->upgraded() ? relays_.http1_->readsChild()
-                                                                                                         : relays_.duplex_.readsChild();
+    if (relays_.http2_) {
+      return relays_.http2_->readsChild();
+    }
+
+    return relays_.http1_ && !relays_.http1_->upgraded() ? relays_.http1_->readsChild() : relays_.duplex_.readsChild();
   }
 
   [[nodiscard]] auto ApplicationRelay::readsOrigin() const noexcept -> bool {
@@ -219,8 +282,11 @@ namespace telar::runtime {
       return relays_.http2_endpoint_->readsOrigin();
     }
 
-    return relays_.http2_ ? relays_.http2_->readsOrigin() : relays_.http1_ && !relays_.http1_->upgraded() ? relays_.http1_->readsOrigin()
-                                                                                                          : relays_.duplex_.readsOrigin();
+    if (relays_.http2_) {
+      return relays_.http2_->readsOrigin();
+    }
+
+    return relays_.http1_ && !relays_.http1_->upgraded() ? relays_.http1_->readsOrigin() : relays_.duplex_.readsOrigin();
   }
 
   [[nodiscard]] auto ApplicationRelay::deadline() const noexcept -> ds::Option<traffic::FlowControl::Time> {
@@ -257,7 +323,7 @@ namespace telar::runtime {
 
   void ApplicationRelay::identify() noexcept {
     const auto bytes = prefix_.bytes();
-    const std::string_view head{reinterpret_cast<const char*>(bytes.data()), bytes.size()};
+    const auto head = textView(bytes);
 
     if (head.empty()) {
       return;
@@ -273,30 +339,9 @@ namespace telar::runtime {
       return;
     }
 
-    const bool h2_prefix = http2.starts_with(head);
-    if (!h2_prefix) {
-      constexpr ds::Array methods{"GET ", "POST ", "PUT ", "HEAD ", "DELETE ", "OPTIONS ", "PATCH ", "CONNECT ", "TRACE "};
-      const bool possible = std::ranges::any_of(methods, [&](std::string_view method) {
-        return method.starts_with(head) || head.starts_with(method);
-      });
-
-      if (!possible) {
-        protocol_ = HttpProtocol::other;
-        return;
-      }
-
-      const auto end = head.find("\r\n");
-      if (end != std::string_view::npos) {
-        const auto line = head.substr(0, end);
-
-        protocol_ = line.ends_with(" HTTP/1.1") || line.ends_with(" HTTP/1.0") ? HttpProtocol::http11 : HttpProtocol::other;
-        return;
-      }
-
-      if (std::ranges::any_of(bytes, [](Byte byte) {
-            return byte == 0 || byte >= 127 || (byte < 32 && byte != '\r' && byte != '\n' && byte != '\t');
-          })) {
-        protocol_ = HttpProtocol::other;
+    if (!http2.starts_with(head)) {
+      if (const auto protocol = http1Request(head)) {
+        protocol_ = *protocol;
         return;
       }
     }
@@ -304,6 +349,51 @@ namespace telar::runtime {
     if (bytes.size() == StreamPrefix::capacity || std::chrono::steady_clock::now() >= sniff_until_) {
       protocol_ = HttpProtocol::other;
     }
+  }
+
+  ds::Option<HttpProtocol> ApplicationRelay::http1Request(std::string_view head) noexcept {
+    // A request line holds no control character but tab, and no byte from DEL on.
+    constexpr Byte first_printable = 0x20;
+    constexpr Byte delete_character = 0x7F;
+    constexpr ds::Array methods{"GET ", "POST ", "PUT ", "HEAD ", "DELETE ", "OPTIONS ", "PATCH ", "CONNECT ", "TRACE "};
+
+    const bool possible = std::ranges::any_of(methods, [&](std::string_view method) {
+      return method.starts_with(head) || head.starts_with(method);
+    });
+
+    if (!possible) {
+      return HttpProtocol::other;
+    }
+
+    const auto end = head.find("\r\n");
+    if (end != std::string_view::npos) {
+      const auto line = substring(head, 0, end);
+
+      return line.ends_with(" HTTP/1.1") || line.ends_with(" HTTP/1.0") ? HttpProtocol::http11 : HttpProtocol::other;
+    }
+
+    if (std::ranges::any_of(byteView(head), [](Byte byte) {
+          return byte == 0 || byte >= delete_character || (byte < first_printable && byte != '\r' && byte != '\n' && byte != '\t');
+        })) {
+      return HttpProtocol::other;
+    }
+
+    return ds::none;
+  }
+
+  void ApplicationRelay::identifyOrigin(std::span<const Byte> banner) noexcept {
+    ds::Option<Http2Frame> initial;
+    Http2FrameReader reader;
+
+    reader.feed(banner, [&](const Http2FrameEvent& event) noexcept -> auto {
+      if (event.kind == Http2FrameEvent::Kind::begin) {
+        initial = event.frame;
+      }
+    });
+
+    const bool h2_settings = initial && initial->kind == Http2FrameKind::settings && initial->stream == 0 && initial->flags == 0 && initial->length % Http2Frame::settings_entry_bytes == 0;
+
+    protocol_ = h2_settings ? HttpProtocol::http2 : HttpProtocol::other;
   }
 
   [[nodiscard]] auto ApplicationRelay::Relays::captureStart(CaptureProtocol protocol) const noexcept -> CaptureStart {
@@ -322,7 +412,8 @@ namespace telar::runtime {
         application_(memory, observation, hostname) {}
 
   bool PlainTunnel::advance(TunnelReadiness readiness, FlowState* flow) noexcept {
-    SocketStream child{sockets_.child}, origin{sockets_.origin};
+    SocketStream child{sockets_.child};
+    SocketStream origin{sockets_.origin};
 
     return application_.advance(child, origin, readiness, flow);
   }
@@ -355,10 +446,10 @@ namespace telar::runtime {
     return application_.interest(side);
   }
 
-  TlsTunnel::TlsTunnel(tbc::mut_a<ConcurrentMemory> memory, tbc::ref_a<TlsInterception> interception, TunnelSockets sockets, std::string_view hostname, tbc::val_a<ds::Box<AlpnOffer, ConcurrentMemory>> offer, tbc::val_a<ConnectionObservation> observation)
+  TlsTunnel::TlsTunnel(tbc::mut_a<ConcurrentMemory> memory, tbc::ref_a<TlsInterception> interception, TunnelRoute route, tbc::val_a<ds::Box<AlpnOffer, ConcurrentMemory>> offer, tbc::val_a<ConnectionObservation> observation)
       : observation_(observation),
-        session_(interception.open(memory, sockets, hostname, std::move(offer))),
-        application_(memory, observation, hostname) {}
+        session_(interception.open(memory, route.sockets, route.hostname, std::move(offer))),
+        application_(memory, observation, route.hostname) {}
 
   auto TlsTunnel::advance(TunnelReadiness readiness, FlowState* flow) noexcept -> bool {
     if (failed_) {
@@ -500,8 +591,11 @@ namespace telar::runtime {
   }
 
   std::uint32_t ConnectionTransport::inflight() const noexcept {
-    return plain_ ? plain_->inflight() : tls_ ? tls_->inflight()
-                                              : 0;
+    if (plain_) {
+      return plain_->inflight();
+    }
+
+    return tls_ ? tls_->inflight() : 0;
   }
 
   bool ConnectionTransport::buffered() const noexcept {
@@ -518,10 +612,12 @@ namespace telar::runtime {
 
   ds::Option<traffic::FlowControl::Time> ConnectionTransport::deadline() const noexcept {
     const auto flow = flow_ ? flow_->deadline() : ds::none;
-    const auto tls = plain_ ? plain_->deadline() : tls_ ? tls_->deadline()
-                                                        : ds::none;
 
-    return earliest(flow, tls);
+    if (plain_) {
+      return earliest(flow, plain_->deadline());
+    }
+
+    return earliest(flow, tls_ ? tls_->deadline() : ds::none);
   }
 
   void ConnectionTransport::reason(tbc::val_static<std::string_view> value) noexcept {
@@ -537,12 +633,28 @@ namespace telar::runtime {
   }
 
   ProxyObservations::ProxyObservations(ConcurrentMemory& memory, ProxyCaptureLimits limits, traffic::FlowControl* flows)
-      : captures(memory, limits),
+      : captures_(memory, limits),
         capture_enabled_(limits.enabled),
         flows_(flows) {}
 
   ConnectionObservation ProxyObservations::connection() noexcept {
-    return {.counters = counters, .captures = capture_enabled_ ? &captures : nullptr, .identity = next_connection_++, .flows = flows_};
+    return {.counters = counters_, .captures = capture_enabled_ ? &captures_ : nullptr, .identity = next_connection_++, .flows = flows_};
+  }
+
+  const ProxyCounters& ProxyObservations::counters() const noexcept {
+    return counters_;
+  }
+
+  ProxyCounters& ProxyObservations::countersMut() noexcept {
+    return counters_;
+  }
+
+  const CaptureProducer& ProxyObservations::captures() const noexcept {
+    return captures_;
+  }
+
+  CaptureProducer& ProxyObservations::capturesMut() noexcept {
+    return captures_;
   }
 
   ProxyClientConfiguration::ProxyClientConfiguration(std::shared_ptr<const Identity> identity) noexcept
@@ -565,9 +677,11 @@ namespace telar::runtime {
     }
 
     if (identity_->https_proxy) {
-      SensitiveBuffer<256> storage;
-      const auto bytes = storage.bytes();
-      const auto url = identity_->secret.formatUrl({reinterpret_cast<char*>(bytes.data()), bytes.size()}, *identity_->status.port);
+      // Room for the URL that carries the secret: scheme, user, the secret's digits, address and port.
+      constexpr std::size_t url_capacity = 256;
+
+      SensitiveBuffer<url_capacity> storage;
+      const auto url = identity_->secret.formatUrl(charsOf(storage.bytes()), *identity_->status.port);
       if (!url) {
         throw SystemError{"Format child proxy URL", EOVERFLOW};
       }
@@ -678,7 +792,8 @@ namespace telar::runtime {
     const auto loopback = address(port);
     if (::bind(socket.get(), loopback.address(), loopback.length) != 0 || ::listen(socket.get(), backlog) != 0) {
       if (sys::lastError() == EADDRINUSE) {
-        return FileDescriptor{};
+        socket.reset();
+        return socket;
       }
 
       throw SystemError{"Bind proxy listener"};
@@ -772,22 +887,33 @@ namespace telar::runtime {
       return false;
     }
 
-    ds::Array<char, maximum_record_bytes> record;
-    auto* end = std::to_chars(record.dataMut(), record.dataMut() + record.size(), port).ptr;
+    // The port's decimal digits, then the endpoint, each ending its line.
+    constexpr std::size_t port_digits = 5;
 
-    *end++ = '\n';
-    end = std::ranges::copy(endpoint_.view(), end).out;
-    *end++ = '\n';
-    const auto bytes = std::span{reinterpret_cast<const std::uint8_t*>(record.data()), static_cast<std::size_t>(end - record.data())};
-    if (writePrivateFile(directory_, filename(), bytes, PrivateFileMode::replace) != 0) {
+    ds::Array<char, port_digits> digits{};
+    const auto digits_view = digits.viewMut();
+    const auto* const digits_end = std::to_chars(digits_view.data(), std::to_address(digits_view.end()), port).ptr;
+    const auto number = digits_view.first(static_cast<std::size_t>(digits_end - digits_view.data()));
+    ds::Array<std::uint8_t, maximum_record_bytes> line{};
+    const auto output = line.viewMut();
+    std::size_t length = 0;
+
+    std::ranges::copy(number, output.begin());
+    length += number.size();
+    output[length++] = '\n';
+    std::ranges::copy(endpoint_.view(), output.subspan(length).begin());
+    length += endpoint_.view().size();
+    output[length++] = '\n';
+    if (writePrivateFile(directory_, filename(), output.first(length), PrivateFileMode::replace) != 0) {
       return false;
     }
 
     if (!own_ && legacy_ == port) {
-      ::unlinkat(directory_, legacy_name, 0);
+      ::unlinkat(directory_, legacy_name.data(), 0);
     }
 
-    if (reserved_.test(port - ProxyPortRange::first)) {
+    // The port is in the range, checked above, so its bit is in the set.
+    if (reserved_[port - ProxyPortRange::first]) {
       scan([&](const char* name, const Record& record) {
         if (record.port == port) {
           ::unlinkat(directory_, name, 0);
@@ -807,16 +933,20 @@ namespace telar::runtime {
   void ProxyPortMemory<Memory>::identify(std::string_view endpoint) noexcept {
     Sha256 hash;
 
+    // The bits of a byte's low hexadecimal digit.
+    constexpr unsigned low_nibble_mask = 0x0FU;
+
     hash.update(endpoint);
     const auto digest = hash.finish();
-    auto* end = std::copy(file_prefix.begin(), file_prefix.end(), name_.dataMut());
+    auto position = file_prefix.size();
 
+    std::ranges::copy(file_prefix, name_.viewMut().begin());
     for (std::size_t index = 0; index < digest_bytes; ++index) {
-      *end++ = hexadecimal[digest[index] >> 4];
-      *end++ = hexadecimal[digest[index] & 15];
+      name_.atMut(position++) = hexadecimal[digest[index] >> 4U];
+      name_.atMut(position++) = hexadecimal[digest[index] & low_nibble_mask];
     }
 
-    *end = '\0';
+    name_.atMut(position) = '\0';
   }
 
   template <Allocator Memory>
@@ -829,9 +959,9 @@ namespace telar::runtime {
       return ds::none;
     }
 
-    const std::string_view text{reinterpret_cast<const char*>(bytes.data()), bytes.size()};
+    const auto text = textView(bytes.view());
     const auto newline = text.find('\n');
-    auto number = trimCarriageReturns(text.substr(0, newline));
+    auto number = trimCarriageReturns(substring(text, 0, newline));
     if (number.starts_with('+')) {
       number.remove_prefix(1);
     }
@@ -841,14 +971,14 @@ namespace telar::runtime {
       return ds::none;
     }
 
-    const auto tail = newline == std::string_view::npos ? std::string_view{} : text.substr(newline + 1);
+    const auto tail = newline == std::string_view::npos ? std::string_view{} : substring(text, newline + 1);
 
-    return Record{*port, trimCarriageReturns(tail.substr(0, tail.find('\n')))};
+    return Record{*port, trimCarriageReturns(substring(tail, 0, tail.find('\n')))};
   }
 
   template <Allocator Memory>
   bool ProxyPortMemory<Memory>::isPortFile(std::string_view name) noexcept {
-    return name.size() == filename_bytes && name.starts_with(file_prefix) && std::ranges::all_of(name.substr(file_prefix.size()), [](char byte) {
+    return name.size() == filename_bytes && name.starts_with(file_prefix) && std::ranges::all_of(substring(name, file_prefix.size()), [](char byte) {
       return hexadecimal.contains(byte);
     });
   }
@@ -860,7 +990,7 @@ namespace telar::runtime {
     }
 
     const auto separator = endpoint.rfind('/');
-    ds::Array<char, PATH_MAX + 1> parent;
+    ds::Array<char, PATH_MAX + 1> parent{};
     const auto length = std::max<std::size_t>(separator, 1);
     if (length >= parent.size()) {
       return false;

@@ -2,6 +2,23 @@ module telar.runtime.http2.frame_reader;
 
 namespace telar::runtime {
 
+  namespace {
+
+    constexpr unsigned byte_bits = 8;
+
+    // The number `bytes` hold, big-endian.
+    constexpr std::uint32_t bigEndian(std::span<const std::uint8_t> bytes) noexcept {
+      std::uint32_t value = 0;
+
+      for (const auto byte : bytes) {
+        value = (value << byte_bits) | byte;
+      }
+
+      return value;
+    }
+
+  }
+
   bool Http2Frame::has(Http2Flag flag) const noexcept {
     return (flags & static_cast<std::uint8_t>(flag)) != 0;
   }
@@ -15,10 +32,18 @@ namespace telar::runtime {
   }
 
   void Http2FrameReader::decodeHeader() noexcept {
-    frame_.length = (std::size_t{header_[0]} << 16) | (std::size_t{header_[1]} << 8) | header_[2];
-    frame_.kind = static_cast<Http2FrameKind>(header_[3]);
-    frame_.flags = header_[4];
-    frame_.stream = (static_cast<std::uint32_t>(header_[5] & stream_high_mask) << 24) | (std::uint32_t{header_[6]} << 16) | (std::uint32_t{header_[7]} << 8) | header_[8];
+    // RFC 9113 4.1: a 24-bit length, the type, the flags, then a reserved bit and the 31-bit stream.
+    constexpr std::size_t length_bytes = 3;
+    constexpr std::size_t type_offset = 3;
+    constexpr std::size_t flags_offset = 4;
+    constexpr std::size_t stream_offset = 5;
+    constexpr std::uint32_t stream_mask = 0x7FFF'FFFF;
+    const auto header = header_.view();
+
+    frame_.length = bigEndian(header.first<length_bytes>());
+    frame_.kind = static_cast<Http2FrameKind>(header[type_offset]);
+    frame_.flags = header[flags_offset];
+    frame_.stream = bigEndian(header.subspan<stream_offset>()) & stream_mask;
     payload_offset_ = 0;
   }
 
@@ -133,6 +158,6 @@ namespace telar::runtime {
     return response_count_ != 0;
   }
 
-  template class Http2StreamIds<256>;
+  template class Http2StreamIds<2 * Http2StreamTracker::capacity>;
 
 }

@@ -53,7 +53,7 @@ export {
   namespace telar::runtime::diagnostics {
 
     struct LogName {
-      enum class Role {
+      enum class Role : std::uint8_t {
         runtime,
         client,
       };
@@ -75,7 +75,7 @@ export {
 
     class LogSink {
     public:
-      static constexpr std::size_t file_limit = 4 * 1024 * 1024;
+      static constexpr std::size_t file_limit = std::size_t{4} * 1024 * 1024;
       static constexpr std::size_t cleanup_limit = 4096;
 
       explicit LogSink(std::string_view endpoint, pid_t process = ::getpid(), std::size_t limit = file_limit) noexcept;
@@ -96,7 +96,7 @@ export {
       bool rotate() noexcept;
 
       FileDescriptor file_;
-      ds::Array<char, PATH_MAX> path_;
+      ds::Array<char, PATH_MAX> path_{};
       std::size_t path_length_ = 0;
       std::size_t written_ = 0;
       std::size_t limit_;
@@ -134,6 +134,8 @@ export {
 
       LogSession(const LogSession&) = delete;
       LogSession& operator=(const LogSession&) = delete;
+      LogSession(LogSession&&) = delete;
+      LogSession& operator=(LogSession&&) = delete;
 
       // Kept here: the format is the caller's callable, an open set no unit can instantiate ahead.
       template <typename Format>
@@ -153,9 +155,9 @@ export {
 
         try {
           line_.reset();
-          format(line_);
+          std::forward<Format>(format)(line_);
           pending_ = worker_.getMut().submit(line_.finish());
-        } catch (...) {
+        } catch (...) { // NOLINT(bugprone-empty-catch): a sample that cannot be formatted is skipped; the next tick writes a fresh one
         }
       }
 
@@ -234,8 +236,8 @@ export {
 
         next_sample_ = now + sample_interval;
         session_.sample([&](Line& line) {
-          line.field("ts_ms", std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count());
-          line.field("uptime_ms", std::chrono::duration_cast<std::chrono::milliseconds>(now - started_).count());
+          line.field("ts_ms", static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count()));
+          line.field("uptime_ms", static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(now - started_).count()));
           line.literal("role", "\"runtime\"");
           writeRuntimeSample(line, model, clients);
           model.metrics.write(line);

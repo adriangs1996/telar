@@ -7,6 +7,12 @@ import telar.runtime.platform.git_status;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 
+// The bounds of a probed checkout's path and of a branch name, as the wire carries them.
+namespace telar::runtime {
+  inline constexpr std::size_t probed_path_bytes = 4096;
+  inline constexpr std::size_t probed_branch_bytes = 200;
+}
+
 // Interface: worktrees/base_distance.cppm
 export {
   namespace telar::runtime {
@@ -50,7 +56,7 @@ export {
       std::uint64_t pane = 0;
       std::uint64_t generation = 0;
       std::uint64_t cwd_revision = 0;
-      FixedText<4096> cwd;
+      FixedText<probed_path_bytes> cwd;
     };
 
     struct WorktreeDetectionResult {
@@ -58,7 +64,7 @@ export {
       std::uint64_t generation = 0;
       std::uint64_t cwd_revision = 0;
       std::size_t root_length = 0;
-      FixedText<200> branch;
+      FixedText<probed_branch_bytes> branch;
     };
 
     template <typename Probe>
@@ -72,7 +78,7 @@ export {
       using Request = WorktreeDetectionRequest;
       using Result = WorktreeDetectionResult;
 
-      Result observe(const Request& request) noexcept;
+      static Result observe(const Request& request) noexcept;
       void stop() noexcept;
     };
 
@@ -85,11 +91,11 @@ export {
 
     struct WorktreeProbeRequest {
       std::uint64_t identity = 0;
-      FixedText<4096> path;
-      FixedText<200> base;
+      FixedText<probed_path_bytes> path;
+      FixedText<probed_branch_bytes> base;
     };
 
-    enum class GitProbeTimeout {
+    enum class GitProbeTimeout : std::uint8_t {
       none,
       status,
       distance,
@@ -100,8 +106,8 @@ export {
       bool present = false;
       bool measured = false;
       bool dirty = false;
-      FixedText<200> branch;
-      FixedText<200> base;
+      FixedText<probed_branch_bytes> branch;
+      FixedText<probed_branch_bytes> base;
       std::uint32_t added = 0;
       std::uint32_t removed = 0;
       std::uint32_t files = 0;
@@ -120,8 +126,8 @@ export {
       Result observe(const Request& request) noexcept;
 
     private:
-      static void assignBranch(FixedText<200>& destination, std::string_view value);
-      static void discoverBase(std::string_view root, FixedText<200>& base);
+      static void assignBranch(FixedText<probed_branch_bytes>& destination, std::string_view value);
+      static void discoverBase(std::string_view root, FixedText<probed_branch_bytes>& base);
 
       ConcurrentMemory& memory_;
       std::atomic<bool> cancelled_{false};

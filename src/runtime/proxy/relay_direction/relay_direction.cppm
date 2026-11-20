@@ -22,7 +22,7 @@ export {
     template <HostnameResolver Resolver>
     class TBC_GENERIC OriginConnection {
     public:
-      enum class State {
+      enum class State : std::uint8_t {
         resolving,
         connecting,
         connected,
@@ -39,7 +39,7 @@ export {
 
         ds::Array<char, ProxyHostname::maximum_bytes + 1> terminated{};
 
-        std::copy(hostname.begin(), hostname.end(), terminated.dataMut());
+        std::ranges::copy(hostname, terminated.viewMut().begin());
         in_addr numeric{};
         if (::inet_pton(AF_INET, terminated.data(), &numeric) == 1) {
           resolved_.addresses.atMut(0) = NetworkAddress::ipv4(numeric);
@@ -139,17 +139,24 @@ export {
   }
 }
 
+namespace telar::runtime {
+
+  // The bytes a relay direction buffers unless its caller asks for another size.
+  inline constexpr std::size_t default_relay_buffer_bytes = std::size_t{16} * 1024;
+
+}
+
 // Interface: proxy/relay_direction.cppm
 export {
   namespace telar::runtime {
 
     // The relay's loop for every read, generic over the caller's streams and buffer size.
-    template <std::size_t BufferCapacity = 16 * 1024>
+    template <std::size_t BufferCapacity = default_relay_buffer_bytes>
     class TBC_GENERIC RelayDirection {
       static_assert(BufferCapacity != 0);
 
     public:
-      enum class Observation {
+      enum class Observation : std::uint8_t {
         received,
         forwarded,
       };

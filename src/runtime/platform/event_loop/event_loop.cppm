@@ -21,7 +21,7 @@ import telar.base.ds;
 export {
   namespace telar::runtime {
 
-    enum class EventKind {
+    enum class EventKind : std::uint8_t {
       readable,
       writable,
       signal,

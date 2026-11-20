@@ -107,6 +107,8 @@ export {
 
       OperationTimer(const OperationTimer&) = delete;
       OperationTimer& operator=(const OperationTimer&) = delete;
+      OperationTimer(OperationTimer&&) = delete;
+      OperationTimer& operator=(OperationTimer&&) = delete;
 
       void fail() noexcept;
 

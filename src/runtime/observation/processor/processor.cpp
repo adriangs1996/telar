@@ -58,7 +58,7 @@ namespace telar::runtime {
 
     const auto offset = batch.byte_count;
 
-    std::copy(bytes.begin(), bytes.end(), batch.bytes.dataMut() + offset);
+    std::ranges::copy(bytes, batch.bytes.viewMut().subspan(offset).begin());
     batch.byte_count += bytes.size();
     batch.events.atMut(batch.event_count++) = {.kind = kind, .time = ObservationTime::now(), .offset = static_cast<std::uint32_t>(offset), .length = static_cast<std::uint32_t>(bytes.size()), .shell_foreground = shell_foreground};
   }
@@ -85,7 +85,7 @@ namespace telar::runtime {
     }
 
     sealed_ = active_;
-    active_ ^= 1;
+    active_ ^= 1U;
     return true;
   }
 

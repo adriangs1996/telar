@@ -13,7 +13,7 @@ namespace telar::runtime {
   ShellGitReader::ShellGitReader()
       : reader_(erased_) {}
 
-  ShellGitReader::Result ShellGitReader::observe(const Request& request) noexcept {
+  ShellGitReader::Result ShellGitReader::observe(const Request& request) noexcept { // NOLINT(bugprone-exception-escape): assign throws only past its capacity, which the hash's digits and the cut branch never reach
     Result result{.pane = request.pane, .generation = request.generation, .summary = {}};
     const auto& status = reader_.read(request.directory.view());
     auto& summary = result.summary;
@@ -25,11 +25,13 @@ namespace telar::runtime {
 
     summary.detached = status.head == git::HeadState::detached;
     if (summary.detached) {
+      // As git abbreviates a commit.
+      constexpr std::size_t short_hash_digits = 7;
       ds::Array<char, 2 * git::maximum_hash_size> digits{};
 
-      summary.branch.assign(status.head_id.hex(digits.viewMut(), 7));
+      summary.branch.assign(status.head_id.hex(digits.viewMut(), short_hash_digits));
     } else {
-      summary.branch.assign(std::string_view{status.branch}.substr(0, 255));
+      summary.branch.assign(std::string_view{status.branch}.substr(0, ShellGitSummary::branch_bytes - 1));
     }
 
     summary.divergence_known = status.divergence == git::Accuracy::exact;

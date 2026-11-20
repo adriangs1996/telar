@@ -7,6 +7,98 @@ import telar.base.ds;
 
 namespace telar::runtime {
 
+  namespace {
+
+    // UTF-8: a lead byte below 0x80 stands alone, below 0xe0 leads two bytes, below 0xf0 three, else
+    // four; each continuation byte carries six bits.
+    constexpr Byte single_end = 0x80;
+    constexpr Byte pair_end = 0xe0;
+    constexpr Byte triple_end = 0xf0;
+    constexpr unsigned lead_payload = 0x7f;
+    constexpr unsigned continuation_payload = 0x3f;
+    constexpr unsigned continuation_bits = 6;
+
+    // The codepoints the screen readers look for.
+    constexpr std::uint32_t no_break_space = 0x00a0;
+    constexpr std::uint32_t bullet = 0x2022;
+    constexpr std::uint32_t codex_prompt = 0x203a;
+    constexpr std::uint32_t cursor_prompt = 0x2192;
+    constexpr std::uint32_t box_horizontal = 0x2500;
+    constexpr std::uint32_t braille_first = 0x2800;
+    constexpr std::uint32_t braille_last = 0x28ff;
+
+    unsigned sequenceLength(Byte first) noexcept {
+      if (first < single_end) {
+        return 1;
+      }
+
+      if (first < pair_end) {
+        return 2;
+      }
+
+      return first < triple_end ? 3 : 4;
+    }
+
+    bool blank(std::uint32_t codepoint) noexcept {
+      return codepoint == 0 || codepoint == ' ' || codepoint == no_break_space;
+    }
+
+    bool braille(std::uint32_t codepoint) noexcept {
+      return codepoint >= braille_first && codepoint <= braille_last;
+    }
+
+    // The column of the first cell that is not blank, or the row's width.
+    std::size_t firstVisible(std::span<const ScreenCell> cells) noexcept {
+      std::size_t column = 0;
+
+      while (column < cells.size() && blank(cellCodepoint(cells[column]))) {
+        ++column;
+      }
+
+      return column;
+    }
+
+    // A draft Claude restored shows at full intensity; its placeholder is faint.
+    bool restoredDraft(std::span<const ScreenCell> input) noexcept {
+      return std::ranges::any_of(input, [](const auto& cell) {
+        return !blank(cellCodepoint(cell)) && (cell.style.flags & static_cast<unsigned>(CellAttribute::faint)) == 0;
+      });
+    }
+
+    bool softwareCursor(std::span<const ScreenCell> input) noexcept {
+      return std::ranges::any_of(input, [](const auto& cell) {
+        return (cell.style.flags & static_cast<unsigned>(CellAttribute::inverse)) != 0 || cell.style.background.kind != CellColor::Kind::default_color;
+      });
+    }
+
+    std::string_view resumeOption(AgentProvider provider) noexcept {
+      if (provider == AgentProvider::codex) {
+        return "resume";
+      }
+
+      return provider == AgentProvider::pi || provider == AgentProvider::opencode ? "--session" : "--resume";
+    }
+
+    // A row without the blank cells at its end.
+    std::span<const ScreenCell> trimmedCells(std::span<const ScreenCell> cells) noexcept {
+      while (!cells.empty() && (cells.back().length == 0 || (cells.back().length == 1 && cells.back().text[0] == ' '))) {
+        cells = cells.first(cells.size() - 1);
+      }
+
+      return cells;
+    }
+
+    // The bytes of a cell's first codepoint, or a space for an empty cell.
+    std::string_view cellText(const ScreenCell& cell) noexcept {
+      if (cell.length == 0) {
+        return " ";
+      }
+
+      return textView(cell.text.view().first(std::min<std::size_t>(sequenceLength(cell.text[0]), cell.length)));
+    }
+
+  }
+
   bool PromptBudget::spend(std::uint64_t sender, std::uint64_t target, std::chrono::steady_clock::time_point now) noexcept {
     const auto pairs = pairs_.viewMut();
     auto entry = std::ranges::find_if(pairs, [&](const Pair& pair) {
@@ -35,14 +127,19 @@ namespace telar::runtime {
   }
 
   bool validResumeSession(AgentProvider provider, std::string_view value) noexcept {
+    // An opencode session is ses_, twelve hexadecimal digits and fourteen alphanumerics; the others are UUIDs.
+    constexpr std::size_t opencode_session_length = 30;
+    constexpr std::size_t opencode_hexadecimal_end = 16;
+    constexpr std::size_t uuid_length = 36;
+
     if (provider == AgentProvider::opencode) {
-      if (value.size() != 30 || !value.starts_with("ses_")) {
+      if (value.size() != opencode_session_length || !value.starts_with("ses_")) {
         return false;
       }
 
       for (std::size_t index = 4; index < value.size(); ++index) {
         const auto character = value[index];
-        const bool valid = index < 16 ? hexadecimal(character) : (character >= '0' && character <= '9') || (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z');
+        const bool valid = index < opencode_hexadecimal_end ? hexadecimal(character) : (character >= '0' && character <= '9') || (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z');
         if (!valid) {
           return false;
         }
@@ -51,7 +148,7 @@ namespace telar::runtime {
       return true;
     }
 
-    if (describeProvider(provider).name.empty() || value.size() != 36) {
+    if (describeProvider(provider).name.empty() || value.size() != uuid_length) {
       return false;
     }
 
@@ -71,8 +168,7 @@ namespace telar::runtime {
     }
 
     arguments.atMut(0) = resume.provider == AgentProvider::cursor ? "cursor-agent" : describeProvider(resume.provider).name;
-    arguments.atMut(1) = resume.provider == AgentProvider::codex ? "resume" : resume.provider == AgentProvider::pi || resume.provider == AgentProvider::opencode ? "--session"
-                                                                                                                                                                 : "--resume";
+    arguments.atMut(1) = resumeOption(resume.provider);
     std::size_t count = 2;
 
     if (resume.provider == AgentProvider::codex && resume.in_pane) {
@@ -90,20 +186,19 @@ namespace telar::runtime {
     }
 
     const auto first = cell.text[0];
-    if (first < 0x80) {
+    if (first < single_end) {
       return first;
     }
 
-    const unsigned length = first < 0xe0 ? 2 : first < 0xf0 ? 3
-                                                            : 4;
+    const auto length = sequenceLength(first);
     if (length > cell.length) {
       return 0;
     }
 
-    std::uint32_t value = first & (0x7f >> length);
+    std::uint32_t value = first & (lead_payload >> length);
 
     for (unsigned index = 1; index < length; ++index) {
-      value = (value << 6) | (cell.text[index] & 0x3f);
+      value = (value << continuation_bits) | (cell.text[index] & continuation_payload);
     }
 
     return value;
@@ -112,8 +207,11 @@ namespace telar::runtime {
   std::string_view AgentScreenRow::text() const noexcept {
     const std::string_view value{bytes.data(), length};
     const auto start = value.find_first_not_of(' ');
+    if (start == std::string_view::npos) {
+      return {};
+    }
 
-    return start == std::string_view::npos ? std::string_view{} : value.substr(start, value.find_last_not_of(' ') - start + 1);
+    return control::textPrefix(control::textAfter(value, start), value.find_last_not_of(' ') - start + 1);
   }
 
   AgentScreenView agentScreenView(const Screen& screen) noexcept {
@@ -142,27 +240,35 @@ namespace telar::runtime {
       return codex();
     case AgentProvider::cursor:
       return cursor();
-    default:
+    case AgentProvider::unknown:
+    case AgentProvider::pi:
+    case AgentProvider::opencode:
+    case AgentProvider::last_custom:
       return {};
     }
+
+    // A custom provider, whose screen no reader knows.
+    return {};
   }
 
   ds::Option<AgentSignal> AgentScreenReader::signal(AgentProvider provider) const noexcept {
+    constexpr Byte claude_confidence = 96;
+    constexpr Byte screen_confidence = 94;
     const auto observation = observe(provider);
     if (!observation.status || (provider == AgentProvider::claude && observation.status == AgentStatus::working)) {
       return ds::none;
     }
 
-    return AgentSignal{.provider = provider, .status = *observation.status, .confidence = static_cast<Byte>(provider == AgentProvider::claude ? 96 : 94), .identity_confirmed = observation.identity_confirmed, .ready_confirmed = observation.status == AgentStatus::ready};
+    return AgentSignal{.provider = provider, .status = *observation.status, .confidence = provider == AgentProvider::claude ? claude_confidence : screen_confidence, .identity_confirmed = observation.identity_confirmed, .ready_confirmed = observation.status == AgentStatus::ready};
   }
 
   std::span<const ScreenCell> AgentScreenReader::rowCells(std::size_t row) const noexcept {
     return screen_.cells.subspan(row * screen_.cols, screen_.cols);
   }
 
-  AgentScreenRow AgentScreenReader::row(std::size_t y) const noexcept {
+  AgentScreenRow AgentScreenReader::row(std::size_t index) const noexcept {
     AgentScreenRow result;
-    const auto cells = rowCells(y);
+    const auto cells = rowCells(index);
 
     for (std::size_t column = 0; column < cells.size(); ++column) {
       const auto codepoint = cellCodepoint(cells[column]);
@@ -175,52 +281,39 @@ namespace telar::runtime {
         break;
       }
 
-      result.bytes.atMut(result.length++) = codepoint > 0 && codepoint < 128 ? static_cast<char>(codepoint) : ' ';
+      result.bytes.atMut(result.length++) = codepoint > 0 && codepoint < single_end ? static_cast<char>(codepoint) : ' ';
     }
 
     return result;
   }
 
-  bool AgentScreenReader::blank(std::uint32_t codepoint) noexcept {
-    return codepoint == 0 || codepoint == ' ' || codepoint == 0x00a0;
-  }
-
   AgentScreenObservation AgentScreenReader::claude() const noexcept {
+    constexpr unsigned prompt_rows = 12;
+
     if (title_.starts_with("◐") || title_.starts_with("◑")) {
       return {.status = AgentStatus::working};
     }
 
     AgentScreenObservation result;
     bool observed_lowest_prompt = false;
-    const auto first = screen_.rows - std::min<unsigned>(screen_.rows, 12);
+    const auto first = screen_.rows - std::min<unsigned>(screen_.rows, prompt_rows);
 
-    for (std::size_t y = screen_.rows; y-- > first;) {
-      const auto cells = rowCells(y);
-      std::size_t prompt = 0;
-
-      while (prompt < cells.size() && blank(cellCodepoint(cells[prompt]))) {
-        ++prompt;
-      }
-
+    for (std::size_t screen_row = screen_.rows; screen_row-- > first;) {
+      const auto cells = rowCells(screen_row);
+      const auto prompt = firstVisible(cells);
       if (prompt == cells.size() || cellCodepoint(cells[prompt]) != claude_prompt) {
         continue;
       }
 
+      const auto input = cells.subspan(prompt + 1);
+
       if (!observed_lowest_prompt && title_.starts_with("✳")) {
-        result.restored_draft = std::ranges::any_of(cells.subspan(prompt + 1), [](const auto& cell) {
-          return !blank(cellCodepoint(cell)) && (cell.style.flags & static_cast<unsigned>(CellAttribute::faint)) == 0;
-        });
+        result.restored_draft = restoredDraft(input);
       }
 
       observed_lowest_prompt = true;
-
-      if (!screen_.cursor.visible) {
-        const bool software_cursor = std::ranges::any_of(cells.subspan(prompt + 1), [](const auto& cell) {
-          return (cell.style.flags & static_cast<unsigned>(CellAttribute::inverse)) != 0 || cell.style.background.kind != CellColor::Kind::default_color;
-        });
-        if (software_cursor) {
-          result.status = AgentStatus::ready;
-        }
+      if (!screen_.cursor.visible && softwareCursor(input)) {
+        result.status = AgentStatus::ready;
       }
 
       if (screen_.cursor.visible || result.status) {
@@ -228,25 +321,32 @@ namespace telar::runtime {
       }
     }
 
-    if (screen_.cursor.visible && screen_.cursor.y < screen_.rows) {
-      const auto cells = rowCells(screen_.cursor.y);
-      std::size_t column = std::min<std::size_t>(static_cast<std::size_t>(screen_.cursor.x) + 1, cells.size());
-
-      for (unsigned distance = 0; column != 0 && distance < 8; ++distance) {
-        const auto codepoint = cellCodepoint(cells[--column]);
-        if (blank(codepoint)) {
-          continue;
-        }
-
-        if (codepoint == claude_prompt) {
-          result.status = AgentStatus::ready;
-        }
-
-        break;
-      }
+    if (cursorAtClaudePrompt()) {
+      result.status = AgentStatus::ready;
     }
 
     return result;
+  }
+
+  bool AgentScreenReader::cursorAtClaudePrompt() const noexcept {
+    // How many cells left of the cursor the prompt may sit.
+    constexpr unsigned prompt_reach = 8;
+
+    if (!screen_.cursor.visible || screen_.cursor.y >= screen_.rows) {
+      return false;
+    }
+
+    const auto cells = rowCells(screen_.cursor.y);
+    std::size_t column = std::min<std::size_t>(static_cast<std::size_t>(screen_.cursor.x) + 1, cells.size());
+
+    for (unsigned distance = 0; column != 0 && distance < prompt_reach; ++distance) {
+      const auto codepoint = cellCodepoint(cells[--column]);
+      if (!blank(codepoint)) {
+        return codepoint == claude_prompt;
+      }
+    }
+
+    return false;
   }
 
   bool AgentScreenReader::codexStatus(const AgentScreenRow& row) noexcept {
@@ -256,38 +356,39 @@ namespace telar::runtime {
       return false;
     }
 
-    const auto prefix = line.substr(0, open);
-    const auto heading = prefix.substr(0, prefix.find_last_not_of(' ') + 1);
-    const bool spinner = row.first == 0x2022 || (row.first >= 0x2800 && row.first <= 0x28ff);
+    const auto prefix = control::textPrefix(line, open);
+    const auto heading = control::textPrefix(prefix, prefix.find_last_not_of(' ') + 1);
+    const bool spinner = row.first == bullet || braille(row.first);
     if (!spinner && heading != "Working" && heading != "Thinking" && heading != "Reconnecting" && heading != "Compacting") {
       return false;
     }
 
-    const auto clock = line.substr(open + 1);
+    const auto clock = control::textAfter(line, open + 1);
     const auto digits = clock.find_first_not_of("0123456789");
 
     return digits != 0 && digits != std::string_view::npos && (clock[digits] == 's' || clock[digits] == 'm' || clock[digits] == 'h');
   }
 
   AgentScreenObservation AgentScreenReader::codex() const noexcept {
+    constexpr unsigned composer_rows = 32;
     const auto* manifest = manifests_.find(AgentProvider::codex);
     if (manifest == nullptr) {
       return {};
     }
 
-    const auto first = screen_.rows - std::min<unsigned>(screen_.rows, 32);
+    const auto first = screen_.rows - std::min<unsigned>(screen_.rows, composer_rows);
 
-    for (std::size_t y = screen_.rows; y-- > first;) {
-      const auto composer = row(y);
-      if (composer.first != 0x203a || composer.column > 1) {
+    for (std::size_t screen_row = screen_.rows; screen_row-- > first;) {
+      const auto composer = row(screen_row);
+      if (composer.first != codex_prompt || composer.column > 1) {
         continue;
       }
 
       const bool identified = manifest->ready_prompt.matches(composer.text());
 
-      for (std::size_t above = y; above-- > first;) {
+      for (std::size_t above = screen_row; above-- > first;) {
         const auto line = row(above);
-        if (line.first == 0x2500) {
+        if (line.first == box_horizontal) {
           break;
         }
 
@@ -296,11 +397,11 @@ namespace telar::runtime {
         }
       }
 
-      if (!screen_.cursor.visible || screen_.cursor.y < y || screen_.cursor.x < composer.column + 2) {
+      if (!screen_.cursor.visible || screen_.cursor.y < screen_row || screen_.cursor.x < composer.column + 2) {
         return {};
       }
 
-      for (std::size_t continuation = y + 1; continuation <= screen_.cursor.y; ++continuation) {
+      for (std::size_t continuation = screen_row + 1; continuation <= screen_.cursor.y; ++continuation) {
         const auto line = row(continuation);
         if (line.first != 0 && line.column < composer.column + 2) {
           return {};
@@ -314,26 +415,27 @@ namespace telar::runtime {
   }
 
   AgentScreenObservation AgentScreenReader::cursor() const noexcept {
-    const auto first = screen_.rows - std::min<unsigned>(screen_.rows, 32);
+    constexpr unsigned composer_rows = 32;
+    const auto first = screen_.rows - std::min<unsigned>(screen_.rows, composer_rows);
 
-    for (std::size_t y = screen_.rows; y-- > first;) {
-      const auto composer = row(y);
-      if (composer.first != 0x2192 || composer.column > 3) {
+    for (std::size_t screen_row = screen_.rows; screen_row-- > first;) {
+      const auto composer = row(screen_row);
+      if (composer.first != cursor_prompt || composer.column > 3) {
         continue;
       }
 
       const bool identified = composer.text().starts_with("Add a follow-up") || composer.text().starts_with("Plan, search, build anything");
 
-      if (composer.text().find("ctrl+c to stop") != std::string_view::npos) {
+      if (composer.text().contains("ctrl+c to stop")) {
         return {.status = AgentStatus::working, .restored_draft = false, .identity_confirmed = identified};
       }
 
-      const auto top = std::max<std::size_t>(first, y > 6 ? y - 6 : 0);
+      const auto top = std::max<std::size_t>(first, screen_row > 6 ? screen_row - 6 : 0);
 
-      for (std::size_t above = y; above-- > top;) {
+      for (std::size_t above = screen_row; above-- > top;) {
         const auto line = row(above);
         const auto label = line.text();
-        if (line.first >= 0x2800 && line.first <= 0x28ff && !label.empty() && ((label.front() >= 'A' && label.front() <= 'Z') || (label.front() >= 'a' && label.front() <= 'z'))) {
+        if (braille(line.first) && !label.empty() && ((label.front() >= 'A' && label.front() <= 'Z') || (label.front() >= 'a' && label.front() <= 'z'))) {
           return {.status = AgentStatus::working, .restored_draft = false, .identity_confirmed = identified};
         }
       }
@@ -355,19 +457,10 @@ namespace telar::runtime {
         break;
       }
 
-      auto cells = screen.cells.subspan(row * screen.cols, screen.cols);
-
-      while (!cells.empty() && (cells.back().length == 0 || (cells.back().length == 1 && cells.back().text[0] == ' '))) {
-        cells = cells.first(cells.size() - 1);
-      }
+      const auto cells = trimmedCells(screen.cells.subspan(row * screen.cols, screen.cols));
 
       for (std::size_t column = cells.size(); column-- != 0;) {
-        const auto& cell = cells[column];
-        const auto first = cell.text[0];
-        const auto length = first < 0x80 ? 1U : first < 0xe0 ? 2U
-                                            : first < 0xf0   ? 3U
-                                                             : 4U;
-        if (!prepend(cell.length == 0 ? std::string_view{" "} : std::string_view{reinterpret_cast<const char*>(cell.text.data()), std::min<std::size_t>(length, cell.length)})) {
+        if (!prepend(cellText(cells[column]))) {
           return text();
         }
       }
@@ -382,12 +475,12 @@ namespace telar::runtime {
     }
 
     start_ -= bytes.size();
-    std::memcpy(bytes_.dataMut() + start_, bytes.data(), bytes.size());
+    std::ranges::copy(bytes, bytes_.viewMut().subspan(start_).begin());
     return true;
   }
 
   std::string_view AgentScreenSample::text() const noexcept {
-    return {bytes_.data() + start_, bytes_.size() - start_};
+    return control::textAfter({bytes_.data(), bytes_.size()}, start_);
   }
 
   ds::Option<AgentSignal> AgentScreenInference::observe(Terminal& terminal, const AgentManifests& manifests, AgentProvider provider, ObservationTime now) {
@@ -403,8 +496,29 @@ namespace telar::runtime {
   }
 
   ds::Option<AgentSignal> AgentScreenInference::infer(const AgentScreenReader& reader, AgentScreenView screen, const AgentManifests& manifests, AgentProvider provider, ObservationTime now) {
+    const auto signal = screenSignal(reader, screen, manifests, provider);
+    if (composerLost(signal)) {
+      return ds::none;
+    }
+
+    if (!signal) {
+      last_signal_.reset();
+      return ds::none;
+    }
+
+    if (signal == last_signal_ && (signal->provider != AgentProvider::codex || !signal->ready_confirmed) && now.milliseconds - last_signal_time_ < signal_refresh.count()) {
+      return ds::none;
+    }
+
+    last_signal_ = signal;
+    last_signal_time_ = now.milliseconds;
+    return last_signal_;
+  }
+
+  ds::Option<AgentSignal> AgentScreenInference::screenSignal(const AgentScreenReader& reader, AgentScreenView screen, const AgentManifests& manifests, AgentProvider provider) {
     const auto phrases = provider == AgentProvider::codex ? ds::none : manifests.detect(sample_.capture(screen));
     const auto codex = provider == AgentProvider::unknown || provider == AgentProvider::codex ? reader.signal(AgentProvider::codex) : ds::none;
+
     auto signal = phrases;
 
     if (provider == AgentProvider::codex || (provider == AgentProvider::unknown && codex && codex->identity_confirmed)) {
@@ -412,7 +526,9 @@ namespace telar::runtime {
     } else if (provider == AgentProvider::unknown && phrases && phrases->provider == AgentProvider::codex) {
       signal.reset();
     } else if (provider == AgentProvider::cursor) {
-      signal = phrases && phrases->status == AgentStatus::blocked ? phrases : reader.signal(AgentProvider::cursor);
+      if (!phrases || phrases->status != AgentStatus::blocked) {
+        signal = reader.signal(AgentProvider::cursor);
+      }
     } else {
       const auto* manifest = phrases ? manifests.find(phrases->provider) : nullptr;
       if (!phrases || (phrases->status != AgentStatus::blocked && (manifest == nullptr || manifest->ready_prompt.entries().empty()))) {
@@ -423,26 +539,19 @@ namespace telar::runtime {
       }
     }
 
-    if (signal && (signal->provider == AgentProvider::codex || signal->provider == AgentProvider::cursor)) {
-      if (signal->status == AgentStatus::working) {
-        composer_lost_ = false;
-      } else if (composer_lost_) {
-        return ds::none;
-      }
-    }
-
-    if (!signal) {
-      last_signal_.reset();
-      return ds::none;
-    }
-
-    if (signal == last_signal_ && !(signal->provider == AgentProvider::codex && signal->ready_confirmed) && now.milliseconds - last_signal_time_ < signal_refresh.count()) {
-      return ds::none;
-    }
-
-    last_signal_ = signal;
-    last_signal_time_ = now.milliseconds;
     return signal;
+  }
+
+  bool AgentScreenInference::composerLost(const ds::Option<AgentSignal>& signal) noexcept {
+    if (!signal || (signal->provider != AgentProvider::codex && signal->provider != AgentProvider::cursor)) {
+      return false;
+    }
+
+    if (signal->status == AgentStatus::working) {
+      composer_lost_ = false;
+    }
+
+    return composer_lost_;
   }
 
   void AgentScreenInference::reset() noexcept {

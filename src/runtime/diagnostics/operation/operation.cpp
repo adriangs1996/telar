@@ -16,7 +16,7 @@ namespace telar::runtime::diagnostics {
 
     next_sample_ = now + sample_interval;
 
-    struct stat status;
+    struct stat status{};
     const bool available = !path_.empty() && path_ != ":memory:" && ::lstat(path_.data(), &status) == 0 && S_ISREG(status.st_mode) && status.st_size >= 0;
 
     bytes_.store(available ? static_cast<std::uint64_t>(status.st_size) : 0, std::memory_order_relaxed);
@@ -105,7 +105,7 @@ namespace telar::runtime::diagnostics {
 
   OperationTimer::~OperationTimer() {
     if (counters_ != nullptr) {
-      counters_->observe(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - started_).count(), failed_ || std::uncaught_exceptions() > exceptions_);
+      counters_->observe(static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - started_).count()), failed_ || std::uncaught_exceptions() > exceptions_);
     }
   }
 

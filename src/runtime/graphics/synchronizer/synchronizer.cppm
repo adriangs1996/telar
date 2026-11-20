@@ -34,7 +34,7 @@ export {
 
       [[nodiscard]] std::size_t available() const noexcept;
 
-      static constexpr std::size_t limit = 512 * 1024 * 1024;
+      static constexpr std::size_t limit = std::size_t{512} * 1024 * 1024;
 
     private:
       std::size_t used_ = 0;
@@ -48,6 +48,8 @@ export {
 
       GraphicsCreditLedger(const GraphicsCreditLedger&) = delete;
       GraphicsCreditLedger& operator=(const GraphicsCreditLedger&) = delete;
+      GraphicsCreditLedger(GraphicsCreditLedger&&) = delete;
+      GraphicsCreditLedger& operator=(GraphicsCreditLedger&&) = delete;
 
       [[nodiscard]] bool canReserve(std::size_t bytes) const noexcept;
 
@@ -82,14 +84,15 @@ export {
       };
 
       struct Request {
-        ds::Array<Entry, 8> entries;
+        static constexpr std::size_t capacity = 8;
+        ds::Array<Entry, capacity> entries;
         std::size_t count = 0;
       };
 
       using Result = Request;
 
       // The result carries the request's media on.
-      tbc::val_a<Result> observe(tbc::ref_a<Request> request) noexcept;
+      static tbc::val_a<Result> observe(tbc::ref_a<Request> request) noexcept;
 
       void stop() noexcept;
     };
@@ -103,7 +106,7 @@ export {
 
     class GraphicsSynchronizer {
     public:
-      enum class StageResult {
+      enum class StageResult : std::uint8_t {
         idle,
         blocked,
         staged,
@@ -113,6 +116,10 @@ export {
       explicit GraphicsSynchronizer(tbc::mut_a<GraphicsCreditBudget> budget, std::uint64_t pane, tbc::val_a<std::shared_ptr<PaneMedia>> media);
 
       ~GraphicsSynchronizer();
+      GraphicsSynchronizer(const GraphicsSynchronizer&) = delete;
+      GraphicsSynchronizer& operator=(const GraphicsSynchronizer&) = delete;
+      GraphicsSynchronizer(GraphicsSynchronizer&&) = delete;
+      GraphicsSynchronizer& operator=(GraphicsSynchronizer&&) = delete;
 
       template <Allocator GraphicsMemory>
       [[nodiscard]] bool synchronized(const GraphicsStorage<GraphicsMemory>& storage) const noexcept;
@@ -168,7 +175,7 @@ export {
       template <Allocator GraphicsMemory>
       void initialize(const GraphicsStorage<GraphicsMemory>& storage) noexcept;
 
-      enum class SnapshotState {
+      enum class SnapshotState : std::uint8_t {
         idle,
         pending,
         open,
@@ -187,13 +194,23 @@ export {
 
       bool publishTransfer(Connection<ConcurrentMemory>& connection, GraphicsHeader header);
 
+      // The steps of publish past its transfer, each sending at most one message: true when it sent one.
+      template <Allocator GraphicsMemory>
+      bool deleteStaleImage(Connection<ConcurrentMemory>& connection, const GraphicsStorage<GraphicsMemory>& storage, GraphicsHeader header);
+
+      template <Allocator GraphicsMemory>
+      bool deleteStalePlacement(Connection<ConcurrentMemory>& connection, const GraphicsStorage<GraphicsMemory>& storage, GraphicsHeader header);
+
+      template <Allocator GraphicsMemory>
+      bool sendChangedPlacement(Connection<ConcurrentMemory>& connection, const GraphicsStorage<GraphicsMemory>& storage, GraphicsHeader header);
+
       [[nodiscard]] bool knows(ImageKey key) const noexcept;
 
       // The slot among the known placements for `identity`: those alone, so a transfer stays borrowed.
       static GraphicsPlacement& placementSlot(std::span<GraphicsPlacement> placements, std::uint64_t identity);
 
-      static constexpr std::size_t maximum_chunk_bytes = 1024 * 1024;
-      static constexpr std::size_t maximum_queue_bytes = 2 * 1024 * 1024;
+      static constexpr std::size_t maximum_chunk_bytes = std::size_t{1024} * 1024;
+      static constexpr std::size_t maximum_queue_bytes = std::size_t{2} * 1024 * 1024;
       // Frozen transfers borrow this pane's allocator until their destruction.
       tbc::val_a<std::shared_ptr<PaneMedia>> media_;
       tbc::val_a<GraphicsCreditLedger> credit_;

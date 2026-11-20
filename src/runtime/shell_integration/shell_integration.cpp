@@ -24,10 +24,10 @@ namespace telar::runtime {
 
         std::ranges::copy(root, path.viewMut().begin());
         path.atMut(root.size()) = '/';
-        std::ranges::copy(file.directory, path.viewMut().begin() + root.size() + 1);
+        std::ranges::copy(file.directory, path.viewMut().subspan(root.size() + 1).begin());
         createPrivateDirectory({path.data(), length});
 
-        FileDescriptor directory{::open(path.data(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
+        FileDescriptor directory{::open(path.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_NOFOLLOW, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
         if (!directory) {
           throw SystemError{"Open shell integration directory"};
         }
@@ -40,8 +40,7 @@ namespace telar::runtime {
           continue;
         }
 
-        const auto bytes = std::span{reinterpret_cast<const std::uint8_t*>(file.content.data()), file.content.size()};
-        if (const int failure = writePrivateFile(directory.get(), file.name, bytes, PrivateFileMode::replace); failure != 0) {
+        if (const int failure = writePrivateFile(directory.get(), file.name, byteView(file.content), PrivateFileMode::replace); failure != 0) {
           throw SystemError{"Write shell integration script", failure};
         }
       }
@@ -50,7 +49,7 @@ namespace telar::runtime {
   }
 
   ds::Option<IntegratedShell> integrableShellProgram(std::string_view program) noexcept {
-    program = program.substr(program.rfind('/') + 1);
+    program.remove_prefix(program.rfind('/') + 1);
     if (program == "zsh") {
       return IntegratedShell::zsh;
     }

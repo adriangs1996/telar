@@ -8,13 +8,21 @@ import telar.base.ds;
 
 namespace telar::runtime {
   namespace {
-    constexpr std::size_t maximum_process_argument_bytes = 16 * 1024;
+    constexpr std::size_t maximum_process_argument_bytes = std::size_t{16} * 1024;
+
+    // The runtimes that run an agent's script, which its arguments then name.
+    constexpr ds::Array<std::string_view, 3> generic_runtimes{"node", "bun", "deno"};
   }
 
   std::string_view processBasename(std::string_view path) noexcept {
     const auto slash = path.find_last_of("/\\");
+    auto name = path;
 
-    return path.substr(slash == std::string_view::npos ? 0 : slash + 1);
+    if (slash != std::string_view::npos) {
+      name.remove_prefix(slash + 1);
+    }
+
+    return name;
   }
 
   ProcessArguments::ProcessArguments(std::string_view arguments) noexcept
@@ -27,8 +35,9 @@ namespace telar::runtime {
 
     int count = 0;
 
-    std::memcpy(&count, buffer.data(), sizeof(count));
-    std::string_view remaining{buffer.data() + sizeof(count), buffer.size() - sizeof(count)};
+    std::ranges::copy(std::as_bytes(buffer.first(sizeof(count))), std::as_writable_bytes(std::span{&count, 1}).begin());
+    const auto strings = buffer.subspan(sizeof(count));
+    std::string_view remaining{strings.data(), strings.size()};
     const auto executable_end = remaining.find('\0');
     if (count <= 0 || executable_end == std::string_view::npos) {
       return ProcessArguments{{}};
@@ -51,7 +60,8 @@ namespace telar::runtime {
       length = end + 1;
     }
 
-    return ProcessArguments{remaining.substr(0, length)};
+    remaining.remove_suffix(remaining.size() - length);
+    return ProcessArguments{remaining};
   }
 
   AgentProvider ProcessArguments::provider(const AgentManifests& manifests, std::string_view command) const noexcept {
@@ -119,7 +129,7 @@ namespace telar::runtime {
 
       const auto count = std::min(argument->size(), output.size() - length);
 
-      std::memcpy(output.data() + length, argument->data(), count);
+      std::ranges::copy(std::span{*argument}.first(count), output.subspan(length).begin());
       length += count;
       if (length == output.size()) {
         break;
@@ -137,25 +147,33 @@ namespace telar::runtime {
 
     remaining.remove_prefix(first);
     const auto end = remaining.find('\0');
-    const auto argument = remaining.substr(0, end);
+    auto argument = remaining;
 
-    remaining = end == std::string_view::npos ? std::string_view{} : remaining.substr(end + 1);
+    if (end == std::string_view::npos) {
+      remaining = {};
+    } else {
+      argument.remove_suffix(argument.size() - end);
+      remaining.remove_prefix(end + 1);
+    }
+
     return argument;
   }
 
   bool ProcessArguments::genericRuntime(std::string_view command) noexcept {
+    constexpr std::string_view windows_suffix = ".exe";
     auto name = processBasename(command);
-    if (name.size() >= 4 && containsInsensitive(name.substr(name.size() - 4), ".exe")) {
-      name.remove_suffix(4);
-    }
+    auto suffix = name;
 
-    for (const std::string_view candidate : {"node", "bun", "deno"}) {
-      if (name.size() == candidate.size() && containsInsensitive(name, candidate)) {
-        return true;
+    if (name.size() >= windows_suffix.size()) {
+      suffix.remove_prefix(name.size() - windows_suffix.size());
+      if (containsInsensitive(suffix, windows_suffix)) {
+        name.remove_suffix(windows_suffix.size());
       }
     }
 
-    return false;
+    return std::ranges::any_of(generic_runtimes, [&](std::string_view candidate) {
+      return name.size() == candidate.size() && containsInsensitive(name, candidate);
+    });
   }
 
   std::span<const pid_t> ProcessLineage::ancestors() const noexcept {
@@ -167,21 +185,21 @@ namespace telar::runtime {
   }
 
   void ListeningPorts::add(std::uint16_t port) noexcept {
-    auto* const begin = values.dataMut();
-    auto* const end = begin + count;
-    auto* const at = std::lower_bound(begin, end, port);
-    if (port == 0 || (at != end && *at == port) || (count == values.size() && at == end)) {
+    const auto stored = values.view().first(count);
+    const auto index = static_cast<std::size_t>(std::ranges::lower_bound(stored, port) - stored.begin());
+    const auto full = count == values.size();
+    if (port == 0 || (index != count && stored[index] == port) || (full && index == count)) {
       return;
     }
 
-    if (count == values.size()) {
-      std::move_backward(at, end - 1, end);
-    } else {
-      std::move_backward(at, end, end + 1);
+    // A full list drops its highest port to make room.
+    const auto moved = values.viewMut().first(full ? count : count + 1).subspan(index);
+
+    std::ranges::shift_right(moved, 1);
+    values.atMut(index) = port;
+    if (!full) {
       ++count;
     }
-
-    *at = port;
   }
 
   std::span<const std::uint16_t> ListeningPorts::view() const noexcept {
@@ -238,13 +256,13 @@ namespace telar::runtime {
       return identified;
     }
 
-    ds::Array<char, maximum_process_argument_bytes> arguments;
+    ds::Array<char, maximum_process_argument_bytes> arguments; // NOLINT(cppcoreguidelines-pro-type-member-init): sysctl writes the arguments it reports, and only those are read, so zeroing 16 KiB per process is work no read needs
 
     return readArguments(process, arguments.viewMut()).provider(manifests_, path.view());
   }
 
   CommandLine ProcessInspector::commandLine(pid_t process, std::span<char> output) const noexcept {
-    ds::Array<char, maximum_process_argument_bytes> storage;
+    ds::Array<char, maximum_process_argument_bytes> storage; // NOLINT(cppcoreguidelines-pro-type-member-init): sysctl writes the arguments it reports, and only those are read, so zeroing 16 KiB per process is work no read needs
     const auto path = executable(process);
     const auto arguments = readArguments(process, storage.viewMut());
     const auto provider = path.view().empty() ? AgentProvider::unknown : arguments.provider(manifests_, path.view());
@@ -252,7 +270,10 @@ namespace telar::runtime {
     return {.text = arguments.joined(output), .provider = provider};
   }
 
-  IdentifiedProcess ProcessInspector::identifyProcess(pid_t process) const noexcept {
+  // A manifest's display name always fits a process name.
+  static_assert(AgentManifest::name_bytes <= process_name_bytes);
+
+  IdentifiedProcess ProcessInspector::identifyProcess(pid_t process) const noexcept { // NOLINT(bugprone-exception-escape): assign throws only past its capacity, which a display name never reaches
     IdentifiedProcess identified;
 
     identified.identity = identity(process);
@@ -261,7 +282,7 @@ namespace telar::runtime {
     }
 
     identified.name = name(process);
-    ds::Array<char, maximum_process_argument_bytes> storage;
+    ds::Array<char, maximum_process_argument_bytes> storage; // NOLINT(cppcoreguidelines-pro-type-member-init): sysctl writes the arguments it reports, and only those are read, so zeroing 16 KiB per process is work no read needs
     const auto arguments = readArguments(process, storage.viewMut());
 
     identified.provider = arguments.provider(manifests_, identified.name.view());
@@ -270,22 +291,24 @@ namespace telar::runtime {
       identified.name.assign(manifest->displayName());
     }
 
-    return identity(process) == identified.identity ? identified : IdentifiedProcess{};
+    // A process that exited or was replaced meanwhile is not the one identified.
+    if (identity(process) != identified.identity) {
+      identified = IdentifiedProcess{};
+    }
+
+    return identified;
   }
 
   IdentifiedProcess ProcessInspector::identifyGroup(pid_t group, AgentProvider preferred) const noexcept {
     constexpr std::size_t maximum_group_processes = 64;
-    auto leader = identifyProcess(group);
-    if (group <= 0 || leader.provider != AgentProvider::unknown) {
-      return leader;
+    // The leader, unless a member runs an agent, or the leader has no name and a member does.
+    auto identified = identifyProcess(group);
+    if (group <= 0 || identified.provider != AgentProvider::unknown) {
+      return identified;
     }
 
-    ds::Array<pid_t, maximum_group_processes> members;
+    ds::Array<pid_t, maximum_group_processes> members{};
     const auto count = groupMembers(group, members.viewMut());
-    if (count == 0) {
-      return leader;
-    }
-
     ds::Option<IdentifiedProcess> selected;
 
     for (const auto member : std::span{members}.first(count)) {
@@ -293,21 +316,22 @@ namespace telar::runtime {
         continue;
       }
 
-      auto candidate = identifyProcess(member);
+      const auto candidate = identifyProcess(member);
       if (!candidate.identity || candidate.identity->process_group != group) {
         continue;
       }
 
       if (candidate.provider == AgentProvider::unknown) {
-        if (leader.name.view().empty()) {
-          leader = candidate;
+        if (identified.name.view().empty()) {
+          identified = candidate;
         }
 
         continue;
       }
 
       if (preferred == AgentProvider::unknown || candidate.provider == preferred) {
-        return candidate;
+        selected = candidate;
+        break;
       }
 
       if (!selected) {
@@ -315,7 +339,11 @@ namespace telar::runtime {
       }
     }
 
-    return selected.valueOr(leader);
+    if (selected) {
+      identified = *selected;
+    }
+
+    return identified;
   }
 
   bool ProcessCache::needsIdentification(pid_t foreground, bool recheck) const noexcept {
@@ -326,9 +354,15 @@ namespace telar::runtime {
     return foreground == group ? identified.provider : AgentProvider::unknown;
   }
 
-  void ProcessCache::update(pid_t foreground, const IdentifiedProcess& process, bool installed) noexcept {
-    attempts = process.provider != AgentProvider::unknown ? 0 : foreground == group ? std::min(attempts + 1, acquisition_attempts)
-                                                                                    : 1;
+  void ProcessCache::update(pid_t foreground, const IdentifiedProcess& process, bool installed) noexcept { // NOLINT(bugprone-exception-escape): assign throws only past its capacity, which "process" never reaches
+    if (process.provider != AgentProvider::unknown) {
+      attempts = 0;
+    } else if (foreground == group) {
+      attempts = std::min(attempts + 1, acquisition_attempts);
+    } else {
+      attempts = 1;
+    }
+
     group = foreground;
     identified = process;
     if (identified.name.view().empty()) {

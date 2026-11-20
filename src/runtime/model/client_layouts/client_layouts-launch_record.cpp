@@ -15,13 +15,16 @@ namespace telar::runtime {
       return;
     }
 
+    // What a session checkpoint keeps of one launch.
+    constexpr std::size_t maximum_arguments = 64;
+    constexpr std::size_t maximum_bytes = std::size_t{128} * 1024;
     std::size_t size = 0;
 
     for (const auto& argument : arguments) {
       size += argument.size() + 1;
     }
 
-    if (arguments.size() > 64 || size > 128 * 1024) {
+    if (arguments.size() > maximum_arguments || size > maximum_bytes) {
       throw EncodingError{"Pane launch exceeds checkpoint limits"};
     }
 

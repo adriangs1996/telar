@@ -31,7 +31,7 @@ export {
       std::size_t used() const noexcept;
 
     private:
-      const std::size_t limit_;
+      std::size_t limit_;
       std::atomic<std::size_t> used_{0};
     };
 
@@ -50,6 +50,8 @@ export {
 
       CaptureBuffer(const CaptureBuffer&) = delete;
       CaptureBuffer& operator=(const CaptureBuffer&) = delete;
+      CaptureBuffer(CaptureBuffer&&) = delete;
+      CaptureBuffer& operator=(CaptureBuffer&&) = delete;
 
       std::size_t append(std::span<const std::uint8_t> input) noexcept;
 
@@ -63,7 +65,8 @@ export {
 
       [[nodiscard]] std::size_t remaining() const noexcept;
 
-      bool truncated = false;
+      // Public beside the buffer's private storage, as the capture's producer marks a buffer truncated directly.
+      bool truncated = false; // NOLINT(cppcoreguidelines-non-private-member-variables-in-classes,misc-non-private-member-variables-in-classes)
 
     private:
       [[nodiscard]] std::size_t grownCapacity(std::size_t needed) const noexcept;
@@ -73,7 +76,7 @@ export {
       static constexpr std::size_t initial_capacity = 256;
       ErasingAllocator<ConcurrentMemory> memory_;
       CaptureQuota& quota_;
-      const std::size_t limit_;
+      std::size_t limit_;
       std::uint8_t* storage_ = nullptr;
       std::size_t size_ = 0;
       std::size_t capacity_ = 0;
@@ -86,25 +89,25 @@ export {
 export {
   namespace telar::runtime {
 
-    enum class CaptureSide {
+    enum class CaptureSide : std::uint8_t {
       request,
       response,
     };
 
-    enum class CapturePart {
+    enum class CapturePart : std::uint8_t {
       request_head,
       request_body,
       response_head,
       response_body,
     };
 
-    enum class CaptureOutcome {
+    enum class CaptureOutcome : std::uint8_t {
       finished,
       failed,
       reset,
     };
 
-    enum class CaptureProtocol {
+    enum class CaptureProtocol : std::uint8_t {
       http1,
       http2,
       upgraded,
@@ -134,11 +137,13 @@ export {
       // Generic over the caller's text, so it stays here.
       template <typename Text>
         requires std::convertible_to<const Text&, std::string_view>
-      TBC_GENERIC inline CaptureHost(const Text& value) noexcept {
-        const std::string_view text{value};
+      // Implicit, so that a capture start's designated initializer takes the host's text.
+      TBC_GENERIC inline CaptureHost(const Text& value) noexcept { // NOLINT(cppcoreguidelines-explicit-constructor,misc-explicit-constructor,bugprone-exception-escape): append throws only past the capacity the text is cut to
+        auto text = std::string_view{value};
 
         oversized_ = text.size() > capacity;
-        text_.append(text.substr(0, capacity));
+        text.remove_suffix(text.size() - std::min(text.size(), capacity));
+        text_.append(text);
       }
 
       [[nodiscard]] std::string_view view() const noexcept;
@@ -168,7 +173,7 @@ export {
     class CaptureHalf {
     public:
       // The half keeps the allocator and the quota, region `a`, and copies what it starts from.
-      explicit CaptureHalf(tbc::mut_a<ConcurrentMemory> memory, tbc::mut_a<CaptureQuota> quota, const ProxyCaptureLimits& limits, CaptureStart start);
+      explicit CaptureHalf(tbc::mut_a<ConcurrentMemory> memory, tbc::mut_a<CaptureQuota> quota, const ProxyCaptureLimits& limits, const CaptureStart& start);
 
       bool append(CapturePart part, std::span<const std::uint8_t> input) noexcept;
 
@@ -204,8 +209,12 @@ export {
 
       static constexpr std::size_t maximum_host_bytes = CaptureHost::capacity;
       static constexpr std::size_t maximum_method_bytes = 32;
-      static constexpr std::size_t maximum_target_bytes = 8 * 1024;
+      static constexpr std::size_t maximum_target_bytes = std::size_t{8} * 1024;
       static constexpr std::size_t maximum_encoding_bytes = 128;
+
+      // Public beside the half's private route, as the relays and the producer read and mark a half's
+      // fields one by one.
+      // NOLINTBEGIN(cppcoreguidelines-non-private-member-variables-in-classes,misc-non-private-member-variables-in-classes)
       const CaptureKey key;
       const CaptureSide side;
       const CaptureProtocol protocol;
@@ -217,6 +226,7 @@ export {
       CaptureTruncation truncation;
       tbc::val_a<CaptureBuffer> head;
       tbc::val_a<CaptureBuffer> body;
+      // NOLINTEND(cppcoreguidelines-non-private-member-variables-in-classes,misc-non-private-member-variables-in-classes)
 
     private:
       template <std::size_t Capacity>
@@ -224,7 +234,7 @@ export {
 
       CaptureBuffer* select(CapturePart part) noexcept;
 
-      const std::size_t maximum_bytes_;
+      std::size_t maximum_bytes_;
       SensitiveText<maximum_host_bytes> host_;
       SensitiveText<maximum_method_bytes> method_;
       SensitiveText<maximum_target_bytes> target_;
@@ -257,7 +267,7 @@ export {
 export {
   namespace telar::runtime {
 
-    enum class FlateContainer {
+    enum class FlateContainer : std::uint8_t {
       gzip,
       zlib,
     };
@@ -271,7 +281,7 @@ export {
       }
 
     private:
-      enum class GzipFlag : unsigned {
+      enum class GzipFlag : std::uint8_t {
         header_checksum = 2,
         extra = 4,
         name = 8,
@@ -313,11 +323,11 @@ export {
     };
 
     struct IgnoreCaptureEvents {
-      [[nodiscard]] constexpr int descriptor() const noexcept {
+      [[nodiscard]] static constexpr int descriptor() noexcept {
         return -1;
       }
 
-      constexpr bool collect() noexcept {
+      static constexpr bool collect() noexcept {
         return false;
       }
     };

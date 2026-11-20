@@ -13,6 +13,19 @@ import telar.base.ds;
 
 namespace telar::runtime {
 
+  namespace {
+
+    // Each client attached to the pane is sent the pane's images whole again.
+    void requestGraphicsSnapshots(std::span<ClientSession* const> clients, std::uint64_t pane) {
+      for (auto* client : clients) {
+        if (auto* attachment = client == nullptr ? nullptr : client->attachmentMut(pane)) {
+          attachment->graphics.requestSnapshot();
+        }
+      }
+    }
+
+  }
+
   template <typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
   BackgroundPool<History, Paths, Editor, Suggestions, Worktrees>::BackgroundPool(ConcurrentMemory& memory, History& history, Paths& paths, Editor& editor, Suggestions& suggestions)
       : path_service_(paths),
@@ -27,7 +40,7 @@ namespace telar::runtime {
   }
 
   template <typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
-  ds::Array<int, 5> BackgroundPool<History, Paths, Editor, Suggestions, Worktrees>::descriptors() const noexcept {
+  ds::Array<int, background_worker_count> BackgroundPool<History, Paths, Editor, Suggestions, Worktrees>::descriptors() const noexcept {
     return {history_.descriptor(), path_service_.descriptor(), editor_.descriptor(), suggestions_.descriptor(), worktrees_.descriptor()};
   }
 
@@ -99,7 +112,7 @@ namespace telar::runtime {
       if (error.code() != FailureCode::internal) {
         throw;
       }
-    } catch (...) {
+    } catch (...) { // NOLINT(bugprone-empty-catch): a history that cannot open leaves no store; the filters below stand in for it
     }
 
     if (!std::holds_alternative<HistoryStore>(history_)) {
@@ -129,7 +142,7 @@ namespace telar::runtime {
       try {
         store->record(request.view());
         return;
-      } catch (...) {
+      } catch (...) { // NOLINT(bugprone-empty-catch): a record the store cannot write is counted below as a failed write
       }
     }
 
@@ -141,7 +154,14 @@ namespace telar::runtime {
       return store->accepts(event);
     }
 
-    return event.kind != HistoryEventKind::command_finished || std::get<HistoryFilters>(history_).allowsPane(event.command.command, event.command.directory);
+    // Without a store the service holds its filters; a history holding neither broke an invariant, which
+    // stops the runtime as the throw out of this noexcept function did.
+    const auto* filters = std::get_if<HistoryFilters>(&history_);
+    if (filters == nullptr) {
+      std::abort();
+    }
+
+    return event.kind != HistoryEventKind::command_finished || filters->allowsPane(event.command.command, event.command.directory);
   }
 
 #if TELAR_DIAGNOSTICS
@@ -160,7 +180,7 @@ namespace telar::runtime {
   template <typename Message>
   void BackgroundService::execute(const Message& request, EncodedReply<ConcurrentMemory>& reply, const RequestContext& context) {
     TELAR_DIAGNOSTIC(diagnostics::OperationTimer timing{counters_.template operation<Message>()});
-    auto* store = std::get_if<HistoryStore>(&history_);
+    auto* store = std::get_if<HistoryStore>(&history_); // NOLINT(misc-const-correctness): most requests write the store's database, which only some instantiations of this template show
     if (store != nullptr) {
       try {
         if constexpr (std::same_as<Message, QueryHistory>) {
@@ -184,7 +204,7 @@ namespace telar::runtime {
         if (error.code() != FailureCode::internal) {
           throw;
         }
-      } catch (...) {
+      } catch (...) { // NOLINT(bugprone-empty-catch): any other failure is answered below as the history being unavailable
       }
     }
 
@@ -273,7 +293,7 @@ namespace telar::runtime {
         finished.title = normalizeDescriptionTitle(result.title.view());
         finished.source = AgentTitleSource::generated;
         finished.state = AgentTitleState::ready;
-      } catch (const EncodingError&) {
+      } catch (const EncodingError&) { // NOLINT(bugprone-empty-catch): a title that does not normalize leaves the description failed, as below
       }
     }
 
@@ -363,7 +383,7 @@ namespace telar::runtime {
 
   template <EventLoop Poller, typename Limits, HistoryEventSink History>
   void MediaService<Poller, Limits, History>::finish(RuntimeModel& model) noexcept {
-    for (auto* pane : model.panes.items()) {
+    for (auto* pane : model.panes.items()) { // NOLINT(misc-const-correctness): the pane's media is cancelled through its shared handle, a mutation tbc sees through the pane
       if (pane != nullptr) {
         pane->media->cancel();
       }
@@ -384,7 +404,7 @@ namespace telar::runtime {
       typename Processor::Request request;
 
       enqueueRetired(model, request);
-      for (auto* pane : model.panes.items()) {
+      for (auto* pane : model.panes.items()) { // NOLINT(misc-const-correctness): the pane's media is sealed through its shared handle, a mutation tbc sees through the pane
         if (request.count == request.entries.size()) {
           break;
         }
@@ -409,14 +429,11 @@ namespace telar::runtime {
 
   template <EventLoop Poller, typename Limits, HistoryEventSink History>
   bool MediaService<Poller, Limits, History>::wanted(const ClientStore& clients, std::uint64_t pane, ImageKey key, bool shared) noexcept {
-    for (const auto* client : clients.items()) {
+    return std::ranges::any_of(clients.items(), [&](const ClientSession* client) {
       const auto* attachment = client == nullptr ? nullptr : client->attachment(pane);
-      if (attachment != nullptr && attachment->graphics.wantsImage(key, shared)) {
-        return true;
-      }
-    }
 
-    return false;
+      return attachment != nullptr && attachment->graphics.wantsImage(key, shared);
+    });
   }
 
   template <EventLoop Poller, typename Limits, HistoryEventSink History>
@@ -461,11 +478,7 @@ namespace telar::runtime {
       }
 
       if (entry.reset) {
-        for (auto* client : clients.items()) {
-          if (auto* attachment = client == nullptr ? nullptr : client->attachmentMut(pane->id)) {
-            attachment->graphics.requestSnapshot();
-          }
-        }
+        requestGraphicsSnapshots(clients.items(), pane->id);
       }
 
       if (auto* terminal = pane->media->terminal()) {

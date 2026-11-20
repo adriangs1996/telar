@@ -39,7 +39,7 @@ namespace telar::runtime {
 
 #if TELAR_DIAGNOSTICS
   void HostSampler::recordSample(std::chrono::steady_clock::time_point started, std::chrono::steady_clock::time_point captured) noexcept {
-    diagnostics_.sample.observe(std::chrono::duration_cast<std::chrono::nanoseconds>(captured - started).count());
+    diagnostics_.sample.observe(static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(captured - started).count()));
     diagnostics_.captured = captured;
   }
 
@@ -53,14 +53,15 @@ namespace telar::runtime {
       return 0;
     }
 
+    constexpr std::uint8_t whole = 100;
     const auto busy = counters.busy_ticks - std::min(counters.busy_ticks, previous_busy_);
     const auto total = counters.total_ticks - previous_total_;
 
-    return static_cast<std::uint8_t>(std::min<__uint128_t>(100, static_cast<__uint128_t>(busy) * 100 / total));
+    return static_cast<std::uint8_t>(std::min<__uint128_t>(whole, static_cast<__uint128_t>(busy) * whole / total));
   }
 
   std::uint16_t HostSampler::decigib(std::uint64_t bytes) noexcept {
-    constexpr std::uint64_t bytes_per_gib = std::uint64_t{1} << 30;
+    constexpr std::uint64_t bytes_per_gib = std::uint64_t{1} << 30U;
     const auto tenths = static_cast<__uint128_t>(bytes) * 10 / bytes_per_gib;
 
     return static_cast<std::uint16_t>(std::min<__uint128_t>(tenths, std::numeric_limits<std::uint16_t>::max()));

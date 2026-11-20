@@ -29,39 +29,40 @@ namespace telar::runtime::shell_files {
   };
 
   // Each shell's scripts, installed here and sent to the hosts `ssh` reaches.
-  inline constexpr ds::Array<ScriptFile, 4> shells{{
-      {.directory = "zsh", .name = ".zshenv", .content = shell_scripts::zsh_environment},
-      {.directory = "zsh", .name = "telar.zsh", .content = shell_scripts::zsh},
-      {.directory = "bash", .name = "telar.bash", .content = shell_scripts::bash},
-      {.directory = "fish/fish/vendor_conf.d", .name = "telar.fish", .content = shell_scripts::fish},
-  }};
+  inline constexpr ds::Array<ScriptFile, 4> shells{
+      {
+          {.directory = "zsh", .name = ".zshenv", .content = shell_scripts::zsh_environment},
+          {.directory = "zsh", .name = "telar.zsh", .content = shell_scripts::zsh},
+          {.directory = "bash", .name = "telar.bash", .content = shell_scripts::bash},
+          {.directory = "fish/fish/vendor_conf.d", .name = "telar.fish", .content = shell_scripts::fish},
+      },
+  };
 
   inline constexpr ScriptFile ssh{.directory = "ssh", .name = "ssh.sh", .content = shell_scripts::ssh};
 
   // FNV-1a over every script's place and content, computed at compile time.
   inline constexpr std::uint64_t digest = [] {
     std::uint64_t hash = fnv1a64_basis;
-    const auto mix = [&](std::string_view part) {
-      hash = fnv1a64(part, hash);
-    };
 
     for (const auto& file : shells) {
-      mix(file.directory);
-      mix(file.name);
-      mix(file.content);
+      hash = fnv1a64(file.directory, hash);
+      hash = fnv1a64(file.name, hash);
+      hash = fnv1a64(file.content, hash);
     }
 
-    mix(ssh.content);
-    mix(shell_scripts::remote);
-    return hash;
+    hash = fnv1a64(ssh.content, hash);
+    return fnv1a64(shell_scripts::remote, hash);
   }();
 
   inline constexpr ds::Array<char, 16> digest_digits = [] {
     constexpr std::string_view digits = "0123456789abcdef";
+    constexpr std::size_t digit_bits = 4;
+    constexpr std::size_t last_digit_shift = 60;
+    constexpr std::uint64_t digit_mask = 0x0F;
     ds::Array<char, 16> text{};
 
     for (std::size_t index = 0; index < text.size(); ++index) {
-      text.atMut(index) = digits[(digest >> (60 - (4 * index))) & 0x0f];
+      text.atMut(index) = digits[(digest >> (last_digit_shift - (digit_bits * index))) & digit_mask];
     }
 
     return text;
@@ -90,12 +91,12 @@ namespace telar::runtime::shell_files {
   // Counts the text it is given, or copies it too once it has storage, so that one pass sizes a
   // compile-time text and another fills it.
   struct ScriptWriter {
-    char* output = nullptr;
+    std::span<char> output;
     std::size_t size = 0;
 
     constexpr void put(std::string_view text) {
-      if (output != nullptr) {
-        std::ranges::copy(text, output + size);
+      if (!output.empty()) {
+        std::ranges::copy(text, output.subspan(size).begin());
       }
 
       size += text.size();
@@ -139,7 +140,7 @@ namespace telar::runtime::shell_files {
   inline constexpr auto remote_script = [] {
     ds::Array<std::uint8_t, remoteScriptBytes()> bytes{};
     ds::Array<char, remoteScriptBytes()> text{};
-    ScriptWriter script{.output = text.dataMut()};
+    ScriptWriter script{.output = text.viewMut()};
 
     writeRemoteScript(script);
     std::ranges::transform(text.view(), bytes.viewMut().begin(), [](char byte) {
@@ -171,14 +172,16 @@ namespace telar::runtime::shell_files {
 
   // Everything the runtime installs. The last one is the sentinel: written last, so its presence
   // means every one is there.
-  inline constexpr ds::Array<ScriptFile, 6> installed{{
-      shells[0],
-      shells[1],
-      shells[2],
-      shells[3],
-      ssh,
-      {.directory = "ssh", .name = "remote", .content = {remote_command.data(), remote_command.size()}},
-  }};
+  inline constexpr ds::Array<ScriptFile, 6> installed{
+      {
+          shells[0],
+          shells[1],
+          shells[2],
+          shells[3],
+          ssh,
+          {.directory = "ssh", .name = "remote", .content = {remote_command.data(), remote_command.size()}},
+      },
+  };
 
 }
 

@@ -24,7 +24,7 @@ export {
 
     class NativeHostMetrics {
     public:
-      ds::Option<HostCounters> read() noexcept;
+      static ds::Option<HostCounters> read() noexcept;
     };
 
     static_assert(HostMetricsProbe<NativeHostMetrics>);
@@ -35,16 +35,22 @@ export {
     };
 
     struct MountUsage {
-      FixedText<128> path;
-      FixedText<64> device;
-      FixedText<16> type;
+      static constexpr std::size_t path_capacity = 128;
+      static constexpr std::size_t device_capacity = 64;
+      static constexpr std::size_t type_capacity = 16;
+
+      FixedText<path_capacity> path;
+      FixedText<device_capacity> device;
+      FixedText<type_capacity> type;
       std::uint64_t total_bytes = 0;
       std::uint64_t used_bytes = 0;
       std::uint64_t available_bytes = 0;
     };
 
     struct InterfaceCounters {
-      FixedText<16> name;
+      static constexpr std::size_t name_capacity = 16;
+
+      FixedText<name_capacity> name;
       std::uint64_t received_bytes = 0;
       std::uint64_t sent_bytes = 0;
     };
@@ -84,8 +90,10 @@ export {
       bool read(HostDetail& detail) noexcept;
 
     private:
+      static constexpr std::size_t buffer_bytes = std::size_t{64} * 1024;
+
       // The interface list of the routing table on macOS; the text of /proc's files on Linux.
-      ds::Array<char, 64 * 1024> buffer_;
+      ds::Array<char, buffer_bytes> buffer_;
     };
 
     static_assert(HostDetailProbe<NativeHostDetail>);

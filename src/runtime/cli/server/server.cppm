@@ -13,7 +13,7 @@ import telar.base.ds;
 
 export namespace telar::runtime::cli {
 
-  using PluginWorkerOptions = config::PluginWorkerOptions;
+  using config::PluginWorkerOptions;
 
   // Keep the reference worker lexical scope and its mutable Lua binding factory.
   tbc::val_a<ds::String<Memory>> pluginCallbackSource(tbc::mut_a<Memory> memory, std::string_view source, std::string_view action);

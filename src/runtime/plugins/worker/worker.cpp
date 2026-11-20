@@ -10,20 +10,32 @@ import telar.base.ds;
 
 namespace telar::runtime::plugins {
 
+  namespace {
+
+    // The longest frame a connection of `stage` may hand the bridge.
+    std::size_t frameLimit(TrafficStage stage) noexcept {
+      if (stage == TrafficStage::control) {
+        return traffic::control::Limits::reply_bytes;
+      }
+
+      return stage == TrafficStage::http ? traffic::Limits::http_frame_bytes : traffic::Limits::frame_bytes;
+    }
+
+  }
+
   template <Allocator Memory>
-  Result<Memory>::Result(const ServiceSpec& specification, tbc::val_a<SensitiveAllocation<Memory>> storage, std::size_t effects_offset, std::size_t effects_size, bool traffic)
+  Result<Memory>::Result(const ServiceSpec& specification, tbc::val_a<SensitiveAllocation<Memory>> owned, std::size_t effects_offset, std::size_t effects_size, bool from_traffic)
       : package_index(specification.package_index),
         plugin_id(specification.plugin_id),
         digest(specification.digest),
         generation(specification.generation),
-        storage(std::move(storage)),
-        traffic(traffic),
-        effects_offset_(effects_offset),
-        effects_size_(effects_size) {
-    const auto effects = Protocol::decodeEffects(effectBytes());
+        storage(std::move(owned)),
+        traffic(from_traffic),
+        effects{.offset = effects_offset, .size = effects_size} {
+    const auto decoded = Protocol::decodeEffects(effectBytes());
 
-    event_id = effects.event_id;
-    batch_count = effects.batch.count;
+    event_id = decoded.event_id;
+    batch_count = decoded.batch.count;
   }
 
   template <Allocator Memory>
@@ -40,7 +52,7 @@ namespace telar::runtime::plugins {
 
   template <Allocator Memory>
   std::span<const Byte> Result<Memory>::effectBytes() const {
-    return storage.bytes().subspan(effects_offset_, effects_size_);
+    return storage.bytes().subspan(effects.offset, effects.size);
   }
 
   template <Allocator Memory>
@@ -130,7 +142,7 @@ namespace telar::runtime::plugins {
   }
 
   void SessionIo::drainError() noexcept {
-    ds::Array<char, error_chunk_bytes> bytes;
+    ds::Array<char, error_chunk_bytes> bytes{};
     std::size_t drained = 0;
 
     while (process_.error() >= 0 && drained < maximum_error_drain_bytes) {
@@ -140,7 +152,7 @@ namespace telar::runtime::plugins {
       }
 
       if (count <= 0) {
-        if (count == 0 || (sys::lastError() != EAGAIN && sys::lastError() != EWOULDBLOCK)) {
+        if (count == 0 || !socketWouldBlock(sys::lastError())) {
           process_.closeError();
         }
 
@@ -150,7 +162,13 @@ namespace telar::runtime::plugins {
       const auto received = static_cast<std::size_t>(count);
       const auto retained = std::min(received, Limits::stderr_bytes - error_.view().size());
 
-      error_.append({bytes.data(), retained});
+      // What is retained is cut to the room left, so the append never throws.
+      try {
+        error_.append({bytes.data(), retained});
+      } catch (...) {
+        std::abort();
+      }
+
       drained += received;
     }
   }
@@ -190,18 +208,18 @@ namespace telar::runtime::plugins {
     return options;
   }
 
-  tbc::val_a<ds::Array<char*, 7>> TapWorkerOptions::arguments(tbc::ref_a<TapWorkerOptions> options, tbc::val_a<const char*> executable) noexcept {
-    ds::Array<char*, 7> words{const_cast<char*>(executable), const_cast<char*>(command.data()), const_cast<char*>(options.entry)};
+  tbc::val_a<ds::Array<char*, TapWorkerOptions::argument_capacity>> TapWorkerOptions::arguments(tbc::ref_a<TapWorkerOptions> options, tbc::val_a<const char*> executable) noexcept {
+    ds::Array<char*, argument_capacity> words{const_cast<char*>(executable), const_cast<char*>(command.data()), const_cast<char*>(options.entry)}; // NOLINT(cppcoreguidelines-pro-type-const-cast): execve takes argv as char* const[], and never writes the words
     std::size_t count = 3;
 
     if (options.traffic) {
-      words.atMut(count++) = const_cast<char*>("--traffic");
+      words.atMut(count++) = const_cast<char*>("--traffic"); // NOLINT(cppcoreguidelines-pro-type-const-cast): execve takes argv as char* const[], and never writes the words
     }
 
 #if TELAR_DEBUG
     if (options.trace_path != nullptr) {
-      words.atMut(count++) = const_cast<char*>("--trace");
-      words.atMut(count++) = const_cast<char*>(options.trace_path);
+      words.atMut(count++) = const_cast<char*>("--trace");          // NOLINT(cppcoreguidelines-pro-type-const-cast): execve takes argv as char* const[], and never writes the words
+      words.atMut(count++) = const_cast<char*>(options.trace_path); // NOLINT(cppcoreguidelines-pro-type-const-cast): execve takes argv as char* const[], and never writes the words
     }
 
 #endif
@@ -229,10 +247,15 @@ namespace telar::runtime::plugins {
     process_.signal(SIGKILL);
     stream_.waitMut().drainError();
     const auto error = stream_.wait().retainedError();
-    if (!error.empty()) {
-      std::fputs("tap worker stderr: ", stderr);
-      std::fwrite(error.data(), 1, error.size(), stderr);
-      std::fputc('\n', stderr);
+    if (error.empty()) {
+      return;
+    }
+
+    try {
+      std::println(stderr, "tap worker stderr: {}", error);
+    } catch (...) {
+      // A stderr that cannot be written loses the worker's output, as it would any line.
+      return;
     }
   }
 
@@ -290,8 +313,8 @@ namespace telar::runtime::plugins {
   template <Allocator Memory>
   PipeProcess Session<Memory>::spawn(const SessionOptions& options) {
     const TapWorkerOptions worker{.entry = options.entry, .traffic = options.traffic, .trace_path = options.trace_path};
-    auto arguments = TapWorkerOptions::arguments(worker, options.executable);
-    ds::Array<char*, 1> environment{nullptr};
+    const auto arguments = TapWorkerOptions::arguments(worker, options.executable);
+    const ds::Array<char*, 1> environment{nullptr};
 
     return PipeProcess{SpawnSpec{.executable = options.executable, .cwd = "/", .arguments = arguments.data(), .environment = environment.data(), .size = {}}, ProcessInput::buffered_socket};
   }
@@ -318,9 +341,7 @@ namespace telar::runtime::plugins {
 #endif
 
   std::span<const Byte> TrafficRegistration::requestBytes() const noexcept {
-    const auto bytes = request.view();
-
-    return {reinterpret_cast<const Byte*>(bytes.data()), bytes.size()};
+    return byteView(request.view());
   }
 
   traffic::InterceptionRule TrafficRegistration::rule() const noexcept {
@@ -372,13 +393,13 @@ namespace telar::runtime::plugins {
     return specification;
   }
 
-  tbc::val_a<std::span<const Byte>> TrafficProtocol::event(tbc::val_a<std::span<Byte>> output, std::uint64_t event_id, std::uint32_t registration, std::span<const Byte> frame, std::uint64_t dropped) {
+  tbc::val_a<std::span<const Byte>> TrafficProtocol::event(tbc::val_a<std::span<Byte>> output, TrafficEventId id, std::span<const Byte> frame, std::uint64_t dropped) {
     traffic::Protocol::decode(frame);
     FrameWriter writer{output};
 
     writer.tag(FrameKind::traffic_event);
-    writer.integer(event_id);
-    writer.integer(registration);
+    writer.integer(id.event_id);
+    writer.integer(id.registration);
     writer.integer(dropped);
     writer.bytes(frame);
     return writer.finish();
@@ -399,7 +420,7 @@ namespace telar::runtime::plugins {
     } else {
       event.error = reader.text();
       event.control = reader.bytes();
-      if (event.error.size() > 1024 || (event.error.empty() == event.control.empty())) {
+      if (event.error.size() > TrafficLimits::error_bytes || (event.error.empty() == event.control.empty())) {
         throw EncodingError{"Invalid worker control result"};
       }
 
@@ -412,12 +433,12 @@ namespace telar::runtime::plugins {
     return event;
   }
 
-  tbc::val_a<std::span<const Byte>> TrafficProtocol::controlEvent(tbc::val_a<std::span<Byte>> output, std::uint64_t event_id, std::uint32_t registration, std::span<const Byte> frame, std::string_view error) {
+  tbc::val_a<std::span<const Byte>> TrafficProtocol::controlEvent(tbc::val_a<std::span<Byte>> output, TrafficEventId id, std::span<const Byte> frame, std::string_view error) {
     FrameWriter writer{output};
 
     writer.tag(FrameKind::traffic_control_event);
-    writer.integer(event_id);
-    writer.integer(registration);
+    writer.integer(id.event_id);
+    writer.integer(id.registration);
     writer.text(error);
     writer.bytes(frame);
     return writer.finish();
@@ -534,23 +555,26 @@ namespace telar::runtime::plugins {
     return registration;
   }
 
-  TrafficBridge::Connection::Connection(tbc::mut_a<Secure> memory, TrafficRegistration registration, traffic::PackageChannel channel)
-      : registration(std::move(registration)),
+  TrafficBridge::Connection::Connection(tbc::mut_a<Secure> memory, TrafficRegistration declared, traffic::PackageChannel channel)
+      : registration(std::move(declared)),
         socket(std::move(channel.socket)),
         owner(channel.owner),
         output(memory, 2 * traffic::Limits::http_frame_bytes),
         registration_ack(this->registration.stage == TrafficStage::stream || this->registration.stage == TrafficStage::http) {}
 
-  TrafficBridge::TrafficBridge(tbc::mut_a<ConcurrentMemory> memory, const ServiceSpec& specification, tbc::mut_a<traffic::PackagePort> port)
+  TrafficBridge::TrafficBridge(tbc::mut_a<ConcurrentMemory> memory, ServiceSpec specification, tbc::mut_a<traffic::PackagePort> port)
       : memory_(memory),
         secure_(memory),
-        specification_(specification),
+        specification_(std::move(specification)),
         port_(port),
         reply_(ds::makeBox<TrafficReply>(memory)) {}
 
   void TrafficBridge::attach(Session<ConcurrentMemory>& session) {
-    ds::Array<Byte, 1024> output;
-    auto initialized = session.request(TrafficProtocol::setup(output.viewMut(), specification_), TrafficLimits::reply_bytes);
+    // Room for the setup frame: the package's identity, digest and name, and its capabilities.
+    constexpr std::size_t setup_bytes = 1024;
+
+    ds::Array<Byte, setup_bytes> output{};
+    const auto initialized = session.request(TrafficProtocol::setup(output.viewMut(), specification_), TrafficLimits::reply_bytes);
 
     apply(0, initialized.bytes());
     for (auto& connection : connections_.viewMut()) {
@@ -581,7 +605,10 @@ namespace telar::runtime::plugins {
   }
 
   void TrafficBridge::fail(Connection& connection, const traffic::FlowEvent& flow) {
-    ds::Array<Byte, 32> decision;
+    // Room for a decision that carries no replacement.
+    constexpr std::size_t decision_bytes = 32;
+
+    ds::Array<Byte, decision_bytes> decision{};
 
     enqueue(connection, traffic::InterceptionCodec::decision(decision.viewMut(), flow.ticket, connection.registration.fail_closed ? traffic::Verdict::reject : traffic::Verdict::allow));
   }
@@ -603,74 +630,92 @@ namespace telar::runtime::plugins {
       throw EncodingError{"Stale traffic worker reply"};
     }
 
+    if (reply_->changed) {
+      checkRegistrations();
+      dropUnregistered();
+      openRegistered();
+    }
+
+    applyDecisions(outcome);
+    return outcome;
+  }
+
+  void TrafficBridge::checkRegistrations() const {
+    const auto registrations = std::span{reply_->registrations}.first(reply_->registration_count);
+    std::size_t controls = 0;
+
+    for (std::size_t index = 0; index < registrations.size(); ++index) {
+      const auto& registration = registrations[index];
+      if (registration.stage == TrafficStage::control) {
+        if (++controls > TrafficLimits::controls || !traffic::control::authorized(specification_, traffic::control::Protocol::request(registration.requestBytes()))) {
+          throw EncodingError{"Package control capability denied"};
+        }
+      } else if (!specification_.allows(registration.stage == TrafficStage::observe ? Capability::traffic_observe : Capability::traffic_intercept)) {
+        throw EncodingError{"Package traffic capability denied"};
+      }
+
+      if (std::ranges::any_of(registrations.first(index), [&](const auto& other) {
+            return other.id == registration.id;
+          })) {
+        throw EncodingError{"Duplicate traffic registration"};
+      }
+    }
+  }
+
+  void TrafficBridge::dropUnregistered() noexcept {
     const auto registrations = std::span{reply_->registrations}.first(reply_->registration_count);
 
-    if (reply_->changed) {
-      std::size_t controls = 0;
+    for (auto& connection : connections_.viewMut()) {
+      if (connection && !std::ranges::any_of(registrations, [&](const auto& registration) {
+            return registration.id == connection->registration.id;
+          })) {
+        connection.reset();
+      }
+    }
+  }
 
-      for (std::size_t index = 0; index < registrations.size(); ++index) {
-        const auto& registration = registrations[index];
-        if (registration.stage == TrafficStage::control) {
-          if (++controls > TrafficLimits::controls || !traffic::control::authorized(specification_, traffic::control::Protocol::request(registration.requestBytes()))) {
-            throw EncodingError{"Package control capability denied"};
-          }
-        } else if (!specification_.allows(registration.stage == TrafficStage::observe ? Capability::traffic_observe : Capability::traffic_intercept)) {
-          throw EncodingError{"Package traffic capability denied"};
+  void TrafficBridge::openRegistered() {
+    const auto registrations = std::span{reply_->registrations}.first(reply_->registration_count);
+
+    for (const auto& registration : registrations) {
+      if (const auto* existing = find(connections_.viewMut(), registration.id)) {
+        const auto& before = existing->registration;
+        if (before != registration) {
+          throw EncodingError{"Traffic registrations are immutable"};
         }
 
-        if (std::ranges::any_of(registrations.first(index), [&](const auto& other) {
-              return other.id == registration.id;
-            })) {
-          throw EncodingError{"Duplicate traffic registration"};
-        }
+        continue;
       }
 
       for (auto& connection : connections_.viewMut()) {
-        if (connection && !std::ranges::any_of(registrations, [&](const auto& registration) {
-              return registration.id == connection->registration.id;
-            })) {
-          connection.reset();
-        }
-      }
-
-      for (const auto& registration : registrations) {
-        if (auto* existing = find(connections_.viewMut(), registration.id)) {
-          const auto& before = existing->registration;
-          if (before != registration) {
-            throw EncodingError{"Traffic registrations are immutable"};
-          }
-
+        if (connection) {
           continue;
         }
 
-        for (auto& connection : connections_.viewMut()) {
-          if (connection) {
-            continue;
-          }
-
-          if (registration.stage == TrafficStage::control) {
-            connection.emplace(secure_, registration, traffic::PackageChannel{.socket = FileDescriptor{}, .owner = 0});
-            connection.getMut().output.append(traffic::control::Protocol::prefix(registration.requestBytes().size()));
-            connection.getMut().output.append(registration.requestBytes());
-            break;
-          }
-
-          connection.emplace(secure_, registration, port_.openPackage(specification_, registration.id));
-          ds::Array<Byte, traffic::Protocol::greeting_bytes + traffic::Limits::filter_bytes> greeting;
-          const auto hello = traffic::Protocol::greeting(greeting.viewMut(), registration.stage == TrafficStage::observe ? traffic::Role::subscribe : traffic::Role::intercept, registration.filter.view(), registration.selection);
-
-          connection.getMut().output.append(hello);
-          if (registration.stage != TrafficStage::observe) {
-            const auto rule = traffic::InterceptionCodec::rule(greeting.viewMut(), registration.rule());
-
-            enqueue(connection.getMut(), rule);
-          }
-
+        if (registration.stage == TrafficStage::control) {
+          connection.emplace(secure_, registration, traffic::PackageChannel{.socket = FileDescriptor{}, .owner = 0});
+          connection.getMut().output.append(traffic::control::Protocol::prefix(registration.requestBytes().size()));
+          connection.getMut().output.append(registration.requestBytes());
           break;
         }
+
+        connection.emplace(secure_, registration, port_.openPackage(specification_, registration.id));
+        ds::Array<Byte, traffic::Protocol::greeting_bytes + traffic::Limits::filter_bytes> greeting{};
+        const auto hello = traffic::Protocol::greeting(greeting.viewMut(), registration.stage == TrafficStage::observe ? traffic::Role::subscribe : traffic::Role::intercept, registration.filter.view(), registration.selection);
+
+        connection.getMut().output.append(hello);
+        if (registration.stage != TrafficStage::observe) {
+          const auto rule = traffic::InterceptionCodec::rule(greeting.viewMut(), registration.rule());
+
+          enqueue(connection.getMut(), rule);
+        }
+
+        break;
       }
     }
+  }
 
+  void TrafficBridge::applyDecisions(const TrafficOutcome& outcome) {
     for (const auto& decision : std::span{outcome.decisions}.first(outcome.decision_count)) {
       auto* connection = find(connections_.viewMut(), decision.registration);
       if (connection == nullptr) {
@@ -701,8 +746,34 @@ namespace telar::runtime::plugins {
 
       enqueue(*connection, decision.payload);
     }
+  }
 
-    return outcome;
+  void TrafficBridge::openControl(traffic::PackagePort& port, const ServiceSpec& specification, Connection& connection) {
+    try {
+      connection.socket = port.openControl(specification);
+    } catch (const SystemError& failure) {
+      if (failure.code() != EAGAIN) {
+        connection.error.assign(std::string_view{failure.what()}.substr(0, TrafficLimits::error_bytes));
+      }
+    } catch (const std::exception& failure) {
+      connection.error.assign(std::string_view{failure.what()}.substr(0, TrafficLimits::error_bytes));
+    }
+  }
+
+  void TrafficBridge::watchConnections(std::span<pollfd> descriptors, std::span<std::uint32_t> identities) const noexcept {
+    for (std::size_t index = 0; index < connections_.size(); ++index) {
+      const auto& connection = connections_[index];
+      const bool writing = connection && !connection->output.empty();
+
+      identities[index] = connection ? connection->registration.id : 0;
+      descriptors[index] = {.fd = connection ? connection->socket.get() : -1, .events = static_cast<short>(combineFlags(POLLIN, writing ? POLLOUT : 0)), .revents = 0};
+    }
+  }
+
+  bool TrafficBridge::due(std::size_t index, Priority priority, std::uint32_t identity) const noexcept {
+    const auto& connection = connections_[index];
+
+    return connection && priorityOf(connection->registration.stage) == priority && connection->registration.id == identity;
   }
 
   void TrafficBridge::enqueue(Connection& connection, std::span<const Byte> frame) {
@@ -727,7 +798,8 @@ namespace telar::runtime::plugins {
   tbc::val_a<ds::Option<SensitiveAllocation<ConcurrentMemory>>> TrafficBridge::read(tbc::mut_a<ConcurrentMemory> memory, Connection& connection) {
     if (!connection.input) {
       const auto prefix_bytes = connection.registration.stage == TrafficStage::control ? traffic::control::Protocol::prefix_bytes : traffic::Protocol::prefix_bytes;
-      const auto count = ::recv(connection.socket.get(), connection.prefix.dataMut() + connection.prefix_bytes, prefix_bytes - connection.prefix_bytes, 0);
+      const auto pending = connection.prefix.viewMut().subspan(connection.prefix_bytes, prefix_bytes - connection.prefix_bytes);
+      const auto count = ::recv(connection.socket.get(), pending.data(), pending.size(), 0);
       if (count < 0 && socketWouldBlock(sys::lastError())) {
         return ds::none;
       }
@@ -748,9 +820,7 @@ namespace telar::runtime::plugins {
         connection.dropped = prefix.integer<std::uint64_t>();
       }
 
-      const auto maximum = connection.registration.stage == TrafficStage::control ? traffic::control::Limits::reply_bytes : connection.registration.stage == TrafficStage::http ? traffic::Limits::http_frame_bytes
-                                                                                                                                                                                : traffic::Limits::frame_bytes;
-      if (size == 0 || size > maximum) {
+      if (size == 0 || size > frameLimit(connection.registration.stage)) {
         throw EncodingError{"Invalid package traffic frame size"};
       }
 
@@ -759,7 +829,8 @@ namespace telar::runtime::plugins {
     }
 
     const auto bytes = connection.input.getMut().bytesMut();
-    const auto count = ::recv(connection.socket.get(), bytes.data() + connection.received, bytes.size() - connection.received, 0);
+    const auto rest = bytes.subspan(connection.received);
+    const auto count = ::recv(connection.socket.get(), rest.data(), rest.size(), 0);
     if (count < 0 && socketWouldBlock(sys::lastError())) {
       return ds::none;
     }
@@ -880,8 +951,7 @@ namespace telar::runtime::plugins {
   void Worker<Clock>::runTraffic() noexcept {
     while (!launch_.cancellation.requested() && !cancellation_.requested()) {
       if (disabled_.load(std::memory_order_relaxed)) {
-        ds::Array watches{pollfd{.fd = cancellation_.descriptor(), .events = POLLIN, .revents = 0}, pollfd{.fd = launch_.cancellation.descriptor(), .events = POLLIN, .revents = 0}};
-        if (::poll(watches.dataMut(), watches.size(), -1) < 0 && sys::lastError() != EINTR) {
+        if (!awaitCancellation()) {
           return;
         }
 
@@ -890,12 +960,7 @@ namespace telar::runtime::plugins {
 
       try {
         if (!session_) {
-          ensureSession(true);
-          if (!bridge_) {
-            bridge_ = ds::makeBox<TrafficBridge>(memory_, memory_, specification_, *launch_.traffic);
-          }
-
-          bridge_.getMut().attach(session_.getMut());
+          startTraffic();
         }
 
         wake_.drain();
@@ -921,6 +986,23 @@ namespace telar::runtime::plugins {
         restart();
       }
     }
+  }
+
+  template <WorkerClock Clock>
+  bool Worker<Clock>::awaitCancellation() noexcept {
+    ds::Array watches{pollfd{.fd = cancellation_.descriptor(), .events = POLLIN, .revents = 0}, pollfd{.fd = launch_.cancellation.descriptor(), .events = POLLIN, .revents = 0}};
+
+    return ::poll(watches.dataMut(), watches.size(), -1) >= 0 || sys::lastError() == EINTR;
+  }
+
+  template <WorkerClock Clock>
+  void Worker<Clock>::startTraffic() {
+    ensureSession(true);
+    if (!bridge_) {
+      bridge_ = ds::makeBox<TrafficBridge>(memory_, memory_, specification_, *launch_.traffic);
+    }
+
+    bridge_.getMut().attach(session_.getMut());
   }
 
   template <WorkerClock Clock>
@@ -950,6 +1032,8 @@ namespace telar::runtime::plugins {
 
       exchange(shared.event_id, payload);
     } catch (...) {
+      // An exchange that cannot be framed is dropped, as one over the budget is.
+      return;
     }
   }
 
@@ -1015,11 +1099,14 @@ namespace telar::runtime::plugins {
       return;
     }
 
-    ds::Array<char, 64> suffix;
-    const auto length = std::snprintf(suffix.dataMut(), suffix.size(), ".tap-%u-%llu.json", static_cast<unsigned>(specification_.package_index), static_cast<unsigned long long>(session_number_++));
+    // Room for the package's index and the session's number around the suffix's text.
+    constexpr std::size_t suffix_capacity = 64;
+
+    ds::Array<char, suffix_capacity> suffix{};
+    const auto written = std::format_to_n(suffix.dataMut(), static_cast<std::ptrdiff_t>(suffix.size() - 1), ".tap-{}-{}.json", static_cast<unsigned>(specification_.package_index), session_number_++);
 
     trace_path_.assign(launch_.trace_prefix);
-    trace_path_.append(std::string_view{suffix.data(), static_cast<std::size_t>(length)});
+    trace_path_.append(std::string_view{suffix.data(), static_cast<std::size_t>(std::min<std::ptrdiff_t>(written.size, static_cast<std::ptrdiff_t>(suffix.size() - 1)))});
 #endif
   }
 

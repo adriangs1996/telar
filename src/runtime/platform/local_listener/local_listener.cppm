@@ -11,7 +11,7 @@ import telar.base.ds;
 export {
   namespace telar::runtime {
 
-    enum class LocalPeerPolicy {
+    enum class LocalPeerPolicy : std::uint8_t {
       same_user,
       same_user_or_root,
     };
@@ -22,6 +22,8 @@ export {
       ~LocalListener();
       LocalListener(const LocalListener&) = delete;
       LocalListener& operator=(const LocalListener&) = delete;
+      LocalListener(LocalListener&&) = delete;
+      LocalListener& operator=(LocalListener&&) = delete;
 
       [[nodiscard]] int descriptor() const noexcept;
 

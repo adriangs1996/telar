@@ -22,7 +22,7 @@ import telar.base.ds;
 export {
   namespace telar::runtime {
 
-    enum class HttpProtocol {
+    enum class HttpProtocol : std::uint8_t {
       http11,
       http2,
       other,
@@ -30,7 +30,7 @@ export {
 
     class AlpnOffer {
     public:
-      enum class Read {
+      enum class Read : std::uint8_t {
         pending,
         complete,
         ended,
@@ -56,6 +56,17 @@ export {
 
     private:
       void parseStored(std::size_t size) noexcept;
+
+      // What a hello's extensions say, as far as they were read: `valid` when they are well formed.
+      struct Extensions {
+        bool valid = false;
+        bool encrypted = false;
+        std::size_t protocols_offset = 0;
+        std::size_t protocols_size = 0;
+      };
+
+      // Reads the extensions, which start `offset` bytes into the hello, and the server name into `name`.
+      static Extensions readExtensions(std::span<const std::uint8_t> extension_bytes, std::size_t offset, FixedText<ProxyHostname::maximum_bytes>& name) noexcept;
 
       class Cursor {
       public:
@@ -88,13 +99,15 @@ export {
 
       static constexpr std::uint8_t handshake_record = 22;
       static constexpr std::uint8_t client_hello = 1;
+      static constexpr std::uint16_t server_name_extension = 0;
       static constexpr std::uint16_t alpn_extension = 16;
+      static constexpr std::uint16_t encrypted_hello_extension = 0xfe0d;
       static constexpr std::size_t record_header_bytes = 5;
-      static constexpr std::size_t maximum_record_bytes = 16 * 1024;
+      static constexpr std::size_t maximum_record_bytes = std::size_t{16} * 1024;
       static constexpr std::size_t handshake_length_bytes = 3;
       static constexpr std::size_t version_bytes = 2;
       static constexpr std::size_t random_bytes = 32;
-      static constexpr std::size_t maximum_hello_bytes = 64 * 1024;
+      static constexpr std::size_t maximum_hello_bytes = std::size_t{64} * 1024;
       ds::Array<std::uint8_t, maximum_hello_bytes> bytes_;
       FixedText<ProxyHostname::maximum_bytes> server_name_;
       bool tls_ = false;
@@ -121,7 +134,8 @@ export {
       static int select(SSL* connection, const unsigned char** selected, unsigned char* length, const unsigned char* offered, unsigned offered_length, void*) noexcept;
 
     private:
-      ds::Array<unsigned char, 255> name_;
+      static constexpr std::size_t maximum_name_bytes = 255;
+      ds::Array<unsigned char, maximum_name_bytes> name_{};
       unsigned char length_ = 0;
     };
 
@@ -145,7 +159,7 @@ export {
       [[nodiscard]] std::size_t count() const noexcept;
 
     private:
-      static constexpr std::size_t maximum_certificate_bytes = 1024 * 1024;
+      static constexpr std::size_t maximum_certificate_bytes = std::size_t{1024} * 1024;
       TlsHandle<X509_STORE, X509_STORE_free> store_;
       std::size_t count_ = 0;
     };
@@ -177,7 +191,7 @@ export {
 export {
   namespace telar::runtime {
 
-    enum class TlsSide {
+    enum class TlsSide : std::uint8_t {
       child,
       origin,
     };
@@ -191,7 +205,7 @@ export {
 
     class TlsSession {
     public:
-      enum class State {
+      enum class State : std::uint8_t {
         initialize,
         offer,
         origin,
@@ -200,7 +214,7 @@ export {
         failed,
       };
 
-      enum class Failure {
+      enum class Failure : std::uint8_t {
         none,
         context,
         client_hello,
@@ -219,6 +233,8 @@ export {
 
       TlsSession(const TlsSession&) = delete;
       TlsSession& operator=(const TlsSession&) = delete;
+      TlsSession(TlsSession&&) = delete;
+      TlsSession& operator=(TlsSession&&) = delete;
 
       State advance() noexcept;
 
@@ -255,6 +271,9 @@ export {
 
       void initialize();
 
+      // Hands the child's offered protocols to the origin; false while its ClientHello is on its way.
+      bool offerProtocols();
+
       static bool handshake(SSL* connection, StreamReadiness& waiting);
 
       void mirrorProtocol();
@@ -264,7 +283,7 @@ export {
       [[nodiscard]] SSL* endpoint(TlsSide side) const noexcept;
 
       std::chrono::steady_clock::time_point offer_after_;
-      static constexpr std::size_t read_capacity = 16 * 1024;
+      static constexpr std::size_t read_capacity = std::size_t{16} * 1024;
       StreamReadBuffer<read_capacity> child_input_;
       StreamReadBuffer<read_capacity> origin_input_;
 

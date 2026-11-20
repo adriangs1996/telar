@@ -34,6 +34,9 @@ export {
 
         Flate(const Flate&) = delete;
         Flate& operator=(const Flate&) = delete;
+        Flate(Flate&&) = delete;
+        Flate& operator=(Flate&&) = delete;
+
         static constexpr int memory_level = 8;
         DecoderMemory<Memory> memory;
         z_stream stream{};
@@ -76,8 +79,8 @@ export {
 
       auto zstd(std::span<const std::uint8_t> input, std::span<std::uint8_t> output, bool encode) -> std::size_t;
 
-      static constexpr std::size_t maximum_bytes = 16 * 1024 * 1024;
-      static constexpr std::size_t coding_overhead_bytes = 64 * 1024;
+      static constexpr std::size_t maximum_bytes = std::size_t{16} * 1024 * 1024;
+      static constexpr std::size_t coding_overhead_bytes = std::size_t{64} * 1024;
       static constexpr int gzip_window_offset = 16;
       static constexpr int maximum_window_log = 23;
       static constexpr unsigned brotli_quality = 4;
@@ -119,8 +122,12 @@ export {
 
       explicit HttpFields(Memory& memory);
 
+      ~HttpFields() = default;
+
       HttpFields(const HttpFields&) = delete;
       HttpFields& operator=(const HttpFields&) = delete;
+      HttpFields(HttpFields&&) = delete;
+      HttpFields& operator=(HttpFields&&) = delete;
 
       void append(std::string_view name, std::string_view value);
 
@@ -141,7 +148,7 @@ export {
       static void validate(std::string_view name, std::string_view value);
 
       static constexpr std::size_t maximum_fields = 256;
-      static constexpr std::size_t maximum_bytes = 64 * 1024;
+      static constexpr std::size_t maximum_bytes = std::size_t{64} * 1024;
 
     private:
       static constexpr std::size_t line_overhead = 4;
@@ -170,8 +177,8 @@ export {
     };
 
     struct HttpMessageLimits {
-      static constexpr std::size_t body_bytes = 1024 * 1024;
-      static constexpr std::size_t head_bytes = 64 * 1024;
+      static constexpr std::size_t body_bytes = std::size_t{1024} * 1024;
+      static constexpr std::size_t head_bytes = std::size_t{64} * 1024;
       static constexpr std::size_t message_bytes = body_bytes + head_bytes + 8192;
     };
 
@@ -185,7 +192,7 @@ export {
       bool response_to_head = false;
       std::uint32_t stream = 0;
       std::string_view method, target, reason, scheme, authority;
-      std::uint16_t status = 200;
+      std::uint16_t status = HttpStatus::first_success;
       ds::Array<Field, HttpFields<SystemAllocator>::maximum_fields> headers, trailers;
       std::size_t header_count = 0;
       std::size_t trailer_count = 0;
@@ -262,27 +269,39 @@ export {
   namespace telar::runtime {
 
     // What a request's Expect field asks: nothing, 100-continue, or something no relay supports.
-    enum class HttpExpectation {
+    enum class HttpExpectation : std::uint8_t {
       none,
       continue_,
       unsupported,
     };
 
+    // The allocators a message's fields draw from, a private base so that they are built before the fields.
     template <Allocator Memory>
-    class HttpMessage {
+    struct HttpMessageMemory {
+      constexpr explicit HttpMessageMemory(Memory& allocator)
+          : upstream(allocator),
+            memory(allocator) {}
+
+      Memory& upstream;
+      ErasingAllocator<Memory> memory;
+    };
+
+    template <Allocator Memory>
+    class HttpMessage : HttpMessageMemory<Memory> {
       using Secure = ErasingAllocator<Memory>;
       using Text = ds::String<Secure>;
-
-      Memory& upstream_;
-      Secure memory_;
 
     public:
       using Bytes = ds::Vec<std::uint8_t, Secure>;
 
-      explicit HttpMessage(Memory& memory, bool response = false);
+      explicit HttpMessage(Memory& memory, bool is_response = false);
+
+      ~HttpMessage() = default;
 
       HttpMessage(const HttpMessage&) = delete;
       HttpMessage& operator=(const HttpMessage&) = delete;
+      HttpMessage(HttpMessage&&) = delete;
+      HttpMessage& operator=(HttpMessage&&) = delete;
 
       auto readHttp1Head(std::string_view input, bool head_response = false) -> Http1Head;
 
@@ -312,7 +331,7 @@ export {
       bool response_to_head = false;
       bool body_materialized = false;
       HttpVersion version = HttpVersion::http11;
-      std::uint16_t status = 200;
+      std::uint16_t status = HttpStatus::first_success;
       std::uint32_t stream = 0;
       Text method, target, reason, scheme, authority;
       HttpFields<Memory> headers, trailers;
@@ -322,6 +341,11 @@ export {
       static HttpVersion readVersion(std::string_view value);
 
       void validateRequest() const;
+
+      void validateHttp2Request() const;
+
+      // The checks a message passes before it is written as HTTP/1.
+      void validateHttp1() const;
 
       void validateHost() const;
 
@@ -337,16 +361,21 @@ export {
 
       static void append(Bytes& output, std::string_view text);
 
-      static void number(Bytes& output, std::size_t value, int base = 10);
+      void writeStartLine(Bytes& output) const;
 
-      static void fieldLine(Bytes& output, std::string_view name, std::string_view value);
+      // The end of a head whose message carries no body, with the length a response to HEAD announces.
+      void writeBodylessEnd(Bytes& output);
+
+      void writeChunked(Bytes& output, std::span<const std::uint8_t> entity) const;
+
+      static void number(Bytes& output, std::size_t value, unsigned base = http_decimal);
+
+      static void fieldLine(Bytes& output, const HttpMessageView::Field& field);
 
       static void validateHeadSize(const Bytes& head);
 
-      static constexpr std::size_t maximum_method_bytes = 64;
-      static constexpr std::size_t maximum_target_bytes = 8192;
       static constexpr std::size_t status_line_prefix_bytes = 13;
-      static constexpr std::size_t content_overhead_bytes = 64 * 1024;
+      static constexpr std::size_t content_overhead_bytes = std::size_t{64} * 1024;
       static constexpr std::size_t maximum_wire_bytes = maximum_body_bytes + (3 * content_overhead_bytes);
     };
 

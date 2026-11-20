@@ -93,8 +93,8 @@ namespace telar::runtime {
     ctl_info control{};
     constexpr std::string_view name = UTUN_CONTROL_NAME;
 
-    std::copy(name.begin(), name.end(), control.ctl_name);
-    if (::ioctl(tunnel_.get(), CTLIOCGINFO, &control) != 0) {
+    std::ranges::copy(name, std::span{control.ctl_name}.begin());
+    if (::ioctl(tunnel_.get(), CTLIOCGINFO, &control) != 0) { // NOLINT(cppcoreguidelines-pro-type-vararg): ioctl's C signature is variadic
       throw SystemError{"Find redirect discovery control"};
     }
 
@@ -104,7 +104,7 @@ namespace telar::runtime {
     address.sc_family = AF_SYSTEM;
     address.ss_sysaddr = AF_SYS_CONTROL;
     address.sc_id = control.ctl_id;
-    if (::connect(tunnel_.get(), reinterpret_cast<const sockaddr*>(&address), sizeof(address)) != 0) {
+    if (::connect(tunnel_.get(), reinterpret_cast<const sockaddr*>(&address), sizeof(address)) != 0) { // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the socket API passes every address family as a sockaddr
       throw SystemError{"Create redirect discovery interface"};
     }
 
@@ -123,27 +123,30 @@ namespace telar::runtime {
     FileDescriptor configuration{::socket(AF_INET, SOCK_DGRAM, 0)};
     ifreq flags{};
 
-    std::copy(name_.view().begin(), name_.view().end(), sys::interfaceName(flags));
-    if (!configuration || ::ioctl(configuration.get(), SIOCGIFFLAGS, &flags) != 0) {
+    std::ranges::copy(name_.view(), std::span{sys::interfaceName(flags)}.begin());
+    if (!configuration || ::ioctl(configuration.get(), SIOCGIFFLAGS, &flags) != 0) { // NOLINT(cppcoreguidelines-pro-type-vararg): ioctl's C signature is variadic
       throw SystemError{"Read discovery interface flags"};
     }
 
-    sys::interfaceFlags(flags) |= IFF_UP;
-    if (::ioctl(configuration.get(), SIOCSIFFLAGS, &flags) != 0) {
+    auto& interface_flags = sys::interfaceFlags(flags);
+
+    // The flag bits are combined unsigned.
+    interface_flags = static_cast<short>(static_cast<unsigned>(interface_flags) | static_cast<unsigned>(IFF_UP));
+    if (::ioctl(configuration.get(), SIOCSIFFLAGS, &flags) != 0) { // NOLINT(cppcoreguidelines-pro-type-vararg): ioctl's C signature is variadic
       throw SystemError{"Enable redirect discovery interface"};
     }
 
     // utun creation does not attach IP protocol handlers. PF's ifnet_output
     // needs them even though this interface has no configured IP addresses.
-    if (::ioctl(configuration.get(), SIOCPROTOATTACH, &flags) != 0 && sys::lastError() != EEXIST) {
+    if (::ioctl(configuration.get(), SIOCPROTOATTACH, &flags) != 0 && sys::lastError() != EEXIST) { // NOLINT(cppcoreguidelines-pro-type-vararg): ioctl's C signature is variadic
       throw SystemError{"Attach discovery IPv4 protocol"};
     }
 
     FileDescriptor ipv6{::socket(AF_INET6, SOCK_DGRAM, 0)};
     in6_aliasreq request{};
 
-    std::copy(name_.view().begin(), name_.view().end(), request.ifra_name);
-    if (!ipv6 || (::ioctl(ipv6.get(), SIOCPROTOATTACH_IN6, &request) != 0 && sys::lastError() != EEXIST)) {
+    std::ranges::copy(name_.view(), std::span{request.ifra_name}.begin());
+    if (!ipv6 || (::ioctl(ipv6.get(), SIOCPROTOATTACH_IN6, &request) != 0 && sys::lastError() != EEXIST)) { // NOLINT(cppcoreguidelines-pro-type-vararg): ioctl's C signature is variadic
       throw SystemError{"Attach discovery IPv6 protocol"};
     }
 

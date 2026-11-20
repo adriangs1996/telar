@@ -11,7 +11,9 @@ namespace telar::runtime {
   }
 
   void SuggestionService::process(std::span<const Byte> payload, EncodedReply<ConcurrentMemory>& reply, const RequestContext& context) {
-    ds::Array<Byte, 1024> scratch;
+    // A suggestion request decodes a prompt and a few short fields.
+    constexpr std::size_t decode_bytes = 1024;
+    ds::Array<Byte, decode_bytes> scratch; // NOLINT(cppcoreguidelines-pro-type-member-init): the decoder writes the bytes it hands out before they are read, so zeroing them would cost every suggestion request
     DecodeStorage storage{scratch.viewMut()};
     const auto request = Codec::decode<SuggestCommand>(payload, storage);
 

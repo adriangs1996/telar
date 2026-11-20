@@ -30,7 +30,7 @@ export {
 
     inline constexpr std::string_view magic = "TELARCKP";
     inline constexpr std::uint16_t current_version = 10;
-    inline constexpr std::size_t maximum_bytes = 4 * 1024 * 1024;
+    inline constexpr std::size_t maximum_bytes = std::size_t{4} * 1024 * 1024;
 
     enum class Kind : Byte {
       end,
@@ -63,13 +63,13 @@ export {
     };
 
     struct PaneRecord {
-      std::uint64_t id;
-      std::uint64_t workspace;
-      std::uint64_t tab;
+      std::uint64_t id = 0;
+      std::uint64_t workspace = 0;
+      std::uint64_t tab = 0;
       std::string_view cwd;
-      std::uint16_t columns;
-      std::uint16_t rows;
-      std::uint16_t argument_count;
+      std::uint16_t columns = 0;
+      std::uint16_t rows = 0;
+      std::uint16_t argument_count = 0;
       std::string_view arguments;
       AgentProvider provider = AgentProvider::unknown;
       std::string_view session;
@@ -85,8 +85,8 @@ export {
     };
 
     struct WorktreeRecord {
-      std::uint64_t id;
-      std::uint64_t workspace;
+      std::uint64_t id = 0;
+      std::uint64_t workspace = 0;
       RegisterWorktree registration;
     };
 
@@ -95,6 +95,20 @@ export {
     void validateTitle(std::string_view title, AgentTitleSource source);
 
   }
+}
+
+// The bounds a checkpoint's records keep within, which the reader, the writer and the restore check.
+namespace telar::runtime::checkpoint {
+  inline constexpr std::size_t maximum_path_bytes = 4096;
+  inline constexpr std::size_t maximum_name_bytes = 256;
+  inline constexpr std::size_t maximum_label_bytes = 128;
+  inline constexpr std::size_t maximum_panes = 256;
+  inline constexpr std::size_t maximum_tabs = 64;
+  inline constexpr std::size_t maximum_tab_panes = 64;
+  inline constexpr std::size_t maximum_arguments = 64;
+  inline constexpr std::size_t maximum_argument_bytes = std::size_t{128} * 1024;
+  inline constexpr std::size_t maximum_session_bytes = 64;
+  inline constexpr std::size_t maximum_layout_bytes = std::size_t{16} * 1024;
 }
 
 // Interface: persistence/file_store.cppm
@@ -157,85 +171,47 @@ export {
 
       // Generic over the caller's consumer, which each record is handed to.
       template <typename Consumer>
-      TBC_GENERIC inline void read(Consumer&& consume) {
-        std::size_t pane_count = 0;
-
+      TBC_GENERIC inline void read(Consumer consume) {
         for (;;) {
-          switch (static_cast<Kind>(u8::decode(input_))) {
+          const auto kind = u8::decode(input_);
+          if (kind > static_cast<Byte>(Kind::worktree)) {
+            throw EncodingError{"Unknown checkpoint record"};
+          }
+
+          switch (static_cast<Kind>(kind)) {
           case Kind::end:
             if (!input_.empty()) {
               throw EncodingError{"Trailing checkpoint bytes"};
             }
 
             return;
-          case Kind::workspace: {
-            const WorkspaceRecord record{.id = u64::decode(input_), .path = text16(), .name = text16(), .first_tab = u64::decode(input_), .first_label = text16()};
-
-            validatePath(record.path);
-            if (record.name.size() > 256 || record.first_label.size() > 128 || (version_ < 3 && record.first_label.empty())) {
-              throw EncodingError{"Invalid checkpoint workspace label"};
-            }
-
-            consume(record);
+          case Kind::workspace:
+            consume(workspace());
             break;
-          }
-          case Kind::tab: {
-            const TabRecord record{.workspace = u64::decode(input_), .id = u64::decode(input_), .label = text16()};
-            if (record.label.size() > 128 || (version_ < 3 && record.label.empty())) {
-              throw EncodingError{"Invalid checkpoint tab label"};
-            }
-
-            consume(record);
+          case Kind::tab:
+            consume(tab());
             break;
-          }
-          case Kind::pane: {
-            const auto record = pane();
-            if (!record) {
-              break;
+          case Kind::pane:
+            if (const auto record = pane()) {
+              consume(*record);
             }
 
-            if (++pane_count > 256) {
-              throw EncodingError{"Checkpoint has too many panes"};
-            }
-
-            consume(*record);
             break;
-          }
-          case Kind::layout: {
-            const LayoutRecord record{.identity = u64::decode(input_), .last_used = u64::decode(input_), .payload = bytes32()};
-            if (record.payload.empty() || record.payload.size() > 16 * 1024) {
-              throw EncodingError{"Invalid checkpoint layout size"};
+          case Kind::layout:
+            consume(layout());
+            break;
+          case Kind::worktree:
+            if (const auto record = worktree(); accepted(record)) {
+              consume(record);
             }
 
-            consume(record);
             break;
-          }
-          case Kind::worktree: {
-            const auto record = worktree();
-
-            try {
-              validatePath(record.registration.path);
-              if (record.id == 0) {
-                throw EncodingError{"Invalid checkpoint worktree identity"};
-              }
-
-              Codec::encodedSize(record.registration);
-            } catch (const EncodingError&) {
-              ++skipped_worktrees;
-              break;
-            }
-
-            consume(record);
-            break;
-          }
-          default:
-            throw EncodingError{"Unknown checkpoint record"};
           }
         }
       }
 
-      Counters counters;
-      std::size_t skipped_worktrees = 0;
+      // Public beside the reader's private input, as a restore reads them once the header is read.
+      Counters counters; // NOLINT(cppcoreguidelines-non-private-member-variables-in-classes,misc-non-private-member-variables-in-classes)
 
     private:
       bool boolean();
@@ -246,12 +222,24 @@ export {
 
       std::span<const Byte> bytes32();
 
+      WorkspaceRecord workspace();
+
+      TabRecord tab();
+
+      // A pane to restore, counted against the most a checkpoint holds; nothing for one left out.
       ds::Option<PaneRecord> pane();
+
+      LayoutRecord layout();
 
       WorktreeRecord worktree();
 
+      // Whether a worktree record is one to restore; one that is not is counted as skipped.
+      bool accepted(const WorktreeRecord& record);
+
       std::span<const Byte> input_;
       std::uint16_t version_;
+      std::size_t skipped_worktrees_ = 0;
+      std::size_t pane_count_ = 0;
     };
 
   }
@@ -284,7 +272,7 @@ export {
         Reader reader{bytes};
 
         model_.next_pane_generation = std::max(model_.next_pane_generation, reader.counters.generation);
-        ds::Array<PaneRecord, 256> records;
+        ds::Array<PaneRecord, maximum_panes> records;
         std::size_t count = 0;
 
         reader.read([&]<typename Record>(const Record& record) {
@@ -293,7 +281,7 @@ export {
           } else if constexpr (!std::same_as<Record, LayoutRecord>) {
             try {
               restore(record);
-            } catch (const std::exception&) {
+            } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): a record that cannot be restored is left out, and the rest restore
             }
           }
         });
@@ -304,7 +292,7 @@ export {
         for (const auto& record : panes) {
           try {
             restore(record);
-          } catch (const std::exception&) {
+          } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): a pane that cannot be restored is left out, and the rest restore
           }
         }
 
@@ -318,11 +306,12 @@ export {
         layouts.read([&]<typename Record>(const Record& record) {
           if constexpr (std::same_as<Record, LayoutRecord>) {
             try {
-              ds::Array<Byte, 64 * 1024> scratch;
+              constexpr std::size_t scratch_bytes = std::size_t{64} * 1024;
+              ds::Array<Byte, scratch_bytes> scratch; // NOLINT(cppcoreguidelines-pro-type-member-init): the decoder writes what it reads back, so zeroing 64 KiB per layout would be waste
               DecodeStorage storage{scratch.viewMut()};
 
               layouts_.retain(model_, record.identity, Codec::decode<UpdateClientLayout>(record.payload, storage));
-            } catch (const std::exception&) {
+            } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): a layout that cannot be decoded is left out, as one never saved
             }
           }
         });
@@ -350,7 +339,7 @@ export {
       inline void restore(const TabRecord& record) {
         validateIdentity(record.id);
         auto* workspace = model_.workspaces.find(record.workspace);
-        if (workspace == nullptr || workspace->tabs.size() == 64 || workspace->tab(record.id) != nullptr) {
+        if (workspace == nullptr || workspace->tabs.size() == maximum_tabs || workspace->tab(record.id) != nullptr) {
           return;
         }
 
@@ -370,11 +359,11 @@ export {
         validateIdentity(record.id);
         auto* workspace = model_.workspaces.find(record.workspace);
         const auto* tab = workspace == nullptr ? nullptr : workspace->tab(record.tab);
-        if (tab == nullptr || tab->panes.size() == 64 || model_.panes.find(record.id) != nullptr) {
+        if (tab == nullptr || tab->panes.size() == maximum_tab_panes || model_.panes.find(record.id) != nullptr) {
           return;
         }
 
-        ds::Array<std::string_view, 64> original;
+        ds::Array<std::string_view, maximum_arguments> original;
         auto remaining = record.arguments;
 
         for (std::size_t index = 0; index < record.argument_count; ++index) {
@@ -424,7 +413,7 @@ export {
             input.append({&separator, 1});
           }
 
-          input.append({reinterpret_cast<const Byte*>(words[index].data()), words[index].size()});
+          input.append(byteView(words[index]));
         }
 
         constexpr Byte enter = '\r';
@@ -506,10 +495,11 @@ export {
 
       tbc::val_a<std::span<const Byte>> finish();
 
-      std::size_t dropped = 0;
+      // The records left out for want of room.
+      [[nodiscard]] std::size_t dropped() const noexcept;
 
     private:
-      struct CapacityReached {};
+      struct CapacityReached : std::exception {};
 
       void require(std::size_t count);
 
@@ -536,6 +526,7 @@ export {
 
       tbc::val_a<std::span<Byte>> buffer_;
       tbc::val_a<std::span<Byte>> remaining_;
+      std::size_t dropped_ = 0;
     };
 
     extern template void Writer::append<WorkspaceRecord>(const WorkspaceRecord& record);
@@ -621,13 +612,13 @@ export {
           writer.append(record);
         }
 
-        ds::Array<Byte, 16 * 1024> payload;
+        ds::Array<Byte, maximum_layout_bytes> payload; // NOLINT(cppcoreguidelines-pro-type-member-init): Codec::encode writes the bytes each record views, so zeroing 16 KiB per snapshot would be waste
 
         layouts.exportRecords(model, [&](std::uint64_t identity, std::uint64_t last_used, const UpdateClientLayout& layout) {
           writer.append(LayoutRecord{.identity = identity, .last_used = last_used, .payload = Codec::encode(layout, payload.viewMut())});
         });
 
-        dropped = writer.dropped;
+        dropped = writer.dropped();
         return writer.finish();
       }
 
@@ -690,6 +681,8 @@ export {
 
       SessionStore(const SessionStore&) = delete;
       SessionStore& operator=(const SessionStore&) = delete;
+      SessionStore(SessionStore&&) = delete;
+      SessionStore& operator=(SessionStore&&) = delete;
 
       template <PaneLauncher Panes>
       inline void configure(RuntimeModel& model, Panes& panes, ClientLayouts& layouts, Options options) {
@@ -710,7 +703,7 @@ export {
           }
         } catch (const EncodingError&) {
           file.quarantine();
-        } catch (const std::exception&) {
+        } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): a session that cannot be read starts empty, and the next checkpoint replaces it
         }
 
         buffer_.resize(maximum_bytes);
@@ -740,13 +733,13 @@ export {
 
         try {
           TELAR_TRACE("checkpoint.encode");
-          const auto bytes = Snapshot<Agents>::encode(model, layouts, agents, buffer_.viewMut(), dropped_records);
+          const auto bytes = Snapshot<Agents>::encode(model, layouts, agents, buffer_.viewMut(), dropped_records_);
 
           pending_ = worker_.getMut().submit(bytes);
           dirty_ = !pending_;
         } catch (const std::exception&) {
           dirty_ = false;
-          ++encoding_failures;
+          ++encoding_failures_;
         }
 
         return std::chrono::seconds{1};
@@ -766,20 +759,12 @@ export {
         }
 
         try {
-          worker_.getMut().wait([&](int error) {
-            completed(error);
-          });
-
+          waitForWrite();
           if (snapshot_.changed(model, layouts, agents) || dirty_) {
-            const auto bytes = Snapshot<Agents>::encode(model, layouts, agents, buffer_.viewMut(), dropped_records);
-            if (worker_.getMut().submit(bytes)) {
-              worker_.getMut().wait([&](int error) {
-                completed(error);
-              });
-            }
+            writeNow(model, layouts, agents);
           }
         } catch (const std::exception&) {
-          ++encoding_failures;
+          ++encoding_failures_;
         }
       }
 
@@ -787,17 +772,26 @@ export {
         return worker_ ? worker_->descriptor() : -1;
       }
 
-      std::uint64_t write_failures = 0;
-      std::uint64_t encoding_failures = 0;
-      std::size_t dropped_records = 0;
-
     private:
       static constexpr std::chrono::milliseconds debounce{500};
+
+      inline void waitForWrite() {
+        worker_.getMut().wait([&](int error) {
+          completed(error);
+        });
+      }
+
+      inline void writeNow(const RuntimeModel& model, const ClientLayouts& layouts, const Agents& agents) {
+        const auto bytes = Snapshot<Agents>::encode(model, layouts, agents, buffer_.viewMut(), dropped_records_);
+        if (worker_.getMut().submit(bytes)) {
+          waitForWrite();
+        }
+      }
 
       inline void completed(int error) {
         pending_ = false;
         if (error != 0) {
-          ++write_failures;
+          ++write_failures_;
           dirty_ = true;
           due_ = Clock::now() + debounce;
         }
@@ -811,6 +805,9 @@ export {
       Clock::time_point due_;
       bool dirty_ = false;
       bool pending_ = false;
+      std::uint64_t write_failures_ = 0;
+      std::uint64_t encoding_failures_ = 0;
+      std::size_t dropped_records_ = 0;
     };
 
   }

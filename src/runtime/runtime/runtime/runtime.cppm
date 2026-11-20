@@ -89,8 +89,15 @@ export {
       [[gnu::noinline]] void publish(ClientSession& client, const RuntimeModel& model, const AgentRegistry<ConcurrentMemory>& registry);
 
     private:
-      ds::Array<FixedText<48>, AgentRegistry<ConcurrentMemory>::capacity> directories_;
-      ds::Array<FixedText<96>, AgentRegistry<ConcurrentMemory>::capacity> placeholders_;
+      // The lengths the snapshot cuts its labels and titles to.
+      static constexpr std::size_t label_bytes = 48;
+      static constexpr std::size_t title_bytes = 96;
+
+      // The pane's directory as the snapshot labels it, the user's home shown as `~`.
+      static void labelDirectory(FixedText<label_bytes>& label, std::string_view cwd);
+
+      ds::Array<FixedText<label_bytes>, AgentRegistry<ConcurrentMemory>::capacity> directories_;
+      ds::Array<FixedText<title_bytes>, AgentRegistry<ConcurrentMemory>::capacity> placeholders_;
     };
 
   }
@@ -187,7 +194,9 @@ export {
         void clear() noexcept;
 
       private:
-        ds::Array<AgentSoundNotification, 32> entries_{};
+        static constexpr std::size_t capacity = 32;
+
+        ds::Array<AgentSoundNotification, capacity> entries_{};
         std::size_t count_ = 0;
       };
 
@@ -215,7 +224,9 @@ export {
 
     // Storage for a launch's working directory taken from the model, so that the launch borrows none of
     // the model a launch then changes.
-    using LaunchDirectory = FixedText<4096>;
+    inline constexpr std::size_t launch_directory_bytes = 4096;
+
+    using LaunchDirectory = FixedText<launch_directory_bytes>;
 
     // A copy of a directory in `storage`, for a launch's cwd: assigning it replaces what that field
     // viewed, as Rust's `launch.cwd = own(&mut storage, directory)` does.
@@ -367,7 +378,7 @@ export {
       // Tells each client viewing the closed tab's workspace, after `seen` notes it; one whose queue
       // is full resynchronizes the workspace instead.
       template <typename Seen>
-      static void broadcastTabClosed(ClientStore& clients, const TabClosed& closed, Seen&& seen) noexcept;
+      static void broadcastTabClosed(ClientStore& clients, const TabClosed& closed, const Seen& seen) noexcept;
 
       static TabClosed removeTab(RuntimeModel& model, TabLocation location);
 
@@ -375,12 +386,29 @@ export {
 
       void retainFinalText(ExitedPanes& exited, Pane& pane) noexcept;
 
-      std::uint64_t createRoot(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const Launch& launch, TerminalSize size, std::string_view name, bool replace_view = false);
+      // How a client opens a workspace: the pane it starts with, its name, and whether the client leaves
+      // the panes it shows for it.
+      struct WorkspaceOpening {
+        std::uint64_t client_id = 0;
+        Launch launch;
+        TerminalSize size{};
+        std::string_view name;
+        bool replace_view = false;
+      };
+
+      std::uint64_t createRoot(RuntimeModel& model, Panes& panes, ClientStore& clients, const WorkspaceOpening& opening);
 
       static std::uint64_t nextTabIdentity(const RuntimeModel& model);
 
       // A pane launched into a tab whose workspace the client takes the geometry of.
-      std::uint64_t createAt(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, TabLocation location, Launch launch, TerminalSize size);
+      struct TabOpening {
+        std::uint64_t client_id = 0;
+        TabLocation location;
+        Launch launch;
+        TerminalSize size{};
+      };
+
+      std::uint64_t createAt(RuntimeModel& model, Panes& panes, ClientStore& clients, const TabOpening& opening);
 
       static ds::Option<std::uint64_t> firstPane(const PaneStore& panes, const Workspace& workspace) noexcept;
 
@@ -388,7 +416,7 @@ export {
 
       static void createDirectories(std::string_view path);
 
-      enum class GenerationField {
+      enum class GenerationField : std::uint8_t {
         included,
         omitted,
       };
@@ -398,7 +426,8 @@ export {
       static constexpr std::size_t maximum_tabs = 64;
       static constexpr std::size_t maximum_panes_per_tab = 64;
       ConcurrentMemory& memory_;
-      ds::Array<Notice, 64> notices_{};
+      static constexpr std::size_t notice_capacity = 64;
+      ds::Array<Notice, notice_capacity> notices_{};
       std::size_t notice_count_ = 0;
       bool overflowed_ = false;
     };
@@ -423,7 +452,13 @@ export {
 
       static void registerEntry(RuntimeModel& model, ClientSession& client, const RegisterWorktree& request);
 
-      void launch(RuntimeModel& model, Workspaces& workspaces, Panes& panes, ClientStore& clients, std::uint64_t client_id, const LaunchWorktree& request);
+      // The services a worktree's launch opens its workspace and pane with.
+      struct LaunchServices {
+        Workspaces& workspaces;
+        Panes& panes;
+      };
+
+      void launch(RuntimeModel& model, LaunchServices services, ClientStore& clients, std::uint64_t client_id, const LaunchWorktree& request);
 
       static void forget(RuntimeModel& model, Workspaces& workspaces, ClientStore& clients, std::uint64_t client_id, const ForgetWorktree& request);
 
@@ -468,14 +503,14 @@ export {
 
     template <typename Executor, typename Memory>
     concept BackgroundExecutor = Allocator<Memory> && HistoryEventSink<Executor> && requires(Executor& executor, std::uint64_t client, const RequestContext& context, void (*consume)(std::uint64_t, ClientTag, std::span<const Byte>)) {
-      { executor.descriptors() } noexcept -> std::same_as<ds::Array<int, 5>>;
+      { executor.descriptors() } noexcept -> std::same_as<ds::Array<int, background_worker_count>>;
       { executor.collect(consume) } -> std::same_as<void>;
       { executor.cancel(client) } noexcept -> std::same_as<void>;
       { executor.suggestionsAvailable() } noexcept -> std::same_as<bool>;
       { executor.editorBusy() } noexcept -> std::same_as<bool>;
       { executor.takeHistoryFailures() } noexcept -> std::same_as<std::uint64_t>;
-    } && submits_worker_requests<Executor, ClientRequests> && requires(Executor& executor, Connection<Memory>& reply, const WorktreeProbeRequest& request, void (*consume)(const WorktreeProbeResult&)) {
-      { executor.tryPaths(std::uint64_t{}, FindPaths{}, reply) } -> std::same_as<bool>;
+    } && submits_worker_requests<Executor, ClientRequests> && requires(Executor& executor, Connection<Memory>& reply, const FindPaths& paths, const WorktreeProbeRequest& request, void (*consume)(const WorktreeProbeResult&)) {
+      { executor.tryPaths(std::uint64_t{}, paths, reply) } -> std::same_as<bool>;
       { executor.observeWorktree(request) } -> std::same_as<bool>;
       { executor.collectWorktrees(consume) } -> std::same_as<void>;
     };
@@ -590,6 +625,10 @@ export {
       void request(std::uint64_t identity, std::span<const Byte> payload, DecodeStorage& storage);
 
       // A failed request answers its client unless the request dropped it.
+      // Observes the reporter's pane before its deferred report is answered; a report that cannot wait for
+      // it is dropped.
+      void observeReporter(std::uint64_t identity, ReporterIdentity reporter);
+
       void fail(std::uint64_t identity, const RequestFailed& failure);
 
       void dispatch(std::uint64_t identity, std::span<const Byte> payload, DecodeStorage& storage);
@@ -769,6 +808,16 @@ export {
       // An opened editor reported to the client that asked, as failed unless it opened beside the
       // pane it was asked from.
       static void deliverEditorReply(const PaneStore& panes, ClientSession& client, std::span<const Byte> payload);
+
+      // The repository of the directory a pane's shell is at.
+      static void followRepository(Pane& pane, ShellGitService& shell_git);
+
+      void refreshServices(Clock::time_point now);
+
+      void addMonitorRoots(MonitorWork& work) const;
+
+      // Reads, answers and writes the client in a slot; how soon it needs the loop again.
+      std::chrono::nanoseconds serveClient(std::size_t slot, Clock::time_point now);
 
       std::chrono::nanoseconds publish(Clock::time_point now);
 

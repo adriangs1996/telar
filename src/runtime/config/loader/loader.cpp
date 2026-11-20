@@ -30,7 +30,7 @@ namespace telar::runtime::config {
       }
     }
 
-    ds::Array<char, PATH_MAX> canonical;
+    ds::Array<char, PATH_MAX> canonical{};
     if (::realpath(path.data(), canonical.dataMut()) == nullptr) {
       if (sys::lastError() == ENOENT && options.config.empty() && options.profile.empty()) {
         return;
@@ -42,17 +42,17 @@ namespace telar::runtime::config {
     const std::string_view resolved{canonical.data()};
     const auto directory = resolved.substr(0, resolved.rfind('/'));
     const auto source = readSource(canonical.data());
-    lua::Vm vm{memory_};
+    lua::Vm machine{memory_};
 
-    vm.resetBudget();
-    vm.execute(bootstrap, "@telar/bootstrap.lua", 0);
-    lua_getglobal(vm.state(), "telar");
-    lua::JsonDecoder<Memory>::install(vm.state(), memory_);
-    lua_pop(vm.state(), 1);
-    LocalModules modules{vm.state(), directory};
+    machine.resetBudget();
+    machine.execute(bootstrap, "@telar/bootstrap.lua", 0);
+    lua_getglobal(machine.state(), "telar");
+    lua::JsonDecoder<Memory>::install(machine.state(), memory_);
+    lua_pop(machine.state(), 1);
+    LocalModules modules{machine.state(), directory};
 
-    vm.execute(source, "@config.lua");
-    const lua::Value root{vm.state(), -1, "config"};
+    machine.execute(source, "@config.lua");
+    const lua::Value root{machine.state(), -1, "config"};
 
     SnapshotReader{memory_, values_}.read(root, options.profile);
     resolveRelativePath(values_.history_path, directory);
@@ -64,7 +64,9 @@ namespace telar::runtime::config {
   template <Allocator Memory>
   ds::String<Memory> Loader<Memory>::readSource(const char* path) const {
     try {
-      return readFile(memory_, path, 1024 * 1024);
+      constexpr std::size_t maximum_source_bytes = std::size_t{1024} * 1024;
+
+      return readFile(memory_, path, maximum_source_bytes);
     } catch (const FileReadError& error) {
       if (error.failure() == FileReadFailure::invalid_size) {
         throw lua::Error{"Configuration must be a regular file of at most 1 MiB"};

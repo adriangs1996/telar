@@ -8,10 +8,10 @@ namespace telar::runtime {
   }
 
   PaneText ExitedPanes::Record::response(const ReadPane& request) const noexcept {
-    std::string_view text{bytes.data(), length};
+    std::string_view text{bytes.view().first(length)};
     const auto last = text.find_last_not_of("\n ");
 
-    text = last == std::string_view::npos ? std::string_view{} : text.substr(0, last + 1);
+    text.remove_suffix(last == std::string_view::npos ? text.size() : text.size() - (last + 1));
     auto start = text.size();
     unsigned lines = 0;
 
@@ -23,7 +23,8 @@ namespace telar::runtime {
       --start;
     }
 
-    return PaneText{.request_id = request.request_id, .pane_id = pane_id, .truncated = start == 0 && truncated, .text = text.substr(start), .exit_code = exit_code};
+    text.remove_prefix(start);
+    return PaneText{.request_id = request.request_id, .pane_id = pane_id, .truncated = start == 0 && truncated, .text = text, .exit_code = exit_code};
   }
 
   void ExitedPanes::record(std::uint64_t pane_id, std::uint64_t generation, const PaneText& text) noexcept {
@@ -34,7 +35,10 @@ namespace telar::runtime {
     entry.exit_code = text.exit_code.valueOr(0);
     entry.length = std::min(text.text.size(), maximum_bytes);
     entry.truncated = text.truncated || entry.length != text.text.size();
-    std::copy_n(text.text.end() - entry.length, entry.length, entry.bytes.dataMut());
+    auto kept = text.text;
+
+    kept.remove_prefix(kept.size() - entry.length);
+    std::ranges::copy(kept, entry.bytes.viewMut().begin());
     next_ = (next_ + 1) % capacity;
   }
 

@@ -32,12 +32,24 @@ export {
 
       static std::int32_t plus(std::int32_t value, int increment) noexcept;
 
+      static constexpr std::size_t maximum_path = 1024;
+      static constexpr std::size_t maximum_needle = 64;
+
       static int bonus(char previous, char value) noexcept;
+
+      // Where each of the query's characters first matches in order, written to `positions` too when
+      // it is not empty; false when the path does not hold the query.
+      static bool firstMatches(std::string_view path, std::string_view query, ds::Array<std::uint16_t, maximum_needle>& matches, std::span<std::uint16_t> positions) noexcept;
+
+      // Fills the score rows of every query prefix, both of them per character when `retain_rows`
+      // keeps them for tracing, else two alternating.
+      void align(std::string_view path, std::string_view query, const ds::Array<std::uint16_t, maximum_needle>& first_matches, const ds::Array<std::int32_t, maximum_path>& bonuses, bool retain_rows) noexcept;
+
+      // Walks the retained rows back from the path's end to where the best alignment places each character.
+      void trace(std::size_t path_size, std::span<const std::uint16_t> first_matches, std::span<std::uint16_t> positions) noexcept;
 
       std::span<std::int32_t> row(std::size_t index, bool best) noexcept;
 
-      static constexpr std::size_t maximum_path = 1024;
-      static constexpr std::size_t maximum_needle = 64;
       static constexpr int consecutive_score = 1000;
       static constexpr int leading_gap = -5;
       static constexpr int inner_gap = -10;
@@ -62,7 +74,7 @@ export {
       PathKind kind;
     };
 
-    enum class PathBuildFailure {
+    enum class PathBuildFailure : std::uint8_t {
       none,
       unreadable,
       allocation,
@@ -74,8 +86,8 @@ export {
     template <Allocator Memory>
     class TBC_SHARED PathIndexStorage {
     public:
-      static constexpr std::size_t maximum_entries = 512 * 1024;
-      static constexpr std::size_t maximum_bytes = 32 * 1024 * 1024;
+      static constexpr std::size_t maximum_entries = std::size_t{512} * 1024;
+      static constexpr std::size_t maximum_bytes = std::size_t{32} * 1024 * 1024;
 
       explicit PathIndexStorage(Memory& memory);
 
@@ -83,6 +95,8 @@ export {
 
       PathIndexStorage(const PathIndexStorage&) = delete;
       PathIndexStorage& operator=(const PathIndexStorage&) = delete;
+      PathIndexStorage(PathIndexStorage&&) = delete;
+      PathIndexStorage& operator=(PathIndexStorage&&) = delete;
 
       void reset() noexcept;
 
@@ -107,8 +121,8 @@ export {
       static constexpr std::size_t entry_bytes = maximum_entries * sizeof(IndexedPath);
       static constexpr std::size_t publication_batch = 1024;
       Memory& memory_;
-      char* bytes_;
-      IndexedPath* entries_;
+      std::span<char> bytes_;
+      std::span<IndexedPath> entries_;
     };
 
     extern template class PathIndexStorage<SystemAllocator>;
@@ -157,6 +171,10 @@ export {
 export {
   namespace telar::runtime {
 
+    // A path query's text, and the matches it answers with at most.
+    inline constexpr std::size_t path_query_bytes = 64;
+    inline constexpr std::size_t path_result_capacity = 50;
+
     class PathIndex {
     public:
       explicit PathIndex(ConcurrentMemory& memory);
@@ -200,7 +218,7 @@ export {
           throw std::bad_alloc{};
         }
 
-        ds::Array<Candidate, 50> ranked;
+        ds::Array<Candidate, path_result_capacity> ranked; // NOLINT(cppcoreguidelines-pro-type-member-init): built on every query, and only the first `count` candidates are written and read
         std::size_t count = 0;
 
         for (std::size_t index = 0; index < published; ++index) {
@@ -235,8 +253,8 @@ export {
           count = kept + 1;
         }
 
-        ds::Array<PathMatch, 50> matches;
-        ds::Array<ds::Array<std::uint16_t, 64>, 50> positions;
+        ds::Array<PathMatch, path_result_capacity> matches;
+        ds::Array<ds::Array<std::uint16_t, path_query_bytes>, path_result_capacity> positions; // NOLINT(cppcoreguidelines-pro-type-member-init): built on every query, and only the positions scoring writes are read
 
         // Every row's positions are written before any match views them, as Rust fills the rows with
         // one mutable borrow and then lends them out shared.
@@ -296,11 +314,13 @@ export {
 
       [[nodiscard]] FindPaths view() const noexcept;
 
+      static constexpr std::size_t root_bytes = 4096;
+
       std::uint64_t request_id = 0;
-      FixedText<4096> root;
-      FixedText<64> query;
+      FixedText<root_bytes> root;
+      FixedText<path_query_bytes> query;
       PathKindFilter kind = PathKindFilter::any;
-      std::uint16_t limit = 50;
+      std::uint16_t limit = path_result_capacity;
     };
 
     // Kept whole: path_service_test instantiates it with its own GatedPathMemory and GatedPathIndex.
@@ -311,7 +331,7 @@ export {
       using Request = OwnedPathQuery;
 
       struct Result {
-        bool complete;
+        bool complete = false;
         std::span<const Byte> payload;
       };
 
@@ -356,7 +376,7 @@ export {
         index_.stop();
       }
 
-      inline bool observe(bool) noexcept {
+      inline bool observe(bool /*request*/) noexcept {
         index_.build();
         return true;
       }

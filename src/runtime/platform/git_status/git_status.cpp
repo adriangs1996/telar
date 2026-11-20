@@ -48,17 +48,19 @@ namespace telar::runtime {
 
   GitStatus GitStatusReader::read(std::string_view root) noexcept {
     GitStatus result;
-    GitHead head;
+    GitHead head; // NOLINT(cppcoreguidelines-pro-type-member-init): read writes the path and the HEAD bytes it reads, so zeroing 8 KiB per status read is work no read needs
     const auto branch = head.read(root);
     if (!branch) {
       return result;
     }
 
     result.present = true;
-    result.branch.assign(*branch);
     const auto deadline = Clock::now() + git_status_timeout;
 
     try {
+      // The branch is a part of the HEAD that GitHead reads, which fits the branch's capacity.
+      result.branch.assign(*branch);
+
       GitRepository git{memory_, root, deadline, cancelled_};
       bool printed = false;
       const auto status = git.stream({"status", "--porcelain", "--no-renames", "--ignore-submodules=all"}, [&](std::span<const Byte> bytes) {
@@ -71,7 +73,7 @@ namespace telar::runtime {
       }
     } catch (const RequestError& error) {
       result.timed_out = error.code() == FailureCode::resource_limit && Clock::now() >= deadline;
-    } catch (...) {
+    } catch (...) { // NOLINT(bugprone-empty-catch): any other failure of git leaves the status without its dirty state
     }
 
     return result;

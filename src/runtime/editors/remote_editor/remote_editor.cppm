@@ -25,13 +25,18 @@ export {
       // One open request: what it asks, the budgets it spends, and the candidate it opened, which views
       // the request's context. The editor keeps only the buffers every request reuses.
       struct Session {
+        // What one request may spend: directory entries read, endpoints tried and commands run.
+        static constexpr unsigned entry_budget = 128;
+        static constexpr unsigned endpoint_budget = 32;
+        static constexpr unsigned command_budget = 128;
+
         const OpenEditor& request;
         tbc::ref_a<RequestContext> context;
-        EditorKind kind;
+        EditorKind kind = EditorKind::unsupported;
         Clock::time_point deadline;
-        unsigned entries_left = 128;
-        unsigned endpoints_left = 32;
-        unsigned commands_left = 128;
+        unsigned entries_left = entry_budget;
+        unsigned endpoints_left = endpoint_budget;
+        unsigned commands_left = command_budget;
         tbc::val_a<const EditorCandidate*> opened = nullptr;
       };
 
@@ -41,7 +46,7 @@ export {
       void open(const OpenEditor& request, const RequestContext& context, EncodedReply<ConcurrentMemory>& reply);
 
     private:
-      static constexpr std::size_t output_limit = 16 * 1024;
+      static constexpr std::size_t output_limit = std::size_t{16} * 1024;
 
       std::string_view command(Session& session, std::span<const std::string_view> arguments);
       static bool ownedPath(const char* path, bool directory) noexcept;

@@ -223,7 +223,7 @@ namespace telar::runtime {
     }
   }
 
-  RuntimeClipboardReader::Result RuntimeClipboardReader::observe(const Request&) noexcept {
+  RuntimeClipboardReader::Result RuntimeClipboardReader::observe(const Request& /*request*/) noexcept {
     return clipboard::read(runtime_clipboard_max_bytes);
   }
 

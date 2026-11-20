@@ -50,7 +50,7 @@ export {
 
     class PendingClipboard {
     public:
-      static constexpr std::size_t capacity = 1024 * 1024;
+      static constexpr std::size_t capacity = std::size_t{1024} * 1024;
 
       explicit PendingClipboard(ConcurrentMemory& memory);
 
@@ -140,18 +140,23 @@ export {
     // The clients a runtime serves at once; a client's slot is its bit in what a pane is observed by.
     inline constexpr std::size_t client_capacity = 32;
 
+    // The panes and workspaces a runtime holds at once.
+    inline constexpr std::size_t pane_capacity = 256;
+    inline constexpr std::size_t workspace_capacity = 64;
+
     class Pane;
 
     class ClientSession {
     public:
       static constexpr std::size_t attachment_capacity = 64;
+      static constexpr int default_frames_per_second = 60;
 
       struct ForegroundStamp {
         std::uint64_t pane = 0;
         std::uint64_t revision = 0;
       };
 
-      explicit ClientSession(ConcurrentMemory& memory, std::uint64_t identity, FileDescriptor descriptor);
+      explicit ClientSession(ConcurrentMemory& memory, std::uint64_t session_id, FileDescriptor descriptor);
 
       [[nodiscard]] std::size_t availableAttachmentSlot() const;
 
@@ -198,13 +203,13 @@ export {
       unsigned limit_reports = 0;
       std::chrono::steady_clock::time_point limit_report_window;
       ds::Option<std::uint64_t> workspace;
-      std::chrono::nanoseconds frame_interval{1'000'000'000 / 60};
+      std::chrono::nanoseconds frame_interval{std::chrono::nanoseconds{std::chrono::seconds{1}} / default_frames_per_second};
       std::uint64_t workspace_revision = 0;
       std::uint64_t agent_workspace_revision = 0;
       std::uint64_t pane_revision = 0;
       std::uint64_t pane_workspace_revision = 0;
       ds::Option<ResyncRequired> workspace_resync;
-      ds::Array<ForegroundStamp, 256> foregrounds;
+      ds::Array<ForegroundStamp, pane_capacity> foregrounds;
       ds::Option<TextSearch> search;
       ConfigureTerminalColors colors{};
       // The client draws telar's editor in place of the shell's prompt: shells it starts print none.
@@ -226,12 +231,12 @@ export {
       };
 
     public:
-      enum class ReadMode {
+      enum class ReadMode : std::uint8_t {
         once,
         burst,
       };
 
-      explicit Pane(ConcurrentMemory& memory, std::uint64_t identity, TabLocation location, Command<ConcurrentMemory>& command, PaneLaunch settings);
+      explicit Pane(ConcurrentMemory& memory, std::uint64_t identity, TabLocation tab, Command<ConcurrentMemory>& command, PaneLaunch settings);
 
       bool read(ReadMode mode = ReadMode::once);
 
@@ -262,12 +267,12 @@ export {
         const auto count = [&] {
           TELAR_DIAGNOSTIC(diagnostics::TimedScope timing{counters == nullptr ? nullptr : &counters->input_write});
           if (response) {
-            ds::Array<iovec, PtyResponseQueue::message_capacity> vectors;
+            ds::Array<iovec, PtyResponseQueue::message_capacity> vectors; // NOLINT(cppcoreguidelines-pro-type-member-init): the PTY write path fills the batch's vectors, the only ones writev reads
 
             for (std::size_t index = 0; index < batch.count; ++index) {
               const auto message = batch.message(index);
 
-              vectors.atMut(index) = {.iov_base = const_cast<Byte*>(message.data()), .iov_len = message.size()};
+              vectors.atMut(index) = {.iov_base = const_cast<Byte*>(message.data()), .iov_len = message.size()}; // NOLINT(cppcoreguidelines-pro-type-const-cast): iovec's base is non-const for readv, and writev only reads through it
             }
 
             return write_responses(process->descriptor(), std::span<const iovec>{vectors}.first(batch.count));
@@ -318,8 +323,11 @@ export {
 
       ds::Option<std::int32_t> exitCode() const noexcept;
 
-      static constexpr std::size_t input_limit = 128 * 1024;
-      static constexpr std::size_t read_buffer_size = 16 * 1024;
+      static constexpr std::size_t input_limit = std::size_t{128} * 1024;
+      static constexpr std::size_t read_buffer_size = std::size_t{16} * 1024;
+      static constexpr std::size_t history_session_bytes = 16;
+      // The bytes of the foreground program's name the pane list shows.
+      static constexpr std::size_t foreground_bytes = 48;
 #if TELAR_DIAGNOSTICS
       diagnostics::PaneCounters* counters = nullptr;
       std::uint64_t input_dropped_bytes = 0;
@@ -328,7 +336,7 @@ export {
       std::uint64_t event_identity = 0;
       ds::Option<ConfigurePaneDesktop> desktop_theme;
       std::uint64_t generation = 1;
-      ds::Array<Byte, 16> history_session;
+      ds::Array<Byte, history_session_bytes> history_session{};
       TabLocation location;
       LaunchRecord<ConcurrentMemory> launch;
       ds::Option<AgentResume> restored_agent;
@@ -346,7 +354,7 @@ export {
       std::uint64_t cwd_revision = 0;
       ds::Option<std::uint64_t> worktree_checked_cwd;
       std::uint64_t input_revision = 0;
-      FixedText<48> foreground;
+      FixedText<foreground_bytes> foreground;
       std::uint64_t foreground_revision = 1;
       // The process group holding the terminal and since when, as the pane list reports them.
       pid_t foreground_group = 0;
@@ -401,8 +409,10 @@ export {
           ds::Option<int> status;
         };
 
+        static constexpr std::size_t kept_capacity = 16;
+
         PaneShell& state;
-        ds::Array<Mark, 16> kept{};
+        ds::Array<Mark, kept_capacity> kept{};
         std::size_t count = 0;
 
         void complete(CommandCompletion completion) noexcept;
@@ -411,6 +421,12 @@ export {
 
         [[nodiscard]] std::span<const Mark> marks() const noexcept;
       };
+
+      // Hands a read's bytes to the shell's marks, the observer and the terminal.
+      void ingest(std::span<const Byte> bytes, bool folded);
+
+      // Feeds the terminal up to each signed mark, so a command's block anchors where its mark was printed.
+      void feedMarks(std::span<const Byte> bytes, const ShellCompletions& completions);
 
       // Folds one round trip into the link's; clients hear of it when it moves by a tenth.
       void timeLink(std::chrono::steady_clock::duration elapsed) noexcept;
@@ -460,12 +476,14 @@ export {
 
       [[nodiscard]] std::string_view displayName() const noexcept;
 
+      static constexpr std::size_t git_branch_bytes = 200;
+
       std::uint64_t id;
       ds::String<ConcurrentMemory> path;
       ds::String<ConcurrentMemory> name;
       ds::Vec<Tab, ConcurrentMemory> tabs;
       ds::Option<std::uint64_t> geometry_client;
-      FixedText<200> git_branch;
+      FixedText<git_branch_bytes> git_branch;
       std::chrono::steady_clock::time_point git_checked_at;
       bool git_dirty = false;
       bool git_timed_out = false;
@@ -483,6 +501,12 @@ export {
 
       [[nodiscard]] WorktreeListEntry entry() const noexcept;
 
+      static constexpr std::size_t branch_bytes = 200;
+      static constexpr std::size_t title_bytes = 96;
+      static constexpr std::size_t brief_bytes = 512;
+      static constexpr std::size_t dispatched_from_bytes = 32;
+      static constexpr std::size_t command_label_bytes = 48;
+
       std::uint64_t id;
       std::uint64_t source;
       ds::Option<std::uint64_t> workspace;
@@ -491,12 +515,12 @@ export {
       WorktreeOrigin origin;
       WorktreeState state = WorktreeState::active;
       ds::String<ConcurrentMemory> path;
-      FixedText<200> branch;
-      FixedText<200> base;
-      FixedText<96> title;
-      FixedText<512> brief;
-      FixedText<32> dispatched_from;
-      FixedText<48> command_label;
+      FixedText<branch_bytes> branch;
+      FixedText<branch_bytes> base;
+      FixedText<title_bytes> title;
+      FixedText<brief_bytes> brief;
+      FixedText<dispatched_from_bytes> dispatched_from;
+      FixedText<command_label_bytes> command_label;
       std::uint32_t diff_added = 0;
       std::uint32_t diff_removed = 0;
       std::uint32_t diff_files = 0;
@@ -542,15 +566,16 @@ export {
 
     // The runtime's tables. Functions take the ones they read or change, so the borrows they keep of one
     // table are not disturbed by another, as Rust's disjoint field borrows are.
-    using PaneStore = SlotStore<Pane, 256, ConcurrentMemory>;
+    using PaneStore = SlotStore<Pane, pane_capacity, ConcurrentMemory>;
     using ClientStore = SlotStore<ClientSession, client_capacity, ConcurrentMemory>;
-    using WorkspaceStore = SlotStore<Workspace, 64, ConcurrentMemory>;
+    using WorkspaceStore = SlotStore<Workspace, workspace_capacity, ConcurrentMemory>;
 
     // Calls `send` for each open client `admits` accepts. A client whose send throws is closed: its
     // connection may hold part of a frame, and every broadcast treats that failure alike.
-    // Generic over the caller's predicate and sender, and run for every message sent to all clients.
+    // Generic over the caller's predicate and sender, and run for every message sent to all clients. Takes
+    // both themselves, as the lambdas callers pass build them in place.
     template <typename Admits, typename Send>
-    TBC_GENERIC inline void deliver(ClientStore& clients, Admits&& admits, Send&& send) noexcept {
+    TBC_GENERIC inline void deliver(ClientStore& clients, Admits admits, Send send) noexcept {
       for (auto* client : clients.items()) {
         if (client == nullptr || client->connection.closing || !admits(*client)) {
           continue;
@@ -567,7 +592,7 @@ export {
     // Sends `message` to each open client `admits` accepts, as deliver does; how many queued it.
     // Generic over the caller's predicate and message, as deliver.
     template <typename Admits, typename Message>
-    TBC_GENERIC inline std::size_t broadcast(ClientStore& clients, Admits&& admits, const Message& message) noexcept {
+    TBC_GENERIC inline std::size_t broadcast(ClientStore& clients, Admits admits, const Message& message) noexcept {
       std::size_t delivered = 0;
 
       deliver(clients, admits, [&](ClientSession& client) {
@@ -581,7 +606,7 @@ export {
     bool tabHeld(const ClientStore& clients, TabLocation location) noexcept;
 
     // The stored client with an identity, which a request names.
-    ClientSession& requireClient(ClientStore& clients, std::uint64_t identity);
+    ClientSession& requireClient(const ClientStore& clients, std::uint64_t identity);
 
     // The pane `identity` names while it has `generation`; none for another generation. No pane has
     // generation 0, so 0 finds none.
@@ -646,9 +671,10 @@ export {
 
       [[nodiscard]] std::uint64_t revision() const noexcept;
 
-      // Generic over the caller's consumer, which each record is handed to.
+      // Generic over the caller's consumer, which each record is handed to. Takes the consumer itself, as
+      // the lambda callers pass builds it in place.
       template <typename Consumer>
-      TBC_GENERIC inline void exportRecords(const RuntimeModel& model, Consumer&& consume) const {
+      TBC_GENERIC inline void exportRecords(const RuntimeModel& model, Consumer consume) const {
         ds::Array<ClientTabLayout, maximum_tabs> tabs;
 
         for (const auto& record : records_) {
@@ -680,11 +706,11 @@ export {
 
       struct StoredTab {
         TabLocation location;
-        std::uint64_t focused_pane;
-        bool fullscreen;
-        bool workspace_active;
-        std::uint16_t node_start;
-        std::uint16_t node_count;
+        std::uint64_t focused_pane = 0;
+        bool fullscreen = false;
+        bool workspace_active = false;
+        std::uint16_t node_start = 0;
+        std::uint16_t node_count = 0;
       };
 
       struct Record {

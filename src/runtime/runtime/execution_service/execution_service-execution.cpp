@@ -5,10 +5,10 @@ import telar.platform.error;
 namespace telar::runtime {
 
   template <Allocator Memory>
-  Execution<Memory>::Execution(Memory& memory, std::uint64_t token, const ExecutionRequest& request, std::uint64_t workspace, std::string_view cwd)
-      : token(token),
+  Execution<Memory>::Execution(Memory& memory, std::uint64_t execution_token, const ExecutionRequest& request, std::uint64_t workspace_id, std::string_view cwd)
+      : token(execution_token),
         id(request.execution_id),
-        workspace(workspace),
+        workspace(workspace_id),
         input(memory, input_capacity),
         output(memory, retained_capacity),
         error(memory, retained_capacity),
@@ -28,8 +28,11 @@ namespace telar::runtime {
       process.emplace(command.specification({}));
       state = ExecutionState::running;
     } catch (const SystemError& failure) {
+      // The shells' code for a command that could not be run.
+      constexpr int spawn_failure_exit_code = 125;
+
       state = ExecutionState::failed;
-      exit_code = 125;
+      exit_code = spawn_failure_exit_code;
       failure_name = sys::errorName(failure.code(), "ExecutionSpawnFailed");
       eof = true;
     }

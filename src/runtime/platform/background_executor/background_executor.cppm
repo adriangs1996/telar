@@ -21,12 +21,15 @@ export {
     };
 
     struct RequestContext {
+      static constexpr std::size_t history_session_bytes = 16;
+      static constexpr std::size_t editor_candidate_capacity = 64;
+
       TabLocation location{};
-      ds::Array<Byte, 16> history_session{};
+      ds::Array<Byte, history_session_bytes> history_session{};
       std::string_view workspace_path;
       std::string_view prompt;
       std::int64_t received_at_ms = 0;
-      ds::Array<EditorCandidate, 64> editor_candidates{};
+      ds::Array<EditorCandidate, editor_candidate_capacity> editor_candidates{};
       std::size_t editor_candidate_count = 0;
       const std::atomic<bool>* cancelled = nullptr;
       bool persistent_client = false;

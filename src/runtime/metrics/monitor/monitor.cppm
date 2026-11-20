@@ -77,8 +77,11 @@ export {
       static constexpr std::size_t maximum_answers = maximum_monitor_answers;
 
       MonitorSampler(tbc::mut_a<ConcurrentMemory> memory, tbc::ref_a<ProcessInspector> inspector);
+      ~MonitorSampler() = default;
       MonitorSampler(const MonitorSampler&) = delete;
       MonitorSampler& operator=(const MonitorSampler&) = delete;
+      MonitorSampler(MonitorSampler&&) = delete;
+      MonitorSampler& operator=(MonitorSampler&&) = delete;
 
       // Takes the processes, leaving the previous reading's storage in `records` for the next one.
       void update(ds::Vec<ProcessRecord, ConcurrentMemory>& records, const HostDetail& host, Clock::time_point now, std::span<const PaneRoot> roots);
@@ -110,8 +113,22 @@ export {
 
       void attribute(std::span<const PaneRoot> roots);
       void measureHost(const HostDetail& host, double seconds);
-      [[nodiscard]] bool matches(const MonitorEntry& entry, const MonitorView& view) const noexcept;
-      [[nodiscard]] bool before(const MonitorEntry& left, const MonitorEntry& right, const MonitorView& view) const noexcept;
+      [[nodiscard]] static bool matches(const MonitorEntry& entry, const MonitorView& view) noexcept;
+      [[nodiscard]] static bool before(const MonitorEntry& left, const MonitorEntry& right, const MonitorView& view) noexcept;
+
+      // Where a query's rows and detail are written.
+      struct Placement {
+        bool found = true;
+        std::size_t first = 0;
+        std::size_t count = 0;
+        std::uint32_t matched = 0;
+        ds::Option<std::size_t> detail;
+      };
+
+      using Placements = ds::Array<Placement, maximum_answers>;
+
+      // Writes the rows and the detail of each query, dropping the previous round's; where each is.
+      Placements place(std::span<const MonitorView> views);
       [[nodiscard]] ds::Option<std::uint32_t> indexOf(pid_t process) const noexcept;
       bool detail(const ProcessInstance& instance);
       void select(const MonitorView& view);

@@ -32,7 +32,10 @@ export {
       }
 
       [[nodiscard]] constexpr std::string_view remaining() const noexcept {
-        return text_.substr(offset_);
+        auto rest = text_;
+
+        rest.remove_prefix(offset_);
+        return rest;
       }
 
       // Writes what `stream` accepts now and returns the stream's result.
@@ -40,7 +43,7 @@ export {
       template <ByteStream Stream>
       TBC_GENERIC inline StreamResult write(Stream& stream) noexcept {
         const auto rest = remaining();
-        const auto result = stream.write({reinterpret_cast<const std::uint8_t*>(rest.data()), rest.size()});
+        const auto result = stream.write({reinterpret_cast<const std::uint8_t*>(rest.data()), rest.size()}); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the bytes may alias char, and no cast-free view reads text as bytes
         if (result.state == StreamResult::State::data) {
           offset_ += result.bytes;
         }
@@ -57,7 +60,8 @@ export {
     // Generic over the caller's stream, so it stays a template here.
     template <ByteStream Stream>
     TBC_GENERIC inline bool drainEnded(Stream& stream) noexcept {
-      ds::Array<std::uint8_t, 4096> discarded;
+      constexpr std::size_t discard_bytes = 4096;
+      ds::Array<std::uint8_t, discard_bytes> discarded; // NOLINT(cppcoreguidelines-pro-type-member-init): the bytes are read only to be dropped, so zeroing 4 KiB per drain is work nothing needs
       const auto read = stream.read(discarded.viewMut());
 
       return read.state == StreamResult::State::ended || read.state == StreamResult::State::failed;
@@ -72,7 +76,7 @@ export {
 
     class DelimitedRead {
     public:
-      enum class Result {
+      enum class Result : std::uint8_t {
         pending,
         complete,
         ended,
@@ -101,7 +105,7 @@ export {
         }
 
         const auto available = length_ + peeked.bytes;
-        const auto bytes = std::string_view{reinterpret_cast<const char*>(storage.data()), available};
+        const auto bytes = std::string_view{reinterpret_cast<const char*>(storage.data()), available}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): char may alias the bytes, and no cast-free view reads bytes as text
         const auto overlap = delimiter.size() - 1;
         const auto boundary = bytes.find(delimiter, length_ > overlap ? length_ - overlap : 0);
         const auto expected = boundary == std::string_view::npos ? available : boundary + delimiter.size();
@@ -113,8 +117,11 @@ export {
         length_ += consumed.bytes;
         waiting_ = StreamReadiness::readable;
         complete_ = boundary != std::string_view::npos && length_ == expected;
-        return complete_ ? Result::complete : length_ == storage.size() ? Result::too_large
-                                                                        : Result::pending;
+        if (complete_) {
+          return Result::complete;
+        }
+
+        return length_ == storage.size() ? Result::too_large : Result::pending;
       }
 
       [[nodiscard]] std::size_t length() const noexcept;
@@ -132,8 +139,8 @@ export {
           return interrupted({visible.state, 0, visible.waiting});
         }
 
-        const auto previous = std::string_view{reinterpret_cast<const char*>(storage.data()), length_};
-        const auto incoming = std::string_view{reinterpret_cast<const char*>(visible.bytes.data()), visible.bytes.size()};
+        const auto previous = std::string_view{reinterpret_cast<const char*>(storage.data()), length_};                    // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): char may alias the bytes, and no cast-free view reads bytes as text
+        const auto incoming = std::string_view{reinterpret_cast<const char*>(visible.bytes.data()), visible.bytes.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): char may alias the bytes, and no cast-free view reads bytes as text
         const auto boundary = delimiterEnd(previous, incoming, delimiter);
         const auto consumed = boundary == std::string_view::npos ? visible.bytes.size() : boundary;
 
@@ -142,8 +149,11 @@ export {
         length_ += consumed;
         waiting_ = StreamReadiness::readable;
         complete_ = boundary != std::string_view::npos;
-        return complete_ ? Result::complete : length_ == storage.size() ? Result::too_large
-                                                                        : Result::pending;
+        if (complete_) {
+          return Result::complete;
+        }
+
+        return length_ == storage.size() ? Result::too_large : Result::pending;
       }
 
       static std::size_t delimiterEnd(std::string_view previous, std::string_view incoming, std::string_view delimiter) noexcept;
@@ -162,9 +172,9 @@ export {
 export {
   namespace telar::runtime {
 
-    inline constexpr std::uint64_t maximum_event_identity = std::numeric_limits<std::uint64_t>::max() >> 3;
+    inline constexpr std::uint64_t maximum_event_identity = std::numeric_limits<std::uint64_t>::max() >> 3U;
 
-    enum class EventSource : std::uint64_t {
+    enum class EventSource : std::uint8_t {
       listener = 0,
       client = 1,
       pane = 2,
@@ -200,6 +210,9 @@ export {
 export {
   namespace telar::runtime {
 
+    // The capacity the buffer is built for once, in its implementation unit.
+    inline constexpr std::size_t stream_read_capacity = std::size_t{16} * 1024;
+
     template <std::size_t Capacity>
     class StreamReadBuffer {
     public:
@@ -234,7 +247,7 @@ export {
       std::size_t length_ = 0;
     };
 
-    extern template class StreamReadBuffer<16 * 1024>;
+    extern template class StreamReadBuffer<stream_read_capacity>;
 
   }
 }

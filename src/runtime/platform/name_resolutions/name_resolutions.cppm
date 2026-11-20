@@ -56,7 +56,7 @@ export {
       };
 
     private:
-      enum class Phase {
+      enum class Phase : std::uint8_t {
         free,
         resolving,
         resolved,
@@ -81,15 +81,17 @@ export {
       class Lock {
       public:
         inline Lock() noexcept {
-          ::pthread_mutex_lock(&state_.mutex);
+          ::pthread_mutex_lock(&state.mutex);
         }
 
         inline ~Lock() {
-          ::pthread_mutex_unlock(&state_.mutex);
+          ::pthread_mutex_unlock(&state.mutex);
         }
 
         Lock(const Lock&) = delete;
         Lock& operator=(const Lock&) = delete;
+        Lock(Lock&&) = delete;
+        Lock& operator=(Lock&&) = delete;
       };
 
     public:
@@ -117,11 +119,11 @@ export {
         inline bool collect(Result& result) const noexcept {
           const Lock lock;
 
-          if (index_ == capacity || state_.rows[index_].phase != Phase::resolved) {
+          if (index_ == capacity || state.rows[index_].phase != Phase::resolved) {
             return false;
           }
 
-          const auto& stored = state_.rows[index_].result;
+          const auto& stored = state.rows[index_].result;
 
           result.summary = stored.summary;
           if (stored.summary.error == 0) {
@@ -137,7 +139,7 @@ export {
           }
 
           const Lock lock;
-          auto& row = state_.rows.atMut(std::exchange(index_, capacity));
+          auto& row = state.rows.atMut(std::exchange(index_, capacity));
           if (--row.waiters == 0 && row.phase == Phase::resolved) {
             row.phase = Phase::free;
           }
@@ -156,7 +158,7 @@ export {
       public:
         inline explicit Notifications(CompletionSignal& signal) {
           const Lock lock;
-          const auto subscribers = state_.subscribers.viewMut();
+          const auto subscribers = state.subscribers.viewMut();
           const auto available = std::ranges::find(subscribers, nullptr);
           if (available == subscribers.end()) {
             throw SystemError{"Too many proxy resolver subscribers", ENOSPC};
@@ -169,11 +171,13 @@ export {
         inline ~Notifications() {
           const Lock lock;
 
-          state_.subscribers.atMut(index_) = nullptr;
+          state.subscribers.atMut(index_) = nullptr;
         }
 
         Notifications(const Notifications&) = delete;
         Notifications& operator=(const Notifications&) = delete;
+        Notifications(Notifications&&) = delete;
+        Notifications& operator=(Notifications&&) = delete;
 
       private:
         std::size_t index_;
@@ -187,8 +191,8 @@ export {
         const Lock lock;
         ds::Option<std::size_t> available;
 
-        for (std::size_t index = 0; index < state_.rows.size(); ++index) {
-          auto& row = state_.rows.atMut(index);
+        for (std::size_t index = 0; index < state.rows.size(); ++index) {
+          auto& row = state.rows.atMut(index);
           if (row.phase == Phase::free) {
             if (!available) {
               available = index;
@@ -203,7 +207,7 @@ export {
           return ds::none;
         }
 
-        auto& row = state_.rows.atMut(*available);
+        auto& row = state.rows.atMut(*available);
 
         row.phase = Phase::resolving;
         row.length = hostname.size();
@@ -222,7 +226,7 @@ export {
       inline static std::size_t pending() noexcept {
         const Lock lock;
 
-        return std::ranges::count_if(state_.rows, [](const auto& row) {
+        return std::ranges::count_if(state.rows, [](const auto& row) {
           return row.phase == Phase::resolving;
         });
       }
@@ -241,7 +245,7 @@ export {
         }
 
         if (error == 0) {
-          pthread_t thread;
+          pthread_t thread{};
 
           error = ::pthread_create(&thread, &attributes, &resolve, &row);
         }
@@ -274,17 +278,17 @@ export {
       }
 
       inline static void notify() noexcept {
-        for (auto* subscriber : state_.subscribers) {
+        for (auto* subscriber : state.subscribers) {
           if (subscriber != nullptr) {
             subscriber->notify();
           }
         }
       }
 
-      static constexpr std::size_t worker_stack_bytes = 512 * 1024;
+      static constexpr std::size_t worker_stack_bytes = std::size_t{512} * 1024;
       // Detached system resolver calls may outlive every proxy. Their rows have
       // process lifetime and never borrow a runtime allocator or service object.
-      inline static constinit State state_;
+      inline static constinit State state;
       static_assert(std::is_trivially_destructible_v<State>);
     };
 

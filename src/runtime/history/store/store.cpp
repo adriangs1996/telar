@@ -13,6 +13,207 @@ import telar.base.ds;
 
 namespace telar::runtime {
 
+  namespace {
+
+    // The ?N parameters of the statements below, as their SQL numbers them, and the columns of
+    // HistoryStore::entry_columns. A session's context leads the statements that write a session or
+    // a command.
+    namespace context_parameter {
+      constexpr int session = 1;
+      constexpr int pane = 2;
+      constexpr int location_kind = 3;
+      constexpr int location_id = 4;
+      constexpr int tab = 5;
+      constexpr int workspace_path = 6;
+    }
+
+    namespace agent_session_parameter {
+      constexpr int started_at = 7;
+    }
+
+    namespace agent_finish_parameter {
+      constexpr int command = 1;
+      constexpr int cwd = 2;
+      constexpr int finished_at = 3;
+      constexpr int exit_code = 4;
+      constexpr int session = 5;
+      constexpr int tool_call = 6;
+      constexpr int workspace_path = 7;
+      constexpr int provider = 8;
+    }
+
+    // Past the context's tab.
+    namespace agent_insert_parameter {
+      constexpr int command = 6;
+      constexpr int cwd = 7;
+      constexpr int workspace_path = 8;
+      constexpr int started_at = 9;
+      constexpr int exit_code = 10;
+      constexpr int status = 11;
+      constexpr int provider = 12;
+      constexpr int tool_call = 13;
+    }
+
+    namespace launch_parameter {
+      constexpr int pane = 1;
+      constexpr int generation = 2;
+      constexpr int location_kind = 3;
+      constexpr int location_id = 4;
+      constexpr int tab = 5;
+      constexpr int workspace_path = 6;
+      constexpr int shell = 7;
+      constexpr int started_at = 8;
+      constexpr int failed_at = 9;
+      constexpr int phase = 10;
+      constexpr int cause = 11;
+    }
+
+    namespace pane_session_parameter {
+      constexpr int shell = 7;
+      constexpr int started_at = 8;
+    }
+
+    namespace pane_command_parameter {
+      constexpr int command = 7;
+      constexpr int truncated = 8;
+      constexpr int cwd = 9;
+      constexpr int started_at = 10;
+      constexpr int duration = 11;
+      constexpr int exit_code = 12;
+      constexpr int status = 13;
+      constexpr int author = 14;
+    }
+
+    namespace import_command_parameter {
+      constexpr int session = 1;
+      constexpr int pane = 2;
+      constexpr int sequence = 3;
+      constexpr int command = 4;
+      constexpr int started_at = 5;
+    }
+
+    // A query numbers each filter apart, so a statement binds only the ones its SQL appends.
+    namespace query_parameter {
+      constexpr int snapshot = 1;
+      constexpr int entry = 2;
+      constexpr int match = 3;
+      constexpr int before = 4;
+      constexpr int author = 5;
+      constexpr int scope = 6;
+      constexpr int limit = 7;
+      constexpr int offset = 8;
+    }
+
+    namespace entry_column {
+      constexpr int id = 0;
+      constexpr int pane = 1;
+      constexpr int started_at = 2;
+      constexpr int duration = 3;
+      constexpr int exit_code = 4;
+      constexpr int status = 5;
+      constexpr int command = 6;
+      constexpr int cwd = 7;
+      constexpr int workspace_path = 8;
+      constexpr int author = 9;
+      constexpr int origin = 10;
+      constexpr int provider = 11;
+      constexpr int command_truncated = 12;
+    }
+
+    // The pinned Wyhash variant ImportIdentity::hash computes.
+    constexpr ds::Array<std::uint64_t, 4> wyhash_secret{0xa0761d6478bd642f, 0xe7037ed1a0b428db, 0x8ebc6af09c88c6e3, 0x589965cc75374cc3};
+    constexpr std::size_t wyhash_word_bytes = 8;
+    // A step reads two words; a block, a step for each of the three lanes.
+    constexpr std::size_t wyhash_step_bytes = 16;
+    constexpr std::size_t wyhash_block_bytes = 48;
+    constexpr unsigned half_word_bits = 32;
+    constexpr unsigned word_bits = 64;
+    constexpr unsigned byte_bits = 8;
+
+    struct WyhashWords {
+      std::uint64_t left = 0;
+      std::uint64_t right = 0;
+      std::uint64_t state = 0;
+    };
+
+    // The little-endian integer at offset, which the caller keeps inside the input.
+    template <typename Integer>
+    std::uint64_t readWord(std::span<const char> input, std::size_t offset) noexcept {
+      ds::Array<char, sizeof(Integer)> bytes{};
+
+      std::ranges::copy(input.subspan(offset, sizeof(Integer)), bytes.viewMut().begin());
+      return std::bit_cast<Integer>(bytes);
+    }
+
+    std::uint64_t mix(std::uint64_t left, std::uint64_t right) noexcept {
+      const __uint128_t product = static_cast<__uint128_t>(left) * right;
+
+      return static_cast<std::uint64_t>(product) ^ static_cast<std::uint64_t>(product >> word_bits);
+    }
+
+    // An input of at most wyhash_step_bytes: its words are read straight from its ends.
+    WyhashWords shortWords(std::span<const char> input, std::uint64_t seeded) noexcept {
+      if (input.size() >= 4) {
+        const auto end = input.size() - 4;
+        const auto quarter = (input.size() >> 3U) << 2U;
+
+        return {
+            .left = (readWord<std::uint32_t>(input, 0) << half_word_bits) | readWord<std::uint32_t>(input, quarter),
+            .right = (readWord<std::uint32_t>(input, end) << half_word_bits) | readWord<std::uint32_t>(input, end - quarter),
+            .state = seeded,
+        };
+      }
+
+      if (input.empty()) {
+        return {.state = seeded};
+      }
+
+      const auto first = std::uint64_t{static_cast<unsigned char>(input.front())};
+      const auto middle = std::uint64_t{static_cast<unsigned char>(input[input.size() >> 1U])};
+      const auto last = std::uint64_t{static_cast<unsigned char>(input.back())};
+
+      return {.left = (first << (2 * byte_bits)) | (middle << byte_bits) | last, .state = seeded};
+    }
+
+    // A longer input folds through three lanes a block at a time, then a step at a time.
+    WyhashWords longWords(std::span<const char> input, std::uint64_t seeded) noexcept {
+      ds::Array<std::uint64_t, 3> state{seeded, seeded, seeded};
+      std::size_t offset = 0;
+
+      if (input.size() >= wyhash_block_bytes) {
+        while (offset + wyhash_block_bytes < input.size()) {
+          for (std::size_t lane = 0; lane < state.size(); ++lane) {
+            const auto step = offset + (wyhash_step_bytes * lane);
+
+            state.atMut(lane) = mix(readWord<std::uint64_t>(input, step) ^ wyhash_secret[lane + 1], readWord<std::uint64_t>(input, step + wyhash_word_bytes) ^ state[lane]);
+          }
+
+          offset += wyhash_block_bytes;
+        }
+
+        state.atMut(0) ^= state[1] ^ state[2];
+      }
+
+      while (offset + wyhash_step_bytes < input.size()) {
+        state.atMut(0) = mix(readWord<std::uint64_t>(input, offset) ^ wyhash_secret[1], readWord<std::uint64_t>(input, offset + wyhash_word_bytes) ^ state[0]);
+        offset += wyhash_step_bytes;
+      }
+
+      return {
+          .left = readWord<std::uint64_t>(input, input.size() - wyhash_step_bytes),
+          .right = readWord<std::uint64_t>(input, input.size() - wyhash_word_bytes),
+          .state = state[0],
+      };
+    }
+
+    // The schema must be current before the index can be built over it.
+    bool prepareHistory(Database& database) {
+      migrateHistory(database);
+      return enableHistoryIndex(database);
+    }
+
+  }
+
   AgentCommandWriter::AgentCommandWriter(Database& database)
       : database_(database),
         session_(database, session_sql),
@@ -29,30 +230,30 @@ namespace telar::runtime {
     const auto now = context.received_at_ms != 0 ? context.received_at_ms : wallMilliseconds();
 
     session_.reset();
-    session_.bind(1, std::span{context.history_session});
-    session_.bind(2, static_cast<std::int64_t>(request.pane_id));
-    session_.bind(3, static_cast<std::int64_t>(context.location.workspace.kind));
-    session_.bind(4, static_cast<std::int64_t>(context.location.workspace.id));
-    session_.bind(5, static_cast<std::int64_t>(context.location.tab_id));
-    session_.bind(6, context.workspace_path);
-    session_.bind(7, now);
+    session_.bind(context_parameter::session, std::span{context.history_session});
+    session_.bind(context_parameter::pane, static_cast<std::int64_t>(request.pane_id));
+    session_.bind(context_parameter::location_kind, static_cast<std::int64_t>(context.location.workspace.kind));
+    session_.bind(context_parameter::location_id, static_cast<std::int64_t>(context.location.workspace.id));
+    session_.bind(context_parameter::tab, static_cast<std::int64_t>(context.location.tab_id));
+    session_.bind(context_parameter::workspace_path, context.workspace_path);
+    session_.bind(agent_session_parameter::started_at, now);
     session_.finish();
 
     if (request.phase == AgentCommandPhase::finished && !request.tool_call_id.empty()) {
       finish_.reset();
-      finish_.bind(1, request.command);
-      finish_.bind(2, request.cwd);
-      finish_.bind(3, now);
+      finish_.bind(agent_finish_parameter::command, request.command);
+      finish_.bind(agent_finish_parameter::cwd, request.cwd);
+      finish_.bind(agent_finish_parameter::finished_at, now);
       if (request.exit_code) {
-        finish_.bind(4, *request.exit_code);
+        finish_.bind(agent_finish_parameter::exit_code, *request.exit_code);
       } else {
-        finish_.bindNull(4);
+        finish_.bindNull(agent_finish_parameter::exit_code);
       }
 
-      finish_.bind(5, std::span{context.history_session});
-      finish_.bind(6, request.tool_call_id);
-      finish_.bind(7, context.workspace_path);
-      finish_.bind(8, request.provider);
+      finish_.bind(agent_finish_parameter::session, std::span{context.history_session});
+      finish_.bind(agent_finish_parameter::tool_call, request.tool_call_id);
+      finish_.bind(agent_finish_parameter::workspace_path, context.workspace_path);
+      finish_.bind(agent_finish_parameter::provider, request.provider);
       finish_.finish();
       if (sqlite3_changes(database_.handle()) != 0) {
         transaction.commit();
@@ -61,27 +262,27 @@ namespace telar::runtime {
     }
 
     insert_.reset();
-    insert_.bind(1, std::span{context.history_session});
-    insert_.bind(2, static_cast<std::int64_t>(request.pane_id));
-    insert_.bind(3, static_cast<std::int64_t>(context.location.workspace.kind));
-    insert_.bind(4, static_cast<std::int64_t>(context.location.workspace.id));
-    insert_.bind(5, static_cast<std::int64_t>(context.location.tab_id));
-    insert_.bind(6, request.command);
-    insert_.bind(7, request.cwd);
-    insert_.bind(8, context.workspace_path);
-    insert_.bind(9, now);
+    insert_.bind(context_parameter::session, std::span{context.history_session});
+    insert_.bind(context_parameter::pane, static_cast<std::int64_t>(request.pane_id));
+    insert_.bind(context_parameter::location_kind, static_cast<std::int64_t>(context.location.workspace.kind));
+    insert_.bind(context_parameter::location_id, static_cast<std::int64_t>(context.location.workspace.id));
+    insert_.bind(context_parameter::tab, static_cast<std::int64_t>(context.location.tab_id));
+    insert_.bind(agent_insert_parameter::command, request.command);
+    insert_.bind(agent_insert_parameter::cwd, request.cwd);
+    insert_.bind(agent_insert_parameter::workspace_path, context.workspace_path);
+    insert_.bind(agent_insert_parameter::started_at, now);
     if (request.exit_code) {
-      insert_.bind(10, *request.exit_code);
+      insert_.bind(agent_insert_parameter::exit_code, *request.exit_code);
     } else {
-      insert_.bindNull(10);
+      insert_.bindNull(agent_insert_parameter::exit_code);
     }
 
-    insert_.bind(11, static_cast<std::int64_t>(request.phase == AgentCommandPhase::started ? HistoryStatus::running : HistoryStatus::completed));
-    insert_.bind(12, request.provider);
+    insert_.bind(agent_insert_parameter::status, static_cast<std::int64_t>(request.phase == AgentCommandPhase::started ? HistoryStatus::running : HistoryStatus::completed));
+    insert_.bind(agent_insert_parameter::provider, request.provider);
     if (request.tool_call_id.empty()) {
-      insert_.bindNull(13);
+      insert_.bindNull(agent_insert_parameter::tool_call);
     } else {
-      insert_.bind(13, request.tool_call_id);
+      insert_.bind(agent_insert_parameter::tool_call, request.tool_call_id);
     }
 
     insert_.finish();
@@ -90,74 +291,23 @@ namespace telar::runtime {
 
   ImportIdentity::ImportIdentity(std::string_view source) noexcept {
     constexpr std::uint64_t import_seed = 0x74656c6172696d70;
+    // A pane id keeps the low 62 bits of the hash, and is never 0.
+    constexpr unsigned pane_bits = 62;
     const auto low = hash(import_seed, source);
     const auto high = hash(low, source);
     static_assert(std::endian::native == std::endian::little);
 
-    std::memcpy(session.dataMut(), &low, sizeof(low));
-    std::memcpy(session.dataMut() + sizeof(low), &high, sizeof(high));
-    pane = (low & ((std::uint64_t{1} << 62) - 1)) | 1;
+    session = std::bit_cast<ds::Array<std::uint8_t, history_session_bytes>>(ds::Array{low, high});
+    pane = (low & ((std::uint64_t{1} << pane_bits) - 1)) | 1U;
   }
 
   std::uint64_t ImportIdentity::hash(std::uint64_t seed, std::string_view input) noexcept {
-    constexpr ds::Array<std::uint64_t, 4> secret{0xa0761d6478bd642f, 0xe7037ed1a0b428db, 0x8ebc6af09c88c6e3, 0x589965cc75374cc3};
-    ds::Array<std::uint64_t, 3> state;
+    const std::span<const char> bytes{input};
+    const auto seeded = seed ^ mix(seed ^ wyhash_secret[0], wyhash_secret[1]);
+    const auto words = bytes.size() <= wyhash_step_bytes ? shortWords(bytes, seeded) : longWords(bytes, seeded);
+    const __uint128_t product = static_cast<__uint128_t>(words.left ^ wyhash_secret[1]) * (words.right ^ words.state);
 
-    state.fill(seed ^ mix(seed ^ secret[0], secret[1]));
-    std::uint64_t left = 0;
-    std::uint64_t right = 0;
-
-    if (input.size() <= 16) {
-      if (input.size() >= 4) {
-        const auto end = input.size() - 4;
-        const auto quarter = (input.size() >> 3) << 2;
-
-        left = (read<std::uint32_t>(input.data()) << 32) | read<std::uint32_t>(input.data() + quarter);
-        right = (read<std::uint32_t>(input.data() + end) << 32) | read<std::uint32_t>(input.data() + end - quarter);
-      } else if (!input.empty()) {
-        left = (std::uint64_t{static_cast<unsigned char>(input.front())} << 16) | (std::uint64_t{static_cast<unsigned char>(input[input.size() >> 1])} << 8) | static_cast<unsigned char>(input.back());
-      }
-    } else {
-      std::size_t offset = 0;
-
-      if (input.size() >= 48) {
-        while (offset + 48 < input.size()) {
-          for (std::size_t lane = 0; lane < state.size(); ++lane) {
-            state.atMut(lane) = mix(read<std::uint64_t>(input.data() + offset + (16 * lane)) ^ secret[lane + 1], read<std::uint64_t>(input.data() + offset + (16 * lane) + 8) ^ state[lane]);
-          }
-
-          offset += 48;
-        }
-
-        state.atMut(0) ^= state[1] ^ state[2];
-      }
-
-      while (offset + 16 < input.size()) {
-        state.atMut(0) = mix(read<std::uint64_t>(input.data() + offset) ^ secret[1], read<std::uint64_t>(input.data() + offset + 8) ^ state[0]);
-        offset += 16;
-      }
-
-      left = read<std::uint64_t>(input.data() + input.size() - 16);
-      right = read<std::uint64_t>(input.data() + input.size() - 8);
-    }
-
-    const __uint128_t product = static_cast<__uint128_t>(left ^ secret[1]) * (right ^ state[0]);
-
-    return mix(static_cast<std::uint64_t>(product) ^ secret[0] ^ input.size(), static_cast<std::uint64_t>(product >> 64) ^ secret[1]);
-  }
-
-  template <typename Integer>
-  std::uint64_t ImportIdentity::read(const char* bytes) noexcept {
-    Integer value;
-
-    std::memcpy(&value, bytes, sizeof(value));
-    return value;
-  }
-
-  std::uint64_t ImportIdentity::mix(std::uint64_t left, std::uint64_t right) noexcept {
-    const __uint128_t product = static_cast<__uint128_t>(left) * right;
-
-    return static_cast<std::uint64_t>(product) ^ static_cast<std::uint64_t>(product >> 64);
+    return mix(static_cast<std::uint64_t>(product) ^ wyhash_secret[0] ^ input.size(), static_cast<std::uint64_t>(product >> word_bits) ^ wyhash_secret[1]);
   }
 
   LaunchHistoryWriter::LaunchHistoryWriter(Database& database)
@@ -172,17 +322,17 @@ namespace telar::runtime {
     }
 
     insert_.reset();
-    insert_.bind(1, static_cast<std::int64_t>(session.pane));
-    insert_.bind(2, static_cast<std::int64_t>(failure.generation));
-    insert_.bind(3, static_cast<std::int64_t>(session.location.workspace.kind));
-    insert_.bind(4, static_cast<std::int64_t>(session.location.workspace.id));
-    insert_.bind(5, static_cast<std::int64_t>(session.location.tab_id));
-    insert_.bind(6, session.workspace_path);
-    insert_.bind(7, session.shell);
-    insert_.bind(8, session.started_at_ms);
-    insert_.bind(9, event.finished_at_ms);
-    insert_.bind(10, static_cast<std::int64_t>(failure.phase));
-    insert_.bind(11, failure.cause);
+    insert_.bind(launch_parameter::pane, static_cast<std::int64_t>(session.pane));
+    insert_.bind(launch_parameter::generation, static_cast<std::int64_t>(failure.generation));
+    insert_.bind(launch_parameter::location_kind, static_cast<std::int64_t>(session.location.workspace.kind));
+    insert_.bind(launch_parameter::location_id, static_cast<std::int64_t>(session.location.workspace.id));
+    insert_.bind(launch_parameter::tab, static_cast<std::int64_t>(session.location.tab_id));
+    insert_.bind(launch_parameter::workspace_path, session.workspace_path);
+    insert_.bind(launch_parameter::shell, session.shell);
+    insert_.bind(launch_parameter::started_at, session.started_at_ms);
+    insert_.bind(launch_parameter::failed_at, event.finished_at_ms);
+    insert_.bind(launch_parameter::phase, static_cast<std::int64_t>(failure.phase));
+    insert_.bind(launch_parameter::cause, failure.cause);
     insert_.finish();
   }
 
@@ -239,31 +389,31 @@ namespace telar::runtime {
   void PaneHistoryWriter::ensureSession(const HistorySession& session) {
     session_.reset();
     bindContext(session_, session);
-    session_.bind(7, session.shell);
-    session_.bind(8, session.started_at_ms);
+    session_.bind(pane_session_parameter::shell, session.shell);
+    session_.bind(pane_session_parameter::started_at, session.started_at_ms);
     session_.finish();
   }
 
   void PaneHistoryWriter::insertCommand(const HistorySession& session, const CapturedCommand& command) {
     command_.reset();
     bindContext(command_, session);
-    command_.bind(7, command.command);
-    command_.bind(8, static_cast<std::int64_t>(command.truncated));
-    command_.bind(9, command.directory);
-    command_.bind(10, command.started.milliseconds);
-    command_.bind(11, command.duration_ns);
+    command_.bind(pane_command_parameter::command, command.command);
+    command_.bind(pane_command_parameter::truncated, static_cast<std::int64_t>(command.truncated));
+    command_.bind(pane_command_parameter::cwd, command.directory);
+    command_.bind(pane_command_parameter::started_at, command.started.milliseconds);
+    command_.bind(pane_command_parameter::duration, command.duration_ns);
     if (command.exit_code) {
-      command_.bind(12, *command.exit_code);
+      command_.bind(pane_command_parameter::exit_code, *command.exit_code);
     } else {
-      command_.bindNull(12);
+      command_.bindNull(pane_command_parameter::exit_code);
     }
 
-    command_.bind(13, static_cast<std::int64_t>(command.status));
-    command_.bind(14, static_cast<std::int64_t>(command.author));
+    command_.bind(pane_command_parameter::status, static_cast<std::int64_t>(command.status));
+    command_.bind(pane_command_parameter::author, static_cast<std::int64_t>(command.author));
     command_.finish();
     if (!command.output.empty() || command.output_observed != 0) {
       output_.reset();
-      output_.bind(1, std::string_view{reinterpret_cast<const char*>(command.output.data()), command.output.size()});
+      output_.bind(1, textView(command.output));
       output_.bind(2, static_cast<std::int64_t>(command.outputTruncated()));
       output_.bind(3, static_cast<std::int64_t>(std::min<std::uint64_t>(command.output_observed, std::numeric_limits<std::int64_t>::max())));
       output_.finish();
@@ -275,12 +425,12 @@ namespace telar::runtime {
       throw RequestError{FailureCode::resource_limit, "History identity exceeds the database integer range"};
     }
 
-    statement.bind(1, std::span{session.id});
-    statement.bind(2, static_cast<std::int64_t>(session.pane));
-    statement.bind(3, static_cast<std::int64_t>(session.location.workspace.kind));
-    statement.bind(4, static_cast<std::int64_t>(session.location.workspace.id));
-    statement.bind(5, static_cast<std::int64_t>(session.location.tab_id));
-    statement.bind(6, session.workspace_path);
+    statement.bind(context_parameter::session, std::span{session.id});
+    statement.bind(context_parameter::pane, static_cast<std::int64_t>(session.pane));
+    statement.bind(context_parameter::location_kind, static_cast<std::int64_t>(session.location.workspace.kind));
+    statement.bind(context_parameter::location_id, static_cast<std::int64_t>(session.location.workspace.id));
+    statement.bind(context_parameter::tab, static_cast<std::int64_t>(session.location.tab_id));
+    statement.bind(context_parameter::workspace_path, session.workspace_path);
   }
 
   HistoryRows::HistoryRows(ConcurrentMemory& memory)
@@ -319,8 +469,8 @@ namespace telar::runtime {
   std::string_view HistoryRows::copy(std::string_view text) const {
     const auto offset = text_.size();
 
-    text_.append(std::span{reinterpret_cast<const Byte*>(text.data()), text.size()});
-    return {reinterpret_cast<const char*>(text_.readable().data() + offset), text.size()};
+    text_.append(byteView(text));
+    return textView(text_.readable().subspan(offset, text.size()));
   }
 
   std::span<const HistoryEntry> HistoryRows::entries() const noexcept {
@@ -330,32 +480,32 @@ namespace telar::runtime {
   HistoryEntry HistoryRows::view(const Statement& row) {
     auto entry = header(row);
 
-    entry.provider = row.text(11);
-    entry.command = row.text(6);
-    entry.cwd = row.text(7);
-    entry.workspace_path = row.text(8);
+    entry.provider = row.text(entry_column::provider);
+    entry.command = row.text(entry_column::command);
+    entry.cwd = row.text(entry_column::cwd);
+    entry.workspace_path = row.text(entry_column::workspace_path);
     return entry;
   }
 
   tbc::val_static<HistoryEntry> HistoryRows::header(const Statement& row) {
-    if (row.integer(0) <= 0 || row.integer(1) <= 0) {
+    if (row.integer(entry_column::id) <= 0 || row.integer(entry_column::pane) <= 0) {
       throw RequestError{FailureCode::internal, "Invalid stored history identity"};
     }
 
-    if (row.integer(5) < 0 || row.integer(5) > static_cast<std::int64_t>(HistoryStatus::running) || row.integer(9) < 0 || row.integer(9) > static_cast<std::int64_t>(HistoryAuthor::agent) || row.integer(10) < 0 || row.integer(10) > static_cast<std::int64_t>(HistoryOrigin::plugin)) {
+    if (row.integer(entry_column::status) < 0 || row.integer(entry_column::status) > static_cast<std::int64_t>(HistoryStatus::running) || row.integer(entry_column::author) < 0 || row.integer(entry_column::author) > static_cast<std::int64_t>(HistoryAuthor::agent) || row.integer(entry_column::origin) < 0 || row.integer(entry_column::origin) > static_cast<std::int64_t>(HistoryOrigin::plugin)) {
       throw RequestError{FailureCode::internal, "Invalid stored history state"};
     }
 
     return HistoryEntry{
-        .id = static_cast<std::uint64_t>(row.integer(0)),
-        .pane_id = static_cast<std::uint64_t>(row.integer(1)),
-        .started_at_ms = row.integer(2),
-        .duration_ns = row.integer(3),
-        .exit_code = row.isNull(4) ? ds::none : ds::Option{static_cast<std::int32_t>(row.integer(4))},
-        .status = static_cast<HistoryStatus>(row.integer(5)),
-        .author = static_cast<HistoryAuthor>(row.integer(9)),
-        .origin = static_cast<HistoryOrigin>(row.integer(10)),
-        .command_truncated = row.integer(12) != 0,
+        .id = static_cast<std::uint64_t>(row.integer(entry_column::id)),
+        .pane_id = static_cast<std::uint64_t>(row.integer(entry_column::pane)),
+        .started_at_ms = row.integer(entry_column::started_at),
+        .duration_ns = row.integer(entry_column::duration),
+        .exit_code = row.isNull(entry_column::exit_code) ? ds::none : ds::Option{static_cast<std::int32_t>(row.integer(entry_column::exit_code))},
+        .status = static_cast<HistoryStatus>(row.integer(entry_column::status)),
+        .author = static_cast<HistoryAuthor>(row.integer(entry_column::author)),
+        .origin = static_cast<HistoryOrigin>(row.integer(entry_column::origin)),
+        .command_truncated = row.integer(entry_column::command_truncated) != 0,
     };
   }
 
@@ -431,10 +581,8 @@ END;
       : memory_(memory),
         filters_(filters),
         database_(path),
-        rows_(memory) {
-    migrateHistory(database_);
-    indexed_ = enableHistoryIndex(database_);
-  }
+        rows_(memory),
+        indexed_(prepareHistory(database_)) {}
 
   void HistoryStore::reportAgentCommand(const ReportAgentCommand& request, const RequestContext& context, EncodedReply<ConcurrentMemory>& reply) {
     if (!filters_.allowsAgent(request.command, request.cwd)) {
@@ -477,7 +625,7 @@ END;
 
   void HistoryStore::importEntries(const ImportHistory& request, EncodedReply<ConcurrentMemory>& reply) {
     const auto sequence = integer(request.base_sequence);
-    if (request.entries.size() > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max() - sequence)) {
+    if (std::cmp_greater(request.entries.size(), std::numeric_limits<std::int64_t>::max() - sequence)) {
       throw RequestError{FailureCode::invalid_request, "History import sequence overflows"};
     }
 
@@ -494,11 +642,11 @@ END;
     Statement command{database_, "INSERT OR IGNORE INTO command(session_id, pane_id, location_kind, location_id, tab_id, sequence, command, cwd, workspace_path, started_at_ms, duration_ns, exit_code, status, author, origin) VALUES(?1, ?2, 0, ?2, ?2, ?3, ?4, '', '', ?5, 0, NULL, 0, 0, 0)"};
 
     for (std::size_t index = 0; index < request.entries.size(); ++index) {
-      command.bind(1, std::span{identity.session});
-      command.bind(2, integer(identity.pane));
-      command.bind(3, sequence + static_cast<std::int64_t>(index));
-      command.bind(4, request.entries[index].command);
-      command.bind(5, request.entries[index].started_at_ms);
+      command.bind(import_command_parameter::session, std::span{identity.session});
+      command.bind(import_command_parameter::pane, integer(identity.pane));
+      command.bind(import_command_parameter::sequence, sequence + static_cast<std::int64_t>(index));
+      command.bind(import_command_parameter::command, request.entries[index].command);
+      command.bind(import_command_parameter::started_at, request.entries[index].started_at_ms);
       command.finish();
       command.reset();
     }
@@ -538,16 +686,16 @@ END;
     sql.append(distinct ? " ORDER BY started_at_ms DESC, id DESC" : " ORDER BY started_at_ms DESC, id DESC LIMIT ?7 OFFSET ?8");
     Statement statement{database_, sql};
 
-    statement.bind(1, integer(request.snapshot_id));
+    statement.bind(query_parameter::snapshot, integer(request.snapshot_id));
     if (request.entry_id != 0) {
-      statement.bind(2, integer(request.entry_id));
+      statement.bind(query_parameter::entry, integer(request.entry_id));
     }
 
     bindMatch(statement, request.query);
     bindFilters(statement, request);
     if (!distinct) {
-      statement.bind(7, static_cast<std::int64_t>(request.limit) + 1);
-      statement.bind(8, request.offset);
+      statement.bind(query_parameter::limit, static_cast<std::int64_t>(request.limit) + 1);
+      statement.bind(query_parameter::offset, request.offset);
     }
 
     HashSet seen{memory_};
@@ -556,7 +704,7 @@ END;
 
     while (statement.next()) {
       if (distinct) {
-        if (!seen.insert(ImportIdentity::hash(command_hash_seed, statement.text(6)), true)) {
+        if (!seen.insert(ImportIdentity::hash(command_hash_seed, statement.text(entry_column::command)), true)) {
           continue;
         }
 
@@ -600,7 +748,7 @@ END;
 
     bindMatch(statement, request.match);
     if (request.before_ms != 0) {
-      statement.bind(4, request.before_ms);
+      statement.bind(query_parameter::before, request.before_ms);
     }
 
     bindScope(statement, request.scope, request.scope_value);
@@ -617,7 +765,7 @@ END;
     if (statement.next()) {
       const auto text = statement.text(0);
 
-      result.content = std::span{reinterpret_cast<const Byte*>(text.data()), text.size()};
+      result.content = byteView(text);
       result.truncated = statement.integer(1) != 0;
       result.observed_bytes = static_cast<std::uint64_t>(statement.integer(2));
     }
@@ -663,16 +811,16 @@ END;
     while (top.next()) {
       const auto group = historyGroup(top.text(0));
       const auto occurrences = static_cast<std::uint64_t>(top.integer(1));
-      const auto existing = groups.viewMut().first(count);
-      auto found = std::ranges::find(existing, group, &HistoryStatsEntry::command);
-      if (found != existing.end()) {
-        found->count += occurrences;
+      const auto existing = groups.view().first(count);
+      const auto found = static_cast<std::size_t>(std::ranges::find(existing, group, &HistoryStatsEntry::command) - existing.begin());
+      if (found != count) {
+        groups.atMut(found).count += occurrences;
       } else {
         groups.atMut(count++) = HistoryStatsEntry{.count = occurrences, .command = rows_.copy(group)};
       }
     }
 
-    std::sort(groups.dataMut(), groups.dataMut() + count, [](const auto& left, const auto& right) {
+    std::ranges::sort(groups.viewMut().first(count), [](const auto& left, const auto& right) {
       return left.count == right.count ? left.command < right.command : left.count > right.count;
     });
 
@@ -731,7 +879,9 @@ END;
 
     const auto end = std::min(std::uint64_t{request.offset} + request.limit, static_cast<std::uint64_t>(ranked.size()));
 
-    std::partial_sort(ranked.dataMut(), ranked.dataMut() + end, ranked.dataMut() + ranked.size(), precedes);
+    auto ranking = ranked.viewMut();
+
+    std::ranges::partial_sort(ranking, ranking.begin() + static_cast<std::ptrdiff_t>(end), precedes);
     sql.assign("SELECT ");
     sql.append(entry_columns);
     sql.append(" FROM command WHERE id = ?1");
@@ -770,10 +920,13 @@ END;
   }
 
   bool HistoryStore::useIndex(std::string_view query) const noexcept {
+    // A UTF-8 continuation byte is 10xxxxxx; every other byte starts a character.
+    constexpr unsigned continuation_mask = 0xc0;
+    constexpr unsigned continuation_tag = 0x80;
     std::size_t characters = 0;
 
-    for (const unsigned char byte : query) {
-      characters += static_cast<std::size_t>((byte & 0xc0) != 0x80);
+    for (const char byte : query) {
+      characters += static_cast<std::size_t>((static_cast<unsigned char>(byte) & continuation_mask) != continuation_tag);
     }
 
     return indexed_ && characters >= 3;
@@ -791,7 +944,7 @@ END;
     }
 
     if (!useIndex(query)) {
-      statement.bind(3, query);
+      statement.bind(query_parameter::match, query);
       return;
     }
 
@@ -805,7 +958,7 @@ END;
     }
 
     quoted.push('"');
-    statement.bind(3, std::string_view{quoted});
+    statement.bind(query_parameter::match, std::string_view{quoted});
   }
 
   void HistoryStore::appendScope(ds::String<ConcurrentMemory>& sql, HistoryScope scope) {
@@ -826,9 +979,9 @@ END;
 
   void HistoryStore::bindScope(Statement& statement, HistoryScope scope, const HistoryScopeValue& value) {
     if (scope == HistoryScope::pane) {
-      statement.bind(6, integer(std::get<std::uint64_t>(value)));
+      statement.bind(query_parameter::scope, integer(std::get<std::uint64_t>(value)));
     } else if (scope != HistoryScope::global) {
-      statement.bind(6, std::get<std::string_view>(value));
+      statement.bind(query_parameter::scope, std::get<std::string_view>(value));
     }
   }
 
@@ -846,7 +999,7 @@ END;
 
   void HistoryStore::bindFilters(Statement& statement, const QueryHistory& request) {
     if (request.author != HistoryAuthorFilter::all) {
-      statement.bind(5, static_cast<std::int64_t>(request.author == HistoryAuthorFilter::agent));
+      statement.bind(query_parameter::author, static_cast<std::int64_t>(request.author == HistoryAuthorFilter::agent));
     }
 
     bindScope(statement, request.scope, request.scope_value);

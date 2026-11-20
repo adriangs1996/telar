@@ -14,6 +14,22 @@ import telar.base.ds;
 
 namespace telar::runtime {
 
+  namespace {
+
+    // The first `count` characters of text, or all of it: substr(0, count) without its throw.
+    constexpr std::string_view textPrefix(std::string_view text, std::size_t count) noexcept {
+      text.remove_suffix(text.size() - std::min(count, text.size()));
+      return text;
+    }
+
+    // Text past its first `offset` characters, or nothing: substr(offset) without its throw.
+    constexpr std::string_view textAfter(std::string_view text, std::size_t offset) noexcept {
+      text.remove_prefix(std::min(offset, text.size()));
+      return text;
+    }
+
+  }
+
   GitBaseDistance::GitBaseDistance(ConcurrentMemory& memory, const std::atomic<bool>& cancelled) noexcept
       : memory_(memory),
         cancelled_(cancelled) {}
@@ -62,27 +78,26 @@ namespace telar::runtime {
   void GitBaseDistance::parseDiff(std::string_view output, GitDistance& result) noexcept {
     while (!output.empty()) {
       const auto delimiter = output.find(',');
-      const auto part = trimText(output.substr(0, delimiter), " \n");
+      const auto part = trimText(textPrefix(output, delimiter), " \n");
 
-      output = delimiter == std::string_view::npos ? std::string_view{} : output.substr(delimiter + 1);
+      output = delimiter == std::string_view::npos ? std::string_view{} : textAfter(output, delimiter + 1);
       const auto separator = part.find(' ');
       if (separator == std::string_view::npos) {
         continue;
       }
 
-      std::uint32_t value = 0;
-      const auto parsed = std::from_chars(part.data(), part.data() + separator, value);
-      if (parsed.ec != std::errc{} || parsed.ptr != part.data() + separator) {
+      const auto value = parseExact<std::uint32_t>(textPrefix(part, separator));
+      if (!value) {
         continue;
       }
 
-      const auto label = part.substr(separator + 1);
+      const auto label = textAfter(part, separator + 1);
       if (label.starts_with("file")) {
-        result.files = value;
+        result.files = *value;
       } else if (label.starts_with("insertion")) {
-        result.added = value;
+        result.added = *value;
       } else if (label.starts_with("deletion")) {
-        result.removed = value;
+        result.removed = *value;
       }
     }
   }
@@ -91,17 +106,17 @@ namespace telar::runtime {
     throw RequestError{FailureCode::invalid_request, "Git distance unavailable"};
   }
 
-  WorktreeDetectionResult WorktreeDetectionProbe::observe(const Request& request) noexcept {
+  WorktreeDetectionResult WorktreeDetectionProbe::observe(const Request& request) noexcept { // NOLINT(bugprone-exception-escape): assign throws only past the capacity the validation keeps the branch within
     TELAR_TRACE("worktrees.detect");
     Result result{.pane = request.pane, .generation = request.generation, .cwd_revision = request.cwd_revision};
-    LinkedWorktree reader;
+    LinkedWorktree reader{};
     if (const auto found = reader.find(request.cwd.view())) {
       try {
-        Text16<4096, false>::validate(request.cwd.view().substr(0, found->root_length));
-        DisplayText16<200, false>::validate(found->branch);
+        Text16<probed_path_bytes, false>::validate(textPrefix(request.cwd.view(), found->root_length));
+        DisplayText16<probed_branch_bytes, false>::validate(found->branch);
         result.branch.assign(found->branch);
         result.root_length = found->root_length;
-      } catch (const EncodingError&) {
+      } catch (const EncodingError&) { // NOLINT(bugprone-empty-catch): a checkout whose root or branch is not display text is reported as none
       }
     }
 
@@ -125,7 +140,7 @@ namespace telar::runtime {
     Result result{.identity = request.identity};
 
     try {
-      ds::String<ConcurrentMemory> path{memory_, request.path.view()};
+      const ds::String<ConcurrentMemory> path{memory_, request.path.view()};
       struct stat filesystem_status{};
       if (::stat(path.data(), &filesystem_status) != 0 || !S_ISDIR(filesystem_status.st_mode)) {
         return result;
@@ -136,7 +151,7 @@ namespace telar::runtime {
       if (status.present) {
         try {
           assignBranch(result.branch, status.branch.view());
-        } catch (const EncodingError&) {
+        } catch (const EncodingError&) { // NOLINT(bugprone-empty-catch): a branch that is not display text is reported as none
         }
       }
 
@@ -145,7 +160,7 @@ namespace telar::runtime {
       if (result.base.view().empty()) {
         try {
           discoverBase(request.path.view(), result.base);
-        } catch (const EncodingError&) {
+        } catch (const EncodingError&) { // NOLINT(bugprone-empty-catch): a base that is not display text stays unknown
         }
       }
 
@@ -169,19 +184,19 @@ namespace telar::runtime {
           result.timeout = GitProbeTimeout::distance;
         }
       }
-    } catch (...) {
+    } catch (...) { // NOLINT(bugprone-empty-catch): any other failure reports what the probe learned before it
     }
 
     return result;
   }
 
-  void WorktreeGitProbe::assignBranch(FixedText<200>& destination, std::string_view value) {
-    DisplayText16<200, false>::validate(value);
+  void WorktreeGitProbe::assignBranch(FixedText<probed_branch_bytes>& destination, std::string_view value) {
+    DisplayText16<probed_branch_bytes, false>::validate(value);
     destination.assign(value);
   }
 
-  void WorktreeGitProbe::discoverBase(std::string_view root, FixedText<200>& base) {
-    LinkedWorktree reader;
+  void WorktreeGitProbe::discoverBase(std::string_view root, FixedText<probed_branch_bytes>& base) {
+    LinkedWorktree reader{};
     if (const auto branch = reader.mainBranch(root)) {
       assignBranch(base, *branch);
     }
