@@ -1,0 +1,113 @@
+# The lint profile of telar's C++: every source under src/ and lib/ but lib/tbc and lib/ebnf, standalone
+# projects with profiles of their own. Every check is on and every warning an error; a check is off only
+# where it contradicts how telar is built, each for the reason below.
+#
+# Checks of other projects' conventions:
+#   abseil, altera, android, boost, fuchsia, google, linuxkernel, llvm, llvmlibc, mpi, openmp, zircon.
+#   modernize-use-trailing-return-type: telar writes the return type first.
+#   portability-avoid-pragma-once: telar's headers use #pragma once.
+# Checks that contradict C++ modules:
+#   misc-include-cleaner: diagnoses implicit primary-module imports as missing headers.
+#   readability-redundant-declaration: a header that a module's global fragment and a unit both include
+#   declares each name twice, once through the BMI, and the implicit sized operator delete has no location.
+#   readability-redundant-inline-specifier: a member defined in its class is implicitly inline only outside
+#   a named module; in a module interface the inline is what lets importers inline the body, and
+#   TBC_HOT_PATH requires it.
+# Checks that contradict tbc's lifetimes:
+#   cppcoreguidelines-avoid-const-or-ref-data-members: a field labeled tbc::mut_self or tbc::ref_a is how
+#   an object holds a borrow tbc checks.
+# Checks that -Wunsafe-buffer-usage covers, which also sees calls into libc:
+#   cppcoreguidelines-pro-bounds-avoid-unchecked-container-access, -pro-bounds-constant-array-index,
+#   -pro-bounds-pointer-arithmetic.
+# Checks that crash clang-tidy 23.1.5, to re-enable once the pinned LLVM fixes them:
+#   bugprone-unchecked-optional-access and misc-static-initialization-cycle on module units that import std
+#   or see one declaration through several BMIs; performance-use-std-move at the end of
+#   lib/config/runtime/runtime.cpp and src/runtime/redirect/socket_owners/socket_owners.cpp.
+#
+# The compiler's warnings are all on but:
+#   the compatibility ones of the standards before telar's;
+#   -Wpadded, which reports every hole that alignment leaves in a type;
+#   -Wmissing-designated-field-initializers: a field a designated initializer leaves out takes its default,
+#   which is how telar asks for it (cmake/TelarBuild.cmake);
+#   -Wswitch-default, which contradicts -Wcovered-switch-default: a switch over an enum names every
+#   enumerator and keeps no default, so -Wswitch-enum reports the one a new enumerator adds;
+#   -Wundefined-func-template: a template whose body sits in an implementation unit, instantiated there
+#   explicitly, is how module interfaces keep no bodies;
+#   the lifetime-safety suggestions, which ask for [[clang::lifetimebound]] where tbc's labels already
+#   state the contract; its use-after-scope and dangling diagnostics stay on.
+InheritParentConfig: false
+Checks: >-
+  *,
+  -abseil-*,
+  -altera-*,
+  -android-*,
+  -boost-*,
+  -fuchsia-*,
+  -google-*,
+  -linuxkernel-*,
+  -llvm-*,
+  -llvmlibc-*,
+  -mpi-*,
+  -openmp-*,
+  -zircon-*,
+  -modernize-use-trailing-return-type,
+  -portability-avoid-pragma-once,
+  -misc-include-cleaner,
+  -readability-redundant-inline-specifier,
+  -readability-redundant-declaration,
+  -cppcoreguidelines-avoid-const-or-ref-data-members,
+  -cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,
+  -cppcoreguidelines-pro-bounds-constant-array-index,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -bugprone-unchecked-optional-access,
+  -misc-static-initialization-cycle,
+  -performance-use-std-move
+ExtraArgs:
+  - -Weverything
+  - -Wno-c++98-compat
+  - -Wno-c++98-compat-pedantic
+  - -Wno-c++11-compat
+  - -Wno-c++14-compat
+  - -Wno-c++17-compat
+  - -Wno-c++20-compat
+  - -Wno-padded
+  - -Wno-missing-designated-field-initializers
+  - -Wno-switch-default
+  - -Wno-undefined-func-template
+  - -Wno-lifetime-safety-intra-tu-suggestions
+  - -Wno-lifetime-safety-cross-tu-suggestions
+  - -Wno-lifetime-safety-intra-tu-constructor-suggestions
+  - -Wno-lifetime-safety-cross-tu-constructor-suggestions
+WarningsAsErrors: '*'
+HeaderFilterRegex: '(^|/)(src|lib)/'
+ExcludeHeaderFilterRegex: '(^|/)(lib/(tbc|ebnf)|dependencies|generated|out[^/]*|tests|third_party|vendor|\.toolchain)/'
+SystemHeaders: false
+FormatStyle: file
+CheckOptions:
+  cppcoreguidelines-macro-usage.AllowedRegexp: '^TELAR_GUI_(ALLOCATOR|LINK_HOST)$'
+  readability-function-size.ParameterThreshold: '5'
+  readability-function-size.LineThreshold: '100'
+  readability-function-size.StatementThreshold: '100'
+  readability-function-size.NestingThreshold: '4'
+  readability-function-size.IgnoreMacros: 'true'
+  readability-function-cognitive-complexity.Threshold: '25'
+  readability-function-cognitive-complexity.IgnoreMacros: 'true'
+  misc-non-private-member-variables-in-classes.IgnoreClassesWithAllMemberVariablesBeingPublic: 'true'
+  readability-identifier-length.MinimumVariableNameLength: '3'
+  readability-identifier-length.MinimumParameterNameLength: '3'
+  readability-identifier-length.IgnoredVariableNames: '^(x|y|r|g|b|a|id)$'
+  readability-identifier-length.IgnoredParameterNames: '^(x|y|r|g|b|a|id)$'
+  readability-identifier-naming.ClassCase: CamelCase
+  readability-identifier-naming.StructCase: CamelCase
+  readability-identifier-naming.EnumCase: CamelCase
+  readability-identifier-naming.EnumConstantCase: lower_case
+  readability-identifier-naming.FunctionCase: camelBack
+  readability-identifier-naming.FunctionIgnoredRegexp: '^qt_.*|^qml.*|^main$'
+  readability-identifier-naming.VariableCase: lower_case
+  readability-identifier-naming.ParameterCase: lower_case
+  readability-identifier-naming.ConstantCase: lower_case
+  readability-identifier-naming.PrivateMemberCase: lower_case
+  readability-identifier-naming.PrivateMemberSuffix: '_'
+  readability-identifier-naming.MacroDefinitionCase: UPPER_CASE
+  readability-magic-numbers.IgnoreBitFieldsWidths: 'true'
+  readability-magic-numbers.IgnoreUserDefinedLiterals: 'true'

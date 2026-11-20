@@ -18,9 +18,8 @@ just format
 The daemon builds in the repository's single tree, `out/dev` for the dev
 preset, whose `compile_commands.json` the root `.clangd` reads and `just
 editor` refreshes. `just lint` and the tree's `lint` and `lifetime` targets
-cover it with every other registered target; the format and clang-tidy
-profiles are shared with the C++ runtime through relative symlinks. TBC is
-not a build dependency.
+cover it with every other registered target, under the repository root's
+`.clang-format` and `.clang-tidy`. TBC is not a build dependency.
 
 Use `tools/cpp bootstrap` and add `.toolchain/bin` to `PATH`. The presets use
 the pinned LLVM 23.1.5 / CMake 4.4.5 / Ninja 1.13.2 toolchain.
