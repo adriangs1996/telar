@@ -35,7 +35,7 @@ negotiation: through the same discovery it prints HEAD and the newest 256 ref
 tips of the clone `receive` would update, one hash per line, or nothing without a clone.
 
 `repository::prepare(memory, options, remote_program, capture)` is the source
-interface in `repository_prepare.hpp`. The callback is called twice: first with
+interface in `commands/worktree/worktree.cppm`. The callback is called twice: first with
 words beginning `exec --no-stdin -- REMOTE_TELAR repository tips ...` and
 descriptor -1 (no stdin), then with words beginning `exec -- REMOTE_TELAR
 repository receive ...` and a borrowed, rewound, readable bundle descriptor. It returns the remote stdout as an owned string; it

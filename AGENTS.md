@@ -17,6 +17,22 @@ general components:
 Two processes. The split decides almost everything else, so get it right before
 you add anything that crosses it.
 
+A folder is a deep module: it is named for what it hides, and what is below it is its own
+business. A folder that holds several domains (`src/runtime/traffic`, `src/cli/session`) is
+sealed. Outside it you import only the modules its entry of `public_modules` lists in
+`docs/build/modules.json`. When you need something it hides, ask whether the folder should do
+that work for you before you make one more module public: the list is meant to shrink.
+
+- Module graph, layers, public modules, test placement: `python3 tools/check-cpp-modules.py`
+  checks them and its message names the rule and the file. Run it after you add, move or
+  import a module.
+- Moving or renaming a domain: `tools/move-cpp-domain.py --help`. A module is named by its
+  path, so the tool renames it in every importer, with its target and its test label.
+- A function body in a `.cppm`: read "Interface bodies" in `lib/tbc/README.md` first. A body
+  stays in an interface only as `TBC_HOT_PATH` or `TBC_GENERIC`.
+- Toolchain, configure, build and test commands: `docs/build/cpp-modules.md`.
+- The GUI's layers and what a feature exports: `docs/build/gui-architecture.md`.
+
 ## Performance, no matter what
 
 Doing so much work and placing between the terminal emulator and the actual pty,

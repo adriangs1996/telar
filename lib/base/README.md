@@ -17,7 +17,7 @@ is thread safe and as `ErasingMemory` when `A` erases what it releases.
 
 `JsonError` reports malformed JSON without a protocol failure code. Protocol
 boundaries translate it to `FailureCode::invalid_request`; `RequestError` lives
-in `telar-client`. `LimitReach` is shared data owned by this library and serialized
+in `lib/vocabulary`. `LimitReach` is shared data owned by this library and serialized
 by the client protocol.
 
 ```cmake

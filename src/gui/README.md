@@ -33,7 +33,7 @@ tests and tools, only `ui`, the native adapters in `platform` and `main.cpp` inc
 Everything in `ui` is one QML module, `Telar.Gui`, so a QML file imports it to use a type
 from another folder.
 
-Native font discovery is owned by `platform/font.h`, `platform/macos/font.m` and
+Native font discovery is owned by `platform/font.h`, `platform/macos/font.mm` and
 `platform/linux/font.c`. macOS optical terminal text uses the CoreText glyph
 rasterizer under `platform/macos`, borrowed font bytes and caller-owned scratch
 storage. Qt caches the resulting masks and retains glyph meshes between damaged
@@ -191,7 +191,7 @@ just editor
 
 The root `.clangd` uses `out/dev/compile_commands.json` for modules and their
 importers. The editor target also generates supplemental contexts under
-`out/dev/clangd` for textual adapters. Launch `.toolchain/bin/clangd --experimental-modules-support`.
+`out/dev/src/gui/clangd` for textual adapters. Launch `.toolchain/bin/clangd --experimental-modules-support`.
 The root `.clangd-build.json` refreshes the same pinned configuration on save.
 
 ## Tests and static analysis

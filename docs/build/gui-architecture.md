@@ -90,38 +90,32 @@ export namespace telar::gui::features::history {
 5. Reexporta a `ui` los tipos de valor que muestra, uno a uno: `export using features::history::Page;`
    dentro de `application::history`.
 
-Un caso de uso de `application` es una función libre, no un método de `Session`. Llega a los
-miembros de la sesión por `Access`, que `Session` declara amiga y que vive en la partición
-`:access`, que el módulo no exporta: solo las unidades de `application` la importan.
+Un caso de uso de `application` es una función libre, no un método de `Session`. El estado de
+cada feature, el modelo replicado y el enlace con el runtime son campos públicos de `Session`
+(`session.history`, `session.tabs`, `session.link`): un caso de uso toma prestados los que
+necesita, uno a uno, como Rust presta los campos de un struct, y así TBC comprueba préstamos
+disjuntos sin que un accesor preste la sesión entera. Lo demás es privado (acaba en `_`), y un
+caso de uso lo alcanza por `Access`, que `Session` declara amiga y que vive en la partición
+`:access`, que el módulo no exporta.
 
 ```cpp
-// application-access.cppm
-module telar.gui.application:access;
-
-import :session;
-
-namespace telar::gui::application {
-
-  struct Access {
-    // One accessor per member a use case reaches; constexpr, so inline like the method it replaces.
-    [[nodiscard]] static constexpr features::history::State& history(Session& session) noexcept {
-      return session.history_;
-    }
-  };
-
-}
-
-// application-history.cpp
+// application-monitor.cpp
 module telar.gui.application;
 
-import :access;
+namespace telar::gui::application::monitor {
 
-namespace telar::gui::application::history {
+  bool refresh(Session& session) {
+    if (!available(session) || session.monitor.waiting != 0) {
+      return false;
+    }
 
-  void search(Session& session, const features::history::Query& query) {
-    auto& state = Access::history(session);
+    const auto asked = session.link.ask(features::monitor::query(session.monitor));
+    if (!asked) {
+      return false;
+    }
 
-    send(session, features::history::search(state, query));
+    features::monitor::wait(session.monitor, *asked);
+    return true;
   }
 
 }
@@ -129,9 +123,11 @@ namespace telar::gui::application::history {
 
 - La partición `application-<feature>.cppm` declara los casos de uso exportados en
   `telar::gui::application::<feature>`; `application-<feature>.cpp`, una unidad de implementación
-  del módulo, los define e importa `:access`.
-- `ui` no puede nombrar `Access`: la sesión sigue opaca para ella aunque sus miembros salgan de la
-  interfaz pública.
+  del módulo, los define.
+- Que un campo sea público es para los casos de uso de `application`. `ui` cambia el estado
+  llamando a un caso de uso, no escribiendo en un campo: quien posee una regla (qué se invalida,
+  qué se retiene) es el caso de uso. Hoy hay excepciones en `ui` (el divisor de paneles, el
+  scroll de un terminal, la vista del monitor); una interacción nueva no añade otra.
 
 ## Convenciones de una feature
 
@@ -148,7 +144,7 @@ nombres siguen invisibles fuera del módulo. Las definiciones van en `peek.cpp` 
 **State y Access.** `Access` se declara sin `export` en la interfaz primaria antes de `State` y se
 define después: una partición no puede importar la primaria, así que `Access` vive junto a `State`.
 Así los casos de uso `inline` de la interfaz también lo usan, e importar la feature no lo hace
-visible.
+visible. `monitor` y `prompt` no lo siguen todavía: su `State` es un struct de campos públicos.
 
 ```cpp
 namespace telar::gui::features::peek { struct Access; }
@@ -165,11 +161,12 @@ namespace telar::gui::features::peek {
 
 **Lo que hay que enviar.** Un caso de uso puro devuelve la petición del protocolo como valor
 (`read` devuelve el `ReadPane`) o lo que el usuario pidió (`submit` devuelve una `Submission`);
-recibe el id de la petición, no lo inventa. `application` pide el id (`Access::pending`), envía
-(`Access::send`, `Access::sendRegistered`) y, si el transporte falla, se lo dice a la feature
-(`fail`). Cada tipo de petición que `application::<feature>` registra tiene su instanciación de
-`Session::sendRegistered` en `application-session-layout.cpp`, como `send` en
-`application-session.cpp`.
+recibe el id de la petición, no lo inventa. `application` envía por `session.link`, y una
+petición solo queda registrada cuando ha salido: `link.ask(request)` le da un id nuevo y lo
+devuelve solo si el transporte la aceptó, y `link.sendRegistered(kind, request)` deshace el
+registro si el envío falla. Un caso de uso anota lo que espera a partir del id que recibe, nunca
+antes de enviar. Cada tipo de petición tiene su instanciación de `ask` o de `send` en
+`application-session.cpp` y de `sendRegistered` en `application-session-layout.cpp`.
 
 **Lo que ui lee.** Una consulta devuelve un valor: `palette::suggestion(session)` da una
 `Suggestion` con vistas al estado. Cuando ui lee mucho de una clase con estado, la feature exporta
@@ -278,8 +275,9 @@ ninguno si no es suya, 0 si no cambió nada que se vea, el pane cuya vista cambi
 un llamable (`prompt::output` por frame, `prompt::toProgram` por tecla), así el reloj se lee solo
 cuando el método al que sustituye lo leía.
 
-**En Session.** El estado de la feature es un miembro, `features::peek::State peek_;`, con el
-nombre de la feature; `Access::peek(session)` lo da, en versión `const` y no `const`.
+**En Session.** El estado de la feature es un campo público con el nombre de la feature,
+`features::peek::State peek;`, que los casos de uso de `application::peek` toman prestado como
+`session.peek`.
 
 **El modelo de la sesión.** Los tabs y panes (`Tab<Memory>` en `foundation/model`, `Pane<Memory>`
 en `application`) y las réplicas de agentes, panes y workspaces son estado de `Session`, no de una

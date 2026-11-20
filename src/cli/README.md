@@ -89,9 +89,9 @@ prefixes of all three artifacts, so changing a companion identifies a different
 build. Companion transfers verify SHA-256 before replacement, and setup repairs
 a missing companion. Release archives must contain all three artifacts; the
 installer refuses archives missing the C++ companions. Agent assets and skills
-are embedded from `integration/assets/`.
+are embedded from `commands/integration/assets/`.
 
 ## Editor
 
-`just editor` configures `out/` (with `out/compile_commands.json`) for clangd, as it
+`just editor` configures `out/dev` (with `out/dev/compile_commands.json`) for clangd, as it
 does for every library; `.clangd-build.json` re-runs that configuration on save.

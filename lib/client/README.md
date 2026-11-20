@@ -1,11 +1,11 @@
 # telar-client
 
-The client side of the runtime protocol: wire framing, message codecs and
-serializers, and `telar::Client`, which talks to a runtime over its Unix socket.
-It is C++23 with compiled standard module interfaces and depends on `telar::base`, the standard library and
-POSIX sockets. The base library does not depend on this protocol. `RequestError`
-lives here because it carries a protocol-specific `FailureCode`.
-`src/gui` and the runtime CLI in `src/runtime` use it.
+The client side of the runtime protocol: the handshake, the framing and
+`telar::Client`, which talks to a runtime over its Unix socket. The messages
+and their codecs are in `lib/wire`. It is C++23 with compiled standard module
+interfaces and depends on `telar::base`, `telar::wire`, the standard library and
+POSIX sockets. The base library does not depend on this protocol.
+`src/cli` and `src/gui` use it, and the runtime reads the handshake from it.
 
 ```cmake
 add_subdirectory("${TELAR_ROOT}/lib/client" "${CMAKE_CURRENT_BINARY_DIR}/telar-client")
@@ -15,9 +15,6 @@ target_link_libraries(your_target PRIVATE telar::client)
 ```cpp
 import telar.client;
 ```
-
-`telar.client.telar` re-exports the client interfaces; import individual modules
-under `telar.client.codecs` or `telar.client.serializers` to use a narrower graph.
 
 ## Editor
 
