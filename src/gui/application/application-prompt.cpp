@@ -36,18 +36,6 @@ namespace telar::gui::application::prompt {
       return Change::terminal;
     }
 
-    // Sends `request`; false when the runtime's output queue is full and it was dropped.
-    template <typename Request>
-    bool trySend(Session::Link& link, const Request& request) {
-      try {
-        link.send(request);
-      } catch (const std::length_error&) {
-        return false;
-      }
-
-      return true;
-    }
-
     // The commands people typed, most recent first and each once, for the editor's suggestions.
     void requestHistory(Session& session) {
       auto& state = session.prompt;
@@ -57,7 +45,7 @@ namespace telar::gui::application::prompt {
 
       const auto query = features::prompt::historyQuery(session.link.nextRequest());
 
-      if (trySend(session.link, query)) {
+      if (session.link.offer(query)) {
         features::prompt::askedHistory(state, query.request_id);
       }
     }
@@ -127,7 +115,7 @@ namespace telar::gui::application::prompt {
 
         const bool queued = std::visit(
             [&](const auto& request) {
-              return trySend(session.link, request);
+              return session.link.offer(request);
             },
             features::prompt::request(plan, {.pane_id = pane_id, .index = index, .request_id = request_id})
         );

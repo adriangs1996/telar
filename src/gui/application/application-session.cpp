@@ -47,12 +47,20 @@ namespace telar::gui::application {
   }
 
   template <typename Request>
-  ds::Option<std::uint64_t> Session::Link::ask(Request request) {
-    request.request_id = nextRequest();
-
+  bool Session::Link::offer(const Request& request) {
     try {
       send(request);
     } catch (const std::length_error&) {
+      return false;
+    }
+
+    return true;
+  }
+
+  template <typename Request>
+  ds::Option<std::uint64_t> Session::Link::ask(Request request) {
+    request.request_id = nextRequest();
+    if (!offer(request)) {
       return ds::none;
     }
 
@@ -715,6 +723,9 @@ namespace telar::gui::application {
   template void Session::Link::send<ConfigureFrameInterval>(const ConfigureFrameInterval& message);
   template void Session::Link::send<ConfigureShellPrompt>(const ConfigureShellPrompt& message);
   template void Session::Link::send<ConfigureTerminalColors>(const ConfigureTerminalColors& message);
+  template bool Session::Link::offer<CompleteWords>(const CompleteWords& request);
+  template bool Session::Link::offer<FindPaths>(const FindPaths& request);
+  template bool Session::Link::offer<QueryHistory>(const QueryHistory& request);
   template ds::Option<std::uint64_t> Session::Link::ask<QueryMonitor>(QueryMonitor request);
   template ds::Option<std::uint64_t> Session::Link::ask<RequestProcessPriority>(RequestProcessPriority request);
   template ds::Option<std::uint64_t> Session::Link::ask<RequestProcessSignal>(RequestProcessSignal request);

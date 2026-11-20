@@ -65,9 +65,7 @@ namespace telar::gui::application::paths {
 
     const auto request = features::paths::search(state, query, session.link.nextRequest());
 
-    try {
-      session.link.send(request);
-    } catch (const std::length_error&) {
+    if (!session.link.offer(request)) {
       features::paths::report(state, "Path request queue is full; retry");
 
       return false;

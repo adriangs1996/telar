@@ -415,9 +415,13 @@ export {
         template <typename Message>
         void send(const Message& message);
 
-        // Sends `request` under a new id and returns it, or nothing when the transport's queue is
-        // full and the request did not leave. A use case records what it waits for from the id it
-        // gets back, so a request the transport refused leaves nothing waiting for an answer.
+        // Sends `request`, whose id its maker chose; false when the transport's queue is full and
+        // the request did not leave. A full queue is no failure: the caller asks again later, and
+        // records its wait only for a request that left.
+        template <typename Request>
+        [[nodiscard]] bool offer(const Request& request);
+
+        // offer under a new id, which it returns: nothing when the request did not leave.
         template <typename Request>
         [[nodiscard]] ds::Option<std::uint64_t> ask(Request request);
 
