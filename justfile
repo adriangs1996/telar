@@ -75,6 +75,12 @@ gui-test *args: dev-bin
     "{{ cpp }}" build dev -- --target src/gui/all
     "{{ cpp }}" test dev -- -L '^gui\.' {{ args }}
 
+# Run cases of the window test alone, each in a couple of seconds: `just gui-case tabsCloseInOrder`.
+# Without a case it runs them all; `just gui-case -functions` lists them.
+gui-case *args: dev-bin
+    "{{ cpp }}" build dev -- --target gui-quick-test
+    cd "{{ build_dir }}/dev/src/gui" && TELAR_GUI_TEST_RUNTIME="{{ dev_telar }}" PATH="{{ build_dir }}/dev/src/runtime:$PATH" QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen ./gui-quick-test {{ args }}
+
 # Refresh the compilation database and generated headers that clangd reads in out/dev.
 editor: (configure "dev")
     "{{ cpp }}" build dev -- --target cell-layout gui-editor --parallel 2

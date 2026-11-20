@@ -32,6 +32,10 @@ that work for you before you make one more module public: the list is meant to s
   stays in an interface only as `TBC_HOT_PATH` or `TBC_GENERIC`.
 - Adding a request to the protocol or a use case to the window, with every place it touches
   and what fails when you miss one: `docs/build/recipes.md`.
+- One case of the window test in two seconds, where the whole program takes eighty:
+  `just gui-case <case>`; `just gui-case -functions` lists the cases.
+- Run one `ctest` at a time in a build tree: two at once corrupt the lists of cases it
+  discovers.
 - Toolchain, configure, build and test commands: `docs/build/cpp-modules.md`.
 - The GUI's layers and what a feature exports: `docs/build/gui-architecture.md`.
 
