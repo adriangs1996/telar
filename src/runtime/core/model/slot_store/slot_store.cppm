@@ -46,6 +46,9 @@ export {
       history, // reads or writes the command history
     };
 
+    // `Role` is the role a client takes when this is its first request: it classifies an undecided
+    // client and authorizes nothing. A window sends requests listed as control, such as the
+    // monitor's, and the services that need a role check it themselves (ClientControl::requireRole).
     template <typename Message, ClientRole Role = ClientRole::interactive, RequestLane Lane = RequestLane::runtime>
     struct ClientRequest {
       using Type = Message;
