@@ -85,13 +85,18 @@ namespace {
         return true;
       }
 
-      clang::GlobalDecl global(&function);
+      // A constructor or destructor names one of its variants; GlobalDecl's plain form refuses them.
+      const auto global = [&] {
+        if (const auto* constructor = llvm::dyn_cast<clang::CXXConstructorDecl>(&function)) {
+          return clang::GlobalDecl(constructor, clang::Ctor_Complete);
+        }
 
-      if (const auto* constructor = llvm::dyn_cast<clang::CXXConstructorDecl>(&function)) {
-        global = clang::GlobalDecl(constructor, clang::Ctor_Complete);
-      } else if (const auto* destructor = llvm::dyn_cast<clang::CXXDestructorDecl>(&function)) {
-        global = clang::GlobalDecl(destructor, clang::Dtor_Complete);
-      }
+        if (const auto* destructor = llvm::dyn_cast<clang::CXXDestructorDecl>(&function)) {
+          return clang::GlobalDecl(destructor, clang::Dtor_Complete);
+        }
+
+        return clang::GlobalDecl(&function);
+      }();
 
       std::string name;
       llvm::raw_string_ostream stream(name);
