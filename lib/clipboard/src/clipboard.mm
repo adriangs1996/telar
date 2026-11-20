@@ -15,7 +15,10 @@ namespace telar::clipboard {
       Content result{.mime_type = mime_type, .bytes = {}};
 
       if (data.length != 0) {
-        const std::span<const byte> bytes{static_cast<const byte*>(data.bytes), data.length}; // NOLINT(clang-diagnostic-unsafe-buffer-usage-in-container): NSData hands out its bytes and their length
+        // NSData hands out its bytes and their length.
+#pragma clang unsafe_buffer_usage begin
+        const std::span<const byte> bytes{static_cast<const byte*>(data.bytes), data.length};
+#pragma clang unsafe_buffer_usage end
 
         result.bytes.assign(bytes.begin(), bytes.end());
       }

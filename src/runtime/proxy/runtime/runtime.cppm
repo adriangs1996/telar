@@ -52,13 +52,6 @@ import telar.base.ds;
 
 namespace telar::runtime {
 
-  // text.substr(offset, count) without its throw: an offset past the end gives an empty view.
-  constexpr std::string_view substring(std::string_view text, std::size_t offset, std::size_t count = std::string_view::npos) noexcept {
-    text.remove_prefix(std::min(offset, text.size()));
-    text.remove_suffix(text.size() - std::min(count, text.size()));
-    return text;
-  }
-
   // The status classes of HTTP the capture and the interception tell apart.
   inline constexpr std::uint16_t first_successful_status = 200;
   inline constexpr std::uint16_t reset_content_status = 205;

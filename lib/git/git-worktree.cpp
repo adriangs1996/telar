@@ -7,6 +7,8 @@ import telar.base.ds;
 
 namespace telar::git {
 
+  using telar::runtime::substring;
+
   namespace {
 
     // An index starts with "DIRC", its version and its entry count.

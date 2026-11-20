@@ -428,7 +428,7 @@ namespace telar::runtime::cli::diagnostics {
 
       const Text parent{memory, endpoint.substr(0, slash)};
       const auto base = endpoint.substr(slash + 1);
-      std::unique_ptr<DIR, decltype(&::closedir)> directory{::opendir(parent.data()), &::closedir}; // NOLINT(misc-const-correctness): an owning pointer, which tbc's deep const forbids marking const
+      std::unique_ptr<DIR, decltype(&::closedir)> directory{::opendir(parent.data()), &::closedir};
       if (!directory) {
         throw std::runtime_error{sys::lastError() == ENOENT ? "DiagnosticLogsNotFound" : sys::errorName(sys::lastError())};
       }

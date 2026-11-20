@@ -42,7 +42,7 @@ namespace telar::gui::features::terminal::input {
   }
 
   void MouseEncoder::number(unsigned value) noexcept {
-    auto room = buffer_.viewMut().subspan(used_); // NOLINT(misc-const-correctness): a span written through, which tbc's deep const forbids marking const
+    auto room = buffer_.viewMut().subspan(used_);
     const auto result = std::to_chars(room.data(), std::to_address(room.end()), value);
 
     used_ = static_cast<std::size_t>(result.ptr - buffer_.data());

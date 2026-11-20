@@ -37,7 +37,11 @@ namespace telar::runtime {
   }
 
   void freeTlsObjects(stack_st_X509_OBJECT* objects) noexcept {
-    sk_X509_OBJECT_pop_free(objects, X509_OBJECT_free); // NOLINT(clang-diagnostic-used-but-marked-unused): OpenSSL's stack macros call the type checks they mark unused
+    // OpenSSL's stack macros call the type checks they mark unused.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wused-but-marked-unused"
+    sk_X509_OBJECT_pop_free(objects, X509_OBJECT_free);
+#pragma clang diagnostic pop
   }
 
   void requireTls(bool succeeded, const char* operation) {
@@ -79,7 +83,9 @@ namespace telar::runtime {
     char* data = nullptr;
     const auto length = BIO_get_mem_data(buffer_.get(), &data);
 
-    return {reinterpret_cast<const std::uint8_t*>(data), length > 0 ? static_cast<std::size_t>(length) : 0}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast,clang-diagnostic-unsafe-buffer-usage-in-container): BIO_get_mem_data hands out the bytes as a char pointer and a length
+#pragma clang unsafe_buffer_usage begin
+    return {reinterpret_cast<const std::uint8_t*>(data), length > 0 ? static_cast<std::size_t>(length) : 0}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): BIO_get_mem_data hands out the bytes as a char pointer and a length
+#pragma clang unsafe_buffer_usage end
   }
 
   void PemDocument::clearBuffer(BIO* buffer) noexcept {
@@ -458,7 +464,10 @@ namespace telar::runtime::proxy_trust {
     // A failed rename's notice: the action, the file and why the system refused it.
     void renameFailed(std::string_view action, const char* path, int code) noexcept {
       ds::Array<char, reason_bytes> reason{};
-      const auto* const message = errorMessage(::strerror_r(code, reason.dataMut(), reason.size()), reason.data()); // NOLINT(clang-diagnostic-unsafe-buffer-usage-in-libc-call): strerror_r writes at most the size it is given
+      // strerror_r writes at most the size it is given.
+#pragma clang unsafe_buffer_usage begin
+      const auto* const message = errorMessage(::strerror_r(code, reason.dataMut(), reason.size()), reason.data());
+#pragma clang unsafe_buffer_usage end
 
       notice({"telar proxy trust: could not ", action, " ", path, ": ", message, "\n"});
     }
@@ -503,7 +512,11 @@ namespace telar::runtime::proxy_trust {
     }
 
     line.push('\n');
-    if (std::fwrite(line.data(), 1, line.size(), output_) != line.size() || std::fflush(output_) != 0) { // NOLINT(clang-diagnostic-unsafe-buffer-usage-in-libc-call): the size is the line's own
+    // fwrite reads the line's own data and size.
+#pragma clang unsafe_buffer_usage begin
+    const bool written = std::fwrite(line.data(), 1, line.size(), output_) == line.size();
+#pragma clang unsafe_buffer_usage end
+    if (!written || std::fflush(output_) != 0) {
       throw SystemError{"Print proxy trust command", EIO};
     }
 
@@ -621,7 +634,10 @@ namespace telar::runtime::proxy_trust {
       throw std::length_error{"Proxy trust record exceeds its bound"};
     }
 
-    if (const int error = writePrivateFile(directory, filename, {reinterpret_cast<const unsigned char*>(source.data()), source.size()}, PrivateFileMode::replace)) { // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast,clang-diagnostic-unsafe-buffer-usage-in-container): the record's text is written as bytes
+#pragma clang unsafe_buffer_usage begin
+    const std::span<const unsigned char> bytes{reinterpret_cast<const unsigned char*>(source.data()), source.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the record's text is written as bytes
+#pragma clang unsafe_buffer_usage end
+    if (const int error = writePrivateFile(directory, filename, bytes, PrivateFileMode::replace)) {
       throw SystemError{"Publish proxy trust record", error};
     }
   }
@@ -1031,9 +1047,17 @@ long(SSL_set_tlsext_host_name)(SSL* ssl, const char* name) {
 }
 
 int(sk_X509_OBJECT_num)(const stack_st_X509_OBJECT* objects) {
-  return sk_X509_OBJECT_num(objects); // NOLINT(clang-diagnostic-used-but-marked-unused): OpenSSL's stack macros call the type checks they mark unused
+  // OpenSSL's stack macros call the type checks they mark unused.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wused-but-marked-unused"
+  return sk_X509_OBJECT_num(objects);
+#pragma clang diagnostic pop
 }
 
 X509_OBJECT*(sk_X509_OBJECT_value)(const stack_st_X509_OBJECT* objects, int index) {
-  return sk_X509_OBJECT_value(objects, index); // NOLINT(clang-diagnostic-used-but-marked-unused): OpenSSL's stack macros call the type checks they mark unused
+  // OpenSSL's stack macros call the type checks they mark unused.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wused-but-marked-unused"
+  return sk_X509_OBJECT_value(objects, index);
+#pragma clang diagnostic pop
 }

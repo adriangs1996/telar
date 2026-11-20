@@ -27,18 +27,6 @@ namespace telar::runtime {
     constexpr unsigned decimal = 10;
     constexpr int hexadecimal = 16;
 
-    // The first `count` characters of text, or all of it: substr(0, count) without its throw.
-    constexpr std::string_view textPrefix(std::string_view text, std::size_t count) noexcept {
-      text.remove_suffix(text.size() - std::min(count, text.size()));
-      return text;
-    }
-
-    // Text past its first `offset` characters, or nothing: substr(offset) without its throw.
-    constexpr std::string_view textAfter(std::string_view text, std::size_t offset) noexcept {
-      text.remove_prefix(std::min(offset, text.size()));
-      return text;
-    }
-
     // Whether a character is shown as itself rather than as a control.
     constexpr bool printable(char byte) noexcept {
       return static_cast<unsigned char>(byte) >= first_printable && static_cast<unsigned char>(byte) != delete_byte;

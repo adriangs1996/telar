@@ -170,7 +170,10 @@ namespace telar::ds {
   // and count how many values it holds, so this is where their bounds meet the pointer.
   template <typename Value>
   TBC_HOT_PATH inline std::span<Value> spanOver(Value* storage, std::size_t count) noexcept {
-    return {storage, count}; // NOLINT(clang-diagnostic-unsafe-buffer-usage-in-container): every caller passes the count of values its storage holds
+    // Every caller passes the count of values its storage holds.
+#pragma clang unsafe_buffer_usage begin
+    return {storage, count};
+#pragma clang unsafe_buffer_usage end
   }
 
   // The high and low halves of a 128-bit product folded together: every bit of either factor

@@ -81,7 +81,7 @@ namespace telar::gui::inline foundation::inline model {
       return false;
     }
 
-    auto nodes = nodes_.viewMut(); // NOLINT(misc-const-correctness): a span written through, which tbc's deep const forbids marking const
+    auto nodes = nodes_.viewMut();
 
     std::ranges::move_backward(nodes.first(count_).subspan(*target + 1), nodes.first(count_ + 2).end());
     nodes_.atMut(*target) = ClientLayoutSplit{.axis = axis, .ratio = ratio_half};
@@ -119,7 +119,7 @@ namespace telar::gui::inline foundation::inline model {
       const auto survivor_end = subtreeEnd(survivor);
       const auto parent_end = subtreeEnd(parent);
 
-      auto nodes = nodes_.viewMut(); // NOLINT(misc-const-correctness): a span written through, which tbc's deep const forbids marking const
+      auto nodes = nodes_.viewMut();
 
       std::ranges::move(nodes.first(survivor_end).subspan(survivor), nodes.subspan(parent).begin());
       std::ranges::move(nodes.first(count_).subspan(parent_end), nodes.subspan(parent_end - 2).begin());

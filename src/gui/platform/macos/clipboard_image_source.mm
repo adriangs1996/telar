@@ -69,7 +69,7 @@ namespace telar::gui::platform {
 
       CFDataSetLength(data.get(), status.st_size);
       const auto size = static_cast<std::size_t>(status.st_size);
-      auto bytes = cBytes(CFDataGetMutableBytePtr(data.get()), size); // NOLINT(misc-const-correctness): a span written through, which tbc's deep const forbids marking const
+      auto bytes = cBytes(CFDataGetMutableBytePtr(data.get()), size);
       std::size_t offset = 0;
 
       while (offset < size) {

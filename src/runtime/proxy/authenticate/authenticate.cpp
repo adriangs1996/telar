@@ -5,6 +5,8 @@ import telar.base.memory.sensitive;
 import telar.platform.error;
 import telar.platform.fs;
 import telar.platform.primitives;
+import telar.base.text;
+import telar.wire.vocabulary;
 import telar.base.ds;
 
 namespace telar::runtime {
@@ -13,17 +15,6 @@ namespace telar::runtime {
 
     // The bits of a byte's low hexadecimal digit.
     constexpr unsigned low_nibble_mask = 0x0FU;
-
-    // text.substr(offset, count) without its throw: an offset past the end gives an empty view.
-    constexpr std::string_view substring(std::string_view text, std::size_t offset, std::size_t count = std::string_view::npos) noexcept {
-      text.remove_prefix(std::min(offset, text.size()));
-      text.remove_suffix(text.size() - std::min(count, text.size()));
-      return text;
-    }
-
-    tbc::val_a<std::string_view> textOf(tbc::val_a<std::span<const std::uint8_t>> bytes) noexcept {
-      return {reinterpret_cast<const char*>(bytes.data()), bytes.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): char may alias the bytes, and no cast-free view reads bytes as text
-    }
 
   }
 
@@ -139,7 +130,7 @@ namespace telar::runtime {
       return ds::none;
     }
 
-    const auto userinfo = substring(textOf(decoded.bytes()), 0, *length);
+    const auto userinfo = substring(textView(decoded.bytes()), 0, *length);
     if (!userinfo.starts_with(userinfo_prefix)) {
       return ds::none;
     }
@@ -222,7 +213,7 @@ namespace telar::runtime {
       return ds::none;
     }
 
-    auto text = textOf(bytes.view());
+    auto text = textView(bytes.view());
 
     while (!text.empty() && (text.back() == '\r' || text.back() == '\n')) {
       text.remove_suffix(1);

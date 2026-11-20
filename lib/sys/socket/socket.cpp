@@ -6,7 +6,10 @@ module telar.sys.socket;
 
 // The parentheses keep each name from expanding as the macro the body calls.
 unsigned char*(CMSG_DATA)(cmsghdr * header) noexcept {
-  return CMSG_DATA(header); // NOLINT(clang-diagnostic-unsafe-buffer-usage): the system macro offsets the header pointer
+  // The system macro offsets the header pointer.
+#pragma clang unsafe_buffer_usage begin
+  return CMSG_DATA(header);
+#pragma clang unsafe_buffer_usage end
 }
 
 cmsghdr*(CMSG_FIRSTHDR)(msghdr * message) noexcept {
@@ -18,7 +21,10 @@ cmsghdr*(CMSG_FIRSTHDR)(msghdr * message) noexcept {
 #pragma clang diagnostic ignored "-Wsign-compare"
 
 cmsghdr*(CMSG_NXTHDR)(msghdr * message, cmsghdr* header) noexcept {
-  return CMSG_NXTHDR(message, header); // NOLINT(clang-diagnostic-unsafe-buffer-usage): the system macro offsets the header pointer
+  // The system macro offsets the header pointer.
+#pragma clang unsafe_buffer_usage begin
+  return CMSG_NXTHDR(message, header);
+#pragma clang unsafe_buffer_usage end
 }
 
 #pragma clang diagnostic pop

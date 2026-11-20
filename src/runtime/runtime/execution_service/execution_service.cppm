@@ -503,10 +503,6 @@ export {
         });
       }
 
-      [[nodiscard]] inline static std::string_view textView(std::span<const Byte> bytes) noexcept {
-        return ::telar::textView(bytes);
-      }
-
       inline bool admitInput(Pane& pane, std::size_t bytes) {
         if (bytes <= Pane::input_limit - pane.input.size()) {
           return true;
@@ -946,8 +942,6 @@ export {
           }
         }
       }
-
-      static constexpr std::size_t pane_capacity = 256;
 
       tbc::mut_a<ConcurrentMemory> memory_;
       tbc::mut_a<Poller> poller_;

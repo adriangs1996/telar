@@ -75,13 +75,6 @@ namespace telar::gui::qt {
       return vcombine_u8(vrshrn_n_u16(low, channel_bits), vrshrn_n_u16(high, channel_bits));
     }
 
-    // The pixels of an image that stays shared: constBits() never detaches it, as bits() would.
-    std::span<const uchar> constImageBytes(const QImage& image) noexcept {
-#pragma clang unsafe_buffer_usage begin
-      return {image.constBits(), static_cast<std::size_t>(image.sizeInBytes())};
-#pragma clang unsafe_buffer_usage end
-    }
-
     void convertRow(std::span<const std::uint8_t> input, std::span<std::uint8_t> output, int width) noexcept {
       constexpr std::size_t block_pixels = 32;
       constexpr std::size_t block_bytes = block_pixels * sizeof(QRgb);
@@ -163,7 +156,7 @@ namespace telar::gui::qt {
         return {};
       }
 
-      const auto input_bytes = constImageBytes(source);
+      const auto input_bytes = imageBytes(source);
       auto output_bytes = imageBytes(retained);
       const auto input_stride = static_cast<std::size_t>(source.bytesPerLine());
       const auto output_stride = static_cast<std::size_t>(retained.bytesPerLine());

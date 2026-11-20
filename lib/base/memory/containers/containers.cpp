@@ -11,7 +11,10 @@ namespace telar::runtime {
     // The `count` bytes an allocator handed out at `bytes`.
     template <typename Byte>
     std::span<Byte> allocated(Byte* bytes, std::size_t count) noexcept {
-      return {bytes, count}; // NOLINT(clang-diagnostic-unsafe-buffer-usage-in-container): every caller passes the size it allocated
+      // Every caller passes the size it allocated.
+#pragma clang unsafe_buffer_usage begin
+      return {bytes, count};
+#pragma clang unsafe_buffer_usage end
     }
 
   }

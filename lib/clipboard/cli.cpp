@@ -8,8 +8,11 @@ namespace telar::clipboard {
   // include, which the module layout keeps to its listed exceptions.
   int runCli(int argc, char** argv); // NOLINT(misc-use-internal-linkage): main.cpp and the tests call it
 
-  int runCli(int argc, char** argv) {                                             // NOLINT(misc-use-internal-linkage,misc-const-correctness): main.cpp and the tests call it, declaring it as main is
-    const std::span<char* const> arguments{argv, static_cast<std::size_t>(argc)}; // NOLINT(clang-diagnostic-unsafe-buffer-usage-in-container): main hands over argc arguments in argv
+  int runCli(int argc, char** argv) { // NOLINT(misc-use-internal-linkage,misc-const-correctness): main.cpp and the tests call it, declaring it as main is
+#pragma clang unsafe_buffer_usage begin
+    // main hands over argc arguments in argv.
+    const std::span<char* const> arguments{argv, static_cast<std::size_t>(argc)};
+#pragma clang unsafe_buffer_usage end
     const char* output_path = nullptr;
 
     if (argc == 2 && std::string_view(arguments[1]) == "--help") {
@@ -42,8 +45,11 @@ namespace telar::clipboard {
     }
 
     const auto& bytes = result->bytes;
-    const bool written = bytes.empty() || std::fwrite(bytes.data(), 1, bytes.size(), output) == bytes.size(); // NOLINT(clang-diagnostic-unsafe-buffer-usage-in-libc-call): the vector hands over its own data and size
-    const bool closed = output_path != nullptr ? std::fclose(output) == 0 : std::fflush(output) == 0;         // NOLINT(cppcoreguidelines-owning-memory): the file fopen opened above, which no owner holds
+    // The vector hands over its own data and size.
+#pragma clang unsafe_buffer_usage begin
+    const bool written = bytes.empty() || std::fwrite(bytes.data(), 1, bytes.size(), output) == bytes.size();
+#pragma clang unsafe_buffer_usage end
+    const bool closed = output_path != nullptr ? std::fclose(output) == 0 : std::fflush(output) == 0; // NOLINT(cppcoreguidelines-owning-memory): the file fopen opened above, which no owner holds
     if (!written || !closed) {
       std::println(stderr, "Could not write clipboard content.");
       return 1;

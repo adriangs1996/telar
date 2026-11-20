@@ -5,6 +5,7 @@ module telar.runtime.agents.snapshot;
 
 import std;
 import telar.sys.posix;
+import telar.base.text;
 import telar.base.text.json;
 import telar.base.text.utf8;
 import telar.runtime.history.store;
@@ -666,7 +667,7 @@ namespace telar::runtime {
     }
 
     path.remove_suffix(sizeof("/meta.json") - 1);
-    return control::textAfter(path, path.rfind('/') + 1) == session;
+    return textAfter(path, path.rfind('/') + 1) == session;
   }
 
   template <Allocator Memory>

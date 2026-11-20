@@ -429,10 +429,14 @@ namespace telar::runtime::cli::hooks {
     case AgentProvider::cursor:
       reports.lifecycle = cursorLifecycle(input, texts.event, files.cursor(input, environment));
       break;
-    // Unknown and custom providers report no lifecycle.
+    // Unknown and custom providers report no lifecycle. Custom providers take the values between
+    // the named ones, which only the default reaches.
     case AgentProvider::unknown:
     case AgentProvider::last_custom:
-    default: // NOLINT(clang-diagnostic-covered-switch-default): custom providers take the values between the named ones.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcovered-switch-default"
+    default:
+#pragma clang diagnostic pop
       break;
     }
   }

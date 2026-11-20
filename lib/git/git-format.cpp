@@ -3,9 +3,12 @@ module telar.git;
 import std;
 import telar.platform.sha256;
 import telar.sys.posix;
+import telar.base.text;
 import telar.base.ds;
 
 namespace telar::git {
+
+  using telar::runtime::substring;
 
   namespace {
 
@@ -158,7 +161,9 @@ namespace telar::git {
   }
 
   std::span<const std::uint8_t> asBytes(std::string_view text) noexcept {
-    return {reinterpret_cast<const std::uint8_t*>(text.data()), text.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast,clang-diagnostic-unsafe-buffer-usage-in-container): bytes may alias text, and no cast-free view reads text as bytes
+#pragma clang unsafe_buffer_usage begin
+    return {reinterpret_cast<const std::uint8_t*>(text.data()), text.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): bytes may alias text, and no cast-free view reads text as bytes
+#pragma clang unsafe_buffer_usage end
   }
 
   std::string_view asText(std::span<const std::uint8_t> bytes) noexcept {

@@ -132,7 +132,7 @@ namespace telar::gui::inline foundation::inline keys {
   }
 
   void KeyEncoder::number(std::uint32_t value) {
-    auto room = bytes_.viewMut().subspan(used_); // NOLINT(misc-const-correctness): a span written through, which tbc's deep const forbids marking const
+    auto room = bytes_.viewMut().subspan(used_);
     const auto encoded = std::to_chars(room.data(), std::to_address(room.end()), value);
     if (encoded.ec == std::errc::value_too_large) {
       throw std::length_error{"Encoded key number exceeds its byte capacity"};

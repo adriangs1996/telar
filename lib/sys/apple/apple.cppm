@@ -107,7 +107,10 @@ export {
   using ::sockaddr_ctl;
 
   // The running executable.
-  using ::_NSGetExecutablePath; // NOLINT(bugprone-reserved-identifier,cert-dcl37-c,cert-dcl51-cpp,clang-diagnostic-reserved-identifier): dyld's own name
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wreserved-identifier"
+  using ::_NSGetExecutablePath; // NOLINT(bugprone-reserved-identifier,cert-dcl37-c,cert-dcl51-cpp): dyld's own name
+#pragma clang diagnostic pop
 
   // BSD and Darwin extensions.
   using ::arc4random_buf;

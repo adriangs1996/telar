@@ -33,6 +33,13 @@ namespace telar::gui::qt {
 #pragma clang unsafe_buffer_usage end
   }
 
+  // The pixels of an image that stays shared: constBits() never detaches it, as bits() would.
+  inline std::span<const uchar> imageBytes(const QImage& image) noexcept {
+#pragma clang unsafe_buffer_usage begin
+    return {image.constBits(), static_cast<std::size_t>(image.sizeInBytes())};
+#pragma clang unsafe_buffer_usage end
+  }
+
   inline std::span<uchar> imageLine(QImage& image, int row) {
 #pragma clang unsafe_buffer_usage begin
     return {image.scanLine(row), static_cast<std::size_t>(image.bytesPerLine())};

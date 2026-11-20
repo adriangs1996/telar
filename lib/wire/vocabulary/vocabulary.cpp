@@ -557,16 +557,6 @@ namespace telar {
     return ValueCodec<Launch>::decode(input, storage);
   }
 
-  std::span<const Byte> byteView(std::string_view text) noexcept {
-#pragma clang unsafe_buffer_usage begin
-    return {reinterpret_cast<const Byte*>(text.data()), text.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): Byte may alias char, and no cast-free view reads text as bytes
-#pragma clang unsafe_buffer_usage end
-  }
-
-  std::string_view textView(std::span<const Byte> bytes) noexcept {
-    return {reinterpret_cast<const char*>(bytes.data()), bytes.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): char may alias Byte, and no cast-free view reads bytes as text
-  }
-
   void BoolByte::encode(bool value, std::span<Byte>& output) {
     u8::encode(static_cast<Byte>(value), output);
   }

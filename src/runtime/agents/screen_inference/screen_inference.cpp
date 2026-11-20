@@ -3,6 +3,7 @@ module telar.runtime.agents.screen_inference;
 import std;
 import telar.tbc;
 import telar.config.core;
+import telar.base.text;
 import telar.base.ds;
 
 namespace telar::runtime {
@@ -211,7 +212,7 @@ namespace telar::runtime {
       return {};
     }
 
-    return control::textPrefix(control::textAfter(value, start), value.find_last_not_of(' ') - start + 1);
+    return textPrefix(textAfter(value, start), value.find_last_not_of(' ') - start + 1);
   }
 
   AgentScreenView agentScreenView(const Screen& screen) noexcept {
@@ -356,14 +357,14 @@ namespace telar::runtime {
       return false;
     }
 
-    const auto prefix = control::textPrefix(line, open);
-    const auto heading = control::textPrefix(prefix, prefix.find_last_not_of(' ') + 1);
+    const auto prefix = textPrefix(line, open);
+    const auto heading = textPrefix(prefix, prefix.find_last_not_of(' ') + 1);
     const bool spinner = row.first == bullet || braille(row.first);
     if (!spinner && heading != "Working" && heading != "Thinking" && heading != "Reconnecting" && heading != "Compacting") {
       return false;
     }
 
-    const auto clock = control::textAfter(line, open + 1);
+    const auto clock = textAfter(line, open + 1);
     const auto digits = clock.find_first_not_of("0123456789");
 
     return digits != 0 && digits != std::string_view::npos && (clock[digits] == 's' || clock[digits] == 'm' || clock[digits] == 'h');
@@ -480,7 +481,7 @@ namespace telar::runtime {
   }
 
   std::string_view AgentScreenSample::text() const noexcept {
-    return control::textAfter({bytes_.data(), bytes_.size()}, start_);
+    return textAfter({bytes_.data(), bytes_.size()}, start_);
   }
 
   ds::Option<AgentSignal> AgentScreenInference::observe(Terminal& terminal, const AgentManifests& manifests, AgentProvider provider, ObservationTime now) {

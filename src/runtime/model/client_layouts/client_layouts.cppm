@@ -42,6 +42,7 @@ import telar.runtime.terminal.control;
 import telar.platform.net;
 import telar.config.core;
 import telar.runtime.command_capture.tracker;
+import telar.runtime.history.event;
 import telar.base.ds;
 
 // Interface: model/pending_clipboard.cppm
@@ -332,7 +333,6 @@ export {
 
       static constexpr std::size_t input_limit = std::size_t{128} * 1024;
       static constexpr std::size_t read_buffer_size = std::size_t{16} * 1024;
-      static constexpr std::size_t history_session_bytes = 16;
       // The bytes of the foreground program's name the pane list shows.
       static constexpr std::size_t foreground_bytes = 48;
 #if TELAR_DIAGNOSTICS
@@ -341,70 +341,72 @@ export {
 #endif
       std::uint64_t id;
       std::uint64_t event_identity = 0;
-      ds::Option<ConfigurePaneDesktop> desktop_theme;
       std::uint64_t generation = 1;
-      ds::Array<Byte, history_session_bytes> history_session{};
-      TabLocation location;
-      LaunchRecord<ConcurrentMemory> launch;
-      ds::Option<AgentResume> restored_agent;
+      std::uint64_t cwd_revision = 0;
+      std::uint64_t input_revision = 0;
+      std::uint64_t foreground_revision = 1;
+      // Since when foreground_group holds the terminal, as the pane list reports it.
+      std::chrono::steady_clock::time_point foreground_since = std::chrono::steady_clock::now();
+      // When listening_ports were last read.
+      std::chrono::steady_clock::time_point ports_checked;
+      // The link's round trip so far, smoothed, which echo_sent times.
+      double link_average_ms = 0;
+      // Zero until the pane has an integrated shell: other panes never send their state.
+      std::uint64_t shell_revision = 0;
+      std::uint64_t git_revision = 0;
+      std::chrono::steady_clock::time_point sync_started;
       std::shared_ptr<PtyResponseQueue> pty_responses;
       std::shared_ptr<PaneObserver> observer;
       std::shared_ptr<PaneMedia> media;
+      ds::Option<std::uint64_t> worktree_checked_cwd;
+      // When input last reached a remote shell's line editor, until its echo arrives.
+      ds::Option<std::chrono::steady_clock::time_point> echo_sent;
+      ds::Option<std::chrono::steady_clock::time_point> last_input;
+      TabLocation location;
+      ds::String<ConcurrentMemory> cwd;
+      LaunchRecord<ConcurrentMemory> launch;
+      ByteQueue<ConcurrentMemory> input;
+      FixedText<foreground_bytes> foreground;
+      ds::Option<ConfigurePaneDesktop> desktop_theme;
+      ProcessCache process_cache;
+      ds::Option<AgentResume> restored_agent;
+      // The repository the integrated shell works in, read after each command; zero until read.
+      ShellGitSummary git{};
+      FixedText<PATH_MAX> git_directory;
+      // The integrated shell's own reading of its signed marks, on the runtime's thread so its
+      // state reaches clients with the output that changed it.
+      ds::Option<CommandZones> shell_zones;
+      // Its host and directory view `shell_zones`' fixed buffers, made once with the pane.
+      tbc::val_self<PaneShell> shell_state{};
       // Reports its graphics queries to media.
       tbc::val_self<Terminal> terminal;
-      ByteQueue<ConcurrentMemory> input;
+      // The commands it ran, anchored in `terminal`, which outlives them.
+      ds::Option<CommandBlocks> blocks;
       // Reads rows of `terminal`'s scrollback for clients that ask for them.
       ScrollbackRows scrollback_rows;
-      ds::String<ConcurrentMemory> cwd;
-      ds::Option<PtyProcess> process;
       std::uint32_t observers = 0;
-      std::uint64_t cwd_revision = 0;
-      ds::Option<std::uint64_t> worktree_checked_cwd;
-      std::uint64_t input_revision = 0;
-      FixedText<foreground_bytes> foreground;
-      std::uint64_t foreground_revision = 1;
-      // The process group holding the terminal and since when, as the pane list reports them.
+      // The process group holding the terminal, as the pane list reports it.
       pid_t foreground_group = 0;
-      std::chrono::steady_clock::time_point foreground_since = std::chrono::steady_clock::now();
-      bool foreground_shell = true;
-      // The TCP ports that process group listens on, and when they were last read.
+      std::uint32_t git_commands = std::numeric_limits<std::uint32_t>::max();
+      std::uint32_t process_rechecks = 0;
+      ds::Option<int> exit_status;
+      ds::Option<RejectedReporter> rejected_reporter;
+      ds::Option<PtyProcess> process;
+      // The TCP ports that process group listens on.
       ListeningPorts listening_ports;
-      std::chrono::steady_clock::time_point ports_checked;
+      bool foreground_shell = true;
       bool output_closed = false;
       bool exit_observed = false;
       bool shell_markers = false;
       bool needs_foreground_observation = false;
-      // The integrated shell's own reading of its signed marks, on the runtime's thread so its
-      // state reaches clients with the output that changed it.
-      ds::Option<CommandZones> shell_zones;
-      // The commands it ran, anchored in `terminal`, which outlives them.
-      ds::Option<CommandBlocks> blocks;
-      // When input last reached a remote shell's line editor, until its echo arrives, and the
-      // link's round trip so far, smoothed.
-      ds::Option<std::chrono::steady_clock::time_point> echo_sent;
-      double link_average_ms = 0;
-      // Its host and directory view `shell_zones`' fixed buffers, made once with the pane.
-      tbc::val_self<PaneShell> shell_state{};
       // The shell the pane started, which an `ssh` session it nests stands in for.
       IntegratedShell local_shell = IntegratedShell::none;
-      // Zero until the pane has an integrated shell: other panes never send their state.
-      std::uint64_t shell_revision = 0;
-      // The repository the integrated shell works in, read after each command; zero until read.
-      ShellGitSummary git{};
-      std::uint64_t git_revision = 0;
-      std::uint32_t git_commands = std::numeric_limits<std::uint32_t>::max();
-      FixedText<PATH_MAX> git_directory;
       bool write_interest = false;
       bool read_paused = false;
-      ds::Option<int> exit_status;
-      std::chrono::steady_clock::time_point sync_started;
-      ds::Option<std::chrono::steady_clock::time_point> last_input;
       bool close_requested = false;
-      ProcessCache process_cache;
-      std::uint32_t process_rechecks = 0;
       bool process_recheck_requested = false;
       bool process_recheck_running = false;
-      ds::Option<RejectedReporter> rejected_reporter;
+      ds::Array<Byte, history_session_bytes> history_session{};
 
     private:
       // Counts the commands the integrated shell finished, for its clients, and keeps the marks

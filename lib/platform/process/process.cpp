@@ -149,9 +149,12 @@ namespace telar::runtime {
     }
 
     if (launch.environment_mode == EnvironmentMode::inherit_runtime) {
-      for (char** entry = environ; *entry != nullptr; ++entry) { // NOLINT(clang-diagnostic-unsafe-buffer-usage): environ is a C array whose end only its null entry marks
+      // environ is a C array whose end only its null entry marks.
+#pragma clang unsafe_buffer_usage begin
+      for (char** entry = environ; *entry != nullptr; ++entry) {
         environment_.emplace(environment_memory_, *entry);
       }
+#pragma clang unsafe_buffer_usage end
     }
 
     for (const auto& entry : launch.environment) {

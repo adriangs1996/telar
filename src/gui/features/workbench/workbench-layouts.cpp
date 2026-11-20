@@ -233,11 +233,11 @@ namespace telar::gui::features::workbench {
     const auto start = rows_[index].start;
     const auto count = rows_[index].count;
 
-    auto nodes = nodes_.viewMut(); // NOLINT(misc-const-correctness): a span written through, which tbc's deep const forbids marking const
+    auto nodes = nodes_.viewMut();
 
     std::ranges::move(nodes.first(node_total_).subspan(start + count), nodes.subspan(start).begin());
     node_total_ -= count;
-    auto rows = rows_.viewMut(); // NOLINT(misc-const-correctness): a span written through, which tbc's deep const forbids marking const
+    auto rows = rows_.viewMut();
 
     std::ranges::move(rows.first(count_).subspan(index + 1), rows.subspan(index).begin());
     --count_;

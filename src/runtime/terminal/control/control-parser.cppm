@@ -6,6 +6,7 @@ export module telar.runtime.terminal.control:parser;
 import std;
 import telar.base.memory.allocators;
 import :sequence;
+import telar.wire.vocabulary;
 import telar.base.ds;
 
 export namespace telar::runtime::control {
@@ -436,10 +437,6 @@ export namespace telar::runtime::control {
       return true;
     }
 
-    static std::span<const std::uint8_t> asBytes(std::string_view text) noexcept {
-      return {reinterpret_cast<const std::uint8_t*>(text.data()), text.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the bytes may alias char, and no cast-free view reads text as bytes
-    }
-
     [[nodiscard]] bool apcBorrowable(std::span<const std::uint8_t> input, std::size_t consumed) const noexcept {
       return input.size() - consumed > inline_bytes && phase_ == Phase::string && kind_ == Kind::apc && size_ == 2 && consumed >= 2 && input[consumed - 2] == escape && input[consumed - 1] == inline_[1];
     }
@@ -483,7 +480,7 @@ export namespace telar::runtime::control {
       if (phase_ == Phase::streaming) {
         const auto terminator = ending_ == Ending::bell ? std::string_view{"\a"} : std::string_view{"\x1b\\"};
 
-        consumer.ordinary(asBytes(terminator));
+        consumer.ordinary(byteView(terminator));
         resumeAfterString();
         return finishStream(consumer);
       }
@@ -546,7 +543,7 @@ export namespace telar::runtime::control {
 
       const bool streamed = phase_ == Phase::streaming;
       if (streamed) {
-        consumer.ordinary(asBytes("\x18"));
+        consumer.ordinary(byteView("\x18"));
       }
 
       clear();

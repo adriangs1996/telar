@@ -25,18 +25,6 @@ namespace telar::runtime {
     constexpr int poll_interval_ms = 20;
     constexpr std::string_view blanks = " \r\t";
 
-    // The first `count` characters of text, or all of it: substr(0, count) without its throw.
-    constexpr std::string_view textPrefix(std::string_view text, std::size_t count) noexcept {
-      text.remove_suffix(text.size() - std::min(count, text.size()));
-      return text;
-    }
-
-    // Text past its first `offset` characters, or nothing: substr(offset) without its throw.
-    constexpr std::string_view textAfter(std::string_view text, std::size_t offset) noexcept {
-      text.remove_prefix(std::min(offset, text.size()));
-      return text;
-    }
-
   }
 
   SuggestionEngine::SuggestionEngine(ConcurrentMemory& memory, SuggestionOptions options)

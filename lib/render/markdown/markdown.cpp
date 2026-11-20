@@ -581,11 +581,12 @@ namespace telar::render::markdown {
         }
 
         // md4c hands the substrings as C arrays without a size: the offsets end with one equal to value.size.
-        for (std::size_t index = 0; value.substr_offsets[index] < value.size; ++index) {            // NOLINT(clang-diagnostic-unsafe-buffer-usage): md4c's sentinel-terminated array
-          const auto begin = value.substr_offsets[index];                                           // NOLINT(clang-diagnostic-unsafe-buffer-usage): md4c's sentinel-terminated array
-          const std::string_view part{value.text + begin, value.substr_offsets[index + 1] - begin}; // NOLINT(clang-diagnostic-unsafe-buffer-usage): md4c's sentinel-terminated array
+#pragma clang unsafe_buffer_usage begin
+        for (std::size_t index = 0; value.substr_offsets[index] < value.size; ++index) {
+          const auto begin = value.substr_offsets[index];
+          const std::string_view part{value.text + begin, value.substr_offsets[index + 1] - begin};
 
-          switch (value.substr_types[index]) { // NOLINT(clang-diagnostic-unsafe-buffer-usage): md4c's sentinel-terminated array
+          switch (value.substr_types[index]) {
           case MD_TEXT_ENTITY:
             appendEntity(document_.text, part);
             break;
@@ -602,6 +603,7 @@ namespace telar::render::markdown {
             break;
           }
         }
+#pragma clang unsafe_buffer_usage end
 
         return Span{.offset = offset, .size = static_cast<std::uint32_t>(document_.text.size() - offset)};
       }
