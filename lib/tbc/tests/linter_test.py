@@ -84,6 +84,47 @@ class LinterTest(unittest.TestCase):
             )
         self.assertNotEqual(result.returncode, 0)
 
+    def check_then_replay(self, source, *options):
+        """Checks `source` leaving its stamp, then replays the stamp; returns both results."""
+        with tempfile.TemporaryDirectory() as directory:
+            stamps = Path(directory) / "stamps"
+            stamps.mkdir()
+            listed = Path(directory) / "replay"
+            listed.write_text(f"{source}\n")
+            flags = ["--", "-std=c++23", f"-I{INCLUDE}", "-Wno-return-stack-address"]
+            if SYSROOT:
+                flags += ["-isysroot", SYSROOT]
+            checked = subprocess.run(
+                [str(BINARY), *options, f"--stamps={stamps}", str(source), *flags],
+                capture_output=True, text=True, timeout=20,
+            )
+            replayed = subprocess.run(
+                [str(BINARY), *options, f"--replay={listed}", f"--stamps={stamps}", *flags],
+                capture_output=True, text=True, timeout=20,
+            )
+        return checked, replayed
+
+    def test_replay_fails_a_unit_that_failed(self):
+        checked, replayed = self.check_then_replay(FIXTURES / "dangling.cpp", "--warnings-as-errors")
+        self.assertNotEqual(checked.returncode, 0, checked.stderr)
+        self.assertNotEqual(replayed.returncode, 0, replayed.stderr)
+        self.assertEqual(replayed.stderr.count("[tbc-dangling-borrow]"), 3, replayed.stderr)
+
+    def test_replay_keeps_warnings_nonfatal(self):
+        checked, replayed = self.check_then_replay(FIXTURES / "dangling.cpp")
+        self.assertEqual(checked.returncode, 0, checked.stderr)
+        self.assertEqual(replayed.returncode, 0, replayed.stderr)
+        self.assertEqual(replayed.stderr.count("[tbc-dangling-borrow]"), 3, replayed.stderr)
+
+    def test_replay_keeps_compiler_warnings_nonfatal(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "warned.cpp"
+            source.write_text('#warning "a compiler warning"\nint value() { return 1; }\n')
+            checked, replayed = self.check_then_replay(source, "--warnings-as-errors")
+        self.assertEqual(checked.returncode, 0, checked.stderr)
+        self.assertEqual(replayed.returncode, 0, replayed.stderr)
+        self.assertIn("a compiler warning", replayed.stderr)
+
 
 class PublicSignatureTest(unittest.TestCase):
     def compile_source(self, source, *options):

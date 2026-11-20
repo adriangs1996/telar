@@ -309,7 +309,7 @@ int main(int argc, const char** argv) try {
   );
   const llvm::cl::opt<bool> fix("fix", llvm::cl::desc("Insert the blank lines that blank-lines asks for"), llvm::cl::cat(category));
   const llvm::cl::opt<std::string> header_filter("header-filter", llvm::cl::desc("Regular expression for the headers blank-lines checks besides each main file"), llvm::cl::cat(category));
-  const llvm::cl::opt<std::string> stamps("stamps", llvm::cl::desc("Directory where each checked unit leaves a stamp named after its source, '/' spelled '%': what it claimed and reported"), llvm::cl::cat(category));
+  const llvm::cl::opt<std::string> stamps("stamps", llvm::cl::desc("Directory where each checked unit leaves a stamp named after its source, '/' spelled '%': what it claimed and reported, and whether it failed"), llvm::cl::cat(category));
   const llvm::cl::opt<std::string> replay("replay", llvm::cl::desc("File naming the sources, one per line, whose stamps are reported again instead of checking them"), llvm::cl::cat(category));
   const llvm::cl::opt<std::string> container_allowlist("standard-containers-allowlist", llvm::cl::desc("File naming the folders standard-containers still allows, one per line"), llvm::cl::cat(category));
   const llvm::cl::opt<std::string> interface_allowlist("interface-allowlist", llvm::cl::desc("File naming the modules interface-bodies allows to keep bodies, one per line"), llvm::cl::cat(category));
@@ -423,18 +423,19 @@ int main(int argc, const char** argv) try {
       llvm::SmallVector<llvm::StringRef, 16> names;
 
       claims.split(names, '\n', -1, false);
+      // The unit fails again only when it failed then: a compiler warning, or a warning without
+      // --warnings-as-errors, is reported without failing it.
       for (auto line : names) {
         if (line.consume_front("claim ")) {
           checked.preclaim(line);
         } else if (line.consume_front("allow ")) {
           containers.replay(line);
+        } else if (line == "failed") {
+          failed = true;
         }
       }
 
       llvm::errs() << output;
-      if (output.contains(": warning: ") || output.contains(": error: ")) {
-        failed = true;
-      }
     }
   }
 
@@ -468,6 +469,10 @@ int main(int argc, const char** argv) try {
 
       for (const auto& event : allowed_uses) {
         stamp << "allow " << event << '\n';
+      }
+
+      if (unit_failed) {
+        stamp << "failed\n";
       }
 
       stamp << "output\n"
