@@ -103,6 +103,14 @@ jobs:
             --target telar-gui gui-status-bar-test gui-ui-kit-tests
           tools/cpp test ci -- -R '^(gui-(qt-dependency|status-bar)$|gui\.ui\.kit\.native_pointer_events\.)'
 
+      # The domains below ui: the value types, the features and the application. Their tests open
+      # no window, and the session's are where the negotiation with an older runtime is checked.
+      - name: Test the domains below the UI
+        run: |
+          tools/cpp build ci -- --parallel 3 \
+            --target src/gui/foundation/all src/gui/features/all src/gui/application/all
+          tools/cpp test ci -- -R '^gui\.(foundation|features|application)\.' --parallel 3
+
       - name: Test native macOS navigation
         if: runner.os == 'macOS'
         run: |

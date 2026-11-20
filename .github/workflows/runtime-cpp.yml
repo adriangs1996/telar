@@ -67,9 +67,9 @@ jobs:
           ulimit -n 8192
           tools/cpp build ci -- --target src/runtime/all src/cli/all checkpoint-probe --parallel 3
           # Every case of the runtime and CLI domains, and their integration tests; of the
-          # end-to-end checks, the server's.
+          # end-to-end checks, the server's and those of the wire contract `api schema` prints.
           tools/cpp test ci -- -L '^(runtime|cli)\.' -LE '\.e2e$' --parallel 3
-          tools/cpp test ci -- -R '^server-cli-tests$'
+          tools/cpp test ci -- -R '^(server-cli-tests|exec-runtime-(offline|cli)-tests)$'
 
       - name: Check distributable linkage
         if: matrix.distributable == 'ON'
