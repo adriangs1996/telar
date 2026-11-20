@@ -38,7 +38,9 @@
 #   -Wundefined-func-template: a template whose body sits in an implementation unit, instantiated there
 #   explicitly, is how module interfaces keep no bodies;
 #   the lifetime-safety suggestions, which ask for [[clang::lifetimebound]] where tbc's labels already
-#   state the contract; its use-after-scope and dangling diagnostics stay on.
+#   state the contract; its use-after-scope and dangling diagnostics stay on;
+#   -Wthread-safety-negative, which asks a method that locks a std::mutex to require its negative
+#   capability, an annotation clang rejects because libc++'s std::mutex is no capability type.
 InheritParentConfig: false
 Checks: >-
   *,
@@ -83,6 +85,7 @@ ExtraArgs:
   - -Wno-lifetime-safety-cross-tu-suggestions
   - -Wno-lifetime-safety-intra-tu-constructor-suggestions
   - -Wno-lifetime-safety-cross-tu-constructor-suggestions
+  - -Wno-thread-safety-negative
 WarningsAsErrors: '*'
 HeaderFilterRegex: '(^|/)(src|lib)/'
 ExcludeHeaderFilterRegex: '(^|/)(lib/(tbc|ebnf)|dependencies|generated|out[^/]*|tests|third_party|vendor|\.toolchain)/'
