@@ -1,4 +1,5 @@
 telar_add_domain(runtime terminal
+  EXCLUDE graphics command_capture shell_integration
   SOURCES
     control/checksum/checksum.cpp
     control/clipboard/clipboard.cpp
@@ -15,7 +16,7 @@ telar_add_domain(runtime terminal
     png_decoder.cpp
     text_reader/cell_projection.cpp
     text_reader/text_reader.cpp
-  DEPS diagnostics platform)
+  DEPS diagnostics host)
 # The grid includes the cell layout the build reads from libghostty-vt.
 add_dependencies(runtime-terminal cell-layout)
 

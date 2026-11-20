@@ -64,7 +64,7 @@ static_assert(true);
 import std;
 import telar.testing;
 import telar.tls.tests.tls_fixture;
-import telar.runtime.platform.system_certificates;
+import telar.runtime.host.system_certificates;
 import telar.tls;
 import telar.runtime.traffic.tls.system_root_bundle;
 import telar.runtime.traffic.tls.interception;

@@ -13,7 +13,7 @@ import telar.base.memory.containers;
 
 import telar.runtime.traffic.exchange_capture.producer;
 
-import telar.runtime.platform.request_worker;
+import telar.runtime.workers.request_worker;
 import telar.platform.primitives;
 import telar.config.runtime;
 import telar.base.ds;

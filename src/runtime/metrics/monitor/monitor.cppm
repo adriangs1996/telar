@@ -7,9 +7,9 @@ import std;
 import telar.sys.posix;
 import telar.tbc;
 
-import telar.runtime.platform.host_metrics;
-import telar.runtime.platform.process_probe;
-import telar.runtime.platform.process_table;
+import telar.runtime.host.host_metrics;
+import telar.runtime.host.process_probe;
+import telar.runtime.host.process_table;
 import telar.wire.monitor;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;

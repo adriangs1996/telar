@@ -28,12 +28,12 @@ import telar.base.memory.containers;
 import telar.platform.primitives;
 import telar.testing;
 import telar.runtime.agents.snapshot;
-import telar.runtime.platform.process_probe;
+import telar.runtime.host.process_probe;
 import telar.platform.process;
 import telar.wire.agents;
 import telar.wire.vocabulary;
 import telar.config.runtime;
-import telar.runtime.platform.session_host;
+import telar.runtime.host.session_host;
 import telar.base.ds;
 
 namespace {

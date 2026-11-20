@@ -19,8 +19,8 @@ import telar.config.runtime;
 import telar.runtime.traffic.tap.protocol;
 import telar.runtime.traffic.capture;
 
-import telar.runtime.platform.local_listener;
-import telar.runtime.platform.signals;
+import telar.runtime.host.local_listener;
+import telar.runtime.host.signals;
 import telar.runtime.traffic.capture_analysis;
 
 import telar.runtime.traffic.redirect.socket_owners;
@@ -34,7 +34,7 @@ import telar.platform.process;
 import telar.base.text;
 import telar.plugins;
 import telar.runtime.traffic.http.message;
-import telar.runtime.platform.process_probe;
+import telar.runtime.host.process_probe;
 import telar.runtime.traffic.redirect.direction;
 import telar.runtime.traffic.tap.exchange;
 import telar.runtime.traffic.tap.frames;

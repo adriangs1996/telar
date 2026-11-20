@@ -7,7 +7,7 @@ import std;
 
 import telar.config.runtime;
 
-import telar.runtime.platform.process_probe;
+import telar.runtime.host.process_probe;
 import telar.runtime.agents.description_generator;
 
 import telar.platform.events;
@@ -18,7 +18,7 @@ import telar.platform.primitives;
 import telar.runtime.terminal.control;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
-import telar.runtime.platform.session_host;
+import telar.runtime.host.session_host;
 import telar.base.ds;
 
 // Interface: agents/evidence_state.cppm

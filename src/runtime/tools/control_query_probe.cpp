@@ -27,7 +27,7 @@ import telar.runtime.terminal.text_reader;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
 import telar.runtime.terminal.ghostty;
-import telar.runtime.runtime.tests.clipboard_task;
+import telar.runtime.core.tests.clipboard_task;
 import telar.base.ds;
 
 using namespace telar;

@@ -8,7 +8,7 @@ import std;
 import telar.sys.posix;
 import telar.tbc;
 
-import telar.runtime.platform.stream_read_buffer;
+import telar.runtime.host.stream_read_buffer;
 import telar.runtime.traffic.tap.protocol;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
@@ -24,7 +24,7 @@ import telar.plugins;
 import telar.runtime.traffic.control_backend;
 import telar.runtime.traffic.control_protocol;
 
-import telar.runtime.platform.signals;
+import telar.runtime.host.signals;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
 import telar.base.text;

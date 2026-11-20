@@ -9,7 +9,7 @@ import telar.testing.test_memory;
 import telar.base.memory.allocators;
 import telar.runtime.history.event;
 import telar.runtime.history.store;
-import telar.runtime.platform.background_executor;
+import telar.runtime.workers.background_executor;
 import telar.runtime.transport.connection;
 import telar.wire.agents;
 import telar.wire.history;

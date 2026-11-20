@@ -4,7 +4,7 @@ import std;
 import telar.native.sqlite;
 import telar.tbc;
 
-import telar.runtime.platform.background_executor;
+import telar.runtime.workers.background_executor;
 
 import telar.runtime.history.event;
 

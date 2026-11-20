@@ -3,7 +3,7 @@
 Reading and validating telar's Lua configuration: the client sections the GUI
 applies and the runtime sections it reports, with the option types they produce
 (`agents/`, `proxy/`, `history/`, `graphics/`, `terminal/`). The runtime's
-configuration loader stays in `src/runtime/config`. It is C++23 and links
+configuration loader stays in `src/runtime/server/config`. It is C++23 and links
 `telar-lua` and `telar-plugins`.
 
 Each process imports only the modules it uses:

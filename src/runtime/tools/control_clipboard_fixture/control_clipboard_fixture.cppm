@@ -1,7 +1,7 @@
 export module telar.runtime.tools.control_clipboard_fixture;
 
 import std;
-import telar.runtime.runtime.tests.clipboard_task;
+import telar.runtime.core.tests.clipboard_task;
 import telar.wire.clipboard;
 import telar.base.ds;
 

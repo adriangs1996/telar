@@ -7,7 +7,7 @@ telar_add_domain(runtime traffic/redirect
   MACOS_SOURCES
     record/record.cpp
     record/record.cppm
-  DEPS platform traffic/tap)
+  DEPS host traffic/tap)
 
 if(BUILD_TESTING)
   telar_add_domain_tests(traffic/redirect LINK telar::base telar::config telar::platform telar::tls telar::wire)

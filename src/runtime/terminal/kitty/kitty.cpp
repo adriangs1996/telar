@@ -2,7 +2,7 @@ module telar.runtime.terminal.kitty;
 
 import telar.platform.error;
 import telar.runtime.terminal.ghostty;
-import telar.runtime.platform.descriptor_path;
+import telar.runtime.host.descriptor_path;
 import telar.base.ds;
 
 namespace telar::runtime {

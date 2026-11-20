@@ -4,7 +4,7 @@ module;
 module telar.runtime.paths.query_task;
 
 import telar.platform.error;
-import telar.runtime.platform.git_status;
+import telar.runtime.workspaces.git_status;
 import telar.sys.posix;
 import telar.base.ds;
 

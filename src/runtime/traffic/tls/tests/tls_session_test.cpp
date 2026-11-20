@@ -44,7 +44,7 @@ import telar.tls.tests.tls_fixture;
 import telar.runtime.traffic.tls.interception;
 import telar.platform.net;
 import telar.tls;
-import telar.runtime.platform.tunnel_sockets;
+import telar.runtime.host.tunnel_sockets;
 import telar.base.ds;
 
 namespace {

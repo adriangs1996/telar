@@ -6,7 +6,7 @@ export module telar.runtime.metrics.host_sampler;
 import std;
 
 import telar.runtime.diagnostics.runtime_counters;
-import telar.runtime.platform.host_metrics;
+import telar.runtime.host.host_metrics;
 import telar.base.ds;
 
 // Interface: metrics/host_sample.cppm

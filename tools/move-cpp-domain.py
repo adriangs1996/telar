@@ -54,7 +54,10 @@ def rules(process, old, new):
     return [
         # Paths, from the repository root and from the process's include root.
         (re.compile(rf'src/{process}/{re.escape(old)}(?![\w-])'), f'src/{process}/{new}', everywhere, None),
-        (re.compile(rf'(#[ \t]*include[ \t]*"){re.escape(old)}/'), rf'\g<1>{new}/', own_code, None),
+        # Only a header the moved folder holds: another include root may spell the same folder.
+        (re.compile(rf'(#[ \t]*include[ \t]*"){re.escape(old)}/([^"\n]+)(?=")'),
+         lambda match: (f'{match[1]}{new}/{match[2]}' if (ROOT / f'src/{process}/{new}/{match[2]}').exists() else match[0]),
+         own_code, None),
         # Module names.
         (re.compile(rf'(?<![\w.])telar\.{process}\.{re.escape(dots(old))}(?!\w)'), f'telar.{process}.{dots(new)}',
          everywhere, None),
@@ -111,7 +114,7 @@ def rewrite_cmake(path, text, process, moves):
 def rewrite_layers(text, process, moves):
     """The domains of process_layers in docs/build/modules.json."""
     start = text.index('"process_layers"')
-    start = text.index(f'"{process}": [', start)
+    start = text.index(f'"{process}": [', start) + len(f'"{process}": [')
     end = text.index(']', start)
     block = re.sub(r'"([\w/]+)"', lambda match: '"' + moves.get(match[1], match[1]) + '"', text[start:end])
     return text[:start] + block + text[end:]
@@ -140,9 +143,14 @@ def seal(folder):
     except RuntimeError as error:
         for line in str(error).splitlines()[1:]:
             match = re.fullmatch(rf'  \S+ imports (\S+), which {re.escape(folder)} does not make public', line)
-            if not match:
+            # A module that moved into the folder leaves the list of the folder it came from.
+            stale = re.fullmatch(r'  (\S+) is public in (\S+), but nothing outside imports it; remove it from public_modules', line)
+            if match:
+                public[folder].append(match[1])
+            elif stale:
+                public[stale[2]].remove(stale[1])
+            else:
                 raise SystemExit('Fix this before sealing: ' + line.strip())
-            public[folder].append(match[1])
     public[folder].sort()
 
     start = text.index('  "public_modules": {')
@@ -152,14 +160,73 @@ def seal(folder):
     print(f'{folder} makes {len(public[folder])} modules public')
 
 
+def load_checker():
+    spec = importlib.util.spec_from_file_location('check_cpp_modules', ROOT / 'tools/check-cpp-modules.py')
+    checker = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(checker)
+    return checker
+
+
+MISSING_DEP_RE = re.compile(r'  (\S+): telar_add_domain\((\w+) (\S+)\) does not depend on (\S+), but ')
+UNUSED_DEP_RE = re.compile(r'  (\S+): telar_add_domain\((\w+) (\S+)\) depends on (\S+), which none of its files imports')
+
+
+def fix_deps():
+    """Make the DEPS of each telar_add_domain the domains its files import (rule 7): add those the
+    checker misses and drop those it finds unused, lowest layer first."""
+    checker = load_checker()
+    inventory = json.loads((ROOT / 'docs/build/modules.json').read_text())
+    files = set(subprocess.check_output(['git', 'ls-files', '--cached', '--others', '--exclude-standard'],
+                                        cwd=ROOT, text=True).splitlines())
+    files = {name for name in files if (ROOT / name).is_file()}
+    try:
+        checker.check_domain_targets(inventory['process_layers'], files, lambda path: (ROOT / path).read_text())
+        return
+    except RuntimeError as error:
+        lines = str(error).splitlines()[1:]
+
+    changes = {}
+    for line in lines:
+        missing, unused = MISSING_DEP_RE.match(line), UNUSED_DEP_RE.match(line)
+        found = missing or unused
+        if not found:
+            raise SystemExit('Fix this by hand: ' + line.strip())
+        added, removed = changes.setdefault((found[1], found[2], found[3]), (set(), set()))
+        (added if missing else removed).add(found[4])
+
+    for (path, process, domain), (added, removed) in changes.items():
+        order = inventory['process_layers'][process]
+        text = (ROOT / path).read_text()
+        call = re.search(rf'telar_add_domain\({process} {re.escape(domain)}\b([^()]*)\)', text)
+        body = call[1]
+        deps = re.search(r'\n(\s*)DEPS((?:[ \t]+\S+)*)', body)
+        current = deps[2].split() if deps else []
+        domains = [name for name in current if name in order]
+        others = [name for name in current if name not in order]
+        domains = sorted((set(domains) | added) - removed, key=order.index)
+        line = ' '.join(domains + others)
+        if deps:
+            new_body = body[:deps.start()] + (f'\n{deps[1]}DEPS {line}' if line else '') + body[deps.end():]
+        else:
+            new_body = body.rstrip() + f'\n  DEPS {line}'
+        (ROOT / path).write_text(text[:call.start(1)] + new_body + text[call.end(1):])
+    print(f'fixed the DEPS of {len(changes)} domains')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--seal', metavar='FOLDER', help='merge the public_modules entries below FOLDER into its own')
+    parser.add_argument('--fix-deps', action='store_true', help='make every domain depend on exactly what it imports')
+    parser.add_argument('--rewrite-only', action='store_true',
+                        help='the folders already moved: only rename what follows from their paths')
     parser.add_argument('process', nargs='?', choices=('runtime', 'cli', 'gui'))
     parser.add_argument('moves', nargs='*', metavar='OLD=NEW', help='folders below src/<process>')
     arguments = parser.parse_args()
     if arguments.seal:
         seal(arguments.seal.rstrip('/'))
+        return
+    if arguments.fix_deps:
+        fix_deps()
         return
     if not arguments.process or not arguments.moves:
         parser.error('name a process and its moves, or --seal a folder')
@@ -167,11 +234,13 @@ def main():
 
     for old, new in moves.items():
         source, target = ROOT / f'src/{arguments.process}/{old}', ROOT / f'src/{arguments.process}/{new}'
-        if not source.is_dir() or target.exists():
+        if not arguments.rewrite_only and (not source.is_dir() or target.exists()):
             raise SystemExit(f'{old}={new}: the source must be a folder and the target must not exist')
     # A folder that moves into one that stays is renamed first, so the longer names go first.
     ordered = sorted(moves.items(), key=lambda move: len(move[0]), reverse=True)
     for old, new in ordered:
+        if arguments.rewrite_only:
+            break
         target = ROOT / f'src/{arguments.process}/{new}'
         target.parent.mkdir(parents=True, exist_ok=True)
         subprocess.run(['git', 'mv', f'src/{arguments.process}/{old}', f'src/{arguments.process}/{new}'], cwd=ROOT, check=True)

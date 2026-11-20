@@ -9,8 +9,8 @@ import telar.tbc;
 
 import telar.tls;
 
-import telar.runtime.platform.stream_read_buffer;
-import telar.runtime.platform.tunnel_sockets;
+import telar.runtime.host.stream_read_buffer;
+import telar.runtime.host.tunnel_sockets;
 import telar.base.text;
 import telar.platform.primitives;
 import telar.base.memory.allocators;

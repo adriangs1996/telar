@@ -68,7 +68,7 @@ import telar.runtime.traffic.http.message;
 import telar.runtime.plugins.service;
 import telar.runtime.plugins.worker;
 import telar.runtime.plugins.tap_configuration;
-import telar.runtime.platform.signals;
+import telar.runtime.host.signals;
 import telar.platform.process;
 import telar.runtime.traffic.control_protocol;
 import telar.config.runtime;

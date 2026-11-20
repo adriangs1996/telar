@@ -3,7 +3,7 @@ telar_add_domain(runtime history
     event/event.cpp
     store/database.cpp
     store/store.cpp
-  DEPS diagnostics transport platform)
+  DEPS diagnostics transport host workers)
 
 if(BUILD_TESTING)
   telar_add_domain_tests(history LINK telar::base telar::config telar::platform telar::wire)

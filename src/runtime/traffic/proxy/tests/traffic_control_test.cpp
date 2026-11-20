@@ -97,14 +97,14 @@ import telar.runtime.traffic.control_backend;
 import telar.wire.vocabulary;
 import telar.config.runtime;
 import telar.plugins;
-import telar.runtime.platform.event_loop;
+import telar.runtime.host.event_loop;
 import telar.runtime.traffic.redirect.direction;
 import telar.runtime.traffic.redirect.ingress;
 import telar.runtime.traffic.redirect.socket_owners;
 import telar.runtime.traffic.control_protocol;
 import telar.runtime.traffic.tap.frames;
 import telar.runtime.traffic.tap.protocol;
-import telar.runtime.platform.name_resolutions;
+import telar.runtime.host.name_resolutions;
 import telar.tls;
 import telar.base.ds;
 

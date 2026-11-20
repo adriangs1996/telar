@@ -21,9 +21,9 @@ import telar.base.text.json;
 import telar.platform.primitives;
 import telar.testing;
 import telar.testing.test_memory;
-import telar.runtime.editors.remote_editor;
+import telar.runtime.workspaces.editors.remote_editor;
 import telar.runtime.paths.query_task;
-import telar.runtime.platform.request_worker;
+import telar.runtime.workers.request_worker;
 import telar.runtime.suggestions.engine;
 import telar.wire.clients;
 import telar.wire.editor;
@@ -31,9 +31,9 @@ import telar.wire.runtime;
 import telar.wire.vocabulary;
 import telar.platform.error;
 import telar.platform.process;
-import telar.runtime.platform.background_executor;
+import telar.runtime.workers.background_executor;
 import telar.runtime.transport.connection;
-import telar.runtime.platform.process_probe;
+import telar.runtime.host.process_probe;
 import telar.base.ds;
 
 namespace {

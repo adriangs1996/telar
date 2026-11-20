@@ -290,7 +290,7 @@ std::string_view mapView(std::string_view text) {
 
 // CASE: std.function_dangling
 // PAIR: std.function
-// SOURCE: src/runtime/platform/request_worker/request_worker.cppm :: RequestWorker::run
+// SOURCE: src/runtime/workers/request_worker/request_worker.cppm :: RequestWorker::run
 // STATUS: implemented
 // CONTRACT: A std::function keeps the borrows of the callable it wraps.
 // SCENARIO: The stored callback is invoked after its captured owner dies.
@@ -309,7 +309,7 @@ void functionDangling() {
 
 // CASE: std.function_live
 // PAIR: std.function
-// SOURCE: src/runtime/platform/request_worker/request_worker.cppm :: RequestWorker::run
+// SOURCE: src/runtime/workers/request_worker/request_worker.cppm :: RequestWorker::run
 // STATUS: implemented
 // CONTRACT: A stored callback may run while its captures are alive.
 // SCENARIO: The owner outlives the invocation; accept.
@@ -729,7 +729,7 @@ int referenceReadBeforeGrowth() {
 
 // CASE: standard.factory_copies
 // PAIR: standard.factory
-// SOURCE: src/runtime/model/client_layouts/client_layouts.cpp :: Pane::Pane (a pane's observer is built from the command's directory, which it copies)
+// SOURCE: src/runtime/core/model/client_layouts/client_layouts.cpp :: Pane::Pane (a pane's observer is built from the command's directory, which it copies)
 // STATUS: implemented
 // CONTRACT: std::make_shared, std::allocate_shared and std::make_unique keep what their first template argument's constructor keeps of the arguments they forward, as Rust's Arc::new(T::new(..)) keeps what T keeps.
 // SCENARIO: An observer built from a directory it copies outlives the directory; accept.
@@ -764,7 +764,7 @@ std::size_t standardFactoryCopies() {
 
 // CASE: standard.factory_keeps
 // PAIR: standard.factory
-// SOURCE: src/runtime/model/client_layouts/client_layouts.cpp :: Pane::Pane (a pane's observer is built from the command's directory, which it copies)
+// SOURCE: src/runtime/core/model/client_layouts/client_layouts.cpp :: Pane::Pane (a pane's observer is built from the command's directory, which it copies)
 // STATUS: implemented
 // CONTRACT: std::make_shared, std::allocate_shared and std::make_unique keep what their first template argument's constructor keeps of the arguments they forward, as Rust's Arc::new(T::new(..)) keeps what T keeps.
 // SCENARIO: An observer built from a directory it views is read after the directory ends; reject where the directory ends.

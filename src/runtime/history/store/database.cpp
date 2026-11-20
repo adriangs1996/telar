@@ -4,7 +4,7 @@ import std;
 import telar.native.sqlite;
 import telar.sys.posix;
 
-import telar.runtime.platform.descriptor_path;
+import telar.runtime.host.descriptor_path;
 import telar.platform.error;
 import telar.platform.fs;
 import telar.wire.vocabulary;

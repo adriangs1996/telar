@@ -12,7 +12,7 @@ import telar.runtime.traffic.redirect.pf_rules;
 import telar.runtime.traffic.redirect.ingress;
 import telar.platform.process;
 
-import telar.runtime.platform.process_probe;
+import telar.runtime.host.process_probe;
 import telar.base.memory.containers;
 import telar.base.text;
 import telar.platform.error;

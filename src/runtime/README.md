@@ -277,29 +277,37 @@ configuration and compilation errors fail the command. No fixes are applied.
 
 | Component | Responsibility |
 | --- | --- |
-| `cli/` | Endpoint resolution, startup, stop, SSH bridge and agent hook commands. |
-| `config/`, `lua/` | Bounded Lua VM, local modules, profiles and runtime configuration. |
-| `metrics/` | Host counter projection and change revisions. |
-| `memory/` | Allocator concepts, budgets, synchronization, owned objects and bounded containers. |
-| `platform/` | Descriptors, PTYs, pipe processes, process identities, host counters, kqueue and background workers. |
+| `server/` | Endpoint resolution, startup, stop and the SSH bridge; `server/config/` loads the runtime configuration in a bounded Lua VM. |
+| `core/` | Service composition, request dispatch, event handling and bounded runtime telemetry. |
+| `core/delivery/` | Current-state selection, service projections, attachment rotation and write completion. |
+| `core/model/` | Generational stores, panes, workspaces, attachments and retained client layouts. |
+| `core/persistence/` | The session checkpoint: its format, debounce, worker and quarantine. |
 | `transport/` | Client protocol framing, decoding and partial writes. |
+| `workers/` | The workers that run requests off the event loop, their queues and reply limits. |
+| `host/` | Descriptors, PTYs, pipe processes, process identities, host counters and kqueue or epoll. |
 | `terminal/` | Ghostty state, cell projection, acknowledged damage frames, text and search. |
-| `model/` | Generational stores, panes, workspaces, attachments and retained client layouts. |
-| `runtime/` | Service composition, request dispatch, event handling and bounded runtime telemetry. |
-| `runtime/delivery/` | Current-state selection, service projections, attachment rotation and write completion. |
-| `agents/` | Provider identity, lifecycle transitions, screen evidence, progress and prompt budgets. |
-| `execution/` | Pipe executions, bounded output retention and stdin state. |
-| `graphics/` | Image projection, PNG decoding, transfers, shared-memory leases and credit. |
+| `terminal/graphics/` | Image projection, PNG decoding, transfers, shared-memory leases and credit. |
+| `terminal/command_capture/` | Command zones, blocks and the text of what ran. |
+| `terminal/shell_integration/` | The shell scripts a pane loads, Git context and completion words. |
+| `agents/` | Provider identity, lifecycle transitions, screen evidence, progress and prompt budgets; `agents/observation/` reads a pane's processes. |
 | `history/` | SQLite ownership, migrations, command persistence, imports and queries. |
-| `workspaces/` | Typed background requests for root Git branch and dirty state. |
-| `worktrees/` | Linked-worktree discovery and Git status/base-distance observation. |
+| `workspaces/` | Git status and typed background requests for root Git branch and dirty state. |
+| `workspaces/worktrees/` | Linked-worktree discovery and Git status/base-distance observation. |
+| `workspaces/editors/` | Existing Neovim, Vim and Emacs endpoint discovery and process validation. |
 | `paths/` | Bounded path indexes, filesystem/Git discovery, fuzzy ranking and highlights. |
-| `editors/` | Existing Neovim, Vim and Emacs endpoint discovery and process validation. |
+| `suggestions/` | A reusable Pi RPC process, bounded messages, deadlines and idle shutdown. |
+| `metrics/` | Host counter projection and change revisions. |
+| `traffic/` | Capture and its control surface; the network domains live below it. |
 | `traffic/proxy/` | Host policy, authentication, port recovery, bounded resolution, CONNECT, relay, connection actor and child configuration. |
 | `traffic/tls/` | Injected OpenSSL allocation, authority persistence, system roots, ALPN and verified two-sided TLS sessions. |
 | `traffic/exchange_capture/` | Erased buffers, shared quotas, directional metadata, joining, publication and bounded content decoding. |
-| `suggestions/` | A reusable Pi RPC process, bounded messages, deadlines and idle shutdown. |
+| `traffic/tap/` | The captured exchange and the protocol of the tap workers. |
+| `plugins/` | Tap and action workers, their budget, restarts and permissions. |
 | `diagnostics/` | Limit ledgers, Debug function tracing, counters and operation timings shared by every component. |
+
+A folder that holds several domains (`core/`, `terminal/`, `agents/`, `workspaces/`, `traffic/`,
+`server/`) hides them: outside it only the modules its entry of `public_modules` lists in
+`docs/build/modules.json` are imported, and `tools/check-cpp-modules.py` checks it (rule 10).
 
 Components receive their allocator by reference. `Allocator`,
 `ConcurrentAllocator`, `EventLoop`, `ProcessInspection`, `RequestService`,

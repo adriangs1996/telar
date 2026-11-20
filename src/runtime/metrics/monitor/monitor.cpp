@@ -3,9 +3,9 @@ module telar.runtime.metrics.monitor;
 import std;
 import telar.sys.posix;
 
-import telar.runtime.platform.host_metrics;
-import telar.runtime.platform.process_probe;
-import telar.runtime.platform.process_table;
+import telar.runtime.host.host_metrics;
+import telar.runtime.host.process_probe;
+import telar.runtime.host.process_table;
 import telar.config.runtime;
 import telar.wire.monitor;
 import telar.wire.vocabulary;

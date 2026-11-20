@@ -59,7 +59,7 @@ void movedOwnerPreservesView() {
 
 // CASE: runtime.queue_slot_removed
 // PAIR: runtime.queue_slot
-// SOURCE: src/runtime/platform/request_worker/request_worker.cppm :: operator[] / take
+// SOURCE: src/runtime/workers/request_worker/request_worker.cppm :: operator[] / take
 // STATUS: pending
 // CONTRACT: take destroys the old optional slot object after transferring its value.
 // SCENARIO: A reference to that slot is invalid even if its value was moved elsewhere.
@@ -74,7 +74,7 @@ void queueSlotRemoved(tbc::view<spec::request_queue&> queue) {
 
 // CASE: runtime.queue_taken_owner
 // PAIR: runtime.queue_slot
-// SOURCE: src/runtime/platform/request_worker/request_worker.cppm :: take
+// SOURCE: src/runtime/workers/request_worker/request_worker.cppm :: take
 // STATUS: pending
 // CONTRACT: The returned string owns its transferred value independently of the old slot.
 // SCENARIO: A view acquired from the taken string remains valid after more queue removals.
@@ -175,7 +175,7 @@ void runtimeBoxResetEndsValue(spec_box::box<spec_box::record>& owner) {
 
 // CASE: runtime.box_into_raw_hands_over
 // PAIR: runtime.box_owner
-// SOURCE: src/runtime/model/slot_store/slot_store.cppm :: SlotStore::insertProvisional
+// SOURCE: src/runtime/core/model/slot_store/slot_store.cppm :: SlotStore::insertProvisional
 // STATUS: implemented
 // CONTRACT: A class marked TBC_OWNER owns its value through an allocation of its own, as the standard library's unique owner does: `intoRaw`, as Rust's `Box::into_raw`, hands the value to an owner the analysis does not see, so the pointer it returns borrows nothing of the owner.
 // SCENARIO: A store keeps the raw pointer a boxed parameter hands over; accept.

@@ -9,7 +9,7 @@ import telar.runtime.terminal.text_reader;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
 import telar.runtime.terminal.control;
-import telar.runtime.platform.session_host;
+import telar.runtime.host.session_host;
 import telar.platform.events;
 import telar.base.memory.containers;
 import telar.base.ds;

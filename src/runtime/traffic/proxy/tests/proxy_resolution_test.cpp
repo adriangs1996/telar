@@ -18,8 +18,8 @@ import std;
 import telar.platform.primitives;
 import telar.testing;
 import telar.platform.net;
-import telar.runtime.platform.name_resolutions;
-import telar.runtime.platform.signals;
+import telar.runtime.host.name_resolutions;
+import telar.runtime.host.signals;
 import telar.base.ds;
 
 namespace {

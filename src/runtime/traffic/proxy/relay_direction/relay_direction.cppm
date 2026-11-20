@@ -9,7 +9,7 @@ import telar.sys.posix;
 
 import telar.platform.net;
 
-import telar.runtime.platform.name_resolutions;
+import telar.runtime.host.name_resolutions;
 import telar.base.text;
 import telar.platform.primitives;
 import telar.base.ds;

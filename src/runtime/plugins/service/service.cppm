@@ -13,7 +13,7 @@ import telar.runtime.traffic.tap.protocol;
 import telar.runtime.plugins.worker;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
-import telar.runtime.platform.signals;
+import telar.runtime.host.signals;
 import telar.runtime.plugins.tap_configuration;
 import telar.runtime.traffic.control_backend;
 import telar.runtime.traffic.tap.exchange;

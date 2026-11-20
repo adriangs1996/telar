@@ -9,7 +9,7 @@ import telar.sys.socket;
 import telar.sys.posix;
 import telar.tbc;
 
-import telar.runtime.platform.stream_read_buffer;
+import telar.runtime.host.stream_read_buffer;
 import telar.runtime.traffic.proxy.relay_direction;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
@@ -31,7 +31,7 @@ import telar.runtime.traffic.http1.head;
 import telar.base.text;
 import telar.platform.net;
 import telar.runtime.traffic.tap.exchange;
-import telar.runtime.platform.name_resolutions;
+import telar.runtime.host.name_resolutions;
 import telar.base.ds;
 
 // Interface: proxy/responses.cppm

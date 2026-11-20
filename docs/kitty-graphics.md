@@ -63,7 +63,7 @@ placements, per-pane and global quotas, and the byte credit returned to the
 runtime. The window reports images and exact pointer pixels as supported; its
 cell pixel size comes from its font metrics.
 
-The runtime's Kitty command handling lives in `src/runtime/graphics/`.
+The runtime's Kitty command handling lives in `src/runtime/terminal/graphics/`.
 
 ## Implemented child subset
 

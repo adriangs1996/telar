@@ -20,7 +20,7 @@ import telar.platform.primitives;
 import telar.testing;
 import telar.runtime.traffic.redirect.ingress;
 import telar.platform.net;
-import telar.runtime.platform.name_resolutions;
+import telar.runtime.host.name_resolutions;
 import telar.base.ds;
 
 namespace {

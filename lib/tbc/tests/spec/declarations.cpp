@@ -320,7 +320,7 @@ declarations::converted_slot<std::variant<declarations::query>> declarationConst
 
 // CASE: declaration.class_parameter_callback
 // PAIR: declaration.class_parameter
-// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: PaneService::sendText
+// SOURCE: src/runtime/core/runtime/runtime.cppm :: PaneService::sendText
 // STATUS: implemented
 // CONTRACT: An object keeps only arguments its class template's own parameters spell, as a Rust struct keeps a `T` only in a field of type `T`.
 // SCENARIO: A callback capturing a local is only called, so the box is read after the local dies; accept.
@@ -339,7 +339,7 @@ std::size_t declarationClassParameterCallback(declarations::box<int>& values) {
 
 // CASE: declaration.class_parameter_kept
 // PAIR: declaration.class_parameter
-// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: PaneService::sendText
+// SOURCE: src/runtime/core/runtime/runtime.cppm :: PaneService::sendText
 // STATUS: implemented
 // CONTRACT: An object keeps only arguments its class template's own parameters spell, as a Rust struct keeps a `T` only in a field of type `T`.
 // SCENARIO: The box keeps a view of a local string of its own `T`, and is used after it dies.
@@ -384,7 +384,7 @@ std::size_t declarationRetainedReference(declarations::holder& kept) {
 
 // CASE: declaration.receiver_shared
 // PAIR: declaration.receiver_fields
-// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: Runtime::handle
+// SOURCE: src/runtime/core/runtime/runtime.cppm :: Runtime::handle
 // STATUS: implemented
 // CONTRACT: A method called on `this` borrows every field of the object, as a Rust method takes `&self` or `&mut self` whole.
 // SCENARIO: A const method reads a field passed to it, so both borrows are shared; accept.
@@ -412,7 +412,7 @@ std::size_t declarationReceiverShared(const declarations::reader& counted) {
 
 // CASE: declaration.receiver_exclusive
 // PAIR: declaration.receiver_fields
-// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: Runtime::handle
+// SOURCE: src/runtime/core/runtime/runtime.cppm :: Runtime::handle
 // STATUS: implemented
 // CONTRACT: A method called on `this` borrows every field of the object, as a Rust method takes `&self` or `&mut self` whole.
 // SCENARIO: A mutating method is passed one of the fields it may change; reject at that argument.
@@ -440,7 +440,7 @@ void declarationReceiverExclusive(declarations::writer& counted) {
 
 // CASE: declaration.shared_sibling_pinned
 // PAIR: declaration.shared_sibling
-// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: Runtime (limits_ kept by its services)
+// SOURCE: src/runtime/core/runtime/runtime.cppm :: Runtime (limits_ kept by its services)
 // STATUS: implemented
 // CONTRACT: A field may keep a TBC_SHARED sibling only while their object can be neither copied nor moved, as Rust shares through `Pin`.
 // SCENARIO: A lender keeps the arena beside it in a pinned object; accept.
@@ -468,7 +468,7 @@ void declarationSharedSiblingPinned() {
 
 // CASE: declaration.shared_sibling_copied
 // PAIR: declaration.shared_sibling
-// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: Runtime (limits_ kept by its services)
+// SOURCE: src/runtime/core/runtime/runtime.cppm :: Runtime (limits_ kept by its services)
 // STATUS: implemented
 // CONTRACT: A field may keep a TBC_SHARED sibling only while their object can be neither copied nor moved, as Rust shares through `Pin`.
 // SCENARIO: The object holding the lender and its arena can be copied; reject where the constructor lends the arena.
@@ -493,7 +493,7 @@ void declarationSharedSiblingCopied() {
 
 // CASE: declaration.lending_output_live
 // PAIR: declaration.lending_output
-// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: AgentService::authorize
+// SOURCE: src/runtime/core/runtime/runtime.cppm :: AgentService::authorize
 // STATUS: implemented
 // CONTRACT: A labeled reference to a table that holds borrows lends to a result of its region, as `fn f<'a>(store: &'a mut Store) -> &'a Entry` lends the store.
 // SCENARIO: The entry found in a live table is read; accept.
@@ -510,7 +510,7 @@ std::size_t declarationLendingOutputLive(std::vector<declarations::entry>& entri
 
 // CASE: declaration.lending_output_dead
 // PAIR: declaration.lending_output
-// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: AgentService::authorize
+// SOURCE: src/runtime/core/runtime/runtime.cppm :: AgentService::authorize
 // STATUS: implemented
 // CONTRACT: A labeled reference to a table that holds borrows lends to a result of its region, as `fn f<'a>(store: &'a mut Store) -> &'a Entry` lends the store.
 // SCENARIO: The table dies while the entry found in it is still read; reject where it dies.
@@ -553,7 +553,7 @@ void declarationReferenceParameterKept(std::string_view& text, const std::string
 
 // CASE: declaration.shared_reached
 // PAIR: declaration.shared_reach
-// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: Runtime (session_.configure)
+// SOURCE: src/runtime/core/runtime/runtime.cppm :: Runtime (session_.configure)
 // STATUS: implemented
 // CONTRACT: An object of a TBC_SHARED type is never invalidated, whatever a call does to the inputs that keep it, as a Rust type with interior mutability keeps every borrow it lent valid.
 // SCENARIO: A store builds a pass over a model that keeps the shared arena and mutates the model; the model, keeping the arena too, stays valid; accept.
@@ -621,7 +621,7 @@ void declarationSharedReached(declarations::arena& memory) {
 
 // CASE: declaration.unshared_reached
 // PAIR: declaration.shared_reach
-// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: Runtime (session_.configure)
+// SOURCE: src/runtime/core/runtime/runtime.cppm :: Runtime (session_.configure)
 // STATUS: implemented
 // CONTRACT: An object of a TBC_SHARED type is never invalidated, whatever a call does to the inputs that keep it, as a Rust type with interior mutability keeps every borrow it lent valid.
 // SCENARIO: The same store over a pool without the mark may invalidate the pool its argument keeps; reject at the argument.
@@ -740,7 +740,7 @@ std::size_t declarationSelfFieldElidedDangling(declarations::arena& memory) {
 
 // CASE: declaration.shared_kept
 // PAIR: declaration.shared_kept
-// SOURCE: src/runtime/config/loader/loader.cppm :: Loader::load (lua::JsonDecoder::install)
+// SOURCE: src/runtime/server/config/loader/loader.cppm :: Loader::load (lua::JsonDecoder::install)
 // STATUS: implemented
 // CONTRACT: An object of a TBC_SHARED type is never invalidated, also when it is reached through an object that keeps it, as a Rust type with interior mutability keeps every borrow it lent valid.
 // SCENARIO: A machine keeps the loader's arena and is passed with that arena to a call that may mutate the machine; accept.
@@ -794,7 +794,7 @@ void declarationSharedKept(declarations::arena& memory) {
 
 // CASE: declaration.unshared_kept
 // PAIR: declaration.shared_kept
-// SOURCE: src/runtime/config/loader/loader.cppm :: Loader::load (lua::JsonDecoder::install)
+// SOURCE: src/runtime/server/config/loader/loader.cppm :: Loader::load (lua::JsonDecoder::install)
 // STATUS: implemented
 // CONTRACT: An object of a TBC_SHARED type is never invalidated, also when it is reached through an object that keeps it, as a Rust type with interior mutability keeps every borrow it lent valid.
 // SCENARIO: The same loader over a pool without the mark passes the pool the machine keeps as a mutable argument, and the call may invalidate it while the machine is used later; reject the overlapping argument and the call.
@@ -826,7 +826,7 @@ void declarationUnsharedKept(declarations::pool& memory) {
 
 // CASE: declaration.exclusive_field_call
 // PAIR: declaration.exclusive_field
-// SOURCE: src/runtime/graphics/pane_media/pane_media.cppm :: PaneMedia::process (MediaInput::feed)
+// SOURCE: src/runtime/terminal/graphics/pane_media/pane_media.cppm :: PaneMedia::process (MediaInput::feed)
 // STATUS: implemented
 // CONTRACT: What a receiver designates through its own reference fields it borrows exclusively, as a Rust `&mut` field is: a call through it invalidates other borrows of those objects, not the receiver's own.
 // SCENARIO: A feeder keeps a screen by reference and is fed twice, each feed growing the screen's cells; accept.
@@ -865,7 +865,7 @@ void declarationExclusiveFieldCall(const std::vector<int>& values) {
 
 // CASE: declaration.exclusive_field_alias
 // PAIR: declaration.exclusive_field
-// SOURCE: src/runtime/graphics/pane_media/pane_media.cppm :: PaneMedia::process (MediaInput::feed)
+// SOURCE: src/runtime/terminal/graphics/pane_media/pane_media.cppm :: PaneMedia::process (MediaInput::feed)
 // STATUS: implemented
 // CONTRACT: What a receiver designates through its own reference fields it borrows exclusively, as a Rust `&mut` field is: a call through it invalidates other borrows of those objects, not the receiver's own.
 // SCENARIO: The screen is resized directly while the feeder that keeps it is fed again; reject at the resize.
@@ -931,7 +931,7 @@ std::size_t declarationStaticInputOwned() {
 
 // CASE: declaration.constant_referent
 // PAIR: declaration.constant_referent
-// SOURCE: src/runtime/cli/server/server.cppm :: runServer (runRuntime)
+// SOURCE: src/runtime/server/server/server.cppm :: runServer (runRuntime)
 // STATUS: implemented
 // CONTRACT: What a reference to const designates cannot change through it, as a Rust `&T` parameter cannot, so a call that receives it invalidates no borrow of it.
 // SCENARIO: A launcher reads settings through a const reference while an options copy keeps a view of them; accept.
@@ -975,7 +975,7 @@ std::size_t declarationConstantReferent(const declarations::settings& values) {
 
 // CASE: declaration.mutable_referent
 // PAIR: declaration.constant_referent
-// SOURCE: src/runtime/cli/server/server.cppm :: runServer (runRuntime)
+// SOURCE: src/runtime/server/server/server.cppm :: runServer (runRuntime)
 // STATUS: implemented
 // CONTRACT: What a reference to const designates cannot change through it, as a Rust `&T` parameter cannot, so a call that receives it invalidates no borrow of it.
 // SCENARIO: The same settings passed by mutable reference to a call that replaces them while a view of them is used later; reject at the call.
@@ -1621,7 +1621,7 @@ bool declarationAbstractSharedSiblingUnmarked(declarations::arena& system) {
 
 // CASE: declaration.abstract_shared_release_read_first
 // PAIR: declaration.abstract_shared_release
-// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: Runtime::closeWorkspace (removeTab erases the workspace through SlotStore and AllocationDeleter)
+// SOURCE: src/runtime/core/runtime/runtime.cppm :: Runtime::closeWorkspace (removeTab erases the workspace through SlotStore and AllocationDeleter)
 // STATUS: implemented
 // CONTRACT: A call through an abstract TBC_SHARED type's virtual deallocate releases only the block it is given, after the caller has evaluated the call's arguments.
 // SCENARIO: The identity is copied into a local, then a call releases the group it was read from through `memory &`, and the group is found again; accept.
@@ -1705,7 +1705,7 @@ void declarationAbstractSharedReleaseReadFirst(declarations::group_store& groups
 
 // CASE: declaration.abstract_shared_release_use
 // PAIR: declaration.abstract_shared_release
-// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: Runtime::closeWorkspace (removeTab erases the workspace through SlotStore and AllocationDeleter)
+// SOURCE: src/runtime/core/runtime/runtime.cppm :: Runtime::closeWorkspace (removeTab erases the workspace through SlotStore and AllocationDeleter)
 // STATUS: implemented
 // CONTRACT: A call through an abstract TBC_SHARED type's virtual deallocate releases only the block it is given, after the caller has evaluated the call's arguments.
 // SCENARIO: The group is read after the call that releases it through `memory &`; reject at the call.
@@ -1723,7 +1723,7 @@ std::size_t declarationAbstractSharedReleaseUse(declarations::group_store& group
 
 // CASE: declaration.abstract_shared_release_argument
 // PAIR: declaration.abstract_shared_release
-// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: Runtime::closeWorkspace (removeTab erases the workspace through SlotStore and AllocationDeleter)
+// SOURCE: src/runtime/core/runtime/runtime.cppm :: Runtime::closeWorkspace (removeTab erases the workspace through SlotStore and AllocationDeleter)
 // STATUS: implemented
 // CONTRACT: A call through an abstract TBC_SHARED type's virtual deallocate releases only the block it is given, after the caller has evaluated the call's arguments.
 // SCENARIO: The identity is read from the group as a by-value argument of the call that releases it; the read completes before the call runs, as when it is copied into a local first; accept.
@@ -1740,7 +1740,7 @@ void declarationAbstractSharedReleaseArgument(declarations::group_store& groups,
 
 // CASE: declaration.abstract_shared_release_argument_kept
 // PAIR: declaration.abstract_shared_release
-// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: Runtime::closeWorkspace (removeTab erases the workspace through SlotStore and AllocationDeleter)
+// SOURCE: src/runtime/core/runtime/runtime.cppm :: Runtime::closeWorkspace (removeTab erases the workspace through SlotStore and AllocationDeleter)
 // STATUS: implemented
 // CONTRACT: A call through an abstract TBC_SHARED type's virtual deallocate releases only the block it is given, after the caller has evaluated the call's arguments.
 // SCENARIO: The releasing call's result initializes a local, and its by-value argument was read from the group before it ran; accept.
@@ -1759,7 +1759,7 @@ void declarationAbstractSharedReleaseArgumentKept(declarations::group_store& gro
 
 // CASE: declaration.abstract_shared_release_next_round
 // PAIR: declaration.abstract_shared_release
-// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: Runtime::closeWorkspace (removeTab erases the workspace through SlotStore and AllocationDeleter)
+// SOURCE: src/runtime/core/runtime/runtime.cppm :: Runtime::closeWorkspace (removeTab erases the workspace through SlotStore and AllocationDeleter)
 // STATUS: implemented
 // CONTRACT: A call through an abstract TBC_SHARED type's virtual deallocate releases only the block it is given, after the caller has evaluated the call's arguments.
 // SCENARIO: A loop's second round passes the call an argument read from the group the first round released, without finding the group again; reject at the call.
@@ -1775,7 +1775,7 @@ void declarationAbstractSharedReleaseNextRound(declarations::group_store& groups
 
 // CASE: declaration.abstract_shared_release_iteration
 // PAIR: declaration.abstract_shared_release
-// SOURCE: src/runtime/persistence/session_store/session_store.cppm :: Restore::dropEmptyTabs (erases workspaces while iterating the store's slots)
+// SOURCE: src/runtime/core/persistence/session_store/session_store.cppm :: Restore::dropEmptyTabs (erases workspaces while iterating the store's slots)
 // STATUS: implemented
 // CONTRACT: A method whose body releases a block through an abstract TBC_SHARED type's virtual deallocate borrows its whole receiver, as a Rust `&mut self` method does.
 // SCENARIO: The store's slot array is iterated while the store erases one slot's group; the erase borrows the whole store, so the loop's view of its slots ends there, as Rust rejects calling a `&mut self` method while iterating a field; reject at the erase.
@@ -1795,7 +1795,7 @@ void declarationAbstractSharedReleaseIteration(declarations::group_store& groups
 
 // CASE: declaration.abstract_shared_release_collected
 // PAIR: declaration.abstract_shared_release
-// SOURCE: src/runtime/persistence/session_store/session_store.cppm :: Restore::dropEmptyTabs (erases workspaces while iterating the store's slots)
+// SOURCE: src/runtime/core/persistence/session_store/session_store.cppm :: Restore::dropEmptyTabs (erases workspaces while iterating the store's slots)
 // STATUS: implemented
 // CONTRACT: A method whose body releases a block through an abstract TBC_SHARED type's virtual deallocate borrows its whole receiver, as a Rust `&mut self` method does.
 // SCENARIO: The identities are collected while iterating, and erased after the loop; accept.
@@ -1818,7 +1818,7 @@ void declarationAbstractSharedReleaseCollected(declarations::group_store& groups
 
 // CASE: declaration.shared_borrow_held_launch
 // PAIR: declaration.shared_borrow_held
-// SOURCE: src/runtime/persistence/session_store/session_store.cppm :: Restore::restore(const PaneRecord&) (launches a pane, then lists it in its tab)
+// SOURCE: src/runtime/core/persistence/session_store/session_store.cppm :: Restore::restore(const PaneRecord&) (launches a pane, then lists it in its tab)
 // STATUS: implemented
 // CONTRACT: A shared object keeps valid the storage it hands out. A place found through a borrow of it that an object holds, past a field the shared type does not have, is such storage; growth there still ends the borrows of the object that owns it.
 // SCENARIO: A launch stores in the model a pane made with the shared memory, which a workspace's tab list also keeps through its allocator; growing a tab's list and then finding the pane again is accepted.
@@ -1969,7 +1969,7 @@ int declarationSharedBorrowHeldLaunch(tbc::view<declarations::model_memory&, tbc
 
 // CASE: declaration.shared_borrow_held_field
 // PAIR: declaration.shared_borrow_held
-// SOURCE: src/runtime/persistence/session_store/session_store.cppm :: Restore::restore(const PaneRecord&) (launches a pane, then lists it in its tab)
+// SOURCE: src/runtime/core/persistence/session_store/session_store.cppm :: Restore::restore(const PaneRecord&) (launches a pane, then lists it in its tab)
 // STATUS: implemented
 // CONTRACT: A shared object keeps valid the storage it hands out. A place found through a borrow of it that an object holds, past a field the shared type does not have, is such storage; growth there still ends the borrows of the object that owns it.
 // SCENARIO: An element of a tab's pane list, a field the shared memory does not have, is read after the list grows; reject at the growth.
@@ -1987,7 +1987,7 @@ std::size_t declarationSharedBorrowHeldField(tbc::view<declarations::model_memor
 
 // CASE: declaration.shared_borrow_held_element
 // PAIR: declaration.shared_borrow_held
-// SOURCE: src/runtime/persistence/session_store/session_store.cppm :: Restore::restore(const PaneRecord&) (launches a pane, then lists it in its tab)
+// SOURCE: src/runtime/core/persistence/session_store/session_store.cppm :: Restore::restore(const PaneRecord&) (launches a pane, then lists it in its tab)
 // STATUS: implemented
 // CONTRACT: A shared object keeps valid the storage it hands out. A place found through a borrow of it that an object holds, past a field the shared type does not have, is such storage; growth there still ends the borrows of the object that owns it.
 // SCENARIO: A tab found by scanning the workspace's list, an element no field names, is read after the list grows; reject at the growth.
@@ -2243,7 +2243,7 @@ std::size_t declarations::region_named::replaced() {
 
 // CASE: declaration.held_contents
 // PAIR: declaration.held
-// SOURCE: src/runtime/runtime/runtime/runtime.cpp :: Runtime::makeWordRequest (a request shares the names the pane's shell reported)
+// SOURCE: src/runtime/core/runtime/runtime.cpp :: Runtime::makeWordRequest (a request shares the names the pane's shell reported)
 // STATUS: implemented
 // CONTRACT: A reference labeled tbc::holds lends what its referent holds in the region and never the referent, as Rust's `&Pane<'a>` lends `'a` and an anonymous borrow of the pane.
 // SCENARIO: A request built from a pane outlives the pane, keeping only the name the pane viewed; accept.
@@ -2278,7 +2278,7 @@ std::size_t declarationHeldContents(declarations::text_a name) {
 
 // CASE: declaration.held_owned
 // PAIR: declaration.held
-// SOURCE: src/runtime/runtime/runtime/runtime.cpp :: Runtime::makeWordRequest (a request shares the names the pane's shell reported)
+// SOURCE: src/runtime/core/runtime/runtime.cpp :: Runtime::makeWordRequest (a request shares the names the pane's shell reported)
 // STATUS: implemented
 // CONTRACT: A reference labeled tbc::holds lends what its referent holds in the region and never the referent, as Rust's `&Pane<'a>` lends `'a` and an anonymous borrow of the pane.
 // SCENARIO: A result in the region views the title the pane owns, which the anonymous borrow does not lend; reject at the return.

@@ -2,7 +2,7 @@
 #include <cstdio>
 import std;
 import telar.testing;
-import telar.runtime.runtime.tests.protocol_peer;
+import telar.runtime.core.tests.protocol_peer;
 import telar.wire.clients;
 import telar.wire.content;
 import telar.wire.layout;

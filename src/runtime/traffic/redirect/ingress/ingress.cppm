@@ -9,12 +9,12 @@ import telar.sys.socket;
 import telar.sys.posix;
 import telar.tbc;
 
-import telar.runtime.platform.name_resolutions;
+import telar.runtime.host.name_resolutions;
 
-import telar.runtime.platform.private_tunnel;
+import telar.runtime.host.private_tunnel;
 
 import telar.platform.net;
-import telar.runtime.platform.local_listener;
+import telar.runtime.host.local_listener;
 
 import telar.wire.vocabulary;
 import telar.platform.primitives;
@@ -23,7 +23,7 @@ import telar.platform.error;
 import telar.runtime.traffic.tap.frames;
 import telar.base.text;
 import telar.base.memory.containers;
-import telar.runtime.platform.signals;
+import telar.runtime.host.signals;
 import telar.base.ds;
 
 // Interface: redirect/bytes.cppm

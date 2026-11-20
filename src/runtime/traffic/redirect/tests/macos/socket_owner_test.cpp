@@ -102,7 +102,7 @@ import telar.runtime.traffic.redirect.pf_rules;
 import telar.wire.vocabulary;
 import telar.runtime.traffic.redirect.direction;
 import telar.runtime.traffic.redirect.ingress;
-import telar.runtime.platform.process_probe;
+import telar.runtime.host.process_probe;
 import telar.base.ds;
 
 namespace {

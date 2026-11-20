@@ -64,7 +64,7 @@ static_assert(true);
 import std;
 import telar.platform.primitives;
 import telar.testing;
-import telar.runtime.platform.private_tunnel;
+import telar.runtime.host.private_tunnel;
 import telar.runtime.traffic.capture_analysis;
 import telar.vocabulary;
 import telar.platform.error;

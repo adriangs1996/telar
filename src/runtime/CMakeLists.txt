@@ -48,7 +48,7 @@ file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
 file(REAL_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../lib/config/bootstrap.lua" telar_config_bootstrap_file)
 file(READ "${telar_config_bootstrap_file}" TELAR_CONFIG_BOOTSTRAP)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${telar_config_bootstrap_file}")
-configure_file(config/bootstrap.inc.in "${CMAKE_CURRENT_BINARY_DIR}/generated/config_bootstrap.inc" @ONLY)
+configure_file(server/config/bootstrap.inc.in "${CMAKE_CURRENT_BINARY_DIR}/generated/config_bootstrap.inc" @ONLY)
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/plugins/bootstrap.lua" TELAR_PLUGIN_BOOTSTRAP)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/plugins/bootstrap.lua")
 configure_file(plugins/bootstrap.inc.in "${CMAKE_CURRENT_BINARY_DIR}/generated/plugin_bootstrap.inc" @ONLY)
@@ -60,10 +60,10 @@ foreach(script IN ITEMS "ZSHENV=zshenv.zsh" "ZSH=telar.zsh" "BASH=telar.bash" "F
   string(REPLACE "=" ";" script "${script}")
   list(GET script 0 script_name)
   list(GET script 1 script_file)
-  file(READ "${CMAKE_CURRENT_SOURCE_DIR}/shell_integration/${script_file}" TELAR_SHELL_${script_name})
-  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shell_integration/${script_file}")
+  file(READ "${CMAKE_CURRENT_SOURCE_DIR}/terminal/shell_integration/${script_file}" TELAR_SHELL_${script_name})
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/terminal/shell_integration/${script_file}")
 endforeach()
-configure_file(shell_integration/scripts.inc.in "${CMAKE_CURRENT_BINARY_DIR}/generated/shell_scripts.inc" @ONLY)
+configure_file(terminal/shell_integration/scripts.inc.in "${CMAKE_CURRENT_BINARY_DIR}/generated/shell_scripts.inc" @ONLY)
 add_custom_command(
   OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/cell_layout.inc"
   COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_cell_layout.py"
@@ -108,15 +108,16 @@ else()
 endif()
 
 # The domains of docs/build/modules.json (process_layers), lowest first.
-foreach(domain IN ITEMS diagnostics transport config suggestions platform paths shell_integration
-    workspaces worktrees metrics terminal history command_capture graphics agents traffic/tap
-    observation model traffic/http1 traffic/http traffic/exchange_capture traffic/http2 traffic/tls traffic/redirect traffic traffic/proxy plugins editors
-    persistence runtime cli)
+foreach(domain IN ITEMS diagnostics transport server/config suggestions host workers
+    terminal/shell_integration workspaces workspaces/worktrees paths metrics terminal history
+    terminal/command_capture terminal/graphics agents traffic/tap agents/observation core/model
+    traffic/http1 traffic/http traffic/exchange_capture traffic/http2 traffic/tls traffic/redirect
+    traffic traffic/proxy plugins workspaces/editors core/persistence core server)
   add_subdirectory(${domain})
 endforeach()
 
 add_executable(telar-runtime main.cpp)
-target_link_libraries(telar-runtime PRIVATE runtime-terminal runtime-plugins runtime-cli)
+target_link_libraries(telar-runtime PRIVATE runtime-terminal runtime-plugins runtime-server)
 telar_register_checks(telar-runtime CHECKS ${TELAR_CHECKS})
 install(TARGETS telar-runtime RUNTIME DESTINATION bin)
 # The pinned libraries are linked into both executables; their licenses travel with them.

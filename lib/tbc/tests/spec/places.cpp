@@ -460,7 +460,7 @@ void placeCalleeFieldMutation(std::vector<std::unique_ptr<places::stream>>& stre
 
 // CASE: place.element_sibling_mutation
 // PAIR: place.element_field
-// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: WorkspaceService
+// SOURCE: src/runtime/core/runtime/runtime.cppm :: WorkspaceService
 // STATUS: implemented
 // CONTRACT: Mutating one field of a container element leaves borrows of the element's other fields valid.
 // SCENARIO: The last tab's title is read after a pane is added to the same tab; accept.
@@ -474,7 +474,7 @@ void placeElementSiblingMutation(std::vector<places::tab>& tabs) {
 
 // CASE: place.element_field_mutation
 // PAIR: place.element_field
-// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: WorkspaceService
+// SOURCE: src/runtime/core/runtime/runtime.cppm :: WorkspaceService
 // STATUS: implemented
 // CONTRACT: Mutating a field of a container element invalidates borrows of that field.
 // SCENARIO: The last tab's title is read after it is reassigned.
@@ -488,7 +488,7 @@ void placeElementFieldMutation(std::vector<places::tab>& tabs) {
 
 // CASE: place.element_member_growth
 // PAIR: place.element_member
-// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: WorkspaceService
+// SOURCE: src/runtime/core/runtime/runtime.cppm :: WorkspaceService
 // STATUS: implemented
 // CONTRACT: A pointer to a field of a container element is invalidated when the container moves its elements.
 // SCENARIO: A pointer to the last tab's title is read after another tab is appended.
@@ -502,7 +502,7 @@ void placeElementMemberGrowth(std::vector<places::tab>& tabs) {
 
 // CASE: place.owned_member_growth
 // PAIR: place.element_member
-// SOURCE: src/runtime/runtime/runtime/runtime.cppm :: WorkspaceService
+// SOURCE: src/runtime/core/runtime/runtime.cppm :: WorkspaceService
 // STATUS: implemented
 // CONTRACT: A pointer to a field of an object owned by a container element survives the container's growth.
 // SCENARIO: A pointer to the last owned tab's title is read after another tab is appended; accept.
@@ -617,7 +617,7 @@ void placeClearedSibling(std::string_view fallback) {
 
 // CASE: place.reassigned_result
 // PAIR: place.assignment
-// SOURCE: src/runtime/platform/request_worker/request_worker.cppm :: ObservationWorker::run
+// SOURCE: src/runtime/workers/request_worker/request_worker.cppm :: ObservationWorker::run
 // STATUS: implemented
 // CONTRACT: Assigning an object replaces what it borrowed without reading it.
 // SCENARIO: An optional view of an invalidated element is reassigned before it is read; accept.
@@ -632,7 +632,7 @@ void placeReassignedResult(std::vector<std::string>& names) {
 
 // CASE: place.assigned_through_dangling
 // PAIR: place.assignment
-// SOURCE: src/runtime/platform/request_worker/request_worker.cppm :: ObservationWorker::run
+// SOURCE: src/runtime/workers/request_worker/request_worker.cppm :: ObservationWorker::run
 // STATUS: implemented
 // CONTRACT: Writing through a pointer needs the object it designates to be live.
 // SCENARIO: A string is assigned through a pointer to an element the vector has moved.
@@ -911,7 +911,7 @@ void placeReborrowRepeated(places::menu_holder& holder) {
 
 // CASE: place.write_through_merged
 // PAIR: place.write_through
-// SOURCE: src/runtime/runtime/runtime/runtime.cpp :: AgentService::report (an agent found in the registry, or made for its pane)
+// SOURCE: src/runtime/core/runtime/runtime.cpp :: AgentService::report (an agent found in the registry, or made for its pane)
 // STATUS: implemented
 // CONTRACT: A call through a reference or a pointer reborrows what it designates, as a Rust `&mut` does: it invalidates other borrows of those objects, never the variable's own, even when the variable borrows two places at once.
 // SCENARIO: An entry is found in a field, or made through the object holding it, then changed through the one reference and reported; accept.
@@ -954,7 +954,7 @@ void places::entry_service::update(int id) {
 
 // CASE: place.write_through_inner
 // PAIR: place.write_through
-// SOURCE: src/runtime/runtime/runtime/runtime.cpp :: AgentService::report (an agent found in the registry, or made for its pane)
+// SOURCE: src/runtime/core/runtime/runtime.cpp :: AgentService::report (an agent found in the registry, or made for its pane)
 // STATUS: implemented
 // CONTRACT: A call through a reference or a pointer reborrows what it designates, as a Rust `&mut` does: it invalidates other borrows of those objects, never the variable's own, even when the variable borrows two places at once.
 // SCENARIO: A value inside the entry is kept across the change, which may replace it; reject at the change.

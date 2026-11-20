@@ -6,7 +6,7 @@ export module telar.runtime.traffic.proxy.intercepted_relay;
 import std;
 import telar.tbc;
 
-import telar.runtime.platform.stream_read_buffer;
+import telar.runtime.host.stream_read_buffer;
 import telar.runtime.traffic.http1.head;
 
 import telar.base.memory.allocators;
