@@ -237,7 +237,7 @@ namespace telar::runtime {
   AgentProvider builtinProviderFromExecutable(std::string_view name) noexcept {
     const auto stem = withoutExecutableSuffix(name);
 
-    for (const auto provider : {AgentProvider::claude, AgentProvider::codex, AgentProvider::pi, AgentProvider::cursor, AgentProvider::opencode}) {
+    for (const auto provider : built_in_agent_providers) {
       for (const auto process : describeProvider(provider).process_names) {
         if (!process.empty() && asciiEqualIgnoreCase(stem, process)) {
           return provider;
@@ -249,7 +249,7 @@ namespace telar::runtime {
   }
 
   AgentProvider providerNamed(std::string_view name) noexcept {
-    for (const auto provider : {AgentProvider::claude, AgentProvider::codex, AgentProvider::pi, AgentProvider::cursor, AgentProvider::opencode}) {
+    for (const auto provider : built_in_agent_providers) {
       if (describeProvider(provider).name == name) {
         return provider;
       }

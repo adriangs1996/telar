@@ -22,6 +22,9 @@ export extern "C++" {
     inline constexpr std::size_t layout_label_bytes = 128;
     inline constexpr std::size_t layout_workspace_name_bytes = 256;
     inline constexpr std::size_t max_layout_tabs = 256;
+    // The layout nodes a runtime keeps for one client across its tabs. A client retains no more,
+    // since the runtime drops the tab that would pass it.
+    inline constexpr std::size_t max_retained_layout_nodes = 511;
     inline constexpr std::size_t max_snapshot_tab_panes = 64;
     inline constexpr std::size_t max_snapshot_workspace_tabs = 64;
     inline constexpr std::size_t max_listed_workspaces = 64;

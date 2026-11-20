@@ -121,15 +121,15 @@ export {
     public:
       static constexpr std::size_t decode_capacity = std::size_t{2} * 1024 * 1024;
       static constexpr std::size_t maximum_tabs = features::workbench::maximum_tabs;
-      static constexpr std::size_t maximum_workspace_tabs = 64;
+      static constexpr std::size_t maximum_workspace_tabs = max_workspace_tabs;
       static constexpr std::size_t maximum_panes = maximum_tabs * PaneLayout::maximum_panes;
       static constexpr std::size_t maximum_pending = 256;
-      static constexpr std::size_t maximum_retained_layout_nodes = 511;
+      static constexpr std::size_t maximum_retained_layout_nodes = max_retained_layout_nodes;
       static constexpr std::size_t input_chunk_size = 65536;
       // A viewport past any bottom: the runtime follows the output.
       static constexpr std::uint32_t follow_output = std::numeric_limits<std::uint32_t>::max();
       static constexpr std::uint16_t default_sidebar_columns = SidebarColumns::minimum_width;
-      static constexpr std::size_t maximum_launch_arguments = 64;
+      static constexpr std::size_t maximum_launch_arguments = max_launch_arguments;
 
       // The session keeps the allocator and the transport, region `a`, which also holds what its replies and
       // requests view of the session's own panes, workspaces and responses.

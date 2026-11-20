@@ -31,7 +31,7 @@ namespace telar::gui::qt {
   namespace {
 
     constexpr int source_side = 64;
-    constexpr ds::Array providers{AgentProvider::claude, AgentProvider::codex, AgentProvider::pi, AgentProvider::cursor, AgentProvider::opencode};
+    constexpr auto& providers = built_in_agent_providers;
     constexpr auto source_stride = providers.size() * source_side * application::terminal::graphics::RgbaImageView::channels;
     constexpr auto sheet_bytes = source_stride * source_side;
 

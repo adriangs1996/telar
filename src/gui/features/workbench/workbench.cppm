@@ -18,6 +18,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.gui.foundation.core;
 import telar.gui.foundation.model;
+import telar.wire.layout;
 import telar.wire.vocabulary;
 import telar.base.ds;
 
@@ -30,7 +31,7 @@ namespace telar::gui::features::workbench {
 export namespace telar::gui::features::workbench {
 
   // The most tabs a session holds across its workspaces.
-  inline constexpr std::size_t maximum_tabs = 256;
+  inline constexpr std::size_t maximum_tabs = max_layout_tabs;
 
   // The tabs a session holds, each owned by the session.
   using Tabs = std::span<const ds::Box<Tab<Memory>, Memory>>;

@@ -622,7 +622,7 @@ namespace telar::runtime::cli {
 
     ds::Option<AgentProvider> provider;
 
-    for (const auto candidate : {AgentProvider::claude, AgentProvider::codex, AgentProvider::pi, AgentProvider::cursor, AgentProvider::opencode}) {
+    for (const auto candidate : built_in_agent_providers) {
       if (describeProvider(candidate).name == arguments.front()) {
         provider = candidate;
       }

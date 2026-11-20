@@ -258,7 +258,7 @@ namespace telar::runtime {
   AgentManifests makeBuiltinManifests() {
     AgentManifests table;
 
-    for (const auto provider : {AgentProvider::claude, AgentProvider::codex, AgentProvider::pi, AgentProvider::cursor, AgentProvider::opencode}) {
+    for (const auto provider : built_in_agent_providers) {
       const auto description = describeProvider(provider);
       auto& manifest = table.add(description.name);
 

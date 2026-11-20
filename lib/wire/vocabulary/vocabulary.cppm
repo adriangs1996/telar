@@ -79,6 +79,7 @@ export namespace telar {
   using telar::ExitKind;
   using telar::FailureCode;
   using telar::Field;
+  using telar::built_in_agent_providers;
   using telar::first_custom_agent_provider;
   using telar::FixedBytes;
   using telar::FixedString;
@@ -111,6 +112,8 @@ export namespace telar {
   using telar::LimitOrigin;
   using telar::LittleEndian;
   using telar::max_agent_provider_index;
+  using telar::max_launch_arguments;
+  using telar::max_workspace_tabs;
   using telar::max_listed_ports;
   using telar::max_notification_duration_ms;
   using telar::max_notification_link_bytes;

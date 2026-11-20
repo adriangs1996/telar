@@ -15,7 +15,7 @@ namespace telar::gui::features::activity {
   ApplicationMark ApplicationMark::forApplication(std::string_view name) noexcept {
     auto provider = runtime::builtinProviderFromExecutable(name);
     if (provider == AgentProvider::unknown) {
-      for (const auto candidate : {AgentProvider::claude, AgentProvider::codex, AgentProvider::pi, AgentProvider::cursor, AgentProvider::opencode}) {
+      for (const auto candidate : built_in_agent_providers) {
         if (name == runtime::describeProvider(candidate).display_name) {
           provider = candidate;
           break;

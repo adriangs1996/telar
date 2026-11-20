@@ -715,8 +715,8 @@ export {
 
     private:
       static constexpr std::size_t maximum_identities = 16;
-      static constexpr std::size_t maximum_tabs = 256;
-      static constexpr std::size_t maximum_nodes = 511;
+      static constexpr std::size_t maximum_tabs = max_layout_tabs;
+      static constexpr std::size_t maximum_nodes = max_retained_layout_nodes;
 
       struct StoredTab {
         TabLocation location;
