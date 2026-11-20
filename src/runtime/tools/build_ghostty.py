@@ -79,10 +79,13 @@ def main():
         raise RuntimeError("Dependency source is not an isolated checkout; use a new build directory")
     run(["git", "apply", "--reverse", "--check", str(patch)], source)
 
+    # Zig builds for the building machine's CPU unless told otherwise: the library would then stop with an
+    # illegal instruction on an older CPU of the same architecture, as a user's machine or another CI runner
+    # restoring the cached build is. Baseline is the architecture's portable instruction set.
     run([
         arguments.zig, "build", "-j2", "-Demit-lib-vt", "-Demit-xcframework=false",
         "-Demit-macos-app=false", "-Demit-docs=false", "-Dversion-string=" + GHOSTTY_APP_VERSION,
-        "-Doptimize=ReleaseFast", "--prefix", str(prefix),
+        "-Doptimize=ReleaseFast", "-Dcpu=baseline", "--prefix", str(prefix),
     ], source)
     install_codec_header(source, prefix, arguments.wuffs_header)
     print(f"libghostty-vt prepared at {prefix}")
