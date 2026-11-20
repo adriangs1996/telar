@@ -40,6 +40,8 @@ namespace telar::git {
     ~Inflater();
     Inflater(const Inflater&) = delete;
     Inflater& operator=(const Inflater&) = delete;
+    Inflater(Inflater&&) = delete;
+    Inflater& operator=(Inflater&&) = delete;
 
     // Starts a new stream, keeping zlib's window allocated between objects.
     bool start() noexcept;
@@ -72,6 +74,11 @@ namespace telar::git {
   inline constexpr std::uint32_t mode_regular = 0100000;
   inline constexpr std::uint32_t mode_symlink = 0120000;
   inline constexpr std::uint32_t mode_gitlink = 0160000;
+  inline constexpr std::uint32_t mode_file = 0100644;
+  inline constexpr std::uint32_t mode_executable = 0100755;
+
+  // A file mode old gits wrote, which reads as mode_file.
+  inline constexpr std::uint32_t mode_group_writable = 0100664;
 
   struct TreeEntry {
     std::uint32_t mode = 0;
@@ -105,6 +112,18 @@ namespace telar::git {
     bool failed_ = false;
   };
 
+  // A base-128 number: seven bits a byte, the high bit set on every byte but the last.
+  inline constexpr unsigned varint_payload_bits = 7;
+  inline constexpr std::uint8_t varint_payload = 0x7f;
+  inline constexpr std::uint8_t varint_continues = 0x80;
+
+  // The value of an offset-encoded number, as OFS_DELTA distances and index v4 prefix lengths, that
+  // one more byte would overflow.
+  inline constexpr std::uint64_t maximum_offset_varint = std::uint64_t{1} << 56U;
+
+  // A fanout table: how many objects sort at or before each first byte of an id.
+  inline constexpr std::size_t fanout_entries = 256;
+
   struct Pack {
     FileDescriptor index;
     FileDescriptor data;
@@ -112,10 +131,12 @@ namespace telar::git {
     std::uint64_t data_size = 0;
     std::uint64_t large_offsets = 0;
     std::uint32_t count = 0;
-    ds::Array<std::uint32_t, 256> fanout{};
+    ds::Array<std::uint32_t, fanout_entries> fanout{};
   };
 
-  inline constexpr std::size_t pack_index_header = 8 + (256 * 4);
+  // A v2 pack index starts with its signature and version, then its fanout table.
+  inline constexpr std::size_t pack_index_fanout = 8;
+  inline constexpr std::size_t pack_index_header = pack_index_fanout + (fanout_entries * sizeof(std::uint32_t));
 
   class ObjectDatabase {
   public:
@@ -135,7 +156,9 @@ namespace telar::git {
     // Releases buffers that one large object grew, so the cache stays small.
     void trim();
 
-    std::uint64_t objects_read = 0;
+    // The objects read since the last resetObjectsRead().
+    [[nodiscard]] std::uint64_t objectsRead() const noexcept;
+    void resetObjectsRead() noexcept;
 
   private:
     static constexpr std::uint32_t loose = std::numeric_limits<std::uint32_t>::max();
@@ -146,6 +169,12 @@ namespace telar::git {
       std::uint64_t size;
     };
 
+    // Where an object is: a pack and the offset of its entry, or `loose`.
+    struct Location {
+      std::uint32_t pack = 0;
+      std::uint64_t offset = 0;
+    };
+
     struct Entry {
       std::uint8_t kind = 0;
       std::uint64_t size = 0;
@@ -153,6 +182,18 @@ namespace telar::git {
       std::uint64_t base_offset = 0;
       ObjectId base;
     };
+
+    // A packed object to inflate: its pack, where its compressed bytes start, and the bytes it
+    // inflates into, all of its bytes when `whole`, else only their prefix.
+    struct Inflation {
+      const Pack& pack;
+      std::uint64_t data_offset = 0;
+      std::span<std::uint8_t> output;
+      bool whole = false;
+    };
+
+    static constexpr std::size_t block_bytes = 8192;
+    static constexpr std::size_t chunk_bytes = 16384;
 
     void refreshPacks();
     bool openPack(int directory, std::string_view index_name, Pack& pack) noexcept;
@@ -163,10 +204,18 @@ namespace telar::git {
     static ds::Option<std::uint32_t> findInPack(std::span<std::uint8_t> block, const Pack& pack, const ObjectId& id) noexcept;
 
     static ds::Option<std::uint64_t> packOffset(ObjectFormat format, const Pack& pack, std::uint32_t position) noexcept;
-    Lookup locate(const ObjectId& id, std::uint32_t& pack, std::uint64_t& offset);
+    Lookup locate(const ObjectId& id, Location& location);
     static bool entryAt(ObjectFormat format, const Pack& pack, std::uint64_t offset, Entry& entry) noexcept;
-    static bool inflatePacked(Inflater& inflater, std::span<std::uint8_t> chunk, ObjectFormat format, const Pack& pack, std::uint64_t data_offset, std::span<std::uint8_t> output, bool whole);
-    Lookup readPacked(std::uint32_t pack, std::uint64_t offset, ObjectType& type, ds::String<Memory>& output, std::size_t prefix);
+    static bool inflatePacked(Inflater& inflater, std::span<std::uint8_t> chunk, ObjectFormat format, Inflation inflation);
+    Lookup readPacked(Location location, ObjectType& type, ds::String<Memory>& output, std::size_t prefix);
+
+    // Follows the delta chain of the object at `location` down to its base, recording each delta in
+    // chain_. It leaves `location` and `entry` on the base when the base is packed, and sets
+    // `loose_base` to its id when it is a loose object.
+    bool chainToBase(Location& location, Entry& entry, ds::Option<ObjectId>& loose_base);
+
+    // Applies chain_'s deltas to base_, the one nearest the base first.
+    bool applyChain();
     Lookup readLoose(const ObjectId& id, ObjectType& type, ds::String<Memory>& output, std::size_t prefix);
 
     // Counts bytes against the per-read budget, so that a crafted delta chain
@@ -186,8 +235,9 @@ namespace telar::git {
     ds::String<Memory> base_;
     ds::String<Memory> target_;
     ds::String<Memory> delta_;
-    ds::Array<std::uint8_t, 8192> block_;
-    ds::Array<std::uint8_t, 16384> chunk_;
+    std::uint64_t objects_read_ = 0;
+    ds::Array<std::uint8_t, block_bytes> block_{};
+    ds::Array<std::uint8_t, chunk_bytes> chunk_{};
   };
 
   // The commit-graph file, or the layers of a split chain. Only each layer's
@@ -196,7 +246,7 @@ namespace telar::git {
   // Positions are global across layers, lower layers first.
   class CommitGraph {
   public:
-    static constexpr std::uint32_t no_parent = 0x70000000u;
+    static constexpr std::uint32_t no_parent = 0x70000000U;
 
     struct Layer {
       FileDescriptor file;
@@ -207,7 +257,7 @@ namespace telar::git {
       std::uint64_t commits = 0;
       std::uint64_t edges = 0;
       std::uint64_t edges_size = 0;
-      ds::Array<std::uint32_t, 256> fanout{};
+      ds::Array<std::uint32_t, fanout_entries> fanout{};
     };
 
     struct Commit {
@@ -243,14 +293,16 @@ namespace telar::git {
       // Stays generic over the caller's output, which the walk calls through a function pointer.
       using Target = std::remove_reference_t<Output>;
 
-      return visitParents(commit, maximum, const_cast<std::remove_const_t<Target>*>(std::addressof(output)), [](void* target, std::uint32_t parent) {
+      auto&& visitor = std::forward<Output>(output);
+
+      return visitParents(commit, maximum, const_cast<std::remove_const_t<Target>*>(std::addressof(visitor)), [](void* target, std::uint32_t parent) {
         (*static_cast<Target*>(target))(parent);
       });
     }
 
   private:
     [[nodiscard]] const Layer* layerOf(std::uint32_t position) const noexcept;
-    bool visitParents(const Commit& commit, std::size_t maximum, void* target, void (*output)(void*, std::uint32_t)) const;
+    static bool visitParents(const Commit& commit, std::size_t maximum, void* target, void (*output)(void*, std::uint32_t));
 
     // Validates the header, the chunk table and the fanout of one layer.
     bool addLayer(int objects, const char* path);

@@ -10,6 +10,33 @@ import telar.base.ds;
 
 namespace telar::runtime {
 
+  namespace {
+
+    // text.substr(offset, count) without its throw: an offset past the end gives an empty view.
+    std::string_view substring(std::string_view text, std::size_t offset, std::size_t count = std::string_view::npos) noexcept {
+      text.remove_prefix(std::min(offset, text.size()));
+      text.remove_suffix(text.size() - std::min(count, text.size()));
+      return text;
+    }
+
+    // Whether the config `key` lets the repository fetch objects lazily.
+    bool fetchesLazily(std::string_view key) noexcept {
+      return key == "extensions.partialclone" || (key.starts_with("remote.") && (key.ends_with(".promisor") || key.ends_with(".partialclonefilter") || key.ends_with(".uploadpack")));
+    }
+
+    // The driver a `filter.<driver>.<variable>` key names; none when `key` is no filter's.
+    tbc::val_a<ds::Option<std::string_view>> filterDriver(tbc::val_a<std::string_view> key) noexcept {
+      constexpr std::string_view prefix = "filter.";
+      const auto variable = key.rfind('.');
+      if (!key.starts_with(prefix) || variable < prefix.size()) {
+        return ds::none;
+      }
+
+      return substring(key, prefix.size(), variable - prefix.size());
+    }
+
+  }
+
   tbc::val_a<ds::Option<std::string_view>> GitFiles::join(std::string_view directory, std::string_view suffix, tbc::val_a<std::span<char>> buffer) noexcept {
     while (directory.ends_with('/')) {
       directory.remove_suffix(1);
@@ -20,9 +47,9 @@ namespace telar::runtime {
       return ds::none;
     }
 
-    std::memcpy(buffer.data(), directory.data(), directory.size());
+    std::ranges::copy(directory, buffer.begin());
     buffer[directory.size()] = '/';
-    std::memcpy(buffer.data() + directory.size() + 1, suffix.data(), suffix.size());
+    std::ranges::copy(suffix, buffer.subspan(directory.size() + 1).begin());
     buffer[length] = '\0';
     return std::string_view{buffer.data(), length};
   }
@@ -40,15 +67,18 @@ namespace telar::runtime {
       return ds::none;
     }
 
-    std::memcpy(buffer.data(), path.data(), path.size());
+    std::ranges::copy(path, buffer.begin());
     buffer[path.size()] = '\0';
     return std::string_view{buffer.data(), path.size()};
   }
 
   tbc::val_a<ds::Option<std::string_view>> GitFiles::directory(std::string_view root, tbc::val_a<std::span<char>> buffer) noexcept {
-    ds::Array<char, PATH_MAX> path;
+    // Room for the "gitdir: " prefix and the whitespace around the path.
+    constexpr std::size_t gitdir_line_slack = 16;
+
+    ds::Array<char, PATH_MAX> path{};
     const auto dot_git = join(root, ".git", path.viewMut());
-    ds::Array<char, PATH_MAX + 16> bytes;
+    ds::Array<char, PATH_MAX + gitdir_line_slack> bytes{};
     const auto pointer = dot_git ? readRegularFile(*dot_git, bytes.viewMut()) : ds::none;
     if (!pointer) {
       return ds::none;
@@ -60,7 +90,7 @@ namespace telar::runtime {
       return ds::none;
     }
 
-    return resolve(root, trimText(contents.substr(prefix.size()), " \t"), buffer);
+    return resolve(root, trimText(substring(contents, prefix.size()), " \t"), buffer);
   }
 
   ds::Option<std::string_view> GitHead::read(std::string_view root) noexcept {
@@ -73,7 +103,7 @@ namespace telar::runtime {
       return parse(*contents);
     }
 
-    ds::Array<char, PATH_MAX> resolved;
+    ds::Array<char, PATH_MAX> resolved{};
     const auto directory = GitFiles::directory(root, resolved.viewMut());
     if (!directory) {
       return ds::none;
@@ -91,13 +121,13 @@ namespace telar::runtime {
     constexpr std::string_view branch = "refs/heads/";
 
     if (contents.starts_with(reference)) {
-      contents = trimText(contents.substr(reference.size()), " ");
-      return contents.starts_with(branch) ? contents.substr(branch.size()) : contents;
+      contents = trimText(substring(contents, reference.size()), " ");
+      return contents.starts_with(branch) ? substring(contents, branch.size()) : contents;
     }
 
     constexpr std::size_t abbreviated_hash_length = 8;
 
-    return contents.substr(0, abbreviated_hash_length);
+    return substring(contents, 0, abbreviated_hash_length);
   }
 
   ds::Option<GitRepositoryFacts> GitRepositoryFacts::parse(std::string_view listing) noexcept {
@@ -113,7 +143,7 @@ namespace telar::runtime {
         return ds::none;
       }
 
-      const auto scope = listing.substr(0, scope_end);
+      const auto scope = substring(listing, 0, scope_end);
 
       listing.remove_prefix(scope_end + 1);
       const auto entry_end = listing.find('\0');
@@ -121,26 +151,25 @@ namespace telar::runtime {
         return ds::none;
       }
 
-      const auto entry = listing.substr(0, entry_end);
+      const auto entry = substring(listing, 0, entry_end);
 
       listing.remove_prefix(entry_end + 1);
       if (scope != "local" && scope != "worktree") {
         continue;
       }
 
-      const auto key = entry.substr(0, entry.find('\n'));
-      if (key == "extensions.partialclone" || (key.starts_with("remote.") && (key.ends_with(".promisor") || key.ends_with(".partialclonefilter") || key.ends_with(".uploadpack")))) {
+      const auto key = substring(entry, 0, entry.find('\n'));
+      if (fetchesLazily(key)) {
         facts.may_fetch = true;
         continue;
       }
 
-      constexpr std::string_view prefix = "filter.";
-      const auto variable = key.rfind('.');
-      if (!key.starts_with(prefix) || variable < prefix.size()) {
+      const auto filter = filterDriver(key);
+      if (!filter) {
         continue;
       }
 
-      const auto driver = key.substr(prefix.size(), variable - prefix.size());
+      const auto driver = *filter;
       if (driver.find_first_of("=\n") != std::string_view::npos) {
         return ds::none;
       }
@@ -189,19 +218,24 @@ namespace telar::runtime {
       return false;
     }
 
-    const auto number = version.substr(prefix.size());
-    unsigned major = 0;
-    const auto parsed = std::from_chars(number.data(), number.data() + number.size(), major);
-    if (parsed.ec != std::errc{} || parsed.ptr == number.data() + number.size() || *parsed.ptr != '.') {
+    const auto number = substring(version, prefix.size());
+    const auto dot = number.find('.');
+    if (dot == std::string_view::npos) {
       return false;
     }
 
-    unsigned minor = 0;
-    const auto subversion = std::from_chars(parsed.ptr + 1, number.data() + number.size(), minor);
+    // The minor version is the run of digits after the dot, as in "2.45.1" or "2.39.5 (Apple Git-154)".
+    const auto subversion = substring(number, dot + 1);
+    const auto major = parseExact<unsigned>(substring(number, 0, dot));
+    const auto minor = parseExact<unsigned>(substring(subversion, 0, subversion.find_first_not_of("0123456789")));
+    if (!major || !minor) {
+      return false;
+    }
+
     constexpr unsigned lazy_fetch_major = 2;
     constexpr unsigned lazy_fetch_minor = 45;
 
-    return subversion.ec == std::errc{} && (major > lazy_fetch_major || (major == lazy_fetch_major && minor >= lazy_fetch_minor));
+    return *major > lazy_fetch_major || (*major == lazy_fetch_major && *minor >= lazy_fetch_minor);
   }
 
   template <Allocator Memory>
@@ -227,13 +261,13 @@ namespace telar::runtime {
     ds::Vec<std::string_view, Memory> complete{memory_};
 
     complete.reserve(git_observation_options.size() + (2 * overrides_.size()) + arguments.size());
-    complete.extend({git_observation_options.begin(), git_observation_options.end()});
+    complete.extend(git_observation_options.view());
     for (const auto& override : overrides_) {
       complete.push("-c");
       complete.push(override);
     }
 
-    complete.extend({arguments.begin(), arguments.end()});
+    complete.extend(arguments);
     return Command<Memory>{memory_, Launch{.cwd = root_, .arguments = complete}, CommandPurpose::administration};
   }
 
@@ -273,23 +307,23 @@ namespace telar::runtime {
         return ds::none;
       }
 
-      directory = directory.substr(0, std::max<std::size_t>(1, separator));
+      directory = substring(directory, 0, std::max<std::size_t>(1, separator));
     }
 
     return ds::none;
   }
 
   ds::Option<std::string_view> LinkedWorktree::mainBranch(std::string_view root) noexcept {
-    ds::Array<char, PATH_MAX> git_directory;
+    ds::Array<char, PATH_MAX> git_directory{};
     const auto directory = GitFiles::directory(root, git_directory.viewMut());
     if (!directory) {
       return ds::none;
     }
 
     const auto common_path = GitFiles::join(*directory, "commondir", path_.viewMut());
-    ds::Array<char, PATH_MAX> contents;
+    ds::Array<char, PATH_MAX> contents{};
     const auto common = common_path ? readRegularFile(*common_path, contents.viewMut()) : ds::none;
-    ds::Array<char, PATH_MAX> resolved;
+    ds::Array<char, PATH_MAX> resolved{};
     const auto common_directory = common ? GitFiles::resolve(*directory, trimText(*common, " \t\r\n"), resolved.viewMut()) : ds::none;
     const auto head_path = common_directory ? GitFiles::join(*common_directory, "HEAD", path_.viewMut()) : ds::none;
     const auto head = head_path ? readRegularFile(*head_path, head_.viewMut()) : ds::none;
@@ -300,18 +334,18 @@ namespace telar::runtime {
     const auto text = trimText(*head, " \r\n");
     constexpr std::string_view prefix = "ref: refs/heads/";
 
-    return text.starts_with(prefix) && text.size() > prefix.size() ? ds::Option{text.substr(prefix.size())} : ds::none;
+    return text.starts_with(prefix) && text.size() > prefix.size() ? ds::Option{substring(text, prefix.size())} : ds::none;
   }
 
   ds::Option<std::string_view> LinkedWorktree::linkedBranch(std::string_view root) noexcept {
-    ds::Array<char, PATH_MAX> git_directory;
+    ds::Array<char, PATH_MAX> git_directory{};
     const auto directory = GitFiles::directory(root, git_directory.viewMut());
     if (!directory) {
       return ds::none;
     }
 
     const auto common_path = GitFiles::join(*directory, "commondir", path_.viewMut());
-    ds::Array<char, PATH_MAX> common;
+    ds::Array<char, PATH_MAX> common{};
     if (!common_path || !readRegularFile(*common_path, common.viewMut())) {
       return ds::none;
     }

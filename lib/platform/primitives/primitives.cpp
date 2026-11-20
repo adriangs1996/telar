@@ -17,7 +17,7 @@ extern "C++" {
 namespace telar::runtime {
 
   FileDescriptor duplicateCloseOnExec(int descriptor, int minimum) {
-    const int copied = ::fcntl(descriptor, F_DUPFD_CLOEXEC, minimum);
+    const int copied = ::fcntl(descriptor, F_DUPFD_CLOEXEC, minimum); // NOLINT(cppcoreguidelines-pro-type-vararg): fcntl's C signature is variadic
     if (copied < 0) {
       throw SystemError{"duplicate close-on-exec descriptor"};
     }
@@ -26,15 +26,15 @@ namespace telar::runtime {
   }
 
   void setNonblocking(int descriptor) {
-    const int flags = fcntl(descriptor, F_GETFL);
-    if (flags < 0 || fcntl(descriptor, F_SETFL, flags | O_NONBLOCK) < 0) {
+    const int flags = fcntl(descriptor, F_GETFL);                                       // NOLINT(cppcoreguidelines-pro-type-vararg): fcntl's C signature is variadic
+    if (flags < 0 || fcntl(descriptor, F_SETFL, combineFlags(flags, O_NONBLOCK)) < 0) { // NOLINT(cppcoreguidelines-pro-type-vararg): fcntl's C signature is variadic
       throw SystemError{"set nonblocking descriptor"};
     }
   }
 
   void setCloseOnExec(int descriptor) {
-    const int flags = fcntl(descriptor, F_GETFD);
-    if (flags < 0 || fcntl(descriptor, F_SETFD, flags | FD_CLOEXEC) < 0) {
+    const int flags = fcntl(descriptor, F_GETFD);                                       // NOLINT(cppcoreguidelines-pro-type-vararg): fcntl's C signature is variadic
+    if (flags < 0 || fcntl(descriptor, F_SETFD, combineFlags(flags, FD_CLOEXEC)) < 0) { // NOLINT(cppcoreguidelines-pro-type-vararg): fcntl's C signature is variadic
       throw SystemError{"set close-on-exec descriptor"};
     }
   }
@@ -72,7 +72,7 @@ namespace telar::runtime {
   MappedRegion::MappedRegion(int descriptor, std::size_t length, int protection) noexcept {
     void* address = ::mmap(nullptr, length, protection, MAP_SHARED, descriptor, 0);
     if (address != MAP_FAILED) {
-      bytes_ = {static_cast<std::uint8_t*>(address), length};
+      bytes_ = {static_cast<std::uint8_t*>(address), length}; // NOLINT(clang-diagnostic-unsafe-buffer-usage-in-container): mmap returns the `length` bytes it mapped as a bare pointer
     }
   }
 
@@ -101,13 +101,13 @@ namespace telar::runtime {
   }
 
   tbc::val_a<const char*> copyGraphicsName(std::span<const std::uint8_t> decoded, tbc::val_a<std::span<std::uint8_t>> destination) noexcept {
-    if (decoded.empty() || decoded.size() >= destination.size() || std::find(decoded.begin(), decoded.end(), 0) != decoded.end()) {
+    if (decoded.empty() || decoded.size() >= destination.size() || std::ranges::find(decoded, 0) != decoded.end()) {
       return nullptr;
     }
 
-    std::copy(decoded.begin(), decoded.end(), destination.begin());
+    std::ranges::copy(decoded, destination.begin());
     destination[decoded.size()] = 0;
-    return reinterpret_cast<const char*>(destination.data());
+    return reinterpret_cast<const char*>(destination.data()); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): shm_open takes the name as char, which may alias its bytes
   }
 
   tbc::val_a<const char*> decodeGraphicsName(std::string_view encoded, tbc::val_a<std::span<std::uint8_t>> destination) noexcept {
@@ -116,19 +116,23 @@ namespace telar::runtime {
     }
 
     const auto length = base64::decode(encoded, destination.first(destination.size() - 1));
-    if (!length || *length == 0 || std::find(destination.begin(), destination.begin() + *length, 0) != destination.begin() + *length) {
+    if (!length || *length == 0) {
+      return nullptr;
+    }
+
+    if (const auto name = destination.first(*length); std::ranges::find(name, 0) != name.end()) {
       return nullptr;
     }
 
     destination[*length] = 0;
-    return reinterpret_cast<const char*>(destination.data());
+    return reinterpret_cast<const char*>(destination.data()); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): shm_open takes the name as char, which may alias its bytes
   }
 
   FileDescriptor GraphicsChildSharedMemory::open(std::string_view encoded_name, std::span<std::uint8_t> name) noexcept {
     const auto* decoded = decodeGraphicsName(encoded_name, name);
     FileDescriptor descriptor{decoded == nullptr ? -1 : ::shm_open(decoded, O_RDONLY, 0)};
-    if (descriptor && ::fcntl(descriptor.get(), F_SETFD, FD_CLOEXEC) != 0) {
-      return FileDescriptor{};
+    if (descriptor && ::fcntl(descriptor.get(), F_SETFD, FD_CLOEXEC) != 0) { // NOLINT(cppcoreguidelines-pro-type-vararg): fcntl's C signature is variadic
+      descriptor.reset();
     }
 
     return descriptor;
@@ -137,8 +141,8 @@ namespace telar::runtime {
   FileDescriptor GraphicsChildSharedMemory::openDecoded(std::span<const std::uint8_t> decoded_name, std::span<std::uint8_t> name) noexcept {
     const auto* decoded = copyGraphicsName(decoded_name, name);
     FileDescriptor descriptor{decoded == nullptr ? -1 : ::shm_open(decoded, O_RDONLY, 0)};
-    if (descriptor && ::fcntl(descriptor.get(), F_SETFD, FD_CLOEXEC) != 0) {
-      return FileDescriptor{};
+    if (descriptor && ::fcntl(descriptor.get(), F_SETFD, FD_CLOEXEC) != 0) { // NOLINT(cppcoreguidelines-pro-type-vararg): fcntl's C signature is variadic
+      descriptor.reset();
     }
 
     return descriptor;
@@ -158,7 +162,8 @@ namespace telar::runtime {
       return false;
     }
 
-    const auto aligned = offset / page * page;
+    const auto page_bytes = static_cast<std::uint64_t>(page);
+    const auto aligned = offset / page_bytes * page_bytes;
     const auto delta = static_cast<std::size_t>(offset - aligned);
     if (aligned > static_cast<std::uint64_t>(std::numeric_limits<off_t>::max()) || output.size() > std::numeric_limits<std::size_t>::max() - delta) {
       return false;
@@ -171,7 +176,7 @@ namespace telar::runtime {
     }
 
     mach_vm_size_t copied = 0;
-    const auto result = ::mach_vm_read_overwrite(::mach_task_self(), reinterpret_cast<mach_vm_address_t>(mapping) + delta, output.size(), reinterpret_cast<mach_vm_address_t>(output.data()), &copied);
+    const auto result = ::mach_vm_read_overwrite(::mach_task_self(), std::bit_cast<mach_vm_address_t>(mapping) + delta, output.size(), std::bit_cast<mach_vm_address_t>(output.data()), &copied);
 
     ::munmap(mapping, length);
     return result == KERN_SUCCESS && copied == output.size();
@@ -199,10 +204,10 @@ namespace telar::runtime {
   }
 
   void GraphicsChildSharedMemory::release(std::string_view encoded_name) noexcept {
-    ds::Array<std::uint8_t, PATH_MAX + 1> name;
+    ds::Array<std::uint8_t, PATH_MAX + 1> name{};
     const auto descriptor = open(encoded_name, name.viewMut());
     if (descriptor) {
-      ::shm_unlink(reinterpret_cast<const char*>(name.data()));
+      ::shm_unlink(reinterpret_cast<const char*>(name.data())); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): shm_open takes the name as char, which may alias its bytes
     }
   }
 

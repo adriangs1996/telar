@@ -13,6 +13,22 @@ namespace telar::git {
 
   namespace {
 
+    // The buffer of a small file, as large as its default limit.
+    constexpr std::size_t small_file_capacity = default_limits::small_file;
+
+    constexpr std::string_view heads_prefix = "refs/heads/";
+    constexpr std::string_view symbolic_prefix = "ref:";
+
+    // The branches visitBranches lists: at most `limit` valid ref names of at most `path_length`,
+    // `count` of them so far, each handed to `visit`.
+    struct BranchWalk {
+      std::size_t limit = 0;
+      std::size_t path_length = 0;
+      std::size_t count = 0;
+      void* target = nullptr;
+      void (*visit)(void*, std::string_view) = nullptr;
+    };
+
     bool ownedByCaller(const struct stat& status) noexcept {
       return status.st_uid == ::geteuid();
     }
@@ -37,25 +53,25 @@ namespace telar::git {
         return source == reference && mapped.assign({destination});
       }
 
-      const auto prefix = source.substr(0, star);
-      const auto suffix = source.substr(star + 1);
+      const auto prefix = substring(source, 0, star);
+      const auto suffix = substring(source, star + 1);
       if (reference.size() < prefix.size() + suffix.size() || !reference.starts_with(prefix) || !reference.ends_with(suffix)) {
         return false;
       }
 
-      const auto captured = reference.substr(prefix.size(), reference.size() - prefix.size() - suffix.size());
+      const auto captured = substring(reference, prefix.size(), reference.size() - prefix.size() - suffix.size());
       const auto target = destination.find('*');
       if (target == std::string_view::npos) {
         return false;
       }
 
-      return mapped.assign({destination.substr(0, target), captured, destination.substr(target + 1)});
+      return mapped.assign({substring(destination, 0, target), captured, substring(destination, target + 1)});
     }
 
     std::string_view shortReference(std::string_view name) noexcept {
-      for (const auto prefix : {std::string_view{"refs/heads/"}, std::string_view{"refs/remotes/"}}) {
+      for (const auto prefix : {heads_prefix, std::string_view{"refs/remotes/"}}) {
         if (name.starts_with(prefix)) {
-          return name.substr(prefix.size());
+          return substring(name, prefix.size());
         }
       }
 
@@ -74,6 +90,67 @@ namespace telar::git {
       }
 
       return ::fstatat(directory, "objects", &status, 0) == 0 && S_ISDIR(status.st_mode) && ::fstatat(directory, "refs", &status, 0) == 0 && S_ISDIR(status.st_mode);
+    }
+
+    // The loose branches beneath `heads`, refs/heads, depth first in readdir's order and at most
+    // `maximum_depth` directories deep; `name` holds the ref name of the entry being read.
+    void looseBranches(int heads, ds::String<Memory>& name, BranchWalk& walk) {
+      constexpr std::size_t maximum_depth = 16;
+      // The open directories from refs/heads down, and the length of `name` where each one's
+      // entries start.
+      ds::Array<ds::Option<runtime::DirectoryStream>, maximum_depth + 1> levels{};
+      ds::Array<std::size_t, maximum_depth + 1> name_sizes{};
+      std::size_t depth = 0;
+
+      levels.atMut(0).emplace(heads);
+      for (;;) {
+        const auto directory = levels[depth]->descriptor();
+        const auto* const entry = levels.atMut(depth).getMut().next();
+        if (entry == nullptr) {
+          if (depth == 0) {
+            return;
+          }
+
+          levels.atMut(depth).reset();
+          --depth;
+          name.resize(name_sizes[depth]);
+          continue;
+        }
+
+        if (walk.count >= walk.limit) {
+          return;
+        }
+
+        const char* const child_name = std::data(entry->d_name);
+        const std::string_view child{child_name};
+        if (child == "." || child == "..") {
+          continue;
+        }
+
+        struct stat state{};
+        if (::fstatat(directory, child_name, &state, AT_SYMLINK_NOFOLLOW) != 0) {
+          continue;
+        }
+
+        const auto size = name.size();
+
+        name.push('/');
+        name.append(child);
+        if (S_ISDIR(state.st_mode) && depth < maximum_depth) {
+          auto nested = openDirectory(directory, child_name, FinalLink::refuse);
+          if (nested) {
+            name_sizes.atMut(depth) = size;
+            ++depth;
+            levels.atMut(depth).emplace(std::move(nested));
+            continue;
+          }
+        } else if (S_ISREG(state.st_mode) && validReferenceName(name, walk.path_length)) {
+          walk.visit(walk.target, substring(name.view(), heads_prefix.size()));
+          ++walk.count;
+        }
+
+        name.resize(size);
+      }
     }
 
   }
@@ -112,7 +189,7 @@ namespace telar::git {
 
     try {
       objects_.trim();
-    } catch (...) {
+    } catch (...) { // NOLINT(bugprone-empty-catch): trimming the caches is best effort; the status read stands without it
     }
 
     return status_;
@@ -135,7 +212,7 @@ namespace telar::git {
 
         return true;
       }));
-    } catch (...) {
+    } catch (...) { // NOLINT(bugprone-empty-catch): a config that fails to parse lists the remotes visited before it
     }
   }
 
@@ -161,27 +238,26 @@ namespace telar::git {
       return;
     }
 
-    std::size_t count = 0;
+    BranchWalk walk{.limit = limit, .path_length = limits_.path_length, .target = target, .visit = visit};
 
     try {
       ds::String<Memory> name{memory_, "refs/heads"};
-      FileDescriptor heads{::openat(common_.get(), "refs/heads", O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
+      const auto heads = openDirectory(common_.get(), "refs/heads", FinalLink::refuse);
       if (heads) {
-        looseBranches(heads.get(), name, 0, limit, count, target, visit);
+        looseBranches(heads.get(), name, walk);
       }
-    } catch (...) {
+    } catch (...) { // NOLINT(bugprone-empty-catch): the packed branches are listed after loose ones that failed to read
     }
 
     if (packed_state_ != ReadStatus::ok) {
       return;
     }
 
-    constexpr std::string_view prefix = "refs/heads/";
     const std::string_view text{packed_refs_};
 
-    for (std::size_t from = 0; from < text.size() && count < limit;) {
+    for (std::size_t from = 0; from < text.size() && walk.count < limit;) {
       const auto end = std::min(text.find('\n', from), text.size());
-      const auto line = trimLineEnd(text.substr(from, end - from));
+      const auto line = trimLineEnd(substring(text, from, end - from));
 
       from = end + 1;
       const auto space = line.find(' ');
@@ -189,10 +265,10 @@ namespace telar::git {
         continue;
       }
 
-      const auto reference = line.substr(space + 1);
-      if (reference.starts_with(prefix) && validReferenceName(reference, limits_.path_length)) {
-        visit(target, reference.substr(prefix.size()));
-        ++count;
+      const auto reference = substring(line, space + 1);
+      if (reference.starts_with(heads_prefix) && validReferenceName(reference, limits_.path_length)) {
+        visit(target, substring(reference, heads_prefix.size()));
+        ++walk.count;
       }
     }
   }
@@ -202,44 +278,7 @@ namespace telar::git {
       return true;
     }
 
-    return probe() != inputs_ || (worktree_ && fingerprintAt(gitdir_.get(), "index") != index_.fingerprint);
-  }
-
-  void StatusReader::looseBranches(int directory, ds::String<Memory>& name, unsigned depth, std::size_t limit, std::size_t& count, void* target, void (*visit)(void*, std::string_view)) const {
-    constexpr unsigned maximum_depth = 16;
-    runtime::DirectoryStream entries{directory};
-
-    while (const auto* entry = entries.next()) {
-      if (count >= limit) {
-        return;
-      }
-
-      const std::string_view child{entry->d_name};
-      if (child == "." || child == "..") {
-        continue;
-      }
-
-      struct stat state{};
-      if (::fstatat(directory, entry->d_name, &state, AT_SYMLINK_NOFOLLOW) != 0) {
-        continue;
-      }
-
-      const auto size = name.size();
-
-      name.push('/');
-      name.append(child);
-      if (S_ISDIR(state.st_mode) && depth < maximum_depth) {
-        FileDescriptor nested{::openat(directory, entry->d_name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
-        if (nested) {
-          looseBranches(nested.get(), name, depth + 1, limit, count, target, visit);
-        }
-      } else if (S_ISREG(state.st_mode) && validReferenceName(name, limits_.path_length)) {
-        visit(target, name.view().substr(std::string_view{"refs/heads/"}.size()));
-        ++count;
-      }
-
-      name.resize(size);
-    }
+    return probe() != inputs_ || (worktree_ && fingerprintAt(gitdir_.get(), "index") != index_.fingerprint());
   }
 
   void StatusReader::reset(RepositoryState state) {
@@ -297,23 +336,19 @@ namespace telar::git {
       return {};
     }
 
-    return fingerprintAt(perWorktreeReference(name) ? gitdir_.get() : common_.get(), path.c_str());
+    return fingerprintAt(perWorktreeReference(name) ? gitdir_.get() : common_.get(), path.cString());
   }
 
   void StatusReader::readRepository(std::string_view directory) {
     status_.work = {};
-    objects_.objects_read = 0;
-    walk_.commits_read = 0;
-    staged_.trees_read = 0;
-    unstaged_.entries_checked = 0;
-    unstaged_.files_hashed = 0;
-    unstaged_.bytes_hashed = 0;
+    objects_.resetObjectsRead();
+    walk_.resetCommitsRead();
+    staged_.resetTreesRead();
+    unstaged_.resetWork();
 
-    FileDescriptor worktree;
-    FileDescriptor gitdir;
-    FileDescriptor common;
+    Discovery found;
 
-    switch (discover(directory, worktree, gitdir, common)) {
+    switch (discover(directory, found)) {
     case Discovered::repository:
       break;
     case Discovered::none:
@@ -336,7 +371,7 @@ namespace telar::git {
 
     struct stat gitdir_status{};
     struct stat common_status{};
-    if (::fstat(gitdir.get(), &gitdir_status) != 0 || ::fstat(common.get(), &common_status) != 0) {
+    if (::fstat(found.gitdir.get(), &gitdir_status) != 0 || ::fstat(found.common.get(), &common_status) != 0) {
       forget();
       reset(RepositoryState::unknown);
       return;
@@ -351,9 +386,9 @@ namespace telar::git {
       common_identity_ = common_identity;
     }
 
-    worktree_ = std::move(worktree);
-    gitdir_ = std::move(gitdir);
-    common_ = std::move(common);
+    worktree_ = std::move(found.worktree);
+    gitdir_ = std::move(found.gitdir);
+    common_ = std::move(found.common);
     status_.linked_worktree = !sameFile(gitdir_status, common_status);
 
     if (const auto state = loadConfig(); state != RepositoryState::ready) {
@@ -390,21 +425,21 @@ namespace telar::git {
     readDivergence();
     readChanges();
 
-    status_.work.objects_read = objects_.objects_read;
-    status_.work.commits_read = walk_.commits_read;
-    status_.work.trees_read = staged_.trees_read;
-    status_.work.entries_checked = unstaged_.entries_checked;
-    status_.work.files_hashed = unstaged_.files_hashed;
-    status_.work.bytes_hashed = unstaged_.bytes_hashed;
+    status_.work.objects_read = objects_.objectsRead();
+    status_.work.commits_read = walk_.commitsRead();
+    status_.work.trees_read = staged_.treesRead();
+    status_.work.entries_checked = unstaged_.work().entries_checked;
+    status_.work.files_hashed = unstaged_.work().files_hashed;
+    status_.work.bytes_hashed = unstaged_.work().bytes_hashed;
   }
 
-  Discovered StatusReader::discover(std::string_view directory, FileDescriptor& worktree, FileDescriptor& gitdir, FileDescriptor& common) const {
+  Discovered StatusReader::discover(std::string_view directory, Discovery& found) const {
     PathName start;
     if (directory.empty() || directory.front() != '/' || !start.assign({directory})) {
       return Discovered::error;
     }
 
-    FileDescriptor current{::open(start.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
+    auto current = openDirectory(AT_FDCWD, start.cString());
     if (!current) {
       return sys::lastError() == ENOENT || sys::lastError() == ENOTDIR ? Discovered::none : Discovered::error;
     }
@@ -417,40 +452,14 @@ namespace telar::git {
     const auto device = current_status.st_dev;
 
     for (std::size_t depth = 0; depth < limits_.discovery_depth; ++depth) {
-      struct stat dot{};
-      if (::fstatat(current.get(), ".git", &dot, 0) == 0) {
-        if (S_ISDIR(dot.st_mode)) {
-          auto candidate = openDirectory(current.get(), ".git");
-          if (!candidate) {
-            return Discovered::error;
-          }
-
-          if (looksLikeGitDirectory(candidate.get())) {
-            if (!ownedByCaller(current_status)) {
-              return Discovered::not_owned;
-            }
-
-            const auto checked = checkGitDirectory(candidate.get(), common);
-            if (checked == Discovered::repository) {
-              worktree = std::move(current);
-              gitdir = std::move(candidate);
-            }
-
-            return checked;
-          }
-        } else if (S_ISREG(dot.st_mode)) {
-          return readGitFile(current, current_status, dot, worktree, gitdir, common);
-        } else {
-          return Discovered::invalid;
-        }
-      } else if (sys::lastError() != ENOENT && sys::lastError() != ENOTDIR) {
-        return Discovered::error;
+      if (const auto dot_git = discoverDotGit(current, current_status, found)) {
+        return *dot_git;
       }
 
       if (looksLikeGitDirectory(current.get())) {
-        const auto checked = checkGitDirectory(current.get(), common);
+        const auto checked = checkGitDirectory(current.get(), found.common);
         if (checked == Discovered::repository) {
-          gitdir = std::move(current);
+          found.gitdir = std::move(current);
         }
 
         return checked;
@@ -473,12 +482,48 @@ namespace telar::git {
     return Discovered::none;
   }
 
-  Discovered StatusReader::readGitFile(FileDescriptor& current, const struct stat& current_status, const struct stat& dot, FileDescriptor& worktree, FileDescriptor& gitdir, FileDescriptor& common) const {
-    if (!ownedByCaller(current_status) || !ownedByCaller(dot)) {
+  ds::Option<Discovered> StatusReader::discoverDotGit(FileDescriptor& current, const struct stat& current_status, Discovery& found) const {
+    struct stat dot{};
+    if (::fstatat(current.get(), ".git", &dot, 0) != 0) {
+      return sys::lastError() == ENOENT || sys::lastError() == ENOTDIR ? ds::none : ds::Option{Discovered::error};
+    }
+
+    if (S_ISREG(dot.st_mode)) {
+      if (!ownedByCaller(current_status) || !ownedByCaller(dot)) {
+        return Discovered::not_owned;
+      }
+
+      return readGitFile(current, found);
+    }
+
+    if (!S_ISDIR(dot.st_mode)) {
+      return Discovered::invalid;
+    }
+
+    auto candidate = openDirectory(current.get(), ".git");
+    if (!candidate) {
+      return Discovered::error;
+    }
+
+    if (!looksLikeGitDirectory(candidate.get())) {
+      return ds::none;
+    }
+
+    if (!ownedByCaller(current_status)) {
       return Discovered::not_owned;
     }
 
-    ds::Array<char, 4096> bytes;
+    const auto checked = checkGitDirectory(candidate.get(), found.common);
+    if (checked == Discovered::repository) {
+      found.worktree = std::move(current);
+      found.gitdir = std::move(candidate);
+    }
+
+    return checked;
+  }
+
+  Discovered StatusReader::readGitFile(FileDescriptor& current, Discovery& found) const {
+    ds::Array<char, small_file_capacity> bytes{};
     std::string_view contents;
     if (readSmall(current.get(), ".git", bytes.viewMut().first(std::min(bytes.size(), limits_.small_file)), contents) != ReadStatus::ok) {
       return Discovered::invalid;
@@ -490,21 +535,21 @@ namespace telar::git {
       return Discovered::invalid;
     }
 
-    const auto target = trimText(contents.substr(prefix.size()), " \t");
+    const auto target = trimText(substring(contents, prefix.size()), " \t");
     PathName path;
     if (target.empty() || !path.assign({target})) {
       return Discovered::invalid;
     }
 
-    auto candidate = openDirectory(current.get(), path.c_str());
+    auto candidate = openDirectory(current.get(), path.cString());
     if (!candidate || !looksLikeGitDirectory(candidate.get())) {
       return Discovered::invalid;
     }
 
-    const auto checked = checkGitDirectory(candidate.get(), common);
+    const auto checked = checkGitDirectory(candidate.get(), found.common);
     if (checked == Discovered::repository) {
-      worktree = std::move(current);
-      gitdir = std::move(candidate);
+      found.worktree = std::move(current);
+      found.gitdir = std::move(candidate);
     }
 
     return checked;
@@ -520,7 +565,7 @@ namespace telar::git {
       return Discovered::not_owned;
     }
 
-    ds::Array<char, 4096> bytes;
+    ds::Array<char, small_file_capacity> bytes{};
     std::string_view contents;
     const auto small = bytes.viewMut().first(std::min(bytes.size(), limits_.small_file));
     const auto common_file = readSmall(directory, "commondir", small, contents);
@@ -531,7 +576,7 @@ namespace telar::git {
         return Discovered::invalid;
       }
 
-      common = openDirectory(directory, path.c_str());
+      common = openDirectory(directory, path.cString());
     } else if (common_file == ReadStatus::missing) {
       common = openDirectory(directory, ".");
     } else {
@@ -555,7 +600,7 @@ namespace telar::git {
     }
 
     contents = trimLineEnd(contents);
-    const bool symbolic = contents.starts_with("ref:") && trimText(contents.substr(4), " \t").starts_with("refs/");
+    const bool symbolic = contents.starts_with(symbolic_prefix) && trimText(substring(contents, symbolic_prefix.size()), " \t").starts_with("refs/");
     if (!symbolic && !ObjectId::fromHex(contents, ObjectFormat::sha1) && !ObjectId::fromHex(contents, ObjectFormat::sha256)) {
       return Discovered::invalid;
     }
@@ -573,7 +618,7 @@ namespace telar::git {
       return RepositoryState::invalid;
     }
 
-    auto directory = openDirectory(gitdir_.get(), path.c_str());
+    auto directory = openDirectory(gitdir_.get(), path.cString());
     struct stat status{};
     if (!directory || ::fstat(directory.get(), &status) != 0) {
       return RepositoryState::invalid;
@@ -612,30 +657,7 @@ namespace telar::git {
     const auto visit = [&](bool worktree_file) {
       return [&, worktree_file](const ConfigEntry& entry) {
         if (asciiEqualIgnoreCase(entry.section, "core") && entry.subsection.empty()) {
-          if (asciiEqualIgnoreCase(entry.key, "repositoryformatversion") && !worktree_file) {
-            const auto version = entry.value ? telar::runtime::unsignedDecimal<unsigned>(*entry.value) : ds::none;
-
-            valid = valid && version.hasValue();
-            config_.version = version.valueOr(0);
-          } else if (asciiEqualIgnoreCase(entry.key, "bare")) {
-            const auto value = configBoolean(entry.value);
-
-            valid = valid && value.hasValue();
-            config_.bare = value.valueOr(false);
-          } else if (asciiEqualIgnoreCase(entry.key, "filemode")) {
-            const auto value = configBoolean(entry.value);
-
-            valid = valid && value.hasValue();
-            config_.file_mode = value.valueOr(true);
-          } else if (asciiEqualIgnoreCase(entry.key, "symlinks")) {
-            const auto value = configBoolean(entry.value);
-
-            valid = valid && value.hasValue();
-            config_.symlinks = value.valueOr(true);
-          } else if (asciiEqualIgnoreCase(entry.key, "worktree") && entry.value) {
-            config_.has_worktree = true;
-            configured_worktree_.assign(*entry.value);
-          }
+          valid = coreVariable(entry, worktree_file) && valid;
         } else if (asciiEqualIgnoreCase(entry.section, "extensions") && entry.subsection.empty() && !worktree_file) {
           extension(entry);
         }
@@ -672,6 +694,43 @@ namespace telar::git {
     return config_state_;
   }
 
+  bool StatusReader::coreVariable(const ConfigEntry& entry, bool worktree_file) {
+    if (asciiEqualIgnoreCase(entry.key, "repositoryformatversion") && !worktree_file) {
+      const auto version = entry.value ? telar::runtime::unsignedDecimal<unsigned>(*entry.value) : ds::none;
+
+      config_.version = version.valueOr(0);
+      return version.hasValue();
+    }
+
+    if (asciiEqualIgnoreCase(entry.key, "bare")) {
+      const auto value = configBoolean(entry.value);
+
+      config_.bare = value.valueOr(false);
+      return value.hasValue();
+    }
+
+    if (asciiEqualIgnoreCase(entry.key, "filemode")) {
+      const auto value = configBoolean(entry.value);
+
+      config_.file_mode = value.valueOr(true);
+      return value.hasValue();
+    }
+
+    if (asciiEqualIgnoreCase(entry.key, "symlinks")) {
+      const auto value = configBoolean(entry.value);
+
+      config_.symlinks = value.valueOr(true);
+      return value.hasValue();
+    }
+
+    if (asciiEqualIgnoreCase(entry.key, "worktree") && entry.value) {
+      config_.has_worktree = true;
+      configured_worktree_.assign(*entry.value);
+    }
+
+    return true;
+  }
+
   void StatusReader::extension(const ConfigEntry& entry) {
     const auto value = entry.value.valueOr("");
 
@@ -702,7 +761,7 @@ namespace telar::git {
   void StatusReader::readReferences() {
     resolveReferences();
     // A large packed-refs is read again when a ref changes rather than kept.
-    constexpr std::size_t retained = 1 << 20;
+    constexpr std::size_t retained = std::size_t{1} << 20U;
     if (packed_refs_.capacity() > retained) {
       packed_refs_.clear();
       packed_refs_.shrinkToFit();
@@ -724,7 +783,7 @@ namespace telar::git {
     inputs_.upstream = {};
     inputs_.shallow = fingerprintAt(common_.get(), "shallow");
 
-    ds::Array<char, 4096> bytes;
+    ds::Array<char, small_file_capacity> bytes{};
     std::string_view contents;
     const auto small = bytes.viewMut().first(std::min(bytes.size(), limits_.small_file));
     const auto packed = fingerprintAt(common_.get(), "packed-refs");
@@ -742,7 +801,7 @@ namespace telar::git {
     }
 
     contents = trimLineEnd(contents);
-    if (!contents.starts_with("ref:")) {
+    if (!contents.starts_with(symbolic_prefix)) {
       if (const auto id = ObjectId::fromHex(contents, config_.format)) {
         status_.head = HeadState::detached;
         status_.head_id = *id;
@@ -751,13 +810,13 @@ namespace telar::git {
       return;
     }
 
-    const auto target = trimText(contents.substr(4), " \t");
+    const auto target = trimText(substring(contents, symbolic_prefix.size()), " \t");
     if (!target.starts_with("refs/") || !validReferenceName(target, limits_.path_length)) {
       return;
     }
 
     head_reference_.assign(target);
-    status_.branch.assign(target.starts_with("refs/heads/") ? target.substr(11) : target);
+    status_.branch.assign(target.starts_with(heads_prefix) ? substring(target, heads_prefix.size()) : target);
     // Resolved into copies: resolving reads the reader, so it cannot also write its fields.
     auto head_id = status_.head_id;
     auto branch = inputs_.branch;
@@ -781,84 +840,31 @@ namespace telar::git {
   }
 
   void StatusReader::readUpstream() {
-    if (!head_reference_.view().starts_with("refs/heads/")) {
+    if (!head_reference_.view().starts_with(heads_prefix)) {
       return;
     }
 
-    const std::string_view branch{status_.branch};
     PathName remote;
     PathName merge;
-    bool have_remote = false;
-    bool have_merge = false;
-    bool valid = true;
-    const auto branches = [&](const ConfigEntry& entry) {
-      if (!asciiEqualIgnoreCase(entry.section, "branch") || entry.subsection != branch || !entry.value) {
-        return true;
-      }
-
-      if (asciiEqualIgnoreCase(entry.key, "remote")) {
-        have_remote = remote.assign({*entry.value});
-        valid = valid && have_remote;
-      } else if (asciiEqualIgnoreCase(entry.key, "merge") && !have_merge) {
-        // git tracks the first merge value of a branch.
-        have_merge = merge.assign({*entry.value});
-        valid = valid && have_merge;
-      }
-
-      return true;
-    };
-    if (!parseConfig(std::string_view{config_bytes_}, config_scratch_, branches) ||
-        (config_.worktree_config && !parseConfig(std::string_view{worktree_config_bytes_}, config_scratch_, branches)) || !valid) {
+    const auto configured = branchUpstream(remote, merge);
+    if (!configured) {
       status_.upstream = UpstreamState::unknown;
       return;
     }
 
-    if (!have_merge || !have_remote || remote.view().empty()) {
-      return;
-    }
-
-    if (!merge.view().starts_with("refs/") || !validReferenceName(merge.view(), limits_.path_length)) {
-      status_.upstream = UpstreamState::unknown;
+    if (!*configured) {
       return;
     }
 
     PathName tracking;
+    const auto mapped = trackingReference(remote, merge, tracking);
+    if (!mapped) {
+      status_.upstream = UpstreamState::unknown;
+      return;
+    }
 
-    if (remote.view() == ".") {
-      tracking.assign({merge.view()});
-    } else {
-      bool matched = false;
-      const auto remotes = [&](const ConfigEntry& entry) {
-        if (!asciiEqualIgnoreCase(entry.section, "remote") || entry.subsection != remote.view() || !asciiEqualIgnoreCase(entry.key, "fetch") || !entry.value) {
-          return true;
-        }
-
-        // A negative refspec only keeps refs out of a fetch; git still names the branch the
-        // positive ones map to as the upstream.
-        auto spec = *entry.value;
-        if (spec.starts_with('^')) {
-          return true;
-        }
-
-        if (spec.starts_with('+')) {
-          spec.remove_prefix(1);
-        }
-
-        const auto colon = spec.find(':');
-        if (!matched && colon != std::string_view::npos) {
-          matched = mapRefspec(spec.substr(0, colon), spec.substr(colon + 1), merge.view(), tracking);
-        }
-
-        return true;
-      };
-      if (!parseConfig(std::string_view{config_bytes_}, config_scratch_, remotes)) {
-        status_.upstream = UpstreamState::unknown;
-        return;
-      }
-
-      if (!matched) {
-        return;
-      }
+    if (!*mapped) {
+      return;
     }
 
     if (!validReferenceName(tracking.view(), limits_.path_length)) {
@@ -887,6 +893,80 @@ namespace telar::git {
     }
   }
 
+  ds::Option<bool> StatusReader::branchUpstream(PathName& remote, PathName& merge) {
+    const std::string_view branch{status_.branch};
+    bool have_remote = false;
+    bool have_merge = false;
+    bool valid = true;
+    const auto branches = [&](const ConfigEntry& entry) {
+      if (!asciiEqualIgnoreCase(entry.section, "branch") || entry.subsection != branch || !entry.value) {
+        return true;
+      }
+
+      if (asciiEqualIgnoreCase(entry.key, "remote")) {
+        have_remote = remote.assign({*entry.value});
+        valid = valid && have_remote;
+      } else if (asciiEqualIgnoreCase(entry.key, "merge") && !have_merge) {
+        // git tracks the first merge value of a branch.
+        have_merge = merge.assign({*entry.value});
+        valid = valid && have_merge;
+      }
+
+      return true;
+    };
+    if (!parseConfig(std::string_view{config_bytes_}, config_scratch_, branches) ||
+        (config_.worktree_config && !parseConfig(std::string_view{worktree_config_bytes_}, config_scratch_, branches)) || !valid) {
+      return ds::none;
+    }
+
+    if (!have_merge || !have_remote || remote.view().empty()) {
+      return false;
+    }
+
+    if (!merge.view().starts_with("refs/") || !validReferenceName(merge.view(), limits_.path_length)) {
+      return ds::none;
+    }
+
+    return true;
+  }
+
+  ds::Option<bool> StatusReader::trackingReference(const PathName& remote, const PathName& merge, PathName& tracking) {
+    if (remote.view() == ".") {
+      tracking.assign({merge.view()});
+      return true;
+    }
+
+    bool matched = false;
+    const auto remotes = [&](const ConfigEntry& entry) {
+      if (!asciiEqualIgnoreCase(entry.section, "remote") || entry.subsection != remote.view() || !asciiEqualIgnoreCase(entry.key, "fetch") || !entry.value) {
+        return true;
+      }
+
+      // A negative refspec only keeps refs out of a fetch; git still names the branch the
+      // positive ones map to as the upstream.
+      auto spec = *entry.value;
+      if (spec.starts_with('^')) {
+        return true;
+      }
+
+      if (spec.starts_with('+')) {
+        spec.remove_prefix(1);
+      }
+
+      const auto colon = spec.find(':');
+      if (!matched && colon != std::string_view::npos) {
+        matched = mapRefspec(substring(spec, 0, colon), substring(spec, colon + 1), merge.view(), tracking);
+      }
+
+      return true;
+    };
+    if (!parseConfig(std::string_view{config_bytes_}, config_scratch_, remotes)) {
+      return ds::none;
+    }
+
+    return matched;
+  }
+
   RefLookup StatusReader::resolve(std::string_view name, ObjectId& id, Fingerprint* identity) {
     for (std::size_t depth = 0; depth <= limits_.symbolic_depth; ++depth) {
       PathName path;
@@ -894,10 +974,10 @@ namespace telar::git {
         return RefLookup::invalid;
       }
 
-      ds::Array<char, 4096> bytes;
+      ds::Array<char, small_file_capacity> bytes{};
       std::string_view contents;
       Fingerprint loose;
-      const auto read = readSmall(perWorktreeReference(name) ? gitdir_.get() : common_.get(), path.c_str(), bytes.viewMut().first(std::min(bytes.size(), limits_.small_file)), contents, &loose);
+      const auto read = readSmall(perWorktreeReference(name) ? gitdir_.get() : common_.get(), path.cString(), bytes.viewMut().first(std::min(bytes.size(), limits_.small_file)), contents, &loose);
 
       if (depth == 0 && identity != nullptr) {
         *identity = read == ReadStatus::ok ? loose : Fingerprint{};
@@ -912,8 +992,8 @@ namespace telar::git {
       }
 
       contents = trimLineEnd(contents);
-      if (contents.starts_with("ref:")) {
-        const auto target = trimText(contents.substr(4), " \t");
+      if (contents.starts_with(symbolic_prefix)) {
+        const auto target = trimText(substring(contents, symbolic_prefix.size()), " \t");
         if (!target.starts_with("refs/")) {
           return RefLookup::invalid;
         }
@@ -964,7 +1044,7 @@ namespace telar::git {
         continue;
       }
 
-      const auto parsed = ObjectId::fromHex(text.substr(line, digits), config_.format);
+      const auto parsed = ObjectId::fromHex(substring(text, line, digits), config_.format);
       if (!parsed) {
         return RefLookup::invalid;
       }
@@ -993,7 +1073,7 @@ namespace telar::git {
       if (shallow_.load(common_.get(), config_.format, limits_)) {
         // git ignores the commit-graph of a shallow clone, whose parents it rewrites.
         graph_.load(objects_.objects(), config_.format, limits_, !shallow_.empty());
-        if (const auto counted = walk_.count(objects_, graph_, shallow_, limits_, status_.head_id, status_.upstream_id)) {
+        if (const auto counted = walk_.count({.objects = objects_, .graph = graph_, .shallow = shallow_, .limits = limits_}, status_.head_id, status_.upstream_id)) {
           divergence_result_ = Accuracy::exact;
           divergence_ = *counted;
         }
@@ -1025,13 +1105,13 @@ namespace telar::git {
     if (status_.head == HeadState::unknown) {
       status_.staged = Accuracy::unknown;
       staged_current_ = false;
-    } else if (!staged_current_ || status_.head_id != staged_head_ || index_.fingerprint != staged_index_) {
+    } else if (!staged_current_ || status_.head_id != staged_head_ || index_.fingerprint() != staged_index_) {
       // A failed comparison is cached too, so a limit is not hit again on every read.
       staged_counts_ = {};
       staged_result_ = compareStaged() ? Accuracy::exact : Accuracy::unknown;
       staged_current_ = true;
       staged_head_ = status_.head_id;
-      staged_index_ = index_.fingerprint;
+      staged_index_ = index_.fingerprint();
       status_.staged = staged_result_;
     } else {
       status_.staged = staged_result_;

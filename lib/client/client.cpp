@@ -15,14 +15,25 @@ import telar.sys.linux_api;
 
 namespace telar {
 
-  HandshakeRejectReason HandshakeReasonByte::validate(HandshakeRejectReason reason) {
-    switch (reason) {
-    case HandshakeRejectReason::incompatible_schema:
-    case HandshakeRejectReason::client_limit_reached:
-      return reason;
-    default:
-      throw EncodingError{"Unknown handshake rejection reason"};
+  namespace {
+
+    // Whether a socket call failed for its timeout. POSIX lets EWOULDBLOCK differ from EAGAIN,
+    // though Linux and macOS spell one error twice.
+    bool timedOut(int error) noexcept {
+      constexpr bool distinct_would_block = EWOULDBLOCK != EAGAIN;
+
+      return error == EAGAIN || (distinct_would_block && error == EWOULDBLOCK);
     }
+
+  }
+
+  // The byte comes off the wire, so it may hold no reason at all.
+  HandshakeRejectReason HandshakeReasonByte::validate(HandshakeRejectReason reason) {
+    if (reason == HandshakeRejectReason::incompatible_schema || reason == HandshakeRejectReason::client_limit_reached) {
+      return reason;
+    }
+
+    throw EncodingError{"Unknown handshake rejection reason"};
   }
 
   void HandshakeReasonByte::encode(HandshakeRejectReason reason, std::span<Byte>& output) {
@@ -61,9 +72,11 @@ namespace telar {
       return decodeBody<ServerAccept>(input);
     case HandshakeTag::server_reject:
       return decodeBody<ServerReject>(input);
-    default:
-      throw EncodingError{"Unexpected handshake response"};
+    case HandshakeTag::client_hello:
+      break;
     }
+
+    throw EncodingError{"Unexpected handshake response"};
   }
 
   HandshakeTag HandshakeCodec::decodeHeader(std::span<const Byte>& input) {
@@ -75,16 +88,13 @@ namespace telar {
       throw EncodingError{"Invalid handshake magic"};
     }
 
+    // The byte comes off the wire, so it may name no message at all.
     const auto tag = static_cast<HandshakeTag>(u8::decode(input));
-
-    switch (tag) {
-    case HandshakeTag::client_hello:
-    case HandshakeTag::server_accept:
-    case HandshakeTag::server_reject:
+    if (tag == HandshakeTag::client_hello || tag == HandshakeTag::server_accept || tag == HandshakeTag::server_reject) {
       return tag;
-    default:
-      throw EncodingError{"Unknown handshake message tag"};
     }
+
+    throw EncodingError{"Unknown handshake message tag"};
   }
 
   template <typename Message>
@@ -123,41 +133,32 @@ namespace telar {
     HandshakeCodec::pretty_print(message, output);
   }
 
-  namespace {
-
-    // Names the HandshakeLayout a message's schema derives from, which declares its pretty_print.
-    template <Direction Side, HandshakeTag Tag, typename... Fields>
-    HandshakeLayout<Side, Tag, Fields...> layoutOf(const HandshakeLayout<Side, Tag, Fields...>&);
-
-  }
-
-  template <typename Message>
-  using HandshakeLayoutOf = decltype(layoutOf(std::declval<HandshakeSchema<Message>>()));
-
   template void HandshakeCodec::pretty_print(const ClientHello&, std::FILE*);
   template void HandshakeCodec::pretty_print(const ServerAccept&, std::FILE*);
   template void HandshakeCodec::pretty_print(const ServerReject&, std::FILE*);
-  template void HandshakeLayoutOf<ClientHello>::pretty_print(const ClientHello&, std::FILE*);
-  template void HandshakeLayoutOf<ServerAccept>::pretty_print(const ServerAccept&, std::FILE*);
-  template void HandshakeLayoutOf<ServerReject>::pretty_print(const ServerReject&, std::FILE*);
+  // A message's schema derives from the HandshakeLayout that declares its pretty_print, which its
+  // injected class name names.
+  template void HandshakeSchema<ClientHello>::HandshakeLayout::pretty_print(const ClientHello&, std::FILE*);
+  template void HandshakeSchema<ServerAccept>::HandshakeLayout::pretty_print(const ServerAccept&, std::FILE*);
+  template void HandshakeSchema<ServerReject>::HandshakeLayout::pretty_print(const ServerReject&, std::FILE*);
 #endif
 
   SocketError::SocketError(const char* message)
-      : message{message} {}
+      : message_{message} {}
 
   const char* SocketError::what() const noexcept {
-    return message;
+    return message_;
   }
 
   Client::Client(Client&& other) noexcept
-      : _address(other._address),
-        _fd(std::exchange(other._fd, -1)) {}
+      : address_(other.address_),
+        fd_(std::exchange(other.fd_, -1)) {}
 
   Client& Client::operator=(Client&& other) noexcept {
     if (this != &other) {
       deinit();
-      _address = other._address;
-      _fd = std::exchange(other._fd, -1);
+      address_ = other.address_;
+      fd_ = std::exchange(other.fd_, -1);
     }
 
     return *this;
@@ -170,46 +171,46 @@ namespace telar {
   Client Client::init(const char* socket_path) {
     Client client{};
 
-    client._address.sun_family = AF_UNIX;
+    client.address_.sun_family = AF_UNIX;
 
-    const auto path_length = std::strlen(socket_path);
-    if (path_length >= sizeof(client._address.sun_path)) {
+    const std::string_view path{socket_path};
+    if (path.size() >= sizeof(client.address_.sun_path)) {
       throw SocketError{"Socket path too long"};
     }
 
-    std::memcpy(client._address.sun_path, socket_path, path_length + 1);
+    *std::ranges::copy(path, std::span{client.address_.sun_path}.begin()).out = '\0';
 
 #ifdef __linux__
-    client._fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+    client.fd_ = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
 #else
     // Darwin has no SOCK_CLOEXEC: a fork between these two calls can still inherit it.
-    client._fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (client._fd >= 0 && fcntl(client._fd, F_SETFD, FD_CLOEXEC) < 0) {
+    client.fd_ = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (client.fd_ >= 0 && fcntl(client.fd_, F_SETFD, FD_CLOEXEC) < 0) { // NOLINT(cppcoreguidelines-pro-type-vararg): fcntl's C signature is variadic
       client.deinit();
       throw SocketError{"Error configuring socket"};
     }
 
 #endif
-    if (client._fd < 0) {
+    if (client.fd_ < 0) {
       throw SocketError{"Error opening socket"};
     }
 
-    if (setsockopt(client._fd, SOL_SOCKET, SO_SNDTIMEO, &io_timeout, sizeof(io_timeout)) < 0) {
+    if (setsockopt(client.fd_, SOL_SOCKET, SO_SNDTIMEO, &io_timeout, sizeof(io_timeout)) < 0) {
       client.deinit();
       throw SocketError{"Error configuring runtime I/O timeout"};
     }
 
 #ifdef __APPLE__
     const int enabled = 1;
-    if (setsockopt(client._fd, SOL_SOCKET, SO_NOSIGPIPE, &enabled, sizeof(enabled)) < 0) {
+    if (setsockopt(client.fd_, SOL_SOCKET, SO_NOSIGPIPE, &enabled, sizeof(enabled)) < 0) {
       client.deinit();
       throw SocketError{"Error configuring socket"};
     }
 #endif
 
-    auto* address_ptr = reinterpret_cast<sockaddr*>(&client._address);
+    auto* address_ptr = reinterpret_cast<sockaddr*>(&client.address_); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the socket API passes every address family as a sockaddr
 
-    while (connect(client._fd, address_ptr, sizeof(client._address)) < 0) {
+    while (connect(client.fd_, address_ptr, sizeof(client.address_)) < 0) {
       if (sys::lastError() == EINTR) {
         continue;
       }
@@ -222,12 +223,13 @@ namespace telar {
   }
 
   void Client::handshake() {
+    constexpr std::time_t handshake_seconds = 30;
     timeval timeout{
-        .tv_sec = 30,
+        .tv_sec = handshake_seconds,
         .tv_usec = 0,
     };
 
-    if (setsockopt(_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+    if (setsockopt(fd_, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
       throw SocketError{"Error enabling runtime receive timeout for handshake"};
     }
 
@@ -245,7 +247,7 @@ namespace telar {
         }
 
         timeout.tv_sec = 0;
-        if (setsockopt(_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+        if (setsockopt(fd_, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
           throw SocketError{"Error disabling runtime receive timeout"};
         }
 
@@ -265,16 +267,16 @@ namespace telar {
   }
 
   void Client::deinit() {
-    if (_fd >= 0) {
-      close(_fd);
-      _fd = -1;
+    if (fd_ >= 0) {
+      close(fd_);
+      fd_ = -1;
     }
   }
 
   tbc::val_a<std::span<const Byte>> Client::receiveFrame(tbc::val_a<std::span<Byte>> buffer) {
     ds::Array<Byte, frame_prefix_size> prefix{};
 
-    readAll(prefix.dataMut(), prefix.size());
+    readAll(prefix.viewMut());
 
     std::span<const Byte> input = prefix;
     const auto length = u32::decode(input);
@@ -282,54 +284,53 @@ namespace telar {
       throw SocketError{"Invalid runtime frame length"};
     }
 
-    readAll(buffer.data(), length);
+    readAll(buffer.first(length));
     return buffer.first(length);
   }
 
   int Client::descriptor() const noexcept {
-    return _fd;
+    return fd_;
   }
 
   void Client::interrupt() const noexcept {
-    if (_fd >= 0) {
-      ::shutdown(_fd, SHUT_RDWR);
+    if (fd_ >= 0) {
+      ::shutdown(fd_, SHUT_RDWR);
     }
   }
 
-  void Client::writeAll(const std::uint8_t* bytes, std::size_t size) {
-    while (size != 0) {
+  void Client::writeAll(std::span<const std::uint8_t> bytes) const {
+    while (!bytes.empty()) {
 #ifdef __linux__
-      const auto count = ::send(_fd, bytes, size, MSG_NOSIGNAL);
+      const auto count = ::send(fd_, bytes.data(), bytes.size(), MSG_NOSIGNAL);
 #else
       // SO_NOSIGPIPE already keeps a closed peer from raising SIGPIPE.
-      const auto count = ::send(_fd, bytes, size, 0);
+      const auto count = ::send(fd_, bytes.data(), bytes.size(), 0);
 #endif
       if (count < 0 && sys::lastError() == EINTR) {
         continue;
       }
 
       if (count <= 0) {
-        if (count < 0 && (sys::lastError() == EAGAIN || sys::lastError() == EWOULDBLOCK)) {
+        if (count < 0 && timedOut(sys::lastError())) {
           throw SocketError{"Runtime send timed out"};
         }
 
         throw SocketError{"Error sending runtime message"};
       }
 
-      bytes += count;
-      size -= static_cast<std::size_t>(count);
+      bytes = bytes.subspan(static_cast<std::size_t>(count));
     }
   }
 
-  void Client::readAll(std::uint8_t* bytes, std::size_t size) {
-    while (size != 0) {
-      const auto count = recv(_fd, bytes, size, 0);
+  void Client::readAll(std::span<std::uint8_t> bytes) const {
+    while (!bytes.empty()) {
+      const auto count = recv(fd_, bytes.data(), bytes.size(), 0);
       if (count < 0 && sys::lastError() == EINTR) {
         continue;
       }
 
       if (count < 0) {
-        if (sys::lastError() == EAGAIN || sys::lastError() == EWOULDBLOCK) {
+        if (timedOut(sys::lastError())) {
           throw SocketError{"Runtime receive timed out"};
         }
 
@@ -340,8 +341,7 @@ namespace telar {
         throw SocketError{"Runtime closed the connection"};
       }
 
-      bytes += count;
-      size -= static_cast<std::size_t>(count);
+      bytes = bytes.subspan(static_cast<std::size_t>(count));
     }
   }
 

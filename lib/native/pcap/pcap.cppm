@@ -44,6 +44,7 @@ export {
 
 // Macros do not cross an import. Each constant the tree reads is captured while the header still
 // defines it, undefined, and exported under its own name.
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage): only a macro can read a macro's value before the header's #undef.
 #define TELAR_PCAP_CONSTANTS(X) \
   X(BPF_ABS)                    \
   X(BPF_JEQ)                    \
@@ -97,7 +98,7 @@ namespace telar::native::pcap::captured {
 #define TELAR_PCAP_CONSTANT(name) inline constexpr auto name = telar::native::pcap::captured::name##_;
 
 export {
-  TELAR_PCAP_CONSTANTS(TELAR_PCAP_CONSTANT)
+  TELAR_PCAP_CONSTANTS(TELAR_PCAP_CONSTANT) // NOLINT(readability-identifier-naming): exported under the C library's own name
 }
 
 // The filter instruction macros build a braced bpf_insn; these build the same one.
@@ -105,11 +106,11 @@ export {
 #undef BPF_STMT
 
 export {
-  constexpr bpf_insn BPF_STMT(unsigned short code, bpf_u_int32 k) noexcept {
-    return bpf_insn{.code = code, .jt = 0, .jf = 0, .k = k};
+  constexpr bpf_insn BPF_STMT(unsigned short code, bpf_u_int32 operand) noexcept { // NOLINT(readability-identifier-naming): named as libpcap's macro it replaces
+    return bpf_insn{.code = code, .jt = 0, .jf = 0, .k = operand};
   }
 
-  constexpr bpf_insn BPF_JUMP(unsigned short code, bpf_u_int32 k, unsigned char jump_true, unsigned char jump_false) noexcept {
-    return bpf_insn{.code = code, .jt = jump_true, .jf = jump_false, .k = k};
+  constexpr bpf_insn BPF_JUMP(unsigned short code, bpf_u_int32 operand, unsigned char jump_true, unsigned char jump_false) noexcept { // NOLINT(readability-identifier-naming): named as libpcap's macro it replaces
+    return bpf_insn{.code = code, .jt = jump_true, .jf = jump_false, .k = operand};
   }
 }

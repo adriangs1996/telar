@@ -3,6 +3,7 @@ module telar.platform.graphics;
 import std;
 import telar.sys.posix;
 import telar.base.ds;
+import telar.base.text;
 
 namespace telar::runtime {
 
@@ -11,12 +12,19 @@ namespace telar::runtime {
       return ds::none;
     }
 
+    // The name is /tlr and 24 random hexadecimal digits, which leave it terminated in its zeroed
+    // storage.
+    constexpr std::string_view prefix = "/tlr";
+    constexpr std::size_t nonce_bytes = 12;
+    constexpr mode_t private_file_mode = 0600;
     SharedImageStorage storage;
-    ds::Array<std::uint64_t, 2> nonce;
+    ds::Array<std::uint8_t, nonce_bytes> nonce{};
+    const auto name = storage.name_.viewMut();
 
-    randomBytes(nonce.dataMut(), sizeof(nonce.viewMut()));
-    std::snprintf(storage.name_.dataMut(), storage.name_.size(), "/tlr%016llx%08x", static_cast<unsigned long long>(nonce[0]), static_cast<unsigned>(nonce[1]));
-    FileDescriptor descriptor{::shm_open(storage.name_.data(), O_CREAT | O_EXCL | O_RDWR, 0600)};
+    randomBytes(nonce.dataMut(), nonce.size());
+    std::ranges::copy(prefix, name.begin());
+    encodeLowerHex(nonce.view(), name.subspan(prefix.size()));
+    FileDescriptor descriptor{::shm_open(storage.name_.data(), combineFlags(O_CREAT, O_EXCL, O_RDWR), private_file_mode)}; // NOLINT(cppcoreguidelines-pro-type-vararg): shm_open's C signature is variadic
     if (!descriptor) {
       storage.name_.atMut(0) = '\0';
       return ds::none;
@@ -26,7 +34,7 @@ namespace telar::runtime {
       return ds::none;
     }
 
-    storage.mapping_ = MappedRegion{descriptor.get(), length, PROT_READ | PROT_WRITE};
+    storage.mapping_ = MappedRegion{descriptor.get(), length, combineFlags(PROT_READ, PROT_WRITE)};
     if (!storage.mapping_) {
       return ds::none;
     }

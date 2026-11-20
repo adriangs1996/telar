@@ -8,41 +8,47 @@ import telar.base.ds;
 
 namespace telar::runtime::config {
 
-  class PluginReader {
-  public:
-    inline static void read(const lua::Value& value, plugins::Specifications& destination, LimitNotices& limits) {
-      if (!value.present()) {
-        return;
-      }
+  namespace {
 
-      const auto listed = value.listLength();
-      const auto count = std::min(listed, plugins::PackageLimits::configured);
-      if (count < listed) {
-        limits.add({.name = "plugins.max_plugins", .noun = "plugins", .value = plugins::PackageLimits::configured, .requested = listed});
-      }
+    constexpr std::size_t maximum_profile_name_bytes = 64;
 
-      destination.count = 0;
-      for (std::size_t index = 0; index < count; ++index) {
-        const auto specification = value.element(static_cast<lua_Integer>(index + 1));
-
-        specification.onlyFields({"path", "enabled"});
-        const auto path_value = specification.field("path");
-        const auto path = path_value.string();
-        if (path.empty() || path.size() > plugins::PackageLimits::configured_path_bytes) {
-          path_value.fail("is outside its bounds");
+    class PluginReader {
+    public:
+      inline static void read(const lua::Value& value, plugins::Specifications& destination, LimitNotices& limits) {
+        if (!value.present()) {
+          return;
         }
 
-        auto& plugin = destination.entries.atMut(destination.count);
+        const auto listed = value.listLength();
+        const auto count = std::min(listed, plugins::PackageLimits::configured);
+        if (count < listed) {
+          limits.add({.name = "plugins.max_plugins", .noun = "plugins", .value = plugins::PackageLimits::configured, .requested = listed});
+        }
 
-        plugin.path.assign(path);
-        plugin.enabled = specification.field("enabled").boolean(true);
-        ++destination.count;
+        destination.count = 0;
+        for (std::size_t index = 0; index < count; ++index) {
+          const auto specification = value.element(static_cast<lua_Integer>(index) + 1);
+
+          specification.onlyFields({"path", "enabled"});
+          const auto path_value = specification.field("path");
+          const auto path = path_value.string();
+          if (path.empty() || path.size() > plugins::PackageLimits::configured_path_bytes) {
+            path_value.fail("is outside its bounds");
+          }
+
+          auto& plugin = destination.entries.atMut(destination.count);
+
+          plugin.path.assign(path);
+          plugin.enabled = specification.field("enabled").boolean(true);
+          ++destination.count;
+        }
       }
-    }
-  };
+    };
+
+  }
 
   bool validProfileName(std::string_view name) noexcept {
-    return !name.empty() && name.size() <= 64 && std::ranges::all_of(name, [](char byte) {
+    return !name.empty() && name.size() <= maximum_profile_name_bytes && std::ranges::all_of(name, [](char byte) {
       return (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') || byte == '_' || byte == '-';
     });
   }
@@ -105,13 +111,14 @@ namespace telar::runtime::config {
       return;
     }
 
-    ds::Array<char, 65> name{};
+    // The name and the NUL after it.
+    ds::Array<char, maximum_profile_name_bytes + 1> name{};
 
     if (!validProfileName(selected_profile)) {
       profiles.fail("has an invalid selected profile name");
     }
 
-    std::copy(selected_profile.begin(), selected_profile.end(), name.dataMut());
+    std::ranges::copy(selected_profile, name.viewMut().begin());
     const auto selected = profiles.field(name.data());
     if (!selected.present()) {
       selected.fail("is not defined");

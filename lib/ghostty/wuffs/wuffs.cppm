@@ -9,6 +9,7 @@ import telar.tbc;
 // The PNG codec of the pinned libghostty-vt archive. Its header stays in this global module
 // fragment only; importers decode through these declarations instead of including it.
 export {
+  // NOLINTBEGIN(bugprone-reserved-identifier,cert-dcl37-c,cert-dcl51-cpp,clang-diagnostic-reserved-identifier): wuffs's C API names its types and functions with double underscores.
   using ::sizeof__wuffs_png__decoder;
   using ::wuffs_base__image_config;
   using ::wuffs_base__io_buffer;
@@ -19,6 +20,7 @@ export {
   using ::wuffs_png__decoder;
   using ::wuffs_png__decoder__initialize;
   using ::wuffs_png__decoder__workbuf_len;
+  // NOLINTEND(bugprone-reserved-identifier,cert-dcl37-c,cert-dcl51-cpp,clang-diagnostic-reserved-identifier)
 }
 
 // The header's helpers are static inline, so no importer can call them: these functions in
@@ -37,28 +39,30 @@ export namespace telar::ghostty::wuffs {
 
 // Macros do not cross an import. Each constant the tree reads is captured while the header still
 // defines it, undefined, and exported under its own name.
-#define TELAR_WUFFS_CONSTANTS(X)                            \
-  X(WUFFS_BASE__PIXEL_BLEND__SRC)                           \
-  X(WUFFS_BASE__PIXEL_FORMAT__RGBA_NONPREMUL)               \
-  X(WUFFS_BASE__PIXEL_SUBSAMPLING__NONE)                    \
-  X(WUFFS_INITIALIZE__LEAVE_INTERNAL_BUFFERS_UNINITIALIZED) \
-  X(WUFFS_VERSION)
-
 namespace telar::ghostty::wuffs::captured {
-
-#define TELAR_WUFFS_CAPTURE(name) inline constexpr auto name##_ = name;
-  TELAR_WUFFS_CONSTANTS(TELAR_WUFFS_CAPTURE)
-
+  // NOLINTBEGIN(clang-diagnostic-old-style-cast): the header's macros cast C-style.
+  inline constexpr auto pixel_blend_src = WUFFS_BASE__PIXEL_BLEND__SRC;
+  inline constexpr auto pixel_format_rgba_nonpremul = WUFFS_BASE__PIXEL_FORMAT__RGBA_NONPREMUL;
+  inline constexpr auto pixel_subsampling_none = WUFFS_BASE__PIXEL_SUBSAMPLING__NONE;
+  inline constexpr auto initialize_leave_internal_buffers_uninitialized = WUFFS_INITIALIZE__LEAVE_INTERNAL_BUFFERS_UNINITIALIZED;
+  inline constexpr auto version = WUFFS_VERSION;
+  // NOLINTEND(clang-diagnostic-old-style-cast)
 }
 
+// NOLINTBEGIN(clang-diagnostic-reserved-macro-identifier): the header names its macros with double underscores.
 #undef WUFFS_BASE__PIXEL_BLEND__SRC
 #undef WUFFS_BASE__PIXEL_FORMAT__RGBA_NONPREMUL
 #undef WUFFS_BASE__PIXEL_SUBSAMPLING__NONE
 #undef WUFFS_INITIALIZE__LEAVE_INTERNAL_BUFFERS_UNINITIALIZED
+// NOLINTEND(clang-diagnostic-reserved-macro-identifier)
 #undef WUFFS_VERSION
 
-#define TELAR_WUFFS_CONSTANT(name) inline constexpr auto name = telar::ghostty::wuffs::captured::name##_;
-
 export {
-  TELAR_WUFFS_CONSTANTS(TELAR_WUFFS_CONSTANT)
+  // NOLINTBEGIN(bugprone-reserved-identifier,cert-dcl37-c,cert-dcl51-cpp,clang-diagnostic-reserved-identifier,readability-identifier-naming): each constant keeps the name of the header's macro it replaces.
+  inline constexpr auto WUFFS_BASE__PIXEL_BLEND__SRC = telar::ghostty::wuffs::captured::pixel_blend_src;
+  inline constexpr auto WUFFS_BASE__PIXEL_FORMAT__RGBA_NONPREMUL = telar::ghostty::wuffs::captured::pixel_format_rgba_nonpremul;
+  inline constexpr auto WUFFS_BASE__PIXEL_SUBSAMPLING__NONE = telar::ghostty::wuffs::captured::pixel_subsampling_none;
+  inline constexpr auto WUFFS_INITIALIZE__LEAVE_INTERNAL_BUFFERS_UNINITIALIZED = telar::ghostty::wuffs::captured::initialize_leave_internal_buffers_uninitialized;
+  inline constexpr auto WUFFS_VERSION = telar::ghostty::wuffs::captured::version;
+  // NOLINTEND(bugprone-reserved-identifier,cert-dcl37-c,cert-dcl51-cpp,clang-diagnostic-reserved-identifier,readability-identifier-naming)
 }

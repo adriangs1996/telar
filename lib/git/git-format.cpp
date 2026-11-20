@@ -27,13 +27,17 @@ namespace telar::git {
     }
 #endif
 
-    // Reads exactly `size` bytes and confirms the file ends there, so a file that
+    constexpr unsigned nibble_bits = 4;
+    constexpr unsigned nibble_mask = 0xf;
+
+    // Reads exactly `destination.size()` bytes and confirms the file ends there, so a file that
     // grows or shrinks while it is read is refused rather than half-parsed.
-    bool readExactly(int descriptor, char* destination, std::size_t size) noexcept {
+    bool readExactly(int descriptor, std::span<char> destination) noexcept {
       std::size_t offset = 0;
 
-      while (offset < size) {
-        const auto count = ::read(descriptor, destination + offset, size - offset);
+      while (offset < destination.size()) {
+        const auto rest = destination.subspan(offset);
+        const auto count = ::read(descriptor, rest.data(), rest.size());
         if (count > 0) {
           offset += static_cast<std::size_t>(count);
         } else if (count < 0 && sys::lastError() == EINTR) {
@@ -43,14 +47,34 @@ namespace telar::git {
         }
       }
 
-      char extra;
-      ssize_t count;
+      char extra = 0;
+      auto count = ::read(descriptor, &extra, 1);
 
-      do {
+      while (count < 0 && sys::lastError() == EINTR) {
         count = ::read(descriptor, &extra, 1);
-      } while (count < 0 && sys::lastError() == EINTR);
+      }
 
       return count == 0;
+    }
+
+    template <std::unsigned_integral Integer>
+    Integer loadBig(std::span<const std::uint8_t> bytes, std::size_t offset) noexcept {
+      constexpr unsigned byte_bits = 8;
+      std::uint64_t value = 0;
+
+      for (const auto byte : bytes.subspan(offset).first<sizeof(Integer)>()) {
+        value = (value << byte_bits) | byte;
+      }
+
+      return static_cast<Integer>(value);
+    }
+
+    int signOf(std::strong_ordering order) noexcept {
+      if (order < 0) {
+        return -1;
+      }
+
+      return order > 0 ? 1 : 0;
     }
 
   }
@@ -60,7 +84,7 @@ namespace telar::git {
   }
 
   std::span<const std::uint8_t> ObjectId::view() const noexcept {
-    return {bytes.data(), size};
+    return bytes.view().first(size);
   }
 
   tbc::val_a<std::string_view> ObjectId::hex(tbc::val_a<std::span<char, 2 * maximum_hash_size>> buffer, std::size_t digits) const noexcept {
@@ -70,7 +94,7 @@ namespace telar::git {
     for (std::size_t index = 0; index < digits; ++index) {
       const auto byte = bytes[index / 2];
 
-      buffer[index] = alphabet[index % 2 == 0 ? byte >> 4 : byte & 15];
+      buffer[index] = alphabet[index % 2 == 0 ? byte >> nibble_bits : byte & nibble_mask];
     }
 
     return {buffer.data(), digits};
@@ -92,7 +116,7 @@ namespace telar::git {
         return ds::none;
       }
 
-      id.bytes.atMut(index) = static_cast<std::uint8_t>(high << 4 | low);
+      id.bytes.atMut(index) = static_cast<std::uint8_t>(static_cast<unsigned>(high) << nibble_bits | static_cast<unsigned>(low));
     }
 
     return id;
@@ -134,38 +158,30 @@ namespace telar::git {
   }
 
   std::span<const std::uint8_t> asBytes(std::string_view text) noexcept {
-    return {reinterpret_cast<const std::uint8_t*>(text.data()), text.size()};
+    return {reinterpret_cast<const std::uint8_t*>(text.data()), text.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast,clang-diagnostic-unsafe-buffer-usage-in-container): bytes may alias text, and no cast-free view reads text as bytes
   }
 
   std::string_view asText(std::span<const std::uint8_t> bytes) noexcept {
-    return {reinterpret_cast<const char*>(bytes.data()), bytes.size()};
+    return {reinterpret_cast<const char*>(bytes.data()), bytes.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): char may alias the bytes, and no cast-free view reads them as text
   }
 
-  std::uint16_t loadBig16(const std::uint8_t* bytes) noexcept {
-    return static_cast<std::uint16_t>(bytes[0] << 8 | bytes[1]);
+  std::uint16_t loadBig16(std::span<const std::uint8_t> bytes, std::size_t offset) noexcept {
+    return loadBig<std::uint16_t>(bytes, offset);
   }
 
-  std::uint32_t loadBig32(const std::uint8_t* bytes) noexcept {
-    return std::uint32_t{bytes[0]} << 24 | std::uint32_t{bytes[1]} << 16 | std::uint32_t{bytes[2]} << 8 | bytes[3];
+  std::uint32_t loadBig32(std::span<const std::uint8_t> bytes, std::size_t offset) noexcept {
+    return loadBig<std::uint32_t>(bytes, offset);
   }
 
-  std::uint64_t loadBig64(const std::uint8_t* bytes) noexcept {
-    return std::uint64_t{loadBig32(bytes)} << 32 | loadBig32(bytes + 4);
+  std::uint64_t loadBig64(std::span<const std::uint8_t> bytes, std::size_t offset) noexcept {
+    return loadBig<std::uint64_t>(bytes, offset);
   }
 
   int compareBytes(std::span<const std::uint8_t> left, std::span<const std::uint8_t> right) noexcept {
-    const auto common = std::min(left.size(), right.size());
-    if (common != 0) {
-      if (const auto order = std::memcmp(left.data(), right.data(), common); order != 0) {
-        return order;
-      }
-    }
-
-    return left.size() < right.size() ? -1 : left.size() > right.size() ? 1
-                                                                        : 0;
+    return signOf(std::lexicographical_compare_three_way(left.begin(), left.end(), right.begin(), right.end()));
   }
 
-  PathName::PathName() noexcept {
+  PathName::PathName() noexcept { // NOLINT(cppcoreguidelines-pro-type-member-init): bytes_ is written before it is read, and zeroing its 4 KiB would cost every *at() call that names a file
     bytes_.atMut(0) = '\0';
   }
 
@@ -178,7 +194,7 @@ namespace telar::git {
         return false;
       }
 
-      std::copy(part.begin(), part.end(), bytes_.dataMut() + static_cast<std::ptrdiff_t>(length_));
+      std::ranges::copy(part, bytes_.viewMut().subspan(length_).begin());
       length_ += part.size();
     }
 
@@ -186,7 +202,7 @@ namespace telar::git {
     return true;
   }
 
-  const char* PathName::c_str() const noexcept {
+  const char* PathName::cString() const noexcept {
     return bytes_.data();
   }
 
@@ -195,7 +211,7 @@ namespace telar::git {
   }
 
   ReadStatus openRegular(int directory, const char* name, FileDescriptor& file, struct stat& status) noexcept {
-    file.reset(::openat(directory, name, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC | O_NOCTTY));
+    file.reset(::openat(directory, name, runtime::combineFlags(O_RDONLY, O_NOFOLLOW, O_NONBLOCK, O_CLOEXEC, O_NOCTTY))); // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
     if (!file) {
       return sys::lastError() == ENOENT || sys::lastError() == ENOTDIR ? ReadStatus::missing : ReadStatus::invalid;
     }
@@ -208,16 +224,16 @@ namespace telar::git {
     return ReadStatus::ok;
   }
 
-  bool readAt(int descriptor, void* destination, std::size_t size, std::uint64_t offset) noexcept {
-    auto* bytes = static_cast<char*>(destination);
+  bool readAt(int descriptor, std::span<std::uint8_t> destination, std::uint64_t offset) noexcept {
     std::size_t done = 0;
 
-    while (done < size) {
+    while (done < destination.size()) {
       if (offset + done > static_cast<std::uint64_t>(std::numeric_limits<off_t>::max())) {
         return false;
       }
 
-      const auto count = ::pread(descriptor, bytes + done, size - done, static_cast<off_t>(offset + done));
+      const auto rest = destination.subspan(done);
+      const auto count = ::pread(descriptor, rest.data(), rest.size(), static_cast<off_t>(offset + done));
       if (count > 0) {
         done += static_cast<std::size_t>(count);
       } else if (count < 0 && sys::lastError() == EINTR) {
@@ -238,7 +254,7 @@ namespace telar::git {
     }
 
     const auto size = static_cast<std::uint64_t>(status.st_size);
-    if (size > buffer.size() || !readExactly(file.get(), buffer.data(), static_cast<std::size_t>(size))) {
+    if (size > buffer.size() || !readExactly(file.get(), buffer.first(static_cast<std::size_t>(size)))) {
       return ReadStatus::invalid;
     }
 
@@ -266,7 +282,7 @@ namespace telar::git {
     bool complete = false;
 
     bytes.resizeForOverwrite(static_cast<std::size_t>(size));
-    complete = readExactly(file.get(), bytes.dataMut(), bytes.size());
+    complete = readExactly(file.get(), bytes.viewMut());
 
     if (!complete) {
       bytes.clear();
@@ -280,8 +296,10 @@ namespace telar::git {
     return ReadStatus::ok;
   }
 
-  FileDescriptor openDirectory(int directory, const char* name) noexcept {
-    return FileDescriptor{::openat(directory, name, O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
+  FileDescriptor openDirectory(int directory, const char* name, FinalLink link) noexcept {
+    const auto flags = runtime::combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC, link == FinalLink::refuse ? O_NOFOLLOW : 0);
+
+    return FileDescriptor{::openat(directory, name, flags)}; // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
   }
 
 // SHA-1 goes through OpenSSL's low-level API, deprecated since 3.0 in favour of EVP: it keeps its
@@ -299,7 +317,7 @@ namespace telar::git {
   }
 
   ds::Array<std::uint8_t, SHA_DIGEST_LENGTH> Sha1::finish() noexcept {
-    ds::Array<std::uint8_t, SHA_DIGEST_LENGTH> digest;
+    ds::Array<std::uint8_t, SHA_DIGEST_LENGTH> digest{};
 
     SHA1_Final(digest.dataMut(), &context_);
     return digest;
@@ -338,18 +356,20 @@ namespace telar::git {
   }
 
   void hashObjectHeader(Hasher& hasher, std::string_view type, std::uint64_t size) noexcept {
-    ds::Array<char, 48> header;
+    // Room for git's longest type, a space, the digits of the largest size and the NUL.
+    constexpr std::size_t header_bytes = 48;
 
-    auto* const begin = header.dataMut();
-    auto* const last = begin + header.size() - 1;
+    ds::Array<char, header_bytes> header{};
+    const auto view = header.viewMut();
 
-    std::copy(type.begin(), type.end(), begin);
-    auto* cursor = begin + type.size();
+    std::ranges::copy(type, view.begin());
+    view[type.size()] = ' ';
+    const auto digits = view.subspan(type.size() + 1, view.size() - type.size() - 2);
+    const auto* const end = std::to_chars(digits.data(), std::to_address(digits.end()), size).ptr;
+    const auto length = static_cast<std::size_t>(end - view.data());
 
-    *cursor++ = ' ';
-    cursor = std::to_chars(cursor, last, size).ptr;
-    *cursor++ = '\0';
-    hasher.update(asBytes({header.data(), static_cast<std::size_t>(cursor - header.data())}));
+    view[length] = '\0';
+    hasher.update(asBytes({view.data(), length + 1}));
   }
 
   ObjectId emptyBlob(ObjectFormat format) noexcept {
@@ -368,7 +388,7 @@ namespace telar::git {
 
     for (std::size_t index = 0; index <= name.size(); ++index) {
       if (index == name.size() || name[index] == '/') {
-        const auto component = name.substr(component_start, index - component_start);
+        const auto component = substring(name, component_start, index - component_start);
         if (component.empty() || component.front() == '.' || component.ends_with(".lock")) {
           return false;
         }
@@ -377,8 +397,11 @@ namespace telar::git {
         continue;
       }
 
+      constexpr unsigned char first_printable = 0x20;
+      constexpr unsigned char delete_character = 0x7f;
+
       const auto byte = static_cast<unsigned char>(name[index]);
-      if (byte < 0x20 || byte == 0x7f) {
+      if (byte < first_printable || byte == delete_character) {
         return false;
       }
 

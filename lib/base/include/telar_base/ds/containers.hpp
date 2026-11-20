@@ -104,9 +104,12 @@ namespace telar::ds {
 
       auto* memory = memory_;
 
-      return std::shared_ptr<Value>{std::exchange(value_, nullptr), [memory](Value* value) noexcept {
-                                      fromRaw(value, *memory).reset();
-                                    }};
+      return std::shared_ptr<Value>{
+          std::exchange(value_, nullptr),
+          [memory](Value* value) noexcept {
+            fromRaw(value, *memory).reset();
+          },
+      };
     }
 
     [[nodiscard]] const Value& get() const noexcept {
@@ -163,57 +166,76 @@ namespace telar::ds {
     return Box<Value, Memory>{value, memory};
   }
 
+  // The `count` values at `storage` as a span. The containers below keep their storage as a pointer
+  // and count how many values it holds, so this is where their bounds meet the pointer.
+  template <typename Value>
+  TBC_HOT_PATH inline std::span<Value> spanOver(Value* storage, std::size_t count) noexcept {
+    return {storage, count}; // NOLINT(clang-diagnostic-unsafe-buffer-usage-in-container): every caller passes the count of values its storage holds
+  }
+
   // The high and low halves of a 128-bit product folded together: every bit of either factor
   // reaches every bit of the result, as wyhash and rapidhash mix.
   TBC_HOT_PATH inline std::uint64_t mix(std::uint64_t left, std::uint64_t right) noexcept {
+    constexpr std::size_t half_bits = 64;
     const auto product = static_cast<unsigned __int128>(left) * right;
 
-    return static_cast<std::uint64_t>(product) ^ static_cast<std::uint64_t>(product >> 64);
+    return static_cast<std::uint64_t>(product) ^ static_cast<std::uint64_t>(product >> half_bits);
   }
 
-  TBC_HOT_PATH inline std::uint64_t read64(const char* bytes) noexcept {
-    std::uint64_t value;
+  // The word the first bytes of `bytes` hold, in the machine's order; a constant-size copy, which
+  // compiles to one load.
+  template <std::unsigned_integral Word, typename Byte>
+  TBC_HOT_PATH inline Word readWord(std::span<const Byte> bytes) noexcept {
+    Word word = 0;
 
-    std::memcpy(&value, bytes, sizeof(value));
-    return value;
+    std::ranges::copy(std::as_bytes(bytes.first(sizeof(Word))), std::as_writable_bytes(std::span{&word, 1}).begin());
+    return word;
   }
 
-  TBC_HOT_PATH inline std::uint64_t read32(const char* bytes) noexcept {
-    std::uint32_t value;
+  template <std::unsigned_integral Word>
+  TBC_HOT_PATH inline void writeWord(std::span<char> target, Word word) noexcept {
+    std::ranges::copy(std::as_bytes(std::span{&word, 1}), std::as_writable_bytes(target.first(sizeof(Word))).begin());
+  }
 
-    std::memcpy(&value, bytes, sizeof(value));
-    return value;
+  TBC_HOT_PATH inline std::uint64_t read64(std::span<const char> bytes) noexcept {
+    return readWord<std::uint64_t>(bytes);
+  }
+
+  TBC_HOT_PATH inline std::uint64_t read32(std::span<const char> bytes) noexcept {
+    return readWord<std::uint32_t>(bytes);
   }
 
   // Copies up to 23 bytes, as an inline String holds, with overlapping word moves rather than a call
-  // to memcpy, which costs more than the copy at these sizes.
-  TBC_HOT_PATH inline void copyShort(char* target, const char* source, std::size_t count) noexcept {
-    if (count >= 8) {
-      const auto first = read64(source);
-      const auto last = read64(source + count - 8);
+  // to memcpy, which costs more than the copy at these sizes. `target` has room for all of `source`.
+  TBC_HOT_PATH inline void copyShort(std::span<char> target, std::span<const char> source) noexcept {
+    constexpr std::size_t long_word = sizeof(std::uint64_t);
+    constexpr std::size_t short_word = sizeof(std::uint32_t);
+    const auto count = source.size();
 
-      if (count > 16) {
-        const auto middle = read64(source + 8);
+    if (count >= long_word) {
+      const auto first = readWord<std::uint64_t>(source);
+      const auto last = readWord<std::uint64_t>(source.last(long_word));
 
-        std::memcpy(target + 8, &middle, sizeof(middle));
+      if (count > 2 * long_word) {
+        writeWord(target.subspan(long_word), readWord<std::uint64_t>(source.subspan(long_word)));
       }
 
-      std::memcpy(target, &first, sizeof(first));
-      std::memcpy(target + count - 8, &last, sizeof(last));
-    } else if (count >= 4) {
-      const auto first = static_cast<std::uint32_t>(read32(source));
-      const auto last = static_cast<std::uint32_t>(read32(source + count - 4));
+      writeWord(target, first);
+      writeWord(target.subspan(count - long_word), last);
+    } else if (count >= short_word) {
+      const auto first = readWord<std::uint32_t>(source);
+      const auto last = readWord<std::uint32_t>(source.last(short_word));
 
-      std::memcpy(target, &first, sizeof(first));
-      std::memcpy(target + count - 4, &last, sizeof(last));
+      writeWord(target, first);
+      writeWord(target.subspan(count - short_word), last);
     } else if (count > 0) {
       target[0] = source[0];
-      target[count >> 1] = source[count >> 1];
+      target[count >> 1U] = source[count >> 1U];
       target[count - 1] = source[count - 1];
     }
   }
 
-  inline constexpr std::uint64_t hash_secrets[] = {
+  inline constexpr Array<std::uint64_t, 4> hash_secrets = {
       0x2d358dccaa6c78a5,
       0x8bb84b93962eacc9,
       0x4b33a62ed433d4a3,
@@ -225,7 +247,7 @@ namespace telar::ds {
   inline constexpr char hash_anchor = 0;
 
   TBC_HOT_PATH inline std::uint64_t hashSeed() noexcept {
-    return hash_secrets[0] ^ reinterpret_cast<std::uintptr_t>(&hash_anchor);
+    return hash_secrets[0] ^ std::bit_cast<std::uintptr_t>(&hash_anchor);
   }
 
   // Eight control bytes of a Map read as one word, as abseil's portable group. A full slot's byte is
@@ -241,11 +263,13 @@ namespace telar::ds {
     static constexpr std::uint64_t low_bits = 0x0101010101010101;
     static constexpr std::uint64_t high_bits = 0x8080808080808080;
 
-    [[nodiscard]] static std::uint64_t load(const std::int8_t* control) noexcept {
-      std::uint64_t word;
+    // The top bit of a slot's byte, and the shift from a bit of the word to its slot's rank.
+    static constexpr std::size_t top_bit = 7;
+    static constexpr std::size_t rank_shift = 3;
 
-      std::memcpy(&word, control, sizeof(word));
-      return word;
+    // The first `width` control bytes of `control`.
+    [[nodiscard]] static std::uint64_t load(std::span<const std::int8_t> control) noexcept {
+      return readWord<std::uint64_t>(control);
     }
 
     // The slots whose byte is `tag`. A full slot right after one of them may come out too, which
@@ -256,27 +280,30 @@ namespace telar::ds {
       return (difference - low_bits) & ~difference & high_bits;
     }
 
+    // Of the bytes with the top bit set, only an empty slot's clears bit 1, which the shift moves to
+    // the top.
     [[nodiscard]] static std::uint64_t matchEmpty(std::uint64_t word) noexcept {
-      return word & ~(word << 6) & high_bits;
+      return word & ~(word << (top_bit - 1)) & high_bits;
     }
 
+    // Of the bytes with the top bit set, the sentinel's alone sets bit 0.
     [[nodiscard]] static std::uint64_t matchEmptyOrRemoved(std::uint64_t word) noexcept {
-      return word & ~(word << 7) & high_bits;
+      return word & ~(word << top_bit) & high_bits;
     }
 
     // How many slots from the first are empty or removed, up to the group's width.
     [[nodiscard]] static std::size_t leadingEmptyOrRemoved(std::uint64_t word) noexcept {
-      return static_cast<std::size_t>(std::countr_zero((word | ~(word >> 7)) & low_bits) + 1) >> 3;
+      return static_cast<std::size_t>(std::countr_zero((word | ~(word >> top_bit)) & low_bits) + 1) >> rank_shift;
     }
 
     // The rank of the first slot a match holds.
     [[nodiscard]] static std::size_t first(std::uint64_t matches) noexcept {
-      return static_cast<std::size_t>(std::countr_zero(matches)) >> 3;
+      return static_cast<std::size_t>(std::countr_zero(matches)) >> rank_shift;
     }
 
     // The rank of the last slot a match holds, counted from the group's end.
     [[nodiscard]] static std::size_t lastFromEnd(std::uint64_t matches) noexcept {
-      return static_cast<std::size_t>(std::countl_zero(matches)) >> 3;
+      return static_cast<std::size_t>(std::countl_zero(matches)) >> rank_shift;
     }
   };
 
@@ -329,7 +356,7 @@ namespace telar::ds {
           size_(std::exchange(other.size_, 0)),
           capacity_(std::exchange(other.capacity_, 0)) {}
 
-    Vec& operator=(Vec&& other) {
+    Vec& operator=(Vec&& other) { // NOLINT(bugprone-exception-escape,cppcoreguidelines-noexcept-move-operations,performance-noexcept-move-constructor): moving between two allocators allocates, as std::vector's move does
       if (this == &other) {
         return *this;
       }
@@ -346,7 +373,7 @@ namespace telar::ds {
       clear();
       reserve(other.size_);
       for (std::size_t index = 0; index < other.size_; ++index) {
-        std::construct_at(items_ + index, std::move(other.items_[index]));
+        std::construct_at(&storageSpan()[index], std::move(other.viewMut()[index]));
       }
 
       size_ = other.size_;
@@ -374,7 +401,7 @@ namespace telar::ds {
         copy.extend(view());
       } else {
         for (std::size_t index = 0; index < size_; ++index) {
-          copy.push(items_[index].clone());
+          copy.push(view()[index].clone());
         }
       }
 
@@ -395,12 +422,12 @@ namespace telar::ds {
 
     [[nodiscard]] const Value& operator[](std::size_t index) const noexcept {
       TELAR_ASSERT(index < size_);
-      return items_[index];
+      return view()[index];
     }
 
     [[nodiscard]] Value& atMut(std::size_t index) noexcept {
       TELAR_ASSERT(index < size_);
-      return items_[index];
+      return viewMut()[index];
     }
 
     [[nodiscard]] const Value& front() const noexcept {
@@ -413,12 +440,12 @@ namespace telar::ds {
 
     [[nodiscard]] const Value& back() const noexcept {
       TELAR_ASSERT(size_ != 0);
-      return items_[size_ - 1];
+      return view().back();
     }
 
     [[nodiscard]] Value& backMut() noexcept {
       TELAR_ASSERT(size_ != 0);
-      return items_[size_ - 1];
+      return viewMut().back();
     }
 
     [[nodiscard]] const Value* data() const noexcept {
@@ -431,11 +458,11 @@ namespace telar::ds {
 
     [[nodiscard]] std::span<const Value> view() const noexcept {
       // The span's constructor is given shared access to the values, as this method has.
-      return {static_cast<const Value*>(items_), size_};
+      return spanOver(static_cast<const Value*>(items_), size_);
     }
 
     [[nodiscard]] std::span<Value> viewMut() noexcept {
-      return {items_, size_};
+      return spanOver(items_, size_);
     }
 
     [[nodiscard]] const Value* begin() const noexcept {
@@ -443,7 +470,7 @@ namespace telar::ds {
     }
 
     [[nodiscard]] const Value* end() const noexcept {
-      return items_ + size_;
+      return std::to_address(view().end());
     }
 
     [[nodiscard]] tbc::mut_a<Memory> memory() const noexcept {
@@ -468,7 +495,7 @@ namespace telar::ds {
     template <typename... Arguments>
     Value& emplace(Arguments&&... arguments) {
       if (size_ < capacity_) [[likely]] {
-        auto* slot = std::construct_at(items_ + size_, std::forward<Arguments>(arguments)...);
+        auto* slot = std::construct_at(&storageSpan()[size_], std::forward<Arguments>(arguments)...);
 
         ++size_;
         return *slot;
@@ -479,13 +506,13 @@ namespace telar::ds {
       Value* slot = nullptr;
 
       try {
-        slot = std::construct_at(storage + size_, std::forward<Arguments>(arguments)...);
+        slot = std::construct_at(&spanOver(storage, capacity)[size_], std::forward<Arguments>(arguments)...);
       } catch (...) {
         deallocate(storage, capacity);
         throw;
       }
 
-      relocate(storage);
+      relocate(spanOver(storage, capacity));
       deallocate(items_, capacity_);
       items_ = tbc::raw(storage);
       capacity_ = capacity;
@@ -504,9 +531,9 @@ namespace telar::ds {
       // Emplaced, so that the value moves once rather than through Option's by-value constructor.
       Option<Value> last;
 
-      last.emplace(std::move(items_[size_]));
+      last.emplace(std::move(storageSpan()[size_]));
 
-      std::destroy_at(items_ + size_);
+      std::destroy_at(&storageSpan()[size_]);
       return last;
     }
 
@@ -516,7 +543,7 @@ namespace telar::ds {
         return;
       }
 
-      std::destroy(items_ + count, items_ + size_);
+      std::ranges::destroy(viewMut().subspan(count));
       size_ = count;
     }
 
@@ -534,7 +561,7 @@ namespace telar::ds {
       }
 
       reserve(count);
-      std::uninitialized_value_construct(items_ + size_, items_ + count);
+      std::ranges::uninitialized_value_construct(storageSpan().subspan(size_, count - size_));
       size_ = count;
     }
 
@@ -548,7 +575,7 @@ namespace telar::ds {
       }
 
       reserve(count);
-      std::uninitialized_fill(items_ + size_, items_ + count, value);
+      std::ranges::uninitialized_fill(storageSpan().subspan(size_, count - size_), value);
       size_ = count;
     }
 
@@ -564,39 +591,39 @@ namespace telar::ds {
         const auto capacity = grownCapacity(size_ + 1);
         auto* storage = tbc::raw(allocate(capacity));
 
-        std::construct_at(storage + index, std::move(value));
-        relocate(items_, index, storage);
-        relocate(items_ + index, size_ - index, storage + index + 1);
+        std::construct_at(&spanOver(storage, capacity)[index], std::move(value));
+        relocate(viewMut().first(index), spanOver(storage, capacity));
+        relocate(viewMut().subspan(index), spanOver(storage, capacity).subspan(index + 1));
         deallocate(items_, capacity_);
         items_ = tbc::raw(storage);
         capacity_ = capacity;
         ++size_;
-        return items_[index];
+        return atMut(index);
       }
 
       // The later values move up one slot each: as bytes when they can, as std::vector does.
       if constexpr (relocatable<Value>) {
-        std::memmove(static_cast<void*>(items_ + index + 1), static_cast<const void*>(items_ + index), (size_ - index) * sizeof(Value));
-        std::construct_at(items_ + index, std::move(value));
+        std::ranges::copy_backward(std::as_bytes(viewMut().subspan(index)), std::as_writable_bytes(storageSpan().first(size_ + 1)).end());
+        std::construct_at(&storageSpan()[index], std::move(value));
       } else {
-        std::construct_at(items_ + size_, std::move(items_[size_ - 1]));
-        std::move_backward(items_ + index, items_ + size_ - 1, items_ + size_);
-        items_[index] = std::move(value);
+        std::construct_at(&storageSpan()[size_], std::move(viewMut().back()));
+        std::ranges::move_backward(viewMut().subspan(index, size_ - index - 1), viewMut().end());
+        viewMut()[index] = std::move(value);
       }
 
       ++size_;
-      return items_[index];
+      return atMut(index);
     }
 
     // Removes the value at `index` and hands it back, moving the later ones down, as Rust's `remove`:
     // it leaves with what it borrows, region `a`, and none of this Vec's storage.
     tbc::val_a<Value> remove(std::size_t index) {
       TELAR_ASSERT(index < size_);
-      Value removed = std::move(items_[index]);
+      Value removed = std::move(viewMut()[index]);
 
-      std::move(items_ + index + 1, items_ + size_, items_ + index);
+      std::ranges::move(viewMut().subspan(index + 1), viewMut().subspan(index).begin());
       --size_;
-      std::destroy_at(items_ + size_);
+      std::destroy_at(&storageSpan()[size_]);
       return removed;
     }
 
@@ -622,14 +649,14 @@ namespace telar::ds {
       std::size_t kept = 0;
 
       for (std::size_t index = 0; index < size_; ++index) {
-        if (!keep(std::as_const(items_[index]))) {
+        if (!keep(view()[index])) {
           continue;
         }
 
         // A different slot, `kept` being behind `index`: read through a raw pointer, as Rust's `retain`
         // moves values within its buffer.
         if (kept != index) {
-          items_[kept] = std::move(*tbc::raw(items_ + index));
+          viewMut()[kept] = std::move(*tbc::raw(&viewMut()[index]));
         }
 
         ++kept;
@@ -654,18 +681,18 @@ namespace telar::ds {
         auto* storage = allocate(capacity);
 
         try {
-          copy(values, storage + size_);
+          copy(values, spanOver(storage, capacity).subspan(size_));
         } catch (...) {
           deallocate(storage, capacity);
           throw;
         }
 
-        relocate(storage);
+        relocate(spanOver(storage, capacity));
         deallocate(items_, capacity_);
         items_ = tbc::raw(storage);
         capacity_ = capacity;
       } else {
-        copy(values, items_ + size_);
+        copy(values, storageSpan().subspan(size_));
       }
 
       size_ = count;
@@ -698,7 +725,7 @@ namespace telar::ds {
 
     void deallocate(Value* storage, std::size_t count) noexcept {
       if (storage != nullptr) {
-        memory_->deallocate(storage, count * sizeof(Value), alignof(Value));
+        memory_->deallocate(static_cast<void*>(storage), count * sizeof(Value), alignof(Value));
       }
     }
 
@@ -706,42 +733,44 @@ namespace telar::ds {
     void reallocate(std::size_t capacity) {
       auto* storage = allocate(capacity);
 
-      relocate(storage);
+      relocate(spanOver(storage, capacity));
       deallocate(items_, capacity_);
       items_ = tbc::raw(storage);
       capacity_ = capacity;
     }
 
-    // Moves the values into new storage and ends their lifetimes in the old one.
-    void relocate(Value* storage) noexcept {
-      relocate(items_, size_, storage);
+    // The storage, whose first `size_` slots hold the values.
+    [[nodiscard]] std::span<Value> storageSpan() noexcept {
+      return spanOver(items_, capacity_);
     }
 
-    static void relocate(Value* from, std::size_t count, Value* to) noexcept {
+    // Moves the values into new storage and ends their lifetimes in the old one.
+    void relocate(std::span<Value> storage) noexcept {
+      relocate(viewMut(), storage);
+    }
+
+    // Moves the values of `source` to the start of `target`, which has room for them.
+    static void relocate(std::span<Value> source, std::span<Value> target) noexcept {
       if constexpr (relocatable<Value>) {
-        if (count != 0) {
-          std::memcpy(static_cast<void*>(to), static_cast<const void*>(from), count * sizeof(Value));
-        }
+        std::ranges::copy(std::as_bytes(source), std::as_writable_bytes(target).begin());
       } else {
-        std::uninitialized_move(from, from + count, to);
-        std::destroy(from, from + count);
+        std::uninitialized_move(source.begin(), source.end(), target.begin());
+        std::ranges::destroy(source);
       }
     }
 
     // Copies values into uninitialized storage: as bytes when they are trivially copyable, which
     // std::uninitialized_copy leaves to a loop.
-    static void copy(std::span<const Value> values, Value* to) {
+    static void copy(std::span<const Value> values, std::span<Value> target) {
       if constexpr (std::is_trivially_copyable_v<Value>) {
-        if (!values.empty()) {
-          std::memcpy(static_cast<void*>(to), static_cast<const void*>(values.data()), values.size_bytes());
-        }
+        std::ranges::copy(std::as_bytes(values), std::as_writable_bytes(target).begin());
       } else {
-        std::uninitialized_copy(values.begin(), values.end(), to);
+        std::uninitialized_copy(values.begin(), values.end(), target.begin());
       }
     }
 
     void release() noexcept {
-      std::destroy(items_, items_ + size_);
+      std::ranges::destroy(viewMut());
       deallocate(items_, capacity_);
       items_ = nullptr;
       size_ = 0;
@@ -776,7 +805,7 @@ namespace telar::ds {
     String(tbc::mut_a<Memory> memory, std::string_view text)
         : memory_(&memory) {
       if (text.size() <= inline_capacity) [[likely]] {
-        copyShort(representation_.bytes, text.data(), text.size());
+        copyShort(representation_.bytes.viewMut(), text);
         setInlineSize(text.size());
         return;
       }
@@ -794,7 +823,7 @@ namespace telar::ds {
       other.setInlineSize(0);
     }
 
-    String& operator=(String&& other) {
+    String& operator=(String&& other) { // NOLINT(bugprone-exception-escape,cppcoreguidelines-noexcept-move-operations,performance-noexcept-move-constructor): moving between two allocators allocates, as std::vector's move does
       if (this == &other) {
         return *this;
       }
@@ -848,7 +877,7 @@ namespace telar::ds {
 
     // The bytes, followed by a NUL.
     [[nodiscard]] const char* data() const noexcept {
-      return onHeap() ? representation_.heap.data : representation_.bytes;
+      return onHeap() ? representation_.heap.data : representation_.bytes.data();
     }
 
     [[nodiscard]] std::string_view view() const noexcept {
@@ -856,16 +885,16 @@ namespace telar::ds {
         return {representation_.heap.data, representation_.heap.size};
       }
 
-      return {representation_.bytes, inline_capacity - tag()};
+      return {representation_.bytes.data(), inline_capacity - tag()};
     }
 
     // The bytes to edit in place, as a span over `size()` of them; the NUL after them stays.
     [[nodiscard]] std::span<char> viewMut() noexcept {
-      return {dataMut(), size()};
+      return storageMut().first(size());
     }
 
     // As std::string converts, so that a String passes where text is read.
-    [[nodiscard]] operator std::string_view() const noexcept {
+    [[nodiscard]] operator std::string_view() const noexcept { // NOLINT(cppcoreguidelines-explicit-constructor,misc-explicit-constructor): converts implicitly as std::string does
       return view();
     }
 
@@ -885,9 +914,8 @@ namespace telar::ds {
       const auto size = this->size();
       if (size <= inline_capacity) {
         Representation shorter;
-        auto* bytes = shorter.bytes;
 
-        copyShort(bytes, representation_.heap.data, size);
+        copyShort(shorter.bytes.viewMut(), view());
         release();
         representation_ = shorter;
         setInlineSize(size);
@@ -909,13 +937,13 @@ namespace telar::ds {
         auto& heap = representation_.heap;
 
         if (count <= (heap.capacity & ~heap_flag) - heap.size) [[likely]] {
-          std::memcpy(heap.data + heap.size, text.data(), count);
+          std::ranges::copy(text, storageOf(heap).subspan(heap.size).begin());
           heap.size += count;
-          heap.data[heap.size] = '\0';
+          storageOf(heap)[heap.size] = '\0';
           return;
         }
       } else if (const auto size = inline_capacity - tag(); count <= inline_capacity - size) [[likely]] {
-        copyShort(representation_.bytes + size, text.data(), count);
+        copyShort(representation_.bytes.viewMut().subspan(size), text);
         setInlineSize(size + count);
         return;
       }
@@ -928,13 +956,13 @@ namespace telar::ds {
         auto& heap = representation_.heap;
 
         if (heap.size < (heap.capacity & ~heap_flag)) [[likely]] {
-          heap.data[heap.size] = character;
+          storageOf(heap)[heap.size] = character;
           ++heap.size;
-          heap.data[heap.size] = '\0';
+          storageOf(heap)[heap.size] = '\0';
           return;
         }
       } else if (const auto size = inline_capacity - tag(); size < inline_capacity) [[likely]] {
-        representation_.bytes[size] = character;
+        representation_.bytes.atMut(size) = character;
         setInlineSize(size + 1);
         return;
       }
@@ -949,17 +977,17 @@ namespace telar::ds {
 
     // The bytes to write in place, `size()` of them followed by the NUL, which stays.
     [[nodiscard]] char* dataMut() noexcept {
-      return onHeap() ? representation_.heap.data : representation_.bytes;
+      return storageMut().data();
     }
 
     [[nodiscard]] char operator[](std::size_t index) const noexcept {
       TELAR_ASSERT(index < size());
-      return data()[index];
+      return view()[index];
     }
 
     [[nodiscard]] char& atMut(std::size_t index) noexcept {
       TELAR_ASSERT(index < size());
-      return dataMut()[index];
+      return storageMut()[index];
     }
 
     // Shortens it to `count` bytes and keeps its storage; a longer count leaves it as it is.
@@ -978,7 +1006,7 @@ namespace telar::ds {
       }
 
       reserve(count);
-      std::memset(dataMut() + size, fill, count - size);
+      std::ranges::fill(storageMut().subspan(size, count - size), fill);
       setSize(count);
     }
 
@@ -996,7 +1024,7 @@ namespace telar::ds {
         return none;
       }
 
-      const char last = data()[size - 1];
+      const char last = view().back();
 
       setSize(size - 1);
       return last;
@@ -1016,10 +1044,9 @@ namespace telar::ds {
       TELAR_ASSERT(index <= size());
       count = std::min(count, size() - index);
 
-      auto* bytes = dataMut();
       const auto size = this->size();
 
-      std::memmove(bytes + index, bytes + index + count, size - index - count);
+      moveBytes(storageMut(), {.from = index + count, .to = index, .count = size - index - count});
       setSize(size - count);
     }
 
@@ -1035,17 +1062,16 @@ namespace telar::ds {
       }
 
       const auto result = size - count + text.size();
-      const auto* own = data();
-      const bool aliases = text.data() >= own && text.data() <= own + capacity();
-      if (result > capacity() || aliases) {
+      if (result > capacity() || overlapsStorage(text)) {
         // New storage, so the text and the old bytes stay intact while they are copied.
         const auto capacity = roundedCapacity(std::max(result, size));
+        const std::span<const char> old = view();
         auto* storage = static_cast<char*>(allocateBytes(*memory_, capacity + 1, 1));
+        auto* end = std::ranges::copy(old.first(index), storage).out;
 
-        std::memcpy(storage, own, index);
-        std::memcpy(storage + index, text.data(), text.size());
-        std::memcpy(storage + index + text.size(), own + index + count, size - index - count);
-        storage[result] = '\0';
+        end = std::ranges::copy(text, end).out;
+        end = std::ranges::copy(old.subspan(index + count), end).out;
+        *end = '\0';
         release();
         representation_.heap = {
             .data = tbc::raw(storage),
@@ -1056,10 +1082,8 @@ namespace telar::ds {
         return;
       }
 
-      auto* bytes = dataMut();
-
-      std::memmove(bytes + index + text.size(), bytes + index + count, size - index - count);
-      std::memcpy(bytes + index, text.data(), text.size());
+      moveBytes(storageMut(), {.from = index + count, .to = index + text.size(), .count = size - index - count});
+      std::ranges::copy(text, storageMut().subspan(index).begin());
       setSize(result);
     }
 
@@ -1090,49 +1114,96 @@ namespace telar::ds {
 
     union Representation {
       Heap heap;
-      char bytes[sizeof(Heap)];
+      Array<char, sizeof(Heap)> bytes;
+    };
+
+    // Bytes that move within the storage: `count` of them, from index `from` to index `to`.
+    struct Move {
+      std::size_t from;
+      std::size_t to;
+      std::size_t count;
     };
 
     static_assert(std::endian::native == std::endian::little, "the capacity's top byte is the last inline byte");
 
     static constexpr std::size_t inline_capacity = sizeof(Heap) - 1;
-    static constexpr std::size_t heap_flag = std::size_t{1} << (std::numeric_limits<std::size_t>::digits - 1);
+    static constexpr std::size_t heap_flag = std::size_t{1} << (std::numeric_limits<std::size_t>::digits - 1U);
+
+    // The heap flag's bit in the last inline byte, which is the capacity's top one.
+    static constexpr std::size_t heap_tag = heap_flag >> ((sizeof(std::size_t) - 1) * std::numeric_limits<unsigned char>::digits);
 
     // Leaves the top bits of a capacity free for the flag, and its rounding from overflowing.
     static constexpr std::size_t maximum_capacity = heap_flag / 4;
+
+    // The allocator hands bytes out in blocks of this many.
+    static constexpr std::size_t allocation_block = 16;
 
     [[nodiscard]] std::size_t tag() const noexcept {
       return static_cast<unsigned char>(representation_.bytes[inline_capacity]);
     }
 
     [[nodiscard]] bool onHeap() const noexcept {
-      return (tag() & 0x80) != 0;
+      return (tag() & heap_tag) != 0;
+    }
+
+    // The heap storage's bytes: its capacity's and the NUL's.
+    [[nodiscard]] static std::span<char> storageOf(Heap& heap) noexcept {
+      return spanOver(heap.data, (heap.capacity & ~heap_flag) + 1);
+    }
+
+    // The storage's bytes, `capacity()` and the NUL's: the heap's, or the inline ones and the tag,
+    // which is their NUL when all are used.
+    [[nodiscard]] std::span<char> storageMut() noexcept {
+      if (onHeap()) {
+        return storageOf(representation_.heap);
+      }
+
+      return representation_.bytes.viewMut();
+    }
+
+    // Whether the text lies in this String's storage, its NUL included.
+    [[nodiscard]] bool overlapsStorage(std::string_view text) const noexcept {
+      const auto address = std::bit_cast<std::uintptr_t>(text.data());
+      const auto start = std::bit_cast<std::uintptr_t>(data());
+
+      return address >= start && address - start <= capacity();
+    }
+
+    // Moves bytes within `storage`, the source and target overlapping or not, as memmove does.
+    static void moveBytes(std::span<char> storage, Move move) noexcept {
+      const std::span<const char> source = storage.subspan(move.from, move.count);
+
+      if (move.to > move.from) {
+        std::ranges::copy_backward(source, storage.subspan(move.to, move.count).end());
+      } else {
+        std::ranges::copy(source, storage.subspan(move.to, move.count).begin());
+      }
     }
 
     void setInlineSize(std::size_t size) noexcept {
       TELAR_ASSERT(size <= inline_capacity);
-      representation_.bytes[size] = '\0';
-      representation_.bytes[inline_capacity] = static_cast<char>(inline_capacity - size);
+      representation_.bytes.atMut(size) = '\0';
+      representation_.bytes.atMut(inline_capacity) = static_cast<char>(inline_capacity - size);
     }
 
     // Sets the size within the current storage, followed by its NUL.
     void setSize(std::size_t size) noexcept {
       if (onHeap()) {
         representation_.heap.size = size;
-        representation_.heap.data[size] = '\0';
+        storageOf(representation_.heap)[size] = '\0';
       } else {
         setInlineSize(size);
       }
     }
 
-    // A capacity of at least `count` bytes whose NUL ends a whole 16-byte block, as the allocator
-    // hands them out.
+    // A capacity of at least `count` bytes whose NUL ends a whole block, as the allocator hands them
+    // out.
     [[nodiscard]] static std::size_t roundedCapacity(std::size_t count) {
       if (count > maximum_capacity) {
         throw std::bad_array_new_length{};
       }
 
-      return ((count + 16) & ~std::size_t{15}) - 1;
+      return ((count + allocation_block) & ~(allocation_block - 1)) - 1;
     }
 
     // Room for `added` more bytes, doubling, so that n appends copy each byte a constant number of
@@ -1151,13 +1222,10 @@ namespace telar::ds {
       auto* storage = static_cast<char*>(allocateBytes(*memory_, capacity + 1, 1));
       const auto current = view();
       const auto size = current.size() + text.size();
+      auto* end = std::ranges::copy(current, storage).out;
 
-      std::memcpy(storage, current.data(), current.size());
-      if (!text.empty()) {
-        std::memcpy(storage + current.size(), text.data(), text.size());
-      }
-
-      storage[size] = '\0';
+      end = std::ranges::copy(text, end).out;
+      *end = '\0';
       release();
       representation_.heap = {
           .data = tbc::raw(storage),
@@ -1233,7 +1301,7 @@ namespace telar::ds {
       std::uint64_t bits{};
 
       if constexpr (std::is_pointer_v<Key>) {
-        bits = reinterpret_cast<std::uintptr_t>(key);
+        bits = std::bit_cast<std::uintptr_t>(key);
       } else {
         bits = static_cast<std::uint64_t>(key);
       }
@@ -1242,50 +1310,68 @@ namespace telar::ds {
     }
 
     [[nodiscard]] inline std::uint64_t operator()(std::string_view text) const noexcept {
-      const auto* bytes = text.data();
-      const auto count = text.size();
-      auto seed = hashSeed();
+      const std::span<const char> bytes{text};
+      const auto count = bytes.size();
       std::uint64_t first = 0;
       std::uint64_t second = 0;
+      auto seed = hashSeed();
 
-      if (count <= 16) [[likely]] {
-        if (count >= 4) {
-          const auto quarter = (count >> 3) << 2;
+      if (count <= short_text) [[likely]] {
+        if (count >= sizeof(std::uint32_t)) {
+          const auto quarter = (count >> 3U) << 2U;
 
-          first = (read32(bytes) << 32) | read32(bytes + quarter);
-          second = (read32(bytes + count - 4) << 32) | read32(bytes + count - 4 - quarter);
+          first = (read32(bytes) << half_bits) | read32(bytes.subspan(quarter));
+          second = (read32(bytes.last(sizeof(std::uint32_t))) << half_bits) | read32(bytes.subspan(count - sizeof(std::uint32_t) - quarter));
         } else if (count > 0) {
-          first = (std::uint64_t{static_cast<unsigned char>(bytes[0])} << 16) | (std::uint64_t{static_cast<unsigned char>(bytes[count >> 1])} << 8) | static_cast<unsigned char>(bytes[count - 1]);
+          first = (byteAt(bytes, 0) << (2 * byte_bits)) | (byteAt(bytes, count >> 1U) << byte_bits) | byteAt(bytes, count - 1);
         }
       } else {
-        auto remaining = count;
+        auto rest = bytes;
 
-        if (remaining > 48) {
+        // Three lanes a round while more than a round is left, then one at a time.
+        if (rest.size() > round_bytes) {
           auto lane1 = seed;
           auto lane2 = seed;
 
-          do {
-            seed = mix(read64(bytes) ^ hash_secrets[1], read64(bytes + 8) ^ seed);
-            lane1 = mix(read64(bytes + 16) ^ hash_secrets[2], read64(bytes + 24) ^ lane1);
-            lane2 = mix(read64(bytes + 32) ^ hash_secrets[3], read64(bytes + 40) ^ lane2);
-            bytes += 48;
-            remaining -= 48;
-          } while (remaining > 48);
+          while (rest.size() > round_bytes) {
+            seed = lane<1>(rest, seed);
+            lane1 = lane<2>(rest.subspan(lane_bytes), lane1);
+            lane2 = lane<3>(rest.subspan(2 * lane_bytes), lane2);
+            rest = rest.subspan(round_bytes);
+          }
 
           seed ^= lane1 ^ lane2;
         }
 
-        while (remaining > 16) {
-          seed = mix(read64(bytes) ^ hash_secrets[1], read64(bytes + 8) ^ seed);
-          bytes += 16;
-          remaining -= 16;
+        while (rest.size() > lane_bytes) {
+          seed = lane<1>(rest, seed);
+          rest = rest.subspan(lane_bytes);
         }
 
-        first = read64(bytes + remaining - 16);
-        second = read64(bytes + remaining - 8);
+        // The last 16 bytes, which the last lane may have read too, end the text.
+        first = read64(bytes.last(lane_bytes));
+        second = read64(bytes.last(sizeof(std::uint64_t)));
       }
 
       return mix(hash_secrets[1] ^ count, mix(first ^ hash_secrets[1], second ^ seed));
+    }
+
+  private:
+    // Text up to this long hashes as overlapping words, and longer text in lanes of this many bytes.
+    static constexpr std::size_t short_text = 16;
+    static constexpr std::size_t lane_bytes = 16;
+    static constexpr std::size_t round_bytes = 3 * lane_bytes;
+    static constexpr std::size_t byte_bits = 8;
+    static constexpr std::size_t half_bits = 32;
+
+    [[nodiscard]] static std::uint64_t byteAt(std::span<const char> bytes, std::size_t index) noexcept {
+      return std::uint64_t{static_cast<unsigned char>(bytes[index])};
+    }
+
+    // Mixes the lane of 16 bytes at the start of `bytes` into `seed` with the secret of rank `secret`.
+    template <std::size_t secret>
+    [[nodiscard]] static std::uint64_t lane(std::span<const char> bytes, std::uint64_t seed) noexcept {
+      return mix(read64(bytes) ^ hash_secrets[secret], read64(bytes.subspan(sizeof(std::uint64_t))) ^ seed);
     }
   };
 
@@ -1341,10 +1427,11 @@ namespace telar::ds {
         skip();
       }
 
-      // Stops at a full slot or at the sentinel past the last one.
+      // Stops at a full slot or at the sentinel past the last one. A group's width of control bytes
+      // follows every slot's, the sentinel's and the copies of the first slots'.
       void skip() noexcept {
         while (*control_ < Group::sentinel) {
-          const auto shift = Group::leadingEmptyOrRemoved(Group::load(control_));
+          const auto shift = Group::leadingEmptyOrRemoved(Group::load(spanOver(control_, Group::width)));
 
           control_ += shift;
           entry_ += shift;
@@ -1369,7 +1456,7 @@ namespace telar::ds {
           size_(std::exchange(other.size_, 0)),
           growth_left_(std::exchange(other.growth_left_, 0)) {}
 
-    Map& operator=(Map&& other) {
+    Map& operator=(Map&& other) { // NOLINT(bugprone-exception-escape,cppcoreguidelines-noexcept-move-operations,performance-noexcept-move-constructor): moving between two allocators allocates, as std::vector's move does
       if (this == &other) {
         return *this;
       }
@@ -1389,8 +1476,8 @@ namespace telar::ds {
       clear();
       reserve(other.size_);
       for (std::size_t index = 0; index < other.mask_; ++index) {
-        if (other.control_[index] >= 0) {
-          auto& entry = other.entries_[index];
+        if (other.controlView()[index] >= 0) {
+          auto& entry = other.entriesMut()[index];
 
           add(hashOf(entry.key), std::move(entry.key), std::move(entry.value));
         }
@@ -1416,25 +1503,25 @@ namespace telar::ds {
       }
 
       // The copy keeps each slot where it is, removed ones too, so no key is hashed again.
-      auto* block = static_cast<std::byte*>(allocateBytes(*memory_, blockBytes(mask_), block_alignment));
-      auto* control = reinterpret_cast<std::int8_t*>(block);
-      auto* entries = reinterpret_cast<Entry*>(block + entriesOffset(mask_));
+      auto [control, entries] = allocateBlock(*memory_, mask_);
 
-      resetControl(control, mask_);
       copy.control_ = tbc::raw(control);
       copy.entries_ = tbc::raw(entries);
       copy.mask_ = mask_;
+      resetControl(copy.controlMut());
 
       // A slot counts once its entry is constructed, so where a copy throws, the copy's destructor
       // destroys the ones before it.
       for (std::size_t index = 0; index < mask_; ++index) {
-        if (control_[index] >= 0) {
-          std::construct_at(entries + index, entries_[index]);
+        const auto byte = controlView()[index];
+
+        if (byte >= 0) {
+          std::construct_at(&copy.entriesMut()[index], entriesView()[index]);
           ++copy.size_;
         }
 
-        if (control_[index] != Group::empty) {
-          setControl(control, mask_, index, control_[index]);
+        if (byte != Group::empty) {
+          setControl(copy.controlMut(), index, byte);
         }
       }
 
@@ -1458,13 +1545,13 @@ namespace telar::ds {
     [[nodiscard]] const Value* find(Lookup key) const {
       const auto index = locate(key, hashOf(key));
 
-      return index == not_found ? nullptr : &entries_[index].value;
+      return index == not_found ? nullptr : &entriesView()[index].value;
     }
 
     [[nodiscard]] Value* findMut(Lookup key) {
       const auto index = locate(key, hashOf(key));
 
-      return index == not_found ? nullptr : &entries_[index].value;
+      return index == not_found ? nullptr : &entriesMut()[index].value;
     }
 
     [[nodiscard]] bool contains(Lookup key) const {
@@ -1488,7 +1575,7 @@ namespace telar::ds {
     bool assign(Key key, Value value) {
       const auto hash = hashOf(key);
       if (const auto index = locate(key, hash); index != not_found) {
-        entries_[index].value = std::move(value);
+        entriesMut()[index].value = std::move(value);
         return false;
       }
 
@@ -1504,7 +1591,8 @@ namespace telar::ds {
         return {};
       }
 
-      Option<Value> removed{std::move(entries_[index].value)};
+      // The value leaves with the borrows it holds, region `a`, not with a borrow of this Map's storage.
+      Option<Value> removed{std::move(tbc::raw(&entriesMut()[index])->value)};
 
       erase(index);
       return removed;
@@ -1517,7 +1605,7 @@ namespace telar::ds {
       std::size_t dropped = 0;
 
       for (std::size_t index = 0; index < mask_; ++index) {
-        if (control_[index] >= 0 && !keep(std::as_const(entries_[index].key), entries_[index].value)) {
+        if (controlView()[index] >= 0 && !keep(std::as_const(entriesMut()[index].key), entriesMut()[index].value)) {
           erase(index);
           ++dropped;
         }
@@ -1533,7 +1621,7 @@ namespace telar::ds {
       }
 
       destroyEntries();
-      resetControl(control_, mask_);
+      resetControl(controlMut());
       size_ = 0;
       growth_left_ = growthOf(mask_);
     }
@@ -1564,47 +1652,83 @@ namespace telar::ds {
     }
 
     [[nodiscard]] Iterator end() const noexcept {
-      return Iterator{control_ + mask_, entries_ + mask_};
+      return Iterator{&controlView()[mask_], std::to_address(entriesView().end())};
     }
 
   private:
+    // A block of storage for a number of slots: their control bytes, then their entries.
+    struct Block {
+      std::int8_t* control;
+      Entry* entries;
+    };
+
     static constexpr std::size_t not_found = std::numeric_limits<std::size_t>::max();
     static constexpr std::size_t block_alignment = std::max(alignof(Entry), alignof(std::uint64_t));
+
+    // A full slot's byte keeps the low bits of its key's hash, and the rest pick where probes start.
+    static constexpr std::size_t tag_bits = Group::top_bit;
+    static constexpr std::uint64_t tag_mask = (std::uint64_t{1} << tag_bits) - 1;
+
+    // One slot in this many stays free, so that every probe ends at an empty one.
+    static constexpr std::size_t free_share = 8;
+
+    // A table grows into as many slots, rather than twice as many, while its entries fill at most
+    // this share of them, removed slots taking the rest.
+    static constexpr std::size_t in_place_entries = 25;
+    static constexpr std::size_t in_place_slots = 32;
 
     [[nodiscard]] static std::uint64_t hashOf(Lookup key) noexcept {
       return Hasher{}(key);
     }
 
+    // The control bytes: a slot's each, the sentinel's, and copies of the first slots'.
+    [[nodiscard]] std::span<const std::int8_t> controlView() const noexcept {
+      return spanOver<const std::int8_t>(control_, controlBytes(mask_));
+    }
+
+    [[nodiscard]] std::span<std::int8_t> controlMut() noexcept {
+      return spanOver(control_, controlBytes(mask_));
+    }
+
+    // The entries, a slot's each; only the full slots' are alive.
+    [[nodiscard]] std::span<const Entry> entriesView() const noexcept {
+      return spanOver<const Entry>(entries_, mask_);
+    }
+
+    [[nodiscard]] std::span<Entry> entriesMut() noexcept {
+      return spanOver(entries_, mask_);
+    }
+
     // Destroys the entry in a full slot.
     void erase(std::size_t index) noexcept {
-      std::destroy_at(entries_ + index);
+      std::destroy_at(&entriesMut()[index]);
       --size_;
 
       // A slot no probe ever passed full can be empty again; any other stays removed, so that probes
       // for the keys past it go on.
-      const auto before = Group::matchEmpty(Group::load(control_ + ((index - Group::width) & mask_)));
-      const auto after = Group::matchEmpty(Group::load(control_ + index));
+      const auto before = Group::matchEmpty(Group::load(controlView().subspan((index - Group::width) & mask_)));
+      const auto after = Group::matchEmpty(Group::load(controlView().subspan(index)));
 
       if (mask_ < Group::width || (before != 0 && after != 0 && Group::lastFromEnd(before) + Group::first(after) < Group::width)) {
-        setControl(control_, mask_, index, Group::empty);
+        setControl(controlMut(), index, Group::empty);
         ++growth_left_;
       } else {
-        setControl(control_, mask_, index, Group::removed);
+        setControl(controlMut(), index, Group::removed);
       }
     }
 
     // The byte a full slot keeps of its key's hash; the rest of the hash picks where probes start.
     [[nodiscard]] static std::uint8_t tagOf(std::uint64_t hash) noexcept {
-      return static_cast<std::uint8_t>(hash & 0x7f);
+      return static_cast<std::uint8_t>(hash & tag_mask);
     }
 
     [[nodiscard]] static std::int8_t* emptyControl() noexcept {
-      return tbc::raw(const_cast<std::int8_t*>(empty_group.data()));
+      return tbc::raw(const_cast<std::int8_t*>(empty_group.data())); // NOLINT(cppcoreguidelines-pro-type-const-cast): a Map writes control bytes only once it holds storage of its own
     }
 
     // Fills seven slots in eight, and always leaves one empty, where every probe ends.
     [[nodiscard]] static std::size_t growthOf(std::size_t capacity) noexcept {
-      return capacity - ((capacity + 1) / 8);
+      return capacity - ((capacity + 1) / free_share);
     }
 
     // The control bytes are the slots', the sentinel's, and copies of the first slots' after it, so
@@ -1617,36 +1741,49 @@ namespace telar::ds {
       return (controlBytes(capacity) + alignof(Entry) - 1) & ~(alignof(Entry) - 1);
     }
 
-    [[nodiscard]] static std::size_t blockBytes(std::size_t capacity) {
+    // The bytes of a block for `capacity` slots, which one already allocated is known to fit.
+    [[nodiscard]] static std::size_t blockBytes(std::size_t capacity) noexcept {
+      return entriesOffset(capacity) + (capacity * sizeof(Entry));
+    }
+
+    // A block for `capacity` slots from `memory`, its control bytes yet to be reset.
+    [[nodiscard]] static Block allocateBlock(Memory& memory, std::size_t capacity) {
       if (capacity > (std::numeric_limits<std::size_t>::max() - entriesOffset(capacity)) / sizeof(Entry)) {
         throw std::bad_array_new_length{};
       }
 
-      return entriesOffset(capacity) + (capacity * sizeof(Entry));
+      void* block = allocateBytes(memory, blockBytes(capacity), block_alignment);
+      void* entries = &spanOver(static_cast<std::byte*>(block), blockBytes(capacity))[entriesOffset(capacity)];
+
+      return {.control = static_cast<std::int8_t*>(block), .entries = static_cast<Entry*>(entries)};
     }
 
-    static void setControl(std::int8_t* control, std::size_t mask, std::size_t index, std::int8_t byte) noexcept {
+    // Sets a slot's control byte and, for one of the first slots, its copy past the sentinel.
+    static void setControl(std::span<std::int8_t> control, std::size_t index, std::int8_t byte) noexcept {
+      const auto mask = control.size() - Group::width;
+
       control[index] = byte;
       control[((index - (Group::width - 1)) & mask) + (Group::width - 1)] = byte;
     }
 
-    static void resetControl(std::int8_t* control, std::size_t capacity) noexcept {
-      std::memset(control, Group::empty, controlBytes(capacity));
-      control[capacity] = Group::sentinel;
+    // Marks every slot empty, and the sentinel after them.
+    static void resetControl(std::span<std::int8_t> control) noexcept {
+      std::ranges::fill(control, Group::empty);
+      control[control.size() - Group::width] = Group::sentinel;
     }
 
     // Probes a group at a time, at triangular strides, which visit every group of a power of two.
     [[nodiscard]] std::size_t locate(Lookup key, std::uint64_t hash) const {
       const auto tag = tagOf(hash);
-      auto offset = (hash >> 7) & mask_;
+      auto offset = (hash >> tag_bits) & mask_;
       std::size_t stride = 0;
 
       while (true) {
-        const auto word = Group::load(control_ + offset);
+        const auto word = Group::load(controlView().subspan(offset));
 
         for (auto matches = Group::match(word, tag); matches != 0; matches &= matches - 1) {
           const auto index = (offset + Group::first(matches)) & mask_;
-          if (entries_[index].key == key) [[likely]] {
+          if (entriesView()[index].key == key) [[likely]] {
             return index;
           }
         }
@@ -1660,12 +1797,14 @@ namespace telar::ds {
       }
     }
 
-    [[nodiscard]] static std::size_t firstFree(const std::int8_t* control, std::size_t mask, std::uint64_t hash) noexcept {
-      auto offset = (hash >> 7) & mask;
+    // The first empty or removed slot of the probe sequence of `hash`.
+    [[nodiscard]] static std::size_t firstFree(std::span<const std::int8_t> control, std::uint64_t hash) noexcept {
+      const auto mask = control.size() - Group::width;
+      auto offset = (hash >> tag_bits) & mask;
       std::size_t stride = 0;
 
       while (true) {
-        if (const auto free = Group::matchEmptyOrRemoved(Group::load(control + offset)); free != 0) [[likely]] {
+        if (const auto free = Group::matchEmptyOrRemoved(Group::load(control.subspan(offset))); free != 0) [[likely]] {
           return (offset + Group::first(free)) & mask;
         }
 
@@ -1680,19 +1819,19 @@ namespace telar::ds {
         grow();
       }
 
-      const auto index = firstFree(control_, mask_, hash);
-      if (control_[index] == Group::empty) {
+      const auto index = firstFree(controlView(), hash);
+      if (controlView()[index] == Group::empty) {
         --growth_left_;
       }
 
-      setControl(control_, mask_, index, static_cast<std::int8_t>(tagOf(hash)));
-      std::construct_at(entries_ + index, std::move(key), std::move(value));
+      setControl(controlMut(), index, static_cast<std::int8_t>(tagOf(hash)));
+      std::construct_at(&entriesMut()[index], std::move(key), std::move(value));
       ++size_;
     }
 
     // Doubles the slots, or, where removed slots took the room, rehashes into as many.
     void grow() {
-      if (mask_ != 0 && size_ * 32 <= mask_ * 25) {
+      if (mask_ != 0 && size_ * in_place_slots <= mask_ * in_place_entries) {
         rehash(mask_);
       } else {
         rehash(mask_ == 0 ? Group::width - 1 : (mask_ * 2) + 1);
@@ -1701,21 +1840,20 @@ namespace telar::ds {
 
     // Moves the entries to new storage of `capacity` slots, a power of two less one.
     void rehash(std::size_t capacity) {
-      auto* block = static_cast<std::byte*>(allocateBytes(*memory_, blockBytes(capacity), block_alignment));
-      auto* control = reinterpret_cast<std::int8_t*>(block);
-      auto* entries = reinterpret_cast<Entry*>(block + entriesOffset(capacity));
+      auto [control, entries] = allocateBlock(*memory_, capacity);
 
-      resetControl(control, capacity);
+      resetControl(spanOver(control, controlBytes(capacity)));
       for (std::size_t index = 0; index < mask_; ++index) {
-        if (control_[index] < 0) {
+        if (controlView()[index] < 0) {
           continue;
         }
 
-        const auto hash = hashOf(entries_[index].key);
-        const auto target = firstFree(control, capacity, hash);
+        const auto hash = hashOf(entriesView()[index].key);
+        const auto target = firstFree(spanOver<const std::int8_t>(control, controlBytes(capacity)), hash);
 
-        setControl(control, capacity, target, static_cast<std::int8_t>(tagOf(hash)));
-        relocate(entries + target, entries_ + index);
+        setControl(spanOver(control, controlBytes(capacity)), target, static_cast<std::int8_t>(tagOf(hash)));
+        // The new storage and this Map's are separate allocations.
+        relocate(tbc::raw(&spanOver(entries, capacity)[target]), tbc::raw(&entriesMut()[index]));
       }
 
       deallocate();
@@ -1727,7 +1865,7 @@ namespace telar::ds {
 
     static void relocate(Entry* target, Entry* source) noexcept {
       if constexpr (relocatable<Entry>) {
-        std::memcpy(static_cast<void*>(target), static_cast<const void*>(source), sizeof(Entry));
+        std::ranges::copy(std::as_bytes(spanOver(source, 1)), std::as_writable_bytes(spanOver(target, 1)).begin());
       } else {
         std::construct_at(target, std::move(*source));
         std::destroy_at(source);
@@ -1737,8 +1875,8 @@ namespace telar::ds {
     void destroyEntries() noexcept {
       if constexpr (!std::is_trivially_destructible_v<Entry>) {
         for (std::size_t index = 0; index < mask_; ++index) {
-          if (control_[index] >= 0) {
-            std::destroy_at(entries_ + index);
+          if (controlView()[index] >= 0) {
+            std::destroy_at(&entriesMut()[index]);
           }
         }
       }
@@ -1802,19 +1940,25 @@ namespace telar::ds {
     // `b`, as Rust's FnMut returns an Output that borrows none of them.
     using Invoke = detail::FunctionResult<Result>::type (*)(tbc::val_a<void*>, tbc::val_b<Pass<Arguments>>...);
 
-    // Moves the callable at `source` to `target` and destroys it, or only destroys it when `target`
-    // is null.
-    using Manage = void (*)(void* target, void* source) noexcept;
+    // The storage a manager moves a callable out of, and the one it moves it to, null to only destroy it.
+    struct Relocation {
+      void* target;
+      void* source;
+    };
+
+    // Moves the callable at the source to the target and destroys it, or only destroys it when the
+    // target is null.
+    using Manage = void (*)(Relocation relocation) noexcept;
 
   public:
     Function() noexcept = default;
 
     template <typename Callable>
       requires(!std::same_as<Callable, Function> && std::is_invocable_r_v<Result, Callable&, Arguments...> && sizeof(Callable) <= Capacity && alignof(Callable) <= alignof(void*) && std::is_nothrow_move_constructible_v<Callable>)
-    Function(Callable callable) noexcept
+    Function(Callable callable) noexcept // NOLINT(cppcoreguidelines-explicit-constructor,misc-explicit-constructor): a callable converts as it does to std::function
         : invoke_(&call<Callable>),
           manage_(std::is_trivially_copyable_v<Callable> ? nullptr : &manage<Callable>) {
-      std::construct_at(reinterpret_cast<Callable*>(storage_), std::move(callable));
+      ::new (static_cast<void*>(storage_.dataMut())) Callable(std::move(callable));
     }
 
     Function(const Function&) = delete;
@@ -1848,8 +1992,8 @@ namespace telar::ds {
 
     // The arguments are lent to this call alone, region `b` of no field, as Rust's `for<'b> FnMut(&'b T)`
     // takes them: the callable cannot keep them.
-    Result operator()(tbc::val_b<Arguments>... arguments) {
-      return invoke_(storage_, std::forward<Arguments>(arguments)...);
+    Result operator()(tbc::val_b<Arguments>... arguments) { // NOLINT(performance-unnecessary-value-param): each argument passes on as the signature takes it, as std::function's call does
+      return invoke_(storage_.dataMut(), std::forward<Arguments>(arguments)...);
     }
 
   private:
@@ -1858,16 +2002,16 @@ namespace telar::ds {
       return std::invoke_r<Result>(*static_cast<Callable*>(storage), std::forward<Arguments>(arguments)...);
     }
 
-    [[noreturn]] static Result callEmpty(void*, Pass<Arguments>...) noexcept {
+    [[noreturn]] static Result callEmpty(void* /*storage*/, Pass<Arguments>... /*arguments*/) noexcept {
       __builtin_verbose_trap("telar::ds::Function", "called while empty");
     }
 
     template <typename Callable>
-    static void manage(void* target, void* source) noexcept {
-      auto* callable = static_cast<Callable*>(source);
+    static void manage(Relocation relocation) noexcept {
+      auto* callable = static_cast<Callable*>(relocation.source);
 
-      if (target != nullptr) {
-        std::construct_at(static_cast<Callable*>(target), std::move(*callable));
+      if (relocation.target != nullptr) {
+        std::construct_at(static_cast<Callable*>(relocation.target), std::move(*callable));
       }
 
       std::destroy_at(callable);
@@ -1877,19 +2021,19 @@ namespace telar::ds {
     // one moves as its bytes.
     void take(Function& other) noexcept {
       if (manage_ == nullptr) {
-        std::memcpy(storage_, other.storage_, Capacity);
+        storage_ = other.storage_;
       } else {
-        manage_(storage_, other.storage_);
+        manage_({.target = storage_.dataMut(), .source = other.storage_.dataMut()});
       }
     }
 
     void destroy() noexcept {
       if (manage_ != nullptr) {
-        manage_(nullptr, storage_);
+        manage_({.target = nullptr, .source = storage_.dataMut()});
       }
     }
 
-    alignas(void*) std::byte storage_[Capacity];
+    alignas(void*) Array<std::byte, Capacity> storage_{};
     Invoke invoke_ = &callEmpty;
     Manage manage_ = nullptr;
   };

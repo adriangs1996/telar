@@ -36,6 +36,8 @@ export {
 
       ByteQueue(const ByteQueue&) = delete;
       ByteQueue& operator=(const ByteQueue&) = delete;
+      ByteQueue(ByteQueue&&) = delete;
+      ByteQueue& operator=(ByteQueue&&) = delete;
 
       // Exchanges contents with a queue of the same allocator, as Rust's `mem::swap` moves buffers.
       inline void swap(ByteQueue& other) noexcept {
@@ -190,6 +192,8 @@ export {
 
       ByteStorage(const ByteStorage&) = delete;
       ByteStorage& operator=(const ByteStorage&) = delete;
+      ByteStorage(ByteStorage&&) = delete;
+      ByteStorage& operator=(ByteStorage&&) = delete;
 
       std::span<std::uint8_t> bytesMut() noexcept;
       [[nodiscard]] std::span<const std::uint8_t> bytes() const noexcept;
@@ -303,7 +307,7 @@ export {
       std::uint64_t dropped = 0;
     };
 
-    enum class ChannelPolicy {
+    enum class ChannelPolicy : std::uint8_t {
       best_effort,
       keep_oldest,
       keep_newest,
@@ -362,7 +366,7 @@ export {
         ds::Array<ds::Option<Value>, Capacity> discarded;
 
         {
-          const std::lock_guard lock{mutex_};
+          const std::scoped_lock lock{mutex_};
 
           closed_ = true;
           std::swap(discarded, slots_);
@@ -429,6 +433,8 @@ export {
 
       RetainedStream(const RetainedStream&) = delete;
       RetainedStream& operator=(const RetainedStream&) = delete;
+      RetainedStream(RetainedStream&&) = delete;
+      RetainedStream& operator=(RetainedStream&&) = delete;
 
       void append(std::span<const Byte> bytes) noexcept;
       // The bytes copied into the caller's destination, not a view of the stream.
@@ -487,8 +493,9 @@ export {
         return ds::none;
       }
 
+      // Takes the visitor itself, as the lambdas callers pass build it in place.
       template <typename Visitor>
-      inline void forEach(Visitor&& visit) const {
+      inline void forEach(Visitor visit) const {
         for (std::size_t word = 0; word < words_.size(); ++word) {
           auto remaining = words_[word];
 

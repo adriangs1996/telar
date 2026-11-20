@@ -10,9 +10,9 @@ namespace telar {
       return;
     }
 
-    std::memset(storage, 0, length);
+    std::fill_n(static_cast<std::byte*>(storage), length, std::byte{0});
     // The memory clobber preserves the wipe after the buffer's final use without forcing byte stores.
-    asm volatile("" : : "r"(storage) : "memory");
+    asm volatile("" : : "r"(storage) : "memory"); // NOLINT(portability-no-assembler): no standard call keeps a wipe the compiler sees as dead
   }
 
   template <Allocator Upstream>

@@ -21,6 +21,7 @@ export {
 
 // Macros do not cross an import. Each constant the tree reads is captured while the header still
 // defines it, undefined, and exported under its own name.
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage): only a macro can read a macro's value before the header's #undef.
 #define TELAR_ZLIB_CONSTANTS(X) \
   X(MAX_WBITS)                  \
   X(Z_BLOCK)                    \
@@ -54,7 +55,7 @@ namespace telar::native::zlib::captured {
 #define TELAR_ZLIB_CONSTANT(name) inline constexpr auto name = telar::native::zlib::captured::name##_;
 
 export {
-  TELAR_ZLIB_CONSTANTS(TELAR_ZLIB_CONSTANT)
+  TELAR_ZLIB_CONSTANTS(TELAR_ZLIB_CONSTANT) // NOLINT(readability-identifier-naming): exported under the C library's own name
 }
 
 // The function-like macros are functions defined in zlib.cpp, where the macros are.

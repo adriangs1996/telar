@@ -8,10 +8,10 @@ namespace telar::git {
   namespace {
 
     std::uint64_t hashOf(const ObjectId& id) noexcept {
-      std::uint64_t hash;
+      ds::Array<std::uint8_t, sizeof(std::uint64_t)> head{};
 
-      std::memcpy(&hash, id.bytes.data(), sizeof(hash));
-      return hash;
+      std::ranges::copy(id.bytes.view().first<sizeof(std::uint64_t)>(), head.viewMut().begin());
+      return std::bit_cast<std::uint64_t>(head);
     }
 
   }
@@ -81,12 +81,10 @@ namespace telar::git {
         heap_(memory),
         object_(memory) {}
 
-  ds::Option<Divergence> DivergenceWalk::count(ObjectDatabase& objects, const CommitGraph& graph, const ShallowCommits& shallow, const Limits& limits, const ObjectId& left, const ObjectId& right) {
+  ds::Option<Divergence> DivergenceWalk::count(Sources sources, const ObjectId& left, const ObjectId& right) {
     if (left == right) {
       return Divergence{};
     }
-
-    Sources sources{.objects = objects, .graph = graph, .shallow = shallow, .limits = limits};
 
     reset();
     const auto left_node = insert(sources, left, ds::none);
@@ -95,8 +93,8 @@ namespace telar::git {
       return ds::none;
     }
 
-    mark(*left_node, left_flag);
-    mark(*right_node, right_flag);
+    mark(*left_node, Reach::left);
+    mark(*right_node, Reach::right);
     const auto result = walk(sources);
 
     release();
@@ -130,7 +128,7 @@ namespace telar::git {
       auto& node = nodes_.atMut(index);
 
       node.queued = false;
-      if (node.flags != both) {
+      if (node.reach != Reach::both) {
         --interesting_;
       }
 
@@ -140,6 +138,14 @@ namespace telar::git {
     }
 
     return Divergence{.ahead = ahead_, .behind = behind_};
+  }
+
+  std::uint64_t DivergenceWalk::commitsRead() const noexcept {
+    return commits_read_;
+  }
+
+  void DivergenceWalk::resetCommitsRead() noexcept {
+    commits_read_ = 0;
   }
 
   void DivergenceWalk::reset() {
@@ -187,10 +193,10 @@ namespace telar::git {
     }
   }
 
-  std::uint64_t DivergenceWalk::key(const CommitGraph& graph, std::uint64_t generation, std::int64_t time) noexcept {
-    const auto seconds = static_cast<std::uint64_t>(std::max<std::int64_t>(time, 0)) & time_mask;
+  std::uint64_t DivergenceWalk::key(const CommitGraph& graph, Age age) noexcept {
+    const auto seconds = static_cast<std::uint64_t>(std::max<std::int64_t>(age.time, 0)) & time_mask;
 
-    return graph.empty() ? seconds : generation << 34 | seconds;
+    return graph.empty() ? seconds : age.generation << time_bits | seconds;
   }
 
   std::uint32_t& DivergenceWalk::slot(const ObjectId& id) noexcept {
@@ -231,7 +237,7 @@ namespace telar::git {
       }
 
       node.graph = *position;
-      node.key = key(sources.graph, commit->generation, commit->time);
+      node.key = key(sources.graph, {.generation = commit->generation, .time = commit->time});
     } else {
       CommitHeader header;
 
@@ -245,7 +251,7 @@ namespace telar::git {
       }
 
       node.parents_count = static_cast<std::uint32_t>(parents_.size() - node.parents_begin);
-      node.key = key(sources.graph, infinite_generation, header.time);
+      node.key = key(sources.graph, {.generation = infinite_generation, .time = header.time});
     }
 
     nodes_.push(node);
@@ -254,7 +260,7 @@ namespace telar::git {
   }
 
   bool DivergenceWalk::readCommit(Sources& sources, const ObjectId& id, CommitHeader& header) {
-    ++commits_read;
+    ++commits_read_;
     const auto begin = parents_.size();
     constexpr std::size_t first_prefix = 4096;
 
@@ -277,27 +283,29 @@ namespace telar::git {
     return false;
   }
 
-  void DivergenceWalk::classify(std::uint8_t flags, bool add) noexcept {
-    auto* count = flags == left_flag ? &ahead_ : flags == right_flag ? &behind_
-                                                                     : nullptr;
-    if (count != nullptr) {
-      *count = add ? *count + 1 : *count - 1;
+  void DivergenceWalk::classify(Reach reach, bool add) noexcept {
+    if (reach != Reach::left && reach != Reach::right) {
+      return;
     }
+
+    auto& count = reach == Reach::left ? ahead_ : behind_;
+
+    count = add ? count + 1 : count - 1;
   }
 
-  void DivergenceWalk::mark(std::uint32_t index, std::uint8_t flags) {
+  void DivergenceWalk::mark(std::uint32_t index, Reach reach) {
     auto& node = nodes_.atMut(index);
-    const auto previous = node.flags;
-    const auto next = static_cast<std::uint8_t>(previous | flags);
+    const auto previous = node.reach;
+    const auto next = static_cast<Reach>(std::to_underlying(previous) | std::to_underlying(reach));
     if (next == previous) {
       return;
     }
 
     classify(previous, false);
     classify(next, true);
-    node.flags = next;
+    node.reach = next;
     if (node.queued) {
-      if (previous != 0 && next == both) {
+      if (previous != Reach::none && next == Reach::both) {
         --interesting_;
       }
 
@@ -305,7 +313,7 @@ namespace telar::git {
     }
 
     node.queued = true;
-    if (next != both) {
+    if (next != Reach::both) {
       ++interesting_;
     }
 
@@ -314,7 +322,7 @@ namespace telar::git {
   }
 
   bool DivergenceWalk::expand(Sources& sources, std::uint32_t index) {
-    const auto flags = nodes_[index].flags;
+    const auto reach = nodes_[index].reach;
 
     if (nodes_[index].graph != no_position) {
       const auto commit = sources.graph.commit(nodes_[index].graph);
@@ -335,7 +343,7 @@ namespace telar::git {
         const auto node = id ? insert(sources, *id, parent) : ds::none;
 
         if (node) {
-          mark(*node, flags);
+          mark(*node, reach);
         } else {
           expanded = false;
         }
@@ -355,7 +363,7 @@ namespace telar::git {
         return false;
       }
 
-      mark(*node, flags);
+      mark(*node, reach);
     }
 
     return true;

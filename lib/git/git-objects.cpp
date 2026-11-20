@@ -11,6 +11,70 @@ namespace telar::git {
 
   namespace {
 
+    constexpr unsigned byte_bits = 8;
+    constexpr unsigned word_bits = 32;
+
+    // A pack entry's header byte: the type above four bits of the size.
+    constexpr unsigned pack_type_shift = 4;
+    constexpr std::uint8_t pack_type_mask = 7;
+    constexpr std::uint8_t pack_size_mask = 0xf;
+
+    // A size shift past which another seven bits overflow 64.
+    constexpr unsigned maximum_size_shift = 57;
+
+    // The pack entry types besides the four object types.
+    constexpr std::uint8_t pack_reserved = 5;
+    constexpr std::uint8_t pack_offset_delta = 6;
+    constexpr std::uint8_t pack_reference_delta = 7;
+
+    // A packfile starts with "PACK", its version and its object count.
+    constexpr std::size_t pack_header_bytes = 12;
+    constexpr std::string_view pack_signature = "PACK";
+
+    // A v2 pack index: its signature, then after the ids a CRC and an offset per object, then the
+    // offsets past 2 GiB.
+    constexpr ds::Array<std::uint8_t, 4> pack_index_signature{0xff, 't', 'O', 'c'};
+    constexpr std::size_t pack_crc_bytes = 4;
+    constexpr std::size_t pack_offset_bytes = 4;
+    constexpr std::size_t pack_large_offset_bytes = 8;
+    constexpr std::uint32_t pack_large_offset = 0x80000000U;
+    constexpr std::uint32_t pack_offset_mask = 0x7fffffffU;
+
+    constexpr std::string_view pack_index_suffix = ".idx";
+    constexpr std::size_t maximum_pack_name = 128;
+
+    // A delta's copy operation: the flag, then flags for the four offset and three size bytes that
+    // follow it.
+    constexpr std::uint8_t delta_copy = 0x80;
+    constexpr unsigned delta_copy_arguments = 7;
+    constexpr unsigned delta_copy_offset_bytes = 4;
+    constexpr std::uint64_t delta_copy_default_size = 0x10000;
+
+    // A commit-graph: its header, a table of chunks, and per commit its id then 16 bytes of parents,
+    // generation and time.
+    constexpr std::string_view graph_signature = "CGPH";
+    constexpr std::size_t graph_header_bytes = 8;
+    constexpr std::size_t graph_version_at = 4;
+    constexpr std::size_t graph_hash_version_at = 5;
+    constexpr std::size_t graph_chunk_count_at = 6;
+    constexpr std::size_t graph_base_count_at = 7;
+    constexpr std::size_t graph_chunk_entry_bytes = 12;
+    constexpr std::size_t graph_chunk_id_bytes = 4;
+    constexpr std::size_t graph_commit_data_bytes = 16;
+    constexpr std::uint8_t graph_sha256_version = 2;
+    constexpr unsigned graph_generation_shift = 2;
+    constexpr std::uint32_t graph_time_high_mask = 3;
+    constexpr std::uint32_t graph_extra_edges = 0x80000000U;
+    constexpr std::uint32_t graph_last_edge = 0x80000000U;
+    constexpr std::uint32_t graph_edge_mask = 0x7fffffffU;
+    constexpr std::size_t graph_edge_bytes = 4;
+    constexpr std::size_t maximum_graph_chunks = 32;
+
+    constexpr std::uint32_t graph_chunk_fanout = 0x4f494446;  // OIDF
+    constexpr std::uint32_t graph_chunk_ids = 0x4f49444c;     // OIDL
+    constexpr std::uint32_t graph_chunk_commits = 0x43444154; // CDAT
+    constexpr std::uint32_t graph_chunk_edges = 0x45444745;   // EDGE
+
     enum class Inflated : std::uint8_t {
       full,
       ended,
@@ -39,7 +103,7 @@ namespace telar::git {
         }
 
         const auto count = static_cast<std::size_t>(std::min<std::uint64_t>(buffer.size(), end - offset));
-        if (!readAt(descriptor, buffer.data(), count, offset)) {
+        if (!readAt(descriptor, buffer.first(count), offset)) {
           return {};
         }
 
@@ -90,7 +154,7 @@ namespace telar::git {
     // After `output` filled, the stream must end without producing another byte.
     template <typename Source>
     bool endsHere(z_stream& stream, Source& source) noexcept {
-      ds::Array<std::uint8_t, 1> sink;
+      ds::Array<std::uint8_t, 1> sink{};
 
       return pump(stream, source, sink.viewMut()) == Inflated::ended && stream.avail_out == sink.size();
     }
@@ -127,82 +191,95 @@ namespace telar::git {
     }
 
     std::span<std::uint8_t> writable(auto& string) noexcept {
-      return {reinterpret_cast<std::uint8_t*>(string.dataMut()), string.size()};
+      return {reinterpret_cast<std::uint8_t*>(string.dataMut()), string.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast,clang-diagnostic-unsafe-buffer-usage-in-container): bytes may alias text, and no cast-free view writes text as bytes
     }
 
-    // Little-endian base-128 size of a delta header.
-    bool deltaSize(std::span<const std::uint8_t> delta, std::size_t& position, std::uint64_t& value) noexcept {
-      value = 0;
-      for (unsigned shift = 0; shift < 64; shift += 7) {
+    // Little-endian base-128 size of a delta header; none when it runs past the delta or 64 bits.
+    ds::Option<std::uint64_t> deltaSize(std::span<const std::uint8_t> delta, std::size_t& position) noexcept {
+      std::uint64_t value = 0;
+
+      for (unsigned shift = 0; shift < std::numeric_limits<std::uint64_t>::digits; shift += varint_payload_bits) {
         if (position >= delta.size()) {
-          return false;
+          return ds::none;
         }
 
         const auto byte = delta[position++];
 
-        value |= std::uint64_t{byte & 0x7fu} << shift;
-        if ((byte & 0x80) == 0) {
-          return true;
+        value |= (std::uint64_t{byte} & varint_payload) << shift;
+        if ((byte & varint_continues) == 0) {
+          return value;
         }
       }
 
-      return false;
+      return ds::none;
+    }
+
+    // The source range a delta's copy operation names.
+    struct DeltaCopy {
+      std::uint64_t offset = 0;
+      std::uint64_t size = 0;
+    };
+
+    // The offset and size bytes `operation` flags, read from `delta` at `position`; none when the
+    // delta ends first.
+    ds::Option<DeltaCopy> deltaCopy(std::span<const std::uint8_t> delta, std::size_t& position, std::uint8_t operation) noexcept {
+      DeltaCopy copy;
+
+      for (unsigned bit = 0; bit < delta_copy_arguments; ++bit) {
+        if ((operation & (1U << bit)) == 0) {
+          continue;
+        }
+
+        if (position >= delta.size()) {
+          return ds::none;
+        }
+
+        const auto byte = std::uint64_t{delta[position++]};
+
+        if (bit < delta_copy_offset_bytes) {
+          copy.offset |= byte << (byte_bits * bit);
+        } else {
+          copy.size |= byte << (byte_bits * (bit - delta_copy_offset_bytes));
+        }
+      }
+
+      if (copy.size == 0) {
+        copy.size = delta_copy_default_size;
+      }
+
+      return copy;
     }
 
     // Applies a git delta to `base`. Every copy is checked against both buffers.
     template <Allocator Memory>
     bool applyDelta(std::span<const std::uint8_t> base, std::span<const std::uint8_t> delta, ds::String<Memory>& output, std::size_t limit) {
       std::size_t position = 0;
-      std::uint64_t source_size = 0;
-      std::uint64_t target_size = 0;
-      if (!deltaSize(delta, position, source_size) || !deltaSize(delta, position, target_size) || source_size != base.size() || target_size > limit) {
+      const auto source_size = deltaSize(delta, position);
+      const auto target_size = source_size ? deltaSize(delta, position) : ds::none;
+      if (!target_size || *source_size != base.size() || *target_size > limit) {
         return false;
       }
 
-      resizeForOverwrite(output, static_cast<std::size_t>(target_size));
-      auto* target = reinterpret_cast<std::uint8_t*>(output.dataMut());
+      resizeForOverwrite(output, static_cast<std::size_t>(*target_size));
+      const auto target = writable(output);
       std::size_t written = 0;
 
       while (position < delta.size()) {
         const auto operation = delta[position++];
-        if ((operation & 0x80) != 0) {
-          std::uint64_t offset = 0;
-          std::uint64_t size = 0;
-
-          for (unsigned bit = 0; bit < 7; ++bit) {
-            if ((operation & (1u << bit)) == 0) {
-              continue;
-            }
-
-            if (position >= delta.size()) {
-              return false;
-            }
-
-            const auto byte = std::uint64_t{delta[position++]};
-
-            if (bit < 4) {
-              offset |= byte << (8 * bit);
-            } else {
-              size |= byte << (8 * (bit - 4));
-            }
-          }
-
-          if (size == 0) {
-            size = 0x10000;
-          }
-
-          if (!fits(base.size(), offset, size) || !fits(target_size, written, size)) {
+        if ((operation & delta_copy) != 0) {
+          const auto copy = deltaCopy(delta, position, operation);
+          if (!copy || !fits(base.size(), copy->offset, copy->size) || !fits(*target_size, written, copy->size)) {
             return false;
           }
 
-          std::memcpy(target + written, base.data() + offset, static_cast<std::size_t>(size));
-          written += static_cast<std::size_t>(size);
+          std::ranges::copy(base.subspan(static_cast<std::size_t>(copy->offset), static_cast<std::size_t>(copy->size)), target.subspan(written).begin());
+          written += static_cast<std::size_t>(copy->size);
         } else if (operation != 0) {
-          if (!fits(delta.size(), position, operation) || !fits(target_size, written, operation)) {
+          if (!fits(delta.size(), position, operation) || !fits(*target_size, written, operation)) {
             return false;
           }
 
-          std::memcpy(target + written, delta.data() + position, operation);
+          std::ranges::copy(delta.subspan(position, operation), target.subspan(written).begin());
           position += operation;
           written += operation;
         } else {
@@ -210,7 +287,7 @@ namespace telar::git {
         }
       }
 
-      return written == target_size;
+      return written == *target_size;
     }
 
     ds::Option<ObjectId> headerId(std::string_view& content, std::string_view label, ObjectFormat format) noexcept {
@@ -219,12 +296,67 @@ namespace telar::git {
         return ds::none;
       }
 
-      const auto id = ObjectId::fromHex(content.substr(label.size(), digits), format);
+      const auto id = ObjectId::fromHex(substring(content, label.size(), digits), format);
       if (id) {
         content.remove_prefix(label.size() + digits + 1);
       }
 
       return id;
+    }
+
+    // The byte of a tree entry's name that git's tree order compares after their common prefix: a
+    // directory's name ends with '/'.
+    unsigned char treeNameByte(std::string_view name, std::size_t position, bool directory) noexcept {
+      if (name.size() > position) {
+        return static_cast<unsigned char>(name[position]);
+      }
+
+      return directory ? '/' : 0;
+    }
+
+    // The type a loose object's header names; none for any other.
+    ds::Option<ObjectType> looseType(std::string_view kind) noexcept {
+      if (kind == "commit") {
+        return ObjectType::commit;
+      }
+
+      if (kind == "tree") {
+        return ObjectType::tree;
+      }
+
+      if (kind == "blob") {
+        return ObjectType::blob;
+      }
+
+      if (kind == "tag") {
+        return ObjectType::tag;
+      }
+
+      return ds::none;
+    }
+
+    // A loose object's header, "<type> <size>\0": the type, the size, and the header's length.
+    struct LooseHeader {
+      ObjectType type = ObjectType::none;
+      std::uint64_t size = 0;
+      std::size_t length = 0;
+    };
+
+    // The header at the front of `text`; none when it is malformed.
+    ds::Option<LooseHeader> looseHeader(std::string_view text) noexcept {
+      const auto space = text.find(' ');
+      const auto terminator = text.find('\0');
+      if (space == std::string_view::npos || terminator == std::string_view::npos || space > terminator) {
+        return ds::none;
+      }
+
+      const auto type = looseType(substring(text, 0, space));
+      const auto size = telar::runtime::parseExact<std::uint64_t>(substring(text, space + 1, terminator - space - 1));
+      if (!type || !size) {
+        return ds::none;
+      }
+
+      return LooseHeader{.type = *type, .size = *size, .length = terminator + 1};
     }
 
   }
@@ -293,7 +425,7 @@ namespace telar::git {
         return false;
       }
 
-      const auto line = content.substr(0, end);
+      const auto line = substring(content, 0, end);
 
       content.remove_prefix(end + 1);
       if (!line.starts_with("committer ")) {
@@ -305,19 +437,18 @@ namespace telar::git {
         return false;
       }
 
-      auto rest = line.substr(email_end + 1);
+      auto rest = substring(line, email_end + 1);
 
       while (rest.starts_with(' ')) {
         rest.remove_prefix(1);
       }
 
-      std::uint64_t seconds = 0;
-      const auto parsed = std::from_chars(rest.data(), rest.data() + rest.size(), seconds);
-      if (parsed.ec != std::errc{}) {
+      const auto seconds = telar::runtime::parseExact<std::uint64_t>(substring(rest, 0, rest.find_first_not_of("0123456789")));
+      if (!seconds) {
         return false;
       }
 
-      header.time = static_cast<std::int64_t>(std::min<std::uint64_t>(seconds, std::numeric_limits<std::int64_t>::max()));
+      header.time = static_cast<std::int64_t>(std::min<std::uint64_t>(*seconds, std::numeric_limits<std::int64_t>::max()));
       return true;
     }
 
@@ -330,17 +461,17 @@ namespace telar::git {
 
   int compareTreeNames(std::string_view left, bool left_directory, std::string_view right, bool right_directory) noexcept {
     const auto common = std::min(left.size(), right.size());
-    if (const auto order = left.substr(0, common).compare(right.substr(0, common)); order != 0) {
+    if (const auto order = substring(left, 0, common).compare(substring(right, 0, common)); order != 0) {
       return order;
     }
 
-    const auto left_next = left.size() > common ? static_cast<unsigned char>(left[common]) : left_directory ? '/'
-                                                                                                            : 0;
-    const auto right_next = right.size() > common ? static_cast<unsigned char>(right[common]) : right_directory ? '/'
-                                                                                                                : 0;
+    const auto left_next = treeNameByte(left, common, left_directory);
+    const auto right_next = treeNameByte(right, common, right_directory);
+    if (left_next == right_next) {
+      return 0;
+    }
 
-    return left_next < right_next ? -1 : left_next > right_next ? 1
-                                                                : 0;
+    return left_next < right_next ? -1 : 1;
   }
 
   TreeReader::TreeReader(tbc::val_a<std::string_view> content, ObjectFormat format) noexcept
@@ -352,11 +483,14 @@ namespace telar::git {
       return false;
     }
 
+    constexpr std::size_t maximum_mode_digits = 7;
+    constexpr unsigned octal_digit_bits = 3;
+
     std::uint32_t mode = 0;
     std::size_t index = 0;
 
-    while (index < rest_.size() && index < 7 && rest_[index] >= '0' && rest_[index] <= '7') {
-      mode = mode << 3 | static_cast<std::uint32_t>(rest_[index] - '0');
+    while (index < rest_.size() && index < maximum_mode_digits && rest_[index] >= '0' && rest_[index] <= '7') {
+      mode = mode << octal_digit_bits | static_cast<std::uint32_t>(rest_[index] - '0');
       ++index;
     }
 
@@ -370,26 +504,26 @@ namespace telar::git {
       return fail();
     }
 
-    const auto name = rest_.substr(name_start, name_end - name_start);
+    const auto name = substring(rest_, name_start, name_end - name_start);
     if (name == "." || name == ".." || name.contains('/')) {
       return fail();
     }
 
     switch (mode) {
-    case 040000:
-    case 0100644:
-    case 0100755:
-    case 0100664:
-    case 0120000:
-    case 0160000:
+    case mode_directory:
+    case mode_file:
+    case mode_executable:
+    case mode_group_writable:
+    case mode_symlink:
+    case mode_gitlink:
       break;
     default:
       return fail();
     }
 
-    entry.mode = mode == 0100664 ? 0100644 : mode;
+    entry.mode = mode == mode_group_writable ? mode_file : mode;
     entry.name = name;
-    entry.id = ObjectId::fromBytes(asBytes(rest_.substr(name_end + 1, hash_size_)));
+    entry.id = ObjectId::fromBytes(asBytes(substring(rest_, name_end + 1, hash_size_)));
     if (have_previous_ && compareTreeNames(previous_, previous_directory_, name, entry.directory()) >= 0) {
       return fail();
     }
@@ -453,23 +587,30 @@ namespace telar::git {
   }
 
   Lookup ObjectDatabase::read(const ObjectId& id, ObjectType& type, ds::String<Memory>& output, std::size_t prefix) {
-    std::uint32_t pack = 0;
-    std::uint64_t offset = 0;
-    const auto located = locate(id, pack, offset);
+    Location location;
+    const auto located = locate(id, location);
     if (located != Lookup::found) {
       return located;
     }
 
-    ++objects_read;
-    if (pack == loose) {
+    ++objects_read_;
+    if (location.pack == loose) {
       return readLoose(id, type, output, prefix);
     }
 
-    return readPacked(pack, offset, type, output, prefix);
+    return readPacked(location, type, output, prefix);
+  }
+
+  std::uint64_t ObjectDatabase::objectsRead() const noexcept {
+    return objects_read_;
+  }
+
+  void ObjectDatabase::resetObjectsRead() noexcept {
+    objects_read_ = 0;
   }
 
   void ObjectDatabase::trim() {
-    constexpr std::size_t retained = 1 << 20;
+    constexpr std::size_t retained = std::size_t{1} << 20U;
 
     for (auto* buffer : {&compressed_, &base_, &target_, &delta_}) {
       if (buffer->capacity() > retained) {
@@ -503,8 +644,8 @@ namespace telar::git {
     telar::runtime::DirectoryStream stream{directory.get()};
 
     while (const auto* entry = stream.next()) {
-      const std::string_view name{entry->d_name};
-      if (!name.starts_with("pack-") || !name.ends_with(".idx") || name.size() > 128) {
+      const std::string_view name{std::data(entry->d_name)};
+      if (!name.starts_with("pack-") || !name.ends_with(pack_index_suffix) || name.size() > maximum_pack_name) {
         continue;
       }
 
@@ -525,24 +666,24 @@ namespace telar::git {
     const auto hash_size = hashSize(format_);
     PathName name;
     struct stat status{};
-    if (!name.assign({index_name}) || openRegular(directory, name.c_str(), pack.index, status) != ReadStatus::ok) {
+    if (!name.assign({index_name}) || openRegular(directory, name.cString(), pack.index, status) != ReadStatus::ok) {
       return false;
     }
 
     pack.index_size = static_cast<std::uint64_t>(status.st_size);
-    ds::Array<std::uint8_t, pack_index_header> header;
-    if (pack.index_size < pack_index_header + (2 * hash_size) || !readAt(pack.index.get(), header.dataMut(), header.size(), 0)) {
+    ds::Array<std::uint8_t, pack_index_header> header{};
+    if (pack.index_size < pack_index_header + (2 * hash_size) || !readAt(pack.index.get(), header.viewMut(), 0)) {
       return false;
     }
 
-    if (header[0] != 0xff || header[1] != 't' || header[2] != 'O' || header[3] != 'c' || loadBig32(header.data() + 4) != 2) {
+    if (!std::ranges::equal(header.view().first(pack_index_signature.size()), pack_index_signature.view()) || loadBig32(header.view(), pack_index_signature.size()) != 2) {
       return false;
     }
 
     std::uint32_t previous = 0;
 
     for (std::size_t index = 0; index < pack.fanout.size(); ++index) {
-      pack.fanout.atMut(index) = loadBig32(header.data() + 8 + (4 * index));
+      pack.fanout.atMut(index) = loadBig32(header.view(), pack_index_fanout + (sizeof(std::uint32_t) * index));
       if (pack.fanout[index] < previous) {
         return false;
       }
@@ -550,28 +691,28 @@ namespace telar::git {
       previous = pack.fanout[index];
     }
 
-    pack.count = pack.fanout[255];
-    const auto fixed = pack_index_header + (std::uint64_t{pack.count} * (hash_size + 8)) + (2 * hash_size);
-    if (pack.index_size < fixed || (pack.index_size - fixed) % 8 != 0 || (pack.index_size - fixed) / 8 > pack.count) {
+    pack.count = pack.fanout.back();
+    const auto fixed = pack_index_header + (std::uint64_t{pack.count} * (hash_size + pack_crc_bytes + pack_offset_bytes)) + (2 * hash_size);
+    if (pack.index_size < fixed || (pack.index_size - fixed) % pack_large_offset_bytes != 0 || (pack.index_size - fixed) / pack_large_offset_bytes > pack.count) {
       return false;
     }
 
-    pack.large_offsets = (pack.index_size - fixed) / 8;
+    pack.large_offsets = (pack.index_size - fixed) / pack_large_offset_bytes;
 
-    const auto stem = index_name.substr(0, index_name.size() - 4);
-    if (!name.assign({stem, ".pack"}) || openRegular(directory, name.c_str(), pack.data, status) != ReadStatus::ok) {
+    const auto stem = substring(index_name, 0, index_name.size() - pack_index_suffix.size());
+    if (!name.assign({stem, ".pack"}) || openRegular(directory, name.cString(), pack.data, status) != ReadStatus::ok) {
       return false;
     }
 
     pack.data_size = static_cast<std::uint64_t>(status.st_size);
-    ds::Array<std::uint8_t, 12> pack_header;
-    if (pack.data_size < pack_header.size() + hash_size || !readAt(pack.data.get(), pack_header.dataMut(), pack_header.size(), 0)) {
+    ds::Array<std::uint8_t, pack_header_bytes> pack_header{};
+    if (pack.data_size < pack_header.size() + hash_size || !readAt(pack.data.get(), pack_header.viewMut(), 0)) {
       return false;
     }
 
-    const auto version = loadBig32(pack_header.data() + 4);
+    const auto version = loadBig32(pack_header.view(), pack_signature.size());
 
-    return std::memcmp(pack_header.data(), "PACK", 4) == 0 && (version == 2 || version == 3) && loadBig32(pack_header.data() + 8) == pack.count;
+    return asText(pack_header.view().first(pack_signature.size())) == pack_signature && (version == 2 || version == 3) && loadBig32(pack_header.view(), pack_signature.size() + sizeof(version)) == pack.count;
   }
 
   ds::Option<std::uint32_t> ObjectDatabase::findInPack(std::span<std::uint8_t> block, const Pack& pack, const ObjectId& id) noexcept {
@@ -583,12 +724,12 @@ namespace telar::git {
 
     while (high > low && std::size_t{high - low} * hash_size > block.size()) {
       const auto middle = low + ((high - low) / 2);
-      ds::Array<std::uint8_t, maximum_hash_size> name;
-      if (!readAt(pack.index.get(), name.dataMut(), hash_size, pack_index_header + (std::uint64_t{middle} * hash_size))) {
+      ds::Array<std::uint8_t, maximum_hash_size> name{};
+      if (!readAt(pack.index.get(), name.viewMut().first(hash_size), pack_index_header + (std::uint64_t{middle} * hash_size))) {
         return ds::none;
       }
 
-      const auto order = compareBytes(key, {name.data(), hash_size});
+      const auto order = compareBytes(key, name.view().first(hash_size));
       if (order == 0) {
         return middle;
       }
@@ -605,7 +746,7 @@ namespace telar::git {
     }
 
     const auto count = std::size_t{high - low};
-    if (!readAt(pack.index.get(), block.data(), count * hash_size, pack_index_header + (std::uint64_t{low} * hash_size))) {
+    if (!readAt(pack.index.get(), block.first(count * hash_size), pack_index_header + (std::uint64_t{low} * hash_size))) {
       return ds::none;
     }
 
@@ -614,7 +755,7 @@ namespace telar::git {
 
     while (begin < end) {
       const auto middle = begin + ((end - begin) / 2);
-      const auto order = compareBytes(key, {block.data() + (middle * hash_size), hash_size});
+      const auto order = compareBytes(key, block.subspan(middle * hash_size, hash_size));
       if (order == 0) {
         return low + static_cast<std::uint32_t>(middle);
       }
@@ -631,30 +772,30 @@ namespace telar::git {
 
   ds::Option<std::uint64_t> ObjectDatabase::packOffset(ObjectFormat format, const Pack& pack, std::uint32_t position) noexcept {
     const auto hash_size = hashSize(format);
-    const auto offsets = pack_index_header + (std::uint64_t{pack.count} * (hash_size + 4));
-    ds::Array<std::uint8_t, 8> bytes;
-    if (!readAt(pack.index.get(), bytes.dataMut(), 4, offsets + (4 * std::uint64_t{position}))) {
+    const auto offsets = pack_index_header + (std::uint64_t{pack.count} * (hash_size + pack_crc_bytes));
+    ds::Array<std::uint8_t, pack_large_offset_bytes> bytes{};
+    if (!readAt(pack.index.get(), bytes.viewMut().first(pack_offset_bytes), offsets + (pack_offset_bytes * std::uint64_t{position}))) {
       return ds::none;
     }
 
-    std::uint64_t offset = loadBig32(bytes.data());
-    if ((offset & 0x80000000u) != 0) {
-      const auto large = offset & 0x7fffffffu;
-      if (large >= pack.large_offsets || !readAt(pack.index.get(), bytes.dataMut(), 8, offsets + (4 * std::uint64_t{pack.count}) + (8 * large))) {
+    std::uint64_t offset = loadBig32(bytes.view());
+    if ((offset & pack_large_offset) != 0) {
+      const auto large = offset & pack_offset_mask;
+      if (large >= pack.large_offsets || !readAt(pack.index.get(), bytes.viewMut(), offsets + (pack_offset_bytes * std::uint64_t{pack.count}) + (pack_large_offset_bytes * large))) {
         return ds::none;
       }
 
-      offset = loadBig64(bytes.data());
+      offset = loadBig64(bytes.view());
     }
 
-    if (offset < 12 || offset >= pack.data_size - hash_size) {
+    if (offset < pack_header_bytes || offset >= pack.data_size - hash_size) {
       return ds::none;
     }
 
     return offset;
   }
 
-  Lookup ObjectDatabase::locate(const ObjectId& id, std::uint32_t& pack, std::uint64_t& offset) {
+  Lookup ObjectDatabase::locate(const ObjectId& id, Location& location) {
     if (id.size != hashSize(format_)) {
       return Lookup::invalid;
     }
@@ -668,88 +809,90 @@ namespace telar::git {
         }
 
         last_pack_ = index;
-        pack = static_cast<std::uint32_t>(index);
-        offset = *found;
+        location = {.pack = static_cast<std::uint32_t>(index), .offset = *found};
         return Lookup::found;
       }
     }
 
-    ds::Array<char, 2 * maximum_hash_size> hex;
+    ds::Array<char, 2 * maximum_hash_size> hex{};
     const auto digits = id.hex(hex.viewMut());
     PathName name;
-    if (!name.assign({digits.substr(0, 2), "/", digits.substr(2)})) {
+    if (!name.assign({substring(digits, 0, 2), "/", substring(digits, 2)})) {
       return Lookup::invalid;
     }
 
     struct stat status{};
-    if (::fstatat(objects_.get(), name.c_str(), &status, AT_SYMLINK_NOFOLLOW) != 0) {
+    if (::fstatat(objects_.get(), name.cString(), &status, AT_SYMLINK_NOFOLLOW) != 0) {
       return sys::lastError() == ENOENT || sys::lastError() == ENOTDIR ? Lookup::missing : Lookup::invalid;
     }
 
-    pack = loose;
+    location.pack = loose;
     return Lookup::found;
   }
 
   bool ObjectDatabase::entryAt(ObjectFormat format, const Pack& pack, std::uint64_t offset, Entry& entry) noexcept {
     const auto hash_size = hashSize(format);
     const auto end = pack.data_size - hash_size;
-    if (offset < 12 || offset >= end) {
+    if (offset < pack_header_bytes || offset >= end) {
       return false;
     }
 
-    ds::Array<std::uint8_t, 64> bytes;
+    // The longest entry header: the size's bytes, then a base's id or distance.
+    constexpr std::size_t entry_header_bytes = 64;
+
+    ds::Array<std::uint8_t, entry_header_bytes> bytes{};
     const auto available = static_cast<std::size_t>(std::min<std::uint64_t>(bytes.size(), end - offset));
-    if (!readAt(pack.data.get(), bytes.dataMut(), available, offset)) {
+    if (!readAt(pack.data.get(), bytes.viewMut().first(available), offset)) {
       return false;
     }
 
     std::size_t index = 0;
     auto byte = bytes[index++];
 
-    entry.kind = (byte >> 4) & 7;
-    entry.size = byte & 15u;
-    unsigned shift = 4;
+    entry.kind = static_cast<std::uint8_t>((unsigned{byte} >> pack_type_shift) & pack_type_mask);
+    entry.size = byte & pack_size_mask;
+    unsigned shift = pack_type_shift;
 
-    while ((byte & 0x80) != 0) {
-      if (index >= available || shift > 57) {
+    while ((byte & varint_continues) != 0) {
+      if (index >= available || shift > maximum_size_shift) {
         return false;
       }
 
       byte = bytes[index++];
-      entry.size |= std::uint64_t{byte & 0x7fu} << shift;
-      shift += 7;
+      entry.size |= (std::uint64_t{byte} & varint_payload) << shift;
+      shift += varint_payload_bits;
     }
 
-    if (entry.kind == 6) {
+    if (entry.kind == pack_offset_delta) {
       if (index >= available) {
         return false;
       }
 
       byte = bytes[index++];
-      std::uint64_t distance = byte & 0x7fu;
+      std::uint64_t distance = byte & varint_payload;
 
-      while ((byte & 0x80) != 0) {
-        if (index >= available || distance >= (std::uint64_t{1} << 56)) {
+      while ((byte & varint_continues) != 0) {
+        if (index >= available || distance >= maximum_offset_varint) {
           return false;
         }
 
         byte = bytes[index++];
-        distance = ((distance + 1) << 7) | (byte & 0x7fu);
+        distance = ((distance + 1) << varint_payload_bits) | (std::uint64_t{byte} & varint_payload);
       }
 
-      if (distance == 0 || distance > offset - 12) {
+      if (distance == 0 || distance > offset - pack_header_bytes) {
         return false;
       }
 
       entry.base_offset = offset - distance;
-    } else if (entry.kind == 7) {
+    } else if (entry.kind == pack_reference_delta) {
       if (!fits(available, index, hash_size)) {
         return false;
       }
 
-      entry.base = ObjectId::fromBytes({bytes.data() + index, hash_size});
+      entry.base = ObjectId::fromBytes(bytes.view().subspan(index, hash_size));
       index += hash_size;
-    } else if (entry.kind == 0 || entry.kind == 5) {
+    } else if (entry.kind == 0 || entry.kind == pack_reserved) {
       return false;
     }
 
@@ -757,59 +900,26 @@ namespace telar::git {
     return true;
   }
 
-  bool ObjectDatabase::inflatePacked(Inflater& inflater, std::span<std::uint8_t> chunk, ObjectFormat format, const Pack& pack, std::uint64_t data_offset, std::span<std::uint8_t> output, bool whole) {
+  bool ObjectDatabase::inflatePacked(Inflater& inflater, std::span<std::uint8_t> chunk, ObjectFormat format, Inflation inflation) {
     if (!inflater.start()) {
       return false;
     }
 
-    PackSource source{.descriptor = pack.data.get(), .offset = data_offset, .end = pack.data_size - hashSize(format), .buffer = chunk};
+    PackSource source{.descriptor = inflation.pack.data.get(), .offset = inflation.data_offset, .end = inflation.pack.data_size - hashSize(format), .buffer = chunk};
 
-    if (whole) {
-      return inflateExactly(inflater.stream(), source, output);
+    if (inflation.whole) {
+      return inflateExactly(inflater.stream(), source, inflation.output);
     }
 
-    return inflatePrefix(inflater.stream(), source, output);
+    return inflatePrefix(inflater.stream(), source, inflation.output);
   }
 
-  Lookup ObjectDatabase::readPacked(std::uint32_t pack, std::uint64_t offset, ObjectType& type, ds::String<Memory>& output, std::size_t prefix) {
+  Lookup ObjectDatabase::readPacked(Location location, ObjectType& type, ds::String<Memory>& output, std::size_t prefix) {
     chain_.clear();
     Entry entry;
-    bool loose_base = false;
-    ObjectId loose_id;
-
-    for (;;) {
-      if (!entryAt(format_, packs_[pack], offset, entry)) {
-        return Lookup::invalid;
-      }
-
-      if (entry.kind >= 1 && entry.kind <= 4) {
-        break;
-      }
-
-      if (chain_.size() >= limits_.delta_depth || entry.size > limits_.object_size) {
-        return Lookup::invalid;
-      }
-
-      chain_.push({.pack = pack, .data_offset = entry.data_offset, .size = entry.size});
-      if (entry.kind == 6) {
-        offset = entry.base_offset;
-        continue;
-      }
-
-      std::uint32_t base_pack = 0;
-      std::uint64_t base_offset = 0;
-      if (locate(entry.base, base_pack, base_offset) != Lookup::found) {
-        return Lookup::invalid;
-      }
-
-      if (base_pack == loose) {
-        loose_base = true;
-        loose_id = entry.base;
-        break;
-      }
-
-      pack = base_pack;
-      offset = base_offset;
+    ds::Option<ObjectId> loose_base;
+    if (!chainToBase(location, entry, loose_base)) {
+      return Lookup::invalid;
     }
 
     if (chain_.empty()) {
@@ -823,7 +933,7 @@ namespace telar::git {
       }
 
       resizeForOverwrite(output, size);
-      if (!inflatePacked(inflater_, chunk_.viewMut(), format_, packs_[pack], entry.data_offset, writable(output), prefix == 0 || size == entry.size)) {
+      if (!inflatePacked(inflater_, chunk_.viewMut(), format_, {.pack = packs_[location.pack], .data_offset = entry.data_offset, .output = writable(output), .whole = prefix == 0 || size == entry.size})) {
         return Lookup::invalid;
       }
 
@@ -834,7 +944,7 @@ namespace telar::git {
     if (loose_base) {
       // The base buffer, taken while the loose object is read into it: reading mutates the database.
       auto base = std::move(base_);
-      const auto read = readLoose(loose_id, type, base, 0);
+      const auto read = readLoose(*loose_base, type, base, 0);
 
       base_ = std::move(base);
       if (read != Lookup::found) {
@@ -846,27 +956,15 @@ namespace telar::git {
       }
 
       resizeForOverwrite(base_, static_cast<std::size_t>(entry.size));
-      if (!inflatePacked(inflater_, chunk_.viewMut(), format_, packs_[pack], entry.data_offset, writable(base_), true)) {
+      if (!inflatePacked(inflater_, chunk_.viewMut(), format_, {.pack = packs_[location.pack], .data_offset = entry.data_offset, .output = writable(base_), .whole = true})) {
         return Lookup::invalid;
       }
 
       type = static_cast<ObjectType>(entry.kind);
     }
 
-    for (auto index = chain_.size(); index-- != 0;) {
-      const auto* link = &chain_[index];
-
-      if (!charge(inflated_, limits_.inflated_bytes, link->size)) {
-        return Lookup::invalid;
-      }
-
-      resizeForOverwrite(delta_, static_cast<std::size_t>(link->size));
-      if (!inflatePacked(inflater_, chunk_.viewMut(), format_, packs_[link->pack], link->data_offset, writable(delta_), true) || !applyDelta(asBytes(base_), asBytes(delta_), target_, limits_.object_size) ||
-          !charge(inflated_, limits_.inflated_bytes, target_.size())) {
-        return Lookup::invalid;
-      }
-
-      std::swap(base_, target_);
+    if (!applyChain()) {
+      return Lookup::invalid;
     }
 
     std::swap(output, base_);
@@ -877,15 +975,69 @@ namespace telar::git {
     return Lookup::found;
   }
 
+  bool ObjectDatabase::chainToBase(Location& location, Entry& entry, ds::Option<ObjectId>& loose_base) {
+    for (;;) {
+      if (!entryAt(format_, packs_[location.pack], location.offset, entry)) {
+        return false;
+      }
+
+      if (entry.kind >= 1 && entry.kind <= 4) {
+        return true;
+      }
+
+      if (chain_.size() >= limits_.delta_depth || entry.size > limits_.object_size) {
+        return false;
+      }
+
+      chain_.push({.pack = location.pack, .data_offset = entry.data_offset, .size = entry.size});
+      if (entry.kind == pack_offset_delta) {
+        location.offset = entry.base_offset;
+        continue;
+      }
+
+      Location base;
+      if (locate(entry.base, base) != Lookup::found) {
+        return false;
+      }
+
+      if (base.pack == loose) {
+        loose_base = entry.base;
+        return true;
+      }
+
+      location = base;
+    }
+  }
+
+  bool ObjectDatabase::applyChain() {
+    for (auto index = chain_.size(); index-- != 0;) {
+      const auto* link = &chain_[index];
+
+      if (!charge(inflated_, limits_.inflated_bytes, link->size)) {
+        return false;
+      }
+
+      resizeForOverwrite(delta_, static_cast<std::size_t>(link->size));
+      if (!inflatePacked(inflater_, chunk_.viewMut(), format_, {.pack = packs_[link->pack], .data_offset = link->data_offset, .output = writable(delta_), .whole = true}) || !applyDelta(asBytes(base_), asBytes(delta_), target_, limits_.object_size) ||
+          !charge(inflated_, limits_.inflated_bytes, target_.size())) {
+        return false;
+      }
+
+      std::swap(base_, target_);
+    }
+
+    return true;
+  }
+
   Lookup ObjectDatabase::readLoose(const ObjectId& id, ObjectType& type, ds::String<Memory>& output, std::size_t prefix) {
-    ds::Array<char, 2 * maximum_hash_size> hex;
+    ds::Array<char, 2 * maximum_hash_size> hex{};
     const auto digits = id.hex(hex.viewMut());
     PathName name;
-    if (!name.assign({digits.substr(0, 2), "/", digits.substr(2)})) {
+    if (!name.assign({substring(digits, 0, 2), "/", substring(digits, 2)})) {
       return Lookup::invalid;
     }
 
-    const auto read = readWhole(objects_.get(), name.c_str(), compressed_, limits_.object_size);
+    const auto read = readWhole(objects_.get(), name.cString(), compressed_, limits_.object_size);
     if (read != ReadStatus::ok) {
       return read == ReadStatus::missing ? Lookup::missing : Lookup::invalid;
     }
@@ -896,40 +1048,23 @@ namespace telar::git {
 
     auto& stream = inflater_.stream();
     MemorySource source{asBytes(compressed_)};
-    ds::Array<std::uint8_t, 64> head;
+    // Room for the longest header, "<type> <size>\0", and the first bytes after it.
+    constexpr std::size_t head_bytes = 64;
+
+    ds::Array<std::uint8_t, head_bytes> head{};
     const auto first = pump(stream, source, head.viewMut());
     if (first == Inflated::failed) {
       return Lookup::invalid;
     }
 
     const auto produced = head.size() - stream.avail_out;
-    const std::string_view text{reinterpret_cast<const char*>(head.data()), produced};
-    const auto space = text.find(' ');
-    const auto terminator = text.find('\0');
-    if (space == std::string_view::npos || terminator == std::string_view::npos || space > terminator) {
+    const auto header = looseHeader(asText(head.view().first(produced)));
+    if (!header) {
       return Lookup::invalid;
     }
 
-    const auto kind = text.substr(0, space);
-    if (kind == "commit") {
-      type = ObjectType::commit;
-    } else if (kind == "tree") {
-      type = ObjectType::tree;
-    } else if (kind == "blob") {
-      type = ObjectType::blob;
-    } else if (kind == "tag") {
-      type = ObjectType::tag;
-    } else {
-      return Lookup::invalid;
-    }
-
-    const auto size_text = text.substr(space + 1, terminator - space - 1);
-    const auto parsed = telar::runtime::parseExact<std::uint64_t>(size_text);
-    if (!parsed) {
-      return Lookup::invalid;
-    }
-
-    const auto size = *parsed;
+    type = header->type;
+    const auto size = header->size;
     if (prefix == 0 && size > limits_.object_size) {
       return Lookup::invalid;
     }
@@ -939,7 +1074,7 @@ namespace telar::git {
       return Lookup::invalid;
     }
 
-    const auto ready = produced - terminator - 1;
+    const auto ready = produced - header->length;
     if (ready > size) {
       return Lookup::invalid;
     }
@@ -947,8 +1082,8 @@ namespace telar::git {
     resizeForOverwrite(output, wanted);
     const auto copied = std::min(ready, wanted);
 
-    std::memcpy(output.dataMut(), head.dataMut() + terminator + 1, copied);
-    auto rest = writable(output).subspan(copied);
+    std::ranges::copy(head.view().subspan(header->length, copied), writable(output).begin());
+    const auto rest = writable(output).subspan(copied);
 
     if (first == Inflated::ended) {
       return ready == size ? Lookup::found : Lookup::invalid;
@@ -1010,18 +1145,21 @@ namespace telar::git {
     // The chain file's buffer, taken while its lines are read: adding a layer mutates the graph.
     auto listing = std::move(chain_);
 
-    if (readWhole(objects, "info/commit-graphs/commit-graph-chain", listing, limits.small_file * 16) == ReadStatus::ok) {
+    // The chain lists a hash per layer, so it may hold more than one small file.
+    constexpr std::size_t chain_small_files = 16;
+
+    if (readWhole(objects, "info/commit-graphs/commit-graph-chain", listing, limits.small_file * chain_small_files) == ReadStatus::ok) {
       std::string_view lines{listing};
       const auto digits = 2 * hashSize(format);
 
       while (!lines.empty()) {
         const auto end = lines.find('\n');
-        const auto line = lines.substr(0, end);
+        const auto line = substring(lines, 0, end);
 
         lines.remove_prefix(end == std::string_view::npos ? lines.size() : end + 1);
         PathName name;
         if (line.size() != digits || !ObjectId::fromHex(line, format) || layers_.size() >= limits.commit_graph_layers ||
-            !name.assign({"info/commit-graphs/graph-", line, ".graph"}) || !addLayer(objects, name.c_str())) {
+            !name.assign({"info/commit-graphs/graph-", line, ".graph"}) || !addLayer(objects, name.cString())) {
           layers_.clear();
           break;
         }
@@ -1055,12 +1193,12 @@ namespace telar::git {
 
       while (low < high) {
         const auto middle = low + ((high - low) / 2);
-        ds::Array<std::uint8_t, maximum_hash_size> name;
-        if (!readAt(layer.file.get(), name.dataMut(), hash_size, layer.names + (std::uint64_t{middle} * hash_size))) {
+        ds::Array<std::uint8_t, maximum_hash_size> name{};
+        if (!readAt(layer.file.get(), name.viewMut().first(hash_size), layer.names + (std::uint64_t{middle} * hash_size))) {
           return ds::none;
         }
 
-        const auto order = compareBytes(id.view(), {name.data(), hash_size});
+        const auto order = compareBytes(id.view(), name.view().first(hash_size));
         if (order == 0) {
           return layer.base + middle;
         }
@@ -1079,28 +1217,34 @@ namespace telar::git {
   ds::Option<ObjectId> CommitGraph::id(std::uint32_t position) const noexcept {
     const auto* layer = layerOf(position);
     const auto hash_size = hashSize(format_);
-    ds::Array<std::uint8_t, maximum_hash_size> name;
-    if (layer == nullptr || !readAt(layer->file.get(), name.dataMut(), hash_size, layer->names + (std::uint64_t{position - layer->base} * hash_size))) {
+    ds::Array<std::uint8_t, maximum_hash_size> name{};
+    if (layer == nullptr || !readAt(layer->file.get(), name.viewMut().first(hash_size), layer->names + (std::uint64_t{position - layer->base} * hash_size))) {
       return ds::none;
     }
 
-    return ObjectId::fromBytes({name.data(), hash_size});
+    return ObjectId::fromBytes(name.view().first(hash_size));
   }
 
   ds::Option<CommitGraph::Commit> CommitGraph::commit(std::uint32_t position) const noexcept {
     const auto* layer = layerOf(position);
     const auto hash_size = hashSize(format_);
-    ds::Array<std::uint8_t, maximum_hash_size + 16> record;
-    if (layer == nullptr || !readAt(layer->file.get(), record.dataMut(), hash_size + 16, layer->commits + (std::uint64_t{position - layer->base} * (hash_size + 16)))) {
+    // After the id: the first and second parents, then the generation above the time's high bits,
+    // then the time's low bits.
+    constexpr std::size_t second_parent_at = 4;
+    constexpr std::size_t generation_at = 8;
+    constexpr std::size_t time_at = 12;
+
+    ds::Array<std::uint8_t, maximum_hash_size + graph_commit_data_bytes> record{};
+    if (layer == nullptr || !readAt(layer->file.get(), record.viewMut().first(hash_size + graph_commit_data_bytes), layer->commits + (std::uint64_t{position - layer->base} * (hash_size + graph_commit_data_bytes)))) {
       return ds::none;
     }
 
-    const auto upper = loadBig32(record.data() + hash_size + 8);
+    const auto upper = loadBig32(record.view(), hash_size + generation_at);
     const Commit commit{
-        .generation = upper >> 2,
-        .time = static_cast<std::int64_t>((std::uint64_t{upper & 3u} << 32) | loadBig32(record.data() + hash_size + 12)),
-        .first = loadBig32(record.data() + hash_size),
-        .second = loadBig32(record.data() + hash_size + 4),
+        .generation = upper >> graph_generation_shift,
+        .time = static_cast<std::int64_t>((std::uint64_t{upper & graph_time_high_mask} << word_bits) | loadBig32(record.view(), hash_size + time_at)),
+        .first = loadBig32(record.view(), hash_size),
+        .second = loadBig32(record.view(), hash_size + second_parent_at),
         .layer = layer,
     };
     if (commit.generation == 0) {
@@ -1110,7 +1254,7 @@ namespace telar::git {
     return commit;
   }
 
-  bool CommitGraph::visitParents(const Commit& commit, std::size_t maximum, void* target, void (*output)(void*, std::uint32_t)) const {
+  bool CommitGraph::visitParents(const Commit& commit, std::size_t maximum, void* target, void (*output)(void*, std::uint32_t)) {
     const auto limit = commit.layer->base + commit.layer->count;
 
     if (commit.first == no_parent) {
@@ -1126,7 +1270,7 @@ namespace telar::git {
       return true;
     }
 
-    if ((commit.second & 0x80000000u) == 0) {
+    if ((commit.second & graph_extra_edges) == 0) {
       if (commit.second >= limit) {
         return false;
       }
@@ -1135,22 +1279,22 @@ namespace telar::git {
       return true;
     }
 
-    auto edge = std::uint64_t{commit.second & 0x7fffffffu};
+    auto edge = std::uint64_t{commit.second & graph_edge_mask};
 
     for (std::size_t count = 1;; ++count, ++edge) {
-      ds::Array<std::uint8_t, 4> bytes;
-      if (count >= maximum || !fits(commit.layer->edges_size, 4 * edge, 4) || !readAt(commit.layer->file.get(), bytes.dataMut(), 4, commit.layer->edges + (4 * edge))) {
+      ds::Array<std::uint8_t, graph_edge_bytes> bytes{};
+      if (count >= maximum || !fits(commit.layer->edges_size, graph_edge_bytes * edge, graph_edge_bytes) || !readAt(commit.layer->file.get(), bytes.viewMut(), commit.layer->edges + (graph_edge_bytes * edge))) {
         return false;
       }
 
-      const auto value = loadBig32(bytes.data());
-      const auto parent = value & 0x7fffffffu;
+      const auto value = loadBig32(bytes.view());
+      const auto parent = value & graph_edge_mask;
       if (parent >= limit) {
         return false;
       }
 
       output(target, parent);
-      if ((value & 0x80000000u) != 0) {
+      if ((value & graph_last_edge) != 0) {
         return true;
       }
     }
@@ -1175,19 +1319,18 @@ namespace telar::git {
     }
 
     layer.size = static_cast<std::uint64_t>(status.st_size);
-    constexpr std::size_t maximum_chunks = 32;
-    ds::Array<std::uint8_t, 8 + (12 * (maximum_chunks + 1))> header;
-    if (layer.size < 8 + hash_size || !readAt(layer.file.get(), header.dataMut(), 8, 0)) {
+    ds::Array<std::uint8_t, graph_header_bytes + (graph_chunk_entry_bytes * (maximum_graph_chunks + 1))> header{};
+    if (layer.size < graph_header_bytes + hash_size || !readAt(layer.file.get(), header.viewMut().first(graph_header_bytes), 0)) {
       return false;
     }
 
-    if (std::memcmp(header.data(), "CGPH", 4) != 0 || header[4] != 1 || header[5] != (format_ == ObjectFormat::sha1 ? 1 : 2)) {
+    if (asText(header.view().first(graph_signature.size())) != graph_signature || header[graph_version_at] != 1 || header[graph_hash_version_at] != (format_ == ObjectFormat::sha1 ? 1 : graph_sha256_version)) {
       return false;
     }
 
-    const std::size_t chunk_count = header[6];
-    const auto table = 12 * (chunk_count + 1);
-    if (header[7] != layers_.size() || chunk_count > maximum_chunks || !fits(layer.size - hash_size, 8, table) || !readAt(layer.file.get(), header.dataMut() + 8, table, 8)) {
+    const std::size_t chunk_count = header[graph_chunk_count_at];
+    const auto table = graph_chunk_entry_bytes * (chunk_count + 1);
+    if (header[graph_base_count_at] != layers_.size() || chunk_count > maximum_graph_chunks || !fits(layer.size - hash_size, graph_header_bytes, table) || !readAt(layer.file.get(), header.viewMut().subspan(graph_header_bytes, table), graph_header_bytes)) {
       return false;
     }
 
@@ -1197,28 +1340,28 @@ namespace telar::git {
     std::uint64_t commits_size = 0;
 
     for (std::size_t chunk = 0; chunk < chunk_count; ++chunk) {
-      const auto* entry = header.data() + 8 + (12 * chunk);
-      const auto identifier = loadBig32(entry);
-      const auto start = loadBig64(entry + 4);
-      const auto end = loadBig64(entry + 16);
+      const auto entry = graph_header_bytes + (graph_chunk_entry_bytes * chunk);
+      const auto identifier = loadBig32(header.view(), entry);
+      const auto start = loadBig64(header.view(), entry + graph_chunk_id_bytes);
+      const auto end = loadBig64(header.view(), entry + graph_chunk_entry_bytes + graph_chunk_id_bytes);
       if (identifier == 0 || start > end || end > layer.size - hash_size) {
         return false;
       }
 
       switch (identifier) {
-      case 0x4f494446: // OIDF
+      case graph_chunk_fanout:
         fanout = start;
         fanout_size = end - start;
         break;
-      case 0x4f49444c: // OIDL
+      case graph_chunk_ids:
         layer.names = start;
         names_size = end - start;
         break;
-      case 0x43444154: // CDAT
+      case graph_chunk_commits:
         layer.commits = start;
         commits_size = end - start;
         break;
-      case 0x45444745: // EDGE
+      case graph_chunk_edges:
         layer.edges = start;
         layer.edges_size = end - start;
         break;
@@ -1227,15 +1370,15 @@ namespace telar::git {
       }
     }
 
-    ds::Array<std::uint8_t, 256 * 4> fanout_bytes;
-    if (loadBig32(header.dataMut() + 8 + (12 * chunk_count)) != 0 || fanout_size != fanout_bytes.size() || !readAt(layer.file.get(), fanout_bytes.dataMut(), fanout_bytes.size(), fanout)) {
+    ds::Array<std::uint8_t, fanout_entries * sizeof(std::uint32_t)> fanout_bytes{};
+    if (loadBig32(header.view(), graph_header_bytes + (graph_chunk_entry_bytes * chunk_count)) != 0 || fanout_size != fanout_bytes.size() || !readAt(layer.file.get(), fanout_bytes.viewMut(), fanout)) {
       return false;
     }
 
     std::uint32_t previous = 0;
 
     for (std::size_t index = 0; index < layer.fanout.size(); ++index) {
-      layer.fanout.atMut(index) = loadBig32(fanout_bytes.data() + (4 * index));
+      layer.fanout.atMut(index) = loadBig32(fanout_bytes.view(), sizeof(std::uint32_t) * index);
       if (layer.fanout[index] < previous) {
         return false;
       }
@@ -1246,7 +1389,7 @@ namespace telar::git {
     layer.count = previous;
     layer.base = layers_.empty() ? 0 : layers_.back().base + layers_.back().count;
     if (std::uint64_t{layer.base} + layer.count >= no_parent || names_size != std::uint64_t{layer.count} * hash_size ||
-        commits_size != std::uint64_t{layer.count} * (hash_size + 16) || layer.edges_size % 4 != 0) {
+        commits_size != std::uint64_t{layer.count} * (hash_size + graph_commit_data_bytes) || layer.edges_size % graph_edge_bytes != 0) {
       return false;
     }
 

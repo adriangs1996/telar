@@ -9,7 +9,7 @@ import telar.base.memory.allocators;
 export namespace telar::render::markdown {
 
   // Limit render.max_markdown_bytes: the largest source the renderer reads.
-  inline constexpr std::size_t max_source_bytes = std::size_t{4} << 20;
+  inline constexpr std::size_t max_source_bytes = std::size_t{4} << 20U;
 
   enum class Error : std::uint8_t {
     none,

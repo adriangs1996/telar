@@ -1,14 +1,15 @@
 module;
+#include <cerrno>
+#include <climits>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <ctime>
 #include <dirent.h>
 #include <dlfcn.h>
-#include <errno.h>
 #include <fcntl.h>
-#include <limits.h>
 #include <poll.h>
 #include <pwd.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <sys/file.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
@@ -16,7 +17,6 @@ module;
 #include <sys/statvfs.h>
 #include <sys/types.h>
 #include <sys/uio.h>
-#include <time.h>
 #include <unistd.h>
 
 export module telar.sys.posix;
@@ -111,6 +111,7 @@ export {
   using ::getuid;
   using ::passwd;
   using ::setenv;
+  using ::strerror_r;
   using ::strnlen;
   using ::sysconf;
 
@@ -130,6 +131,7 @@ export {
 // Macros do not cross an import. Each one the tree reads is captured while the headers still
 // define it, undefined, and exported under its own name, so `O_CLOEXEC` reads the same to an
 // importer that includes the header and to one that only imports this module.
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage): an X-macro lists the C macros to capture, which no template can name
 #define TELAR_SYS_ERRNOS(X) \
   X(EACCES)                 \
   X(EADDRINUSE)             \
@@ -171,6 +173,7 @@ export {
   X(EWOULDBLOCK)
 
 // open, fcntl, flock and the *at calls.
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage): an X-macro lists the C macros to capture, which no template can name
 #define TELAR_SYS_FILE_FLAGS(X) \
   X(AT_FDCWD)                   \
   X(AT_REMOVEDIR)               \
@@ -196,6 +199,7 @@ export {
   X(O_WRONLY)
 
 // File modes, access checks, seeks, mappings, polls and the standard descriptors.
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage): an X-macro lists the C macros to capture, which no template can name
 #define TELAR_SYS_FILE_CONSTANTS(X) \
   X(F_OK)                           \
   X(MAP_SHARED)                     \
@@ -223,6 +227,7 @@ export {
   X(X_OK)
 
 // System limits, clocks and dynamic loading.
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage): an X-macro lists the C macros to capture, which no template can name
 #define TELAR_SYS_LIMITS(X) \
   X(CLOCKS_PER_SEC)         \
   X(CLOCK_MONOTONIC)        \
@@ -234,6 +239,7 @@ export {
   X(RTLD_NOW)
 
 // glibc declares these as enumerators and defines each macro as its own name.
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage): an X-macro lists the C macros to capture, which no template can name
 #define TELAR_SYS_ENUMERATORS(X) \
   X(DT_DIR)                      \
   X(DT_REG)                      \
@@ -249,23 +255,23 @@ namespace telar::sys::captured {
   TELAR_SYS_FILE_CONSTANTS(TELAR_SYS_CAPTURE)
   TELAR_SYS_LIMITS(TELAR_SYS_CAPTURE)
 #ifndef __GLIBC__
-  TELAR_SYS_ENUMERATORS(TELAR_SYS_CAPTURE)
+  TELAR_SYS_ENUMERATORS(TELAR_SYS_CAPTURE) // NOLINT(clang-diagnostic-reserved-identifier): POSIX spells the sysconf names with a leading underscore
 #endif
 
-  inline constexpr bool S_ISDIR_(mode_t mode) noexcept {
+  inline constexpr bool isDirectory(mode_t mode) noexcept {
     return S_ISDIR(mode);
   }
 
-  inline constexpr bool S_ISREG_(mode_t mode) noexcept {
+  inline constexpr bool isRegular(mode_t mode) noexcept {
     return S_ISREG(mode);
   }
 
-  inline constexpr bool S_ISSOCK_(mode_t mode) noexcept {
+  inline constexpr bool isSocket(mode_t mode) noexcept {
     return S_ISSOCK(mode);
   }
 
   // An integer cast to a pointer, which no constant expression can hold.
-  inline void* const MAP_FAILED_ = MAP_FAILED;
+  inline void* const map_failed = MAP_FAILED; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables): mmap's C signature returns this sentinel as void*, and nothing writes through it
 
 }
 
@@ -364,9 +370,9 @@ namespace telar::sys::captured {
 #undef RTLD_NOW
 #undef DT_DIR
 #undef DT_REG
-#undef _SC_CLK_TCK
-#undef _SC_NPROCESSORS_ONLN
-#undef _SC_PAGESIZE
+#undef _SC_CLK_TCK          // NOLINT(clang-diagnostic-reserved-macro-identifier): the system header defines it
+#undef _SC_NPROCESSORS_ONLN // NOLINT(clang-diagnostic-reserved-macro-identifier): the system header defines it
+#undef _SC_PAGESIZE         // NOLINT(clang-diagnostic-reserved-macro-identifier): the system header defines it
 #undef S_ISDIR
 #undef S_ISREG
 #undef S_ISSOCK
@@ -382,25 +388,28 @@ namespace telar::sys::captured {
 #endif
 
 export {
-  TELAR_SYS_ERRNOS(TELAR_SYS_CONSTANT)
-  TELAR_SYS_FILE_FLAGS(TELAR_SYS_CONSTANT)
-  TELAR_SYS_FILE_CONSTANTS(TELAR_SYS_CONSTANT)
-  TELAR_SYS_LIMITS(TELAR_SYS_CONSTANT)
-  TELAR_SYS_ENUMERATORS(TELAR_SYS_ENUMERATOR) // NOLINT(bugprone-reserved-identifier): POSIX spells these sysconf names, which the module exports as the system does
+  TELAR_SYS_ERRNOS(TELAR_SYS_CONSTANT)         // NOLINT(readability-identifier-naming): exported under the system's own names
+  TELAR_SYS_FILE_FLAGS(TELAR_SYS_CONSTANT)     // NOLINT(readability-identifier-naming): exported under the system's own names
+  TELAR_SYS_FILE_CONSTANTS(TELAR_SYS_CONSTANT) // NOLINT(readability-identifier-naming): exported under the system's own names
+  TELAR_SYS_LIMITS(TELAR_SYS_CONSTANT)         // NOLINT(readability-identifier-naming): exported under the system's own names
+  TELAR_SYS_ENUMERATORS(TELAR_SYS_ENUMERATOR)  // NOLINT(bugprone-reserved-identifier,cert-dcl37-c,cert-dcl51-cpp,clang-diagnostic-reserved-identifier,readability-identifier-naming): POSIX spells these sysconf names, which the module exports as the system does
 
+  // NOLINTNEXTLINE(readability-identifier-naming): exported under the system's own name
   inline constexpr bool S_ISDIR(mode_t mode) noexcept {
-    return telar::sys::captured::S_ISDIR_(mode);
+    return telar::sys::captured::isDirectory(mode);
   }
 
+  // NOLINTNEXTLINE(readability-identifier-naming): exported under the system's own name
   inline constexpr bool S_ISREG(mode_t mode) noexcept {
-    return telar::sys::captured::S_ISREG_(mode);
+    return telar::sys::captured::isRegular(mode);
   }
 
+  // NOLINTNEXTLINE(readability-identifier-naming): exported under the system's own name
   inline constexpr bool S_ISSOCK(mode_t mode) noexcept {
-    return telar::sys::captured::S_ISSOCK_(mode);
+    return telar::sys::captured::isSocket(mode);
   }
 
-  inline void* const MAP_FAILED = telar::sys::captured::MAP_FAILED_;
+  inline void* const MAP_FAILED = telar::sys::captured::map_failed; // NOLINT(readability-identifier-naming): exported under the system's own name
 
   // Darwin's stream macros name __stdinp, __stdoutp and __stderrp; glibc and musl declare the
   // streams under their own names.

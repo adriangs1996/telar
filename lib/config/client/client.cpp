@@ -8,13 +8,54 @@ import telar.base.ds;
 
 namespace telar::runtime::config {
 
+  namespace {
+
+    constexpr unsigned char first_printable = 0x20;
+    constexpr unsigned char delete_byte = 0x7f;
+    // "#RRGGBB".
+    constexpr std::size_t rgb_text_length = 7;
+
+    // The last component of `path`, without the slashes after it; empty when it is all slashes.
+    std::string_view executableName(std::string_view path) noexcept {
+      const auto last = path.find_last_not_of('/');
+      if (last == std::string_view::npos) {
+        return {};
+      }
+
+      path.remove_suffix(path.size() - last - 1);
+      const auto separator = path.find_last_of('/');
+      if (separator != std::string_view::npos) {
+        path.remove_prefix(separator + 1);
+      }
+
+      return path;
+    }
+
+    // Reads a whole number within bounds of an integer setting.
+    std::uint64_t boundedWhole(const lua::Value& value, std::uint64_t fallback, Bounds<std::uint64_t> bounds) {
+      return value.boundedInteger(fallback, bounds.minimum, bounds.maximum);
+    }
+
+    unsigned toneBonus(std::string_view tone) noexcept {
+      constexpr unsigned danger_bonus = 40;
+      constexpr unsigned warning_bonus = 20;
+
+      if (tone == "danger") {
+        return danger_bonus;
+      }
+
+      return tone == "warning" ? warning_bonus : 0;
+    }
+
+  }
+
   std::size_t NamedDefinitionsValidator::sortedNames(const lua::Value& table, tbc::val_b<LimitReach> reach, tbc::mut_b<LimitNotices> limits, std::span<std::string_view, maximum_definitions> names) {
     std::size_t kept = 0;
     std::size_t total = 0;
 
     table.eachField([&](std::string_view name, const lua::Value&) {
       ++total;
-      const auto end = names.begin() + kept;
+      const auto end = names.begin() + static_cast<std::ptrdiff_t>(kept);
       const auto insertion = std::lower_bound(names.begin(), end, name);
       if (kept == names.size() && insertion == end) {
         return;
@@ -101,19 +142,7 @@ namespace telar::runtime::config {
       return configured_label;
     }
 
-    auto executable = arguments.front();
-    const auto last = executable.find_last_not_of('/');
-    if (last == std::string_view::npos) {
-      return {};
-    }
-
-    executable.remove_suffix(executable.size() - last - 1);
-    const auto separator = executable.find_last_of('/');
-    if (separator != std::string_view::npos) {
-      executable.remove_prefix(separator + 1);
-    }
-
-    return executable;
+    return executableName(arguments.front());
   }
 
   template <CommandTabLifetime Lifetime>
@@ -141,7 +170,7 @@ namespace telar::runtime::config {
     const auto index = rows_++;
 
     offsets_.atMut(index) = static_cast<std::uint32_t>(used_);
-    std::ranges::copy(row, bytes_.viewMut().begin() + used_);
+    std::ranges::copy(row, bytes_.viewMut().subspan(used_).begin());
     used_ += row.size();
 
     return reference(index);
@@ -243,13 +272,11 @@ namespace telar::runtime::config {
     }
 
     for (const auto argument : arguments) {
-      std::memcpy(encoded.data() + length, argument.data(), argument.size());
+      std::ranges::copy(byteView(argument), encoded.subspan(length).begin());
       length += argument.size();
     }
 
-    if (!label.empty()) {
-      std::memcpy(encoded.data() + length, label.data(), label.size());
-    }
+    std::ranges::copy(byteView(label), encoded.subspan(length).begin());
 
     return length + label.size();
   }
@@ -381,8 +408,10 @@ namespace telar::runtime::config {
     } else if (kind == "move-tab") {
       direction(action, {"previous", "next"});
     } else if (kind == "select-tab" || kind == "select-workspace") {
+      constexpr lua_Integer maximum_index = 256;
+
       action.onlyFields({"kind", "index"});
-      requiredInteger(action.field("index"), 1, 256);
+      requiredInteger(action.field("index"), 1, maximum_index);
     } else if (kind == "select-tab-offset") {
       action.onlyFields({"kind", "offset"});
       requiredInteger(action.field("offset"), std::numeric_limits<std::int8_t>::min(), std::numeric_limits<std::int8_t>::max());
@@ -391,13 +420,13 @@ namespace telar::runtime::config {
     } else if (kind == "notification") {
       notification(action);
     } else if (kind == "open-panel") {
-      reference(action, "panel", "panels");
+      reference(action, {.field = "panel", .section = "panels"});
     } else if (kind == "pick") {
-      reference(action, "pick", "picks");
+      reference(action, {.field = "pick", .section = "picks"});
     } else if (kind == "plugin") {
       action.onlyFields({"kind", "plugin", "action"});
-      action.field("plugin").string();
-      action.field("action").string();
+      static_cast<void>(action.field("plugin").string());
+      static_cast<void>(action.field("action").string());
     } else {
       builtin(kind_value);
       action.onlyFields({"kind"});
@@ -474,15 +503,17 @@ namespace telar::runtime::config {
 
   template <CommandTabStore Commands>
   tbc::val_a<std::string_view> BasicActionValidator<Commands>::builtinName(const lua::Value& action, tbc::val_a<std::string_view> kind) {
-    constexpr auto stems = ds::Array<std::pair<std::string_view, std::string_view>, 7>{{
-        {"scroll-pane", "scroll-pane-"},
-        {"split-pane", "split-"},
-        {"focus-pane", "focus-"},
-        {"navigate-pane", "navigate-"},
-        {"resize-pane", "resize-"},
-        {"resize-sidebar", "resize-sidebar-"},
-        {"move-tab", "move-tab-"},
-    }};
+    constexpr auto stems = ds::Array<std::pair<std::string_view, std::string_view>, 7>{
+        {
+            {"scroll-pane", "scroll-pane-"},
+            {"split-pane", "split-"},
+            {"focus-pane", "focus-"},
+            {"navigate-pane", "navigate-"},
+            {"resize-pane", "resize-"},
+            {"resize-sidebar", "resize-sidebar-"},
+            {"move-tab", "move-tab-"},
+        },
+    };
 
     const auto* const found = std::ranges::find(stems, kind, &decltype(stems)::value_type::first);
     if (found == stems.end()) {
@@ -537,15 +568,15 @@ namespace telar::runtime::config {
     action.onlyFields({"kind", "direction"});
     const auto direction = action.field("direction");
 
-    direction.string();
+    static_cast<void>(direction.string());
     optionalChoice(direction, choices);
   }
 
   template <CommandTabStore Commands>
-  void BasicActionValidator<Commands>::reference(const lua::Value& action, const char* field, const char* section) const {
-    action.onlyFields({"kind", field});
-    const auto value = action.field(field);
-    if (!definitions_.contains(section, value.string())) {
+  void BasicActionValidator<Commands>::reference(const lua::Value& action, DefinitionField definition) const {
+    action.onlyFields({"kind", definition.field});
+    const auto value = action.field(definition.field);
+    if (!definitions_.contains(definition.section, value.string())) {
       value.fail("names an unknown client definition");
     }
   }
@@ -567,12 +598,12 @@ namespace telar::runtime::config {
       return false;
     }
 
-    command.arraySize();
+    static_cast<void>(command.arraySize());
     ds::Array<std::string_view, maximum_arguments> arguments;
     std::size_t total_bytes = 0;
 
     for (std::size_t index = 0; index < count; ++index) {
-      const auto argument = command.element(index + 1);
+      const auto argument = command.element(static_cast<lua_Integer>(index) + 1);
 
       arguments.atMut(index) = argument.string();
       if (arguments[index].empty()) {
@@ -583,7 +614,7 @@ namespace telar::runtime::config {
     }
 
     const auto label = action.field("label");
-    if (label.is(LUA_TSTRING) && label.string().size() > 32) {
+    if (label.is(LUA_TSTRING) && label.string().size() > CommandTabView::maximum_label_bytes) {
       label.fail("exceeds the label limit");
     }
 
@@ -628,7 +659,9 @@ namespace telar::runtime::config {
       action.fail("accepts only one notification target");
     }
 
-    ds::Array<Byte, 1024> storage;
+    constexpr std::size_t notification_frame_bytes = 1024;
+
+    ds::Array<Byte, notification_frame_bytes> storage{};
 
     Codec::encode(ShowNotification{.request_id = 1, .notification = body}, storage.viewMut());
   }
@@ -718,12 +751,14 @@ namespace telar::runtime::config {
   }
 
   void ComponentBudget::report(LimitNotices& limits) const noexcept {
-    const ds::Array<LimitReach, 4> reaches{{
-        {.name = "bars.max_bar_nodes", .noun = "components", .value = 64, .requested = offered_.nodes, .route = {}},
-        {.name = "bars.max_bar_text_bytes", .noun = "text bytes", .value = 4096, .requested = offered_.text, .route = {}},
-        {.name = "bars.max_bar_actions", .noun = "click actions", .value = 32, .requested = offered_.actions, .route = {}},
-        {.name = "bars.max_samples", .noun = "sparkline samples", .value = 256, .requested = offered_.samples, .route = {}},
-    }};
+    const ds::Array<LimitReach, 4> reaches{
+        {
+            {.name = "bars.max_bar_nodes", .noun = "components", .value = 64, .requested = offered_.nodes, .route = {}},
+            {.name = "bars.max_bar_text_bytes", .noun = "text bytes", .value = 4096, .requested = offered_.text, .route = {}},
+            {.name = "bars.max_bar_actions", .noun = "click actions", .value = 32, .requested = offered_.actions, .route = {}},
+            {.name = "bars.max_samples", .noun = "sparkline samples", .value = 256, .requested = offered_.samples, .route = {}},
+        },
+    };
 
     for (const auto& reach : reaches) {
       if (reach.requested > reach.value) {
@@ -733,75 +768,80 @@ namespace telar::runtime::config {
   }
 
   ComponentBudget::Usage ComponentBudget::usage(const ComponentShape& shape) noexcept {
-    return {.nodes = 1, .text = shape.text.size() + shape.detail.size() + shape.url.size(), .actions = shape.action_field != nullptr ? 1u : 0u, .samples = shape.samples};
+    return {.nodes = 1, .text = shape.text.size() + shape.detail.size() + shape.url.size(), .actions = shape.action_field != nullptr ? 1U : 0U, .samples = shape.samples};
   }
 
-  class ComponentStyleValidator {
-  public:
-    inline static void validate(const lua::Value& component) {
-      for (const auto* name : {"fg", "bg"}) {
-        const auto value = component.field(name);
-        if (value.present()) {
-          color(value);
+  namespace {
+
+    class ComponentStyleValidator {
+    public:
+      inline static void validate(const lua::Value& component) {
+        for (const auto* name : {"fg", "bg"}) {
+          const auto value = component.field(name);
+          if (value.present()) {
+            color(value);
+          }
+        }
+
+        for (const auto* name : {"bold", "italic", "faint", "underline", "strikethrough"}) {
+          static_cast<void>(component.field(name).boolean(false));
         }
       }
 
-      for (const auto* name : {"bold", "italic", "faint", "underline", "strikethrough"}) {
-        component.field(name).boolean(false);
-      }
-    }
+    private:
+      inline static void color(const lua::Value& value) {
+        if (const auto index = value.asInteger()) {
+          if (!std::in_range<std::uint8_t>(*index)) {
+            value.fail("is outside the color index range");
+          }
 
-  private:
-    inline static void color(const lua::Value& value) {
-      if (const auto index = value.asInteger()) {
-        if (*index < 0 || *index > 255) {
-          value.fail("is outside the color index range");
+          return;
         }
 
-        return;
+        constexpr ds::Array names{std::string_view{"default"}, "accent", "panel_bg", "surface0", "surface1", "surface_dim", "overlay0", "overlay1", "text", "subtext0", "mauve", "green", "yellow", "red", "blue", "teal", "peach"};
+        const auto text = value.string();
+        if (std::ranges::any_of(names, [text](std::string_view name) {
+              return equalUiName(text, name);
+            })) {
+          return;
+        }
+
+        if (text.size() == rgb_text_length && text.front() == '#' && hexadecimal(text.substr(1))) {
+          return;
+        }
+
+        value.fail("is not a supported color");
       }
 
-      constexpr std::string_view names[]{"default", "accent", "panel_bg", "surface0", "surface1", "surface_dim", "overlay0", "overlay1", "text", "subtext0", "mauve", "green", "yellow", "red", "blue", "teal", "peach"};
-      const auto text = value.string();
-      if (std::ranges::any_of(names, [text](std::string_view name) {
-            return equalUiName(text, name);
-          })) {
-        return;
+      inline static bool hexadecimal(std::string_view digits) noexcept {
+        const bool negative = digits.front() == '-';
+        if (negative || digits.front() == '+') {
+          digits.remove_prefix(1);
+        }
+
+        // At most six digits follow '#', so the value never reaches the limit.
+        const auto value = unsignedNumber<unsigned>(digits, std::numeric_limits<unsigned>::max(), 16);
+
+        return value && (!negative || *value == 0);
       }
+    };
 
-      if (text.size() == 7 && text.front() == '#' && hexadecimal(text.substr(1))) {
-        return;
-      }
-
-      value.fail("is not a supported color");
-    }
-
-    inline static bool hexadecimal(std::string_view digits) noexcept {
-      const bool negative = digits.front() == '-';
-      if (negative || digits.front() == '+') {
-        digits.remove_prefix(1);
-      }
-
-      // At most six digits follow '#', so the value never reaches the limit.
-      const auto value = unsignedNumber<unsigned>(digits, std::numeric_limits<unsigned>::max(), 16);
-
-      return value && (!negative || *value == 0);
-    }
-  };
+  }
 
   tbc::val_a<ComponentShape> ComponentShapeReader::read(const lua::Value& value, unsigned inherited_priority, LimitNotices& limits) {
+    constexpr double maximum_priority = 100;
+
     ComponentShape shape;
 
     shape.kind = kind(value.field("ui"));
     shape.form = ComponentForm::component;
     fields(value, shape.kind);
-    shape.priority = static_cast<unsigned>(std::round(value.field("priority").boundedNumber(inherited_priority, 0, 100)));
+    shape.priority = static_cast<unsigned>(std::round(value.field("priority").boundedNumber(inherited_priority, 0, maximum_priority)));
     const auto tone = value.field("tone");
 
     optionalChoice(tone, {"neutral", "muted", "accent", "success", "warning", "danger"});
     if (tone.present()) {
-      shape.tone_bonus = tone.string() == "danger" ? 40 : tone.string() == "warning" ? 20
-                                                                                     : 0;
+      shape.tone_bonus = toneBonus(tone.string());
     }
 
     switch (shape.kind) {
@@ -843,7 +883,7 @@ namespace telar::runtime::config {
 
       break;
     case ComponentKind::metric:
-      value.field("name").string();
+      static_cast<void>(value.field("name").string());
       optionalChoice(value.field("name"), {"cpu", "memory", "battery"});
       break;
     case ComponentKind::group:
@@ -870,7 +910,7 @@ namespace telar::runtime::config {
       shape.text = text(value, "text");
       shape.action_field = value.field("action").present() ? "action" : nullptr;
       shape.url = text(value, "url");
-      value.field("primary").boolean(false);
+      static_cast<void>(value.field("primary").boolean(false));
       if (shape.action_field == nullptr && shape.url.empty()) {
         value.fail("requires an action or URL");
       }
@@ -899,13 +939,13 @@ namespace telar::runtime::config {
   }
 
   ComponentKind ComponentShapeReader::kind(const lua::Value& value) {
-    constexpr std::string_view names[]{"label", "icon", "mark", "meter", "sparkline", "badge", "clock", "metric", "machines", "group", "heading", "text", "meter_row", "kv", "callout", "actions", "button", "divider"};
+    constexpr ds::Array names{std::string_view{"label"}, "icon", "mark", "meter", "sparkline", "badge", "clock", "metric", "machines", "group", "heading", "text", "meter_row", "kv", "callout", "actions", "button", "divider"};
     const auto* const found = std::ranges::find(names, value.string());
-    if (found == std::end(names)) {
+    if (found == names.end()) {
       value.fail("names an unknown component");
     }
 
-    return static_cast<ComponentKind>(found - std::begin(names));
+    return static_cast<ComponentKind>(found - names.begin());
   }
 
   void ComponentShapeReader::fields(const lua::Value& value, ComponentKind kind) {
@@ -972,7 +1012,7 @@ namespace telar::runtime::config {
   }
 
   void ComponentShapeReader::finiteNumber(const lua::Value& value) {
-    value.boundedNumber(0, std::numeric_limits<double>::lowest(), std::numeric_limits<double>::max());
+    static_cast<void>(value.boundedNumber(0, std::numeric_limits<double>::lowest(), std::numeric_limits<double>::max()));
   }
 
   std::size_t ComponentShapeReader::samples(const lua::Value& value, LimitNotices& limits) {
@@ -985,12 +1025,12 @@ namespace telar::runtime::config {
     }
 
     for (std::size_t index = total - kept + 1; index <= total; ++index) {
-      const auto sample = values.element(index);
+      const auto sample = values.element(static_cast<lua_Integer>(index));
       if (!sample.present()) {
         sample.fail("must be a number");
       }
 
-      sample.boundedNumber(0, 0, std::numeric_limits<double>::max());
+      static_cast<void>(sample.boundedNumber(0, 0, std::numeric_limits<double>::max()));
     }
 
     return kept;
@@ -1230,7 +1270,21 @@ namespace telar::runtime::config {
     case ComponentKind::callout:
       frame.phase = Phase::button;
       break;
-    default:
+    case ComponentKind::label:
+    case ComponentKind::icon:
+    case ComponentKind::mark:
+    case ComponentKind::meter:
+    case ComponentKind::sparkline:
+    case ComponentKind::badge:
+    case ComponentKind::clock:
+    case ComponentKind::metric:
+    case ComponentKind::machines:
+    case ComponentKind::heading:
+    case ComponentKind::text:
+    case ComponentKind::meter_row:
+    case ComponentKind::key_value:
+    case ComponentKind::button:
+    case ComponentKind::divider:
       break;
     }
   }
@@ -1243,36 +1297,40 @@ namespace telar::runtime::config {
     return placer.place(value, shape, position);
   }
 
-  class CommandArgumentsValidator {
-  public:
-    inline static bool validate(const lua::Value& command) {
-      const auto count = command.arraySize();
-      if (count == 0 || count > maximum_arguments) {
-        command.fail("must contain 1..32 arguments");
-      }
+  namespace {
 
-      std::size_t bytes = 0;
-      bool receives_choice = false;
-
-      for (std::size_t index = 0; index < count; ++index) {
-        const auto value = command.element(index + 1);
-        const auto argument = value.string();
-
-        bytes += argument.size();
-        if ((index == 0 && argument.empty()) || argument.contains('\0') || bytes > maximum_bytes) {
-          value.fail("is not a valid bounded command argument");
+    class CommandArgumentsValidator {
+    public:
+      inline static bool validate(const lua::Value& command) {
+        const auto count = command.arraySize();
+        if (count == 0 || count > maximum_arguments) {
+          command.fail("must contain 1..32 arguments");
         }
 
-        receives_choice |= index > 0 && argument == "{}";
+        std::size_t bytes = 0;
+        bool receives_choice = false;
+
+        for (std::size_t index = 0; index < count; ++index) {
+          const auto value = command.element(static_cast<lua_Integer>(index) + 1);
+          const auto argument = value.string();
+
+          bytes += argument.size();
+          if ((index == 0 && argument.empty()) || argument.contains('\0') || bytes > maximum_bytes) {
+            value.fail("is not a valid bounded command argument");
+          }
+
+          receives_choice |= index > 0 && argument == "{}";
+        }
+
+        return receives_choice;
       }
 
-      return receives_choice;
-    }
+    private:
+      static constexpr std::size_t maximum_arguments = 32;
+      static constexpr std::size_t maximum_bytes = 4096;
+    };
 
-  private:
-    static constexpr std::size_t maximum_arguments = 32;
-    static constexpr std::size_t maximum_bytes = 4096;
-  };
+  }
 
   SourceSetting SourceReader::read(const lua::Value& source, bool panel) {
     const auto kind = source.field("bar_kind");
@@ -1290,11 +1348,11 @@ namespace telar::runtime::config {
 
     const auto every = source.field("every_ms");
     if (!panel || every.present()) {
-      setting.every_ms = static_cast<std::uint32_t>(every.boundedInteger(SourceSetting::default_every_ms, SourceSetting::every_ms_bounds.minimum, SourceSetting::every_ms_bounds.maximum));
+      setting.every_ms = static_cast<std::uint32_t>(boundedWhole(every, SourceSetting::default_every_ms, SourceSetting::every_ms_bounds));
     }
 
     setting.render = source.field("render").present();
-    setting.timeout_ms = static_cast<std::uint32_t>(source.field("timeout_ms").boundedInteger(SourceSetting::default_timeout_ms, SourceSetting::timeout_ms_bounds.minimum, SourceSetting::timeout_ms_bounds.maximum));
+    setting.timeout_ms = static_cast<std::uint32_t>(boundedWhole(source.field("timeout_ms"), SourceSetting::default_timeout_ms, SourceSetting::timeout_ms_bounds));
     return setting;
   }
 
@@ -1321,233 +1379,238 @@ namespace telar::runtime::config {
     return setting;
   }
 
-  template <CommandTabStore Commands>
-  class ComponentValidator {
-  public:
-    inline explicit ComponentValidator(BasicActionValidator<Commands>& actions, LimitNotices& limits)
-        : actions_(actions),
-          limits_(limits) {}
+  namespace {
 
-    inline void validate(const lua::Value& value) {
-      // Rank the whole result before validating actions: components excluded
-      // from staging must not retain commands or reject the configuration.
-      walk(value, {});
-      budget_.prepare();
-      counting_ = false;
-      walk(value, {});
-      budget_.report(limits_);
-    }
+    template <CommandTabStore Commands>
+    class ComponentValidator {
+    public:
+      inline explicit ComponentValidator(BasicActionValidator<Commands>& actions, LimitNotices& limits)
+          : actions_(actions),
+            limits_(limits) {}
 
-  private:
-    using Place = ComponentPlace;
-
-    struct Position {
-      Place place = Place::bar;
-      unsigned priority = 50;
-      unsigned rank = std::numeric_limits<std::uint8_t>::max();
-      unsigned depth = 0;
-    };
-
-    inline void walk(const lua::Value& value, Position position) {
-      if (!value.present()) {
-        return;
+      inline void validate(const lua::Value& value) {
+        // Rank the whole result before validating actions: components excluded
+        // from staging must not retain commands or reject the configuration.
+        walk(value, {});
+        budget_.prepare();
+        counting_ = false;
+        walk(value, {});
+        budget_.report(limits_);
       }
 
-      if (value.is(LUA_TSTRING)) {
-        append(value, {.text = value.string(), .priority = position.priority}, position);
-        return;
+    private:
+      using Place = ComponentPlace;
+
+      struct Position {
+        Place place = Place::bar;
+        unsigned priority = default_priority;
+        unsigned rank = std::numeric_limits<std::uint8_t>::max();
+        unsigned depth = 0;
+      };
+
+      // Lists nest at most maximum_list_depth deep, and componentAllowed bounds how components nest.
+      inline void walk(const lua::Value& value, Position position) { // NOLINT(misc-no-recursion): bounded; an explicit stack of Lua slots, as ComponentTreeWalker keeps, needs the lua_State this validator does not get.
+        if (!value.present()) {
+          return;
+        }
+
+        if (value.is(LUA_TSTRING)) {
+          append(value, {.text = value.string(), .priority = position.priority}, position);
+          return;
+        }
+
+        if (value.field("ui").present()) {
+          component(value, position);
+          return;
+        }
+
+        if (value.field("text").present() || value.field("icon").present()) {
+          append(value, ComponentShapeReader::segment(value, position.priority), position);
+          return;
+        }
+
+        if (position.depth == maximum_list_depth) {
+          value.fail("exceeds the component nesting limit");
+        }
+
+        ++position.depth;
+        const auto count = value.arraySize();
+
+        for (std::size_t index = 1; index <= count; ++index) {
+          walk(value.element(static_cast<lua_Integer>(index)), position);
+        }
       }
 
-      if (value.field("ui").present()) {
-        component(value, position);
-        return;
+      inline void component(const lua::Value& value, Position position) { // NOLINT(misc-no-recursion): bounded, as walk is.
+        const auto shape = ComponentShapeReader::read(value, position.priority, limits_);
+        if (!append(value, shape, position)) {
+          return;
+        }
+
+        const auto rank = std::min(shape.priority + shape.tone_bonus, position.rank);
+
+        if (shape.kind == ComponentKind::group) {
+          children(value, {Place::group, shape.priority, rank});
+          walk(value.field("tooltip"), {Place::tooltip, default_priority, rank});
+        } else if (shape.kind == ComponentKind::callout) {
+          walk(value.field("button"), {Place::buttons, default_priority, rank});
+        } else if (shape.kind == ComponentKind::actions) {
+          children(value, {Place::buttons, default_priority, rank});
+        }
       }
 
-      if (value.field("text").present() || value.field("icon").present()) {
-        append(value, ComponentShapeReader::segment(value, position.priority), position);
-        return;
+      inline void children(const lua::Value& value, Position position) { // NOLINT(misc-no-recursion): bounded, as walk is.
+        const auto count = value.listLength();
+
+        for (std::size_t index = 1; index <= count; ++index) {
+          walk(value.element(static_cast<lua_Integer>(index)), position);
+        }
       }
 
-      if (position.depth == maximum_list_depth) {
-        value.fail("exceeds the component nesting limit");
-      }
+      inline bool append(const lua::Value& value, const ComponentShape& shape, Position position) {
+        if (!componentAllowed(shape.kind, position.place)) {
+          value.fail("contains a component unsupported in this position");
+        }
 
-      ++position.depth;
-      const auto count = value.arraySize();
+        const auto rank = std::min(shape.priority + shape.tone_bonus, position.rank);
 
-      for (std::size_t index = 1; index <= count; ++index) {
-        walk(value.element(index), position);
-      }
-    }
+        if (counting_) {
+          budget_.count(shape, rank);
+          return true;
+        }
 
-    inline void component(const lua::Value& value, Position position) {
-      const auto shape = ComponentShapeReader::read(value, position.priority, limits_);
-      if (!append(value, shape, position)) {
-        return;
-      }
+        if (!budget_.admit(shape, rank)) {
+          return false;
+        }
 
-      const auto rank = std::min(shape.priority + shape.tone_bonus, position.rank);
+        if (shape.action_field != nullptr && !actions_.component(value.field(shape.action_field))) {
+          budget_.release(shape, rank);
+          return false;
+        }
 
-      if (shape.kind == ComponentKind::group) {
-        children(value, {Place::group, shape.priority, rank});
-        walk(value.field("tooltip"), {Place::tooltip, default_priority, rank});
-      } else if (shape.kind == ComponentKind::callout) {
-        walk(value.field("button"), {Place::buttons, default_priority, rank});
-      } else if (shape.kind == ComponentKind::actions) {
-        children(value, {Place::buttons, default_priority, rank});
-      }
-    }
+        if (budget_.nodesFull()) {
+          return false;
+        }
 
-    inline void children(const lua::Value& value, Position position) {
-      const auto count = value.listLength();
+        validateUrl(value, shape.url);
+        if (!budget_.stage(shape)) {
+          return false;
+        }
 
-      for (std::size_t index = 1; index <= count; ++index) {
-        walk(value.element(index), position);
-      }
-    }
-
-    inline bool append(const lua::Value& value, const ComponentShape& shape, Position position) {
-      if (!componentAllowed(shape.kind, position.place)) {
-        value.fail("contains a component unsupported in this position");
-      }
-
-      const auto rank = std::min(shape.priority + shape.tone_bonus, position.rank);
-
-      if (counting_) {
-        budget_.count(shape, rank);
+        printableUiText(value, shape.text);
+        printableUiText(value, shape.detail);
         return true;
       }
 
-      if (!budget_.admit(shape, rank)) {
-        return false;
-      }
-
-      if (shape.action_field != nullptr && !actions_.component(value.field(shape.action_field))) {
-        budget_.release(shape, rank);
-        return false;
-      }
-
-      if (budget_.nodesFull()) {
-        return false;
-      }
-
-      validateUrl(value, shape.url);
-      if (!budget_.stage(shape)) {
-        return false;
-      }
-
-      printableUiText(value, shape.text);
-      printableUiText(value, shape.detail);
-      return true;
-    }
-
-    inline static void validateUrl(const lua::Value& value, std::string_view url) {
-      if (url.empty()) {
-        return;
-      }
-
-      if (url.size() > maximum_url_bytes || url.contains(' ') || (!url.starts_with("https://") && !url.starts_with("http://"))) {
-        value.fail("requires an HTTP or HTTPS URL without spaces");
-      }
-
-      printableUiText(value, url);
-    }
-
-    static constexpr unsigned maximum_list_depth = 4;
-    static constexpr unsigned default_priority = 50;
-    static constexpr std::size_t maximum_url_bytes = 1024;
-    BasicActionValidator<Commands>& actions_;
-    LimitNotices& limits_;
-    ComponentBudget budget_;
-    bool counting_ = true;
-  };
-
-  template <CommandTabStore Commands>
-  class BarsValidator {
-  public:
-    inline explicit BarsValidator(BasicActionValidator<Commands>& actions, LimitNotices& limits)
-        : actions_(actions),
-          limits_(limits) {}
-
-    inline void validate(const lua::Value& bars) {
-      if (!bars.present()) {
-        return;
-      }
-
-      bars.onlyFields({"bottom", "top", "sidebar_footer"});
-      bottom(bars.field("bottom"));
-      const auto top = bars.field("top");
-      if (top.present()) {
-        top.onlyFields({"right"});
-        const auto right = top.field("right");
-        if (right.present() && source(right) == Source::tabs) {
-          right.fail("cannot contain tabs");
-        }
-      }
-
-      const auto footer = bars.field("sidebar_footer");
-      if (footer.present()) {
-        const auto count = footer.arraySize();
-        if (count > maximum_footer_slots) {
-          footer.fail(std::format("accepts at most {} slots", maximum_footer_slots).c_str());
+      inline static void validateUrl(const lua::Value& value, std::string_view url) {
+        if (url.empty()) {
+          return;
         }
 
-        for (std::size_t index = 1; index <= count; ++index) {
-          if (source(footer.element(index)) == Source::tabs) {
-            footer.fail("cannot contain tabs");
+        if (url.size() > maximum_url_bytes || url.contains(' ') || (!url.starts_with("https://") && !url.starts_with("http://"))) {
+          value.fail("requires an HTTP or HTTPS URL without spaces");
+        }
+
+        printableUiText(value, url);
+      }
+
+      static constexpr unsigned maximum_list_depth = 4;
+      static constexpr unsigned default_priority = 50;
+      static constexpr std::size_t maximum_url_bytes = 1024;
+      BasicActionValidator<Commands>& actions_;
+      LimitNotices& limits_;
+      ComponentBudget budget_;
+      bool counting_ = true;
+    };
+
+    template <CommandTabStore Commands>
+    class BarsValidator {
+    public:
+      inline explicit BarsValidator(BasicActionValidator<Commands>& actions, LimitNotices& limits)
+          : actions_(actions),
+            limits_(limits) {}
+
+      inline void validate(const lua::Value& bars) {
+        if (!bars.present()) {
+          return;
+        }
+
+        bars.onlyFields({"bottom", "top", "sidebar_footer"});
+        bottom(bars.field("bottom"));
+        const auto top = bars.field("top");
+        if (top.present()) {
+          top.onlyFields({"right"});
+          const auto right = top.field("right");
+          if (right.present() && source(right) == Source::tabs) {
+            right.fail("cannot contain tabs");
+          }
+        }
+
+        const auto footer = bars.field("sidebar_footer");
+        if (footer.present()) {
+          const auto count = footer.arraySize();
+          if (count > maximum_footer_slots) {
+            footer.fail(std::format("accepts at most {} slots", maximum_footer_slots).c_str());
+          }
+
+          for (std::size_t index = 1; index <= count; ++index) {
+            if (source(footer.element(static_cast<lua_Integer>(index))) == Source::tabs) {
+              footer.fail("cannot contain tabs");
+            }
           }
         }
       }
-    }
 
-  private:
-    enum class Source {
-      content,
-      tabs,
-    };
+    private:
+      enum class Source : std::uint8_t {
+        content,
+        tabs,
+      };
 
-    inline void bottom(const lua::Value& bar) {
-      if (!bar.present()) {
-        return;
-      }
+      inline void bottom(const lua::Value& bar) {
+        if (!bar.present()) {
+          return;
+        }
 
-      bar.onlyFields({"left", "center", "right"});
-      unsigned tabs = 0;
+        bar.onlyFields({"left", "center", "right"});
+        unsigned tabs = 0;
 
-      for (const auto* name : {"left", "center", "right"}) {
-        const auto value = bar.field(name);
-        if (value.present() && source(value) == Source::tabs) {
-          ++tabs;
+        for (const auto* name : {"left", "center", "right"}) {
+          const auto value = bar.field(name);
+          if (value.present() && source(value) == Source::tabs) {
+            ++tabs;
+          }
+        }
+
+        if (tabs != 1) {
+          bar.fail("must contain exactly one tabs source");
         }
       }
 
-      if (tabs != 1) {
-        bar.fail("must contain exactly one tabs source");
-      }
-    }
+      inline Source source(const lua::Value& value) {
+        const auto kind_value = value.field("bar_kind");
+        const auto kind = kind_value.string();
+        if (kind == "tabs" || kind == "metrics" || kind == "machines") {
+          value.onlyFields({"bar_kind"});
+          return kind == "tabs" ? Source::tabs : Source::content;
+        }
 
-    inline Source source(const lua::Value& value) {
-      const auto kind_value = value.field("bar_kind");
-      const auto kind = kind_value.string();
-      if (kind == "tabs" || kind == "metrics" || kind == "machines") {
-        value.onlyFields({"bar_kind"});
-        return kind == "tabs" ? Source::tabs : Source::content;
-      }
+        if (kind == "static") {
+          value.onlyFields({"bar_kind", "value"});
+          ComponentValidator<Commands>{actions_, limits_}.validate(value.field("value"));
+        } else {
+          static_cast<void>(SourceReader::dynamic(value));
+        }
 
-      if (kind == "static") {
-        value.onlyFields({"bar_kind", "value"});
-        ComponentValidator{actions_, limits_}.validate(value.field("value"));
-      } else {
-        static_cast<void>(SourceReader::dynamic(value));
+        return Source::content;
       }
 
-      return Source::content;
-    }
+      static constexpr std::size_t maximum_footer_slots = 3;
+      BasicActionValidator<Commands>& actions_;
+      LimitNotices& limits_;
+    };
 
-    static constexpr std::size_t maximum_footer_slots = 3;
-    BasicActionValidator<Commands>& actions_;
-    LimitNotices& limits_;
-  };
+  }
 
   lua::Value BarsReader::content(const lua::Value& source) {
     return source.field("value");
@@ -1664,7 +1727,7 @@ namespace telar::runtime::config {
   }
 
   void KeyChordValidator::parseKey(const lua::Value& value, std::string_view name, KeyChord& chord) {
-    constexpr std::pair<std::string_view, Key> named_keys[]{{"up", Key::up}, {"down", Key::down}, {"left", Key::left}, {"right", Key::right}, {"home", Key::home}, {"end", Key::end}, {"delete", Key::erase}, {"del", Key::erase}, {"pageup", Key::page_up}, {"page-up", Key::page_up}, {"pagedown", Key::page_down}, {"page-down", Key::page_down}, {"enter", Key::enter}, {"return", Key::enter}, {"escape", Key::escape}, {"esc", Key::escape}, {"backspace", Key::backspace}, {"tab", Key::tab}, {"backtab", Key::back_tab}};
+    constexpr ds::Array<std::pair<std::string_view, Key>, 19> named_keys{{{"up", Key::up}, {"down", Key::down}, {"left", Key::left}, {"right", Key::right}, {"home", Key::home}, {"end", Key::end}, {"delete", Key::erase}, {"del", Key::erase}, {"pageup", Key::page_up}, {"page-up", Key::page_up}, {"pagedown", Key::page_down}, {"page-down", Key::page_down}, {"enter", Key::enter}, {"return", Key::enter}, {"escape", Key::escape}, {"esc", Key::escape}, {"backspace", Key::backspace}, {"tab", Key::tab}, {"backtab", Key::back_tab}}};
 
     for (const auto& [known, key] : named_keys) {
       if (matches(name, known)) {
@@ -1684,15 +1747,23 @@ namespace telar::runtime::config {
       name = "+";
     }
 
+    // A UTF-8 continuation byte is 10xxxxxx.
+    constexpr unsigned continuation_mask = 0xc0U;
+    constexpr unsigned continuation_tag = 0x80U;
+
     validateUtf8(name);
     const auto codepoints = std::ranges::count_if(name, [](unsigned char byte) {
-      return (byte & 0xc0) != 0x80;
+      return (byte & continuation_mask) != continuation_tag;
     });
     if (codepoints != 1) {
       value.fail("must name one key");
     }
 
-    std::memcpy(&chord.character, name.data(), name.size());
+    // The key's UTF-8 bytes, packed into the character as they sit in memory.
+    auto packed = std::bit_cast<ds::Array<char, sizeof(chord.character)>>(chord.character);
+
+    std::ranges::copy(name, packed.viewMut().begin());
+    chord.character = std::bit_cast<std::uint32_t>(packed);
     if (name.size() == 1 && (chord.has(Modifier::control) || chord.has(Modifier::super))) {
       chord.character = static_cast<unsigned char>(asciiLower(name.front()));
     }
@@ -1829,7 +1900,7 @@ namespace telar::runtime::config {
     lua_newtable(state);
     lua::setField(state, "sidebar_visible", static_cast<bool>(context_.sidebar_visible));
     lua::setField(state, "tab_count", static_cast<lua_Integer>(context_.tab_count));
-    lua::setField(state, "active_tab_index", static_cast<lua_Integer>(static_cast<std::uint32_t>(context_.active_tab_index) + 1));
+    lua::setField(state, "active_tab_index", static_cast<lua_Integer>(context_.active_tab_index) + 1);
     lua::setField(state, "pane_count", static_cast<lua_Integer>(context_.pane_count));
     lua::setField(state, "focused_pane_id", static_cast<lua_Integer>(context_.focused_pane_id));
     lua::pushReadOnly(state, "callback context is immutable");
@@ -1912,9 +1983,10 @@ namespace telar::runtime::config {
       const auto color = value.element(static_cast<lua_Integer>(index) + 1);
 
       hexadecimalColor(color);
-      const auto text = color.string();
-      const auto parsed = std::from_chars(text.data() + 1, text.data() + text.size(), result.atMut(index), hexadecimal_base);
-      if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size()) {
+      const auto digits = color.string().substr(1);
+      const auto* const end = std::to_address(digits.end());
+      const auto parsed = std::from_chars(digits.data(), end, result.atMut(index), hexadecimal_base);
+      if (std::make_error_code(parsed.ec) || parsed.ptr != end) {
         color.fail("must be an RGB color");
       }
     }
@@ -1922,89 +1994,95 @@ namespace telar::runtime::config {
     return result;
   }
 
-  class PickItemsValidator {
-  public:
-    inline explicit PickItemsValidator(LimitNotices& limits)
-        : limits_(limits) {}
+  namespace {
 
-    inline void validate(const lua::Value& items) {
-      std::size_t count = 0;
+    class PickItemsValidator {
+    public:
+      inline explicit PickItemsValidator(LimitNotices& limits)
+          : limits_(limits) {}
 
-      PickItemsReader::read(items, [&](const PickItemSetting& option, const lua::Value& item) {
-        keep(item, option.label, option.value.valueOr(option.label), option.detail.valueOr(std::string_view{}));
-        ++count;
-      });
+      inline void validate(const lua::Value& items) {
+        std::size_t count = 0;
 
-      if (count > maximum_items) {
-        limits_.add({.name = "picks.max_items", .noun = "options", .value = maximum_items, .requested = count, .route = {}});
-      }
+        PickItemsReader::read(items, [&](const PickItemSetting& option, const lua::Value& item) {
+          keep(item, option.label, option.value.valueOr(option.label), option.detail.valueOr(std::string_view{}));
+          ++count;
+        });
 
-      if (text_full_) {
-        limits_.add({.name = "picks.max_text_bytes", .noun = "option text bytes", .value = maximum_text_bytes, .requested = offered_text_bytes_, .route = {}});
-      }
+        if (count > maximum_items) {
+          limits_.add({.name = "picks.max_items", .noun = "options", .value = maximum_items, .requested = count, .route = {}});
+        }
 
-      const ds::Array<LimitReach, 3> text_limits{{
-          {.name = "picks.max_label_bytes", .noun = "label bytes", .value = maximum_label_bytes, .requested = longest_label_, .route = {}},
-          {.name = "picks.max_value_bytes", .noun = "value bytes", .value = maximum_value_bytes, .requested = longest_value_, .route = {}},
-          {.name = "picks.max_detail_bytes", .noun = "detail bytes", .value = maximum_detail_bytes, .requested = longest_detail_, .route = {}},
-      }};
+        if (text_full_) {
+          limits_.add({.name = "picks.max_text_bytes", .noun = "option text bytes", .value = maximum_text_bytes, .requested = offered_text_bytes_, .route = {}});
+        }
 
-      for (const auto& reach : text_limits) {
-        if (reach.requested > reach.value) {
-          limits_.add(reach);
+        const ds::Array<LimitReach, 3> text_limits{
+            {
+                {.name = "picks.max_label_bytes", .noun = "label bytes", .value = maximum_label_bytes, .requested = longest_label_, .route = {}},
+                {.name = "picks.max_value_bytes", .noun = "value bytes", .value = maximum_value_bytes, .requested = longest_value_, .route = {}},
+                {.name = "picks.max_detail_bytes", .noun = "detail bytes", .value = maximum_detail_bytes, .requested = longest_detail_, .route = {}},
+            },
+        };
+
+        for (const auto& reach : text_limits) {
+          if (reach.requested > reach.value) {
+            limits_.add(reach);
+          }
         }
       }
-    }
 
-  private:
-    inline void keep(const lua::Value& item, std::string_view label, std::string_view value, std::string_view detail) {
-      offered_text_bytes_ += label.size() + value.size() + detail.size();
-      longest_label_ = std::max(longest_label_, label.size());
-      longest_detail_ = std::max(longest_detail_, detail.size());
-      longest_value_ = std::max(longest_value_, value.size());
-      label = utf8Prefix(label, maximum_label_bytes);
-      detail = utf8Prefix(detail, maximum_detail_bytes);
-      if (value.size() > maximum_value_bytes) {
-        return;
+    private:
+      inline void keep(const lua::Value& item, std::string_view label, std::string_view value, std::string_view detail) {
+        offered_text_bytes_ += label.size() + value.size() + detail.size();
+        longest_label_ = std::max(longest_label_, label.size());
+        longest_detail_ = std::max(longest_detail_, detail.size());
+        longest_value_ = std::max(longest_value_, value.size());
+        label = utf8Prefix(label, maximum_label_bytes);
+        detail = utf8Prefix(detail, maximum_detail_bytes);
+        if (value.size() > maximum_value_bytes) {
+          return;
+        }
+
+        if (kept_items_ == maximum_items || text_full_) {
+          return;
+        }
+
+        if (label.empty() || value.empty()) {
+          item.fail("needs a nonempty label and value");
+        }
+
+        printableUiText(item, label);
+        printableUiText(item, detail);
+        printableUiText(item, value, true);
+
+        const auto needed = label.size() + detail.size() + (label == value ? 0 : value.size());
+        if (text_bytes_ + needed > maximum_text_bytes) {
+          text_full_ = true;
+          return;
+        }
+
+        text_bytes_ += needed;
+        ++kept_items_;
       }
 
-      if (kept_items_ == maximum_items || text_full_) {
-        return;
-      }
+      static constexpr std::size_t maximum_items = 4096;
+      static constexpr std::size_t maximum_text_bytes = std::size_t{256} * 1024;
+      static constexpr std::size_t maximum_label_bytes = 128;
+      static constexpr std::size_t maximum_value_bytes = 512;
+      static constexpr std::size_t maximum_detail_bytes = 128;
 
-      if (label.empty() || value.empty()) {
-        item.fail("needs a nonempty label and value");
-      }
+      LimitNotices& limits_;
+      std::size_t kept_items_ = 0;
+      std::size_t text_bytes_ = 0;
+      std::size_t offered_text_bytes_ = 0;
+      std::size_t longest_label_ = 0;
+      std::size_t longest_value_ = 0;
+      std::size_t longest_detail_ = 0;
+      bool text_full_ = false;
+    };
 
-      printableUiText(item, label);
-      printableUiText(item, detail);
-      printableUiText(item, value, true);
-
-      const auto needed = label.size() + detail.size() + (label == value ? 0 : value.size());
-      if (text_bytes_ + needed > maximum_text_bytes) {
-        text_full_ = true;
-        return;
-      }
-
-      text_bytes_ += needed;
-      ++kept_items_;
-    }
-
-    static constexpr std::size_t maximum_items = 4096;
-    static constexpr std::size_t maximum_text_bytes = 256 * 1024;
-    static constexpr std::size_t maximum_label_bytes = 128;
-    static constexpr std::size_t maximum_value_bytes = 512;
-    static constexpr std::size_t maximum_detail_bytes = 128;
-
-    LimitNotices& limits_;
-    std::size_t kept_items_ = 0;
-    std::size_t text_bytes_ = 0;
-    std::size_t offered_text_bytes_ = 0;
-    std::size_t longest_label_ = 0;
-    std::size_t longest_value_ = 0;
-    std::size_t longest_detail_ = 0;
-    bool text_full_ = false;
-  };
+  }
 
   tbc::val_a<PanelSetting> ClientDefinitionsReader::panelSetting(tbc::val_a<std::string_view> name, const lua::Value& definition, LimitNotices& limits) {
     definition.onlyFields({"panel_kind", "title", "mark", "icon", "width", "source", "refresh"});
@@ -2023,7 +2101,7 @@ namespace telar::runtime::config {
       setting.icon = icon.string();
     }
 
-    setting.width = static_cast<std::uint16_t>(definition.field("width").boundedInteger(PanelSetting::default_width, PanelSetting::width_bounds.minimum, PanelSetting::width_bounds.maximum));
+    setting.width = static_cast<std::uint16_t>(boundedWhole(definition.field("width"), PanelSetting::default_width, PanelSetting::width_bounds));
     setting.source = SourceReader::dynamic(definition.field("source"), true);
     return setting;
   }
@@ -2033,7 +2111,7 @@ namespace telar::runtime::config {
     PickSetting setting;
 
     setting.heading = {.name = name, .title = NamedDefinitionsValidator::heading(name, definition, limits)};
-    setting.timeout_ms = static_cast<std::uint32_t>(definition.field("timeout_ms").boundedInteger(SourceSetting::default_timeout_ms, PickSetting::timeout_ms_bounds.minimum, PickSetting::timeout_ms_bounds.maximum));
+    setting.timeout_ms = static_cast<std::uint32_t>(boundedWhole(definition.field("timeout_ms"), SourceSetting::default_timeout_ms, PickSetting::timeout_ms_bounds));
     const auto command = definition.field("command");
     if (command.present()) {
       CommandArgumentsValidator::validate(command);
@@ -2102,7 +2180,7 @@ namespace telar::runtime::config {
     settings.keymap = optionalChoice<PromptKeymap>(table.field("keymap"), prompt_keymap_names);
     settings.ghost = optionalBoolean(table.field("ghost"));
     if (const auto lines = table.field("max_lines"); lines.present()) {
-      settings.max_lines = static_cast<std::uint8_t>(lines.boundedInteger(PromptBounds::max_lines.minimum, PromptBounds::max_lines.minimum, PromptBounds::max_lines.maximum));
+      settings.max_lines = static_cast<std::uint8_t>(boundedWhole(lines, PromptBounds::max_lines.minimum, PromptBounds::max_lines));
     }
   }
 
@@ -2161,7 +2239,7 @@ namespace telar::runtime::config {
       if (timeout.present()) {
         constexpr auto bounds = ClientInputSettings::sequence_timeout_bounds;
 
-        settings.sequence_timeout_ms = static_cast<std::uint16_t>(timeout.boundedInteger(bounds.minimum, bounds.minimum, bounds.maximum));
+        settings.sequence_timeout_ms = static_cast<std::uint16_t>(boundedWhole(timeout, bounds.minimum, bounds));
       }
     }
 
@@ -2176,7 +2254,7 @@ namespace telar::runtime::config {
     optionalUtf8Text(value, maximum);
     const auto text = value.string();
     if ((!allow_empty && text.empty()) || std::ranges::any_of(text, [](unsigned char byte) {
-          return byte < 0x20 || byte == 0x7f;
+          return byte < first_printable || byte == delete_byte;
         })) {
       value.fail("must contain printable text");
     }
@@ -2229,10 +2307,10 @@ namespace telar::runtime::config {
 
     static_cast<void>(ClientDefinitionsReader::read(client, limits, [](std::size_t, const PanelSetting&, const lua::Value&) {}, [](std::size_t, const PickSetting&, const lua::Value&) {}));
     const ClientDefinitions definitions{client, inherited};
-    BasicActionValidator actions{definitions, limits, state.commands};
+    BasicActionValidator<Commands> actions{definitions, limits, state.commands};
 
     BindingValidator::validate(client.field("keybindings"), actions, state.keymap, limits);
-    BarsValidator{actions, limits}.validate(client.field("bars"));
+    BarsValidator<Commands>{actions, limits}.validate(client.field("bars"));
     ClientReader::slots(client, [](std::size_t, const lua::Value&) {});
   }
 

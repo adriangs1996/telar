@@ -100,6 +100,14 @@ namespace telar::git {
     error,
   };
 
+  // What discovery opens: the work tree, none for a bare repository, the git directory and the
+  // common directory.
+  struct Discovery {
+    FileDescriptor worktree;
+    FileDescriptor gitdir;
+    FileDescriptor common;
+  };
+
   enum class RefLookup : std::uint8_t {
     found,
     missing,
@@ -152,6 +160,9 @@ export namespace telar::git {
 
     StatusReader(const StatusReader&) = delete;
     StatusReader& operator=(const StatusReader&) = delete;
+    StatusReader(StatusReader&&) = delete;
+    StatusReader& operator=(StatusReader&&) = delete;
+    ~StatusReader() = default;
 
     // Reads the repository that contains `directory`, an absolute path. Never
     // throws: failures and limits show as unknown parts of the status.
@@ -165,7 +176,9 @@ export namespace telar::git {
       // Stays generic over the caller's visitor, which the reader calls through a function pointer.
       using Target = std::remove_reference_t<Visit>;
 
-      visitRemotes(const_cast<std::remove_const_t<Target>*>(std::addressof(visit)), [](void* target, std::string_view name) {
+      auto&& visitor = std::forward<Visit>(visit);
+
+      visitRemotes(const_cast<std::remove_const_t<Target>*>(std::addressof(visitor)), [](void* target, std::string_view name) {
         (*static_cast<Target*>(target))(name);
       });
     }
@@ -181,7 +194,9 @@ export namespace telar::git {
       // Stays generic over the caller's visitor, which the reader calls through a function pointer.
       using Target = std::remove_reference_t<Visit>;
 
-      visitBranches(limit, const_cast<std::remove_const_t<Target>*>(std::addressof(visit)), [](void* target, std::string_view name) {
+      auto&& visitor = std::forward<Visit>(visit);
+
+      visitBranches(limit, const_cast<std::remove_const_t<Target>*>(std::addressof(visitor)), [](void* target, std::string_view name) {
         (*static_cast<Target*>(target))(name);
       });
     }
@@ -208,9 +223,14 @@ export namespace telar::git {
     // Walks up from `directory` as git's setup_git_directory does: a .git
     // directory or "gitdir:" file, else the directory itself as a bare git
     // directory. It stops at the filesystem root or a filesystem boundary.
-    Discovered discover(std::string_view directory, FileDescriptor& worktree, FileDescriptor& gitdir, FileDescriptor& common) const;
+    Discovered discover(std::string_view directory, Discovery& found) const;
 
-    Discovered readGitFile(FileDescriptor& current, const struct stat& current_status, const struct stat& dot, FileDescriptor& worktree, FileDescriptor& gitdir, FileDescriptor& common) const;
+    // The repository a .git entry of `current` names; none when it has none, or it is a directory
+    // that does not look like a git directory, so the walk goes on.
+    ds::Option<Discovered> discoverDotGit(FileDescriptor& current, const struct stat& current_status, Discovery& found) const;
+
+    // A "gitdir:" file in `current`, whose owner discovery checked.
+    Discovered readGitFile(FileDescriptor& current, Discovery& found) const;
 
     // Ownership first, then git's is_git_directory: a valid HEAD, and objects/
     // and refs/ in the common directory a linked worktree's commondir names.
@@ -222,12 +242,23 @@ export namespace telar::git {
     // extensions.worktreeConfig asks for it. include and includeIf are ignored.
     RepositoryState loadConfig();
 
+    // A core.* variable; false when its value is malformed.
+    bool coreVariable(const ConfigEntry& entry, bool worktree_file);
+
     void extension(const ConfigEntry& entry);
     void readReferences();
     void resolveReferences();
 
     // branch.<name>.remote and .merge, mapped through remote.<remote>.fetch.
     void readUpstream();
+
+    // branch.<name>.remote and .merge of the current branch: true when both are set, false when the
+    // branch has no upstream, none when a config file or a value is malformed.
+    ds::Option<bool> branchUpstream(PathName& remote, PathName& merge);
+
+    // The remote-tracking ref `merge` maps to through remote.<remote>.fetch, or `merge` itself for
+    // the remote "."; false when no refspec maps it, none when the config cannot be parsed.
+    ds::Option<bool> trackingReference(const PathName& remote, const PathName& merge, PathName& tracking);
 
     // A loose ref, following symbolic refs, else packed-refs.
     RefLookup resolve(std::string_view name, ObjectId& id, Fingerprint* identity);
@@ -244,9 +275,6 @@ export namespace telar::git {
     Status status_;
     FileDescriptor worktree_;
     FileDescriptor gitdir_;
-
-    void looseBranches(int directory, ds::String<Memory>& name, unsigned depth, std::size_t limit, std::size_t& count, void* target, void (*visit)(void*, std::string_view)) const;
-
     FileDescriptor common_;
     Fingerprint gitdir_identity_;
     Fingerprint common_identity_;

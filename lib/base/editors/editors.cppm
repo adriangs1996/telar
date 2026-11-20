@@ -8,7 +8,7 @@ import std;
 export {
   namespace telar::runtime {
 
-    enum class EditorKind {
+    enum class EditorKind : std::uint8_t {
       neovim,
       vim,
       emacs,

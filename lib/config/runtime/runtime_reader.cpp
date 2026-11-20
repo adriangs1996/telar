@@ -12,196 +12,244 @@ import telar.base.ds;
 // libghostty-vt.
 namespace telar::runtime::config {
 
-  class AgentReader {
-  public:
-    // Fills the manifests and tells the notices about limits it reaches, region `a`.
-    inline explicit AgentReader(tbc::mut_a<AgentManifests> manifests, tbc::mut_a<LimitNotices> limits)
-        : manifests_(manifests),
-          limits_(limits) {}
+  namespace {
 
-    inline void read(const lua::Value& agents) {
-      if (!agents.present()) {
-        return;
-      }
+    constexpr unsigned char first_printable = 0x20;
+    constexpr unsigned char delete_byte = 0x7f;
+    constexpr std::size_t maximum_path_bytes = 1024;
+    // The bytes of all of a helper's arguments together.
+    constexpr std::size_t maximum_command_bytes = 4096;
 
-      const auto count = agents.arraySize();
-      std::size_t dropped = 0;
+    // UTF-8: where the lead bytes of longer sequences start, and the payload each byte carries.
+    constexpr unsigned char ascii_limit = 0x80;
+    constexpr unsigned char first_three_byte_lead = 0xe0;
+    constexpr unsigned char first_four_byte_lead = 0xf0;
+    constexpr unsigned lead_payload_mask = 0x7fU;
+    constexpr std::uint32_t continuation_payload_mask = 0x3fU;
+    constexpr unsigned continuation_payload_bits = 6U;
 
-      for (std::size_t position = 1; position <= count; ++position) {
-        const auto entry = agents.element(static_cast<lua_Integer>(position));
+    struct TimeoutBounds {
+      std::chrono::milliseconds minimum;
+      std::chrono::milliseconds maximum;
+    };
 
-        entry.onlyFields({"name", "process_names", "process_paths", "brand", "identity", "working", "blocked", "ready_prompt", "display_name", "placeholder", "icon", "attachments", "command_tools"});
-        auto* manifest = manifests_.tryAdd(entry.field("name").string());
-        if (manifest == nullptr) {
-          ++dropped;
-          continue;
-        }
+    constexpr TimeoutBounds helper_timeout_bounds{.minimum = std::chrono::seconds{1}, .maximum = std::chrono::minutes{1}};
+    constexpr TimeoutBounds idle_timeout_bounds{.minimum = std::chrono::seconds{10}, .maximum = std::chrono::hours{1}};
 
-        paths(entry.field("process_names"), manifest->process_names);
-        paths(entry.field("process_paths"), manifest->process_paths);
-        phrases(entry.field("brand"), manifest->brand);
-        phrases(entry.field("identity"), manifest->identity);
-        phrases(entry.field("working"), manifest->working);
-        phrases(entry.field("blocked"), manifest->blocked);
-        phrases(entry.field("ready_prompt"), manifest->ready_prompt);
-        commandTools(entry.field("command_tools"), *manifest);
-        presentation(entry, *manifest);
-      }
-
-      if (dropped != 0) {
-        limits_.add({.name = "agent_manifest.max_custom_agents", .noun = "agents", .value = 27, .requested = 27 + dropped, .route = {}});
-      }
+    std::uint64_t millisecondCount(std::chrono::milliseconds duration) noexcept {
+      return static_cast<std::uint64_t>(duration.count());
     }
 
-  private:
-    inline static tbc::val_a<std::string_view> printable(const lua::Value& value) {
-      const auto text = value.string();
-
-      validateUtf8(text);
-      if (text.empty() || std::ranges::any_of(text, [](unsigned char byte) {
-            return byte < 0x20 || byte == 0x7f;
-          })) {
-        value.fail("must be a printable string");
-      }
-
-      return text;
+    std::chrono::milliseconds boundedTimeout(const lua::Value& field, std::chrono::milliseconds fallback, TimeoutBounds bounds) {
+      return std::chrono::milliseconds{field.boundedInteger(millisecondCount(fallback), millisecondCount(bounds.minimum), millisecondCount(bounds.maximum))};
     }
 
-    template <std::size_t Capacity, std::size_t TextCapacity>
-    inline void list(const lua::Value& value, ManifestTextList<Capacity, TextCapacity>& destination, tbc::val_a<LimitReach> entries_limit, tbc::val_a<LimitReach> bytes_limit) {
-      if (!value.present()) {
-        return;
+    // The continuation bytes a UTF-8 lead byte announces.
+    unsigned continuationBytes(unsigned char lead) noexcept {
+      if (lead < ascii_limit) {
+        return 0;
       }
 
-      const auto count = value.arraySize();
+      if (lead < first_three_byte_lead) {
+        return 1;
+      }
 
-      for (std::size_t position = 1; position <= count; ++position) {
-        const auto text = printable(value.element(static_cast<lua_Integer>(position)));
-        if (text.size() > TextCapacity) {
-          bytes_limit.requested = text.size();
-          limits_.add(bytes_limit);
-        } else if (destination.entries().size() == Capacity) {
-          entries_limit.requested = Capacity + count - position + 1;
-          limits_.add(entries_limit);
+      return lead < first_four_byte_lead ? 2 : 3;
+    }
+
+    class AgentReader {
+    public:
+      // Fills the manifests and tells the notices about limits it reaches, region `a`.
+      inline explicit AgentReader(tbc::mut_a<AgentManifests> manifests, tbc::mut_a<LimitNotices> limits)
+          : manifests_(manifests),
+            limits_(limits) {}
+
+      inline void read(const lua::Value& agents) {
+        if (!agents.present()) {
           return;
-        } else {
-          destination.append(text);
-        }
-      }
-    }
-
-    inline void paths(const lua::Value& value, ManifestTextList<8, 128>& destination) {
-      list(value, destination, {.name = "agent_manifest.max_paths", .noun = "entries", .value = 8, .requested = {}, .route = {}}, {.name = "agent_manifest.max_path_bytes", .noun = "bytes", .value = 128, .requested = {}, .route = {}});
-    }
-
-    inline void phrases(const lua::Value& value, ManifestTextList<16, 64>& destination) {
-      list(value, destination, {.name = "agent_manifest.max_phrases", .noun = "phrases", .value = 16, .requested = {}, .route = {}}, {.name = "agent_manifest.max_phrase_bytes", .noun = "bytes", .value = 64, .requested = {}, .route = {}});
-    }
-
-    inline void commandTools(const lua::Value& value, AgentManifest& manifest) {
-      if (!value.present()) {
-        return;
-      }
-
-      const auto count = value.arraySize();
-
-      for (std::size_t position = 1; position <= count; ++position) {
-        const auto mapping = value.element(static_cast<lua_Integer>(position));
-
-        mapping.onlyFields({"tool", "field"});
-        const auto tool = mapping.field("tool").string();
-        const auto field = mapping.field("field").string();
-        if (tool.empty() || field.empty()) {
-          mapping.fail("requires nonempty tool and field strings");
         }
 
-        if (tool.size() > 64 || field.size() > 32) {
-          if (tool.size() > 64) {
-            limits_.add({.name = "agent_manifest.max_tool_name_bytes", .noun = "bytes", .value = 64, .requested = tool.size(), .route = {}});
+        const auto count = agents.arraySize();
+        std::size_t dropped = 0;
+
+        for (std::size_t position = 1; position <= count; ++position) {
+          const auto entry = agents.element(static_cast<lua_Integer>(position));
+
+          entry.onlyFields({"name", "process_names", "process_paths", "brand", "identity", "working", "blocked", "ready_prompt", "display_name", "placeholder", "icon", "attachments", "command_tools"});
+          auto* manifest = manifests_.tryAdd(entry.field("name").string());
+          if (manifest == nullptr) {
+            ++dropped;
+            continue;
           }
 
-          if (field.size() > 32) {
-            limits_.add({.name = "agent_manifest.max_command_field_bytes", .noun = "bytes", .value = 32, .requested = field.size(), .route = {}});
+          paths(entry.field("process_names"), manifest->process_names);
+          paths(entry.field("process_paths"), manifest->process_paths);
+          phrases(entry.field("brand"), manifest->brand);
+          phrases(entry.field("identity"), manifest->identity);
+          phrases(entry.field("working"), manifest->working);
+          phrases(entry.field("blocked"), manifest->blocked);
+          phrases(entry.field("ready_prompt"), manifest->ready_prompt);
+          commandTools(entry.field("command_tools"), *manifest);
+          presentation(entry, *manifest);
+        }
+
+        if (dropped != 0) {
+          limits_.add({.name = "agent_manifest.max_custom_agents", .noun = "agents", .value = AgentManifests::maximum_custom_agents, .requested = AgentManifests::maximum_custom_agents + dropped, .route = {}});
+        }
+      }
+
+    private:
+      inline static tbc::val_a<std::string_view> printable(const lua::Value& value) {
+        const auto text = value.string();
+
+        validateUtf8(text);
+        if (text.empty() || std::ranges::any_of(text, [](unsigned char byte) {
+              return byte < first_printable || byte == delete_byte;
+            })) {
+          value.fail("must be a printable string");
+        }
+
+        return text;
+      }
+
+      template <std::size_t Capacity, std::size_t TextCapacity>
+      inline void list(const lua::Value& value, ManifestTextList<Capacity, TextCapacity>& destination, tbc::val_a<LimitReach> entries_limit, tbc::val_a<LimitReach> bytes_limit) {
+        if (!value.present()) {
+          return;
+        }
+
+        const auto count = value.arraySize();
+
+        for (std::size_t position = 1; position <= count; ++position) {
+          const auto text = printable(value.element(static_cast<lua_Integer>(position)));
+          if (text.size() > TextCapacity) {
+            bytes_limit.requested = text.size();
+            limits_.add(bytes_limit);
+          } else if (destination.entries().size() == Capacity) {
+            entries_limit.requested = Capacity + count - position + 1;
+            limits_.add(entries_limit);
+            return;
+          } else {
+            destination.append(text);
           }
-        } else if (manifest.tool_count == manifest.command_tools.size()) {
-          limits_.add({.name = "agent_manifest.max_command_tools", .noun = "command tools", .value = 8, .requested = 8 + count - position + 1, .route = {}});
-          return;
-        } else {
-          manifest.addCommandTool(tool, field);
         }
       }
-    }
 
-    template <std::size_t Capacity>
-    inline static void text(const lua::Value& value, FixedText<Capacity>& destination) {
-      if (value.present()) {
-        destination.assign(printable(value));
-      }
-    }
-
-    inline static unsigned iconWidth(std::string_view text) noexcept {
-      ds::Array<std::uint32_t, 8> codepoints;
-      std::size_t count = 0;
-
-      for (std::size_t offset = 0; offset < text.size();) {
-        const auto lead = static_cast<unsigned char>(text[offset++]);
-        const unsigned continuation = lead < 0x80 ? 0 : lead < 0xe0 ? 1
-                                                    : lead < 0xf0   ? 2
-                                                                    : 3;
-        std::uint32_t codepoint = continuation == 0 ? lead : lead & (0x7f >> continuation);
-
-        for (unsigned index = 0; index < continuation; ++index) {
-          codepoint = (codepoint << 6) | (static_cast<unsigned char>(text[offset++]) & 0x3f);
-        }
-
-        codepoints.atMut(count++) = codepoint;
+      inline void paths(const lua::Value& value, AgentManifest::ProcessList& destination) {
+        list(value, destination, {.name = "agent_manifest.max_paths", .noun = "entries", .value = AgentManifest::maximum_processes, .requested = {}, .route = {}}, {.name = "agent_manifest.max_path_bytes", .noun = "bytes", .value = AgentManifest::process_bytes, .requested = {}, .route = {}});
       }
 
-      unsigned width = 0;
-
-      for (std::size_t offset = 0; offset < count;) {
-        std::uint8_t cluster_width = 0;
-
-        offset += ghostty_unicode_grapheme_width(codepoints.data() + offset, count - offset, &cluster_width);
-        width += std::max<unsigned>(1, cluster_width);
+      inline void phrases(const lua::Value& value, AgentManifest::PhraseList& destination) {
+        list(value, destination, {.name = "agent_manifest.max_phrases", .noun = "phrases", .value = AgentManifest::maximum_phrases, .requested = {}, .route = {}}, {.name = "agent_manifest.max_phrase_bytes", .noun = "bytes", .value = AgentManifest::phrase_bytes, .requested = {}, .route = {}});
       }
 
-      return width;
-    }
-
-    inline static void presentation(const lua::Value& entry, AgentManifest& manifest) {
-      text(entry.field("display_name"), manifest.display_name);
-      text(entry.field("placeholder"), manifest.placeholder);
-      const auto icon = entry.field("icon");
-      if (icon.present()) {
-        const auto value = printable(icon);
-        if (value.size() > 8 || iconWidth(value) != 1) {
-          icon.fail("must fit in eight bytes and exactly one cell");
-        }
-
-        manifest.icon.assign(value);
-      }
-
-      const auto attachments = entry.field("attachments");
-      if (!attachments.present()) {
-        return;
-      }
-
-      const auto policy = printable(attachments);
-
-      for (const auto& [name, kind] : ds::Array<std::pair<std::string_view, AgentAttachmentMarkers>, 4>{{{"none", AgentAttachmentMarkers::none}, {"ordered", AgentAttachmentMarkers::ordered}, {"stable_number", AgentAttachmentMarkers::stable_number}, {"pasted_path", AgentAttachmentMarkers::pasted_path}}}) {
-        if (name == policy) {
-          manifest.attachments = kind;
+      inline void commandTools(const lua::Value& value, AgentManifest& manifest) {
+        if (!value.present()) {
           return;
         }
+
+        const auto count = value.arraySize();
+
+        for (std::size_t position = 1; position <= count; ++position) {
+          const auto mapping = value.element(static_cast<lua_Integer>(position));
+
+          mapping.onlyFields({"tool", "field"});
+          const auto tool = mapping.field("tool").string();
+          const auto field = mapping.field("field").string();
+          if (tool.empty() || field.empty()) {
+            mapping.fail("requires nonempty tool and field strings");
+          }
+
+          if (tool.size() > AgentCommandTool::tool_bytes || field.size() > AgentCommandTool::field_bytes) {
+            if (tool.size() > AgentCommandTool::tool_bytes) {
+              limits_.add({.name = "agent_manifest.max_tool_name_bytes", .noun = "bytes", .value = AgentCommandTool::tool_bytes, .requested = tool.size(), .route = {}});
+            }
+
+            if (field.size() > AgentCommandTool::field_bytes) {
+              limits_.add({.name = "agent_manifest.max_command_field_bytes", .noun = "bytes", .value = AgentCommandTool::field_bytes, .requested = field.size(), .route = {}});
+            }
+          } else if (manifest.tool_count == manifest.command_tools.size()) {
+            limits_.add({.name = "agent_manifest.max_command_tools", .noun = "command tools", .value = AgentManifest::maximum_command_tools, .requested = AgentManifest::maximum_command_tools + count - position + 1, .route = {}});
+            return;
+          } else {
+            manifest.addCommandTool(tool, field);
+          }
+        }
       }
 
-      attachments.fail("must be none, ordered, stable_number or pasted_path");
-    }
+      template <std::size_t Capacity>
+      inline static void text(const lua::Value& value, FixedText<Capacity>& destination) {
+        if (value.present()) {
+          destination.assign(printable(value));
+        }
+      }
 
-    tbc::mut_a<AgentManifests> manifests_;
-    tbc::mut_a<LimitNotices> limits_;
-  };
+      inline static unsigned iconWidth(std::string_view text) noexcept {
+        // An icon's bytes bound its codepoints.
+        ds::Array<std::uint32_t, AgentManifest::icon_bytes> codepoints{};
+        std::size_t codepoint_count = 0;
+
+        for (std::size_t offset = 0; offset < text.size();) {
+          const auto lead = static_cast<unsigned char>(text[offset++]);
+          const auto continuation = continuationBytes(lead);
+          std::uint32_t codepoint = continuation == 0 ? lead : lead & (lead_payload_mask >> continuation);
+
+          for (unsigned index = 0; index < continuation; ++index) {
+            codepoint = (codepoint << continuation_payload_bits) | (static_cast<unsigned char>(text[offset++]) & continuation_payload_mask);
+          }
+
+          codepoints.atMut(codepoint_count++) = codepoint;
+        }
+
+        unsigned width = 0;
+        const auto measured = codepoints.view().first(codepoint_count);
+
+        for (std::size_t offset = 0; offset < codepoint_count;) {
+          const auto rest = measured.subspan(offset);
+          std::uint8_t cluster_width = 0;
+
+          offset += ghostty_unicode_grapheme_width(rest.data(), rest.size(), &cluster_width);
+          width += std::max<unsigned>(1, cluster_width);
+        }
+
+        return width;
+      }
+
+      inline static void presentation(const lua::Value& entry, AgentManifest& manifest) {
+        text(entry.field("display_name"), manifest.display_name);
+        text(entry.field("placeholder"), manifest.placeholder);
+        const auto icon = entry.field("icon");
+        if (icon.present()) {
+          const auto value = printable(icon);
+          if (value.size() > AgentManifest::icon_bytes || iconWidth(value) != 1) {
+            icon.fail("must fit in eight bytes and exactly one cell");
+          }
+
+          manifest.icon.assign(value);
+        }
+
+        const auto attachments = entry.field("attachments");
+        if (!attachments.present()) {
+          return;
+        }
+
+        const auto policy = printable(attachments);
+
+        for (const auto& [name, kind] : ds::Array<std::pair<std::string_view, AgentAttachmentMarkers>, 4>{{{"none", AgentAttachmentMarkers::none}, {"ordered", AgentAttachmentMarkers::ordered}, {"stable_number", AgentAttachmentMarkers::stable_number}, {"pasted_path", AgentAttachmentMarkers::pasted_path}}}) {
+          if (name == policy) {
+            manifest.attachments = kind;
+            return;
+          }
+        }
+
+        attachments.fail("must be none, ordered, stable_number or pasted_path");
+      }
+
+      tbc::mut_a<AgentManifests> manifests_;
+      tbc::mut_a<LimitNotices> limits_;
+    };
+
+  }
 
   template <Allocator Memory>
   RuntimeReader<Memory>::RuntimeReader(RuntimeValues<Memory>& values)
@@ -233,8 +281,8 @@ namespace telar::runtime::config {
     }
 
     table.onlyFields({"pane_mib", "global_mib"});
-    values_.graphics.pane_bytes = table.field("pane_mib").boundedInteger(values_.graphics.pane_bytes / GraphicsLimits::mebibyte, 2, 256) * GraphicsLimits::mebibyte;
-    values_.graphics.global_bytes = table.field("global_mib").boundedInteger(values_.graphics.global_bytes / GraphicsLimits::mebibyte, 2, 512) * GraphicsLimits::mebibyte;
+    values_.graphics.pane_bytes = table.field("pane_mib").boundedInteger(values_.graphics.pane_bytes / GraphicsLimits::mebibyte, 2, GraphicsLimits::maximum_pane_bytes / GraphicsLimits::mebibyte) * GraphicsLimits::mebibyte;
+    values_.graphics.global_bytes = table.field("global_mib").boundedInteger(values_.graphics.global_bytes / GraphicsLimits::mebibyte, 2, GraphicsLimits::maximum_global_bytes / GraphicsLimits::mebibyte) * GraphicsLimits::mebibyte;
     if (values_.graphics.global_bytes < values_.graphics.pane_bytes) {
       table.fail("global memory must cover the pane memory limit");
     }
@@ -247,7 +295,7 @@ namespace telar::runtime::config {
     }
 
     const auto text = field.string();
-    if (text.empty() || text.size() > 1024 || text.contains('\0')) {
+    if (text.empty() || text.size() > maximum_path_bytes || text.contains('\0')) {
       field.fail("is not a valid path");
     }
 
@@ -315,7 +363,10 @@ namespace telar::runtime::config {
 
     const auto command = table.field("command");
     const auto count = command.arraySize();
-    static_assert(CommandValues<Memory>::maximum_arguments == 32, "the message names the limit");
+    // The limit the message below names.
+    constexpr std::size_t named_maximum_arguments = 32;
+
+    static_assert(CommandValues<Memory>::maximum_arguments == named_maximum_arguments, "the message names the limit");
 
     if (count == 0 || count > CommandValues<Memory>::maximum_arguments) {
       command.fail("must contain 1..32 arguments");
@@ -328,7 +379,7 @@ namespace telar::runtime::config {
     for (std::size_t index = 1; index <= count; ++index) {
       const auto argument = command.element(static_cast<lua_Integer>(index));
       const auto text = argument.string();
-      if ((index == 1 && text.empty()) || text.size() > 4096 - bytes || text.contains('\0')) {
+      if ((index == 1 && text.empty()) || text.size() > maximum_command_bytes - bytes || text.contains('\0')) {
         argument.fail("exceeds the helper command bounds");
       }
 
@@ -336,9 +387,9 @@ namespace telar::runtime::config {
       destination.arguments.emplace(memory, text);
     }
 
-    destination.timeout = std::chrono::milliseconds{table.field("timeout_ms").boundedInteger(15'000, 1000, 60'000)};
+    destination.timeout = boundedTimeout(table.field("timeout_ms"), CommandValues<Memory>::default_timeout, helper_timeout_bounds);
     if (engine) {
-      destination.idle_timeout = std::chrono::milliseconds{table.field("idle_timeout_ms").boundedInteger(300'000, 10'000, 3'600'000)};
+      destination.idle_timeout = boundedTimeout(table.field("idle_timeout_ms"), CommandValues<Memory>::default_idle_timeout, idle_timeout_bounds);
     }
   }
 

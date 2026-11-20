@@ -69,12 +69,14 @@ export {
 
       RecyclingAllocator(const RecyclingAllocator&) = delete;
       RecyclingAllocator& operator=(const RecyclingAllocator&) = delete;
+      RecyclingAllocator(RecyclingAllocator&&) = delete;
+      RecyclingAllocator& operator=(RecyclingAllocator&&) = delete;
 
       void* allocate(std::size_t size, std::size_t alignment) noexcept;
       void deallocate(void* pointer, std::size_t size, std::size_t alignment) noexcept;
       [[nodiscard]] std::size_t retainedBytes() const noexcept;
 
-      static constexpr std::size_t maximum_retained_bytes = 512 * 1024;
+      static constexpr std::size_t maximum_retained_bytes = std::size_t{512} * 1024;
 
     private:
       struct Block {
@@ -179,7 +181,7 @@ export {
     template <std::size_t Capacity>
     class TBC_GENERIC SensitiveBuffer {
     public:
-      inline SensitiveBuffer() noexcept {}
+      inline SensitiveBuffer() noexcept {} // NOLINT(modernize-use-equals-default): user-provided, so that value-initializing one leaves its bytes unwritten
 
       inline ~SensitiveBuffer() {
         eraseSensitive(bytes_.dataMut(), bytes_.size());
@@ -187,6 +189,8 @@ export {
 
       SensitiveBuffer(const SensitiveBuffer&) = delete;
       SensitiveBuffer& operator=(const SensitiveBuffer&) = delete;
+      SensitiveBuffer(SensitiveBuffer&&) = delete;
+      SensitiveBuffer& operator=(SensitiveBuffer&&) = delete;
 
       inline std::span<std::uint8_t, Capacity> bytes() noexcept {
         return bytes_.viewMut();
@@ -207,7 +211,7 @@ export {
     template <std::size_t Capacity>
     class TBC_GENERIC SensitiveText {
     public:
-      inline SensitiveText() noexcept {}
+      inline SensitiveText() noexcept {} // NOLINT(modernize-use-equals-default): user-provided, so that value-initializing one leaves its bytes unwritten
 
       inline ~SensitiveText() {
         clear();

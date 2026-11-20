@@ -9,6 +9,7 @@ import telar.platform.primitives;
 import telar.platform.thread;
 import telar.sys.posix;
 import telar.sys.process;
+import telar.tbc;
 
 namespace telar::runtime::trace {
   namespace {
@@ -28,10 +29,19 @@ namespace telar::runtime::trace {
       bool stopping = false;
     };
 
-    Sink sink;
-    constexpr std::size_t maximum_trace_bytes = 256 * 1024 * 1024;
+    // Never destroyed: a writer thread still running at exit keeps using it.
+    Sink& traceSink() noexcept {
+      [[clang::no_destroy]] static Sink sink;
+
+      return sink;
+    }
+
+    constexpr std::size_t maximum_trace_bytes = std::size_t{256} * 1024 * 1024;
+    constexpr long long nanoseconds_per_microsecond = 1000;
 
     bool writeAll(std::string_view bytes) noexcept {
+      auto& sink = traceSink();
+
       while (!bytes.empty()) {
         const auto count = ::write(sink.file.get(), bytes.data(), bytes.size());
         if (count < 0 && sys::lastError() == EINTR) {
@@ -50,8 +60,25 @@ namespace telar::runtime::trace {
       return true;
     }
 
+    // The record's line, as long as it fits in `buffer` with a byte to spare; empty when it does
+    // not, as a line cut short would break the JSON.
+    tbc::val_a<std::string_view> formatRecord(tbc::val_a<std::span<char>> buffer, const Record& entry, std::int64_t origin) noexcept {
+      const auto start = static_cast<long long>(entry.start - origin);
+      const auto duration = static_cast<long long>(entry.duration);
+
+      try {
+        const auto length = std::format_to_n(buffer.data(), static_cast<std::ptrdiff_t>(buffer.size()), "{{\"name\":\"{}\",\"ph\":\"X\",\"pid\":{},\"tid\":{},\"ts\":{}.{:03},\"dur\":{}.{:03}}},\n", entry.name, ::getpid(), entry.thread, start / nanoseconds_per_microsecond, start % nanoseconds_per_microsecond, duration / nanoseconds_per_microsecond, duration % nanoseconds_per_microsecond).size;
+
+        return std::cmp_less(length, buffer.size()) ? std::string_view{buffer.data(), static_cast<std::size_t>(length)} : std::string_view{};
+      } catch (const std::exception&) {
+        return {};
+      }
+    }
+
     void format(std::span<const Record> records) noexcept {
-      ds::Array<char, 1024> buffer;
+      constexpr std::size_t record_bytes = 1024;
+      auto& sink = traceSink();
+      ds::Array<char, record_bytes> buffer{};
 
       for (const auto& entry : records) {
         if (sink.written > maximum_trace_bytes - buffer.size()) {
@@ -59,23 +86,35 @@ namespace telar::runtime::trace {
           return;
         }
 
-        const auto start = static_cast<long long>(entry.start - sink.origin);
-        const auto duration = static_cast<long long>(entry.duration);
-        const int length = std::snprintf(buffer.dataMut(), buffer.size(), "{\"name\":\"%s\",\"ph\":\"X\",\"pid\":%d,\"tid\":%llu,\"ts\":%lld.%03lld,\"dur\":%lld.%03lld},\n", entry.name, ::getpid(), static_cast<unsigned long long>(entry.thread), start / 1000, start % 1000, duration / 1000, duration % 1000);
-        if (length > 0 && static_cast<std::size_t>(length) < buffer.size()) {
-          if (!writeAll({buffer.data(), static_cast<std::size_t>(length)})) {
-            return;
-          }
+        const auto line = formatRecord(buffer.viewMut(), entry, sink.origin);
+        if (!line.empty() && !writeAll(line)) {
+          return;
         }
       }
     }
 
-    void* run(void*) noexcept {
+    // The closing metadata event and the end of the JSON array.
+    void writeFooter(std::uint64_t dropped) noexcept {
+      constexpr std::size_t footer_bytes = 256;
+      ds::Array<char, footer_bytes> footer{};
+
+      try {
+        const auto* const end = std::format_to_n(footer.dataMut(), footer.size(), "{{\"name\":\"process_name\",\"ph\":\"M\",\"pid\":{},\"args\":{{\"name\":\"telar-runtime\",\"dropped_records\":{}}}}}\n]\n", ::getpid(), dropped).out;
+
+        writeAll({footer.data(), static_cast<std::size_t>(end - footer.data())});
+      } catch (const std::exception&) {
+        traceSink().enabled = false;
+      }
+    }
+
+    void* run(void* /*context*/) noexcept {
+      auto& sink = traceSink();
+
       setThreadName("telar.trace");
       std::unique_lock lock{sink.mutex};
 
       while (true) {
-        sink.wake.wait_for(lock, std::chrono::seconds{1}, [] {
+        sink.wake.wait_for(lock, std::chrono::seconds{1}, [&sink] {
           return sink.stopping || sink.count == sink.pending.size();
         });
 
@@ -93,15 +132,15 @@ namespace telar::runtime::trace {
         }
       }
     }
-
   }
 
   void record(const char* name, std::int64_t start, std::int64_t end) noexcept {
+    auto& sink = traceSink();
     if (!sink.enabled.load(std::memory_order_relaxed)) {
       return;
     }
 
-    std::lock_guard lock{sink.mutex};
+    const std::scoped_lock lock{sink.mutex};
 
     if (!sink.enabled.load(std::memory_order_relaxed)) {
       return;
@@ -119,8 +158,13 @@ namespace telar::runtime::trace {
   }
 
   void open(const char* path, std::span<Record> first, std::span<Record> second) {
+    constexpr mode_t private_file_mode = 0600;
+    auto& sink = traceSink();
+    const std::string_view full_path{path};
+    // The tail of the terminated path, so terminated too.
+    const auto name = full_path.substr(full_path.rfind('/') + 1);
     auto parent = openPrivateParent(path);
-    FileDescriptor file{::openat(parent.get(), std::strrchr(path, '/') + 1, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600)};
+    FileDescriptor file{::openat(parent.get(), name.data(), combineFlags(O_WRONLY, O_CREAT, O_EXCL, O_NOFOLLOW, O_CLOEXEC), private_file_mode)}; // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
     if (!file) {
       throw SystemError{"Create trace file", sys::lastError()};
     }
@@ -144,8 +188,10 @@ namespace telar::runtime::trace {
   }
 
   void close() noexcept {
+    auto& sink = traceSink();
+
     {
-      std::lock_guard lock{sink.mutex};
+      const std::scoped_lock lock{sink.mutex};
 
       sink.enabled = false;
       sink.stopping = true;
@@ -153,10 +199,7 @@ namespace telar::runtime::trace {
 
     sink.wake.notify_one();
     pthread_join(sink.writer, nullptr);
-    ds::Array<char, 256> footer;
-    const int length = std::snprintf(footer.dataMut(), footer.size(), "{\"name\":\"process_name\",\"ph\":\"M\",\"pid\":%d,\"args\":{\"name\":\"telar-runtime\",\"dropped_records\":%llu}}\n]\n", ::getpid(), static_cast<unsigned long long>(sink.dropped));
-
-    writeAll({footer.data(), static_cast<std::size_t>(length)});
+    writeFooter(sink.dropped);
     sink.file.reset();
   }
 

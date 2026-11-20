@@ -17,6 +17,35 @@ namespace telar::runtime {
 
   namespace {
 
+    constexpr unsigned char first_printable = 0x20;
+    constexpr int hex_base = 16;
+    constexpr std::size_t hex_digits = 4;
+
+    // The UTF-16 surrogates a \u escape pairs into one scalar past the basic plane.
+    constexpr std::uint32_t high_surrogate_first = 0xd800;
+    constexpr std::uint32_t high_surrogate_last = 0xdbff;
+    constexpr std::uint32_t low_surrogate_first = 0xdc00;
+    constexpr std::uint32_t low_surrogate_last = 0xdfff;
+    constexpr std::uint32_t supplementary_first = 0x10000;
+    constexpr unsigned surrogate_bits = 10;
+
+    // UTF-8: the scalars below each limit take one byte more than those below the one before.
+    constexpr std::uint32_t one_byte_limit = 0x80;
+    constexpr std::uint32_t two_byte_limit = 0x800;
+    constexpr std::uint32_t three_byte_limit = 0x10000;
+    constexpr std::uint32_t two_byte_lead = 0xc0;
+    constexpr std::uint32_t three_byte_lead = 0xe0;
+    constexpr std::uint32_t four_byte_lead = 0xf0;
+    constexpr std::uint32_t continuation_tag = 0x80;
+    constexpr std::uint32_t continuation_mask = 0x3f;
+    constexpr unsigned continuation_bits = 6;
+
+    // A scalar a \u escape spells, and how many bytes it takes after the 'u'.
+    struct EscapedScalar {
+      std::uint32_t value;
+      std::size_t length;
+    };
+
     [[noreturn]] void invalid() {
       throw JsonError{};
     }
@@ -36,13 +65,17 @@ namespace telar::runtime {
     }
 
     std::uint32_t hex(std::string_view input, std::size_t offset) {
-      if (offset > input.size() || input.size() - offset < 4) {
+      if (offset > input.size() || input.size() - offset < hex_digits) {
         invalid();
       }
 
       std::uint32_t value = 0;
-      const auto result = std::from_chars(input.data() + offset, input.data() + offset + 4, value, 16);
-      if (result.ec != std::errc{} || result.ptr != input.data() + offset + 4) {
+      const auto digits = std::span<const char>{input}.subspan(offset, hex_digits);
+      const auto* const end = std::to_address(digits.end());
+      const auto result = std::from_chars(digits.data(), end, value, hex_base);
+
+      // from_chars reports success as the errc of value 0, which names no error.
+      if (std::to_underlying(result.ec) != 0 || result.ptr != end) {
         invalid();
       }
 
@@ -61,7 +94,7 @@ namespace telar::runtime {
           return original.substr(0, index);
         }
 
-        if (byte < 0x20) {
+        if (byte < first_printable) {
           invalid();
         }
 
@@ -72,8 +105,8 @@ namespace telar::runtime {
 
           if (original[index] == 'u') {
             hex(original, index + 1);
-            index += 4;
-          } else if (std::string_view{"\"\\/bfnrt"}.find(original[index]) == std::string_view::npos) {
+            index += hex_digits;
+          } else if (!std::string_view{"\"\\/bfnrt"}.contains(original[index])) {
             invalid();
           }
         }
@@ -92,7 +125,61 @@ namespace telar::runtime {
       return consumed;
     }
 
-    void skip(std::string_view& input, unsigned depth, unsigned maximum_depth) {
+    // Throws unless `number` is a JSON number whole.
+    void checkNumber(std::string_view number) {
+      if (number.starts_with('-')) {
+        number.remove_prefix(1);
+      }
+
+      if (number.empty()) {
+        invalid();
+      }
+
+      if (number.front() == '0') {
+        number.remove_prefix(1);
+      } else {
+        if (number.front() < '1' || number.front() > '9') {
+          invalid();
+        }
+
+        digits(number);
+      }
+
+      if (number.starts_with('.')) {
+        number.remove_prefix(1);
+        if (digits(number) == 0) {
+          invalid();
+        }
+      }
+
+      if (number.starts_with('e') || number.starts_with('E')) {
+        number.remove_prefix(1);
+        if (number.starts_with('+') || number.starts_with('-')) {
+          number.remove_prefix(1);
+        }
+
+        if (digits(number) == 0) {
+          invalid();
+        }
+      }
+
+      if (!number.empty()) {
+        invalid();
+      }
+    }
+
+    // Consumes a literal or a number, up to the byte that ends it.
+    void skipAtom(std::string_view& input) {
+      const auto end = input.find_first_of(",]} \r\n\t");
+      const auto atom = input.substr(0, end);
+      if (atom != "true" && atom != "false" && atom != "null") {
+        checkNumber(atom);
+      }
+
+      input.remove_prefix(atom.size());
+    }
+
+    void skip(std::string_view& input, unsigned depth, unsigned maximum_depth) { // NOLINT(misc-no-recursion): nested values recurse at most maximum_depth deep
       if (depth > maximum_depth || input.empty()) {
         invalid();
       }
@@ -102,110 +189,133 @@ namespace telar::runtime {
         return;
       }
 
-      if (input.front() == '{' || input.front() == '[') {
-        const bool object = input.front() == '{';
-        const char close = object ? '}' : ']';
+      if (input.front() != '{' && input.front() != '[') {
+        skipAtom(input);
+        return;
+      }
 
+      const bool object = input.front() == '{';
+      const char close = object ? '}' : ']';
+
+      input.remove_prefix(1);
+      whitespace(input);
+      if (input.starts_with(close)) {
         input.remove_prefix(1);
+        return;
+      }
+
+      for (;;) {
+        if (object) {
+          stringToken(input);
+          whitespace(input);
+          take(input, ':');
+          whitespace(input);
+        }
+
+        skip(input, depth + 1, maximum_depth);
         whitespace(input);
         if (input.starts_with(close)) {
           input.remove_prefix(1);
           return;
         }
 
-        for (;;) {
-          if (object) {
-            stringToken(input);
-            whitespace(input);
-            take(input, ':');
-            whitespace(input);
-          }
-
-          skip(input, depth + 1, maximum_depth);
-          whitespace(input);
-          if (input.starts_with(close)) {
-            input.remove_prefix(1);
-            return;
-          }
-
-          take(input, ',');
-          whitespace(input);
-        }
+        take(input, ',');
+        whitespace(input);
       }
-
-      const auto end = input.find_first_of(",]} \r\n\t");
-      const auto atom = input.substr(0, end);
-      if (atom != "true" && atom != "false" && atom != "null") {
-        auto number = atom;
-        if (number.starts_with('-')) {
-          number.remove_prefix(1);
-        }
-
-        if (number.empty()) {
-          invalid();
-        }
-
-        if (number.front() == '0') {
-          number.remove_prefix(1);
-        } else {
-          if (number.front() < '1' || number.front() > '9') {
-            invalid();
-          }
-
-          digits(number);
-        }
-
-        if (number.starts_with('.')) {
-          number.remove_prefix(1);
-          if (digits(number) == 0) {
-            invalid();
-          }
-        }
-
-        if (number.starts_with('e') || number.starts_with('E')) {
-          number.remove_prefix(1);
-          if (number.starts_with('+') || number.starts_with('-')) {
-            number.remove_prefix(1);
-          }
-
-          if (digits(number) == 0) {
-            invalid();
-          }
-        }
-
-        if (!number.empty()) {
-          invalid();
-        }
-      }
-
-      input.remove_prefix(atom.size());
     }
 
-    // Writes `value` as UTF-8 at `output` and returns the bytes it wrote.
-    std::size_t encodeUtf8(std::uint32_t value, char* output) noexcept {
-      if (value < 0x80) {
+    // A continuation byte of UTF-8: the six bits of `value` from `shift` up.
+    char continuation(std::uint32_t value, unsigned shift) noexcept {
+      return static_cast<char>(continuation_tag | ((value >> shift) & continuation_mask));
+    }
+
+    // Writes `value` as UTF-8 at the front of `output` and returns the bytes it wrote.
+    std::size_t encodeUtf8(std::uint32_t value, std::span<char> output) noexcept {
+      if (value < one_byte_limit) {
         output[0] = static_cast<char>(value);
         return 1;
       }
 
-      if (value < 0x800) {
-        output[0] = static_cast<char>(0xc0 | (value >> 6));
-        output[1] = static_cast<char>(0x80 | (value & 0x3f));
+      if (value < two_byte_limit) {
+        output[0] = static_cast<char>(two_byte_lead | (value >> continuation_bits));
+        output[1] = continuation(value, 0);
         return 2;
       }
 
-      if (value < 0x10000) {
-        output[0] = static_cast<char>(0xe0 | (value >> 12));
-        output[1] = static_cast<char>(0x80 | ((value >> 6) & 0x3f));
-        output[2] = static_cast<char>(0x80 | (value & 0x3f));
+      if (value < three_byte_limit) {
+        output[0] = static_cast<char>(three_byte_lead | (value >> (2 * continuation_bits)));
+        output[1] = continuation(value, continuation_bits);
+        output[2] = continuation(value, 0);
         return 3;
       }
 
-      output[0] = static_cast<char>(0xf0 | (value >> 18));
-      output[1] = static_cast<char>(0x80 | ((value >> 12) & 0x3f));
-      output[2] = static_cast<char>(0x80 | ((value >> 6) & 0x3f));
-      output[3] = static_cast<char>(0x80 | (value & 0x3f));
+      output[0] = static_cast<char>(four_byte_lead | (value >> (3 * continuation_bits)));
+      output[1] = continuation(value, 2 * continuation_bits);
+      output[2] = continuation(value, continuation_bits);
+      output[3] = continuation(value, 0);
       return 4;
+    }
+
+    // The byte a short escape spells after its backslash; none for a letter that spells none.
+    ds::Option<char> shortEscape(char letter) noexcept {
+      switch (letter) {
+      case '"':
+      case '\\':
+      case '/':
+        return letter;
+      case 'b':
+        return '\b';
+      case 'f':
+        return '\f';
+      case 'n':
+        return '\n';
+      case 'r':
+        return '\r';
+      case 't':
+        return '\t';
+      default:
+        return ds::none;
+      }
+    }
+
+    // The scalar the \u escape at `offset` of `encoded`, just past its 'u', spells: a high surrogate
+    // takes the low one's escape after it.
+    EscapedScalar unicodeEscape(std::string_view encoded, std::size_t offset) {
+      const auto unit = hex(encoded, offset);
+      if (unit >= low_surrogate_first && unit <= low_surrogate_last) {
+        invalid();
+      }
+
+      if (unit < high_surrogate_first || unit > high_surrogate_last) {
+        return {.value = unit, .length = hex_digits};
+      }
+
+      if (encoded.substr(offset + hex_digits, 2) != "\\u") {
+        invalid();
+      }
+
+      const auto low = hex(encoded, offset + hex_digits + 2);
+      if (low < low_surrogate_first || low > low_surrogate_last) {
+        invalid();
+      }
+
+      return {
+          .value = supplementary_first + ((unit - high_surrogate_first) << surrogate_bits) + low - low_surrogate_first,
+          .length = (2 * hex_digits) + 2,
+      };
+    }
+
+    // The kind of the value `encoded` spells, by its first byte.
+    JsonKind kindOf(std::string_view encoded) noexcept {
+      if (encoded.starts_with('{')) {
+        return JsonKind::object;
+      }
+
+      if (encoded.starts_with('[')) {
+        return JsonKind::array;
+      }
+
+      return encoded.starts_with('"') ? JsonKind::string : JsonKind::literal;
     }
 
   }
@@ -277,10 +387,10 @@ namespace telar::runtime {
     return JsonValue{value, maximum_depth};
   }
 
-  bool JsonValue::enter(std::string_view& input, char open, char close) {
-    take(input, open);
+  bool JsonValue::enter(std::string_view& input, Brackets brackets) {
+    take(input, brackets.open);
     whitespace(input);
-    return !input.starts_with(close);
+    return !input.starts_with(brackets.close);
   }
 
   bool JsonValue::advance(std::string_view& input, char close) {
@@ -322,7 +432,7 @@ namespace telar::runtime {
 
     output.clear();
     output.resize(encoded.size());
-    output.resize(unescape(encoded, output.dataMut()));
+    output.resize(unescape(encoded, output.viewMut()));
   }
 
   template void JsonValue::string<Memory>(ds::String<Memory>& output) const;
@@ -332,7 +442,7 @@ namespace telar::runtime {
   template void JsonValue::string<ErasingMemory>(ds::String<ErasingMemory>& output) const;
   template void JsonValue::string<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>(ds::String<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>& output) const;
 
-  std::size_t JsonValue::unescape(std::string_view encoded, char* output) {
+  std::size_t JsonValue::unescape(std::string_view encoded, std::span<char> output) {
     std::size_t written = 0;
 
     for (std::size_t index = 0; index < encoded.size(); ++index) {
@@ -346,53 +456,20 @@ namespace telar::runtime {
         invalid();
       }
 
-      switch (encoded[index]) {
-      case '"':
-      case '\\':
-      case '/':
-        output[written++] = encoded[index];
-        break;
-      case 'b':
-        output[written++] = '\b';
-        break;
-      case 'f':
-        output[written++] = '\f';
-        break;
-      case 'n':
-        output[written++] = '\n';
-        break;
-      case 'r':
-        output[written++] = '\r';
-        break;
-      case 't':
-        output[written++] = '\t';
-        break;
-      case 'u': {
-        auto codepoint = hex(encoded, index + 1);
+      if (encoded[index] == 'u') {
+        const auto scalar = unicodeEscape(encoded, index + 1);
 
-        index += 4;
-        if (codepoint >= 0xd800 && codepoint <= 0xdbff) {
-          if (encoded.substr(index + 1, 2) != "\\u") {
-            invalid();
-          }
-
-          const auto low = hex(encoded, index + 3);
-          if (low < 0xdc00 || low > 0xdfff) {
-            invalid();
-          }
-
-          codepoint = 0x10000 + ((codepoint - 0xd800) << 10) + low - 0xdc00;
-          index += 6;
-        } else if (codepoint >= 0xdc00 && codepoint <= 0xdfff) {
-          invalid();
-        }
-
-        written += encodeUtf8(codepoint, output + written);
-        break;
+        index += scalar.length;
+        written += encodeUtf8(scalar.value, output.subspan(written));
+        continue;
       }
-      default:
+
+      const auto escaped = shortEscape(encoded[index]);
+      if (!escaped) {
         invalid();
       }
+
+      output[written++] = *escaped;
     }
 
     return written;
@@ -476,7 +553,17 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   const JsonNode<Memory>* JsonNode<Memory>::find(std::string_view name) const noexcept {
-    return const_cast<JsonNode*>(this)->findMut(name);
+    if (kind_ != JsonKind::object) {
+      return nullptr;
+    }
+
+    for (const auto& child : children_) {
+      if (child.name_ == name) {
+        return &child;
+      }
+    }
+
+    return nullptr;
   }
 
   template <Allocator Memory>
@@ -544,12 +631,13 @@ namespace telar::runtime {
     return output;
   }
 
+  // A node's children are nodes, which these build and format as deep as maximum_depth lets a value
+  // nest.
+  // NOLINTBEGIN(misc-no-recursion): a node's children recurse at most maximum_depth deep
   template <Allocator Memory>
   auto JsonNode<Memory>::fromValue(tbc::mut_a<Memory> memory, JsonValue value) -> tbc::val_a<JsonNode> {
     const auto encoded = value.encoded();
-    const auto kind = encoded.starts_with('{') ? JsonKind::object : encoded.starts_with('[') ? JsonKind::array
-                                                                : encoded.starts_with('"')   ? JsonKind::string
-                                                                                             : JsonKind::literal;
+    const auto kind = kindOf(encoded);
     JsonNode node{memory, kind};
 
     if (kind == JsonKind::object) {
@@ -617,6 +705,8 @@ namespace telar::runtime {
 
     output.push(kind_ == JsonKind::object ? '}' : ']');
   }
+
+  // NOLINTEND(misc-no-recursion)
 
   template class JsonNode<Memory>;
   template class JsonNode<ConcurrentMemory>;

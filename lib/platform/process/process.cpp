@@ -7,6 +7,7 @@ import telar.sys.process;
 import telar.platform.error;
 import telar.base.ds;
 import telar.base.text;
+import telar.platform.net;
 #ifdef __APPLE__
 import telar.sys.apple;
 #endif
@@ -15,26 +16,92 @@ import telar.sys.linux_api;
 #endif
 
 namespace telar::runtime {
+  namespace {
+
+    using Clock = std::chrono::steady_clock;
+
+    // The streams a command's loop waits on, polled until one is ready or the deadline is near:
+    // its output, its errors and its input, in that order.
+    ds::Array<pollfd, 3> pollStreams(const PipeProcess& process, Clock::time_point deadline) {
+      constexpr std::int64_t longest_wait_milliseconds = 20;
+      ds::Array descriptors{
+          pollfd{.fd = process.output(), .events = POLLIN, .revents = 0},
+          pollfd{.fd = process.error(), .events = POLLIN, .revents = 0},
+          pollfd{.fd = process.input(), .events = POLLOUT, .revents = 0},
+      };
+
+      const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - Clock::now()).count();
+      const int result = ::poll(descriptors.dataMut(), descriptors.size(), static_cast<int>(std::clamp<std::int64_t>(remaining, 0, longest_wait_milliseconds)));
+
+      if (result < 0 && sys::lastError() != EINTR) {
+        throw SystemError{"Wait for command output"};
+      }
+
+      return descriptors;
+    }
+
+    // Hands what the ready output and error streams hold to their consumers and closes a stream
+    // that ended; false when the output consumer asks to stop.
+    bool readStreams(PipeProcess& process, const ds::Array<pollfd, 3>& descriptors, std::span<Byte> buffer, BytesConsumer consume, const BytesConsumer* consume_error) {
+      for (std::size_t index = 0; index < 2; ++index) {
+        if (descriptors[index].fd < 0 || descriptors[index].revents == 0) {
+          continue;
+        }
+
+        const auto count = ::read(descriptors[index].fd, buffer.data(), buffer.size());
+        if (count > 0) {
+          const auto bytes = std::span<const Byte>{buffer}.first(static_cast<std::size_t>(count));
+          if (index == 0 && !consume(bytes)) {
+            return false;
+          }
+
+          if (index == 1 && consume_error != nullptr) {
+            (*consume_error)(bytes);
+          }
+        } else if (count == 0) {
+          if (index == 0) {
+            process.closeOutput();
+          } else {
+            process.closeError();
+          }
+        } else if (!socketWouldBlock(sys::lastError())) {
+          throw SystemError{"Read command output"};
+        }
+      }
+
+      return true;
+    }
+
+  }
 
   bool findExecutable(std::string_view path, std::string_view program, std::span<char, PATH_MAX> found, std::string_view cwd) noexcept {
     for (;;) {
       const auto separator = path.find(':');
-      const auto directory = path.substr(0, separator);
+      const auto directory = separator == std::string_view::npos ? path : std::string_view{path.data(), separator};
       const bool relative = directory.empty() || directory.front() != '/';
-      const std::string_view base = !relative ? std::string_view{} : cwd.empty() ? std::string_view{"."}
-                                                                                 : cwd;
+      std::string_view base;
+
+      if (relative) {
+        base = cwd.empty() ? std::string_view{"."} : cwd;
+      }
+
       const auto length = base.size() + (relative ? 1 : 0) + directory.size() + 1 + program.size();
       if (length < found.size()) {
-        auto* cursor = std::ranges::copy(base, found.data()).out;
+        std::size_t written = 0;
+        const auto write = [&](std::string_view text) {
+          std::ranges::copy(text, found.subspan(written).begin());
+          written += text.size();
+        };
 
+        write(base);
         if (relative) {
-          *cursor++ = '/';
+          write("/");
         }
 
-        cursor = std::ranges::copy(directory, cursor).out;
-        *cursor++ = '/';
-        cursor = std::ranges::copy(program, cursor).out;
-        *cursor = '\0';
+        write(directory);
+        write("/");
+        write(program);
+        found[written] = '\0';
         if (::access(found.data(), X_OK) == 0) {
           return true;
         }
@@ -78,7 +145,7 @@ namespace telar::runtime {
     }
 
     if (launch.environment_mode == EnvironmentMode::inherit_runtime) {
-      for (char** entry = environ; *entry != nullptr; ++entry) {
+      for (char** entry = environ; *entry != nullptr; ++entry) { // NOLINT(clang-diagnostic-unsafe-buffer-usage): environ is a C array whose end only its null entry marks
         environment_.emplace(environment_memory_, *entry);
       }
     }
@@ -127,7 +194,10 @@ namespace telar::runtime {
   ds::Option<std::string_view> Command<Memory>::environment(std::string_view name) const noexcept {
     for (const auto& entry : environment_) {
       if (definesVariable(entry, name)) {
-        return std::string_view{entry}.substr(name.size() + 1);
+        std::string_view value{entry};
+
+        value.remove_prefix(name.size() + 1);
+        return value;
       }
     }
 
@@ -233,16 +303,17 @@ namespace telar::runtime {
       return;
     }
 
+    constexpr std::string_view path_entry = "PATH=";
     std::string_view path = "/usr/bin:/bin";
 
     for (const auto& entry : environment_) {
-      if (std::string_view{entry}.starts_with("PATH=")) {
-        path = std::string_view{entry}.substr(5);
+      if (std::string_view{entry}.starts_with(path_entry)) {
+        path = std::string_view{entry}.substr(path_entry.size());
         break;
       }
     }
 
-    ds::Array<char, PATH_MAX> found;
+    ds::Array<char, PATH_MAX> found{};
     if (!findExecutable(path, program, found.viewMut(), cwd())) {
       throw SystemError{"resolve pane executable", ENOENT};
     }
@@ -307,7 +378,7 @@ namespace telar::runtime {
   std::string_view CommandOutput<Memory>::text() const noexcept {
     const auto bytes = output_.readable();
 
-    return {reinterpret_cast<const char*>(bytes.data()), bytes.size()};
+    return {reinterpret_cast<const char*>(bytes.data()), bytes.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the output is text the queue holds as bytes, which char may alias
   }
 
   template <Allocator Memory>
@@ -336,7 +407,8 @@ namespace telar::runtime {
       process.closeInput();
     }
 
-    ds::Array<Byte, 16 * 1024> bytes;
+    constexpr std::size_t read_bytes = std::size_t{16} * 1024;
+    ds::Array<Byte, read_bytes> bytes{};
 
     while (process.output() >= 0 || process.error() >= 0 || process.input() >= 0) {
       checkCancellation(options.cancelled);
@@ -344,40 +416,13 @@ namespace telar::runtime {
         throw RequestError{FailureCode::resource_limit, "Command deadline exceeded"};
       }
 
-      ds::Array<pollfd, 3> descriptors{{{.fd = process.output(), .events = POLLIN, .revents = 0}, {.fd = process.error(), .events = POLLIN, .revents = 0}, {.fd = process.input(), .events = POLLOUT, .revents = 0}}};
-      const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - Clock::now()).count();
-      const int result = ::poll(descriptors.dataMut(), descriptors.size(), static_cast<int>(std::clamp<std::int64_t>(remaining, 0, 20)));
-      if (result < 0 && sys::lastError() != EINTR) {
-        throw SystemError{"Wait for command output"};
-      }
-
+      const auto descriptors = pollStreams(process, deadline);
       if (descriptors[2].fd >= 0 && descriptors[2].revents != 0) {
         writeInput(process, input, input_offset);
       }
 
-      for (std::size_t index = 0; index < 2; ++index) {
-        if (descriptors[index].fd < 0 || descriptors[index].revents == 0) {
-          continue;
-        }
-
-        const auto count = ::read(descriptors[index].fd, bytes.dataMut(), bytes.size());
-        if (count > 0) {
-          if (index == 0 && !consume(std::span<const Byte>{bytes}.first(static_cast<std::size_t>(count)))) {
-            return 0;
-          }
-
-          if (index == 1 && consume_error != nullptr) {
-            (*consume_error)(std::span<const Byte>{bytes}.first(static_cast<std::size_t>(count)));
-          }
-        } else if (count == 0) {
-          if (index == 0) {
-            process.closeOutput();
-          } else {
-            process.closeError();
-          }
-        } else if (sys::lastError() != EAGAIN && sys::lastError() != EWOULDBLOCK && sys::lastError() != EINTR) {
-          throw SystemError{"Read command output"};
-        }
+      if (!readStreams(process, descriptors, bytes.viewMut(), consume, consume_error)) {
+        return 0;
       }
     }
 
@@ -402,10 +447,11 @@ namespace telar::runtime {
         continue;
       }
 
-      const auto count = ::write(process.input(), input.front().data() + offset, input.front().size() - offset);
+      const auto pending = input.front().substr(offset);
+      const auto count = ::write(process.input(), pending.data(), pending.size());
       if (count > 0) {
         offset += static_cast<std::size_t>(count);
-      } else if (count < 0 && sys::lastError() != EAGAIN && sys::lastError() != EWOULDBLOCK && sys::lastError() != EINTR) {
+      } else if (count < 0 && !socketWouldBlock(sys::lastError())) {
         throw SystemError{"Write command input"};
       } else {
         return;
@@ -423,7 +469,7 @@ namespace telar::runtime {
   }
 
   ExecutablePath::ExecutablePath() {
-    ds::Array<char, PATH_MAX> original;
+    ds::Array<char, PATH_MAX> original{};
 #ifdef __APPLE__
     auto size = static_cast<std::uint32_t>(original.size());
     if (::_NSGetExecutablePath(original.dataMut(), &size) != 0) {
@@ -456,17 +502,17 @@ namespace telar::runtime {
     // The directory views the path written below, so its length is read first.
     const auto start = directory.size();
 
-    name.copy(path_.dataMut() + start, name.size());
+    std::ranges::copy(name, path_.viewMut().subspan(start).begin());
     path_.atMut(start + name.size()) = '\0';
   }
 
   ds::Option<ExecutablePath> ExecutablePath::sibling(std::initializer_list<std::string_view> candidates) {
-    ExecutablePath self;
+    const ExecutablePath self;
     const std::string_view own = self.path_.data();
     const auto directory = own.substr(0, own.rfind('/') + 1);
 
     for (const auto candidate : candidates) {
-      ds::Array<char, PATH_MAX> path;
+      ds::Array<char, PATH_MAX> path{};
       if (directory.size() + candidate.size() >= path.size()) {
         continue;
       }
@@ -497,15 +543,16 @@ namespace telar::runtime {
 
     request.bitmapcount = ATTR_BIT_MAP_COUNT;
     request.commonattr = ATTR_CMN_NAME;
-    alignas(attrreference_t) ds::Array<char, sizeof(std::uint32_t) + sizeof(attrreference_t) + (NAME_MAX * 3) + 1> answer{};
+    alignas(attrreference_t) ds::Array<char, sizeof(std::uint32_t) + sizeof(attrreference_t) + (std::size_t{NAME_MAX} * 3) + 1> answer{};
     if (::getattrlist(path, &request, answer.dataMut(), answer.size(), FSOPT_NOFOLLOW) != 0) {
       return false;
     }
 
     constexpr auto reference_at = sizeof(std::uint32_t);
-    attrreference_t reference{};
+    ds::Array<char, sizeof(attrreference_t)> reference_bytes{};
 
-    std::memcpy(&reference, answer.data() + reference_at, sizeof(reference));
+    std::ranges::copy(answer.view().subspan<reference_at, sizeof(attrreference_t)>(), reference_bytes.viewMut().begin());
+    const auto reference = std::bit_cast<attrreference_t>(reference_bytes);
     const auto offset = static_cast<std::size_t>(reference.attr_dataoffset);
     const auto length = static_cast<std::size_t>(reference.attr_length);
     if (reference.attr_dataoffset < 0 || length == 0 || offset > answer.size() - reference_at || length > answer.size() - reference_at - offset) {
@@ -513,10 +560,12 @@ namespace telar::runtime {
     }
 
     // The length counts the terminating NUL.
-    const std::string_view name{answer.data() + reference_at + offset, length - 1};
-    const std::string_view written{path};
+    const auto name_bytes = answer.view().subspan(reference_at + offset, length - 1);
+    const std::string_view name{name_bytes.data(), name_bytes.size()};
+    std::string_view written{path};
 
-    return name == written.substr(written.rfind('/') + 1);
+    written.remove_prefix(written.rfind('/') + 1);
+    return name == written;
 #else
     static_cast<void>(path);
     return true;
@@ -526,16 +575,21 @@ namespace telar::runtime {
   FixedText<PATH_MAX> loginShell() {
     FixedText<PATH_MAX> shell;
     const auto pick = [&](const char* candidate) {
-      if (candidate == nullptr || *candidate != '/' || std::strlen(candidate) > PATH_MAX) {
+      if (candidate == nullptr || *candidate != '/' || std::string_view{candidate}.size() > PATH_MAX) {
         return false;
       }
 
       shell.assign(candidate);
       return true;
     };
-    if (!pick(std::getenv("SHELL"))) {
-      const auto* entry = ::getpwuid(::getuid());
-      if (entry == nullptr || !pick(entry->pw_shell)) {
+    if (!pick(std::getenv("SHELL"))) { // NOLINT(concurrency-mt-unsafe): POSIX has no thread-safe read of the environment
+      constexpr std::size_t account_record_bytes = std::size_t{16} * 1024;
+      passwd account{};
+      passwd* found = nullptr;
+      ds::Array<char, account_record_bytes> storage{};
+      const bool known = ::getpwuid_r(::getuid(), &account, storage.dataMut(), storage.size(), &found) == 0 && found != nullptr;
+
+      if (!known || !pick(account.pw_shell)) {
         shell.assign("/bin/sh");
       }
     }
@@ -544,7 +598,9 @@ namespace telar::runtime {
   }
 
   std::string_view loginShellScript(std::string_view shell) noexcept {
-    const auto name = shell.substr(shell.rfind('/') + 1);
+    auto name = shell;
+
+    name.remove_prefix(shell.rfind('/') + 1);
     if (name == "bash" || name == "zsh" || name == "ksh") {
       return R"(exec -- "$0" "$@")";
     }
@@ -572,19 +628,19 @@ namespace telar::runtime {
       throw;
     }
 
-    sigset_t empty;
+    sigset_t empty{};
 
     sigemptyset(&empty);
-    sigset_t defaults;
+    sigset_t defaults{};
 
     sigfillset(&defaults);
     posix_spawnattr_setsigmask(&attributes, &empty);
     posix_spawnattr_setsigdefault(&attributes, &defaults);
     posix_spawnattr_setpgroup(&attributes, 0);
 #ifdef __APPLE__
-    flags |= POSIX_SPAWN_CLOEXEC_DEFAULT;
+    flags = static_cast<short>(combineFlags(static_cast<int>(flags), POSIX_SPAWN_CLOEXEC_DEFAULT));
 #endif
-    checkSpawn(posix_spawnattr_setflags(&attributes, flags | POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK));
+    checkSpawn(posix_spawnattr_setflags(&attributes, static_cast<short>(combineFlags(static_cast<int>(flags), POSIX_SPAWN_SETSIGDEF, POSIX_SPAWN_SETSIGMASK))));
   }
 
   SpawnOptions::~SpawnOptions() {

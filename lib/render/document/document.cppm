@@ -30,11 +30,13 @@ export namespace telar::render {
   // documents a terminal keeps for one pane's scrollback. Past either, the
   // oldest goes and its rows show their text again.
   inline constexpr std::size_t max_pane_documents = 8;
-  inline constexpr std::size_t max_pane_document_bytes = std::size_t{16} << 20;
+  inline constexpr std::size_t max_pane_document_bytes = std::size_t{16} << 20U;
 
   // The longest OSC body that can carry a document.
   inline constexpr std::size_t max_sequence_body = sequence_begin.size() + ((max_document_bytes + 2) / 3 * 4);
-  static_assert(max_sequence_body <= std::size_t{8} << 20);
+  // The bytes a terminal buffers for one OSC.
+  inline constexpr std::size_t max_osc_bytes = std::size_t{8} << 20U;
+  static_assert(max_sequence_body <= max_osc_bytes);
 
 }
 
@@ -98,16 +100,16 @@ export namespace telar::render {
   };
 
   namespace style {
-    inline constexpr std::uint16_t strong = 1 << 0;
-    inline constexpr std::uint16_t emphasis = 1 << 1;
-    inline constexpr std::uint16_t code = 1 << 2;
-    inline constexpr std::uint16_t strike = 1 << 3;
-    inline constexpr std::uint16_t link = 1 << 4;  // Run::target is the destination
-    inline constexpr std::uint16_t image = 1 << 5; // text is the alternative text; Run::target the source, never fetched
-    inline constexpr std::uint16_t math = 1 << 6;
-    inline constexpr std::uint16_t html = 1 << 7; // inline raw HTML, shown verbatim
-    inline constexpr std::uint16_t superscript = 1 << 8;
-    inline constexpr std::uint16_t all = (1 << 9) - 1;
+    inline constexpr std::uint16_t strong = 1U << 0U;
+    inline constexpr std::uint16_t emphasis = 1U << 1U;
+    inline constexpr std::uint16_t code = 1U << 2U;
+    inline constexpr std::uint16_t strike = 1U << 3U;
+    inline constexpr std::uint16_t link = 1U << 4U;  // Run::target is the destination
+    inline constexpr std::uint16_t image = 1U << 5U; // text is the alternative text; Run::target the source, never fetched
+    inline constexpr std::uint16_t math = 1U << 6U;
+    inline constexpr std::uint16_t html = 1U << 7U; // inline raw HTML, shown verbatim
+    inline constexpr std::uint16_t superscript = 1U << 8U;
+    inline constexpr std::uint16_t all = (1U << 9U) - 1U;
   }
 
   // Text with one style. A hard line break is a '\n' inside the text.
@@ -128,8 +130,8 @@ export namespace telar::render {
   };
 
   struct Block {
-    static constexpr std::uint8_t tight = 1 << 0;         // inside a tight list: no gap before it
-    static constexpr std::uint8_t opens_callout = 1 << 1; // the first block of its callout
+    static constexpr std::uint8_t tight = 1U << 0U;         // inside a tight list: no gap before it
+    static constexpr std::uint8_t opens_callout = 1U << 1U; // the first block of its callout
     static constexpr std::uint8_t known_flags = tight | opens_callout;
 
     BlockKind kind = BlockKind::paragraph;

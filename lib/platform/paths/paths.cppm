@@ -22,7 +22,12 @@ export {
       virtual std::string_view lookup(const char* name) const = 0;
 
     protected:
+      EnvironmentSource() = default;
       ~EnvironmentSource() = default;
+      EnvironmentSource(const EnvironmentSource&) = default;
+      EnvironmentSource& operator=(const EnvironmentSource&) = default;
+      EnvironmentSource(EnvironmentSource&&) = default;
+      EnvironmentSource& operator=(EnvironmentSource&&) = default;
     };
 
     struct ProcessEnvironment final : EnvironmentSource {
@@ -71,20 +76,22 @@ export {
 export {
   namespace telar::runtime::cli {
 
-    enum class ServerAction {
+    enum class ServerAction : std::uint8_t {
       run,
       stop,
       endpoint,
       bridge,
       help,
     };
-    enum class ServerMode {
+    enum class ServerMode : std::uint8_t {
       foreground,
       background,
       daemonized,
     };
 
     struct ServerOptions {
+      static constexpr std::size_t maximum_engine_arguments = 64;
+
       ServerAction action = ServerAction::run;
       ServerMode mode = ServerMode::foreground;
       std::string_view socket;
@@ -93,7 +100,7 @@ export {
       std::string_view trace;
       std::string_view config;
       std::string_view profile;
-      ds::Array<std::string_view, 64> engine_arguments;
+      ds::Array<std::string_view, maximum_engine_arguments> engine_arguments;
       std::size_t engine_argument_count = 0;
       bool fresh = false;
       bool no_config = false;
@@ -103,6 +110,15 @@ export {
       static ServerOptions parse(std::span<char* const> arguments);
 
     private:
+      // Applies the option at `index` when it takes a value, which it reads after its checks and
+      // steps `index` to; false for any other argument.
+      bool applyValueOption(std::span<char* const> arguments, std::size_t& index);
+
+      // Applies an action or an option without a value; throws for an unknown argument.
+      void applyFlagOption(std::string_view argument, bool& action_selected);
+
+      // The value after the option at `index`: one of the process's arguments, which outlive the options.
+      static tbc::val_static<std::string_view> nextValue(std::span<char* const> arguments, std::size_t& index);
       static void setOnce(std::string_view& destination, std::string_view value);
       static void setFlag(bool& flag);
     };
@@ -171,7 +187,13 @@ export {
       [[nodiscard]] ds::Option<std::string_view> managedDirectory() const noexcept;
 
     private:
-      void managed(std::string_view base, std::string_view name);
+      // A managed socket's directory, `name` under `base`.
+      struct ManagedDirectory {
+        std::string_view base;
+        std::string_view name;
+      };
+
+      void managed(ManagedDirectory directory);
       void append(std::string_view text);
       void validate() const;
 

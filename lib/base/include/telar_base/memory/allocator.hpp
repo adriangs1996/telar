@@ -27,9 +27,9 @@ namespace telar {
   public:
     static constexpr bool thread_safe = true;
 
-    void* allocate(std::size_t size, std::size_t alignment) noexcept {
+    static void* allocate(std::size_t size, std::size_t alignment) noexcept {
       if (alignment <= alignof(std::max_align_t)) {
-        return std::malloc(size);
+        return std::malloc(size); // NOLINT(cppcoreguidelines-no-malloc,cppcoreguidelines-owning-memory): the allocator every other one ends in
       }
 
       void* pointer = nullptr;
@@ -37,8 +37,8 @@ namespace telar {
       return posix_memalign(&pointer, alignment, size) == 0 ? pointer : nullptr;
     }
 
-    void deallocate(void* pointer, std::size_t, std::size_t) noexcept {
-      std::free(pointer);
+    static void deallocate(void* pointer, std::size_t /*size*/, std::size_t /*alignment*/) noexcept {
+      std::free(pointer); // NOLINT(cppcoreguidelines-no-malloc,cppcoreguidelines-owning-memory): the allocator every other one ends in
     }
   };
 
@@ -138,13 +138,13 @@ namespace telar {
         : upstream_(upstream) {}
 
     void* allocate(std::size_t size, std::size_t alignment) noexcept {
-      const std::lock_guard lock{mutex_};
+      const std::scoped_lock lock{mutex_};
 
       return upstream_.allocate(size, alignment);
     }
 
     void deallocate(void* pointer, std::size_t size, std::size_t alignment) noexcept {
-      const std::lock_guard lock{mutex_};
+      const std::scoped_lock lock{mutex_};
 
       upstream_.deallocate(pointer, size, alignment);
     }
@@ -152,7 +152,7 @@ namespace telar {
     auto statistics() const noexcept
       requires requires(const Upstream& upstream) { upstream.statistics(); }
     {
-      const std::lock_guard lock{mutex_};
+      const std::scoped_lock lock{mutex_};
 
       return upstream_.statistics();
     }
@@ -170,12 +170,14 @@ namespace telar {
 
   // An allocator behind a virtual call, so a service compiles once rather than once per allocator.
   // allocate returns nullptr, instead of throwing, when it cannot satisfy the request.
-  class TBC_SHARED Memory {
+  class TBC_SHARED Memory { // NOLINT(clang-diagnostic-weak-vtables): an interface of pure virtual calls, defined only by its implementations
   public:
     static constexpr bool thread_safe = false;
 
     Memory(const Memory&) = delete;
     Memory& operator=(const Memory&) = delete;
+    Memory(Memory&&) = delete;
+    Memory& operator=(Memory&&) = delete;
 
     virtual void* allocate(std::size_t size, std::size_t alignment) noexcept = 0;
     virtual void deallocate(void* pointer, std::size_t size, std::size_t alignment) noexcept = 0;
@@ -193,9 +195,14 @@ namespace telar {
   };
 
   // A Memory that any number of threads may call at once.
-  class TBC_SHARED ConcurrentMemory : public Memory {
+  class TBC_SHARED ConcurrentMemory : public Memory { // NOLINT(clang-diagnostic-weak-vtables): an interface of pure virtual calls, defined only by its implementations
   public:
     static constexpr bool thread_safe = true;
+
+    ConcurrentMemory(const ConcurrentMemory&) = delete;
+    ConcurrentMemory& operator=(const ConcurrentMemory&) = delete;
+    ConcurrentMemory(ConcurrentMemory&&) = delete;
+    ConcurrentMemory& operator=(ConcurrentMemory&&) = delete;
 
   protected:
     ConcurrentMemory() noexcept = default;
@@ -206,6 +213,11 @@ namespace telar {
   class TBC_SHARED ErasingMemory : public Memory {
   public:
     static constexpr bool erasing = true;
+
+    ErasingMemory(const ErasingMemory&) = delete;
+    ErasingMemory& operator=(const ErasingMemory&) = delete;
+    ErasingMemory(ErasingMemory&&) = delete;
+    ErasingMemory& operator=(ErasingMemory&&) = delete;
 
   protected:
     ErasingMemory() noexcept = default;
@@ -270,7 +282,7 @@ namespace telar {
         : memory_(&memory) {}
 
     template <typename Other>
-    AllocatorRef(const AllocatorRef<Other, Memory>& other) noexcept
+    AllocatorRef(const AllocatorRef<Other, Memory>& other) noexcept // NOLINT(cppcoreguidelines-explicit-constructor,misc-explicit-constructor): rebinding converts implicitly, as std::allocator's does
         : memory_(&other.memory()) {}
 
     Value* allocate(std::size_t count) {

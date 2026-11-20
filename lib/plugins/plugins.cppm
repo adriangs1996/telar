@@ -104,10 +104,10 @@ export {
 
     private:
       static constexpr std::uint16_t bit(Capability capability) noexcept {
-        return std::uint16_t{1} << static_cast<unsigned>(capability);
+        return static_cast<std::uint16_t>(1U << static_cast<unsigned>(capability));
       }
 
-      static constexpr auto names_ = ds::Array<std::string_view, 15>{
+      static constexpr auto capability_names = ds::Array<std::string_view, 15>{
           "workspace.read",
           "workspace.write",
           "process.spawn",
@@ -124,8 +124,8 @@ export {
           "traffic.control",
           "traffic.record",
       };
-      static_assert(names_.size() == static_cast<std::size_t>(Capability::count));
-      static_assert(names_.size() <= 16);
+      static_assert(capability_names.size() == static_cast<std::size_t>(Capability::count));
+      static_assert(capability_names.size() <= std::numeric_limits<std::uint16_t>::digits);
       std::uint16_t bits_ = 0;
     };
 
@@ -139,7 +139,8 @@ export {
 export {
   namespace telar::runtime::plugins {
 
-    using PackageDigest = ds::Array<std::uint8_t, 32>;
+    inline constexpr std::size_t package_digest_bytes = 32;
+    using PackageDigest = ds::Array<std::uint8_t, package_digest_bytes>;
 
     constexpr std::uint64_t stableId(std::string_view name) noexcept {
       return fnv1a64(name);
@@ -157,7 +158,7 @@ export {
     struct PackageLimits {
       static constexpr std::size_t configured = 32;
       static constexpr std::size_t configured_path_bytes = 512;
-      static constexpr std::size_t manifest_bytes = 64 * 1024;
+      static constexpr std::size_t manifest_bytes = std::size_t{64} * 1024;
       static constexpr std::size_t id_bytes = 64;
       static constexpr std::size_t version_bytes = 32;
       static constexpr std::size_t entry_bytes = 256;
@@ -166,9 +167,9 @@ export {
       static constexpr std::size_t actions = 64;
       static constexpr std::size_t action_bytes = 64;
       static constexpr std::size_t grants = 64;
-      static constexpr std::size_t trust_bytes = 64 * 1024;
+      static constexpr std::size_t trust_bytes = std::size_t{64} * 1024;
       static constexpr std::size_t files = 256;
-      static constexpr std::size_t total_bytes = 16 * 1024 * 1024;
+      static constexpr std::size_t total_bytes = std::size_t{16} * 1024 * 1024;
     };
 
   }
@@ -244,11 +245,11 @@ export {
       static constexpr std::size_t workers = 16;
       static constexpr std::size_t queue_depth = 64;
       static constexpr std::size_t effects = 16;
-      static constexpr std::size_t effect_bytes = 64 * 1024;
-      static constexpr std::size_t frame_overhead = 64 * 1024;
-      static constexpr std::size_t frame_bytes = 128 * 1024 * 1024;
-      static constexpr std::size_t held_bytes = 128 * 1024 * 1024;
-      static constexpr std::size_t entry_bytes = 1024 * 1024;
+      static constexpr std::size_t effect_bytes = std::size_t{64} * 1024;
+      static constexpr std::size_t frame_overhead = std::size_t{64} * 1024;
+      static constexpr std::size_t frame_bytes = std::size_t{128} * 1024 * 1024;
+      static constexpr std::size_t held_bytes = std::size_t{128} * 1024 * 1024;
+      static constexpr std::size_t entry_bytes = std::size_t{1024} * 1024;
       static constexpr std::size_t error_bytes = 4096;
       static constexpr std::size_t stderr_bytes = 4096;
       static constexpr std::size_t restarts = 5;
@@ -256,7 +257,7 @@ export {
       static constexpr auto callback_deadline = std::chrono::seconds{2};
       static constexpr auto reply_deadline = std::chrono::seconds{3};
       static constexpr auto trust_check_interval = std::chrono::milliseconds{250};
-      static constexpr std::size_t lua_bytes = 64 * 1024 * 1024;
+      static constexpr std::size_t lua_bytes = std::size_t{64} * 1024 * 1024;
       static constexpr std::uint64_t lua_instructions = 5'000'000;
     };
 
@@ -339,14 +340,20 @@ namespace telar::runtime::plugins {
     PackageDigest (*finish)(void* hash);
   };
 
+  // A configured package's path, resolved against the configuration's directory.
+  struct ConfiguredPath {
+    std::string_view directory;
+    std::string_view path;
+  };
+
   template <Allocator Memory>
-  Package inspectConfiguredPackage(Memory& memory, std::string_view directory, std::string_view path, PackageHashing hashing);
+  Package inspectConfiguredPackage(Memory& memory, ConfiguredPath configured, PackageHashing hashing);
 
   template <Allocator Memory>
   Package inspectPackage(Memory& memory, std::string_view path, PackageHashing hashing);
 
-  extern template Package inspectConfiguredPackage<Memory>(Memory& memory, std::string_view directory, std::string_view path, PackageHashing hashing);
-  extern template Package inspectConfiguredPackage<ConcurrentMemory>(ConcurrentMemory& memory, std::string_view directory, std::string_view path, PackageHashing hashing);
+  extern template Package inspectConfiguredPackage<Memory>(Memory& memory, ConfiguredPath configured, PackageHashing hashing);
+  extern template Package inspectConfiguredPackage<ConcurrentMemory>(ConcurrentMemory& memory, ConfiguredPath configured, PackageHashing hashing);
   extern template Package inspectPackage<Memory>(Memory& memory, std::string_view path, PackageHashing hashing);
   extern template Package inspectPackage<ConcurrentMemory>(ConcurrentMemory& memory, std::string_view path, PackageHashing hashing);
 
@@ -370,7 +377,7 @@ export {
       TBC_GENERIC static Package inspectConfigured(Memory& memory, std::string_view directory, std::string_view path) {
         Hash hash;
 
-        return inspectConfiguredPackage(memory, directory, path, hashing(hash));
+        return inspectConfiguredPackage(memory, ConfiguredPath{.directory = directory, .path = path}, hashing(hash));
       }
 
       template <Allocator Memory>
@@ -482,8 +489,8 @@ export {
     public:
       TBC_GENERIC explicit PackageRegistryStorage(Memory& memory, std::string_view directory, std::span<const ConfiguredPlugin> specifications)
           : packages_(memory) {
-        registerPackages<Memory>(packages_, memory, directory, specifications, [](Memory& memory, std::string_view directory, std::string_view path) {
-          return Inspector::inspectConfigured(memory, directory, path);
+        registerPackages<Memory>(packages_, memory, directory, specifications, [](Memory& inspection_memory, std::string_view base, std::string_view path) {
+          return Inspector::inspectConfigured(inspection_memory, base, path);
         });
       }
 

@@ -5,9 +5,9 @@
 #endif
 
 #if TELAR_DIAGNOSTICS
-#define TELAR_DIAGNOSTIC(...) __VA_ARGS__
+#define TELAR_DIAGNOSTIC(...) __VA_ARGS__ // NOLINT(cppcoreguidelines-macro-usage): the code compiles only in builds with diagnostics
 #else
-#define TELAR_DIAGNOSTIC(...) static_cast<void>(0)
+#define TELAR_DIAGNOSTIC(...) static_cast<void>(0) // NOLINT(cppcoreguidelines-macro-usage): the code compiles only in builds with diagnostics
 #endif
 
 // assert for module units, which <cassert>'s macro does not reach through an import. Active unless

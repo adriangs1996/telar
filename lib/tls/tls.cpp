@@ -37,7 +37,7 @@ namespace telar::runtime {
   }
 
   void freeTlsObjects(stack_st_X509_OBJECT* objects) noexcept {
-    sk_X509_OBJECT_pop_free(objects, X509_OBJECT_free);
+    sk_X509_OBJECT_pop_free(objects, X509_OBJECT_free); // NOLINT(clang-diagnostic-used-but-marked-unused): OpenSSL's stack macros call the type checks they mark unused
   }
 
   void requireTls(bool succeeded, const char* operation) {
@@ -79,7 +79,7 @@ namespace telar::runtime {
     char* data = nullptr;
     const auto length = BIO_get_mem_data(buffer_.get(), &data);
 
-    return {reinterpret_cast<const std::uint8_t*>(data), length > 0 ? static_cast<std::size_t>(length) : 0};
+    return {reinterpret_cast<const std::uint8_t*>(data), length > 0 ? static_cast<std::size_t>(length) : 0}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast,clang-diagnostic-unsafe-buffer-usage-in-container): BIO_get_mem_data hands out the bytes as a char pointer and a length
   }
 
   void PemDocument::clearBuffer(BIO* buffer) noexcept {
@@ -121,8 +121,8 @@ namespace telar::runtime {
     const std::string_view prefix = TlsHostname::numeric(hostname) ? "IP:" : "DNS:";
     ds::Array<char, 4 + ProxyHostname::maximum_bytes + 1> alternative{};
 
-    std::copy(prefix.begin(), prefix.end(), alternative.dataMut());
-    std::copy(hostname.begin(), hostname.end(), alternative.dataMut() + prefix.size());
+    std::ranges::copy(prefix, alternative.viewMut().begin());
+    std::ranges::copy(hostname, alternative.viewMut().subspan(prefix.size()).begin());
     extension(leaf.certificate.get(), NID_subject_alt_name, alternative.data());
     sign(leaf.certificate, key.get());
     return leaf;
@@ -131,8 +131,8 @@ namespace telar::runtime {
   CertificatePair CertificatePair::parse(std::span<const std::uint8_t> key_pem, std::span<const std::uint8_t> certificate_pem) {
     requireTls(!key_pem.empty() && key_pem.size() <= PemDocument::maximum_bytes, "Invalid TLS key size");
     requireTls(!certificate_pem.empty() && certificate_pem.size() <= PemDocument::maximum_bytes, "Invalid TLS certificate size");
-    TlsBuffer key_input{BIO_new_mem_buf(key_pem.data(), static_cast<int>(key_pem.size()))};
-    TlsBuffer certificate_input{BIO_new_mem_buf(certificate_pem.data(), static_cast<int>(certificate_pem.size()))};
+    TlsBuffer key_input{BIO_new_mem_buf(key_pem.data(), static_cast<int>(key_pem.size()))};                         // NOLINT(misc-const-correctness): an owning handle stays mutable, as tbc reads const as deep and OpenSSL writes through it
+    TlsBuffer certificate_input{BIO_new_mem_buf(certificate_pem.data(), static_cast<int>(certificate_pem.size()))}; // NOLINT(misc-const-correctness): an owning handle stays mutable, as tbc reads const as deep and OpenSSL writes through it
 
     requireTls(key_input != nullptr && certificate_input != nullptr, "Allocate TLS parser");
 
@@ -146,14 +146,15 @@ namespace telar::runtime {
 
   void CertificatePair::validateAuthority(std::string_view name, bool system) const {
     requireTls(EVP_PKEY_is_a(key.get(), "EC") == 1, "TLS authority requires an EC key");
-    ds::Array<char, 80> group;
+    constexpr std::size_t group_name_bytes = 80;
+    ds::Array<char, group_name_bytes> group{};
     std::size_t length = 0;
 
     requireTls(EVP_PKEY_get_group_name(key.get(), group.dataMut(), group.size(), &length) == 1 && std::string_view{group.dataMut(), length} == "prime256v1", "TLS authority requires a P-256 key");
     requireTls(X509_check_private_key(certificate.get(), key.get()) == 1, "TLS authority key does not match its certificate");
     requireTls(X509_verify(certificate.get(), key.get()) == 1, "TLS authority signature is invalid");
     requireTls(X509_check_ca(certificate.get()) > 0, "TLS certificate is not an authority");
-    TlsHandle<ASN1_TIME, ASN1_TIME_free> now{ASN1_TIME_set(nullptr, std::time(nullptr))};
+    TlsHandle<ASN1_TIME, ASN1_TIME_free> now{ASN1_TIME_set(nullptr, std::time(nullptr))}; // NOLINT(misc-const-correctness): an owning handle stays mutable, as tbc reads const as deep and OpenSSL writes through it
 
     requireTls(now != nullptr, "Read TLS validation time");
     const int begins = ASN1_TIME_compare(X509_get0_notBefore(certificate.get()), now.get());
@@ -162,9 +163,9 @@ namespace telar::runtime {
     requireTls(begins >= -1 && begins <= 0 && ends >= 0, "TLS authority is outside its validity period");
     const auto encoded_length = i2d_X509(certificate.get(), nullptr);
 
-    requireTls(encoded_length > 0 && encoded_length <= static_cast<int>(maximum_der_bytes), "TLS authority exceeds its DER bound");
+    requireTls(encoded_length > 0 && std::cmp_less_equal(encoded_length, maximum_der_bytes), "TLS authority exceeds its DER bound");
 
-    TlsHandle<X509_NAME, X509_NAME_free> expected{X509_NAME_new()};
+    TlsHandle<X509_NAME, X509_NAME_free> expected{X509_NAME_new()}; // NOLINT(misc-const-correctness): an owning handle stays mutable, as tbc reads const as deep and OpenSSL writes through it
 
     requireTls(expected != nullptr, "Allocate TLS authority name");
     setName(expected.get(), name);
@@ -178,7 +179,7 @@ namespace telar::runtime {
   }
 
   CertificatePair CertificatePair::create(std::string_view name, std::chrono::seconds lifetime) {
-    TlsHandle<EVP_PKEY_CTX, EVP_PKEY_CTX_free> generator{EVP_PKEY_CTX_new_id(EVP_PKEY_EC, nullptr)};
+    TlsHandle<EVP_PKEY_CTX, EVP_PKEY_CTX_free> generator{EVP_PKEY_CTX_new_id(EVP_PKEY_EC, nullptr)}; // NOLINT(misc-const-correctness): an owning handle stays mutable, as tbc reads const as deep and OpenSSL writes through it
 
     requireTls(generator != nullptr, "Allocate TLS key generator");
     requireTls(EVP_PKEY_keygen_init(generator.get()) == 1 && EVP_PKEY_CTX_set_ec_paramgen_curve_nid(generator.get(), NID_X9_62_prime256v1) == 1, "Configure TLS P-256 key generator");
@@ -191,15 +192,15 @@ namespace telar::runtime {
 
     requireTls(X509_set_version(pair.certificate.get(), version_three) == 1 && X509_set_pubkey(pair.certificate.get(), pair.key.get()) == 1, "Set TLS certificate public key");
 
-    std::uint64_t serial;
+    std::uint64_t serial = 0;
 
     randomBytes(&serial, sizeof(serial));
-    serial >>= 1;
+    serial >>= 1U;
     requireTls(ASN1_INTEGER_set_uint64(X509_get_serialNumber(pair.certificate.get()), serial == 0 ? 1 : serial) == 1, "Set TLS certificate serial");
     const auto backdate_seconds = std::chrono::duration_cast<std::chrono::seconds>(backdate).count();
 
     requireTls(X509_gmtime_adj(X509_getm_notBefore(pair.certificate.get()), -backdate_seconds) != nullptr && X509_gmtime_adj(X509_getm_notAfter(pair.certificate.get()), lifetime.count()) != nullptr, "Set TLS certificate validity");
-    TlsHandle<X509_NAME, X509_NAME_free> subject{X509_NAME_new()};
+    TlsHandle<X509_NAME, X509_NAME_free> subject{X509_NAME_new()}; // NOLINT(misc-const-correctness): an owning handle stays mutable, as tbc reads const as deep and OpenSSL writes through it
 
     requireTls(subject != nullptr, "Allocate TLS certificate subject");
     setName(subject.get(), name);
@@ -209,14 +210,14 @@ namespace telar::runtime {
 
   void CertificatePair::setName(X509_NAME* destination, std::string_view name) {
     requireTls(!name.empty() && name.size() <= ProxyHostname::maximum_bytes && !name.contains('\0'), "Invalid TLS certificate name");
-    requireTls(X509_NAME_add_entry_by_NID(destination, NID_commonName, V_ASN1_UTF8STRING, reinterpret_cast<const unsigned char*>(name.data()), static_cast<int>(name.size()), -1, 0) == 1, "Set TLS certificate name");
+    requireTls(X509_NAME_add_entry_by_NID(destination, NID_commonName, V_ASN1_UTF8STRING, reinterpret_cast<const unsigned char*>(name.data()), static_cast<int>(name.size()), -1, 0) == 1, "Set TLS certificate name"); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): OpenSSL takes the name's bytes as unsigned char
   }
 
   void CertificatePair::extension(X509* certificate, int identifier, const char* value, X509* issuer) {
     X509V3_CTX context{};
 
     X509V3_set_ctx(&context, issuer, certificate, nullptr, nullptr, 0);
-    TlsHandle<X509_EXTENSION, X509_EXTENSION_free> extension{X509V3_EXT_conf_nid(nullptr, &context, identifier, value)};
+    TlsHandle<X509_EXTENSION, X509_EXTENSION_free> extension{X509V3_EXT_conf_nid(nullptr, &context, identifier, value)}; // NOLINT(misc-const-correctness): an owning handle stays mutable, as tbc reads const as deep and OpenSSL writes through it
 
     requireTls(extension != nullptr && X509_add_ext(certificate, extension.get(), -1) == 1, "Set TLS certificate extension");
   }
@@ -225,50 +226,50 @@ namespace telar::runtime {
     requireTls(X509_sign(certificate.get(), issuer, EVP_sha256()) > 0, "Sign TLS certificate");
     const auto length = i2d_X509(certificate.get(), nullptr);
 
-    requireTls(length > 0 && length <= static_cast<int>(maximum_der_bytes), "TLS certificate exceeds its DER bound");
+    requireTls(length > 0 && std::cmp_less_equal(length, maximum_der_bytes), "TLS certificate exceeds its DER bound");
   }
 
-  int CertificatePair::refusePassword(char*, int, int, void*) noexcept {
+  int CertificatePair::refusePassword(char* /*buffer*/, int /*size*/, int /*writing*/, void* /*context*/) noexcept {
     return 0;
   }
 
   TlsLibrary::TlsLibrary(ConcurrentMemory& memory) {
-    if (used_ || CRYPTO_set_mem_functions(&allocate, &reallocate, &deallocate) != 1) {
+    if (configured || CRYPTO_set_mem_functions(&allocate, &reallocate, &deallocate) != 1) {
       throw std::logic_error{"TLS allocation must be configured once before using OpenSSL"};
     }
 
-    used_ = true;
-    memory_ = &memory;
+    configured = true;
+    configured_memory = &memory;
     if (OPENSSL_init_ssl(OPENSSL_INIT_NO_ATEXIT | OPENSSL_INIT_NO_LOAD_CONFIG, nullptr) != 1) {
       OPENSSL_cleanup();
-      memory_ = nullptr;
+      configured_memory = nullptr;
       throw std::bad_alloc{};
     }
   }
 
   TlsLibrary::~TlsLibrary() {
     OPENSSL_cleanup();
-    memory_ = nullptr;
+    configured_memory = nullptr;
   }
 
-  bool TlsLibrary::uses(const ConcurrentMemory& memory) const noexcept {
-    return memory_ == &memory;
+  bool TlsLibrary::uses(const ConcurrentMemory& memory) const noexcept { // NOLINT(readability-convert-member-functions-to-static): the instance a caller holds proves OpenSSL is configured
+    return configured_memory == &memory;
   }
 
-  void* TlsLibrary::allocate(std::size_t size, const char*, int) noexcept {
-    if (memory_ == nullptr || size == 0) {
+  void* TlsLibrary::allocate(std::size_t size, const char* /*file*/, int /*line*/) noexcept {
+    if (configured_memory == nullptr || size == 0) {
       return nullptr;
     }
 
-    return CAllocationBlocks{*memory_}.allocate(size);
+    return CAllocationBlocks{*configured_memory}.allocate(size);
   }
 
-  void TlsLibrary::deallocate(void* pointer, const char*, int) noexcept {
+  void TlsLibrary::deallocate(void* pointer, const char* /*file*/, int /*line*/) noexcept {
     if (pointer == nullptr) {
       return;
     }
 
-    CAllocationBlocks{*memory_}.release(pointer);
+    CAllocationBlocks{*configured_memory}.release(pointer);
   }
 
   void* TlsLibrary::reallocate(void* pointer, std::size_t size, const char* file, int line) noexcept {
@@ -277,7 +278,7 @@ namespace telar::runtime {
       return nullptr;
     }
 
-    return memory_ == nullptr ? nullptr : CAllocationBlocks{*memory_}.resize(pointer, size);
+    return configured_memory == nullptr ? nullptr : CAllocationBlocks{*configured_memory}.resize(pointer, size);
   }
 
   tbc::val_a<CertificateAuthority> CertificateAuthority::loadOrCreate(tbc::mut_a<ConcurrentMemory> memory, const TlsLibrary& library, int directory, AuthorityKind kind) {
@@ -324,7 +325,7 @@ namespace telar::runtime {
     if (const int error = writePrivateFile(directory, files.certificate, certificate.bytes(), PrivateFileMode::create_only)) {
       ds::Array<char, NAME_MAX + 1> name{};
 
-      std::copy(files.key.begin(), files.key.end(), name.dataMut());
+      std::ranges::copy(files.key, name.viewMut().begin());
       ::unlinkat(directory, name.data(), 0);
       throw SystemError{"Publish TLS authority certificate", error};
     }
@@ -340,33 +341,35 @@ namespace telar::runtime {
     return pair_.certificate.get();
   }
 
-  ds::Array<char, 40> CertificateAuthority::fingerprint() const {
-    return fingerprint<20>(EVP_sha1());
+  ds::Array<char, CertificateAuthority::sha1_bytes * 2> CertificateAuthority::fingerprint() const {
+    return fingerprint<sha1_bytes>(EVP_sha1());
   }
 
-  ds::Array<char, 64> CertificateAuthority::fingerprintSha256() const {
-    return fingerprint<32>(EVP_sha256());
+  ds::Array<char, CertificateAuthority::sha256_bytes * 2> CertificateAuthority::fingerprintSha256() const {
+    return fingerprint<sha256_bytes>(EVP_sha256());
   }
 
   template <std::size_t digest_bytes>
   ds::Array<char, digest_bytes * 2> CertificateAuthority::fingerprint(const EVP_MD* algorithm) const {
-    ds::Array<unsigned char, EVP_MAX_MD_SIZE> digest;
+    ds::Array<unsigned char, EVP_MAX_MD_SIZE> digest{};
     unsigned length = 0;
 
     requireTls(X509_digest(certificate(), algorithm, digest.dataMut(), &length) == 1 && length == digest_bytes, "Compute TLS authority fingerprint");
     constexpr std::string_view hexadecimal = "0123456789ABCDEF";
+    constexpr unsigned nibble_bits = 4;
+    constexpr unsigned low_nibble = 0x0f;
     ds::Array<char, digest_bytes * 2> result;
 
     for (std::size_t index = 0; index < digest_bytes; ++index) {
-      result.atMut(index * 2) = hexadecimal[digest[index] >> 4];
-      result.atMut((index * 2) + 1) = hexadecimal[digest[index] & 15];
+      result.atMut(index * 2) = hexadecimal[digest[index] >> nibble_bits];
+      result.atMut((index * 2) + 1) = hexadecimal[digest[index] & low_nibble];
     }
 
     return result;
   }
 
   bool CertificateAuthority::expiresWithin(std::chrono::seconds duration) const {
-    TlsHandle<ASN1_TIME, ASN1_TIME_free> deadline{ASN1_TIME_adj(nullptr, std::time(nullptr), 0, duration.count())};
+    TlsHandle<ASN1_TIME, ASN1_TIME_free> deadline{ASN1_TIME_adj(nullptr, std::time(nullptr), 0, duration.count())}; // NOLINT(misc-const-correctness): an owning handle stays mutable, as tbc reads const as deep and OpenSSL writes through it
 
     requireTls(deadline != nullptr, "Compute TLS authority expiration deadline");
     const int comparison = ASN1_TIME_compare(X509_get0_notAfter(certificate()), deadline.get());
@@ -376,15 +379,15 @@ namespace telar::runtime {
   }
 
   void CertificateAuthority::writeBundle(int directory, std::span<const std::uint8_t> roots) const {
-    constexpr std::size_t maximum_root_bytes = 4 * 1024 * 1024;
+    constexpr std::size_t maximum_root_bytes = std::size_t{4} * 1024 * 1024;
 
     requireTls(roots.size() <= maximum_root_bytes, "TLS root bundle exceeds its bound");
     const PemDocument own{certificate()};
     ds::Vec<std::uint8_t, ConcurrentMemory> bundle{memory_};
 
     bundle.reserve(roots.size() + own.bytes().size());
-    bundle.extend({roots.begin(), roots.end()});
-    bundle.extend({own.bytes().begin(), own.bytes().end()});
+    bundle.extend(roots);
+    bundle.extend(own.bytes());
     if (const int error = writePrivateFile(directory, "ca-bundle.pem", bundle, PrivateFileMode::replace)) {
       throw SystemError{"Publish TLS trust bundle", error};
     }
@@ -414,11 +417,66 @@ namespace telar::runtime {
 namespace telar::runtime::proxy_trust {
   namespace {
 
-    void makeName(ds::Array<char, NAME_MAX + 1>& output, std::string_view base, const char* operation, std::uint64_t nonce) {
-      const int size = std::snprintf(output.dataMut(), output.size(), "%.*s.%s-%016llx", static_cast<int>(base.size()), base.data(), operation, static_cast<unsigned long long>(nonce));
-      if (size < 0 || static_cast<std::size_t>(size) >= output.size()) {
+    constexpr std::size_t notice_bytes = 512;
+    constexpr std::size_t reason_bytes = 256;
+
+    void makeName(ds::Array<char, NAME_MAX + 1>& output, std::string_view base, std::string_view operation, std::uint64_t nonce) {
+      const auto bound = output.size() - 1;
+      const auto written = std::format_to_n(output.dataMut(), static_cast<std::ptrdiff_t>(bound), "{}.{}-{:016x}", base, operation, nonce);
+      if (std::cmp_greater(written.size, bound)) {
         throw std::length_error{"Proxy authority temporary filename exceeds its bound"};
       }
+
+      output.atMut(static_cast<std::size_t>(written.size)) = '\0';
+    }
+
+    // POSIX's strerror_r writes the message and returns 0; glibc's returns the message itself.
+    template <typename Result>
+    const char* errorMessage(Result result, const char* buffer) noexcept {
+      if constexpr (std::is_pointer_v<Result>) {
+        return result;
+      } else {
+        return result == 0 ? buffer : "Unknown error";
+      }
+    }
+
+    // Writes one line to stderr, cut at notice_bytes, without stdio's shared state.
+    void notice(std::initializer_list<std::string_view> parts) noexcept {
+      ds::Array<char, notice_bytes> line{};
+      std::size_t length = 0;
+
+      for (const auto part : parts) {
+        const auto count = std::min(part.size(), line.size() - length);
+
+        std::ranges::copy_n(part.begin(), static_cast<std::ptrdiff_t>(count), line.viewMut().subspan(length).begin());
+        length += count;
+      }
+
+      static_cast<void>(::write(STDERR_FILENO, line.data(), length));
+    }
+
+    // A failed rename's notice: the action, the file and why the system refused it.
+    void renameFailed(std::string_view action, const char* path, int code) noexcept {
+      ds::Array<char, reason_bytes> reason{};
+      const auto* const message = errorMessage(::strerror_r(code, reason.dataMut(), reason.size()), reason.data()); // NOLINT(clang-diagnostic-unsafe-buffer-usage-in-libc-call): strerror_r writes at most the size it is given
+
+      notice({"telar proxy trust: could not ", action, " ", path, ": ", message, "\n"});
+    }
+
+    // The existing authority to keep, or none when it is missing, unreadable or due for rotation.
+    tbc::val_a<ds::Option<CertificateAuthority>> reusableAuthority(tbc::mut_a<ConcurrentMemory> memory, const TlsLibrary& library, int directory, AuthorityPreparation options) {
+      try {
+        auto existing = CertificateAuthority::loadExisting(memory, library, directory, options.kind);
+        if (existing && !options.force_rotation && !existing->expiresWithin(rotation_window)) {
+          return existing;
+        }
+      } catch (const TlsError&) {
+        return ds::none;
+      } catch (const SystemError&) {
+        return ds::none;
+      }
+
+      return ds::none;
     }
 
   }
@@ -445,7 +503,7 @@ namespace telar::runtime::proxy_trust {
     }
 
     line.push('\n');
-    if (std::fwrite(line.data(), 1, line.size(), output_) != line.size() || std::fflush(output_) != 0) {
+    if (std::fwrite(line.data(), 1, line.size(), output_) != line.size() || std::fflush(output_) != 0) { // NOLINT(clang-diagnostic-unsafe-buffer-usage-in-libc-call): the size is the line's own
       throw SystemError{"Print proxy trust command", EIO};
     }
 
@@ -461,18 +519,18 @@ namespace telar::runtime::proxy_trust {
 
     spawn.keepStandardStreams();
 
-    pid_t child;
+    pid_t child = 0;
     // POSIX declares argv `char* const[]` for C's sake and never writes it.
-    if (const int error = ::posix_spawn(&child, pointers.front(), &spawn.actions, &spawn.attributes, const_cast<char* const*>(pointers.data()), environ)) {
+    if (const int error = ::posix_spawn(&child, pointers.front(), &spawn.actions, &spawn.attributes, const_cast<char* const*>(pointers.data()), environ)) { // NOLINT(cppcoreguidelines-pro-type-const-cast): posix_spawn's C signature
       throw SystemError{"Start proxy trust command", error};
     }
 
-    int status;
-    pid_t waited;
+    int status = 0;
+    pid_t waited = ::waitpid(child, &status, 0);
 
-    do {
+    while (waited < 0 && sys::lastError() == EINTR) {
       waited = ::waitpid(child, &status, 0);
-    } while (waited < 0 && sys::lastError() == EINTR);
+    }
 
     if (waited < 0) {
       throw SystemError{"Wait for proxy trust command"};
@@ -524,7 +582,7 @@ namespace telar::runtime::proxy_trust {
     for (std::size_t index = 0; index < fingerprint.size(); ++index) {
       const char byte = fingerprint[index];
       if (byte >= 'a' && byte <= 'f') {
-        record.fingerprint.atMut(index) = byte - 'a' + 'A';
+        record.fingerprint.atMut(index) = static_cast<char>(byte - 'a' + 'A');
       } else if ((byte >= 'A' && byte <= 'F') || (byte >= '0' && byte <= '9')) {
         record.fingerprint.atMut(index) = byte;
       } else {
@@ -547,7 +605,7 @@ namespace telar::runtime::proxy_trust {
       return ds::none;
     }
 
-    return parse(memory, {reinterpret_cast<const char*>(source.data()), source.size()});
+    return parse(memory, {reinterpret_cast<const char*>(source.data()), source.size()}); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the record's bytes are read as text
   }
 
   void Record::write(ConcurrentMemory& memory, int directory) const {
@@ -563,7 +621,7 @@ namespace telar::runtime::proxy_trust {
       throw std::length_error{"Proxy trust record exceeds its bound"};
     }
 
-    if (const int error = writePrivateFile(directory, filename, {reinterpret_cast<const unsigned char*>(source.data()), source.size()}, PrivateFileMode::replace)) {
+    if (const int error = writePrivateFile(directory, filename, {reinterpret_cast<const unsigned char*>(source.data()), source.size()}, PrivateFileMode::replace)) { // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast,clang-diagnostic-unsafe-buffer-usage-in-container): the record's text is written as bytes
       throw SystemError{"Publish proxy trust record", error};
     }
   }
@@ -601,7 +659,7 @@ namespace telar::runtime::proxy_trust {
 
   FileDescriptor Paths::open() const {
     // A path that names no directory holds no trust record.
-    FileDescriptor descriptor{::open(directory_.data(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
+    FileDescriptor descriptor{::open(directory_.data(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)}; // NOLINT(cppcoreguidelines-pro-type-vararg,bugprone-signed-bitwise): open's C signature is variadic, and POSIX defines its flags as int
     if (!descriptor && sys::lastError() != ENOENT && sys::lastError() != ENOTDIR) {
       throw SystemError{"Open proxy authority directory"};
     }
@@ -621,8 +679,11 @@ namespace telar::runtime::proxy_trust {
   }
 
   void Paths::validateDirectory(int descriptor) {
+    // Read, write and search for the group and others.
+    constexpr mode_t shared_permissions = 0077;
     struct stat state{};
-    if (::fstat(descriptor, &state) != 0 || !S_ISDIR(state.st_mode) || state.st_uid != ::geteuid() || (state.st_mode & 0077) != 0) {
+
+    if (::fstat(descriptor, &state) != 0 || !S_ISDIR(state.st_mode) || state.st_uid != ::geteuid() || (state.st_mode & shared_permissions) != 0) {
       throw SystemError{"Validate proxy authority directory", EACCES};
     }
   }
@@ -643,7 +704,7 @@ namespace telar::runtime::proxy_trust {
     return result;
   }
 
-  Destination Paths::nativeDestinationFrom(ConcurrentMemory& memory, ds::Option<Backend> selected, const EnvironmentSource& environment) const {
+  Destination Paths::nativeDestinationFrom(ConcurrentMemory& memory, ds::Option<Backend> selected, const EnvironmentSource& environment) const { // NOLINT(readability-convert-member-functions-to-static): the Linux branch reads the directory
 #ifdef __APPLE__
     if (selected && *selected != Backend::macos) {
       throw std::invalid_argument{"Linux trust backend is not supported on macOS"};
@@ -716,17 +777,12 @@ namespace telar::runtime::proxy_trust {
   PreparedAuthority::PreparedAuthority(ConcurrentMemory& memory, const TlsLibrary& library, int directory, AuthorityPreparation options)
       : directory_(directory),
         canonical_(AuthorityFiles::forKind(options.kind)) {
-    try {
-      auto existing = CertificateAuthority::loadExisting(memory, library, directory, options.kind);
-      if (existing && !options.force_rotation && !existing->expiresWithin(rotation_window)) {
-        authority_.emplace(std::move(existing.getMut()));
-        return;
-      }
-    } catch (const TlsError&) {
-    } catch (const SystemError&) {
+    if (auto existing = reusableAuthority(memory, library, directory, options)) {
+      authority_.emplace(std::move(existing.getMut()));
+      return;
     }
 
-    std::uint64_t nonce;
+    std::uint64_t nonce = 0;
 
     randomBytes(&nonce, sizeof(nonce));
     makeName(key_, canonical_.key, "rotate", nonce);
@@ -816,13 +872,13 @@ namespace telar::runtime::proxy_trust {
 
   void PreparedAuthority::restore(const Filename& temporary, const char* canonical) const noexcept {
     if (::renameat(directory_, canonical, directory_, temporary.data()) != 0) {
-      std::fprintf(stderr, "telar proxy trust: could not roll back %s: %s\n", canonical, std::strerror(sys::lastError()));
+      renameFailed("roll back", canonical, sys::lastError());
     }
   }
 
   void PreparedAuthority::restorePrevious(const Filename& previous, const char* canonical) const noexcept {
     if (::renameat(directory_, previous.data(), directory_, canonical) != 0) {
-      std::fprintf(stderr, "telar proxy trust: could not restore %s: %s\n", canonical, std::strerror(sys::lastError()));
+      renameFailed("restore", canonical, sys::lastError());
     }
   }
 
@@ -831,7 +887,7 @@ namespace telar::runtime::proxy_trust {
         library_(library),
         paths_(paths),
         executor_(executor),
-        destination_(destination) {}
+        destination_(std::move(destination)) {}
 
   Inspection Service::inspect() const noexcept {
     return proxy_trust::inspect(memory_, library_, paths_, destination_);
@@ -869,7 +925,7 @@ namespace telar::runtime::proxy_trust {
       try {
         remove(replacement);
       } catch (const std::exception& error) {
-        std::fprintf(stderr, "telar proxy trust: could not remove partially installed authority: %s\n", error.what());
+        notice({"telar proxy trust: could not remove partially installed authority: ", error.what(), "\n"});
       }
 
       throw;
@@ -908,14 +964,14 @@ namespace telar::runtime::proxy_trust {
   void Service::installAuthority(std::string_view certificate) {
     switch (destination_.backend) {
     case Backend::macos:
-      executor_.run(ds::Array<std::string_view, 7>{"/usr/bin/security", "add-trusted-cert", "-r", "trustRoot", "-k", destination_.store.view(), certificate});
+      executor_.run(ds::Array{std::string_view{"/usr/bin/security"}, "add-trusted-cert", "-r", "trustRoot", "-k", destination_.store.view(), certificate});
       break;
     case Backend::update_ca_certificates:
-      executor_.run(ds::Array<std::string_view, 7>{"/usr/bin/sudo", "--", "/usr/bin/install", "-m", "0644", certificate, destination_.store.view()});
+      executor_.run(ds::Array{std::string_view{"/usr/bin/sudo"}, "--", "/usr/bin/install", "-m", "0644", certificate, destination_.store.view()});
       executor_.run(ds::Array<std::string_view, 3>{"/usr/bin/sudo", "--", "/usr/sbin/update-ca-certificates"});
       break;
     case Backend::trust:
-      executor_.run(ds::Array<std::string_view, 5>{"/usr/bin/sudo", "--", "/usr/bin/trust", "anchor", certificate});
+      executor_.run(ds::Array{std::string_view{"/usr/bin/sudo"}, "--", "/usr/bin/trust", "anchor", certificate});
       break;
     }
   }
@@ -923,14 +979,14 @@ namespace telar::runtime::proxy_trust {
   void Service::remove(const Record& record) {
     switch (record.backend) {
     case Backend::macos:
-      executor_.run(ds::Array<std::string_view, 6>{"/usr/bin/security", "delete-certificate", "-t", "-Z", {record.fingerprint.data(), record.fingerprint.size()}, record.store.view()});
+      executor_.run(ds::Array{std::string_view{"/usr/bin/security"}, "delete-certificate", "-t", "-Z", std::string_view{record.fingerprint.data(), record.fingerprint.size()}, record.store.view()});
       break;
     case Backend::update_ca_certificates:
-      executor_.run(ds::Array<std::string_view, 5>{"/usr/bin/sudo", "--", "/usr/bin/rm", "-f", record.store.view()});
+      executor_.run(ds::Array{std::string_view{"/usr/bin/sudo"}, "--", "/usr/bin/rm", "-f", record.store.view()});
       executor_.run(ds::Array<std::string_view, 3>{"/usr/bin/sudo", "--", "/usr/sbin/update-ca-certificates"});
       break;
     case Backend::trust:
-      executor_.run(ds::Array<std::string_view, 6>{"/usr/bin/sudo", "--", "/usr/bin/trust", "anchor", "--remove", record.store.view()});
+      executor_.run(ds::Array{std::string_view{"/usr/bin/sudo"}, "--", "/usr/bin/trust", "anchor", "--remove", record.store.view()});
       break;
     }
   }
@@ -975,9 +1031,9 @@ long(SSL_set_tlsext_host_name)(SSL* ssl, const char* name) {
 }
 
 int(sk_X509_OBJECT_num)(const stack_st_X509_OBJECT* objects) {
-  return sk_X509_OBJECT_num(objects);
+  return sk_X509_OBJECT_num(objects); // NOLINT(clang-diagnostic-used-but-marked-unused): OpenSSL's stack macros call the type checks they mark unused
 }
 
 X509_OBJECT*(sk_X509_OBJECT_value)(const stack_st_X509_OBJECT* objects, int index) {
-  return sk_X509_OBJECT_value(objects, index);
+  return sk_X509_OBJECT_value(objects, index); // NOLINT(clang-diagnostic-used-but-marked-unused): OpenSSL's stack macros call the type checks they mark unused
 }

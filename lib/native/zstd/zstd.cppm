@@ -42,6 +42,7 @@ export {
 
 // Macros do not cross an import. Each constant the tree reads is captured while the header still
 // defines it, undefined, and exported under its own name.
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage): only a macro can read a macro's value before the header's #undef.
 #define TELAR_ZSTD_CONSTANTS(X) \
   X(ZSTD_CONTENTSIZE_UNKNOWN)   \
   X(ZSTD_d_forceIgnoreChecksum)
@@ -59,7 +60,7 @@ namespace telar::native::zstd::captured {
 #define TELAR_ZSTD_CONSTANT(name) inline constexpr auto name = telar::native::zstd::captured::name##_;
 
 export {
-  TELAR_ZSTD_CONSTANTS(TELAR_ZSTD_CONSTANT)
+  TELAR_ZSTD_CONSTANTS(TELAR_ZSTD_CONSTANT) // NOLINT(readability-identifier-naming): exported under the C library's own name
 }
 
 // The old name of the frame header type is a macro too.

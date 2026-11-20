@@ -34,7 +34,7 @@ namespace telar::runtime {
 
       for (auto& end : ends.viewMut()) {
         if (end.get() <= STDERR_FILENO) {
-          const int relocated = ::fcntl(end.get(), F_DUPFD_CLOEXEC, STDERR_FILENO + 1);
+          const int relocated = ::fcntl(end.get(), F_DUPFD_CLOEXEC, STDERR_FILENO + 1); // NOLINT(cppcoreguidelines-pro-type-vararg): fcntl's C signature is variadic
           if (relocated < 0) {
             throw SystemError{"Relocate process pipe"};
           }
@@ -57,7 +57,7 @@ namespace telar::runtime {
 
     setNonblocking(input[1].get());
 #ifdef __APPLE__
-    if (::fcntl(input[1].get(), F_SETNOSIGPIPE, 1) < 0) {
+    if (::fcntl(input[1].get(), F_SETNOSIGPIPE, 1) < 0) { // NOLINT(cppcoreguidelines-pro-type-vararg): fcntl's C signature is variadic
       throw SystemError{"Suppress pipe signals"};
     }
 
@@ -85,7 +85,7 @@ namespace telar::runtime {
     if (process_id_ > 0 && !exit_status_) {
       ::kill(-process_id_, SIGKILL);
       ::kill(process_id_, SIGKILL);
-      int status;
+      int status = 0;
 
       while (::waitpid(process_id_, &status, 0) < 0 && sys::lastError() == EINTR) {
       }
@@ -129,7 +129,7 @@ namespace telar::runtime {
 
   ds::Option<int> PipeProcess::reap() noexcept {
     if (!exit_status_) {
-      int status;
+      int status = 0;
       if (::waitpid(process_id_, &status, WNOHANG) == process_id_) {
         exit_status_ = status;
       }

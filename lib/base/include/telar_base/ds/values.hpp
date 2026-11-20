@@ -50,12 +50,12 @@ namespace telar::ds {
 
     [[nodiscard]] constexpr const Value& operator[](std::size_t index) const noexcept {
       TELAR_ASSERT(index < Count);
-      return values[index];
+      return view()[index];
     }
 
     [[nodiscard]] constexpr Value& atMut(std::size_t index) noexcept {
       TELAR_ASSERT(index < Count);
-      return values[index];
+      return viewMut()[index];
     }
 
     // A value whose index comes from outside, checked in every build: an index past the end throws
@@ -65,7 +65,7 @@ namespace telar::ds {
         throw std::out_of_range{"telar::ds::Array index out of range"};
       }
 
-      return values[index];
+      return view()[index];
     }
 
     [[nodiscard]] constexpr Value& atCheckedMut(std::size_t index) {
@@ -73,7 +73,7 @@ namespace telar::ds {
         throw std::out_of_range{"telar::ds::Array index out of range"};
       }
 
-      return values[index];
+      return viewMut()[index];
     }
 
     [[nodiscard]] constexpr const Value& front() const noexcept {
@@ -85,11 +85,11 @@ namespace telar::ds {
     }
 
     [[nodiscard]] constexpr const Value* data() const noexcept {
-      return values;
+      return std::data(values);
     }
 
     [[nodiscard]] constexpr Value* dataMut() noexcept {
-      return values;
+      return std::data(values);
     }
 
     [[nodiscard]] constexpr std::span<const Value, Count> view() const noexcept {
@@ -101,25 +101,31 @@ namespace telar::ds {
     }
 
     [[nodiscard]] constexpr const Value* begin() const noexcept {
-      return values;
+      return std::begin(values);
     }
 
     [[nodiscard]] constexpr const Value* end() const noexcept {
-      return values + Count;
+      return std::end(values);
     }
 
     constexpr void fill(const Value& value) {
       std::ranges::fill(values, value);
     }
 
-    friend constexpr bool operator==(const Array&, const Array&) = default;
+    // Spelled out rather than defaulted, as the comparison a default synthesizes over the C array
+    // reads to the linter as a literal of its own.
+    friend constexpr bool operator==(const Array& left, const Array& right) noexcept(noexcept(std::declval<const Value&>() == std::declval<const Value&>()))
+      requires std::equality_comparable<Value>
+    {
+      return std::ranges::equal(left.view(), right.view());
+    }
 
     friend constexpr auto operator<=>(const Array&, const Array&)
       requires std::three_way_comparable<Value>
     = default;
 
     // Public so that braces initialize it, as std::array's member is; read it through the methods.
-    Value values[Count];
+    Value values[Count]; // NOLINT(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays): the storage of the array type itself, as std::array's
   };
 
   template <typename First, typename... Rest>
@@ -135,15 +141,15 @@ namespace telar::ds {
   template <std::size_t Index, typename Value, std::size_t Count>
     requires(Index < Count)
   [[nodiscard]] constexpr Value&& get(Array<Value, Count>&& array) noexcept {
-    return std::move(array.values[Index]);
+    return std::move(array).values[Index];
   }
 
   // An Array of a C array's values, its size counted, as std::to_array does for a string literal's
   // characters. A braced list builds an Array directly, `Array<T, N>{a, b}`, which keeps a copy of each.
   template <typename Value, std::size_t Count>
-  constexpr Array<std::remove_cv_t<Value>, Count> toArray(Value (&values)[Count]) {
+  constexpr Array<std::remove_cv_t<Value>, Count> toArray(Value (&values)[Count]) { // NOLINT(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays): a string literal is a C array
     return [&]<std::size_t... Index>(std::index_sequence<Index...>) {
-      return Array<std::remove_cv_t<Value>, Count>{{values[Index]...}};
+      return Array<std::remove_cv_t<Value>, Count>{{std::span<Value, Count>{values}[Index]...}};
     }(std::make_index_sequence<Count>{});
   }
 
@@ -156,6 +162,7 @@ namespace telar::ds {
 
   // A value or nothing, as std::optional and Rust's `Option<T>`. Its special members are trivial when
   // the value's are, so an Option of a trivial value copies as its bytes do.
+  // NOLINTBEGIN(cppcoreguidelines-pro-type-union-access): the value lives in a union with nothing, as std::optional's does
   template <typename Value>
     requires(std::is_object_v<Value> && !std::is_array_v<Value>)
   class TBC_GENERIC Option {
@@ -163,7 +170,7 @@ namespace telar::ds {
     constexpr Option() noexcept
         : empty_() {}
 
-    constexpr Option(None) noexcept
+    constexpr Option(None /*none*/) noexcept // NOLINT(cppcoreguidelines-explicit-constructor,misc-explicit-constructor): none converts to an empty Option as std::nullopt does
         : empty_() {}
 
     // Holds a value built from what it is given, a Value itself or anything a Value converts from, as
@@ -189,7 +196,7 @@ namespace telar::ds {
     // Builds the value in place, for one that cannot move, as std::optional's in_place constructor
     // does. It keeps what Value's constructor keeps of the arguments.
     template <typename... Arguments>
-    TBC_CONSTRUCTS constexpr explicit Option(std::in_place_t, Arguments&&... arguments)
+    TBC_CONSTRUCTS constexpr explicit Option(std::in_place_t /*tag*/, Arguments&&... arguments)
         : value_(std::forward<Arguments>(arguments)...),
           full_(true) {}
 
@@ -246,7 +253,7 @@ namespace telar::ds {
       requires(std::is_trivially_move_constructible_v<Value> && std::is_trivially_move_assignable_v<Value> && std::is_trivially_destructible_v<Value>)
     = default;
 
-    constexpr Option& operator=(Option&& other) noexcept(std::is_nothrow_move_constructible_v<Value> && std::is_nothrow_move_assignable_v<Value>)
+    constexpr Option& operator=(Option&& other) noexcept(std::is_nothrow_move_constructible_v<Value> && std::is_nothrow_move_assignable_v<Value>) // NOLINT(bugprone-exception-escape): throws where the value's move does, as std::optional's
       requires(std::is_move_constructible_v<Value> && std::is_move_assignable_v<Value> && !(std::is_trivially_move_constructible_v<Value> && std::is_trivially_move_assignable_v<Value> && std::is_trivially_destructible_v<Value>))
     {
       if (this == &other) {
@@ -346,7 +353,11 @@ namespace telar::ds {
     [[nodiscard]] constexpr tbc::val_a<Value> valueOr(tbc::val_a<Value> fallback) const
       requires std::is_copy_constructible_v<Value>
     {
-      return full_ ? value_ : std::move(fallback);
+      if (full_) {
+        return value_;
+      }
+
+      return fallback;
     }
 
     template <typename... Arguments>
@@ -387,7 +398,7 @@ namespace telar::ds {
       return left.full_ == right.full_ && (!left.full_ || left.value_ == right.value_);
     }
 
-    friend constexpr bool operator==(const Option& option, None) noexcept {
+    friend constexpr bool operator==(const Option& option, None /*none*/) noexcept {
       return !option.full_;
     }
 
@@ -414,6 +425,8 @@ namespace telar::ds {
 
     bool full_ = false;
   };
+
+  // NOLINTEND(cppcoreguidelines-pro-type-union-access)
 
   template <typename Value>
   Option(Value) -> Option<Value>;
@@ -453,6 +466,9 @@ namespace telar::ds {
 
     Cell(const Cell&) = delete;
     Cell& operator=(const Cell&) = delete;
+    Cell(Cell&&) = delete;
+    Cell& operator=(Cell&&) = delete;
+    constexpr ~Cell() = default;
 
     [[nodiscard]] constexpr Value get() const noexcept {
       return value_;

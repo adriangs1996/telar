@@ -50,6 +50,9 @@ export {
 
       BufferAllocator(const BufferAllocator&) = delete;
       BufferAllocator& operator=(const BufferAllocator&) = delete;
+      BufferAllocator(BufferAllocator&&) = delete;
+      BufferAllocator& operator=(BufferAllocator&&) = delete;
+      ~BufferAllocator() = default;
 
       inline void* allocate(std::size_t size, std::size_t alignment) noexcept {
         if (used_ == buffer_.size()) {
@@ -67,8 +70,8 @@ export {
       }
 
       inline void deallocate(void* pointer, std::size_t size, std::size_t alignment) noexcept {
-        const auto address = reinterpret_cast<std::uintptr_t>(pointer);
-        const auto beginning = reinterpret_cast<std::uintptr_t>(buffer_.data());
+        const auto address = std::bit_cast<std::uintptr_t>(pointer);
+        const auto beginning = std::bit_cast<std::uintptr_t>(buffer_.data());
         if (address >= beginning && address - beginning < buffer_.size()) {
           return;
         }

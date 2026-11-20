@@ -38,8 +38,10 @@ export {
       static std::string_view parse(std::string_view contents) noexcept;
 
     private:
+      static constexpr std::size_t head_bytes = 4096;
+
       ds::Array<char, PATH_MAX> path_;
-      ds::Array<char, 4096> head_;
+      ds::Array<char, head_bytes> head_;
     };
 
   }
@@ -125,6 +127,9 @@ export {
       HardenedGit(tbc::mut_a<Memory> memory, std::string_view root);
       HardenedGit(const HardenedGit&) = delete;
       HardenedGit& operator=(const HardenedGit&) = delete;
+      HardenedGit(HardenedGit&&) = delete;
+      HardenedGit& operator=(HardenedGit&&) = delete;
+      ~HardenedGit() = default;
 
       // Reads the repository's filter drivers and lazy-fetch facts, before any other command:
       // `run(command)` returns the command's exit status and its output; `reject()` throws the
@@ -134,15 +139,16 @@ export {
         // Stays generic over the caller's runner and failure; the listing is read in the implementation unit.
         const auto [status, text] = with({"config", "--show-scope", "-z", "--get-regexp", R"(^(filter\.|extensions\.partialclone$|remote\..*\.(promisor|partialclonefilter|uploadpack)$))"}, run);
         const auto may_fetch = overrideFilters(status, text);
-        if (!may_fetch) {
-          reject();
+        auto accepted = static_cast<bool>(may_fetch);
+
+        if (accepted && *may_fetch) {
+          const auto [version_status, version_text] = with({"version"}, std::forward<Run>(run));
+
+          accepted = version_status == 0 && honorsLazyFetchControl(version_text);
         }
 
-        if (*may_fetch) {
-          const auto [version_status, version_text] = with({"version"}, run);
-          if (version_status != 0 || !honorsLazyFetchControl(version_text)) {
-            reject();
-          }
+        if (!accepted) {
+          std::forward<Reject>(reject)();
         }
       }
 
@@ -207,8 +213,10 @@ export {
     private:
       ds::Option<std::string_view> linkedBranch(std::string_view root) noexcept;
 
+      static constexpr std::size_t head_bytes = 256;
+
       ds::Array<char, PATH_MAX> path_;
-      ds::Array<char, 256> head_;
+      ds::Array<char, head_bytes> head_;
     };
 
   }

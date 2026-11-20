@@ -5,6 +5,7 @@ import telar.sys.posix;
 import telar.tbc;
 import telar.platform.error;
 import telar.base.ds;
+import telar.base.text;
 #ifdef __linux__
 import telar.sys.linux_api;
 #endif
@@ -15,14 +16,16 @@ import telar.sys.apple;
 namespace telar::runtime {
   namespace {
 
+    constexpr mode_t private_directory_mode = 0700;
+    constexpr mode_t private_file_mode = 0600;
+
     // Fills `bytes` from `descriptor`, retrying interrupted reads; false when the file ends early or
-    // holds more than `size` bytes.
-    bool readExactly(int descriptor, void* bytes, std::size_t size) noexcept {
-      auto* cursor = static_cast<char*>(bytes);
+    // holds more than `bytes`.
+    bool readExactly(int descriptor, std::span<std::byte> bytes) noexcept {
       std::size_t offset = 0;
 
-      while (offset < size) {
-        const auto count = ::read(descriptor, cursor + offset, size - offset);
+      while (offset < bytes.size()) {
+        const auto count = ::read(descriptor, bytes.subspan(offset).data(), bytes.size() - offset);
         if (count < 0 && sys::lastError() == EINTR) {
           continue;
         }
@@ -34,26 +37,50 @@ namespace telar::runtime {
         offset += static_cast<std::size_t>(count);
       }
 
-      char extra;
-      ssize_t count;
+      char extra = 0;
 
-      do {
-        count = ::read(descriptor, &extra, 1);
-      } while (count < 0 && sys::lastError() == EINTR);
+      for (;;) {
+        const auto count = ::read(descriptor, &extra, 1);
+        if (count >= 0 || sys::lastError() != EINTR) {
+          return count == 0;
+        }
+      }
+    }
 
-      return count == 0;
+    constexpr std::size_t temporary_name_bytes = 64;
+
+    // Writes .telar-write-<16 random hexadecimal digits>.tmp to the zeroed `name`, which keeps
+    // its terminating NUL.
+    void randomTemporaryName(ds::Array<char, temporary_name_bytes>& name) noexcept {
+      constexpr std::string_view prefix = ".telar-write-";
+      constexpr std::string_view suffix = ".tmp";
+      ds::Array<std::uint8_t, sizeof(std::uint64_t)> nonce{};
+      const auto output = name.viewMut();
+
+      randomBytes(nonce.dataMut(), nonce.size());
+      std::ranges::copy(prefix, output.begin());
+      const auto digits = encodeLowerHex(nonce.view(), output.subspan(prefix.size()));
+
+      std::ranges::copy(suffix, output.subspan(prefix.size() + digits.size()).begin());
+    }
+
+    // Copies `text` into `buffer` and ends it with a NUL; the caller checked that both fit.
+    template <std::size_t Capacity>
+    void copyTerminated(std::string_view text, ds::Array<char, Capacity>& buffer) noexcept {
+      std::ranges::copy(text, buffer.viewMut().begin());
+      buffer.atMut(text.size()) = '\0';
     }
 
   }
 
   void createPrivateDirectory(std::string_view path) {
-    if (path.empty() || path.front() != '/' || path.size() >= PATH_MAX || path.find('\0') != std::string_view::npos) {
+    if (path.empty() || path.front() != '/' || path.size() >= PATH_MAX || path.contains('\0')) {
       throw SystemError{"Invalid absolute private directory", EINVAL};
     }
 
     ds::Array<char, PATH_MAX> name{};
 
-    std::copy(path.begin(), path.end(), name.dataMut());
+    std::ranges::copy(path, name.viewMut().begin());
     for (std::size_t index = 1; index <= path.size(); ++index) {
       if (index != path.size() && name[index] != '/') {
         continue;
@@ -62,14 +89,14 @@ namespace telar::runtime {
       const auto separator = name[index];
 
       name.atMut(index) = '\0';
-      if (::mkdir(name.data(), 0700) != 0 && sys::lastError() != EEXIST) {
+      if (::mkdir(name.data(), private_directory_mode) != 0 && sys::lastError() != EEXIST) {
         throw SystemError{"Create private directory"};
       }
 
       name.atMut(index) = separator;
     }
 
-    FileDescriptor directory{::open(name.data(), O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW)};
+    FileDescriptor directory{::open(name.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC, O_NOFOLLOW))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
     struct stat state{};
     if (!directory || ::fstat(directory.get(), &state) != 0) {
       throw SystemError{"Open private directory"};
@@ -79,27 +106,28 @@ namespace telar::runtime {
       throw SystemError{"Private directory belongs to another user", EACCES};
     }
 
-    if (::fchmod(directory.get(), 0700) != 0) {
+    if (::fchmod(directory.get(), private_directory_mode) != 0) {
       throw SystemError{"Restrict private directory permissions"};
     }
   }
 
   FileDescriptor openPrivateParent(std::string_view file_path) {
     const auto separator = file_path.rfind('/');
-    if (file_path.empty() || file_path.front() != '/' || file_path.size() >= PATH_MAX || separator == file_path.size() - 1 || file_path.find('\0') != std::string_view::npos) {
+    if (file_path.empty() || file_path.front() != '/' || file_path.size() >= PATH_MAX || separator == file_path.size() - 1 || file_path.contains('\0')) {
       throw SystemError{"invalid absolute runtime file path", EINVAL};
     }
 
     ds::Array<char, PATH_MAX> directory{};
 
     std::copy_n(file_path.data(), std::max<std::size_t>(separator, 1), directory.dataMut());
-    FileDescriptor parent{::open(directory.data(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
+    FileDescriptor parent{::open(directory.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_NOFOLLOW, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
     struct stat state{};
     if (!parent || ::fstat(parent.get(), &state) != 0) {
       throw SystemError{"open runtime file directory"};
     }
 
-    if (state.st_uid != ::geteuid() || (state.st_mode & 0022) != 0) {
+    constexpr mode_t writable_by_others = 0022;
+    if (state.st_uid != ::geteuid() || (state.st_mode & writable_by_others) != 0) {
       throw SystemError{"runtime directory must be owned by the user and not writable by others", EACCES};
     }
 
@@ -107,7 +135,7 @@ namespace telar::runtime {
   }
 
   DirectoryStream::DirectoryStream(int directory)
-      : DirectoryStream(FileDescriptor{::openat(directory, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC)}) {}
+      : DirectoryStream(FileDescriptor{::openat(directory, ".", combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}) {} // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
 
   DirectoryStream::DirectoryStream(FileDescriptor iterator) {
     if (!iterator) {
@@ -133,7 +161,7 @@ namespace telar::runtime {
   const dirent* DirectoryStream::next() {
     for (;;) {
       sys::setLastError(0);
-      const auto* entry = ::readdir(stream_);
+      const auto* entry = ::readdir(stream_); // NOLINT(concurrency-mt-unsafe): readdir is unsafe only on a stream that another thread reads too, and this stream is the object's own
       if (entry == nullptr) {
         if (sys::lastError() != 0) {
           throw SystemError{"Read directory entry"};
@@ -142,24 +170,21 @@ namespace telar::runtime {
         return nullptr;
       }
 
-      const auto* name = entry->d_name;
-      const bool current_directory = name[0] == '.' && name[1] == '\0';
-      const bool parent_directory = name[0] == '.' && name[1] == '.' && name[2] == '\0';
-      if (!current_directory && !parent_directory) {
+      const std::string_view name{std::data(entry->d_name)};
+      if (name != "." && name != "..") {
         return entry;
       }
     }
   }
 
   tbc::val_a<ds::Option<std::string_view>> readRegularFile(std::string_view path, tbc::val_a<std::span<char>> buffer) noexcept {
-    ds::Array<char, PATH_MAX> terminated;
+    ds::Array<char, PATH_MAX> terminated{};
     if (path.size() >= terminated.size() || path.contains('\0')) {
       return ds::none;
     }
 
-    std::memcpy(terminated.dataMut(), path.data(), path.size());
-    terminated.atMut(path.size()) = '\0';
-    FileDescriptor file{::open(terminated.data(), O_RDONLY | O_NONBLOCK | O_CLOEXEC | O_NOCTTY)};
+    copyTerminated(path, terminated);
+    FileDescriptor file{::open(terminated.data(), combineFlags(O_RDONLY, O_NONBLOCK, O_CLOEXEC, O_NOCTTY))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
     struct stat status{};
     if (!file || ::fstat(file.get(), &status) != 0 || !S_ISREG(status.st_mode)) {
       return ds::none;
@@ -168,7 +193,7 @@ namespace telar::runtime {
     std::size_t length = 0;
 
     while (length < buffer.size()) {
-      const auto count = ::read(file.get(), buffer.data() + length, buffer.size() - length);
+      const auto count = ::read(file.get(), buffer.subspan(length).data(), buffer.size() - length);
       if (count > 0) {
         length += static_cast<std::size_t>(count);
       } else if (count == 0) {
@@ -187,7 +212,7 @@ namespace telar::runtime {
     }
 
     FileDescriptor parent;
-    ds::Array<char, PATH_MAX> name;
+    ds::Array<char, PATH_MAX> name{};
 
     for (;;) {
       const auto separator = path.find('/');
@@ -196,11 +221,10 @@ namespace telar::runtime {
         throw SystemError{"Invalid package-relative component", EINVAL};
       }
 
-      std::copy(component.begin(), component.end(), name.dataMut());
-      name.atMut(component.size()) = '\0';
+      copyTerminated(component, name);
 
-      const auto selected_flags = separator == std::string_view::npos ? flags : O_RDONLY | O_DIRECTORY;
-      FileDescriptor selected{::openat(parent ? parent.get() : root, name.data(), selected_flags | O_NOFOLLOW | O_NONBLOCK | O_NOCTTY | O_CLOEXEC, permissions)};
+      const auto selected_flags = separator == std::string_view::npos ? flags : combineFlags(O_RDONLY, O_DIRECTORY);
+      FileDescriptor selected{::openat(parent ? parent.get() : root, name.data(), combineFlags(selected_flags, O_NOFOLLOW, O_NONBLOCK, O_NOCTTY, O_CLOEXEC), permissions)}; // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
       if (!selected) {
         throw SystemError{"Open package-relative file"};
       }
@@ -219,11 +243,10 @@ namespace telar::runtime {
       throw SystemError{"Invalid private file path", EINVAL};
     }
 
-    ds::Array<char, PATH_MAX> terminated;
+    ds::Array<char, PATH_MAX> terminated{};
 
-    std::copy(name.begin(), name.end(), terminated.dataMut());
-    terminated.atMut(name.size()) = '\0';
-    FileDescriptor file{::openat(directory, terminated.data(), O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)};
+    copyTerminated(name, terminated);
+    FileDescriptor file{::openat(directory, terminated.data(), combineFlags(O_RDONLY, O_NOFOLLOW, O_NONBLOCK, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
     if (!file) {
       if (sys::lastError() == ENOENT) {
         return PrivateFile{.file = FileDescriptor{}};
@@ -232,12 +255,13 @@ namespace telar::runtime {
       throw SystemError{"Open private file"};
     }
 
+    constexpr mode_t shared_permissions = 0077;
     struct stat state{};
-    if (::fstat(file.get(), &state) != 0 || !S_ISREG(state.st_mode) || state.st_uid != ::geteuid() || (state.st_mode & 0077) != 0) {
+    if (::fstat(file.get(), &state) != 0 || !S_ISREG(state.st_mode) || state.st_uid != ::geteuid() || (state.st_mode & shared_permissions) != 0) {
       throw SystemError{"Validate private file", EACCES};
     }
 
-    if (state.st_size < 0 || static_cast<std::uint64_t>(state.st_size) > limit) {
+    if (state.st_size < 0 || std::cmp_greater(state.st_size, limit)) {
       throw SystemError{"Private file exceeds its limit", EFBIG};
     }
 
@@ -245,7 +269,7 @@ namespace telar::runtime {
   }
 
   void readPrivateFileBytes(int file, std::span<unsigned char> bytes) {
-    if (!readExactly(file, bytes.data(), bytes.size())) {
+    if (!readExactly(file, std::as_writable_bytes(bytes))) {
       throw SystemError{"Private file changed while reading", EIO};
     }
   }
@@ -282,7 +306,7 @@ namespace telar::runtime {
 
   std::size_t boundedFileSize(int descriptor, std::size_t maximum_bytes) {
     struct stat metadata{};
-    if (::fstat(descriptor, &metadata) != 0 || !S_ISREG(metadata.st_mode) || metadata.st_size < 0 || static_cast<std::uint64_t>(metadata.st_size) > maximum_bytes) {
+    if (::fstat(descriptor, &metadata) != 0 || !S_ISREG(metadata.st_mode) || metadata.st_size < 0 || std::cmp_greater(metadata.st_size, maximum_bytes)) {
       throw FileReadError{FileReadFailure::invalid_size};
     }
 
@@ -290,13 +314,13 @@ namespace telar::runtime {
   }
 
   void readFileBytes(int descriptor, std::span<char> bytes) {
-    if (!readExactly(descriptor, bytes.data(), bytes.size())) {
+    if (!readExactly(descriptor, std::as_writable_bytes(bytes))) {
       throw FileReadError{FileReadFailure::changed};
     }
   }
 
   FileDescriptor openSourceFile(const char* path) {
-    FileDescriptor file{::open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK | O_NOFOLLOW | O_NOCTTY)};
+    FileDescriptor file{::open(path, combineFlags(O_RDONLY, O_CLOEXEC, O_NONBLOCK, O_NOFOLLOW, O_NOCTTY))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
     if (!file) {
       throw SystemError{"Open source file"};
     }
@@ -310,7 +334,7 @@ namespace telar::runtime {
     ds::String<Memory> source{memory};
 
     source.resize(size);
-    readFileBytes(descriptor, std::span<char>{source.dataMut(), source.size()});
+    readFileBytes(descriptor, source.viewMut());
     return source;
   }
 
@@ -334,7 +358,7 @@ namespace telar::runtime {
 
   int renameAt(int source_directory, const char* source, int destination_directory, const char* destination, RenameMode mode) noexcept {
 #ifdef __APPLE__
-    const auto flags = mode == RenameMode::create_only ? RENAME_EXCL : 0;
+    const auto flags = mode == RenameMode::create_only ? static_cast<unsigned>(RENAME_EXCL) : 0U;
 
     return ::renameatx_np(source_directory, source, destination_directory, destination, flags);
 #else
@@ -351,14 +375,15 @@ namespace telar::runtime {
     for (auto remaining : {directory, path}) {
       while (!remaining.empty()) {
         const auto end = remaining.find('/');
-        const auto component = remaining.substr(0, end);
+        const auto component = end == std::string_view::npos ? remaining : std::string_view{remaining.data(), end};
         if (component == "..") {
           const auto slash = std::string_view{resolved.data(), length}.rfind('/');
 
           length = slash == std::string_view::npos ? 0 : slash;
         } else if (!component.empty() && component != ".") {
           resolved[length++] = '/';
-          length = static_cast<std::size_t>(std::ranges::copy(component, resolved.data() + length).out - resolved.data());
+          std::ranges::copy(component, resolved.subspan(length).begin());
+          length += component.size();
         }
 
         if (end == std::string_view::npos) {
@@ -393,7 +418,7 @@ namespace telar::runtime {
     ds::String<Memory> resolved{path.memory()};
 
     resolved.resize(directory.size() + path.size() + 2);
-    resolved.resize(resolvePath(directory, path, std::span<char>{resolved.dataMut(), resolved.size()}));
+    resolved.resize(resolvePath(directory, path, resolved.viewMut()));
     path = std::move(resolved);
   }
 
@@ -403,7 +428,7 @@ namespace telar::runtime {
       return;
     }
 
-    ds::Array<char, PATH_MAX> directory;
+    ds::Array<char, PATH_MAX> directory{};
 
     resolveRelativePath(path, workingDirectory(directory.viewMut()));
   }
@@ -422,14 +447,13 @@ namespace telar::runtime {
       throw SystemError{"Invalid temporary directory pattern", EINVAL};
     }
 
-    std::copy(pattern.begin(), pattern.end(), path_.dataMut());
-    path_.atMut(pattern.size()) = '\0';
+    copyTerminated(pattern, path_);
     if (::mkdtemp(path_.dataMut()) == nullptr) {
       throw SystemError{"Create temporary directory"};
     }
 
-    directory_.reset(::open(path_.data(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
-    if (!directory_ || ::fstat(directory_.get(), &identity_) != 0 || ::fchmod(directory_.get(), 0700) != 0) {
+    directory_.reset(::open(path_.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_NOFOLLOW, O_CLOEXEC))); // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+    if (!directory_ || ::fstat(directory_.get(), &identity_) != 0 || ::fchmod(directory_.get(), private_directory_mode) != 0) {
       const auto error = sys::lastError();
 
       ::rmdir(path_.data());
@@ -455,20 +479,21 @@ namespace telar::runtime {
     return {path_.data(), length_};
   }
 
-  void TemporaryDirectory::removeContents(int directory) noexcept {
+  void TemporaryDirectory::removeContents(int directory) noexcept { // NOLINT(misc-no-recursion): descends the temporary tree, one open directory per level
     try {
       DirectoryStream iterator{directory};
 
       while (const auto* entry = iterator.next()) {
-        FileDescriptor child{::openat(directory, entry->d_name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
+        const char* const name = std::data(entry->d_name);
+        FileDescriptor child{::openat(directory, name, combineFlags(O_RDONLY, O_DIRECTORY, O_NOFOLLOW, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
         if (child) {
           removeContents(child.get());
-          ::unlinkat(directory, entry->d_name, AT_REMOVEDIR);
+          ::unlinkat(directory, name, AT_REMOVEDIR);
         } else {
-          ::unlinkat(directory, entry->d_name, 0);
+          ::unlinkat(directory, name, 0);
         }
       }
-    } catch (...) {
+    } catch (...) { // NOLINT(bugprone-empty-catch): removal is best effort, and the destructor that calls it cannot fail
     }
   }
 
@@ -494,20 +519,16 @@ namespace telar::runtime {
       return EINVAL;
     }
 
-    ds::Array<char, NAME_MAX + 1> destination;
+    ds::Array<char, NAME_MAX + 1> destination{};
 
-    std::copy(name.begin(), name.end(), destination.dataMut());
-    destination.atMut(name.size()) = '\0';
+    copyTerminated(name, destination);
     constexpr unsigned maximum_attempts = 8;
 
     for (unsigned attempt = 0; attempt < maximum_attempts; ++attempt) {
-      std::uint64_t nonce;
+      ds::Array<char, temporary_name_bytes> temporary{};
 
-      randomBytes(&nonce, sizeof(nonce));
-      ds::Array<char, 64> temporary;
-
-      std::snprintf(temporary.dataMut(), temporary.size(), ".telar-write-%016llx.tmp", static_cast<unsigned long long>(nonce));
-      FileDescriptor file{::openat(directory, temporary.data(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600)};
+      randomTemporaryName(temporary);
+      FileDescriptor file{::openat(directory, temporary.data(), combineFlags(O_WRONLY, O_CREAT, O_EXCL, O_NOFOLLOW, O_CLOEXEC), private_file_mode)}; // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
       if (!file) {
         if (sys::lastError() == EEXIST) {
           continue;
@@ -547,7 +568,7 @@ namespace telar::runtime {
     FileDescriptor file;
 
     for (unsigned attempt = 0; attempt < maximum_attempts && !file; ++attempt) {
-      file.reset(::openat(directory, name, O_RDWR | O_CREAT | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC, 0600));
+      file.reset(::openat(directory, name, combineFlags(O_RDWR, O_CREAT, O_NOFOLLOW, O_NONBLOCK, O_CLOEXEC), private_file_mode)); // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
       if (!file && sys::lastError() != ENOENT && sys::lastError() != EINTR) {
         break;
       }

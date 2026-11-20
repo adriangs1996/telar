@@ -1,5 +1,5 @@
 module;
-#include <errno.h>
+#include <cerrno>
 
 module telar.sys.posix;
 

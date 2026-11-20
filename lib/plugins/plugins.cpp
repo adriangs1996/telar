@@ -29,11 +29,12 @@ namespace telar::runtime::plugins {
     }
 
     void hashLength(PackageHashing hashing, std::uint64_t length) {
-      ds::Array<char, sizeof(length)> encoded;
+      constexpr auto byte_bits = static_cast<unsigned>(std::numeric_limits<std::uint8_t>::digits);
+      ds::Array<char, sizeof(length)> encoded{};
 
       for (std::size_t index = 0; index < encoded.size(); ++index) {
         encoded.atMut(index) = static_cast<char>(length & std::numeric_limits<std::uint8_t>::max());
-        length >>= std::numeric_limits<std::uint8_t>::digits;
+        length >>= byte_bits;
       }
 
       hashing.update(hashing.hash, {encoded.data(), encoded.size()});
@@ -41,10 +42,12 @@ namespace telar::runtime::plugins {
 
     template <Allocator Memory>
     PackageDigest digest(Memory& memory, int directory, PackageHashing hashing) {
+      using namespace std::string_view_literals;
+      // The terminating NUL is part of the hashed domain.
+      constexpr std::string_view domain = "telar-plugin-package-v1\0"sv;
       const PackageFiles files{memory, directory};
-      static constexpr char domain[] = "telar-plugin-package-v1";
 
-      hashing.update(hashing.hash, {domain, sizeof(domain)});
+      hashing.update(hashing.hash, domain);
       std::size_t total = 0;
 
       for (const auto& entry : files.entries()) {
@@ -75,16 +78,18 @@ namespace telar::runtime::plugins {
     }
 
     unsigned hex(char byte) {
+      constexpr unsigned letter_value = 10;
+
       if (byte >= '0' && byte <= '9') {
         return static_cast<unsigned>(byte - '0');
       }
 
       if (byte >= 'a' && byte <= 'f') {
-        return static_cast<unsigned>(byte - 'a' + 10);
+        return static_cast<unsigned>(byte - 'a') + letter_value;
       }
 
       if (byte >= 'A' && byte <= 'F') {
-        return static_cast<unsigned>(byte - 'A' + 10);
+        return static_cast<unsigned>(byte - 'A') + letter_value;
       }
 
       throw std::invalid_argument{"Invalid plugin digest"};
@@ -103,16 +108,16 @@ namespace telar::runtime::plugins {
   }
 
   Capability Capabilities::parseName(std::string_view name) {
-    const auto* const found = std::ranges::find(names_, name);
-    if (found == names_.end()) {
+    const auto* const found = std::ranges::find(capability_names, name);
+    if (found == capability_names.end()) {
       throw std::invalid_argument{"UnknownCapability"};
     }
 
-    return static_cast<Capability>(found - names_.begin());
+    return static_cast<Capability>(found - capability_names.begin());
   }
 
   std::string_view Capabilities::name(Capability capability) noexcept {
-    return names_[static_cast<std::size_t>(capability)];
+    return capability_names[static_cast<std::size_t>(capability)];
   }
 
   template <Allocator Memory>
@@ -137,7 +142,7 @@ namespace telar::runtime::plugins {
 
     for (;;) {
       const auto separator = path.find_first_of("/\\");
-      const auto part = path.substr(0, separator);
+      const auto part = separator == std::string_view::npos ? path : std::string_view{path.data(), separator};
       if (part.empty() || part == "." || part == "..") {
         return false;
       }
@@ -249,12 +254,13 @@ namespace telar::runtime::plugins {
       }
 
       std::uint16_t result = 0;
-      const auto parsed = std::from_chars(text.data(), text.data() + text.size(), result);
+      const auto* const end = std::to_address(text.end());
+      const auto parsed = std::from_chars(text.data(), end, result);
       if (parsed.ec == std::errc::result_out_of_range) {
         throw std::invalid_argument{"Overflow"};
       }
 
-      if (parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size()) {
+      if (parsed.ec == std::errc::invalid_argument || parsed.ptr != end) {
         throw std::invalid_argument{"InvalidNumber"};
       }
 
@@ -393,7 +399,7 @@ namespace telar::runtime::plugins {
   }
 
   template <Allocator Memory>
-  void PackageFiles<Memory>::scan(DirectoryStream& iterator, ds::String<Memory>& prefix) {
+  void PackageFiles<Memory>::scan(DirectoryStream& iterator, ds::String<Memory>& prefix) { // NOLINT(misc-no-recursion): descends the package's tree, which PackageLimits::files and PATH_MAX bound
     const auto directory = iterator.descriptor();
     if (directory < 0) {
       throw SystemError{"Read plugin package directory descriptor"};
@@ -404,8 +410,9 @@ namespace telar::runtime::plugins {
         throw std::invalid_argument{"Too many plugin package entries"};
       }
 
+      const char* const name = std::data(entry->d_name);
       struct stat status{};
-      if (::fstatat(directory, entry->d_name, &status, AT_SYMLINK_NOFOLLOW) != 0) {
+      if (::fstatat(directory, name, &status, AT_SYMLINK_NOFOLLOW) != 0) {
         throw SystemError{"Inspect plugin package entry"};
       }
 
@@ -416,9 +423,9 @@ namespace telar::runtime::plugins {
       const auto parent_length = prefix.size();
 
 #ifdef __APPLE__
-      prefix.append(std::string_view{entry->d_name, entry->d_namlen});
+      prefix.append(std::string_view{name, entry->d_namlen});
 #else
-      prefix.append(entry->d_name);
+      prefix.append(name);
 #endif
       if (prefix.size() >= PATH_MAX) {
         throw std::invalid_argument{"Plugin package path exceeds its limit"};
@@ -426,7 +433,7 @@ namespace telar::runtime::plugins {
 
       entries_.push({ds::String<Memory>{memory_, prefix}, S_ISDIR(status.st_mode)});
       if (S_ISDIR(status.st_mode)) {
-        FileDescriptor child{::openat(directory, entry->d_name, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW)};
+        FileDescriptor child{::openat(directory, name, combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC, O_NOFOLLOW))}; // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
         if (!child) {
           throw SystemError{"Open plugin package directory"};
         }
@@ -463,7 +470,8 @@ namespace telar::runtime::plugins {
         const auto contents = readFileContents(memory, original.get(), PackageLimits::total_bytes - total - 1);
 
         total += contents.size();
-        auto copied = openBeneath(destination, entry.path, O_WRONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
+        constexpr mode_t private_file_mode = 0600;
+        auto copied = openBeneath(destination, entry.path, combineFlags(O_WRONLY, O_CREAT, O_EXCL), private_file_mode);
         const auto error = writeFile(copied, contents);
         if (error != 0) {
           throw SystemError{"Write plugin package file", error};
@@ -494,10 +502,10 @@ namespace telar::runtime::plugins {
   // Package inspection
 
   template <Allocator Memory>
-  Package inspectConfiguredPackage(Memory& memory, std::string_view directory, std::string_view path, PackageHashing hashing) {
-    ds::String<Memory> resolved{memory, path};
+  Package inspectConfiguredPackage(Memory& memory, ConfiguredPath configured, PackageHashing hashing) {
+    ds::String<Memory> resolved{memory, configured.path};
 
-    resolveRelativePath(resolved, directory);
+    resolveRelativePath(resolved, configured.directory);
     return inspectPackage(memory, resolved, hashing);
   }
 
@@ -507,16 +515,16 @@ namespace telar::runtime::plugins {
       throw std::invalid_argument{"Invalid plugin package path"};
     }
 
-    ds::Array<char, PATH_MAX> terminated;
+    ds::Array<char, PATH_MAX> terminated{};
 
-    std::copy(path.begin(), path.end(), terminated.dataMut());
+    std::ranges::copy(path, terminated.viewMut().begin());
     terminated.atMut(path.size()) = '\0';
-    ds::Array<char, PATH_MAX> canonical;
+    ds::Array<char, PATH_MAX> canonical{};
     if (::realpath(terminated.data(), canonical.dataMut()) == nullptr) {
       throw SystemError{"Resolve plugin package"};
     }
 
-    FileDescriptor directory{::open(canonical.data(), O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW)};
+    FileDescriptor directory{::open(canonical.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC, O_NOFOLLOW))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
     if (!directory) {
       throw SystemError{"Open plugin package"};
     }
@@ -554,19 +562,21 @@ namespace telar::runtime::plugins {
     auto directory = openPrivateParent(path);
 
     parent.append("/.telar-plugin-XXXXXX");
-    TemporaryDirectory staging{parent};
-    if (::mkdirat(staging.descriptor(), staged_package, 0700) != 0) {
+    constexpr mode_t private_directory_mode = 0700;
+    TemporaryDirectory staging{parent}; // NOLINT(misc-const-correctness): the staging directory is written through its descriptor, a mutation tbc sees through the handle
+    if (::mkdirat(staging.descriptor(), staged_package, private_directory_mode) != 0) {
       throw SystemError{"Create plugin installation staging directory"};
     }
 
-    auto copied = openBeneath(staging.descriptor(), staged_package, O_RDONLY | O_DIRECTORY);
+    auto copied = openBeneath(staging.descriptor(), staged_package, combineFlags(O_RDONLY, O_DIRECTORY));
     ds::String<Memory> staged_path{memory_, staging.path()};
 
     staged_path.push('/');
     staged_path.append(staged_package);
     PackageCopy{memory_}.copy(package, copied.get(), staged_path);
 
-    if (renameAt(staging.descriptor(), staged_package, directory.get(), path.data() + separator + 1, RenameMode::create_only) != 0) {
+    // The name is the tail of the terminated path, so terminated too.
+    if (renameAt(staging.descriptor(), staged_package, directory.get(), std::string_view{path}.substr(separator + 1).data(), RenameMode::create_only) != 0) {
       if (sys::lastError() == EEXIST && existing(package, path.data())) {
         return;
       }
@@ -665,7 +675,7 @@ namespace telar::runtime::plugins {
       return {};
     }
 
-    return parse(memory, {reinterpret_cast<const char*>(bytes.data()), bytes.size()});
+    return parse(memory, {reinterpret_cast<const char*>(bytes.data()), bytes.size()}); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the trust store is text read as bytes, which char may alias
   }
 
   template <Allocator Memory>
@@ -756,6 +766,29 @@ namespace telar::runtime::plugins {
     return false;
   }
 
+  namespace {
+
+    // The names of the granted capabilities, as a JSON array's elements.
+    void appendCapabilities(ds::String<Memory>& output, Capabilities capabilities) {
+      bool first = true;
+
+      for (unsigned value = 0; value < static_cast<unsigned>(Capability::count); ++value) {
+        const auto capability = static_cast<Capability>(value);
+        if (!capabilities.contains(capability)) {
+          continue;
+        }
+
+        if (!first) {
+          output.push(',');
+        }
+
+        appendJsonText(output, Capabilities::name(capability));
+        first = false;
+      }
+    }
+
+  }
+
   tbc::val_a<ds::String<Memory>> TrustStore::json(tbc::mut_a<Memory> memory) const {
     ds::String<Memory> output{memory, R"({"version":1,"grants":[)"};
 
@@ -771,20 +804,7 @@ namespace telar::runtime::plugins {
       output.append(R"(,"digest":")");
       appendLowerHex(output, entry.digest);
       output.append(R"(","capabilities":[)");
-      bool first = true;
-
-      for (unsigned value = 0; value < static_cast<unsigned>(Capability::count); ++value) {
-        const auto capability = static_cast<Capability>(value);
-        if (entry.capabilities.contains(capability)) {
-          if (!first) {
-            output.push(',');
-          }
-
-          appendJsonText(output, Capabilities::name(capability));
-          first = false;
-        }
-      }
-
+      appendCapabilities(output, entry.capabilities);
       output.append("]}");
     }
 
@@ -803,7 +823,7 @@ namespace telar::runtime::plugins {
     }
 
     for (std::size_t index = 0; index < digest.size(); ++index) {
-      digest.atMut(index) = static_cast<std::uint8_t>((hex(text[2 * index]) << 4) | hex(text[(2 * index) + 1]));
+      digest.atMut(index) = static_cast<std::uint8_t>((hex(text[2 * index]) << 4U) | hex(text[(2 * index) + 1]));
     }
 
     return digest;
@@ -819,7 +839,7 @@ namespace telar::runtime::plugins {
 
     createPrivateDirectory(std::string_view{path}.substr(0, separator));
     const auto parent = openPrivateParent(path);
-    const auto written = writePrivateFile(parent.get(), std::string_view{path}.substr(separator + 1), {reinterpret_cast<const std::uint8_t*>(contents.data()), contents.size()}, PrivateFileMode::replace);
+    const auto written = writePrivateFile(parent.get(), std::string_view{path}.substr(separator + 1), {reinterpret_cast<const std::uint8_t*>(contents.data()), contents.size()}, PrivateFileMode::replace); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast,clang-diagnostic-unsafe-buffer-usage-in-container): the file takes the text as bytes, whose size the string gives
     if (written != 0) {
       throw SystemError{"Replace plugin trust store", written};
     }
@@ -853,8 +873,8 @@ namespace telar::runtime::plugins {
   template Package copyPackage<Memory>(Memory& memory, const Package& package, int destination, std::string_view path, Package (*inspect)(Memory& memory, std::string_view path));
   template Package copyPackage<ConcurrentMemory>(ConcurrentMemory& memory, const Package& package, int destination, std::string_view path, Package (*inspect)(ConcurrentMemory& memory, std::string_view path));
 
-  template Package inspectConfiguredPackage<Memory>(Memory& memory, std::string_view directory, std::string_view path, PackageHashing hashing);
-  template Package inspectConfiguredPackage<ConcurrentMemory>(ConcurrentMemory& memory, std::string_view directory, std::string_view path, PackageHashing hashing);
+  template Package inspectConfiguredPackage<Memory>(Memory& memory, ConfiguredPath configured, PackageHashing hashing);
+  template Package inspectConfiguredPackage<ConcurrentMemory>(ConcurrentMemory& memory, ConfiguredPath configured, PackageHashing hashing);
   template Package inspectPackage<Memory>(Memory& memory, std::string_view path, PackageHashing hashing);
   template Package inspectPackage<ConcurrentMemory>(ConcurrentMemory& memory, std::string_view path, PackageHashing hashing);
 

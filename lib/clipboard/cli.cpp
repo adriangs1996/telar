@@ -6,18 +6,19 @@ import telar.sys.posix;
 namespace telar::clipboard {
   // main.cpp and the Objective-C++ tests declare it themselves: a header shared with them would be a textual
   // include, which the module layout keeps to its listed exceptions.
-  int runCli(int argc, char** argv);
+  int runCli(int argc, char** argv); // NOLINT(misc-use-internal-linkage): main.cpp and the tests call it
 
-  int runCli(int argc, char** argv) { // NOLINT(misc-use-internal-linkage): main.cpp and the tests call it
+  int runCli(int argc, char** argv) {                                             // NOLINT(misc-use-internal-linkage,misc-const-correctness): main.cpp and the tests call it, declaring it as main is
+    const std::span<char* const> arguments{argv, static_cast<std::size_t>(argc)}; // NOLINT(clang-diagnostic-unsafe-buffer-usage-in-container): main hands over argc arguments in argv
     const char* output_path = nullptr;
 
-    if (argc == 2 && std::string_view(argv[1]) == "--help") {
+    if (argc == 2 && std::string_view(arguments[1]) == "--help") {
       std::puts("Usage: clipboard [--output PATH]\nRead current text or image. Images keep their original format.\nBinary output requires --output PATH or redirected stdout.");
       return 0;
     }
 
-    if (argc == 3 && std::string_view(argv[1]) == "--output") {
-      output_path = argv[2];
+    if (argc == 3 && std::string_view(arguments[1]) == "--output") {
+      output_path = arguments[2];
     } else if (argc != 1) {
       std::println(stderr, "Usage: clipboard [--output PATH]");
       return 1;
@@ -41,8 +42,8 @@ namespace telar::clipboard {
     }
 
     const auto& bytes = result->bytes;
-    const bool written = bytes.empty() || std::fwrite(bytes.data(), 1, bytes.size(), output) == bytes.size();
-    const bool closed = output_path != nullptr ? std::fclose(output) == 0 : std::fflush(output) == 0;
+    const bool written = bytes.empty() || std::fwrite(bytes.data(), 1, bytes.size(), output) == bytes.size(); // NOLINT(clang-diagnostic-unsafe-buffer-usage-in-libc-call): the vector hands over its own data and size
+    const bool closed = output_path != nullptr ? std::fclose(output) == 0 : std::fflush(output) == 0;         // NOLINT(cppcoreguidelines-owning-memory): the file fopen opened above, which no owner holds
     if (!written || !closed) {
       std::println(stderr, "Could not write clipboard content.");
       return 1;

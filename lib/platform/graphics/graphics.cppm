@@ -11,7 +11,8 @@ export {
 
     class SharedImageStorage {
     public:
-      using Name = ds::Array<char, 32>;
+      static constexpr std::size_t name_bytes = 32;
+      using Name = ds::Array<char, name_bytes>;
 
       static ds::Option<SharedImageStorage> create(std::size_t length) noexcept;
 
@@ -21,6 +22,7 @@ export {
       SharedImageStorage& operator=(const SharedImageStorage&) = delete;
 
       SharedImageStorage(SharedImageStorage&& other) noexcept;
+      SharedImageStorage& operator=(SharedImageStorage&&) = delete;
 
       MappedRegion& mapping() noexcept;
       Name takeName() noexcept;

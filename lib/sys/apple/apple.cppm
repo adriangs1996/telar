@@ -1,4 +1,7 @@
 module;
+#include <cstdio>
+#include <cstdlib>
+#include <ctime>
 #include <fcntl.h>
 #include <libproc.h>
 #include <mach-o/dyld.h>
@@ -17,8 +20,6 @@ module;
 #include <netinet6/in6_var.h>
 #include <pthread.h>
 #include <spawn.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <sys/attr.h>
 #include <sys/event.h>
 #include <sys/ioctl.h>
@@ -31,7 +32,6 @@ module;
 #include <sys/sys_domain.h>
 #include <sys/sysctl.h>
 #include <sys/un.h>
-#include <time.h>
 #include <unistd.h>
 
 export module telar.sys.apple;
@@ -107,7 +107,7 @@ export {
   using ::sockaddr_ctl;
 
   // The running executable.
-  using ::_NSGetExecutablePath;
+  using ::_NSGetExecutablePath; // NOLINT(bugprone-reserved-identifier,cert-dcl37-c,cert-dcl51-cpp,clang-diagnostic-reserved-identifier): dyld's own name
 
   // BSD and Darwin extensions.
   using ::arc4random_buf;
@@ -125,6 +125,7 @@ export {
 // Macros do not cross an import. Each one the tree reads is captured while the headers still
 // define it, undefined, and exported under its own name, so `EVFILT_READ` reads the same to an
 // importer that includes the header and to one that only imports this module.
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage): an X-macro lists the C macros to capture, which no template can name
 #define TELAR_SYS_FILES(X)       \
   X(ATTR_BIT_MAP_COUNT)          \
   X(ATTR_CMN_NAME)               \
@@ -140,6 +141,7 @@ export {
   X(RENAME_EXCL)
 
 // kqueue filters and flags.
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage): an X-macro lists the C macros to capture, which no template can name
 #define TELAR_SYS_EVENTS(X) \
   X(EVFILT_READ)            \
   X(EVFILT_SIGNAL)          \
@@ -152,6 +154,7 @@ export {
   X(EV_ERROR)
 
 // Mach host and task statistics, sysctl and libproc.
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage): an X-macro lists the C macros to capture, which no template can name
 #define TELAR_SYS_PROCESSES(X) \
   X(CPU_STATE_IDLE)            \
   X(CPU_STATE_NICE)            \
@@ -191,6 +194,7 @@ export {
   X(TSI_S_LISTEN)
 
 // Sockets, kernel controls, utun, routes and the TCP control blocks.
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage): an X-macro lists the C macros to capture, which no template can name
 #define TELAR_SYS_NETWORK(X) \
   X(AF_LINK)                 \
   X(AF_SYSTEM)               \
@@ -333,19 +337,21 @@ namespace telar::sys::captured {
 #define TELAR_SYS_CONSTANT(name) inline constexpr auto name = telar::sys::captured::name##_;
 
 export {
-  TELAR_SYS_FILES(TELAR_SYS_CONSTANT)
-  TELAR_SYS_EVENTS(TELAR_SYS_CONSTANT)
-  TELAR_SYS_PROCESSES(TELAR_SYS_CONSTANT)
-  TELAR_SYS_NETWORK(TELAR_SYS_CONSTANT)
+  TELAR_SYS_FILES(TELAR_SYS_CONSTANT)     // NOLINT(readability-identifier-naming): exported under the system's own names
+  TELAR_SYS_EVENTS(TELAR_SYS_CONSTANT)    // NOLINT(readability-identifier-naming): exported under the system's own names
+  TELAR_SYS_PROCESSES(TELAR_SYS_CONSTANT) // NOLINT(readability-identifier-naming): exported under the system's own names
+  TELAR_SYS_NETWORK(TELAR_SYS_CONSTANT)   // NOLINT(readability-identifier-naming): exported under the system's own names
 
   // Darwin's private sockio.h defines these protocol attachments; the public SDK does not.
-  inline constexpr unsigned long SIOCPROTOATTACH = _IOWR('i', 80, ifreq);
-  inline constexpr unsigned long SIOCPROTOATTACH_IN6 = _IOWR('i', 110, in6_aliasreq);
+  inline constexpr unsigned long SIOCPROTOATTACH = _IOWR('i', 80, ifreq);             // NOLINT(readability-identifier-naming): exported under the system's own names
+  inline constexpr unsigned long SIOCPROTOATTACH_IN6 = _IOWR('i', 110, in6_aliasreq); // NOLINT(readability-identifier-naming): exported under the system's own names
 
   // Defined in apple.cpp, where the macros are.
+  // NOLINTNEXTLINE(readability-identifier-naming): exported under the system's own name
   void EV_SET(telar::sys::captured::Event* event, uintptr_t ident, int16_t filter, uint16_t flags, uint32_t filter_flags, intptr_t data, void* user_data) noexcept;
 
   // Darwin's macro reads the port its runtime caches at startup.
+  // NOLINTNEXTLINE(readability-identifier-naming): exported under the system's own name
   mach_port_t mach_task_self() noexcept;
 }
 

@@ -13,58 +13,131 @@ import telar.sys.linux_api;
 #endif
 
 namespace telar::runtime {
+  namespace {
 
-  static winsize windowSize(TerminalSize size) noexcept {
-    return winsize{
-        .ws_row = size.rows,
-        .ws_col = size.cols,
-        .ws_xpixel = static_cast<unsigned short>(std::min<unsigned>(std::numeric_limits<std::uint16_t>::max(), size.cols * size.cell_width_px)),
-        .ws_ypixel = static_cast<unsigned short>(std::min<unsigned>(std::numeric_limits<std::uint16_t>::max(), size.rows * size.cell_height_px)),
+    // The status a shell gives a command it could not execute.
+    constexpr int exec_failure_status = 127;
+
+    // The descriptors a forked pane child works with before it executes the pane's command.
+    struct ChildDescriptors {
+      int terminal;
+      int directory;
+      int status_writer;
+      int limit;
     };
-  }
 
-  static void moveAboveStandardStreams(FileDescriptor& descriptor) {
-    if (descriptor.get() > STDERR_FILENO) {
-      return;
+    winsize windowSize(TerminalSize size) noexcept {
+      return winsize{
+          .ws_row = size.rows,
+          .ws_col = size.cols,
+          .ws_xpixel = static_cast<unsigned short>(std::min<unsigned>(std::numeric_limits<std::uint16_t>::max(), size.cols * size.cell_width_px)),
+          .ws_ypixel = static_cast<unsigned short>(std::min<unsigned>(std::numeric_limits<std::uint16_t>::max(), size.rows * size.cell_height_px)),
+      };
     }
 
-    const int duplicated = ::fcntl(descriptor.get(), F_DUPFD_CLOEXEC, STDERR_FILENO + 1);
-    if (duplicated < 0) {
-      throw SystemError{"reserve child descriptor"};
-    }
-
-    descriptor.reset(duplicated);
-  }
-
-  [[noreturn]] static void reportSpawnFailure(int descriptor) noexcept {
-    const int failure = sys::lastError();
-    const auto* bytes = reinterpret_cast<const char*>(&failure);
-    std::size_t written = 0;
-
-    while (written < sizeof(failure)) {
-      const auto count = ::write(descriptor, bytes + written, sizeof(failure) - written);
-      if (count < 0 && sys::lastError() == EINTR) {
-        continue;
+    void moveAboveStandardStreams(FileDescriptor& descriptor) {
+      if (descriptor.get() > STDERR_FILENO) {
+        return;
       }
 
-      if (count <= 0) {
-        break;
+      const int duplicated = ::fcntl(descriptor.get(), F_DUPFD_CLOEXEC, STDERR_FILENO + 1); // NOLINT(cppcoreguidelines-pro-type-vararg): fcntl's C signature is variadic
+      if (duplicated < 0) {
+        throw SystemError{"reserve child descriptor"};
       }
 
-      written += static_cast<std::size_t>(count);
+      descriptor.reset(duplicated);
     }
 
-    _exit(127);
+    [[noreturn]] void reportSpawnFailure(int descriptor) noexcept {
+      const auto report = std::bit_cast<ds::Array<char, sizeof(int)>>(sys::lastError());
+      std::size_t written = 0;
+
+      while (written < report.size()) {
+        const auto pending = report.view().subspan(written);
+        const auto count = ::write(descriptor, pending.data(), pending.size());
+        if (count < 0 && sys::lastError() == EINTR) {
+          continue;
+        }
+
+        if (count <= 0) {
+          break;
+        }
+
+        written += static_cast<std::size_t>(count);
+      }
+
+      _exit(exec_failure_status);
+    }
+
+    // The forked child: it takes the terminal as its controlling one and its standard streams,
+    // keeps only the status pipe, and executes the command, or reports why it could not.
+    [[noreturn]] void runChild(const SpawnSpec& specification, ChildDescriptors descriptors) noexcept {
+      if (::setsid() < 0 || ::ioctl(descriptors.terminal, TIOCSCTTY, 0) < 0 || ::fchdir(descriptors.directory) < 0) { // NOLINT(cppcoreguidelines-pro-type-vararg): ioctl's C signature is variadic
+        reportSpawnFailure(descriptors.status_writer);
+      }
+
+      for (int descriptor = STDIN_FILENO; descriptor <= STDERR_FILENO; ++descriptor) {
+        if (::dup2(descriptors.terminal, descriptor) < 0) {
+          reportSpawnFailure(descriptors.status_writer);
+        }
+      }
+
+      closeChildDescriptors(descriptors.status_writer, descriptors.limit);
+
+      sigset_t signals{};
+
+      sigemptyset(&signals);
+      ::pthread_sigmask(SIG_SETMASK, &signals, nullptr);
+      for (int signal_number = 1; signal_number < NSIG; ++signal_number) {
+        static_cast<void>(::signal(signal_number, SIG_DFL));
+      }
+
+      ::execve(specification.executable, specification.arguments, specification.environment);
+      reportSpawnFailure(descriptors.status_writer);
+    }
+
+    // The error the child reported through the status pipe before it could execute, EIO for a
+    // report cut short; none when the pipe closed empty at exec.
+    ds::Option<int> spawnFailure(int reader) noexcept {
+      ds::Array<char, sizeof(int)> report{};
+      std::size_t received = 0;
+
+      while (received < report.size()) {
+        const auto pending = report.viewMut().subspan(received);
+        const auto count = ::read(reader, pending.data(), pending.size());
+        if (count < 0 && sys::lastError() == EINTR) {
+          continue;
+        }
+
+        if (count == 0) {
+          break;
+        }
+
+        if (count < 0) {
+          return sys::lastError();
+        }
+
+        received += static_cast<std::size_t>(count);
+      }
+
+      if (received == 0) {
+        return ds::none;
+      }
+
+      return received == report.size() ? std::bit_cast<int>(report) : EIO;
+    }
+
   }
 
   void closeChildDescriptors(int retained, int descriptor_limit) noexcept {
 #ifdef __APPLE__
     // Only the forked child enumerates descriptors, so no other thread can open
     // one during the scan. proc_pidinfo copies kernel data into this stack buffer.
-    ds::Array<proc_fdinfo, 1024> descriptors;
+    constexpr std::size_t listed_descriptors = 1024;
+    ds::Array<proc_fdinfo, listed_descriptors> descriptors{};
     const int bytes = ::proc_pidinfo(::getpid(), PROC_PIDLISTFDS, 0, descriptors.dataMut(), sizeof(descriptors));
 
-    if (bytes > 0 && bytes < static_cast<int>(sizeof(descriptors)) && bytes % sizeof(proc_fdinfo) == 0) {
+    if (bytes > 0 && std::cmp_less(bytes, sizeof(descriptors)) && static_cast<std::size_t>(bytes) % sizeof(proc_fdinfo) == 0) {
       const auto count = static_cast<std::size_t>(bytes) / sizeof(proc_fdinfo);
 
       for (std::size_t index = 0; index < count; ++index) {
@@ -93,7 +166,7 @@ namespace telar::runtime {
   }
 
   PtyProcess::PtyProcess(const SpawnSpec& specification) {
-    FileDescriptor directory{::open(specification.cwd, O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
+    FileDescriptor directory{::open(specification.cwd, combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
     if (!directory) {
       throw SystemError{"open pane working directory"};
     }
@@ -137,61 +210,18 @@ namespace telar::runtime {
     }
 
     if (process_id_ == 0) {
-      if (::setsid() < 0 || ::ioctl(slave, TIOCSCTTY, 0) < 0 || ::fchdir(directory.get()) < 0) {
-        reportSpawnFailure(status_writer.get());
-      }
-
-      for (int descriptor = STDIN_FILENO; descriptor <= STDERR_FILENO; ++descriptor) {
-        if (::dup2(slave, descriptor) < 0) {
-          reportSpawnFailure(status_writer.get());
-        }
-      }
-
-      closeChildDescriptors(status_writer.get(), descriptor_limit);
-
-      sigset_t signals;
-
-      sigemptyset(&signals);
-      sigprocmask(SIG_SETMASK, &signals, nullptr);
-      for (int signal_number = 1; signal_number < NSIG; ++signal_number) {
-        ::signal(signal_number, SIG_DFL);
-      }
-
-      ::execve(specification.executable, specification.arguments, specification.environment);
-      reportSpawnFailure(status_writer.get());
+      runChild(specification, {.terminal = slave, .directory = directory.get(), .status_writer = status_writer.get(), .limit = descriptor_limit});
     }
 
     slave_descriptor.reset();
     status_writer.reset();
-    int failure = 0;
-    std::size_t received = 0;
-
-    while (received < sizeof(failure)) {
-      const auto count = ::read(status_reader.get(), reinterpret_cast<char*>(&failure) + received, sizeof(failure) - received);
-      if (count < 0 && sys::lastError() == EINTR) {
-        continue;
-      }
-
-      if (count == 0) {
-        break;
-      }
-
-      if (count < 0) {
-        failure = sys::lastError();
-        received = sizeof(failure);
-        break;
-      }
-
-      received += static_cast<std::size_t>(count);
-    }
-
-    if (received != 0) {
+    if (const auto failure = spawnFailure(status_reader.get())) {
       ::kill(process_id_, SIGKILL);
       while (::waitpid(process_id_, nullptr, 0) < 0 && sys::lastError() == EINTR) {
       }
 
       process_id_ = -1;
-      throw SystemError{"execute pane command", received == sizeof(failure) ? failure : EIO};
+      throw SystemError{"execute pane command", *failure};
     }
   }
 
@@ -217,14 +247,14 @@ namespace telar::runtime {
 
   void PtyProcess::resize(TerminalSize size) {
     auto dimensions = windowSize(size);
-    if (::ioctl(master_.get(), TIOCSWINSZ, &dimensions) < 0) {
+    if (::ioctl(master_.get(), TIOCSWINSZ, &dimensions) < 0) { // NOLINT(cppcoreguidelines-pro-type-vararg): ioctl's C signature is variadic
       throw SystemError{"resize pseudoterminal"};
     }
   }
 
   ds::Option<pid_t> PtyProcess::foregroundProcessGroup() const noexcept {
     pid_t foreground = 0;
-    if (::ioctl(master_.get(), TIOCGPGRP, &foreground) < 0 || foreground <= 0) {
+    if (::ioctl(master_.get(), TIOCGPGRP, &foreground) < 0 || foreground <= 0) { // NOLINT(cppcoreguidelines-pro-type-vararg): ioctl's C signature is variadic
       return ds::none;
     }
 

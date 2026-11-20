@@ -8,7 +8,7 @@
 
 namespace telar {
 
-  enum class AllocationPath {
+  enum class AllocationPath : std::uint8_t {
     interactive,
     media,
     observation,
@@ -34,8 +34,9 @@ namespace telar {
   };
 
 #if TELAR_DIAGNOSTICS
-  inline thread_local AllocationPath current_allocation_path = AllocationPath::other;
-  inline thread_local bool terminal_allocation = false;
+  // The allocation context of each thread, which the scopes below set.
+  inline thread_local AllocationPath current_allocation_path = AllocationPath::other; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables): a thread's own state, which the scopes below set
+  inline thread_local bool terminal_allocation = false;                               // NOLINT(cppcoreguidelines-avoid-non-const-global-variables): a thread's own state, which the scopes below set
 
   class AllocationScope {
   public:
@@ -48,6 +49,8 @@ namespace telar {
 
     AllocationScope(const AllocationScope&) = delete;
     AllocationScope& operator=(const AllocationScope&) = delete;
+    AllocationScope(AllocationScope&&) = delete;
+    AllocationScope& operator=(AllocationScope&&) = delete;
 
   private:
     AllocationPath previous_;
@@ -64,6 +67,8 @@ namespace telar {
 
     TerminalAllocationScope(const TerminalAllocationScope&) = delete;
     TerminalAllocationScope& operator=(const TerminalAllocationScope&) = delete;
+    TerminalAllocationScope(TerminalAllocationScope&&) = delete;
+    TerminalAllocationScope& operator=(TerminalAllocationScope&&) = delete;
 
   private:
     bool previous_;

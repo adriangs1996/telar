@@ -80,7 +80,7 @@ export {
       std::size_t count_ = 0;
     };
 
-    enum class AgentInterruptKey {
+    enum class AgentInterruptKey : std::uint8_t {
       none,
       escape,
       escape_twice,
@@ -88,33 +88,48 @@ export {
     };
 
     struct AgentCommandTool {
-      FixedText<64> tool;
-      FixedText<32> field;
+      static constexpr std::size_t tool_bytes = 64;
+      static constexpr std::size_t field_bytes = 32;
+
+      FixedText<tool_bytes> tool;
+      FixedText<field_bytes> field;
     };
 
     struct AgentManifest {
-      void addCommandTool(std::string_view name, std::string_view field);
+      static constexpr std::size_t name_bytes = 32;
+      static constexpr std::size_t placeholder_bytes = 96;
+      static constexpr std::size_t icon_bytes = 8;
+      static constexpr std::size_t maximum_processes = 8;
+      static constexpr std::size_t process_bytes = 128;
+      static constexpr std::size_t maximum_phrases = 16;
+      static constexpr std::size_t phrase_bytes = 64;
+      static constexpr std::size_t maximum_command_tools = 8;
+
+      using ProcessList = ManifestTextList<maximum_processes, process_bytes>;
+      using PhraseList = ManifestTextList<maximum_phrases, phrase_bytes>;
+
+      void addCommandTool(std::string_view tool, std::string_view field);
       [[nodiscard]] std::string_view commandField(std::string_view tool) const noexcept;
       [[nodiscard]] std::string_view displayName() const noexcept;
 
       // The manifest's own placeholder, or one built in the caller's storage.
-      tbc::val_a<std::string_view> placeholderTitle(tbc::mut_a<FixedText<96>> storage) const;
+      tbc::val_a<std::string_view> placeholderTitle(tbc::mut_a<FixedText<placeholder_bytes>> storage) const;
 
       AgentProvider provider = AgentProvider::unknown;
-      tbc::val_a<FixedText<32>> name;
-      tbc::val_a<FixedText<32>> display_name;
-      tbc::val_a<FixedText<96>> placeholder;
-      FixedText<8> icon;
+      tbc::val_a<FixedText<name_bytes>> name;
+      tbc::val_a<FixedText<name_bytes>> display_name;
+      tbc::val_a<FixedText<placeholder_bytes>> placeholder;
+      FixedText<icon_bytes> icon;
       AgentAttachmentMarkers attachments = AgentAttachmentMarkers::none;
       AgentInterruptKey interrupt = AgentInterruptKey::none;
-      ManifestTextList<8, 128> process_names;
-      ManifestTextList<8, 128> process_paths;
-      ManifestTextList<16, 64> brand;
-      ManifestTextList<16, 64> identity;
-      ManifestTextList<16, 64> working;
-      ManifestTextList<16, 64> blocked;
-      ManifestTextList<16, 64> ready_prompt;
-      ds::Array<AgentCommandTool, 8> command_tools;
+      ProcessList process_names;
+      ProcessList process_paths;
+      PhraseList brand;
+      PhraseList identity;
+      PhraseList working;
+      PhraseList blocked;
+      PhraseList ready_prompt;
+      ds::Array<AgentCommandTool, maximum_command_tools> command_tools;
       std::size_t tool_count = 0;
     };
 
@@ -129,12 +144,15 @@ export {
       [[nodiscard]] ds::Option<AgentSignal> detect(std::string_view text) const noexcept;
       [[nodiscard]] std::span<const AgentManifest> entries() const noexcept;
 
+      static constexpr Byte first_custom_provider = first_custom_agent_provider;
+      static constexpr Byte maximum_custom_agents = max_agent_provider_index - first_custom_provider + 1;
+
     private:
       [[nodiscard]] AgentProvider inferProvider(std::string_view text) const noexcept;
 
-      static constexpr Byte first_custom_provider = first_custom_agent_provider;
-      static constexpr Byte maximum_custom_agents = max_agent_provider_index - first_custom_provider + 1;
-      ds::Array<AgentManifest, 32> entries_;
+      static constexpr std::size_t capacity = 32;
+
+      ds::Array<AgentManifest, capacity> entries_;
       std::size_t count_ = 0;
       Byte custom_count_ = 0;
     };
@@ -172,7 +190,10 @@ export {
       [[nodiscard]] bool matches(std::string_view text) const noexcept;
 
     private:
-      ds::Array<FixedText<256>, 64> patterns_;
+      static constexpr std::size_t maximum_patterns = 64;
+      static constexpr std::size_t pattern_bytes = 256;
+
+      ds::Array<FixedText<pattern_bytes>, maximum_patterns> patterns_;
       std::size_t count_ = 0;
     };
 
@@ -207,15 +228,20 @@ export {
   namespace telar::runtime {
 
     struct ProxyCaptureLimits {
-      static constexpr std::size_t mebibyte = 1024 * 1024;
+      static constexpr std::size_t kibibyte = 1024;
+      static constexpr std::size_t mebibyte = kibibyte * kibibyte;
       static constexpr std::size_t maximum_exchange_bytes = 64 * mebibyte;
-      static constexpr std::size_t maximum_total_bytes = 1024 * mebibyte;
+      static constexpr std::size_t maximum_total_bytes = kibibyte * mebibyte;
       static constexpr auto maximum_join_timeout = std::chrono::hours{1};
+      static constexpr std::size_t default_part_bytes = 16 * mebibyte;
+      static constexpr std::size_t default_exchange_bytes = 32 * mebibyte;
+      static constexpr std::size_t default_total_bytes = 128 * mebibyte;
+      static constexpr auto default_join_timeout = std::chrono::minutes{15};
 
-      std::size_t part_bytes = 16 * mebibyte;
-      std::size_t exchange_bytes = 32 * mebibyte;
-      std::size_t total_bytes = 128 * mebibyte;
-      std::chrono::milliseconds join_timeout{std::chrono::minutes{15}};
+      std::size_t part_bytes = default_part_bytes;
+      std::size_t exchange_bytes = default_exchange_bytes;
+      std::size_t total_bytes = default_total_bytes;
+      std::chrono::milliseconds join_timeout{default_join_timeout};
       bool enabled = false;
 
       [[nodiscard]] bool valid() const noexcept;
@@ -321,9 +347,12 @@ export {
       [[nodiscard]] tbc::val_a<CommandValues> clone() const;
       [[nodiscard]] Views views() const noexcept;
 
+      static constexpr std::chrono::milliseconds default_timeout{15'000};
+      static constexpr std::chrono::milliseconds default_idle_timeout{300'000};
+
       tbc::val_a<ds::Vec<ds::String<Memory>, Memory>> arguments;
-      std::chrono::milliseconds timeout{15'000};
-      std::chrono::milliseconds idle_timeout{300'000};
+      std::chrono::milliseconds timeout{default_timeout};
+      std::chrono::milliseconds idle_timeout{default_idle_timeout};
     };
 
     template <Allocator Memory>
@@ -390,8 +419,8 @@ export {
 // ConcurrentMemory. Any other allocator goes behind a MemoryAdapter.
 namespace telar::runtime {
 
-  extern template class ManifestTextList<8, 128>;
-  extern template class ManifestTextList<16, 64>;
+  extern template class ManifestTextList<AgentManifest::maximum_processes, AgentManifest::process_bytes>;
+  extern template class ManifestTextList<AgentManifest::maximum_phrases, AgentManifest::phrase_bytes>;
   extern template class ProxyHostPolicy<Memory>;
   extern template class ProxyHostPolicy<ConcurrentMemory>;
   extern template class ProxyHostPolicy<SystemAllocator>;

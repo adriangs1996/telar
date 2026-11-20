@@ -68,6 +68,25 @@ auto(lua_tostring)(lua_State* state, int index) -> const char* {
 namespace telar::runtime::lua {
   namespace {
 
+    // luaL_error without its format: the message prefixed with where the running chunk stands.
+    int raiseError(lua_State* state, const char* message) {
+      luaL_where(state, 1);
+      lua_pushstring(state, message);
+      lua_concat(state, 2);
+      return lua_error(state);
+    }
+
+    // The block Lua sees follows its allocation's header, which records the block's capacity.
+    template <typename Header>
+    void* pastHeader(Header* header) noexcept {
+      return header + 1; // NOLINT(clang-diagnostic-unsafe-buffer-usage): lua_Alloc trades raw blocks, each right after its header
+    }
+
+    template <typename Header>
+    Header* headerOf(void* block) noexcept {
+      return static_cast<Header*>(block) - 1; // NOLINT(clang-diagnostic-unsafe-buffer-usage): lua_Alloc trades raw blocks, each right after its header
+    }
+
     int panic(lua_State* state) {
       std::size_t size = 0;
       const auto* message = lua_tolstring(state, -1, &size);
@@ -77,7 +96,7 @@ namespace telar::runtime::lua {
 
     int osTime(lua_State* state) {
       if (!lua_isnoneornil(state, 1)) {
-        return luaL_error(state, "os.time accepts no arguments");
+        return raiseError(state, "os.time accepts no arguments");
       }
 
       lua_pushinteger(state, static_cast<lua_Integer>(std::time(nullptr)));
@@ -105,18 +124,23 @@ namespace telar::runtime::lua {
       }
 
       if (format.size() > maximum_format_bytes) {
-        return luaL_error(state, "os.date format exceeds 64 bytes");
+        return raiseError(state, "os.date format exceeds 64 bytes");
       }
 
       for (std::size_t index = 0; index < format.size(); ++index) {
-        if (format[index] == '%' && (++index == format.size() || !allowed.contains(format[index]))) {
-          return luaL_error(state, "os.date format uses an unsupported conversion");
+        if (format[index] != '%') {
+          continue;
+        }
+
+        ++index;
+        if (index == format.size() || !allowed.contains(format[index])) {
+          return raiseError(state, "os.date format uses an unsupported conversion");
         }
       }
 
       std::tm calendar{};
       if ((utc ? ::gmtime_r(&when, &calendar) : ::localtime_r(&when, &calendar)) == nullptr) {
-        return luaL_error(state, "os.date time is out of range");
+        return raiseError(state, "os.date time is out of range");
       }
 
       ds::Array<char, maximum_format_bytes + 1> pattern{};
@@ -128,6 +152,39 @@ namespace telar::runtime::lua {
       lua_pushlstring(state, output.data(), written);
 
       return 1;
+    }
+
+    // A registry reference to a new table that caches the loaded modules by name.
+    int newModuleCache(lua_State* state) {
+      constexpr int expected_modules = 16;
+
+      lua_createtable(state, 0, expected_modules);
+      return luaL_ref(state, LUA_REGISTRYINDEX);
+    }
+
+    // Writes the canonical path of module `name` under `directory` to `canonical`: name.lua, or
+    // name/init.lua for a folder module, such as mods/tabs/init.lua, which answers to the folder's
+    // name. The caller checked that the longer of the two fits.
+    bool resolveModule(std::string_view directory, std::string_view name, ds::Array<char, PATH_MAX>& canonical) {
+      ds::Array<char, PATH_MAX> path{};
+
+      std::ranges::copy(directory, path.viewMut().begin());
+      path.atMut(directory.size()) = '/';
+      std::ranges::transform(name, path.viewMut().subspan(directory.size() + 1).begin(), [](char byte) {
+        return byte == '.' ? '/' : byte;
+      });
+
+      for (const std::string_view ending : {std::string_view{".lua"}, std::string_view{"/init.lua"}}) {
+        auto tail = path.viewMut().subspan(directory.size() + 1 + name.size());
+
+        std::ranges::copy(ending, tail.begin());
+        tail[ending.size()] = '\0';
+        if (::realpath(path.data(), canonical.dataMut()) != nullptr) {
+          return true;
+        }
+      }
+
+      return false;
     }
 
     int openSandbox(lua_State* state) {
@@ -178,8 +235,8 @@ namespace telar::runtime::lua {
   Vm<Memory>::Vm(Memory& memory, Limits limits)
       : memory_(memory),
         limits_(limits),
-        deadline_(Clock::now() + limits.deadline) {
-    state_ = lua_newstate(&allocate, this, 0);
+        deadline_(Clock::now() + limits.deadline),
+        state_(lua_newstate(&allocate, this, 0)) {
     if (state_ == nullptr) {
       throw std::bad_alloc{};
     }
@@ -244,57 +301,59 @@ namespace telar::runtime::lua {
   }
 
   template <Allocator Memory>
-  void* Vm<Memory>::allocate(void* context, void* pointer, std::size_t old_size, std::size_t new_size) noexcept {
-    auto& vm = *static_cast<Vm*>(context);
+  void* Vm<Memory>::allocate(void* context, void* pointer, std::size_t old_size, std::size_t new_size) noexcept { // NOLINT(bugprone-easily-swappable-parameters): lua_Alloc's C signature
+    auto& machine = *static_cast<Vm*>(context);
     const auto previous = pointer == nullptr ? 0 : old_size;
-    const auto retained = vm.used_bytes_ - previous;
+    const auto retained = machine.used_bytes_ - previous;
 
     if (new_size == 0) {
-      vm.release(pointer);
-      vm.used_bytes_ = retained;
+      machine.release(pointer);
+      machine.used_bytes_ = retained;
       return nullptr;
     }
 
-    if (new_size > vm.limits_.memory - retained || new_size > std::numeric_limits<std::size_t>::max() - sizeof(Allocation)) {
+    if (new_size > machine.limits_.memory - retained || new_size > std::numeric_limits<std::size_t>::max() - sizeof(Allocation)) {
       return nullptr;
     }
 
     if (pointer != nullptr && new_size <= previous) {
-      vm.used_bytes_ = retained + new_size;
+      machine.used_bytes_ = retained + new_size;
       return pointer;
     }
 
-    auto* allocation = static_cast<Allocation*>(vm.memory_.allocate(sizeof(Allocation) + new_size, alignof(Allocation)));
+    auto* allocation = static_cast<Allocation*>(machine.memory_.allocate(sizeof(Allocation) + new_size, alignof(Allocation)));
     if (allocation == nullptr) {
       return nullptr;
     }
 
     allocation->capacity = new_size;
+    void* const block = pastHeader(allocation);
+
     if (pointer != nullptr) {
-      std::memcpy(allocation + 1, pointer, previous);
-      vm.release(pointer);
+      std::memcpy(block, pointer, previous); // NOLINT(clang-diagnostic-unsafe-buffer-usage-in-libc-call): lua_Alloc trades raw blocks; `previous` bytes fit both
+      machine.release(pointer);
     }
 
-    vm.used_bytes_ = retained + new_size;
-    return allocation + 1;
+    machine.used_bytes_ = retained + new_size;
+    return block;
   }
 
   template <Allocator Memory>
   void Vm<Memory>::release(void* pointer) noexcept {
     if (pointer != nullptr) {
-      auto* allocation = static_cast<Allocation*>(pointer) - 1;
+      auto* allocation = headerOf<Allocation>(pointer);
 
       memory_.deallocate(allocation, sizeof(Allocation) + allocation->capacity, alignof(Allocation));
     }
   }
 
   template <Allocator Memory>
-  void Vm<Memory>::instructionHook(lua_State* state, lua_Debug*) {
-    auto& vm = owner(state);
+  void Vm<Memory>::instructionHook(lua_State* state, lua_Debug* /*record*/) {
+    auto& machine = owner(state);
 
-    vm.instructions_ += instruction_interval;
-    if (vm.instructions_ > vm.limits_.instructions || Clock::now() > vm.deadline_) {
-      luaL_error(state, "Telar Lua execution budget exceeded");
+    machine.instructions_ += instruction_interval;
+    if (machine.instructions_ > machine.limits_.instructions || Clock::now() > machine.deadline_) {
+      raiseError(state, "Telar Lua execution budget exceeded");
     }
   }
 
@@ -331,14 +390,14 @@ namespace telar::runtime::lua {
   template <Allocator Memory>
   int JsonDecoder<Memory>::decode(lua_State* state) {
     if (lua_type(state, 1) != LUA_TSTRING) {
-      return luaL_error(state, "json.decode expects a string");
+      return raiseError(state, "json.decode expects a string");
     }
 
     std::size_t size = 0;
     const auto* bytes = lua_tolstring(state, 1, &size);
 
     if (size > maximum_input_bytes) {
-      return luaL_error(state, "JSON input is too large");
+      return raiseError(state, "JSON input is too large");
     }
 
     try {
@@ -352,13 +411,16 @@ namespace telar::runtime::lua {
       decoder.push(state, document, 0);
       return 1;
     } catch (const std::exception& error) {
-      return luaL_error(state, "%s", error.what());
+      return raiseError(state, error.what());
     }
   }
 
+  // NOLINTBEGIN(misc-no-recursion): push and object descend a document's nesting, cut at maximum_depth.
   template <Allocator Memory>
   void JsonDecoder<Memory>::push(lua_State* state, const JsonValue& value, unsigned depth) {
-    if (depth == maximum_depth || (lua_checkstack(state, 6) == 0)) {
+    // The stack slots one level of the document may take.
+    constexpr int level_slots = 6;
+    if (depth == maximum_depth || (lua_checkstack(state, level_slots) == 0)) {
       throw Error{"JSON exceeds the depth limit"};
     }
 
@@ -437,17 +499,16 @@ namespace telar::runtime::lua {
     lua_pop(state, 1);
   }
 
+  // NOLINTEND(misc-no-recursion)
+
   template class JsonDecoder<Memory>;
   template class JsonDecoder<ConcurrentMemory>;
   template class JsonDecoder<ErasingMemory>;
 
   template <ModuleDomain domain>
-  LocalModules<domain>::LocalModules(lua_State* state, std::string_view directory) {
+  LocalModules<domain>::LocalModules(lua_State* state, std::string_view directory)
+      : cache_(newModuleCache(state)) {
     directory_.assign(directory);
-    constexpr int expected_modules = 16;
-
-    lua_createtable(state, 0, expected_modules);
-    cache_ = luaL_ref(state, LUA_REGISTRYINDEX);
     lua_pushlightuserdata(state, this);
     lua_pushcclosure(state, &require, 1);
     lua_setglobal(state, "require");
@@ -498,13 +559,13 @@ namespace telar::runtime::lua {
     auto& modules = *static_cast<LocalModules*>(lua_touserdata(state, lua_upvalueindex(1)));
 
     if (domain == ModuleDomain::configuration && lua_type(state, 1) != LUA_TSTRING) {
-      return luaL_error(state, "require expects a module name");
+      return raiseError(state, "require expects a module name");
     }
 
     std::size_t size = 0;
     const auto* bytes = lua_tolstring(state, 1, &size);
     if (bytes == nullptr) {
-      return luaL_error(state, "require expects a module name");
+      return raiseError(state, "require expects a module name");
     }
 
     const std::string_view name{bytes, size};
@@ -517,7 +578,7 @@ namespace telar::runtime::lua {
       lua_getglobal(state, "telar");
       lua_getfield(state, -1, "traffic");
       if (lua_isnil(state, -1)) {
-        return luaL_error(state, "Traffic API is unavailable");
+        return raiseError(state, "Traffic API is unavailable");
       }
 
       return 1;
@@ -537,33 +598,12 @@ namespace telar::runtime::lua {
     lua_pop(state, 1);
 
     const auto directory = modules.directory_.view();
-    ds::Array<char, PATH_MAX> path;
-    if (directory.size() + name.size() + sizeof("/init.lua") > path.size()) {
+    ds::Array<char, PATH_MAX> canonical{};
+    if (directory.size() + name.size() + sizeof("/init.lua") > canonical.size()) {
       return raise(state, "Local module path is too long", "module path too long");
     }
 
-    std::memcpy(path.dataMut(), directory.data(), directory.size());
-    path.atMut(directory.size()) = '/';
-    auto* suffix = path.dataMut() + directory.size() + 1;
-
-    std::transform(name.begin(), name.end(), suffix, [](char byte) {
-      return byte == '.' ? '/' : byte;
-    });
-
-    ds::Array<char, PATH_MAX> canonical;
-    // A folder module, such as mods/tabs/init.lua, answers to the folder's name.
-    bool found = false;
-
-    for (const std::string_view ending : {std::string_view{".lua"}, std::string_view{"/init.lua"}}) {
-      std::memcpy(suffix + name.size(), ending.data(), ending.size());
-      suffix[name.size() + ending.size()] = '\0';
-      if (::realpath(path.data(), canonical.dataMut()) != nullptr) {
-        found = true;
-        break;
-      }
-    }
-
-    if (!found) {
+    if (!resolveModule(directory, name, canonical)) {
       return raise(state, "Cannot resolve local configuration module", "cannot resolve local module");
     }
 
@@ -574,7 +614,7 @@ namespace telar::runtime::lua {
 
     struct stat metadata{};
     if (::stat(canonical.data(), &metadata) != 0 || !S_ISREG(metadata.st_mode)) {
-      return luaL_error(state, "Local configuration module must be a regular file");
+      return raiseError(state, "Local configuration module must be a regular file");
     }
 
     if (luaL_loadfilex(state, canonical.data(), "t") != LUA_OK || lua_pcall(state, 0, 1, 0) != LUA_OK) {
@@ -587,7 +627,7 @@ namespace telar::runtime::lua {
     }
 
     if (domain == ModuleDomain::configuration && modules.loaded_ == module_limit) {
-      return luaL_error(state, "Configuration requires too many local modules");
+      return raiseError(state, "Configuration requires too many local modules");
     }
 
     if constexpr (domain == ModuleDomain::configuration) {
@@ -619,8 +659,10 @@ namespace telar::runtime::lua {
   }
 
   void setDecimal(lua_State* state, const char* name, std::uint64_t value) {
-    ds::Array<char, 32> text;
-    const auto result = std::to_chars(text.dataMut(), text.dataMut() + text.size(), value);
+    constexpr std::size_t text_bytes = 32;
+    ds::Array<char, text_bytes> text{};
+    const auto output = text.viewMut();
+    const auto result = std::to_chars(output.data(), std::to_address(output.end()), value);
 
     setField(state, name, std::string_view{text.data(), static_cast<std::size_t>(result.ptr - text.data())});
   }
@@ -726,7 +768,7 @@ namespace telar::runtime::lua {
     }
 
     const auto result = integer();
-    if (result < 0 || static_cast<std::uint64_t>(result) < minimum || static_cast<std::uint64_t>(result) > maximum) {
+    if (std::cmp_less(result, minimum) || std::cmp_greater(result, maximum)) {
       fail("is outside its bounds");
     }
 
@@ -748,7 +790,7 @@ namespace telar::runtime::lua {
   }
 
   void Value::onlyFields(std::initializer_list<std::string_view> allowed, bool allow_children) const {
-    onlyFields(std::span<const std::string_view>{allowed.begin(), allowed.size()}, allow_children);
+    onlyFields(std::span<const std::string_view>{allowed}, allow_children);
   }
 
   void Value::onlyFields(std::span<const std::string_view> allowed, bool allow_children) const {
@@ -759,7 +801,7 @@ namespace telar::runtime::lua {
     while (lua_next(state_, index_) != 0) {
       if (children != 0 && (lua_isinteger(state_, -2) != 0)) {
         const auto position = lua_tointeger(state_, -2);
-        if (position < 1 || static_cast<std::uint64_t>(position) > children) {
+        if (position < 1 || std::cmp_greater(position, children)) {
           fail("children must form an array");
         }
 
@@ -770,7 +812,7 @@ namespace telar::runtime::lua {
       {
         const Value key{state_, -2, label_.view()};
         const auto name = key.string();
-        if (std::find(allowed.begin(), allowed.end(), name) == allowed.end()) {
+        if (std::ranges::find(allowed, name) == allowed.end()) {
           throw Error{"unknown field ", label_.view(), ".", name};
         }
       }
@@ -787,7 +829,7 @@ namespace telar::runtime::lua {
     while (lua_next(state_, index_) != 0) {
       int valid = 0;
       const auto key = lua_tointegerx(state_, -2, &valid);
-      if ((valid == 0) || lua_type(state_, -2) != LUA_TNUMBER || key < 1 || static_cast<std::uint64_t>(key) > size) {
+      if ((valid == 0) || lua_type(state_, -2) != LUA_TNUMBER || key < 1 || std::cmp_greater(key, size)) {
         fail("contains a non-array key");
       }
 

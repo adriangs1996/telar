@@ -11,7 +11,7 @@ import telar.base.ds;
 export {
   namespace telar::runtime {
 
-    enum class StreamReadiness {
+    enum class StreamReadiness : std::uint8_t {
       none,
       readable,
       writable,
@@ -19,14 +19,14 @@ export {
     };
 
     struct StreamResult {
-      enum class State {
+      enum class State : std::uint8_t {
         data,
         blocked,
         ended,
         failed,
       };
 
-      State state;
+      State state = State::data;
       std::size_t bytes = 0;
       StreamReadiness waiting = StreamReadiness::none;
     };

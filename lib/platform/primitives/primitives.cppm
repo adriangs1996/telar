@@ -79,6 +79,13 @@ export namespace telar::runtime {
 
 export namespace telar::runtime {
 
+  // The system calls take their flags as an int, such as open(2)'s O_* and flock(2)'s LOCK_*;
+  // the bits are combined unsigned.
+  template <std::same_as<int>... Flag>
+  constexpr int combineFlags(Flag... flags) noexcept {
+    return static_cast<int>((0U | ... | static_cast<unsigned>(flags)));
+  }
+
   // Fills `size` bytes at `data` from the kernel's random source, never
   // failing: arc4random_buf on macOS, getrandom on Linux, where musl has no
   // arc4random. A Linux that cannot answer getrandom aborts rather than hand
@@ -90,6 +97,7 @@ export namespace telar::runtime {
 // The trace sink is defined in src/trace.cpp, a translation unit outside the module, so its
 // declarations belong to the global module.
 #if TELAR_DEBUG
+// NOLINTBEGIN(misc-use-internal-linkage): exported, and declared in the global module for trace.cpp.
 export extern "C++" {
   namespace telar::runtime::trace {
 
@@ -100,12 +108,15 @@ export extern "C++" {
       std::uint64_t thread;
     };
 
-    inline constexpr std::size_t buffer_capacity = 16 * 1024;
+    inline constexpr std::size_t buffer_capacity = std::size_t{16} * 1024;
 
     consteval const char* literal(const char* name) {
+      // JSON escapes the control characters below the space.
+      constexpr unsigned char first_unescaped = 0x20;
+
       for (const char* character = name; (*character) != 0; ++character) {
-        if (*character == '"' || *character == '\\' || static_cast<unsigned char>(*character) < 0x20) {
-          throw "Trace names must be JSON-safe literals";
+        if (*character == '"' || *character == '\\' || static_cast<unsigned char>(*character) < first_unescaped) {
+          throw std::invalid_argument{"Trace names must be JSON-safe literals"};
         }
       }
 
@@ -132,6 +143,8 @@ export extern "C++" {
 
       Scope(const Scope&) = delete;
       Scope& operator=(const Scope&) = delete;
+      Scope(Scope&&) = delete;
+      Scope& operator=(Scope&&) = delete;
 
     private:
       const char* name_;
@@ -160,6 +173,8 @@ export extern "C++" {
 
       Session(const Session&) = delete;
       Session& operator=(const Session&) = delete;
+      Session(Session&&) = delete;
+      Session& operator=(Session&&) = delete;
 
     private:
       ds::Vec<Record, Memory> buffers_;
@@ -171,4 +186,5 @@ export extern "C++" {
 
   }
 }
+// NOLINTEND(misc-use-internal-linkage)
 #endif

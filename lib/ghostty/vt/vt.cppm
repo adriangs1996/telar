@@ -283,6 +283,7 @@ export {
 // expression can call, so the capture packs the same bits. The captures are exported too: an
 // importer that also includes the header, as the ghostty-modes test does, can only reach them,
 // and that test checks each against the header's ghostty_mode_new.
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage): only the preprocessor can read a constant while the header defines it, and modes.hpp shares the list with the ghostty-modes test.
 #define TELAR_GHOSTTY_CONSTANTS(X)       \
   X(GHOSTTY_MODS_CTRL)                   \
   X(GHOSTTY_TELAR_ASCII_CODEPOINT_LIMIT) \
@@ -293,16 +294,20 @@ export namespace telar::ghostty {
   // ghostty_mode_new for a mode known only at run time, as a mode report reads it. The captures
   // below pack their bits through it.
   constexpr GhosttyMode mode(std::uint16_t value, bool ansi) noexcept {
-    return static_cast<GhosttyMode>((value & 0x7FFF) | (static_cast<std::uint16_t>(ansi) << 15));
+    constexpr std::uint32_t number_mask = 0x7FFFU;
+    constexpr std::uint32_t ansi_shift = 15U;
+
+    return static_cast<GhosttyMode>((std::uint32_t{value} & number_mask) | (std::uint32_t{ansi} << ansi_shift));
   }
 
 }
 
 export namespace telar::ghostty::captured {
 
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage): replaces the header's static inline ghostty_mode_new so its mode macros expand to constant expressions.
 #define ghostty_mode_new(value, ansi) telar::ghostty::mode(value, ansi)
 #define TELAR_GHOSTTY_CAPTURE(name) inline constexpr auto name##_ = name;
-  TELAR_GHOSTTY_CONSTANTS(TELAR_GHOSTTY_CAPTURE)
+  TELAR_GHOSTTY_CONSTANTS(TELAR_GHOSTTY_CAPTURE) // NOLINT(bugprone-signed-bitwise): the header shifts a signed literal in GHOSTTY_MODS_CTRL.
 #undef ghostty_mode_new
 
 }
@@ -326,5 +331,5 @@ export namespace telar::ghostty::captured {
 #define TELAR_GHOSTTY_CONSTANT(name) inline constexpr auto name = telar::ghostty::captured::name##_;
 
 export {
-  TELAR_GHOSTTY_CONSTANTS(TELAR_GHOSTTY_CONSTANT)
+  TELAR_GHOSTTY_CONSTANTS(TELAR_GHOSTTY_CONSTANT) // NOLINT(readability-identifier-naming): each constant keeps the name of the header's macro it replaces.
 }

@@ -81,7 +81,7 @@ export {
       template <std::unsigned_integral Number>
       inline void appendDecimal(Number number) {
         const auto result = std::to_chars(storage_.dataMut() + length_, storage_.dataMut() + Capacity, number);
-        if (result.ec != std::errc{}) {
+        if (result.ec == std::errc::value_too_large) {
           throw std::length_error{"Text capacity exceeded"};
         }
 

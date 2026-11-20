@@ -29,6 +29,8 @@ export {
 
       TimedScope(const TimedScope&) = delete;
       TimedScope& operator=(const TimedScope&) = delete;
+      TimedScope(TimedScope&&) = delete;
+      TimedScope& operator=(TimedScope&&) = delete;
 
     private:
       Timing* timing_;
@@ -51,9 +53,13 @@ export {
     class LimitLedger {
     public:
       struct Row {
-        FixedText<64> name;
-        FixedText<32> noun;
-        FixedText<32> route;
+        static constexpr std::size_t name_bytes = 64;
+        static constexpr std::size_t noun_bytes = 32;
+        static constexpr std::size_t route_bytes = 32;
+
+        FixedText<name_bytes> name;
+        FixedText<noun_bytes> noun;
+        FixedText<route_bytes> route;
         std::uint64_t value = 0;
         ds::Option<std::uint64_t> requested;
         std::uint64_t hits = 0;

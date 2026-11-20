@@ -43,6 +43,8 @@ export {
       ~PtyProcess();
       PtyProcess(const PtyProcess&) = delete;
       PtyProcess& operator=(const PtyProcess&) = delete;
+      PtyProcess(PtyProcess&&) = delete;
+      PtyProcess& operator=(PtyProcess&&) = delete;
 
       [[nodiscard]] int descriptor() const noexcept;
       [[nodiscard]] pid_t processId() const noexcept;
@@ -86,7 +88,7 @@ export {
     // working directory when `cwd` is empty. A candidate longer than PATH_MAX is passed over.
     bool findExecutable(std::string_view path, std::string_view program, std::span<char, PATH_MAX> found, std::string_view cwd = {}) noexcept;
 
-    enum class CommandPurpose {
+    enum class CommandPurpose : std::uint8_t {
       terminal,
       administration,
       configured_helper,
@@ -97,9 +99,12 @@ export {
     public:
       // Copies the launch; it keeps only its allocator, region `a`.
       explicit Command(tbc::mut_a<Memory> memory, const Launch& launch, CommandPurpose purpose = CommandPurpose::terminal);
+      ~Command() = default;
 
       Command(const Command&) = delete;
       Command& operator=(const Command&) = delete;
+      Command(Command&&) = delete;
+      Command& operator=(Command&&) = delete;
 
       void removeEnvironmentPrefix(std::string_view prefix);
       [[nodiscard]] ds::Option<std::string_view> environment(std::string_view name) const noexcept;
@@ -145,7 +150,7 @@ export {
 export {
   namespace telar::runtime {
 
-    enum class ProcessInput {
+    enum class ProcessInput : std::uint8_t {
       pipe,
       buffered_socket,
     };
@@ -156,6 +161,8 @@ export {
       ~PipeProcess();
       PipeProcess(const PipeProcess&) = delete;
       PipeProcess& operator=(const PipeProcess&) = delete;
+      PipeProcess(PipeProcess&&) = delete;
+      PipeProcess& operator=(PipeProcess&&) = delete;
 
       [[nodiscard]] int input() const noexcept;
       [[nodiscard]] int output() const noexcept;
@@ -190,10 +197,10 @@ export {
     public:
       template <typename Consumer>
         requires(!std::same_as<std::remove_cvref_t<Consumer>, BytesConsumer> && std::invocable<Consumer&, std::span<const Byte>>)
-      TBC_GENERIC BytesConsumer(Consumer&& consumer) noexcept
-          : consumer_(const_cast<void*>(static_cast<const void*>(std::addressof(consumer)))),
-            consume_([](void* consumer, std::span<const Byte> bytes) {
-              auto& consume = *static_cast<std::remove_reference_t<Consumer>*>(consumer);
+      TBC_GENERIC BytesConsumer(Consumer&& consumer) noexcept // NOLINT(cppcoreguidelines-explicit-constructor,misc-explicit-constructor): a call passes its lambda where it takes a BytesConsumer, as Rust passes a closure as `&mut dyn FnMut`
+          : consumer_(erasedAddress(std::forward<Consumer>(consumer))),
+            consume_([](void* target, std::span<const Byte> bytes) {
+              auto& consume = *static_cast<std::remove_reference_t<Consumer>*>(target);
 
               if constexpr (std::is_void_v<std::invoke_result_t<Consumer&, std::span<const Byte>>>) {
                 consume(bytes);
@@ -206,6 +213,13 @@ export {
       bool operator()(std::span<const Byte> bytes) const;
 
     private:
+      // The consumer's address with its type erased; the trampoline casts it back to the type, and
+      // so the constness, the consumer came with.
+      template <typename Object>
+      TBC_GENERIC static void* erasedAddress(const Object& object) noexcept {
+        return const_cast<void*>(static_cast<const void*>(std::addressof(object))); // NOLINT(cppcoreguidelines-pro-type-const-cast): the trampoline restores the consumer's own type and constness
+      }
+
       void* consumer_;
       bool (*consume_)(void* consumer, std::span<const Byte> bytes);
     };
@@ -274,7 +288,7 @@ export {
     private:
       static bool exactlyNamed(const char* path) noexcept;
 
-      ds::Array<char, PATH_MAX> path_;
+      ds::Array<char, PATH_MAX> path_{};
     };
 
   }
@@ -310,6 +324,8 @@ export {
 
       SpawnOptions(const SpawnOptions&) = delete;
       SpawnOptions& operator=(const SpawnOptions&) = delete;
+      SpawnOptions(SpawnOptions&&) = delete;
+      SpawnOptions& operator=(SpawnOptions&&) = delete;
 
       void redirect(int source, int destination);
       void changeDirectory(const char* path);

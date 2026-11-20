@@ -10,55 +10,55 @@ namespace telar::shell {
 
     // Byte classes. Bytes >= 0x80 have none, so they are word characters and a
     // token boundary never falls inside a UTF-8 sequence.
-    enum : u8 {
-      k_blank = 1 << 0,
-      k_newline = 1 << 1,
-      k_end = 1 << 2,  // ends a word
-      k_stop = 1 << 3, // ends a literal run
-      k_name = 1 << 4,
-      k_name_start = 1 << 5,
-      k_digit = 1 << 6,
-      k_quote_stop = 1 << 7, // ends a run inside double quotes
-    };
+    constexpr unsigned k_blank = 1U << 0U;
+    constexpr unsigned k_newline = 1U << 1U;
+    constexpr unsigned k_end = 1U << 2U;  // ends a word
+    constexpr unsigned k_stop = 1U << 3U; // ends a literal run
+    constexpr unsigned k_name = 1U << 4U;
+    constexpr unsigned k_name_start = 1U << 5U;
+    constexpr unsigned k_digit = 1U << 6U;
+    constexpr unsigned k_quote_stop = 1U << 7U; // ends a run inside double quotes
 
-    using Table = std::array<u8, 256>;
+    constexpr int byte_values = 256;
+
+    using Table = std::array<u8, byte_values>;
 
     consteval Table makeTable(Dialect dialect) {
       Table table{};
       const bool posix = dialect == Dialect::posix;
 
-      for (int c = 0; c < 256; ++c) {
+      for (int byte = 0; byte < byte_values; ++byte) {
         u8 bits = 0;
 
-        if (c == ' ' || c == '\t') {
+        if (byte == ' ' || byte == '\t') {
           bits |= k_blank | k_end | k_stop;
         }
 
-        if (c == '\n') {
+        if (byte == '\n') {
           bits |= k_newline | k_end | k_stop;
         }
 
-        if (c == ';' || c == '&' || c == '|' || c == '<' || c == '>' || c == ')') {
+        if (byte == ';' || byte == '&' || byte == '|' || byte == '<' || byte == '>' || byte == ')') {
           bits |= k_end | k_stop;
         }
 
-        if (c == '(' || c == '\'' || c == '"' || c == '$' || c == '\\' || (posix && c == '`')) {
+        if (byte == '(' || byte == '\'' || byte == '"' || byte == '$' || byte == '\\' || (posix && byte == '`')) {
           bits |= k_stop;
         }
 
-        if (c == '"' || c == '$' || c == '\\' || (posix && c == '`')) {
+        if (byte == '"' || byte == '$' || byte == '\\' || (posix && byte == '`')) {
           bits |= k_quote_stop;
         }
 
-        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_') {
+        if ((byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || byte == '_') {
           bits |= k_name | k_name_start;
         }
 
-        if (c >= '0' && c <= '9') {
+        if (byte >= '0' && byte <= '9') {
           bits |= k_name | k_digit;
         }
 
-        table[static_cast<std::size_t>(c)] = bits;
+        table[static_cast<std::size_t>(byte)] = bits;
       }
 
       return table;
@@ -67,22 +67,103 @@ namespace telar::shell {
     constexpr Table posix_table = makeTable(Dialect::posix);
     constexpr Table fish_table = makeTable(Dialect::fish);
 
+    // UTF-8: the first code point of each sequence length, the lead byte that announces it, and the
+    // six bits a continuation byte carries after its tag.
+    constexpr u32 first_two_byte = 0x80;
+    constexpr u32 first_three_byte = 0x800;
+    constexpr u32 first_four_byte = 0x10000;
+    constexpr u32 max_code_point = 0x10ffff;
+    constexpr u32 first_surrogate = 0xd800;
+    constexpr u32 last_surrogate = 0xdfff;
+    constexpr u32 two_byte_lead = 0xc0;
+    constexpr u32 three_byte_lead = 0xe0;
+    constexpr u32 four_byte_lead = 0xf0;
+    constexpr u32 continuation_mask = 0xc0;
+    constexpr u32 continuation_tag = 0x80;
+    constexpr u32 continuation_payload = 0x3f;
+    constexpr unsigned continuation_bits = 6;
+
+    // Escapes: \cX keeps the low five bits of X, \x reads up to two hexadecimal digits, \u four and
+    // \U eight, and an octal escape writes one byte.
+    constexpr u32 control_bits = 0x1f;
+    constexpr std::size_t hex_byte_digits = 2;
+    constexpr std::size_t short_unicode_digits = 4;
+    constexpr std::size_t long_unicode_digits = 8;
+    constexpr u32 hex_base = 16;
+    constexpr u32 octal_base = 8;
+    constexpr u32 byte_mask = 0xff;
+
+    // The value of the hexadecimal digit a, the first after the decimal ones.
+    constexpr u32 first_hex_letter = 10;
+
     constexpr bool isPiece(TokenKind kind) noexcept {
       return kind <= TokenKind::substitution;
     }
 
-    constexpr bool hexValue(char c, u32& value) noexcept {
-      if (c >= '0' && c <= '9') {
-        value = static_cast<u32>(c - '0');
-      } else if (c >= 'a' && c <= 'f') {
-        value = static_cast<u32>(c - 'a' + 10);
-      } else if (c >= 'A' && c <= 'F') {
-        value = static_cast<u32>(c - 'A' + 10);
+    constexpr bool isContinuation(unsigned char byte) noexcept {
+      return (byte & continuation_mask) == continuation_tag;
+    }
+
+    constexpr char continuationByte(u32 code, unsigned shift) noexcept {
+      return static_cast<char>(continuation_tag | ((code >> shift) & continuation_payload));
+    }
+
+    // [from, until) of text, which the caller keeps in bounds; unlike substr it never throws.
+    constexpr std::string_view slice(std::string_view text, std::size_t from, std::size_t until) noexcept {
+      const auto bytes = std::span{text}.subspan(from, until - from);
+
+      return {bytes.begin(), bytes.end()};
+    }
+
+    constexpr bool hexValue(char digit, u32& value) noexcept {
+      if (digit >= '0' && digit <= '9') {
+        value = static_cast<u32>(digit - '0');
+      } else if (digit >= 'a' && digit <= 'f') {
+        value = static_cast<u32>(digit - 'a') + first_hex_letter;
+      } else if (digit >= 'A' && digit <= 'F') {
+        value = static_cast<u32>(digit - 'A') + first_hex_letter;
       } else {
         return false;
       }
 
       return true;
+    }
+
+    // The hexadecimal digits \x, \u and \U read at most.
+    constexpr std::size_t codeDigits(char letter) noexcept {
+      switch (letter) {
+      case 'u':
+        return short_unicode_digits;
+      case 'U':
+        return long_unicode_digits;
+      default:
+        return hex_byte_digits;
+      }
+    }
+
+    // The byte a one-letter escape stands for, or none.
+    constexpr char simpleEscape(char letter) noexcept {
+      switch (letter) {
+      case 'a':
+        return '\a';
+      case 'b':
+        return '\b';
+      case 'e':
+      case 'E':
+        return '\x1b';
+      case 'f':
+        return '\f';
+      case 'n':
+        return '\n';
+      case 'r':
+        return '\r';
+      case 't':
+        return '\t';
+      case 'v':
+        return '\v';
+      default:
+        return '\0';
+      }
     }
 
     // Writes unquoted bytes into a caller buffer. Unquoting never produces more
@@ -105,12 +186,14 @@ namespace telar::shell {
       }
 
       [[nodiscard]] tbc::val_a<std::string_view> text(std::size_t from) const noexcept {
-        return {out_.data() + from, size_ - from};
+        const auto written = out_.subspan(from, size_ - from);
+
+        return {written.data(), written.size()};
       }
 
       void verbatim(std::string_view bytes) noexcept {
-        for (const char c : bytes) {
-          put(c);
+        for (const char byte : bytes) {
+          put(byte);
         }
       }
 
@@ -136,49 +219,58 @@ namespace telar::shell {
           }
 
           return;
-        default:
+        case TokenKind::command:
+        case TokenKind::argument:
+        case TokenKind::option:
+        case TokenKind::keyword:
+        case TokenKind::assignment:
+        case TokenKind::control:
+        case TokenKind::redirection:
+        case TokenKind::comment:
+        case TokenKind::heredoc_body:
+        case TokenKind::error:
           literal(dialect, bytes);
           return;
         }
       }
 
     private:
-      void put(char c) noexcept {
+      void put(char byte) noexcept {
         if (size_ < out_.size()) {
-          out_[size_++] = c;
+          out_[size_++] = byte;
         } else {
           overflow_ = true;
         }
       }
 
-      void singleQuoted(Dialect dialect, std::string_view s) noexcept {
-        for (std::size_t i = 0; i < s.size(); ++i) {
-          const char c = s[i];
-          if (dialect == Dialect::fish && c == '\\' && i + 1 < s.size() && (s[i + 1] == '\\' || s[i + 1] == '\'')) {
-            put(s[++i]);
-          } else if (c != '\'') {
-            put(c);
+      void singleQuoted(Dialect dialect, std::string_view bytes) noexcept {
+        for (std::size_t i = 0; i < bytes.size(); ++i) {
+          const char byte = bytes[i];
+          if (dialect == Dialect::fish && byte == '\\' && i + 1 < bytes.size() && (bytes[i + 1] == '\\' || bytes[i + 1] == '\'')) {
+            put(bytes[++i]);
+          } else if (byte != '\'') {
+            put(byte);
           }
         }
       }
 
-      void doubleQuoted(Dialect dialect, std::string_view s) noexcept {
-        for (std::size_t i = 0; i < s.size(); ++i) {
-          const char c = s[i];
-          if (c == '"') {
+      void doubleQuoted(Dialect dialect, std::string_view bytes) noexcept {
+        for (std::size_t i = 0; i < bytes.size(); ++i) {
+          const char byte = bytes[i];
+          if (byte == '"') {
             continue;
           }
 
-          if (c != '\\') {
-            put(c);
+          if (byte != '\\') {
+            put(byte);
             continue;
           }
 
-          if (i + 1 == s.size()) {
+          if (i + 1 == bytes.size()) {
             return;
           }
 
-          const char next = s[++i];
+          const char next = bytes[++i];
           const bool special = next == '"' || next == '$' || next == '\\' ||
                                (dialect == Dialect::posix && next == '`');
 
@@ -194,160 +286,151 @@ namespace telar::shell {
         }
       }
 
-      void literal(Dialect dialect, std::string_view s) noexcept {
-        for (std::size_t i = 0; i < s.size(); ++i) {
-          const char c = s[i];
-          if (c != '\\') {
-            put(c);
+      void literal(Dialect dialect, std::string_view bytes) noexcept {
+        for (std::size_t i = 0; i < bytes.size(); ++i) {
+          const char byte = bytes[i];
+          if (byte != '\\') {
+            put(byte);
             continue;
           }
 
-          if (i + 1 == s.size()) {
+          if (i + 1 == bytes.size()) {
             return;
           }
 
-          if (s[i + 1] == '\n') {
+          if (bytes[i + 1] == '\n') {
             ++i;
           } else if (dialect == Dialect::fish) {
-            i = escape(s, i, false);
+            i = escape(bytes, i, false);
           } else {
-            put(s[++i]);
+            put(bytes[++i]);
           }
         }
       }
 
-      void ansiC(std::string_view s) noexcept {
+      void ansiC(std::string_view bytes) noexcept {
         bool inside = false;
 
-        for (std::size_t i = 0; i < s.size(); ++i) {
-          const char c = s[i];
+        for (std::size_t i = 0; i < bytes.size(); ++i) {
+          const char byte = bytes[i];
 
           if (!inside) {
-            if (c == '$' && i + 1 < s.size() && s[i + 1] == '\'') {
+            if (byte == '$' && i + 1 < bytes.size() && bytes[i + 1] == '\'') {
               inside = true;
               ++i;
             } else {
-              put(c);
+              put(byte);
             }
-          } else if (c == '\'') {
+          } else if (byte == '\'') {
             inside = false;
-          } else if (c == '\\' && i + 1 < s.size()) {
-            i = escape(s, i, true);
-          } else if (c != '\\') {
-            put(c);
+          } else if (byte == '\\' && i + 1 < bytes.size()) {
+            i = escape(bytes, i, true);
+          } else if (byte != '\\') {
+            put(byte);
           }
         }
       }
 
-      // Decodes the escape at s[i] == '\\' (with a byte after it) and returns the
-      // index of its last byte. ANSI-C keeps unknown escapes; fish drops the slash.
-      std::size_t escape(std::string_view s, std::size_t i, bool ansi) noexcept {
-        const char c = s[i + 1];
+      // Decodes the escape at bytes[slash] == '\\' (with a byte after it) and returns
+      // the index of its last byte. ANSI-C keeps unknown escapes; fish drops the slash.
+      std::size_t escape(std::string_view bytes, std::size_t slash, bool ansi) noexcept {
+        const char letter = bytes[slash + 1];
+        if (const char simple = simpleEscape(letter); simple != '\0') {
+          put(simple);
+          return slash + 1;
+        }
 
-        switch (c) {
-        case 'a':
-          put('\a');
-          return i + 1;
-        case 'b':
-          put('\b');
-          return i + 1;
-        case 'e':
-        case 'E':
-          put('\x1b');
-          return i + 1;
-        case 'f':
-          put('\f');
-          return i + 1;
-        case 'n':
-          put('\n');
-          return i + 1;
-        case 'r':
-          put('\r');
-          return i + 1;
-        case 't':
-          put('\t');
-          return i + 1;
-        case 'v':
-          put('\v');
-          return i + 1;
+        switch (letter) {
         case 'c':
-          if (i + 2 < s.size()) {
-            put(static_cast<char>(s[i + 2] & 0x1f));
-            return i + 2;
+          if (slash + 2 < bytes.size()) {
+            put(static_cast<char>(static_cast<unsigned char>(bytes[slash + 2]) & control_bits));
+            return slash + 2;
           }
 
           break;
         case 'x':
         case 'X':
         case 'u':
-        case 'U': {
-          if (c == 'X' && ansi) {
-            break;
-          }
-
-          const std::size_t digits = c == 'u' ? 4 : (c == 'U' ? 8 : 2);
-          u32 code = 0;
-          std::size_t j = i + 2;
-
-          for (u32 digit = 0; j < s.size() && j < i + 2 + digits && hexValue(s[j], digit); ++j) {
-            code = (code * 16) + digit;
-          }
-
-          if (j == i + 2) {
-            break;
-          }
-
-          if (c == 'x' || c == 'X') {
-            put(static_cast<char>(code));
-          } else if (!utf8(code)) {
-            verbatim(s.substr(i, j - i));
-          }
-
-          return j - 1;
-        }
-        default:
-          if (c >= '0' && c <= '7') {
-            u32 code = 0;
-            std::size_t j = i + 1;
-
-            for (; j < s.size() && j < i + 4 && s[j] >= '0' && s[j] <= '7'; ++j) {
-              code = (code * 8) + static_cast<u32>(s[j] - '0');
+        case 'U':
+          if (letter != 'X' || !ansi) {
+            if (const std::size_t last = codeEscape(letter, bytes, slash); last != slash) {
+              return last;
             }
+          }
 
-            put(static_cast<char>(code & 0xff));
-            return j - 1;
+          break;
+        default:
+          if (letter >= '0' && letter <= '7') {
+            return octalEscape(bytes, slash);
           }
 
           break;
         }
 
-        if (ansi && c != '\\' && c != '\'' && c != '"' && c != '?') {
+        if (ansi && letter != '\\' && letter != '\'' && letter != '"' && letter != '?') {
           put('\\');
         }
 
-        put(c);
-        return i + 1;
+        put(letter);
+        return slash + 1;
+      }
+
+      // \x \X \u \U and their digits; returns the index of the escape's last byte, or slash when no
+      // digit follows.
+      std::size_t codeEscape(char letter, std::string_view bytes, std::size_t slash) noexcept {
+        const std::size_t digits = codeDigits(letter);
+        u32 code = 0;
+        std::size_t end = slash + 2;
+
+        for (u32 digit = 0; end < bytes.size() && end < slash + 2 + digits && hexValue(bytes[end], digit); ++end) {
+          code = (code * hex_base) + digit;
+        }
+
+        if (end == slash + 2) {
+          return slash;
+        }
+
+        if (letter == 'x' || letter == 'X') {
+          put(static_cast<char>(code));
+        } else if (!utf8(code)) {
+          verbatim(slice(bytes, slash, end));
+        }
+
+        return end - 1;
+      }
+
+      // Up to three octal digits after the slash; returns the index of the last.
+      std::size_t octalEscape(std::string_view bytes, std::size_t slash) noexcept {
+        u32 code = 0;
+        std::size_t end = slash + 1;
+
+        for (; end < bytes.size() && end < slash + 4 && bytes[end] >= '0' && bytes[end] <= '7'; ++end) {
+          code = (code * octal_base) + static_cast<u32>(bytes[end] - '0');
+        }
+
+        put(static_cast<char>(code & byte_mask));
+        return end - 1;
       }
 
       bool utf8(u32 code) noexcept {
-        if (code < 0x80) {
+        if (code < first_two_byte) {
           put(static_cast<char>(code));
-        } else if (code < 0x800) {
-          put(static_cast<char>(0xc0 | (code >> 6)));
-          put(static_cast<char>(0x80 | (code & 0x3f)));
-        } else if (code < 0x10000) {
-          if (code >= 0xd800 && code <= 0xdfff) {
+        } else if (code < first_three_byte) {
+          put(static_cast<char>(two_byte_lead | (code >> continuation_bits)));
+          put(continuationByte(code, 0));
+        } else if (code < first_four_byte) {
+          if (code >= first_surrogate && code <= last_surrogate) {
             return false;
           }
 
-          put(static_cast<char>(0xe0 | (code >> 12)));
-          put(static_cast<char>(0x80 | ((code >> 6) & 0x3f)));
-          put(static_cast<char>(0x80 | (code & 0x3f)));
-        } else if (code <= 0x10ffff) {
-          put(static_cast<char>(0xf0 | (code >> 18)));
-          put(static_cast<char>(0x80 | ((code >> 12) & 0x3f)));
-          put(static_cast<char>(0x80 | ((code >> 6) & 0x3f)));
-          put(static_cast<char>(0x80 | (code & 0x3f)));
+          put(static_cast<char>(three_byte_lead | (code >> (2 * continuation_bits))));
+          put(continuationByte(code, continuation_bits));
+          put(continuationByte(code, 0));
+        } else if (code <= max_code_point) {
+          put(static_cast<char>(four_byte_lead | (code >> (3 * continuation_bits))));
+          put(continuationByte(code, 2 * continuation_bits));
+          put(continuationByte(code, continuation_bits));
+          put(continuationByte(code, 0));
         } else {
           return false;
         }
@@ -402,18 +485,18 @@ namespace telar::shell {
 
     enum class Keyword : u8 {
       none,
-      if_,
-      then_,
-      elif_,
-      else_,
+      if_word,
+      then_word,
+      elif_word,
+      else_word,
       fi,
-      while_,
+      while_word,
       until,
-      for_,
+      for_word,
       select,
-      do_,
+      do_word,
       done,
-      case_,
+      case_word,
       esac,
       in,
       function,
@@ -425,18 +508,21 @@ namespace telar::shell {
       test_open,
       begin,
       end,
-      switch_,
-      and_,
-      or_,
-      not_,
+      switch_word,
+      and_word,
+      or_word,
+      not_word,
     };
 
     // Keywords fit in eight bytes, so a word compares as one integer.
+    constexpr std::size_t max_keyword_bytes = sizeof(std::uint64_t);
+    constexpr std::size_t byte_bits = 8;
+
     constexpr std::uint64_t pack(std::string_view word) noexcept {
       std::uint64_t key = 0;
 
       for (std::size_t i = 0; i < word.size(); ++i) {
-        key |= static_cast<std::uint64_t>(static_cast<unsigned char>(word[i])) << (8 * i);
+        key |= static_cast<std::uint64_t>(static_cast<unsigned char>(word[i])) << (byte_bits * i);
       }
 
       return key;
@@ -446,24 +532,24 @@ namespace telar::shell {
       std::uint64_t key;
       Keyword keyword;
 
-      consteval KeywordName(std::string_view name, Keyword k)
+      consteval KeywordName(std::string_view name, Keyword value)
           : key(pack(name)),
-            keyword(k) {}
+            keyword(value) {}
     };
 
-    constexpr KeywordName posix_keywords[] = {
-        {"if", Keyword::if_},
-        {"then", Keyword::then_},
-        {"elif", Keyword::elif_},
-        {"else", Keyword::else_},
+    constexpr auto posix_keywords = std::to_array<KeywordName>({
+        {"if", Keyword::if_word},
+        {"then", Keyword::then_word},
+        {"elif", Keyword::elif_word},
+        {"else", Keyword::else_word},
         {"fi", Keyword::fi},
-        {"while", Keyword::while_},
+        {"while", Keyword::while_word},
         {"until", Keyword::until},
-        {"for", Keyword::for_},
+        {"for", Keyword::for_word},
         {"select", Keyword::select},
-        {"do", Keyword::do_},
+        {"do", Keyword::do_word},
         {"done", Keyword::done},
-        {"case", Keyword::case_},
+        {"case", Keyword::case_word},
         {"esac", Keyword::esac},
         {"in", Keyword::in},
         {"function", Keyword::function},
@@ -473,25 +559,25 @@ namespace telar::shell {
         {"{", Keyword::brace_open},
         {"}", Keyword::brace_close},
         {"[[", Keyword::test_open},
-    };
+    });
 
-    constexpr KeywordName fish_keywords[] = {
+    constexpr auto fish_keywords = std::to_array<KeywordName>({
         {"begin", Keyword::begin},
         {"end", Keyword::end},
-        {"if", Keyword::if_},
-        {"else", Keyword::else_},
-        {"while", Keyword::while_},
-        {"for", Keyword::for_},
+        {"if", Keyword::if_word},
+        {"else", Keyword::else_word},
+        {"while", Keyword::while_word},
+        {"for", Keyword::for_word},
         {"in", Keyword::in},
         {"function", Keyword::function},
-        {"switch", Keyword::switch_},
-        {"case", Keyword::case_},
-        {"and", Keyword::and_},
-        {"or", Keyword::or_},
-        {"not", Keyword::not_},
-        {"!", Keyword::not_},
+        {"switch", Keyword::switch_word},
+        {"case", Keyword::case_word},
+        {"and", Keyword::and_word},
+        {"or", Keyword::or_word},
+        {"not", Keyword::not_word},
+        {"!", Keyword::not_word},
         {"time", Keyword::time},
-    };
+    });
 
     // Only words of one to eight plain bytes in command position get here.
     Keyword findKeyword(std::span<const KeywordName> names, std::string_view word) noexcept {
@@ -535,29 +621,62 @@ namespace telar::shell {
     constexpr Frame blank_frame{.command = no_command, .word_begin = 0, .parens = 0, .owner = no_command, .kind = FrameKind::root, .position = Position::start, .header = Header::none, .header_words = 0, .role = TokenKind::argument, .owner_role = TokenKind::argument, .word_flags = 0, .owner_flags = 0, .glob = 0, .in_word = false, .fresh = false, .pending_operator = false, .pending_body = false, .after_else = false, .redirect = false, .heredoc = false, .strip_tabs = false, .arithmetic_command = false};
     static_assert(std::is_trivially_default_constructible_v<Frame>);
 
-    struct Heredoc {
+    struct Heredoc { // NOLINT(cppcoreguidelines-pro-type-member-init): a capture writes the delimiter before it is read, so a lexer does not clear its heredocs per call
       std::array<char, max_delimiter> text;
       std::size_t size = 0;
       bool strip_tabs = false;
     };
 
-    class Lexer {
+    // A token to write: its kinds, the command it belongs to and the bytes it covers.
+    struct Emission {
+      TokenKind kind = TokenKind::error;
+      TokenKind role = TokenKind::error;
+      u32 command = no_command;
+      Quote quote = Quote::none;
+      u8 flags = 0;
+      std::size_t begin = 0;
+      std::size_t end = 0;
+    };
+
+    // An operator that ends a command: its length, whether the line must go on after it, and where
+    // the next command starts.
+    struct Operator {
+      std::size_t length = 1;
+      bool pending = false;
+      Position position = Position::start;
+    };
+
+    // The operator of a redirection: where it ends, and whether a target word or a heredoc
+    // delimiter follows it.
+    struct Redirect {
+      std::size_t end = 0;
+      bool target = true;
+      bool heredoc = false;
+      bool strip_tabs = false;
+    };
+
+    // Where a heredoc body ends: past the line that is its delimiter, or at the end of the line.
+    struct HeredocBody {
+      std::size_t end = 0;
+      bool closed = false;
+    };
+
+    class Lexer { // NOLINT(cppcoreguidelines-special-member-functions,hicpp-special-member-functions): the implicit destructor is the right one, and declaring it here is a warning of its own
     public:
-      Lexer(std::string_view line, Syntax syntax, std::span<Token> tokens, std::size_t cursor) noexcept
+      Lexer(std::string_view line, Syntax syntax, std::span<Token> tokens, std::size_t cursor) noexcept // NOLINT(cppcoreguidelines-pro-type-member-init): push() writes each frame before it is read, so a lexer does not clear its frame stack per call
           : s_(line),
             n_(line.size()),
             table_(syntax.dialect == Dialect::fish ? fish_table : posix_table),
             syntax_(syntax),
             fish_(syntax.dialect == Dialect::fish),
             tokens_(tokens),
+            depth_(1),
             cursor_(cursor) {
         frames_[0] = blank_frame;
-        depth_ = 1;
         if (cursor_ > n_) {
           cursor_done_ = true;
         } else {
-          while (cursor_ > 0 && cursor_ < n_ && (static_cast<unsigned char>(s_[cursor_]) & 0xc0) == 0x80 &&
-                 cursor - cursor_ < 3) {
+          while (cursor_ > 0 && cursor_ < n_ && isContinuation(at(cursor_)) && cursor - cursor_ < 3) {
             --cursor_;
           }
         }
@@ -593,7 +712,17 @@ namespace telar::shell {
           case FrameKind::arithmetic:
             stepArithmetic(frame);
             break;
-          default:
+          case FrameKind::root:
+          case FrameKind::subshell:
+          case FrameKind::group:
+          case FrameKind::substitution:
+          case FrameKind::backtick:
+          case FrameKind::if_block:
+          case FrameKind::loop:
+          case FrameKind::case_block:
+          case FrameKind::fish_block:
+          case FrameKind::test:
+          case FrameKind::array:
             stepList(frame);
             break;
           }
@@ -602,8 +731,9 @@ namespace telar::shell {
           if (stalled > 2) {
 #if TELAR_DEBUG
             std::abort();
-#endif
+#else
             fail();
+#endif
           }
         }
 
@@ -612,16 +742,16 @@ namespace telar::shell {
       }
 
     private:
-      [[nodiscard]] unsigned char at(std::size_t i) const noexcept {
-        return static_cast<unsigned char>(s_[i]);
+      [[nodiscard]] unsigned char at(std::size_t index) const noexcept {
+        return static_cast<unsigned char>(s_[index]);
       }
 
-      [[nodiscard]] u8 bits(std::size_t i) const noexcept {
-        return table_[at(i)];
+      [[nodiscard]] u8 bits(std::size_t index) const noexcept {
+        return table_[at(index)];
       }
 
-      [[nodiscard]] bool next(std::size_t i, char c) const noexcept {
-        return i < n_ && s_[i] == c;
+      [[nodiscard]] bool next(std::size_t index, char byte) const noexcept {
+        return index < n_ && s_[index] == byte;
       }
 
       [[nodiscard]] std::size_t level() const noexcept {
@@ -634,22 +764,22 @@ namespace telar::shell {
 
       // ---- output
 
-      void emit(TokenKind kind, TokenKind role, u32 command, Quote quote, u8 flags, std::size_t begin, std::size_t end) noexcept {
-        if (capturing_ && command == capture_command_ && isPiece(kind)) {
-          capture_.verbatim(s_.substr(capture_gap_, begin - capture_gap_));
-          capture_.piece(syntax_.dialect, kind, quote, s_.substr(begin, end - begin));
-          capture_gap_ = end;
+      void emit(const Emission& token) noexcept {
+        if (capturing_ && token.command == capture_command_ && isPiece(token.kind)) {
+          capture_.verbatim(slice(s_, capture_gap_, token.begin));
+          capture_.piece(syntax_.dialect, token.kind, token.quote, slice(s_, token.begin, token.end));
+          capture_gap_ = token.end;
         }
 
         if (overflow_) {
           return;
         }
 
-        if (count_ > 0 && isPiece(kind) && (flags & Token::word_start) == 0) {
+        if (count_ > 0 && isPiece(token.kind) && (token.flags & Token::word_start) == 0) {
           Token& last = tokens_[count_ - 1];
-          if (last.end == begin && last.kind == kind && last.role == role && last.command == command &&
-              last.quote == quote && (last.flags & ~Token::word_start) == flags) {
-            last.end = static_cast<u32>(end);
+          if (last.end == token.begin && last.kind == token.kind && last.role == token.role && last.command == token.command &&
+              last.quote == token.quote && (last.flags | Token::word_start) == (token.flags | Token::word_start)) {
+            last.end = static_cast<u32>(token.end);
             return;
           }
         }
@@ -659,30 +789,36 @@ namespace telar::shell {
           return;
         }
 
-        tokens_[count_++] = Token{.begin = static_cast<u32>(begin), .end = static_cast<u32>(end), .command = command, .kind = kind, .role = role, .quote = quote, .flags = flags};
+        tokens_[count_++] = Token{.begin = static_cast<u32>(token.begin), .end = static_cast<u32>(token.end), .command = token.command, .kind = token.kind, .role = token.role, .quote = token.quote, .flags = token.flags};
       }
 
       void control(std::size_t length, TokenKind kind = TokenKind::control) noexcept {
-        emit(kind, kind, no_command, Quote::none, 0, p_, p_ + length);
+        emit({.kind = kind, .role = kind, .begin = p_, .end = p_ + length});
         p_ += length;
       }
 
       // A part of the word the frame is building.
-      void out(std::size_t frame, TokenKind kind, Quote quote, std::size_t begin, std::size_t end, u8 extra = 0) noexcept {
-        u8 flags = static_cast<u8>(frames_[frame].word_flags | extra);
+      void out(std::size_t frame, TokenKind kind, Quote quote, std::size_t begin, std::size_t end) noexcept {
+        out(frame, {.kind = kind, .quote = quote, .begin = begin, .end = end});
+      }
 
+      // A part of the word the frame is building, with the flags it adds to the word's.
+      void out(std::size_t frame, Emission token) noexcept {
+        token.role = frames_[frame].role;
+        token.command = frames_[frame].command;
+        token.flags = static_cast<u8>(frames_[frame].word_flags | token.flags);
         if (frames_[frame].fresh) {
-          flags |= Token::word_start;
+          token.flags |= Token::word_start;
           frames_[frame].fresh = false;
         }
 
-        emit(kind, frames_[frame].role, frames_[frame].command, quote, flags, begin, end);
+        emit(token);
       }
 
       // The rest of the line becomes one error token.
       void fail() noexcept {
         if (p_ < n_) {
-          emit(TokenKind::error, TokenKind::error, no_command, Quote::none, 0, p_, n_);
+          emit({.kind = TokenKind::error, .role = TokenKind::error, .begin = p_, .end = n_});
         }
 
         p_ = n_;
@@ -733,7 +869,8 @@ namespace telar::shell {
         }
       }
 
-      void endCommand(std::size_t frame, std::size_t at_level, Position position) noexcept {
+      // Ends the command of the list at index frame, which is also the list's level.
+      void endCommand(std::size_t frame, Position position) noexcept {
         frames_[frame].command = no_command;
         frames_[frame].position = position;
         frames_[frame].header = Header::none;
@@ -741,7 +878,7 @@ namespace telar::shell {
         frames_[frame].redirect = false;
         frames_[frame].heredoc = false;
         frames_[frame].after_else = false;
-        if (cursor_pending_ == at_level) {
+        if (cursor_pending_ == frame) {
           cursor_pending_ = no_cursor;
         }
       }
@@ -749,7 +886,7 @@ namespace telar::shell {
       // At a boundary of the top list: the cursor before this element is
       // between words of the current command.
       void gap(bool inclusive) noexcept {
-        if (cursor_done_ || !(cursor_ < p_ || (inclusive && cursor_ == p_))) {
+        if (cursor_done_ || (cursor_ >= p_ && (!inclusive || cursor_ != p_))) {
           return;
         }
 
@@ -785,8 +922,8 @@ namespace telar::shell {
           return;
         }
 
-        const char c = s_[p_];
-        if (c == ' ' || c == '\t') {
+        const char byte = s_[p_];
+        if (byte == ' ' || byte == '\t') {
           ++p_;
           while (p_ < n_ && ((bits(p_) & k_blank) != 0)) {
             ++p_;
@@ -795,7 +932,7 @@ namespace telar::shell {
           return;
         }
 
-        if (c == '\\' && next(p_ + 1, '\n')) {
+        if (byte == '\\' && next(p_ + 1, '\n')) {
           p_ += 2;
           return;
         }
@@ -810,117 +947,133 @@ namespace telar::shell {
           return;
         }
 
-        switch (c) {
-        case '\n':
-          gap(true);
-          newline(frame);
+        if (listOperator(frame)) {
           return;
-        case ';':
-          gap(true);
-          semicolon(frame);
-          return;
-        case '&':
-          gap(true);
-          ampersand(frame);
-          return;
-        case '|':
-          gap(true);
-          pipe(frame);
-          return;
-        case '<':
-        case '>':
-          if (!fish_ && next(p_ + 1, '(')) {
-            break;
-          }
-
-          gap(true);
-          redirection(frame, p_);
-          return;
-        case '(':
-          if (fish_) {
-            break;
-          }
-
-          if (next(p_ + 1, ')')) {
-            gap(true);
-            control(2);
-            endCommand(frame, level(), Position::start);
-            frames_[frame].pending_body = true;
-            return;
-          }
-
-          if (frames_[frame].position == Position::pattern) {
-            gap(true);
-            control(1);
-            return;
-          }
-
-          if (frames_[frame].position == Position::start || frames_[frame].position == Position::after_close ||
-              (frames_[frame].position == Position::header && frames_[frame].header == Header::loop && frames_[frame].header_words == 0)) {
-            gap(true);
-            if (next(p_ + 1, '(')) {
-              arithmeticCommand(frame);
-            } else {
-              subshell(frame);
-            }
-
-            return;
-          }
-
-          break;
-        case ')':
-          gap(true);
-          closeParen(frame);
-          return;
-        case '`':
-          if (!fish_ && frames_[frame].kind == FrameKind::backtick) {
-            gap(true);
-            closeList(frame);
-            return;
-          }
-
-          break;
-        case '#':
-          if (syntax_.comments) {
-            gap(true);
-            comment();
-            return;
-          }
-
-          break;
-        default:
-          if ((bits(p_) & k_digit) != 0) {
-            std::size_t q = p_ + 1;
-
-            while (q < n_ && ((bits(q) & k_digit) != 0)) {
-              ++q;
-            }
-
-            if (q < n_ && (s_[q] == '<' || s_[q] == '>') && !(!fish_ && next(q + 1, '('))) {
-              gap(true);
-              redirection(frame, q);
-              return;
-            }
-          }
-
-          break;
         }
 
         gap(false);
         beginWord(frame);
       }
 
-      void operatorEnd(std::size_t frame, std::size_t length, bool pending, Position position = Position::start) noexcept {
-        control(length);
-        endCommand(frame, level(), position);
-        frames_[frame].pending_operator = pending;
+      // An operator, comment, redirection or group at p_ of a list; false when a word starts there.
+      bool listOperator(std::size_t frame) noexcept {
+        switch (s_[p_]) {
+        case '\n':
+          gap(true);
+          newline(frame);
+          return true;
+        case ';':
+          gap(true);
+          semicolon(frame);
+          return true;
+        case '&':
+          gap(true);
+          ampersand(frame);
+          return true;
+        case '|':
+          gap(true);
+          pipe(frame);
+          return true;
+        case '<':
+        case '>':
+          if (!fish_ && next(p_ + 1, '(')) {
+            return false;
+          }
+
+          gap(true);
+          redirection(frame, p_);
+          return true;
+        case '(':
+          return !fish_ && openParen(frame);
+        case ')':
+          gap(true);
+          closeParen(frame);
+          return true;
+        case '`':
+          if (!fish_ && frames_[frame].kind == FrameKind::backtick) {
+            gap(true);
+            closeList(frame);
+            return true;
+          }
+
+          return false;
+        case '#':
+          if (syntax_.comments) {
+            gap(true);
+            comment();
+            return true;
+          }
+
+          return false;
+        default:
+          return numberedRedirection(frame);
+        }
+      }
+
+      // A posix ( in a list: a function's (), a case pattern's (, a subshell or an arithmetic
+      // command; false where it is part of a word.
+      bool openParen(std::size_t frame) noexcept {
+        if (next(p_ + 1, ')')) {
+          gap(true);
+          control(2);
+          endCommand(frame, Position::start);
+          frames_[frame].pending_body = true;
+          return true;
+        }
+
+        if (frames_[frame].position == Position::pattern) {
+          gap(true);
+          control(1);
+          return true;
+        }
+
+        if (frames_[frame].position == Position::start || frames_[frame].position == Position::after_close ||
+            (frames_[frame].position == Position::header && frames_[frame].header == Header::loop && frames_[frame].header_words == 0)) {
+          gap(true);
+          if (next(p_ + 1, '(')) {
+            arithmeticCommand(frame);
+          } else {
+            subshell(frame);
+          }
+
+          return true;
+        }
+
+        return false;
+      }
+
+      // A redirection after a file descriptor, as 2> or 10<; false when the digits start a word.
+      bool numberedRedirection(std::size_t frame) noexcept {
+        if ((bits(p_) & k_digit) == 0) {
+          return false;
+        }
+
+        std::size_t end = p_ + 1;
+
+        while (end < n_ && ((bits(end) & k_digit) != 0)) {
+          ++end;
+        }
+
+        if (end < n_ && (s_[end] == '<' || s_[end] == '>') && (fish_ || !next(end + 1, '('))) {
+          gap(true);
+          redirection(frame, end);
+          return true;
+        }
+
+        return false;
+      }
+
+      void operatorEnd(std::size_t frame, Operator ending) noexcept {
+        control(ending.length);
+        endCommand(frame, ending.position);
+        frames_[frame].pending_operator = ending.pending;
         frames_[frame].pending_body = false;
       }
 
       void newline(std::size_t frame) noexcept {
         control(1);
         if (frames_[frame].position != Position::pattern && (frames_[frame].command != no_command || frames_[frame].position != Position::start)) {
-          endCommand(frame, level(), Position::start);
+          endCommand(frame, Position::start);
         }
 
         if (heredoc_count_ > 0) {
@@ -940,30 +1093,30 @@ namespace telar::shell {
 
           if (length > 0) {
             if (frames_[frame].kind == FrameKind::case_block && frames_[frame].position != Position::pattern) {
-              operatorEnd(frame, length, false, Position::pattern);
+              operatorEnd(frame, {.length = length, .position = Position::pattern});
             } else {
               control(length, TokenKind::error);
-              endCommand(frame, level(), Position::start);
+              endCommand(frame, Position::start);
             }
 
             return;
           }
         }
 
-        operatorEnd(frame, 1, false);
+        operatorEnd(frame, {});
       }
 
       void ampersand(std::size_t frame) noexcept {
         if (next(p_ + 1, '&')) {
-          operatorEnd(frame, 2, true);
+          operatorEnd(frame, {.length = 2, .pending = true});
         } else if (next(p_ + 1, '>')) {
           redirection(frame, p_);
         } else if (next(p_ + 1, '|')) {
-          operatorEnd(frame, 2, fish_); // fish pipes both streams; zsh disowns
+          operatorEnd(frame, {.length = 2, .pending = fish_}); // fish pipes both streams; zsh disowns
         } else if (!fish_ && next(p_ + 1, '!')) {
-          operatorEnd(frame, 2, false);
+          operatorEnd(frame, {.length = 2});
         } else {
-          operatorEnd(frame, 1, false);
+          operatorEnd(frame, {});
         }
       }
 
@@ -975,65 +1128,18 @@ namespace telar::shell {
           return;
         }
 
-        operatorEnd(frame, length, true);
+        operatorEnd(frame, {.length = length, .pending = true});
       }
 
-      // p_ starts the redirection (at its file descriptor, if any); op is its first < > or &.
-      void redirection(std::size_t frame, std::size_t op) noexcept {
-        std::size_t e = op + 1;
-        bool target = true;
-        bool heredoc = false;
-        bool strip = false;
-        const auto duplicate = [&] {
-          if (next(e, '-')) {
-            ++e;
-            target = false;
-          } else if (e < n_ && (bits(e) & k_digit)) {
-            while (e < n_ && (bits(e) & k_digit)) {
-              ++e;
-            }
-
-            target = false;
-          }
-        };
-
-        if (s_[op] == '&') { // &> &>>
-          e = next(op + 2, '>') ? op + 3 : op + 2;
-        } else if (s_[op] == '<') {
-          if (!fish_ && next(op + 1, '<')) {
-            if (next(op + 2, '<')) {
-              e = op + 3;
-            } else {
-              heredoc = true;
-              e = op + 2;
-              if (next(e, '-')) {
-                strip = true;
-                ++e;
-              }
-            }
-          } else if (next(op + 1, '&')) {
-            e = op + 2;
-            duplicate();
-          } else if (!fish_ && next(op + 1, '>')) {
-            e = op + 2;
-          }
-        } else if (next(op + 1, '>')) {
-          e = op + 2;
-        } else if (next(op + 1, '&')) {
-          e = op + 2;
-          duplicate();
-        } else if (next(op + 1, '|')) {
-          if (fish_) { // 2>| pipes a stream
-            operatorEnd(frame, op + 2 - p_, true);
-            return;
-          }
-
-          e = op + 2;
-        } else if ((fish_ && next(op + 1, '?')) || (!fish_ && next(op + 1, '!'))) {
-          e = op + 2;
+      // p_ starts the redirection (at its file descriptor, if any); sign is its first < > or &.
+      void redirection(std::size_t frame, std::size_t sign) noexcept {
+        if (fish_ && s_[sign] == '>' && next(sign + 1, '|')) { // 2>| pipes a stream
+          operatorEnd(frame, {.length = sign + 2 - p_, .pending = true});
+          return;
         }
 
-        if (heredoc && heredoc_count_ == max_heredocs) {
+        const Redirect redirect = redirectAt(sign);
+        if (redirect.heredoc && heredoc_count_ == max_heredocs) {
           fail();
           return;
         }
@@ -1041,21 +1147,83 @@ namespace telar::shell {
         ensureCommand(level());
         frames_[frame].pending_operator = false;
         frames_[frame].pending_body = false;
-        emit(TokenKind::redirection, TokenKind::redirection, frames_[frame].command, Quote::none, 0, p_, e);
-        p_ = e;
-        frames_[frame].redirect = target;
-        frames_[frame].heredoc = heredoc;
-        frames_[frame].strip_tabs = strip;
+        emit({.kind = TokenKind::redirection, .role = TokenKind::redirection, .command = frames_[frame].command, .begin = p_, .end = redirect.end});
+        p_ = redirect.end;
+        frames_[frame].redirect = redirect.target;
+        frames_[frame].heredoc = redirect.heredoc;
+        frames_[frame].strip_tabs = redirect.strip_tabs;
+      }
+
+      [[nodiscard]] Redirect redirectAt(std::size_t sign) const noexcept {
+        if (s_[sign] == '&') { // &> &>>
+          return {.end = next(sign + 2, '>') ? sign + 3 : sign + 2};
+        }
+
+        return s_[sign] == '<' ? inputRedirect(sign) : outputRedirect(sign);
+      }
+
+      // < << <<< <<- <& <>
+      [[nodiscard]] Redirect inputRedirect(std::size_t sign) const noexcept {
+        Redirect redirect{.end = sign + 1};
+
+        if (!fish_ && next(sign + 1, '<')) {
+          if (next(sign + 2, '<')) {
+            redirect.end = sign + 3;
+            return redirect;
+          }
+
+          redirect.heredoc = true;
+          redirect.end = sign + 2;
+          if (next(redirect.end, '-')) {
+            redirect.strip_tabs = true;
+            ++redirect.end;
+          }
+        } else if (next(sign + 1, '&')) {
+          redirect.end = sign + 2;
+          duplicate(redirect);
+        } else if (!fish_ && next(sign + 1, '>')) {
+          redirect.end = sign + 2;
+        }
+
+        return redirect;
+      }
+
+      // > >> >& >| and zsh's >! or fish's >?
+      [[nodiscard]] Redirect outputRedirect(std::size_t sign) const noexcept {
+        Redirect redirect{.end = sign + 1};
+
+        if (next(sign + 1, '&')) {
+          redirect.end = sign + 2;
+          duplicate(redirect);
+        } else if (next(sign + 1, '>') || next(sign + 1, '|') || (fish_ && next(sign + 1, '?')) || (!fish_ && next(sign + 1, '!'))) {
+          redirect.end = sign + 2;
+        }
+
+        return redirect;
+      }
+
+      // &- and &n name a descriptor, not a target word.
+      void duplicate(Redirect& redirect) const noexcept {
+        if (next(redirect.end, '-')) {
+          ++redirect.end;
+          redirect.target = false;
+        } else if (redirect.end < n_ && ((bits(redirect.end) & k_digit) != 0)) {
+          while (redirect.end < n_ && ((bits(redirect.end) & k_digit) != 0)) {
+            ++redirect.end;
+          }
+
+          redirect.target = false;
+        }
       }
 
       void comment() noexcept {
-        std::size_t q = s_.find('\n', p_);
-        if (q == std::string_view::npos) {
-          q = n_;
+        std::size_t end = s_.find('\n', p_);
+        if (end == std::string_view::npos) {
+          end = n_;
         }
 
-        opaque(p_ < cursor_ && cursor_ <= q);
-        control(q - p_, TokenKind::comment);
+        opaque(p_ < cursor_ && cursor_ <= end);
+        control(end - p_, TokenKind::comment);
       }
 
       void subshell(std::size_t frame) noexcept {
@@ -1081,7 +1249,7 @@ namespace telar::shell {
         ensureCommand(level());
         frames_[frame].pending_operator = false;
         frames_[frame].pending_body = false;
-        emit(TokenKind::keyword, TokenKind::keyword, frames_[frame].command, Quote::none, Token::word_start, p_, p_ + 2);
+        emit({.kind = TokenKind::keyword, .role = TokenKind::keyword, .command = frames_[frame].command, .flags = Token::word_start, .begin = p_, .end = p_ + 2});
         p_ += 2;
         const std::size_t g = push(FrameKind::arithmetic, frames_[frame].command, TokenKind::keyword);
 
@@ -1090,7 +1258,7 @@ namespace telar::shell {
 
       // A substitution or backtick frame ends at the boundary of its list.
       void closeList(std::size_t frame) noexcept {
-        emit(TokenKind::substitution, frames_[frame].owner_role, frames_[frame].owner, Quote::none, frames_[frame].owner_flags, p_, p_ + 1);
+        emit({.kind = TokenKind::substitution, .role = frames_[frame].owner_role, .command = frames_[frame].owner, .flags = frames_[frame].owner_flags, .begin = p_, .end = p_ + 1});
         ++p_;
         pop();
       }
@@ -1104,40 +1272,40 @@ namespace telar::shell {
           top().position = Position::after_close;
         } else if (frames_[frame].position == Position::pattern) {
           control(1);
-          endCommand(frame, level(), Position::start);
+          endCommand(frame, Position::start);
         } else {
           control(1, TokenKind::error);
         }
       }
 
       void testElement(std::size_t frame) noexcept {
-        const char c = s_[p_];
-        if (c == '\n') {
+        const char byte = s_[p_];
+        if (byte == '\n') {
           ++p_;
           return;
         }
 
-        if (c == '&' || c == '|') {
+        if (byte == '&' || byte == '|') {
           gap(true);
-          control(next(p_ + 1, c) ? 2 : 1, next(p_ + 1, c) ? TokenKind::control : TokenKind::error);
+          control(next(p_ + 1, byte) ? 2 : 1, next(p_ + 1, byte) ? TokenKind::control : TokenKind::error);
           return;
         }
 
-        if (c == '<' || c == '>' || c == '(' || c == ')') {
+        if (byte == '<' || byte == '>' || byte == '(' || byte == ')') {
           gap(true);
           control(1);
           return;
         }
 
-        if (c == ';') {
+        if (byte == ';') {
           gap(true);
           control(1, TokenKind::error);
           return;
         }
 
         gap(false);
-        if (c == ']' && next(p_ + 1, ']') && (p_ + 2 == n_ || ((bits(p_ + 2) & k_end) != 0))) {
-          emit(TokenKind::keyword, TokenKind::keyword, frames_[frame].command, Quote::none, Token::word_start, p_, p_ + 2);
+        if (byte == ']' && next(p_ + 1, ']') && (p_ + 2 == n_ || ((bits(p_ + 2) & k_end) != 0))) {
+          emit({.kind = TokenKind::keyword, .role = TokenKind::keyword, .command = frames_[frame].command, .flags = Token::word_start, .begin = p_, .end = p_ + 2});
           touch(frames_[frame].command, p_, p_ + 2);
           p_ += 2;
           pop();
@@ -1149,13 +1317,13 @@ namespace telar::shell {
       }
 
       void arrayElement(std::size_t frame) noexcept {
-        const char c = s_[p_];
-        if (c == '\n') {
+        const char byte = s_[p_];
+        if (byte == '\n') {
           ++p_;
           return;
         }
 
-        if (c == ')') {
+        if (byte == ')') {
           gap(true);
           out(frame, TokenKind::assignment, Quote::none, p_, p_ + 1);
           ++p_;
@@ -1163,7 +1331,7 @@ namespace telar::shell {
           return;
         }
 
-        if (c == '#' && syntax_.comments) {
+        if (byte == '#' && syntax_.comments) {
           gap(true);
           comment();
           return;
@@ -1181,7 +1349,7 @@ namespace telar::shell {
       }
 
       [[nodiscard]] TokenKind optionOrArgument() const noexcept {
-        return s_[p_] == '-' && !(p_ + 1 < n_ && ((bits(p_ + 1) & k_end) != 0)) ? TokenKind::option : TokenKind::argument;
+        return s_[p_] == '-' && (p_ + 1 >= n_ || (bits(p_ + 1) & k_end) == 0) ? TokenKind::option : TokenKind::argument;
       }
 
       void startWord(std::size_t frame, TokenKind role) noexcept {
@@ -1196,47 +1364,48 @@ namespace telar::shell {
         frames_[frame].after_else = false;
       }
 
-      [[nodiscard]] bool isAssignment(std::size_t q) const noexcept {
+      // Whether the literal run [p_, end) starts an assignment: name=, and in posix name+= or name[...]=.
+      [[nodiscard]] bool isAssignment(std::size_t end) const noexcept {
         if ((bits(p_) & k_name_start) == 0) {
           return false;
         }
 
-        std::size_t i = p_ + 1;
+        std::size_t name_end = p_ + 1;
 
-        while (i < q && ((bits(i) & k_name) != 0)) {
-          ++i;
+        while (name_end < end && ((bits(name_end) & k_name) != 0)) {
+          ++name_end;
         }
 
-        if (i < q && s_[i] == '=') {
+        if (name_end < end && s_[name_end] == '=') {
           return true;
         }
 
-        if (fish_ || i >= q) {
+        if (fish_ || name_end >= end) {
           return false;
         }
 
-        if (s_[i] == '+') {
-          return i + 1 < q && s_[i + 1] == '=';
+        if (s_[name_end] == '+') {
+          return name_end + 1 < end && s_[name_end + 1] == '=';
         }
 
-        if (s_[i] == '[') {
-          const std::size_t close = s_.substr(i, q - i).find(']');
+        if (s_[name_end] == '[') {
+          const std::size_t close = slice(s_, name_end, end).find(']');
 
-          return close != std::string_view::npos && i + close + 1 < q && s_[i + close + 1] == '=';
+          return close != std::string_view::npos && name_end + close + 1 < end && s_[name_end + close + 1] == '=';
         }
 
         return false;
       }
 
       void beginWord(std::size_t frame) noexcept {
-        std::size_t q = p_;
+        std::size_t end = p_;
 
-        while (q < n_ && ((bits(q) & k_stop) == 0)) {
-          ++q;
+        while (end < n_ && ((bits(end) & k_stop) == 0)) {
+          ++end;
         }
 
-        const bool whole = q == n_ || ((bits(q) & k_end) != 0);
-        if (!frames_[frame].redirect && whole && q - p_ <= 8 && q > p_ && keyword(frame, q)) {
+        const bool whole = end == n_ || ((bits(end) & k_end) != 0);
+        if (!frames_[frame].redirect && whole && end - p_ <= max_keyword_bytes && end > p_ && keyword(frame, end)) {
           return;
         }
 
@@ -1256,7 +1425,7 @@ namespace telar::shell {
           switch (position) {
           case Position::start:
           case Position::prefix:
-            if (isAssignment(q)) {
+            if (isAssignment(end)) {
               frames_[frame].role = TokenKind::assignment;
               frames_[frame].position = Position::prefix;
             } else {
@@ -1280,27 +1449,24 @@ namespace telar::shell {
           return;
         }
 
-        if (q > p_) {
-          out(frame, frames_[frame].role, Quote::none, p_, q);
-          p_ = q;
-          if (!fish_ && frames_[frame].role == TokenKind::assignment && s_[q - 1] == '=' && next(q, '(')) {
-            if (room()) {
-              out(frame, TokenKind::assignment, Quote::none, q, q + 1);
-              ++p_;
-              const std::size_t g = push(FrameKind::array, frames_[frame].command, TokenKind::assignment);
+        if (end > p_) {
+          out(frame, frames_[frame].role, Quote::none, p_, end);
+          p_ = end;
+          if (!fish_ && frames_[frame].role == TokenKind::assignment && s_[end - 1] == '=' && next(end, '(') && room()) {
+            out(frame, TokenKind::assignment, Quote::none, end, end + 1);
+            ++p_;
+            const std::size_t g = push(FrameKind::array, frames_[frame].command, TokenKind::assignment);
 
-              frames_[g].word_flags = frames_[frame].word_flags;
-            }
+            frames_[g].word_flags = frames_[frame].word_flags;
           }
         }
       }
 
-      // Emits the keyword at [p_, q) and updates the lists; false if the word
+      // Emits the keyword at [p_, end) and updates the lists; false if the word
       // is not a keyword where it stands.
-      bool keyword(std::size_t frame, std::size_t q) noexcept {
-        const std::string_view word = s_.substr(p_, q - p_);
-        const Keyword k = findKeyword(fish_ ? std::span<const KeywordName>{fish_keywords} : std::span<const KeywordName>{posix_keywords}, word);
-        if (k == Keyword::none) {
+      bool keyword(std::size_t frame, std::size_t end) noexcept {
+        const Keyword found = findKeyword(fish_ ? std::span<const KeywordName>{fish_keywords} : std::span<const KeywordName>{posix_keywords}, slice(s_, p_, end));
+        if (found == Keyword::none) {
           return false;
         }
 
@@ -1309,159 +1475,190 @@ namespace telar::shell {
         case Position::after_close:
           break;
         case Position::header:
-          if (k == Keyword::in && frames_[frame].header_words == 1 && (frames_[frame].header == Header::loop || frames_[frame].header == Header::case_word)) {
-            word_keyword(frame, q);
-            ++frames_[frame].header_words;
-            if (frames_[frame].header == Header::case_word) {
-              endCommand(frame, level(), Position::pattern);
-            }
-
-            return true;
-          }
-
-          if (!fish_ && k == Keyword::do_ && frames_[frame].header_words == 1 && frames_[frame].header == Header::loop) {
-            endCommand(frame, level(), Position::start);
-            word_keyword(frame, q);
-            return true;
-          }
-
-          return false;
+          return headerKeyword(frame, found, end);
         case Position::pattern:
-          if (k == Keyword::esac && frames_[frame].command == no_command) {
-            close(frame, FrameKind::case_block, q);
+          if (found == Keyword::esac && frames_[frame].command == no_command) {
+            close(frame, FrameKind::case_block, end);
             return true;
           }
 
           return false;
-        default:
+        case Position::prefix:
+        case Position::arguments:
           return false;
         }
 
         frames_[frame].pending_operator = false;
         frames_[frame].pending_body = false;
-        if (fish_) {
-          return fishKeywordAt(frame, k, q);
+        return fish_ ? fishKeywordAt(frame, found, end) : posixKeywordAt(frame, found, end);
+      }
+
+      // The second word of a for, select or case header: `in`, or a for's `do`.
+      bool headerKeyword(std::size_t frame, Keyword found, std::size_t end) noexcept {
+        if (found == Keyword::in && frames_[frame].header_words == 1 && (frames_[frame].header == Header::loop || frames_[frame].header == Header::case_word)) {
+          wordKeyword(frame, end);
+          ++frames_[frame].header_words;
+          if (frames_[frame].header == Header::case_word) {
+            endCommand(frame, Position::pattern);
+          }
+
+          return true;
         }
 
-        switch (k) {
-        case Keyword::if_:
-          open(FrameKind::if_block, Position::start, Header::none, q);
+        if (!fish_ && found == Keyword::do_word && frames_[frame].header_words == 1 && frames_[frame].header == Header::loop) {
+          endCommand(frame, Position::start);
+          wordKeyword(frame, end);
           return true;
-        case Keyword::while_:
+        }
+
+        return false;
+      }
+
+      bool posixKeywordAt(std::size_t frame, Keyword found, std::size_t end) noexcept {
+        switch (found) {
+        case Keyword::if_word:
+          open(FrameKind::if_block, Position::start, Header::none, end);
+          return true;
+        case Keyword::while_word:
         case Keyword::until:
-          open(FrameKind::loop, Position::start, Header::none, q);
+          open(FrameKind::loop, Position::start, Header::none, end);
           return true;
-        case Keyword::for_:
+        case Keyword::for_word:
         case Keyword::select:
-          open(FrameKind::loop, Position::header, Header::loop, q);
+          open(FrameKind::loop, Position::header, Header::loop, end);
           return true;
-        case Keyword::case_:
-          open(FrameKind::case_block, Position::header, Header::case_word, q);
+        case Keyword::case_word:
+          open(FrameKind::case_block, Position::header, Header::case_word, end);
           return true;
         case Keyword::brace_open:
-          open(FrameKind::group, Position::start, Header::none, q);
+          open(FrameKind::group, Position::start, Header::none, end);
           return true;
         case Keyword::fi:
-          close(frame, FrameKind::if_block, q);
+          close(frame, FrameKind::if_block, end);
           return true;
         case Keyword::done:
-          close(frame, FrameKind::loop, q);
+          close(frame, FrameKind::loop, end);
           return true;
         case Keyword::esac:
-          close(frame, FrameKind::case_block, q);
+          close(frame, FrameKind::case_block, end);
           return true;
         case Keyword::brace_close:
-          close(frame, FrameKind::group, q);
+          close(frame, FrameKind::group, end);
           return true;
         case Keyword::test_open:
           if (room()) {
             ensureCommand(level());
-            word_keyword(frame, q);
+            wordKeyword(frame, end);
             frames_[push(FrameKind::test, frames_[frame].command, TokenKind::argument)].position = Position::arguments;
           }
 
           return true;
         case Keyword::function:
-          word_keyword(frame, q);
+          wordKeyword(frame, end);
           frames_[frame].position = Position::header;
           frames_[frame].header = Header::function;
           frames_[frame].header_words = 0;
           return true;
-        case Keyword::then_:
-        case Keyword::elif_:
-        case Keyword::else_:
-        case Keyword::do_:
+        case Keyword::then_word:
+        case Keyword::elif_word:
+        case Keyword::else_word:
+        case Keyword::do_word:
         case Keyword::bang:
         case Keyword::time:
         case Keyword::coproc:
-          word_keyword(frame, q);
+          wordKeyword(frame, end);
           frames_[frame].position = Position::start;
           return true;
-        default:
+        case Keyword::none:
+        case Keyword::in:
+        case Keyword::begin:
+        case Keyword::end:
+        case Keyword::switch_word:
+        case Keyword::and_word:
+        case Keyword::or_word:
+        case Keyword::not_word:
           return false;
         }
+
+        return false;
       }
 
-      bool fishKeywordAt(std::size_t frame, Keyword k, std::size_t q) noexcept {
-        switch (k) {
+      bool fishKeywordAt(std::size_t frame, Keyword found, std::size_t end) noexcept {
+        switch (found) {
         case Keyword::begin:
-          open(FrameKind::fish_block, Position::start, Header::none, q);
+          open(FrameKind::fish_block, Position::start, Header::none, end);
           return true;
-        case Keyword::if_:
+        case Keyword::if_word:
           if (frames_[frame].after_else) {
-            word_keyword(frame, q);
+            wordKeyword(frame, end);
             frames_[frame].position = Position::start;
             frames_[frame].after_else = false;
           } else {
-            open(FrameKind::fish_block, Position::start, Header::none, q);
+            open(FrameKind::fish_block, Position::start, Header::none, end);
           }
 
           return true;
-        case Keyword::while_:
-          open(FrameKind::fish_block, Position::start, Header::none, q);
+        case Keyword::while_word:
+          open(FrameKind::fish_block, Position::start, Header::none, end);
           return true;
-        case Keyword::for_:
-          open(FrameKind::fish_block, Position::header, Header::loop, q);
+        case Keyword::for_word:
+          open(FrameKind::fish_block, Position::header, Header::loop, end);
           return true;
         case Keyword::function:
-        case Keyword::switch_:
-          open(FrameKind::fish_block, Position::header, Header::plain, q);
+        case Keyword::switch_word:
+          open(FrameKind::fish_block, Position::header, Header::plain, end);
           return true;
         case Keyword::end:
-          close(frame, FrameKind::fish_block, q);
+          close(frame, FrameKind::fish_block, end);
           return true;
-        case Keyword::else_:
-          word_keyword(frame, q);
+        case Keyword::else_word:
+          wordKeyword(frame, end);
           frames_[frame].position = Position::start;
           frames_[frame].after_else = true;
           return true;
-        case Keyword::case_:
-          word_keyword(frame, q);
+        case Keyword::case_word:
+          wordKeyword(frame, end);
           frames_[frame].position = Position::header;
           frames_[frame].header = Header::plain;
           frames_[frame].header_words = 0;
           return true;
-        case Keyword::and_:
-        case Keyword::or_:
-        case Keyword::not_:
+        case Keyword::and_word:
+        case Keyword::or_word:
+        case Keyword::not_word:
         case Keyword::time:
-          word_keyword(frame, q);
+          wordKeyword(frame, end);
           frames_[frame].position = Position::start;
           return true;
-        default:
+        case Keyword::none:
+        case Keyword::then_word:
+        case Keyword::elif_word:
+        case Keyword::fi:
+        case Keyword::until:
+        case Keyword::select:
+        case Keyword::do_word:
+        case Keyword::done:
+        case Keyword::esac:
+        case Keyword::in:
+        case Keyword::coproc:
+        case Keyword::bang:
+        case Keyword::brace_open:
+        case Keyword::brace_close:
+        case Keyword::test_open:
           return false;
         }
+
+        return false;
       }
 
       // A keyword word joins the command that follows it.
-      void word_keyword(std::size_t frame, std::size_t q) noexcept {
+      void wordKeyword(std::size_t frame, std::size_t end) noexcept {
         ensureCommand(level());
-        emit(TokenKind::keyword, TokenKind::keyword, frames_[frame].command, Quote::none, Token::word_start, p_, q);
-        touch(frames_[frame].command, p_, q);
-        p_ = q;
+        emit({.kind = TokenKind::keyword, .role = TokenKind::keyword, .command = frames_[frame].command, .flags = Token::word_start, .begin = p_, .end = end});
+        touch(frames_[frame].command, p_, end);
+        p_ = end;
       }
 
-      void open(FrameKind kind, Position position, Header header, std::size_t q) noexcept {
+      void open(FrameKind kind, Position position, Header header, std::size_t end) noexcept {
         if (!room()) {
           return;
         }
@@ -1474,14 +1671,14 @@ namespace telar::shell {
           cursor_pending_ = level();
         }
 
-        word_keyword(g, q);
+        wordKeyword(g, end);
         frames_[g].position = position;
         frames_[g].header = header;
       }
 
-      void close(std::size_t frame, FrameKind kind, std::size_t q) noexcept {
+      void close(std::size_t frame, FrameKind kind, std::size_t end) noexcept {
         if (frames_[frame].kind != kind) {
-          control(q - p_, TokenKind::error);
+          control(end - p_, TokenKind::error);
           return;
         }
 
@@ -1489,35 +1686,24 @@ namespace telar::shell {
         const std::size_t parent = depth_ - 1;
 
         frames_[parent].command = no_command;
-        word_keyword(parent, q);
+        wordKeyword(parent, end);
         frames_[parent].position = Position::after_close;
       }
 
       // ---- words
 
       void stepWord(std::size_t frame) noexcept {
-        const char c = s_[p_];
-
-        if (!fish_ && frames_[frame].glob > 0) {
-          if (c == ')' || c == '|' || c == '(') {
-            if (c == ')') {
-              --frames_[frame].glob;
-            } else if (c == '(' && frames_[frame].glob < 255) {
-              ++frames_[frame].glob;
-            }
-
-            out(frame, frames_[frame].role, Quote::none, p_, p_ + 1);
-            ++p_;
-            return;
-          }
-        }
-
-        if (((bits(p_) & k_end) != 0) || (!fish_ && c == '`' && frames_[frame].kind == FrameKind::backtick)) {
-          endWord(frame, level());
+        const char byte = s_[p_];
+        if (globByte(frame, byte)) {
           return;
         }
 
-        switch (c) {
+        if (((bits(p_) & k_end) != 0) || (!fish_ && byte == '`' && frames_[frame].kind == FrameKind::backtick)) {
+          endWord(frame);
+          return;
+        }
+
+        switch (byte) {
         case '\'':
           singleQuote(frame);
           return;
@@ -1550,7 +1736,7 @@ namespace telar::shell {
           if (fish_) {
             openList(frame, FrameKind::substitution, p_ + 1);
           } else if (next(p_ + 1, ')') && frames_[frame].kind != FrameKind::array) {
-            endWord(frame, level());
+            endWord(frame);
           } else {
             ++frames_[frame].glob;
             out(frame, frames_[frame].role, Quote::none, p_, p_ + 1);
@@ -1562,17 +1748,35 @@ namespace telar::shell {
           break;
         }
 
-        std::size_t q = p_ + 1;
+        std::size_t end = p_ + 1;
 
-        while (q < n_ && ((bits(q) & k_stop) == 0)) {
-          ++q;
+        while (end < n_ && ((bits(end) & k_stop) == 0)) {
+          ++end;
         }
 
-        out(frame, frames_[frame].role, Quote::none, p_, q);
-        p_ = q;
+        out(frame, frames_[frame].role, Quote::none, p_, end);
+        p_ = end;
       }
 
-      void endWord(std::size_t frame, std::size_t at_level) noexcept {
+      // ( | ) inside a posix glob group, as *(a|b), belong to the word; false for any other byte.
+      bool globByte(std::size_t frame, char byte) noexcept {
+        if (fish_ || frames_[frame].glob == 0 || (byte != ')' && byte != '|' && byte != '(')) {
+          return false;
+        }
+
+        if (byte == ')') {
+          --frames_[frame].glob;
+        } else if (byte == '(' && frames_[frame].glob < std::numeric_limits<u8>::max()) {
+          ++frames_[frame].glob;
+        }
+
+        out(frame, frames_[frame].role, Quote::none, p_, p_ + 1);
+        ++p_;
+        return true;
+      }
+
+      // Ends the word of the list at index frame, which is also the list's level.
+      void endWord(std::size_t frame) noexcept {
         frames_[frame].in_word = false;
         frames_[frame].glob = 0;
         touch(frames_[frame].command, frames_[frame].word_begin, p_);
@@ -1588,12 +1792,12 @@ namespace telar::shell {
         }
 
         if (frames_[frame].position == Position::header) {
-          if (frames_[frame].header_words < 255) {
+          if (frames_[frame].header_words < std::numeric_limits<u8>::max()) {
             ++frames_[frame].header_words;
           }
 
           if (frames_[frame].header == Header::function && frames_[frame].header_words == 1) {
-            endCommand(frame, at_level, Position::start);
+            endCommand(frame, Position::start);
             frames_[frame].pending_body = true;
           }
         }
@@ -1610,70 +1814,73 @@ namespace telar::shell {
           return;
         }
 
-        Heredoc& h = heredocs_[heredoc_count_++];
+        Heredoc& heredoc = heredocs_[heredoc_count_++];
 
-        h.size = capture_.size();
-        h.strip_tabs = strip_tabs;
+        heredoc.size = capture_.size();
+        heredoc.strip_tabs = strip_tabs;
       }
 
       // A backslash and the character it escapes, whole even when multibyte.
       void escape(std::size_t frame, TokenKind kind, Quote quote) noexcept {
-        std::size_t e = p_ + 1;
-        if (e < n_) {
-          ++e;
-          while (e < n_ && (at(e) & 0xc0) == 0x80 && e < p_ + 5) {
-            ++e;
+        // A backslash and a character of up to four bytes.
+        constexpr std::size_t max_escape_bytes = 5;
+        std::size_t end = p_ + 1;
+
+        if (end < n_) {
+          ++end;
+          while (end < n_ && isContinuation(at(end)) && end < p_ + max_escape_bytes) {
+            ++end;
           }
         }
 
-        out(frame, kind, quote, p_, e);
-        p_ = e;
+        out(frame, kind, quote, p_, end);
+        p_ = end;
       }
 
       void singleQuote(std::size_t frame) noexcept {
-        std::size_t i = p_ + 1;
+        std::size_t stop = p_ + 1;
 
         for (;;) {
-          i = s_.find_first_of(fish_ ? std::string_view{"\\'"} : std::string_view{"'"}, i);
-          if (i == std::string_view::npos || (s_[i] == '\\' && i + 1 == n_)) {
+          stop = s_.find_first_of(fish_ ? std::string_view{"\\'"} : std::string_view{"'"}, stop);
+          if (stop == std::string_view::npos || (s_[stop] == '\\' && stop + 1 == n_)) {
             open_quote_ = true;
-            out(frame, TokenKind::string, Quote::single_quoted, p_, n_, Token::unterminated);
+            out(frame, {.kind = TokenKind::string, .quote = Quote::single_quoted, .flags = Token::unterminated, .begin = p_, .end = n_});
             p_ = n_;
             return;
           }
 
-          if (s_[i] == '\'') {
+          if (s_[stop] == '\'') {
             break;
           }
 
-          i += 2;
+          stop += 2;
         }
 
-        out(frame, TokenKind::string, Quote::single_quoted, p_, i + 1);
-        p_ = i + 1;
+        out(frame, TokenKind::string, Quote::single_quoted, p_, stop + 1);
+        p_ = stop + 1;
       }
 
       void ansiString(std::size_t frame) noexcept {
-        std::size_t i = p_ + 2;
+        std::size_t stop = p_ + 2;
 
         for (;;) {
-          i = s_.find_first_of("\\'", i);
-          if (i == std::string_view::npos || (s_[i] == '\\' && i + 1 == n_)) {
+          stop = s_.find_first_of("\\'", stop);
+          if (stop == std::string_view::npos || (s_[stop] == '\\' && stop + 1 == n_)) {
             open_quote_ = true;
-            out(frame, TokenKind::string, Quote::ansi_c, p_, n_, Token::unterminated);
+            out(frame, {.kind = TokenKind::string, .quote = Quote::ansi_c, .flags = Token::unterminated, .begin = p_, .end = n_});
             p_ = n_;
             return;
           }
 
-          if (s_[i] == '\'') {
+          if (s_[stop] == '\'') {
             break;
           }
 
-          i += 2;
+          stop += 2;
         }
 
-        out(frame, TokenKind::string, Quote::ansi_c, p_, i + 1);
-        p_ = i + 1;
+        out(frame, TokenKind::string, Quote::ansi_c, p_, stop + 1);
+        p_ = stop + 1;
       }
 
       // Emits the opener as part of the frame's word, then enters a frame inside the word.
@@ -1718,31 +1925,31 @@ namespace telar::shell {
           return;
         }
 
-        const char c = s_[b + 1];
-        if (c == '{') {
+        const char following = s_[b + 1];
+        if (following == '{') {
           openWord(frame, FrameKind::parameter, b + 2, TokenKind::variable, Quote::none);
-        } else if (c == '(') {
+        } else if (following == '(') {
           if (next(b + 2, '(')) {
             openWord(frame, FrameKind::arithmetic, b + 3, TokenKind::substitution, Quote::none);
           } else {
             openList(frame, FrameKind::substitution, b + 2);
           }
-        } else if (unquoted && c == '\'') {
+        } else if (unquoted && following == '\'') {
           ansiString(frame);
-        } else if (unquoted && c == '"') {
+        } else if (unquoted && following == '"') {
           out(frame, TokenKind::string, Quote::none, b, b + 1);
           p_ = b + 1;
         } else if ((bits(b + 1) & k_name_start) != 0) {
-          std::size_t q = b + 2;
+          std::size_t end = b + 2;
 
-          while (q < n_ && ((bits(q) & k_name) != 0)) {
-            ++q;
+          while (end < n_ && ((bits(end) & k_name) != 0)) {
+            ++end;
           }
 
-          out(frame, TokenKind::variable, Quote::none, b, q);
-          p_ = q;
-        } else if (((bits(b + 1) & k_digit) != 0) || c == '@' || c == '*' || c == '#' || c == '?' || c == '$' ||
-                   c == '!' || c == '-') {
+          out(frame, TokenKind::variable, Quote::none, b, end);
+          p_ = end;
+        } else if (((bits(b + 1) & k_digit) != 0) || following == '@' || following == '*' || following == '#' || following == '?' || following == '$' ||
+                   following == '!' || following == '-') {
           out(frame, TokenKind::variable, Quote::none, b, b + 2);
           p_ = b + 2;
         } else {
@@ -1764,24 +1971,24 @@ namespace telar::shell {
           return;
         }
 
-        std::size_t q = b + 1;
+        std::size_t end = b + 1;
 
-        while (q < n_ && s_[q] == '$') {
-          ++q;
+        while (end < n_ && s_[end] == '$') {
+          ++end;
         }
 
-        if (q == n_ || ((bits(q) & k_name) == 0)) {
-          out(frame, q == n_ ? TokenKind::variable : literal, q == n_ ? Quote::none : quote, b, q);
-          p_ = q;
+        if (end == n_ || ((bits(end) & k_name) == 0)) {
+          out(frame, end == n_ ? TokenKind::variable : literal, end == n_ ? Quote::none : quote, b, end);
+          p_ = end;
           return;
         }
 
-        while (q < n_ && ((bits(q) & k_name) != 0)) {
-          ++q;
+        while (end < n_ && ((bits(end) & k_name) != 0)) {
+          ++end;
         }
 
-        if (next(q, '[')) {
-          std::size_t r = q + 1;
+        if (next(end, '[')) {
+          std::size_t r = end + 1;
 
           while (r < n_ && s_[r] != ']' && ((bits(r) & k_newline) == 0) && s_[r] != '$' && s_[r] != '(' &&
                  s_[r] != '\'' && s_[r] != '"') {
@@ -1789,31 +1996,31 @@ namespace telar::shell {
           }
 
           if (next(r, ']')) {
-            q = r + 1;
+            end = r + 1;
           }
         }
 
-        out(frame, TokenKind::variable, Quote::none, b, q);
-        p_ = q;
+        out(frame, TokenKind::variable, Quote::none, b, end);
+        p_ = end;
       }
 
       // ---- frames inside a word
 
       void stepDouble(std::size_t frame) noexcept {
-        const char c = s_[p_];
-        if (c == '"') {
+        const char byte = s_[p_];
+        if (byte == '"') {
           out(frame, TokenKind::string, Quote::double_quoted, p_, p_ + 1);
           ++p_;
           pop();
           return;
         }
 
-        if (c == '\\') {
+        if (byte == '\\') {
           escape(frame, TokenKind::string, Quote::double_quoted);
           return;
         }
 
-        if (c == '$') {
+        if (byte == '$') {
           if (fish_) {
             fishDollar(frame, TokenKind::string, Quote::double_quoted);
           } else {
@@ -1823,19 +2030,19 @@ namespace telar::shell {
           return;
         }
 
-        if (!fish_ && c == '`') {
+        if (!fish_ && byte == '`') {
           openList(frame, FrameKind::backtick, p_ + 1);
           return;
         }
 
-        std::size_t q = p_ + 1;
+        std::size_t end = p_ + 1;
 
-        while (q < n_ && ((bits(q) & k_quote_stop) == 0)) {
-          ++q;
+        while (end < n_ && ((bits(end) & k_quote_stop) == 0)) {
+          ++end;
         }
 
-        out(frame, TokenKind::string, Quote::double_quoted, p_, q);
-        p_ = q;
+        out(frame, TokenKind::string, Quote::double_quoted, p_, end);
+        p_ = end;
       }
 
       // Shared by ${...} and $((...)): quotes, escapes and expansions nest.
@@ -1873,31 +2080,31 @@ namespace telar::shell {
           return;
         }
 
-        std::size_t q = p_ + 1;
+        std::size_t end = p_ + 1;
 
-        while (q < n_) {
-          const char c = s_[q];
-          if (c == '}' || c == '\\' || c == '"' || c == '\'' || c == '$' || c == '`') {
+        while (end < n_) {
+          const char byte = s_[end];
+          if (byte == '}' || byte == '\\' || byte == '"' || byte == '\'' || byte == '$' || byte == '`') {
             break;
           }
 
-          ++q;
+          ++end;
         }
 
-        out(frame, TokenKind::variable, Quote::none, p_, q);
-        p_ = q;
+        out(frame, TokenKind::variable, Quote::none, p_, end);
+        p_ = end;
       }
 
       void stepArithmetic(std::size_t frame) noexcept {
-        const char c = s_[p_];
-        if (c == '(') {
+        const char byte = s_[p_];
+        if (byte == '(') {
           ++frames_[frame].parens;
           out(frame, TokenKind::substitution, Quote::none, p_, p_ + 1);
           ++p_;
           return;
         }
 
-        if (c == ')') {
+        if (byte == ')') {
           if (frames_[frame].parens > 0) {
             --frames_[frame].parens;
             out(frame, TokenKind::substitution, Quote::none, p_, p_ + 1);
@@ -1906,8 +2113,7 @@ namespace telar::shell {
           }
 
           const std::size_t length = next(p_ + 1, ')') ? 2 : 1;
-          const TokenKind closer = length == 1 ? TokenKind::error : frames_[frame].arithmetic_command ? TokenKind::keyword
-                                                                                                      : TokenKind::substitution;
+          const TokenKind closer = length == 1 ? TokenKind::error : arithmeticCloser(frame);
 
           out(frame, closer, Quote::none, p_, p_ + length);
           p_ += length;
@@ -1919,62 +2125,71 @@ namespace telar::shell {
           return;
         }
 
-        std::size_t q = p_ + 1;
+        std::size_t end = p_ + 1;
 
-        while (q < n_) {
-          const char d = s_[q];
-          if (d == '(' || d == ')' || d == '\\' || d == '"' || d == '\'' || d == '$' || d == '`') {
+        while (end < n_) {
+          const char candidate = s_[end];
+          if (candidate == '(' || candidate == ')' || candidate == '\\' || candidate == '"' || candidate == '\'' || candidate == '$' || candidate == '`') {
             break;
           }
 
-          ++q;
+          ++end;
         }
 
-        out(frame, TokenKind::substitution, Quote::none, p_, q);
-        p_ = q;
+        out(frame, TokenKind::substitution, Quote::none, p_, end);
+        p_ = end;
+      }
+
+      [[nodiscard]] TokenKind arithmeticCloser(std::size_t frame) const noexcept {
+        return frames_[frame].arithmetic_command ? TokenKind::keyword : TokenKind::substitution;
       }
 
       // ---- heredocs
 
       void readHeredocs() noexcept {
         for (std::size_t i = 0; i < heredoc_count_; ++i) {
-          const Heredoc& h = heredocs_[i];
-          const std::string_view delimiter{h.text.data(), h.size};
           const std::size_t begin = p_;
-          bool closed = false;
+          const HeredocBody body = heredocBody({heredocs_[i].text.data(), heredocs_[i].size}, heredocs_[i].strip_tabs);
 
-          while (p_ < n_) {
-            std::size_t e = s_.find('\n', p_);
-            if (e == std::string_view::npos) {
-              e = n_;
-            }
-
-            std::size_t b = p_;
-
-            if (h.strip_tabs) {
-              while (b < e && s_[b] == '\t') {
-                ++b;
-              }
-            }
-
-            p_ = e < n_ ? e + 1 : n_;
-            if (s_.substr(b, e - b) == delimiter) {
-              closed = true;
-              break;
-            }
-          }
-
-          if (!closed) {
+          p_ = body.end;
+          if (!body.closed) {
             heredoc_open_ = true;
           }
 
-          opaque(begin <= cursor_ && (cursor_ < p_ || (cursor_ == p_ && (!closed || s_[p_ - 1] != '\n'))));
+          opaque(begin <= cursor_ && (cursor_ < p_ || (cursor_ == p_ && (!body.closed || s_[p_ - 1] != '\n'))));
           if (p_ > begin) {
-            emit(TokenKind::heredoc_body, TokenKind::heredoc_body, no_command, Quote::none, closed ? 0 : Token::unterminated, begin, p_);
+            emit({.kind = TokenKind::heredoc_body, .role = TokenKind::heredoc_body, .flags = body.closed ? u8{0} : Token::unterminated, .begin = begin, .end = p_});
           }
         }
 
         heredoc_count_ = 0;
+      }
+
+      // The lines from p_ up to the one that is delimiter, with leading tabs ignored when strip_tabs.
+      [[nodiscard]] HeredocBody heredocBody(std::string_view delimiter, bool strip_tabs) const noexcept {
+        std::size_t position = p_;
+
+        while (position < n_) {
+          std::size_t line_end = s_.find('\n', position);
+          if (line_end == std::string_view::npos) {
+            line_end = n_;
+          }
+
+          std::size_t line_begin = position;
+
+          if (strip_tabs) {
+            while (line_begin < line_end && s_[line_begin] == '\t') {
+              ++line_begin;
+            }
+          }
+
+          position = line_end < n_ ? line_end + 1 : n_;
+          if (slice(s_, line_begin, line_end) == delimiter) {
+            return {.end = position, .closed = true};
+          }
+        }
+
+        return {.end = position, .closed = false};
       }
 
       // ---- end of line
@@ -1983,20 +2198,21 @@ namespace telar::shell {
         for (std::size_t i = depth_; i-- > 0;) {
           const std::size_t frame = i;
           if (isList(frames_[frame].kind) && frames_[frame].in_word) {
-            endWord(frame, i);
+            endWord(frame);
           }
         }
 
         finishCapture(false);
         if (!cursor_done_) {
-          std::size_t i = depth_;
+          std::size_t list = depth_ - 1;
 
-          while (i-- > 1 && !isList(frames_[i].kind)) {
+          while (list > 0 && !isList(frames_[list].kind)) {
+            --list;
           }
 
           cursor_done_ = true;
           cursor_completable_ = true;
-          cursor_command_ = frames_[i].command;
+          cursor_command_ = frames_[list].command;
         }
 
         if (top().kind == FrameKind::double_quote && count_ > 0 && !overflow_) {
@@ -2110,6 +2326,125 @@ namespace telar::shell {
       tbc::val_self<Unquoter> capture_;
     };
 
+    enum class Gathered : u8 {
+      complete,
+      invalid, // a token is out of order or outside the line
+      full,    // the words or the text ran out
+    };
+
+    // The words of one command, gathered from its tokens for commandAt: each word's text is unquoted
+    // into a buffer the gatherer borrows, region `a`.
+    class WordGatherer {
+    public:
+      WordGatherer(tbc::val_a<std::string_view> line, Dialect dialect, std::span<Word> words, tbc::val_a<std::span<char>> text, std::size_t cursor) noexcept
+          : line_(line),
+            dialect_(dialect),
+            words_(words),
+            unquoter_(text),
+            cursor_(cursor) {}
+
+      // Adds the words of command to result.
+      [[nodiscard]] Gathered gather(std::span<const Token> tokens, u32 command, CommandAt& result) noexcept {
+        // Tokens from another line or out of order are rejected, never read past.
+        std::size_t last_end = 0;
+
+        for (std::size_t i = 0; i < tokens.size(); ++i) {
+          const Token& token = tokens[i];
+          if (token.begin < last_end || token.begin > token.end || token.end > line_.size()) {
+            return Gathered::invalid;
+          }
+
+          last_end = token.end;
+          if (token.command == command && !add(token, i, result)) {
+            return Gathered::full;
+          }
+        }
+
+        return closeWord(tokens.size(), result) ? Gathered::complete : Gathered::full;
+      }
+
+      // The unquoted bytes the words take.
+      [[nodiscard]] std::size_t textSize() const noexcept {
+        return unquoter_.size();
+      }
+
+      // The token indexes [first, end) of the word the cursor touches.
+      [[nodiscard]] std::size_t currentFirst() const noexcept {
+        return current_first_;
+      }
+
+      [[nodiscard]] std::size_t currentEnd() const noexcept {
+        return current_end_;
+      }
+
+    private:
+      // A piece joins the open word or starts the next; any other token ends the word.
+      [[nodiscard]] bool add(const Token& token, std::size_t index, CommandAt& result) noexcept {
+        if (!isPiece(token.kind)) {
+          return closeWord(index, result);
+        }
+
+        if (!open_ || ((token.flags & Token::word_start) != 0)) {
+          if (!closeWord(index, result)) {
+            return false;
+          }
+
+          open_ = true;
+          word_ = Word{.source = {.begin = token.begin, .end = token.end}, .text = {}, .role = token.role, .flags = static_cast<u8>(token.flags & Token::redirect_target)};
+          text_begin_ = unquoter_.size();
+          gap_ = token.begin;
+          first_ = index;
+        }
+
+        unquoter_.verbatim(slice(line_, gap_, token.begin));
+        unquoter_.piece(dialect_, token.kind, token.quote, slice(line_, token.begin, token.end));
+        gap_ = token.end;
+        word_.source.end = token.end;
+        return true;
+      }
+
+      // Ends the open word at token end_token; false when words or text ran out.
+      [[nodiscard]] bool closeWord(std::size_t end_token, CommandAt& result) noexcept {
+        if (!open_) {
+          return true;
+        }
+
+        open_ = false;
+        if (result.words == words_.size() || unquoter_.overflow()) {
+          return false;
+        }
+
+        word_.text = unquoter_.text(text_begin_);
+        if (!result.in_word && word_.source.begin <= cursor_ && cursor_ <= word_.source.end) {
+          result.in_word = true;
+          result.current = result.words;
+          result.replace = word_.source;
+          current_first_ = first_;
+          current_end_ = end_token;
+        }
+
+        if (result.command_word == no_word && word_.role == TokenKind::command) {
+          result.command_word = result.words;
+        }
+
+        words_[result.words++] = word_;
+        return true;
+      }
+
+      std::string_view line_;
+      Dialect dialect_;
+      std::span<Word> words_;
+      Unquoter unquoter_;
+      std::size_t cursor_;
+      Word word_;
+      bool open_ = false;
+      std::size_t text_begin_ = 0;
+      std::size_t gap_ = 0;
+      std::size_t first_ = 0;
+      std::size_t current_first_ = 0;
+      std::size_t current_end_ = 0;
+    };
+
   }
 
   Lexed lex(std::string_view line, Syntax syntax, std::span<Token> tokens, std::size_t cursor) noexcept {
@@ -2120,175 +2455,105 @@ namespace telar::shell {
     std::size_t count = 0;
 
     for (std::size_t i = 0; i < tokens.size(); ++i) {
-      const Token& t = tokens[i];
-      if (t.command == no_command) {
+      const Token& token = tokens[i];
+      if (token.command == no_command) {
         continue;
       }
 
-      const std::size_t id = t.command;
-      if (id >= count) {
-        if (id < segments.size()) {
-          for (std::size_t j = count; j <= id; ++j) {
-            segments[j] = Segment{.source = {.begin = t.begin, .end = t.begin}, .first_token = static_cast<u32>(i), .end_token = static_cast<u32>(i)};
-          }
+      const std::size_t id = token.command;
+      // Commands without a token of their own before this one get an empty segment here.
+      if (id >= count && id < segments.size()) {
+        for (std::size_t j = count; j <= id; ++j) {
+          segments[j] = Segment{.source = {.begin = token.begin, .end = token.begin}, .first_token = static_cast<u32>(i), .end_token = static_cast<u32>(i)};
         }
-
-        count = id + 1;
       }
 
+      count = std::max(count, id + 1);
       if (id < segments.size()) {
-        Segment& s = segments[id];
+        Segment& entry = segments[id];
 
-        s.source.end = std::max(s.source.end, t.end);
-        s.end_token = static_cast<u32>(i + 1);
+        entry.source.end = std::max(entry.source.end, token.end);
+        entry.end_token = static_cast<u32>(i + 1);
       }
     }
 
     return count;
   }
 
-  tbc::val_a<CommandAt> commandAt(tbc::val_a<std::string_view> line, Syntax syntax, std::span<const Token> tokens, const Lexed& lexed, std::span<Word> words, tbc::val_a<std::span<char>> text) noexcept {
-    CommandAt at;
+  tbc::val_a<CommandAt> commandAt(tbc::val_a<std::string_view> line, Syntax syntax, std::span<const Token> tokens, const Lexed& lexed, std::span<Word> words, tbc::val_a<std::span<char>> text) noexcept { // NOLINT(readability-function-size): the exported signature takes six parameters
+    CommandAt result;
 
     if (!lexed.cursor_completable || lexed.cursor > line.size()) {
-      return at;
+      return result;
     }
 
     if (lexed.overflow) {
-      at.overflow = true;
-      return at;
+      result.overflow = true;
+      return result;
     }
 
     const std::size_t cursor = lexed.cursor;
     const u32 command = lexed.cursor_command;
 
     tokens = tokens.first(std::min(tokens.size(), lexed.tokens));
-    at.replace = Range{.begin = static_cast<u32>(cursor), .end = static_cast<u32>(cursor)};
+    result.replace = Range{.begin = static_cast<u32>(cursor), .end = static_cast<u32>(cursor)};
     if (command == no_command) {
-      at.current = 0;
-      return at;
+      result.current = 0;
+      return result;
     }
 
-    Unquoter unquoter{text};
-    bool open = false;
-    Word word;
-    std::size_t text_begin = 0;
-    std::size_t gap = 0;
-    std::size_t first = 0;
-    std::size_t current_first = 0;
-    std::size_t current_end = 0;
-    const auto closeWord = [&](std::size_t end_token) {
-      if (!open) {
-        return true;
-      }
+    WordGatherer gatherer{line, syntax.dialect, words, text, cursor};
 
-      open = false;
-      if (at.words == words.size() || unquoter.overflow()) {
-        return false;
-      }
-
-      word.text = unquoter.text(text_begin);
-      if (!at.in_word && word.source.begin <= cursor && cursor <= word.source.end) {
-        at.in_word = true;
-        at.current = at.words;
-        at.replace = word.source;
-        current_first = first;
-        current_end = end_token;
-      }
-
-      if (at.command_word == no_word && word.role == TokenKind::command) {
-        at.command_word = at.words;
-      }
-
-      words[at.words++] = word;
-      return true;
-    };
-
-    // Tokens from another line or out of order are rejected, never read past.
-    std::size_t last_end = 0;
-
-    for (std::size_t i = 0; i < tokens.size(); ++i) {
-      const Token& t = tokens[i];
-      if (t.begin < last_end || t.begin > t.end || t.end > line.size()) {
-        at = CommandAt{};
-        at.overflow = true;
-        return at;
-      }
-
-      last_end = t.end;
-      if (t.command != command) {
-        continue;
-      }
-
-      if (!isPiece(t.kind)) {
-        if (!closeWord(i)) {
-          at.overflow = true;
-          return at;
-        }
-
-        continue;
-      }
-
-      if (!open || ((t.flags & Token::word_start) != 0)) {
-        if (!closeWord(i)) {
-          at.overflow = true;
-          return at;
-        }
-
-        open = true;
-        word = Word{.source = {.begin = t.begin, .end = t.end}, .text = {}, .role = t.role, .flags = static_cast<u8>(t.flags & Token::redirect_target)};
-        text_begin = unquoter.size();
-        gap = t.begin;
-        first = i;
-      }
-
-      unquoter.verbatim(line.substr(gap, t.begin - gap));
-      unquoter.piece(syntax.dialect, t.kind, t.quote, line.substr(t.begin, t.end - t.begin));
-      gap = t.end;
-      word.source.end = t.end;
+    switch (gatherer.gather(tokens, command, result)) {
+    case Gathered::complete:
+      break;
+    case Gathered::invalid:
+      result = CommandAt{};
+      result.overflow = true;
+      return result;
+    case Gathered::full:
+      result.overflow = true;
+      return result;
     }
 
-    if (!closeWord(tokens.size())) {
-      at.overflow = true;
-      return at;
-    }
-
-    if (!at.in_word) {
+    if (!result.in_word) {
       std::size_t before = 0;
 
-      while (before < at.words && words[before].source.end < cursor) {
+      while (before < result.words && words[before].source.end < cursor) {
         ++before;
       }
 
-      at.current = before;
-      return at;
+      result.current = before;
+      return result;
     }
 
-    // The prefix: the current word's pieces cut at the cursor.
-    Unquoter prefix{text.subspan(unquoter.size())};
+    // The prefix: the current word's pieces cut result the cursor.
+    const std::size_t current_first = gatherer.currentFirst();
+    const std::size_t current_end = gatherer.currentEnd();
+    Unquoter prefix{text.subspan(gatherer.textSize())};
+    std::size_t gap = result.replace.begin;
 
-    gap = at.replace.begin;
     for (std::size_t i = current_first; i < current_end && gap < cursor; ++i) {
-      const Token& t = tokens[i];
-      if (t.command != command || !isPiece(t.kind)) {
+      const Token& token = tokens[i];
+      if (token.command != command || !isPiece(token.kind)) {
         continue;
       }
 
-      const std::size_t begin = std::min<std::size_t>(t.begin, cursor);
-      const std::size_t end = std::min<std::size_t>(t.end, cursor);
+      const std::size_t begin = std::min<std::size_t>(token.begin, cursor);
+      const std::size_t end = std::min<std::size_t>(token.end, cursor);
 
-      prefix.verbatim(line.substr(gap, begin - gap));
-      prefix.piece(syntax.dialect, t.kind, t.quote, line.substr(begin, end - begin));
+      prefix.verbatim(slice(line, gap, begin));
+      prefix.piece(syntax.dialect, token.kind, token.quote, slice(line, begin, end));
       gap = end;
     }
 
     if (prefix.overflow()) {
-      at.overflow = true;
-      return at;
+      result.overflow = true;
+      return result;
     }
 
-    at.prefix = prefix.text(0);
-    return at;
+    result.prefix = prefix.text(0);
+    return result;
   }
 
 }

@@ -21,21 +21,26 @@ export {
   namespace telar::runtime::lua {
 
     class Error : public std::exception {
+      static constexpr std::size_t message_bytes = 1023;
+
     public:
       template <typename... Parts>
-        requires std::is_constructible_v<ErrorText<1023>, const Parts&...>
+        requires std::is_constructible_v<ErrorText<message_bytes>, const Parts&...>
       TBC_GENERIC explicit Error(const Parts&... parts) noexcept
           : message_(parts...) {}
 
       [[nodiscard]] const char* what() const noexcept override;
 
     private:
-      ErrorText<1023> message_;
+      ErrorText<message_bytes> message_;
     };
 
     struct Limits {
-      std::size_t memory = std::size_t{256} * 1024 * 1024;
-      std::uint64_t instructions = 50'000'000;
+      static constexpr std::size_t default_memory_bytes = std::size_t{256} * 1024 * 1024;
+      static constexpr std::uint64_t default_instructions = 50'000'000;
+
+      std::size_t memory = default_memory_bytes;
+      std::uint64_t instructions = default_instructions;
       std::chrono::nanoseconds deadline = std::chrono::seconds{2};
     };
 
@@ -50,6 +55,8 @@ export {
 
       Vm(const Vm&) = delete;
       Vm& operator=(const Vm&) = delete;
+      Vm(Vm&&) = delete;
+      Vm& operator=(Vm&&) = delete;
 
       void resetBudget() noexcept;
       void resetBudget(std::uint64_t instructions, std::chrono::nanoseconds deadline) noexcept;
@@ -106,7 +113,7 @@ export {
       void push(lua_State* state, const JsonValue& value, unsigned depth);
       void object(lua_State* state, const JsonValue& value, unsigned depth);
 
-      static constexpr std::size_t maximum_input_bytes = 1024 * 1024;
+      static constexpr std::size_t maximum_input_bytes = std::size_t{1024} * 1024;
       static constexpr unsigned maximum_depth = 64;
       ds::String<Memory> text_;
     };
@@ -122,7 +129,7 @@ export {
 export {
   namespace telar::runtime::lua {
 
-    enum class ModuleDomain {
+    enum class ModuleDomain : std::uint8_t {
       configuration,
       package,
     };
@@ -131,9 +138,12 @@ export {
     class LocalModules {
     public:
       explicit LocalModules(lua_State* state, std::string_view directory);
+      ~LocalModules() = default;
 
       LocalModules(const LocalModules&) = delete;
       LocalModules& operator=(const LocalModules&) = delete;
+      LocalModules(LocalModules&&) = delete;
+      LocalModules& operator=(LocalModules&&) = delete;
 
       [[nodiscard]] std::size_t configurationModuleCount() const noexcept
         requires(domain == ModuleDomain::configuration);
@@ -142,8 +152,9 @@ export {
       template <typename Visitor>
       TBC_GENERIC void visitLoadedNames(lua_State* state, Visitor&& visit) const {
         using Target = std::remove_reference_t<Visitor>;
+        auto&& visitor = std::forward<Visitor>(visit);
 
-        visitNames(state, std::addressof(visit), [](void* target, std::string_view name) {
+        visitNames(state, std::addressof(visitor), [](void* target, std::string_view name) {
           (*static_cast<Target*>(target))(name);
         });
       }
@@ -197,6 +208,8 @@ export {
 
       Value(const Value&) = delete;
       Value& operator=(const Value&) = delete;
+      Value(Value&&) = delete;
+      Value& operator=(Value&&) = delete;
 
       // The same value under another name: a profile's tables are reported as
       // the configuration's, as diagnostics name them.
@@ -226,8 +239,9 @@ export {
       template <typename Consumer>
       TBC_GENERIC void eachField(Consumer&& consume) const {
         using Target = std::remove_reference_t<Consumer>;
+        auto&& consumer = std::forward<Consumer>(consume);
 
-        visitFields(std::addressof(consume), [](void* target, std::string_view name, const Value& value) {
+        visitFields(std::addressof(consumer), [](void* target, std::string_view name, const Value& value) {
           (*static_cast<Target*>(target))(name, value);
         });
       }
@@ -253,7 +267,8 @@ export {
       int index_;
       int restored_top_;
       // The value's path, for errors only: a deep path is cut rather than allocated.
-      ErrorText<255> label_;
+      static constexpr std::size_t label_bytes = 255;
+      ErrorText<label_bytes> label_;
     };
 
   }
@@ -302,6 +317,7 @@ export {
 // define it, undefined, and exported under its own name, so `LUA_NOREF` reads the same to an
 // importer that includes the header and to one that only imports this module. The function-like
 // macros are functions defined in lua.cpp, where the macros are.
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage): only a macro can read a macro's value before the header's #undef.
 #define TELAR_LUA_CONSTANTS(X) \
   X(LUA_NOREF)                 \
   X(LUA_OK)                    \
@@ -342,6 +358,7 @@ namespace telar::runtime::lua::captured {
 
 #define TELAR_LUA_CONSTANT(name) inline constexpr auto name = telar::runtime::lua::captured::name##_;
 
+// NOLINTBEGIN(readability-identifier-naming): each constant and function keeps the name of the header's macro it replaces.
 export {
   TELAR_LUA_CONSTANTS(TELAR_LUA_CONSTANT)
 
@@ -363,3 +380,4 @@ export {
     return LUA_REGISTRYINDEX - index;
   }
 }
+// NOLINTEND(readability-identifier-naming)

@@ -24,7 +24,7 @@ namespace telar::runtime::config {
     // returns how many it kept, if the table is present. Stays in the interface because it is a
     // template over the caller's callable.
     template <typename Validator>
-    TBC_GENERIC static ds::Option<std::size_t> validate(const lua::Value& table, tbc::val_b<LimitReach> reach, tbc::mut_b<LimitNotices> limits, Validator&& validate_definition) {
+    TBC_GENERIC static ds::Option<std::size_t> validate(const lua::Value& table, tbc::val_b<LimitReach> reach, tbc::mut_b<LimitNotices> limits, const Validator& validate_definition) {
       if (!table.present()) {
         return ds::none;
       }
@@ -281,7 +281,14 @@ export {
       static bool validIndex(std::string_view number) noexcept;
       static void requiredInteger(const lua::Value& value, lua_Integer minimum, lua_Integer maximum);
       static void direction(const lua::Value& action, std::initializer_list<std::string_view> choices);
-      void reference(const lua::Value& action, const char* field, const char* section) const;
+
+      // An action's field that names a client definition, and the section that defines it.
+      struct DefinitionField {
+        const char* field = nullptr;
+        const char* section = nullptr;
+      };
+
+      void reference(const lua::Value& action, DefinitionField definition) const;
       bool commandTab(const lua::Value& action);
       void notification(const lua::Value& action);
       tbc::val_a<std::string_view> fitted(tbc::val_a<std::string_view> text, tbc::val_b<LimitReach> limit);
@@ -343,9 +350,11 @@ export {
       std::string_view text;
       std::string_view detail;
       std::string_view url;
+      static constexpr unsigned default_priority = 50;
+
       const char* action_field = nullptr;
       std::size_t samples = 0;
-      unsigned priority = 50;
+      unsigned priority = default_priority;
       unsigned tone_bonus = 0;
     };
 
@@ -381,7 +390,7 @@ export {
       static Usage usage(const ComponentShape& shape) noexcept;
 
       static constexpr unsigned rank_count = 256;
-      static constexpr Usage staging_capacity{.nodes = 254, .text = 32 * 1024, .actions = 64, .samples = 2048};
+      static constexpr Usage staging_capacity{.nodes = 254, .text = std::size_t{32} * 1024, .actions = 64, .samples = 2048};
       ds::Array<Usage, rank_count> ranked_{};
       Usage offered_;
       Usage taken_;
@@ -523,7 +532,14 @@ export {
         case ComponentKind::button:
           result.primary = value.field("primary").boolean(false);
           break;
-        default:
+        case ComponentKind::badge:
+        case ComponentKind::clock:
+        case ComponentKind::machines:
+        case ComponentKind::heading:
+        case ComponentKind::text:
+        case ComponentKind::key_value:
+        case ComponentKind::actions:
+        case ComponentKind::divider:
           break;
         }
 
@@ -655,7 +671,9 @@ export {
     protected:
       ComponentPlacer() = default;
       ComponentPlacer(const ComponentPlacer&) = default;
+      ComponentPlacer(ComponentPlacer&&) = default;
       ComponentPlacer& operator=(const ComponentPlacer&) = default;
+      ComponentPlacer& operator=(ComponentPlacer&&) = default;
       ~ComponentPlacer() = default;
     };
 
@@ -863,9 +881,11 @@ export {
 
     template <typename Color>
     struct CanvasStepSetting {
+      static constexpr std::size_t maximum_values = 6;
+
       std::uint8_t op = 0;
       std::uint8_t count = 0;
-      ds::Array<float, 6> values{};
+      ds::Array<float, maximum_values> values{};
       ElementColorSetting<Color> color;
       std::string_view text;
     };
@@ -901,7 +921,17 @@ export {
       }
 
     private:
-      inline void element(const Value& value, std::uint32_t parent, unsigned depth) {
+      // The bounds of what an element may set.
+      static constexpr std::uint64_t maximum_lines = 64;
+      static constexpr double maximum_grow = 1000;
+      static constexpr double maximum_rotation = 3600;
+      static constexpr double maximum_scale = 16;
+      static constexpr double maximum_z = 1000;
+      static constexpr double maximum_text_size = 256;
+      static constexpr double maximum_length = 100'000;
+      static constexpr double maximum_canvas_value = 1e6;
+
+      inline void element(const Value& value, std::uint32_t parent, unsigned depth) { // NOLINT(misc-no-recursion): bounded by Element::maximum_depth; an explicit stack of Lua slots, as ComponentTreeWalker keeps, needs the lua_State this reader does not get.
         if (!value.present()) {
           return;
         }
@@ -950,7 +980,7 @@ export {
         }
       }
 
-      inline void children(const Value& value, std::uint32_t parent, unsigned depth) {
+      inline void children(const Value& value, std::uint32_t parent, unsigned depth) { // NOLINT(misc-no-recursion): bounded by Element::maximum_depth.
         const auto count = value.listLength();
 
         for (std::size_t index = 0; index < count; ++index) {
@@ -988,7 +1018,7 @@ export {
           value.onlyFields(std::span<const std::string_view>{combined(layout_fields, {"text", "size", "bold", "italic", "color", "tone", "max_lines"})});
           element.text = text(value.field("text"));
           typography(value, element);
-          element.max_lines = static_cast<std::uint8_t>(value.field("max_lines").boundedInteger(1, 1, 64));
+          element.max_lines = static_cast<std::uint8_t>(value.field("max_lines").boundedInteger(1, 1, maximum_lines));
           break;
         case Kind::icon:
           value.onlyFields(std::span<const std::string_view>{combined(layout_fields, {"name", "glyph", "size", "color", "tone"})});
@@ -1055,17 +1085,17 @@ export {
         element.max_width = length(value.field("max_width"), -1);
         element.min_height = length(value.field("min_height"), 0);
         element.max_height = length(value.field("max_height"), -1);
-        element.grow = static_cast<float>(value.field("grow").boundedNumber(element.grow, 0, 1000));
+        element.grow = static_cast<float>(value.field("grow").boundedNumber(element.grow, 0, maximum_grow));
         if (const auto align = value.field("align_self"); align.present()) {
           element.align_self = choice(align, {"start", "center", "end", "stretch"}, 0);
         }
 
         element.x = offset(value.field("x"));
         element.y = offset(value.field("y"));
-        element.rotation = static_cast<float>(value.field("rotation").boundedNumber(0, -3600, 3600));
-        element.scale = static_cast<float>(value.field("scale").boundedNumber(1, 0, 16));
+        element.rotation = static_cast<float>(value.field("rotation").boundedNumber(0, -maximum_rotation, maximum_rotation));
+        element.scale = static_cast<float>(value.field("scale").boundedNumber(1, 0, maximum_scale));
         element.opacity = static_cast<float>(value.field("opacity").boundedNumber(1, 0, 1));
-        element.z = static_cast<std::int16_t>(std::lround(value.field("z").boundedNumber(0, -1000, 1000)));
+        element.z = static_cast<std::int16_t>(std::lround(value.field("z").boundedNumber(0, -maximum_z, maximum_z)));
         element.background = color(value.field("background"));
         element.radius = length(value.field("radius"), 0);
         element.shadow = value.field("shadow").boolean(false);
@@ -1087,16 +1117,7 @@ export {
           element.hover = color(hover.field("background"));
         }
 
-        if (const auto transition = value.field("transition"); transition.present()) {
-          if (transition.is(LUA_TTABLE)) {
-            transition.onlyFields({"duration", "easing"});
-            element.transition_ms = static_cast<std::uint16_t>(transition.field("duration").boundedInteger(220, 0, 10000));
-            element.easing = choice(transition.field("easing"), {"ease_out", "linear", "ease_in_out"}, 0);
-          } else {
-            element.transition_ms = static_cast<std::uint16_t>(transition.boundedInteger(220, 0, 10000));
-          }
-        }
-
+        transition(value.field("transition"), element);
         if (const auto tooltip = value.field("tooltip"); tooltip.present()) {
           element.tooltip = text(tooltip);
         }
@@ -1111,22 +1132,46 @@ export {
           element.url = text(url);
         }
 
-        if (const auto click = value.field("on_click"); click.present()) {
-          if (click.is(LUA_TFUNCTION)) {
-            if (callbacks_ == Element::maximum_actions) {
-              click.fail("exceeds 1024 click functions");
-            }
+        click(value.field("on_click"), element);
+      }
 
-            element.callback = sink_.callback(click);
-            ++callbacks_;
-          } else if (auto resolved = sink_.resolve(click)) {
-            if (actions_ == Element::maximum_actions) {
-              click.fail("exceeds 1024 click actions");
-            }
+      inline void transition(const Value& value, Element& element) {
+        constexpr std::uint64_t default_transition_ms = 220;
+        constexpr std::uint64_t maximum_transition_ms = 10'000;
 
-            element.action = actions_++;
-            sink_.bind(std::move(resolved.getMut()));
+        if (!value.present()) {
+          return;
+        }
+
+        if (!value.is(LUA_TTABLE)) {
+          element.transition_ms = static_cast<std::uint16_t>(value.boundedInteger(default_transition_ms, 0, maximum_transition_ms));
+          return;
+        }
+
+        value.onlyFields({"duration", "easing"});
+        element.transition_ms = static_cast<std::uint16_t>(value.field("duration").boundedInteger(default_transition_ms, 0, maximum_transition_ms));
+        element.easing = choice(value.field("easing"), {"ease_out", "linear", "ease_in_out"}, 0);
+      }
+
+      inline void click(const Value& value, Element& element) {
+        if (!value.present()) {
+          return;
+        }
+
+        if (value.is(LUA_TFUNCTION)) {
+          if (callbacks_ == Element::maximum_actions) {
+            value.fail("exceeds 1024 click functions");
           }
+
+          element.callback = sink_.callback(value);
+          ++callbacks_;
+        } else if (auto resolved = sink_.resolve(value)) {
+          if (actions_ == Element::maximum_actions) {
+            value.fail("exceeds 1024 click actions");
+          }
+
+          element.action = actions_++;
+          sink_.bind(std::move(resolved.getMut()));
         }
       }
 
@@ -1135,7 +1180,7 @@ export {
           if (size.is(LUA_TSTRING)) {
             element.size_role = choice(size, {"title", "body", "small"}, 1);
           } else {
-            element.size = static_cast<float>(size.boundedNumber(0, 1, 256));
+            element.size = static_cast<float>(size.boundedNumber(0, 1, maximum_text_size));
           }
         }
 
@@ -1178,35 +1223,37 @@ export {
       inline void canvas(const Value& ops, Element& element) {
         struct Shape {
           std::string_view name;
-          std::uint8_t numbers;
-          bool text;
-          bool color;
+          std::uint8_t numbers = 0;
+          bool text = false;
+          bool color = false;
         };
 
         // Matches ElementCanvas::Operation, in order.
-        constexpr ds::Array<Shape, 21> shapes{{
-            {"move", 2, false, false},
-            {"line", 2, false, false},
-            {"curve", 6, false, false},
-            {"quad", 4, false, false},
-            {"arc", 5, false, false},
-            {"rect", 4, false, false},
-            {"round_rect", 5, false, false},
-            {"circle", 3, false, false},
-            {"path", 0, true, false},
-            {"close", 0, false, false},
-            {"fill", 0, false, true},
-            {"stroke", 1, false, true},
-            {"width", 1, false, false},
-            {"cap", 0, true, false},
-            {"join", 0, true, false},
-            {"alpha", 1, false, false},
-            {"translate", 2, false, false},
-            {"rotate", 1, false, false},
-            {"scale", 2, false, false},
-            {"save", 0, false, false},
-            {"restore", 0, false, false},
-        }};
+        constexpr ds::Array<Shape, 21> shapes{
+            {
+                {"move", 2, false, false},
+                {"line", 2, false, false},
+                {"curve", 6, false, false},
+                {"quad", 4, false, false},
+                {"arc", 5, false, false},
+                {"rect", 4, false, false},
+                {"round_rect", 5, false, false},
+                {"circle", 3, false, false},
+                {"path", 0, true, false},
+                {"close", 0, false, false},
+                {"fill", 0, false, true},
+                {"stroke", 1, false, true},
+                {"width", 1, false, false},
+                {"cap", 0, true, false},
+                {"join", 0, true, false},
+                {"alpha", 1, false, false},
+                {"translate", 2, false, false},
+                {"rotate", 1, false, false},
+                {"scale", 2, false, false},
+                {"save", 0, false, false},
+                {"restore", 0, false, false},
+            },
+        };
 
         element.steps_offset = steps_;
         const auto count = ops.present() ? ops.listLength() : 0;
@@ -1216,11 +1263,11 @@ export {
             ops.fail("exceeds 4096 canvas operations");
           }
 
-          const auto op = ops.element(static_cast<lua_Integer>(index) + 1);
-          const auto name = op.element(1).string();
+          const auto operation = ops.element(static_cast<lua_Integer>(index) + 1);
+          const auto name = operation.element(1).string();
           const auto* const shape = std::ranges::find(shapes, name, &Shape::name);
           if (shape == shapes.end()) {
-            op.fail("names an unknown canvas operation");
+            operation.fail("names an unknown canvas operation");
           }
 
           CanvasStepSetting<typename Colors::Color> step;
@@ -1229,22 +1276,22 @@ export {
           lua_Integer next = 2;
 
           if (shape->text) {
-            step.text = text(op.element(next++));
+            step.text = text(operation.element(next++));
           }
 
           if (shape->color) {
-            step.color = color(op.element(next++));
+            step.color = color(operation.element(next++));
           }
 
-          const auto available = op.listLength() - static_cast<std::size_t>(next - 1);
+          const auto available = operation.listLength() - static_cast<std::size_t>(next - 1);
 
           step.count = static_cast<std::uint8_t>(std::min<std::size_t>(available, shape->numbers));
           if ((step.count < shape->numbers && shape->name != "stroke" && shape->name != "scale") || available > shape->numbers) {
-            op.fail("has the wrong number of values");
+            operation.fail("has the wrong number of values");
           }
 
           for (std::uint8_t number = 0; number < step.count; ++number) {
-            step.values.atMut(number) = static_cast<float>(op.element(next++).boundedNumber(0, -1e6, 1e6));
+            step.values.atMut(number) = static_cast<float>(operation.element(next++).boundedNumber(0, -maximum_canvas_value, maximum_canvas_value));
           }
 
           sink_.step(step);
@@ -1262,7 +1309,7 @@ export {
         }
 
         if (const auto index = value.asInteger()) {
-          if (*index < 0 || *index > std::numeric_limits<std::uint8_t>::max()) {
+          if (!std::in_range<std::uint8_t>(*index)) {
             value.fail("is outside the color index range");
           }
 
@@ -1276,7 +1323,7 @@ export {
         if (name.size() == rgba_length && name.front() == '#') {
           unsigned alpha = 0;
           const auto parsed = std::from_chars(name.data() + rgba_length - 2, name.data() + rgba_length, alpha, 16);
-          if (parsed.ec != std::errc{} || parsed.ptr != name.data() + rgba_length) {
+          if (std::make_error_code(parsed.ec) || parsed.ptr != name.data() + rgba_length) {
             value.fail("is not a supported color");
           }
 
@@ -1293,11 +1340,11 @@ export {
       }
 
       inline static float length(const Value& value, float fallback) {
-        return static_cast<float>(value.boundedNumber(fallback, 0, 100000));
+        return static_cast<float>(value.boundedNumber(static_cast<double>(fallback), 0, maximum_length));
       }
 
       inline static float offset(const Value& value) {
-        return static_cast<float>(value.boundedNumber(0, -100000, 100000));
+        return static_cast<float>(value.boundedNumber(0, -maximum_length, maximum_length));
       }
 
       inline static std::uint8_t choice(const Value& value, std::initializer_list<std::string_view> names, std::uint8_t fallback) {
@@ -1315,11 +1362,12 @@ export {
       }
 
       struct Fields {
-        ds::Array<std::string_view, 40> names{};
+        static constexpr std::size_t capacity = 40;
+
+        ds::Array<std::string_view, capacity> names{};
         std::size_t count = 0;
 
-        // NOLINTNEXTLINE(google-explicit-constructor): reads like the field lists it joins.
-        operator std::span<const std::string_view>() const noexcept {
+        explicit operator std::span<const std::string_view>() const noexcept {
           return std::span{names}.first(count);
         }
       };
@@ -1388,7 +1436,7 @@ export {
       // Hands each argument of the definition's `field` list to `visit`, in order. Stays in the
       // interface because it is a template over the caller's callable.
       template <typename Visit>
-      TBC_GENERIC static void read(const lua::Value& definition, const char* field, Visit&& visit) {
+      TBC_GENERIC static void read(const lua::Value& definition, const char* field, const Visit& visit) {
         const auto command = definition.field(field);
         const auto count = command.listLength();
 
@@ -1418,8 +1466,8 @@ export {
     inline constexpr ds::Array<std::string_view, 6> source_kind_names{"tabs", "metrics", "machines", "static", "dynamic", "command"};
 
     struct SourceSetting {
-      static constexpr Bounds<double> every_ms_bounds{.minimum = 100, .maximum = 3'600'000};
-      static constexpr Bounds<double> timeout_ms_bounds{.minimum = 100, .maximum = 10'000};
+      static constexpr Bounds<std::uint64_t> every_ms_bounds{.minimum = 100, .maximum = 3'600'000};
+      static constexpr Bounds<std::uint64_t> timeout_ms_bounds{.minimum = 100, .maximum = 10'000};
       static constexpr std::uint32_t default_every_ms = 1000;
       static constexpr std::uint32_t default_timeout_ms = 2000;
       SourceKind kind = SourceKind::tabs;
@@ -1467,7 +1515,7 @@ export {
       // slots, an empty one with a nil source. Stays in the interface because it is a template
       // over the caller's callable.
       template <typename Visit>
-      TBC_GENERIC static void sources(const lua::Value& client, Visit&& visit) {
+      TBC_GENERIC static void sources(const lua::Value& client, const Visit& visit) {
         const auto bars = client.field("bars");
         if (!bars.present()) {
           return;
@@ -1509,7 +1557,7 @@ export {
   namespace telar::runtime::config {
 
     struct KeyChord {
-      enum class Key {
+      enum class Key : std::uint8_t {
         character,
         up,
         down,
@@ -1527,7 +1575,7 @@ export {
         back_tab,
       };
 
-      enum class Modifier : unsigned {
+      enum class Modifier : std::uint8_t {
         none = 0,
         control = 1,
         alt = 2,
@@ -1568,56 +1616,60 @@ export {
       static constexpr std::size_t maximum_bindings = 256;
 
     private:
-      static constexpr ds::Array<KeyChord, 43> defaultSuffixes() noexcept {
+      static constexpr std::size_t default_suffix_count = 43;
+
+      static constexpr ds::Array<KeyChord, default_suffix_count> defaultSuffixes() noexcept {
         using Key = KeyChord::Key;
         constexpr auto shift = static_cast<unsigned>(KeyChord::Modifier::shift);
         constexpr auto alt = static_cast<unsigned>(KeyChord::Modifier::alt);
 
-        return ds::Array<KeyChord, 43>{{
-            {.key = Key::character, .character = '-'},
-            {.key = Key::character, .character = '='},
-            {.key = Key::character, .character = '%'},
-            {.key = Key::character, .character = '"'},
-            {.key = Key::left},
-            {.key = Key::right},
-            {.key = Key::up},
-            {.key = Key::down},
-            {.key = Key::left, .character = 0, .modifiers = shift},
-            {.key = Key::right, .character = 0, .modifiers = shift},
-            {.key = Key::up, .character = 0, .modifiers = shift},
-            {.key = Key::down, .character = 0, .modifiers = shift},
-            {.key = Key::character, .character = 'z'},
-            {.key = Key::character, .character = 's'},
-            {.key = Key::left, .character = 0, .modifiers = alt},
-            {.key = Key::right, .character = 0, .modifiers = alt},
-            {.key = Key::character, .character = 'w'},
-            {.key = Key::character, .character = 'u'},
-            {.key = Key::character, .character = 'N'},
-            {.key = Key::character, .character = 'W'},
-            {.key = Key::character, .character = 'x'},
-            {.key = Key::character, .character = 'd'},
-            {.key = Key::character, .character = '['},
-            {.key = Key::character, .character = 'g'},
-            {.key = Key::character, .character = '/'},
-            {.key = Key::character, .character = 'f'},
-            {.key = Key::character, .character = '?'},
-            {.key = Key::character, .character = 'c'},
-            {.key = Key::character, .character = 'n'},
-            {.key = Key::character, .character = 'p'},
-            {.key = Key::character, .character = '1'},
-            {.key = Key::character, .character = '2'},
-            {.key = Key::character, .character = '3'},
-            {.key = Key::character, .character = '4'},
-            {.key = Key::character, .character = '5'},
-            {.key = Key::character, .character = '6'},
-            {.key = Key::character, .character = '7'},
-            {.key = Key::character, .character = '8'},
-            {.key = Key::character, .character = '9'},
-            {.key = Key::character, .character = 'T'},
-            {.key = Key::character, .character = 'X'},
-            {.key = Key::character, .character = ','},
-            {.key = Key::character, .character = '.'},
-        }};
+        return ds::Array<KeyChord, default_suffix_count>{
+            {
+                {.key = Key::character, .character = '-'},
+                {.key = Key::character, .character = '='},
+                {.key = Key::character, .character = '%'},
+                {.key = Key::character, .character = '"'},
+                {.key = Key::left},
+                {.key = Key::right},
+                {.key = Key::up},
+                {.key = Key::down},
+                {.key = Key::left, .character = 0, .modifiers = shift},
+                {.key = Key::right, .character = 0, .modifiers = shift},
+                {.key = Key::up, .character = 0, .modifiers = shift},
+                {.key = Key::down, .character = 0, .modifiers = shift},
+                {.key = Key::character, .character = 'z'},
+                {.key = Key::character, .character = 's'},
+                {.key = Key::left, .character = 0, .modifiers = alt},
+                {.key = Key::right, .character = 0, .modifiers = alt},
+                {.key = Key::character, .character = 'w'},
+                {.key = Key::character, .character = 'u'},
+                {.key = Key::character, .character = 'N'},
+                {.key = Key::character, .character = 'W'},
+                {.key = Key::character, .character = 'x'},
+                {.key = Key::character, .character = 'd'},
+                {.key = Key::character, .character = '['},
+                {.key = Key::character, .character = 'g'},
+                {.key = Key::character, .character = '/'},
+                {.key = Key::character, .character = 'f'},
+                {.key = Key::character, .character = '?'},
+                {.key = Key::character, .character = 'c'},
+                {.key = Key::character, .character = 'n'},
+                {.key = Key::character, .character = 'p'},
+                {.key = Key::character, .character = '1'},
+                {.key = Key::character, .character = '2'},
+                {.key = Key::character, .character = '3'},
+                {.key = Key::character, .character = '4'},
+                {.key = Key::character, .character = '5'},
+                {.key = Key::character, .character = '6'},
+                {.key = Key::character, .character = '7'},
+                {.key = Key::character, .character = '8'},
+                {.key = Key::character, .character = '9'},
+                {.key = Key::character, .character = 'T'},
+                {.key = Key::character, .character = 'X'},
+                {.key = Key::character, .character = ','},
+                {.key = Key::character, .character = '.'},
+            },
+        };
       }
 
       KeyChord prefix_{.key = KeyChord::Key::character, .character = 'b', .modifiers = static_cast<unsigned>(KeyChord::Modifier::control)};
@@ -1670,7 +1722,7 @@ export {
       // and returns how many it lists. Stays in the interface because it is a template over the
       // caller's callable; each entry is read out of line.
       template <typename Visit>
-      TBC_GENERIC static std::size_t read(const lua::Value& bindings, KeyChord prefix, Visit&& visit) {
+      TBC_GENERIC static std::size_t read(const lua::Value& bindings, KeyChord prefix, const Visit& visit) {
         if (!bindings.present()) {
           return 0;
         }
@@ -1727,12 +1779,15 @@ export {
       // Hands `consume` each word after the command, in the order parse reads them. Stays in the
       // interface because it is a template over the caller's callable.
       template <typename Consume>
-      TBC_GENERIC void eachArgument(Consume&& consume) const {
+      TBC_GENERIC void eachArgument(const Consume& consume) const {
         consume(std::string_view{entry});
         consume(std::string_view{action});
         consume(std::string_view{context.sidebar_visible ? "1" : "0"});
         for (const std::uint64_t value : {std::uint64_t{context.tab_count}, std::uint64_t{context.active_tab_index}, std::uint64_t{context.pane_count}, context.focused_pane_id}) {
-          ds::Array<char, 20> digits;
+          // The digits of the largest std::uint64_t.
+          constexpr std::size_t maximum_digits = 20;
+
+          ds::Array<char, maximum_digits> digits{};
           const auto written = std::to_chars(digits.dataMut(), digits.dataMut() + digits.size(), value);
 
           consume(std::string_view{digits.data(), static_cast<std::size_t>(written.ptr - digits.data())});
@@ -1794,7 +1849,7 @@ export {
       // and returns how many it dropped past them. Stays in the interface, as does `action`,
       // because it is a template over the caller's callable.
       template <typename Visit>
-      TBC_GENERIC static std::size_t actions(const lua::Value& result, std::size_t maximum, Visit&& visit) {
+      TBC_GENERIC static std::size_t actions(const lua::Value& result, std::size_t maximum, const Visit& visit) {
         if (!result.is(LUA_TTABLE)) {
           result.fail("must be an action or an array of actions");
         }
@@ -1850,7 +1905,7 @@ export {
       // Hands each option of `items` to `visit` with its value, in order. Stays in the interface,
       // as does `definition`, because it is a template over the caller's callable.
       template <typename Visit>
-      TBC_GENERIC static void read(const lua::Value& items, Visit&& visit) {
+      TBC_GENERIC static void read(const lua::Value& items, const Visit& visit) {
         const auto count = items.arraySize();
 
         for (std::size_t index = 1; index <= count; ++index) {
@@ -1863,8 +1918,8 @@ export {
 
       // The options a pick definition lists.
       template <typename Visit>
-      TBC_GENERIC static void definition(const lua::Value& pick, Visit&& visit) {
-        read(pick.field("items"), std::forward<Visit>(visit));
+      TBC_GENERIC static void definition(const lua::Value& pick, const Visit& visit) {
+        read(pick.field("items"), visit);
       }
 
     private:
@@ -1887,7 +1942,7 @@ export {
     };
 
     struct PanelSetting {
-      static constexpr Bounds<double> width_bounds{.minimum = 240, .maximum = 720};
+      static constexpr Bounds<std::uint64_t> width_bounds{.minimum = 240, .maximum = 720};
       static constexpr std::uint16_t default_width = 420;
       DefinitionHeading heading;
       std::uint16_t width = default_width;
@@ -1898,7 +1953,7 @@ export {
     };
 
     struct PickSetting {
-      static constexpr Bounds<double> timeout_ms_bounds{.minimum = 100, .maximum = 60'000};
+      static constexpr Bounds<std::uint64_t> timeout_ms_bounds{.minimum = 100, .maximum = 60'000};
       DefinitionHeading heading;
       std::uint32_t timeout_ms = SourceSetting::default_timeout_ms;
       // Whether a command lists the options, and whether a function renders them.
@@ -1920,7 +1975,7 @@ export {
       // interface because it is a template over the caller's callables; each definition is read
       // out of line.
       template <typename Panel, typename Pick>
-      TBC_GENERIC static DefinitionCounts read(const lua::Value& client, LimitNotices& limits, Panel&& panel, Pick&& pick) {
+      TBC_GENERIC static DefinitionCounts read(const lua::Value& client, LimitNotices& limits, const Panel& panel, const Pick& pick) {
         DefinitionCounts counts;
 
         counts.panels = NamedDefinitionsValidator::validate(client.field("panels"), {"panels.max_panels", "panels", NamedDefinitionsValidator::maximum_definitions, {}, {}}, limits, [&](std::string_view name, const lua::Value& definition, std::size_t index) {
@@ -1995,7 +2050,7 @@ export {
         "transpose",
         "clear_screen",
         "normal_mode",
-        "insert_mode"
+        "insert_mode",
     };
 
     enum class PromptMode : std::uint8_t {
@@ -2027,7 +2082,7 @@ export {
     inline constexpr ds::Array<std::string_view, 2> prompt_binding_mode_names{"insert", "normal"};
 
     struct PromptBounds {
-      static constexpr Bounds<double> max_lines{.minimum = 1, .maximum = 64};
+      static constexpr Bounds<std::uint64_t> max_lines{.minimum = 1, .maximum = 64};
       static constexpr std::size_t bindings = 256;
     };
 
@@ -2056,7 +2111,7 @@ export {
       // Hands each binding to `binding` in order. Stays in the interface because it is a template
       // over the caller's callable.
       template <typename Binding>
-      [[nodiscard]] TBC_GENERIC static tbc::val_a<PromptSettings> read(const lua::Value& table, Binding&& binding) {
+      [[nodiscard]] TBC_GENERIC static tbc::val_a<PromptSettings> read(const lua::Value& table, const Binding& binding) {
         PromptSettings settings;
 
         if (!table.present()) {
@@ -2114,7 +2169,7 @@ export {
 
     // `client.prefix` and `client.input`.
     struct ClientInputSettings {
-      static constexpr Bounds<double> sequence_timeout_bounds{.minimum = 10, .maximum = 10'000};
+      static constexpr Bounds<std::uint64_t> sequence_timeout_bounds{.minimum = 10, .maximum = 10'000};
       ds::Option<KeyChord> prefix;
       ds::Option<std::uint16_t> sequence_timeout_ms;
     };
@@ -2193,7 +2248,7 @@ export {
 
       // Hands each `client.components` function to `visit` with its index in component_slots.
       template <typename Visit>
-      TBC_GENERIC static void slots(const lua::Value& client, Visit&& visit) {
+      TBC_GENERIC static void slots(const lua::Value& client, const Visit& visit) {
         const auto components = client.field("components");
         if (!components.present()) {
           return;

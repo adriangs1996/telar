@@ -174,27 +174,29 @@ export {
 
     private:
       // Each name a theme may give, with the preset it selects.
-      static constexpr ds::Array<std::pair<std::string_view, std::string_view>, 19> presets{{
-          {"cybervenom", "cybervenom"},
-          {"shade", "shade"},
-          {"vesper", "vesper"},
-          {"catppuccin", "catppuccin"},
-          {"catppuccin-mocha", "catppuccin"},
-          {"mocha", "catppuccin"},
-          {"tokyo-night", "tokyo-night"},
-          {"tokyonight", "tokyo-night"},
-          {"tokyo_night", "tokyo-night"},
-          {"pierre-dark", "pierre-dark"},
-          {"pierre-dark-soft", "pierre-dark-soft"},
-          {"kanagawa", "kanagawa"},
-          {"kanagawa-wave", "kanagawa"},
-          {"kanagawa_wave", "kanagawa"},
-          {"kanagawa-dragon", "kanagawa-dragon"},
-          {"kanagawa_dragon", "kanagawa-dragon"},
-          {"terminal", "terminal"},
-          {"default", "terminal"},
-          {"zenburn", "zenburn"},
-      }};
+      static constexpr ds::Array<std::pair<std::string_view, std::string_view>, 19> presets{
+          {
+              {"cybervenom", "cybervenom"},
+              {"shade", "shade"},
+              {"vesper", "vesper"},
+              {"catppuccin", "catppuccin"},
+              {"catppuccin-mocha", "catppuccin"},
+              {"mocha", "catppuccin"},
+              {"tokyo-night", "tokyo-night"},
+              {"tokyonight", "tokyo-night"},
+              {"tokyo_night", "tokyo-night"},
+              {"pierre-dark", "pierre-dark"},
+              {"pierre-dark-soft", "pierre-dark-soft"},
+              {"kanagawa", "kanagawa"},
+              {"kanagawa-wave", "kanagawa"},
+              {"kanagawa_wave", "kanagawa"},
+              {"kanagawa-dragon", "kanagawa-dragon"},
+              {"kanagawa_dragon", "kanagawa-dragon"},
+              {"terminal", "terminal"},
+              {"default", "terminal"},
+              {"zenburn", "zenburn"},
+          },
+      };
 
       static tbc::val_a<ds::Option<std::string_view>> preset(const lua::Value& value);
       static ThemeColor color(const lua::Value& value, bool allow_default);

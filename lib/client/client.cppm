@@ -23,7 +23,9 @@ export namespace telar::runtime {
 export {
   namespace telar {
 
-    using SchemaId = ds::Array<Byte, 8>;
+    inline constexpr std::size_t schema_id_bytes = 8;
+
+    using SchemaId = ds::Array<Byte, schema_id_bytes>;
 
     namespace handshake {
 
@@ -144,11 +146,19 @@ export {
       static Message decodeBody(std::span<const Byte> input) _throw(EncodingError);
     };
 
-    static_assert(HandshakeSchema<ClientHello>::payload_size == 17);
-    static_assert(HandshakeSchema<ServerAccept>::payload_size == 17);
-    static_assert(HandshakeSchema<ServerReject>::payload_size == 18);
-
   } // namespace telar
+}
+
+// The handshake's sizes on the wire, which a peer of any build agrees on.
+namespace telar::handshake {
+
+  inline constexpr std::size_t hello_bytes = 17;
+  inline constexpr std::size_t reject_bytes = 18;
+
+  static_assert(HandshakeSchema<ClientHello>::payload_size == hello_bytes);
+  static_assert(HandshakeSchema<ServerAccept>::payload_size == hello_bytes);
+  static_assert(HandshakeSchema<ServerReject>::payload_size == reject_bytes);
+
 }
 
 // Interface: telar_client/codecs.cppm
@@ -164,12 +174,12 @@ export {
   namespace telar {
 
     struct SocketError final : std::exception {
-      SocketError(const char* message);
+      explicit SocketError(const char* message);
 
       [[nodiscard]] const char* what() const noexcept override;
 
     private:
-      const char* message;
+      const char* message_;
     };
 
     // Owns its socket: closed when the client goes, moved but never copied, and never inherited
@@ -210,7 +220,7 @@ export {
         auto prefix = frame_buffer.first(frame_prefix_size);
 
         u32::encode(static_cast<std::uint32_t>(payload.size()), prefix);
-        writeAll(frame_buffer.data(), frame_prefix_size + payload.size());
+        writeAll(frame_buffer.first(frame_prefix_size + payload.size()));
       }
 
       tbc::val_a<std::span<const Byte>> receiveFrame(tbc::val_a<std::span<Byte>> buffer) _throw(SocketError);
@@ -233,16 +243,16 @@ export {
 
         u32::encode(static_cast<std::uint32_t>(payload.size()), output);
 
-        std::memcpy(output.data(), payload.data(), payload.size());
-        writeAll(frame.data(), frame.size());
+        std::ranges::copy(payload.view(), output.begin());
+        writeAll(frame.view());
       }
 
-      void writeAll(const std::uint8_t* bytes, std::size_t size) _throw(SocketError);
+      void writeAll(std::span<const std::uint8_t> bytes) const _throw(SocketError);
 
-      void readAll(std::uint8_t* bytes, std::size_t size) _throw(SocketError);
+      void readAll(std::span<std::uint8_t> bytes) const _throw(SocketError);
 
-      sockaddr_un _address = {};
-      int _fd = -1;
+      sockaddr_un address_ = {};
+      int fd_ = -1;
     };
 
   } // namespace telar

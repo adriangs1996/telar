@@ -2,6 +2,7 @@
 #import <AppKit/AppKit.h>
 #include <array>
 #include <new>
+#include <span>
 #include <stdexcept>
 
 namespace telar::clipboard {
@@ -14,35 +15,35 @@ namespace telar::clipboard {
       content result{.mime_type = mime_type, .bytes = {}};
 
       if (data.length != 0) {
-        const auto* bytes = static_cast<const byte*>(data.bytes);
+        const std::span<const byte> bytes{static_cast<const byte*>(data.bytes), data.length}; // NOLINT(clang-diagnostic-unsafe-buffer-usage-in-container): NSData hands out its bytes and their length
 
-        result.bytes.assign(bytes, bytes + data.length);
+        result.bytes.assign(bytes.begin(), bytes.end());
       }
 
       return result;
     }
 
     std::expected<content, read_error> capture(NSPasteboard* board, std::size_t maximum_bytes) {
-      struct image_format {
+      struct ImageFormat {
         NSPasteboardType type;
         std::string_view mime_type;
       };
 
       const std::array formats{
-          image_format{.type = NSPasteboardTypePNG, .mime_type = "image/png"},
-          image_format{.type = @"public.jpeg", .mime_type = "image/jpeg"},
-          image_format{.type = NSPasteboardTypeTIFF, .mime_type = "image/tiff"},
+          ImageFormat{.type = NSPasteboardTypePNG, .mime_type = "image/png"},
+          ImageFormat{.type = @"public.jpeg", .mime_type = "image/jpeg"},
+          ImageFormat{.type = NSPasteboardTypeTIFF, .mime_type = "image/tiff"},
       };
 
       // Prefer PNG/JPEG over TIFF, which AppKit can synthesize for legacy consumers.
-      NSArray<NSPasteboardType>* types = board.types;
+      NSArray<NSPasteboardType>* const types = board.types;
 
       for (const auto& format : formats) {
         if (![types containsObject:format.type]) {
           continue;
         }
 
-        NSData* data = [board dataForType:format.type];
+        NSData* const data = [board dataForType:format.type];
         if (data == nil || data.length == 0) {
           continue;
         }
@@ -50,12 +51,12 @@ namespace telar::clipboard {
         return copyData(data, format.mime_type, maximum_bytes);
       }
 
-      NSString* text = [board stringForType:NSPasteboardTypeString];
+      NSString* const text = [board stringForType:NSPasteboardTypeString];
       if (text == nil) {
         return std::unexpected(read_error::no_supported_content);
       }
 
-      NSData* data = [text dataUsingEncoding:NSUTF8StringEncoding];
+      NSData* const data = [text dataUsingEncoding:NSUTF8StringEncoding];
       if (data == nil) {
         return std::unexpected(read_error::encoding_failed);
       }
@@ -66,14 +67,14 @@ namespace telar::clipboard {
 
   std::expected<content, read_error> read(std::size_t maximum_bytes) {
     @autoreleasepool {
-      NSPasteboard* board = [NSPasteboard generalPasteboard];
+      NSPasteboard* const board = [NSPasteboard generalPasteboard];
       const auto revision = board.changeCount;
 
       try {
         auto result = capture(board, maximum_bytes);
 
         if (board.changeCount != revision) {
-          return std::unexpected(read_error::changed);
+          result = std::unexpected(read_error::changed);
         }
 
         return result;

@@ -20,7 +20,7 @@ namespace telar::runtime {
     NetworkAddress addressOf(const Address& address) noexcept {
       NetworkAddress result;
 
-      std::memcpy(&result.storage, &address, sizeof(address));
+      std::memcpy(&result.storage, &address, sizeof(address)); // NOLINT(clang-diagnostic-unsafe-buffer-usage-in-libc-call): a family's sockaddr into sockaddr_storage, which holds any
       result.length = sizeof(address);
       return result;
     }
@@ -28,7 +28,10 @@ namespace telar::runtime {
   }
 
   bool socketWouldBlock(int error) noexcept {
-    return error == EAGAIN || error == EWOULDBLOCK || error == EINTR;
+    // POSIX lets EWOULDBLOCK differ from EAGAIN, though Linux and macOS spell one error twice.
+    constexpr bool distinct_would_block = EWOULDBLOCK != EAGAIN;
+
+    return error == EAGAIN || error == EINTR || (distinct_would_block && error == EWOULDBLOCK);
   }
 
   void suppressSocketSignals(int descriptor) {
@@ -100,21 +103,21 @@ namespace telar::runtime {
     NetworkAddress address;
 
     address.length = static_cast<socklen_t>(expected);
-    std::memcpy(&address.storage, source, expected);
+    std::memcpy(&address.storage, source, expected); // NOLINT(clang-diagnostic-unsafe-buffer-usage-in-libc-call): a family's sockaddr, whose size `size` covers, into sockaddr_storage
     address.setPort(0);
     return address;
   }
 
   void NetworkAddress::setPort(std::uint16_t port) noexcept {
     if (storage.ss_family == AF_INET) {
-      reinterpret_cast<sockaddr_in*>(&storage)->sin_port = htons(port);
+      reinterpret_cast<sockaddr_in*>(&storage)->sin_port = htons(port); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the socket API passes every address family as a sockaddr
     } else if (storage.ss_family == AF_INET6) {
-      reinterpret_cast<sockaddr_in6*>(&storage)->sin6_port = htons(port);
+      reinterpret_cast<sockaddr_in6*>(&storage)->sin6_port = htons(port); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the socket API passes every address family as a sockaddr
     }
   }
 
   const sockaddr* NetworkAddress::address() const noexcept {
-    return reinterpret_cast<const sockaddr*>(&storage);
+    return reinterpret_cast<const sockaddr*>(&storage); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the socket API passes every address family as a sockaddr
   }
 
   void configureProxySocket(int socket) {
@@ -146,7 +149,12 @@ namespace telar::runtime {
 #else
     constexpr int idle_option = TCP_KEEPIDLE;
 #endif
-    constexpr Option options[] = {{.level = SOL_SOCKET, .name = SO_KEEPALIVE, .value = enabled}, {.level = IPPROTO_TCP, .name = idle_option, .value = idle_seconds}, {.level = IPPROTO_TCP, .name = TCP_KEEPINTVL, .value = interval_seconds}, {.level = IPPROTO_TCP, .name = TCP_KEEPCNT, .value = probe_count}};
+    constexpr ds::Array options{
+        Option{.level = SOL_SOCKET, .name = SO_KEEPALIVE, .value = enabled},
+        Option{.level = IPPROTO_TCP, .name = idle_option, .value = idle_seconds},
+        Option{.level = IPPROTO_TCP, .name = TCP_KEEPINTVL, .value = interval_seconds},
+        Option{.level = IPPROTO_TCP, .name = TCP_KEEPCNT, .value = probe_count},
+    };
 
     for (const auto& option : options) {
       if (::setsockopt(socket.get(), option.level, option.name, &option.value, sizeof(option.value)) != 0) {
@@ -160,23 +168,23 @@ namespace telar::runtime {
   SocketStream::SocketStream(int descriptor) noexcept
       : descriptor_(descriptor) {}
 
-  StreamResult SocketStream::read(std::span<std::uint8_t> destination) noexcept {
+  StreamResult SocketStream::read(std::span<std::uint8_t> destination) noexcept { // NOLINT(readability-make-member-function-const): it reads or writes the socket, a mutation tbc sees through the descriptor
     const auto received = ::read(descriptor_, destination.data(), destination.size());
 
     return result(received, StreamReadiness::readable);
   }
 
-  StreamResult SocketStream::peek(std::span<std::uint8_t> destination) noexcept {
+  StreamResult SocketStream::peek(std::span<std::uint8_t> destination) noexcept { // NOLINT(readability-make-member-function-const): it reads or writes the socket, a mutation tbc sees through the descriptor
     return result(::recv(descriptor_, destination.data(), destination.size(), MSG_PEEK), StreamReadiness::readable);
   }
 
-  StreamResult SocketStream::write(std::span<const std::uint8_t> bytes) noexcept {
+  StreamResult SocketStream::write(std::span<const std::uint8_t> bytes) noexcept { // NOLINT(readability-make-member-function-const): it reads or writes the socket, a mutation tbc sees through the descriptor
     const auto sent = ::write(descriptor_, bytes.data(), bytes.size());
 
     return result(sent, StreamReadiness::writable);
   }
 
-  void SocketStream::halfClose() noexcept {
+  void SocketStream::halfClose() noexcept { // NOLINT(readability-make-member-function-const): it reads or writes the socket, a mutation tbc sees through the descriptor
     ::shutdown(descriptor_, SHUT_WR);
   }
 

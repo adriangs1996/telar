@@ -18,6 +18,9 @@ static_assert(true);
 #include <tuple>
 #include <utility>
 
+// pick_controller.hpp reads the definitions, so their module comes first.
+import telar.gui.features.components;
+
 #include "ui/app/chrome/components/pick_controller.hpp"
 #include "ui/app/chrome/components/surface_command.hpp"
 #include "ui/foundation/config/lua_host.hpp"
@@ -40,8 +43,6 @@ static_assert(true);
 #include <exception>
 #include <functional>
 #include <iostream>
-
-import telar.gui.features.components;
 
 import telar.gui.application;
 

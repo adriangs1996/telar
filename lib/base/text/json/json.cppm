@@ -27,15 +27,19 @@ export {
     // A JSON value inside its text, region `b`; the values and texts it hands out view that text.
     class JsonValue {
     public:
-      explicit JsonValue(tbc::val_b<std::string_view> bytes, unsigned maximum_depth = 32);
+      // How deep values nest in a text read without a depth of its own.
+      static constexpr unsigned default_depth = 32;
+
+      explicit JsonValue(tbc::val_b<std::string_view> bytes, unsigned maximum_depth = default_depth);
 
       [[nodiscard]] tbc::val_b<std::string_view> encoded() const noexcept;
 
+      // Each takes the consumer itself, as the lambdas callers pass build it in place.
       template <typename Consumer>
-      TBC_GENERIC void eachElement(Consumer&& consume) const {
+      TBC_GENERIC void eachElement(Consumer consume) const { // NOLINT(misc-no-recursion): callers recurse through it as deep as maximum_depth_ allows
         auto input = bytes_;
 
-        for (bool more = enter(input, '[', ']'); more; more = advance(input, ']')) {
+        for (bool more = enter(input, {.open = '[', .close = ']'}); more; more = advance(input, ']')) {
           const auto before = input;
 
           skipValue(input, maximum_depth_);
@@ -44,10 +48,10 @@ export {
       }
 
       template <typename Consumer>
-      TBC_GENERIC void eachMember(Consumer&& consume) const {
+      TBC_GENERIC void eachMember(Consumer consume) const { // NOLINT(misc-no-recursion): callers recurse through it as deep as maximum_depth_ allows
         auto input = bytes_;
 
-        for (bool more = enter(input, '{', '}'); more; more = advance(input, '}')) {
+        for (bool more = enter(input, {.open = '{', .close = '}'}); more; more = advance(input, '}')) {
           const auto key_start = input;
           const JsonValue key{key_start.substr(0, skipKey(input)), maximum_depth_};
           const auto before = input;
@@ -64,14 +68,20 @@ export {
       template <Allocator Memory>
       void string(ds::String<Memory>& output) const;
 
-      static tbc::val_b<JsonValue> parse(tbc::val_b<std::string_view> input, unsigned maximum_depth = 32);
+      static tbc::val_b<JsonValue> parse(tbc::val_b<std::string_view> input, unsigned maximum_depth = default_depth);
 
     private:
+      // The brackets that open and close an array or an object.
+      struct Brackets {
+        char open;
+        char close;
+      };
+
       // The steps of eachElement and eachMember. `enter` consumes the opening bracket and tells
       // whether a first item follows; `advance` consumes the separator after an item and tells
       // whether another follows. `skipKey` consumes a member's name and the colon after it, and
       // returns the size of the name.
-      static bool enter(std::string_view& input, char open, char close);
+      static bool enter(std::string_view& input, Brackets brackets);
       static bool advance(std::string_view& input, char close);
       static std::size_t skipKey(std::string_view& input);
       static void skipValue(std::string_view& input, unsigned maximum_depth);
@@ -81,7 +91,7 @@ export {
 
       // Writes the unescaped `encoded` to `output`, which holds at least encoded.size() bytes,
       // and returns how many it wrote: an escape never takes fewer bytes than what it spells.
-      static std::size_t unescape(std::string_view encoded, char* output);
+      static std::size_t unescape(std::string_view encoded, std::span<char> output);
 
       tbc::val_b<std::string_view> bytes_;
       unsigned maximum_depth_;
@@ -109,6 +119,8 @@ export {
       constexpr std::string_view hex = "0123456789abcdef";
       constexpr unsigned char first_printable = 0x20;
       constexpr unsigned char delete_byte = 0x7f;
+      constexpr unsigned nibble_bits = 4;
+      constexpr unsigned nibble_mask = 0x0f;
       std::size_t plain = 0;
 
       for (std::size_t index = 0; index < text.size(); ++index) {
@@ -141,7 +153,7 @@ export {
           break;
         }
 
-        if (shorthand == 0 && byte >= first_printable && !(byte == delete_byte && escapes == JsonEscapes::control)) {
+        if (shorthand == 0 && byte >= first_printable && (byte != delete_byte || escapes != JsonEscapes::control)) {
           continue;
         }
 
@@ -152,13 +164,13 @@ export {
 
           emit(std::string_view{escaped.data(), escaped.size()});
         } else {
-          const ds::Array escaped{'\\', 'u', '0', '0', hex[byte >> 4], hex[byte & 15]};
+          const ds::Array escaped{'\\', 'u', '0', '0', hex[byte >> nibble_bits], hex[byte & nibble_mask]};
 
           emit(std::string_view{escaped.data(), escaped.size()});
         }
       }
 
-      emit(text.substr(plain));
+      std::forward<Emit>(emit)(text.substr(plain));
     }
 
     // Appends `text` to `output` as one JSON string literal, quotes included.
@@ -184,7 +196,7 @@ export {
 
 template <>
 struct std::formatter<telar::runtime::JsonQuoted, char> {
-  constexpr tbc::val_a<std::format_parse_context::iterator> parse(tbc::mut_a<std::format_parse_context> context) {
+  static constexpr tbc::val_a<std::format_parse_context::iterator> parse(tbc::mut_a<std::format_parse_context> context) {
     return context.begin();
   }
 
@@ -257,7 +269,7 @@ export {
 export {
   namespace telar::runtime {
 
-    enum class JsonKind {
+    enum class JsonKind : std::uint8_t {
       object,
       array,
       string,

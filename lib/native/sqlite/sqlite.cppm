@@ -41,6 +41,7 @@ export {
 
 // Macros do not cross an import. Each constant the tree reads is captured while the header still
 // defines it, undefined, and exported under its own name.
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage): only a macro can read a macro's value before the header's #undef.
 #define TELAR_SQLITE_CONSTANTS(X) \
   X(SQLITE_CONFIG_GETMALLOC)      \
   X(SQLITE_CONFIG_MALLOC)         \
@@ -80,18 +81,18 @@ namespace telar::native::sqlite::captured {
 #define TELAR_SQLITE_CONSTANT(name) inline constexpr auto name = telar::native::sqlite::captured::name##_;
 
 export {
-  TELAR_SQLITE_CONSTANTS(TELAR_SQLITE_CONSTANT)
+  TELAR_SQLITE_CONSTANTS(TELAR_SQLITE_CONSTANT) // NOLINT(readability-identifier-naming): exported under the C library's own name
 }
 
 // SQLITE_TRANSIENT casts -1 to a destructor pointer, which no constant expression can do.
 namespace telar::native::sqlite::captured {
 
-  inline const auto SQLITE_TRANSIENT_ = SQLITE_TRANSIENT;
+  inline const auto SQLITE_TRANSIENT_ = SQLITE_TRANSIENT; // NOLINT(readability-identifier-naming): the capture of SQLite's macro, named after it
 
 }
 
 #undef SQLITE_TRANSIENT
 
 export {
-  inline const auto SQLITE_TRANSIENT = telar::native::sqlite::captured::SQLITE_TRANSIENT_;
+  inline const auto SQLITE_TRANSIENT = telar::native::sqlite::captured::SQLITE_TRANSIENT_; // NOLINT(readability-identifier-naming): exported under the C library's own name
 }

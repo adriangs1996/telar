@@ -64,7 +64,7 @@ export {
           const auto profiles = root.field("profiles");
           const auto selected = profiles.entry(profile);
 
-          consume(selected.as("config"));
+          std::forward<Consume>(consume)(selected.as("config"));
         }
       }
 
@@ -76,7 +76,7 @@ export {
 
         consume(client, static_cast<const lua::Value*>(nullptr));
         if (!profile.empty()) {
-          overlay(root, profile, client, consume);
+          overlay(root, profile, client, std::forward<Consume>(consume));
         }
       }
 
@@ -87,10 +87,10 @@ export {
         const auto client = root.field("client");
 
         if (profile.empty()) {
-          return consume(client, static_cast<const lua::Value*>(nullptr));
+          return std::forward<Consume>(consume)(client, static_cast<const lua::Value*>(nullptr));
         }
 
-        return overlay(root, profile, client, consume);
+        return overlay(root, profile, client, std::forward<Consume>(consume));
       }
 
       // Hands each `client.prompt` binding to `binding` in order.
@@ -106,13 +106,13 @@ export {
 
     private:
       template <typename Consume>
-      TBC_GENERIC inline static decltype(auto) overlay(const lua::Value& root, std::string_view profile, const lua::Value& client, Consume& consume) {
+      TBC_GENERIC inline static decltype(auto) overlay(const lua::Value& root, std::string_view profile, const lua::Value& client, Consume&& consume) {
         const auto profiles = root.field("profiles");
         const auto selected = profiles.entry(profile);
         const auto configuration = selected.as("config");
         const auto overlay = configuration.field("client");
 
-        return consume(overlay, &client);
+        return std::forward<Consume>(consume)(overlay, &client);
       }
     };
 

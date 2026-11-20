@@ -194,12 +194,15 @@ namespace telar::runtime::config {
   }
 
   ThemeColor ThemeReader::color(const lua::Value& value, bool allow_default) {
+    constexpr std::size_t rgb_text_length = 7;
+    constexpr int first_letter_digit = 10;
+
     const auto text = value.string();
     if (allow_default && text == "default") {
       return {};
     }
 
-    if (text.size() != 7 || text.front() != '#') {
+    if (text.size() != rgb_text_length || text.front() != '#') {
       value.fail("must be an RGB hexadecimal color");
     }
 
@@ -213,7 +216,9 @@ namespace telar::runtime::config {
           value.fail("contains an invalid hexadecimal digit");
         }
 
-        rgb.atMut(channel) = static_cast<std::uint8_t>((rgb[channel] << 4) | (decimal ? lower - '0' : lower - 'a' + 10));
+        const auto nibble = static_cast<unsigned>(decimal ? lower - '0' : lower - 'a' + first_letter_digit);
+
+        rgb.atMut(channel) = static_cast<std::uint8_t>((unsigned{rgb[channel]} << 4U) | nibble);
       }
     }
 

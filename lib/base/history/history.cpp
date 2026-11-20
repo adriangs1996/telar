@@ -14,7 +14,7 @@ namespace telar::runtime {
     std::size_t first = 0;
 
     for (std::size_t index = 0; index < command.size(); ++index) {
-      if (asciiLower(command[index]) != asciiLower(query[matched])) {
+      if (asciiLower(static_cast<unsigned char>(command[index])) != asciiLower(static_cast<unsigned char>(query[matched]))) {
         continue;
       }
 
@@ -37,15 +37,22 @@ namespace telar::runtime {
   }
 
   std::string_view historyGroup(std::string_view command) noexcept {
+    constexpr std::string_view sudo = "sudo ";
     const auto trim = [](std::string_view text) {
-      const auto start = text.find_first_not_of(' ');
+      text.remove_prefix(std::min(text.find_first_not_of(' '), text.size()));
+      return text;
+    };
 
-      return start == std::string_view::npos ? std::string_view{} : text.substr(start);
+    // The first `count` bytes of the command, which holds them.
+    const auto head = [](std::string_view text, std::size_t count) {
+      text.remove_suffix(text.size() - count);
+      return text;
     };
 
     command = trim(command);
-    if (command.starts_with("sudo ")) {
-      command = trim(command.substr(5));
+    if (command.starts_with(sudo)) {
+      command.remove_prefix(sudo.size());
+      command = trim(command);
     }
 
     const auto first_end = command.find(' ');
@@ -54,24 +61,23 @@ namespace telar::runtime {
     }
 
     constexpr ds::Array<std::string_view, 11> leaders{"git", "docker", "kubectl", "cargo", "zig", "npm", "pnpm", "yarn", "make", "brew", "systemctl"};
-    const auto first = command.substr(0, first_end);
+    const auto first = head(command, first_end);
 
-    for (const auto leader : leaders) {
-      if (first != leader) {
-        continue;
-      }
-
-      const auto remainder = trim(command.substr(first_end));
-      if (!remainder.empty() && remainder.front() != '-') {
-        const auto second_end = remainder.find(' ');
-
-        return command.substr(0, static_cast<std::size_t>(remainder.data() - command.data()) + std::min(second_end, remainder.size()));
-      }
-
-      break;
+    if (std::ranges::find(leaders, first) == leaders.end()) {
+      return head(command, first_end);
     }
 
-    return first;
+    auto remainder = command;
+
+    remainder.remove_prefix(first_end);
+    remainder = trim(remainder);
+    if (remainder.empty() || remainder.front() == '-') {
+      return head(command, first_end);
+    }
+
+    const auto second_end = remainder.find(' ');
+
+    return head(command, static_cast<std::size_t>(remainder.data() - command.data()) + std::min(second_end, remainder.size()));
   }
 
 }

@@ -32,7 +32,9 @@ export {
       void print() const noexcept;
 
     private:
-      tbc::val_a<ds::Array<LimitReach, 16>> entries_{};
+      static constexpr std::size_t capacity = 16;
+
+      tbc::val_a<ds::Array<LimitReach, capacity>> entries_{};
       std::size_t count_ = 0;
     };
 
@@ -137,7 +139,7 @@ export {
       static IntegrationProvider describe(AgentProvider provider);
 
       // The path lives in the memory it is written to, region `a`.
-      tbc::val_a<ds::String<Memory>> root(tbc::mut_a<Memory> memory, const EnvironmentSource& environment, bool legacy = false) const;
+      tbc::val_a<ds::String<Memory>> root(tbc::mut_a<Memory> memory, const EnvironmentSource& source, bool legacy = false) const;
 
     private:
       static constexpr auto claude_events = ds::Array<std::string_view, 8>{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop", "Notification", "SessionEnd", "CwdChanged"};

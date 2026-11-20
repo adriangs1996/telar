@@ -2,6 +2,7 @@
 
 // The libghostty-vt modes the tree reads. telar.ghostty.vt exports each as a constant, and the
 // runtime's ghostty-modes test checks every one against the header's own ghostty_mode_new.
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage): an X-macro, since only the preprocessor can read a mode while the header defines it.
 #define TELAR_GHOSTTY_MODES(X)     \
   X(GHOSTTY_MODE_ALT_SCROLL)       \
   X(GHOSTTY_MODE_ANY_MOUSE)        \

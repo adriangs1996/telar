@@ -93,8 +93,10 @@ namespace telar::runtime::machines {
     return code_;
   }
 
-  const char* MachineFailure::name(MachineError code) {
-    static constexpr ds::Array names{
+  namespace {
+
+    // MachineError's names, in its order.
+    constexpr ds::Array machine_error_names{
         "InvalidMachineId",
         "InvalidMachineLabel",
         "InvalidRemoteDestination",
@@ -119,12 +121,15 @@ namespace telar::runtime::machines {
         "InvalidRuntimeDirectory",
     };
 
-    return names.at(static_cast<std::size_t>(code));
+  }
+
+  const char* MachineFailure::name(MachineError code) {
+    return machine_error_names.at(static_cast<std::size_t>(code));
   }
 
   ds::Option<MachineError> MachineFailure::named(std::string_view text) noexcept {
-    for (auto code = std::uint8_t{0}; code <= static_cast<std::uint8_t>(MachineError::invalid_runtime_directory); ++code) {
-      if (text == name(static_cast<MachineError>(code))) {
+    for (std::size_t code = 0; code < machine_error_names.size(); ++code) {
+      if (text == machine_error_names[code]) {
         return static_cast<MachineError>(code);
       }
     }
@@ -154,9 +159,22 @@ namespace telar::runtime::machines {
       return "machines.json is not a file this telar can read";
     case MachineError::incompatible_profiles:
       return "machines.json was written by a newer telar; update this one to read it";
-    default:
-      return ds::none;
+    case MachineError::invalid_id:
+    case MachineError::duplicate_id:
+    case MachineError::discovery_unreadable:
+    case MachineError::host_key_rejected:
+    case MachineError::authentication_failed:
+    case MachineError::remote_program_missing:
+    case MachineError::remote_program_incompatible:
+    case MachineError::remote_runtime_incompatible:
+    case MachineError::endpoint_unavailable:
+    case MachineError::incompatible_schema:
+    case MachineError::runtime_already_running:
+    case MachineError::invalid_runtime_directory:
+      break;
     }
+
+    return ds::none;
   }
 
   template <std::size_t MaximumPathBytes>
@@ -195,7 +213,7 @@ namespace telar::runtime::machines {
       }
     }
 
-    std::memcpy(result.schema_.dataMut(), output.data(), result.schema_.size());
+    std::ranges::copy(output, result.schema_.viewMut().begin());
 
     return result;
   }
@@ -629,7 +647,7 @@ namespace telar::runtime::machines {
       invalid();
     }
 
-    const RadixNumber number{memory, text, floating};
+    const RadixNumber<Memory> number{memory, text, floating};
     const auto maximum = static_cast<std::uint32_t>(std::numeric_limits<Number>::max());
     const auto integral = number.integerPart(maximum);
 
@@ -656,7 +674,7 @@ namespace telar::runtime::machines {
   std::uint32_t JsonUnsignedInteger::rounded(const RadixNumber<Memory>& number, std::uint32_t integral, std::uint32_t maximum) {
     if (!number.negative()) {
       if (integral != 0) {
-        const auto exponent = binary128_significand_bits - (std::bit_width(integral) - 1);
+        const auto exponent = binary128_significand_bits + 1 - static_cast<unsigned>(std::bit_width(integral));
         const BinaryFraction<ordinary_half_exponent> upper{exponent, number.radix()};
         if (number.compareFraction(upper) <= 0) {
           return integral;
@@ -665,7 +683,7 @@ namespace telar::runtime::machines {
 
       if (integral < maximum) {
         const auto next = integral + 1;
-        const auto exponent = binary128_significand_bits - (std::bit_width(next) - 1) + static_cast<unsigned>(std::has_single_bit(next));
+        const auto exponent = binary128_significand_bits + 1 - static_cast<unsigned>(std::bit_width(next)) + static_cast<unsigned>(std::has_single_bit(next));
         const BinaryFraction<ordinary_half_exponent> lower{exponent, number.radix()};
         if (number.compareFraction(lower, true) >= 0) {
           return next;

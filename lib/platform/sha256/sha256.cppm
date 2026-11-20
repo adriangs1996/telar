@@ -41,6 +41,7 @@ export {
 
 // Macros do not cross an import. Each constant the tree reads is captured while the headers still
 // define it, undefined, and exported under its own name.
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage): only a macro can read a macro's value before the header's #undef.
 #define TELAR_SHA256_CONSTANTS(X) \
   X(MD5_DIGEST_LENGTH)            \
   X(SHA256_DIGEST_LENGTH)         \
@@ -60,5 +61,5 @@ namespace telar::runtime::sha256::captured {
 #define TELAR_SHA256_CONSTANT(name) inline constexpr auto name = telar::runtime::sha256::captured::name##_;
 
 export {
-  TELAR_SHA256_CONSTANTS(TELAR_SHA256_CONSTANT)
+  TELAR_SHA256_CONSTANTS(TELAR_SHA256_CONSTANT) // NOLINT(readability-identifier-naming): exported under the C library's own name
 }

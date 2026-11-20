@@ -9,20 +9,16 @@ import telar.base.ds;
 namespace telar::runtime {
 
   std::string_view ProcessEnvironment::lookup(const char* name) const noexcept {
-    const auto* value = std::getenv(name);
+    const auto* value = std::getenv(name); // NOLINT(concurrency-mt-unsafe): POSIX has no thread-safe read of the environment
 
     return value == nullptr ? std::string_view{} : std::string_view{value};
   }
 
-  tbc::val_static<std::string_view> processHome() noexcept {
+  tbc::val_static<std::string_view> processHome() noexcept { // NOLINT(bugprone-exception-escape): only the copy's allocation throws, and a process without memory for it ends, as noexcept states
     // Copied once into storage of its own, which outlives every caller, as the environment it came
     // from may not once something replaces it.
     static SystemAllocator memory;
-    static const ds::String<SystemAllocator> home{memory, [] {
-                                                    const char* value = std::getenv("HOME");
-
-                                                    return value == nullptr ? std::string_view{} : std::string_view{value};
-                                                  }()};
+    [[clang::no_destroy]] static const ds::String<SystemAllocator> home{memory, process_environment.lookup("HOME")};
 
     return home.view();
   }
@@ -50,67 +46,8 @@ namespace telar::runtime::cli {
     }
 
     for (std::size_t index = 0; index < arguments.size(); ++index) {
-      const std::string_view argument = arguments[index];
-      const auto value = [&]() -> std::string_view {
-        if (++index == arguments.size()) {
-          throw std::invalid_argument{"Missing server option value"};
-        }
-
-        return arguments[index];
-      };
-
-      if (argument == "stop" || argument == "endpoint" || argument == "bridge") {
-        if (action_selected) {
-          throw std::invalid_argument{"Duplicate server action"};
-        }
-
-        action_selected = true;
-        options.action = argument == "stop" ? ServerAction::stop : argument == "endpoint" ? ServerAction::endpoint
-                                                                                          : ServerAction::bridge;
-      } else if (argument == "--help") {
-        options.action = ServerAction::help;
-      } else if (argument == "--socket") {
-        setOnce(options.socket, value());
-      } else if (argument == "--history") {
-        setOnce(options.history, value());
-      } else if (argument == "--session") {
-        setOnce(options.session, value());
-      } else if (argument == "--trace") {
-        setOnce(options.trace, value());
-      } else if (argument == "--config") {
-        if (options.no_config) {
-          throw std::invalid_argument{"Conflicting configuration options"};
-        }
-
-        setOnce(options.config, value());
-      } else if (argument == "--profile") {
-        setOnce(options.profile, value());
-      } else if (argument == "--engine-arg") {
-        if (options.engine_argument_count == options.engine_arguments.size()) {
-          throw std::invalid_argument{"Too many engine arguments"};
-        }
-
-        options.engine_arguments.atMut(options.engine_argument_count++) = value();
-      } else if (argument == "--no-session") {
-        options.persist_session = false;
-      } else if (argument == "--no-resume") {
-        options.resume_agents = false;
-      } else if (argument == "--no-config") {
-        if (!options.config.empty()) {
-          throw std::invalid_argument{"Conflicting configuration options"};
-        }
-
-        setFlag(options.no_config);
-      } else if (argument == "--fresh") {
-        setFlag(options.fresh);
-      } else if (argument == "--background" || argument == "--daemonized") {
-        if (options.mode != ServerMode::foreground) {
-          throw std::invalid_argument{"Conflicting server modes"};
-        }
-
-        options.mode = argument == "--background" ? ServerMode::background : ServerMode::daemonized;
-      } else {
-        throw std::invalid_argument{"Unknown server option"};
+      if (!options.applyValueOption(arguments, index)) {
+        options.applyFlagOption(arguments[index], action_selected);
       }
     }
 
@@ -127,6 +64,84 @@ namespace telar::runtime::cli {
     }
 
     return options;
+  }
+
+  bool ServerOptions::applyValueOption(std::span<char* const> arguments, std::size_t& index) {
+    const std::string_view argument = arguments[index];
+
+    if (argument == "--socket") {
+      setOnce(socket, nextValue(arguments, index));
+    } else if (argument == "--history") {
+      setOnce(history, nextValue(arguments, index));
+    } else if (argument == "--session") {
+      setOnce(session, nextValue(arguments, index));
+    } else if (argument == "--trace") {
+      setOnce(trace, nextValue(arguments, index));
+    } else if (argument == "--config") {
+      if (no_config) {
+        throw std::invalid_argument{"Conflicting configuration options"};
+      }
+
+      setOnce(config, nextValue(arguments, index));
+    } else if (argument == "--profile") {
+      setOnce(profile, nextValue(arguments, index));
+    } else if (argument == "--engine-arg") {
+      if (engine_argument_count == engine_arguments.size()) {
+        throw std::invalid_argument{"Too many engine arguments"};
+      }
+
+      engine_arguments.atMut(engine_argument_count++) = nextValue(arguments, index);
+    } else {
+      return false;
+    }
+
+    return true;
+  }
+
+  void ServerOptions::applyFlagOption(std::string_view argument, bool& action_selected) {
+    if (argument == "stop" || argument == "endpoint" || argument == "bridge") {
+      if (action_selected) {
+        throw std::invalid_argument{"Duplicate server action"};
+      }
+
+      action_selected = true;
+      if (argument == "stop") {
+        action = ServerAction::stop;
+      } else {
+        action = argument == "endpoint" ? ServerAction::endpoint : ServerAction::bridge;
+      }
+    } else if (argument == "--help") {
+      action = ServerAction::help;
+    } else if (argument == "--no-session") {
+      persist_session = false;
+    } else if (argument == "--no-resume") {
+      resume_agents = false;
+    } else if (argument == "--no-config") {
+      if (!config.empty()) {
+        throw std::invalid_argument{"Conflicting configuration options"};
+      }
+
+      setFlag(no_config);
+    } else if (argument == "--fresh") {
+      setFlag(fresh);
+    } else if (argument == "--background" || argument == "--daemonized") {
+      if (mode != ServerMode::foreground) {
+        throw std::invalid_argument{"Conflicting server modes"};
+      }
+
+      mode = argument == "--background" ? ServerMode::background : ServerMode::daemonized;
+    } else {
+      throw std::invalid_argument{"Unknown server option"};
+    }
+  }
+
+  tbc::val_static<std::string_view> ServerOptions::nextValue(std::span<char* const> arguments, std::size_t& index) {
+    if (++index == arguments.size()) {
+      throw std::invalid_argument{"Missing server option value"};
+    }
+
+    // argv's strings live as long as the process.
+    return std::string_view{tbc::raw(arguments[index])};
   }
 
   void ServerOptions::setOnce(std::string_view& destination, std::string_view value) {
@@ -190,16 +205,21 @@ namespace telar::runtime::cli {
     SocketLocation location;
 
     if (const auto runtime_directory = environment.lookup("XDG_RUNTIME_DIR"); !runtime_directory.empty()) {
-      location.managed(runtime_directory, "telar");
+      location.managed({.base = runtime_directory, .name = "telar"});
     } else {
       const auto temporary_directory = environment.lookup("TMPDIR");
-      ds::Array<char, 32> name;
+      constexpr std::size_t name_bytes = 32;
       constexpr std::string_view prefix = "telar-";
+      ds::Array<char, name_bytes> name{};
 
       std::ranges::copy(prefix, name.viewMut().begin());
-      const auto converted = std::to_chars(name.dataMut() + prefix.size(), name.dataMut() + name.size(), user);
+      auto digits = name.viewMut().subspan(prefix.size());
+      const auto converted = std::to_chars(digits.data(), std::to_address(digits.end()), user);
 
-      location.managed(temporary_directory.empty() ? "/tmp" : temporary_directory, {name.data(), static_cast<std::size_t>(converted.ptr - name.data())});
+      location.managed({
+          .base = temporary_directory.empty() ? "/tmp" : temporary_directory,
+          .name = {name.data(), static_cast<std::size_t>(converted.ptr - name.data())},
+      });
     }
 
     location.validate();
@@ -219,16 +239,16 @@ namespace telar::runtime::cli {
   }
 
   ds::Option<std::string_view> SocketLocation::managedDirectory() const noexcept {
-    return directory_ == 0 ? ds::none : ds::Option{path().substr(0, directory_)};
+    return directory_ == 0 ? ds::none : ds::Option{std::string_view{bytes_.data(), directory_}};
   }
 
-  void SocketLocation::managed(std::string_view base, std::string_view name) {
-    append(base);
-    if (!base.ends_with('/')) {
+  void SocketLocation::managed(ManagedDirectory directory) {
+    append(directory.base);
+    if (!directory.base.ends_with('/')) {
       append("/");
     }
 
-    append(name);
+    append(directory.name);
     directory_ = length_;
     append("/runtime.sock");
   }
@@ -238,7 +258,7 @@ namespace telar::runtime::cli {
       throw std::invalid_argument{"Invalid absolute runtime socket path"};
     }
 
-    std::ranges::copy(text, bytes_.dataMut() + length_);
+    std::ranges::copy(text, bytes_.viewMut().subspan(length_).begin());
     length_ += text.size();
   }
 
@@ -296,7 +316,7 @@ namespace telar::runtime::cli {
 
   template <Allocator Memory>
   bool RuntimePaths<Memory>::isDefaultSocket(const EnvironmentSource& environment) const {
-    const RuntimePaths expected{socket.memory(), ServerOptions{}, DefaultSocketEnvironment{environment}};
+    const RuntimePaths expected{socket.memory(), ServerOptions(), DefaultSocketEnvironment{environment}};
 
     return socket == expected.socket;
   }

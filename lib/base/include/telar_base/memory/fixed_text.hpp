@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
+#include <span>
 #include <stdexcept>
 #include <string_view>
 #include <type_traits>
@@ -13,9 +14,14 @@ namespace telar::runtime {
   template <std::size_t Capacity>
   class FixedText {
   public:
-    FixedText() noexcept {}
+    FixedText() noexcept {} // NOLINT(modernize-use-equals-default): user-provided, so that value-initializing one leaves its bytes unwritten
 
+    // Copies and moves copy only the text, not the bytes past it.
     FixedText(const FixedText& other) noexcept {
+      copy(other.view());
+    }
+
+    FixedText(FixedText&& other) noexcept {
       copy(other.view());
     }
 
@@ -26,6 +32,16 @@ namespace telar::runtime {
 
       return *this;
     }
+
+    FixedText& operator=(FixedText&& other) noexcept {
+      if (this != &other) {
+        copy(other.view());
+      }
+
+      return *this;
+    }
+
+    ~FixedText() = default;
 
     void assign(std::string_view text) {
       if (text.size() > Capacity) {
@@ -45,9 +61,10 @@ namespace telar::runtime {
     }
 
   private:
+    // The text may be a part of this one's, which lies at or after where it goes.
     void copy(std::string_view text) noexcept {
-      if (!text.empty()) {
-        std::memmove(bytes_.dataMut(), text.data(), text.size());
+      if (text.data() != bytes_.data()) {
+        std::ranges::copy(text, bytes_.viewMut().begin());
       }
 
       length_ = text.size();
@@ -84,10 +101,8 @@ namespace telar::runtime {
   private:
     void append(std::string_view part) noexcept {
       const auto count = std::min(part.size(), Capacity - length_);
-      if (count != 0) {
-        std::memcpy(bytes_.dataMut() + length_, part.data(), count);
-      }
 
+      std::ranges::copy(std::span<const char>{part}.first(count), bytes_.viewMut().subspan(length_).begin());
       length_ += count;
     }
 

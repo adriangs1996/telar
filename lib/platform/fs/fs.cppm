@@ -41,6 +41,8 @@ export {
 
       DirectoryStream(const DirectoryStream&) = delete;
       DirectoryStream& operator=(const DirectoryStream&) = delete;
+      DirectoryStream(DirectoryStream&&) = delete;
+      DirectoryStream& operator=(DirectoryStream&&) = delete;
 
       [[nodiscard]] int descriptor() const noexcept;
       const dirent* next();
@@ -105,7 +107,7 @@ export {
 export {
   namespace telar::runtime {
 
-    enum class FileReadFailure {
+    enum class FileReadFailure : std::uint8_t {
       invalid_size,
       changed,
     };
@@ -155,7 +157,7 @@ export {
 export {
   namespace telar::runtime {
 
-    enum class RenameMode {
+    enum class RenameMode : std::uint8_t {
       create_only,
       replace,
     };
@@ -207,6 +209,8 @@ export {
 
       TemporaryDirectory(const TemporaryDirectory&) = delete;
       TemporaryDirectory& operator=(const TemporaryDirectory&) = delete;
+      TemporaryDirectory(TemporaryDirectory&&) = delete;
+      TemporaryDirectory& operator=(TemporaryDirectory&&) = delete;
 
       [[nodiscard]] int descriptor() const noexcept;
       [[nodiscard]] std::string_view path() const noexcept;
@@ -214,7 +218,7 @@ export {
     private:
       static void removeContents(int directory) noexcept;
 
-      ds::Array<char, PATH_MAX> path_;
+      ds::Array<char, PATH_MAX> path_{};
       std::size_t length_ = 0;
       FileDescriptor directory_;
       struct stat identity_{};

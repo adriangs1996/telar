@@ -11,7 +11,34 @@ import telar.base.text.json;
 import telar.sys.socket;
 import telar.base.ds;
 
+// Not exported: what the inline functions below read digits with.
+namespace telar::runtime::detail {
+
+  // The value of a digit in a base up to 16, or one no base reaches for a byte that is none.
+  constexpr unsigned digitValue(char character) noexcept {
+    constexpr unsigned first_letter = 10;
+
+    if (character >= '0' && character <= '9') {
+      return static_cast<unsigned>(character - '0');
+    }
+
+    if (character >= 'a' && character <= 'f') {
+      return static_cast<unsigned>(character - 'a') + first_letter;
+    }
+
+    if (character >= 'A' && character <= 'F') {
+      return static_cast<unsigned>(character - 'A') + first_letter;
+    }
+
+    return std::numeric_limits<unsigned>::max();
+  }
+
+}
+
 export namespace telar::runtime {
+
+  // The base numbers are read in unless told otherwise.
+  inline constexpr int decimal_base = 10;
 
   enum class NumberError : unsigned char {
     invalid_character,
@@ -21,7 +48,7 @@ export namespace telar::runtime {
   // Digits in `base` (2 to 16) with '_' only between them, as Zig's parseUnsigned reads them, worth
   // at most `limit`. The first failing digit decides the error, as it does there.
   template <std::unsigned_integral Integer>
-  constexpr std::expected<Integer, NumberError> unsignedNumber(std::string_view text, Integer limit = std::numeric_limits<Integer>::max(), unsigned base = 10) noexcept {
+  constexpr std::expected<Integer, NumberError> unsignedNumber(std::string_view text, Integer limit = std::numeric_limits<Integer>::max(), unsigned base = decimal_base) noexcept {
     if (text.empty() || text.front() == '_' || text.back() == '_') {
       return std::unexpected{NumberError::invalid_character};
     }
@@ -33,10 +60,8 @@ export namespace telar::runtime {
         continue;
       }
 
-      const int digit = character >= '0' && character <= '9' ? character - '0' : character >= 'a' && character <= 'f' ? character - 'a' + 10
-                                                                             : character >= 'A' && character <= 'F'   ? character - 'A' + 10
-                                                                                                                      : -1;
-      if (digit < 0 || static_cast<unsigned>(digit) >= base) {
+      const auto digit = detail::digitValue(character);
+      if (digit >= base) {
         return std::unexpected{NumberError::invalid_character};
       }
 
@@ -63,11 +88,13 @@ export namespace telar::runtime {
   // `text` read whole as an Integer in `base`, as std::from_chars reads it; none when any byte is
   // left over or the value does not fit.
   template <std::integral Integer>
-  constexpr ds::Option<Integer> parseExact(std::string_view text, int base = 10) noexcept {
+  constexpr ds::Option<Integer> parseExact(std::string_view text, int base = decimal_base) noexcept {
     Integer value{};
-    const auto* const end = text.data() + text.size();
+    const auto* const end = std::to_address(text.end());
     const auto [ptr, error] = std::from_chars(text.data(), end, value, base);
-    if (error != std::errc{} || ptr != end || text.empty()) {
+
+    // from_chars reports success as the errc of value 0, which names no error.
+    if (std::to_underlying(error) != 0 || ptr != end || text.empty()) {
       return ds::none;
     }
 
@@ -81,14 +108,14 @@ export namespace telar::runtime::base64 {
 
   inline constexpr std::string_view alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-  enum class Padding {
+  enum class Padding : std::uint8_t {
     canonical,
     required,
     optional,
   };
 
   inline constexpr auto encoded_pairs = [] {
-    ds::Array<ds::Array<char, 2>, alphabet.size() * alphabet.size()> pairs;
+    ds::Array<ds::Array<char, 2>, alphabet.size() * alphabet.size()> pairs{};
 
     for (std::size_t index = 0; index < pairs.size(); ++index) {
       pairs.atMut(index) = {alphabet[index / alphabet.size()], alphabet[index % alphabet.size()]};
@@ -113,13 +140,15 @@ export namespace telar::runtime::base64 {
       return ds::none;
     }
 
-    constexpr unsigned pair_bits = 12;
+    constexpr unsigned byte_bits = 8;
+    constexpr unsigned sextet_bits = 6;
+    constexpr unsigned pair_bits = 2 * sextet_bits;
     constexpr auto pair_mask = encoded_pairs.size() - 1;
     std::size_t written = 0;
     std::size_t offset = 0;
 
     for (std::size_t group = 0; group < complete_groups; ++group) {
-      const auto value = (static_cast<std::uint32_t>(bytes[offset]) << 16) | (static_cast<std::uint32_t>(bytes[offset + 1]) << 8) | bytes[offset + 2];
+      const auto value = (static_cast<std::uint32_t>(bytes[offset]) << (2 * byte_bits)) | (static_cast<std::uint32_t>(bytes[offset + 1]) << byte_bits) | bytes[offset + 2];
       const auto& first = encoded_pairs[value >> pair_bits];
       const auto& second = encoded_pairs[value & pair_mask];
 
@@ -132,18 +161,43 @@ export namespace telar::runtime::base64 {
     }
 
     if (remaining != 0) {
-      const auto value = (static_cast<std::uint32_t>(bytes[offset]) << 16) | (remaining == 2 ? static_cast<std::uint32_t>(bytes[offset + 1]) << 8 : 0);
+      const auto value = (static_cast<std::uint32_t>(bytes[offset]) << (2 * byte_bits)) | (remaining == 2 ? static_cast<std::uint32_t>(bytes[offset + 1]) << byte_bits : 0);
       const auto& first = encoded_pairs[value >> pair_bits];
 
       destination[written] = first[0];
       destination[written + 1] = first[1];
-      destination[written + 2] = remaining == 2 ? alphabet[(value >> 6) & (alphabet.size() - 1)] : '=';
+      destination[written + 2] = remaining == 2 ? alphabet[(value >> sextet_bits) & (alphabet.size() - 1)] : '=';
       destination[written + 3] = '=';
       written += 4;
     }
 
     return written;
   }
+
+}
+
+// Not exported: the steps of decode, which text.cpp builds for the three rules.
+namespace telar::runtime::base64 {
+
+  // A group's characters by their ranks in the alphabet: npos for one outside it, as '=', and 0 past
+  // the end of a short group.
+  struct Sextets {
+    std::size_t first;
+    std::size_t second;
+    std::size_t third;
+    std::size_t fourth;
+  };
+
+  Sextets sextetsOf(std::span<const char> group) noexcept;
+
+  // How many bytes a whole group stands for, by the '=' that end it; none when it is not base64
+  // under `Rule`. Only the last group of the text, `last`, may end in '='.
+  template <Padding Rule>
+  ds::Option<std::size_t> groupBytes(std::span<const char> group, const Sextets& sextets, bool last) noexcept;
+
+  // Writes the first `count` bytes the sextets stand for at the front of `destination`, and returns
+  // how many it wrote.
+  std::size_t writeBytes(std::span<std::uint8_t> destination, const Sextets& sextets, std::size_t count) noexcept;
 
 }
 
@@ -161,7 +215,7 @@ export {
   namespace telar::runtime {
 
     inline constexpr char asciiLower(char value) noexcept {
-      return value >= 'A' && value <= 'Z' ? value + ('a' - 'A') : value;
+      return value >= 'A' && value <= 'Z' ? static_cast<char>(value + ('a' - 'A')) : value;
     }
 
     // `text` with its ASCII capitals lowered where it is formatted, with no copy built apart.
@@ -184,17 +238,31 @@ export {
     }
 
     inline constexpr bool asciiStartsWithIgnoreCase(std::string_view text, std::string_view prefix) noexcept {
-      return text.size() >= prefix.size() && asciiEqualIgnoreCase(text.substr(0, prefix.size()), prefix);
+      if (text.size() < prefix.size()) {
+        return false;
+      }
+
+      text.remove_suffix(text.size() - prefix.size());
+      return asciiEqualIgnoreCase(text, prefix);
     }
 
     inline constexpr bool asciiEndsWithIgnoreCase(std::string_view text, std::string_view suffix) noexcept {
-      return text.size() >= suffix.size() && asciiEqualIgnoreCase(text.substr(text.size() - suffix.size()), suffix);
+      if (text.size() < suffix.size()) {
+        return false;
+      }
+
+      text.remove_prefix(text.size() - suffix.size());
+      return asciiEqualIgnoreCase(text, suffix);
     }
 
     // Where `fragment` first occurs in `text` from `from` on, ignoring ASCII case, or npos.
     inline constexpr std::size_t asciiFindIgnoreCase(std::string_view text, std::string_view fragment, std::size_t from = 0) noexcept {
       for (std::size_t start = from; start + fragment.size() <= text.size(); ++start) {
-        if (asciiEqualIgnoreCase(text.substr(start, fragment.size()), fragment)) {
+        auto window = text;
+
+        window.remove_prefix(start);
+        window.remove_suffix(window.size() - fragment.size());
+        if (asciiEqualIgnoreCase(window, fragment)) {
           return start;
         }
       }
@@ -269,7 +337,7 @@ export {
         }
 
         if (!text.empty()) {
-          sink(text);
+          std::forward<Sink>(sink)(text);
         }
       }
 
@@ -278,7 +346,7 @@ export {
       static constexpr void encode(std::string_view text, bool bracketed, Sink&& sink) {
         if (!bracketed) {
           if (!text.empty()) {
-            sink(text);
+            std::forward<Sink>(sink)(text);
           }
 
           return;
@@ -286,7 +354,7 @@ export {
 
         sink(begin);
         body(text, sink);
-        sink(end);
+        std::forward<Sink>(sink)(end);
       }
     };
 
@@ -299,8 +367,9 @@ export {
 
     inline constexpr std::string_view withoutExecutableSuffix(std::string_view name) noexcept {
       for (const auto suffix : {std::string_view{".exe"}, std::string_view{".cmd"}, std::string_view{".bat"}, std::string_view{".js"}}) {
-        if (name.size() >= suffix.size() && asciiEqualIgnoreCase(name.substr(name.size() - suffix.size()), suffix)) {
-          return name.substr(0, name.size() - suffix.size());
+        if (asciiEndsWithIgnoreCase(name, suffix)) {
+          name.remove_suffix(suffix.size());
+          return name;
         }
       }
 
@@ -340,11 +409,13 @@ export {
     // `output`, which must hold them, and returns what it wrote.
     constexpr tbc::val_a<std::string_view> encodeLowerHex(std::span<const std::uint8_t> bytes, tbc::val_a<std::span<char>> output) noexcept {
       constexpr std::string_view digits = "0123456789abcdef";
+      constexpr unsigned nibble_bits = 4;
+      constexpr unsigned nibble_mask = 0x0f;
 
       TELAR_ASSERT(output.size() >= 2 * bytes.size());
       for (std::size_t index = 0; index < bytes.size(); ++index) {
-        output[2 * index] = digits[bytes[index] >> 4];
-        output[(2 * index) + 1] = digits[bytes[index] & 15];
+        output[2 * index] = digits[bytes[index] >> nibble_bits];
+        output[(2 * index) + 1] = digits[bytes[index] & nibble_mask];
       }
 
       return {output.data(), 2 * bytes.size()};
@@ -373,7 +444,7 @@ export {
 
 template <>
 struct std::formatter<telar::runtime::AsciiLower, char> {
-  constexpr tbc::val_a<std::format_parse_context::iterator> parse(tbc::mut_a<std::format_parse_context> context) {
+  static constexpr tbc::val_a<std::format_parse_context::iterator> parse(tbc::mut_a<std::format_parse_context> context) {
     return context.begin();
   }
 
@@ -391,18 +462,20 @@ struct std::formatter<telar::runtime::AsciiLower, char> {
 
 template <>
 struct std::formatter<telar::runtime::LowerHex, char> {
-  constexpr tbc::val_a<std::format_parse_context::iterator> parse(tbc::mut_a<std::format_parse_context> context) {
+  static constexpr tbc::val_a<std::format_parse_context::iterator> parse(tbc::mut_a<std::format_parse_context> context) {
     return context.begin();
   }
 
   template <typename Context>
   TBC_GENERIC tbc::val_a<typename Context::iterator> format(const telar::runtime::LowerHex& hex, tbc::mut_a<Context> context) const {
     constexpr std::string_view digits = "0123456789abcdef";
+    constexpr unsigned nibble_bits = 4;
+    constexpr unsigned nibble_mask = 0x0f;
     auto output = context.out();
 
     for (const auto byte : hex.bytes) {
-      *output++ = digits[byte >> 4];
-      *output++ = digits[byte & 15];
+      *output++ = digits[byte >> nibble_bits];
+      *output++ = digits[byte & nibble_mask];
     }
 
     return output;

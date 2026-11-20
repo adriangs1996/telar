@@ -16,7 +16,7 @@ namespace telar::runtime {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 
-  Sha256::Sha256() noexcept {
+  Sha256::Sha256() noexcept { // NOLINT(cppcoreguidelines-pro-type-member-init): SHA256_Init sets the whole context, which every hashed file builds anew
     SHA256_Init(&context_);
   }
 
@@ -25,7 +25,7 @@ namespace telar::runtime {
   }
 
   ds::Array<std::uint8_t, SHA256_DIGEST_LENGTH> Sha256::finish() noexcept {
-    ds::Array<std::uint8_t, SHA256_DIGEST_LENGTH> digest;
+    ds::Array<std::uint8_t, SHA256_DIGEST_LENGTH> digest{};
 
     SHA256_Final(digest.dataMut(), &context_);
     return digest;
@@ -34,7 +34,7 @@ namespace telar::runtime {
 #pragma clang diagnostic pop
 
   ds::Option<ds::Array<std::uint8_t, MD5_DIGEST_LENGTH>> md5(std::string_view bytes) noexcept {
-    ds::Array<std::uint8_t, MD5_DIGEST_LENGTH> digest;
+    ds::Array<std::uint8_t, MD5_DIGEST_LENGTH> digest{};
     std::size_t length = 0;
     if (EVP_Q_digest(nullptr, "MD5", nullptr, bytes.data(), bytes.size(), digest.dataMut(), &length) != 1 || length != digest.size()) {
       return ds::none;

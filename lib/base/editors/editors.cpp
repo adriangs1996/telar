@@ -5,8 +5,12 @@ import std;
 namespace telar::runtime {
 
   EditorKind identifyEditor(std::string_view path) noexcept {
-    const auto slash = path.rfind('/');
-    const auto name = path.substr(slash == std::string_view::npos ? 0 : slash + 1);
+    auto name = path;
+
+    if (const auto slash = path.rfind('/'); slash != std::string_view::npos) {
+      name.remove_prefix(slash + 1);
+    }
+
     if (name == "nvim") {
       return EditorKind::neovim;
     }

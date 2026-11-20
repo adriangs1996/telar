@@ -8,6 +8,13 @@ import telar.base.ds;
 namespace telar::render {
 
   namespace {
+    constexpr unsigned byte_bits = 8;
+    constexpr unsigned half_word_bits = 16;
+
+    // The two top bits that mark a UTF-8 continuation byte.
+    constexpr std::uint8_t continuation_mask = 0xc0;
+    constexpr std::uint8_t continuation_tag = 0x80;
+
     class Writer {
     public:
       explicit Writer(std::span<std::uint8_t> output) noexcept
@@ -19,16 +26,16 @@ namespace telar::render {
 
       void u16(std::uint16_t value) noexcept {
         u8(static_cast<std::uint8_t>(value));
-        u8(static_cast<std::uint8_t>(value >> 8));
+        u8(static_cast<std::uint8_t>(value >> byte_bits));
       }
 
       void u32(std::uint32_t value) noexcept {
         u16(static_cast<std::uint16_t>(value));
-        u16(static_cast<std::uint16_t>(value >> 16));
+        u16(static_cast<std::uint16_t>(value >> half_word_bits));
       }
 
       void bytes(std::string_view value) noexcept {
-        std::memcpy(output_.data() + at_, value.data(), value.size());
+        std::ranges::copy(value, output_.subspan(at_, value.size()).begin());
         at_ += value.size();
       }
 
@@ -48,19 +55,16 @@ namespace telar::render {
       }
 
       std::uint16_t u16() noexcept {
-        const auto low = u8();
+        const unsigned low = u8();
+        const unsigned high = u8();
 
-        return static_cast<std::uint16_t>(low | (u8() << 8));
+        return static_cast<std::uint16_t>(low | (high << byte_bits));
       }
 
       std::uint32_t u32() noexcept {
         const auto low = u16();
 
-        return low | (static_cast<std::uint32_t>(u16()) << 16);
-      }
-
-      [[nodiscard]] std::size_t at() const noexcept {
-        return at_;
+        return low | (static_cast<std::uint32_t>(u16()) << half_word_bits);
       }
 
     private:
@@ -72,8 +76,8 @@ namespace telar::render {
       return first <= size && count <= size - first;
     }
 
-    bool boundary(std::string_view text, std::size_t at) noexcept {
-      return at == text.size() || (static_cast<std::uint8_t>(text[at]) & 0xc0) != 0x80;
+    bool boundary(std::string_view text, std::size_t index) noexcept {
+      return index == text.size() || (static_cast<std::uint8_t>(text[index]) & continuation_mask) != continuation_tag;
     }
 
     bool validSpan(std::string_view text, Span span) noexcept {
@@ -200,7 +204,7 @@ namespace telar::render {
         block.count = records.u32();
         block.info.offset = records.u32();
         block.info.size = records.u32();
-        if (kind >= static_cast<std::uint8_t>(BlockKind::count) || marker >= static_cast<std::uint8_t>(Marker::count) || callout >= static_cast<std::uint8_t>(Callout::count) || (block.flags & ~Block::known_flags) != 0 || reserved != 0 || reserved_columns != 0 || block.quote > max_nesting || block.list > max_nesting) {
+        if (kind >= static_cast<std::uint8_t>(BlockKind::count) || marker >= static_cast<std::uint8_t>(Marker::count) || callout >= static_cast<std::uint8_t>(Callout::count) || (block.flags | Block::known_flags) != Block::known_flags || reserved != 0 || reserved_columns != 0 || block.quote > max_nesting || block.list > max_nesting) {
           return DecodeError::malformed;
         }
 
@@ -243,7 +247,7 @@ namespace telar::render {
         run.target.offset = records.u32();
         run.target.size = records.u32();
         run.style = records.u16();
-        if (records.u16() != 0 || (run.style & ~style::all) != 0) {
+        if (records.u16() != 0 || (run.style | style::all) != style::all) {
           return DecodeError::malformed;
         }
 
@@ -292,7 +296,8 @@ namespace telar::render {
           case BlockKind::code:
           case BlockKind::html:
             return validSpan(content, Span{.offset = block.first, .size = block.count});
-          default:
+          case BlockKind::rule:
+          case BlockKind::count:
             return true;
           }
         }();
@@ -307,7 +312,7 @@ namespace telar::render {
     tbc::val_a<std::string_view> text(tbc::val_a<std::span<const std::uint8_t>> input, const Counts& counts) noexcept {
       const auto bytes = input.last(counts.text);
 
-      return {reinterpret_cast<const char*>(bytes.data()), bytes.size()};
+      return {reinterpret_cast<const char*>(bytes.data()), bytes.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): char may alias the bytes, and no cast-free view reads them as text
     }
   }
 
@@ -320,7 +325,9 @@ namespace telar::render {
 
   template <Allocator Memory>
   std::string_view Document<Memory>::view(Span span) const noexcept {
-    return std::string_view{text}.substr(span.offset, span.size);
+    const auto bytes = std::span<const char>{text.view()}.subspan(span.offset, span.size);
+
+    return {bytes.begin(), bytes.end()};
   }
 
   template <Allocator Memory>
@@ -416,7 +423,7 @@ namespace telar::render {
     const auto body = output.size();
 
     output.resize(body + encoded);
-    static_cast<void>(runtime::base64::encode(bytes, std::span<char>{output.dataMut() + body, encoded}));
+    static_cast<void>(runtime::base64::encode(bytes, output.viewMut().subspan(body, encoded)));
     output.append("\x1b\\");
     return true;
   }

@@ -12,31 +12,60 @@ import telar.tbc;
 // hashing, bounded file reads beneath a directory descriptor and file
 // fingerprints. Everything read from a repository is untrusted input.
 
+// The defaults of Limits.
+namespace telar::git::default_limits {
+
+  inline constexpr std::size_t kibibyte = std::size_t{1} << 10U;
+  inline constexpr std::size_t mebibyte = std::size_t{1} << 20U;
+
+  inline constexpr std::size_t small_file = 4096;
+  inline constexpr std::size_t config_file = mebibyte;
+  inline constexpr std::size_t packed_refs = 64 * mebibyte;
+  inline constexpr std::size_t shallow_file = 16 * mebibyte;
+  inline constexpr std::size_t index_file = 256 * mebibyte;
+  inline constexpr std::size_t index_entries = std::size_t{1} << 21U;
+  inline constexpr std::size_t path_length = 4095;
+  inline constexpr std::size_t path_depth = 128;
+  inline constexpr std::size_t discovery_depth = 256;
+  inline constexpr std::size_t symbolic_depth = 5;
+  inline constexpr std::size_t packs = 1024;
+  inline constexpr std::size_t object_size = 64 * mebibyte;
+  inline constexpr std::size_t delta_depth = 128;
+  inline constexpr std::size_t inflated_bytes = 256 * mebibyte;
+  inline constexpr std::size_t commit_header = 64 * kibibyte;
+  inline constexpr std::size_t commit_parents = 128;
+  inline constexpr std::size_t commit_graph_layers = 64;
+  inline constexpr std::size_t walk_commits = 20000;
+  inline constexpr std::size_t tree_objects = 20000;
+  inline constexpr std::size_t hashed_bytes = 64 * mebibyte;
+
+}
+
 export namespace telar::git {
 
   // Upper bounds on what one read may consume. Exceeding one reports the
   // affected part as unknown instead of reading further.
   struct Limits {
-    std::size_t small_file = 4096;     // HEAD, loose refs, .git files, commondir
-    std::size_t config_file = 1 << 20; // config, config.worktree
-    std::size_t packed_refs = 64 << 20;
-    std::size_t shallow_file = 16 << 20;
-    std::size_t index_file = 256 << 20;
-    std::size_t index_entries = 1 << 21;
-    std::size_t path_length = 4095;    // one index path or ref name
-    std::size_t path_depth = 128;      // directory components of one index path
-    std::size_t discovery_depth = 256; // parent directories walked to find .git
-    std::size_t symbolic_depth = 5;    // chained symbolic refs, as git's SYMREF_MAXDEPTH
-    std::size_t packs = 1024;
-    std::size_t object_size = 64 << 20; // one inflated object or delta result
-    std::size_t delta_depth = 128;
-    std::size_t inflated_bytes = 256 << 20; // inflated and delta-applied by one read
-    std::size_t commit_header = 64 << 10;   // bytes of a commit inspected for its header
-    std::size_t commit_parents = 128;
-    std::size_t commit_graph_layers = 64;
-    std::size_t walk_commits = 20000;    // commits visited by one ahead/behind walk
-    std::size_t tree_objects = 20000;    // trees read by one HEAD-to-index comparison
-    std::size_t hashed_bytes = 64 << 20; // working tree bytes hashed by one read
+    std::size_t small_file = default_limits::small_file;   // HEAD, loose refs, .git files, commondir
+    std::size_t config_file = default_limits::config_file; // config, config.worktree
+    std::size_t packed_refs = default_limits::packed_refs;
+    std::size_t shallow_file = default_limits::shallow_file;
+    std::size_t index_file = default_limits::index_file;
+    std::size_t index_entries = default_limits::index_entries;
+    std::size_t path_length = default_limits::path_length;         // one index path or ref name
+    std::size_t path_depth = default_limits::path_depth;           // directory components of one index path
+    std::size_t discovery_depth = default_limits::discovery_depth; // parent directories walked to find .git
+    std::size_t symbolic_depth = default_limits::symbolic_depth;   // chained symbolic refs, as git's SYMREF_MAXDEPTH
+    std::size_t packs = default_limits::packs;
+    std::size_t object_size = default_limits::object_size; // one inflated object or delta result
+    std::size_t delta_depth = default_limits::delta_depth;
+    std::size_t inflated_bytes = default_limits::inflated_bytes; // inflated and delta-applied by one read
+    std::size_t commit_header = default_limits::commit_header;   // bytes of a commit inspected for its header
+    std::size_t commit_parents = default_limits::commit_parents;
+    std::size_t commit_graph_layers = default_limits::commit_graph_layers;
+    std::size_t walk_commits = default_limits::walk_commits; // commits visited by one ahead/behind walk
+    std::size_t tree_objects = default_limits::tree_objects; // trees read by one HEAD-to-index comparison
+    std::size_t hashed_bytes = default_limits::hashed_bytes; // working tree bytes hashed by one read
   };
 
   enum class ObjectFormat : std::uint8_t {
@@ -44,24 +73,28 @@ export namespace telar::git {
     sha256,
   };
 
-  inline constexpr std::size_t maximum_hash_size = 32;
+  inline constexpr std::size_t sha1_hash_size = 20;
+  inline constexpr std::size_t sha256_hash_size = 32;
+  inline constexpr std::size_t maximum_hash_size = sha256_hash_size;
   inline constexpr std::size_t default_abbreviation = 7;
 
   inline constexpr std::size_t hashSize(ObjectFormat format) noexcept {
-    return format == ObjectFormat::sha1 ? 20 : 32;
+    return format == ObjectFormat::sha1 ? sha1_hash_size : sha256_hash_size;
   }
 
   inline constexpr int hexValue(char digit) noexcept {
+    constexpr int letter_values = 10;
+
     if (digit >= '0' && digit <= '9') {
       return digit - '0';
     }
 
     if (digit >= 'a' && digit <= 'f') {
-      return digit - 'a' + 10;
+      return digit - 'a' + letter_values;
     }
 
     if (digit >= 'A' && digit <= 'F') {
-      return digit - 'A' + 10;
+      return digit - 'A' + letter_values;
     }
 
     return -1;
@@ -107,6 +140,13 @@ namespace telar::git {
 
   using telar::runtime::FileDescriptor;
 
+  // text.substr(offset, count) without its throw: an offset past the end gives an empty view.
+  inline constexpr std::string_view substring(std::string_view text, std::size_t offset, std::size_t count = std::string_view::npos) noexcept {
+    text.remove_prefix(std::min(offset, text.size()));
+    text.remove_suffix(text.size() - std::min(count, text.size()));
+    return text;
+  }
+
   Fingerprint fingerprintOf(const struct stat& status) noexcept;
 
   // The fingerprint of `name` beneath `directory`, without following a final
@@ -117,14 +157,15 @@ namespace telar::git {
   std::span<const std::uint8_t> asBytes(std::string_view text) noexcept;
   std::string_view asText(std::span<const std::uint8_t> bytes) noexcept;
 
-  // True when [offset, offset + count) lies within `size` bytes, without overflow.
-  inline constexpr bool fits(std::uint64_t size, std::uint64_t offset, std::uint64_t count) noexcept {
-    return offset <= size && count <= size - offset;
+  // True when [offset, offset + count) lies within `length` bytes, without overflow.
+  inline constexpr bool fits(std::uint64_t length, std::uint64_t offset, std::uint64_t count) noexcept {
+    return offset <= length && count <= length - offset;
   }
 
-  std::uint16_t loadBig16(const std::uint8_t* bytes) noexcept;
-  std::uint32_t loadBig32(const std::uint8_t* bytes) noexcept;
-  std::uint64_t loadBig64(const std::uint8_t* bytes) noexcept;
+  // The big-endian integer at `offset` of `bytes`, which holds all of it.
+  std::uint16_t loadBig16(std::span<const std::uint8_t> bytes, std::size_t offset = 0) noexcept;
+  std::uint32_t loadBig32(std::span<const std::uint8_t> bytes, std::size_t offset = 0) noexcept;
+  std::uint64_t loadBig64(std::span<const std::uint8_t> bytes, std::size_t offset = 0) noexcept;
   int compareBytes(std::span<const std::uint8_t> left, std::span<const std::uint8_t> right) noexcept;
 
   // A NUL-terminated name for the *at() calls, assembled without allocating.
@@ -132,11 +173,13 @@ namespace telar::git {
   public:
     PathName() noexcept;
     bool assign(std::initializer_list<std::string_view> parts) noexcept;
-    [[nodiscard]] const char* c_str() const noexcept;
+    [[nodiscard]] const char* cString() const noexcept;
     [[nodiscard]] std::string_view view() const noexcept;
 
   private:
-    ds::Array<char, 4096> bytes_;
+    static constexpr std::size_t capacity = 4096;
+
+    ds::Array<char, capacity> bytes_;
     std::size_t length_ = 0;
   };
 
@@ -150,7 +193,8 @@ namespace telar::git {
   // or a directory is refused; O_NONBLOCK keeps a FIFO from blocking the open.
   ReadStatus openRegular(int directory, const char* name, FileDescriptor& file, struct stat& status) noexcept;
 
-  bool readAt(int descriptor, void* destination, std::size_t size, std::uint64_t offset) noexcept;
+  // Fills `destination` from `offset`; false when the file is shorter or cannot be read.
+  bool readAt(int descriptor, std::span<std::uint8_t> destination, std::uint64_t offset) noexcept;
 
   // Reads a small file into a caller buffer; files that do not fit are invalid.
   ReadStatus readSmall(int directory, const char* name, tbc::val_a<std::span<char>> buffer, tbc::mut_a<std::string_view> contents, Fingerprint* fingerprint = nullptr) noexcept;
@@ -158,7 +202,13 @@ namespace telar::git {
   // Reads a whole file of at most `limit` bytes into `bytes`, which keeps its capacity.
   ReadStatus readWhole(int directory, const char* name, ds::String<Memory>& bytes, std::size_t limit, Fingerprint* fingerprint = nullptr);
 
-  FileDescriptor openDirectory(int directory, const char* name) noexcept;
+  // Whether opening a name follows it when it is a symlink.
+  enum class FinalLink : std::uint8_t {
+    follow,
+    refuse,
+  };
+
+  FileDescriptor openDirectory(int directory, const char* name, FinalLink link = FinalLink::follow) noexcept;
 
   class Sha1 {
   public:
@@ -167,7 +217,7 @@ namespace telar::git {
     ds::Array<std::uint8_t, SHA_DIGEST_LENGTH> finish() noexcept;
 
   private:
-    SHA_CTX context_;
+    SHA_CTX context_{};
   };
 
   // The object hash of the repository's format.

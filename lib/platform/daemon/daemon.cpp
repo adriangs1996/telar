@@ -10,14 +10,13 @@ import telar.base.ds;
 namespace telar::runtime::cli {
 
   FileDescriptor openStartLog(const char* path) noexcept {
-    FileDescriptor file{::open(path, O_WRONLY | O_CREAT | O_APPEND | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK, 0600)};
+    constexpr mode_t private_file_mode = 0600;
+    FileDescriptor file{::open(path, combineFlags(O_WRONLY, O_CREAT, O_APPEND, O_NOFOLLOW, O_CLOEXEC, O_NONBLOCK), private_file_mode)}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
     struct stat state{};
-    if (!file || ::fstat(file.get(), &state) != 0 || !S_ISREG(state.st_mode) || state.st_uid != ::getuid() || state.st_nlink != 1) {
-      return FileDescriptor{};
-    }
+    const bool private_regular_file = file && ::fstat(file.get(), &state) == 0 && S_ISREG(state.st_mode) && state.st_uid == ::getuid() && state.st_nlink == 1;
 
-    if (::fchmod(file.get(), 0600) != 0 || ::ftruncate(file.get(), 0) != 0) {
-      return FileDescriptor{};
+    if (!private_regular_file || ::fchmod(file.get(), private_file_mode) != 0 || ::ftruncate(file.get(), 0) != 0) {
+      file.reset();
     }
 
     return file;
@@ -25,7 +24,7 @@ namespace telar::runtime::cli {
 
   pid_t spawnDaemon(const char* executable, char* const* arguments, const char* log_path) {
     auto log = openStartLog(log_path);
-    FileDescriptor ignored{::open("/dev/null", O_RDWR | O_CLOEXEC)};
+    FileDescriptor ignored{::open("/dev/null", combineFlags(O_RDWR, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
     if (!ignored) {
       throw SystemError{"Open daemon standard streams"};
     }
@@ -45,12 +44,14 @@ namespace telar::runtime::cli {
 
   template <Allocator Memory>
   pid_t launchDaemon(Memory& memory, const ServerOptions& options, const RuntimePaths<Memory>& paths, const ExecutablePath& executable) {
-    ds::Array<char, PATH_MAX> config_path;
+    // Room for every argument but the engine's, which take two each.
+    constexpr std::size_t other_arguments = 28;
+    ds::Array<char, PATH_MAX> config_path{};
     ds::Vec<char*, Memory> arguments{memory};
 
-    arguments.reserve((2 * options.engine_argument_count) + 28);
+    arguments.reserve((2 * options.engine_argument_count) + other_arguments);
     const auto append = [&](std::string_view value) {
-      arguments.push(const_cast<char*>(value.data()));
+      arguments.push(const_cast<char*>(value.data())); // NOLINT(cppcoreguidelines-pro-type-const-cast): posix_spawn's C signature takes the arguments as char*, and does not write them
     };
 
     append(executable.view());

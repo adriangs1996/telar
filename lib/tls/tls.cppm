@@ -90,7 +90,10 @@ export {
       explicit PemDocument(X509* certificate);
 
       PemDocument(const PemDocument&) = delete;
+      PemDocument(PemDocument&&) = delete;
       PemDocument& operator=(const PemDocument&) = delete;
+      PemDocument& operator=(PemDocument&&) = delete;
+      ~PemDocument() = default;
 
       [[nodiscard]] std::span<const std::uint8_t> bytes() const noexcept;
 
@@ -149,7 +152,9 @@ export {
       ~TlsLibrary();
 
       TlsLibrary(const TlsLibrary&) = delete;
+      TlsLibrary(TlsLibrary&&) = delete;
       TlsLibrary& operator=(const TlsLibrary&) = delete;
+      TlsLibrary& operator=(TlsLibrary&&) = delete;
 
       [[nodiscard]] bool uses(const ConcurrentMemory& memory) const noexcept;
 
@@ -159,8 +164,8 @@ export {
       static void* reallocate(void* pointer, std::size_t size, const char* file, int line) noexcept;
 
       // OpenSSL cannot be reinitialized after cleanup, and its callbacks have no context argument.
-      inline static ConcurrentMemory* memory_ = nullptr;
-      inline static bool used_ = false;
+      inline static ConcurrentMemory* configured_memory = nullptr;
+      inline static bool configured = false;
     };
 
   }
@@ -170,7 +175,7 @@ export {
 export {
   namespace telar::runtime {
 
-    enum class AuthorityKind {
+    enum class AuthorityKind : std::uint8_t {
       private_local,
       system_trust,
     };
@@ -188,6 +193,10 @@ export {
     public:
       static constexpr std::string_view common_name = "telar local CA";
 
+      // The digests a fingerprint shows, two hexadecimal characters a byte.
+      static constexpr std::size_t sha1_bytes = 20;
+      static constexpr std::size_t sha256_bytes = 32;
+
       // An authority allocates from its allocator in region `a`; the library only checks that it is configured.
       static tbc::val_a<CertificateAuthority> loadOrCreate(tbc::mut_a<ConcurrentMemory> memory, const TlsLibrary& library, int directory, AuthorityKind kind);
       static tbc::val_a<ds::Option<CertificateAuthority>> loadExisting(tbc::mut_a<ConcurrentMemory> memory, const TlsLibrary& library, int directory, AuthorityKind kind);
@@ -195,8 +204,8 @@ export {
 
       [[nodiscard]] CertificatePair mint(std::string_view hostname) const;
       [[nodiscard]] X509* certificate() const noexcept;
-      [[nodiscard]] ds::Array<char, 40> fingerprint() const;
-      [[nodiscard]] ds::Array<char, 64> fingerprintSha256() const;
+      [[nodiscard]] ds::Array<char, sha1_bytes * 2> fingerprint() const;
+      [[nodiscard]] ds::Array<char, sha256_bytes * 2> fingerprintSha256() const;
 
     private:
       template <std::size_t digest_bytes>
@@ -246,6 +255,13 @@ export {
     public:
       virtual ~TrustCommandRunner() = default;
       virtual void run(std::span<const std::string_view> arguments) = 0;
+
+    protected:
+      TrustCommandRunner() = default;
+      TrustCommandRunner(const TrustCommandRunner&) = default;
+      TrustCommandRunner(TrustCommandRunner&&) = default;
+      TrustCommandRunner& operator=(const TrustCommandRunner&) = default;
+      TrustCommandRunner& operator=(TrustCommandRunner&&) = default;
     };
 
     class SystemCommand : public TrustCommandRunner {
@@ -266,7 +282,7 @@ export {
 export {
   namespace telar::runtime::proxy_trust {
 
-    enum class Backend {
+    enum class Backend : std::uint8_t {
       macos,
       update_ca_certificates,
       trust,
@@ -279,7 +295,7 @@ export {
       static constexpr std::size_t maximum_bytes = 4096;
 
       Backend backend = Backend::macos;
-      ds::Array<char, 40> fingerprint;
+      ds::Array<char, CertificateAuthority::sha1_bytes * 2> fingerprint;
       FixedText<PATH_MAX> store;
 
       static tbc::val_a<Record> parse(tbc::mut_a<ConcurrentMemory> memory, std::string_view source);
@@ -299,12 +315,12 @@ export {
     inline constexpr std::string_view linux_certificate_path = "/usr/local/share/ca-certificates/telar-proxy.crt";
 
     struct Destination {
-      Destination(std::string_view path);
+      Destination(std::string_view path); // NOLINT(cppcoreguidelines-explicit-constructor,misc-explicit-constructor,hicpp-explicit-conversions): a path converts to the macOS destination it names
 
       // Generic over the caller's text type, so it stays here and forwards to the string_view constructor.
       template <typename Text>
         requires std::convertible_to<const Text&, std::string_view>
-      TBC_GENERIC Destination(const Text& path)
+      TBC_GENERIC Destination(const Text& path) // NOLINT(cppcoreguidelines-explicit-constructor,misc-explicit-constructor,hicpp-explicit-conversions): converts as the string_view constructor does
           : Destination(std::string_view{path}) {}
 
       Destination(Backend selected, std::string_view path);
@@ -356,7 +372,7 @@ export {
 export {
   namespace telar::runtime::proxy_trust {
 
-    enum class Status {
+    enum class Status : std::uint8_t {
       absent,
       installed,
       stale,
@@ -393,7 +409,9 @@ export {
       ~PreparedAuthority();
 
       PreparedAuthority(const PreparedAuthority&) = delete;
+      PreparedAuthority(PreparedAuthority&&) = delete;
       PreparedAuthority& operator=(const PreparedAuthority&) = delete;
+      PreparedAuthority& operator=(PreparedAuthority&&) = delete;
 
       [[nodiscard]] std::string_view certificateName() const noexcept;
       [[nodiscard]] const CertificateAuthority& authority() const noexcept;
@@ -412,10 +430,10 @@ export {
       int directory_;
       AuthorityFiles canonical_;
       ds::Option<CertificateAuthority> authority_;
-      Filename key_;
-      Filename certificate_;
-      Filename previous_key_;
-      Filename previous_certificate_;
+      Filename key_{};
+      Filename certificate_{};
+      Filename previous_key_{};
+      Filename previous_certificate_{};
       bool temporary_ = false;
       bool activated_ = false;
       bool committed_ = false;
@@ -430,7 +448,7 @@ export {
 export {
   namespace telar::runtime::proxy_trust {
 
-    enum class Action {
+    enum class Action : std::uint8_t {
       install,
       uninstall,
       rotate,
@@ -521,6 +539,7 @@ export {
 // Macros do not cross an import. Each constant the tree reads is captured while the headers still
 // define it, undefined, and exported under its own name. The function-like macros are functions
 // defined in tls.cpp, where the macros are.
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage): an X-macro lists the C macros to capture, which no template can name
 #define TELAR_TLS_CONSTANTS(X)           \
   X(SSL_ERROR_WANT_READ)                 \
   X(SSL_ERROR_WANT_WRITE)                \
@@ -577,17 +596,17 @@ namespace telar::runtime::tls::captured {
 #define TELAR_TLS_CONSTANT(name) inline constexpr auto name = telar::runtime::tls::captured::name##_;
 
 export {
-  TELAR_TLS_CONSTANTS(TELAR_TLS_CONSTANT)
+  TELAR_TLS_CONSTANTS(TELAR_TLS_CONSTANT) // NOLINT(readability-identifier-naming): exported under OpenSSL's own names
 
-  void OPENSSL_free(void* pointer);
-  long SSL_CTX_set1_verify_cert_store(SSL_CTX* context, X509_STORE* store);
-  long SSL_CTX_set_min_proto_version(SSL_CTX* context, int version);
-  long SSL_CTX_set_mode(SSL_CTX* context, long mode);
-  long SSL_CTX_set_session_cache_mode(SSL_CTX* context, long mode);
-  long SSL_add1_chain_cert(SSL* ssl, X509* certificate);
-  void* SSL_get_app_data(const SSL* ssl);
-  int SSL_set_app_data(SSL* ssl, void* data);
-  long SSL_set_tlsext_host_name(SSL* ssl, const char* name);
-  int sk_X509_OBJECT_num(const stack_st_X509_OBJECT* objects);
-  X509_OBJECT* sk_X509_OBJECT_value(const stack_st_X509_OBJECT* objects, int index);
+  void OPENSSL_free(void* pointer);                                                  // NOLINT(readability-identifier-naming): exported under OpenSSL's own name
+  long SSL_CTX_set1_verify_cert_store(SSL_CTX* context, X509_STORE* store);          // NOLINT(readability-identifier-naming): exported under OpenSSL's own name
+  long SSL_CTX_set_min_proto_version(SSL_CTX* context, int version);                 // NOLINT(readability-identifier-naming): exported under OpenSSL's own name
+  long SSL_CTX_set_mode(SSL_CTX* context, long mode);                                // NOLINT(readability-identifier-naming): exported under OpenSSL's own name
+  long SSL_CTX_set_session_cache_mode(SSL_CTX* context, long mode);                  // NOLINT(readability-identifier-naming): exported under OpenSSL's own name
+  long SSL_add1_chain_cert(SSL* ssl, X509* certificate);                             // NOLINT(readability-identifier-naming): exported under OpenSSL's own name
+  void* SSL_get_app_data(const SSL* ssl);                                            // NOLINT(readability-identifier-naming): exported under OpenSSL's own name
+  int SSL_set_app_data(SSL* ssl, void* data);                                        // NOLINT(readability-identifier-naming): exported under OpenSSL's own name
+  long SSL_set_tlsext_host_name(SSL* ssl, const char* name);                         // NOLINT(readability-identifier-naming): exported under OpenSSL's own name
+  int sk_X509_OBJECT_num(const stack_st_X509_OBJECT* objects);                       // NOLINT(readability-identifier-naming): exported under OpenSSL's own name
+  X509_OBJECT* sk_X509_OBJECT_value(const stack_st_X509_OBJECT* objects, int index); // NOLINT(readability-identifier-naming): exported under OpenSSL's own name
 }

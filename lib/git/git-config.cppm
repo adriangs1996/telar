@@ -29,7 +29,9 @@ namespace telar::git {
     // Stays generic over the caller's visitor, which the parser calls through a function pointer.
     using Target = std::remove_reference_t<Visitor>;
 
-    return parseConfigEntries(text, scratch, const_cast<std::remove_const_t<Target>*>(std::addressof(visit)), [](void* target, const ConfigEntry& entry) -> bool {
+    auto&& visitor = std::forward<Visitor>(visit);
+
+    return parseConfigEntries(text, scratch, const_cast<std::remove_const_t<Target>*>(std::addressof(visitor)), [](void* target, const ConfigEntry& entry) -> bool {
       return (*static_cast<Target*>(target))(entry);
     });
   }

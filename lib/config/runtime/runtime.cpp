@@ -8,12 +8,43 @@ import telar.base.ds;
 
 namespace telar::runtime {
 
+  namespace {
+
+    // How sure each kind of evidence is that it names the agent's state, in percent.
+    constexpr Byte certain_confidence = 100;
+    constexpr Byte blocked_confidence = 88;
+    constexpr Byte working_confidence = 78;
+    constexpr Byte ready_prompt_confidence = 94;
+    constexpr Byte identity_confidence = 90;
+
+    std::chrono::milliseconds reportExpiry(AgentReportState state) noexcept {
+      if (state == AgentReportState::settling) {
+        return AgentEvidence::screen_working_expiry;
+      }
+
+      if (state == AgentReportState::working || state == AgentReportState::waiting) {
+        return AgentEvidence::report_working_expiry;
+      }
+
+      return AgentEvidence::settled_expiry;
+    }
+
+    AgentStatus reportStatus(AgentReportState state) noexcept {
+      if (state == AgentReportState::working || state == AgentReportState::waiting || state == AgentReportState::settling) {
+        return AgentStatus::working;
+      }
+
+      return state == AgentReportState::blocked ? AgentStatus::blocked : AgentStatus::ready;
+    }
+
+  }
+
   bool AgentEvidence::expired(std::int64_t now) const noexcept {
     return expires_at <= now;
   }
 
   AgentEvidence AgentEvidence::process(AgentProvider provider, ObservationTime now) noexcept {
-    return {.provider = provider, .status = AgentStatus::ready, .source = AgentSource::foreground_process, .confidence = 100, .observed = now, .expires_at = std::numeric_limits<std::int64_t>::max()};
+    return {.provider = provider, .status = AgentStatus::ready, .source = AgentSource::foreground_process, .confidence = certain_confidence, .observed = now, .expires_at = std::numeric_limits<std::int64_t>::max()};
   }
 
   AgentEvidence AgentEvidence::screen(AgentProvider provider, AgentSignal signal, ObservationTime now) noexcept {
@@ -21,12 +52,7 @@ namespace telar::runtime {
   }
 
   AgentEvidence AgentEvidence::report(AgentProvider provider, AgentReportState state, ObservationTime now) noexcept {
-    const bool working = state == AgentReportState::working || state == AgentReportState::waiting || state == AgentReportState::settling;
-    const auto expiry = working ? (state == AgentReportState::settling ? screen_working_expiry : report_working_expiry) : settled_expiry;
-    const auto status = working ? AgentStatus::working : state == AgentReportState::blocked ? AgentStatus::blocked
-                                                                                            : AgentStatus::ready;
-
-    return {.provider = provider, .status = status, .source = AgentSource::lifecycle_report, .confidence = 100, .observed = now, .expires_at = now.milliseconds + expiry.count()};
+    return {.provider = provider, .status = reportStatus(state), .source = AgentSource::lifecycle_report, .confidence = certain_confidence, .observed = now, .expires_at = now.milliseconds + reportExpiry(state).count()};
   }
 
   bool completionRequiresSignal(AgentProvider provider) noexcept {
@@ -34,19 +60,7 @@ namespace telar::runtime {
   }
 
   bool containsInsensitive(std::string_view text, std::string_view phrase) noexcept {
-    if (phrase.empty() || phrase.size() > text.size()) {
-      return false;
-    }
-
-    for (std::size_t offset = 0; offset <= text.size() - phrase.size(); ++offset) {
-      if (std::equal(phrase.begin(), phrase.end(), text.begin() + offset, [](char left, char right) {
-            return asciiLower(left) == asciiLower(right);
-          })) {
-        return true;
-      }
-    }
-
-    return false;
+    return !phrase.empty() && asciiFindIgnoreCase(text, phrase) != std::string_view::npos;
   }
 
   template <std::size_t Capacity, std::size_t TextCapacity>
@@ -70,15 +84,15 @@ namespace telar::runtime {
     return std::span{entries_}.first(count_);
   }
 
-  template class ManifestTextList<8, 128>;
-  template class ManifestTextList<16, 64>;
+  template class ManifestTextList<AgentManifest::maximum_processes, AgentManifest::process_bytes>;
+  template class ManifestTextList<AgentManifest::maximum_phrases, AgentManifest::phrase_bytes>;
 
-  void AgentManifest::addCommandTool(std::string_view name, std::string_view field) {
-    if (name.empty() || name.size() > 64 || field.empty() || field.size() > 32 || tool_count == command_tools.size()) {
+  void AgentManifest::addCommandTool(std::string_view tool, std::string_view field) {
+    if (tool.empty() || tool.size() > AgentCommandTool::tool_bytes || field.empty() || field.size() > AgentCommandTool::field_bytes || tool_count == command_tools.size()) {
       throw EncodingError{"Invalid agent command tool"};
     }
 
-    command_tools.atMut(tool_count).tool.assign(name);
+    command_tools.atMut(tool_count).tool.assign(tool);
     command_tools.atMut(tool_count).field.assign(field);
     ++tool_count;
   }
@@ -97,18 +111,22 @@ namespace telar::runtime {
     return display_name.view().empty() ? name.view() : display_name.view();
   }
 
-  tbc::val_a<std::string_view> AgentManifest::placeholderTitle(tbc::mut_a<FixedText<96>> storage) const {
+  tbc::val_a<std::string_view> AgentManifest::placeholderTitle(tbc::mut_a<FixedText<placeholder_bytes>> storage) const {
     if (!placeholder.view().empty()) {
       return placeholder.view();
     }
 
-    ds::Array<char, 96> bytes{};
-    const auto display = displayName();
+    constexpr std::string_view prefix = "New ";
+    constexpr std::string_view suffix = " session";
 
-    std::memcpy(bytes.dataMut(), "New ", 4);
-    std::memcpy(bytes.dataMut() + 4, display.data(), display.size());
-    std::memcpy(bytes.dataMut() + 4 + display.size(), " session", 8);
-    storage.assign({bytes.data(), display.size() + 12});
+    ds::Array<char, placeholder_bytes> bytes{};
+    const auto display = displayName();
+    const auto title = bytes.viewMut();
+
+    std::ranges::copy(prefix, title.begin());
+    std::ranges::copy(display, title.subspan(prefix.size()).begin());
+    std::ranges::copy(suffix, title.subspan(prefix.size() + display.size()).begin());
+    storage.assign({bytes.data(), prefix.size() + display.size() + suffix.size()});
     return storage.view();
   }
 
@@ -122,7 +140,7 @@ namespace telar::runtime {
   }
 
   AgentManifest* AgentManifests::tryAdd(std::string_view name) {
-    if (name.empty() || name.size() > 32 || !std::ranges::all_of(name, [](char byte) {
+    if (name.empty() || name.size() > AgentManifest::name_bytes || !std::ranges::all_of(name, [](char byte) {
           return (byte >= 'a' && byte <= 'z') || (byte >= '0' && byte <= '9') || byte == '-' || byte == '_' || byte == '.';
         })) {
       throw EncodingError{"Invalid agent manifest name"};
@@ -198,25 +216,25 @@ namespace telar::runtime {
   ds::Option<AgentSignal> AgentManifests::detect(std::string_view text) const noexcept {
     for (const auto& entry : entries()) {
       if (entry.blocked.matches(text)) {
-        return AgentSignal{.provider = inferProvider(text), .status = AgentStatus::blocked, .confidence = 88};
+        return AgentSignal{.provider = inferProvider(text), .status = AgentStatus::blocked, .confidence = blocked_confidence};
       }
     }
 
     for (const auto& entry : entries()) {
       if (entry.working.matches(text)) {
-        return AgentSignal{.provider = inferProvider(text), .status = AgentStatus::working, .confidence = 78};
+        return AgentSignal{.provider = inferProvider(text), .status = AgentStatus::working, .confidence = working_confidence};
       }
     }
 
     for (const auto& entry : entries()) {
       if (entry.ready_prompt.matches(text)) {
-        return AgentSignal{.provider = entry.provider, .status = AgentStatus::ready, .confidence = 94, .identity_confirmed = true, .ready_confirmed = true};
+        return AgentSignal{.provider = entry.provider, .status = AgentStatus::ready, .confidence = ready_prompt_confidence, .identity_confirmed = true, .ready_confirmed = true};
       }
     }
 
     for (const auto& entry : entries()) {
       if (entry.identity.matches(text)) {
-        return AgentSignal{.provider = entry.provider, .status = AgentStatus::ready, .confidence = 90, .identity_confirmed = true, .ready_confirmed = false};
+        return AgentSignal{.provider = entry.provider, .status = AgentStatus::ready, .confidence = identity_confidence, .identity_confirmed = true, .ready_confirmed = false};
       }
     }
 
@@ -280,13 +298,13 @@ namespace telar::runtime {
     codex.addCommandTool("exec_command", "cmd");
     codex.addCommandTool("shell", "command");
 
-    auto& pi = table.add("pi");
+    auto& pi_agent = table.add("pi");
 
-    pi.process_paths.append("/@earendil-works/pi-coding-agent/");
-    pi.process_paths.append(R"(\@earendil-works\pi-coding-agent\)");
-    pi.process_paths.append("/@mariozechner/pi-coding-agent/");
-    pi.process_paths.append(R"(\@mariozechner\pi-coding-agent\)");
-    pi.addCommandTool("bash", "command");
+    pi_agent.process_paths.append("/@earendil-works/pi-coding-agent/");
+    pi_agent.process_paths.append(R"(\@earendil-works\pi-coding-agent\)");
+    pi_agent.process_paths.append("/@mariozechner/pi-coding-agent/");
+    pi_agent.process_paths.append(R"(\@mariozechner\pi-coding-agent\)");
+    pi_agent.addCommandTool("bash", "command");
 
     auto& cursor = table.add("cursor");
 
@@ -304,7 +322,7 @@ namespace telar::runtime {
   }
 
   void HistoryPatternList::append(std::string_view pattern) {
-    if (pattern.empty() || pattern.find('\0') != std::string_view::npos) {
+    if (pattern.empty() || pattern.contains('\0')) {
       throw std::invalid_argument{"History filter patterns must not be empty or contain NUL"};
     }
 
@@ -317,13 +335,9 @@ namespace telar::runtime {
   }
 
   bool HistoryPatternList::matches(std::string_view text) const noexcept {
-    for (const auto& pattern : std::span{patterns_}.first(count_)) {
-      if (text.contains(pattern.view())) {
-        return true;
-      }
-    }
-
-    return false;
+    return std::ranges::any_of(std::span{patterns_}.first(count_), [text](const auto& pattern) {
+      return text.contains(pattern.view());
+    });
   }
 
   bool HistoryFilters::allowsPane(std::string_view command, std::string_view directory) const noexcept {
@@ -347,10 +361,10 @@ namespace telar::runtime {
         TokenRule{.marker = "xoxp-", .minimum_length = 10},
     };
 
-    for (const auto& rule : tokens) {
-      if (matchesToken(command, rule)) {
-        return true;
-      }
+    if (std::ranges::any_of(tokens, [command](const TokenRule& rule) {
+          return matchesToken(command, rule);
+        })) {
+      return true;
     }
 
     if (command.contains("hooks.slack.com/services/") || command.contains("-----BEGIN")) {
@@ -359,13 +373,9 @@ namespace telar::runtime {
 
     constexpr ds::Array<std::string_view, 5> assignments{"password=", "passwd=", "token=", "secret=", "api_key="};
 
-    for (const auto marker : assignments) {
-      if (matchesAssignment(command, marker)) {
-        return true;
-      }
-    }
-
-    return false;
+    return std::ranges::any_of(assignments, [command](std::string_view marker) {
+      return matchesAssignment(command, marker);
+    });
   }
 
   bool HistoryFilters::tokenByte(unsigned char byte) noexcept {
@@ -379,10 +389,11 @@ namespace telar::runtime {
         return false;
       }
 
-      const auto suffix = command.substr(found + rule.marker.size());
+      auto suffix = command;
       std::size_t length = 0;
 
-      while (length < suffix.size() && tokenByte(suffix[length])) {
+      suffix.remove_prefix(found + rule.marker.size());
+      while (length < suffix.size() && tokenByte(static_cast<unsigned char>(suffix[length]))) {
         ++length;
       }
 
@@ -401,7 +412,7 @@ namespace telar::runtime {
       bool matches = true;
 
       for (std::size_t index = 0; index < marker.size(); ++index) {
-        const unsigned char byte = command[offset + index];
+        const auto byte = static_cast<unsigned char>(command[offset + index]);
         const auto lower = byte >= 'A' && byte <= 'Z' ? byte + ('a' - 'A') : byte;
         if (lower != marker[index]) {
           matches = false;
@@ -493,19 +504,21 @@ namespace telar::runtime {
       return find(numeric.data());
     }
 
-    ds::Array<char, maximum_hostname_bytes + wildcard_prefix.size()> canonical;
+    ds::Array<char, maximum_hostname_bytes + wildcard_prefix.size()> canonical; // NOLINT(cppcoreguidelines-pro-type-member-init): checked for every proxied host; nothing reads a byte before it is written.
+    const auto bytes = canonical.viewMut();
 
-    std::ranges::transform(hostname, canonical.viewMut().begin() + wildcard_prefix.size(), asciiLower);
-    const std::string_view exact{canonical.data() + wildcard_prefix.size(), hostname.size()};
-    if (find(exact)) {
+    std::ranges::transform(hostname, bytes.subspan(wildcard_prefix.size()).begin(), asciiLower);
+    const auto exact = bytes.subspan(wildcard_prefix.size(), hostname.size());
+    if (find({exact.data(), exact.size()})) {
       return true;
     }
 
     for (auto dot = hostname.find('.'); dot != std::string_view::npos; dot = hostname.find('.', dot + 1)) {
       const auto start = dot + 1;
+      const auto candidate = bytes.subspan(start, hostname.size() - start + wildcard_prefix.size());
 
-      std::ranges::copy(wildcard_prefix, canonical.dataMut() + start);
-      if (find({canonical.data() + start, hostname.size() - start + wildcard_prefix.size()})) {
+      std::ranges::copy(wildcard_prefix, candidate.begin());
+      if (find({candidate.data(), candidate.size()})) {
         return true;
       }
     }
@@ -619,7 +632,7 @@ namespace telar::runtime::config {
         answerback.fail("exceeds 1024 bytes");
       }
 
-      std::copy(text.begin(), text.end(), policy.answerback.dataMut());
+      std::ranges::copy(text, policy.answerback.viewMut().begin());
       policy.answerback_length = static_cast<std::uint16_t>(text.size());
     }
   }

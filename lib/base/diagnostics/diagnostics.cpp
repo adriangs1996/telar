@@ -13,7 +13,7 @@ namespace telar {
 
   TimedScope::~TimedScope() {
     if (timing_ != nullptr) {
-      timing_->observe(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - started_).count());
+      timing_->observe(static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - started_).count()));
     }
   }
 
@@ -30,20 +30,21 @@ namespace telar::runtime {
   }
 
   LimitLedger::Recorded LimitLedger::record(const LimitReach& reach, std::uint32_t hits) {
-    auto rows = rows_.viewMut().first(count_);
-    auto found = std::find_if(rows.begin(), rows.end(), [&](const Row& row) {
-      return row.name.view() == reach.name;
-    });
+    Row* row = nullptr;
 
-    Row* row = found == rows.end() ? nullptr : &*found;
+    for (auto& candidate : rows_.viewMut().first(count_)) {
+      if (candidate.name.view() == reach.name) {
+        row = &candidate;
+        break;
+      }
+    }
+
     if (row == nullptr) {
       if (count_ < capacity) {
         row = &rows_.atMut(count_++);
       } else {
-        row = &*std::min_element(rows.begin(), rows.end(), [](const Row& left, const Row& right) {
-          return left.last_ms < right.last_ms;
-        });
-
+        // Every row is taken: the one recorded longest ago makes room.
+        row = &*std::ranges::min_element(rows_.viewMut().first(count_), {}, &Row::last_ms);
         evicted_ = saturatedAdd(evicted_, 1);
       }
 

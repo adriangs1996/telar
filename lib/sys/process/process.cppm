@@ -1,7 +1,7 @@
 module;
+#include <csignal>
 #include <pthread.h>
 #include <sched.h>
-#include <signal.h>
 #include <spawn.h>
 #include <sys/ioctl.h>
 #include <sys/resource.h>
@@ -24,7 +24,7 @@ export module telar.sys.process;
 // declarations through these using-declarations instead of including them.
 export {
   // Processes and process groups.
-  using ::_exit;
+  using ::_exit; // NOLINT(clang-diagnostic-reserved-identifier): POSIX's own name
   using ::environ;
   using ::execv;
   using ::execve;
@@ -108,6 +108,7 @@ export {
 // Macros do not cross an import. Each one the tree reads is captured while the headers still
 // define it, undefined, and exported under its own name, so `SIGTERM` reads the same to an
 // importer that includes the header and to one that only imports this module.
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage): an X-macro lists the C macros to capture, which no template can name
 #define TELAR_SYS_SIGNALS(X) \
   X(NSIG)                    \
   X(SA_RESTART)              \
@@ -124,6 +125,7 @@ export {
   X(SIG_SETMASK)
 
 // waitpid and posix_spawn.
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage): an X-macro lists the C macros to capture, which no template can name
 #define TELAR_SYS_SPAWN(X)  \
   X(POSIX_SPAWN_SETPGROUP)  \
   X(POSIX_SPAWN_SETSID)     \
@@ -132,6 +134,7 @@ export {
   X(WNOHANG)
 
 // Terminal modes and the terminal ioctls.
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage): an X-macro lists the C macros to capture, which no template can name
 #define TELAR_SYS_TERMINALS(X) \
   X(ECHO)                      \
   X(ICANON)                    \
@@ -149,6 +152,7 @@ export {
   X(_POSIX_VDISABLE)
 
 // glibc declares these as enumerators and defines each macro as its own name.
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage): an X-macro lists the C macros to capture, which no template can name
 #define TELAR_SYS_ENUMERATORS(X) \
   X(PRIO_PROCESS)                \
   X(PTHREAD_CREATE_DETACHED)     \
@@ -159,18 +163,18 @@ namespace telar::sys::captured {
 #define TELAR_SYS_CAPTURE(name) inline constexpr auto name##_ = name;
   TELAR_SYS_SIGNALS(TELAR_SYS_CAPTURE)
   TELAR_SYS_SPAWN(TELAR_SYS_CAPTURE)
-  TELAR_SYS_TERMINALS(TELAR_SYS_CAPTURE)
+  TELAR_SYS_TERMINALS(TELAR_SYS_CAPTURE) // NOLINT(clang-diagnostic-reserved-identifier): POSIX spells _POSIX_VDISABLE with a leading underscore
 #ifndef __GLIBC__
   TELAR_SYS_ENUMERATORS(TELAR_SYS_CAPTURE)
 #endif
 
-  inline constexpr pthread_mutex_t PTHREAD_MUTEX_INITIALIZER_ = PTHREAD_MUTEX_INITIALIZER;
+  inline constexpr pthread_mutex_t mutex_initializer = PTHREAD_MUTEX_INITIALIZER;
 
   // The handlers other than SIG_DFL are integers cast to function pointers, which no constant
   // expression can hold.
-  inline constexpr auto SIG_DFL_ = SIG_DFL;
-  inline const auto SIG_ERR_ = SIG_ERR;
-  inline const auto SIG_IGN_ = SIG_IGN;
+  inline constexpr auto default_handler = SIG_DFL;
+  inline const auto error_handler = SIG_ERR;
+  inline const auto ignore_handler = SIG_IGN;
 
 }
 
@@ -205,7 +209,7 @@ namespace telar::sys::captured {
 #undef VINTR
 #undef VQUIT
 #undef VSUSP
-#undef _POSIX_VDISABLE
+#undef _POSIX_VDISABLE // NOLINT(clang-diagnostic-reserved-macro-identifier): the system header defines it
 #undef PRIO_PROCESS
 #undef PTHREAD_CREATE_DETACHED
 #undef RLIMIT_NOFILE
@@ -225,21 +229,21 @@ namespace telar::sys::captured {
 #endif
 
 export {
-  TELAR_SYS_SIGNALS(TELAR_SYS_CONSTANT)
-  TELAR_SYS_SPAWN(TELAR_SYS_CONSTANT)
-  TELAR_SYS_TERMINALS(TELAR_SYS_CONSTANT)
-  TELAR_SYS_ENUMERATORS(TELAR_SYS_ENUMERATOR)
+  TELAR_SYS_SIGNALS(TELAR_SYS_CONSTANT)       // NOLINT(readability-identifier-naming): exported under the system's own names
+  TELAR_SYS_SPAWN(TELAR_SYS_CONSTANT)         // NOLINT(readability-identifier-naming): exported under the system's own names
+  TELAR_SYS_TERMINALS(TELAR_SYS_CONSTANT)     // NOLINT(bugprone-reserved-identifier,cert-dcl37-c,cert-dcl51-cpp,clang-diagnostic-reserved-identifier,readability-identifier-naming): exported under the system's own names, _POSIX_VDISABLE among them
+  TELAR_SYS_ENUMERATORS(TELAR_SYS_ENUMERATOR) // NOLINT(readability-identifier-naming): exported under the system's own names
 
-  inline constexpr pthread_mutex_t PTHREAD_MUTEX_INITIALIZER = telar::sys::captured::PTHREAD_MUTEX_INITIALIZER_;
-  inline constexpr auto SIG_DFL = telar::sys::captured::SIG_DFL_;
-  inline const auto SIG_ERR = telar::sys::captured::SIG_ERR_;
-  inline const auto SIG_IGN = telar::sys::captured::SIG_IGN_;
+  inline constexpr pthread_mutex_t PTHREAD_MUTEX_INITIALIZER = telar::sys::captured::mutex_initializer; // NOLINT(readability-identifier-naming): exported under the system's own names
+  inline constexpr auto SIG_DFL = telar::sys::captured::default_handler;                                // NOLINT(readability-identifier-naming): exported under the system's own names
+  inline const auto SIG_ERR = telar::sys::captured::error_handler;                                      // NOLINT(readability-identifier-naming): exported under the system's own names
+  inline const auto SIG_IGN = telar::sys::captured::ignore_handler;                                     // NOLINT(readability-identifier-naming): exported under the system's own names
 
   // Darwin reads the status through its address, which no constant expression allows, so these
   // are defined in process.cpp, where the macros are.
-  bool WIFEXITED(int status) noexcept;
-  int WEXITSTATUS(int status) noexcept;
-  int WTERMSIG(int status) noexcept;
+  bool WIFEXITED(int status) noexcept;  // NOLINT(readability-identifier-naming): exported under the system's own names
+  int WEXITSTATUS(int status) noexcept; // NOLINT(readability-identifier-naming): exported under the system's own names
+  int WTERMSIG(int status) noexcept;    // NOLINT(readability-identifier-naming): exported under the system's own names
 }
 
 // Members that the headers reach through a macro have no name an importer can spell.
