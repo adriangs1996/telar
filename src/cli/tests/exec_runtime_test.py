@@ -629,7 +629,16 @@ def repositories(f, prepare_probe=None):
     # The history learns of this clone as it does of any directory: a workspace ran there and
     # was closed. The runtime remembers it after the workspace is gone.
     opened = json.loads(f.invoke("repository/open-closed", "workspace", "create", "--directory", closed, "--json", "--", "/bin/cat").stdout)
-    f.invoke("repository/close-closed", "tab", "close", opened["tab_id"], "--workspace", opened["workspace_id"])
+    # A telar that sets up a machine reads these replies of the machine's telar, whatever its
+    # version: the keys it reads are a contract between versions.
+    assert all(isinstance(opened[key], int) for key in ("workspace_id", "tab_id", "pane_id")), opened
+    listed = json.loads(f.invoke("repository/workspaces-open", "workspace", "list", "--json").stdout)
+    assert any(entry["workspace_id"] == opened["workspace_id"] and isinstance(entry["name"], str) for entry in listed), listed
+    tab = json.loads(f.invoke("repository/tab", "tab", "get", opened["tab_id"], "--workspace", opened["workspace_id"], "--json").stdout)
+    assert (tab["workspace_id"], tab["tab_id"]) == (opened["workspace_id"], opened["tab_id"]), tab
+    assert [pane["pane_id"] for pane in tab["panes"]] == [opened["pane_id"]], tab
+    gone = json.loads(f.invoke("repository/close-closed", "tab", "close", opened["tab_id"], "--workspace", opened["workspace_id"], "--json").stdout)
+    assert (gone["workspace_id"], gone["tab_id"], gone["closed"]) == (opened["workspace_id"], opened["tab_id"], True), gone
     listed = json.loads(f.invoke("repository/workspaces", "workspace", "list", "--json").stdout)
     assert str(closed) not in json.dumps(listed), listed
     f.invoke("repository/ambiguous", *args, data=content, code=1)
