@@ -376,10 +376,10 @@ namespace telar::gui::features::terminal::links {
     ds::Array<std::ptrdiff_t, pair_count> balance{};
 
     for (const auto byte : text) {
-      if (const auto index = openers.find(byte); index < balance.size()) {
-        --balance.atMut(index);
-      } else if (const auto index = closers.find(byte); index != std::string_view::npos) {
-        ++balance.atMut(index);
+      if (const auto opener = openers.find(byte); opener < balance.size()) {
+        --balance.atMut(opener);
+      } else if (const auto closer = closers.find(byte); closer != std::string_view::npos) {
+        ++balance.atMut(closer);
       }
     }
 
@@ -604,7 +604,7 @@ namespace telar::gui::features::terminal::links {
   std::uint32_t PathRecognizer::number(std::string_view text) noexcept {
     std::uint32_t result = 0;
 
-    static_cast<void>(std::from_chars(text.data(), text.data() + text.size(), result));
+    static_cast<void>(std::from_chars(text.data(), std::to_address(text.end()), result));
 
     return result;
   }
@@ -802,9 +802,14 @@ namespace telar::gui::features::terminal::links {
       return fromUri(target.text());
     case LinkScheme::path:
       return fromProse(target.text());
-    default:
-      throw std::invalid_argument{"NotFileLink"};
+    case LinkScheme::http:
+    case LinkScheme::https:
+    case LinkScheme::external:
+      break;
     }
+
+    // A scheme that names no file, or one outside the enum.
+    throw std::invalid_argument{"NotFileLink"};
   }
 
   std::string_view FilePath::text() const noexcept {
@@ -840,9 +845,11 @@ namespace telar::gui::features::terminal::links {
     }
 
     unsigned byte = 0;
-    const auto* const first = text.data() + (policy == EscapePolicy::tolerant && text[1] == '+' ? 2 : 1);
-    const auto result = std::from_chars(first, text.data() + escape_bytes, byte, hexadecimal_base);
-    if (!std::make_error_code(result.ec) && result.ptr == text.data() + escape_bytes) {
+    const auto escape = std::span{text}.first(escape_bytes);
+    const auto digits = escape.subspan(policy == EscapePolicy::tolerant && text[1] == '+' ? 2 : 1);
+    const auto* const end = std::to_address(escape.end());
+    const auto result = std::from_chars(digits.data(), end, byte, hexadecimal_base);
+    if (!std::make_error_code(result.ec) && result.ptr == end) {
       return static_cast<char>(byte);
     }
 

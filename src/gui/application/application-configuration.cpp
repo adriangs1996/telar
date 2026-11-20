@@ -75,7 +75,7 @@ namespace telar::gui::application {
 
     scroll.smooth = gui.scroll.smooth.valueOr(scroll.smooth);
     scroll.wheel_ms = gui.scroll.wheel_ms.valueOr(scroll.wheel_ms);
-    scroll.overscan = static_cast<float>(gui.scroll.overscan.valueOr(scroll.overscan));
+    scroll.overscan = static_cast<float>(gui.scroll.overscan.valueOr(static_cast<double>(scroll.overscan)));
     scroll.sticky_headers = gui.scroll.sticky_headers.valueOr(scroll.sticky_headers);
 
     window(gui.window, configuration);
@@ -85,7 +85,7 @@ namespace telar::gui::application {
       }
     }
 
-    configuration.chrome_scale = static_cast<float>(gui.chrome_scale.valueOr(configuration.chrome_scale));
+    configuration.chrome_scale = static_cast<float>(gui.chrome_scale.valueOr(static_cast<double>(configuration.chrome_scale)));
     if (gui.sidebar.automatic) {
       configuration.sidebar_width_auto = true;
     } else if (gui.sidebar.width) {
@@ -164,9 +164,9 @@ namespace telar::gui::application {
       font.style.assign(settings.style->view());
     }
 
-    font.size = static_cast<float>(settings.size.valueOr(font.size));
-    font.line_height = static_cast<float>(settings.line_height.valueOr(font.line_height));
-    font.letter_spacing = static_cast<float>(settings.letter_spacing.valueOr(font.letter_spacing));
+    font.size = static_cast<float>(settings.size.valueOr(static_cast<double>(font.size)));
+    font.line_height = static_cast<float>(settings.line_height.valueOr(static_cast<double>(font.line_height)));
+    font.letter_spacing = static_cast<float>(settings.letter_spacing.valueOr(static_cast<double>(font.letter_spacing)));
     font.thicken = settings.thicken.valueOr(font.thicken);
     font.thicken_strength = settings.thicken_strength.valueOr(font.thicken_strength);
     if (settings.hinting) {
@@ -175,7 +175,7 @@ namespace telar::gui::application {
   }
 
   void ConfigurationReader::window(const runtime::config::GuiSettings::Window& settings, Configuration& configuration) {
-    configuration.background_opacity = static_cast<float>(settings.background_opacity.valueOr(configuration.background_opacity));
+    configuration.background_opacity = static_cast<float>(settings.background_opacity.valueOr(static_cast<double>(configuration.background_opacity)));
     if (settings.titlebar) {
       configuration.titlebar = settings.titlebar;
     }
@@ -186,8 +186,8 @@ namespace telar::gui::application {
       configuration.background_blur = *settings.blur_radius;
     }
 
-    configuration.padding_x = static_cast<float>(settings.padding_x.valueOr(configuration.padding_x));
-    configuration.padding_y = static_cast<float>(settings.padding_y.valueOr(configuration.padding_y));
+    configuration.padding_x = static_cast<float>(settings.padding_x.valueOr(static_cast<double>(configuration.padding_x)));
+    configuration.padding_y = static_cast<float>(settings.padding_y.valueOr(static_cast<double>(configuration.padding_y)));
   }
 
   CursorShape ConfigurationReader::cursorShape(runtime::config::CursorStyle style) noexcept {
@@ -208,13 +208,9 @@ namespace telar::gui::application {
 
       [[nodiscard]] ds::Option<BindingAction> read(const runtime::lua::Value& value, bool expression = false) {
         auto action = reader_.read(value, expression);
-        if (!action) {
-          return {};
-        }
-
-        if (action->kind == BindingActionKind::callback || action->kind == BindingActionKind::expression) {
+        if (action && (action->kind == BindingActionKind::callback || action->kind == BindingActionKind::expression)) {
           action.getMut().parameter = descriptions_.registerCallback();
-        } else if (action->kind == BindingActionKind::extended) {
+        } else if (action && action->kind == BindingActionKind::extended) {
           action.getMut().parameter = descriptions_.retain(ActionDescriptionReader::read(value, definitions_));
         }
 
@@ -564,7 +560,7 @@ namespace telar::gui::application {
       ElementSink<Memory, decltype(action), decltype(callback)> sink{result.getMut(), action, callback};
       const features::components::ComponentColors colors;
 
-      runtime::config::ElementReader{sink, colors}.read(root);
+      runtime::config::ElementReader<features::components::ComponentColors, decltype(sink)>{sink, colors}.read(root);
     } catch (...) {
       release();
       client_state_.commands.endRender();
@@ -963,7 +959,7 @@ namespace telar::gui::application {
       descriptions_.replaceBindings();
     }
 
-    RecordingActionReader actions{reader, descriptions_, definitions};
+    RecordingActionReader<Memory> actions{reader, descriptions_, definitions};
 
     BindingReader::apply(client, input_, actions);
   }
@@ -988,8 +984,8 @@ namespace telar::gui::application {
     constexpr std::uint64_t callback_instructions = lua_call_instructions;
     constexpr auto callback_deadline = lua_call_deadline;
 
-    for (const auto reference : std::span{transient_references_}.first(transient_count_)) {
-      luaL_unref(machine_.state(), LUA_REGISTRYINDEX, reference);
+    for (const auto transient : std::span{transient_references_}.first(transient_count_)) {
+      luaL_unref(machine_.state(), LUA_REGISTRYINDEX, transient);
     }
 
     transient_count_ = 0;
@@ -1208,9 +1204,9 @@ namespace telar::gui::application::configuration {
       return features::configuration::InputQuery::write(generation.input(), output);
     case Section::theme:
       return features::configuration::ThemeQuery::write(generation.configuration().themes, output);
-    default:
-      throw std::runtime_error{"ConfigurationSectionUnavailable"};
     }
+
+    throw std::runtime_error{"ConfigurationSectionUnavailable"};
   }
 
   template tbc::val_a<std::string_view> query<telar::Memory>(const ConfigurationGeneration<telar::Memory>& generation, const runtime::config::RetainedCommandTabRegistry& commands, ConfigurationQuery query, const ClientQueryContext& context, tbc::val_a<std::span<char>> output);

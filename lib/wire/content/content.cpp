@@ -29,7 +29,7 @@ namespace telar {
 
   void PaneRows::validate() const {
     const auto count = static_cast<std::uint32_t>(cols) * rows;
-    if (rows > ReadPaneRows::maximum_rows || count > 130359 || (rows != 0 && cols == 0)) {
+    if (rows > ReadPaneRows::maximum_rows || count > BodySchema<TerminalSize>::max_cells || (rows != 0 && cols == 0)) {
       throw EncodingError{"Invalid pane rows header"};
     }
 

@@ -12,6 +12,7 @@ import telar.config.client;
 import telar.config.core;
 import telar.config.runtime;
 import telar.base.ds;
+import telar.cli.command_limit;
 
 namespace telar::runtime::cli {
 
@@ -26,11 +27,12 @@ namespace telar::runtime::cli {
     // Prints the formatted message, cut to one line's buffer, and fails with `code`.
     template <typename... Arguments>
     [[noreturn]] void diagnostic(const char* code, std::format_string<Arguments...> format, Arguments&&... arguments) {
-      ds::Array<char, 1024> line;
+      constexpr std::size_t line_bytes = 1024;
+      ds::Array<char, line_bytes> line{};
       const auto written = std::format_to_n(line.dataMut(), line.size(), format, std::forward<Arguments>(arguments)...);
       const auto size = std::min(static_cast<std::size_t>(written.size), line.size());
 
-      std::fprintf(stderr, "telar config: %.*s\n", static_cast<int>(size), line.data());
+      writeFormatted(STDERR_FILENO, "telar config: {}\n", std::string_view{line.data(), size});
       throw ConfigurationFailure{code};
     }
 
@@ -99,16 +101,15 @@ namespace telar::runtime::cli {
         return;
       }
 
-      std::fputs("telar config: warning: Ignored ", stderr);
-      for (std::size_t index = 0; index < count; ++index) {
-        if (index != 0) {
-          std::fputs(", ", stderr);
-        }
+      DescriptorWriter warning{STDERR_FILENO};
 
-        std::fprintf(stderr, "%.*s", static_cast<int>(paths[index].size()), paths[index].data());
+      warning.print("telar config: warning: Ignored ");
+      for (std::size_t index = 0; index < count; ++index) {
+        warning.print("{}{}", index != 0 ? ", " : "", paths[index]);
       }
 
-      std::fputs(": only the retired terminal client used them; remove them\n", stderr);
+      warning.print(": only the retired terminal client used them; remove them\n");
+      warning.flush();
     }
 
     void validatePluginAction(const lua::Value& action, std::span<const plugins::Package> packages) {
@@ -162,7 +163,7 @@ namespace telar::runtime::cli {
       const auto count = std::min(bindings.listLength(), sequences.size());
 
       for (std::size_t index = 0; index < count; ++index) {
-        const auto binding = bindings.element(index + 1);
+        const auto binding = bindings.element(static_cast<lua_Integer>(index) + 1);
 
         validatePluginAction(binding.field("action"), packages);
         auto& sequence = sequences.atMut(index);
@@ -174,16 +175,16 @@ namespace telar::runtime::cli {
         const auto keys = binding.field("keys");
 
         for (std::size_t key = 1; key <= keys.listLength(); ++key) {
-          sequence.keys.atMut(sequence.count++) = config::KeyChordValidator::parse(keys.element(key));
+          sequence.keys.atMut(sequence.count++) = config::KeyChordValidator::parse(keys.element(static_cast<lua_Integer>(key)));
         }
 
         for (std::size_t previous = 0; previous < index; ++previous) {
           const auto& other = sequences[previous];
           const auto shared = std::min(other.count, sequence.count);
-          if (std::equal(sequence.keys.begin(), sequence.keys.begin() + shared, other.keys.begin())) {
+          if (std::ranges::equal(sequence.keys.view().first(shared), other.keys.view().first(shared))) {
             const auto* const error = other.count == sequence.count ? "DuplicateBinding" : "AmbiguousBindingPrefix";
 
-            std::fprintf(stderr, "telar config: keybindings do not compile: %s\n", error);
+            writeFormatted(STDERR_FILENO, "telar config: keybindings do not compile: {}\n", std::string_view{error});
             throw ConfigurationFailure{error};
           }
         }
@@ -222,7 +223,7 @@ namespace telar::runtime::cli {
   int checkConfiguration(const window::ConfigCheckOptions& options) {
     try {
       SystemAllocator system;
-      constexpr std::size_t memory_budget = 64 * 1024 * 1024;
+      constexpr std::size_t memory_budget = std::size_t{64} * 1024 * 1024;
       BudgetAllocator budget{system, memory_budget};
       MemoryAdapter budget_memory{budget};
       Memory& memory = budget_memory;
@@ -238,7 +239,7 @@ namespace telar::runtime::cli {
         }
       }
 
-      ds::Array<char, PATH_MAX> canonical;
+      ds::Array<char, PATH_MAX> canonical{};
       if (::realpath(path.data(), canonical.dataMut()) == nullptr) {
         const auto* const error = sys::errorName(sys::lastError());
 
@@ -248,39 +249,39 @@ namespace telar::runtime::cli {
       // The configuration's directory: the canonical path up to its last separator.
       const std::string_view canonical_path{canonical.data()};
       const auto directory = canonical_path.substr(0, std::max<std::size_t>(canonical_path.rfind('/'), 1));
-      constexpr std::size_t maximum_source_bytes = 1024 * 1024;
+      constexpr std::size_t maximum_source_bytes = std::size_t{1024} * 1024;
       const auto source = readFile(memory, canonical.data(), maximum_source_bytes);
-      lua::Vm vm{memory};
+      lua::Vm interpreter{memory};
 
-      vm.execute(configuration_bootstrap, "@telar/bootstrap.lua", 0);
-      lua_getglobal(vm.state(), "telar");
-      lua::JsonDecoder<Memory>::install(vm.state(), memory);
-      lua_pop(vm.state(), 1);
-      config::LocalModules modules{vm.state(), directory};
+      interpreter.execute(configuration_bootstrap, "@telar/bootstrap.lua", 0);
+      lua_getglobal(interpreter.state(), "telar");
+      lua::JsonDecoder<Memory>::install(interpreter.state(), memory);
+      lua_pop(interpreter.state(), 1);
+      const config::LocalModules modules{interpreter.state(), directory};
 
-      executeSource(vm.state(), source);
+      executeSource(interpreter.state(), source);
       config::RuntimeValues values{memory};
-      const lua::Value root{vm.state(), -1, "config"};
+      const lua::Value root{interpreter.state(), -1, "config"};
 
       validateRoot(root);
       config::SnapshotReader{memory, values}.read(root, options.profile);
-      plugins::PackageRegistry registry{memory, directory, values.plugins.configured()};
+      const plugins::PackageRegistry registry{memory, directory, values.plugins.configured()};
 
       validateSelectedBindings(root, options.profile, registry.packages());
       retiredWarnings(root);
       values.limits.print();
       if (!values.limits.entries().empty()) {
-        std::fputs("error: ConfigLimitReached\n", stderr);
+        writeText("error: ConfigLimitReached\n", STDERR_FILENO);
         return 1;
       }
 
-      std::fputs("telar config: OK\n", stdout);
+      writeText("telar config: OK\n");
       return 0;
     } catch (const ConfigurationFailure& error) {
-      std::fprintf(stderr, "error: %s\n", error.what());
+      writeFormatted(STDERR_FILENO, "error: {}\n", std::string_view{error.what()});
       return 1;
     } catch (const std::exception& error) {
-      std::fprintf(stderr, "telar config: %s\nerror: InvalidConfig\n", error.what());
+      writeFormatted(STDERR_FILENO, "telar config: {}\nerror: InvalidConfig\n", std::string_view{error.what()});
       return 1;
     }
   }

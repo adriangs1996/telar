@@ -270,9 +270,10 @@ namespace telar::gui::application {
     }
 
     using Dispatch = Change (Session::*)(std::span<const Byte> payload, DecodeStorage& storage, ClientCommandHandler& handler);
-    constexpr auto by_tag = []<typename... Messages>(std::type_identity<Messages>...) consteval {
+    using DispatchTable = ds::Array<Dispatch, std::numeric_limits<Byte>::max() + 1>;
+    constexpr auto by_tag = []<typename... Messages>(std::type_identity<Messages>...) consteval -> DispatchTable {
       static_assert((std::same_as<std::remove_const_t<decltype(MessageSchema<Messages>::tag)>, ServerTag> && ...), "only the runtime's messages");
-      ds::Array<Dispatch, std::numeric_limits<Byte>::max() + 1> table{};
+      DispatchTable table{};
 
       ((table.atMut(std::to_underlying(MessageSchema<Messages>::tag)) = &Session::dispatchMessage<Messages>), ...);
       if (std::ranges::count(table, Dispatch{}) != table.size() - sizeof...(Messages)) {
@@ -467,7 +468,7 @@ namespace telar::gui::application {
   }
 
   void Session::setSidebarWidth(float width) {
-    if (configuration.sidebar_width != width) {
+    if (std::not_equal_to<>{}(configuration.sidebar_width, width)) {
       ++view_version.host;
     }
 

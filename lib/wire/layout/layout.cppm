@@ -14,8 +14,18 @@ export namespace telar {
 
 // Declared in the global module, with the vocabulary these schemas build on, so the module's
 // implementation unit defines their members there too.
+// NOLINTBEGIN(misc-use-internal-linkage): exported, and declared in the global module for layout.cpp.
 export extern "C++" {
   namespace telar {
+
+    // The byte and count limits of the layout's messages.
+    inline constexpr std::size_t layout_label_bytes = 128;
+    inline constexpr std::size_t layout_workspace_name_bytes = 256;
+    inline constexpr std::size_t max_layout_tabs = 256;
+    inline constexpr std::size_t max_snapshot_tab_panes = 64;
+    inline constexpr std::size_t max_snapshot_workspace_tabs = 64;
+    inline constexpr std::size_t max_listed_workspaces = 64;
+    inline constexpr std::size_t max_listed_worktrees = 64;
 
     struct RequestTabSnapshot {
       std::uint64_t request_id{};
@@ -45,7 +55,7 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<CreateTab>
-        : Schema<Direction::client, ClientTag::create_tab, Field<&CreateTab::request_id, NonzeroU64, "request_id">, Field<&CreateTab::workspace, ValueCodec<WorkspaceLocation>, "workspace">, Field<&CreateTab::label, DisplayText16<128>, "label">, Field<&CreateTab::size, ValueCodec<TerminalSize>, "size">, Field<&CreateTab::launch, ValueCodec<Launch>, "launch">> {};
+        : Schema<Direction::client, ClientTag::create_tab, Field<&CreateTab::request_id, NonzeroU64, "request_id">, Field<&CreateTab::workspace, ValueCodec<WorkspaceLocation>, "workspace">, Field<&CreateTab::label, DisplayText16<layout_label_bytes>, "label">, Field<&CreateTab::size, ValueCodec<TerminalSize>, "size">, Field<&CreateTab::launch, ValueCodec<Launch>, "launch">> {};
 
     struct RenameTab {
       std::uint64_t request_id{};
@@ -55,7 +65,7 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<RenameTab>
-        : Schema<Direction::client, ClientTag::rename_tab, Field<&RenameTab::request_id, NonzeroU64, "request_id">, Field<&RenameTab::location, ValueCodec<TabLocation>, "location">, Field<&RenameTab::label, DisplayText16<128, false>, "label">> {};
+        : Schema<Direction::client, ClientTag::rename_tab, Field<&RenameTab::request_id, NonzeroU64, "request_id">, Field<&RenameTab::location, ValueCodec<TabLocation>, "location">, Field<&RenameTab::label, DisplayText16<layout_label_bytes, false>, "label">> {};
 
     struct CloseTab {
       std::uint64_t request_id{};
@@ -98,7 +108,7 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<CreateWorkspace>
-        : Schema<Direction::client, ClientTag::create_workspace, Field<&CreateWorkspace::request_id, NonzeroU64, "request_id">, Field<&CreateWorkspace::size, ValueCodec<TerminalSize>, "size">, Field<&CreateWorkspace::name, DisplayText16<128, false>, "name">, Field<&CreateWorkspace::create_cwd, BoolByte, "create_cwd">, Field<&CreateWorkspace::launch, ValueCodec<Launch>, "launch">> {};
+        : Schema<Direction::client, ClientTag::create_workspace, Field<&CreateWorkspace::request_id, NonzeroU64, "request_id">, Field<&CreateWorkspace::size, ValueCodec<TerminalSize>, "size">, Field<&CreateWorkspace::name, DisplayText16<layout_label_bytes, false>, "name">, Field<&CreateWorkspace::create_cwd, BoolByte, "create_cwd">, Field<&CreateWorkspace::launch, ValueCodec<Launch>, "launch">> {};
 
     struct RenameWorkspace {
       std::uint64_t request_id{};
@@ -108,7 +118,7 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<RenameWorkspace>
-        : Schema<Direction::client, ClientTag::rename_workspace, Field<&RenameWorkspace::request_id, NonzeroU64, "request_id">, Field<&RenameWorkspace::workspace, ValueCodec<WorkspaceLocation>, "workspace">, Field<&RenameWorkspace::name, DisplayText16<128, false>, "name">> {};
+        : Schema<Direction::client, ClientTag::rename_workspace, Field<&RenameWorkspace::request_id, NonzeroU64, "request_id">, Field<&RenameWorkspace::workspace, ValueCodec<WorkspaceLocation>, "workspace">, Field<&RenameWorkspace::name, DisplayText16<layout_label_bytes, false>, "name">> {};
 
     struct UpdateClientLayout {
       bool sidebar_visible{};
@@ -122,7 +132,7 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<UpdateClientLayout>
-        : Schema<Direction::client, ClientTag::update_client_layout, Field<&UpdateClientLayout::sidebar_visible, BoolByte, "sidebar_visible">, Field<&UpdateClientLayout::sidebar_width, u16, "sidebar_width">, Field<&UpdateClientLayout::workspace_list_collapsed, BoolByte, "workspace_list_collapsed">, Field<&UpdateClientLayout::active_tab, ValueCodec<TabLocation>, "active_tab">, SpanCountField<&UpdateClientLayout::tabs, u16, ValueCodec<ClientTabLayout>, 256, "tab_count", 1>, SpanItemsField<&UpdateClientLayout::tabs, ValueCodec<ClientTabLayout>, "tabs">> {};
+        : Schema<Direction::client, ClientTag::update_client_layout, Field<&UpdateClientLayout::sidebar_visible, BoolByte, "sidebar_visible">, Field<&UpdateClientLayout::sidebar_width, u16, "sidebar_width">, Field<&UpdateClientLayout::workspace_list_collapsed, BoolByte, "workspace_list_collapsed">, Field<&UpdateClientLayout::active_tab, ValueCodec<TabLocation>, "active_tab">, SpanCountField<&UpdateClientLayout::tabs, u16, ValueCodec<ClientTabLayout>, max_layout_tabs, "tab_count", 1>, SpanItemsField<&UpdateClientLayout::tabs, ValueCodec<ClientTabLayout>, "tabs">> {};
 
     struct RequestPaneFocus {
       std::uint64_t request_id{};
@@ -162,7 +172,7 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<LaunchTab>
-        : Schema<Direction::client, ClientTag::launch_tab, Field<&LaunchTab::request_id, NonzeroU64, "request_id">, Field<&LaunchTab::workspace, NonzeroU64, "workspace">, Field<&LaunchTab::label, DisplayText16<128>, "label">, Field<&LaunchTab::size, ValueCodec<TerminalSize>, "size">, Field<&LaunchTab::launch, ValueCodec<Launch>, "launch">> {};
+        : Schema<Direction::client, ClientTag::launch_tab, Field<&LaunchTab::request_id, NonzeroU64, "request_id">, Field<&LaunchTab::workspace, NonzeroU64, "workspace">, Field<&LaunchTab::label, DisplayText16<layout_label_bytes>, "label">, Field<&LaunchTab::size, ValueCodec<TerminalSize>, "size">, Field<&LaunchTab::launch, ValueCodec<Launch>, "launch">> {};
 
     struct TabSnapshot {
       std::uint64_t request_id{};
@@ -174,7 +184,7 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<TabSnapshot>
-        : Schema<Direction::server, ServerTag::tab_snapshot, Field<&TabSnapshot::request_id, NonzeroU64, "request_id">, Field<&TabSnapshot::location, ValueCodec<TabLocation>, "location">, SpanCountField<&TabSnapshot::panes, u16, ValueCodec<PaneDescriptor>, 64, "pane_count", 0>, SpanItemsField<&TabSnapshot::panes, ValueCodec<PaneDescriptor>, "panes">> {};
+        : Schema<Direction::server, ServerTag::tab_snapshot, Field<&TabSnapshot::request_id, NonzeroU64, "request_id">, Field<&TabSnapshot::location, ValueCodec<TabLocation>, "location">, SpanCountField<&TabSnapshot::panes, u16, ValueCodec<PaneDescriptor>, max_snapshot_tab_panes, "pane_count", 0>, SpanItemsField<&TabSnapshot::panes, ValueCodec<PaneDescriptor>, "panes">> {};
 
     struct WorkspaceSnapshot {
       std::uint64_t request_id{};
@@ -185,7 +195,7 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<WorkspaceSnapshot>
-        : Schema<Direction::server, ServerTag::workspace_snapshot, Field<&WorkspaceSnapshot::request_id, NonzeroU64, "request_id">, Field<&WorkspaceSnapshot::workspace, ValueCodec<WorkspaceLocation>, "workspace">, Field<&WorkspaceSnapshot::name, Text16<256, false>, "name">, SpanCountField<&WorkspaceSnapshot::tabs, u16, ValueCodec<TabDescriptor>, 64, "tab_count", 0>, SpanItemsField<&WorkspaceSnapshot::tabs, ValueCodec<TabDescriptor>, "tabs">> {};
+        : Schema<Direction::server, ServerTag::workspace_snapshot, Field<&WorkspaceSnapshot::request_id, NonzeroU64, "request_id">, Field<&WorkspaceSnapshot::workspace, ValueCodec<WorkspaceLocation>, "workspace">, Field<&WorkspaceSnapshot::name, Text16<layout_workspace_name_bytes, false>, "name">, SpanCountField<&WorkspaceSnapshot::tabs, u16, ValueCodec<TabDescriptor>, max_snapshot_workspace_tabs, "tab_count", 0>, SpanItemsField<&WorkspaceSnapshot::tabs, ValueCodec<TabDescriptor>, "tabs">> {};
 
     struct TabCreated {
       std::uint64_t request_id{};
@@ -198,7 +208,7 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<TabCreated>
-        : Schema<Direction::server, ServerTag::tab_created, Field<&TabCreated::request_id, NonzeroU64, "request_id">, Field<&TabCreated::location, ValueCodec<TabLocation>, "location">, Field<&TabCreated::position, u16, "position">, Field<&TabCreated::label, DisplayText16<128>, "label">, Field<&TabCreated::root_pane_id, NonzeroU64, "root_pane_id">, Field<&TabCreated::pane_generation, u64, "pane_generation">> {};
+        : Schema<Direction::server, ServerTag::tab_created, Field<&TabCreated::request_id, NonzeroU64, "request_id">, Field<&TabCreated::location, ValueCodec<TabLocation>, "location">, Field<&TabCreated::position, u16, "position">, Field<&TabCreated::label, DisplayText16<layout_label_bytes>, "label">, Field<&TabCreated::root_pane_id, NonzeroU64, "root_pane_id">, Field<&TabCreated::pane_generation, u64, "pane_generation">> {};
 
     struct TabRenamed {
       std::uint64_t request_id{};
@@ -208,7 +218,7 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<TabRenamed>
-        : Schema<Direction::server, ServerTag::tab_renamed, Field<&TabRenamed::request_id, NonzeroU64, "request_id">, Field<&TabRenamed::location, ValueCodec<TabLocation>, "location">, Field<&TabRenamed::label, DisplayText16<128, false>, "label">> {};
+        : Schema<Direction::server, ServerTag::tab_renamed, Field<&TabRenamed::request_id, NonzeroU64, "request_id">, Field<&TabRenamed::location, ValueCodec<TabLocation>, "location">, Field<&TabRenamed::label, DisplayText16<layout_label_bytes, false>, "label">> {};
 
     struct TabClosed {
       std::uint64_t request_id{};
@@ -257,9 +267,9 @@ export extern "C++" {
               Direction::server,
               ServerTag::workspace_list,
               Field<&WorkspaceList::revision, u64, "revision">,
-              SpanCountField<&WorkspaceList::entries, u16, ValueCodec<WorkspaceListEntry>, 64, "entry_count", 0>,
+              SpanCountField<&WorkspaceList::entries, u16, ValueCodec<WorkspaceListEntry>, max_listed_workspaces, "entry_count", 0>,
               SpanItemsField<&WorkspaceList::entries, ValueCodec<WorkspaceListEntry>, "entries">,
-              SpanCountField<&WorkspaceList::worktrees, u16, ValueCodec<WorktreeListEntry>, 64, "worktree_count", 0>,
+              SpanCountField<&WorkspaceList::worktrees, u16, ValueCodec<WorktreeListEntry>, max_listed_worktrees, "worktree_count", 0>,
               SpanItemsField<&WorkspaceList::worktrees, ValueCodec<WorktreeListEntry>, "worktrees">> {
     };
 
@@ -276,7 +286,7 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<ClientLayoutSnapshot>
-        : Schema<Direction::server, ServerTag::client_layout_snapshot, Field<&ClientLayoutSnapshot::restored, BoolByte, "restored">, Field<&ClientLayoutSnapshot::sidebar_visible, BoolByte, "sidebar_visible">, Field<&ClientLayoutSnapshot::sidebar_width, u16, "sidebar_width">, Field<&ClientLayoutSnapshot::workspace_list_collapsed, BoolByte, "workspace_list_collapsed">, Field<&ClientLayoutSnapshot::active_tab, OptionalValue<ValueCodec<TabLocation>>, "active_tab">, SpanCountField<&ClientLayoutSnapshot::tabs, u16, ValueCodec<ClientTabLayout>, 256, "tab_count", 0>, SpanItemsField<&ClientLayoutSnapshot::tabs, ValueCodec<ClientTabLayout>, "tabs">> {};
+        : Schema<Direction::server, ServerTag::client_layout_snapshot, Field<&ClientLayoutSnapshot::restored, BoolByte, "restored">, Field<&ClientLayoutSnapshot::sidebar_visible, BoolByte, "sidebar_visible">, Field<&ClientLayoutSnapshot::sidebar_width, u16, "sidebar_width">, Field<&ClientLayoutSnapshot::workspace_list_collapsed, BoolByte, "workspace_list_collapsed">, Field<&ClientLayoutSnapshot::active_tab, OptionalValue<ValueCodec<TabLocation>>, "active_tab">, SpanCountField<&ClientLayoutSnapshot::tabs, u16, ValueCodec<ClientTabLayout>, max_layout_tabs, "tab_count", 0>, SpanItemsField<&ClientLayoutSnapshot::tabs, ValueCodec<ClientTabLayout>, "tabs">> {};
 
     struct PaneFocusCommand {
       ClientRoute requester{};
@@ -306,3 +316,4 @@ export extern "C++" {
 
   }
 }
+// NOLINTEND(misc-use-internal-linkage)

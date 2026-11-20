@@ -80,7 +80,7 @@ namespace telar::gui::features::notifications {
     ds::Option<std::uint64_t> earliest;
 
     for (const auto& motion : motions_) {
-      if (motion.id.value == 0 || motion.from == motion.to || (now_ns >= motion.started_ns && now_ns - motion.started_ns >= motion_duration_ns)) {
+      if (motion.id.value == 0 || std::equal_to<>{}(motion.from, motion.to) || (now_ns >= motion.started_ns && now_ns - motion.started_ns >= motion_duration_ns)) {
         continue;
       }
 
@@ -95,7 +95,7 @@ namespace telar::gui::features::notifications {
   float NotificationStack::Motion::position(float target, const NotificationStackRequest& frame) noexcept {
     const auto now_ns = frame.now_ns;
 
-    if (to != target) {
+    if (std::not_equal_to<>{}(to, target)) {
       from = value(now_ns);
       to = target;
       started_ns = now_ns;

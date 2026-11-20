@@ -28,6 +28,10 @@ export {
       [[nodiscard]] std::size_t countExcept(std::string_view finished) const noexcept;
 
     private:
+      // A thread identifier's bytes, and how many running subagents the hook follows.
+      static constexpr std::size_t identifier_bytes = 64;
+      static constexpr std::size_t maximum_subagents = 32;
+
       static tbc::val_a<std::string_view> value(tbc::val_a<std::string_view> item, std::string_view key) noexcept;
 
       [[nodiscard]] std::size_t find(std::string_view identifier) const noexcept;
@@ -36,7 +40,7 @@ export {
 
       std::size_t scan(std::string_view bytes, bool at_end) noexcept;
 
-      ds::Array<FixedText<64>, 32> identifiers_;
+      ds::Array<FixedText<identifier_bytes>, maximum_subagents> identifiers_;
       std::size_t count_ = 0;
     };
 
@@ -50,10 +54,15 @@ export {
     // The text the reports show, apart from them: a report views these and the payload, as a Rust
     // `Reports<'a>` borrows the buffers it does not own.
     struct ReportTexts {
-      FixedText<96> event;
-      FixedText<96> step;
-      FixedText<96> title_text;
-      FixedText<2048> message;
+      // The runtime's bounds of a display line and of a message, as hooks' display_line_bytes and
+      // display_message_bytes, which the functions that write these texts take.
+      static constexpr std::size_t line_bytes = 96;
+      static constexpr std::size_t message_bytes = 2048;
+
+      FixedText<line_bytes> event;
+      FixedText<line_bytes> step;
+      FixedText<line_bytes> title_text;
+      FixedText<message_bytes> message;
       LinkedWorktree worktree;
     };
 
@@ -93,7 +102,7 @@ export {
         try {
           TELAR_TRACE("hooks.sendReport");
           exchange(value);
-        } catch (const std::exception&) {
+        } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): a report is best effort; the hook never fails the agent over one.
         }
       }
 

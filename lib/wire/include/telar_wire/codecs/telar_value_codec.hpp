@@ -100,7 +100,7 @@ namespace telar {
     }
   };
 
-  enum class TextRule {
+  enum class TextRule : std::uint8_t {
     bytes,
     utf8,
     utf8_no_nul,
@@ -121,7 +121,7 @@ namespace telar {
       }
 
       if constexpr (Rule != TextRule::utf8 && Rule != TextRule::opaque) {
-        if (value.find('\0') != std::string_view::npos) {
+        if (value.contains('\0')) {
           throw EncodingError{"Embedded NUL in text"};
         }
       }
@@ -134,7 +134,7 @@ namespace telar {
         for (const auto character : value) {
           const auto byte = static_cast<Byte>(character);
           const auto allowed = Rule == TextRule::multiline && (byte == '\n' || byte == '\t');
-          if ((byte < 0x20 && !allowed) || byte == 0x7f) {
+          if ((byte < first_printable_byte && !allowed) || byte == delete_byte) {
             throw EncodingError{"Control byte in display text"};
           }
         }

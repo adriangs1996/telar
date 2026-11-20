@@ -209,7 +209,7 @@ namespace telar::gui::application {
 
     // A walk borrows the builder, so the budget is prepared between two walks.
     {
-      runtime::config::ComponentWalker walker{state_, builder_, builder_.limits_};
+      runtime::config::ComponentWalker<Builder> walker{state_, builder_, builder_.limits_};
 
       walker.walk(value, root);
     }
@@ -217,7 +217,7 @@ namespace telar::gui::application {
     builder_.budget_.prepare();
     builder_.counting_ = false;
     {
-      runtime::config::ComponentWalker walker{state_, builder_, builder_.limits_};
+      runtime::config::ComponentWalker<Builder> walker{state_, builder_, builder_.limits_};
 
       walker.walk(value, root);
     }

@@ -105,12 +105,12 @@ namespace telar::gui::features::machines {
       return "1 active agent";
     }
 
-    constexpr std::string_view noun = "active agents";
     constexpr std::string_view suffix = " active agents";
-    auto* const last = storage.data() + storage.size();
+    auto* const last = std::to_address(storage.end());
     const auto [end, error] = std::to_chars(storage.data(), last, agents);
     if (error == std::errc::value_too_large || static_cast<std::size_t>(last - end) < suffix.size()) {
-      return noun;
+      // A count too long for the storage is left out.
+      return "active agents";
     }
 
     std::ranges::copy(suffix, end);

@@ -213,7 +213,7 @@ export {
           }
 
           const auto opacity = item.opacity(request.now_ns);
-          if (opacity == 0 && item.phase == NotificationItem::Phase::exiting) {
+          if (std::equal_to<>{}(opacity, 0.0F) && item.phase == NotificationItem::Phase::exiting) {
             continue;
           }
 

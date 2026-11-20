@@ -28,7 +28,7 @@ namespace telar::gui::inline foundation::inline drawing {
     }
 
     const auto filled = std::clamp(fraction, 0.0F, 1.0F);
-    if (filled == 0) {
+    if (std::equal_to<>{}(filled, 0.0F)) {
       return;
     }
 
@@ -53,6 +53,10 @@ namespace telar::gui::inline foundation::inline drawing {
     return {.x = static_cast<float>(std::sin(angle)), .y = -static_cast<float>(std::cos(angle))};
   }
 
+  // std::sin and std::cos are not constexpr, so the ring is computed as the program loads; a
+  // function-local static instead would test its guard on every draw.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wglobal-constructors"
   const ds::Array<Point, ProgressRing::segments> ProgressRing::circle = [] noexcept {
     ds::Array<Point, segments> points{};
 
@@ -62,6 +66,7 @@ namespace telar::gui::inline foundation::inline drawing {
 
     return points;
   }();
+#pragma clang diagnostic pop
 
   void ProgressCapsule::visit(PaintSink append) const {
     if (state == PaneProgressState::remove || area.empty()) {

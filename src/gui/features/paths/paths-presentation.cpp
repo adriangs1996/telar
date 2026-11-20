@@ -275,7 +275,7 @@ namespace telar::gui::features::paths {
     }
 
     const auto left = cursor->x > cursor_inset ? cursor->x - cursor_inset : 0;
-    const auto x = std::min<unsigned>(left, host.x + host.width - width);
+    const auto x = std::min(static_cast<unsigned>(left), static_cast<unsigned>(host.x + host.width - width));
     const auto host_bottom = static_cast<unsigned>(host.y) + host.height;
     const auto next_row = static_cast<unsigned>(cursor->y) + 1;
     const auto below = host_bottom > next_row ? host_bottom - next_row : 0;

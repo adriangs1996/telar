@@ -69,7 +69,7 @@ namespace telar::gui::features::paths {
       retained.kind = match.kind;
       retained.position_count = static_cast<std::uint8_t>(match.positions.size());
       std::ranges::copy(match.positions, retained.positions.viewMut().begin());
-      std::memcpy(page_.dataMut() + page_used_, match.path.data(), match.path.size());
+      std::ranges::copy(match.path, page_.viewMut().subspan(page_used_).begin());
       page_used_ += match.path.size();
       ++count_;
     }
@@ -112,7 +112,9 @@ namespace telar::gui::features::paths {
   }
 
   std::string_view PathPicker::path(const PathPickerMatch& match) const noexcept {
-    return {page_.data() + match.offset, match.length};
+    const auto chars = page_.view().subspan(match.offset, match.length);
+
+    return {chars.data(), chars.size()};
   }
 
   std::string_view PathPicker::root() const noexcept {

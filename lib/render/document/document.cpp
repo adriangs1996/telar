@@ -300,6 +300,9 @@ namespace telar::render {
           case BlockKind::count:
             return true;
           }
+
+          // A kind outside the enum, which the shape check above has already refused.
+          return true;
         }();
         if (!in_range || !validSpan(content, block.info)) {
           return DecodeError::range;

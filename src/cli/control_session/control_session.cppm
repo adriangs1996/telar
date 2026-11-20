@@ -39,6 +39,8 @@ export {
       ~RuntimeConnection();
       RuntimeConnection(const RuntimeConnection&) = delete;
       RuntimeConnection& operator=(const RuntimeConnection&) = delete;
+      RuntimeConnection(RuntimeConnection&&) = delete;
+      RuntimeConnection& operator=(RuntimeConnection&&) = delete;
 
       void requestStop();
       [[noreturn]] void bridge();
@@ -76,8 +78,10 @@ export {
       [[nodiscard]] std::string_view message() const noexcept;
 
     private:
+      static constexpr std::size_t message_capacity = 1023;
+
       FailureCode code_;
-      ErrorText<1023> message_;
+      ErrorText<message_capacity> message_;
     };
 
     // One conversation with the runtime, as every command that addresses panes, tabs,
@@ -118,30 +122,28 @@ export {
           const auto frame = connection_.receive(incoming_.viewMut());
           DecodeStorage storage{decoded_.viewMut()};
 
-          if (frame.front() == static_cast<Byte>(MessageSchema<Reply>::tag)) {
-            auto reply = Codec::decode<Reply>(frame, storage);
-
-            if constexpr (requires { reply.request_id; }) {
-              if (request_id && reply.request_id != *request_id) {
-                continue;
-              }
-            }
-
-            return reply;
+          if (frame.front() != static_cast<Byte>(MessageSchema<Reply>::tag)) {
+            refuse(frame, request_id, storage);
+            continue;
           }
 
-          if (frame.front() == static_cast<Byte>(ServerTag::request_failed)) {
-            const auto failure = Codec::decode<RequestFailed>(frame, storage);
-            if (!request_id || failure.request_id == *request_id) {
-              throw ControlFailure{failure.code, failure.message};
+          auto reply = Codec::decode<Reply>(frame, storage);
+
+          if constexpr (requires { reply.request_id; }) {
+            if (request_id && reply.request_id != *request_id) {
+              continue;
             }
-          } else if (frame.front() == static_cast<Byte>(ServerTag::runtime_stopping)) {
-            throw std::runtime_error{"RuntimeStopping"};
           }
+
+          return reply;
         }
       }
 
     private:
+      // Throws the refusal of the request `request_id` names, or of any when it names none, and the
+      // runtime's stop; a frame that carries neither passes.
+      static void refuse(std::span<const Byte> frame, ds::Option<std::uint64_t> request_id, DecodeStorage& storage);
+
       static constexpr std::size_t maximum_request_bytes = 65536 + 4096 + 1024;
 
       RuntimeConnection connection_;

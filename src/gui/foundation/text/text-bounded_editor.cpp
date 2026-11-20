@@ -8,6 +8,28 @@ import telar.base.ds;
 
 namespace telar::gui::inline foundation::inline text {
 
+  namespace {
+
+    // The `length` bytes of `text` at `offset`, which the caller keeps within it.
+    std::string_view slice(std::string_view text, std::size_t offset, std::size_t length) noexcept {
+      const auto bytes = std::span{text}.subspan(offset, length);
+
+      return {bytes.data(), bytes.size()};
+    }
+
+    // Moves `count` bytes of `bytes` from `from` to `destination`, which may overlap, as memmove does.
+    void shiftBytes(std::span<char> bytes, std::size_t destination, std::size_t from, std::size_t count) noexcept {
+      const auto source = bytes.subspan(from, count);
+
+      if (destination < from) {
+        std::ranges::copy(source, bytes.subspan(destination).begin());
+      } else if (destination > from) {
+        std::ranges::copy_backward(source, bytes.subspan(destination, count).end());
+      }
+    }
+
+  }
+
   template <bool ReplaceInvalid>
   ds::Option<std::string_view> GraphemeCursor::advance() noexcept(ReplaceInvalid) {
     if (position_ == text_.size()) {
@@ -21,7 +43,7 @@ namespace telar::gui::inline foundation::inline text {
       ++position_;
       columns_ = 1;
 
-      return std::string_view{text_.data() + start, 1};
+      return slice(text_, start, 1);
     }
 
     ds::Array<std::uint32_t, codepoint_window> codepoints{};
@@ -41,14 +63,14 @@ namespace telar::gui::inline foundation::inline text {
       }
 
       if constexpr (ReplaceInvalid) {
-        const auto decoded = Utf8Scalar::tryDecode({text_.data() + cursor, length});
+        const auto decoded = Utf8Scalar::tryDecode(slice(text_, cursor, length));
         if (!decoded) {
           break;
         }
 
         codepoints.atMut(count) = *decoded;
       } else {
-        codepoints.atMut(count) = Utf8Scalar::decode({text_.data() + cursor, length});
+        codepoints.atMut(count) = Utf8Scalar::decode(slice(text_, cursor, length));
       }
 
       cursor += length;
@@ -72,7 +94,7 @@ namespace telar::gui::inline foundation::inline text {
       return " ";
     }
 
-    return std::string_view{text_.data() + start, position_ - start};
+    return slice(text_, start, position_ - start);
   }
 
   GraphemeCursor::GraphemeCursor(std::string_view text) noexcept
@@ -284,7 +306,9 @@ namespace telar::gui::inline foundation::inline text {
 
   template <std::size_t Capacity>
   std::string_view BoundedEditor<Capacity>::selected() const noexcept {
-    return {bytes_.data() + std::min(head_, anchor_), std::max(head_, anchor_) - std::min(head_, anchor_)};
+    const auto bytes = bytes_.view().subspan(std::min(head_, anchor_), std::max(head_, anchor_) - std::min(head_, anchor_));
+
+    return {bytes.data(), bytes.size()};
   }
 
   template <std::size_t Capacity>
@@ -293,8 +317,9 @@ namespace telar::gui::inline foundation::inline text {
       return false;
     }
 
-    if (!value.empty()) {
-      std::memmove(bytes_.dataMut(), value.data(), value.size());
+    // `value` may be this editor's own text, which then starts where the copy goes or after it.
+    if (!value.empty() && value.data() != bytes_.data()) {
+      std::ranges::copy(value, bytes_.viewMut().begin());
     }
 
     length_ = value.size();
@@ -341,17 +366,13 @@ namespace telar::gui::inline foundation::inline text {
       return false;
     }
 
-    const auto changed = std::string_view{bytes_.data() + first, last - first} != value || head_ != first + value.size() || anchor_ != first + value.size();
+    const auto current = bytes_.view().subspan(first, last - first);
+    const auto changed = std::string_view{current.data(), current.size()} != value || head_ != first + value.size() || anchor_ != first + value.size();
     ds::Array<char, Capacity> copied{};
 
-    if (!value.empty()) {
-      std::memcpy(copied.dataMut(), value.data(), value.size());
-    }
-
-    std::memmove(bytes_.dataMut() + first + value.size(), bytes_.dataMut() + last, length_ - last);
-    if (!value.empty()) {
-      std::memcpy(bytes_.dataMut() + first, copied.dataMut(), value.size());
-    }
+    std::ranges::copy(value, copied.viewMut().begin());
+    shiftBytes(bytes_.viewMut(), first + value.size(), last, length_ - last);
+    std::ranges::copy(copied.view().first(value.size()), bytes_.viewMut().subspan(first).begin());
 
     length_ = remaining + value.size();
     head_ = first + value.size();
@@ -513,7 +534,7 @@ namespace telar::gui::inline foundation::inline text {
 
     while (position < value.size()) {
       const auto length = Utf8Scalar::sequenceLength(static_cast<unsigned char>(value[position]));
-      if (length == 0 || length > value.size() - position || !Utf8Scalar::tryDecode({value.data() + position, length})) {
+      if (length == 0 || length > value.size() - position || !Utf8Scalar::tryDecode(slice(value, position, length))) {
         return false;
       }
 
@@ -550,7 +571,7 @@ namespace telar::gui::inline foundation::inline text {
 
   template <std::size_t Capacity>
   void BoundedEditor<Capacity>::remove(std::size_t first, std::size_t last) noexcept {
-    std::memmove(bytes_.dataMut() + first, bytes_.dataMut() + last, length_ - last);
+    shiftBytes(bytes_.viewMut(), first, last, length_ - last);
     length_ -= last - first;
     if (scroll_ > length_) {
       scroll_ = 0;

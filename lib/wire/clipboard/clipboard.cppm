@@ -15,8 +15,16 @@ export namespace telar {
 
 // Declared in the global module, with the vocabulary these schemas build on, so the module's
 // implementation unit defines their members there too.
+// NOLINTBEGIN(misc-use-internal-linkage): exported, and declared in the global module for clipboard.cpp.
 export extern "C++" {
   namespace telar {
+
+    // The byte and count limits of the clipboard's messages.
+    inline constexpr std::size_t clipboard_content_limit = std::size_t{1024} * 1024;
+    inline constexpr std::size_t clipboard_mime_bytes = 256;
+    inline constexpr std::size_t clipboard_name_bytes = 256;
+    inline constexpr std::size_t max_clipboard_request_contents = 128;
+    inline constexpr std::size_t max_clipboard_available_mimes = 16;
 
     struct CopySelection {
       std::uint64_t pane_id{};
@@ -38,9 +46,7 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<PaneClipboard>
-        : Schema<Direction::server, ServerTag::pane_clipboard, Field<&PaneClipboard::pane_id, NonzeroU64, "pane_id">, Field<&PaneClipboard::bytes, SizedBytes<u32, 1048576>, "bytes">> {};
-
-    inline constexpr std::size_t clipboard_content_limit = 1024 * 1024;
+        : Schema<Direction::server, ServerTag::pane_clipboard, Field<&PaneClipboard::pane_id, NonzeroU64, "pane_id">, Field<&PaneClipboard::bytes, SizedBytes<u32, clipboard_content_limit>, "bytes">> {};
 
     struct ClipboardTicket {
       std::uint64_t pane_id{};
@@ -62,7 +68,7 @@ export extern "C++" {
 
     template <>
     struct BodySchema<ClipboardRepresentation>
-        : Serializer<Field<&ClipboardRepresentation::mime, Utf8Text16<256>, "mime">, Field<&ClipboardRepresentation::data, SizedBytes<u32, clipboard_content_limit>, "data">> {};
+        : Serializer<Field<&ClipboardRepresentation::mime, Utf8Text16<clipboard_mime_bytes>, "mime">, Field<&ClipboardRepresentation::data, SizedBytes<u32, clipboard_content_limit>, "data">> {};
 
     void validateClipboardContents(std::span<const ClipboardRepresentation> contents);
 
@@ -82,7 +88,7 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<ClipboardDesktopRequest>
-        : Schema<Direction::server, ServerTag::clipboard_desktop_request, Field<&ClipboardDesktopRequest::ticket, ValueCodec<ClipboardTicket>, "ticket">, Field<&ClipboardDesktopRequest::write, BoolByte, "write">, Field<&ClipboardDesktopRequest::primary, BoolByte, "primary">, Field<&ClipboardDesktopRequest::prompt, BoolByte, "prompt">, Field<&ClipboardDesktopRequest::listing, BoolByte, "listing">, Field<&ClipboardDesktopRequest::rememberable, BoolByte, "rememberable">, Field<&ClipboardDesktopRequest::name, Utf8Text16<256>, "name">, Field<&ClipboardDesktopRequest::mimes, CountedSpan<u8, Utf8Text16<256>, 4>, "mimes">, Field<&ClipboardDesktopRequest::contents, CountedSpan<u8, ValueCodec<ClipboardRepresentation>, 128>, "contents">> {};
+        : Schema<Direction::server, ServerTag::clipboard_desktop_request, Field<&ClipboardDesktopRequest::ticket, ValueCodec<ClipboardTicket>, "ticket">, Field<&ClipboardDesktopRequest::write, BoolByte, "write">, Field<&ClipboardDesktopRequest::primary, BoolByte, "primary">, Field<&ClipboardDesktopRequest::prompt, BoolByte, "prompt">, Field<&ClipboardDesktopRequest::listing, BoolByte, "listing">, Field<&ClipboardDesktopRequest::rememberable, BoolByte, "rememberable">, Field<&ClipboardDesktopRequest::name, Utf8Text16<clipboard_name_bytes>, "name">, Field<&ClipboardDesktopRequest::mimes, CountedSpan<u8, Utf8Text16<clipboard_mime_bytes>, 4>, "mimes">, Field<&ClipboardDesktopRequest::contents, CountedSpan<u8, ValueCodec<ClipboardRepresentation>, max_clipboard_request_contents>, "contents">> {};
 
     enum class ClipboardDesktopStatus : Byte {
       success,
@@ -104,7 +110,7 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<CompleteClipboardDesktop>
-        : Schema<Direction::client, ClientTag::complete_clipboard_desktop, Field<&CompleteClipboardDesktop::ticket, ValueCodec<ClipboardTicket>, "ticket">, Field<&CompleteClipboardDesktop::status, EnumByte<ClipboardDesktopStatus, 3>, "status">, Field<&CompleteClipboardDesktop::remember, BoolByte, "remember">, Field<&CompleteClipboardDesktop::prepared, BoolByte, "prepared">, Field<&CompleteClipboardDesktop::contents, CountedSpan<u8, ValueCodec<ClipboardRepresentation>, 4>, "contents">, Field<&CompleteClipboardDesktop::available, CountedSpan<u8, Utf8Text16<256>, 16>, "available">> {};
+        : Schema<Direction::client, ClientTag::complete_clipboard_desktop, Field<&CompleteClipboardDesktop::ticket, ValueCodec<ClipboardTicket>, "ticket">, Field<&CompleteClipboardDesktop::status, EnumByte<ClipboardDesktopStatus, 3>, "status">, Field<&CompleteClipboardDesktop::remember, BoolByte, "remember">, Field<&CompleteClipboardDesktop::prepared, BoolByte, "prepared">, Field<&CompleteClipboardDesktop::contents, CountedSpan<u8, ValueCodec<ClipboardRepresentation>, 4>, "contents">, Field<&CompleteClipboardDesktop::available, CountedSpan<u8, Utf8Text16<clipboard_mime_bytes>, max_clipboard_available_mimes>, "available">> {};
 
     struct ClipboardDesktopExecute {
       ClipboardTicket ticket;
@@ -134,10 +140,10 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<PastePaneClipboard>
-        : Schema<Direction::client, ClientTag::paste_pane_clipboard, Field<&PastePaneClipboard::request_id, NonzeroU64, "request_id">, Field<&PastePaneClipboard::pane_id, NonzeroU64, "pane_id">, Field<&PastePaneClipboard::pane_generation, NonzeroU64, "pane_generation">, Field<&PastePaneClipboard::primary, BoolByte, "primary">, Field<&PastePaneClipboard::listing_only, BoolByte, "listing_only">, Field<&PastePaneClipboard::text, SizedBytes<u32, clipboard_content_limit>, "text">, Field<&PastePaneClipboard::available, CountedSpan<u8, Utf8Text16<256>, 16>, "available">> {};
+        : Schema<Direction::client, ClientTag::paste_pane_clipboard, Field<&PastePaneClipboard::request_id, NonzeroU64, "request_id">, Field<&PastePaneClipboard::pane_id, NonzeroU64, "pane_id">, Field<&PastePaneClipboard::pane_generation, NonzeroU64, "pane_generation">, Field<&PastePaneClipboard::primary, BoolByte, "primary">, Field<&PastePaneClipboard::listing_only, BoolByte, "listing_only">, Field<&PastePaneClipboard::text, SizedBytes<u32, clipboard_content_limit>, "text">, Field<&PastePaneClipboard::available, CountedSpan<u8, Utf8Text16<clipboard_mime_bytes>, max_clipboard_available_mimes>, "available">> {};
 
     inline constexpr std::size_t runtime_clipboard_max_bytes = std::size_t{32} * 1024 * 1024;
-    inline constexpr std::size_t runtime_clipboard_chunk_bytes = 64 * 1024;
+    inline constexpr std::size_t runtime_clipboard_chunk_bytes = std::size_t{64} * 1024;
 
     // A zero transfer id starts a capture. Subsequent requests pull the next chunk
     // of that immutable capture over the same connection.
@@ -166,7 +172,8 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<RuntimeClipboardChunk>
-        : Schema<Direction::server, ServerTag::runtime_clipboard_chunk, Field<&RuntimeClipboardChunk::request_id, NonzeroU64, "request_id">, Field<&RuntimeClipboardChunk::transfer_id, NonzeroU64, "transfer_id">, Field<&RuntimeClipboardChunk::offset, u64, "offset">, Field<&RuntimeClipboardChunk::total_bytes, u64, "total_bytes">, Field<&RuntimeClipboardChunk::mime, Utf8Text16<256>, "mime">, Field<&RuntimeClipboardChunk::bytes, SizedBytes<u32, runtime_clipboard_chunk_bytes>, "bytes">> {};
+        : Schema<Direction::server, ServerTag::runtime_clipboard_chunk, Field<&RuntimeClipboardChunk::request_id, NonzeroU64, "request_id">, Field<&RuntimeClipboardChunk::transfer_id, NonzeroU64, "transfer_id">, Field<&RuntimeClipboardChunk::offset, u64, "offset">, Field<&RuntimeClipboardChunk::total_bytes, u64, "total_bytes">, Field<&RuntimeClipboardChunk::mime, Utf8Text16<clipboard_mime_bytes>, "mime">, Field<&RuntimeClipboardChunk::bytes, SizedBytes<u32, runtime_clipboard_chunk_bytes>, "bytes">> {};
 
   }
 }
+// NOLINTEND(misc-use-internal-linkage)

@@ -16,9 +16,9 @@ namespace telar::gui::features::activity {
     ProjectActivity result;
 
     result.worktrees = static_cast<std::size_t>(std::ranges::count(workspaces.worktrees(), project, &Worktree<Memory>::source));
-    const auto index = workspaces.indexOf(project);
-    if (index < workspaces.entries().size()) {
-      result.path = workspaces.entries()[index].path;
+    const auto entry = workspaces.indexOf(project);
+    if (entry < workspaces.entries().size()) {
+      result.path = workspaces.entries()[entry].path;
     }
 
     for (std::size_t index = 0; index < agents.size(); ++index) {
@@ -84,9 +84,12 @@ namespace telar::gui::features::activity {
       return spinner_side;
     case Kind::progress:
       return ProgressGeometry::compactWidth();
-    default:
-      return 0;
+    case Kind::none:
+      break;
     }
+
+    // No activity, or a kind outside the enum.
+    return 0;
   }
 
   template <Allocator Memory>
@@ -130,7 +133,8 @@ namespace telar::gui::features::activity {
       activity.kind = Kind::dot;
       activity.color = AgentStatusPresentation::color(urgent->status);
       break;
-    default:
+    case AgentStatus::unknown:
+    case AgentStatus::ready:
       break;
     }
 
@@ -176,9 +180,13 @@ namespace telar::gui::features::activity {
 
       return {.text = final.empty() ? std::string_view{agent.detail} : final, .color = PaletteRole::subtext0};
     }
-    default:
-      return agent.plan_total == 0 ? Activity{.text = agent.detail} : Activity{.text = agent.plan_step, .color = PaletteRole::subtext0, .plan = true};
+    case AgentStatus::unknown:
+    case AgentStatus::working:
+      break;
     }
+
+    // An unknown or working agent, or a status outside the enum.
+    return agent.plan_total == 0 ? Activity{.text = agent.detail} : Activity{.text = agent.plan_step, .color = PaletteRole::subtext0, .plan = true};
   }
 
   float TaskCardLabels::contextShare(AgentStatus state, bool signal) noexcept {
@@ -193,9 +201,13 @@ namespace telar::gui::features::activity {
     case AgentStatus::done:
     case AgentStatus::ready:
       return resting_context_share;
-    default:
-      return context_share;
+    case AgentStatus::unknown:
+    case AgentStatus::working:
+      break;
     }
+
+    // An unknown or working agent, or a status outside the enum.
+    return context_share;
   }
 
   template <Allocator Memory>
@@ -209,9 +221,12 @@ namespace telar::gui::features::activity {
       return "running";
     case CommandState::exited:
       return task.command_exit == 0 ? "exited successfully" : "failed";
-    default:
-      return {};
+    case CommandState::none:
+      break;
     }
+
+    // No command, or a state outside the enum.
+    return {};
   }
 
   template <Allocator Memory>
@@ -231,7 +246,7 @@ namespace telar::gui::features::activity {
 
       return storage.view();
     } catch (const std::length_error&) {
-      return status;
+      return std::string_view{status};
     }
   }
 
@@ -242,7 +257,7 @@ namespace telar::gui::features::activity {
   void TaskCardLabels::decimal(Text& storage, std::uint32_t value) {
     constexpr auto decimal_digits = std::numeric_limits<std::uint32_t>::digits10 + 1;
     ds::Array<char, decimal_digits> digits{};
-    const auto result = std::to_chars(digits.dataMut(), digits.dataMut() + digits.size(), value);
+    const auto result = std::to_chars(digits.dataMut(), std::to_address(digits.viewMut().end()), value);
 
     append(storage, {digits.data(), static_cast<std::size_t>(result.ptr - digits.data())});
   }

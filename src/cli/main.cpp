@@ -34,7 +34,7 @@ namespace telar::runtime::cli {
 
     // A family or entry point this build does not implement yet.
     int unavailable(std::string_view family) {
-      std::fprintf(stderr, "telar: telar %.*s is not implemented by this telar yet\n", static_cast<int>(family.size()), family.data());
+      std::println(stderr, "telar: telar {} is not implemented by this telar yet", family);
       return 1;
     }
 
@@ -44,7 +44,10 @@ namespace telar::runtime::cli {
         throw std::invalid_argument{"UnknownSkill"};
       }
 
-      std::fwrite(text->data(), 1, text->size(), stdout);
+      // fwrite reads the text's own data and size.
+#pragma clang unsafe_buffer_usage begin
+      static_cast<void>(std::fwrite(text->data(), 1, text->size(), stdout));
+#pragma clang unsafe_buffer_usage end
       return 0;
     }
 
@@ -139,9 +142,11 @@ namespace telar::runtime::cli {
         return sessions::tab(memory, sessions::TabOptions::parse(options));
       case Family::worktree:
         return sessions::worktree(memory, sessions::WorktreeOptions::parse(options));
-      default:
-        return unavailable(familyName(family));
+      case Family::count:
+        break;
       }
+
+      return unavailable(familyName(family));
     }
 
     int run(std::span<char* const> words);
@@ -152,7 +157,7 @@ namespace telar::runtime::cli {
       } catch (const std::invalid_argument& error) {
         const auto reference = helpReference(words);
 
-        std::fprintf(stderr, "telar: %s; see `%s`\n", error.what(), reference.c_str());
+        std::println(stderr, "telar: {}; see `{}`", error.what(), reference.c_str());
         return 1;
       }
     }
@@ -161,7 +166,10 @@ namespace telar::runtime::cli {
       if (const auto topic = findHelp(words)) {
         const auto text = helpText(*topic).valueOr(helpText({}).valueOr(""));
 
-        std::fwrite(text.data(), 1, text.size(), stdout);
+        // fwrite reads the text's own data and size.
+#pragma clang unsafe_buffer_usage begin
+        static_cast<void>(std::fwrite(text.data(), 1, text.size(), stdout));
+#pragma clang unsafe_buffer_usage end
         return 0;
       }
 
@@ -193,7 +201,7 @@ namespace telar::runtime::cli {
 
       const std::string_view first = words.front();
       if (first == "--version" || first == "-V") {
-        std::printf("telar %.*s\n", static_cast<int>(version.size()), version.data());
+        std::println("telar {}", version);
         return 0;
       }
 
@@ -219,6 +227,21 @@ namespace telar::runtime::cli {
       return runFamily(memory, *family, words);
     }
 
+    // Prints the failure that ended a command on stderr, as each kind of failure reads.
+    void reportFailure(const std::exception& error, std::span<char* const> words) {
+      if (dynamic_cast<const std::invalid_argument*>(&error) != nullptr) {
+        const auto reference = helpReference(words);
+
+        std::println(stderr, "telar: {}; see `{}`", error.what(), reference.c_str());
+      } else if (dynamic_cast<const CommandError*>(&error) != nullptr) {
+        std::println(stderr, "error: {}", error.what());
+      } else if (const auto* system = dynamic_cast<const SystemError*>(&error)) {
+        std::println(stderr, "telar: {}: {}", error.what(), std::system_category().message(system->code()));
+      } else {
+        std::println(stderr, "telar: {}", error.what());
+      }
+    }
+
   }
 }
 
@@ -226,20 +249,20 @@ auto main(int argc, char** argv) -> int {
   using namespace telar;
   using namespace telar::runtime;
 
+  // main receives its arguments as the C array and count the C runtime gives it.
+#pragma clang unsafe_buffer_usage begin
   const std::span<char* const> words = std::span<char* const>{argv, static_cast<std::size_t>(argc)}.subspan(argc > 0 ? 1 : 0);
+#pragma clang unsafe_buffer_usage end
 
   try {
     return cli::run(words);
-  } catch (const std::invalid_argument& error) {
-    const auto reference = cli::helpReference(words);
-
-    std::fprintf(stderr, "telar: %s; see `%s`\n", error.what(), reference.c_str());
-  } catch (const cli::CommandError& error) {
-    std::fprintf(stderr, "error: %s\n", error.what());
-  } catch (const SystemError& error) {
-    std::fprintf(stderr, "telar: %s: %s\n", error.what(), std::strerror(error.code()));
   } catch (const std::exception& error) {
-    std::fprintf(stderr, "telar: %s\n", error.what());
+    try {
+      cli::reportFailure(error, words);
+    } catch (const std::exception&) {
+      // stderr refused the report too, and nothing is left to tell it to.
+      return 1;
+    }
   }
 
   return 1;

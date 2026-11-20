@@ -26,6 +26,15 @@ import telar.gui.features.configuration;
 import :configuration_readers;
 import telar.base.ds;
 
+namespace telar::gui::application::configuration_bounds {
+
+  // Whether a GUI limit is exactly the configuration's, which may keep it in another number type.
+  consteval bool follows(auto limit, auto bound) {
+    return std::equal_to<>{}(limit, bound);
+  }
+
+}
+
 // Interface: config/reader.cppm
 export {
   namespace telar::gui::application {
@@ -33,17 +42,17 @@ export {
     // The GUI keeps its own limits for what it clamps at run time; they follow the configuration's.
     namespace configuration_bounds {
       using runtime::config::GuiBounds;
-      static_assert(FontConfiguration::minimum_size == GuiBounds::font_size.minimum && FontConfiguration::maximum_size == GuiBounds::font_size.maximum);
-      static_assert(FontConfiguration::minimum_line_height == GuiBounds::line_height.minimum && FontConfiguration::maximum_line_height == GuiBounds::line_height.maximum);
-      static_assert(FontConfiguration::minimum_letter_spacing == GuiBounds::letter_spacing.minimum && FontConfiguration::maximum_letter_spacing == GuiBounds::letter_spacing.maximum);
-      static_assert(FontConfiguration::maximum_thicken_strength == GuiBounds::thicken_strength.maximum);
-      static_assert(Configuration::minimum_blink_interval.count() == GuiBounds::blink_interval_ms.minimum && Configuration::maximum_blink_interval.count() == GuiBounds::blink_interval_ms.maximum);
-      static_assert(ScrollConfiguration::maximum_wheel_ms == GuiBounds::wheel_ms.maximum && ScrollConfiguration::maximum_overscan == GuiBounds::overscan.maximum);
-      static_assert(Configuration::minimum_sidebar_width == GuiBounds::sidebar_width.minimum && Configuration::maximum_sidebar_width == GuiBounds::sidebar_width.maximum);
-      static_assert(Configuration::minimum_chrome_scale == GuiBounds::chrome_scale.minimum && Configuration::maximum_chrome_scale == GuiBounds::chrome_scale.maximum);
-      static_assert(Configuration::maximum_padding == GuiBounds::padding.maximum && Configuration::maximum_background_blur == GuiBounds::background_blur.maximum);
-      static_assert(Configuration::minimum_fps == GuiBounds::max_fps.minimum && Configuration::maximum_fps == GuiBounds::max_fps.maximum);
-      static_assert(PromptConfiguration::maximum_max_lines == runtime::config::PromptBounds::max_lines.maximum);
+      static_assert(follows(FontConfiguration::minimum_size, GuiBounds::font_size.minimum) && follows(FontConfiguration::maximum_size, GuiBounds::font_size.maximum));
+      static_assert(follows(FontConfiguration::minimum_line_height, GuiBounds::line_height.minimum) && follows(FontConfiguration::maximum_line_height, GuiBounds::line_height.maximum));
+      static_assert(follows(FontConfiguration::minimum_letter_spacing, GuiBounds::letter_spacing.minimum) && follows(FontConfiguration::maximum_letter_spacing, GuiBounds::letter_spacing.maximum));
+      static_assert(follows(FontConfiguration::maximum_thicken_strength, GuiBounds::thicken_strength.maximum));
+      static_assert(follows(Configuration::minimum_blink_interval.count(), GuiBounds::blink_interval_ms.minimum) && follows(Configuration::maximum_blink_interval.count(), GuiBounds::blink_interval_ms.maximum));
+      static_assert(follows(ScrollConfiguration::maximum_wheel_ms, GuiBounds::wheel_ms.maximum) && follows(ScrollConfiguration::maximum_overscan, GuiBounds::overscan.maximum));
+      static_assert(follows(Configuration::minimum_sidebar_width, GuiBounds::sidebar_width.minimum) && follows(Configuration::maximum_sidebar_width, GuiBounds::sidebar_width.maximum));
+      static_assert(follows(Configuration::minimum_chrome_scale, GuiBounds::chrome_scale.minimum) && follows(Configuration::maximum_chrome_scale, GuiBounds::chrome_scale.maximum));
+      static_assert(follows(Configuration::maximum_padding, GuiBounds::padding.maximum) && follows(Configuration::maximum_background_blur, GuiBounds::background_blur.maximum));
+      static_assert(follows(Configuration::minimum_fps, GuiBounds::max_fps.minimum) && follows(Configuration::maximum_fps, GuiBounds::max_fps.maximum));
+      static_assert(follows(PromptConfiguration::maximum_max_lines, runtime::config::PromptBounds::max_lines.maximum));
       static_assert(PromptBindings::capacity == runtime::config::PromptBounds::bindings);
       // The enums follow the configuration's name tables.
       static_assert(std::to_underlying(FontHinting::full) == std::to_underlying(runtime::config::FontHinting::full));

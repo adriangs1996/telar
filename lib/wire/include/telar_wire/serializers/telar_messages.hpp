@@ -161,7 +161,7 @@ namespace telar {
   };
 
   struct RequestRuntimeState {
-    std::uint64_t client_identity;
+    std::uint64_t client_identity{};
     bool interactive = false;
 
     void validate() const;
@@ -415,8 +415,11 @@ namespace telar {
     std::uint64_t generation = 0;
   };
 
+  // An agent session's identity, as the bytes of its UUID.
+  inline constexpr std::size_t session_id_bytes = 16;
+
   struct CoordinatorReference {
-    ds::Array<Byte, 16> session_id{};
+    ds::Array<Byte, session_id_bytes> session_id{};
     std::uint64_t pane_id = 0;
     std::uint64_t pane_generation = 0;
   };
@@ -510,7 +513,7 @@ namespace telar {
     TabLocation location{};
     std::uint16_t pane_index = 0;
     std::uint32_t process_id = 0;
-    ds::Array<Byte, 16> session_id{};
+    ds::Array<Byte, session_id_bytes> session_id{};
     std::string_view workspace_label;
     std::string_view tab_label;
     std::string_view session_title;
@@ -651,6 +654,46 @@ namespace telar {
     PlacementLocation location = PlacementLocation::cell;
   };
 
+  // The byte and count limits the schemas below put on their fields.
+  inline constexpr std::size_t max_path_bytes = 4096;
+  inline constexpr std::size_t max_text16_bytes = std::numeric_limits<std::uint16_t>::max();
+  inline constexpr std::size_t max_environment_bytes = std::size_t{512} * 1024;
+  inline constexpr std::size_t max_launch_arguments = 64;
+  inline constexpr std::size_t max_environment_entries = 256;
+  inline constexpr std::size_t max_foreground_bytes = 48;
+  inline constexpr std::size_t max_tab_panes = 64;
+  inline constexpr std::size_t max_tab_label_bytes = 128;
+  inline constexpr std::size_t max_workspace_name_bytes = 256;
+  inline constexpr std::size_t max_workspace_tabs = 64;
+  inline constexpr std::size_t max_branch_bytes = 200;
+  inline constexpr std::size_t max_worktree_title_bytes = 96;
+  inline constexpr std::size_t max_worktree_brief_bytes = 512;
+  inline constexpr std::size_t max_dispatched_from_bytes = 32;
+  inline constexpr std::size_t max_command_label_bytes = 48;
+  inline constexpr std::size_t max_provider_bytes = 64;
+  inline constexpr std::size_t max_history_command_bytes = std::size_t{64} * 1024;
+  inline constexpr std::size_t max_workspace_label_bytes = 48;
+  inline constexpr std::size_t max_agent_title_bytes = 96;
+  inline constexpr std::size_t max_cwd_label_bytes = 48;
+  inline constexpr std::size_t max_agent_name_bytes = 32;
+  inline constexpr std::size_t max_agent_icon_bytes = 8;
+  inline constexpr std::size_t max_agent_event_bytes = 96;
+  inline constexpr Byte max_confidence_percent = 100;
+  inline constexpr std::size_t max_agent_message_bytes = 2048;
+  inline constexpr std::size_t max_plan_step_bytes = 96;
+  inline constexpr std::size_t max_client_command_text_bytes = 4096;
+  // A split's ratio in ten-thousandths of its extent.
+  inline constexpr std::uint16_t min_split_ratio = 1000;
+  inline constexpr std::uint16_t max_split_ratio = 9000;
+  inline constexpr std::size_t max_tab_layout_nodes = 127;
+  inline constexpr std::size_t max_completion_bytes = 256;
+  inline constexpr std::size_t max_block_command_bytes = 256;
+  inline constexpr std::size_t max_match_path_bytes = 1024;
+  inline constexpr std::size_t max_match_positions = 64;
+  inline constexpr std::size_t max_limit_name_bytes = 64;
+  inline constexpr std::size_t max_limit_noun_bytes = 32;
+  inline constexpr std::size_t max_limit_route_bytes = 32;
+
   template <>
   struct BodySchema<TerminalSize> : MessageSchema<TerminalSize> {
     // Matches frame_support.max_cell_count and its worst-case metadata budget.
@@ -673,7 +716,7 @@ namespace telar {
 
       NonzeroU64::validate(value.id);
 
-      return 9;
+      return KindCodec::width + NonzeroU64::width;
     }
 
     static void encodeBody(const Value& value, std::span<Byte>& output) {
@@ -683,7 +726,7 @@ namespace telar {
       }
     }
 
-    static void decodeBody(std::span<const Byte>& input, Value& value, DecodeStorage&) {
+    static void decodeBody(std::span<const Byte>& input, Value& value, DecodeStorage& /*storage*/) {
       value.kind = KindCodec::decode(input);
       value.id = static_cast<Byte>(value.kind) == 0 ? 0 : NonzeroU64::decode(input);
     }
@@ -705,7 +748,7 @@ namespace telar {
   struct BodySchema<HistoryScopeValue> {
     static constexpr std::size_t min_width = 0;
     static constexpr bool fixed_size = false;
-    using PathCodec = Text16<4096, false>;
+    using PathCodec = Text16<max_path_bytes, false>;
 
     static std::size_t encodedSize(const HistoryScopeValue& value, HistoryScope scope);
     static void encodeBody(const HistoryScopeValue& value, std::span<Byte>& output, HistoryScope scope);
@@ -718,46 +761,51 @@ namespace telar {
 
   template <>
   struct BodySchema<CoordinatorReference>
-      : Serializer<Field<&CoordinatorReference::session_id, FixedBytes<16>, "session_id">, Field<&CoordinatorReference::pane_id, NonzeroU64, "pane_id">, Field<&CoordinatorReference::pane_generation, NonzeroU64, "pane_generation">> {
+      : Serializer<Field<&CoordinatorReference::session_id, FixedBytes<session_id_bytes>, "session_id">, Field<&CoordinatorReference::pane_id, NonzeroU64, "pane_id">, Field<&CoordinatorReference::pane_generation, NonzeroU64, "pane_generation">> {
     static void validate(const CoordinatorReference& value);
   };
 
   template <>
   struct BodySchema<EnvironmentEntry>
-      : Serializer<Field<&EnvironmentEntry::name, Text16<65535, false>, "name">, Field<&EnvironmentEntry::value, Text32<512 * 1024>, "value">> {
+      : Serializer<Field<&EnvironmentEntry::name, Text16<max_text16_bytes, false>, "name">, Field<&EnvironmentEntry::value, Text32<max_environment_bytes>, "value">> {
     static void validate(const EnvironmentEntry& value);
   };
 
   template <>
   struct BodySchema<Launch>
       : Serializer<
-            Field<&Launch::cwd, Text16<4096, false>, "cwd">,
+            Field<&Launch::cwd, Text16<max_path_bytes, false>, "cwd">,
             Field<&Launch::cwd_source, u64, "cwd_source">,
-            Field<&Launch::arguments, CountedSpan<u16, Text16<65535>, 64, 1>, "arguments">,
+            Field<&Launch::arguments, CountedSpan<u16, Text16<max_text16_bytes>, max_launch_arguments, 1>, "arguments">,
             Field<&Launch::environment_mode, EnumByte<EnvironmentMode, 1>, "environment_mode">,
-            Field<&Launch::environment, CountedSpan<u16, ValueCodec<EnvironmentEntry>, 256>, "environment">> {
+            Field<&Launch::environment, CountedSpan<u16, ValueCodec<EnvironmentEntry>, max_environment_entries>, "environment">> {
+    static constexpr std::size_t maximum_arguments = max_launch_arguments;
+    static constexpr std::size_t maximum_environment = max_environment_entries;
+    static constexpr std::size_t maximum_argument_bytes = std::size_t{128} * 1024;
+    static constexpr std::size_t maximum_environment_bytes = max_environment_bytes;
+
     static void validate(const Launch& value);
   };
 
   template <>
   struct BodySchema<TabPane>
-      : Serializer<Field<&TabPane::pane_id, NonzeroU64, "pane_id">, Field<&TabPane::foreground, Text16<48, false>, "foreground">, Field<&TabPane::cwd, Text16<4096>, "cwd">> {};
+      : Serializer<Field<&TabPane::pane_id, NonzeroU64, "pane_id">, Field<&TabPane::foreground, Text16<max_foreground_bytes, false>, "foreground">, Field<&TabPane::cwd, Text16<max_path_bytes>, "cwd">> {};
 
   template <>
   struct BodySchema<PaneListEntry>
-      : Serializer<Field<&PaneListEntry::pane_id, NonzeroU64, "pane_id">, Field<&PaneListEntry::pane_generation, NonzeroU64, "pane_generation">, Field<&PaneListEntry::location, ValueCodec<TabLocation>, "location">, Field<&PaneListEntry::foreground, Text16<48, false>, "foreground">, Field<&PaneListEntry::foreground_age_s, u32, "foreground_age_s">, Field<&PaneListEntry::shell, BoolByte, "shell">, Field<&PaneListEntry::ports, CountedSpan<u8, BoundedInteger<u16, 1>, max_listed_ports>, "ports">> {
+      : Serializer<Field<&PaneListEntry::pane_id, NonzeroU64, "pane_id">, Field<&PaneListEntry::pane_generation, NonzeroU64, "pane_generation">, Field<&PaneListEntry::location, ValueCodec<TabLocation>, "location">, Field<&PaneListEntry::foreground, Text16<max_foreground_bytes, false>, "foreground">, Field<&PaneListEntry::foreground_age_s, u32, "foreground_age_s">, Field<&PaneListEntry::shell, BoolByte, "shell">, Field<&PaneListEntry::ports, CountedSpan<u8, BoundedInteger<u16, 1>, max_listed_ports>, "ports">> {
     static void validate(const PaneListEntry& value);
   };
 
   template <>
   struct BodySchema<TabDescriptor>
-      : Serializer<Field<&TabDescriptor::tab_id, NonzeroU64, "tab_id">, Field<&TabDescriptor::position, u16, "position">, Field<&TabDescriptor::pane_count, BoundedInteger<u16, 0, 64>, "pane_count">, Field<&TabDescriptor::label, DisplayText16<128>, "label">, Field<&TabDescriptor::panes, CountedSpan<u16, ValueCodec<TabPane>, 64>, "panes">> {
+      : Serializer<Field<&TabDescriptor::tab_id, NonzeroU64, "tab_id">, Field<&TabDescriptor::position, u16, "position">, Field<&TabDescriptor::pane_count, BoundedInteger<u16, 0, max_tab_panes>, "pane_count">, Field<&TabDescriptor::label, DisplayText16<max_tab_label_bytes>, "label">, Field<&TabDescriptor::panes, CountedSpan<u16, ValueCodec<TabPane>, max_tab_panes>, "panes">> {
     static void validate(const TabDescriptor& value);
   };
 
   template <>
   struct BodySchema<WorkspaceListEntry>
-      : Serializer<Field<&WorkspaceListEntry::workspace, NonzeroU64, "workspace">, Field<&WorkspaceListEntry::name, Text16<256, false>, "name">, Field<&WorkspaceListEntry::path, Text16<4096, false>, "path">, Field<&WorkspaceListEntry::tab_count, BoundedInteger<u16, 0, 64>, "tab_count">, Field<&WorkspaceListEntry::branch, Text16<200>, "branch">, Field<&WorkspaceListEntry::dirty, BoolByte, "dirty">> {};
+      : Serializer<Field<&WorkspaceListEntry::workspace, NonzeroU64, "workspace">, Field<&WorkspaceListEntry::name, Text16<max_workspace_name_bytes, false>, "name">, Field<&WorkspaceListEntry::path, Text16<max_path_bytes, false>, "path">, Field<&WorkspaceListEntry::tab_count, BoundedInteger<u16, 0, max_workspace_tabs>, "tab_count">, Field<&WorkspaceListEntry::branch, Text16<max_branch_bytes>, "branch">, Field<&WorkspaceListEntry::dirty, BoolByte, "dirty">> {};
 
   template <>
   struct BodySchema<WorktreeListEntry>
@@ -768,18 +816,18 @@ namespace telar {
             Field<&WorktreeListEntry::created_by, OptionalValue<NonzeroU64>, "created_by">,
             Field<&WorktreeListEntry::origin, EnumByte<WorktreeOrigin, 1>, "origin">,
             Field<&WorktreeListEntry::state, EnumByte<WorktreeState, 2>, "state">,
-            Field<&WorktreeListEntry::path, Text16<4096, false>, "path">,
-            Field<&WorktreeListEntry::branch, DisplayText16<200, false>, "branch">,
-            Field<&WorktreeListEntry::base, DisplayText16<200>, "base">,
-            Field<&WorktreeListEntry::title, DisplayText16<96>, "title">,
-            Field<&WorktreeListEntry::brief, MessageText16<512>, "brief">,
-            Field<&WorktreeListEntry::dispatched_from, DisplayText16<32>, "dispatched_from">,
+            Field<&WorktreeListEntry::path, Text16<max_path_bytes, false>, "path">,
+            Field<&WorktreeListEntry::branch, DisplayText16<max_branch_bytes, false>, "branch">,
+            Field<&WorktreeListEntry::base, DisplayText16<max_branch_bytes>, "base">,
+            Field<&WorktreeListEntry::title, DisplayText16<max_worktree_title_bytes>, "title">,
+            Field<&WorktreeListEntry::brief, MessageText16<max_worktree_brief_bytes>, "brief">,
+            Field<&WorktreeListEntry::dispatched_from, DisplayText16<max_dispatched_from_bytes>, "dispatched_from">,
             Field<&WorktreeListEntry::coordinator, OptionalValue<ValueCodec<CoordinatorReference>>, "coordinator">,
             Field<&WorktreeListEntry::diff_added, u32, "diff_added">,
             Field<&WorktreeListEntry::diff_removed, u32, "diff_removed">,
             Field<&WorktreeListEntry::diff_files, u32, "diff_files">,
             Field<&WorktreeListEntry::commits_ahead, u32, "commits_ahead">,
-            Field<&WorktreeListEntry::command_label, DisplayText16<48>, "command_label">,
+            Field<&WorktreeListEntry::command_label, DisplayText16<max_command_label_bytes>, "command_label">,
             Field<&WorktreeListEntry::command_state, EnumByte<CommandState, 2>, "command_state">,
             Field<&WorktreeListEntry::command_exit, i32, "command_exit">> {
     static void validate(const WorktreeListEntry& value);
@@ -787,7 +835,7 @@ namespace telar {
 
   template <>
   struct BodySchema<HistoryEntry>
-      : Serializer<Field<&HistoryEntry::id, NonzeroU64, "id">, Field<&HistoryEntry::pane_id, NonzeroU64, "pane_id">, Field<&HistoryEntry::started_at_ms, i64, "started_at_ms">, Field<&HistoryEntry::duration_ns, i64, "duration_ns">, Field<&HistoryEntry::exit_code, OptionalValue<i32>, "exit_code">, Field<&HistoryEntry::status, EnumByte<HistoryStatus, 2>, "status">, Field<&HistoryEntry::author, EnumByte<HistoryAuthor, 1>, "author">, Field<&HistoryEntry::origin, EnumByte<HistoryOrigin, 2>, "origin">, Field<&HistoryEntry::provider, Text16<64>, "provider">, Field<&HistoryEntry::command, Text32<64 * 1024, false>, "command">, Field<&HistoryEntry::cwd, Text16<4096>, "cwd">, Field<&HistoryEntry::workspace_path, Text16<4096>, "workspace_path">, Field<&HistoryEntry::command_truncated, BoolByte, "command_truncated">> {};
+      : Serializer<Field<&HistoryEntry::id, NonzeroU64, "id">, Field<&HistoryEntry::pane_id, NonzeroU64, "pane_id">, Field<&HistoryEntry::started_at_ms, i64, "started_at_ms">, Field<&HistoryEntry::duration_ns, i64, "duration_ns">, Field<&HistoryEntry::exit_code, OptionalValue<i32>, "exit_code">, Field<&HistoryEntry::status, EnumByte<HistoryStatus, 2>, "status">, Field<&HistoryEntry::author, EnumByte<HistoryAuthor, 1>, "author">, Field<&HistoryEntry::origin, EnumByte<HistoryOrigin, 2>, "origin">, Field<&HistoryEntry::provider, Text16<max_provider_bytes>, "provider">, Field<&HistoryEntry::command, Text32<max_history_command_bytes, false>, "command">, Field<&HistoryEntry::cwd, Text16<max_path_bytes>, "cwd">, Field<&HistoryEntry::workspace_path, Text16<max_path_bytes>, "workspace_path">, Field<&HistoryEntry::command_truncated, BoolByte, "command_truncated">> {};
 
   template <>
   struct BodySchema<AgentSnapshotEntry>
@@ -797,33 +845,33 @@ namespace telar {
             Field<&AgentSnapshotEntry::location, ValueCodec<TabLocation>, "location">,
             Field<&AgentSnapshotEntry::pane_index, BoundedInteger<u16, 1>, "pane_index">,
             Field<&AgentSnapshotEntry::process_id, u32, "process_id">,
-            Field<&AgentSnapshotEntry::session_id, FixedBytes<16>, "session_id">,
-            Field<&AgentSnapshotEntry::workspace_label, DisplayText16<48>, "workspace_label">,
-            Field<&AgentSnapshotEntry::tab_label, DisplayText16<128>, "tab_label">,
-            Field<&AgentSnapshotEntry::session_title, DisplayText16<96>, "session_title">,
+            Field<&AgentSnapshotEntry::session_id, FixedBytes<session_id_bytes>, "session_id">,
+            Field<&AgentSnapshotEntry::workspace_label, DisplayText16<max_workspace_label_bytes>, "workspace_label">,
+            Field<&AgentSnapshotEntry::tab_label, DisplayText16<max_tab_label_bytes>, "tab_label">,
+            Field<&AgentSnapshotEntry::session_title, DisplayText16<max_agent_title_bytes>, "session_title">,
             Field<&AgentSnapshotEntry::title_source, EnumByte<AgentTitleSource, 4>, "title_source">,
             Field<&AgentSnapshotEntry::title_state, EnumByte<AgentTitleState, 3>, "title_state">,
-            Field<&AgentSnapshotEntry::cwd_label, DisplayText16<48>, "cwd_label">,
+            Field<&AgentSnapshotEntry::cwd_label, DisplayText16<max_cwd_label_bytes>, "cwd_label">,
             Field<&AgentSnapshotEntry::provider, EnumByte<AgentProvider, max_agent_provider_index>, "provider">,
-            Field<&AgentSnapshotEntry::provider_name, DisplayText16<32>, "provider_name">,
-            Field<&AgentSnapshotEntry::display_name, DisplayText16<32>, "display_name">,
-            Field<&AgentSnapshotEntry::icon, DisplayText16<8>, "icon">,
+            Field<&AgentSnapshotEntry::provider_name, DisplayText16<max_agent_name_bytes>, "provider_name">,
+            Field<&AgentSnapshotEntry::display_name, DisplayText16<max_agent_name_bytes>, "display_name">,
+            Field<&AgentSnapshotEntry::icon, DisplayText16<max_agent_icon_bytes>, "icon">,
             Field<&AgentSnapshotEntry::attachments, EnumByte<AgentAttachmentMarkers, 3>, "attachments">,
-            Field<&AgentSnapshotEntry::status, EnumByte<AgentStatus, 5>, "status">,
+            Field<&AgentSnapshotEntry::status, EnumByte<AgentStatus, std::to_underlying(AgentStatus::done)>, "status">,
             Field<&AgentSnapshotEntry::blocked_reason, EnumByte<AgentBlockedReason, 4>, "blocked_reason">,
-            Field<&AgentSnapshotEntry::last_event, DisplayText16<96>, "last_event">,
+            Field<&AgentSnapshotEntry::last_event, DisplayText16<max_agent_event_bytes>, "last_event">,
             Field<&AgentSnapshotEntry::status_age_s, u32, "status_age_s">,
             Field<&AgentSnapshotEntry::source, EnumByte<AgentSource, 3, 1>, "source">,
-            Field<&AgentSnapshotEntry::authority, EnumByte<AgentAuthority, 5>, "authority">,
-            Field<&AgentSnapshotEntry::confidence, BoundedInteger<u8, 0, 100>, "confidence">,
+            Field<&AgentSnapshotEntry::authority, EnumByte<AgentAuthority, std::to_underlying(AgentAuthority::stale)>, "authority">,
+            Field<&AgentSnapshotEntry::confidence, BoundedInteger<u8, 0, max_confidence_percent>, "confidence">,
             Field<&AgentSnapshotEntry::sequence, NonzeroU64, "sequence">,
             Field<&AgentSnapshotEntry::observed_at_ms, i64, "observed_at_ms">,
             Field<&AgentSnapshotEntry::expires_at_ms, i64, "expires_at_ms">,
             Field<&AgentSnapshotEntry::work_tree, u64, "work_tree">,
-            Field<&AgentSnapshotEntry::final_message, MessageText16<2048>, "final_message">,
+            Field<&AgentSnapshotEntry::final_message, MessageText16<max_agent_message_bytes>, "final_message">,
             Field<&AgentSnapshotEntry::plan_done, u16, "plan_done">,
             Field<&AgentSnapshotEntry::plan_total, u16, "plan_total">,
-            Field<&AgentSnapshotEntry::plan_step, DisplayText16<96>, "plan_step">> {
+            Field<&AgentSnapshotEntry::plan_step, DisplayText16<max_plan_step_bytes>, "plan_step">> {
     static void validate(const AgentSnapshotEntry& value);
   };
 
@@ -833,7 +881,7 @@ namespace telar {
 
   template <>
   struct BodySchema<ClientCommand>
-      : Serializer<Field<&ClientCommand::request_id, NonzeroU64, "request_id">, Field<&ClientCommand::route, ValueCodec<ClientRoute>, "route">, Field<&ClientCommand::action, EnumByte<ClientAction, 33>, "action">, Field<&ClientCommand::status, EnumByte<ClientCommandStatus, 3>, "status">, Field<&ClientCommand::target_id, u64, "target_id">, Field<&ClientCommand::value, i64, "value">, Field<&ClientCommand::text, Utf8Text16<4096>, "text">> {};
+      : Serializer<Field<&ClientCommand::request_id, NonzeroU64, "request_id">, Field<&ClientCommand::route, ValueCodec<ClientRoute>, "route">, Field<&ClientCommand::action, EnumByte<ClientAction, std::to_underlying(ClientAction::plugin_run)>, "action">, Field<&ClientCommand::status, EnumByte<ClientCommandStatus, 3>, "status">, Field<&ClientCommand::target_id, u64, "target_id">, Field<&ClientCommand::value, i64, "value">, Field<&ClientCommand::text, Utf8Text16<max_client_command_text_bytes>, "text">> {};
 
   template <>
   struct BodySchema<ClientLayoutPane>
@@ -841,7 +889,7 @@ namespace telar {
 
   template <>
   struct BodySchema<ClientLayoutSplit>
-      : Serializer<Field<&ClientLayoutSplit::axis, EnumByte<ClientLayoutAxis, 1>, "axis">, Field<&ClientLayoutSplit::ratio, BoundedInteger<u16, 1000, 9000>, "ratio">> {};
+      : Serializer<Field<&ClientLayoutSplit::axis, EnumByte<ClientLayoutAxis, 1>, "axis">, Field<&ClientLayoutSplit::ratio, BoundedInteger<u16, min_split_ratio, max_split_ratio>, "ratio">> {};
 
   template <>
   struct BodySchema<ClientLayoutNode> {
@@ -855,7 +903,10 @@ namespace telar {
 
   template <>
   struct BodySchema<ClientTabLayout>
-      : Serializer<Field<&ClientTabLayout::location, ValueCodec<TabLocation>, "location">, Field<&ClientTabLayout::focused_pane, NonzeroU64, "focused_pane">, Field<&ClientTabLayout::fullscreen, BoolByte, "fullscreen">, Field<&ClientTabLayout::workspace_active, BoolByte, "workspace_active">, Field<&ClientTabLayout::nodes, CountedSpan<u16, ValueCodec<ClientLayoutNode>, 127, 1>, "nodes">> {
+      : Serializer<Field<&ClientTabLayout::location, ValueCodec<TabLocation>, "location">, Field<&ClientTabLayout::focused_pane, NonzeroU64, "focused_pane">, Field<&ClientTabLayout::fullscreen, BoolByte, "fullscreen">, Field<&ClientTabLayout::workspace_active, BoolByte, "workspace_active">, Field<&ClientTabLayout::nodes, CountedSpan<u16, ValueCodec<ClientLayoutNode>, max_tab_layout_nodes, 1>, "nodes">> {
+    static constexpr std::size_t maximum_nodes = max_tab_layout_nodes;
+    static constexpr std::size_t maximum_panes = 64;
+
     static void validate(const ClientTabLayout& value);
   };
 
@@ -882,7 +933,7 @@ namespace telar {
 
   template <>
   struct BodySchema<CompletionWord>
-      : Serializer<Field<&CompletionWord::text, DisplayText16<256, false>, "text">, Field<&CompletionWord::description, DisplayText16<256>, "description">> {
+      : Serializer<Field<&CompletionWord::text, DisplayText16<max_completion_bytes, false>, "text">, Field<&CompletionWord::description, DisplayText16<max_completion_bytes>, "description">> {
     static void validate(const CompletionWord& value);
   };
 
@@ -919,19 +970,19 @@ namespace telar {
 
   template <>
   struct BodySchema<CommandBlock>
-      : Serializer<Field<&CommandBlock::row, u32, "row">, Field<&CommandBlock::rows, u16, "rows">, Field<&CommandBlock::lines, u16, "lines">, Field<&CommandBlock::state, EnumByte<CommandBlockState, 4>, "state">, Field<&CommandBlock::status, i32, "status">, Field<&CommandBlock::duration_ms, u32, "duration_ms">, Field<&CommandBlock::command, DisplayText16<256>, "command">, Field<&CommandBlock::nest, EnumByte<CommandBlockNest, 2>, "nest">> {
+      : Serializer<Field<&CommandBlock::row, u32, "row">, Field<&CommandBlock::rows, u16, "rows">, Field<&CommandBlock::lines, u16, "lines">, Field<&CommandBlock::state, EnumByte<CommandBlockState, 4>, "state">, Field<&CommandBlock::status, i32, "status">, Field<&CommandBlock::duration_ms, u32, "duration_ms">, Field<&CommandBlock::command, DisplayText16<max_block_command_bytes>, "command">, Field<&CommandBlock::nest, EnumByte<CommandBlockNest, 2>, "nest">> {
     static void validate(const CommandBlock& value);
   };
 
   template <>
   struct BodySchema<PathMatch>
-      : Serializer<Field<&PathMatch::path, DisplayText16<1024, false>, "path">, Field<&PathMatch::kind, EnumByte<PathKind, 1>, "kind">, Field<&PathMatch::positions, CountedSpan<u8, u16, 64>, "positions">> {
+      : Serializer<Field<&PathMatch::path, DisplayText16<max_match_path_bytes, false>, "path">, Field<&PathMatch::kind, EnumByte<PathKind, 1>, "kind">, Field<&PathMatch::positions, CountedSpan<u8, u16, max_match_positions>, "positions">> {
     static void validate(const PathMatch& value);
   };
 
   template <>
   struct BodySchema<LimitReach>
-      : Serializer<Field<&LimitReach::name, Text16<64, false>, "name">, Field<&LimitReach::noun, Text16<32>, "noun">, Field<&LimitReach::value, u64, "value">, Field<&LimitReach::requested, OptionalValue<u64>, "requested">, Field<&LimitReach::route, Text16<32>, "route">> {
+      : Serializer<Field<&LimitReach::name, Text16<max_limit_name_bytes, false>, "name">, Field<&LimitReach::noun, Text16<max_limit_noun_bytes>, "noun">, Field<&LimitReach::value, u64, "value">, Field<&LimitReach::requested, OptionalValue<u64>, "requested">, Field<&LimitReach::route, Text16<max_limit_route_bytes>, "route">> {
     static void validate(const LimitReach& value);
   };
 
@@ -957,16 +1008,30 @@ namespace telar {
   struct BodySchema<GraphicsPlacement>
       : Serializer<Field<&GraphicsPlacement::key, ValueCodec<ImageKey>, "key">, Field<&GraphicsPlacement::virtual_id, NonzeroU64, "virtual_id">, Field<&GraphicsPlacement::placement_id, u32, "placement_id">, Field<&GraphicsPlacement::x, i32, "x">, Field<&GraphicsPlacement::y, i32, "y">, Field<&GraphicsPlacement::source_x, u32, "source_x">, Field<&GraphicsPlacement::source_y, u32, "source_y">, Field<&GraphicsPlacement::source_width, u32, "source_width">, Field<&GraphicsPlacement::source_height, u32, "source_height">, Field<&GraphicsPlacement::columns, u32, "columns">, Field<&GraphicsPlacement::rows, u32, "rows">, Field<&GraphicsPlacement::offset_x, u32, "offset_x">, Field<&GraphicsPlacement::offset_y, u32, "offset_y">, Field<&GraphicsPlacement::z_index, i32, "z_index">, Field<&GraphicsPlacement::location, EnumChoiceByte<PlacementLocation, PlacementLocation::cell, PlacementLocation::placeholders>, "location">> {};
 
-  static_assert(BodySchema<TerminalSize>::payload_size == 8);
-  static_assert(BodySchema<WorkspaceLocation>::payload_size == 9);
-  static_assert(BodySchema<TabLocation>::payload_size == 17);
-  static_assert(BodySchema<ClientRoute>::payload_size == 16);
-  static_assert(BodySchema<CoordinatorReference>::payload_size == 32);
-  static_assert(BodySchema<ClientDescriptor>::payload_size == 42);
-  static_assert(BodySchema<GraphicsHeader>::payload_size == 16);
-  static_assert(BodySchema<ImageKey>::payload_size == 12);
-  static_assert(BodySchema<ImageDescription>::payload_size == 29);
-  static_assert(BodySchema<GraphicsPlacement>::payload_size == 69);
+  // The sizes of the fixed bodies, pinned so that a field change that moves one fails here.
+  namespace fixed_body_bytes {
+    inline constexpr std::size_t terminal_size = 8;
+    inline constexpr std::size_t workspace_location = 9;
+    inline constexpr std::size_t tab_location = 17;
+    inline constexpr std::size_t client_route = 16;
+    inline constexpr std::size_t coordinator_reference = 32;
+    inline constexpr std::size_t client_descriptor = 42;
+    inline constexpr std::size_t graphics_header = 16;
+    inline constexpr std::size_t image_key = 12;
+    inline constexpr std::size_t image_description = 29;
+    inline constexpr std::size_t graphics_placement = 69;
+  }
+
+  static_assert(BodySchema<TerminalSize>::payload_size == fixed_body_bytes::terminal_size);
+  static_assert(BodySchema<WorkspaceLocation>::payload_size == fixed_body_bytes::workspace_location);
+  static_assert(BodySchema<TabLocation>::payload_size == fixed_body_bytes::tab_location);
+  static_assert(BodySchema<ClientRoute>::payload_size == fixed_body_bytes::client_route);
+  static_assert(BodySchema<CoordinatorReference>::payload_size == fixed_body_bytes::coordinator_reference);
+  static_assert(BodySchema<ClientDescriptor>::payload_size == fixed_body_bytes::client_descriptor);
+  static_assert(BodySchema<GraphicsHeader>::payload_size == fixed_body_bytes::graphics_header);
+  static_assert(BodySchema<ImageKey>::payload_size == fixed_body_bytes::image_key);
+  static_assert(BodySchema<ImageDescription>::payload_size == fixed_body_bytes::image_description);
+  static_assert(BodySchema<GraphicsPlacement>::payload_size == fixed_body_bytes::graphics_placement);
 
   enum class TabMoveDirection : Byte {
     previous = 0,
@@ -1188,7 +1253,7 @@ namespace telar {
 
   template <>
   struct BodySchema<ImportHistoryEntry>
-      : Serializer<Field<&ImportHistoryEntry::started_at_ms, i64, "started_at_ms">, Field<&ImportHistoryEntry::command, Text16<65535, false>, "command">> {};
+      : Serializer<Field<&ImportHistoryEntry::started_at_ms, i64, "started_at_ms">, Field<&ImportHistoryEntry::command, Text16<max_text16_bytes, false>, "command">> {};
 
   template <>
   struct BodySchema<PaneDescriptor>
@@ -1200,6 +1265,6 @@ namespace telar {
 
   template <>
   struct BodySchema<HistoryStatsEntry>
-      : Serializer<Field<&HistoryStatsEntry::count, u64, "count">, Field<&HistoryStatsEntry::command, Text16<65535, false>, "command">> {};
+      : Serializer<Field<&HistoryStatsEntry::count, u64, "count">, Field<&HistoryStatsEntry::command, Text16<max_text16_bytes, false>, "command">> {};
 
 }; // namespace telar

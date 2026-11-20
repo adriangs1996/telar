@@ -36,17 +36,33 @@ namespace telar::runtime::cli {
       return "permission denied for the runtime's user";
     case FailureCode::process_not_found:
       return "the process is gone, or another process has its pid now";
-    default:
-      return "runtime refused the request";
+    case FailureCode::spawn_failed:
+    case FailureCode::resource_limit:
+    case FailureCode::internal:
+    case FailureCode::tab_not_found:
+      break;
     }
+
+    return "runtime refused the request";
+  }
+
+  namespace {
+
+    // A receive past its timeout fails with EAGAIN or EWOULDBLOCK, which a system may give one value.
+    bool timedOut(int code) noexcept {
+      constexpr ds::Array<int, 2> codes{EAGAIN, EWOULDBLOCK};
+
+      return std::ranges::contains(codes.view(), code);
+    }
+
   }
 
   int commandFailure(const char* family, const std::exception& error) {
     const auto* system = dynamic_cast<const SystemError*>(&error);
-    const auto socket_timeout = (dynamic_cast<const SocketError*>(&error) != nullptr) && (sys::lastError() == EAGAIN || sys::lastError() == EWOULDBLOCK);
-    const auto timeout = socket_timeout || ((system != nullptr) && (system->code() == EAGAIN || system->code() == EWOULDBLOCK));
+    const auto socket_timeout = (dynamic_cast<const SocketError*>(&error) != nullptr) && timedOut(sys::lastError());
+    const auto timeout = socket_timeout || ((system != nullptr) && timedOut(system->code()));
 
-    std::fprintf(stderr, "%s: %s\n", family, timeout ? "RuntimeTimeout" : error.what());
+    std::println(stderr, "{}: {}", family, timeout ? "RuntimeTimeout" : error.what());
     if (timeout) {
       return 1;
     }
@@ -94,6 +110,17 @@ namespace telar::runtime::cli {
 
   void ControlSession::receiveTimeout(unsigned seconds) {
     connection_.receiveTimeout(seconds);
+  }
+
+  void ControlSession::refuse(std::span<const Byte> frame, ds::Option<std::uint64_t> request_id, DecodeStorage& storage) {
+    if (frame.front() == static_cast<Byte>(ServerTag::request_failed)) {
+      const auto failure = Codec::decode<RequestFailed>(frame, storage);
+      if (!request_id || failure.request_id == *request_id) {
+        throw ControlFailure{failure.code, failure.message};
+      }
+    } else if (frame.front() == static_cast<Byte>(ServerTag::runtime_stopping)) {
+      throw std::runtime_error{"RuntimeStopping"};
+    }
   }
 
 }

@@ -166,7 +166,11 @@ namespace telar::gui::application::prompt {
       case Outcome::bytes:
         session.input(pane_id, text.view());
         break;
-      default:
+      case Outcome::edited:
+      case Outcome::terminal:
+      case Outcome::ignored:
+      case Outcome::complete:
+      case Outcome::search_history:
         break;
       }
     }

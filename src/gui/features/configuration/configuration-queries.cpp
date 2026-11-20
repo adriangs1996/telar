@@ -411,24 +411,85 @@ namespace telar::gui::features::configuration {
     switch (action.kind) {
     case BindingActionKind::select_tab:
       writeValue(writer, "select_tab", action.parameter);
-      break;
+      return;
     case BindingActionKind::select_workspace:
       writeValue(writer, "select_workspace", action.parameter);
-      break;
+      return;
     case BindingActionKind::select_tab_offset:
       writeValue(writer, "select_tab_offset", action.parameter);
-      break;
+      return;
     case BindingActionKind::next_tab:
     case BindingActionKind::previous_tab:
       writeValue(writer, "select_tab_offset", action.kind == BindingActionKind::next_tab ? 1 : -1);
-      break;
+      return;
     case BindingActionKind::next_machine:
     case BindingActionKind::previous_machine:
       writeValue(writer, "select_machine_offset", action.kind == BindingActionKind::next_machine ? 1 : -1);
+      return;
+    case BindingActionKind::none:
+    case BindingActionKind::scroll_pane_up:
+    case BindingActionKind::scroll_pane_down:
+    case BindingActionKind::split_horizontal:
+    case BindingActionKind::split_vertical:
+    case BindingActionKind::focus_left:
+    case BindingActionKind::focus_right:
+    case BindingActionKind::focus_up:
+    case BindingActionKind::focus_down:
+    case BindingActionKind::navigate_left:
+    case BindingActionKind::navigate_right:
+    case BindingActionKind::navigate_up:
+    case BindingActionKind::navigate_down:
+    case BindingActionKind::resize_left:
+    case BindingActionKind::resize_right:
+    case BindingActionKind::resize_up:
+    case BindingActionKind::resize_down:
+    case BindingActionKind::toggle_pane_fullscreen:
+    case BindingActionKind::toggle_sidebar:
+    case BindingActionKind::resize_sidebar_left:
+    case BindingActionKind::resize_sidebar_right:
+    case BindingActionKind::toggle_workspace_list:
+    case BindingActionKind::leave_worktree:
+    case BindingActionKind::forget_gone_worktrees:
+    case BindingActionKind::new_workspace:
+    case BindingActionKind::rename_workspace:
+    case BindingActionKind::close_pane:
+    case BindingActionKind::new_tab:
+    case BindingActionKind::rename_tab:
+    case BindingActionKind::close_tab:
+    case BindingActionKind::move_tab_previous:
+    case BindingActionKind::move_tab_next:
+    case BindingActionKind::detach:
+    case BindingActionKind::copy_mode:
+    case BindingActionKind::goto_picker:
+    case BindingActionKind::history_palette:
+    case BindingActionKind::path_picker:
+    case BindingActionKind::suggest_command:
+    case BindingActionKind::close_panel:
+    case BindingActionKind::refresh_panel:
+    case BindingActionKind::machine_picker:
+    case BindingActionKind::add_machine:
+    case BindingActionKind::monitor:
+    case BindingActionKind::process_picker:
+    case BindingActionKind::process_terminate:
+    case BindingActionKind::process_kill:
+    case BindingActionKind::process_stop:
+    case BindingActionKind::process_continue:
+    case BindingActionKind::process_lower_priority:
+    case BindingActionKind::process_copy_command:
+    case BindingActionKind::process_focus_pane:
+    case BindingActionKind::process_review_stack:
+    case BindingActionKind::process_review_files:
+    case BindingActionKind::process_review_logs:
+    case BindingActionKind::palette:
+    case BindingActionKind::callback:
+    case BindingActionKind::expression:
+    case BindingActionKind::extended:
+    case BindingActionKind::command_tab:
       break;
-    default:
-      throw std::runtime_error{"BindingNotFound"};
     }
+
+    // An action without a numeric form, or a kind outside the enum.
+    throw std::runtime_error{"BindingNotFound"};
   }
 
   void ActionQuery::writeStoredCommand(JsonWriter& writer, runtime::config::CommandTabReference reference, const runtime::config::RetainedCommandTabRegistry& commands) {

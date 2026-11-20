@@ -23,7 +23,7 @@ namespace telar {
       total = checkedWireSize(total, argument.size());
     }
 
-    if (total > 32768) {
+    if (total > maximum_argument_bytes) {
       throw EncodingError{"Execution arguments too large"};
     }
   }

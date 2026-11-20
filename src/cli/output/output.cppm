@@ -26,7 +26,9 @@ export {
       [[nodiscard]] ds::Option<FailureCode> code() const noexcept;
 
     private:
-      ErrorText<1023> message_;
+      static constexpr std::size_t message_capacity = 1023;
+
+      ErrorText<message_capacity> message_;
       int status_;
       ds::Option<FailureCode> code_;
     };

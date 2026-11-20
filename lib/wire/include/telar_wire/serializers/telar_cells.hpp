@@ -18,7 +18,7 @@ namespace telar {
     dotted,
     dashed,
   };
-  enum class CellAttribute : std::uint16_t {
+  enum class CellAttribute : std::uint8_t {
     bold = 1,
     italic = 2,
     faint = 4,
@@ -52,13 +52,18 @@ namespace telar {
   // Every cell of a frame is validated and coded on its own; the codecs are in vocabulary.cpp.
   struct CellStyle {
     std::uint16_t flags = 0;
-    CellColor foreground{}, background{}, underline_color{};
+    CellColor foreground{};
+    CellColor background{};
+    CellColor underline_color{};
+
     bool operator==(const CellStyle&) const = default;
 
     void validate() const;
   };
 
   struct Cell {
+    static constexpr std::size_t maximum_text_bytes = 16;
+
     CellWidth width = CellWidth::single;
     CellStyle style{};
     std::span<const Byte> text;

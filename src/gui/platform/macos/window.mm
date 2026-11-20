@@ -66,7 +66,11 @@ namespace telar::gui::platform {
         return;
       }
 
+      // The runtime types every IMP as void(*)(); only the method's own signature can call it.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcast-function-type-strict"
       const auto original = reinterpret_cast<NSRect (*)(NSWindow*, SEL)>(method_getImplementation(method)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): an IMP must be cast to the method's signature to be called
+#pragma clang diagnostic pop
       const IMP replacement = imp_implementationWithBlock(^NSRect(NSWindow* native) {
         auto rect = original(native, selector);
         const auto style = native.styleMask;
@@ -132,7 +136,7 @@ namespace telar::gui::platform {
 
         for (NSView* child in backdrop.subviews) {
           if ([child.identifier isEqualToString:@"telar.background.blur"]) {
-            effect = (NSVisualEffectView*)child;
+            effect = static_cast<NSVisualEffectView*>(child);
             break;
           }
         }
@@ -185,7 +189,7 @@ namespace telar::gui::platform {
       WindowControls& operator=(WindowControls&&) = delete;
 
       void set(WindowAppearance appearance) {
-        height_ = appearance.navigation_height;
+        height_ = static_cast<CGFloat>(appearance.navigation_height);
         NSWindow* const window = nativeWindow(window_);
 
         observe(appearance.titlebar ? nil : window);
@@ -306,7 +310,7 @@ namespace telar::gui::platform {
       NSWindow* __weak observed_ = nil;
       NSArray<NSView*>* views_ = nil;
       NSArray* tokens_ = nil;
-      CGFloat height_ = WindowAppearance::default_navigation_height;
+      CGFloat height_ = static_cast<CGFloat>(WindowAppearance::default_navigation_height);
       CGFloat pitch_ = 0;
       CGFloat side_ = 0;
       bool applying_ = false;

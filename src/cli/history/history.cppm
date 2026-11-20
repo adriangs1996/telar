@@ -20,11 +20,11 @@ export {
   namespace telar::runtime::cli {
 
     struct DiagnosticsOptions {
-      enum class Action {
+      enum class Action : std::uint8_t {
         logs,
         limits,
       };
-      enum class Component {
+      enum class Component : std::uint8_t {
         all,
         runtime,
         client,
@@ -51,10 +51,10 @@ export {
 
   namespace telar::runtime::cli::file_transfer {
 
-    inline constexpr std::size_t copy_buffer_bytes = 64 * 1024;
+    inline constexpr std::size_t copy_buffer_bytes = std::size_t{64} * 1024;
 
     struct Options {
-      enum class Action {
+      enum class Action : std::uint8_t {
         put,
         get,
       };
@@ -74,7 +74,13 @@ export {
 
     FileDescriptor openRegular(int parent, const char* name);
 
-    std::uint64_t copy(int input, int output);
+    // The descriptors a copy reads and writes.
+    struct CopyEnds {
+      int input;
+      int output;
+    };
+
+    std::uint64_t copy(CopyEnds ends);
 
     void publish(int parent, const char* temporary, const char* name);
 
@@ -110,7 +116,7 @@ export {
   namespace telar::runtime::cli {
 
     struct HistoryOptions {
-      enum class Action {
+      enum class Action : std::uint8_t {
         import,
         remove,
         prune,
@@ -119,7 +125,7 @@ export {
         list,
         search,
       };
-      enum class ImportKind {
+      enum class ImportKind : std::uint8_t {
         automatic,
         zsh,
         bash,

@@ -173,7 +173,7 @@ namespace telar::gui::features::notifications {
 
     item.id = NotificationId{next_id_++};
     count_ = std::min(count_, capacity - 1);
-    std::move_backward(items_.dataMut(), items_.dataMut() + static_cast<std::ptrdiff_t>(count_), items_.dataMut() + static_cast<std::ptrdiff_t>(count_ + 1));
+    std::ranges::move_backward(items_.viewMut().first(count_), items_.viewMut().first(count_ + 1).end());
     items_.atMut(0) = item;
     ++count_;
 

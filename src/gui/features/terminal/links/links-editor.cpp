@@ -162,9 +162,15 @@ namespace telar::gui::features::terminal::links {
       return ", ";
     case Convention::nano:
       return ",";
-    default:
-      return ":";
+    case Convention::plus_line_column:
+    case Convention::path_suffix:
+    case Convention::goto_flag:
+    case Convention::none:
+      break;
     }
+
+    // The other conventions, and one outside the enum.
+    return ":";
   }
 
   EditorLaunch::Convention EditorLaunch::conventionOf(std::string_view executable) {
@@ -178,7 +184,7 @@ namespace telar::gui::features::terminal::links {
       return Convention::vim;
     case runtime::EditorKind::emacs:
       return Convention::plus_line_column;
-    default:
+    case runtime::EditorKind::unsupported:
       break;
     }
 

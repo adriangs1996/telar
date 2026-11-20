@@ -14,8 +14,23 @@ export namespace telar {
 
 // Declared in the global module, with the vocabulary these schemas build on, so the module's
 // implementation unit defines their members there too.
+// NOLINTBEGIN(misc-use-internal-linkage): exported, and declared in the global module for agents.cpp.
 export extern "C++" {
   namespace telar {
+
+    // The byte and count limits of the agent reports and snapshots.
+    inline constexpr std::size_t agent_report_session_bytes = 64;
+    inline constexpr std::size_t agent_report_session_file_bytes = 1024;
+    inline constexpr std::size_t agent_report_event_bytes = 96;
+    inline constexpr std::size_t agent_report_provider_bytes = 64;
+    inline constexpr std::size_t agent_report_tool_call_bytes = 256;
+    inline constexpr std::size_t agent_report_command_bytes = 65536;
+    inline constexpr std::size_t agent_report_path_bytes = 4096;
+    inline constexpr std::size_t agent_report_title_bytes = 96;
+    inline constexpr std::size_t agent_report_branch_bytes = 200;
+    inline constexpr std::size_t agent_report_message_bytes = 2048;
+    inline constexpr std::size_t agent_report_plan_bytes = 96;
+    inline constexpr std::size_t max_agent_snapshot_entries = 64;
 
     struct AcknowledgeAgent {
       std::uint64_t pane_id{};
@@ -45,7 +60,7 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<ReportAgentSession>
-        : Schema<Direction::client, ClientTag::report_agent_session, Field<&ReportAgentSession::request_id, NonzeroU64, "request_id">, Field<&ReportAgentSession::pane_id, NonzeroU64, "pane_id">, Field<&ReportAgentSession::pane_generation, u64, "pane_generation">, Field<&ReportAgentSession::session, Text16<64>, "session">> {};
+        : Schema<Direction::client, ClientTag::report_agent_session, Field<&ReportAgentSession::request_id, NonzeroU64, "request_id">, Field<&ReportAgentSession::pane_id, NonzeroU64, "pane_id">, Field<&ReportAgentSession::pane_generation, u64, "pane_generation">, Field<&ReportAgentSession::session, Text16<agent_report_session_bytes>, "session">> {};
 
     struct ReportAgent {
       std::uint64_t request_id{};
@@ -70,13 +85,13 @@ export extern "C++" {
               Field<&ReportAgent::request_id, NonzeroU64, "request_id">,
               Field<&ReportAgent::pane_id, NonzeroU64, "pane_id">,
               Field<&ReportAgent::pane_generation, u64, "pane_generation">,
-              Field<&ReportAgent::provider, EnumByte<AgentProvider, 32>, "provider">,
-              Field<&ReportAgent::state, EnumByte<AgentReportState, 8>, "state">,
-              Field<&ReportAgent::session, Text16<64>, "session">,
-              Field<&ReportAgent::session_file, Text16<1024>, "session_file">,
+              Field<&ReportAgent::provider, EnumByte<AgentProvider, max_agent_provider_index>, "provider">,
+              Field<&ReportAgent::state, EnumByte<AgentReportState, std::to_underlying(AgentReportState::released)>, "state">,
+              Field<&ReportAgent::session, Text16<agent_report_session_bytes>, "session">,
+              Field<&ReportAgent::session_file, Text16<agent_report_session_file_bytes>, "session_file">,
               Field<&ReportAgent::session_file_kind, EnumByte<AgentSessionFileKind, 2>, "session_file_kind">,
               Field<&ReportAgent::blocked_reason, EnumByte<AgentBlockedReason, 4>, "blocked_reason">,
-              Field<&ReportAgent::event, DisplayText16<96>, "event">> {};
+              Field<&ReportAgent::event, DisplayText16<agent_report_event_bytes>, "event">> {};
 
     struct ReportAgentCommand {
       std::uint64_t request_id{};
@@ -95,7 +110,7 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<ReportAgentCommand>
-        : Schema<Direction::client, ClientTag::report_agent_command, Field<&ReportAgentCommand::request_id, NonzeroU64, "request_id">, Field<&ReportAgentCommand::pane_id, NonzeroU64, "pane_id">, Field<&ReportAgentCommand::pane_generation, u64, "pane_generation">, Field<&ReportAgentCommand::phase, EnumByte<AgentCommandPhase, 1>, "phase">, Field<&ReportAgentCommand::provider, Text16<64, false>, "provider">, Field<&ReportAgentCommand::tool_call_id, Text16<256>, "tool_call_id">, Field<&ReportAgentCommand::command, Text32<65536, false>, "command">, Field<&ReportAgentCommand::cwd, Text16<4096>, "cwd">, Field<&ReportAgentCommand::session, Text16<64>, "session">, Field<&ReportAgentCommand::exit_code, OptionalValue<i32>, "exit_code">> {};
+        : Schema<Direction::client, ClientTag::report_agent_command, Field<&ReportAgentCommand::request_id, NonzeroU64, "request_id">, Field<&ReportAgentCommand::pane_id, NonzeroU64, "pane_id">, Field<&ReportAgentCommand::pane_generation, u64, "pane_generation">, Field<&ReportAgentCommand::phase, EnumByte<AgentCommandPhase, 1>, "phase">, Field<&ReportAgentCommand::provider, Text16<agent_report_provider_bytes, false>, "provider">, Field<&ReportAgentCommand::tool_call_id, Text16<agent_report_tool_call_bytes>, "tool_call_id">, Field<&ReportAgentCommand::command, Text32<agent_report_command_bytes, false>, "command">, Field<&ReportAgentCommand::cwd, Text16<agent_report_path_bytes>, "cwd">, Field<&ReportAgentCommand::session, Text16<agent_report_session_bytes>, "session">, Field<&ReportAgentCommand::exit_code, OptionalValue<i32>, "exit_code">> {};
 
     struct ReportAgentTitle {
       std::uint64_t request_id{};
@@ -107,7 +122,7 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<ReportAgentTitle>
-        : Schema<Direction::client, ClientTag::report_agent_title, Field<&ReportAgentTitle::request_id, NonzeroU64, "request_id">, Field<&ReportAgentTitle::pane_id, NonzeroU64, "pane_id">, Field<&ReportAgentTitle::pane_generation, u64, "pane_generation">, Field<&ReportAgentTitle::provider, EnumByte<AgentProvider, 32>, "provider">, Field<&ReportAgentTitle::title, DisplayText16<96>, "title">> {};
+        : Schema<Direction::client, ClientTag::report_agent_title, Field<&ReportAgentTitle::request_id, NonzeroU64, "request_id">, Field<&ReportAgentTitle::pane_id, NonzeroU64, "pane_id">, Field<&ReportAgentTitle::pane_generation, u64, "pane_generation">, Field<&ReportAgentTitle::provider, EnumByte<AgentProvider, max_agent_provider_index>, "provider">, Field<&ReportAgentTitle::title, DisplayText16<agent_report_title_bytes>, "title">> {};
 
     struct InterruptAgent {
       std::uint64_t request_id{};
@@ -146,17 +161,17 @@ export extern "C++" {
               Field<&ReportAgentProgress::request_id, NonzeroU64, "request_id">,
               Field<&ReportAgentProgress::pane_id, NonzeroU64, "pane_id">,
               Field<&ReportAgentProgress::pane_generation, u64, "pane_generation">,
-              Field<&ReportAgentProgress::provider, EnumByte<AgentProvider, 32>, "provider">,
-              Field<&ReportAgentProgress::cwd, Text16<4096>, "cwd">,
-              Field<&ReportAgentProgress::work_tree_path, Text16<4096>, "work_tree_path">,
-              Field<&ReportAgentProgress::work_tree_branch, DisplayText16<200>, "work_tree_branch">,
-              Field<&ReportAgentProgress::final_message, MessageText16<2048>, "final_message">,
+              Field<&ReportAgentProgress::provider, EnumByte<AgentProvider, max_agent_provider_index>, "provider">,
+              Field<&ReportAgentProgress::cwd, Text16<agent_report_path_bytes>, "cwd">,
+              Field<&ReportAgentProgress::work_tree_path, Text16<agent_report_path_bytes>, "work_tree_path">,
+              Field<&ReportAgentProgress::work_tree_branch, DisplayText16<agent_report_branch_bytes>, "work_tree_branch">,
+              Field<&ReportAgentProgress::final_message, MessageText16<agent_report_message_bytes>, "final_message">,
               Field<&ReportAgentProgress::plan_op, EnumByte<AgentPlanOp, 3>, "plan_op">,
               Field<&ReportAgentProgress::plan_index, u16, "plan_index">,
               Field<&ReportAgentProgress::plan_status, EnumByte<AgentPlanStatus, 3>, "plan_status">,
               Field<&ReportAgentProgress::plan_done, u16, "plan_done">,
               Field<&ReportAgentProgress::plan_total, u16, "plan_total">,
-              Field<&ReportAgentProgress::plan_text, DisplayText16<96>, "plan_text">> {};
+              Field<&ReportAgentProgress::plan_text, DisplayText16<agent_report_plan_bytes>, "plan_text">> {};
 
     struct AgentSnapshot {
       std::uint64_t revision{};
@@ -165,7 +180,7 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<AgentSnapshot>
-        : Schema<Direction::server, ServerTag::agent_snapshot, Field<&AgentSnapshot::revision, u64, "revision">, SpanCountField<&AgentSnapshot::entries, u16, ValueCodec<AgentSnapshotEntry>, 64, "entry_count", 0>, SpanItemsField<&AgentSnapshot::entries, ValueCodec<AgentSnapshotEntry>, "entries">> {
+        : Schema<Direction::server, ServerTag::agent_snapshot, Field<&AgentSnapshot::revision, u64, "revision">, SpanCountField<&AgentSnapshot::entries, u16, ValueCodec<AgentSnapshotEntry>, max_agent_snapshot_entries, "entry_count", 0>, SpanItemsField<&AgentSnapshot::entries, ValueCodec<AgentSnapshotEntry>, "entries">> {
     };
 
     struct AgentSoundNotification {
@@ -180,3 +195,4 @@ export extern "C++" {
 
   }
 }
+// NOLINTEND(misc-use-internal-linkage)

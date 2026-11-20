@@ -174,9 +174,12 @@ namespace telar::gui::features::history {
       }
 
       return byte == escape ? State::string_escape : State::string;
-    default:
-      return State::ground;
+    case State::ground:
+      break;
     }
+
+    // The ground state, or one outside the enum.
+    return State::ground;
   }
 
   HistorySearch HistorySearch::parse(std::string_view text, bool failed_only) noexcept {

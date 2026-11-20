@@ -15,7 +15,7 @@ import telar.base.ds;
 export {
   namespace telar::runtime::cli {
 
-    enum class IntegrationAction {
+    enum class IntegrationAction : std::uint8_t {
       install,
       uninstall,
       status,
@@ -100,7 +100,13 @@ export {
 
       bool installEvents(JsonNode<Memory>& hooks, std::span<const std::string_view> events, std::string_view command, std::string_view timeout) const;
 
-      [[nodiscard]] JsonNode<Memory> newEntry(std::string_view command, std::string_view timeout) const;
+      // A hook's command and how long the agent waits for it.
+      struct HookCommand {
+        std::string_view command;
+        std::string_view timeout;
+      };
+
+      [[nodiscard]] JsonNode<Memory> newEntry(HookCommand command) const;
 
       bool removeEvents(JsonNode<Memory>& hooks, std::span<const std::string_view> events) const;
       // Erases telar's own hooks from a list of them, noting in `changed` whether it erased any;
@@ -130,6 +136,17 @@ export {
     extern template int runSettings<ProcessEnvironment>(Memory& memory, const IntegrationOptions& options, const ProcessEnvironment& environment, std::string_view executable);
 
   }
+}
+
+// Not exported. runExtension and runSettings, templates their importers name, run these, so they
+// keep module linkage: an internal one would be exposed to the importers
+// (-Wreference-tu-local-entity-in-other-tu).
+namespace telar::runtime::cli::integration {
+
+  int extensionCommand(Memory& memory, const IntegrationOptions& options, const EnvironmentSource& environment, std::string_view executable);
+
+  int settingsCommand(Memory& memory, const IntegrationOptions& options, const EnvironmentSource& environment, std::string_view executable);
+
 }
 
 // Interface: integration.cppm

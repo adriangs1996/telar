@@ -380,7 +380,7 @@ namespace telar::gui::application::workbench {
       }
     }
 
-    const auto active_found = std::any_of(layouts.begin(), layouts.begin() + count, [&](const auto& layout) {
+    const auto active_found = std::ranges::any_of(layouts.view().first(count), [&](const auto& layout) {
       return sameTab(layout.location, *active_tab);
     });
     if (active_found) {

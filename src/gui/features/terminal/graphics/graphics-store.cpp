@@ -9,6 +9,19 @@ import telar.base.ds;
 
 namespace telar::gui::features::terminal::graphics {
 
+  namespace {
+
+    // The first `count` bytes of an image's pixels, which it allocates `byte_len` of: the one place
+    // the allocation's pointer meets a count, which every caller keeps within it.
+    template <typename Value>
+    std::span<Value> pixelBytes(Value* pixels, std::size_t count) noexcept {
+#pragma clang unsafe_buffer_usage begin
+      return {pixels, count};
+#pragma clang unsafe_buffer_usage end
+    }
+
+  }
+
   GraphicsLifetime GraphicsLifetime::next() noexcept {
     static std::atomic<std::uint64_t> next_value{1};
     auto candidate = next_value.load(std::memory_order_relaxed);
@@ -82,7 +95,7 @@ namespace telar::gui::features::terminal::graphics {
       throw EncodingError{"Invalid graphics image chunk length"};
     }
 
-    std::ranges::copy(bytes, pixels_ + received_);
+    std::ranges::copy(bytes, pixelBytes(pixels_, static_cast<std::size_t>(description_.byte_len)).subspan(received_).begin());
     received_ += bytes.size();
     ++chunks_;
   }
@@ -94,7 +107,7 @@ namespace telar::gui::features::terminal::graphics {
 
   template <Allocator Memory>
   std::span<const Byte> GraphicsStore<Memory>::Image::pixels() const noexcept {
-    return ready() ? std::span<const Byte>{static_cast<const Byte*>(pixels_), received_} : std::span<const Byte>{};
+    return ready() ? pixelBytes(static_cast<const Byte*>(pixels_), received_) : std::span<const Byte>{};
   }
 
   template <Allocator Memory>

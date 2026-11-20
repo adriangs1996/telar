@@ -58,11 +58,11 @@ namespace telar::runtime::cli {
 
     const char* const path = path_text.data();
     const ExecutablePath target;
-    ds::Array<char, PATH_MAX> buffer;
+    ds::Array<char, PATH_MAX> buffer{};
     const auto count = ::readlink(path, buffer.dataMut(), buffer.size());
     if (count < 0 && sys::lastError() != ENOENT) {
       if (sys::lastError() == EINVAL && action != "status") {
-        std::fprintf(stderr, "telar cli: %s exists and is not a symlink; refusing to replace it\n", path);
+        std::println(stderr, "telar cli: {} exists and is not a symlink; refusing to replace it", path);
       }
 
       throw fileError(sys::lastError());
@@ -70,9 +70,9 @@ namespace telar::runtime::cli {
 
     if (action == "status") {
       if (count < 0) {
-        std::printf("telar cli: %s is not installed\n", path);
+        std::println(stdout, "telar cli: {} is not installed", path);
       } else {
-        std::printf("telar cli: %s -> %.*s\n", path, static_cast<int>(count), buffer.data());
+        std::println(stdout, "telar cli: {} -> {}", path, std::string_view{buffer.data(), static_cast<std::size_t>(count)});
       }
 
       return 0;
@@ -86,81 +86,85 @@ namespace telar::runtime::cli {
       if (::symlink(target.c_str(), path) != 0) {
         const auto failure = sys::lastError();
         if (failure == EACCES || failure == EPERM) {
-          std::fprintf(stderr, "telar cli: cannot write %s; rerun with sudo or pass --dir ~/.local/bin\n", path);
+          std::println(stderr, "telar cli: cannot write {}; rerun with sudo or pass --dir ~/.local/bin", path);
         }
 
         throw fileError(failure);
       }
 
-      std::printf("telar cli: installed %s -> %s\n", path, target.c_str());
+      std::println(stdout, "telar cli: installed {} -> {}", path, target.c_str());
     } else {
-      std::printf("telar cli: removed %s\n", path);
+      std::println(stdout, "telar cli: removed {}", path);
     }
 
     return 0;
   }
 
-  // The granted capabilities: the manifest's, or the requested ones, each
-  // declared there and named once.
-  static plugins::Capabilities grantedCapabilities(const plugins::Manifest& manifest, const PluginOptions& options) {
-    if (options.capability_count == 0) {
-      return manifest.capabilities;
-    }
+  namespace {
 
-    plugins::Capabilities granted;
-
-    for (const auto capability : std::span{options.capabilities}.first(options.capability_count)) {
-      if (!manifest.capabilities.contains(capability)) {
-        throw std::runtime_error{"CapabilityNotDeclared"};
+    // The granted capabilities: the manifest's, or the requested ones, each
+    // declared there and named once.
+    plugins::Capabilities grantedCapabilities(const plugins::Manifest& manifest, const PluginOptions& options) {
+      if (options.capability_count == 0) {
+        return manifest.capabilities;
       }
 
-      granted.insert(capability);
+      plugins::Capabilities granted;
+
+      for (const auto capability : std::span{options.capabilities}.first(options.capability_count)) {
+        if (!manifest.capabilities.contains(capability)) {
+          throw std::runtime_error{"CapabilityNotDeclared"};
+        }
+
+        granted.insert(capability);
+      }
+
+      return granted;
     }
 
-    return granted;
-  }
+    template <Allocator Memory, EnvironmentLookup Environment>
+    void executePlugin(Memory& memory, const PluginOptions& options, const Environment& environment) {
+      if (options.action == PluginAction::untrust) {
+        plugins::revokeTrust(memory, options.path, plugins::Paths::trust(memory, environment));
+        constexpr std::string_view message = "telar plugin trust revoked\n";
+        const auto written = writeDescriptor(STDOUT_FILENO, byteView(message));
+        if (written != 0) {
+          throw SystemError{"Write plugin command output", written};
+        }
 
-  template <Allocator Memory, EnvironmentLookup Environment>
-  static void executePlugin(Memory& memory, const PluginOptions& options, const Environment& environment) {
-    if (options.action == PluginAction::untrust) {
-      plugins::revokeTrust(memory, options.path, plugins::Paths::trust(memory, environment));
-      constexpr std::string_view message = "telar plugin trust revoked\n";
-      const auto written = writeDescriptor(STDOUT_FILENO, {reinterpret_cast<const std::uint8_t*>(message.data()), message.size()});
+        return;
+      }
+
+      const auto package = plugins::PackageInspector::inspect(memory, options.path);
+      ds::String<Memory> output{memory};
+
+      switch (options.action) {
+      case PluginAction::inspect:
+        plugins::appendInspection(output, package);
+        break;
+      case PluginAction::install: {
+        const auto destination = plugins::Paths::installation(memory, environment, package);
+
+        plugins::PackageInstallation{memory}.install(package, destination);
+        output.assign("telar plugin installed: ");
+        output.append(destination);
+        output.push('\n');
+        break;
+      }
+      case PluginAction::trust:
+        plugins::updateTrust(memory, package, grantedCapabilities(package.manifest, options), plugins::Paths::trust(memory, environment));
+        output.assign("telar plugin trust updated\n");
+        break;
+      case PluginAction::untrust:
+        break;
+      }
+
+      const auto written = writeDescriptor(STDOUT_FILENO, byteView(output));
       if (written != 0) {
         throw SystemError{"Write plugin command output", written};
       }
-
-      return;
     }
 
-    const auto package = plugins::PackageInspector::inspect(memory, options.path);
-    ds::String<Memory> output{memory};
-
-    switch (options.action) {
-    case PluginAction::inspect:
-      plugins::appendInspection(output, package);
-      break;
-    case PluginAction::install: {
-      const auto destination = plugins::Paths::installation(memory, environment, package);
-
-      plugins::PackageInstallation{memory}.install(package, destination);
-      output.assign("telar plugin installed: ");
-      output.append(destination);
-      output.push('\n');
-      break;
-    }
-    case PluginAction::trust:
-      plugins::updateTrust(memory, package, grantedCapabilities(package.manifest, options), plugins::Paths::trust(memory, environment));
-      output.assign("telar plugin trust updated\n");
-      break;
-    case PluginAction::untrust:
-      break;
-    }
-
-    const auto written = writeDescriptor(STDOUT_FILENO, {reinterpret_cast<const std::uint8_t*>(output.data()), output.size()});
-    if (written != 0) {
-      throw SystemError{"Write plugin command output", written};
-    }
   }
 
   template <EnvironmentLookup Environment>
@@ -178,7 +182,7 @@ namespace telar::runtime::cli {
   int runProxyTrust(ConcurrentMemory& memory, const ProxyTrustOptions& options, const Environment& environment) {
     const auto directory = options.directory.empty() ? proxyAuthorityDirectory(memory, environment) : ds::String<ConcurrentMemory>{memory, options.directory};
     if (directory.empty() || directory.view().front() != '/') {
-      std::fputs("telar proxy trust: --ca-dir must be absolute\n", stderr);
+      std::println(stderr, "telar proxy trust: --ca-dir must be absolute");
       return 1;
     }
 
@@ -213,15 +217,15 @@ namespace telar::runtime::cli {
     const auto current = service.inspect();
     const auto certificate = paths.file(AuthorityFiles::forKind(AuthorityKind::system_trust).certificate);
     const auto print_notice = [&] {
-      std::printf("Firefox may use its own certificate store; import %s there if it does not honor OS trust.\n", certificate.data());
+      std::println(stdout, "Firefox may use its own certificate store; import {} there if it does not honor OS trust.", certificate.data());
     };
 
     if (options.action == ProxyTrustAction::status) {
-      std::printf("telar proxy trust: %s (%s)\n", proxy_trust::statusName(current.status).data(), directory.data());
+      std::println(stdout, "telar proxy trust: {} ({})", proxy_trust::statusName(current.status).data(), directory.data());
       if (current.record) {
         const auto& record = *current.record;
 
-        std::printf("fingerprint: %.*s\nstore: %.*s\n", static_cast<int>(record.fingerprint.size()), record.fingerprint.data(), static_cast<int>(record.store.view().size()), record.store.view().data());
+        std::println(stdout, "fingerprint: {}\nstore: {}", std::string_view{record.fingerprint.data(), record.fingerprint.size()}, record.store.view());
       }
 
       print_notice();
@@ -231,17 +235,17 @@ namespace telar::runtime::cli {
     if (current.status == proxy_trust::Status::stale && !current.record) {
       const auto record = paths.file(proxy_trust::Record::filename);
 
-      std::printf("telar proxy trust: invalid trust record (%s)\n", record.data());
+      std::println(stdout, "telar proxy trust: invalid trust record ({})", record.data());
       return 1;
     }
 
     if (options.action == ProxyTrustAction::install) {
       if (current.status == proxy_trust::Status::installed) {
-        std::printf("telar proxy trust: already installed (%s)\n", directory.data());
+        std::println(stdout, "telar proxy trust: already installed ({})", directory.data());
       } else {
         const auto record = service.install(current.record);
 
-        std::printf("telar proxy trust: installed %.*s\n", static_cast<int>(record.fingerprint.size()), record.fingerprint.data());
+        std::println(stdout, "telar proxy trust: installed {}", std::string_view{record.fingerprint.data(), record.fingerprint.size()});
       }
 
       print_notice();
@@ -249,12 +253,12 @@ namespace telar::runtime::cli {
     }
 
     if (!current.record) {
-      std::printf("telar proxy trust: not installed (%s)\n", directory.data());
+      std::println(stdout, "telar proxy trust: not installed ({})", directory.data());
       return 0;
     }
 
     service.uninstall(*current.record);
-    std::printf("telar proxy trust: removed %.*s\n", static_cast<int>(current.record->fingerprint.size()), current.record->fingerprint.data());
+    std::println(stdout, "telar proxy trust: removed {}", std::string_view{current.record->fingerprint.data(), current.record->fingerprint.size()});
     return 0;
   }
 
@@ -398,9 +402,9 @@ namespace telar::runtime::cli {
 
   auto RoutedOptions::parseAction(std::string_view group, std::string_view verb, std::string_view nested) -> ds::Option<ClientAction> {
     constexpr std::size_t name_limit = 64;
-    ds::Array<char, name_limit> bytes;
+    ds::Array<char, name_limit> bytes{};
     const auto written = nested.empty() ? std::format_to_n(bytes.dataMut(), bytes.size(), "{}_{}", group, verb) : std::format_to_n(bytes.dataMut(), bytes.size(), "{}_{}_{}", group, verb, nested);
-    if (static_cast<std::size_t>(written.size) > name_limit) {
+    if (std::cmp_greater(written.size, name_limit)) {
       return ds::none;
     }
 
@@ -492,7 +496,22 @@ namespace telar::runtime::cli {
     case workspace_select:
       target_id = positive(cursor.take("MissingTarget"), "InvalidTarget");
       break;
-    default:
+    case tab_create:
+    case tab_next:
+    case tab_previous:
+    case pane_create:
+    case sidebar_get:
+    case sidebar_show:
+    case sidebar_hide:
+    case workspace_list_expand:
+    case workspace_list_collapse:
+    case client_open_goto:
+    case client_open_history:
+    case client_copy_mode:
+    case layout_get:
+    case config_reload:
+    case config_show:
+    case plugin_list:
       break;
     }
   }

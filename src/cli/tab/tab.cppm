@@ -26,6 +26,11 @@ export {
       virtual void operator()(std::string_view path) = 0;
 
     protected:
+      HistoryPathVisitor() = default;
+      HistoryPathVisitor(const HistoryPathVisitor&) = default;
+      HistoryPathVisitor& operator=(const HistoryPathVisitor&) = default;
+      HistoryPathVisitor(HistoryPathVisitor&&) = default;
+      HistoryPathVisitor& operator=(HistoryPathVisitor&&) = default;
       ~HistoryPathVisitor() = default;
     };
 

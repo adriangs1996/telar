@@ -316,13 +316,13 @@ namespace telar::gui::features::workbench {
     double right = -std::numeric_limits<double>::infinity();
 
     for (const auto& slot : std::span{entries_}.first(count_)) {
-      if (point[1] < slot.bounds.y || point[1] >= slot.bounds.y + slot.bounds.height) {
+      if (point[1] < static_cast<double>(slot.bounds.y) || point[1] >= static_cast<double>(slot.bounds.y + slot.bounds.height)) {
         continue;
       }
 
       left = std::min(left, static_cast<double>(slot.bounds.x));
       right = std::max(right, static_cast<double>(slot.bounds.x + slot.bounds.width));
-      const auto horizontal_distance = std::max({0.0, slot.bounds.x - point[0], point[0] - (slot.bounds.x + slot.bounds.width)});
+      const auto horizontal_distance = std::max({0.0, static_cast<double>(slot.bounds.x) - point[0], point[0] - static_cast<double>(slot.bounds.x + slot.bounds.width)});
       if (horizontal_distance < distance) {
         nearest = &slot;
         distance = horizontal_distance;
@@ -333,7 +333,7 @@ namespace telar::gui::features::workbench {
       return ds::none;
     }
 
-    return TabDropTarget{.relative_to = nearest->id, .direction = point[0] < nearest->bounds.x + (nearest->bounds.width / 2) ? TabMoveDirection::previous : TabMoveDirection::next};
+    return TabDropTarget{.relative_to = nearest->id, .direction = point[0] < static_cast<double>(nearest->bounds.x + (nearest->bounds.width / 2)) ? TabMoveDirection::previous : TabMoveDirection::next};
   }
 
   std::span<const TabDropSlot> TabDropSlots::view() const noexcept {
@@ -342,7 +342,7 @@ namespace telar::gui::features::workbench {
 
   const TabDropSlot* TabDropSurface::at(TabDrag::Position point) const noexcept {
     const auto contains = [&](const Rect& bounds) {
-      return point[0] >= bounds.x && point[0] < bounds.right() && point[1] >= bounds.y && point[1] < bounds.bottom();
+      return point[0] >= static_cast<double>(bounds.x) && point[0] < static_cast<double>(bounds.right()) && point[1] >= static_cast<double>(bounds.y) && point[1] < static_cast<double>(bounds.bottom());
     };
     if (contains(create)) {
       return nullptr;

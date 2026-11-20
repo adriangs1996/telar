@@ -30,6 +30,15 @@ namespace telar::runtime::cli::monitor {
     constexpr unsigned reply_timeout_seconds = 15;
     constexpr std::size_t microsecond_digits = 6;
     constexpr std::size_t command_column_bytes = 96;
+    constexpr std::uint64_t decimal_base = 10;
+    constexpr std::uint64_t percent = 100;
+    constexpr unsigned char first_printable = 0x20;
+    constexpr unsigned char delete_byte = 0x7f;
+    constexpr std::int32_t nice_limit = 20;
+
+    // The most words a review tool's command line takes, and argv's room for them and its null end.
+    constexpr std::size_t review_words = 6;
+    constexpr std::size_t review_argv = review_words + 1;
 
     template <typename Enum, std::size_t Size>
     Enum pick(std::string_view word, const ds::Array<std::string_view, Size>& names, const char* error) {
@@ -60,7 +69,7 @@ namespace telar::runtime::cli::monitor {
       process.started_seconds = number<std::uint64_t>(text.substr(0, dot), "InvalidStarted");
       process.started_microseconds = fraction.empty() ? 0 : number<std::uint64_t>(fraction, "InvalidStarted");
       for (auto digits = fraction.size(); digits < microsecond_digits; ++digits) {
-        process.started_microseconds *= 10;
+        process.started_microseconds *= decimal_base;
       }
     }
 
@@ -92,9 +101,9 @@ namespace telar::runtime::cli::monitor {
       constexpr ds::Array<char, 5> units{'B', 'K', 'M', 'G', 'T'};
       constexpr std::uint64_t step = 1024;
       std::size_t unit = 0;
-      std::uint64_t tenths = bytes * 10;
+      std::uint64_t tenths = bytes * decimal_base;
 
-      while (tenths >= step * 10 && unit + 1 < units.size()) {
+      while (tenths >= step * decimal_base && unit + 1 < units.size()) {
         tenths /= step;
         ++unit;
       }
@@ -102,12 +111,12 @@ namespace telar::runtime::cli::monitor {
       if (unit == 0) {
         ds::formatTo(output, "{}B", bytes);
       } else {
-        ds::formatTo(output, "{}.{}{}", tenths / 10, tenths % 10, units[unit]);
+        ds::formatTo(output, "{}.{}{}", tenths / decimal_base, tenths % decimal_base, units[unit]);
       }
     }
 
     void appendPermille(Text& output, std::uint32_t permille) {
-      ds::formatTo(output, "{}.{}", permille / 10, permille % 10);
+      ds::formatTo(output, "{}.{}", permille / decimal_base, permille % decimal_base);
     }
 
     void appendStarted(Text& output, const ProcessInstance& process) {
@@ -299,7 +308,7 @@ namespace telar::runtime::cli::monitor {
         appendBytes(used, disk.used_bytes);
         appendBytes(total, disk.total_bytes);
         appendBytes(available, disk.available_bytes);
-        ds::formatTo(output, "{:<28} {:<8} {:>8} {:>8} {:>8} {:>4}%\n", disk.path, disk.type, used.view(), total.view(), available.view(), disk.total_bytes == 0 ? 0 : disk.used_bytes * 100 / disk.total_bytes);
+        ds::formatTo(output, "{:<28} {:<8} {:>8} {:>8} {:>8} {:>4}%\n", disk.path, disk.type, used.view(), total.view(), available.view(), disk.total_bytes == 0 ? 0 : disk.used_bytes * percent / disk.total_bytes);
       }
     }
 
@@ -338,7 +347,7 @@ namespace telar::runtime::cli::monitor {
           .tree = options.tree,
           .filter = options.filter,
           .limit = listing(options.command) ? options.limit : std::uint16_t{0},
-          .detail = options.command == Command::process_get || options.command == Command::process_review ? options.process : ProcessInstance{},
+          .detail = options.command == Command::process_get || options.command == Command::process_review ? options.process : ProcessInstance(),
       };
     }
 
@@ -368,8 +377,17 @@ namespace telar::runtime::cli::monitor {
       return 0;
     }
 
+    // The words a review tool's command line takes from the process it reviews.
+    struct ReviewSubject {
+      std::string_view pid;
+      std::string_view predicate;
+    };
+
     // The system tool that shows `tool` of a process here, and its arguments.
-    tbc::val_a<ds::Array<std::string_view, 6>> reviewCommand(ReviewTool tool, tbc::val_a<std::string_view> pid, tbc::val_a<std::string_view> predicate) noexcept {
+    tbc::val_a<ds::Array<std::string_view, review_words>> reviewCommand(ReviewTool tool, tbc::val_a<ReviewSubject> subject) noexcept {
+      const auto pid = subject.pid;
+      const auto predicate = subject.predicate;
+
 #ifdef __APPLE__
       switch (tool) {
       case ReviewTool::stack:
@@ -407,7 +425,7 @@ namespace telar::runtime::cli::monitor {
 #else
       ds::formatTo(predicate, "_PID={}", options.process.pid);
 #endif
-      const auto words = reviewCommand(options.tool, pid.view(), predicate.view());
+      const auto words = reviewCommand(options.tool, {.pid = pid.view(), .predicate = predicate.view()});
       const auto count = static_cast<std::size_t>(std::ranges::count_if(words, [](std::string_view word) {
         return !word.empty();
       }));
@@ -429,8 +447,8 @@ namespace telar::runtime::cli::monitor {
 
       // The words, each ended by a NUL, and argv pointing at them once they stop moving.
       Text storage{memory};
-      ds::Array<std::size_t, 6> offsets{};
-      ds::Array<char*, 7> argv{};
+      ds::Array<std::size_t, review_words> offsets{};
+      ds::Array<char*, review_argv> argv{};
 
       for (std::size_t index = 0; index < count; ++index) {
         offsets.atMut(index) = storage.size();
@@ -441,116 +459,110 @@ namespace telar::runtime::cli::monitor {
       const auto bytes = storage.viewMut();
 
       for (std::size_t index = 0; index < count; ++index) {
-        argv.atMut(index) = bytes.data() + offsets[index];
+        argv.atMut(index) = bytes.subspan(offsets[index]).data();
       }
 
       ::execvp(argv[0], argv.dataMut());
-      std::fprintf(stderr, "telar process: %s is not available on this machine\n", argv[0]);
+      std::println(stderr, "telar process: {} is not available on this machine", argv[0]);
       return 1;
     }
 
-  }
-
-  Options Options::parse(Family family, Arguments words) {
-    Cursor cursor{words};
-    Options options;
-    const auto verb = cursor.take("MissingCommand");
-
-    if (family == Family::process) {
-      constexpr ds::Array<std::string_view, 6> verbs{"list", "get", "watch", "signal", "renice", "review"};
-
-      options.command = pick<Command>(verb, verbs, "UnknownCommand");
-    } else {
-      constexpr ds::Array<std::string_view, 3> verbs{"host", "disks", "network"};
-
-      options.command = static_cast<Command>(static_cast<std::size_t>(pick<Command>(verb, verbs, "UnknownCommand")) + static_cast<std::size_t>(Command::monitor_host));
-    }
-
-    if (options.command == Command::process_watch) {
-      options.limit = default_watch_limit;
-    }
-
-    std::size_t positional = 0;
-
-    while (const auto word = cursor.next()) {
-      const auto argument = *word;
-      const auto list_option = listing(options.command);
-
-      if (argument == "--socket") {
-        options.socket = cursor.take("MissingSocket");
-      } else if ((argument == "--json" && options.command != Command::process_watch) || (argument == "--jsonl" && options.command == Command::process_watch)) {
-        options.json = true;
-      } else if (list_option && argument == "--sort") {
+    // An option of `process list` and `process watch`; false where `argument` is none of theirs.
+    bool listOption(tbc::mut_a<Options> options, Cursor& cursor, std::string_view argument) {
+      if (argument == "--sort") {
         options.sort = pick<MonitorSort>(cursor.take("MissingSort"), sort_names, "InvalidSort");
-      } else if (list_option && argument == "--reverse") {
+      } else if (argument == "--reverse") {
         options.reverse = true;
-      } else if (list_option && argument == "--scope") {
+      } else if (argument == "--scope") {
         options.scope = pick<MonitorScope>(cursor.take("MissingScope"), scope_names, "InvalidScope");
-      } else if (list_option && argument == "--tree") {
+      } else if (argument == "--tree") {
         options.tree = true;
-      } else if (list_option && argument == "--filter") {
+      } else if (argument == "--filter") {
         options.filter = cursor.take("MissingFilter");
         if (options.filter.size() > MonitorLimits::filter_bytes || std::ranges::any_of(options.filter, [](unsigned char byte) {
-              return byte < 0x20 || byte == 0x7f;
+              return byte < first_printable || byte == delete_byte;
             })) {
           usage("InvalidFilter");
         }
-      } else if (list_option && argument == "--limit") {
+      } else if (argument == "--limit") {
         options.limit = number<std::uint16_t>(cursor.take("MissingLimit"), "InvalidLimit");
         if (options.limit == 0 || options.limit > MonitorLimits::maximum_processes) {
           usage("InvalidLimit");
         }
-      } else if (options.command == Command::process_watch && argument == "--interval-ms") {
+      } else {
+        return false;
+      }
+
+      return true;
+    }
+
+    // An option of `process watch`, `--started` of a command on one process, or an option of
+    // `process review`; false where `argument` is none of the command's.
+    bool processOption(Options& options, Cursor& cursor, std::string_view argument) {
+      const auto watching = options.command == Command::process_watch;
+      const auto reviewing = options.command == Command::process_review;
+
+      if (watching && argument == "--interval-ms") {
         options.interval_ms = number<unsigned>(cursor.take("MissingInterval"), "InvalidInterval");
         if (options.interval_ms < minimum_interval_ms || options.interval_ms > maximum_interval_ms) {
           usage("InvalidInterval");
         }
-      } else if (options.command == Command::process_watch && argument == "--count") {
+      } else if (watching && argument == "--count") {
         options.count = positive(cursor.take("MissingCount"), "InvalidCount");
       } else if (targeted(options.command) && argument == "--started") {
         parseStarted(cursor.take("MissingStarted"), options.process);
-      } else if (options.command == Command::process_review && argument == "--tool") {
+      } else if (reviewing && argument == "--tool") {
         options.tool = pick<ReviewTool>(cursor.take("MissingTool"), tool_names, "InvalidTool");
-      } else if (options.command == Command::process_review && argument == "--print") {
+      } else if (reviewing && argument == "--print") {
         options.print = true;
-      } else if (argument.starts_with("--")) {
-        usage("UnknownOption");
-      } else if (targeted(options.command) && positional == 0) {
+      } else {
+        return false;
+      }
+
+      return true;
+    }
+
+    // The `positional`th word that is no option: the pid, then the signal or the nice value.
+    void positionalArgument(Options& options, std::string_view argument, std::size_t positional) {
+      if (targeted(options.command) && positional == 0) {
         options.process.pid = static_cast<std::int32_t>(std::min<std::uint64_t>(positive(argument, "InvalidPid"), std::numeric_limits<std::int32_t>::max()));
-        ++positional;
       } else if (options.command == Command::process_signal && positional == 1) {
         options.signal = pick<ProcessSignal>(argument, signal_names, "InvalidSignal");
-        ++positional;
       } else if (options.command == Command::process_renice && positional == 1) {
         options.nice = signedNumber<int>(argument, "InvalidNice");
-        if (options.nice < -20 || options.nice > 20) {
+        if (options.nice < -nice_limit || options.nice > nice_limit) {
           usage("InvalidNice");
         }
-
-        ++positional;
       } else {
         usage("UnexpectedArgument");
       }
     }
 
-    const auto required = options.command == Command::process_signal || options.command == Command::process_renice ? 2u : targeted(options.command) ? 1u
-                                                                                                                                                    : 0u;
-    if (positional < required) {
-      usage(positional == 0 ? "MissingPid" : options.command == Command::process_signal ? "MissingSignal"
-                                                                                        : "MissingNice");
+    // The words that are no option the command needs: the pid, and the signal or the nice value.
+    std::size_t requiredPositionals(Command command) noexcept {
+      if (command == Command::process_signal || command == Command::process_renice) {
+        return 2;
+      }
+
+      return targeted(command) ? 1 : 0;
     }
 
-    return options;
-  }
+    // The error of a command that lacks its `positional`th word.
+    const char* missingPositional(Command command, std::size_t positional) noexcept {
+      if (positional == 0) {
+        return "MissingPid";
+      }
 
-  int run(Memory& memory, const Options& options) {
-    const auto family = familyText(options.command);
+      return command == Command::process_signal ? "MissingSignal" : "MissingNice";
+    }
 
-    try {
+    // The command's exchange with the runtime and what it prints, or the status of a command that
+    // prints for itself.
+    int respond(Memory& memory, const Options& options) {
       ServerOptions server_options{};
 
       server_options.socket = options.socket.valueOr("");
-      const RuntimePaths paths{memory, server_options, process_environment};
+      const RuntimePaths<Memory> paths{memory, server_options, process_environment};
       ds::Option<ControlSession> session;
 
       session.emplace(memory, paths.socket.data());
@@ -624,6 +636,59 @@ namespace telar::runtime::cli::monitor {
 
       writeText(output);
       return 0;
+    }
+  }
+
+  Options Options::parse(Family family, Arguments words) {
+    Cursor cursor{words};
+    Options options;
+    const auto verb = cursor.take("MissingCommand");
+
+    if (family == Family::process) {
+      constexpr ds::Array<std::string_view, 6> verbs{"list", "get", "watch", "signal", "renice", "review"};
+
+      options.command = pick<Command>(verb, verbs, "UnknownCommand");
+    } else {
+      constexpr ds::Array<std::string_view, 3> verbs{"host", "disks", "network"};
+
+      options.command = static_cast<Command>(static_cast<std::size_t>(pick<Command>(verb, verbs, "UnknownCommand")) + static_cast<std::size_t>(Command::monitor_host));
+    }
+
+    if (options.command == Command::process_watch) {
+      options.limit = default_watch_limit;
+    }
+
+    std::size_t positional = 0;
+
+    while (const auto word = cursor.next()) {
+      const auto argument = *word;
+
+      if (argument == "--socket") {
+        options.socket = cursor.take("MissingSocket");
+      } else if ((argument == "--json" && options.command != Command::process_watch) || (argument == "--jsonl" && options.command == Command::process_watch)) {
+        options.json = true;
+      } else if ((listing(options.command) && listOption(options, cursor, argument)) || processOption(options, cursor, argument)) {
+        continue;
+      } else if (argument.starts_with("--")) {
+        usage("UnknownOption");
+      } else {
+        positionalArgument(options, argument, positional);
+        ++positional;
+      }
+    }
+
+    if (positional < requiredPositionals(options.command)) {
+      usage(missingPositional(options.command, positional));
+    }
+
+    return options;
+  }
+
+  int run(Memory& memory, const Options& options) {
+    const auto family = familyText(options.command);
+
+    try {
+      return respond(memory, options);
     } catch (const std::exception& error) {
       return commandFailure(family.data(), error);
     }

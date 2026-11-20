@@ -7,6 +7,48 @@ import telar.base.ds;
 
 namespace telar::runtime::cli::hooks {
 
+  namespace {
+
+    // The runtime takes a session reference of at most this many bytes.
+    constexpr std::size_t maximum_session_reference = 64;
+
+    // Reads each named field as text, so a field of another type fails the payload.
+    void readTexts(const Object& fields, std::initializer_list<std::string_view> names) {
+      for (const auto name : names) {
+        static_cast<void>(fields.text(name));
+      }
+    }
+
+    // Cursor spells its tool events as camelCase; the reports take the PascalCase names.
+    std::string_view cursorToolEvent(std::string_view name) noexcept {
+      if (name == "preToolUse") {
+        return "PreToolUse";
+      }
+
+      if (name == "postToolUse" || name == "postToolUseFailure") {
+        return "PostToolUse";
+      }
+
+      return name;
+    }
+
+    // A string token holding a \u escape decodes as JSON would, so an invalid one fails here.
+    void decodeEscapes(std::string_view token, ds::String<Memory>& decoded) {
+      if (token.contains("\\u")) {
+        JsonValue{token}.string(decoded);
+      }
+    }
+
+  }
+
+  bool printable(unsigned char byte) noexcept {
+    // The bytes below the space and the delete byte are control characters.
+    constexpr unsigned char first_printable = 0x20;
+    constexpr unsigned char delete_byte = 0x7f;
+
+    return byte >= first_printable && byte != delete_byte;
+  }
+
   Object::Object(Memory& memory, JsonValue value, bool reject_duplicates)
       : memory_(memory),
         members_(memory),
@@ -83,7 +125,7 @@ namespace telar::runtime::cli::hooks {
   }
 
   template <typename Consumer>
-  void Object::eachValue(Consumer&& consume) const {
+  void Object::eachValue(const Consumer& consume) const {
     for (const auto& member : members_) {
       consume(member.value);
     }
@@ -91,8 +133,8 @@ namespace telar::runtime::cli::hooks {
 
   auto Object::find(std::string_view name) const noexcept -> const Member* {
     const auto members = members_.view();
-    const auto found = std::lower_bound(members.begin(), members.end(), name, [](const Member& member, std::string_view key) {
-      return member.name < key;
+    const auto found = std::ranges::lower_bound(members, name, std::ranges::less{}, [](const Member& member) {
+      return std::string_view{member.name};
     });
 
     return found != members.end() && found->name == name ? &*found : nullptr;
@@ -155,100 +197,126 @@ namespace telar::runtime::cli::hooks {
       : Payload(memory, provider, Object{memory, input, true}) {}
 
   Payload::Payload(Memory& memory, AgentProvider provider, Object input)
-      : memory(memory),
-        provider(provider),
-        fields(std::move(input)),
-        tools(memory, toolObject(fields)) {
-    if (const auto tool_input = fields.value("tool_input")) {
+      : memory_(memory),
+        provider_(provider),
+        fields_(std::move(input)),
+        tools_(memory, toolObject(fields_)) {
+    validateTools();
+    readTexts(fields_, {"tool_name", "cwd"});
+    if (provider == AgentProvider::pi || provider == AgentProvider::opencode) {
+      readEventFields();
+    } else {
+      readHookFields();
+    }
+  }
+
+  void Payload::validateTools() {
+    if (const auto tool_input = fields_.value("tool_input")) {
       if (tool_input->encoded().starts_with('{')) {
-        tools.requireUnique();
-        tools.eachValue([&](JsonValue child) {
-          validateDynamicValue(memory, child);
+        tools_.requireUnique();
+        tools_.eachValue([&](JsonValue child) {
+          validateDynamicValue(memory_, child);
         });
       } else {
-        validateDynamicValue(memory, *tool_input);
+        validateDynamicValue(memory_, *tool_input);
       }
     }
+  }
 
-    for (const auto* const name : {"tool_name", "cwd"}) {
-      fields.text(name);
-    }
-
-    if (provider == AgentProvider::pi || provider == AgentProvider::opencode) {
-      for (const auto* const name : {"event", "session_id", "tool_call_id"}) {
-        fields.text(name);
-      }
-
-      fields.template integer<std::int32_t>("exit_code");
-      if (provider == AgentProvider::pi) {
-        fields.boolean("idle");
-        strictBoolean("blocked");
-        fields.optionalText("name");
-      } else {
-        strictBoolean("busy");
-        fields.optionalText("title");
-        blockedReason();
-      }
+  void Payload::readEventFields() {
+    readTexts(fields_, {"event", "session_id", "tool_call_id"});
+    static_cast<void>(fields_.template integer<std::int32_t>("exit_code"));
+    if (provider_ == AgentProvider::pi) {
+      static_cast<void>(fields_.boolean("idle"));
+      strictBoolean("blocked");
+      static_cast<void>(fields_.optionalText("name"));
     } else {
-      for (const auto* const name : {"hook_event_name", "tool_use_id"}) {
-        fields.text(name);
-      }
-
-      if (provider == AgentProvider::cursor) {
-        for (const auto* const name : {"conversation_id", "tool_output", "chat_meta"}) {
-          fields.text(name);
-        }
-
-        if (const auto roots = fields.value("workspace_roots")) {
-          roots->eachElement([&](JsonValue root) {
-            ds::String<Memory> decoded{memory};
-
-            root.string(decoded);
-            if (!workspace_) {
-              workspace_ = std::move(decoded);
-            }
-          });
-        }
-      } else {
-        fields.optionalText("agent_id");
-        for (const auto* const name : {"session_id", "transcript_path"}) {
-          fields.text(name);
-        }
-
-        if (provider == AgentProvider::claude) {
-          for (const auto* const name : {"session_title", "notification_type", "message", "last_assistant_message", "new_cwd"}) {
-            fields.text(name);
-          }
-
-          if (const auto tasks = fields.value("background_tasks")) {
-            tasks->eachElement([&](JsonValue value) {
-              Object task{memory, value, true};
-              const auto type = task.text("type");
-              const auto status = task.text("status");
-
-              running_subagents += type == "subagent" && status == "running";
-            });
-          }
-        } else {
-          fields.text("source");
-          fields.text("state_database");
-          fields.optionalText("last_assistant_message");
-          fields.template integer<std::size_t>("running_subagents");
-        }
-      }
+      strictBoolean("busy");
+      static_cast<void>(fields_.optionalText("title"));
+      static_cast<void>(blockedReason());
     }
+  }
+
+  void Payload::readHookFields() {
+    readTexts(fields_, {"hook_event_name", "tool_use_id"});
+    if (provider_ == AgentProvider::cursor) {
+      readCursorFields();
+      return;
+    }
+
+    static_cast<void>(fields_.optionalText("agent_id"));
+    readTexts(fields_, {"session_id", "transcript_path"});
+    if (provider_ == AgentProvider::claude) {
+      readClaudeFields();
+      return;
+    }
+
+    readTexts(fields_, {"source", "state_database"});
+    static_cast<void>(fields_.optionalText("last_assistant_message"));
+    static_cast<void>(fields_.template integer<std::size_t>("running_subagents"));
+  }
+
+  void Payload::readCursorFields() {
+    readTexts(fields_, {"conversation_id", "tool_output", "chat_meta"});
+    if (const auto roots = fields_.value("workspace_roots")) {
+      roots->eachElement([&](JsonValue root) {
+        ds::String<Memory> decoded{memory_};
+
+        root.string(decoded);
+        if (!workspace_) {
+          workspace_ = std::move(decoded);
+        }
+      });
+    }
+  }
+
+  void Payload::readClaudeFields() {
+    readTexts(fields_, {"session_title", "notification_type", "message", "last_assistant_message", "new_cwd"});
+    if (const auto tasks = fields_.value("background_tasks")) {
+      tasks->eachElement([&](JsonValue value) {
+        const Object task{memory_, value, true};
+        const auto type = task.text("type");
+        const auto status = task.text("status");
+
+        running_subagents_ += type == "subagent" && status == "running";
+      });
+    }
+  }
+
+  Memory& Payload::memory() const noexcept {
+    return memory_;
+  }
+
+  AgentProvider Payload::provider() const noexcept {
+    return provider_;
+  }
+
+  const Object& Payload::fields() const noexcept {
+    return fields_;
+  }
+
+  const Object& Payload::tools() const noexcept {
+    return tools_;
+  }
+
+  std::size_t Payload::runningSubagents() const noexcept {
+    return running_subagents_;
+  }
+
+  void Payload::setRunningSubagents(std::size_t count) noexcept {
+    running_subagents_ = count;
   }
 
   std::string_view Payload::event() const {
-    return fields.text(provider == AgentProvider::pi || provider == AgentProvider::opencode ? "event" : "hook_event_name");
+    return fields_.text(provider_ == AgentProvider::pi || provider_ == AgentProvider::opencode ? "event" : "hook_event_name");
   }
 
   std::string_view Payload::session() const {
-    return fields.text(provider == AgentProvider::cursor ? "conversation_id" : "session_id");
+    return fields_.text(provider_ == AgentProvider::cursor ? "conversation_id" : "session_id");
   }
 
   bool Payload::subagent() const {
-    return !fields.optionalText("agent_id").valueOr("").empty();
+    return !fields_.optionalText("agent_id").valueOr("").empty();
   }
 
   std::string_view Payload::workspace() const noexcept {
@@ -256,25 +324,11 @@ namespace telar::runtime::cli::hooks {
   }
 
   std::string_view Payload::toolEvent() const {
-    const auto name = event();
-
-    if (provider != AgentProvider::cursor) {
-      return name;
-    }
-
-    if (name == "preToolUse") {
-      return "PreToolUse";
-    }
-
-    if (name == "postToolUse" || name == "postToolUseFailure") {
-      return "PostToolUse";
-    }
-
-    return name;
+    return provider_ == AgentProvider::cursor ? cursorToolEvent(event()) : event();
   }
 
   AgentBlockedReason Payload::blockedReason() const {
-    const auto name = fields.value("blocked") ? fields.text("blocked") : "none";
+    const auto name = fields_.value("blocked") ? fields_.text("blocked") : "none";
     constexpr ds::Array names{"none", "permission", "question", "plan", "other"};
     const auto* const found = std::ranges::find(names, name);
     if (found == names.end()) {
@@ -285,7 +339,7 @@ namespace telar::runtime::cli::hooks {
   }
 
   void Payload::strictBoolean(std::string_view name) {
-    if (fields.value(name) && !fields.boolean(name).hasValue()) {
+    if (fields_.value(name) && !fields_.boolean(name).hasValue()) {
       throw std::invalid_argument{"Expected hook boolean"};
     }
   }
@@ -307,42 +361,45 @@ namespace telar::runtime::cli::hooks {
     for (std::size_t index = 0; index < input.size(); ++index) {
       if (start && input[index] == '\\') {
         ++index;
+      } else if (input[index] == '"' && start) {
+        decodeEscapes(input.substr(*start, index - *start + 1), decoded);
+        start.reset();
       } else if (input[index] == '"') {
-        if (start) {
-          const auto token = input.substr(*start, index - *start + 1);
-          if (token.contains("\\u")) {
-            JsonValue{token}.string(decoded);
-          }
-
-          start.reset();
-        } else {
-          start = index;
-        }
+        start = index;
       }
     }
   }
 
   void validateDynamicValue(Memory& memory, JsonValue value) {
-    if (value.encoded().starts_with('{')) {
-      Object fields{memory, value};
+    // Depth first and in the order a recursive walk takes, so the first failure is the same one.
+    ds::Vec<JsonValue, Memory> pending{memory};
 
-      fields.requireUnique();
-      fields.eachValue([&](JsonValue child) {
-        validateDynamicValue(memory, child);
-      });
-    } else if (value.encoded().starts_with('[')) {
-      value.eachElement([&](JsonValue child) {
-        validateDynamicValue(memory, child);
-      });
+    pending.push(value);
+    while (const auto current = pending.pop()) {
+      const auto children = pending.size();
+      const auto push = [&](JsonValue child) {
+        pending.push(child);
+      };
+
+      if (current->encoded().starts_with('{')) {
+        const Object fields{memory, *current};
+
+        fields.requireUnique();
+        fields.eachValue(push);
+      } else if (current->encoded().starts_with('[')) {
+        current->eachElement(push);
+      }
+
+      std::ranges::reverse(pending.viewMut().subspan(children));
     }
   }
 
   std::string_view sessionReference(std::string_view text) noexcept {
-    if (text.empty() || text.size() > 64 || text.front() == '-') {
+    if (text.empty() || text.size() > maximum_session_reference || text.front() == '-') {
       return {};
     }
 
-    for (const unsigned char byte : text) {
+    for (const char byte : text) {
       const bool allowed = (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') || byte == '.' || byte == '_' || byte == '-' || byte == ':';
       if (!allowed) {
         return {};
@@ -370,12 +427,13 @@ namespace telar::runtime::cli::hooks {
     ds::Array<char, Capacity> bytes;
     std::size_t length = 0;
 
-    for (const unsigned char byte : text) {
+    for (const char character : text) {
+      const auto byte = static_cast<unsigned char>(character);
       if (length == bytes.size() || (!multiline && byte == '\n')) {
         break;
       }
 
-      if ((byte >= 0x20 && byte != 0x7f) || (multiline && (byte == '\n' || byte == '\t'))) {
+      if (printable(byte) || (multiline && (byte == '\n' || byte == '\t'))) {
         bytes.atMut(length++) = static_cast<char>(byte);
       }
     }
@@ -391,12 +449,12 @@ namespace telar::runtime::cli::hooks {
     output.assign(validPrefix(result));
   }
 
-  void eventLine(FixedText<96>& output, std::string_view text) {
+  void eventLine(FixedText<display_line_bytes>& output, std::string_view text) {
     const auto* const control = std::ranges::find_if(text, [](unsigned char byte) {
-      return byte < 0x20 || byte == 0x7f;
+      return !printable(byte);
     });
 
-    const auto prefix = utf8Prefix(text.substr(0, static_cast<std::size_t>(control - text.begin())), 96);
+    const auto prefix = utf8Prefix(text.substr(0, static_cast<std::size_t>(control - text.begin())), display_line_bytes);
 
     try {
       validateUtf8(prefix);
@@ -427,26 +485,26 @@ namespace telar::runtime::cli::hooks {
     return false;
   }
 
-  void toolEvent(FixedText<96>& output, const Payload& input) {
-    const auto name = input.fields.text("tool_name");
+  void toolEvent(FixedText<display_line_bytes>& output, const Payload& input) {
+    const auto name = input.fields().text("tool_name");
     if (name.empty()) {
       output.assign({});
       return;
     }
 
-    ds::Array<char, 192> buffer;
+    ds::Array<char, 192> buffer{};
     std::size_t length = 0;
     const auto append = [&](std::string_view text) {
       const auto count = std::min(text.size(), buffer.size() - length);
 
-      std::memcpy(buffer.dataMut() + length, text.data(), count);
+      std::ranges::copy(text.substr(0, count), buffer.viewMut().subspan(length).begin());
       length += count;
     };
 
     append("» ");
     append(name);
     for (const auto* const key : {"command", "cmd", "file_path", "filePath", "filepath", "path", "pattern", "url", "query", "prompt", "description"}) {
-      if (const auto argument = input.tools.stringField(key); argument && !argument->empty()) {
+      if (const auto argument = input.tools().stringField(key); argument && !argument->empty()) {
         append(" ");
         append(*argument);
         break;
@@ -456,8 +514,8 @@ namespace telar::runtime::cli::hooks {
     eventLine(output, {buffer.data(), length});
   }
 
-  bool questionEvent(FixedText<96>& output, const Payload& input) {
-    const auto questions = input.tools.value("questions");
+  bool questionEvent(FixedText<display_line_bytes>& output, const Payload& input) {
+    const auto questions = input.tools().value("questions");
     if (!questions || !questions->encoded().starts_with('[')) {
       return false;
     }
@@ -470,7 +528,7 @@ namespace telar::runtime::cli::hooks {
         return;
       }
 
-      Object question{input.memory, value};
+      const Object question{input.memory(), value};
       if (const auto text = question.stringField("question"); text && !text->empty()) {
         eventLine(output, *text);
         found = true;
@@ -480,34 +538,38 @@ namespace telar::runtime::cli::hooks {
     return found;
   }
 
-  static ds::Option<std::int32_t> commandExitCode(const Payload& input) {
-    if (input.provider == AgentProvider::claude) {
-      return input.event() == "PostToolUse" ? ds::Option<std::int32_t>{0} : ds::none;
+  namespace {
+
+    ds::Option<std::int32_t> commandExitCode(const Payload& input) {
+      if (input.provider() == AgentProvider::claude) {
+        return input.event() == "PostToolUse" ? ds::Option<std::int32_t>{0} : ds::none;
+      }
+
+      if (input.provider() == AgentProvider::codex) {
+        return ds::none;
+      }
+
+      if (input.provider() != AgentProvider::cursor) {
+        return input.fields().template integer<std::int32_t>("exit_code");
+      }
+
+      if (input.event() != "postToolUse" || input.fields().text("tool_name") != "Shell") {
+        return ds::none;
+      }
+
+      try {
+        const Object output{input.memory(), JsonValue::parse(input.fields().text("tool_output")), true};
+
+        return output.template integer<std::int32_t>("exitCode");
+      } catch (const std::exception&) {
+        return ds::none;
+      }
     }
 
-    if (input.provider == AgentProvider::codex) {
-      return ds::none;
-    }
-
-    if (input.provider != AgentProvider::cursor) {
-      return input.fields.template integer<std::int32_t>("exit_code");
-    }
-
-    if (input.event() != "postToolUse" || input.fields.text("tool_name") != "Shell") {
-      return ds::none;
-    }
-
-    try {
-      Object output{input.memory, JsonValue::parse(input.fields.text("tool_output")), true};
-
-      return output.template integer<std::int32_t>("exitCode");
-    } catch (const std::exception&) {
-      return ds::none;
-    }
   }
 
   ds::Option<ReportAgentCommand> commandReport(const Payload& input) {
-    if ((input.provider == AgentProvider::claude || input.provider == AgentProvider::codex) && input.subagent()) {
+    if ((input.provider() == AgentProvider::claude || input.provider() == AgentProvider::codex) && input.subagent()) {
       return ds::none;
     }
 
@@ -518,36 +580,36 @@ namespace telar::runtime::cli::hooks {
       return ds::none;
     }
 
-    const auto provider = describeProvider(input.provider).name;
-    const auto* manifest = builtin_manifests.find(input.provider);
-    const auto field = manifest == nullptr ? std::string_view{} : manifest->commandField(input.fields.text("tool_name"));
-    const auto command = input.tools.stringField(field);
+    const auto provider = describeProvider(input.provider()).name;
+    const auto* manifest = builtin_manifests.find(input.provider());
+    const auto field = manifest == nullptr ? std::string_view{} : manifest->commandField(input.fields().text("tool_name"));
+    const auto command = input.tools().stringField(field);
     if (!command || command->empty()) {
       return ds::none;
     }
 
-    const auto cwd = input.fields.text("cwd");
+    const auto cwd = input.fields().text("cwd");
 
     return ReportAgentCommand{
         .phase = started ? AgentCommandPhase::started : AgentCommandPhase::finished,
         .provider = provider,
-        .tool_call_id = input.fields.text(input.provider == AgentProvider::pi || input.provider == AgentProvider::opencode ? "tool_call_id" : "tool_use_id"),
+        .tool_call_id = input.fields().text(input.provider() == AgentProvider::pi || input.provider() == AgentProvider::opencode ? "tool_call_id" : "tool_use_id"),
         .command = *command,
-        .cwd = input.provider == AgentProvider::cursor && cwd.empty() ? input.workspace() : cwd,
+        .cwd = input.provider() == AgentProvider::cursor && cwd.empty() ? input.workspace() : cwd,
         .session = sessionReference(input.session()),
         .exit_code = started ? ds::none : commandExitCode(input),
     };
   }
 
-  void backgroundEvent(FixedText<96>& output, std::size_t count) {
-    ds::Array<char, 96> buffer;
-    const auto length = std::snprintf(buffer.dataMut(), buffer.size(), "waiting for %zu background %s", count, count == 1 ? "agent" : "agents");
+  void backgroundEvent(FixedText<display_line_bytes>& output, std::size_t count) {
+    ds::Array<char, display_line_bytes> buffer{};
+    const auto written = std::format_to_n(buffer.dataMut(), static_cast<std::ptrdiff_t>(buffer.size()), "waiting for {} background {}", count, count == 1 ? "agent" : "agents");
 
-    output.assign({buffer.data(), static_cast<std::size_t>(length)});
+    output.assign({buffer.data(), std::min(static_cast<std::size_t>(written.size), buffer.size())});
   }
 
-  template void displayText<96>(FixedText<96>& output, std::string_view text, bool multiline);
-  template void displayText<2048>(FixedText<2048>& output, std::string_view text, bool multiline);
+  template void displayText<display_line_bytes>(FixedText<display_line_bytes>& output, std::string_view text, bool multiline);
+  template void displayText<display_message_bytes>(FixedText<display_message_bytes>& output, std::string_view text, bool multiline);
 
 }
 

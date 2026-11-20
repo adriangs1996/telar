@@ -86,9 +86,13 @@ export {
           return "failed";
         case AgentStatus::ready:
           return "ready";
-        default:
-          return "active";
+        case AgentStatus::unknown:
+        case AgentStatus::working:
+          break;
         }
+
+        // An unknown or working agent, or a status outside the enum.
+        return "active";
       }
 
       [[nodiscard]] static constexpr std::string_view title(AgentStatus status) noexcept {
@@ -99,9 +103,14 @@ export {
           return "Agent done";
         case AgentStatus::failed:
           return "Agent failed";
-        default:
-          return {};
+        case AgentStatus::unknown:
+        case AgentStatus::working:
+        case AgentStatus::ready:
+          break;
         }
+
+        // A status that raises no alert, or one outside the enum.
+        return {};
       }
 
       [[nodiscard]] static constexpr NotificationLevel level(AgentStatus status) noexcept {
@@ -110,9 +119,15 @@ export {
           return NotificationLevel::warning;
         case AgentStatus::failed:
           return NotificationLevel::failure;
-        default:
-          return NotificationLevel::success;
+        case AgentStatus::unknown:
+        case AgentStatus::working:
+        case AgentStatus::ready:
+        case AgentStatus::done:
+          break;
         }
+
+        // A status that needs nothing, or one outside the enum.
+        return NotificationLevel::success;
       }
 
       [[nodiscard]] static constexpr std::uint64_t duration(AgentStatus status) noexcept {

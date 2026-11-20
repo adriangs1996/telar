@@ -60,7 +60,9 @@ namespace telar::runtime::cli {
       }
 
     private:
-      ErrorText<1023> message_;
+      static constexpr std::size_t message_capacity = 1023;
+
+      ErrorText<message_capacity> message_;
     };
 
   }
@@ -72,9 +74,13 @@ namespace telar::runtime::cli {
     }
 
     client_.send(RuntimeStop{});
-    ds::Array<Byte, 2048> incoming;
+
+    // Room for the runtime's stop or its refusal, and for what decoding the refusal borrows.
+    constexpr std::size_t reply_bytes = 2048;
+
+    ds::Array<Byte, reply_bytes> incoming{};
     const auto response = client_.receiveFrame(incoming.viewMut());
-    ds::Array<Byte, 2048> decoded;
+    ds::Array<Byte, reply_bytes> decoded{};
     DecodeStorage storage{decoded.viewMut()};
 
     if (!response.empty() && response.front() == static_cast<Byte>(ServerTag::request_failed)) {
@@ -94,7 +100,9 @@ namespace telar::runtime::cli {
     };
 
     [[noreturn]] void relay(RelayDirection direction) noexcept {
-      ds::Array<Byte, 64 * 1024> buffer;
+      constexpr std::size_t buffer_bytes = std::size_t{64} * 1024;
+
+      ds::Array<Byte, buffer_bytes> buffer{};
 
       for (;;) {
         const auto count = ::read(direction.source, buffer.dataMut(), buffer.size());
@@ -130,9 +138,9 @@ namespace telar::runtime::cli {
   }
 
   [[noreturn]] void RuntimeConnection::bridge() {
-    ::signal(SIGPIPE, SIG_IGN);
+    static_cast<void>(::signal(SIGPIPE, SIG_IGN));
     RelayDirection upstream{.source = STDIN_FILENO, .destination = client_.descriptor()};
-    pthread_t thread;
+    pthread_t thread{};
     const auto result = ::pthread_create(&thread, nullptr, &relayInput, &upstream);
     if (result != 0) {
       throw SystemError{"Start runtime bridge", result};

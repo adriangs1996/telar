@@ -241,7 +241,7 @@ namespace telar::gui::features::terminal::graphics {
   }
 
   std::span<const std::uint16_t> ImageResidencyTable::rows() const noexcept {
-    return {occupied_.data(), count_};
+    return occupied_.view().first(count_);
   }
 
   void ImageResidencyTable::sweepRows(const void* context, Retained retained) {

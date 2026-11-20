@@ -21,7 +21,7 @@ import telar.cli.command_limit;
 export {
   namespace telar::runtime::cli::config_receive {
 
-    inline constexpr std::size_t max_file_bytes = 1024 * 1024;
+    inline constexpr std::size_t max_file_bytes = 1024 * std::size_t{1024};
     inline constexpr std::size_t max_total_bytes = 16 * max_file_bytes;
     inline constexpr std::size_t max_files = 4096;
 
@@ -40,7 +40,7 @@ export {
   namespace telar::runtime::cli::launch {
 
     inline constexpr int ssh_failure = 255;
-    inline constexpr std::size_t output_limit = 256 * 1024;
+    inline constexpr std::size_t output_limit = 256 * std::size_t{1024};
 
     // A program and its arguments, each a NUL-terminated text, as exec takes them.
     using Argv = ds::Vec<Text, Memory>;
@@ -85,7 +85,7 @@ export {
   namespace telar::runtime::cli {
 
     struct MachineOptions {
-      enum class Action {
+      enum class Action : std::uint8_t {
         add,
         remove,
         rename,
@@ -126,12 +126,13 @@ export {
     MachineProfiles load(Memory& memory, const Text& path);
 
     // This machine's label: the one saved, else its host name.
-    using LocalLabel = FixedText<256>;
+    inline constexpr std::size_t local_label_bytes = 256;
+    using LocalLabel = FixedText<local_label_bytes>;
 
     LocalLabel localLabel(const MachineProfiles& profiles);
 
     struct Random {
-      void fill(std::span<std::uint8_t> bytes);
+      static void fill(std::span<std::uint8_t> bytes);
     };
 
     MachineProfile newProfile(const MachineProfiles& profiles, const MachineOptions& options);
@@ -151,7 +152,7 @@ export {
 export {
   namespace telar::runtime::cli::machine {
 
-    inline constexpr std::size_t command_limit = 64 * 1024;
+    inline constexpr std::size_t command_limit = 64 * std::size_t{1024};
     inline constexpr auto probe_timeout = std::chrono::seconds{60};
     inline constexpr auto install_timeout = std::chrono::seconds{900};
     using Discovery = machines::MachineDiscovery<PATH_MAX>;
@@ -197,6 +198,15 @@ export {
   }
 }
 
+// Not exported. remoteCommand, a template its importers name, reaches it, so it keeps module
+// linkage: an internal one would be exposed to the importers (-Wreference-tu-local-entity-in-other-tu).
+namespace telar::runtime::cli::machine {
+
+  // Appends `argument` as one shell-safe word: `a`, then its bytes in URL-safe base64.
+  void appendEncoded(Text& result, std::string_view argument);
+
+}
+
 // Interface: machines/config_filter.cppm
 export {
   namespace telar::runtime::cli::machine::filter {
@@ -204,7 +214,7 @@ export {
     // The names of what a filter dropped, each once.
     using Notes = ds::Vec<Text, Memory>;
 
-    tbc::val_a<Text> rewriteHome(tbc::mut_a<Memory> memory, std::string_view bytes, std::string_view from, std::string_view to);
+    tbc::val_a<Text> rewriteHome(tbc::mut_a<Memory> memory, std::string_view bytes, std::string_view from, std::string_view replacement);
 
     tbc::val_a<Text> stripJsonc(tbc::mut_a<Memory> memory, std::string_view bytes);
 

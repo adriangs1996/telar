@@ -35,9 +35,12 @@ export {
     // the command its second word names. Help never starts or contacts a runtime.
     ds::Option<HelpTopic> findHelp(std::span<char* const> words) noexcept;
 
+    // The bytes a help reference holds, enough for the longest family and command.
+    inline constexpr std::size_t help_reference_bytes = 127;
+
     // The words a usage error points at, as in "see `telar pane read --help`".
     // The help to read after an argument error, as `telar FAMILY COMMAND --help`.
-    ErrorText<127> helpReference(std::span<char* const> words);
+    ErrorText<help_reference_bytes> helpReference(std::span<char* const> words);
 
   }
 }

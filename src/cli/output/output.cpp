@@ -43,12 +43,19 @@ namespace telar::runtime::cli {
   };
 
   std::string_view familyName(Family family) noexcept {
-    return family_names.at(static_cast<std::size_t>(family));
+    const auto index = static_cast<std::size_t>(family);
+
+    // A Family outside the enum is a broken invariant: stop rather than read past the names.
+    if (index >= family_names.size()) {
+      std::abort();
+    }
+
+    return family_names[index];
   }
 
   ds::Option<Family> parseFamily(std::string_view word) noexcept {
     for (std::size_t index = 0; index < family_names.size(); ++index) {
-      if (family_names.at(index) == word) {
+      if (family_names[index] == word) {
         return static_cast<Family>(index);
       }
     }
@@ -91,15 +98,22 @@ namespace telar::runtime::cli {
   }
 
   void Output::flush() {
-    std::fwrite(data.data(), 1, data.size(), stdout);
-    std::fflush(stdout);
+    // Best effort: a command's status does not depend on stdout taking its text. fwrite reads the
+    // String's own data and size.
+#pragma clang unsafe_buffer_usage begin
+    static_cast<void>(std::fwrite(data.data(), 1, data.size(), stdout));
+#pragma clang unsafe_buffer_usage end
+    static_cast<void>(std::fflush(stdout));
     data.clear();
   }
 
   template <typename Integer>
   Output& Output::number(Integer value) {
-    ds::Array<char, 32> buffer;
-    const char* const end = std::to_chars(buffer.dataMut(), buffer.dataMut() + buffer.size(), value).ptr;
+    // Room for the decimal digits and sign of the widest integer.
+    constexpr std::size_t digits_capacity = 32;
+
+    ds::Array<char, digits_capacity> buffer{};
+    const char* const end = std::to_chars(buffer.dataMut(), std::to_address(buffer.viewMut().end()), value).ptr;
 
     data.append(std::string_view{buffer.data(), end});
     return *this;

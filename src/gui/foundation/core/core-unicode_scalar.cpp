@@ -80,8 +80,8 @@ namespace telar::gui::inline foundation::inline core {
     continuations.remove_prefix(1);
     for (const auto byte : continuations) {
       const auto continuation = static_cast<unsigned char>(byte);
-      constexpr unsigned prefix_mask = 0xc0;
-      if ((continuation & prefix_mask) != continuation_prefix) {
+      constexpr unsigned continuation_tag_mask = 0xc0;
+      if ((continuation & continuation_tag_mask) != continuation_prefix) {
         return {.error = DecodeError::continuation_byte};
       }
 

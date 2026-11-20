@@ -44,7 +44,9 @@ namespace telar::gui::features::notifications {
     case AgentStatus::failed:
       ++failed_;
       break;
-    default:
+    case AgentStatus::unknown:
+    case AgentStatus::working:
+    case AgentStatus::ready:
       break;
     }
   }

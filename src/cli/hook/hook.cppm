@@ -22,7 +22,7 @@ export {
 
     class Input {
     public:
-      static constexpr std::size_t maximum_bytes = 16 * 1024 * 1024;
+      static constexpr std::size_t maximum_bytes = std::size_t{16} * 1024 * 1024;
 
       explicit Input(Memory& memory);
 
@@ -60,6 +60,8 @@ export {
       template <EnvironmentLookup Environment>
       ds::Option<std::string_view> cursorRoot(const Environment& environment);
 
+      ds::Option<std::string_view> cursorChat(std::string_view root, std::string_view chat);
+
       ds::Option<std::string_view> cursorPath(std::string_view root, std::string_view digest, std::string_view chat);
 
       static tbc::val_a<ds::Option<std::string_view>> copy(std::string_view value, tbc::val_a<std::span<char>> buffer) noexcept;
@@ -78,21 +80,19 @@ export {
 // (-Wreference-tu-local-entity-in-other-tu). Helpers that only these call stay internal in hook.cpp.
 namespace telar::runtime::cli::hooks {
 
-  inline constexpr std::size_t MAX_EVENT_BYTES = 96;
+  tbc::val_a<ds::Option<ReportAgent>> claudeLifecycle(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<display_line_bytes>> event);
 
-  tbc::val_a<ds::Option<ReportAgent>> claudeLifecycle(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<MAX_EVENT_BYTES>> event);
+  tbc::val_a<ds::Option<ReportAgent>> codexLifecycle(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<display_line_bytes>> event, tbc::val_a<std::string_view> database);
 
-  tbc::val_a<ds::Option<ReportAgent>> codexLifecycle(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<MAX_EVENT_BYTES>> event, tbc::val_a<std::string_view> database);
+  tbc::val_a<ds::Option<ReportAgent>> piLifecycle(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<display_line_bytes>> event);
 
-  tbc::val_a<ds::Option<ReportAgent>> piLifecycle(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<MAX_EVENT_BYTES>> event);
+  tbc::val_a<ds::Option<ReportAgent>> openCodeLifecycle(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<display_line_bytes>> event);
 
-  tbc::val_a<ds::Option<ReportAgent>> openCodeLifecycle(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<MAX_EVENT_BYTES>> event);
-
-  tbc::val_a<ds::Option<ReportAgent>> cursorLifecycle(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<MAX_EVENT_BYTES>> event, tbc::val_a<std::string_view> metadata);
+  tbc::val_a<ds::Option<ReportAgent>> cursorLifecycle(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<display_line_bytes>> event, tbc::val_a<std::string_view> metadata);
 
   tbc::val_a<ds::Option<ReportAgentProgress>> progressReport(tbc::ref_a<Payload> input, tbc::mut_a<ReportTexts> texts);
 
-  tbc::val_a<ds::Option<ReportAgentTitle>> titleReport(const Payload& input, tbc::mut_a<FixedText<MAX_EVENT_BYTES>> text);
+  tbc::val_a<ds::Option<ReportAgentTitle>> titleReport(const Payload& input, tbc::mut_a<FixedText<display_line_bytes>> text);
 
   ds::Option<std::uint64_t> unsignedValue(std::string_view value) noexcept;
 

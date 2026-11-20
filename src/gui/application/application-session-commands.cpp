@@ -96,11 +96,24 @@ namespace telar::gui::application {
       }
 
       return Change::notification;
-    default:
-      handler(message, reply);
-
-      return Change::none;
+    case ClientAction::client_open_goto:
+    case ClientAction::client_open_history:
+    case ClientAction::client_copy_mode:
+    case ClientAction::client_open_link:
+    case ClientAction::config_reload:
+    case ClientAction::config_show:
+    case ClientAction::plugin_list:
+    case ClientAction::plugin_get:
+    case ClientAction::plugin_enable:
+    case ClientAction::plugin_disable:
+    case ClientAction::plugin_run:
+      break;
     }
+
+    // The client's own actions, and one outside the enum, go to the handler.
+    handler(message, reply);
+
+    return Change::none;
   }
 
   void Session::executeNavigationCommand(const ClientCommand& message, CompleteClientCommand& reply) {
@@ -165,7 +178,35 @@ namespace telar::gui::application {
       reply.status = ClientCommandStatus::admitted;
       break;
     }
-    default:
+    case ClientAction::pane_create:
+    case ClientAction::pane_split:
+    case ClientAction::pane_close:
+    case ClientAction::pane_focus:
+    case ClientAction::pane_resize:
+    case ClientAction::pane_fullscreen:
+    case ClientAction::pane_scroll:
+    case ClientAction::sidebar_get:
+    case ClientAction::sidebar_show:
+    case ClientAction::sidebar_hide:
+    case ClientAction::sidebar_resize:
+    case ClientAction::workspace_list_expand:
+    case ClientAction::workspace_list_collapse:
+    case ClientAction::client_open_goto:
+    case ClientAction::client_open_history:
+    case ClientAction::client_copy_mode:
+    case ClientAction::notification_dismiss:
+    case ClientAction::client_open_link:
+    case ClientAction::client_clipboard_copy:
+    case ClientAction::pane_copy:
+    case ClientAction::layout_get:
+    case ClientAction::layout_apply:
+    case ClientAction::config_reload:
+    case ClientAction::config_show:
+    case ClientAction::plugin_list:
+    case ClientAction::plugin_get:
+    case ClientAction::plugin_enable:
+    case ClientAction::plugin_disable:
+    case ClientAction::plugin_run:
       throw EncodingError{"Invalid navigation command"};
     }
   }
@@ -238,7 +279,32 @@ namespace telar::gui::application {
       reply.text = {};
       reply.status = ClientCommandStatus::admitted;
       break;
-    default:
+    case ClientAction::workspace_select:
+    case ClientAction::tab_create:
+    case ClientAction::tab_select:
+    case ClientAction::tab_next:
+    case ClientAction::tab_previous:
+    case ClientAction::sidebar_get:
+    case ClientAction::sidebar_show:
+    case ClientAction::sidebar_hide:
+    case ClientAction::sidebar_resize:
+    case ClientAction::workspace_list_expand:
+    case ClientAction::workspace_list_collapse:
+    case ClientAction::client_open_goto:
+    case ClientAction::client_open_history:
+    case ClientAction::client_copy_mode:
+    case ClientAction::notification_dismiss:
+    case ClientAction::client_open_link:
+    case ClientAction::client_clipboard_copy:
+    case ClientAction::layout_get:
+    case ClientAction::layout_apply:
+    case ClientAction::config_reload:
+    case ClientAction::config_show:
+    case ClientAction::plugin_list:
+    case ClientAction::plugin_get:
+    case ClientAction::plugin_enable:
+    case ClientAction::plugin_disable:
+    case ClientAction::plugin_run:
       throw EncodingError{"Invalid pane command"};
     }
   }

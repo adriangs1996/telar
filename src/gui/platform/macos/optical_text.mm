@@ -24,6 +24,14 @@
 
 namespace telar::gui::qt {
   namespace {
+
+    // `bytes` of an image's scanline, which Qt hands over as a bare pointer: the one place it meets a span.
+    std::span<uchar> scanLine(QImage& image, int row, qsizetype bytes) {
+#pragma clang unsafe_buffer_usage begin
+      return {image.scanLine(row), static_cast<std::size_t>(bytes)};
+#pragma clang unsafe_buffer_usage end
+    }
+
     constexpr CGFloat synthetic_italic_slant = 0.21256;
     constexpr CGFloat synthetic_bold_divisor = 24;
     constexpr CGFloat smoothing_margin = 1;
@@ -194,8 +202,8 @@ namespace telar::gui::qt {
       const auto opacity = color.alpha();
 
       for (int row = bounds.top(); row <= bounds.bottom(); ++row) {
-        const auto coverage = std::span{mask.scanLine(row), static_cast<std::size_t>(mask.width())};
-        const auto pixels = std::span{image.scanLine(row), static_cast<std::size_t>(image.bytesPerLine())};
+        const auto coverage = scanLine(mask, row, mask.width());
+        const auto pixels = scanLine(image, row, image.bytesPerLine());
         int first = bounds.right() + 1;
         int last = bounds.left() - 1;
 
@@ -207,10 +215,10 @@ namespace telar::gui::qt {
             const auto pixel = pixels.subspan(offset * sizeof(QRgb), sizeof(QRgb));
             QRgb previous = 0;
 
-            std::memcpy(&previous, pixel.data(), sizeof(previous));
+            std::ranges::copy(std::as_bytes(pixel), std::as_writable_bytes(std::span{&previous, 1}).begin());
             const auto composite = compositePixel(previous, color, alpha);
 
-            std::memcpy(pixel.data(), &composite, sizeof(composite));
+            std::ranges::copy(std::as_bytes(std::span{&composite, 1}), std::as_writable_bytes(pixel).begin());
             first = std::min(first, column);
             last = column;
           }
@@ -238,11 +246,11 @@ namespace telar::gui::qt {
     auto& self = *state_;
     const auto pixels = physicalSize(size, scale);
 
-    if (self.scale != scale) {
+    if (std::not_equal_to<>{}(self.scale, scale)) {
       self.clearFonts();
     }
 
-    if (!self.context || self.mask.size() != pixels || self.strength != strength || self.scale != scale) {
+    if (!self.context || self.mask.size() != pixels || std::not_equal_to<>{}(self.strength, strength) || std::not_equal_to<>{}(self.scale, scale)) {
       if (self.context) {
         self.context.reset();
       }
@@ -253,12 +261,12 @@ namespace telar::gui::qt {
       }
 
       self.mask.fill(0);
-      const platform::NativeReference space{CGColorSpaceCreateWithName(kCGColorSpaceLinearGray)};
+      const platform::NativeReference<CGColorSpaceRef> space{CGColorSpaceCreateWithName(kCGColorSpaceLinearGray)};
       if (!space) {
         throw std::runtime_error{"Unable to create optical terminal color space"};
       }
 
-      self.context.reset(CGBitmapContextCreate(self.mask.bits(), pixels.width(), pixels.height(), alpha_bits, self.mask.bytesPerLine(), space.get(), kCGImageAlphaOnly));
+      self.context.reset(CGBitmapContextCreate(self.mask.bits(), static_cast<std::size_t>(pixels.width()), static_cast<std::size_t>(pixels.height()), alpha_bits, static_cast<std::size_t>(self.mask.bytesPerLine()), space.get(), kCGImageAlphaOnly));
 
       if (!self.context) {
         throw std::runtime_error("Unable to allocate optical terminal mask");

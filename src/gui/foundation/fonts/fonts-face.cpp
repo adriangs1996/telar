@@ -25,6 +25,22 @@ namespace telar::gui::inline foundation::inline fonts {
     constexpr std::size_t maximum_collection_faces = 256;
     constexpr double variation_unit = 65536;
 
+    // An array FreeType or HarfBuzz hands over as a pointer and its length: the one place the two
+    // meet a span.
+    template <typename Value, typename Count>
+    std::span<Value> libraryArray(Value* values, Count count) noexcept {
+#pragma clang unsafe_buffer_usage begin
+      return {values, static_cast<std::size_t>(count)};
+#pragma clang unsafe_buffer_usage end
+    }
+
+    // A NUL-padded name field's text: up to its first NUL, or all of it.
+    std::string_view fieldText(std::span<const char> field) noexcept {
+      const auto end = std::ranges::find(field, '\0');
+
+      return {field.data(), static_cast<std::size_t>(end - field.begin())};
+    }
+
     struct VariationDeleter {
       FT_Library library = nullptr;
 
@@ -193,7 +209,9 @@ namespace telar::gui::inline foundation::inline fonts {
     }
 
     const auto master = variationMaster(library_.get(), face_.get());
-    const auto axes = std::span{master->axis, master->num_axis};
+    const auto axes = libraryArray(master->axis, master->num_axis);
+    const auto tags = std::span{variation.tags};
+    const auto values = std::span{variation.values};
     ds::Array<FT_Fixed, telar_font_max_axes> coordinates{};
 
     for (std::size_t index = 0; index < axes.size(); ++index) {
@@ -202,13 +220,13 @@ namespace telar::gui::inline foundation::inline fonts {
 
     for (std::size_t index = 0; index < variation.count; ++index) {
       const auto found = std::ranges::find_if(axes, [&](const FT_Var_Axis& axis) {
-        return axis.tag == variation.tags[index];
+        return axis.tag == tags[index];
       });
       if (found == axes.end()) {
         throw std::invalid_argument{"FontVariationAxisMissing"};
       }
 
-      const auto fixed = static_cast<double>(variation.values[index]) * variation_unit;
+      const auto fixed = static_cast<double>(values[index]) * variation_unit;
       if (!std::isfinite(fixed) || fixed < static_cast<double>(found->minimum) || fixed > static_cast<double>(found->maximum)) {
         throw std::invalid_argument{"FontVariationOutOfRange"};
       }
@@ -233,11 +251,12 @@ namespace telar::gui::inline foundation::inline fonts {
     }
 
     FontVariation result{};
+    const auto axes = libraryArray(master->axis, master->num_axis);
 
     result.count = master->num_axis;
     for (std::size_t index = 0; index < master->num_axis; ++index) {
-      result.tags[index] = static_cast<std::uint32_t>(master->axis[index].tag);
-      result.values[index] = static_cast<float>(static_cast<double>(coordinates[index]) / variation_unit);
+      std::span{result.tags}[index] = static_cast<std::uint32_t>(axes[index].tag);
+      std::span{result.values}[index] = static_cast<float>(static_cast<double>(coordinates[index]) / variation_unit);
     }
 
     return result;
@@ -272,18 +291,17 @@ namespace telar::gui::inline foundation::inline fonts {
       return;
     }
 
-    auto* const begin = sizes_.dataMut();
-    auto* const end = begin + sizes_.size();
-    auto* found = std::ranges::find(begin, end, pixel_height, &SizeEntry::height);
-    if (found == end) {
+    const auto sizes = sizes_.view();
+    auto slot = static_cast<std::size_t>(std::ranges::find(sizes, pixel_height, &SizeEntry::height) - sizes.begin());
+    if (slot == sizes_.size()) {
       auto candidate = createSize(pixel_height);
 
-      found = sizes_.dataMut() + static_cast<std::ptrdiff_t>(next_size_slot_);
-      *found = {.height = pixel_height, .handle = std::move(candidate)};
+      slot = next_size_slot_;
+      sizes_.atMut(slot) = {.height = pixel_height, .handle = std::move(candidate)};
       next_size_slot_ = (next_size_slot_ + 1) % sizes_.size();
     }
 
-    if (FT_Activate_Size(found->handle.get()) != 0) {
+    if (FT_Activate_Size(sizes_[slot].handle.get()) != 0) {
       throw std::runtime_error{"FontSizeFailed"};
     }
 
@@ -343,7 +361,7 @@ namespace telar::gui::inline foundation::inline fonts {
       throw std::runtime_error{"ShapingFailed"};
     }
 
-    return {{glyphs, glyph_count}, {positions, position_count}, hb_buffer_get_direction(buffer) == HB_DIRECTION_RTL};
+    return {libraryArray(glyphs, glyph_count), libraryArray(positions, position_count), hb_buffer_get_direction(buffer) == HB_DIRECTION_RTL};
   }
 
   GlyphBitmapView Face::rasterize(GlyphRasterRequest request) {
@@ -447,7 +465,7 @@ namespace telar::gui::inline foundation::inline fonts {
   }
 
   bool sameFontMatch(const FontMatch& left, const FontMatch& right) noexcept {
-    return left.face_index == right.face_index && std::strncmp(std::span{left.path}.data(), std::span{right.path}.data(), sizeof(left.path)) == 0 && std::strncmp(std::span{left.postscript}.data(), std::span{right.postscript}.data(), sizeof(left.postscript)) == 0 && left.variation.count == right.variation.count && std::ranges::equal(left.variation.tags, right.variation.tags) && std::ranges::equal(left.variation.values, right.variation.values);
+    return left.face_index == right.face_index && fieldText(left.path) == fieldText(right.path) && fieldText(left.postscript) == fieldText(right.postscript) && left.variation.count == right.variation.count && std::ranges::equal(left.variation.tags, right.variation.tags) && std::ranges::equal(left.variation.values, right.variation.values);
   }
 
 }

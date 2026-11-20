@@ -20,9 +20,13 @@ namespace telar::gui::inline foundation::inline agents {
         return "Question";
       case AgentBlockedReason::plan:
         return "Review plan";
-      default:
-        return "Needs input";
+      case AgentBlockedReason::none:
+      case AgentBlockedReason::other:
+        break;
       }
+
+      // A reason without a word of its own, or one outside the enum.
+      return "Needs input";
     case AgentStatus::done:
       return "Done";
     case AgentStatus::failed:
@@ -46,9 +50,13 @@ namespace telar::gui::inline foundation::inline agents {
         return "?";
       case AgentBlockedReason::plan:
         return "\u2261";
-      default:
-        return "!";
+      case AgentBlockedReason::none:
+      case AgentBlockedReason::other:
+        break;
       }
+
+      // A reason without a glyph of its own, or one outside the enum.
+      return "!";
     case AgentStatus::working:
       return "\u25cc";
     case AgentStatus::done:
@@ -74,9 +82,13 @@ namespace telar::gui::inline foundation::inline agents {
       return PaletteRole::yellow;
     case AgentStatus::failed:
       return PaletteRole::red;
-    default:
-      return PaletteRole::overlay1;
+    case AgentStatus::unknown:
+    case AgentStatus::ready:
+      break;
     }
+
+    // An unknown or ready agent, or a status outside the enum.
+    return PaletteRole::overlay1;
   }
 
   auto AgentStatusPresentation::age(std::uint32_t seconds, bool duration) -> Age {

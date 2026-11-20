@@ -7,6 +7,15 @@ import telar.base.ds;
 
 namespace telar::gui::inline foundation::inline fonts::glyphs {
 
+  namespace {
+
+    // Whether `lower` starts where `upper` ends, over the same columns: the two make one rectangle.
+    bool stacks(Rect upper, Rect lower) noexcept {
+      return std::equal_to<>{}(upper.x, lower.x) && std::equal_to<>{}(upper.width, lower.width) && std::equal_to<>{}(upper.bottom(), lower.y);
+    }
+
+  }
+
   void validateCell(Rect cell) {
     constexpr auto maximum_extent = std::numeric_limits<std::uint16_t>::max();
     const auto finite_origin = std::isfinite(cell.x) && std::isfinite(cell.y);
@@ -50,7 +59,7 @@ namespace telar::gui::inline foundation::inline fonts::glyphs {
     }
 
     for (auto& previous : rectangles_.viewMut().first(count_)) {
-      if (previous.x == rectangle.x && previous.width == rectangle.width && previous.bottom() == rectangle.y) {
+      if (stacks(previous, rectangle)) {
         previous.height += rectangle.height;
 
         return;
@@ -189,7 +198,7 @@ namespace telar::gui::inline foundation::inline fonts::glyphs {
 
     // Two bands that line up make one rectangle, as Ink::appendMerged would join them; with only
     // two, the ink needs no search for the band to join.
-    if (!upper.empty() && !lower.empty() && upper.x == lower.x && upper.width == lower.width && upper.bottom() == lower.y) {
+    if (!upper.empty() && !lower.empty() && stacks(upper, lower)) {
       upper.height += lower.height;
       result.push(upper);
 
@@ -430,7 +439,7 @@ namespace telar::gui::inline foundation::inline fonts::glyphs {
     for (std::size_t index = 1; index < rows.size(); ++index) {
       const auto top = rows[index - 1];
       const auto bottom = rows[index];
-      if (top != bottom) {
+      if (std::not_equal_to<>{}(top, bottom)) {
         uniteBand(result, strokes, top, bottom);
       }
     }
@@ -468,7 +477,7 @@ namespace telar::gui::inline foundation::inline fonts::glyphs {
     const auto grid = cell.width < columns || cell.height < rows ? fractionalGrid(cell) : integerGrid(cell);
     Paint result;
 
-    if (grid.diameter == 0) {
+    if (std::equal_to<>{}(grid.diameter, 0.0F)) {
       return result;
     }
 

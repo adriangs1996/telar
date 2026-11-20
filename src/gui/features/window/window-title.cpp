@@ -6,6 +6,18 @@ import telar.base.ds;
 
 namespace telar::gui::features::window {
 
+  namespace {
+
+    // Moves `count` bytes at `from` left to `destination`, over bytes dropped before them; none move
+    // while nothing was dropped.
+    void moveLeft(std::span<char> bytes, std::size_t destination, std::size_t from, std::size_t count) noexcept {
+      if (destination != from) {
+        std::ranges::copy(bytes.subspan(from, count), bytes.subspan(destination).begin());
+      }
+    }
+
+  }
+
   bool LoadingCue::sample(bool waiting, ds::Option<std::uint64_t> now_ns) noexcept {
     if (!waiting || !now_ns) {
       since_ns_.reset();
@@ -56,7 +68,7 @@ namespace telar::gui::features::window {
     }
 
     if (suffix_length != 0) {
-      std::memmove(bytes_.dataMut() + kept, suffix.data(), suffix_length);
+      std::ranges::copy(std::span{suffix}.first(suffix_length), bytes_.viewMut().subspan(kept).begin());
     }
 
     length_ = kept + suffix_length;
@@ -109,7 +121,7 @@ namespace telar::gui::features::window {
   void WindowTitle::append(std::string_view value) noexcept {
     const auto count = std::min(capacity - length_, value.size());
     if (count != 0) {
-      std::memcpy(bytes_.dataMut() + length_, value.data(), count);
+      std::ranges::copy(std::span{value}.first(count), bytes_.viewMut().subspan(length_).begin());
       length_ += count;
     }
   }
@@ -129,9 +141,10 @@ namespace telar::gui::features::window {
       }
 
       try {
-        const auto codepoint = Utf8Scalar::decode({bytes_.data() + position, size});
+        const auto scalar = bytes_.view().subspan(position, size);
+        const auto codepoint = Utf8Scalar::decode({scalar.data(), scalar.size()});
         if (codepoint >= printable_start && (codepoint < control_start || codepoint > control_end)) {
-          std::memmove(bytes_.dataMut() + written, bytes_.data() + position, size);
+          moveLeft(bytes_.viewMut(), written, position, size);
           written += size;
         }
       } catch (const std::invalid_argument&) {

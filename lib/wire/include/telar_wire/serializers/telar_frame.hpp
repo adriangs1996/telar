@@ -105,6 +105,12 @@ namespace telar {
   };
 
   struct TextMetadata {
+    static constexpr std::size_t maximum_rows = std::numeric_limits<std::uint16_t>::max();
+    static constexpr std::size_t maximum_links = 256;
+    static constexpr std::size_t maximum_runs = 2048;
+    static constexpr std::size_t maximum_uri_bytes = 65536;
+    static constexpr std::size_t maximum_link_bytes = 4096;
+
     MetadataStatus status{};
     std::span<const Byte> row_flags;
     std::span<const MetadataLink> links;
@@ -148,8 +154,8 @@ namespace telar {
       visitor("run_count", take(2), value.runs.size());
       visitor("uri_length", take(4), value.uris.size());
       visitor("row_flags", take(value.row_flags.size()), value.row_flags);
-      visitor("links", take(value.links.size() * 6), value.links);
-      visitor("runs", take(value.runs.size() * 10), value.runs);
+      visitor("links", take(value.links.size() * BodySchema<MetadataLink>::payload_size), value.links);
+      visitor("runs", take(value.runs.size() * BodySchema<MetadataRun>::payload_size), value.runs);
       visitor("uris", take(value.uris.size()), value.uris);
     }
   };
@@ -157,6 +163,8 @@ namespace telar {
   struct FrameMetadataCodec {
     using value_type = ds::Option<TextMetadata>;
     static constexpr std::size_t min_width = 4;
+    // The largest encoded text metadata a frame carries.
+    static constexpr std::size_t maximum_bytes = 153098;
 
     static std::size_t encodedSize(const value_type& value);
     static void encode(const value_type& value, std::span<Byte>& output);
@@ -175,6 +183,8 @@ namespace telar {
       : Serializer<Field<&FrameSpan::start, u32, "start">, Field<&FrameSpan::count, BoundedInteger<u32, 1>, "count">, Field<&FrameSpan::cells, SizedBytes<u32, max_payload_size>, "cells">> {};
 
   struct FrameBody {
+    static constexpr std::size_t maximum_spans = 4096;
+
     std::uint64_t pane_id = 0, frame_id = 0, base_frame_id = 0;
     std::uint16_t cols = 0, rows = 0;
     Cursor cursor{};
@@ -187,6 +197,9 @@ namespace telar {
 
     void validate() const;
   };
+
+  // The Kitty keyboard protocol's five progressive enhancement flags.
+  inline constexpr Byte max_kitty_keyboard_flags = 31;
 
   using FrameSerializer =
       Serializer<Field<&FrameBody::pane_id, NonzeroU64, "pane_id">, Field<&FrameBody::frame_id, u64, "frame_id">, Field<&FrameBody::base_frame_id, u64, "base_frame_id">, Field<&FrameBody::cols, u16, "cols">, Field<&FrameBody::rows, u16, "rows">, Field<[](auto& frame) -> auto& {
@@ -257,14 +270,14 @@ namespace telar {
           Field<[](auto& frame) -> auto& {
             return frame.input_modes.kitty_keyboard_flags;
           },
-              BoundedInteger<u8, 0, 31>,
+              BoundedInteger<u8, 0, max_kitty_keyboard_flags>,
               "input_modes.kitty_keyboard_flags">,
           Field<[](auto& frame) -> auto& {
             return frame.input_modes.modify_other_keys_2;
           },
               BoolByte,
               "input_modes.modify_other_keys_2">,
-          Field<&FrameBody::pointer_shape, EnumByte<PointerShape, 33>, "pointer_shape">,
+          Field<&FrameBody::pointer_shape, EnumByte<PointerShape, std::to_underlying(PointerShape::zoom_out)>, "pointer_shape">,
           Field<[](auto& frame) -> auto& {
             return frame.scroll.total_rows;
           },
@@ -275,7 +288,7 @@ namespace telar {
           },
               u32,
               "scroll.offset">,
-          SpanCountField<&FrameBody::spans, u16, ValueCodec<FrameSpan>, 4096, "span_count">,
+          SpanCountField<&FrameBody::spans, u16, ValueCodec<FrameSpan>, FrameBody::maximum_spans, "span_count">,
           Field<[](auto& frame) -> auto& {
             return frame.cursor.shape;
           },

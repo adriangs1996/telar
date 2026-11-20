@@ -7,26 +7,34 @@ import telar.gui.foundation.model;
 
 namespace telar::gui::features::workbench {
 
+  namespace {
+
+    // The chip's word for why an agent is blocked.
+    std::string_view blockedWord(AgentBlockedReason reason) noexcept {
+      switch (reason) {
+      case AgentBlockedReason::permission:
+        return "permission";
+      case AgentBlockedReason::question:
+        return "question";
+      case AgentBlockedReason::plan:
+        return "plan";
+      case AgentBlockedReason::none:
+      case AgentBlockedReason::other:
+        break;
+      }
+
+      // A reason without a word of its own, or one outside the enum.
+      return "blocked";
+    }
+
+  }
+
   auto PaneStatusChip::text(AgentStatus status, AgentBlockedReason reason, std::uint32_t seconds) -> Text {
     Text result;
 
     switch (status) {
     case AgentStatus::blocked:
-      switch (reason) {
-      case AgentBlockedReason::permission:
-        result.append("permission");
-        break;
-      case AgentBlockedReason::question:
-        result.append("question");
-        break;
-      case AgentBlockedReason::plan:
-        result.append("plan");
-        break;
-      default:
-        result.append("blocked");
-        break;
-      }
-
+      result.append(blockedWord(reason));
       break;
     case AgentStatus::working:
       result.append("working ");
@@ -92,9 +100,14 @@ namespace telar::gui::features::workbench {
       return PaletteRole::red;
     case PaneProgressState::pause:
       return PaletteRole::yellow;
-    default:
-      return PaletteRole::teal;
+    case PaneProgressState::remove:
+    case PaneProgressState::set:
+    case PaneProgressState::indeterminate:
+      break;
     }
+
+    // Progress that is going well, or a state outside the enum.
+    return PaletteRole::teal;
   }
 
   PaneHeaderGeometry PaneHeaderGeometry::derive(Rect row, const PaneHeaderMetrics& metrics, const PaneHeaderMeasurements& measurements) noexcept {
@@ -126,9 +139,9 @@ namespace telar::gui::features::workbench {
     result.index = {.x = band.x, .y = band.y, .width = index_width, .height = band.height};
     auto x = band.x + index_width + (index_width > 0 ? part_gap * ratio : 0);
     const auto chip_width = measurements.chip <= end - x ? measurements.chip : 0;
-    const auto text_end = end - (chip_width != 0 ? chip_width + (chip_gap * ratio) : 0);
+    const auto text_end = end - (std::not_equal_to<>{}(chip_width, 0.0F) ? chip_width + (chip_gap * ratio) : 0);
     const auto paused_width = measurements.paused > 0 ? measurements.paused + (chip_gap * ratio) : 0;
-    const bool paused_fits = paused_width != 0 && paused_width <= text_end - x;
+    const bool paused_fits = std::not_equal_to<>{}(paused_width, 0.0F) && paused_width <= text_end - x;
     const auto name_width = std::max(0.0F, text_end - x - (paused_fits ? paused_width : 0));
 
     result.name = {.x = x, .y = band.y, .width = name_width, .height = band.height};
@@ -138,7 +151,7 @@ namespace telar::gui::features::workbench {
       result.paused = {.x = x, .y = band.y, .width = std::max(0.0F, text_end - x), .height = band.height};
     }
 
-    if (chip_width != 0) {
+    if (std::not_equal_to<>{}(chip_width, 0.0F)) {
       result.chip = {.x = end - chip_width, .y = band.y, .width = chip_width, .height = band.height};
     }
 

@@ -13,10 +13,17 @@ export namespace telar {
 
 // Declared in the global module, with the vocabulary these schemas build on, so the module's
 // implementation unit defines their members there too.
+// NOLINTBEGIN(misc-use-internal-linkage): exported, and declared in the global module for execution.cpp.
 export extern "C++" {
   namespace telar {
 
     struct ExecutionRequest {
+      static constexpr std::size_t maximum_cwd_bytes = 4096;
+      // Each argument, and all of them together.
+      static constexpr std::size_t maximum_argument_bytes = 32768;
+      static constexpr std::size_t maximum_arguments = 64;
+      static constexpr std::size_t maximum_input_bytes = 4096;
+
       std::uint64_t request_id{};
       ExecutionAction action{};
       std::uint64_t execution_id{};
@@ -34,9 +41,12 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<ExecutionRequest>
-        : Schema<Direction::client, ClientTag::execution_request, Field<&ExecutionRequest::request_id, NonzeroU64, "request_id">, Field<&ExecutionRequest::action, EnumByte<ExecutionAction, 6>, "action">, Field<&ExecutionRequest::execution_id, u64, "execution_id">, Field<&ExecutionRequest::workspace_id, u64, "workspace_id">, Field<&ExecutionRequest::stdout_offset, u64, "stdout_offset">, Field<&ExecutionRequest::stderr_offset, u64, "stderr_offset">, Field<&ExecutionRequest::input_offset, u64, "input_offset">, Field<&ExecutionRequest::stdin_open, BoolByte, "stdin_open">, Field<&ExecutionRequest::cwd, Text16<4096>, "cwd">, SpanCountField<&ExecutionRequest::arguments, u8, Text16<32768>, 64, "argument_count", 0>, SpanItemsField<&ExecutionRequest::arguments, Text16<32768>, "arguments">, Field<&ExecutionRequest::bytes, SizedBytes<u16, 4096>, "bytes">> {};
+        : Schema<Direction::client, ClientTag::execution_request, Field<&ExecutionRequest::request_id, NonzeroU64, "request_id">, Field<&ExecutionRequest::action, EnumByte<ExecutionAction, std::to_underlying(ExecutionAction::list)>, "action">, Field<&ExecutionRequest::execution_id, u64, "execution_id">, Field<&ExecutionRequest::workspace_id, u64, "workspace_id">, Field<&ExecutionRequest::stdout_offset, u64, "stdout_offset">, Field<&ExecutionRequest::stderr_offset, u64, "stderr_offset">, Field<&ExecutionRequest::input_offset, u64, "input_offset">, Field<&ExecutionRequest::stdin_open, BoolByte, "stdin_open">, Field<&ExecutionRequest::cwd, Text16<ExecutionRequest::maximum_cwd_bytes>, "cwd">, SpanCountField<&ExecutionRequest::arguments, u8, Text16<ExecutionRequest::maximum_argument_bytes>, ExecutionRequest::maximum_arguments, "argument_count", 0>, SpanItemsField<&ExecutionRequest::arguments, Text16<ExecutionRequest::maximum_argument_bytes>, "arguments">, Field<&ExecutionRequest::bytes, SizedBytes<u16, ExecutionRequest::maximum_input_bytes>, "bytes">> {};
 
     struct ExecutionReply {
+      static constexpr std::size_t maximum_failure_bytes = 128;
+      static constexpr std::size_t maximum_output_bytes = 4096;
+
       std::uint64_t request_id{};
       std::uint64_t execution_id{};
       std::uint64_t workspace_id{};
@@ -56,7 +66,8 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<ExecutionReply>
-        : Schema<Direction::server, ServerTag::execution_reply, Field<&ExecutionReply::request_id, NonzeroU64, "request_id">, Field<&ExecutionReply::execution_id, u64, "execution_id">, Field<&ExecutionReply::workspace_id, u64, "workspace_id">, Field<&ExecutionReply::stdout_offset, u64, "stdout_offset">, Field<&ExecutionReply::stderr_offset, u64, "stderr_offset">, Field<&ExecutionReply::stdout_total, u64, "stdout_total">, Field<&ExecutionReply::stderr_total, u64, "stderr_total">, Field<&ExecutionReply::input_offset, u64, "input_offset">, Field<&ExecutionReply::input_available, u64, "input_available">, Field<&ExecutionReply::state, EnumByte<ExecutionState, 3>, "state">, Field<&ExecutionReply::exit_code, i32, "exit_code">, Field<&ExecutionReply::stdin_open, BoolByte, "stdin_open">, Field<&ExecutionReply::failure, SizedBytes<u16, 128>, "failure">, Field<&ExecutionReply::stdout_bytes, SizedBytes<u16, 4096>, "stdout">, Field<&ExecutionReply::stderr_bytes, SizedBytes<u16, 4096>, "stderr">> {};
+        : Schema<Direction::server, ServerTag::execution_reply, Field<&ExecutionReply::request_id, NonzeroU64, "request_id">, Field<&ExecutionReply::execution_id, u64, "execution_id">, Field<&ExecutionReply::workspace_id, u64, "workspace_id">, Field<&ExecutionReply::stdout_offset, u64, "stdout_offset">, Field<&ExecutionReply::stderr_offset, u64, "stderr_offset">, Field<&ExecutionReply::stdout_total, u64, "stdout_total">, Field<&ExecutionReply::stderr_total, u64, "stderr_total">, Field<&ExecutionReply::input_offset, u64, "input_offset">, Field<&ExecutionReply::input_available, u64, "input_available">, Field<&ExecutionReply::state, EnumByte<ExecutionState, 3>, "state">, Field<&ExecutionReply::exit_code, i32, "exit_code">, Field<&ExecutionReply::stdin_open, BoolByte, "stdin_open">, Field<&ExecutionReply::failure, SizedBytes<u16, ExecutionReply::maximum_failure_bytes>, "failure">, Field<&ExecutionReply::stdout_bytes, SizedBytes<u16, ExecutionReply::maximum_output_bytes>, "stdout">, Field<&ExecutionReply::stderr_bytes, SizedBytes<u16, ExecutionReply::maximum_output_bytes>, "stderr">> {};
 
   }
 }
+// NOLINTEND(misc-use-internal-linkage)

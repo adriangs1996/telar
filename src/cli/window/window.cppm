@@ -21,7 +21,7 @@ import telar.base.ds;
 export {
   namespace telar::runtime::cli::machine {
 
-    enum class Step {
+    enum class Step : std::uint8_t {
       ssh,
       platform,
       telar,
@@ -34,7 +34,7 @@ export {
       check,
       count,
     };
-    enum class Status {
+    enum class Status : std::uint8_t {
       ok,
       changed,
       skipped,
@@ -64,7 +64,7 @@ export {
         Line text;
       };
 
-      SetupReport(Memory& memory, bool json);
+      SetupReport(Memory& memory, bool json_output);
 
       bool json;
       ds::Array<Result, static_cast<std::size_t>(Step::count)> results{};
@@ -97,7 +97,7 @@ export {
     private:
       template <typename... Arguments>
       TBC_GENERIC static Line formatted(std::format_string<Arguments...> format, Arguments&&... arguments) {
-        ds::Array<char, max_text_bytes> buffer;
+        ds::Array<char, max_text_bytes> buffer{};
         const auto written = std::format_to_n(buffer.dataMut(), buffer.size(), format, std::forward<Arguments>(arguments)...);
 
         return bounded({buffer.data(), std::min(static_cast<std::size_t>(written.size), buffer.size())});
@@ -142,12 +142,12 @@ export {
   namespace telar::runtime::cli::window {
 
     struct ClientOptions {
-      enum class Action {
+      enum class Action : std::uint8_t {
         list,
         get,
         detach,
       };
-      Action action;
+      Action action = Action::list;
       std::uint64_t target = 0;
       bool json = false;
       const char* socket = nullptr;

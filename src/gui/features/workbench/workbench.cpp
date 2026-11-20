@@ -27,7 +27,7 @@ namespace telar::gui::features::workbench {
         }
       }
 
-      std::sort(output.dataMut(), output.dataMut() + count, [](const auto* left, const auto* right) {
+      std::ranges::sort(output.viewMut().first(count), [](const auto* left, const auto* right) {
         return left->position != right->position ? left->position < right->position : left->location.tab_id < right->location.tab_id;
       });
 
@@ -119,12 +119,13 @@ namespace telar::gui::features::workbench {
     ds::Array<const Tab<Memory>*, maximum_tabs> sorted{};
     const auto count = ordered(tabs, active, sorted);
     const auto* current = active ? find(tabs, *active) : nullptr;
-    const auto* const found = std::find(sorted.begin(), sorted.begin() + count, current);
-    if (count == 0 || found == sorted.begin() + count) {
+    const auto candidates = sorted.view().first(count);
+    const auto found = std::ranges::find(candidates, current);
+    if (count == 0 || found == candidates.end()) {
       return ds::none;
     }
 
-    const auto index = static_cast<std::int64_t>(found - sorted.begin());
+    const auto index = static_cast<std::int64_t>(found - candidates.begin());
     const auto size = static_cast<std::int64_t>(count);
     const auto next = (((index + offset) % size) + size) % size;
 

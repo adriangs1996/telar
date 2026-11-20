@@ -20,7 +20,7 @@ export {
   namespace telar::runtime::cli {
 
     struct RepositoryOptions {
-      enum class Action {
+      enum class Action : std::uint8_t {
         prepare,
         receive,
         tips,
@@ -79,6 +79,11 @@ export {
       virtual Text operator()(std::span<const std::string_view> words, int input) = 0;
 
     protected:
+      RepositoryCapture() = default;
+      RepositoryCapture(const RepositoryCapture&) = default;
+      RepositoryCapture& operator=(const RepositoryCapture&) = default;
+      RepositoryCapture(RepositoryCapture&&) = default;
+      RepositoryCapture& operator=(RepositoryCapture&&) = default;
       ~RepositoryCapture() = default;
     };
 

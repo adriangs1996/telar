@@ -15,10 +15,13 @@ export namespace telar {
 
 // Declared in the global module, with the vocabulary these schemas build on, so the module's
 // implementation unit defines their members there too.
+// NOLINTBEGIN(misc-use-internal-linkage): exported, and declared in the global module for content.cpp.
 export extern "C++" {
   namespace telar {
 
     struct ReadPane {
+      static constexpr std::uint16_t maximum_rows = 2000;
+
       std::uint64_t request_id{};
       std::uint64_t pane_id{};
       std::uint64_t pane_generation{};
@@ -28,9 +31,11 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<ReadPane>
-        : Schema<Direction::client, ClientTag::read_pane, Field<&ReadPane::request_id, NonzeroU64, "request_id">, Field<&ReadPane::pane_id, NonzeroU64, "pane_id">, Field<&ReadPane::pane_generation, u64, "pane_generation">, Field<&ReadPane::rows, BoundedInteger<u16, 1, 2000>, "rows">, Field<&ReadPane::source, EnumByte<PaneTextSource, 1>, "source">> {};
+        : Schema<Direction::client, ClientTag::read_pane, Field<&ReadPane::request_id, NonzeroU64, "request_id">, Field<&ReadPane::pane_id, NonzeroU64, "pane_id">, Field<&ReadPane::pane_generation, u64, "pane_generation">, Field<&ReadPane::rows, BoundedInteger<u16, 1, ReadPane::maximum_rows>, "rows">, Field<&ReadPane::source, EnumByte<PaneTextSource, 1>, "source">> {};
 
     struct SearchPane {
+      static constexpr std::size_t maximum_needle_bytes = 128;
+
       std::uint64_t request_id{};
       std::uint64_t pane_id{};
       std::string_view needle;
@@ -38,7 +43,7 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<SearchPane>
-        : Schema<Direction::client, ClientTag::search_pane, Field<&SearchPane::request_id, NonzeroU64, "request_id">, Field<&SearchPane::pane_id, NonzeroU64, "pane_id">, Field<&SearchPane::needle, Text16<128, false>, "needle">> {};
+        : Schema<Direction::client, ClientTag::search_pane, Field<&SearchPane::request_id, NonzeroU64, "request_id">, Field<&SearchPane::pane_id, NonzeroU64, "pane_id">, Field<&SearchPane::needle, Text16<SearchPane::maximum_needle_bytes, false>, "needle">> {};
 
     // A search of the rows from `first_row` to `last_row`, counted from the scrollback's current
     // top as `PaneMatch::y` is: one command's output, say. Answered by `PaneMatches`.
@@ -54,7 +59,7 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<SearchPaneRows>
-        : Schema<Direction::client, ClientTag::search_pane_rows, Field<&SearchPaneRows::request_id, NonzeroU64, "request_id">, Field<&SearchPaneRows::pane_id, NonzeroU64, "pane_id">, Field<&SearchPaneRows::needle, Text16<128, false>, "needle">, Field<&SearchPaneRows::first_row, u32, "first_row">, Field<&SearchPaneRows::last_row, u32, "last_row">> {};
+        : Schema<Direction::client, ClientTag::search_pane_rows, Field<&SearchPaneRows::request_id, NonzeroU64, "request_id">, Field<&SearchPaneRows::pane_id, NonzeroU64, "pane_id">, Field<&SearchPaneRows::needle, Text16<SearchPane::maximum_needle_bytes, false>, "needle">, Field<&SearchPaneRows::first_row, u32, "first_row">, Field<&SearchPaneRows::last_row, u32, "last_row">> {};
 
     // Rows of a pane's scrollback, by their stable number: the rows the scrollback dropped from
     // its top since the pane began (`PaneScrollback::trimmed`) plus the row counted from its
@@ -73,6 +78,8 @@ export extern "C++" {
         : Schema<Direction::client, ClientTag::read_pane_rows, Field<&ReadPaneRows::request_id, NonzeroU64, "request_id">, Field<&ReadPaneRows::pane_id, NonzeroU64, "pane_id">, Field<&ReadPaneRows::from, u64, "from">, Field<&ReadPaneRows::count, BoundedInteger<u16, 1, ReadPaneRows::maximum_rows>, "count">> {};
 
     struct PaneText {
+      static constexpr std::size_t maximum_text_bytes = 262144;
+
       std::uint64_t request_id{};
       std::uint64_t pane_id{};
       bool truncated{};
@@ -82,9 +89,11 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<PaneText>
-        : Schema<Direction::server, ServerTag::pane_text, Field<&PaneText::request_id, NonzeroU64, "request_id">, Field<&PaneText::pane_id, NonzeroU64, "pane_id">, Field<&PaneText::truncated, BoolByte, "truncated">, Field<&PaneText::text, SizedText<u32, 262144, true, TextRule::opaque>, "text">, Field<&PaneText::exit_code, OptionalValue<i32>, "exit_code">> {};
+        : Schema<Direction::server, ServerTag::pane_text, Field<&PaneText::request_id, NonzeroU64, "request_id">, Field<&PaneText::pane_id, NonzeroU64, "pane_id">, Field<&PaneText::truncated, BoolByte, "truncated">, Field<&PaneText::text, SizedText<u32, PaneText::maximum_text_bytes, true, TextRule::opaque>, "text">, Field<&PaneText::exit_code, OptionalValue<i32>, "exit_code">> {};
 
     struct PaneMatches {
+      static constexpr std::size_t maximum_matches = 256;
+
       std::uint64_t request_id{};
       std::uint64_t pane_id{};
       bool truncated{};
@@ -93,7 +102,7 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<PaneMatches>
-        : Schema<Direction::server, ServerTag::pane_matches, Field<&PaneMatches::request_id, NonzeroU64, "request_id">, Field<&PaneMatches::pane_id, NonzeroU64, "pane_id">, Field<&PaneMatches::truncated, BoolByte, "truncated">, SpanCountField<&PaneMatches::matches, u16, ValueCodec<PaneMatch>, 256, "match_count", 0>, SpanItemsField<&PaneMatches::matches, ValueCodec<PaneMatch>, "matches">> {};
+        : Schema<Direction::server, ServerTag::pane_matches, Field<&PaneMatches::request_id, NonzeroU64, "request_id">, Field<&PaneMatches::pane_id, NonzeroU64, "pane_id">, Field<&PaneMatches::truncated, BoolByte, "truncated">, SpanCountField<&PaneMatches::matches, u16, ValueCodec<PaneMatch>, PaneMatches::maximum_matches, "match_count", 0>, SpanItemsField<&PaneMatches::matches, ValueCodec<PaneMatch>, "matches">> {};
 
     // The commands a pane's integrated shell ran, oldest first, at most `capacity`. Sent again
     // whenever one starts or ends, or the rows they take move.
@@ -134,7 +143,7 @@ export extern "C++" {
       // Limit render.max_document_bytes, as telar.render.document sets it.
       static constexpr std::uint32_t max_size = std::uint32_t{6000} * 1024;
       // Small enough that a part never holds a pane's frames back for long.
-      static constexpr std::uint32_t chunk_bytes = std::uint32_t{64} << 10;
+      static constexpr std::uint32_t chunk_bytes = std::uint32_t{64} * 1024;
 
       std::uint64_t pane_id{};
       std::uint64_t id{};
@@ -178,3 +187,4 @@ export extern "C++" {
 
   }
 }
+// NOLINTEND(misc-use-internal-linkage)

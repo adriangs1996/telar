@@ -61,6 +61,8 @@ namespace telar {
   struct MessageSchema<NotificationShown>
       : Schema<Direction::server, ServerTag::notification_shown, Field<&NotificationShown::request_id, NonzeroU64, "request_id">, Field<&NotificationShown::delivered_clients, u8, "delivered_clients">> {};
 
+  inline constexpr std::size_t max_listed_clients = 32;
+
   struct ClientList {
     std::uint64_t request_id{};
     std::span<const ClientDescriptor> entries;
@@ -74,7 +76,7 @@ namespace telar {
             Direction::server,
             ServerTag::client_list,
             Field<&ClientList::request_id, NonzeroU64, "request_id">,
-            SpanCountField<&ClientList::entries, u8, ValueCodec<ClientDescriptor>, 32, "count", 0>,
+            SpanCountField<&ClientList::entries, u8, ValueCodec<ClientDescriptor>, max_listed_clients, "count", 0>,
             SpanItemsField<&ClientList::entries, ValueCodec<ClientDescriptor>, "entries">> {};
 
   template <>

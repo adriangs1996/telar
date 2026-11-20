@@ -130,9 +130,22 @@ namespace telar::gui::features::plugins {
       return BindingAction{.kind = Kind::select_workspace, .parameter = u8::decode(input)};
     case Tag::notification:
       return notification(input);
-    default:
-      throw std::invalid_argument{"UnknownWorkerEffect"};
+    case Tag::sidebar:
+    case Tag::close_pane:
+    case Tag::new_tab:
+    case Tag::rename_tab:
+    case Tag::close_tab:
+    case Tag::detach:
+    case Tag::fullscreen:
+    case Tag::workspace_list:
+    case Tag::new_workspace:
+    case Tag::rename_workspace:
+    case Tag::leave_worktree:
+      break;
     }
+
+    // A tag outside the enum, as a malformed effect decodes to; the simple tags returned above.
+    throw std::invalid_argument{"UnknownWorkerEffect"};
   }
 
   ds::Option<runtime::plugins::Capability> PluginEffects::capability(BindingActionKind kind) {
@@ -169,9 +182,49 @@ namespace telar::gui::features::plugins {
     case Kind::select_tab_offset:
     case Kind::select_tab:
       return ds::none;
-    default:
-      throw std::invalid_argument{"InvalidPluginEffect"};
+    case Kind::none:
+    case Kind::scroll_pane_up:
+    case Kind::scroll_pane_down:
+    case Kind::navigate_left:
+    case Kind::navigate_right:
+    case Kind::navigate_up:
+    case Kind::navigate_down:
+    case Kind::forget_gone_worktrees:
+    case Kind::next_tab:
+    case Kind::previous_tab:
+    case Kind::copy_mode:
+    case Kind::goto_picker:
+    case Kind::history_palette:
+    case Kind::path_picker:
+    case Kind::suggest_command:
+    case Kind::close_panel:
+    case Kind::refresh_panel:
+    case Kind::next_machine:
+    case Kind::previous_machine:
+    case Kind::machine_picker:
+    case Kind::add_machine:
+    case Kind::monitor:
+    case Kind::process_picker:
+    case Kind::process_terminate:
+    case Kind::process_kill:
+    case Kind::process_stop:
+    case Kind::process_continue:
+    case Kind::process_lower_priority:
+    case Kind::process_copy_command:
+    case Kind::process_focus_pane:
+    case Kind::process_review_stack:
+    case Kind::process_review_files:
+    case Kind::process_review_logs:
+    case Kind::palette:
+    case Kind::callback:
+    case Kind::expression:
+    case Kind::extended:
+    case Kind::command_tab:
+      break;
     }
+
+    // An action no plugin may take, or a kind outside the enum.
+    throw std::invalid_argument{"InvalidPluginEffect"};
   }
 
 }

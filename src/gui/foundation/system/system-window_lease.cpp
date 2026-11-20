@@ -28,7 +28,7 @@ namespace telar::gui::inline foundation::inline system {
       auto* next = std::ranges::copy(basename, output.data()).out;
 
       next = std::ranges::copy(prefix, next).out;
-      const auto formatted = std::to_chars(next, output.data() + output.size() - suffix.size(), slot);
+      const auto formatted = std::to_chars(next, std::to_address(output.first(output.size() - suffix.size()).end()), slot);
       if (formatted.ec == std::errc::value_too_large) {
         throw std::runtime_error{"GUI identity filename exceeds capacity"};
       }
@@ -68,7 +68,8 @@ namespace telar::gui::inline foundation::inline system {
       throw std::runtime_error{"Cannot resolve runtime endpoint directory"};
     }
 
-    const auto canonical_length = std::strlen(canonical_endpoint_.data());
+    const auto canonical_bytes = canonical_endpoint_.view();
+    const auto canonical_length = static_cast<std::size_t>(std::ranges::find(canonical_bytes, '\0') - canonical_bytes.begin());
     if (canonical_length + basename.size() + 1 >= canonical_endpoint_.size()) {
       throw std::runtime_error{"Canonical runtime endpoint exceeds path capacity"};
     }

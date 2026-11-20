@@ -46,7 +46,7 @@ namespace telar {
     static void visit(const Message& message, std::span<const Byte>& input, Visitor visitor) {
       const auto size = encodedSize(message);
 
-      visitor(Name.value, input.first(size), memberValue<Member>(message));
+      visitor(Name.value.data(), input.first(size), memberValue<Member>(message));
       input = input.subspan(size);
     }
 
@@ -56,21 +56,21 @@ namespace telar {
       const auto bytes = input.first(width);
       const auto value = debug::valueText(WireCodec::decode(input));
 
-      debug::printBytes(bytes, Name.value, value.data(), output, !input.empty());
+      debug::printBytes(bytes, Name.value.data(), value.data(), output, !input.empty());
     }
 
     static void prettyPrintLabel(std::span<const Byte>& input, std::FILE* output) {
       constexpr auto width = WireCodec::width;
       const auto value = debug::valueText(WireCodec::decode(input));
 
-      debug::printLabel(width, Name.value, value.data(), output, !input.empty());
+      debug::printLabel(width, Name.value.data(), value.data(), output, !input.empty());
     }
 
     static void prettyPrintValue(std::span<const Byte>& input, std::FILE* output) {
       constexpr auto width = WireCodec::width;
       const auto value = debug::valueText(WireCodec::decode(input));
 
-      debug::printValue(width, Name.value, value.data(), output, !input.empty());
+      debug::printValue(width, Name.value.data(), value.data(), output, !input.empty());
     }
 #endif
   };
@@ -99,7 +99,7 @@ namespace telar {
     static void visit(const Message& message, std::span<const Byte>& input, Visitor visitor) {
       const auto size = encodedSize(message);
 
-      visitor(Name.value, input.first(size), memberValue<Member>(message));
+      visitor(Name.value.data(), input.first(size), memberValue<Member>(message));
       input = input.subspan(size);
     }
   };
@@ -147,7 +147,7 @@ namespace telar {
 
     template <typename Message, typename Visitor>
     static void visit(const Message& message, std::span<const Byte>& input, Visitor visitor) {
-      visitor(Name.value, input.first(width), memberValue<Member>(message).size());
+      visitor(Name.value.data(), input.first(width), memberValue<Member>(message).size());
       input = input.subspan(width);
     }
   };
@@ -193,7 +193,7 @@ namespace telar {
     static void visit(const Message& message, std::span<const Byte>& input, Visitor visitor) {
       const auto size = encodedSize(message);
 
-      visitor(Name.value, input.first(size), memberValue<Member>(message));
+      visitor(Name.value.data(), input.first(size), memberValue<Member>(message));
       input = input.subspan(size);
     }
   };
@@ -248,15 +248,15 @@ namespace telar {
     }
 
 #ifdef TELAR_DEBUG
-    static void pretty_print_fields(std::span<const Byte> input, std::FILE* output) {
+    static void prettyPrintFields(std::span<const Byte> input, std::FILE* output) {
       (Fields::prettyPrint(input, output), ...);
     }
 
-    static void pretty_print_labels(std::span<const Byte> input, std::FILE* output) {
+    static void prettyPrintLabels(std::span<const Byte> input, std::FILE* output) {
       (Fields::prettyPrintLabel(input, output), ...);
     }
 
-    static void pretty_print_values(std::span<const Byte> input, std::FILE* output) {
+    static void prettyPrintValues(std::span<const Byte> input, std::FILE* output) {
       (Fields::prettyPrintValue(input, output), ...);
     }
 #endif
@@ -277,7 +277,7 @@ namespace telar {
 
 #ifdef TELAR_DEBUG
     template <typename Message, Allocator Memory>
-    static void pretty_print(Memory& memory, const Message& message, std::FILE* output = stderr);
+    static void prettyPrint(Memory& memory, const Message& message, std::FILE* output = stderr);
 #endif
   };
 

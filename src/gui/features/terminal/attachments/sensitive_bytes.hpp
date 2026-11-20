@@ -45,7 +45,7 @@ namespace telar::gui {
     }
 
     [[nodiscard]] std::span<const std::byte> view() const noexcept {
-      return std::as_bytes(std::span{data_, size_});
+      return std::as_bytes(bytesAt(static_cast<const std::uint8_t*>(data_), size_));
     }
 
     [[nodiscard]] std::size_t size() const noexcept {
@@ -53,15 +53,15 @@ namespace telar::gui {
     }
 
     [[nodiscard]] std::span<std::byte> writable() noexcept {
-      return std::as_writable_bytes(std::span{data_, size_});
+      return std::as_writable_bytes(bytesAt(data_, size_));
     }
 
     [[nodiscard]] std::span<std::uint8_t> unsignedBytesMut() noexcept {
-      return {data_, size_};
+      return bytesAt(data_, size_);
     }
 
     [[nodiscard]] std::span<const std::uint8_t> unsignedBytes() const noexcept {
-      return {static_cast<const std::uint8_t*>(data_), size_};
+      return bytesAt(static_cast<const std::uint8_t*>(data_), size_);
     }
 
     void resizeZeroed(std::size_t size, std::size_t limit) {
@@ -74,9 +74,9 @@ namespace telar::gui {
       }
 
       if (size > size_) {
-        std::fill(data_ + size_, data_ + size, std::uint8_t{});
+        std::ranges::fill(bytesAt(data_, size).subspan(size_), std::uint8_t{});
       } else if (size < size_) {
-        eraseSensitiveBytes(std::as_writable_bytes(std::span{data_ + size, size_ - size}));
+        eraseSensitiveBytes(std::as_writable_bytes(bytesAt(data_, size_).subspan(size)));
       }
 
       size_ = size;
@@ -100,7 +100,7 @@ namespace telar::gui {
           throw std::bad_alloc{};
         }
 
-        std::memcpy(data_ + size_, bytes.data(), bytes.size());
+        std::ranges::copy(bytes, std::as_writable_bytes(bytesAt(data_, required)).subspan(size_).begin());
       }
 
       size_ = required;
@@ -108,7 +108,7 @@ namespace telar::gui {
 
     void clear() noexcept {
       if (data_ != nullptr) {
-        eraseSensitiveBytes(std::as_writable_bytes(std::span{data_, size_}));
+        eraseSensitiveBytes(std::as_writable_bytes(bytesAt(data_, size_)));
         memory_->deallocate(data_, capacity_, alignof(std::uint8_t));
       }
 
@@ -118,6 +118,15 @@ namespace telar::gui {
     }
 
   private:
+    // The first `count` bytes at `data` as a span: the one place the allocation's pointer meets a
+    // count, which every caller keeps within the capacity.
+    template <typename Byte>
+    [[nodiscard]] static std::span<Byte> bytesAt(Byte* data, std::size_t count) noexcept {
+#pragma clang unsafe_buffer_usage begin
+      return {data, count};
+#pragma clang unsafe_buffer_usage end
+    }
+
     void reserve(std::size_t capacity) {
       auto* const replacement = static_cast<std::uint8_t*>(memory_->allocate(capacity, alignof(std::uint8_t)));
       if (replacement == nullptr) {
@@ -125,7 +134,7 @@ namespace telar::gui {
       }
 
       if (size_ != 0) {
-        std::memcpy(replacement, data_, size_);
+        std::ranges::copy(bytesAt(static_cast<const std::uint8_t*>(data_), size_), replacement);
       }
 
       const auto retained = size_;

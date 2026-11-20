@@ -27,21 +27,30 @@ namespace telar::runtime::cli::integration {
     return ds::none;
   }
 
-  template <Allocator Memory>
-  static tbc::val_a<ds::String<Memory>> joinPath(tbc::mut_a<Memory> memory, std::string_view directory, std::string_view name) {
-    ds::String<Memory> path{memory, directory};
+  namespace {
 
-    path.push('/');
-    path.append(name);
-    if (path.size() >= PATH_MAX || path.view().contains('\0')) {
-      throw std::length_error{"Invalid integration file path"};
+    // A file's directory and its name in it.
+    struct PathParts {
+      std::string_view directory;
+      std::string_view name;
+    };
+
+    tbc::val_a<ds::String<Memory>> joinPath(tbc::mut_a<Memory> memory, PathParts parts) {
+      ds::String<Memory> path{memory, parts.directory};
+
+      path.push('/');
+      path.append(parts.name);
+      if (path.size() >= PATH_MAX || path.view().contains('\0')) {
+        throw std::length_error{"Invalid integration file path"};
+      }
+
+      return path;
     }
 
-    return path;
   }
 
   tbc::val_a<ds::Option<ds::String<Memory>>> read(tbc::mut_a<Memory> memory, const ds::String<Memory>& path, std::size_t maximum_bytes) {
-    FileDescriptor file{::open(path.data(), O_RDONLY | O_CLOEXEC | O_NONBLOCK | O_NOCTTY)};
+    FileDescriptor file{::open(path.data(), combineFlags(O_RDONLY, O_CLOEXEC, O_NONBLOCK, O_NOCTTY))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
     if (!file) {
       if (sys::lastError() == ENOENT) {
         return ds::none;
@@ -51,257 +60,265 @@ namespace telar::runtime::cli::integration {
     }
 
     struct stat state{};
-    if (::fstat(file.get(), &state) == 0 && state.st_size >= 0 && static_cast<std::uint64_t>(state.st_size) >= maximum_bytes) {
+    if (::fstat(file.get(), &state) == 0 && std::cmp_greater_equal(state.st_size, maximum_bytes)) {
       throw CommandError{"StreamTooLong"};
     }
 
     return readFileContents(memory, file.get(), maximum_bytes - 1);
   }
 
-  template <Allocator Memory>
-  static void createParents(const ds::String<Memory>& path) {
-    ds::Array<char, PATH_MAX> directory;
-    if (path.size() >= directory.size() || path.view().contains('\0')) {
-      throw std::length_error{"Invalid integration file path"};
+  namespace {
+
+    void createParents(const ds::String<Memory>& path) {
+      constexpr mode_t directory_mode = 0777;
+      ds::Array<char, PATH_MAX> directory{};
+      if (path.size() >= directory.size() || path.view().contains('\0')) {
+        throw std::length_error{"Invalid integration file path"};
+      }
+
+      std::ranges::copy(path.view(), directory.dataMut());
+      for (std::size_t index = 1; index < path.size(); ++index) {
+        if (directory[index] == '/') {
+          directory.atMut(index) = '\0';
+          if (::mkdir(directory.data(), directory_mode) != 0 && sys::lastError() != EEXIST) {
+            throw SystemError{"Create integration directory"};
+          }
+
+          directory.atMut(index) = '/';
+        }
+      }
     }
 
-    std::ranges::copy(path.view(), directory.dataMut());
-    directory.atMut(path.size()) = '\0';
-    for (std::size_t index = 1; index < path.size(); ++index) {
-      if (directory[index] == '/') {
-        directory.atMut(index) = '\0';
-        if (::mkdir(directory.data(), 0777) != 0 && sys::lastError() != EEXIST) {
-          throw SystemError{"Create integration directory"};
+    void write(Memory& memory, const ds::String<Memory>& path, std::string_view source, bool preserve_settings) {
+      constexpr mode_t permission_bits = 07777;
+      ds::String<Memory> target{memory, path};
+      ds::Option<mode_t> permissions;
+
+      if (preserve_settings) {
+        ds::Array<char, PATH_MAX> resolved{};
+        if (::realpath(path.data(), resolved.dataMut()) != nullptr) {
+          target.assign(resolved.data());
         }
 
-        directory.atMut(index) = '/';
-      }
-    }
-  }
-
-  template <Allocator Memory>
-  static void write(Memory& memory, const ds::String<Memory>& path, std::string_view source, bool preserve_settings) {
-    ds::String<Memory> target{memory, path};
-    ds::Option<mode_t> permissions;
-
-    if (preserve_settings) {
-      ds::Array<char, PATH_MAX> resolved;
-      if (::realpath(path.data(), resolved.dataMut()) != nullptr) {
-        target.assign(resolved.data());
+        struct stat state{};
+        if (::stat(target.data(), &state) == 0) {
+          permissions = static_cast<mode_t>(state.st_mode & permission_bits);
+        }
       }
 
-      struct stat state{};
-      if (::stat(target.data(), &state) == 0) {
-        permissions = state.st_mode & 07777;
+      resolveAbsolutePath(target);
+      createParents(target);
+      const auto separator = target.view().rfind('/');
+      const ds::String<Memory> parent{memory, std::string_view{target.data(), separator == 0 ? 1 : separator}};
+      FileDescriptor directory{::open(parent.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+      if (!directory) {
+        throw SystemError{"Open integration directory"};
+      }
+
+      const auto name = std::string_view{target}.substr(separator + 1);
+      // The file takes the text as bytes, whose size the text gives.
+#pragma clang unsafe_buffer_usage begin
+      const std::span<const std::uint8_t> bytes{reinterpret_cast<const std::uint8_t*>(source.data()), source.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): bytes may alias text, and no cast-free view reads text as bytes
+#pragma clang unsafe_buffer_usage end
+      if (const int error = writePrivateFile(directory.get(), name, bytes, PrivateFileMode::replace)) {
+        throw SystemError{"Publish integration file", error};
+      }
+
+      if (permissions && ::chmod(target.data(), *permissions) != 0) {
+        throw SystemError{"Restore integration settings permissions"};
       }
     }
 
-    resolveAbsolutePath(target);
-    createParents(target);
-    const auto separator = target.view().rfind('/');
-    ds::String<Memory> parent{memory, std::string_view{target.data(), separator == 0 ? 1 : separator}};
-    FileDescriptor directory{::open(parent.data(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
-    if (!directory) {
-      throw SystemError{"Open integration directory"};
+    enum class Ownership : std::uint8_t {
+      absent,
+      owned,
+      foreign,
+    };
+
+    std::string_view ownershipName(Ownership ownership) noexcept {
+      switch (ownership) {
+      case Ownership::absent:
+        return "absent";
+      case Ownership::owned:
+        return "installed";
+      case Ownership::foreign:
+        return "foreign";
+      }
+
+      std::unreachable();
     }
 
-    const auto name = std::string_view{target}.substr(separator + 1);
-    if (const int error = writePrivateFile(directory.get(), name, {reinterpret_cast<const unsigned char*>(source.data()), source.size()}, PrivateFileMode::replace)) {
-      throw SystemError{"Publish integration file", error};
+    Ownership ownershipOf(bool present, bool owned) noexcept {
+      if (!present) {
+        return Ownership::absent;
+      }
+
+      return owned ? Ownership::owned : Ownership::foreign;
     }
 
-    if (permissions && ::chmod(target.data(), *permissions) != 0) {
-      throw SystemError{"Restore integration settings permissions"};
-    }
-  }
+    struct Skill {
+      std::string_view name;
+      std::string_view header;
+      std::string_view marker;
+      std::string_view text;
+      bool legacy_header = false;
+    };
 
-  enum class Ownership {
-    absent,
-    owned,
-    foreign,
-  };
-
-  static std::string_view ownershipName(Ownership ownership) noexcept {
-    switch (ownership) {
-    case Ownership::absent:
-      return "absent";
-    case Ownership::owned:
-      return "installed";
-    case Ownership::foreign:
-      return "foreign";
-    }
-
-    std::unreachable();
-  }
-
-  struct Skill {
-    std::string_view name;
-    std::string_view header;
-    std::string_view marker;
-    std::string_view text;
-    bool legacy_header = false;
-  };
-
-  constexpr std::string_view telar_header = R"(---
+    constexpr std::string_view telar_header = R"(---
 name: telar
 description: Drive telar, the terminal multiplexer and agent runtime this pane runs in. Use when the user asks about telar, about other panes, agents, workspaces or worktrees, about running or watching commands in terminals or on other machines, or when a command's output mentions telar. Teaches how to discover the installed telar's commands from its own help.
 ---
 )";
-  constexpr std::string_view coordinator_header = R"(---
+    constexpr std::string_view coordinator_header = R"(---
 name: telar-coordinator
 description: Delegate tasks to agents in their own Git worktrees and steer them through telar. Use when the user asks to implement, fix or build something in a separate worktree, or asks about, stops, redirects or reviews agents working in worktrees.
 ---
 )";
-  constexpr auto skills = ds::Array<Skill, 2>{{
-      {.name = "telar", .header = telar_header, .marker = "<!-- telar-integration: skill telar -->\n", .text = assets::telar_skill},
-      {.name = "telar-coordinator", .header = coordinator_header, .marker = "<!-- telar-integration: skill telar-coordinator -->\n", .text = assets::coordinator_skill, .legacy_header = true},
-  }};
+    constexpr ds::Array skills{
+        Skill{.name = "telar", .header = telar_header, .marker = "<!-- telar-integration: skill telar -->\n", .text = assets::telar_skill},
+        Skill{.name = "telar-coordinator", .header = coordinator_header, .marker = "<!-- telar-integration: skill telar-coordinator -->\n", .text = assets::coordinator_skill, .legacy_header = true},
+    };
 
-  template <Allocator Memory>
-  static tbc::val_a<ds::String<Memory>> skillPath(tbc::mut_a<Memory> memory, std::string_view root, const Skill& skill) {
-    auto path = joinPath(memory, root, "skills");
+    tbc::val_a<ds::String<Memory>> skillPath(tbc::mut_a<Memory> memory, std::string_view root, const Skill& skill) {
+      auto path = joinPath(memory, {.directory = root, .name = "skills"});
 
-    path = joinPath(memory, path, skill.name);
-    return joinPath(memory, path, "SKILL.md");
-  }
-
-  template <Allocator Memory>
-  static Ownership skillOwnership(const ds::String<Memory>& path, const Skill& skill) noexcept {
-    struct stat state{};
-    if (::stat(path.data(), &state) != 0) {
-      return sys::lastError() == ENOENT ? Ownership::absent : Ownership::foreign;
+      path = joinPath(memory, {.directory = path, .name = skill.name});
+      return joinPath(memory, {.directory = path, .name = "SKILL.md"});
     }
 
-    ds::Array<char, 1024> buffer;
-    const auto contents = readRegularFile(path, buffer.viewMut());
-    if (!contents) {
+    Ownership skillOwnership(const ds::String<Memory>& path, const Skill& skill) noexcept {
+      // Enough of a skill file to hold its header and telar's marker.
+      constexpr std::size_t skill_head_bytes = 1024;
+      struct stat state{};
+      if (::stat(path.data(), &state) != 0) {
+        return sys::lastError() == ENOENT ? Ownership::absent : Ownership::foreign;
+      }
+
+      ds::Array<char, skill_head_bytes> buffer{};
+      const auto contents = readRegularFile(path, buffer.viewMut());
+      if (!contents) {
+        return Ownership::foreign;
+      }
+
+      const auto header_size = skill.header.size();
+      if (contents->contains(skill.marker) || (skill.legacy_header && contents->starts_with(skill.header) && contents->size() > header_size && (*contents)[header_size] == '\n')) {
+        return Ownership::owned;
+      }
+
       return Ownership::foreign;
     }
 
-    if (contents->contains(skill.marker) || (skill.legacy_header && contents->starts_with(skill.header) && contents->substr(skill.header.size()).starts_with('\n'))) {
-      return Ownership::owned;
-    }
-
-    return Ownership::foreign;
-  }
-
-  template <Allocator Memory>
-  static void installSkills(Memory& memory, std::string_view root) {
-    for (const auto& skill : skills) {
-      const auto path = skillPath(memory, root, skill);
-      if (skillOwnership(path, skill) == Ownership::foreign) {
-        std::printf("telar integration: skill %.*s at %s is not telar's; left untouched\n", static_cast<int>(skill.name.size()), skill.name.data(), path.data());
-        continue;
-      }
-
-      ds::String<Memory> contents{memory, skill.header};
-
-      contents.append(skill.marker);
-      contents.push('\n');
-      contents.append(skill.text);
-      write(memory, path, contents, false);
-      std::printf("telar integration: skill %.*s written to %s\n", static_cast<int>(skill.name.size()), skill.name.data(), path.data());
-    }
-  }
-
-  template <Allocator Memory>
-  static void reportSkills(Memory& memory, std::string_view root) {
-    for (const auto& skill : skills) {
-      const auto path = skillPath(memory, root, skill);
-
-      std::printf("skill %.*s: %s at %s\n", static_cast<int>(skill.name.size()), skill.name.data(), ownershipName(skillOwnership(path, skill)).data(), path.data());
-    }
-  }
-
-  template <Allocator Memory>
-  static void removeSkills(Memory& memory, std::string_view root) noexcept {
-    for (const auto& skill : skills) {
-      try {
+    void installSkills(Memory& memory, std::string_view root) {
+      for (const auto& skill : skills) {
         const auto path = skillPath(memory, root, skill);
-        if (skillOwnership(path, skill) == Ownership::owned) {
-          ::unlink(path.data());
+        if (skillOwnership(path, skill) == Ownership::foreign) {
+          std::println("telar integration: skill {} at {} is not telar's; left untouched", skill.name, path.view());
+          continue;
         }
-      } catch (...) {
+
+        ds::String<Memory> contents{memory, skill.header};
+
+        contents.append(skill.marker);
+        contents.push('\n');
+        contents.append(skill.text);
+        write(memory, path, contents, false);
+        std::println("telar integration: skill {} written to {}", skill.name, path.view());
       }
     }
+
+    void reportSkills(Memory& memory, std::string_view root) {
+      for (const auto& skill : skills) {
+        const auto path = skillPath(memory, root, skill);
+
+        std::println("skill {}: {} at {}", skill.name, ownershipName(skillOwnership(path, skill)), path.view());
+      }
+    }
+
+    void removeSkills(Memory& memory, std::string_view root) noexcept {
+      for (const auto& skill : skills) {
+        try {
+          const auto path = skillPath(memory, root, skill);
+          if (skillOwnership(path, skill) == Ownership::owned) {
+            ::unlink(path.data());
+          }
+        } catch (...) { // NOLINT(bugprone-empty-catch): removing the skills is best effort; one that stays is the user's to delete.
+        }
+      }
+    }
+
+    struct Extension {
+      std::string_view noun;
+      std::string_view marker;
+      std::string_view source;
+
+      static Extension describe(AgentProvider provider) {
+        if (provider == AgentProvider::pi) {
+          return {.noun = "extension", .marker = "// telar-integration: pi", .source = assets::pi_extension};
+        }
+
+        if (provider == AgentProvider::opencode) {
+          return {.noun = "plugin", .marker = "// telar-integration: opencode", .source = assets::opencode_extension};
+        }
+
+        throw std::invalid_argument{"Provider does not use an integration extension"};
+      }
+
+      // The text lives in the memory it is written to, region `a`.
+      tbc::val_a<ds::String<Memory>> render(tbc::mut_a<Memory> memory, std::string_view executable) const {
+        constexpr std::string_view placeholder = "\"__TELAR_EXECUTABLE__\"";
+        const auto offset = source.find(placeholder);
+        if (offset == std::string_view::npos) {
+          throw std::invalid_argument{"Integration template lacks its executable placeholder"};
+        }
+
+        ds::String<Memory> result{memory, source.substr(0, offset)};
+
+        appendJsonText(result, executable);
+        result.append(source.substr(offset + placeholder.size()));
+        if (result.size() > maximum_bytes) {
+          throw std::length_error{"Integration extension exceeds its bound"};
+        }
+
+        return result;
+      }
+
+      static constexpr std::size_t maximum_bytes = std::size_t{64} * 1024;
+    };
+
   }
 
-  struct Extension {
-    std::string_view noun;
-    std::string_view marker;
-    std::string_view source;
-
-    static Extension describe(AgentProvider provider) {
-      if (provider == AgentProvider::pi) {
-        return {.noun = "extension", .marker = "// telar-integration: pi", .source = assets::pi_extension};
-      }
-
-      if (provider == AgentProvider::opencode) {
-        return {.noun = "plugin", .marker = "// telar-integration: opencode", .source = assets::opencode_extension};
-      }
-
-      throw std::invalid_argument{"Provider does not use an integration extension"};
-    }
-
-    // The text lives in the memory it is written to, region `a`.
-    template <Allocator Memory>
-    tbc::val_a<ds::String<Memory>> render(tbc::mut_a<Memory> memory, std::string_view executable) const {
-      constexpr std::string_view placeholder = "\"__TELAR_EXECUTABLE__\"";
-      const auto offset = source.find(placeholder);
-      if (offset == std::string_view::npos) {
-        throw std::invalid_argument{"Integration template lacks its executable placeholder"};
-      }
-
-      ds::String<Memory> result{memory, source.substr(0, offset)};
-
-      appendJsonText(result, executable);
-      result.append(source.substr(offset + placeholder.size()));
-      if (result.size() > maximum_bytes) {
-        throw std::length_error{"Integration extension exceeds its bound"};
-      }
-
-      return result;
-    }
-
-    static constexpr std::size_t maximum_bytes = 64 * 1024;
-  };
-
-  template <EnvironmentLookup Environment>
-  int runExtension(Memory& memory, const IntegrationOptions& options, const Environment& environment, std::string_view executable) {
+  int extensionCommand(Memory& memory, const IntegrationOptions& options, const EnvironmentSource& environment, std::string_view executable) {
     const auto provider = Provider::describe(options.provider);
     const auto extension = Extension::describe(options.provider);
     const auto root = provider.root(memory, environment);
-    const auto path = options.settings.empty() ? joinPath(memory, root, provider.file) : ds::String<Memory>{memory, options.settings};
+    const auto path = options.settings.empty() ? joinPath(memory, {.directory = root, .name = provider.file}) : ds::String<Memory>{memory, options.settings};
     const auto rendered = extension.render(memory, executable);
     const auto existing = read(memory, path, Extension::maximum_bytes);
     const bool owned = existing && existing->view().starts_with(extension.marker);
 
     if (options.action == IntegrationAction::status) {
-      const auto ownership = !existing ? Ownership::absent : owned ? Ownership::owned
-                                                                   : Ownership::foreign;
-
-      std::printf("telar %s: %s at %s\n", extension.noun.data(), ownershipName(ownership).data(), path.data());
+      std::println("telar {}: {} at {}", extension.noun, ownershipName(ownershipOf(existing.hasValue(), owned)), path.view());
       reportSkills(memory, root);
       return 0;
     }
 
     if (existing && !owned && *existing != rendered) {
-      const auto* const action = options.action == IntegrationAction::install ? "exists and is not telar's" : "is not telar's";
-      const auto* const resolution = options.action == IntegrationAction::install ? "move it first" : "left untouched";
+      const std::string_view action = options.action == IntegrationAction::install ? "exists and is not telar's" : "is not telar's";
+      const std::string_view resolution = options.action == IntegrationAction::install ? "move it first" : "left untouched";
 
-      std::fprintf(stderr, "telar integration: %s %s %s; %s\n", path.data(), action, extension.noun.data(), resolution);
+      std::println(stderr, "telar integration: {} {} {}; {}", path.view(), action, extension.noun, resolution);
       return 1;
     }
 
     if (options.action == IntegrationAction::install) {
-      const char* state = "already present";
+      std::string_view state = "already present";
 
       if (!existing || *existing != rendered) {
         write(memory, path, rendered, false);
         state = existing ? "updated" : "installed";
       }
 
-      std::printf("telar integration: %s %s %s at %s\n", provider.name.data(), extension.noun.data(), state, path.data());
+      std::println("telar integration: {} {} {} at {}", provider.name, extension.noun, state, path.view());
       installSkills(memory, root);
       return 0;
     }
@@ -311,112 +328,135 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
         throw SystemError{"Remove integration extension"};
       }
 
-      std::printf("telar integration: %s %s removed from %s\n", provider.name.data(), extension.noun.data(), path.data());
+      std::println("telar integration: {} {} removed from {}", provider.name, extension.noun, path.view());
     } else {
-      std::printf("telar integration: %s %s not present at %s\n", provider.name.data(), extension.noun.data(), path.data());
+      std::println("telar integration: {} {} not present at {}", provider.name, extension.noun, path.view());
     }
 
     removeSkills(memory, root);
     return 0;
   }
 
-  constexpr std::size_t maximum_settings_bytes = 4 * 1024 * 1024;
-
-  template <Allocator Memory, EnvironmentLookup Environment>
-  static tbc::val_a<ds::Option<ds::String<Memory>>> legacySettings(tbc::mut_a<Memory> memory, Provider provider, const Environment& environment) {
-    if (provider.environment == nullptr || environment.lookup(provider.environment).empty() || environment.lookup("HOME").empty()) {
-      return ds::none;
-    }
-
-    const auto current = joinPath(memory, provider.root(memory, environment), provider.file);
-    auto legacy = joinPath(memory, provider.root(memory, environment, true), provider.file);
-    ds::Array<char, PATH_MAX> legacy_path;
-    ds::Array<char, PATH_MAX> current_path;
-
-    if (::realpath(legacy.data(), legacy_path.dataMut()) == nullptr) {
-      return ds::none;
-    }
-
-    if (::realpath(current.data(), current_path.dataMut()) != nullptr && std::string_view{legacy_path.data()} == current_path.data()) {
-      return ds::none;
-    }
-
-    return legacy;
-  }
-
-  static bool reportLegacy(Memory& memory, const ds::String<Memory>& path, const HookSettings& hooks, Provider provider) {
-    const auto source = read(memory, path, maximum_settings_bytes);
-    if (!source) {
-      return false;
-    }
-
-    ds::Option<JsonNode<Memory>> settings;
-
-    try {
-      settings.emplace(JsonNode<Memory>::parse(memory, *source));
-    } catch (const std::exception&) {
-      return false;
-    }
-
-    for (const auto events : {provider.events, provider.worktree_events}) {
-      for (const auto event : events) {
-        if (hooks.installed(*settings, event)) {
-          std::printf("telar integration: hooks remain in %s, which is not read while its directory variable is set; `telar integration uninstall %s --legacy` removes them\n", path.data(), provider.name.data());
-          return true;
-        }
-      }
-    }
-
-    return false;
-  }
-
   template <EnvironmentLookup Environment>
-  int runSettings(Memory& memory, const IntegrationOptions& options, const Environment& environment, std::string_view executable) {
-    const auto provider = Provider::describe(options.provider);
-    ds::String<Memory> path{memory, options.settings};
-    if (path.empty()) {
-      if (options.legacy) {
-        const auto legacy = legacySettings(memory, provider, environment);
-        if (!legacy) {
-          std::fprintf(stderr, "telar integration: no %s settings under the home directory differ from the ones in use\n", provider.name.data());
-          return 1;
-        }
+  int runExtension(Memory& memory, const IntegrationOptions& options, const Environment& environment, std::string_view executable) {
+    return extensionCommand(memory, options, environment, executable);
+  }
 
-        path.assign(*legacy);
-      } else {
-        path = joinPath(memory, provider.root(memory, environment), provider.file);
+  namespace {
+
+    constexpr std::size_t maximum_settings_bytes = std::size_t{4} * 1024 * 1024;
+
+    tbc::val_a<ds::Option<ds::String<Memory>>> legacySettings(tbc::mut_a<Memory> memory, Provider provider, const EnvironmentSource& environment) {
+      if (provider.environment == nullptr || environment.lookup(provider.environment).empty() || environment.lookup("HOME").empty()) {
+        return ds::none;
       }
+
+      const auto current = joinPath(memory, {.directory = provider.root(memory, environment), .name = provider.file});
+      auto legacy = joinPath(memory, {.directory = provider.root(memory, environment, true), .name = provider.file});
+      ds::Array<char, PATH_MAX> legacy_path{};
+      ds::Array<char, PATH_MAX> current_path{};
+
+      if (::realpath(legacy.data(), legacy_path.dataMut()) == nullptr) {
+        return ds::none;
+      }
+
+      if (::realpath(current.data(), current_path.dataMut()) != nullptr && std::string_view{legacy_path.data()} == current_path.data()) {
+        return ds::none;
+      }
+
+      return legacy;
+    }
+
+    bool reportLegacy(Memory& memory, const ds::String<Memory>& path, const HookSettings& hooks, Provider provider) {
+      const auto source = read(memory, path, maximum_settings_bytes);
+      if (!source) {
+        return false;
+      }
+
+      ds::Option<JsonNode<Memory>> settings;
+
+      try {
+        settings.emplace(JsonNode<Memory>::parse(memory, *source));
+      } catch (const std::exception&) {
+        return false;
+      }
+
+      for (const auto events : {provider.events, provider.worktree_events}) {
+        for (const auto event : events) {
+          if (hooks.installed(*settings, event)) {
+            std::println("telar integration: hooks remain in {}, which is not read while its directory variable is set; `telar integration uninstall {} --legacy` removes them", path.view(), provider.name);
+            return true;
+          }
+        }
+      }
+
+      return false;
+    }
+
+    // The settings file the command reads: the one given, the legacy one, or the provider's.
+    tbc::val_a<ds::Option<ds::String<Memory>>> settingsPath(tbc::mut_a<Memory> memory, const IntegrationOptions& options, Provider provider, const EnvironmentSource& environment) {
+      if (!options.settings.empty()) {
+        return ds::String<Memory>{memory, options.settings};
+      }
+
+      if (!options.legacy) {
+        return joinPath(memory, {.directory = provider.root(memory, environment), .name = provider.file});
+      }
+
+      return legacySettings(memory, provider, environment);
+    }
+
+    void reportHookEvents(const HookSettings& hooks, const JsonNode<Memory>& settings, Provider provider) {
+      for (const auto events : {provider.events, provider.worktree_events}) {
+        for (const auto event : events) {
+          std::println("{}: {}", event, hooks.installed(settings, event) ? "installed" : "absent");
+        }
+      }
+    }
+
+    std::string_view hooksState(bool installing, bool changed) noexcept {
+      if (installing) {
+        return changed ? "installed" : "already present";
+      }
+
+      return changed ? "removed" : "not present";
+    }
+
+  }
+
+  int settingsCommand(Memory& memory, const IntegrationOptions& options, const EnvironmentSource& environment, std::string_view executable) {
+    const auto provider = Provider::describe(options.provider);
+    const auto path = settingsPath(memory, options, provider, environment);
+    if (!path) {
+      // Only a legacy file goes missing: the others are named whether they exist or not.
+      std::println(stderr, "telar integration: no {} settings under the home directory differ from the ones in use", provider.name);
+      return 1;
     }
 
     const HookSettings hooks{memory, provider, executable};
-    const auto source = read(memory, path, maximum_settings_bytes);
+    const auto source = read(memory, *path, maximum_settings_bytes);
     ds::Option<JsonNode<Memory>> settings;
 
     try {
       settings.emplace(JsonNode<Memory>::parse(memory, source ? std::string_view{*source} : "{}"));
     } catch (const std::exception&) {
-      std::fprintf(stderr, "telar integration: %s is not valid JSON\n", path.data());
+      std::println(stderr, "telar integration: {} is not valid JSON", path->view());
       return 1;
     }
 
     if (settings->kind() != JsonKind::object) {
-      std::fprintf(stderr, "telar integration: %s must contain a JSON object\n", path.data());
+      std::println(stderr, "telar integration: {} must contain a JSON object", path->view());
       return 1;
     }
 
-    const auto separator = path.view().rfind('/');
-    const auto root = separator == std::string_view::npos ? std::string_view{} : std::string_view{path}.substr(0, separator == 0 ? 1 : separator);
+    const auto separator = path->view().rfind('/');
+    const auto root = separator == std::string_view::npos ? std::string_view{} : path->view().substr(0, separator == 0 ? 1 : separator);
     if (root.empty()) {
       throw std::invalid_argument{"Invalid integration settings path"};
     }
 
     if (options.action == IntegrationAction::status) {
-      for (const auto events : {provider.events, provider.worktree_events}) {
-        for (const auto event : events) {
-          std::printf("%.*s: %s\n", static_cast<int>(event.size()), event.data(), hooks.installed(*settings, event) ? "installed" : "absent");
-        }
-      }
-
+      reportHookEvents(hooks, *settings, provider);
       reportSkills(memory, root);
       if (options.settings.empty()) {
         if (const auto legacy = legacySettings(memory, provider, environment)) {
@@ -430,17 +470,14 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
     const bool installing = options.action == IntegrationAction::install;
     const bool changed = installing ? hooks.install(settings.getMut()) : hooks.uninstall(settings.getMut());
     if (changed) {
-      write(memory, path, settings->format(), true);
+      write(memory, *path, settings->format(), true);
     }
 
-    const char* state = installing ? changed ? "installed" : "already present" : changed ? "removed"
-                                                                                         : "not present";
-
-    std::printf("telar integration: %s hooks %s in %s\n", provider.name.data(), state, path.data());
+    std::println("telar integration: {} hooks {} in {}", provider.name, hooksState(installing, changed), path->view());
     if (installing) {
       installSkills(memory, root);
       if (!provider.launch_note.empty()) {
-        std::printf("telar integration: %.*s\n", static_cast<int>(provider.launch_note.size()), provider.launch_note.data());
+        std::println("telar integration: {}", provider.launch_note);
       }
     } else if (changed || !options.legacy) {
       removeSkills(memory, root);
@@ -449,127 +486,160 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
     return 0;
   }
 
-  // The first line of every file telar's Neovim plugin writes: only those are replaced or removed.
-  constexpr std::string_view neovim_marker = "-- telar-integration: neovim\n";
-  constexpr std::size_t maximum_neovim_file_bytes = 256 * 1024;
-
-  // $XDG_DATA_HOME/$NVIM_APPNAME/site, as Neovim's stdpath("data") .. "/site" names it.
   template <EnvironmentLookup Environment>
-  static tbc::val_a<ds::String<Memory>> neovimSite(tbc::mut_a<Memory> memory, const Environment& environment) {
-    const auto application = environment.lookup("NVIM_APPNAME");
-    if (application.starts_with('/') || application.contains("..")) {
-      throw std::invalid_argument{"InvalidNvimAppName"};
-    }
-
-    ds::String<Memory> data{memory, environment.lookup("XDG_DATA_HOME")};
-
-    if (!data.view().starts_with('/')) {
-      data.assign(environment.lookup("HOME"));
-      if (data.empty()) {
-        throw std::invalid_argument{"Home directory unavailable for integration"};
-      }
-
-      data.append("/.local/share");
-    }
-
-    return joinPath(memory, joinPath(memory, data, application.empty() ? "nvim" : application), "site");
+  int runSettings(Memory& memory, const IntegrationOptions& options, const Environment& environment, std::string_view executable) {
+    return settingsCommand(memory, options, environment, executable);
   }
 
-  // The telar-owned files under the package's directories that the package no longer has.
-  template <Allocator Memory>
-  static void removeStaleNeovimFiles(Memory& memory, std::string_view site) noexcept {
-    ds::Array<std::string_view, std::size(assets::neovim_files)> directories{};
-    std::size_t count = 0;
+  namespace {
 
-    for (const auto& file : assets::neovim_files) {
-      const auto directory = file.path.substr(0, file.path.rfind('/'));
-      if (std::ranges::find(directories.view().first(count), directory) == directories.view().first(count).end()) {
-        directories.atMut(count++) = directory;
+    // The first line of every file telar's Neovim plugin writes: only those are replaced or removed.
+    constexpr std::string_view neovim_marker = "-- telar-integration: neovim\n";
+    constexpr std::size_t maximum_neovim_file_bytes = std::size_t{256} * 1024;
+
+    // The directories of the plugin's files, each once.
+    struct NeovimDirectories {
+      ds::Array<std::string_view, std::size(assets::neovim_files)> names{};
+      std::size_t count = 0;
+    };
+
+    constexpr NeovimDirectories neovimDirectories() {
+      NeovimDirectories directories;
+
+      for (const auto& file : assets::neovim_files) {
+        const auto directory = file.path.substr(0, file.path.rfind('/'));
+        if (std::ranges::find(directories.names.view().first(directories.count), directory) == directories.names.view().first(directories.count).end()) {
+          directories.names.atMut(directories.count++) = directory;
+        }
       }
+
+      return directories;
     }
 
-    for (const auto directory : directories.view().first(count)) {
-      try {
-        const auto path = joinPath(memory, site, directory);
-        std::unique_ptr<DIR, decltype(&::closedir)> listing{::opendir(path.data()), &::closedir};
-        if (!listing) {
+    constexpr auto neovim_directories = neovimDirectories();
+
+    // $XDG_DATA_HOME/$NVIM_APPNAME/site, as Neovim's stdpath("data") .. "/site" names it.
+    template <EnvironmentLookup Environment>
+    tbc::val_a<ds::String<Memory>> neovimSite(tbc::mut_a<Memory> memory, const Environment& environment) {
+      const auto application = environment.lookup("NVIM_APPNAME");
+      if (application.starts_with('/') || application.contains("..")) {
+        throw std::invalid_argument{"InvalidNvimAppName"};
+      }
+
+      ds::String<Memory> data{memory, environment.lookup("XDG_DATA_HOME")};
+
+      if (!data.view().starts_with('/')) {
+        data.assign(environment.lookup("HOME"));
+        if (data.empty()) {
+          throw std::invalid_argument{"Home directory unavailable for integration"};
+        }
+
+        data.append("/.local/share");
+      }
+
+      return joinPath(memory, {.directory = joinPath(memory, {.directory = data, .name = application.empty() ? "nvim" : application}), .name = "site"});
+    }
+
+    bool packagedNeovimFile(std::string_view directory, std::string_view name) noexcept {
+      return std::ranges::any_of(assets::neovim_files, [&](const auto& file) {
+        return file.path.starts_with(directory) && file.path.size() == directory.size() + 1 + name.size() && file.path.ends_with(name);
+      });
+    }
+
+    // The telar-owned files in one of the package's directories that the package no longer has.
+    void removeStaleNeovimFilesIn(Memory& memory, std::string_view site, std::string_view directory) {
+      const auto path = joinPath(memory, {.directory = site, .name = directory});
+      // A directory that cannot be opened or read throws, and the caller skips it.
+      DirectoryStream listing{FileDescriptor{::open(path.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+
+      while (const auto* entry = listing.next()) {
+        const std::string_view name{std::data(entry->d_name)};
+        if (!name.ends_with(".lua")) {
           continue;
         }
 
-        while (const auto* entry = ::readdir(listing.get())) {
-          const std::string_view name = entry->d_name;
-          if (!name.ends_with(".lua")) {
-            continue;
-          }
-
-          const auto packaged = std::ranges::any_of(assets::neovim_files, [&](const auto& file) {
-            return file.path.starts_with(directory) && file.path.size() == directory.size() + 1 + name.size() && file.path.ends_with(name);
-          });
-
-          const auto stale = joinPath(memory, path, name);
-          const auto existing = packaged ? ds::Option<ds::String<Memory>>{} : read(memory, stale, maximum_neovim_file_bytes);
-          if (existing && existing->view().starts_with(neovim_marker)) {
-            ::unlink(stale.data());
-            std::printf("telar integration: neovim %s removed, no longer part of the plugin\n", stale.data());
-          }
+        const auto stale = joinPath(memory, {.directory = path, .name = name});
+        const auto existing = packagedNeovimFile(directory, name) ? ds::Option<ds::String<Memory>>{} : read(memory, stale, maximum_neovim_file_bytes);
+        if (existing && existing->view().starts_with(neovim_marker)) {
+          ::unlink(stale.data());
+          std::println("telar integration: neovim {} removed, no longer part of the plugin", stale.view());
         }
-      } catch (...) {
       }
     }
+
+    // The telar-owned files under the package's directories that the package no longer has.
+    void removeStaleNeovimFiles(Memory& memory, std::string_view site) noexcept {
+      for (const auto directory : neovim_directories.names.view().first(neovim_directories.count)) {
+        try {
+          removeStaleNeovimFilesIn(memory, site, directory);
+        } catch (...) { // NOLINT(bugprone-empty-catch): the stale files are removed best effort; a directory that fails leaves its files.
+        }
+      }
+    }
+
+    // Reports each of the plugin's files, or a file another tool or the user wrote; whether one is.
+    bool checkNeovimFiles(Memory& memory, const IntegrationOptions& options, std::string_view site) {
+      bool foreign = false;
+
+      for (const auto& file : assets::neovim_files) {
+        const auto path = joinPath(memory, {.directory = site, .name = file.path});
+        const auto existing = read(memory, path, maximum_neovim_file_bytes);
+        const auto ownership = ownershipOf(existing.hasValue(), existing && existing->view().starts_with(neovim_marker));
+
+        if (options.action == IntegrationAction::status) {
+          std::println("neovim {}: {} at {}", file.path, ownershipName(ownership), path.view());
+        } else if (ownership == Ownership::foreign) {
+          std::println(stderr, "telar integration: {} is not telar's neovim plugin; {}", path.view(), options.action == IntegrationAction::install ? "move it first" : "left untouched");
+          foreign = true;
+        }
+      }
+
+      return foreign;
+    }
+
+    // Installs or removes each of the plugin's files that telar owns or that is absent.
+    void applyNeovimFiles(Memory& memory, const IntegrationOptions& options, std::string_view site) {
+      for (const auto& file : assets::neovim_files) {
+        const auto path = joinPath(memory, {.directory = site, .name = file.path});
+        const auto existing = read(memory, path, maximum_neovim_file_bytes);
+        if (existing && !existing->view().starts_with(neovim_marker)) {
+          continue;
+        }
+
+        if (options.action == IntegrationAction::uninstall) {
+          if (existing && ::unlink(path.data()) != 0) {
+            throw SystemError{"Remove integration file"};
+          }
+
+          std::println("telar integration: neovim {} {} {}", file.path, existing ? "removed from" : "not present at", path.view());
+          continue;
+        }
+
+        ds::String<Memory> contents{memory, neovim_marker};
+        std::string_view state = "already present";
+
+        contents.append(file.text);
+        if (!existing || *existing != contents) {
+          write(memory, path, contents, false);
+          state = existing ? "updated" : "installed";
+        }
+
+        std::println("telar integration: neovim {} {} at {}", file.path, state, path.view());
+      }
+    }
+
   }
 
   template <EnvironmentLookup Environment>
   int runNeovim(Memory& memory, const IntegrationOptions& options, const Environment& environment) {
     const auto site = options.settings.empty() ? neovimSite(memory, environment) : ds::String<Memory>{memory, options.settings};
-    bool foreign = false;
-
     // A file another tool or the user wrote stops the whole install, before anything changes.
-    for (const auto& file : assets::neovim_files) {
-      const auto path = joinPath(memory, site, file.path);
-      const auto existing = read(memory, path, maximum_neovim_file_bytes);
-      const auto ownership = !existing ? Ownership::absent : existing->view().starts_with(neovim_marker) ? Ownership::owned
-                                                                                                         : Ownership::foreign;
-
-      if (options.action == IntegrationAction::status) {
-        std::printf("neovim %.*s: %s at %s\n", static_cast<int>(file.path.size()), file.path.data(), ownershipName(ownership).data(), path.data());
-      } else if (ownership == Ownership::foreign) {
-        std::fprintf(stderr, "telar integration: %s is not telar's neovim plugin; %s\n", path.data(), options.action == IntegrationAction::install ? "move it first" : "left untouched");
-        foreign = true;
-      }
-    }
-
+    const bool foreign = checkNeovimFiles(memory, options, site);
     if (options.action == IntegrationAction::status || (foreign && options.action == IntegrationAction::install)) {
       return foreign ? 1 : 0;
     }
 
-    for (const auto& file : assets::neovim_files) {
-      const auto path = joinPath(memory, site, file.path);
-      const auto existing = read(memory, path, maximum_neovim_file_bytes);
-      if (existing && !existing->view().starts_with(neovim_marker)) {
-        continue;
-      }
-
-      if (options.action == IntegrationAction::uninstall) {
-        if (existing && ::unlink(path.data()) != 0) {
-          throw SystemError{"Remove integration file"};
-        }
-
-        std::printf("telar integration: neovim %.*s %s %s\n", static_cast<int>(file.path.size()), file.path.data(), existing ? "removed from" : "not present at", path.data());
-        continue;
-      }
-
-      ds::String<Memory> contents{memory, neovim_marker};
-      const char* state = "already present";
-
-      contents.append(file.text);
-      if (!existing || *existing != contents) {
-        write(memory, path, contents, false);
-        state = existing ? "updated" : "installed";
-      }
-
-      std::printf("telar integration: neovim %.*s %s at %s\n", static_cast<int>(file.path.size()), file.path.data(), state, path.data());
-    }
-
+    applyNeovimFiles(memory, options, site);
     removeStaleNeovimFiles(memory, site);
     return foreign ? 1 : 0;
   }
@@ -759,7 +829,7 @@ namespace telar::runtime::cli::integration {
       }
 
       if (!present) {
-        entries.append(newEntry(command, timeout));
+        entries.append(newEntry({.command = command, .timeout = timeout}));
         changed = true;
       }
     }
@@ -767,22 +837,26 @@ namespace telar::runtime::cli::integration {
     return changed;
   }
 
-  JsonNode<Memory> HookSettings::newEntry(std::string_view command, std::string_view timeout) const {
-    JsonNode<Memory> hook{memory_};
+  JsonNode<Memory> HookSettings::newEntry(HookCommand command) const {
+    const auto hook = [&] {
+      JsonNode<Memory> node{memory_};
 
-    if (!provider_.flat_hooks) {
-      hook.setString("type", "command");
-    }
+      if (!provider_.flat_hooks) {
+        node.setString("type", "command");
+      }
 
-    hook.setString("command", command);
-    hook.setLiteral("timeout", timeout);
+      node.setString("command", command.command);
+      node.setLiteral("timeout", command.timeout);
+      return node;
+    };
+
     if (provider_.flat_hooks) {
-      return hook;
+      return hook();
     }
 
     JsonNode<Memory> entry{memory_};
 
-    entry.ensure("hooks", JsonKind::array).append(std::move(hook));
+    entry.ensure("hooks", JsonKind::array).append(hook());
     return entry;
   }
 

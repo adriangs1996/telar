@@ -23,6 +23,8 @@ export {
   namespace telar::runtime::cli::pane_agents {
 
     inline constexpr std::uint32_t default_interval_ms = 250;
+    inline constexpr std::uint32_t default_timeout_seconds = 30;
+    inline constexpr std::uint16_t default_read_lines = 40;
 
     struct Options {
       std::string_view action;
@@ -38,8 +40,8 @@ export {
       bool wait = false;
       bool finished = false;
       AgentStatus until = AgentStatus::done;
-      std::uint32_t timeout = 30;
-      std::uint16_t lines = 40;
+      std::uint32_t timeout = default_timeout_seconds;
+      std::uint16_t lines = default_read_lines;
       PaneTextSource source = PaneTextSource::recent;
       ds::Option<PaneDirection> direction;
       ds::Option<std::uint32_t> count;
@@ -80,7 +82,7 @@ export {
   namespace telar::runtime::cli {
 
     struct ExecutionOptions {
-      enum class Action {
+      enum class Action : std::uint8_t {
         start,
         status,
         output,

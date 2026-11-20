@@ -397,7 +397,9 @@ namespace telar::gui::features::prompt {
       return {};
     }
 
-    return std::string_view{text.data() + menu_->begin, menu_->end - menu_->begin};
+    const auto chars = std::span{text}.subspan(menu_->begin, menu_->end - menu_->begin);
+
+    return {chars.data(), chars.size()};
   }
 
   Outcome Line::refine(Outcome outcome) {

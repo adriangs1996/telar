@@ -15,7 +15,7 @@ import telar.base.ds;
 // Older glibc keeps these in libdl. Keep the CLI linkable there; history
 // discovery reports unavailability when no loader is present. A static
 // release build links SQLite instead (TELAR_LINKED_SQLITE).
-#if defined(__linux__) && !TELAR_LINKED_SQLITE
+#if defined(__linux__) && !(defined(TELAR_LINKED_SQLITE) && TELAR_LINKED_SQLITE)
 #pragma weak dlopen
 #pragma weak dlsym
 #pragma weak dlclose
@@ -26,7 +26,7 @@ import telar.base.ds;
 struct HistoryDatabase;
 struct HistoryStatement;
 
-#if TELAR_LINKED_SQLITE
+#if defined(TELAR_LINKED_SQLITE) && TELAR_LINKED_SQLITE
 extern "C" {
 int sqlite3_open_v2(const char*, HistoryDatabase**, int, const char*);
 int sqlite3_close(HistoryDatabase*);
@@ -41,190 +41,192 @@ int sqlite3_busy_timeout(HistoryDatabase*, int);
 
 namespace telar::runtime::cli {
 
-  // The workspace paths the history database recorded, read as repository
-  // discovery does. Hooks must not load SQLite, so its public
-  // ABI is resolved only while a command searches history.
-  class HistoryPathReader {
-  public:
-    static constexpr std::size_t maximum_paths = 4096;
+  namespace {
 
-    // Opens `path` read-only; false when SQLite cannot open it.
-    bool open(const char* path) {
-#if TELAR_LINKED_SQLITE
-      open_ = &sqlite3_open_v2;
-      close_ = &sqlite3_close;
-      prepare_ = &sqlite3_prepare_v2;
-      finalize_ = &sqlite3_finalize;
-      step_ = &sqlite3_step;
-      text_ = &sqlite3_column_text;
-      length_ = &sqlite3_column_bytes;
-      const Timeout timeout = &sqlite3_busy_timeout;
+    // The workspace paths the history database recorded, read as repository
+    // discovery does. Hooks must not load SQLite, so its public
+    // ABI is resolved only while a command searches history.
+    class HistoryPathReader {
+    public:
+      static constexpr std::size_t maximum_paths = 4096;
+
+      // Opens `path` read-only; false when SQLite cannot open it.
+      bool open(const char* path) {
+#if defined(TELAR_LINKED_SQLITE) && TELAR_LINKED_SQLITE
+        open_ = &sqlite3_open_v2;
+        close_ = &sqlite3_close;
+        prepare_ = &sqlite3_prepare_v2;
+        finalize_ = &sqlite3_finalize;
+        step_ = &sqlite3_step;
+        text_ = &sqlite3_column_text;
+        length_ = &sqlite3_column_bytes;
+        const Timeout timeout = &sqlite3_busy_timeout;
 #else
 #ifdef __linux__
-      if (!::dlopen || !::dlsym || !::dlclose) {
-        return false;
-      }
+        if (!::dlopen || !::dlsym || !::dlclose) {
+          return false;
+        }
 
-      library_ = ::dlopen("libsqlite3.so.0", RTLD_NOW | RTLD_LOCAL);
-      if (!library_) {
-        library_ = ::dlopen("libsqlite3.so", RTLD_NOW | RTLD_LOCAL);
-      }
+        library_ = ::dlopen("libsqlite3.so.0", combineFlags(RTLD_NOW, RTLD_LOCAL));
+        if (!library_) {
+          library_ = ::dlopen("libsqlite3.so", combineFlags(RTLD_NOW, RTLD_LOCAL));
+        }
 #else
-      library_ = ::dlopen("/usr/lib/libsqlite3.dylib", RTLD_NOW | RTLD_LOCAL);
+        library_ = ::dlopen("/usr/lib/libsqlite3.dylib", combineFlags(RTLD_NOW, RTLD_LOCAL));
 #endif
-      if (library_ == nullptr) {
-        return false;
-      }
+        if (library_ == nullptr) {
+          return false;
+        }
 
-      open_ = symbol<Open>("sqlite3_open_v2");
-      close_ = symbol<Close>("sqlite3_close");
-      prepare_ = symbol<Prepare>("sqlite3_prepare_v2");
-      finalize_ = symbol<Finalize>("sqlite3_finalize");
-      step_ = symbol<Step>("sqlite3_step");
-      text_ = symbol<Text>("sqlite3_column_text");
-      length_ = symbol<Length>("sqlite3_column_bytes");
-      const auto timeout = symbol<Timeout>("sqlite3_busy_timeout");
+        open_ = symbol<Open>("sqlite3_open_v2");
+        close_ = symbol<Close>("sqlite3_close");
+        prepare_ = symbol<Prepare>("sqlite3_prepare_v2");
+        finalize_ = symbol<Finalize>("sqlite3_finalize");
+        step_ = symbol<Step>("sqlite3_step");
+        text_ = symbol<Text>("sqlite3_column_text");
+        length_ = symbol<Length>("sqlite3_column_bytes");
+        const auto timeout = symbol<Timeout>("sqlite3_busy_timeout");
 
 #endif
-      if (open_(path, &database_, read_only, nullptr) != Result::ok) {
-        return false;
+        if (open_(path, &database_, open_read_only, nullptr) != sqlite_ok) {
+          return false;
+        }
+
+        constexpr int busy_timeout_ms = 5000;
+
+        timeout(database_, busy_timeout_ms);
+        return true;
       }
 
-      constexpr int busy_timeout_ms = 5000;
+      HistoryPathReader() = default;
 
-      timeout(database_, busy_timeout_ms);
-      return true;
-    }
-
-    HistoryPathReader() = default;
-
-    ~HistoryPathReader() {
-      release();
-    }
-
-    HistoryPathReader(const HistoryPathReader&) = delete;
-    HistoryPathReader& operator=(const HistoryPathReader&) = delete;
-
-    // A new runtime can accept clients while its history worker still creates
-    // the schema: no session table means no recorded paths.
-    template <typename Consumer>
-    void each(Consumer&& consume) {
-      prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='session'");
-      const auto schema = step_(statement_);
-      if (schema == Result::done) {
-        return;
+      ~HistoryPathReader() {
+        release();
       }
 
-      if (schema != Result::row) {
-        throw std::runtime_error{"RepositoryHistoryUnavailable"};
-      }
+      HistoryPathReader(const HistoryPathReader&) = delete;
+      HistoryPathReader& operator=(const HistoryPathReader&) = delete;
+      HistoryPathReader(HistoryPathReader&&) = delete;
+      HistoryPathReader& operator=(HistoryPathReader&&) = delete;
 
-      prepare("SELECT DISTINCT workspace_path FROM session LIMIT 4097");
-      std::size_t count = 0;
-
-      for (;;) {
-        const auto result = step_(statement_);
-        if (result == Result::done) {
+      // A new runtime can accept clients while its history worker still creates
+      // the schema: no session table means no recorded paths.
+      template <typename Consumer>
+      void each(Consumer& consume) {
+        prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='session'");
+        const auto schema = step_(statement_);
+        if (schema == sqlite_done) {
           return;
         }
 
-        if (result != Result::row) {
+        if (schema != sqlite_row) {
           throw std::runtime_error{"RepositoryHistoryUnavailable"};
         }
 
-        if (++count > maximum_paths) {
-          reportCommandLimit({.name = "repository.max_recorded_paths", .noun = "recorded paths", .value = maximum_paths, .requested = count});
-          throw std::runtime_error{"RepositoryDiscoveryLimit"};
-        }
+        prepare("SELECT DISTINCT workspace_path FROM session LIMIT 4097");
+        std::size_t count = 0;
 
-        const auto* const bytes = text_(statement_, first_column);
-        const auto length = length_(statement_, first_column);
-        if (length < 0 || (!bytes && length != 0)) {
+        for (;;) {
+          const auto result = step_(statement_);
+          if (result == sqlite_done) {
+            return;
+          }
+
+          if (result != sqlite_row) {
+            throw std::runtime_error{"RepositoryHistoryUnavailable"};
+          }
+
+          if (++count > maximum_paths) {
+            reportCommandLimit({.name = "repository.max_recorded_paths", .noun = "recorded paths", .value = maximum_paths, .requested = count});
+            throw std::runtime_error{"RepositoryDiscoveryLimit"};
+          }
+
+          const auto* const bytes = text_(statement_, first_column);
+          const auto length = length_(statement_, first_column);
+          if (length < 0 || (!bytes && length != 0)) {
+            throw std::runtime_error{"RepositoryHistoryUnavailable"};
+          }
+
+          const std::string_view path{bytes ? reinterpret_cast<const char*>(bytes) : "", static_cast<std::size_t>(length)}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): SQLite hands out text as unsigned char, which char may alias
+          if (path.size() >= PATH_MAX || path.contains('\0')) {
+            continue;
+          }
+
+          consume(path);
+        }
+      }
+
+    private:
+      using Database = HistoryDatabase;
+      using Statement = HistoryStatement;
+
+      // SQLite's result codes and open flag, as its C API numbers them.
+      static constexpr int sqlite_ok = 0;
+      static constexpr int sqlite_row = 100;
+      static constexpr int sqlite_done = 101;
+      static constexpr int open_read_only = 1;
+
+      static constexpr int first_column = 0;
+      using Open = int (*)(const char*, Database**, int, const char*);
+      using Close = int (*)(Database*);
+      using Prepare = int (*)(Database*, const char*, int, Statement**, const char**);
+      using Finalize = int (*)(Statement*);
+      using Step = int (*)(Statement*);
+      using Text = const unsigned char* (*)(Statement*, int);
+      using Length = int (*)(Statement*, int);
+      using Timeout = int (*)(Database*, int);
+
+      template <typename Function>
+      Function symbol(const char* name) {
+        auto* const address = ::dlsym(library_, name);
+        if (!address) {
           throw std::runtime_error{"RepositoryHistoryUnavailable"};
         }
 
-        const std::string_view path{bytes ? reinterpret_cast<const char*>(bytes) : "", static_cast<std::size_t>(length)};
-        if (path.size() >= PATH_MAX || path.contains('\0')) {
-          continue;
+        return reinterpret_cast<Function>(address); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): dlsym returns a function's address as void*
+      }
+
+      void prepare(const char* sql) {
+        if (statement_ != nullptr) {
+          finalize_(std::exchange(statement_, nullptr));
         }
 
-        consume(path);
-      }
-    }
-
-  private:
-    using Database = HistoryDatabase;
-    using Statement = HistoryStatement;
-
-    enum Result : int {
-      ok = 0,
-      row = 100,
-      done = 101,
-    };
-
-    enum OpenFlag : int {
-      read_only = 1,
-    };
-
-    static constexpr int first_column = 0;
-    using Open = int (*)(const char*, Database**, int, const char*);
-    using Close = int (*)(Database*);
-    using Prepare = int (*)(Database*, const char*, int, Statement**, const char**);
-    using Finalize = int (*)(Statement*);
-    using Step = int (*)(Statement*);
-    using Text = const unsigned char* (*)(Statement*, int);
-    using Length = int (*)(Statement*, int);
-    using Timeout = int (*)(Database*, int);
-
-    template <typename Function>
-    Function symbol(const char* name) {
-      auto* const address = ::dlsym(library_, name);
-      if (!address) {
-        throw std::runtime_error{"RepositoryHistoryUnavailable"};
+        constexpr int null_terminated = -1;
+        if (prepare_(database_, sql, null_terminated, &statement_, nullptr) != sqlite_ok) {
+          throw std::runtime_error{"RepositoryHistoryUnavailable"};
+        }
       }
 
-      return reinterpret_cast<Function>(address);
-    }
+      void release() noexcept {
+        if (statement_ != nullptr) {
+          finalize_(std::exchange(statement_, nullptr));
+        }
 
-    void prepare(const char* sql) {
-      if (statement_ != nullptr) {
-        finalize_(std::exchange(statement_, nullptr));
-      }
+        if ((database_ != nullptr) && (close_ != nullptr)) {
+          close_(std::exchange(database_, nullptr));
+        }
 
-      constexpr int null_terminated = -1;
-      if (prepare_(database_, sql, null_terminated, &statement_, nullptr) != Result::ok) {
-        throw std::runtime_error{"RepositoryHistoryUnavailable"};
-      }
-    }
-
-    void release() noexcept {
-      if (statement_ != nullptr) {
-        finalize_(std::exchange(statement_, nullptr));
-      }
-
-      if ((database_ != nullptr) && (close_ != nullptr)) {
-        close_(std::exchange(database_, nullptr));
-      }
-
-      if (library_ != nullptr) {
-#if !TELAR_LINKED_SQLITE
-        ::dlclose(std::exchange(library_, nullptr));
+        if (library_ != nullptr) {
+#if !(defined(TELAR_LINKED_SQLITE) && TELAR_LINKED_SQLITE)
+          ::dlclose(std::exchange(library_, nullptr));
 #endif
+        }
       }
-    }
 
-    void* library_ = nullptr;
-    Database* database_ = nullptr;
-    Statement* statement_ = nullptr;
-    // Functions of the library library_ holds open.
-    tbc::val_self<Open> open_{};
-    tbc::val_self<Close> close_{};
-    tbc::val_self<Prepare> prepare_{};
-    tbc::val_self<Finalize> finalize_{};
-    tbc::val_self<Step> step_{};
-    tbc::val_self<Text> text_{};
-    tbc::val_self<Length> length_{};
-  };
+      void* library_ = nullptr;
+      Database* database_ = nullptr;
+      Statement* statement_ = nullptr;
+      // Functions of the library library_ holds open.
+      tbc::val_self<Open> open_{};
+      tbc::val_self<Close> close_{};
+      tbc::val_self<Prepare> prepare_{};
+      tbc::val_self<Finalize> finalize_{};
+      tbc::val_self<Step> step_{};
+      tbc::val_self<Text> text_{};
+      tbc::val_self<Length> length_{};
+    };
+
+  }
 
   void historyPaths(const char* database, HistoryPathVisitor& visit) {
     HistoryPathReader reader;
@@ -244,114 +246,130 @@ namespace telar::runtime::cli {
 
 namespace telar::runtime::cli::sessions {
 
-  static void tabSnapshot(Output& output, const TabSnapshot& reply, bool json) {
-    if (json) {
-      output.text("{\"workspace_id\":").number(reply.location.workspace.id).text(",\"tab_id\":").number(reply.location.tab_id).text(",\"panes\":[");
-    } else {
-      output.text("PANE\tGENERATION\tLIFECYCLE\n");
-    }
+  namespace {
 
-    bool first = true;
-
-    for (const auto& pane : reply.panes) {
-      const auto* const lifecycle = pane.lifecycle == PaneLifecycle::running ? "running" : "exited";
-
+    void tabSnapshot(Output& output, const TabSnapshot& reply, bool json) {
       if (json) {
-        if (!first) {
-          output.text(",");
+        output.text("{\"workspace_id\":").number(reply.location.workspace.id).text(",\"tab_id\":").number(reply.location.tab_id).text(",\"panes\":[");
+      } else {
+        output.text("PANE\tGENERATION\tLIFECYCLE\n");
+      }
+
+      bool first = true;
+
+      for (const auto& pane : reply.panes) {
+        const auto* const lifecycle = pane.lifecycle == PaneLifecycle::running ? "running" : "exited";
+
+        if (json) {
+          if (!first) {
+            output.text(",");
+          }
+
+          output.text("{\"pane_id\":").number(pane.pane_id).text(",\"pane_generation\":").number(pane.pane_generation).text(",\"lifecycle\":").json(lifecycle).text("}");
+        } else {
+          output.number(pane.pane_id).text("\t").number(pane.pane_generation).text("\t").text(lifecycle).text("\n");
         }
 
-        output.text("{\"pane_id\":").number(pane.pane_id).text(",\"pane_generation\":").number(pane.pane_generation).text(",\"lifecycle\":").json(lifecycle).text("}");
-      } else {
-        output.number(pane.pane_id).text("\t").number(pane.pane_generation).text("\t").text(lifecycle).text("\n");
+        first = false;
       }
 
-      first = false;
-    }
-
-    if (json) {
-      output.text("]}\n");
-    }
-  }
-
-  static void tabList(Output& output, const WorkspaceSnapshot& reply, bool json) {
-    output.text(json ? "[" : "ID\tPOSITION\tPANES\tLABEL\n");
-    bool first = true;
-
-    for (const auto& entry : reply.tabs) {
       if (json) {
-        if (!first) {
-          output.text(",");
+        output.text("]}\n");
+      }
+    }
+
+    void tabList(Output& output, const WorkspaceSnapshot& reply, bool json) {
+      output.text(json ? "[" : "ID\tPOSITION\tPANES\tLABEL\n");
+      bool first = true;
+
+      for (const auto& entry : reply.tabs) {
+        if (json) {
+          if (!first) {
+            output.text(",");
+          }
+
+          output.text("{\"workspace_id\":").number(reply.workspace.id).text(",\"tab_id\":").number(entry.tab_id).text(",\"position\":").number(entry.position).text(",\"pane_count\":").number(entry.pane_count).text(",\"label\":").json(entry.label).text("}");
+        } else {
+          output.number(entry.tab_id).text("\t").number(entry.position).text("\t").number(entry.pane_count).text("\t").text(entry.label).text("\n");
         }
 
-        output.text("{\"workspace_id\":").number(reply.workspace.id).text(",\"tab_id\":").number(entry.tab_id).text(",\"position\":").number(entry.position).text(",\"pane_count\":").number(entry.pane_count).text(",\"label\":").json(entry.label).text("}");
-      } else {
-        output.number(entry.tab_id).text("\t").number(entry.position).text("\t").number(entry.pane_count).text("\t").text(entry.label).text("\n");
+        first = false;
       }
 
-      first = false;
+      if (json) {
+        output.text("]\n");
+      }
     }
 
-    if (json) {
-      output.text("]\n");
-    }
-  }
+    // Renames, closes or moves the tab and writes what the reply says.
+    void tabEdit(Channel& session, Output& output, const TabOptions& options, TabLocation location) {
+      using Action = TabOptions::Action;
 
-  static void tabOperation(Channel& session, Output& output, const TabOptions& options, TabLocation location) {
-    using Action = TabOptions::Action;
+      switch (options.action) {
+      case Action::rename: {
+        wireTabLabel(*options.label);
+        const auto reply = session.template exchange<TabRenamed>(RenameTab{.location = location, .label = *options.label});
 
-    if (options.action == Action::get) {
-      const auto reply = session.template exchange<TabSnapshot>(RequestTabSnapshot{.location = location});
+        checkLocation(reply.location, location);
+        if (options.json) {
+          output.text(",\"label\":").json(reply.label);
+        } else {
+          output.text(" renamed to ").text(reply.label);
+        }
 
-      checkLocation(reply.location, location);
-      tabSnapshot(output, reply, options.json);
-      return;
-    }
+        return;
+      }
+      case Action::close: {
+        const auto reply = session.template exchange<TabClosed>(CloseTab{.location = location});
 
-    if (options.json) {
-      output.text("{\"workspace_id\":").number(location.workspace.id).text(",\"tab_id\":").number(location.tab_id);
-    } else {
-      output.text("tab ").number(location.tab_id);
-    }
+        checkLocation(reply.location, location);
+        if (options.json) {
+          output.text(R"(,"closed":true,"workspace_closed":)").boolean(reply.workspace_closed);
+        } else {
+          output.text(" closed");
+        }
 
-    switch (options.action) {
-    case Action::rename: {
-      wireTabLabel(*options.label);
-      const auto reply = session.template exchange<TabRenamed>(RenameTab{.location = location, .label = *options.label});
+        return;
+      }
+      case Action::move: {
+        const auto reply = session.template exchange<TabMoved>(MoveTab{.location = location, .direction = options.direction, .relative_to = options.relative});
 
-      checkLocation(reply.location, location);
-      if (options.json) {
-        output.text(",\"label\":").json(reply.label);
-      } else {
-        output.text(" renamed to ").text(reply.label);
+        checkLocation(reply.location, location);
+        output.text(options.json ? ",\"position\":" : " moved to position ").number(reply.position);
+        return;
+      }
+      case Action::list:
+      case Action::get:
+      case Action::create:
+        break;
       }
 
-      break;
-    }
-    case Action::close: {
-      const auto reply = session.template exchange<TabClosed>(CloseTab{.location = location});
-
-      checkLocation(reply.location, location);
-      if (options.json) {
-        output.text(R"(,"closed":true,"workspace_closed":)").boolean(reply.workspace_closed);
-      } else {
-        output.text(" closed");
-      }
-
-      break;
-    }
-    case Action::move: {
-      const auto reply = session.template exchange<TabMoved>(MoveTab{.location = location, .direction = options.direction, .relative_to = options.relative});
-
-      checkLocation(reply.location, location);
-      output.text(options.json ? ",\"position\":" : " moved to position ").number(reply.position);
-      break;
-    }
-    default:
+      // An action that edits no tab, or one outside the enum.
       throw Failure{"InvalidTabAction"};
     }
 
-    output.text(options.json ? "}\n" : "\n");
+    void tabOperation(Channel& session, Output& output, const TabOptions& options, TabLocation location) {
+      using Action = TabOptions::Action;
+
+      if (options.action == Action::get) {
+        const auto reply = session.template exchange<TabSnapshot>(RequestTabSnapshot{.location = location});
+
+        checkLocation(reply.location, location);
+        tabSnapshot(output, reply, options.json);
+        return;
+      }
+
+      if (options.json) {
+        output.text("{\"workspace_id\":").number(location.workspace.id).text(",\"tab_id\":").number(location.tab_id);
+      } else {
+        output.text("tab ").number(location.tab_id);
+      }
+
+      tabEdit(session, output, options, location);
+
+      output.text(options.json ? "}\n" : "\n");
+    }
+
   }
 
   int tab(Memory& memory, const TabOptions& options) {
@@ -395,10 +413,10 @@ namespace telar::runtime::cli::sessions {
       output.flush();
       return 0;
     } catch (const Failure& error) {
-      std::fprintf(stderr, "telar tab: %s\n", error.what());
+      writeFormatted(STDERR_FILENO, "telar tab: {}\n", std::string_view{error.what()});
       return error.status();
     } catch (const std::exception& error) {
-      std::fprintf(stderr, "telar tab: %s\n", error.what());
+      writeFormatted(STDERR_FILENO, "telar tab: {}\n", std::string_view{error.what()});
       return 1;
     }
   }

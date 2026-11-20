@@ -35,14 +35,19 @@ namespace telar::gui::features::components {
     View result;
 
     result.count = count_;
+    const auto bytes = bytes_.view();
     std::size_t offset = 0;
 
     for (std::size_t index = 0; index < count_; ++index) {
-      result.arguments.atMut(index) = {bytes_.data() + offset, lengths_[index]};
+      const auto argument = bytes.subspan(offset, lengths_[index]);
+
+      result.arguments.atMut(index) = {argument.data(), argument.size()};
       offset += lengths_[index];
     }
 
-    result.configured_label = {bytes_.data() + offset, label_};
+    const auto label = bytes.subspan(offset, label_);
+
+    result.configured_label = {label.data(), label.size()};
 
     return result;
   }
@@ -88,7 +93,13 @@ namespace telar::gui::features::components {
 
   template <Allocator Memory>
   std::string_view RenderedElements<Memory>::view(ElementText range) const noexcept {
-    return range.length == 0 || range.offset > text.size() || range.length > text.size() - range.offset ? std::string_view{} : std::string_view{text.data() + range.offset, range.length};
+    if (range.length == 0 || range.offset > text.size() || range.length > text.size() - range.offset) {
+      return {};
+    }
+
+    const auto chars = std::span{text.view()}.subspan(range.offset, range.length);
+
+    return {chars.data(), chars.size()};
   }
 
   template class ResolvedActions<telar::Memory>;

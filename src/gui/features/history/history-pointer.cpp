@@ -8,7 +8,7 @@ import telar.base.ds;
 namespace telar::gui::features::history {
 
   bool HistoryActionTarget::contains(HistoryActionPosition position) const noexcept {
-    return position.x >= bounds.x && position.y >= bounds.y && position.x < static_cast<double>(bounds.x) + bounds.width && position.y < static_cast<double>(bounds.y) + bounds.height;
+    return position.x >= static_cast<double>(bounds.x) && position.y >= static_cast<double>(bounds.y) && position.x < static_cast<double>(bounds.x) + static_cast<double>(bounds.width) && position.y < static_cast<double>(bounds.y) + static_cast<double>(bounds.height);
   }
 
   const HistoryActionTarget* HistoryActionSurface::find(HistoryCardAction action) const noexcept {
@@ -119,7 +119,7 @@ namespace telar::gui::features::history {
   }
 
   bool HistoryHoverTarget::contains(HistoryActionPosition position) const noexcept {
-    return position.x >= bounds.x && position.y >= bounds.y && position.x < static_cast<double>(bounds.x) + bounds.width && position.y < static_cast<double>(bounds.y) + bounds.height;
+    return position.x >= static_cast<double>(bounds.x) && position.y >= static_cast<double>(bounds.y) && position.x < static_cast<double>(bounds.x) + static_cast<double>(bounds.width) && position.y < static_cast<double>(bounds.y) + static_cast<double>(bounds.height);
   }
 
   const ds::Option<HistoryHoverIdentity>& HistoryHover::hovered() const noexcept {
@@ -191,7 +191,7 @@ namespace telar::gui::features::history {
   }
 
   bool HistoryScroll::within(Rect bounds, HistoryScrollPosition pointer) noexcept {
-    return pointer.x >= bounds.x && pointer.y >= bounds.y && pointer.x < static_cast<double>(bounds.x) + bounds.width && pointer.y < static_cast<double>(bounds.y) + bounds.height;
+    return pointer.x >= static_cast<double>(bounds.x) && pointer.y >= static_cast<double>(bounds.y) && pointer.x < static_cast<double>(bounds.x) + static_cast<double>(bounds.width) && pointer.y < static_cast<double>(bounds.y) + static_cast<double>(bounds.height);
   }
 
 }

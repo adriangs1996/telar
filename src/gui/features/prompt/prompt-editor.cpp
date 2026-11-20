@@ -575,9 +575,15 @@ namespace telar::gui::features::prompt {
         return U'x';
       case Key::character:
         return key.character;
-      default:
-        return ds::none;
+      case Key::enter:
+      case Key::tab:
+      case Key::backtab:
+      case Key::escape:
+        break;
       }
+
+      // A key that stands for no command, or one outside the enum.
+      return ds::none;
     }
 
   }
@@ -1294,7 +1300,7 @@ namespace telar::gui::features::prompt {
         clipboard_.write(text);
       }
     } else if (register_ != '_') {
-      auto& target = register_ >= 'a' && register_ <= 'z' ? registers_.atMut(register_ - 'a') : unnamed_;
+      auto& target = register_ >= 'a' && register_ <= 'z' ? registers_.atMut(static_cast<std::size_t>(register_ - 'a')) : unnamed_;
 
       target.text.assign(text);
       target.linewise = linewise;
@@ -1315,7 +1321,7 @@ namespace telar::gui::features::prompt {
       return {.text = pasted_.view(), .linewise = false};
     }
 
-    const auto& source = register_ >= 'a' && register_ <= 'z' ? registers_[register_ - 'a'] : unnamed_;
+    const auto& source = register_ >= 'a' && register_ <= 'z' ? registers_[static_cast<std::size_t>(register_ - 'a')] : unnamed_;
 
     return {.text = source.text.view(), .linewise = source.linewise};
   }
@@ -1708,7 +1714,7 @@ namespace telar::gui::features::prompt {
       // Room for any std::size_t in decimal.
       constexpr std::size_t count_digits = 24;
       ds::Array<char, count_digits> digits{};
-      auto* const end = std::to_chars(digits.dataMut(), digits.dataMut() + digits.size(), count_).ptr;
+      auto* const end = std::to_chars(digits.dataMut(), std::to_address(digits.viewMut().end()), count_).ptr;
 
       for (const auto digit : std::string_view{digits.data(), end}) {
         recorded_.push(Recorded{

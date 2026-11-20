@@ -20,7 +20,7 @@ namespace telar {
   }
 
   void ClipboardDesktopRequest::validate() const {
-    if (mimes.size() > 4 || contents.size() > 128) {
+    if (mimes.size() > 4 || contents.size() > max_clipboard_request_contents) {
       throw EncodingError{"Invalid clipboard request bounds"};
     }
 
@@ -31,7 +31,7 @@ namespace telar {
   }
 
   void CompleteClipboardDesktop::validate() const {
-    if (contents.size() > 4 || available.size() > 16 || (prepared && (!contents.empty() || !available.empty()))) {
+    if (contents.size() > 4 || available.size() > max_clipboard_available_mimes || (prepared && (!contents.empty() || !available.empty()))) {
       throw EncodingError{"Invalid clipboard completion phase or bounds"};
     }
 

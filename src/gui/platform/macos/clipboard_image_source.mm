@@ -36,6 +36,14 @@ namespace telar::gui::platform {
 
     using NativeSource = NativeReference<CGImageSourceRef>;
 
+    // Bytes a C API hands over as a pointer and a length: the one place the two meet a span.
+    template <typename Byte>
+    std::span<Byte> cBytes(Byte* data, std::size_t size) noexcept {
+#pragma clang unsafe_buffer_usage begin
+      return {data, size};
+#pragma clang unsafe_buffer_usage end
+    }
+
     // The source is a Core Foundation object it retains, depending on no argument.
     tbc::val_static<NativeSource> sourceFromFile(const char* path, ClipboardImageError& failure) {
       const runtime::FileDescriptor descriptor{telarGuiOpenClipboardImageFile(path)};
@@ -54,24 +62,24 @@ namespace telar::gui::platform {
         return NativeSource{nullptr};
       }
 
-      const NativeReference data{CFDataCreateMutable(nullptr, status.st_size)};
+      const NativeReference<CFMutableDataRef> data{CFDataCreateMutable(nullptr, status.st_size)};
       if (data.get() == nullptr) {
         throw std::bad_alloc{};
       }
 
       CFDataSetLength(data.get(), status.st_size);
-      auto* const bytes = CFDataGetMutableBytePtr(data.get());
-      std::size_t offset = 0;
       const auto size = static_cast<std::size_t>(status.st_size);
+      auto bytes = cBytes(CFDataGetMutableBytePtr(data.get()), size); // NOLINT(misc-const-correctness): a span written through, which tbc's deep const forbids marking const
+      std::size_t offset = 0;
 
       while (offset < size) {
-        const auto count = ::read(descriptor.get(), bytes + offset, size - offset);
+        const auto count = ::read(descriptor.get(), bytes.subspan(offset).data(), size - offset);
         if (count < 0 && errno == EINTR) {
           continue;
         }
 
         if (count <= 0) {
-          eraseSensitiveBytes(std::as_writable_bytes(std::span{bytes, size}));
+          eraseSensitiveBytes(std::as_writable_bytes(bytes));
           failure = ClipboardImageError::read_failed;
 
           return NativeSource{nullptr};
@@ -81,16 +89,16 @@ namespace telar::gui::platform {
       }
 
       // ImageIO borrows lazily. Keep an immutable copy before clearing the read.
-      const NativeReference copy{CFDataCreate(nullptr, bytes, status.st_size)};
+      const NativeReference<CFDataRef> copy{CFDataCreate(nullptr, bytes.data(), status.st_size)};
 
-      eraseSensitiveBytes(std::as_writable_bytes(std::span{bytes, size}));
+      eraseSensitiveBytes(std::as_writable_bytes(bytes));
       if (copy.get() == nullptr) {
         throw std::bad_alloc{};
       }
 
       NativeSource source{CGImageSourceCreateWithData(copy.get(), nullptr)};
-      if (source.get() == nullptr || CGImageSourceGetCount(source.get()) == 0) {
-        return NativeSource{nullptr};
+      if (source.get() != nullptr && CGImageSourceGetCount(source.get()) == 0) {
+        source.reset();
       }
 
       return source;
@@ -145,7 +153,7 @@ namespace telar::gui::platform {
     };
 
     ImageDimensions dimensions(CGImageSourceRef source) {
-      const NativeReference properties{CGImageSourceCopyPropertiesAtIndex(source, 0, nullptr)};
+      const NativeReference<CFDictionaryRef> properties{CGImageSourceCopyPropertiesAtIndex(source, 0, nullptr)};
       if (properties.get() == nullptr) {
         throw ClipboardImageFailure{ClipboardImageError::read_failed};
       }
@@ -170,7 +178,7 @@ namespace telar::gui::platform {
       std::exception_ptr failure;
 
       static std::size_t write(void* writer_context, const void* writer_bytes, std::size_t size) noexcept {
-        return append(*static_cast<PngWriter*>(writer_context), {static_cast<const std::byte*>(writer_bytes), size});
+        return append(*static_cast<PngWriter*>(writer_context), cBytes(static_cast<const std::byte*>(writer_bytes), size));
       }
 
       static std::size_t append(PngWriter& writer, std::span<const std::byte> bytes) noexcept {
@@ -192,14 +200,14 @@ namespace telar::gui::platform {
 
     // The bytes are allocated from memory, region `a`.
     tbc::val_a<SensitiveBytes<ApplicationAllocator>> encode(tbc::mut_a<ApplicationAllocator> memory, CGImageSourceRef source) {
-      PngWriter writer{.bytes = SensitiveBytes{memory}, .failure = nullptr};
+      PngWriter writer{.bytes = SensitiveBytes<ApplicationAllocator>{memory}, .failure = nullptr};
       const CGDataConsumerCallbacks callbacks{.putBytes = PngWriter::write, .releaseConsumer = nullptr};
-      const NativeReference consumer{CGDataConsumerCreate(&writer, &callbacks)};
+      const NativeReference<CGDataConsumerRef> consumer{CGDataConsumerCreate(&writer, &callbacks)};
       if (consumer.get() == nullptr) {
         throw std::bad_alloc{};
       }
 
-      const NativeReference destination{CGImageDestinationCreateWithDataConsumer(consumer.get(), CFSTR("public.png"), 1, nullptr)};
+      const NativeReference<CGImageDestinationRef> destination{CGImageDestinationCreateWithDataConsumer(consumer.get(), CFSTR("public.png"), 1, nullptr)};
       if (destination.get() == nullptr) {
         throw ClipboardImageFailure{ClipboardImageError::read_failed};
       }

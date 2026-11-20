@@ -14,6 +14,7 @@ export namespace telar {
 }
 
 // Declared in the global module, with the vocabulary these schemas build on.
+// NOLINTBEGIN(misc-use-internal-linkage): exported, and declared in the global module as the vocabulary is.
 export extern "C++" {
   namespace telar {
 
@@ -65,6 +66,15 @@ export extern "C++" {
       static constexpr std::size_t command_bytes = 256;
       static constexpr std::size_t arguments_bytes = 8192;
       static constexpr std::size_t directory_bytes = 1024;
+      static constexpr std::size_t disk_path_bytes = 128;
+      static constexpr std::size_t disk_device_bytes = 64;
+      static constexpr std::size_t disk_type_bytes = 16;
+      static constexpr std::size_t interface_name_bytes = 16;
+      // The nice values a process takes, from the highest priority to the lowest.
+      static constexpr std::int32_t highest_nice = -20;
+      static constexpr std::int32_t lowest_nice = 20;
+      // A share of the processor in thousandths: of one core, or of all of them together.
+      static constexpr std::uint16_t whole_permille = 1000;
     };
 
     // The sections a query asks for, as bits.
@@ -73,12 +83,14 @@ export extern "C++" {
       static constexpr std::uint8_t disks = 2;
       static constexpr std::uint8_t network = 4;
       static constexpr std::uint8_t processes = 8;
-      static constexpr std::uint8_t all = host | disks | network | processes;
+      static constexpr std::uint8_t all = static_cast<std::uint8_t>(unsigned{host} | unsigned{disks} | unsigned{network} | unsigned{processes});
     };
 
     // A process instance: its pid and the moment it started, which a recycled pid never repeats.
     // A start of zero names whichever process has the pid now.
     struct ProcessInstance {
+      static constexpr std::uint64_t maximum_microseconds = 999'999;
+
       std::int32_t pid{};
       std::uint64_t started_seconds{};
       std::uint64_t started_microseconds{};
@@ -89,7 +101,7 @@ export extern "C++" {
         : Serializer<
               Field<&ProcessInstance::pid, BoundedInteger<i32, 0>, "pid">,
               Field<&ProcessInstance::started_seconds, u64, "started_seconds">,
-              Field<&ProcessInstance::started_microseconds, BoundedInteger<u64, 0, 999'999>, "started_microseconds">> {};
+              Field<&ProcessInstance::started_microseconds, BoundedInteger<u64, 0, ProcessInstance::maximum_microseconds>, "started_microseconds">> {};
 
     struct QueryMonitor {
       std::uint64_t request_id{};
@@ -131,9 +143,9 @@ export extern "C++" {
     template <>
     struct BodySchema<MonitorDisk>
         : Serializer<
-              Field<&MonitorDisk::path, DisplayText16<128>, "path">,
-              Field<&MonitorDisk::device, DisplayText16<64>, "device">,
-              Field<&MonitorDisk::type, DisplayText16<16>, "type">,
+              Field<&MonitorDisk::path, DisplayText16<MonitorLimits::disk_path_bytes>, "path">,
+              Field<&MonitorDisk::device, DisplayText16<MonitorLimits::disk_device_bytes>, "device">,
+              Field<&MonitorDisk::type, DisplayText16<MonitorLimits::disk_type_bytes>, "type">,
               Field<&MonitorDisk::total_bytes, u64, "total_bytes">,
               Field<&MonitorDisk::used_bytes, u64, "used_bytes">,
               Field<&MonitorDisk::available_bytes, u64, "available_bytes">> {};
@@ -149,7 +161,7 @@ export extern "C++" {
     template <>
     struct BodySchema<MonitorInterface>
         : Serializer<
-              Field<&MonitorInterface::name, DisplayText16<16, false>, "name">,
+              Field<&MonitorInterface::name, DisplayText16<MonitorLimits::interface_name_bytes, false>, "name">,
               Field<&MonitorInterface::received_per_second, u64, "received_per_second">,
               Field<&MonitorInterface::sent_per_second, u64, "sent_per_second">,
               Field<&MonitorInterface::received_bytes, u64, "received_bytes">,
@@ -195,7 +207,7 @@ export extern "C++" {
               Field<&MonitorProcess::cpu_permille, u32, "cpu_permille">,
               Field<&MonitorProcess::resident_bytes, u64, "resident_bytes">,
               Field<&MonitorProcess::threads, u32, "threads">,
-              Field<&MonitorProcess::nice, BoundedInteger<i32, -20, 20>, "nice">,
+              Field<&MonitorProcess::nice, BoundedInteger<i32, MonitorLimits::highest_nice, MonitorLimits::lowest_nice>, "nice">,
               Field<&MonitorProcess::pane_id, u64, "pane_id">,
               Field<&MonitorProcess::agent, EnumByte<AgentProvider, max_agent_provider_index>, "agent">,
               Field<&MonitorProcess::depth, u8, "depth">> {};
@@ -249,8 +261,8 @@ export extern "C++" {
               ServerTag::monitor_snapshot,
               Field<&MonitorSnapshot::request_id, NonzeroU64, "request_id">,
               Field<&MonitorSnapshot::sections, BoundedInteger<u8, 0, MonitorSections::all>, "sections">,
-              Field<&MonitorSnapshot::cpu_permille, BoundedInteger<u16, 0, 1000>, "cpu_permille">,
-              Field<&MonitorSnapshot::cores, CountedSpan<u16, BoundedInteger<u16, 0, 1000>, MonitorLimits::maximum_cores>, "cores">,
+              Field<&MonitorSnapshot::cpu_permille, BoundedInteger<u16, 0, MonitorLimits::whole_permille>, "cpu_permille">,
+              Field<&MonitorSnapshot::cores, CountedSpan<u16, BoundedInteger<u16, 0, MonitorLimits::whole_permille>, MonitorLimits::maximum_cores>, "cores">,
               Field<&MonitorSnapshot::memory_total_bytes, u64, "memory_total_bytes">,
               Field<&MonitorSnapshot::memory_used_bytes, u64, "memory_used_bytes">,
               Field<&MonitorSnapshot::memory_available_bytes, u64, "memory_available_bytes">,
@@ -298,7 +310,7 @@ export extern "C++" {
               ClientTag::request_process_priority,
               Field<&RequestProcessPriority::request_id, NonzeroU64, "request_id">,
               Field<&RequestProcessPriority::process, ValueCodec<ProcessInstance>, "process">,
-              Field<&RequestProcessPriority::nice, BoundedInteger<i32, -20, 20>, "nice">> {};
+              Field<&RequestProcessPriority::nice, BoundedInteger<i32, MonitorLimits::highest_nice, MonitorLimits::lowest_nice>, "nice">> {};
 
     // Every operation of the monitor, with the CLI command, the binding action and the palette label
     // that reach it. The CLI's and the window's tests check each one against their tables, so an
@@ -310,20 +322,23 @@ export extern "C++" {
       std::string_view command;
     };
 
-    inline constexpr ds::Array<MonitorOperation, 12> monitor_operations{{
-        {.binding = "monitor", .label = "Open monitor", .family = "monitor", .command = "host"},
-        {.binding = "process-picker", .label = "Find process", .family = "process", .command = "list"},
-        {.binding = "process-terminate", .label = "Terminate process", .family = "process", .command = "signal"},
-        {.binding = "process-kill", .label = "Kill process", .family = "process", .command = "signal"},
-        {.binding = "process-stop", .label = "Pause process", .family = "process", .command = "signal"},
-        {.binding = "process-continue", .label = "Resume process", .family = "process", .command = "signal"},
-        {.binding = "process-lower-priority", .label = "Lower process priority", .family = "process", .command = "renice"},
-        {.binding = "process-copy-command", .label = "Copy process command", .family = "process", .command = "get"},
-        {.binding = "process-focus-pane", .label = "Go to process pane", .family = "process", .command = "get"},
-        {.binding = "process-review-stack", .label = "Review process stack", .family = "process", .command = "review"},
-        {.binding = "process-review-files", .label = "Review process open files", .family = "process", .command = "review"},
-        {.binding = "process-review-logs", .label = "Review process logs", .family = "process", .command = "review"},
-    }};
+    inline constexpr ds::Array<MonitorOperation, 12> monitor_operations{
+        {
+            {.binding = "monitor", .label = "Open monitor", .family = "monitor", .command = "host"},
+            {.binding = "process-picker", .label = "Find process", .family = "process", .command = "list"},
+            {.binding = "process-terminate", .label = "Terminate process", .family = "process", .command = "signal"},
+            {.binding = "process-kill", .label = "Kill process", .family = "process", .command = "signal"},
+            {.binding = "process-stop", .label = "Pause process", .family = "process", .command = "signal"},
+            {.binding = "process-continue", .label = "Resume process", .family = "process", .command = "signal"},
+            {.binding = "process-lower-priority", .label = "Lower process priority", .family = "process", .command = "renice"},
+            {.binding = "process-copy-command", .label = "Copy process command", .family = "process", .command = "get"},
+            {.binding = "process-focus-pane", .label = "Go to process pane", .family = "process", .command = "get"},
+            {.binding = "process-review-stack", .label = "Review process stack", .family = "process", .command = "review"},
+            {.binding = "process-review-files", .label = "Review process open files", .family = "process", .command = "review"},
+            {.binding = "process-review-logs", .label = "Review process logs", .family = "process", .command = "review"},
+        },
+    };
 
   }
 }
+// NOLINTEND(misc-use-internal-linkage)

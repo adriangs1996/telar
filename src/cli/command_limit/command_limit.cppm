@@ -14,6 +14,23 @@ import telar.cli.output;
 import telar.base.ds;
 import telar.base.memory.allocators;
 
+// What the integer parsers share, defined in the implementation unit that instantiates them.
+namespace telar::runtime::cli {
+
+  enum class Sign : std::uint8_t {
+    rejected,
+    accepted,
+  };
+
+  // A signed (`Sign::accepted`) or unsigned (`Sign::rejected`) integer in base
+  // 10: one optional sign, digits with inner underscores, and the error names
+  // `InvalidCharacter` and `Overflow`. An unsigned integer accepts "-0" when
+  // signs are accepted.
+  template <typename Integer>
+  Integer parseDecimal(std::string_view text, Sign sign);
+
+}
+
 // Interface: arguments.cppm
 export {
   // What every command's argument parser shares. A usage error is an
@@ -142,6 +159,9 @@ export {
 
       DescriptorWriter(const DescriptorWriter&) = delete;
       DescriptorWriter& operator=(const DescriptorWriter&) = delete;
+      DescriptorWriter(DescriptorWriter&&) = delete;
+      DescriptorWriter& operator=(DescriptorWriter&&) = delete;
+      ~DescriptorWriter() = default;
 
       template <typename... Arguments>
       TBC_GENERIC void print(std::format_string<Arguments...> format, Arguments&&... arguments) {
@@ -183,7 +203,9 @@ export {
         buffer_.atMut(used_++) = character;
       }
 
-      ds::Array<char, 4096> buffer_;
+      static constexpr std::size_t buffer_bytes = 4096;
+
+      ds::Array<char, buffer_bytes> buffer_;
       std::size_t used_ = 0;
       int descriptor_;
     };
@@ -229,7 +251,11 @@ export {
 
 template <>
 struct std::formatter<telar::runtime::cli::EscapedField, char> {
-  constexpr tbc::val_a<std::format_parse_context::iterator> parse(tbc::mut_a<std::format_parse_context> context) {
+  // The printable ASCII bytes lie between the control bytes and DEL.
+  static constexpr unsigned char first_printable = 0x20;
+  static constexpr unsigned char delete_byte = 0x7f;
+
+  static constexpr tbc::val_a<std::format_parse_context::iterator> parse(tbc::mut_a<std::format_parse_context> context) {
     return context.begin();
   }
 
@@ -237,7 +263,9 @@ struct std::formatter<telar::runtime::cli::EscapedField, char> {
   TBC_GENERIC tbc::val_a<typename Context::iterator> format(const telar::runtime::cli::EscapedField& field, tbc::mut_a<Context> context) const {
     auto output = context.out();
 
-    for (const unsigned char byte : field.text) {
+    for (const char character : field.text) {
+      const auto byte = static_cast<unsigned char>(character);
+
       switch (byte) {
       case '\n':
         output = std::format_to(output, "\\n");
@@ -249,7 +277,7 @@ struct std::formatter<telar::runtime::cli::EscapedField, char> {
         output = std::format_to(output, "\\t");
         break;
       default:
-        if (byte < 0x20 || byte == 0x7f) {
+        if (byte < first_printable || byte == delete_byte) {
           output = std::format_to(output, "\\x{:02x}", byte);
         } else {
           *output++ = static_cast<char>(byte);
@@ -275,7 +303,7 @@ struct std::formatter<telar::runtime::cli::NumberOrNull<Number>, char> {
 
 template <>
 struct std::formatter<telar::runtime::cli::LimitDescription, char> {
-  constexpr tbc::val_a<std::format_parse_context::iterator> parse(tbc::mut_a<std::format_parse_context> context) {
+  static constexpr tbc::val_a<std::format_parse_context::iterator> parse(tbc::mut_a<std::format_parse_context> context) {
     return context.begin();
   }
 

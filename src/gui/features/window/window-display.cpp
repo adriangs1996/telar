@@ -41,7 +41,7 @@ namespace telar::gui::features::window {
   }
 
   DisplayMetrics DisplayMetrics::resolve(const Configuration& configuration, Viewport logical_viewport, const CellMetrics& cells, double density) {
-    if (!std::isfinite(density) || density <= 0 || density > Viewport::maximum_scale) {
+    if (!std::isfinite(density) || density <= 0 || density > static_cast<double>(Viewport::maximum_scale)) {
       throw std::invalid_argument{"InvalidDisplayDensity"};
     }
 

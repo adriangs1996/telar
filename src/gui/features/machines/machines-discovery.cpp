@@ -60,9 +60,9 @@ namespace telar::gui::features::machines {
       return MachineError::remote_program_missing;
     case ExitStatus::ssh_failed:
       return sshFailure(result.standard_error);
-    default:
-      return MachineError::endpoint_unavailable;
     }
+
+    return MachineError::endpoint_unavailable;
   }
 
   bool MachineConnectionPolicy::permanent(MachineError error) noexcept {
@@ -78,9 +78,23 @@ namespace telar::gui::features::machines {
     case MachineError::invalid_runtime_directory:
     case MachineError::invalid_destination:
       return true;
-    default:
-      return false;
+    case MachineError::invalid_id:
+    case MachineError::invalid_label:
+    case MachineError::invalid_color:
+    case MachineError::invalid_program:
+    case MachineError::invalid_profiles:
+    case MachineError::incompatible_profiles:
+    case MachineError::too_many:
+    case MachineError::duplicate_id:
+    case MachineError::duplicate_label:
+    case MachineError::duplicate_destination:
+    case MachineError::unknown_machine:
+    case MachineError::endpoint_unavailable:
+      break;
     }
+
+    // A transient error, or one outside the enum.
+    return false;
   }
 
   bool MachineConnectionPolicy::setupRepairs(MachineError error) noexcept {
@@ -90,9 +104,29 @@ namespace telar::gui::features::machines {
     case MachineError::remote_program_incompatible:
     case MachineError::remote_runtime_incompatible:
       return true;
-    default:
-      return false;
+    case MachineError::invalid_id:
+    case MachineError::invalid_label:
+    case MachineError::invalid_destination:
+    case MachineError::invalid_color:
+    case MachineError::invalid_program:
+    case MachineError::invalid_profiles:
+    case MachineError::incompatible_profiles:
+    case MachineError::too_many:
+    case MachineError::duplicate_id:
+    case MachineError::duplicate_label:
+    case MachineError::duplicate_destination:
+    case MachineError::unknown_machine:
+    case MachineError::host_key_rejected:
+    case MachineError::authentication_failed:
+    case MachineError::endpoint_unavailable:
+    case MachineError::incompatible_schema:
+    case MachineError::runtime_already_running:
+    case MachineError::invalid_runtime_directory:
+      break;
     }
+
+    // An error setup does not repair, or one outside the enum.
+    return false;
   }
 
   std::string_view MachineProfileMessages::failure(MachineError error) {

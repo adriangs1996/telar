@@ -37,7 +37,7 @@ export {
   namespace telar::runtime::cli {
 
     struct RuntimeOptions {
-      enum class Action {
+      enum class Action : std::uint8_t {
         status,
         metrics,
         watch,

@@ -17,7 +17,7 @@ namespace telar::gui::inline foundation::inline drawing {
   }
 
   Color RoundedRectangle::sample(Point local) const noexcept {
-    if (style.radius == 0 && style.border_width == 0) {
+    if (std::equal_to<>{}(style.radius, 0.0F) && std::equal_to<>{}(style.border_width, 0.0F)) {
       return style.fill;
     }
 

@@ -17,12 +17,11 @@
 #include <string_view>
 
 #ifdef TELAR_DEBUG
+#include <algorithm>
+#include <charconv>
 #include <cstdio>
 #include <limits>
 #endif
-
-#define KILO_BYTES(x) x * 1024
-#define MEGA_BYTES(x) KILO_BYTES(x) * 1024
 
 #include "telar_base/ds/values.hpp"
 #include "telar_base/text/utf8.hpp"
@@ -33,17 +32,14 @@ namespace telar {
 
   template <std::size_t N>
   struct FixedString {
-    char value[N];
+    ds::Array<char, N> value;
 
-    constexpr FixedString(const char (&text)[N]) {
-      for (std::size_t i = 0; i < N; ++i) {
-        value[i] = text[i];
-      }
-    }
+    constexpr FixedString(const char (&text)[N]) // NOLINT(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays,cppcoreguidelines-explicit-constructor,misc-explicit-constructor): a template argument converts a string literal, a C array, to it
+        : value(ds::toArray(text)) {}
   };
 
   template <std::size_t N>
-  FixedString(const char (&text)[N]) -> FixedString<N>;
+  FixedString(const char (&text)[N]) -> FixedString<N>; // NOLINT(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays): a string literal is a C array
 
   static_assert(std::same_as<Byte, unsigned char>);
 
@@ -51,10 +47,15 @@ namespace telar {
   [[nodiscard]] std::span<const Byte> byteView(std::string_view text) noexcept;
   [[nodiscard]] std::string_view textView(std::span<const Byte> bytes) noexcept;
 
-  inline constexpr std::size_t max_payload_size = MEGA_BYTES(4);
+  inline constexpr std::size_t max_payload_size = std::size_t{4} * 1024 * 1024;
   inline constexpr std::size_t frame_prefix_size = sizeof(std::uint32_t);
 
-  enum class Direction {
+  // The printable ASCII bytes, between the control bytes and DEL.
+  inline constexpr Byte first_printable_byte = 0x20;
+  inline constexpr Byte last_printable_byte = 0x7e;
+  inline constexpr Byte delete_byte = 0x7f;
+
+  enum class Direction : std::uint8_t {
     client,
     server,
     either,
@@ -63,19 +64,43 @@ namespace telar {
 #ifdef TELAR_DEBUG
   namespace debug {
 
+    inline constexpr std::string_view hex_digits = "0123456789abcdef";
+    inline constexpr unsigned nibble_bits = 4;
+    inline constexpr unsigned low_nibble = 0x0f;
+
+    // The two lowercase hexadecimal digits of `byte`, the high one first.
+    constexpr ds::Array<char, 2> hexPair(Byte byte) noexcept {
+      return {{hex_digits[static_cast<unsigned>(byte) >> nibble_bits], hex_digits[static_cast<unsigned>(byte) & low_nibble]}};
+    }
+
+    // `byte` as a C literal, 0xNN, terminated.
+    constexpr ds::Array<char, sizeof("0x00")> byteLiteral(Byte byte) noexcept {
+      const auto digits = hexPair(byte);
+
+      return {{'0', 'x', digits[0], digits[1], '\0'}};
+    }
+
+    // The bytes between quotes, each one that is not printable as \xNN, and a terminating NUL.
     template <std::size_t N>
-    auto valueText(const ds::Array<Byte, N>& value) {
-      ds::Array<char, (N * 4) + 3> text{};
+    using BytesText = ds::Array<char, (N * 4) + 3>;
+
+    template <std::size_t N>
+    BytesText<N> valueText(const ds::Array<Byte, N>& value) {
+      BytesText<N> text{};
       std::size_t position = 0;
 
       text.atMut(position++) = '"';
 
       for (const auto byte : value) {
-        if (byte >= 0x20 && byte <= 0x7e && byte != '"' && byte != '\\') {
+        if (byte >= first_printable_byte && byte <= last_printable_byte && byte != '"' && byte != '\\') {
           text.atMut(position++) = static_cast<char>(byte);
         } else {
-          std::snprintf(text.dataMut() + position, text.size() - position, "\\x%02x", static_cast<unsigned>(byte));
-          position += 4;
+          const auto digits = hexPair(byte);
+
+          text.atMut(position++) = '\\';
+          text.atMut(position++) = 'x';
+          text.atMut(position++) = digits[0];
+          text.atMut(position++) = digits[1];
         }
       }
 
@@ -84,22 +109,37 @@ namespace telar {
       return text;
     }
 
+    inline ds::Array<char, sizeof("false")> boolText(bool value) {
+      ds::Array<char, sizeof("false")> text{};
+      const std::string_view word = value ? "true" : "false";
+
+      std::ranges::copy(word, text.viewMut().begin());
+      return text;
+    }
+
+    // The decimal digits of the largest Value, and a terminating NUL.
+    template <std::unsigned_integral Value>
+    using IntegerText = ds::Array<char, std::numeric_limits<Value>::digits10 + 2>;
+
+    template <std::unsigned_integral Value>
+    IntegerText<Value> integerText(Value value) {
+      IntegerText<Value> text{};
+      const auto digits = text.viewMut().first(text.size() - 1);
+
+      std::to_chars(std::to_address(digits.begin()), std::to_address(digits.end()), value);
+      return text;
+    }
+
     template <typename Value>
     auto valueText(Value value) {
       if constexpr (std::same_as<Value, bool>) {
-        ds::Array<char, sizeof("false")> text{};
-
-        std::snprintf(text.data(), text.size(), "%s", value ? "true" : "false");
-        return text;
+        return boolText(value);
       } else if constexpr (std::is_enum_v<Value>) {
         return valueText(static_cast<std::underlying_type_t<Value>>(value));
       } else {
         static_assert(std::unsigned_integral<Value>, "Add a formatter for this field type");
 
-        ds::Array<char, std::numeric_limits<Value>::digits10 + 2> text{};
-
-        std::snprintf(text.dataMut(), text.size(), "%llu", static_cast<unsigned long long>(value));
-        return text;
+        return integerText(value);
       }
     }
 
@@ -161,6 +201,7 @@ namespace telar {
     using value_type = T;
 
     static constexpr std::size_t width = sizeof(T);
+    static constexpr std::size_t byte_bits = 8;
 
     static void encode(T value, _changes std::span<Byte>& output) _throw(EncodingError) {
       if (output.size() < width) {
@@ -168,7 +209,7 @@ namespace telar {
       }
 
       for (std::size_t i = 0; i < width; ++i) {
-        output[i] = static_cast<Byte>(value >> (i * 8));
+        output[i] = static_cast<Byte>(value >> (i * byte_bits));
       }
 
       output = output.subspan(width);
@@ -184,7 +225,7 @@ namespace telar {
       for (std::size_t i = 0; i < width; ++i) {
         const auto byte = static_cast<T>(input[i]);
 
-        result |= byte << (i * 8);
+        result |= byte << (i * byte_bits);
       }
 
       input = input.subspan(width);
@@ -280,7 +321,7 @@ namespace telar {
   }
 
   template <typename WireCodec, typename Storage>
-  Decoded<std::remove_cvref_t<decltype(WireCodec::decode(std::declval<std::span<const Byte>&>()))>> decodeValue(DecodeInput input, Storage&) {
+  Decoded<std::remove_cvref_t<decltype(WireCodec::decode(std::declval<std::span<const Byte>&>()))>> decodeValue(DecodeInput input, Storage& /*storage*/) {
     return WireCodec::decode(input);
   }
 

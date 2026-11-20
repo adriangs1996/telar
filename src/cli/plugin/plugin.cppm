@@ -36,7 +36,7 @@ export {
 export {
   namespace telar::runtime::cli {
 
-    enum class PluginAction {
+    enum class PluginAction : std::uint8_t {
       inspect,
       install,
       trust,
@@ -76,7 +76,7 @@ export {
 export {
   namespace telar::runtime::cli {
 
-    enum class ProxyTrustAction {
+    enum class ProxyTrustAction : std::uint8_t {
       install,
       uninstall,
       status,
@@ -144,7 +144,7 @@ export {
         "plugin_get",
         "plugin_enable",
         "plugin_disable",
-        "plugin_run"
+        "plugin_run",
     };
 
     inline constexpr ds::Array<std::string_view, 4> pane_directions{"left", "right", "up", "down"};

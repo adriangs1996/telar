@@ -35,7 +35,7 @@ namespace telar::gui::inline foundation::inline core {
   }
 
   const PromptBinding* PromptBindings::end() const noexcept {
-    return entries_.data() + count_;
+    return std::to_address(entries_.view().first(count_).end());
   }
 
   bool operator==(const PromptBindings& left, const PromptBindings& right) noexcept {

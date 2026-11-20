@@ -119,7 +119,9 @@ namespace telar::gui::features::components {
   }
 
   std::string_view PickItems::text(Range range) const noexcept {
-    return {bytes_.data() + range.offset, range.length};
+    const auto chars = bytes_.view().subspan(range.offset, range.length);
+
+    return {chars.data(), chars.size()};
   }
 
   void PickMatches::collect(const PickItems& items, std::string_view query) {

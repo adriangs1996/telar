@@ -1,6 +1,7 @@
 module telar.cli.window;
 
 import telar.sys.posix;
+import telar.tbc;
 import telar.base.text.utf8;
 import telar.cli.command_limit;
 import telar.base.ds;
@@ -12,75 +13,82 @@ import telar.base.text;
 
 namespace telar::runtime::cli::window {
 
-  template <Allocator Memory>
-  static void appendJsonNumber(ds::String<Memory>& output, std::string_view encoded) {
-    if (encoded.find_first_of(".eE") == std::string_view::npos) {
-      output.append(encoded);
-      return;
-    }
+  namespace {
 
-    double value = 0;
-    const auto parsed = std::from_chars(encoded.data(), encoded.data() + encoded.size(), value);
-    if (parsed.ec == std::errc::result_out_of_range) {
-      const ds::String<Memory> terminated{output.memory(), encoded};
+    template <Allocator Memory>
+    void appendJsonNumber(ds::String<Memory>& output, std::string_view encoded) {
+      if (encoded.find_first_of(".eE") == std::string_view::npos) {
+        output.append(encoded);
+        return;
+      }
 
-      value = std::strtod(terminated.data(), nullptr);
-    }
+      double value = 0;
+      const auto parsed = std::from_chars(encoded.data(), std::to_address(encoded.end()), value);
+      if (parsed.ec == std::errc::result_out_of_range) {
+        const ds::String<Memory> terminated{output.memory(), encoded};
 
-    if (!std::isfinite(value)) {
-      output.append(encoded);
-      return;
-    }
+        // strtod reads the copy up to its NUL, and gives the infinity or denormal from_chars refuses.
+#pragma clang unsafe_buffer_usage begin
+        value = std::strtod(terminated.data(), nullptr);
+#pragma clang unsafe_buffer_usage end
+      }
 
-    constexpr std::size_t maximum_float_bytes = 64;
-    ds::Array<char, maximum_float_bytes> buffer;
-    const auto formatted = std::to_chars(buffer.dataMut(), buffer.dataMut() + buffer.size(), value);
-    const std::string_view number{buffer.data(), static_cast<std::size_t>(formatted.ptr - buffer.data())};
-    const auto exponent_at = number.find('e');
-    if (exponent_at == std::string_view::npos) {
-      output.append(number);
-      return;
-    }
+      if (!std::isfinite(value)) {
+        output.append(encoded);
+        return;
+      }
 
-    auto mantissa = number.substr(0, exponent_at);
-    auto exponent_text = number.substr(exponent_at + 1);
-    if (exponent_text.starts_with('+')) {
-      exponent_text.remove_prefix(1);
-    }
+      constexpr std::size_t maximum_float_bytes = 64;
+      ds::Array<char, maximum_float_bytes> buffer{};
+      const auto formatted = std::to_chars(buffer.dataMut(), std::to_address(buffer.viewMut().end()), value);
+      const std::string_view number{buffer.data(), static_cast<std::size_t>(formatted.ptr - buffer.data())};
+      const auto exponent_at = number.find('e');
+      if (exponent_at == std::string_view::npos) {
+        output.append(number);
+        return;
+      }
 
-    int exponent = 0;
+      auto mantissa = number.substr(0, exponent_at);
+      auto exponent_text = number.substr(exponent_at + 1);
+      if (exponent_text.starts_with('+')) {
+        exponent_text.remove_prefix(1);
+      }
 
-    std::from_chars(exponent_text.data(), exponent_text.data() + exponent_text.size(), exponent);
-    if (mantissa.starts_with('-')) {
-      output.push('-');
-      mantissa.remove_prefix(1);
-    }
+      int exponent = 0;
 
-    const auto dot = mantissa.find('.');
-    const int decimal_position = static_cast<int>(dot == std::string_view::npos ? mantissa.size() : dot) + exponent;
-    ds::String<Memory> digits{output.memory()};
+      std::from_chars(exponent_text.data(), std::to_address(exponent_text.end()), exponent);
+      if (mantissa.starts_with('-')) {
+        output.push('-');
+        mantissa.remove_prefix(1);
+      }
 
-    for (const auto byte : mantissa) {
-      if (byte != '.') {
-        digits.push(byte);
+      const auto dot = mantissa.find('.');
+      const int decimal_position = static_cast<int>(dot == std::string_view::npos ? mantissa.size() : dot) + exponent;
+      ds::String<Memory> digits{output.memory()};
+
+      for (const auto byte : mantissa) {
+        if (byte != '.') {
+          digits.push(byte);
+        }
+      }
+
+      if (decimal_position <= 0) {
+        output.append("0.");
+        output.resize(output.size() + static_cast<std::size_t>(-decimal_position), '0');
+        output.append(digits);
+      } else if (static_cast<std::size_t>(decimal_position) >= digits.size()) {
+        output.append(digits);
+        output.resize(output.size() + static_cast<std::size_t>(decimal_position) - digits.size(), '0');
+      } else {
+        output.append(std::string_view{digits.data(), static_cast<std::size_t>(decimal_position)});
+        output.push('.');
+        output.append(digits.view().substr(static_cast<std::size_t>(decimal_position)));
       }
     }
 
-    if (decimal_position <= 0) {
-      output.append("0.");
-      output.resize(output.size() + static_cast<std::size_t>(-decimal_position), '0');
-      output.append(digits);
-    } else if (static_cast<std::size_t>(decimal_position) >= digits.size()) {
-      output.append(digits);
-      output.resize(output.size() + static_cast<std::size_t>(decimal_position) - digits.size(), '0');
-    } else {
-      output.append(std::string_view{digits.data(), static_cast<std::size_t>(decimal_position)});
-      output.push('.');
-      output.append(std::string_view{digits.data() + decimal_position, digits.size() - static_cast<std::size_t>(decimal_position)});
-    }
   }
 
-  void appendJson(ds::String<Memory>& output, const JsonValue& value, bool pretty, unsigned depth) {
+  void appendJson(ds::String<Memory>& output, const JsonValue& value, bool pretty, unsigned depth) { // NOLINT(misc-no-recursion): nested values recurse at most as deep as the JsonValue's maximum_depth allows
     const auto encoded = value.encoded();
     if (encoded.starts_with('"')) {
       ds::String<Memory> text{output.memory()};
@@ -103,6 +111,7 @@ namespace telar::runtime::cli::window {
     const bool object = encoded.starts_with('{');
 
     output.push(object ? '{' : '[');
+    constexpr std::size_t indent_width = 2;
     std::size_t count = 0;
     const auto separator = [&] {
       if (count++ != 0) {
@@ -111,19 +120,19 @@ namespace telar::runtime::cli::window {
 
       if (pretty) {
         output.push('\n');
-        output.resize(output.size() + ((depth + 1) * 2), ' ');
+        output.resize(output.size() + ((std::size_t{depth} + 1) * indent_width), ' ');
       }
     };
 
     if (object) {
-      value.eachMember([&](const JsonValue& key, const JsonValue& member) {
+      value.eachMember([&](const JsonValue& key, const JsonValue& member) { // NOLINT(misc-no-recursion): bounded as appendJson is
         separator();
         appendJson(output, key, false);
         output.append(pretty ? ": " : ":");
         appendJson(output, member, pretty, depth + 1);
       });
     } else {
-      value.eachElement([&](const JsonValue& member) {
+      value.eachElement([&](const JsonValue& member) { // NOLINT(misc-no-recursion): bounded as appendJson is
         separator();
         appendJson(output, member, pretty, depth + 1);
       });
@@ -131,7 +140,7 @@ namespace telar::runtime::cli::window {
 
     if (pretty && count != 0) {
       output.push('\n');
-      output.resize(output.size() + (depth * 2), ' ');
+      output.resize(output.size() + (std::size_t{depth} * indent_width), ' ');
     }
 
     output.push(object ? '}' : ']');
@@ -141,146 +150,44 @@ namespace telar::runtime::cli::window {
 
 namespace telar::runtime::cli::machine {
 
-  SetupReport::SetupReport(Memory& memory, bool json)
-      : json(json),
-        notes(memory) {}
+  namespace {
 
-  SetupReport::Line SetupReport::bounded(std::string_view text) {
-    ds::Array<char, max_text_bytes> bytes;
-    const auto size = std::min(text.size(), max_text_bytes);
+    constexpr unsigned char first_printable = 0x20;
+    constexpr char delete_character = 0x7f;
 
-    for (std::size_t index = 0; index < size; ++index) {
-      const auto byte = text[index];
+    // What setup's steps add up to, for its last line.
+    struct Outcome {
+      bool failed = false;
+      bool pending = false;
+      bool changed = false;
+    };
 
-      bytes.atMut(index) = (static_cast<unsigned char>(byte) < 0x20 && byte != '\t') || byte == 0x7f ? ' ' : byte;
-    }
-
-    Line line;
-
-    line.assign(trimText({bytes.data(), size}, " "));
-    return line;
-  }
-
-  void SetupReport::printNotes(Step step) const {
-    for (const auto& note : notes) {
-      if (note.step == step) {
-        std::printf("      %.*s\n", static_cast<int>(note.text.view().size()), note.text.view().data());
-      }
-    }
-  }
-
-  void SetupReport::endLine(Step step, Status status, const Line& detail) {
-    const auto index = static_cast<std::size_t>(step);
-    auto& result = results.atCheckedMut(index);
-
-    result.status = status;
-    result.detail = detail;
-    if (!json) {
-      std::printf("%2zu. %-14s %-10s %.*s\n", index + 1, titles[index], statuses[static_cast<std::size_t>(status)], static_cast<int>(detail.view().size()), detail.view().data());
-      printNotes(step);
-      std::fflush(stdout);
-    }
-  }
-
-  void SetupReport::noteLine(Step step, const Line& text) {
-    if (notes.size() == max_notes) {
-      ++omitted_notes;
-      return;
-    }
-
-    notes.push(Note{.step = step, .text = text});
-    if (!json && results.atCheckedMut(static_cast<std::size_t>(step)).status) {
-      std::printf("      %.*s\n", static_cast<int>(text.view().size()), text.view().data());
-      std::fflush(stdout);
-    }
-  }
-
-  void SetupReport::progressLine(const Line& text) const {
-    if (!json) {
-      std::printf("    ... %.*s\n", static_cast<int>(text.view().size()), text.view().data());
-      std::fflush(stdout);
-    }
-  }
-
-  bool SetupReport::has(Status status) const {
-    return std::ranges::any_of(results, [&](const Result& result) {
-      return result.status == status;
-    });
-  }
-
-  int SetupReport::refuse(Memory& memory, std::string_view label, std::string_view destination, std::string_view reason) const {
-    if (!json) {
-      std::printf("telar machine setup %.*s: %.*s.\n", static_cast<int>(label.size()), label.data(), static_cast<int>(reason.size()), reason.data());
-    } else {
-      ds::String<Memory> output{memory};
-
-      output.append("{\"label\":");
-      appendJsonText(output, label, JsonEscapes::control);
-      output.append(",\"destination\":");
-      appendJsonText(output, destination, JsonEscapes::control);
-      output.append(R"(,"ready":false,"pending":false,"changed":false,"refused":)");
-      appendJsonText(output, reason, JsonEscapes::control);
-      output.append(",\"steps\":[]}\n");
-      std::fwrite(output.data(), 1, output.size(), stdout);
-    }
-
-    return 1;
-  }
-
-  int SetupReport::finish(Memory& memory, std::string_view label, std::string_view destination) const {
-    const bool failed = has(Status::failed);
-    const bool pending = has(Status::pending);
-    const bool changed = has(Status::changed);
-
-    if (!json) {
-      const auto* verdict = failed ? "is not ready; see the failed steps above" : pending ? "takes windows, but a login waits for you there; see Logins above and run setup again once it is done"
-                                                                              : changed   ? "is ready"
-                                                                                          : "was already set up; nothing changed";
-
-      std::printf("%.*s %s.\n", static_cast<int>(label.size()), label.data(), verdict);
-      return failed ? 1 : 0;
-    }
-
-    ds::String<Memory> output{memory};
-
-    output.append("{\"label\":");
-    appendJsonText(output, label, JsonEscapes::control);
-    output.append(",\"destination\":");
-    appendJsonText(output, destination, JsonEscapes::control);
-    output.append(",\"ready\":");
-    output.append(!failed && !pending ? "true" : "false");
-    output.append(",\"pending\":");
-    output.append(pending ? "true" : "false");
-    output.append(",\"changed\":");
-    output.append(changed ? "true" : "false");
-    if (omitted_notes != 0) {
-      ds::formatTo(output, ",\"omitted_notes\":{}", omitted_notes);
-    }
-
-    output.append(",\"steps\":[");
-    bool first = true;
-
-    for (std::size_t index = 0; index < results.size(); ++index) {
-      const auto& result = results[index];
-      if (!result.status) {
-        continue;
+    const char* verdict(Outcome outcome) noexcept {
+      if (outcome.failed) {
+        return "is not ready; see the failed steps above";
       }
 
-      if (!first) {
-        output.push(',');
+      if (outcome.pending) {
+        return "takes windows, but a login waits for you there; see Logins above and run setup again once it is done";
       }
 
-      first = false;
+      return outcome.changed ? "is ready" : "was already set up; nothing changed";
+    }
+
+    // The JSON object of one step that ran, with its notes.
+    void appendStepJson(ds::String<Memory>& output, const SetupReport& report, std::size_t index) {
+      const auto& result = report.results[index];
+
       output.append(R"({"step":")");
-      output.append(steps[index]);
+      output.append(SetupReport::steps[index]);
       output.append(R"(","status":")");
-      output.append(statuses[static_cast<std::size_t>(*result.status)]);
+      output.append(SetupReport::statuses[static_cast<std::size_t>(*result.status)]);
       output.append(R"(","detail":)");
       appendJsonText(output, result.detail.view(), JsonEscapes::control);
       output.append(",\"notes\":[");
       bool first_note = true;
 
-      for (const auto& note : notes) {
+      for (const auto& note : report.notes) {
         if (note.step != static_cast<Step>(index)) {
           continue;
         }
@@ -296,9 +203,141 @@ namespace telar::runtime::cli::machine {
       output.append("]}");
     }
 
+  }
+
+  SetupReport::SetupReport(Memory& memory, bool json_output)
+      : json(json_output),
+        notes(memory) {}
+
+  SetupReport::Line SetupReport::bounded(std::string_view text) {
+    ds::Array<char, max_text_bytes> bytes{};
+    const auto size = std::min(text.size(), max_text_bytes);
+
+    for (std::size_t index = 0; index < size; ++index) {
+      const auto byte = text[index];
+
+      bytes.atMut(index) = (static_cast<unsigned char>(byte) < first_printable && byte != '\t') || byte == delete_character ? ' ' : byte;
+    }
+
+    Line line;
+
+    line.assign(trimText({bytes.data(), size}, " "));
+    return line;
+  }
+
+  void SetupReport::printNotes(Step step) const {
+    for (const auto& note : notes) {
+      if (note.step == step) {
+        std::print("      {}\n", note.text.view());
+      }
+    }
+  }
+
+  void SetupReport::endLine(Step step, Status status, const Line& detail) {
+    const auto index = static_cast<std::size_t>(step);
+    auto& result = results.atCheckedMut(index);
+
+    result.status = status;
+    result.detail = detail;
+    if (!json) {
+      std::print("{:2}. {:<14} {:<10} {}\n", index + 1, titles[index], statuses[static_cast<std::size_t>(status)], detail.view());
+      printNotes(step);
+      static_cast<void>(std::fflush(stdout));
+    }
+  }
+
+  void SetupReport::noteLine(Step step, const Line& text) {
+    if (notes.size() == max_notes) {
+      ++omitted_notes;
+      return;
+    }
+
+    notes.push(Note{.step = step, .text = text});
+    if (!json && results.atCheckedMut(static_cast<std::size_t>(step)).status) {
+      std::print("      {}\n", text.view());
+      static_cast<void>(std::fflush(stdout));
+    }
+  }
+
+  void SetupReport::progressLine(const Line& text) const {
+    if (!json) {
+      std::print("    ... {}\n", text.view());
+      static_cast<void>(std::fflush(stdout));
+    }
+  }
+
+  bool SetupReport::has(Status status) const {
+    return std::ranges::any_of(results, [&](const Result& result) {
+      return result.status == status;
+    });
+  }
+
+  int SetupReport::refuse(Memory& memory, std::string_view label, std::string_view destination, std::string_view reason) const {
+    if (!json) {
+      std::print("telar machine setup {}: {}.\n", label, reason);
+    } else {
+      ds::String<Memory> output{memory};
+
+      output.append("{\"label\":");
+      appendJsonText(output, label, JsonEscapes::control);
+      output.append(",\"destination\":");
+      appendJsonText(output, destination, JsonEscapes::control);
+      output.append(R"(,"ready":false,"pending":false,"changed":false,"refused":)");
+      appendJsonText(output, reason, JsonEscapes::control);
+      output.append(",\"steps\":[]}\n");
+      std::print("{}", output.view());
+    }
+
+    return 1;
+  }
+
+  int SetupReport::finish(Memory& memory, std::string_view label, std::string_view destination) const {
+    const Outcome outcome{
+        .failed = has(Status::failed),
+        .pending = has(Status::pending),
+        .changed = has(Status::changed),
+    };
+
+    if (!json) {
+      std::print("{} {}.\n", label, verdict(outcome));
+      return outcome.failed ? 1 : 0;
+    }
+
+    ds::String<Memory> output{memory};
+
+    output.append("{\"label\":");
+    appendJsonText(output, label, JsonEscapes::control);
+    output.append(",\"destination\":");
+    appendJsonText(output, destination, JsonEscapes::control);
+    output.append(",\"ready\":");
+    output.append(!outcome.failed && !outcome.pending ? "true" : "false");
+    output.append(",\"pending\":");
+    output.append(outcome.pending ? "true" : "false");
+    output.append(",\"changed\":");
+    output.append(outcome.changed ? "true" : "false");
+    if (omitted_notes != 0) {
+      ds::formatTo(output, ",\"omitted_notes\":{}", omitted_notes);
+    }
+
+    output.append(",\"steps\":[");
+    bool first = true;
+
+    for (std::size_t index = 0; index < results.size(); ++index) {
+      if (!results[index].status) {
+        continue;
+      }
+
+      if (!first) {
+        output.push(',');
+      }
+
+      first = false;
+      appendStepJson(output, *this, index);
+    }
+
     output.append("]}\n");
-    std::fwrite(output.data(), 1, output.size(), stdout);
-    return failed ? 1 : 0;
+    std::print("{}", output.view());
+    return outcome.failed ? 1 : 0;
   }
 
 }
@@ -378,6 +417,112 @@ namespace telar::runtime::cli::window {
     return self;
   }
 
+  namespace {
+
+    // The options a notification takes at most once.
+    struct NotificationSeen {
+      bool body = false;
+      bool link = false;
+      bool level = false;
+      bool duration = false;
+      bool target = false;
+    };
+
+    // Fails with `duplicate` when the option came before, and marks it as given.
+    void once(bool& seen, const char* duplicate) {
+      if (seen) {
+        throw std::invalid_argument{duplicate};
+      }
+
+      seen = true;
+    }
+
+    NotificationLevel notificationLevel(std::string_view value) {
+      if (value == "info") {
+        return NotificationLevel::info;
+      }
+
+      if (value == "success") {
+        return NotificationLevel::success;
+      }
+
+      if (value == "warning") {
+        return NotificationLevel::warning;
+      }
+
+      if (value == "failure") {
+        return NotificationLevel::failure;
+      }
+
+      throw std::invalid_argument{"InvalidNotificationLevel"};
+    }
+
+    // A flag that names what a notification is about, with the errors of its identity.
+    struct TargetFlag {
+      std::string_view flag;
+      NotificationTarget::Kind kind;
+      const char* missing;
+      const char* invalid;
+    };
+
+    constexpr ds::Array target_flags{
+        TargetFlag{.flag = "--pane", .kind = NotificationTarget::Kind::pane, .missing = "MissingPaneId", .invalid = "InvalidPaneId"},
+        TargetFlag{.flag = "--tab", .kind = NotificationTarget::Kind::tab, .missing = "MissingTabId", .invalid = "InvalidTabId"},
+        TargetFlag{.flag = "--workspace", .kind = NotificationTarget::Kind::workspace, .missing = "MissingWorkspaceId", .invalid = "InvalidWorkspaceId"},
+    };
+
+    ds::Option<TargetFlag> targetFlag(std::string_view option) noexcept {
+      for (const auto& entry : target_flags) {
+        if (entry.flag == option) {
+          return entry;
+        }
+      }
+
+      return ds::none;
+    }
+
+    void parseDuration(NotificationBody& notification, Cursor& args) {
+      notification.duration_ms = parseUnsigned<std::uint32_t>(args.take("MissingNotificationDuration"));
+      if (notification.duration_ms < min_notification_duration_ms || notification.duration_ms > max_notification_duration_ms) {
+        throw std::invalid_argument{"InvalidNotificationDuration"};
+      }
+    }
+
+    void parseTarget(NotificationBody& notification, const TargetFlag& target, Cursor& args) {
+      notification.target.id = parseUnsigned<std::uint64_t>(args.take(target.missing));
+      if (notification.target.id == 0) {
+        throw std::invalid_argument{target.invalid};
+      }
+
+      notification.target.kind = target.kind;
+    }
+
+    // Reads the notification option `option` and its value; false when it names none.
+    bool parseNotificationOption(tbc::mut_a<NotificationBody> notification, NotificationSeen& seen, std::string_view option, Cursor& args) {
+      if (option == "--body") {
+        once(seen.body, "DuplicateNotificationBody");
+        notification.message = args.take("MissingNotificationBody");
+      } else if (option == "--link") {
+        once(seen.link, "DuplicateNotificationLink");
+        notification.link = args.take("MissingNotificationLink");
+      } else if (option == "--level") {
+        once(seen.level, "DuplicateNotificationLevel");
+        notification.level = notificationLevel(args.take("MissingNotificationLevel"));
+      } else if (option == "--duration") {
+        once(seen.duration, "DuplicateNotificationDuration");
+        parseDuration(notification, args);
+      } else if (const auto target = targetFlag(option)) {
+        once(seen.target, "ConflictingNotificationTargets");
+        parseTarget(notification, *target, args);
+      } else {
+        return false;
+      }
+
+      return true;
+    }
+
+  }
+
   NotificationOptions NotificationOptions::parse(std::span<char* const> words) {
     if (words.size() < 2 || std::string_view{words[0]} != "show") {
       throw std::invalid_argument{"MissingNotificationShow"};
@@ -391,80 +536,23 @@ namespace telar::runtime::cli::window {
     }
 
     Cursor args{words.subspan(2)};
-    bool body = false, link = false, level = false, duration = false, target = false;
+    NotificationSeen seen;
 
     while (!args.empty()) {
       const auto option = args.take("UnknownNotificationOption");
-      if (option == "--body") {
-        if (body) {
-          throw std::invalid_argument{"DuplicateNotificationBody"};
-        }
+      if (parseNotificationOption(self.notification, seen, option, args)) {
+        continue;
+      }
 
-        self.notification.message = args.take("MissingNotificationBody");
-        body = true;
-      } else if (option == "--link") {
-        if (link) {
-          throw std::invalid_argument{"DuplicateNotificationLink"};
-        }
-
-        self.notification.link = args.take("MissingNotificationLink");
-        link = true;
-      } else if (option == "--level") {
-        if (level) {
-          throw std::invalid_argument{"DuplicateNotificationLevel"};
-        }
-
-        const auto value = args.take("MissingNotificationLevel");
-        if (value == "info") {
-          self.notification.level = NotificationLevel::info;
-        } else if (value == "success") {
-          self.notification.level = NotificationLevel::success;
-        } else if (value == "warning") {
-          self.notification.level = NotificationLevel::warning;
-        } else if (value == "failure") {
-          self.notification.level = NotificationLevel::failure;
-        } else {
-          throw std::invalid_argument{"InvalidNotificationLevel"};
-        }
-
-        level = true;
-      } else if (option == "--duration") {
-        if (duration) {
-          throw std::invalid_argument{"DuplicateNotificationDuration"};
-        }
-
-        self.notification.duration_ms = parseUnsigned<std::uint32_t>(args.take("MissingNotificationDuration"));
-        if (self.notification.duration_ms < min_notification_duration_ms || self.notification.duration_ms > max_notification_duration_ms) {
-          throw std::invalid_argument{"InvalidNotificationDuration"};
-        }
-
-        duration = true;
-      } else if (option == "--pane" || option == "--tab" || option == "--workspace") {
-        if (target) {
-          throw std::invalid_argument{"ConflictingNotificationTargets"};
-        }
-
-        const auto* const missing = option == "--pane" ? "MissingPaneId" : option == "--tab" ? "MissingTabId"
-                                                                                             : "MissingWorkspaceId";
-
-        self.notification.target.id = parseUnsigned<std::uint64_t>(args.take(missing));
-        if (self.notification.target.id == 0) {
-          throw std::invalid_argument{option == "--pane" ? "InvalidPaneId" : option == "--tab" ? "InvalidTabId"
-                                                                                               : "InvalidWorkspaceId"};
-        }
-
-        self.notification.target.kind = option == "--pane" ? NotificationTarget::Kind::pane : option == "--tab" ? NotificationTarget::Kind::tab
-                                                                                                                : NotificationTarget::Kind::workspace;
-        target = true;
-      } else if (option == "--socket") {
-        if (self.socket != nullptr) {
-          throw std::invalid_argument{"DuplicateSocketOption"};
-        }
-
-        self.socket = args.take("MissingSocketPath").data();
-      } else {
+      if (option != "--socket") {
         throw std::invalid_argument{"UnknownNotificationOption"};
       }
+
+      if (self.socket != nullptr) {
+        throw std::invalid_argument{"DuplicateSocketOption"};
+      }
+
+      self.socket = args.take("MissingSocketPath").data();
     }
 
     return self;

@@ -18,9 +18,9 @@ namespace telar::gui::inline foundation::inline text {
     }
 
     if (path.size() != 1 || !path_separators.contains(path.front())) {
-      const auto separator = path.find_last_of(path_separators);
-      if (separator != std::string_view::npos && separator + 1 < path.size()) {
-        path.remove_prefix(separator + 1);
+      const auto last_separator = path.find_last_of(path_separators);
+      if (last_separator != std::string_view::npos && last_separator + 1 < path.size()) {
+        path.remove_prefix(last_separator + 1);
       }
     }
 
@@ -56,12 +56,13 @@ namespace telar::gui::inline foundation::inline text {
     const auto directory = directoryName(content.directory);
     const auto length = directory.size() + separator.size() + application.size();
     if (directory.empty() || length > storage.size()) {
-      return application;
+      return std::string_view{application};
     }
 
-    std::memcpy(storage.dataMut(), directory.data(), directory.size());
-    std::memcpy(storage.dataMut() + directory.size(), separator.data(), separator.size());
-    std::memcpy(storage.dataMut() + directory.size() + separator.size(), application.data(), application.size());
+    auto out = std::ranges::copy(directory, storage.viewMut().begin()).out;
+
+    out = std::ranges::copy(separator, out).out;
+    std::ranges::copy(application, out);
 
     return {storage.data(), length};
   }

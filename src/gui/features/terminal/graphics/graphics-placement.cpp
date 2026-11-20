@@ -131,7 +131,7 @@ namespace telar::gui::features::terminal::graphics {
       return 0;
     }
 
-    const auto pixels = std::round(static_cast<double>(logical) * scale);
+    const auto pixels = std::round(static_cast<double>(logical) * static_cast<double>(scale));
     const auto bounded = std::clamp(pixels, 0.0, static_cast<double>(std::numeric_limits<std::uint32_t>::max()));
 
     return static_cast<std::uint32_t>(bounded);

@@ -35,8 +35,8 @@ namespace telar::gui::features::terminal::input {
       return {};
     }
 
-    const auto columns = std::min(static_cast<double>(view.columns), std::floor(static_cast<double>(surface.content.width) / surface.cell.x));
-    const auto rows = std::min(static_cast<double>(view.rows), std::floor(static_cast<double>(surface.content.height) / surface.cell.y));
+    const auto columns = std::min(static_cast<double>(view.columns), std::floor(static_cast<double>(surface.content.width) / static_cast<double>(surface.cell.x)));
+    const auto rows = std::min(static_cast<double>(view.rows), std::floor(static_cast<double>(surface.content.height) / static_cast<double>(surface.cell.y)));
     if (columns < 1 || rows < 1 || (view.protocol.pixels && (view.cell_width_px == 0 || view.cell_height_px == 0))) {
       return {};
     }
@@ -47,12 +47,12 @@ namespace telar::gui::features::terminal::input {
       button |= motion;
     }
 
-    const auto scale_x = view.protocol.pixels ? surface.scale : 1 / static_cast<double>(surface.cell.x);
-    const auto scale_y = view.protocol.pixels ? surface.scale : 1 / static_cast<double>(surface.cell.y);
+    const auto scale_x = view.protocol.pixels ? static_cast<double>(surface.scale) : 1 / static_cast<double>(surface.cell.x);
+    const auto scale_y = view.protocol.pixels ? static_cast<double>(surface.scale) : 1 / static_cast<double>(surface.cell.y);
     const auto width = static_cast<unsigned>(columns * (view.protocol.pixels ? view.cell_width_px : 1));
     const auto height = static_cast<unsigned>(rows * (view.protocol.pixels ? view.cell_height_px : 1));
 
-    return ChildMouseReport{.button = button, .x = coordinate((sample.position.x - surface.content.x) * scale_x, width), .y = coordinate((sample.position.y - surface.content.y) * scale_y, height), .released = sample.phase == MousePhase::release};
+    return ChildMouseReport{.button = button, .x = coordinate(static_cast<double>(sample.position.x - surface.content.x) * scale_x, width), .y = coordinate(static_cast<double>(sample.position.y - surface.content.y) * scale_y, height), .released = sample.phase == MousePhase::release};
   }
 
   bool ChildMouseProjection::valid(const TerminalSurface& surface) noexcept {

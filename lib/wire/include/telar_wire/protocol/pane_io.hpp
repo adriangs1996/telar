@@ -17,13 +17,17 @@ namespace telar {
   struct MessageSchema<OpenPane>
       : Schema<Direction::client, ClientTag::open_pane, Field<&OpenPane::request_id, NonzeroU64, "request_id">, Field<&OpenPane::target, ValueCodec<PaneTarget>, "target">, Field<&OpenPane::size, ValueCodec<TerminalSize>, "size">, ContextField<&OpenPane::launch, &OpenPane::target, TargetLaunch, "launch">> {};
 
+  // The bytes one message types into a pane, and the text one sends it.
+  inline constexpr std::size_t max_pane_input_bytes = 65536;
+  inline constexpr std::size_t max_pane_text_bytes = 65536;
+
   struct PaneInput {
     std::uint64_t pane_id{};
     std::span<const Byte> bytes;
   };
 
   template <>
-  struct MessageSchema<PaneInput> : Schema<Direction::client, ClientTag::pane_input, Field<&PaneInput::pane_id, NonzeroU64, "pane_id">, Field<&PaneInput::bytes, TailBytes<65536, 1>, "bytes">> {
+  struct MessageSchema<PaneInput> : Schema<Direction::client, ClientTag::pane_input, Field<&PaneInput::pane_id, NonzeroU64, "pane_id">, Field<&PaneInput::bytes, TailBytes<max_pane_input_bytes, 1>, "bytes">> {
   };
 
   // A command telar's editor runs at the shell's prompt. The runtime types it there, as one
@@ -35,7 +39,7 @@ namespace telar {
   };
 
   template <>
-  struct MessageSchema<PaneCommand> : Schema<Direction::client, ClientTag::pane_command, Field<&PaneCommand::pane_id, NonzeroU64, "pane_id">, Field<&PaneCommand::text, TailBytes<65536, 1>, "text">> {
+  struct MessageSchema<PaneCommand> : Schema<Direction::client, ClientTag::pane_command, Field<&PaneCommand::pane_id, NonzeroU64, "pane_id">, Field<&PaneCommand::text, TailBytes<max_pane_input_bytes, 1>, "text">> {
   };
 
   // Whether this client draws telar's editor in place of the shell's prompt. The shells of the
@@ -126,7 +130,7 @@ namespace telar {
 
   template <>
   struct MessageSchema<SendPaneText>
-      : Schema<Direction::client, ClientTag::send_pane_text, Field<&SendPaneText::request_id, NonzeroU64, "request_id">, Field<&SendPaneText::pane_id, NonzeroU64, "pane_id">, Field<&SendPaneText::pane_generation, u64, "pane_generation">, Field<&SendPaneText::mode, EnumByte<PaneTextMode, 2>, "mode">, Field<&SendPaneText::text, Text32<65536>, "text">, Field<&SendPaneText::sender, OptionalValue<NonzeroU64>, "sender">> {};
+      : Schema<Direction::client, ClientTag::send_pane_text, Field<&SendPaneText::request_id, NonzeroU64, "request_id">, Field<&SendPaneText::pane_id, NonzeroU64, "pane_id">, Field<&SendPaneText::pane_generation, u64, "pane_generation">, Field<&SendPaneText::mode, EnumByte<PaneTextMode, 2>, "mode">, Field<&SendPaneText::text, Text32<max_pane_text_bytes>, "text">, Field<&SendPaneText::sender, OptionalValue<NonzeroU64>, "sender">> {};
 
   // A client's theme as RGB triples. Programs in a pane read the terminal's part (foreground,
   // background, cursor and the 16 ANSI colors) through OSC 4, 10, 11 and 12; `telar pane theme`
@@ -136,13 +140,15 @@ namespace telar {
   struct TerminalTheme {
     static constexpr std::size_t syntax_roles = 15;
     static constexpr std::size_t chrome_roles = 16;
-    static constexpr std::uint16_t syntax_mask = (1u << syntax_roles) - 1;
+    static constexpr std::uint16_t syntax_mask = (1U << syntax_roles) - 1;
+    // The 16 ANSI colors, three bytes each.
+    static constexpr std::size_t palette_bytes = 48;
     static constexpr ds::Array<std::string_view, syntax_roles> syntax_names{"plain", "keyword", "string", "number", "comment", "constant", "builtin_constant", "builtin", "func", "type", "parameter", "property", "namespace", "operator", "punctuation"};
     static constexpr ds::Array<std::string_view, chrome_roles> chrome_names{"accent", "panel_bg", "surface0", "surface1", "surface_dim", "overlay0", "overlay1", "text", "subtext0", "mauve", "green", "yellow", "red", "blue", "teal", "peach"};
 
     ds::Option<ds::Array<Byte, 3>> foreground;
     ds::Option<ds::Array<Byte, 3>> background;
-    ds::Option<ds::Array<Byte, 48>> palette;
+    ds::Option<ds::Array<Byte, palette_bytes>> palette;
     ds::Option<ds::Array<Byte, 3>> cursor;
     ds::Option<ds::Array<Byte, syntax_roles * 3>> syntax;
     std::uint16_t syntax_italic{};
@@ -162,7 +168,7 @@ namespace telar {
       : Serializer<
             Field<&TerminalTheme::foreground, OptionalValue<FixedBytes<3>>, "foreground">,
             Field<&TerminalTheme::background, OptionalValue<FixedBytes<3>>, "background">,
-            Field<&TerminalTheme::palette, OptionalValue<FixedBytes<48>>, "palette">,
+            Field<&TerminalTheme::palette, OptionalValue<FixedBytes<TerminalTheme::palette_bytes>>, "palette">,
             Field<&TerminalTheme::cursor, OptionalValue<FixedBytes<3>>, "cursor">,
             Field<&TerminalTheme::syntax, OptionalValue<FixedBytes<TerminalTheme::syntax_roles * 3>>, "syntax">,
             Field<&TerminalTheme::syntax_italic, BoundedInteger<u16, 0, TerminalTheme::syntax_mask>, "syntax_italic">,
@@ -207,7 +213,7 @@ namespace telar {
     ds::Option<ds::Array<Byte, 3>> foreground;
     ds::Option<ds::Array<Byte, 3>> background;
     ds::Option<ds::Array<Byte, 3>> cursor;
-    ds::Option<ds::Array<Byte, 48>> palette;
+    ds::Option<ds::Array<Byte, TerminalTheme::palette_bytes>> palette;
 
     void validate() const;
 
@@ -216,7 +222,7 @@ namespace telar {
 
   template <>
   struct MessageSchema<ConfigurePaneDesktop>
-      : Schema<Direction::client, ClientTag::configure_pane_desktop, Field<&ConfigurePaneDesktop::pane_id, NonzeroU64, "pane_id">, Field<&ConfigurePaneDesktop::pane_generation, NonzeroU64, "pane_generation">, Field<&ConfigurePaneDesktop::visible, BoolByte, "visible">, Field<&ConfigurePaneDesktop::focused, BoolByte, "focused">, Field<&ConfigurePaneDesktop::light, BoolByte, "light">, Field<&ConfigurePaneDesktop::clipboard, BoolByte, "clipboard">, Field<&ConfigurePaneDesktop::foreground, OptionalValue<FixedBytes<3>>, "foreground">, Field<&ConfigurePaneDesktop::background, OptionalValue<FixedBytes<3>>, "background">, Field<&ConfigurePaneDesktop::cursor, OptionalValue<FixedBytes<3>>, "cursor">, Field<&ConfigurePaneDesktop::palette, OptionalValue<FixedBytes<48>>, "palette">> {};
+      : Schema<Direction::client, ClientTag::configure_pane_desktop, Field<&ConfigurePaneDesktop::pane_id, NonzeroU64, "pane_id">, Field<&ConfigurePaneDesktop::pane_generation, NonzeroU64, "pane_generation">, Field<&ConfigurePaneDesktop::visible, BoolByte, "visible">, Field<&ConfigurePaneDesktop::focused, BoolByte, "focused">, Field<&ConfigurePaneDesktop::light, BoolByte, "light">, Field<&ConfigurePaneDesktop::clipboard, BoolByte, "clipboard">, Field<&ConfigurePaneDesktop::foreground, OptionalValue<FixedBytes<3>>, "foreground">, Field<&ConfigurePaneDesktop::background, OptionalValue<FixedBytes<3>>, "background">, Field<&ConfigurePaneDesktop::cursor, OptionalValue<FixedBytes<3>>, "cursor">, Field<&ConfigurePaneDesktop::palette, OptionalValue<FixedBytes<TerminalTheme::palette_bytes>>, "palette">> {};
 
   struct VerifyPaneDescent {
     std::uint64_t request_id{};
@@ -228,13 +234,17 @@ namespace telar {
   struct MessageSchema<VerifyPaneDescent>
       : Schema<Direction::client, ClientTag::verify_pane_descent, Field<&VerifyPaneDescent::request_id, NonzeroU64, "request_id">, Field<&VerifyPaneDescent::pane_id, NonzeroU64, "pane_id">, Field<&VerifyPaneDescent::pane_generation, u64, "pane_generation">> {};
 
+  // Between a frame at 240 Hz and one at 30 Hz.
   struct ConfigureFrameInterval {
+    static constexpr std::uint64_t minimum_interval_ns = std::uint64_t{1'000'000'000} / 240;
+    static constexpr std::uint64_t maximum_interval_ns = std::uint64_t{1'000'000'000} / 30;
+
     std::uint64_t interval_ns{};
   };
 
   template <>
   struct MessageSchema<ConfigureFrameInterval>
-      : Schema<Direction::client, ClientTag::configure_frame_interval, Field<&ConfigureFrameInterval::interval_ns, BoundedInteger<u64, 1000000000 / 240, 1000000000 / 30>, "interval_ns">> {};
+      : Schema<Direction::client, ClientTag::configure_frame_interval, Field<&ConfigureFrameInterval::interval_ns, BoundedInteger<u64, ConfigureFrameInterval::minimum_interval_ns, ConfigureFrameInterval::maximum_interval_ns>, "interval_ns">> {};
 
   struct PaneOpened {
     std::uint64_t request_id{};
@@ -277,11 +287,13 @@ namespace telar {
   };
 
   template <>
-  struct MessageSchema<PaneCwd> : Schema<Direction::server, ServerTag::pane_cwd, Field<&PaneCwd::pane_id, NonzeroU64, "pane_id">, Field<&PaneCwd::cwd, Text16<4096, false>, "cwd">> {};
+  struct MessageSchema<PaneCwd> : Schema<Direction::server, ServerTag::pane_cwd, Field<&PaneCwd::pane_id, NonzeroU64, "pane_id">, Field<&PaneCwd::cwd, Text16<max_path_bytes, false>, "cwd">> {};
 
   template <>
   struct MessageSchema<PaneForeground>
-      : Schema<Direction::server, ServerTag::pane_foreground, Field<&PaneForeground::pane_id, NonzeroU64, "pane_id">, Field<&PaneForeground::name, Text16<48, false>, "name">> {};
+      : Schema<Direction::server, ServerTag::pane_foreground, Field<&PaneForeground::pane_id, NonzeroU64, "pane_id">, Field<&PaneForeground::name, Text16<max_foreground_bytes, false>, "name">> {};
+
+  inline constexpr std::size_t max_pane_title_bytes = 256;
 
   struct PaneTitle {
     std::uint64_t pane_id{};
@@ -289,7 +301,7 @@ namespace telar {
   };
 
   template <>
-  struct MessageSchema<PaneTitle> : Schema<Direction::server, ServerTag::pane_title, Field<&PaneTitle::pane_id, NonzeroU64, "pane_id">, Field<&PaneTitle::title, Text16<256>, "title">> {};
+  struct MessageSchema<PaneTitle> : Schema<Direction::server, ServerTag::pane_title, Field<&PaneTitle::pane_id, NonzeroU64, "pane_id">, Field<&PaneTitle::title, Text16<max_pane_title_bytes>, "title">> {};
 
   struct PaneProgress {
     std::uint64_t pane_id{};
@@ -306,6 +318,9 @@ namespace telar {
   // What a native command editor needs to decide who gets the keyboard: whether the pane's
   // integrated shell is reading a command, and how the terminal's line discipline is set
   // for the program that is not. The control characters are 0 when disabled.
+  // The longest host name DNS allows.
+  inline constexpr std::size_t max_host_bytes = 255;
+
   struct PaneShell {
     std::uint64_t pane_id{};
     IntegratedShell shell{};
@@ -341,10 +356,12 @@ namespace telar {
 
   template <>
   struct MessageSchema<PaneShell>
-      : Schema<Direction::server, ServerTag::pane_shell, Field<&PaneShell::pane_id, NonzeroU64, "pane_id">, Field<&PaneShell::shell, EnumByte<IntegratedShell, 3>, "shell">, Field<&PaneShell::phase, EnumByte<ShellPhase, 2>, "phase">, Field<&PaneShell::shell_foreground, BoolByte, "shell_foreground">, Field<&PaneShell::canonical, BoolByte, "canonical">, Field<&PaneShell::echo, BoolByte, "echo">, Field<&PaneShell::signal_keys, BoolByte, "signal_keys">, Field<&PaneShell::interrupt, u8, "interrupt">, Field<&PaneShell::quit, u8, "quit">, Field<&PaneShell::suspend, u8, "suspend">, Field<&PaneShell::end_of_file, u8, "end_of_file">, Field<&PaneShell::commands, u32, "commands">, Field<&PaneShell::status, i32, "status">, Field<&PaneShell::remote, BoolByte, "remote">, Field<&PaneShell::host, DisplayText16<255>, "host">, Field<&PaneShell::link_ms, u32, "link_ms">, Field<&PaneShell::directory, DisplayText16<4096>, "directory">> {};
+      : Schema<Direction::server, ServerTag::pane_shell, Field<&PaneShell::pane_id, NonzeroU64, "pane_id">, Field<&PaneShell::shell, EnumByte<IntegratedShell, 3>, "shell">, Field<&PaneShell::phase, EnumByte<ShellPhase, 2>, "phase">, Field<&PaneShell::shell_foreground, BoolByte, "shell_foreground">, Field<&PaneShell::canonical, BoolByte, "canonical">, Field<&PaneShell::echo, BoolByte, "echo">, Field<&PaneShell::signal_keys, BoolByte, "signal_keys">, Field<&PaneShell::interrupt, u8, "interrupt">, Field<&PaneShell::quit, u8, "quit">, Field<&PaneShell::suspend, u8, "suspend">, Field<&PaneShell::end_of_file, u8, "end_of_file">, Field<&PaneShell::commands, u32, "commands">, Field<&PaneShell::status, i32, "status">, Field<&PaneShell::remote, BoolByte, "remote">, Field<&PaneShell::host, DisplayText16<max_host_bytes>, "host">, Field<&PaneShell::link_ms, u32, "link_ms">, Field<&PaneShell::directory, DisplayText16<max_path_bytes>, "directory">> {};
 
   // The git repository an integrated shell's working directory is in, read by the runtime after
   // each command. Counts the native reader could not establish are flagged unknown.
+  inline constexpr std::size_t max_git_branch_bytes = 256;
+
   struct PaneGit {
     std::uint64_t pane_id{};
     bool repository = false;
@@ -363,6 +380,6 @@ namespace telar {
 
   template <>
   struct MessageSchema<PaneGit>
-      : Schema<Direction::server, ServerTag::pane_git, Field<&PaneGit::pane_id, NonzeroU64, "pane_id">, Field<&PaneGit::repository, BoolByte, "repository">, Field<&PaneGit::detached, BoolByte, "detached">, Field<&PaneGit::branch, DisplayText16<256>, "branch">, Field<&PaneGit::divergence_known, BoolByte, "divergence_known">, Field<&PaneGit::ahead, u32, "ahead">, Field<&PaneGit::behind, u32, "behind">, Field<&PaneGit::changes_known, BoolByte, "changes_known">, Field<&PaneGit::staged, u32, "staged">, Field<&PaneGit::unstaged, u32, "unstaged">, Field<&PaneGit::conflicted, u32, "conflicted">> {};
+      : Schema<Direction::server, ServerTag::pane_git, Field<&PaneGit::pane_id, NonzeroU64, "pane_id">, Field<&PaneGit::repository, BoolByte, "repository">, Field<&PaneGit::detached, BoolByte, "detached">, Field<&PaneGit::branch, DisplayText16<max_git_branch_bytes>, "branch">, Field<&PaneGit::divergence_known, BoolByte, "divergence_known">, Field<&PaneGit::ahead, u32, "ahead">, Field<&PaneGit::behind, u32, "behind">, Field<&PaneGit::changes_known, BoolByte, "changes_known">, Field<&PaneGit::staged, u32, "staged">, Field<&PaneGit::unstaged, u32, "unstaged">, Field<&PaneGit::conflicted, u32, "conflicted">> {};
 
 } // namespace telar

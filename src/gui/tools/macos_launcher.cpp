@@ -23,6 +23,8 @@ namespace {
   bool adoptHome(telar::SystemAllocator& memory, const char* const* environment) {
     constexpr std::string_view prefix = "HOME=";
 
+    // The C runtime's environment is an array that ends at a null entry, with no length to bound it.
+#pragma clang unsafe_buffer_usage begin
     for (const auto* entry = environment; *entry != nullptr; ++entry) {
       const std::string_view value{*entry};
       if (value.starts_with(prefix)) {
@@ -31,6 +33,7 @@ namespace {
         return ::chdir(home.data()) == 0;
       }
     }
+#pragma clang unsafe_buffer_usage end
 
     return true;
   }
@@ -39,7 +42,7 @@ namespace {
     telar::ds::Array<char, PATH_MAX> path{};
     auto size = static_cast<std::uint32_t>(path.size());
     if (_NSGetExecutablePath(path.dataMut(), &size) != 0) {
-      static_cast<void>(std::fputs("Telar C++: cannot locate application bundle\n", stderr));
+      std::cerr << "Telar C++: cannot locate application bundle\n";
 
       return EXIT_FAILURE;
     }
@@ -91,7 +94,12 @@ int main(int argc, char** argv, char* const* environment) {
   try {
     telar::SystemAllocator memory;
 
-    return launch(memory, {argv, static_cast<std::size_t>(argc)}, environment);
+    // main receives its arguments as the C array and count the C runtime gives it.
+#pragma clang unsafe_buffer_usage begin
+    const std::span<char*> input{argv, static_cast<std::size_t>(argc)};
+#pragma clang unsafe_buffer_usage end
+
+    return launch(memory, input, environment);
   } catch (const std::exception& error) {
     std::cerr << "Telar C++: " << error.what() << '\n';
 

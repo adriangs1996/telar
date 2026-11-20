@@ -31,9 +31,13 @@ namespace telar::gui::inline foundation::inline agents {
       return "\u2b22";
     case AgentProvider::opencode:
       return "\u25a3";
-    default:
-      return "?";
+    case AgentProvider::unknown:
+    case AgentProvider::last_custom:
+      break;
     }
+
+    // A custom provider's number has no enumerator of its own.
+    return "?";
   }
 
   tbc::val_a<std::string_view> AgentCardLabels::project(tbc::val_a<std::string_view> workspace, tbc::val_a<std::string_view> machine, bool coordinator, tbc::mut_a<Project> storage) {

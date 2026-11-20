@@ -26,6 +26,11 @@ namespace telar::gui::platform {
     read_failed,
   };
 
+  // Header-only, as both platforms' sources, the pipe module and their tests throw or catch it; a
+  // key function out of line would need a unit all of them link.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wweak-vtables"
+
   class ClipboardImageFailure final : public std::exception {
   public:
     explicit ClipboardImageFailure(ClipboardImageError code) noexcept
@@ -59,6 +64,8 @@ namespace telar::gui::platform {
   private:
     ClipboardImageError code_;
   };
+
+#pragma clang diagnostic pop
 
   // Snapshot on the GUI thread; materialize and encode on one joined worker.
   // The source retains native clipboard ownership without retaining a window.

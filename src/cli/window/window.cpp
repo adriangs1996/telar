@@ -22,202 +22,181 @@ import telar.tls;
 import telar.base.text.utf8;
 import telar.cli.command_limit;
 import telar.base.ds;
+import telar.base.text;
 
 namespace telar::runtime::cli::window {
 
   using Text = ds::String<Memory>;
   using Session = ControlSession;
-  constexpr std::size_t memory_budget = 32 * 1024 * 1024;
+  constexpr std::size_t memory_budget = std::size_t{32} * 1024 * 1024;
   constexpr unsigned receive_timeout = 30;
   constexpr std::size_t maximum_command_text = 4096;
 
-  static constexpr const char* statusName(ClientCommandStatus status) {
-    switch (status) {
-    case ClientCommandStatus::applied:
-      return "applied";
-    case ClientCommandStatus::admitted:
-      return "admitted";
-    case ClientCommandStatus::failed:
-      return "failed";
-    case ClientCommandStatus::request:
+  constexpr int timeout_status = 3;
+  constexpr unsigned char first_printable = 0x20;
+  constexpr unsigned char delete_character = 0x7f;
+
+  namespace {
+
+    constexpr const char* statusName(ClientCommandStatus status) {
+      switch (status) {
+      case ClientCommandStatus::applied:
+        return "applied";
+      case ClientCommandStatus::admitted:
+        return "admitted";
+      case ClientCommandStatus::failed:
+        return "failed";
+      case ClientCommandStatus::request:
+        return "request";
+      }
+
       return "request";
     }
 
-    return "request";
-  }
+    void number(Text& output, std::uint64_t value) {
+      ds::Array<char, std::numeric_limits<std::uint64_t>::digits10 + 2> buffer{};
+      const char* const end = std::to_chars(buffer.dataMut(), std::to_address(buffer.viewMut().end()), value).ptr;
 
-  static void number(Text& output, std::uint64_t value) {
-    ds::Array<char, std::numeric_limits<std::uint64_t>::digits10 + 2> buffer;
-    const char* const end = std::to_chars(buffer.dataMut(), buffer.dataMut() + buffer.size(), value).ptr;
-
-    output.append(std::string_view{buffer.data(), end});
-  }
-
-  static void signedNumber(Text& output, std::int64_t value) {
-    ds::Array<char, std::numeric_limits<std::int64_t>::digits10 + 3> buffer;
-    const char* const end = std::to_chars(buffer.dataMut(), buffer.dataMut() + buffer.size(), value).ptr;
-
-    output.append(std::string_view{buffer.data(), end});
-  }
-
-  static void descriptor(Text& output, const ClientDescriptor& entry, bool json) {
-    if (json) {
-      output.append("{\"id\":");
-      number(output, entry.id);
-      output.append(",\"generation\":");
-      number(output, entry.generation);
-      output.append(",\"identity\":");
-      number(output, entry.identity);
-      output.append(",\"attachments\":");
-      number(output, entry.attachments);
-      output.append(",\"last_input_pane\":");
-      number(output, entry.last_input_pane);
-      output.append(",\"last_input_sequence\":");
-      number(output, entry.last_input_sequence);
-      output.push('}');
-    } else {
-      number(output, entry.id);
-      output.push('\t');
-      number(output, entry.generation);
-      output.push('\t');
-      number(output, entry.identity);
-      output.push('\t');
-      number(output, entry.attachments);
-      output.push('\t');
-      number(output, entry.last_input_pane);
-      output.push('\n');
-    }
-  }
-
-  static void clients(Session& session, const ClientOptions& options, Text& output) {
-    const auto list = session.exchange<ClientList>(QueryClients{});
-
-    if (options.action == ClientOptions::Action::list) {
-      output.append(options.json ? "[" : "CLIENT\tGENERATION\tIDENTITY\tATTACHMENTS\tLAST INPUT PANE\n");
-      bool first = true;
-
-      for (const auto& entry : list.entries) {
-        if (options.json && !first) {
-          output.push(',');
-        }
-
-        descriptor(output, entry, options.json);
-        first = false;
-      }
-
-      if (options.json) {
-        output.append("]\n");
-      }
-
-      return;
+      output.append(std::string_view{buffer.data(), end});
     }
 
-    for (const auto entry : list.entries) {
-      if (entry.id != options.target) {
-        continue;
-      }
+    void signedNumber(Text& output, std::int64_t value) {
+      ds::Array<char, std::numeric_limits<std::int64_t>::digits10 + 3> buffer{};
+      const char* const end = std::to_chars(buffer.dataMut(), std::to_address(buffer.viewMut().end()), value).ptr;
 
-      if (options.action == ClientOptions::Action::detach) {
-        session.exchange<RequestCompleted>(DetachClient{
-            .client_id = entry.id,
-            .client_generation = entry.generation,
-        });
+      output.append(std::string_view{buffer.data(), end});
+    }
 
-        if (options.json) {
-          output.append("{\"id\":");
-          number(output, entry.id);
-          output.append(",\"generation\":");
-          number(output, entry.generation);
-          output.append(",\"detached\":true}\n");
-        } else {
-          output.append("client ");
-          number(output, entry.id);
-          output.append(" detached\n");
-        }
+    void descriptor(Text& output, const ClientDescriptor& entry, bool json) {
+      if (json) {
+        output.append("{\"id\":");
+        number(output, entry.id);
+        output.append(",\"generation\":");
+        number(output, entry.generation);
+        output.append(",\"identity\":");
+        number(output, entry.identity);
+        output.append(",\"attachments\":");
+        number(output, entry.attachments);
+        output.append(",\"last_input_pane\":");
+        number(output, entry.last_input_pane);
+        output.append(",\"last_input_sequence\":");
+        number(output, entry.last_input_sequence);
+        output.push('}');
       } else {
-        descriptor(output, entry, options.json);
-        if (options.json) {
-          output.push('\n');
+        number(output, entry.id);
+        output.push('\t');
+        number(output, entry.generation);
+        output.push('\t');
+        number(output, entry.identity);
+        output.push('\t');
+        number(output, entry.attachments);
+        output.push('\t');
+        number(output, entry.last_input_pane);
+        output.push('\n');
+      }
+    }
+
+    void clients(Session& session, const ClientOptions& options, Text& output) {
+      const auto list = session.exchange<ClientList>(QueryClients{});
+
+      if (options.action == ClientOptions::Action::list) {
+        output.append(options.json ? "[" : "CLIENT\tGENERATION\tIDENTITY\tATTACHMENTS\tLAST INPUT PANE\n");
+        bool first = true;
+
+        for (const auto& entry : list.entries) {
+          if (options.json && !first) {
+            output.push(',');
+          }
+
+          descriptor(output, entry, options.json);
+          first = false;
         }
+
+        if (options.json) {
+          output.append("]\n");
+        }
+
+        return;
       }
 
-      return;
-    }
+      for (const auto entry : list.entries) {
+        if (entry.id != options.target) {
+          continue;
+        }
 
-    throw Failure{"ClientNotFound", 2};
-  }
+        if (options.action == ClientOptions::Action::detach) {
+          session.exchange<RequestCompleted>(DetachClient{
+              .client_id = entry.id,
+              .client_generation = entry.generation,
+          });
 
-  static tbc::val_a<ClientCommandResult> exchangeCommand(tbc::mut_a<Session> session, const ClientCommand& command) {
-    const auto reply = session.exchange<ClientCommandResult>(RequestClientCommand{command});
-    if (reply.route.id != command.route.id || reply.route.generation != command.route.generation || reply.action != command.action || reply.target_id != command.target_id || reply.status == ClientCommandStatus::request) {
-      throw Failure{"unexpected reply from the runtime"};
-    }
+          if (options.json) {
+            output.append("{\"id\":");
+            number(output, entry.id);
+            output.append(",\"generation\":");
+            number(output, entry.generation);
+            output.append(",\"detached\":true}\n");
+          } else {
+            output.append("client ");
+            number(output, entry.id);
+            output.append(" detached\n");
+          }
+        } else {
+          descriptor(output, entry, options.json);
+          if (options.json) {
+            output.push('\n');
+          }
+        }
 
-    return reply;
-  }
-
-  // Collect owned pages before printing: a concurrent reload must never mix generations.
-  static void plugins(Session& session, ClientCommand command, ClientCommandResult reply, Text& output) {
-    ds::Vec<Text, Memory> entries{output.memory()};
-    ds::Option<std::int64_t> generation;
-    const std::int64_t limit = command.action == ClientAction::plugin_get ? 65 : 32;
-
-    for (std::int64_t page_index = 0;; ++page_index) {
-      if (page_index >= limit || reply.status != ClientCommandStatus::applied) {
-        throw Failure{"InvalidPluginPage"};
+        return;
       }
 
-      const auto page = JsonValue::parse(reply.text);
+      throw Failure{"ClientNotFound", 2};
+    }
+
+    tbc::val_a<ClientCommandResult> exchangeCommand(tbc::mut_a<Session> session, const ClientCommand& command) {
+      const auto reply = session.exchange<ClientCommandResult>(RequestClientCommand{command});
+      if (reply.route.id != command.route.id || reply.route.generation != command.route.generation || reply.action != command.action || reply.target_id != command.target_id || reply.status == ClientCommandStatus::request) {
+        throw Failure{"unexpected reply from the runtime"};
+      }
+
+      return reply;
+    }
+
+    // The generation a plugin page names, which must be positive.
+    std::int64_t pageGeneration(const JsonValue& page) {
       const auto version = page.field("generation");
       const auto items = page.field("entries");
-      std::int64_t version_number = 0;
-
       if (!version || !items || !items->encoded().starts_with('[')) {
         throw Failure{"InvalidPluginPage"};
       }
 
-      const auto encoded = version->encoded();
-      const auto parsed = std::from_chars(encoded.data(), encoded.data() + encoded.size(), version_number);
-      if (parsed.ec != std::errc{} || parsed.ptr != encoded.data() + encoded.size() || version_number <= 0) {
+      const auto version_number = parseExact<std::int64_t>(version->encoded());
+      if (!version_number || *version_number <= 0) {
         throw Failure{"InvalidPluginPage"};
       }
 
-      if (generation && *generation != version_number) {
-        throw Failure{"StaleConfiguration"};
-      }
+      return *version_number;
+    }
 
-      generation = version_number;
+    // Keeps the one entry a plugin page holds.
+    void collectPageEntry(const JsonValue& page, ds::Vec<Text, Memory>& entries) {
       std::size_t count = 0;
 
-      items->eachElement([&](const JsonValue& item) {
+      page.field("entries")->eachElement([&](const JsonValue& item) {
         if (++count > 1) {
           throw Failure{"InvalidPluginPage"};
         }
 
-        Text entry{output.memory()};
+        Text entry{entries.memory()};
 
         appendJson(entry, item, false);
         entries.push(std::move(entry));
       });
-
-      if (reply.value == -1) {
-        break;
-      }
-
-      if (reply.value <= command.value || reply.value >= limit) {
-        throw Failure{"InvalidPluginPage"};
-      }
-
-      command.value = reply.value;
-      command.target_id = static_cast<std::uint64_t>(*generation);
-      reply = exchangeCommand(session, command);
-      if (reply.status == ClientCommandStatus::failed) {
-        std::println(stderr, "telar: {:.{}}", reply.text.data(), static_cast<int>(reply.text.size()));
-        throw Failure{"PluginQueryFailed"};
-      }
     }
 
-    if (command.action == ClientAction::plugin_get) {
+    // One plugin's object, with the actions of the pages after its own as `actions`.
+    void appendPlugin(std::span<const Text> entries, Text& output) {
       if (entries.empty() || !entries.front().view().starts_with('{')) {
         throw Failure{"InvalidPluginPage"};
       }
@@ -238,7 +217,9 @@ namespace telar::runtime::cli::window {
       }
 
       output.append("]}\n");
-    } else {
+    }
+
+    void appendPluginList(std::span<const Text> entries, Text& output) {
       output.push('[');
       for (std::size_t index = 0; index < entries.size(); ++index) {
         if (index != 0) {
@@ -250,253 +231,305 @@ namespace telar::runtime::cli::window {
 
       output.append("]\n");
     }
-  }
 
-  static int routed(Session& session, const RoutedOptions& options, Text& output) {
-    const auto list = session.exchange<ClientList>(QueryClients{});
-    const auto route = std::ranges::find(list.entries, options.client_id, &ClientDescriptor::id);
-    if (route == list.entries.end()) {
-      throw Failure{"ClientNotFound", 2};
-    }
+    // Collect owned pages before printing: a concurrent reload must never mix generations.
+    void plugins(Session& session, ClientCommand command, ClientCommandResult reply, Text& output) {
+      constexpr std::int64_t plugin_get_pages = 65;
+      constexpr std::int64_t plugin_list_pages = 32;
+      ds::Vec<Text, Memory> entries{output.memory()};
+      ds::Option<std::int64_t> generation;
+      const std::int64_t limit = command.action == ClientAction::plugin_get ? plugin_get_pages : plugin_list_pages;
 
-    if (options.text.size() > maximum_command_text) {
-      throw Failure{"InvalidClientCommandText"};
-    }
+      for (std::int64_t page_index = 0;; ++page_index) {
+        if (page_index >= limit || reply.status != ClientCommandStatus::applied) {
+          throw Failure{"InvalidPluginPage"};
+        }
 
-    try {
-      validateUtf8(options.text);
-    } catch (const EncodingError&) {
-      throw Failure{"InvalidClientCommandText"};
-    }
+        const auto page = JsonValue::parse(reply.text);
+        const auto version_number = pageGeneration(page);
+        if (generation && *generation != version_number) {
+          throw Failure{"StaleConfiguration"};
+        }
 
-    const ClientCommand command{
-        .route = {.id = route->id, .generation = route->generation},
-        .action = options.action,
-        .target_id = options.target_id,
-        .value = options.value,
-        .text = options.text,
-    };
+        generation = version_number;
+        collectPageEntry(page, entries);
+        if (reply.value == -1) {
+          break;
+        }
 
-    const auto reply = exchangeCommand(session, command);
-    if (reply.status == ClientCommandStatus::failed) {
-      std::println(stderr, "telar: {:.{}}", reply.text.data(), static_cast<int>(reply.text.size()));
-      return 1;
-    }
+        if (reply.value <= command.value || reply.value >= limit) {
+          throw Failure{"InvalidPluginPage"};
+        }
 
-    if (reply.action == ClientAction::plugin_list || reply.action == ClientAction::plugin_get) {
-      // The first page leaves the session's storage, which answering the next one reuses.
-      const Text first{output.memory(), reply.text};
-      auto page = reply;
-
-      page.text = first;
-      plugins(session, command, page, output);
-    } else if (reply.action == ClientAction::config_show) {
-      appendJson(output, JsonValue::parse(reply.text), !options.json);
-      output.push('\n');
-    } else if (reply.action == ClientAction::layout_get) {
-      if (options.json) {
-        output.append(R"({"encoding":"telar-layout-hex","data":)");
-        appendJsonText(output, reply.text, JsonEscapes::standard);
-        output.push('}');
-      } else {
-        output.append(reply.text);
+        command.value = reply.value;
+        command.target_id = static_cast<std::uint64_t>(*generation);
+        reply = exchangeCommand(session, command);
+        if (reply.status == ClientCommandStatus::failed) {
+          std::println(stderr, "telar: {:.{}}", reply.text.data(), static_cast<int>(reply.text.size()));
+          throw Failure{"PluginQueryFailed"};
+        }
       }
 
-      output.push('\n');
-    } else if (reply.action == ClientAction::sidebar_get) {
-      if (options.json) {
-        output.append(reply.text == "visible" ? R"({"visible":true,"width":)" : R"({"visible":false,"width":)");
+      if (command.action == ClientAction::plugin_get) {
+        appendPlugin(entries.view(), output);
+      } else {
+        appendPluginList(entries.view(), output);
+      }
+    }
+
+    int routed(Session& session, const RoutedOptions& options, Text& output) {
+      const auto list = session.exchange<ClientList>(QueryClients{});
+      const auto route = std::ranges::find(list.entries, options.client_id, &ClientDescriptor::id);
+      if (route == list.entries.end()) {
+        throw Failure{"ClientNotFound", 2};
+      }
+
+      if (options.text.size() > maximum_command_text) {
+        throw Failure{"InvalidClientCommandText"};
+      }
+
+      try {
+        validateUtf8(options.text);
+      } catch (const EncodingError&) {
+        throw Failure{"InvalidClientCommandText"};
+      }
+
+      const ClientCommand command{
+          .route = {.id = route->id, .generation = route->generation},
+          .action = options.action,
+          .target_id = options.target_id,
+          .value = options.value,
+          .text = options.text,
+      };
+
+      const auto reply = exchangeCommand(session, command);
+      if (reply.status == ClientCommandStatus::failed) {
+        std::println(stderr, "telar: {:.{}}", reply.text.data(), static_cast<int>(reply.text.size()));
+        return 1;
+      }
+
+      if (reply.action == ClientAction::plugin_list || reply.action == ClientAction::plugin_get) {
+        // The first page leaves the session's storage, which answering the next one reuses.
+        const Text first{output.memory(), reply.text};
+        auto page = reply;
+
+        page.text = first;
+        plugins(session, command, page, output);
+      } else if (reply.action == ClientAction::config_show) {
+        appendJson(output, JsonValue::parse(reply.text), !options.json);
+        output.push('\n');
+      } else if (reply.action == ClientAction::layout_get) {
+        if (options.json) {
+          output.append(R"({"encoding":"telar-layout-hex","data":)");
+          appendJsonText(output, reply.text, JsonEscapes::standard);
+          output.push('}');
+        } else {
+          output.append(reply.text);
+        }
+
+        output.push('\n');
+      } else if (reply.action == ClientAction::sidebar_get) {
+        if (options.json) {
+          output.append(reply.text == "visible" ? R"({"visible":true,"width":)" : R"({"visible":false,"width":)");
+          signedNumber(output, reply.value);
+          output.append("}\n");
+        } else {
+          output.append(reply.text);
+          output.push(' ');
+          signedNumber(output, reply.value);
+          output.append(" columns\n");
+        }
+      } else if (options.json) {
+        output.append("{\"client_id\":");
+        number(output, reply.route.id);
+        output.append(",\"client_generation\":");
+        number(output, reply.route.generation);
+        output.append(",\"action\":");
+        appendJsonText(output, clientActionName(reply.action), JsonEscapes::standard);
+        output.append(",\"status\":");
+        appendJsonText(output, statusName(reply.status), JsonEscapes::standard);
+        output.append(",\"target_id\":");
+        number(output, reply.target_id);
+        output.append(",\"value\":");
         signedNumber(output, reply.value);
+        output.append(",\"text\":");
+        appendJsonText(output, reply.text, JsonEscapes::standard);
         output.append("}\n");
       } else {
-        output.append(reply.text);
-        output.push(' ');
-        signedNumber(output, reply.value);
-        output.append(" columns\n");
-      }
-    } else if (options.json) {
-      output.append("{\"client_id\":");
-      number(output, reply.route.id);
-      output.append(",\"client_generation\":");
-      number(output, reply.route.generation);
-      output.append(",\"action\":");
-      appendJsonText(output, clientActionName(reply.action), JsonEscapes::standard);
-      output.append(",\"status\":");
-      appendJsonText(output, statusName(reply.status), JsonEscapes::standard);
-      output.append(",\"target_id\":");
-      number(output, reply.target_id);
-      output.append(",\"value\":");
-      signedNumber(output, reply.value);
-      output.append(",\"text\":");
-      appendJsonText(output, reply.text, JsonEscapes::standard);
-      output.append("}\n");
-    } else {
-      output.append(clientActionName(reply.action));
-      output.append(": ");
-      output.append(statusName(reply.status));
-      if (!reply.text.empty()) {
-        output.push(' ');
-        output.append(reply.text);
+        output.append(clientActionName(reply.action));
+        output.append(": ");
+        output.append(statusName(reply.status));
+        if (!reply.text.empty()) {
+          output.push(' ');
+          output.append(reply.text);
+        }
+
+        output.push('\n');
       }
 
-      output.push('\n');
+      return 0;
     }
 
-    return 0;
-  }
+    int suggest(Session& session, const SuggestionOptions& options, Text& output) {
+      const auto reply = session.exchange<CommandSuggestion>(SuggestCommand{
+          .pane_id = options.pane,
+          .text = options.text,
+      });
 
-  static int suggest(Session& session, const SuggestionOptions& options, Text& output) {
-    const auto reply = session.exchange<CommandSuggestion>(SuggestCommand{
-        .pane_id = options.pane,
-        .text = options.text,
-    });
+      constexpr ds::Array statuses{"ready", "unavailable", "timeout", "failed"};
+      const auto* const status = statuses.at(static_cast<std::size_t>(reply.status));
 
-    constexpr ds::Array statuses{"ready", "unavailable", "timeout", "failed"};
-    const auto* const status = statuses.at(static_cast<std::size_t>(reply.status));
+      if (options.json) {
+        output.append("{\"status\":");
+        appendJsonText(output, status, JsonEscapes::standard);
+        output.append(",\"command\":");
+        appendJsonText(output, reply.text, JsonEscapes::standard);
+        output.append("}\n");
+      } else if (reply.status == SuggestionStatus::ready) {
+        output.append(reply.text);
+        output.push('\n');
+      } else {
+        std::println(stderr, "telar command suggest: {}", status);
+      }
 
-    if (options.json) {
-      output.append("{\"status\":");
-      appendJsonText(output, status, JsonEscapes::standard);
-      output.append(",\"command\":");
-      appendJsonText(output, reply.text, JsonEscapes::standard);
-      output.append("}\n");
-    } else if (reply.status == SuggestionStatus::ready) {
-      output.append(reply.text);
-      output.push('\n');
-    } else {
-      std::println(stderr, "telar command suggest: {}", status);
+      if (reply.status == SuggestionStatus::ready) {
+        return 0;
+      }
+
+      return reply.status == SuggestionStatus::timeout ? timeout_status : 1;
     }
 
-    return reply.status == SuggestionStatus::ready ? 0 : reply.status == SuggestionStatus::timeout ? 3
-                                                                                                   : 1;
-  }
+    std::string_view utf8Prefix(std::string_view text, std::size_t maximum) {
+      if (text.size() <= maximum) {
+        return text;
+      }
 
-  static std::string_view utf8Prefix(std::string_view text, std::size_t maximum) {
-    if (text.size() <= maximum) {
-      return text;
+      constexpr unsigned continuation_mask = 0xc0U;
+      constexpr unsigned continuation_tag = 0x80U;
+
+      while (maximum != 0 && (static_cast<unsigned>(static_cast<unsigned char>(text[maximum])) & continuation_mask) == continuation_tag) {
+        --maximum;
+      }
+
+      return text.substr(0, maximum);
     }
 
-    while (maximum != 0 && (static_cast<unsigned char>(text[maximum]) & 0xc0) == 0x80) {
-      --maximum;
-    }
+    int notify(Session& session, NotificationBody notification) {
+      ds::Option<LimitReach> reach;
 
-    return text.substr(0, maximum);
-  }
+      if (notification.title.size() > max_notification_title_bytes) {
+        reach = LimitReach{
+            .name = "notifications.max_title_bytes",
+            .noun = "bytes",
+            .value = max_notification_title_bytes,
+            .requested = notification.title.size(),
+        };
 
-  static int notify(Session& session, NotificationBody notification) {
-    ds::Option<LimitReach> reach;
+        notification.title = utf8Prefix(notification.title, max_notification_title_bytes);
+      }
 
-    if (notification.title.size() > max_notification_title_bytes) {
-      reach = LimitReach{
-          .name = "notifications.max_title_bytes",
-          .noun = "bytes",
-          .value = max_notification_title_bytes,
-          .requested = notification.title.size(),
-      };
+      if (notification.message.size() > max_notification_message_bytes) {
+        reach = LimitReach{
+            .name = "notifications.max_message_bytes",
+            .noun = "bytes",
+            .value = max_notification_message_bytes,
+            .requested = notification.message.size(),
+        };
 
-      notification.title = utf8Prefix(notification.title, max_notification_title_bytes);
-    }
+        notification.message = utf8Prefix(notification.message, max_notification_message_bytes);
+      }
 
-    if (notification.message.size() > max_notification_message_bytes) {
-      reach = LimitReach{
-          .name = "notifications.max_message_bytes",
-          .noun = "bytes",
-          .value = max_notification_message_bytes,
-          .requested = notification.message.size(),
-      };
+      for (const auto text : {notification.title, notification.message}) {
+        try {
+          validateUtf8(text);
+        } catch (const EncodingError&) {
+          throw Failure{"InvalidUtf8"};
+        }
 
-      notification.message = utf8Prefix(notification.message, max_notification_message_bytes);
-    }
+        if (std::ranges::any_of(text, [](unsigned char byte) {
+              return byte < first_printable || byte == delete_character;
+            })) {
+          throw Failure{"InvalidNotificationText"};
+        }
+      }
 
-    for (const auto text : {notification.title, notification.message}) {
       try {
-        validateUtf8(text);
+        BodySchema<NotificationBody>::validate(notification);
       } catch (const EncodingError&) {
-        throw Failure{"InvalidUtf8"};
+        throw Failure{"InvalidNotificationLink"};
       }
 
-      if (std::ranges::any_of(text, [](unsigned char byte) {
-            return byte < 0x20 || byte == 0x7f;
-          })) {
-        throw Failure{"InvalidNotificationText"};
-      }
-    }
-
-    try {
-      BodySchema<NotificationBody>::validate(notification);
-    } catch (const EncodingError&) {
-      throw Failure{"InvalidNotificationLink"};
-    }
-
-    if (notification.link.size() > max_notification_link_bytes) {
-      throw Failure{"InvalidNotificationLink"};
-    }
-
-    const auto shown = session.exchange<NotificationShown>(ShowNotification{
-        .notification = notification,
-    });
-    if (shown.delivered_clients == 0) {
-      throw Failure{"NoNotificationClients"};
-    }
-
-    if (reach) {
-      try {
-        session.send(ReportLimit{
-            .reach = *reach,
-            .hits = 1,
-        });
-      } catch (...) {
+      if (notification.link.size() > max_notification_link_bytes) {
+        throw Failure{"InvalidNotificationLink"};
       }
 
-      std::println(stderr, "telar: Limit reached: {:.{}}: {} bytes; limit {}\nerror: NotificationTextTooLong", reach->name.data(), static_cast<int>(reach->name.size()), static_cast<unsigned long long>(*reach->requested), static_cast<unsigned long long>(reach->value));
-      return 1;
+      const auto shown = session.exchange<NotificationShown>(ShowNotification{
+          .notification = notification,
+      });
+      if (shown.delivered_clients == 0) {
+        throw Failure{"NoNotificationClients"};
+      }
+
+      if (reach) {
+        try {
+          session.send(ReportLimit{
+              .reach = *reach,
+              .hits = 1,
+          });
+        } catch (...) { // NOLINT(bugprone-empty-catch): reporting the limit is best effort; the notification was shown
+        }
+
+        std::println(stderr, "telar: Limit reached: {:.{}}: {} bytes; limit {}\nerror: NotificationTextTooLong", reach->name.data(), static_cast<int>(reach->name.size()), static_cast<unsigned long long>(*reach->requested), static_cast<unsigned long long>(reach->value));
+        return 1;
+      }
+
+      return 0;
     }
 
-    return 0;
-  }
+    const char* socketOption(const RoutedOptions& options) {
+      return options.socket;
+    }
 
-  static const char* socketOption(const RoutedOptions& options) {
-    return options.socket;
-  }
+    const char* socketOption(const ClientOptions& options) {
+      return options.socket;
+    }
 
-  static const char* socketOption(const ClientOptions& options) {
-    return options.socket;
-  }
+    const char* socketOption(const SuggestionOptions& options) {
+      return options.socket;
+    }
 
-  static const char* socketOption(const SuggestionOptions& options) {
-    return options.socket;
-  }
+    const char* socketOption(const NotificationOptions& options) {
+      return options.socket;
+    }
 
-  static const char* socketOption(const NotificationOptions& options) {
-    return options.socket;
-  }
-
-  template <typename Options, typename Execute>
-  static int connected(const Options& options, const char* prefix, Execute execute) {
-    try {
-      SystemAllocator system;
-      BudgetAllocator budget{system, memory_budget};
-      MemoryAdapter budget_memory{budget};
-      Memory& memory = budget_memory;
-      ServerOptions server;
-
-      if (const auto socket = socketOption(options)) {
-        server.socket = socket;
+    // What a failed system call reports in place of its message.
+    const char* systemErrorDescription(const SystemError& error, bool timeout) noexcept {
+      if (timeout) {
+        return "RuntimeTimeout";
       }
 
-      const RuntimePaths paths{memory, server, process_environment};
-      Session session{memory, paths.socket.data()};
-
-      session.receiveTimeout(receive_timeout);
-      Text output{memory};
-      const auto result = execute(session, output);
-
-      if (std::fwrite(output.data(), 1, output.size(), stdout) != output.size()) {
-        throw Failure{"WriteFailed"};
+      if (error.code() == ENOENT || error.code() == ECONNREFUSED) {
+        return sys::errorName(error.code());
       }
 
-      return result;
-    } catch (const Failure& error) {
+      return error.what();
+    }
+
+    // What a socket failure reports in place of its message.
+    const char* socketErrorDescription(const SocketError& error, bool timeout) noexcept {
+      if (timeout) {
+        return "RuntimeTimeout";
+      }
+
+      if (std::string_view{error.what()} == "Runtime closed the connection") {
+        return "ConnectionClosed";
+      }
+
+      return error.what();
+    }
+
+    template <typename Options>
+    int reportFailure(const Failure& error, const char* prefix) {
       if constexpr (std::is_same_v<Options, NotificationOptions>) {
         const auto* const message = std::string_view{error.what()} == "NoNotificationClients" ? "no UI client is connected" : error.what();
 
@@ -506,12 +539,12 @@ namespace telar::runtime::cli::window {
       }
 
       return error.status();
-    } catch (const ControlFailure& error) {
-      std::println(stderr, "{}{}", prefix, error.what());
-    } catch (const SystemError& error) {
+    }
+
+    template <typename Options>
+    int reportSystemError(const SystemError& error, const char* prefix) {
       const bool timeout = error.code() == EAGAIN || error.code() == ETIMEDOUT;
-      const char* description = timeout ? "RuntimeTimeout" : error.code() == ENOENT || error.code() == ECONNREFUSED ? sys::errorName(error.code())
-                                                                                                                    : error.what();
+      const char* description = systemErrorDescription(error, timeout);
 
       if constexpr (std::is_same_v<Options, NotificationOptions>) {
         if (error.code() == ENOENT || error.code() == ECONNREFUSED) {
@@ -524,40 +557,56 @@ namespace telar::runtime::cli::window {
       }
 
       std::println(stderr, "{}{}", prefix, description);
-      return timeout ? 3 : 1;
-    } catch (const SocketError& error) {
-      const std::string_view message = error.what();
-      const bool timeout = message == "Runtime receive timed out";
-      const auto* const description = timeout ? "RuntimeTimeout" : message == "Runtime closed the connection" ? "ConnectionClosed"
-                                                                                                              : error.what();
-
-      std::println(stderr, "{}{}", prefix, description);
-      return timeout ? 3 : 1;
-    } catch (const EncodingError&) {
-      std::println(stderr, "{}unexpected reply from the runtime", prefix);
-    } catch (const std::exception& error) {
-      std::println(stderr, "{}{}", prefix, error.what());
+      return timeout ? timeout_status : 1;
     }
 
-    return 1;
-  }
+    int reportSocketError(const SocketError& error, const char* prefix) {
+      const bool timeout = std::string_view{error.what()} == "Runtime receive timed out";
 
-}
+      std::println(stderr, "{}{}", prefix, socketErrorDescription(error, timeout));
+      return timeout ? timeout_status : 1;
+    }
 
-namespace telar::runtime::cli {
+    template <typename Options, typename Execute>
+    int connected(const Options& options, const char* prefix, Execute execute) {
+      try {
+        SystemAllocator system;
+        BudgetAllocator budget{system, memory_budget};
+        MemoryAdapter budget_memory{budget};
+        Memory& memory = budget_memory;
+        ServerOptions server;
 
-  int runRouted(const RoutedOptions& options) {
-    using namespace window;
+        if (const auto socket = socketOption(options)) {
+          server.socket = socket;
+        }
 
-    return connected(options, "telar: ", [&](Session& session, Text& output) {
-      return routed(session, options, output);
-    });
-  }
+        const RuntimePaths<Memory> paths{memory, server, process_environment};
+        Session session{memory, paths.socket.data()};
 
-  int runWindow(Family family, std::span<char* const> words) {
-    using namespace window;
+        session.receiveTimeout(receive_timeout);
+        Text output{memory};
+        const auto result = execute(session, output);
 
-    if (family == Family::client) {
+        writeText(output);
+        return result;
+      } catch (const Failure& error) {
+        return reportFailure<Options>(error, prefix);
+      } catch (const ControlFailure& error) {
+        std::println(stderr, "{}{}", prefix, error.what());
+      } catch (const SystemError& error) {
+        return reportSystemError<Options>(error, prefix);
+      } catch (const SocketError& error) {
+        return reportSocketError(error, prefix);
+      } catch (const EncodingError&) {
+        std::println(stderr, "{}unexpected reply from the runtime", prefix);
+      } catch (const std::exception& error) {
+        std::println(stderr, "{}{}", prefix, error.what());
+      }
+
+      return 1;
+    }
+
+    int runClient(std::span<char* const> words) {
       const auto options = ClientOptions::parse(words);
 
       return connected(options, "telar client: ", [&](Session& session, Text& output) {
@@ -566,7 +615,7 @@ namespace telar::runtime::cli {
       });
     }
 
-    if (family == Family::command) {
+    int runSuggestion(std::span<char* const> words) {
       auto options = SuggestionOptions::parse(words);
       if (options.current) {
         try {
@@ -588,7 +637,7 @@ namespace telar::runtime::cli {
       });
     }
 
-    if (family == Family::notification) {
+    int runNotification(std::span<char* const> words) {
       const auto options = NotificationOptions::parse(words);
 
       return connected(options, "telar notification: ", [&](Session& session, Text&) {
@@ -596,20 +645,54 @@ namespace telar::runtime::cli {
       });
     }
 
-    if (family == Family::config) {
-      window::ConfigCheckOptions::parse(words);
+    [[noreturn]] void runConfigCheck(std::span<char* const> words) {
+      constexpr std::size_t maximum_arguments = 8;
+
+      ConfigCheckOptions::parse(words);
       const ExecutablePath helper{"telar-config-check"};
       // The options parsed: at most a path and a profile, so the arguments fit.
-      ds::Array<char*, 8> arguments{};
+      ds::Array<char*, maximum_arguments> arguments{};
       if (words.size() + 2 > arguments.size()) {
         throw std::invalid_argument{"TooManyConfigArguments"};
       }
 
-      // execv takes char* const[] for C's sake and never writes through them.
-      arguments.atMut(0) = const_cast<char*>(helper.c_str());
+      arguments.atMut(0) = const_cast<char*>(helper.c_str()); // NOLINT(cppcoreguidelines-pro-type-const-cast): execv takes char* const[] for C's sake and never writes through them
       std::ranges::copy(words, arguments.viewMut().begin() + 1);
       ::execv(helper.c_str(), arguments.dataMut());
       throw SystemError{"Execute telar-config-check"};
+    }
+
+  }
+
+}
+
+namespace telar::runtime::cli {
+
+  int runRouted(const RoutedOptions& options) {
+    using namespace window;
+
+    return connected(options, "telar: ", [&](Session& session, Text& output) {
+      return routed(session, options, output);
+    });
+  }
+
+  int runWindow(Family family, std::span<char* const> words) {
+    using namespace window;
+
+    if (family == Family::client) {
+      return runClient(words);
+    }
+
+    if (family == Family::command) {
+      return runSuggestion(words);
+    }
+
+    if (family == Family::notification) {
+      return runNotification(words);
+    }
+
+    if (family == Family::config) {
+      runConfigCheck(words);
     }
 
     throw std::invalid_argument{words.empty() ? "MissingClientAction" : "UnknownClientAction"};

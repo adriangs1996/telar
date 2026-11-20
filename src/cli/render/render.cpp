@@ -65,194 +65,243 @@ namespace telar::runtime::cli::render_command {
     return self;
   }
 
-  static bool writeAll(int descriptor, std::string_view bytes) noexcept {
-    while (!bytes.empty()) {
-      const auto written = ::write(descriptor, bytes.data(), bytes.size());
-      if (written < 0) {
-        if (sys::lastError() == EINTR) {
-          continue;
+  namespace {
+
+    // The bits of open(2)'s flags, combined unsigned.
+    template <std::same_as<int>... Flag>
+    constexpr int combineFlags(Flag... flags) noexcept {
+      return static_cast<int>((0U | ... | static_cast<unsigned>(flags)));
+    }
+
+    bool writeAll(int descriptor, std::string_view bytes) noexcept {
+      while (!bytes.empty()) {
+        const auto written = ::write(descriptor, bytes.data(), bytes.size());
+        if (written < 0) {
+          if (sys::lastError() == EINTR) {
+            continue;
+          }
+
+          return false;
         }
 
-        return false;
+        bytes.remove_prefix(static_cast<std::size_t>(written));
       }
 
-      bytes.remove_prefix(static_cast<std::size_t>(written));
+      return true;
     }
 
-    return true;
-  }
+    // Reads all of descriptor, up to one byte past the limit so an oversized
+    // source is detected without reading the rest of it.
+    template <Allocator Memory>
+    bool readSource(int descriptor, ds::String<Memory>& source) {
+      constexpr std::size_t chunk = std::size_t{64} * 1024;
+      const auto limit = render::markdown::max_source_bytes + 1;
 
-  // Reads all of descriptor, up to one byte past the limit so an oversized
-  // source is detected without reading the rest of it.
-  template <Allocator Memory>
-  static bool readSource(int descriptor, ds::String<Memory>& source) {
-    constexpr std::size_t chunk = 64 * 1024;
-    const auto limit = render::markdown::max_source_bytes + 1;
+      while (source.size() < limit) {
+        const auto offset = source.size();
 
-    while (source.size() < limit) {
-      const auto at = source.size();
+        source.resize(std::min(offset + chunk, limit));
+        const auto free = source.viewMut().subspan(offset);
+        const auto got = ::read(descriptor, free.data(), free.size());
+        if (got < 0) {
+          source.resize(offset);
+          if (sys::lastError() == EINTR) {
+            continue;
+          }
 
-      source.resize(std::min(at + chunk, limit));
-      const auto got = ::read(descriptor, source.dataMut() + at, source.size() - at);
-      if (got < 0) {
-        source.resize(at);
-        if (sys::lastError() == EINTR) {
-          continue;
+          return false;
         }
 
-        return false;
-      }
-
-      source.resize(at + static_cast<std::size_t>(got));
-      if (got == 0) {
-        break;
-      }
-    }
-
-    return true;
-  }
-
-  static std::uint16_t terminalWidth(int descriptor) noexcept {
-    winsize size{};
-    if (::ioctl(descriptor, TIOCGWINSZ, &size) == 0 && size.ws_col != 0) {
-      return size.ws_col;
-    }
-
-    return 80;
-  }
-
-  static volatile std::sig_atomic_t stop_signal = 0;
-
-  static void onStopSignal(int signal) noexcept {
-    stop_signal = signal;
-  }
-
-  // Holds the controlling terminal in raw mode on the alternate screen, and
-  // restores both however the command ends.
-  class Viewer {
-  public:
-    explicit Viewer(int descriptor) noexcept
-        : descriptor_(descriptor) {}
-
-    Viewer(const Viewer&) = delete;
-    Viewer& operator=(const Viewer&) = delete;
-
-    ~Viewer() {
-      if (entered_) {
-        static_cast<void>(writeAll(descriptor_, "\x1b[?25h\x1b[?1049l"));
-        ::tcsetattr(descriptor_, TCSAFLUSH, &saved_);
-      }
-
-      ::close(descriptor_);
-    }
-
-    bool enter() noexcept {
-      if (::tcgetattr(descriptor_, &saved_) != 0) {
-        return false;
-      }
-
-      termios raw = saved_;
-
-      ::cfmakeraw(&raw);
-      if (::tcsetattr(descriptor_, TCSAFLUSH, &raw) != 0) {
-        return false;
-      }
-
-      entered_ = true;
-      return writeAll(descriptor_, "\x1b[?1049h\x1b[?25l\x1b[H\x1b[2J");
-    }
-
-    // Waits until the user quits: q, Escape, Ctrl-C or Ctrl-D, a hang-up or a stop signal. A
-    // blocking read, as poll() rejects /dev/tty on macOS; the signal handlers are installed
-    // without SA_RESTART, so a signal interrupts the read.
-    void wait() noexcept {
-      ds::Array<char, 64> keys;
-
-      while (stop_signal == 0) {
-        const auto got = ::read(descriptor_, keys.dataMut(), keys.size());
-        if (got < 0 && (sys::lastError() == EINTR || sys::lastError() == EAGAIN)) {
-          continue;
-        }
-
-        if (got <= 0) {
-          return;
-        }
-
-        const std::string_view typed{keys.data(), static_cast<std::size_t>(got)};
-        // A lone Escape quits; an escape sequence (an arrow key) does not.
-        if (typed == "\x1b" || typed.find_first_of("qQ\x03\x04") != std::string_view::npos) {
-          return;
+        source.resize(offset + static_cast<std::size_t>(got));
+        if (got == 0) {
+          break;
         }
       }
+
+      return true;
     }
 
-  private:
-    int descriptor_;
-    termios saved_{};
-    bool entered_ = false;
-  };
-
-  static void report(std::string_view message) noexcept {
-    std::fprintf(stderr, "telar render: %.*s\n", static_cast<int>(message.size()), message.data());
-  }
-
-  static void reportDocumentLimit() noexcept {
-    std::fprintf(stderr, "telar render: the document exceeds the %zu KiB limit render.max_document_bytes\n", render::max_document_bytes / 1024);
-  }
-
-  static bool insidePane() noexcept {
-    const char* pane = std::getenv("TELAR_PANE_ID");
-
-    return pane != nullptr && *pane != '\0';
-  }
-
-  template <Allocator Memory>
-  static int showPager(Memory& memory, const render::Document<Memory>& document, std::string_view name) {
-    const auto descriptor = ::open("/dev/tty", O_RDWR | O_CLOEXEC | O_NOCTTY);
-    if (descriptor < 0) {
-      report("native rendering needs a controlling terminal; use --format ansi");
-      return 1;
-    }
-
-    ds::String<Memory> output{memory};
-
-    // Clients that cannot show documents still show what is running.
-    output.append("\x1b[2mtelar render \xc2\xb7 ");
-    for (const char byte : name) {
-      if (static_cast<unsigned char>(byte) >= 0x20 && byte != 0x7f) {
-        output.push(byte);
+    std::uint16_t terminalWidth(int descriptor) noexcept {
+      constexpr std::uint16_t default_width = 80;
+      winsize size{};
+      if (::ioctl(descriptor, TIOCGWINSZ, &size) == 0 && size.ws_col != 0) { // NOLINT(cppcoreguidelines-pro-type-vararg): ioctl's C signature is variadic
+        return size.ws_col;
       }
+
+      return default_width;
     }
 
-    output.append(" \xc2\xb7 q to quit\x1b[0m");
-    if (!render::appendSequence(document, output)) {
-      ::close(descriptor);
-      reportDocumentLimit();
-      return 1;
+    volatile std::sig_atomic_t stop_signal = 0; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables): a signal handler reaches only a global
+
+    void onStopSignal(int signal) noexcept {
+      stop_signal = signal;
     }
 
-    Viewer viewer{descriptor};
-    struct sigaction action{};
+    // Holds the controlling terminal in raw mode on the alternate screen, and
+    // restores both however the command ends.
+    class Viewer {
+    public:
+      explicit Viewer(int descriptor) noexcept
+          : descriptor_(descriptor) {}
 
-    sys::signalHandler(action) = onStopSignal;
-    sigemptyset(&action.sa_mask);
-    for (const int signal : {SIGTERM, SIGHUP, SIGINT, SIGQUIT}) {
-      ::sigaction(signal, &action, nullptr);
+      Viewer(const Viewer&) = delete;
+      Viewer& operator=(const Viewer&) = delete;
+      Viewer(Viewer&&) = delete;
+      Viewer& operator=(Viewer&&) = delete;
+
+      ~Viewer() {
+        if (entered_) {
+          static_cast<void>(writeAll(descriptor_, "\x1b[?25h\x1b[?1049l"));
+          ::tcsetattr(descriptor_, TCSAFLUSH, &saved_);
+        }
+
+        ::close(descriptor_);
+      }
+
+      bool enter() noexcept {
+        if (::tcgetattr(descriptor_, &saved_) != 0) {
+          return false;
+        }
+
+        termios raw = saved_;
+
+        ::cfmakeraw(&raw);
+        if (::tcsetattr(descriptor_, TCSAFLUSH, &raw) != 0) {
+          return false;
+        }
+
+        entered_ = true;
+        return writeAll(descriptor_, "\x1b[?1049h\x1b[?25l\x1b[H\x1b[2J");
+      }
+
+      // Waits until the user quits: q, Escape, Ctrl-C or Ctrl-D, a hang-up or a stop signal. A
+      // blocking read, as poll() rejects /dev/tty on macOS; the signal handlers are installed
+      // without SA_RESTART, so a signal interrupts the read.
+      void wait() noexcept {
+        constexpr std::size_t key_bytes = 64;
+        ds::Array<char, key_bytes> keys{};
+
+        while (stop_signal == 0) {
+          const auto got = ::read(descriptor_, keys.dataMut(), keys.size());
+          if (got < 0 && (sys::lastError() == EINTR || sys::lastError() == EAGAIN)) {
+            continue;
+          }
+
+          if (got <= 0) {
+            return;
+          }
+
+          const std::string_view typed{keys.data(), static_cast<std::size_t>(got)};
+          // A lone Escape quits; an escape sequence (an arrow key) does not.
+          if (typed == "\x1b" || typed.find_first_of("qQ\x03\x04") != std::string_view::npos) {
+            return;
+          }
+        }
+      }
+
+    private:
+      int descriptor_;
+      termios saved_{};
+      bool entered_ = false;
+    };
+
+    // strerror_r is POSIX's, which returns a status, on macOS and musl, and GNU's, which returns
+    // the text, on glibc.
+    [[maybe_unused]] const char* errorMessage(int status, const char* buffer) noexcept {
+      return status == 0 ? buffer : "Unknown error";
     }
 
-    if (!viewer.enter() || !writeAll(descriptor, output)) {
-      report("could not write to the terminal");
-      return 1;
+    [[maybe_unused]] const char* errorMessage(const char* text, const char* /*buffer*/) noexcept {
+      return text;
     }
 
-    viewer.wait();
-    return 0;
+    // Writes `telar render: ` and the formatted line to stderr, ignoring a failed write as stdio does.
+    template <Allocator Memory, typename... Arguments>
+    void report(Memory& memory, std::format_string<Arguments...> format, Arguments&&... arguments) {
+      auto line = ds::format(memory, "telar render: ");
+
+      ds::formatTo(line, format, std::forward<Arguments>(arguments)...);
+      line.push('\n');
+      static_cast<void>(writeAll(STDERR_FILENO, line));
+    }
+
+    // Reports `what` failed with the system error `code`.
+    template <Allocator Memory>
+    void reportError(Memory& memory, std::string_view what, int code) {
+      constexpr std::size_t error_text_bytes = 128;
+      ds::Array<char, error_text_bytes> text{};
+      // strerror_r writes at most the size it is given.
+#pragma clang unsafe_buffer_usage begin
+      const auto* const message = errorMessage(::strerror_r(code, text.dataMut(), text.size()), text.data());
+#pragma clang unsafe_buffer_usage end
+
+      report(memory, "{}: {}", what, std::string_view{message});
+    }
+
+    template <Allocator Memory>
+    void reportDocumentLimit(Memory& memory) {
+      constexpr std::size_t kibibyte = 1024;
+
+      report(memory, "the document exceeds the {} KiB limit render.max_document_bytes", render::max_document_bytes / kibibyte);
+    }
+
+    bool insidePane() noexcept {
+      const char* pane = std::getenv("TELAR_PANE_ID"); // NOLINT(concurrency-mt-unsafe): POSIX has no thread-safe read of the environment
+
+      return pane != nullptr && *pane != '\0';
+    }
+
+    template <Allocator Memory>
+    int showPager(Memory& memory, const render::Document<Memory>& document, std::string_view name) {
+      constexpr unsigned char first_printable = 0x20;
+      constexpr char delete_character = 0x7f;
+      const auto descriptor = ::open("/dev/tty", combineFlags(O_RDWR, O_CLOEXEC, O_NOCTTY)); // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+      if (descriptor < 0) {
+        report(memory, "native rendering needs a controlling terminal; use --format ansi");
+        return 1;
+      }
+
+      ds::String<Memory> output{memory};
+
+      // Clients that cannot show documents still show what is running.
+      output.append("\x1b[2mtelar render \xc2\xb7 ");
+      for (const char byte : name) {
+        if (static_cast<unsigned char>(byte) >= first_printable && byte != delete_character) {
+          output.push(byte);
+        }
+      }
+
+      output.append(" \xc2\xb7 q to quit\x1b[0m");
+      if (!render::appendSequence(document, output)) {
+        ::close(descriptor);
+        reportDocumentLimit(memory);
+        return 1;
+      }
+
+      Viewer viewer{descriptor};
+      struct sigaction action{};
+
+      sys::signalHandler(action) = onStopSignal;
+      sigemptyset(&action.sa_mask);
+      for (const int signal : {SIGTERM, SIGHUP, SIGINT, SIGQUIT}) {
+        ::sigaction(signal, &action, nullptr);
+      }
+
+      if (!viewer.enter() || !writeAll(descriptor, output)) {
+        report(memory, "could not write to the terminal");
+        return 1;
+      }
+
+      viewer.wait();
+      return 0;
+    }
+
   }
 
   int run(Memory& memory, const RenderOptions& options) {
     const bool from_stdin = options.path.empty() || options.path == "-";
     if (from_stdin && ::isatty(STDIN_FILENO) == 1) {
-      report("give a FILE or pipe the content to standard input");
+      report(memory, "give a FILE or pipe the content to standard input");
       return 1;
     }
 
@@ -261,14 +310,14 @@ namespace telar::runtime::cli::render_command {
     {
       ds::Array<char, PATH_MAX> path{};
       if (!from_stdin && options.path.size() >= path.size()) {
-        std::fprintf(stderr, "telar render: %.*s: %s\n", static_cast<int>(options.path.size()), options.path.data(), std::strerror(ENAMETOOLONG));
+        reportError(memory, options.path, ENAMETOOLONG);
         return 1;
       }
 
       std::ranges::copy(options.path, path.dataMut());
-      const auto descriptor = from_stdin ? STDIN_FILENO : ::open(path.data(), O_RDONLY | O_CLOEXEC);
+      const auto descriptor = from_stdin ? STDIN_FILENO : ::open(path.data(), combineFlags(O_RDONLY, O_CLOEXEC)); // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
       if (descriptor < 0) {
-        std::fprintf(stderr, "telar render: %.*s: %s\n", static_cast<int>(options.path.size()), options.path.data(), std::strerror(sys::lastError()));
+        reportError(memory, options.path, sys::lastError());
         return 1;
       }
 
@@ -280,7 +329,7 @@ namespace telar::runtime::cli::render_command {
       }
 
       if (!read) {
-        std::fprintf(stderr, "telar render: could not read the source: %s\n", std::strerror(error));
+        reportError(memory, "could not read the source", error);
         return 1;
       }
     }
@@ -291,13 +340,13 @@ namespace telar::runtime::cli::render_command {
     case render::markdown::Error::none:
       break;
     case render::markdown::Error::too_large:
-      report("the source exceeds the 4 MiB limit render.max_markdown_bytes");
+      report(memory, "the source exceeds the 4 MiB limit render.max_markdown_bytes");
       return 1;
     case render::markdown::Error::document_too_large:
-      reportDocumentLimit();
+      reportDocumentLimit(memory);
       return 1;
     case render::markdown::Error::parser:
-      report("the Markdown parser failed");
+      report(memory, "the Markdown parser failed");
       return 1;
     }
 
@@ -311,7 +360,7 @@ namespace telar::runtime::cli::render_command {
     // a client that draws documents shows the document in place of the text, any other the text.
     ds::String<Memory> output{memory};
     if (native && !render::appendSequence(document, output)) {
-      reportDocumentLimit();
+      reportDocumentLimit(memory);
       return 1;
     }
 
@@ -321,7 +370,7 @@ namespace telar::runtime::cli::render_command {
     }
 
     if (!writeAll(STDOUT_FILENO, output)) {
-      std::fprintf(stderr, "telar render: could not write the output: %s\n", std::strerror(sys::lastError()));
+      reportError(memory, "could not write the output", sys::lastError());
       return 1;
     }
 

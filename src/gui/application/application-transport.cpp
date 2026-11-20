@@ -34,7 +34,7 @@ namespace telar::gui::application {
       if (prefix_used_ < prefix_.size()) {
         const auto count = std::min(input.size(), prefix_.size() - prefix_used_);
 
-        std::copy_n(input.begin(), count, prefix_.dataMut() + prefix_used_);
+        std::ranges::copy(input.first(count), prefix_.viewMut().subspan(prefix_used_).begin());
         prefix_used_ += count;
         input = input.subspan(count);
 
@@ -63,7 +63,7 @@ namespace telar::gui::application {
 
       const auto count = std::min(input.size(), expected_ - payload_.size());
 
-      payload_.extend({input.begin(), input.begin() + count});
+      payload_.extend(input.first(count));
       input = input.subspan(count);
 
       if (payload_.size() == expected_) {

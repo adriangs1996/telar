@@ -95,7 +95,7 @@ namespace telar::gui::application {
       return ds::none;
     }
 
-    return block;
+    return *block;
   }
 
   void Session::selectBlock(std::uint64_t pane_id, ds::Option<std::size_t> index) {

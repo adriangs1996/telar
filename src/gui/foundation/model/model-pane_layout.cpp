@@ -42,7 +42,7 @@ namespace telar::gui::inline foundation::inline model {
 
       --pending;
       if (const auto* pane = std::get_if<ClientLayoutPane>(&node)) {
-        if (pane->pane_id == 0 || panes == maximum_panes || std::find(identities.begin(), identities.begin() + panes, pane->pane_id) != identities.begin() + panes) {
+        if (pane->pane_id == 0 || panes == maximum_panes || std::ranges::contains(identities.view().first(panes), pane->pane_id)) {
           throw EncodingError{"Invalid pane layout identity"};
         }
 
@@ -81,7 +81,9 @@ namespace telar::gui::inline foundation::inline model {
       return false;
     }
 
-    std::move_backward(nodes_.dataMut() + *target + 1, nodes_.dataMut() + count_, nodes_.dataMut() + count_ + 2);
+    auto nodes = nodes_.viewMut(); // NOLINT(misc-const-correctness): a span written through, which tbc's deep const forbids marking const
+
+    std::ranges::move_backward(nodes.first(count_).subspan(*target + 1), nodes.first(count_ + 2).end());
     nodes_.atMut(*target) = ClientLayoutSplit{.axis = axis, .ratio = ratio_half};
     nodes_.atMut(*target + 1) = ClientLayoutPane{beside};
     nodes_.atMut(*target + 2) = ClientLayoutPane{pane_id};
@@ -117,8 +119,10 @@ namespace telar::gui::inline foundation::inline model {
       const auto survivor_end = subtreeEnd(survivor);
       const auto parent_end = subtreeEnd(parent);
 
-      std::move(nodes_.dataMut() + survivor, nodes_.dataMut() + survivor_end, nodes_.dataMut() + parent);
-      std::move(nodes_.dataMut() + parent_end, nodes_.dataMut() + count_, nodes_.dataMut() + parent_end - 2);
+      auto nodes = nodes_.viewMut(); // NOLINT(misc-const-correctness): a span written through, which tbc's deep const forbids marking const
+
+      std::ranges::move(nodes.first(survivor_end).subspan(survivor), nodes.subspan(parent).begin());
+      std::ranges::move(nodes.first(count_).subspan(parent_end), nodes.subspan(parent_end - 2).begin());
       count_ -= 2;
 
       return true;
@@ -147,11 +151,11 @@ namespace telar::gui::inline foundation::inline model {
 
     reserveBelowPane(metrics);
 
-    return {placements_.data(), placement_count_};
+    return placements_.view().first(placement_count_);
   }
 
   std::span<const PaneLayout::Divider> PaneLayout::dividers() const noexcept {
-    return {dividers_.data(), divider_count_};
+    return dividers_.view().first(divider_count_);
   }
 
   ds::Option<PaneLayout::SplitBounds> PaneLayout::prospectiveSplit(
@@ -268,7 +272,7 @@ namespace telar::gui::inline foundation::inline model {
   }
 
   std::span<const ClientLayoutNode> PaneLayout::nodes() const noexcept {
-    return {nodes_.data(), count_};
+    return nodes_.view().first(count_);
   }
 
   std::uint64_t PaneLayout::firstPane() const noexcept {
@@ -509,7 +513,7 @@ namespace telar::gui::inline foundation::inline model {
   }
 
   CellRectangle WorkbenchGeometry::cellArea() const noexcept {
-    const auto size = grid.fit(area.width, area.height);
+    const auto size = grid.fit(static_cast<double>(area.width), static_cast<double>(area.height));
 
     return size ? CellRectangle{.width = size->cols, .height = size->rows} : CellRectangle{};
   }

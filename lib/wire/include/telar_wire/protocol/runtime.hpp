@@ -17,8 +17,15 @@ namespace telar {
     static constexpr const char* name = "SystemMetrics";
   };
 
-  static_assert(MessageSchema<RequestRuntimeState>::payload_size == 10);
-  static_assert(MessageSchema<SystemMetrics>::payload_size == 18);
+  // The sizes of the fixed messages, their tag included, pinned so that a field change that moves one
+  // fails here.
+  namespace fixed_message_bytes {
+    inline constexpr std::size_t request_runtime_state = 10;
+    inline constexpr std::size_t system_metrics = 18;
+  }
+
+  static_assert(MessageSchema<RequestRuntimeState>::payload_size == fixed_message_bytes::request_runtime_state);
+  static_assert(MessageSchema<SystemMetrics>::payload_size == fixed_message_bytes::system_metrics);
 
   struct RuntimeStop {};
 
@@ -43,14 +50,16 @@ namespace telar {
       : Schema<Direction::client, ClientTag::query_limits, Field<&QueryLimits::request_id, NonzeroU64, "request_id">> {};
 
   struct RequestFailed {
+    static constexpr std::size_t maximum_message_bytes = 1024;
+
     std::uint64_t request_id{};
-    FailureCode code{};
+    FailureCode code = FailureCode::internal;
     std::string_view message;
   };
 
   template <>
   struct MessageSchema<RequestFailed>
-      : Schema<Direction::server, ServerTag::request_failed, Field<&RequestFailed::request_id, u64, "request_id">, Field<&RequestFailed::code, EnumInteger<FailureCode, u16, 1, 17>, "code">, Field<&RequestFailed::message, Utf8Tail<1024>, "message">> {};
+      : Schema<Direction::server, ServerTag::request_failed, Field<&RequestFailed::request_id, u64, "request_id">, Field<&RequestFailed::code, EnumInteger<FailureCode, u16, std::to_underlying(FailureCode::pane_not_found), std::to_underlying(FailureCode::process_not_found)>, "code">, Field<&RequestFailed::message, Utf8Tail<RequestFailed::maximum_message_bytes>, "message">> {};
 
   struct RuntimeStopping {};
 
@@ -78,6 +87,8 @@ namespace telar {
       : Schema<Direction::server, ServerTag::request_completed, Field<&RequestCompleted::request_id, NonzeroU64, "request_id">> {};
 
   struct LimitList {
+    static constexpr std::size_t maximum_entries = 256;
+
     std::uint64_t request_id{};
     std::uint64_t runtime_evicted{};
     std::uint64_t client_evicted{};
@@ -87,6 +98,6 @@ namespace telar {
 
   template <>
   struct MessageSchema<LimitList>
-      : Schema<Direction::server, ServerTag::limit_list, Field<&LimitList::request_id, NonzeroU64, "request_id">, Field<&LimitList::runtime_evicted, u64, "runtime_evicted">, Field<&LimitList::client_evicted, u64, "client_evicted">, Field<&LimitList::refused_reports, u64, "refused_reports">, SpanCountField<&LimitList::entries, u16, ValueCodec<LimitListEntry>, 256, "entry_count", 0>, SpanItemsField<&LimitList::entries, ValueCodec<LimitListEntry>, "entries">> {};
+      : Schema<Direction::server, ServerTag::limit_list, Field<&LimitList::request_id, NonzeroU64, "request_id">, Field<&LimitList::runtime_evicted, u64, "runtime_evicted">, Field<&LimitList::client_evicted, u64, "client_evicted">, Field<&LimitList::refused_reports, u64, "refused_reports">, SpanCountField<&LimitList::entries, u16, ValueCodec<LimitListEntry>, LimitList::maximum_entries, "entry_count", 0>, SpanItemsField<&LimitList::entries, ValueCodec<LimitListEntry>, "entries">> {};
 
 } // namespace telar

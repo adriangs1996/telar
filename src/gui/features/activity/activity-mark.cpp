@@ -34,7 +34,8 @@ namespace telar::gui::features::activity {
       return {.provider = provider, .glyph = "\U000f02d8", .tile = "#e5e3ee", .ink = "#1a1627"};
     case AgentProvider::opencode:
       return {.provider = provider, .glyph = "\U000f0763", .tile = "#99baf8", .ink = "#1a1627"};
-    default:
+    case AgentProvider::unknown:
+    case AgentProvider::last_custom:
       break;
     }
 

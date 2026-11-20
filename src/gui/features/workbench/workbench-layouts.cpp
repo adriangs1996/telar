@@ -65,8 +65,9 @@ namespace telar::gui::features::workbench {
     for (std::size_t index = 0; index < size; ++index) {
       const auto digits = text.substr(index * digits_per_byte, digits_per_byte);
       unsigned value = 0;
-      const auto parsed = std::from_chars(digits.data(), digits.data() + digits.size(), value, hexadecimal_base);
-      if (std::make_error_code(parsed.ec) || parsed.ptr != digits.data() + digits.size()) {
+      const auto* const end = std::to_address(digits.end());
+      const auto parsed = std::from_chars(digits.data(), end, value, hexadecimal_base);
+      if (std::make_error_code(parsed.ec) || parsed.ptr != end) {
         throw EncodingError{"InvalidCharacter"};
       }
 
@@ -187,7 +188,7 @@ namespace telar::gui::features::workbench {
     }
 
     rows_.atMut(count_) = {.location = saved.location, .pane_id = saved.pane_id, .focused_pane = saved.focused_pane, .workspace_active = saved.workspace_active, .fullscreen = saved.fullscreen, .start = node_total_, .count = saved.nodes.size()};
-    std::copy_n(captured.begin(), saved.nodes.size(), nodes_.dataMut() + node_total_);
+    std::ranges::copy(captured.view().first(saved.nodes.size()), nodes_.viewMut().subspan(node_total_).begin());
     node_total_ += saved.nodes.size();
     ++count_;
 
@@ -232,9 +233,13 @@ namespace telar::gui::features::workbench {
     const auto start = rows_[index].start;
     const auto count = rows_[index].count;
 
-    std::move(nodes_.dataMut() + start + count, nodes_.dataMut() + node_total_, nodes_.dataMut() + start);
+    auto nodes = nodes_.viewMut(); // NOLINT(misc-const-correctness): a span written through, which tbc's deep const forbids marking const
+
+    std::ranges::move(nodes.first(node_total_).subspan(start + count), nodes.subspan(start).begin());
     node_total_ -= count;
-    std::move(rows_.dataMut() + index + 1, rows_.dataMut() + count_, rows_.dataMut() + index);
+    auto rows = rows_.viewMut(); // NOLINT(misc-const-correctness): a span written through, which tbc's deep const forbids marking const
+
+    std::ranges::move(rows.first(count_).subspan(index + 1), rows.subspan(index).begin());
     --count_;
     for (auto& moved : rows_.viewMut().subspan(index, count_ - index)) {
       moved.start -= count;

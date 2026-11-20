@@ -58,7 +58,7 @@ namespace telar::gui::features::peek {
   void PeekLabels::decimal(Facts& storage, std::uint16_t value) {
     constexpr auto capacity = std::numeric_limits<std::uint16_t>::digits10 + 1;
     ds::Array<char, capacity> digits{};
-    const auto result = std::to_chars(digits.dataMut(), digits.dataMut() + digits.size(), value);
+    const auto result = std::to_chars(digits.dataMut(), std::to_address(digits.viewMut().end()), value);
 
     append(storage, {digits.data(), static_cast<std::size_t>(result.ptr - digits.data())});
   }

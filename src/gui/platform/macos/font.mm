@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iterator>
+#include <span>
 #include <string_view>
 #include <sys/stat.h>
 #include <utility>
@@ -28,15 +29,15 @@ namespace {
     NSMutableDictionary* const defaults = [NSMutableDictionary dictionaryWithCapacity:axes.count];
 
     for (NSDictionary* axis in axes) {
-      const id tag = axis[(id)kCTFontVariationAxisIdentifierKey];
-      const id value = axis[(id)kCTFontVariationAxisDefaultValueKey];
+      const id tag = axis[(__bridge id)kCTFontVariationAxisIdentifierKey];
+      const id value = axis[(__bridge id)kCTFontVariationAxisDefaultValueKey];
       if (tag != nil && value != nil) {
         defaults[tag] = value;
       }
     }
 
-    const NativeReference reset {
-      CTFontDescriptorCreateWithAttributes((__bridge CFDictionaryRef) @{(id)kCTFontVariationAttribute : defaults})
+    const NativeReference<CTFontDescriptorRef> reset {
+      CTFontDescriptorCreateWithAttributes((__bridge CFDictionaryRef) @{(__bridge id)kCTFontVariationAttribute : defaults})
     };
     if (!reset) {
       return nullptr;
@@ -58,8 +59,8 @@ namespace {
         return -1;
       }
 
-      out->tags[count] = tag.unsignedIntValue;
-      out->values[count] = value.floatValue;
+      std::span{out->tags}[count] = tag.unsignedIntValue;
+      std::span{out->values}[count] = value.floatValue;
       count++;
     }
 
@@ -69,7 +70,7 @@ namespace {
 
   int fill(CTFontRef font, telar_font_match* match) {
     NSDictionary* const variation = CFBridgingRelease(CTFontCopyVariation(font));
-    const NativeReference face{variation.count > 0 ? defaultInstance(font) : static_cast<CTFontRef>(CFRetain(font))};
+    const NativeReference<CTFontRef> face{variation.count > 0 ? defaultInstance(font) : static_cast<CTFontRef>(CFRetain(font))};
     if (!face) {
       return -1;
     }
@@ -88,7 +89,7 @@ namespace {
       return -1;
     }
 
-    memset(match, 0, sizeof *match);
+    *match = telar_font_match{};
     if (fillVariation(variation, &match->variation) != 0) {
       return -1;
     }
@@ -111,10 +112,10 @@ namespace {
       return CTFontCreateWithName((__bridge CFStringRef)query.family, lookup_size, nullptr);
     }
 
-    const NativeReference descriptor {
+    const NativeReference<CTFontDescriptorRef> descriptor {
       CTFontDescriptorCreateWithAttributes((__bridge CFDictionaryRef) @{
-        (id)kCTFontFamilyNameAttribute : query.family,
-        (id)kCTFontStyleNameAttribute : query.style,
+        (__bridge id)kCTFontFamilyNameAttribute : query.family,
+        (__bridge id)kCTFontStyleNameAttribute : query.style,
       })
     };
     if (!descriptor) {
@@ -160,7 +161,7 @@ namespace {
     }
 
     [text getCharacters:units.dataMut() range:NSMakeRange(0, text.length)];
-    return CTFontGetGlyphsForCharacters(font, units.data(), glyphs.dataMut(), (CFIndex)text.length);
+    return CTFontGetGlyphsForCharacters(font, units.data(), glyphs.dataMut(), static_cast<CFIndex>(text.length));
   }
 
   bool monochrome(CTFontRef font) {
@@ -168,7 +169,7 @@ namespace {
       return false;
     }
 
-    const NativeReference tables{CTFontCopyAvailableTables(font, kCTFontTableOptionNoOptions)};
+    const NativeReference<CFArrayRef> tables{CTFontCopyAvailableTables(font, kCTFontTableOptionNoOptions)};
     if (tables) {
       for (CFIndex i = 0; i < CFArrayGetCount(tables.get()); i++) {
         // The array holds each tag in place of a pointer.
@@ -206,12 +207,12 @@ namespace {
 
   // The font Core Text's cascade from Menlo picks for the text.
   int acceptCascaded(NSString* text, FallbackTarget target) {
-    const NativeReference base{CTFontCreateWithName(CFSTR("Menlo"), lookup_size, nullptr)};
+    const NativeReference<CTFontRef> base{CTFontCreateWithName(CFSTR("Menlo"), lookup_size, nullptr)};
     if (!base) {
       return -1;
     }
 
-    const NativeReference direct{CTFontCreateForString(base.get(), (__bridge CFStringRef)text, CFRangeMake(0, (CFIndex)text.length))};
+    const NativeReference<CTFontRef> direct{CTFontCreateForString(base.get(), (__bridge CFStringRef)text, CFRangeMake(0, static_cast<CFIndex>(text.length)))};
     if (!direct) {
       return -1;
     }
@@ -222,14 +223,14 @@ namespace {
   // The installed fonts whose character set covers the text, the monospaced ones first.
   int acceptCovering(NSString* text, FallbackTarget target) {
     NSCharacterSet* const set = [NSCharacterSet characterSetWithCharactersInString:text];
-    const NativeReference query {
-      CTFontDescriptorCreateWithAttributes((__bridge CFDictionaryRef) @{(id)kCTFontCharacterSetAttribute : set})
+    const NativeReference<CTFontDescriptorRef> query {
+      CTFontDescriptorCreateWithAttributes((__bridge CFDictionaryRef) @{(__bridge id)kCTFontCharacterSetAttribute : set})
     };
     if (!query) {
       return -1;
     }
 
-    const NativeReference candidates{CTFontDescriptorCreateMatchingFontDescriptors(query.get(), nullptr)};
+    const NativeReference<CFArrayRef> candidates{CTFontDescriptorCreateMatchingFontDescriptors(query.get(), nullptr)};
     if (!candidates) {
       return -1;
     }
@@ -239,7 +240,7 @@ namespace {
 
     for (int pass = 0; pass < 2 && status != 0; pass++) {
       for (CFIndex i = 0; i < count && status != 0; i++) {
-        const NativeReference font{CTFontCreateWithFontDescriptor(static_cast<CTFontDescriptorRef>(CFArrayGetValueAtIndex(candidates.get(), i)), lookup_size, nullptr)};
+        const NativeReference<CTFontRef> font{CTFontCreateWithFontDescriptor(static_cast<CTFontDescriptorRef>(CFArrayGetValueAtIndex(candidates.get(), i)), lookup_size, nullptr)};
         if (!font) {
           continue;
         }
@@ -265,7 +266,7 @@ int telarGuiFindFont(const char* family, const char* style, telar_font_match* ma
     }
 
     const FontQuery query{.family = requested, .style = face};
-    const NativeReference font{createFont(query)};
+    const NativeReference<CTFontRef> font{createFont(query)};
     if (!font) {
       return telar_font_family_not_found;
     }

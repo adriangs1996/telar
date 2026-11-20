@@ -41,7 +41,7 @@ namespace telar {
     std::span<const EnvironmentEntry> environment;
   };
 
-  enum class FailureCode : std::uint16_t {
+  enum class FailureCode : std::uint8_t {
     pane_not_found = 1,
     invalid_request = 2,
     spawn_failed = 3,
@@ -75,9 +75,8 @@ namespace telar::runtime {
       return code_;
     }
 
-    [[nodiscard]] inline const char* what() const noexcept override {
-      return message_;
-    }
+    // Out of line, in vocabulary.cpp, so the class's vtable has one home.
+    [[nodiscard]] const char* what() const noexcept override;
 
   private:
     FailureCode code_;

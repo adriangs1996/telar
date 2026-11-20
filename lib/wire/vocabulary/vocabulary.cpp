@@ -9,13 +9,50 @@ import telar.base.ds;
 extern "C++" {
 namespace telar {
 
+  namespace {
+
+    // The printable ASCII bytes lie between the control bytes and DEL.
+    constexpr Byte first_printable_byte = 0x20;
+    constexpr Byte delete_byte = 0x7f;
+
+    constexpr std::size_t max_agent_session_bytes = 64;
+    // The longest name macOS gives a POSIX shared memory object.
+    constexpr std::size_t max_shared_image_name_bytes = 31;
+    // Of all the tabs of a client's layout together.
+    constexpr std::size_t max_client_layout_nodes = 511;
+
+    // A percentage, and the byte a progress report sends for one it does not know.
+    constexpr Byte whole_percent = 100;
+    constexpr Byte unknown_percent = 255;
+
+    // A cell's header byte: its text length in the low five bits, its width in the two above them and,
+    // in the top bit, whether a style follows.
+    constexpr unsigned cell_length_mask = 0x1f;
+    constexpr unsigned cell_width_shift = 5;
+    constexpr unsigned cell_width_mask = 0x3;
+    constexpr unsigned cell_style_flag = 0x80;
+
+    constexpr unsigned rowBit(RowFlag flag) noexcept {
+      return std::to_underlying(flag);
+    }
+
+    // A row is a prompt's first line or a further line of it, never both.
+    constexpr unsigned prompt_rows = rowBit(RowFlag::prompt) | rowBit(RowFlag::prompt_continuation);
+    constexpr unsigned known_row_flags = rowBit(RowFlag::wrap) | rowBit(RowFlag::continuation) | rowBit(RowFlag::wide_padding) | rowBit(RowFlag::hyperlinks) | prompt_rows;
+
+  }
+
 #ifdef TELAR_DEBUG
   namespace debug {
 
     std::size_t columnWidth(std::size_t byte_count, const char* name, const char* value) {
+      const auto length = [](const char* text) {
+        return std::string_view{text}.size();
+      };
+
       const auto bytes_width = byte_count == 0 ? 0 : (byte_count * 3) - 1;
-      const auto name_width = std::strlen(name);
-      const auto value_width = std::strlen(value);
+      const auto name_width = length(name);
+      const auto value_width = length(value);
       const auto width = bytes_width > name_width ? bytes_width : name_width;
 
       return width > value_width ? width : value_width;
@@ -23,28 +60,23 @@ namespace telar {
 
     void printBytes(std::span<const Byte> bytes, const char* name, const char* value, std::FILE* output, bool more) {
       for (std::size_t i = 0; i < bytes.size(); ++i) {
-        if (i != 0) {
-          std::fputc(' ', output);
-        }
-
-        std::fprintf(output, "%02x", static_cast<unsigned>(bytes[i]));
+        std::print(output, "{}{:02x}", i == 0 ? "" : " ", bytes[i]);
       }
 
       if (more) {
         const auto bytes_width = bytes.empty() ? 0 : (bytes.size() * 3) - 1;
         const auto padding = columnWidth(bytes.size(), name, value) - bytes_width;
 
-        std::fprintf(output, "%*s | ", static_cast<int>(padding), "");
+        std::print(output, "{:{}} | ", "", padding);
       }
     }
 
     void printText(const char* text, std::size_t width, std::FILE* output, const char* separator) {
-      std::fputs(text, output);
+      const std::string_view shown{text};
 
+      std::print(output, "{}", shown);
       if (separator[0] != '\0') {
-        const auto padding = width - std::strlen(text);
-
-        std::fprintf(output, "%*s%s", static_cast<int>(padding), "", separator);
+        std::print(output, "{:{}}{}", "", width - shown.size(), separator);
       }
     }
 
@@ -66,11 +98,11 @@ namespace telar {
   }
 
   void SystemMetrics::validate() const {
-    if (revision == 0 || cpu_percent > 100) {
+    if (revision == 0 || cpu_percent > whole_percent) {
       throw std::runtime_error{"Invalid system metrics"};
     }
 
-    if ((has_battery && battery_percent > 100) || (!has_battery && battery_percent != 0)) {
+    if ((has_battery && battery_percent > whole_percent) || (!has_battery && battery_percent != 0)) {
       throw std::runtime_error{"Invalid battery metrics"};
     }
   }
@@ -80,9 +112,11 @@ namespace telar {
       return {};
     }
 
-    const auto rest = link.substr(notification_link_scheme.size());
+    auto host = link;
 
-    return rest.substr(0, rest.find_first_of("/?#"));
+    host.remove_prefix(notification_link_scheme.size());
+    host.remove_suffix(host.size() - std::min(host.find_first_of("/?#"), host.size()));
+    return host;
   }
 
   void BodySchema<TerminalSize>::validate(const TerminalSize& value) {
@@ -111,7 +145,7 @@ namespace telar {
     case HistoryScope::pane:
       if (const auto* id = std::get_if<std::uint64_t>(&value)) {
         NonzeroU64::validate(*id);
-        return 8;
+        return NonzeroU64::width;
       }
 
       break;
@@ -135,7 +169,7 @@ namespace telar {
     }
   }
 
-  void BodySchema<HistoryScopeValue>::decodeBody(DecodeInput input, tbc::mut_a<HistoryScopeValue> value, DecodeStorage&, HistoryScope scope) {
+  void BodySchema<HistoryScopeValue>::decodeBody(DecodeInput input, tbc::mut_a<HistoryScopeValue> value, DecodeStorage& /*storage*/, HistoryScope scope) {
     EnumByte<HistoryScope, 3>::validate(scope);
     switch (scope) {
     case HistoryScope::global:
@@ -162,14 +196,14 @@ namespace telar {
   }
 
   void BodySchema<EnvironmentEntry>::validate(const EnvironmentEntry& value) {
-    if (value.name.find('=') != std::string_view::npos) {
+    if (value.name.contains('=')) {
       throw EncodingError{"Invalid environment name"};
     }
   }
 
   void BodySchema<Launch>::validate(const Launch& value) {
-    if (value.arguments.empty() || value.arguments.size() > 64 ||
-        value.arguments.front().empty() || value.environment.size() > 256) {
+    if (value.arguments.empty() || value.arguments.size() > maximum_arguments ||
+        value.arguments.front().empty() || value.environment.size() > maximum_environment) {
       throw EncodingError{"Invalid launch collections"};
     }
 
@@ -186,7 +220,7 @@ namespace telar {
       environment = checkedWireSize(environment, entry.value.size());
     }
 
-    if (arguments > 128 * 1024 || environment > 512 * 1024) {
+    if (arguments > maximum_argument_bytes || environment > maximum_environment_bytes) {
       throw EncodingError{"Launch byte budget exceeded"};
     }
   }
@@ -286,11 +320,11 @@ namespace telar {
   }
 
   void BodySchema<ClientTabLayout>::validate(const ClientTabLayout& value) {
-    if (value.nodes.empty() || value.nodes.size() > 127) {
+    if (value.nodes.empty() || value.nodes.size() > maximum_nodes) {
       throw EncodingError{"Invalid layout node count"};
     }
 
-    ds::Array<std::uint64_t, 64> panes{};
+    ds::Array<std::uint64_t, maximum_panes> panes{};
     std::size_t pane_count = 0;
     std::size_t pending = 1;
     bool focused = false;
@@ -306,10 +340,8 @@ namespace telar {
           throw EncodingError{"Too many layout panes"};
         }
 
-        for (std::size_t i = 0; i < pane_count; ++i) {
-          if (panes[i] == pane->pane_id) {
-            throw EncodingError{"Duplicate layout pane"};
-          }
+        if (std::ranges::contains(panes.view().first(pane_count), pane->pane_id)) {
+          throw EncodingError{"Duplicate layout pane"};
         }
 
         panes.atMut(pane_count++) = pane->pane_id;
@@ -336,7 +368,7 @@ namespace telar {
 
     for (const auto character : link) {
       const auto byte = static_cast<Byte>(character);
-      if (byte <= 0x20 || byte >= 0x7f || byte == '\\') {
+      if (byte <= first_printable_byte || byte >= delete_byte || byte == '\\') {
         throw EncodingError{"Invalid notification link"};
       }
     }
@@ -397,7 +429,7 @@ namespace telar {
 
     for (const auto character : value.noun) {
       const auto byte = static_cast<Byte>(character);
-      if (byte < 0x20 || byte >= 0x7f) {
+      if (byte < first_printable_byte || byte >= delete_byte) {
         throw EncodingError{"Invalid limit noun"};
       }
     }
@@ -411,8 +443,8 @@ namespace telar {
 
   void BodySchema<ImageDescription>::validate(const ImageDescription& value) {
     const auto pixels = static_cast<std::uint64_t>(value.width) * value.height;
-    const auto channels = value.format == ImageFormat::rgb ? 3u : 4u;
-    constexpr std::uint64_t maximum = 256 * 1024 * 1024;
+    const auto channels = value.format == ImageFormat::rgb ? 3U : 4U;
+    constexpr std::uint64_t maximum = std::uint64_t{256} * 1024 * 1024;
 
     if (pixels > maximum / channels || value.byte_len != pixels * channels) {
       throw EncodingError{"Invalid image byte length"};
@@ -428,15 +460,16 @@ namespace telar {
       return;
     }
 
-    if (session.size() > 64 || session.front() == '-') {
+    if (session.size() > max_agent_session_bytes || session.front() == '-') {
       throw EncodingError{"Invalid agent session"};
     }
 
     for (const auto character : session) {
       const auto byte = static_cast<Byte>(character);
-      if (!((byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') ||
-              (byte >= '0' && byte <= '9') || byte == '.' || byte == '_' || byte == '-' ||
-              byte == ':')) {
+      const auto allowed = (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') ||
+                           (byte >= '0' && byte <= '9') || byte == '.' || byte == '_' || byte == '-' ||
+                           byte == ':';
+      if (!allowed) {
         throw EncodingError{"Invalid agent session"};
       }
     }
@@ -450,12 +483,13 @@ namespace telar {
   }
 
   void validateSharedImageName(std::string_view name) {
-    if (name.size() < 2 || name.size() > 31 || name.front() != '/') {
+    if (name.size() < 2 || name.size() > max_shared_image_name_bytes || name.front() != '/') {
       throw EncodingError{"Invalid shared image name"};
     }
 
     for (const auto byte : name.substr(1)) {
-      if (!((byte >= 'a' && byte <= 'z') || (byte >= '0' && byte <= '9') || byte == '-')) {
+      const auto allowed = (byte >= 'a' && byte <= 'z') || (byte >= '0' && byte <= '9') || byte == '-';
+      if (!allowed) {
         throw EncodingError{"Invalid shared image name"};
       }
     }
@@ -480,7 +514,7 @@ namespace telar {
       }
     }
 
-    if (nodes > 511 || !active_found) {
+    if (nodes > max_client_layout_nodes || !active_found) {
       throw EncodingError{"Invalid active client layout"};
     }
   }
@@ -524,11 +558,13 @@ namespace telar {
   }
 
   std::span<const Byte> byteView(std::string_view text) noexcept {
-    return {reinterpret_cast<const Byte*>(text.data()), text.size()};
+#pragma clang unsafe_buffer_usage begin
+    return {reinterpret_cast<const Byte*>(text.data()), text.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): Byte may alias char, and no cast-free view reads text as bytes
+#pragma clang unsafe_buffer_usage end
   }
 
   std::string_view textView(std::span<const Byte> bytes) noexcept {
-    return {reinterpret_cast<const char*>(bytes.data()), bytes.size()};
+    return {reinterpret_cast<const char*>(bytes.data()), bytes.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): char may alias Byte, and no cast-free view reads bytes as text
   }
 
   void BoolByte::encode(bool value, std::span<Byte>& output) {
@@ -545,20 +581,20 @@ namespace telar {
   }
 
   void PercentSentinel::encode(value_type value, std::span<Byte>& output) {
-    if (value && *value > 100) {
+    if (value && *value > whole_percent) {
       throw EncodingError{"Invalid progress percentage"};
     }
 
-    u8::encode(value.valueOr(255), output);
+    u8::encode(value.valueOr(unknown_percent), output);
   }
 
   auto PercentSentinel::decode(std::span<const Byte>& input) -> value_type {
     const auto value = u8::decode(input);
-    if (value == 255) {
+    if (value == unknown_percent) {
       return ds::none;
     }
 
-    if (value > 100) {
+    if (value > whole_percent) {
       throw EncodingError{"Invalid progress percentage"};
     }
 
@@ -566,14 +602,20 @@ namespace telar {
   }
 
   void CellStyle::validate() const {
-    if ((flags & 0xf800) != 0 || ((flags >> 8) & 7) > 5) {
+    // The attribute bits, then three bits of underline style; the bits above them stay clear.
+    constexpr unsigned underline_shift = 8;
+    constexpr unsigned underline_mask = 0x7;
+    constexpr unsigned reserved_flags = 0xf800;
+
+    const unsigned bits = flags;
+    if ((bits & reserved_flags) != 0 || ((bits >> underline_shift) & underline_mask) > std::to_underlying(UnderlineStyle::dashed)) {
       throw EncodingError{"Invalid cell style"};
     }
   }
 
   void Cell::validate() const {
     const auto raw_width = static_cast<Byte>(width);
-    if (raw_width > 2 || text.size() > 16 || (raw_width == 0 ? !text.empty() : text.empty())) {
+    if (raw_width > 2 || text.size() > maximum_text_bytes || (raw_width == 0 ? !text.empty() : text.empty())) {
       throw EncodingError{"Invalid terminal cell"};
     }
 
@@ -582,9 +624,11 @@ namespace telar {
 
   std::size_t BodySchema<CellColor>::encodedSize(const CellColor& value) {
     EnumByte<CellColor::Kind, 2>::validate(value.kind);
-    return value.kind == CellColor::Kind::default_color ? 1
-           : value.kind == CellColor::Kind::indexed     ? 2
-                                                        : 4;
+    if (value.kind == CellColor::Kind::default_color) {
+      return 1;
+    }
+
+    return value.kind == CellColor::Kind::indexed ? 2 : 4;
   }
 
   void BodySchema<CellColor>::encodeBody(const CellColor& value, std::span<Byte>& output) {
@@ -596,7 +640,7 @@ namespace telar {
     }
   }
 
-  void BodySchema<CellColor>::decodeBody(std::span<const Byte>& input, CellColor& value, DecodeStorage&) {
+  void BodySchema<CellColor>::decodeBody(std::span<const Byte>& input, CellColor& value, DecodeStorage& /*storage*/) {
     value.kind = EnumByte<CellColor::Kind, 2>::decode(input);
     for (std::size_t i = 0; i < encodedSize(value) - 1; ++i) {
       value.channels.atMut(i) = u8::decode(input);
@@ -608,39 +652,39 @@ namespace telar {
   }
 
   CellReader::CellReader(std::span<const Byte> bytes, std::uint32_t count)
-      : input{bytes},
-        remaining{count} {}
+      : input_{bytes},
+        remaining_{count} {}
 
   ds::Option<Cell> CellReader::next() {
-    if (remaining == 0) {
-      if (!input.empty()) {
+    if (remaining_ == 0) {
+      if (!input_.empty()) {
         throw EncodingError{"Trailing cell bytes"};
       }
 
       return ds::none;
     }
 
-    const auto header = u8::decode(input);
-    const auto length = header & 0x1f;
+    const unsigned header = u8::decode(input_);
+    const std::size_t length = header & cell_length_mask;
 
-    if ((header & 0x80) != 0) {
+    if ((header & cell_style_flag) != 0) {
       DecodeStorage storage{};
 
-      previous_style = ValueCodec<CellStyle>::decode(input, storage);
-    } else if (!previous_style) {
+      previous_style_ = ValueCodec<CellStyle>::decode(input_, storage);
+    } else if (!previous_style_) {
       throw EncodingError{"First cell needs a style"};
     }
 
-    if (static_cast<std::size_t>(length) > input.size()) {
+    if (length > input_.size()) {
       throw EncodingError{"Truncated cell text"};
     }
 
-    Cell cell{.width = static_cast<CellWidth>((header >> 5) & 3), .style = *previous_style, .text = input.first(length)};
+    Cell cell{.width = static_cast<CellWidth>((header >> cell_width_shift) & cell_width_mask), .style = *previous_style_, .text = input_.first(length)};
 
     cell.validate();
-    input = input.subspan(length);
-    --remaining;
-    if (remaining == 0 && !input.empty()) {
+    input_ = input_.subspan(length);
+    --remaining_;
+    if (remaining_ == 0 && !input_.empty()) {
       throw EncodingError{"Trailing cell bytes"};
     }
 
@@ -676,12 +720,14 @@ namespace telar {
     for (const auto& cell : cells) {
       const auto changed = (previous == nullptr) || !(*previous == cell.style);
 
-      u8::encode(static_cast<Byte>(cell.text.size() | (static_cast<Byte>(cell.width) << 5) | (changed ? 0x80 : 0)), output);
+      const unsigned width = std::to_underlying(cell.width);
+
+      u8::encode(static_cast<Byte>(cell.text.size() | (width << cell_width_shift) | (changed ? cell_style_flag : 0U)), output);
       if (changed) {
         ValueCodec<CellStyle>::encode(cell.style, output);
       }
 
-      TailBytes<16>::encode(cell.text, output);
+      TailBytes<Cell::maximum_text_bytes>::encode(cell.text, output);
       previous = &cell.style;
     }
 
@@ -690,15 +736,16 @@ namespace telar {
 
   void TextMetadata::validate(std::uint16_t cols, std::uint16_t rows) const {
     EnumByte<MetadataStatus, 2>::validate(status);
-    if (row_flags.size() != rows || links.size() > 256 || runs.size() > 2048 ||
-        uris.size() > 65536 ||
+    if (row_flags.size() != rows || links.size() > maximum_links || runs.size() > maximum_runs ||
+        uris.size() > maximum_uri_bytes ||
         (status == MetadataStatus::omitted &&
             (!links.empty() || !runs.empty() || !uris.empty()))) {
       throw EncodingError{"Invalid text metadata counts"};
     }
 
-    for (const auto flags : row_flags) {
-      if ((flags & 0xc0) != 0 || ((flags & 48) == 48) || ((flags & 4) != 0 && ((flags & 1) == 0 || cols < 2))) {
+    for (const unsigned flags : row_flags) {
+      const auto wide = (flags & rowBit(RowFlag::wide_padding)) != 0;
+      if ((flags & ~known_row_flags) != 0 || (flags & prompt_rows) == prompt_rows || (wide && ((flags & rowBit(RowFlag::wrap)) == 0 || cols < 2))) {
         throw EncodingError{"Invalid text row flags"};
       }
     }
@@ -706,7 +753,7 @@ namespace telar {
     std::size_t uri_end = 0;
 
     for (const auto& link : links) {
-      if (link.offset != uri_end || link.len == 0 || link.len > 4096 ||
+      if (link.offset != uri_end || link.len == 0 || link.len > maximum_link_bytes ||
           link.len > uris.size() - uri_end) {
         throw EncodingError{"Invalid metadata link"};
       }
@@ -746,12 +793,12 @@ namespace telar {
   }
 
   std::size_t BodySchema<TextMetadata>::encodedSize(const TextMetadata& value) {
-    if (value.row_flags.size() > 65535 || value.links.size() > 256 || value.runs.size() > 2048 ||
-        value.uris.size() > 65536) {
+    if (value.row_flags.size() > TextMetadata::maximum_rows || value.links.size() > TextMetadata::maximum_links || value.runs.size() > TextMetadata::maximum_runs ||
+        value.uris.size() > TextMetadata::maximum_uri_bytes) {
       throw EncodingError{"Text metadata exceeds capacity"};
     }
 
-    return 11 + value.row_flags.size() + (value.links.size() * 6) + (value.runs.size() * 10) +
+    return min_width + value.row_flags.size() + (value.links.size() * BodySchema<MetadataLink>::payload_size) + (value.runs.size() * BodySchema<MetadataRun>::payload_size) +
            value.uris.size();
   }
 
@@ -762,7 +809,7 @@ namespace telar {
     u16::encode(static_cast<std::uint16_t>(value.links.size()), output);
     u16::encode(static_cast<std::uint16_t>(value.runs.size()), output);
     u32::encode(static_cast<std::uint32_t>(value.uris.size()), output);
-    TailBytes<65535>::encode(value.row_flags, output);
+    TailBytes<TextMetadata::maximum_rows>::encode(value.row_flags, output);
     for (const auto& link : value.links) {
       ValueCodec<MetadataLink>::encode(link, output);
     }
@@ -771,7 +818,7 @@ namespace telar {
       ValueCodec<MetadataRun>::encode(run, output);
     }
 
-    TailBytes<65536>::encode(value.uris, output);
+    TailBytes<TextMetadata::maximum_uri_bytes>::encode(value.uris, output);
   }
 
   void BodySchema<TextMetadata>::decodeBody(DecodeInput input, tbc::mut_a<TextMetadata> value, DecodeStorage& storage) {
@@ -780,8 +827,8 @@ namespace telar {
     const auto links = u16::decode(input);
     const auto runs = u16::decode(input);
     const auto uri_length = u32::decode(input);
-    if (links > 256 || runs > 2048 || uri_length > 65536 ||
-        rows + (static_cast<std::size_t>(links) * 6) + (static_cast<std::size_t>(runs) * 10) +
+    if (links > TextMetadata::maximum_links || runs > TextMetadata::maximum_runs || uri_length > TextMetadata::maximum_uri_bytes ||
+        rows + (static_cast<std::size_t>(links) * BodySchema<MetadataLink>::payload_size) + (static_cast<std::size_t>(runs) * BodySchema<MetadataRun>::payload_size) +
                 uri_length >
             input.size()) {
       throw EncodingError{"Invalid text metadata lengths"};
@@ -823,7 +870,7 @@ namespace telar {
       return ds::none;
     }
 
-    if (length > 153098 || length > input.size()) {
+    if (length > maximum_bytes || length > input.size()) {
       throw EncodingError{"Invalid frame metadata length"};
     }
 
@@ -846,7 +893,7 @@ namespace telar {
     const auto cells = static_cast<std::uint32_t>(cols) * rows;
 
     if (pane_id == 0 || frame_id == 0 || base_frame_id >= frame_id || cols == 0 || rows == 0 ||
-        cells > 130359 || spans.size() > 4096) {
+        cells > BodySchema<TerminalSize>::max_cells || spans.size() > maximum_spans) {
       throw EncodingError{"Invalid frame header"};
     }
 

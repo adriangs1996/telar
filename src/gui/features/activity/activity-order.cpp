@@ -23,9 +23,12 @@ namespace telar::gui::features::activity {
       return Attention::done;
     case AgentStatus::ready:
       return Attention::ready;
-    default:
-      return Attention::unknown;
+    case AgentStatus::unknown:
+      break;
     }
+
+    // An unknown agent, or a status outside the enum.
+    return Attention::unknown;
   }
 
   bool AgentOrder::stacked(AgentStatus status) noexcept {

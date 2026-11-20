@@ -3,6 +3,7 @@ module telar.cli.server;
 import telar.sys.posix;
 import telar.sys.process;
 
+import telar.cli.command_limit;
 import telar.cli.control_session;
 import telar.client;
 import telar.cli.runtime_observer;
@@ -29,6 +30,21 @@ namespace telar::runtime::cli {
 
   }
 
+  namespace {
+
+    // The command a family's second word names, when its help lists it.
+    std::string_view knownCommand(Family family, std::string_view word) noexcept {
+      const HelpTopic topic{.family = familyName(family), .command = word};
+
+      return !word.empty() && helpText(topic) ? word : std::string_view{};
+    }
+
+    bool isHelpFlag(std::string_view word) noexcept {
+      return word == "--help" || word == "-h";
+    }
+
+  }
+
   ds::Option<std::string_view> helpText(HelpTopic topic) noexcept {
     for (const auto& entry : help_texts) {
       if (entry.family == topic.family && entry.command == topic.command) {
@@ -37,17 +53,6 @@ namespace telar::runtime::cli {
     }
 
     return ds::none;
-  }
-
-  // The command a family's second word names, when its help lists it.
-  static std::string_view knownCommand(Family family, std::string_view word) noexcept {
-    const HelpTopic topic{.family = familyName(family), .command = word};
-
-    return !word.empty() && helpText(topic) ? word : std::string_view{};
-  }
-
-  static bool isHelpFlag(std::string_view word) noexcept {
-    return word == "--help" || word == "-h";
   }
 
   ds::Option<HelpTopic> findHelp(std::span<char* const> words) noexcept {
@@ -86,18 +91,18 @@ namespace telar::runtime::cli {
     return HelpTopic{.family = familyName(*family), .command = knownCommand(*family, second)};
   }
 
-  ErrorText<127> helpReference(std::span<char* const> words) {
+  ErrorText<help_reference_bytes> helpReference(std::span<char* const> words) {
     const auto family = words.empty() ? ds::none : parseFamily(words.front());
     if (!family) {
-      return ErrorText<127>{"telar --help"};
+      return ErrorText<help_reference_bytes>{"telar --help"};
     }
 
     const auto command = knownCommand(*family, words.size() > 1 ? words[1] : "");
     if (command.empty()) {
-      return ErrorText<127>{"telar ", familyName(*family), " --help"};
+      return ErrorText<help_reference_bytes>{"telar ", familyName(*family), " --help"};
     }
 
-    return ErrorText<127>{"telar ", familyName(*family), " ", command, " --help"};
+    return ErrorText<help_reference_bytes>{"telar ", familyName(*family), " ", command, " --help"};
   }
 
   bool connectExisting(ds::Option<RuntimeConnection>& connection, const char* path) {
@@ -138,34 +143,36 @@ namespace telar::runtime::cli {
     return RuntimeStart::listening;
   }
 
-  template <Allocator Memory>
-  static void printEndpoint(Memory& memory, const ServerOptions& options, const RuntimePaths<Memory>& paths) {
-    ds::Option<RuntimeConnection> connection;
-    if (!connectExisting(connection, paths.socket.data())) {
-      const auto started = startRuntime(memory, options, paths);
-      if (started == RuntimeStart::exited) {
-        throw SystemError{"Runtime failed to start; inspect its .runtime.start.log", ECHILD};
+  namespace {
+
+    template <Allocator Memory>
+    void printEndpoint(Memory& memory, const ServerOptions& options, const RuntimePaths<Memory>& paths) {
+      ds::Option<RuntimeConnection> connection;
+      if (!connectExisting(connection, paths.socket.data())) {
+        const auto started = startRuntime(memory, options, paths);
+        if (started == RuntimeStart::exited) {
+          throw SystemError{"Runtime failed to start; inspect its .runtime.start.log", ECHILD};
+        }
+
+        if (started == RuntimeStart::timed_out) {
+          throw SystemError{"Runtime did not start within ten seconds", ETIMEDOUT};
+        }
       }
 
-      if (started == RuntimeStart::timed_out) {
-        throw SystemError{"Runtime did not start within ten seconds", ETIMEDOUT};
+      std::print("{}\n{}\n", std::string_view{paths.socket.data()}, textBytes(handshake::schema_id.view()));
+    }
+
+    void stopRuntime(const char* socket) {
+      ds::Option<RuntimeConnection> connection;
+      if (!connectExisting(connection, socket)) {
+        std::puts("telar runtime is not running");
+        return;
       }
+
+      connection.getMut().requestStop();
+      std::puts("telar runtime is stopping");
     }
 
-    std::printf("%s\n", paths.socket.data());
-    std::fwrite(handshake::schema_id.data(), 1, handshake::schema_id.size(), stdout);
-    std::fputc('\n', stdout);
-  }
-
-  static void stopRuntime(const char* socket) {
-    ds::Option<RuntimeConnection> connection;
-    if (!connectExisting(connection, socket)) {
-      std::puts("telar runtime is not running");
-      return;
-    }
-
-    connection.getMut().requestStop();
-    std::puts("telar runtime is stopping");
   }
 
   [[noreturn]] void execRuntime(Memory& memory, std::span<char* const> arguments) {
@@ -173,7 +180,7 @@ namespace telar::runtime::cli {
     ds::Vec<char*, Memory> command{memory};
 
     command.reserve(arguments.size() + 2);
-    command.push(const_cast<char*>(runtime.c_str()));
+    command.push(const_cast<char*>(runtime.c_str())); // NOLINT(cppcoreguidelines-pro-type-const-cast): execv's C signature takes the arguments as char*, and does not write them
     command.extend({arguments.begin(), arguments.end()});
     command.push(nullptr);
     ::execv(runtime.c_str(), command.data());
@@ -187,7 +194,7 @@ namespace telar::runtime::cli {
     }
 
     const ProcessEnvironment environment;
-    const RuntimePaths paths{memory, options, environment};
+    const RuntimePaths<Memory> paths{memory, options, environment};
 
     switch (options.action) {
     case ServerAction::stop:

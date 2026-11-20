@@ -14,10 +14,13 @@ export namespace telar {
 
 // Declared in the global module, with the vocabulary these schemas build on, so the module's
 // implementation unit defines their members there too.
+// NOLINTBEGIN(misc-use-internal-linkage): exported, and declared in the global module for editor.cpp.
 export extern "C++" {
   namespace telar {
 
     struct SuggestCommand {
+      static constexpr std::size_t maximum_text_bytes = 512;
+
       std::uint64_t request_id{};
       std::uint64_t pane_id{};
       std::string_view text;
@@ -25,9 +28,12 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<SuggestCommand>
-        : Schema<Direction::client, ClientTag::suggest_command, Field<&SuggestCommand::request_id, NonzeroU64, "request_id">, Field<&SuggestCommand::pane_id, NonzeroU64, "pane_id">, Field<&SuggestCommand::text, Text16<512, false>, "text">> {};
+        : Schema<Direction::client, ClientTag::suggest_command, Field<&SuggestCommand::request_id, NonzeroU64, "request_id">, Field<&SuggestCommand::pane_id, NonzeroU64, "pane_id">, Field<&SuggestCommand::text, Text16<SuggestCommand::maximum_text_bytes, false>, "text">> {};
 
     struct OpenEditor {
+      static constexpr std::size_t maximum_editor_bytes = 4096;
+      static constexpr std::size_t maximum_path_bytes = 4096;
+
       std::uint64_t request_id{};
       std::uint64_t pane_id{};
       std::uint64_t pane_generation{};
@@ -41,9 +47,13 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<OpenEditor>
-        : Schema<Direction::client, ClientTag::open_editor, Field<&OpenEditor::request_id, NonzeroU64, "request_id">, Field<&OpenEditor::pane_id, NonzeroU64, "pane_id">, Field<&OpenEditor::pane_generation, u64, "pane_generation">, Field<&OpenEditor::editor, DisplayText16<4096, false>, "editor">, Field<&OpenEditor::path, DisplayText16<4096, false>, "path">, Field<&OpenEditor::line, u32, "line">, Field<&OpenEditor::column, u32, "column">> {};
+        : Schema<Direction::client, ClientTag::open_editor, Field<&OpenEditor::request_id, NonzeroU64, "request_id">, Field<&OpenEditor::pane_id, NonzeroU64, "pane_id">, Field<&OpenEditor::pane_generation, u64, "pane_generation">, Field<&OpenEditor::editor, DisplayText16<OpenEditor::maximum_editor_bytes, false>, "editor">, Field<&OpenEditor::path, DisplayText16<OpenEditor::maximum_path_bytes, false>, "path">, Field<&OpenEditor::line, u32, "line">, Field<&OpenEditor::column, u32, "column">> {};
 
     struct FindPaths {
+      static constexpr std::size_t maximum_root_bytes = 4096;
+      static constexpr std::size_t maximum_query_bytes = 64;
+      static constexpr std::uint16_t maximum_limit = 50;
+
       std::uint64_t request_id{};
       std::string_view root;
       std::string_view query;
@@ -56,9 +66,11 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<FindPaths>
-        : Schema<Direction::client, ClientTag::find_paths, Field<&FindPaths::request_id, NonzeroU64, "request_id">, Field<&FindPaths::root, Text16<4096, false>, "root">, Field<&FindPaths::query, SizedText<u16, 64, true, TextRule::utf8_no_nul>, "query">, Field<&FindPaths::kind, EnumByte<PathKindFilter, 2>, "kind">, Field<&FindPaths::limit, BoundedInteger<u16, 1, 50>, "limit">, Field<&FindPaths::refresh, BoolByte, "refresh">> {};
+        : Schema<Direction::client, ClientTag::find_paths, Field<&FindPaths::request_id, NonzeroU64, "request_id">, Field<&FindPaths::root, Text16<FindPaths::maximum_root_bytes, false>, "root">, Field<&FindPaths::query, SizedText<u16, FindPaths::maximum_query_bytes, true, TextRule::utf8_no_nul>, "query">, Field<&FindPaths::kind, EnumByte<PathKindFilter, 2>, "kind">, Field<&FindPaths::limit, BoundedInteger<u16, 1, FindPaths::maximum_limit>, "limit">, Field<&FindPaths::refresh, BoolByte, "refresh">> {};
 
     struct CommandSuggestion {
+      static constexpr std::size_t maximum_text_bytes = 1024;
+
       std::uint64_t request_id{};
       SuggestionStatus status{};
       std::string_view text;
@@ -68,7 +80,7 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<CommandSuggestion>
-        : Schema<Direction::server, ServerTag::command_suggestion, Field<&CommandSuggestion::request_id, NonzeroU64, "request_id">, Field<&CommandSuggestion::status, EnumByte<SuggestionStatus, 3>, "status">, Field<&CommandSuggestion::text, Text16<1024>, "text">> {};
+        : Schema<Direction::server, ServerTag::command_suggestion, Field<&CommandSuggestion::request_id, NonzeroU64, "request_id">, Field<&CommandSuggestion::status, EnumByte<SuggestionStatus, 3>, "status">, Field<&CommandSuggestion::text, Text16<CommandSuggestion::maximum_text_bytes>, "text">> {};
 
     // What a command spec leaves to the runtime: values that live where the shell runs.
     enum class CompletionProvider : Byte {
@@ -88,6 +100,8 @@ export extern "C++" {
 
     // Asks for the values of `provider` that start with `prefix`, for the pane's integrated shell.
     struct CompleteWords {
+      static constexpr std::size_t maximum_prefix_bytes = 256;
+
       std::uint64_t request_id{};
       std::uint64_t pane_id{};
       CompletionProvider provider{};
@@ -96,9 +110,11 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<CompleteWords>
-        : Schema<Direction::client, ClientTag::complete_words, Field<&CompleteWords::request_id, NonzeroU64, "request_id">, Field<&CompleteWords::pane_id, NonzeroU64, "pane_id">, Field<&CompleteWords::provider, EnumByte<CompletionProvider, 9>, "provider">, Field<&CompleteWords::prefix, DisplayText16<256>, "prefix">> {};
+        : Schema<Direction::client, ClientTag::complete_words, Field<&CompleteWords::request_id, NonzeroU64, "request_id">, Field<&CompleteWords::pane_id, NonzeroU64, "pane_id">, Field<&CompleteWords::provider, EnumByte<CompletionProvider, std::to_underlying(CompletionProvider::compose_service)>, "provider">, Field<&CompleteWords::prefix, DisplayText16<CompleteWords::maximum_prefix_bytes>, "prefix">> {};
 
     struct CompletionWords {
+      static constexpr std::size_t maximum_words = 256;
+
       std::uint64_t request_id{};
       bool truncated{};
       std::span<const CompletionWord> words;
@@ -106,12 +122,14 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<CompletionWords>
-        : Schema<Direction::server, ServerTag::completion_words, Field<&CompletionWords::request_id, NonzeroU64, "request_id">, Field<&CompletionWords::truncated, BoolByte, "truncated">, SpanCountField<&CompletionWords::words, u16, ValueCodec<CompletionWord>, 256, "word_count", 0>, SpanItemsField<&CompletionWords::words, ValueCodec<CompletionWord>, "words">> {};
+        : Schema<Direction::server, ServerTag::completion_words, Field<&CompletionWords::request_id, NonzeroU64, "request_id">, Field<&CompletionWords::truncated, BoolByte, "truncated">, SpanCountField<&CompletionWords::words, u16, ValueCodec<CompletionWord>, CompletionWords::maximum_words, "word_count", 0>, SpanItemsField<&CompletionWords::words, ValueCodec<CompletionWord>, "words">> {};
 
     // The completion spec of a command, which the runtime holds: the specs telar ships and the
     // ones in the user's completions directory. It answers only for a command the pane's
     // shell runs; with the digest of the spec the client holds, an unchanged one is not sent.
     struct RequestCommandSpec {
+      static constexpr std::size_t maximum_command_bytes = 64;
+
       std::uint64_t request_id{};
       std::uint64_t pane_id{};
       std::string_view command;
@@ -120,7 +138,7 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<RequestCommandSpec>
-        : Schema<Direction::client, ClientTag::request_command_spec, Field<&RequestCommandSpec::request_id, NonzeroU64, "request_id">, Field<&RequestCommandSpec::pane_id, NonzeroU64, "pane_id">, Field<&RequestCommandSpec::command, DisplayText16<64, false>, "command">, Field<&RequestCommandSpec::known_digest, u64, "known_digest">> {};
+        : Schema<Direction::client, ClientTag::request_command_spec, Field<&RequestCommandSpec::request_id, NonzeroU64, "request_id">, Field<&RequestCommandSpec::pane_id, NonzeroU64, "pane_id">, Field<&RequestCommandSpec::command, DisplayText16<RequestCommandSpec::maximum_command_bytes, false>, "command">, Field<&RequestCommandSpec::known_digest, u64, "known_digest">> {};
 
     enum class CommandSpecState : Byte {
       // `source` is the spec, and `digest` names it.
@@ -132,7 +150,8 @@ export extern "C++" {
     };
 
     struct CommandSpec {
-      static constexpr std::size_t maximum_source = 256 * 1024;
+      static constexpr std::size_t maximum_source = std::size_t{256} * 1024;
+      static constexpr std::size_t maximum_expansion_bytes = 256;
 
       std::uint64_t request_id{};
       std::string_view command;
@@ -148,7 +167,7 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<CommandSpec>
-        : Schema<Direction::server, ServerTag::command_spec, Field<&CommandSpec::request_id, NonzeroU64, "request_id">, Field<&CommandSpec::command, DisplayText16<64, false>, "command">, Field<&CommandSpec::state, EnumByte<CommandSpecState, 2>, "state">, Field<&CommandSpec::digest, u64, "digest">, Field<&CommandSpec::source, SizedText<u32, CommandSpec::maximum_source, true, TextRule::utf8>, "source">, Field<&CommandSpec::expansion, DisplayText16<256>, "expansion">> {};
+        : Schema<Direction::server, ServerTag::command_spec, Field<&CommandSpec::request_id, NonzeroU64, "request_id">, Field<&CommandSpec::command, DisplayText16<RequestCommandSpec::maximum_command_bytes, false>, "command">, Field<&CommandSpec::state, EnumByte<CommandSpecState, 2>, "state">, Field<&CommandSpec::digest, u64, "digest">, Field<&CommandSpec::source, SizedText<u32, CommandSpec::maximum_source, true, TextRule::utf8>, "source">, Field<&CommandSpec::expansion, DisplayText16<CommandSpec::maximum_expansion_bytes>, "expansion">> {};
 
     struct EditorOpened {
       std::uint64_t request_id{};
@@ -180,12 +199,13 @@ export extern "C++" {
               Direction::server,
               ServerTag::path_results,
               Field<&PathResults::request_id, NonzeroU64, "request_id">,
-              Field<&PathResults::root, Text16<4096, false>, "root">,
+              Field<&PathResults::root, Text16<FindPaths::maximum_root_bytes, false>, "root">,
               Field<&PathResults::scanned, u32, "scanned">,
               Field<&PathResults::complete, BoolByte, "complete">,
               Field<&PathResults::truncated, BoolByte, "truncated">,
-              SpanCountField<&PathResults::matches, u16, ValueCodec<PathMatch>, 50, "match_count", 0>,
+              SpanCountField<&PathResults::matches, u16, ValueCodec<PathMatch>, FindPaths::maximum_limit, "match_count", 0>,
               SpanItemsField<&PathResults::matches, ValueCodec<PathMatch>, "matches">> {};
 
   }
 }
+// NOLINTEND(misc-use-internal-linkage)

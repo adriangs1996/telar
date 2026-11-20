@@ -63,7 +63,7 @@ export {
       void requireUnique() const;
 
       template <typename Consumer>
-      void eachValue(Consumer&& consume) const;
+      void eachValue(const Consumer& consume) const;
 
     private:
       struct Member {
@@ -114,6 +114,9 @@ export {
 
       Payload(const Payload&) = delete;
       Payload& operator=(const Payload&) = delete;
+      Payload(Payload&&) = delete;
+      Payload& operator=(Payload&&) = delete;
+      ~Payload() = default;
 
       [[nodiscard]] std::string_view event() const;
       [[nodiscard]] std::string_view session() const;
@@ -122,16 +125,28 @@ export {
       [[nodiscard]] std::string_view toolEvent() const;
       [[nodiscard]] AgentBlockedReason blockedReason() const;
 
-      Memory& memory;
-      AgentProvider provider;
-      Object fields;
-      tbc::val_self<Object> tools;
-      std::size_t running_subagents = 0;
+      [[nodiscard]] Memory& memory() const noexcept;
+      [[nodiscard]] AgentProvider provider() const noexcept;
+      [[nodiscard]] const Object& fields() const noexcept;
+      [[nodiscard]] const Object& tools() const noexcept;
+      [[nodiscard]] std::size_t runningSubagents() const noexcept;
+      void setRunningSubagents(std::size_t count) noexcept;
 
     private:
+      void validateTools();
+      // The fields Pi and OpenCode send, and those of the agents that send hook events.
+      void readEventFields();
+      void readHookFields();
+      void readCursorFields();
+      void readClaudeFields();
       void strictBoolean(std::string_view name);
       static JsonValue toolObject(const Object& fields);
 
+      Memory& memory_;
+      AgentProvider provider_;
+      Object fields_;
+      tbc::val_self<Object> tools_;
+      std::size_t running_subagents_ = 0;
       ds::Option<ds::String<Memory>> workspace_;
     };
 
@@ -142,21 +157,32 @@ export {
 export {
   namespace telar::runtime::cli::hooks {
 
+    // The bytes the runtime shows of an event, a plan step or a title, and of an agent's message.
+    inline constexpr std::size_t display_line_bytes = 96;
+    inline constexpr std::size_t display_message_bytes = 2048;
+
     std::string_view sessionReference(std::string_view text) noexcept;
 
-    void eventLine(FixedText<96>& output, std::string_view text);
+    void eventLine(FixedText<display_line_bytes>& output, std::string_view text);
 
     std::string_view validPrefix(std::string_view text) noexcept;
 
     // Writes only `output`.
     template <std::size_t Capacity>
     void displayText(FixedText<Capacity>& output, std::string_view text, bool multiline);
-    extern template void displayText<96>(FixedText<96>& output, std::string_view text, bool multiline);
-    extern template void displayText<2048>(FixedText<2048>& output, std::string_view text, bool multiline);
+    extern template void displayText<display_line_bytes>(FixedText<display_line_bytes>& output, std::string_view text, bool multiline);
+    extern template void displayText<display_message_bytes>(FixedText<display_message_bytes>& output, std::string_view text, bool multiline);
 
     bool defaultOpenCodeTitle(std::string_view title) noexcept;
 
   }
+}
+
+// Not exported. displayText, a template its importers instantiate, calls it, so it keeps module linkage.
+namespace telar::runtime::cli::hooks {
+
+  bool printable(unsigned char byte) noexcept;
+
 }
 
 // Interface: hooks/command.cppm
@@ -172,11 +198,11 @@ export {
 export {
   namespace telar::runtime::cli::hooks {
 
-    void toolEvent(FixedText<96>& output, const Payload& input);
+    void toolEvent(FixedText<display_line_bytes>& output, const Payload& input);
 
-    bool questionEvent(FixedText<96>& output, const Payload& input);
+    bool questionEvent(FixedText<display_line_bytes>& output, const Payload& input);
 
-    void backgroundEvent(FixedText<96>& output, std::size_t count);
+    void backgroundEvent(FixedText<display_line_bytes>& output, std::size_t count);
 
   }
 }

@@ -103,7 +103,13 @@ namespace telar::gui::inline foundation::inline fonts::glyphs {
     case Shape::powerline_forwardslash_redundant:
       set({{.y = height}, {.x = width}});
       break;
-    default:
+    case Shape::rounded_down_right:
+    case Shape::rounded_down_left:
+    case Shape::rounded_up_left:
+    case Shape::rounded_up_right:
+    case Shape::rising_diagonal:
+    case Shape::falling_diagonal:
+    case Shape::diagonal_cross:
       break;
     }
   }
@@ -231,7 +237,7 @@ namespace telar::gui::inline foundation::inline fonts::glyphs {
     const auto delta_x = last.x - first.x;
     const auto delta_y = last.y - first.y;
     const auto length = (delta_x * delta_x) + (delta_y * delta_y);
-    const auto fraction = length == 0 ? 0 : std::clamp((((point.x - first.x) * delta_x) + ((point.y - first.y) * delta_y)) / length, 0.0F, 1.0F);
+    const auto fraction = std::equal_to<>{}(length, 0.0F) ? 0 : std::clamp((((point.x - first.x) * delta_x) + ((point.y - first.y) * delta_y)) / length, 0.0F, 1.0F);
     const auto x = point.x - first.x - (fraction * delta_x);
     const auto y = point.y - first.y - (fraction * delta_y);
 

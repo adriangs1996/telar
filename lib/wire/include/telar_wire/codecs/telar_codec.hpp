@@ -18,6 +18,28 @@ namespace telar {
     template <Allocator Memory>
     using Text = ds::String<Memory>;
 
+    // A string as a quoted literal, the bytes that are not printable escaped as \xNN.
+    template <Allocator Memory>
+    Text<Memory> inspectText(Memory& memory, std::string_view value) {
+      Text<Memory> text{memory, "\""};
+
+      for (const auto character : value) {
+        const auto byte = static_cast<Byte>(character);
+        if (byte >= first_printable_byte && byte <= last_printable_byte && byte != '"' && byte != '\\') {
+          text.push(character);
+        } else {
+          const auto digits = hexPair(byte);
+
+          text.append("\\x");
+          text.push(digits[0]);
+          text.push(digits[1]);
+        }
+      }
+
+      text.push('"');
+      return text;
+    }
+
     template <Allocator Memory, typename Value>
     Text<Memory> inspectValue(Memory& memory, const Value& value) {
       using T = std::remove_cvref_t<Value>;
@@ -27,33 +49,19 @@ namespace telar {
       } else if constexpr (std::is_enum_v<T>) {
         return inspectValue(memory, static_cast<std::underlying_type_t<T>>(value));
       } else if constexpr (std::is_integral_v<T>) {
-        ds::Array<char, 24> digits;
-        const auto end = std::to_chars(digits.dataMut(), digits.dataMut() + digits.size(), value).ptr;
+        ds::Array<char, std::numeric_limits<T>::digits10 + 2> digits{};
+        const auto view = digits.viewMut();
+        const auto end = std::to_chars(std::to_address(view.begin()), std::to_address(view.end()), value).ptr;
 
         return Text<Memory>{memory, std::string_view{digits.data(), end}};
       } else if constexpr (std::is_same_v<T, std::string_view>) {
-        Text<Memory> text{memory, "\""};
-
-        for (const auto character : value) {
-          const auto byte = static_cast<Byte>(character);
-          if (byte >= 0x20 && byte <= 0x7e && byte != '"' && byte != '\\') {
-            text.push(character);
-          } else {
-            ds::Array<char, 5> escaped{};
-
-            std::snprintf(escaped.dataMut(), escaped.size(), "\\x%02x", static_cast<unsigned>(byte));
-            text.append(escaped.data());
-          }
-        }
-
-        text.push('"');
-        return text;
+        return inspectText(memory, value);
       } else if constexpr (requires {
                              value.has_value();
                              *value;
                            }) {
         return value ? inspectValue(memory, *value) : Text<Memory>{memory, "null"};
-      } else if constexpr (requires { std::variant_size<T>::value; }) {
+      } else if constexpr (requires { std::variant_size<T>{}; }) {
         return std::visit(
             [&](const auto& entry) {
               return inspectValue(memory, entry);
@@ -110,14 +118,78 @@ namespace telar {
       return text;
     }
 
+    template <Allocator Memory>
+    void pushColumn(ds::Vec<Column<Memory>, Memory>& columns, Text<Memory> label, std::span<const Byte> raw, std::string_view text) {
+      auto& memory = columns.memory();
+
+      columns.push(Column<Memory>{std::move(label), raw, Text<Memory>{memory, text}});
+    }
+
+    template <Allocator Memory, typename Value>
+    void appendColumns(ds::Vec<Column<Memory>, Memory>& columns, Text<Memory> name, std::span<const Byte> bytes, const Value& value);
+
+    // An optional field: the byte that marks it present, when it has one, and then its value's columns.
+    template <Allocator Memory, typename Value>
+    void appendOptionalColumns(ds::Vec<Column<Memory>, Memory>& columns, Text<Memory> name, std::span<const Byte> bytes, const Value& value) {
+      using Element = std::remove_cvref_t<decltype(*value)>;
+
+      if constexpr (requires { BodySchema<Element>::encodedSize(*value); }) {
+        if (!value) {
+          pushColumn(columns, std::move(name), bytes, "null");
+          return;
+        }
+
+        const auto size = BodySchema<Element>::encodedSize(*value);
+        const auto prefix = bytes.size() - size;
+        if (prefix != 0) {
+          pushColumn(columns, joined(name, ".length_or_present"), bytes.first(prefix), "present");
+        }
+
+        appendColumns(columns, std::move(name), bytes.subspan(prefix), *value);
+      } else {
+        auto& memory = columns.memory();
+
+        columns.push(Column<Memory>{std::move(name), bytes, inspectValue(memory, value)});
+      }
+    }
+
+    // A list field: its count, when it has one, and then each element's columns.
+    template <Allocator Memory, typename Value>
+    void appendListColumns(ds::Vec<Column<Memory>, Memory>& columns, Text<Memory> name, std::span<const Byte> bytes, const Value& value) {
+      using Element = std::remove_cv_t<typename std::remove_cvref_t<Value>::element_type>;
+      auto& memory = columns.memory();
+
+      if constexpr (requires(const Element& entry) { BodySchema<Element>::encodedSize(entry); }) {
+        std::size_t size = 0;
+
+        for (const auto& entry : value) {
+          size += BodySchema<Element>::encodedSize(entry);
+        }
+
+        const auto prefix = bytes.size() - size;
+        if (prefix != 0) {
+          columns.push(Column<Memory>{joined(name, ".count"), bytes.first(prefix), inspectValue(memory, value.size())});
+        }
+
+        bytes = bytes.subspan(prefix);
+        for (std::size_t i = 0; i < value.size(); ++i) {
+          const auto width = BodySchema<Element>::encodedSize(value[i]);
+
+          appendColumns(columns, joined(name, "[", inspectValue(memory, i), "]"), bytes.first(width), value[i]);
+          bytes = bytes.subspan(width);
+        }
+
+        if (value.empty() && prefix == 0) {
+          pushColumn(columns, std::move(name), {}, "[]");
+        }
+      } else {
+        columns.push(Column<Memory>{std::move(name), bytes, inspectValue(memory, value)});
+      }
+    }
+
     template <Allocator Memory, typename Value>
     void appendColumns(ds::Vec<Column<Memory>, Memory>& columns, Text<Memory> name, std::span<const Byte> bytes, const Value& value) {
       using T = std::remove_cvref_t<Value>;
-      auto& memory = columns.memory();
-      const auto column = [&](Text<Memory> label, std::span<const Byte> raw, std::string_view text) {
-        columns.push(Column<Memory>{std::move(label), raw, Text<Memory>{memory, text}});
-      };
-
       const auto visitor = [&](const char* field, std::span<const Byte> raw, const auto& entry) {
         appendColumns(columns, joined(name, ".", field), raw, entry);
       };
@@ -128,61 +200,20 @@ namespace telar {
                              value.has_value();
                              *value;
                            }) {
-        using Element = std::remove_cvref_t<decltype(*value)>;
-
-        if constexpr (requires { BodySchema<Element>::encodedSize(*value); }) {
-          if (value) {
-            const auto size = BodySchema<Element>::encodedSize(*value);
-            const auto prefix = bytes.size() - size;
-            if (prefix != 0) {
-              column(joined(name, ".length_or_present"), bytes.first(prefix), "present");
-            }
-
-            appendColumns(columns, std::move(name), bytes.subspan(prefix), *value);
-          } else {
-            column(std::move(name), bytes, "null");
-          }
-        } else {
-          columns.push(Column<Memory>{std::move(name), bytes, inspectValue(memory, value)});
-        }
+        appendOptionalColumns(columns, std::move(name), bytes, value);
       } else if constexpr (requires {
                              typename T::element_type;
                              value.size();
                            }) {
-        using Element = std::remove_cv_t<typename T::element_type>;
-
-        if constexpr (requires(const Element& entry) { BodySchema<Element>::encodedSize(entry); }) {
-          std::size_t size = 0;
-
-          for (const auto& entry : value) {
-            size += BodySchema<Element>::encodedSize(entry);
-          }
-
-          const auto prefix = bytes.size() - size;
-          if (prefix != 0) {
-            columns.push(Column<Memory>{joined(name, ".count"), bytes.first(prefix), inspectValue(memory, value.size())});
-          }
-
-          bytes = bytes.subspan(prefix);
-          for (std::size_t i = 0; i < value.size(); ++i) {
-            const auto width = BodySchema<Element>::encodedSize(value[i]);
-
-            appendColumns(columns, joined(name, "[", inspectValue(memory, i), "]"), bytes.first(width), value[i]);
-            bytes = bytes.subspan(width);
-          }
-
-          if (value.empty() && prefix == 0) {
-            column(std::move(name), {}, "[]");
-          }
-        } else {
-          columns.push(Column<Memory>{std::move(name), bytes, inspectValue(memory, value)});
-        }
+        appendListColumns(columns, std::move(name), bytes, value);
       } else {
+        auto& memory = columns.memory();
+
         columns.push(Column<Memory>{std::move(name), bytes, inspectValue(memory, value)});
       }
     }
 
-    enum class FrameRow {
+    enum class FrameRow : std::uint8_t {
       bytes,
       labels,
       values,
@@ -209,29 +240,33 @@ namespace telar {
       }
 
       const auto tag_bytes = input.first(u8::width);
-      ds::Array<char, sizeof("0x00")> tag_value{};
+      const auto tag_value = byteLiteral(u8::decode(input));
 
-      std::snprintf(tag_value.dataMut(), tag_value.size(), "0x%02x", static_cast<unsigned>(u8::decode(input)));
       printColumn<Row>(tag_bytes, "tag", tag_value.data(), output, !input.empty());
 
       if constexpr (Row == FrameRow::bytes) {
-        Sch::pretty_print_fields(input, output);
+        Sch::prettyPrintFields(input, output);
       } else if constexpr (Row == FrameRow::labels) {
-        Sch::pretty_print_labels(input, output);
+        Sch::prettyPrintLabels(input, output);
       } else {
-        Sch::pretty_print_values(input, output);
+        Sch::prettyPrintValues(input, output);
       }
     }
 
+    // A frame's bytes: its length prefix and the payload after it.
+    struct FrameBytes {
+      std::span<const Byte> prefix;
+      std::span<const Byte> payload;
+    };
+
     template <typename Sch, FrameRow Row>
-    void
-    printFrameRow(std::span<const Byte> prefix, std::span<const Byte> payload, std::FILE* output) {
-      auto input = prefix;
+    void printFrameRow(FrameBytes frame, std::FILE* output) {
+      auto input = frame.prefix;
       const auto length_value = valueText(u32::decode(input));
 
-      printColumn<Row>(prefix, "length", length_value.data(), output, true);
-      printPayload<Sch, Row>(payload, output);
-      std::fputc('\n', output);
+      printColumn<Row>(frame.prefix, "length", length_value.data(), output, true);
+      printPayload<Sch, Row>(frame.payload, output);
+      static_cast<void>(std::fputc('\n', output));
     }
 
     template <typename Sch>
@@ -241,10 +276,12 @@ namespace telar {
 
       u32::encode(static_cast<std::uint32_t>(payload.size()), prefix_output);
 
-      std::fputs("Frame:\n", output);
-      printFrameRow<Sch, FrameRow::bytes>(prefix, payload, output);
-      printFrameRow<Sch, FrameRow::labels>(prefix, payload, output);
-      printFrameRow<Sch, FrameRow::values>(prefix, payload, output);
+      const FrameBytes frame{.prefix = prefix.view(), .payload = payload};
+
+      static_cast<void>(std::fputs("Frame:\n", output));
+      printFrameRow<Sch, FrameRow::bytes>(frame, output);
+      printFrameRow<Sch, FrameRow::labels>(frame, output);
+      printFrameRow<Sch, FrameRow::values>(frame, output);
     }
 
   } // namespace debug
@@ -304,9 +341,8 @@ namespace telar {
       ds::Vec<debug::Column<Memory>, Memory> columns{memory};
 
       columns.push({debug::Text<Memory>{memory, "length"}, prefix.view(), debug::inspectValue(memory, payload.size())});
-      ds::Array<char, 5> tag_text{};
+      const auto tag_text = debug::byteLiteral(static_cast<Byte>(MessageSchema<Message>::tag));
 
-      std::snprintf(tag_text.dataMut(), tag_text.size(), "0x%02x", static_cast<unsigned>(MessageSchema<Message>::tag));
       columns.push({debug::Text<Memory>{memory, "tag"}, payload.first(1), debug::Text<Memory>{memory, tag_text.data()}});
       auto body = std::span<const Byte>{payload.subspan(1)};
 
@@ -314,7 +350,7 @@ namespace telar {
         debug::appendColumns(columns, debug::Text<Memory>{memory, name}, bytes, value);
       });
 
-      std::fputs("Frame:\n", output);
+      static_cast<void>(std::fputs("Frame:\n", output));
       for (int row = 0; row < 3; ++row) {
         for (std::size_t i = 0; i < columns.size(); ++i) {
           const auto& column = columns[i];
@@ -329,7 +365,7 @@ namespace telar {
           }
         }
 
-        std::fputc('\n', output);
+        static_cast<void>(std::fputc('\n', output));
       }
     }
 #endif
@@ -382,7 +418,7 @@ namespace telar {
 #ifdef TELAR_DEBUG
   template <Direction Side, auto Tag, typename Body>
   template <typename Message, Allocator Memory>
-  void MessageLayout<Side, Tag, Body>::pretty_print(Memory& memory, const Message& message, std::FILE* output) {
+  void MessageLayout<Side, Tag, Body>::prettyPrint(Memory& memory, const Message& message, std::FILE* output) {
     Codec::pretty_print(memory, message, output);
   }
 #endif

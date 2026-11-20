@@ -70,9 +70,22 @@ namespace telar::gui::inline foundation::inline keys {
     case Code::tab:
     case Code::back_tab:
       return false;
-    default:
-      return true;
+    case Code::character:
+    case Code::up:
+    case Code::down:
+    case Code::left:
+    case Code::right:
+    case Code::home:
+    case Code::end:
+    case Code::erase:
+    case Code::page_up:
+    case Code::page_down:
+    case Code::escape:
+      break;
     }
+
+    // The other keys, and one outside the enum.
+    return true;
   }
 
   KeyEncoder::Encoding::Encoding(const TerminalKey& key, const InputModes& modes)
@@ -119,7 +132,8 @@ namespace telar::gui::inline foundation::inline keys {
   }
 
   void KeyEncoder::number(std::uint32_t value) {
-    const auto encoded = std::to_chars(bytes_.dataMut() + used_, bytes_.dataMut() + bytes_.size(), value);
+    auto room = bytes_.viewMut().subspan(used_); // NOLINT(misc-const-correctness): a span written through, which tbc's deep const forbids marking const
+    const auto encoded = std::to_chars(room.data(), std::to_address(room.end()), value);
     if (encoded.ec == std::errc::value_too_large) {
       throw std::length_error{"Encoded key number exceeds its byte capacity"};
     }
@@ -205,7 +219,16 @@ namespace telar::gui::inline foundation::inline keys {
     case Code::tab:
       number('\t');
       break;
-    default:
+    case Code::up:
+    case Code::down:
+    case Code::left:
+    case Code::right:
+    case Code::home:
+    case Code::end:
+    case Code::erase:
+    case Code::page_up:
+    case Code::page_down:
+    case Code::back_tab:
       throw std::invalid_argument{"Key has no Kitty codepoint"};
     }
   }

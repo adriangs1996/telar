@@ -9,6 +9,13 @@ import telar.base.memory.allocators;
 
 namespace telar::gui::application {
 
+  namespace {
+
+    // A tab's application when nothing names one.
+    constexpr std::string_view fallback_application = "shell";
+
+  }
+
   template <Allocator Memory>
   Pane<Memory>::Pane(Memory& memory, std::uint64_t identity, features::terminal::graphics::GraphicsBudget& budget)
       : id(identity),
@@ -75,10 +82,10 @@ namespace telar::gui::application {
     std::size_t start = 0;
 
     for (auto& block : blocks.viewMut()) {
-      const auto size = block.command.size();
+      const auto length = block.command.size();
 
-      block.command = blocks_text.view().substr(start, size);
-      start += size;
+      block.command = blocks_text.view().substr(start, length);
+      start += length;
     }
   }
 
@@ -90,19 +97,17 @@ namespace telar::gui::application {
 
   template <Allocator Memory>
   tbc::val_a<std::string_view> tabApplicationName(tbc::ref_a<Tab<Memory>> tab, tbc::val_a<std::type_identity_t<const Pane<Memory>*>> pane) noexcept {
-    constexpr std::string_view fallback = "shell";
-
     if (pane != nullptr) {
       if (!pane->foreground.empty()) {
         return pane->foreground;
       }
 
       if (pane->id != tab.foreground_pane) {
-        return fallback;
+        return fallback_application;
       }
     }
 
-    return tab.foreground.empty() ? fallback : std::string_view{tab.foreground};
+    return tab.foreground.empty() ? fallback_application : std::string_view{tab.foreground};
   }
 
   template struct Pane<Memory>;

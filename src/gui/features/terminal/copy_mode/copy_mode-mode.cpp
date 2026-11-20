@@ -42,7 +42,25 @@ namespace telar::gui::features::terminal::copy_mode {
       break;
     case Command::open_link:
       return {.open_link = true};
-    default:
+    case Command::none:
+    case Command::left:
+    case Command::right:
+    case Command::up:
+    case Command::down:
+    case Command::first_column:
+    case Command::first_nonblank:
+    case Command::last_nonblank:
+    case Command::word_forward:
+    case Command::word_end:
+    case Command::word_backward:
+    case Command::paragraph_forward:
+    case Command::paragraph_backward:
+    case Command::top:
+    case Command::bottom:
+    case Command::page_up:
+    case Command::page_down:
+    case Command::half_page_up:
+    case Command::half_page_down:
       return {.handled = false};
     }
 
@@ -75,9 +93,15 @@ namespace telar::gui::features::terminal::copy_mode {
       return Command::copy;
     case Code::character:
       return characterCommand(key);
-    default:
-      return Command::none;
+    case Code::erase:
+    case Code::backspace:
+    case Code::tab:
+    case Code::back_tab:
+      break;
     }
+
+    // A key copy mode ignores, or one outside the enum.
+    return Command::none;
   }
 
   CopyNavigation::Command CopyNavigation::characterCommand(const TerminalKey& key) noexcept {
@@ -188,7 +212,17 @@ namespace telar::gui::features::terminal::copy_mode {
       state.cursor.y = grid.lastRow();
       state.viewport_offset = grid.maximumOffset();
       break;
-    default:
+    case Command::none:
+    case Command::cancel:
+    case Command::copy:
+    case Command::leave:
+    case Command::select:
+    case Command::select_lines:
+    case Command::search_forward:
+    case Command::search_backward:
+    case Command::match_next:
+    case Command::match_previous:
+    case Command::open_link:
       return false;
     }
 

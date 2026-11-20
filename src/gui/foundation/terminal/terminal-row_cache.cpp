@@ -201,7 +201,7 @@ namespace telar::gui::inline foundation::inline terminal {
       const auto& target = metadata.links[run.link_index];
       const auto offset = uris_.size();
 
-      uris_.extend({metadata.uris.begin() + target.offset, metadata.uris.begin() + target.offset + target.len});
+      uris_.extend(metadata.uris.subspan(target.offset, target.len));
       links_.push({.stable = reply.from + (run.start / reply.cols), .column = static_cast<std::uint16_t>(run.start % reply.cols), .length = run.len, .uri_offset = static_cast<std::uint32_t>(offset), .uri_length = target.len});
     }
   }
@@ -213,7 +213,7 @@ namespace telar::gui::inline foundation::inline terminal {
     for (auto& link : links_.viewMut()) {
       const auto offset = kept.size();
 
-      kept.extend({uris_.begin() + link.uri_offset, uris_.begin() + link.uri_offset + link.uri_length});
+      kept.extend(uris_.view().subspan(link.uri_offset, link.uri_length));
       link.uri_offset = static_cast<std::uint32_t>(offset);
     }
 

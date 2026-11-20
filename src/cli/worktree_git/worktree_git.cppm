@@ -40,8 +40,8 @@ export {
 export {
   namespace telar::runtime::cli::repository {
 
-    inline constexpr std::size_t max_git_output = 8 * 1024 * 1024;
-    inline constexpr std::size_t max_bundle_bytes = 256 * 1024 * 1024;
+    inline constexpr std::size_t max_git_output = std::size_t{8} * 1024 * 1024;
+    inline constexpr std::size_t max_bundle_bytes = std::size_t{256} * 1024 * 1024;
     inline constexpr std::chrono::seconds git_timeout{600};
 
     class Git {
@@ -107,7 +107,7 @@ export {
     };
 
     struct WorkspaceOptions {
-      enum class Action {
+      enum class Action : std::uint8_t {
         create,
         list,
         get,
@@ -125,7 +125,7 @@ export {
     };
 
     struct TabOptions {
-      enum class Action {
+      enum class Action : std::uint8_t {
         list,
         get,
         create,
@@ -134,7 +134,8 @@ export {
         move,
       };
       Action action{};
-      Target workspace{}, target{};
+      Target workspace{};
+      Target target{};
       ds::Option<std::string_view> label, socket;
       TabMoveDirection direction{};
       ds::Option<std::uint64_t> relative;
@@ -225,6 +226,11 @@ export {
       virtual bool operator()(std::string_view path) const = 0;
 
     protected:
+      WorktreeFilter() = default;
+      WorktreeFilter(const WorktreeFilter&) = default;
+      WorktreeFilter(WorktreeFilter&&) = default;
+      WorktreeFilter& operator=(const WorktreeFilter&) = default;
+      WorktreeFilter& operator=(WorktreeFilter&&) = default;
       ~WorktreeFilter() = default;
     };
 
@@ -274,7 +280,7 @@ export {
     void machineLabel(std::string_view value);
 
     struct WorktreeOptions {
-      enum class Action {
+      enum class Action : std::uint8_t {
         create,
         exec,
         list,

@@ -89,7 +89,7 @@ ExcludeHeaderFilterRegex: '(^|/)(lib/(tbc|ebnf)|dependencies|generated|out[^/]*|
 SystemHeaders: false
 FormatStyle: file
 CheckOptions:
-  misc-const-correctness.AllowedTypes: 'std::span;std::unique_ptr;std::shared_ptr;telar::ds::Box'
+  misc-const-correctness.AllowedTypes: 'std::(__1::)?span;std::(__1::)?unique_ptr;std::(__1::)?shared_ptr;telar::ds::Box'
   cppcoreguidelines-macro-usage.AllowedRegexp: '^TELAR_GUI_(ALLOCATOR|LINK_HOST)$'
   readability-function-size.ParameterThreshold: '5'
   readability-function-size.LineThreshold: '100'

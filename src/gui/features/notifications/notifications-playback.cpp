@@ -51,7 +51,7 @@ namespace telar::gui::features::notifications {
 
     active_ = true;
 
-    return next;
+    return *next;
   }
 
   void SoundPlayback::schedulingFailed() {

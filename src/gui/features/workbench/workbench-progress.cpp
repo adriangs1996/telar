@@ -40,11 +40,11 @@ namespace telar::gui::features::workbench {
       return target;
     }
 
-    if (target != to_) {
+    if (std::not_equal_to<>{}(target, to_)) {
       from_ = value(now_ns);
       to_ = target;
       started_ns_ = now_ns;
-      duration_ = from_ == target ? 0 : duration_ns;
+      duration_ = std::equal_to<>{}(from_, target) ? 0 : duration_ns;
     }
 
     return value(now_ns);

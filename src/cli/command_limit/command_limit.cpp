@@ -10,6 +10,7 @@ import telar.base.text;
 
 namespace telar::runtime::cli {
 
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init): push writes each byte of buffer_ before flush reads it, so zeroing its 4 KiB for every writer is work the output never needs.
   DescriptorWriter::DescriptorWriter(int descriptor) noexcept
       : descriptor_(descriptor) {}
 
@@ -25,17 +26,16 @@ namespace telar::runtime::cli {
     throw std::invalid_argument{error};
   }
 
-  enum class Sign : std::uint8_t {
-    rejected,
-    accepted,
-  };
+  namespace {
 
-  // A signed (`Sign::accepted`) or unsigned (`Sign::rejected`) integer in base
-  // 10: one optional sign, digits with inner underscores, and the error names
-  // `InvalidCharacter` and `Overflow`. An unsigned integer accepts "-0" when
-  // signs are accepted.
+    // The names of an enum's values, one for each from 0 to `Last`.
+    template <auto Last>
+    using EnumNames = ds::Array<std::string_view, std::size_t{std::to_underlying(Last)} + 1>;
+
+  }
+
   template <typename Integer>
-  static Integer parseDecimal(std::string_view text, Sign sign) {
+  Integer parseDecimal(std::string_view text, Sign sign) {
     const bool negative = sign == Sign::accepted && text.starts_with('-');
     if (sign == Sign::accepted && (text.starts_with('+') || negative)) {
       text.remove_prefix(1);
@@ -138,11 +138,11 @@ namespace telar::runtime::cli {
   }
 
   void writeText(std::string_view text, int descriptor) {
-    writeBytes(descriptor, {reinterpret_cast<const Byte*>(text.data()), text.size()});
+    writeBytes(descriptor, byteView(text));
   }
 
   std::string_view textBytes(std::span<const Byte> bytes) {
-    return {reinterpret_cast<const char*>(bytes.data()), bytes.size()};
+    return textView(bytes);
   }
 
   std::uint64_t randomIdentity() {
@@ -172,7 +172,9 @@ namespace telar::runtime::cli {
   }
 
   void reportCommandLimit(const LimitReach& reach) {
-    ds::Array<char, 512> line;
+    constexpr std::size_t line_capacity = 512;
+
+    ds::Array<char, line_capacity> line{};
     const auto written = std::format_to_n(line.dataMut(), line.size(), "telar: Limit reached: {}\n", limitDescription(reach));
 
     writeText({line.data(), std::min(static_cast<std::size_t>(written.size), line.size())}, STDERR_FILENO);
@@ -203,12 +205,12 @@ namespace telar::runtime::cli {
   template long signedNumber<long>(std::string_view text, const char* error);
   template long long signedNumber<long long>(std::string_view text, const char* error);
 
-  template PaneDirection choice<PaneDirection, 4>(std::string_view text, const char* error, const ds::Array<std::string_view, 4>& names);
-  template AgentStatus choice<AgentStatus, 6>(std::string_view text, const char* error, const ds::Array<std::string_view, 6>& names);
-  template AgentSessionFileKind choice<AgentSessionFileKind, 3>(std::string_view text, const char* error, const ds::Array<std::string_view, 3>& names);
-  template AgentReportState choice<AgentReportState, 9>(std::string_view text, const char* error, const ds::Array<std::string_view, 9>& names);
-  template AgentCommandPhase choice<AgentCommandPhase, 2>(std::string_view text, const char* error, const ds::Array<std::string_view, 2>& names);
-  template AgentBlockedReason choice<AgentBlockedReason, 5>(std::string_view text, const char* error, const ds::Array<std::string_view, 5>& names);
+  template PaneDirection choice<PaneDirection>(std::string_view text, const char* error, const EnumNames<PaneDirection::down>& names);
+  template AgentStatus choice<AgentStatus>(std::string_view text, const char* error, const EnumNames<AgentStatus::done>& names);
+  template AgentSessionFileKind choice<AgentSessionFileKind>(std::string_view text, const char* error, const EnumNames<AgentSessionFileKind::cursor_meta>& names);
+  template AgentReportState choice<AgentReportState>(std::string_view text, const char* error, const EnumNames<AgentReportState::released>& names);
+  template AgentCommandPhase choice<AgentCommandPhase>(std::string_view text, const char* error, const EnumNames<AgentCommandPhase::finished>& names);
+  template AgentBlockedReason choice<AgentBlockedReason>(std::string_view text, const char* error, const EnumNames<AgentBlockedReason::other>& names);
 
   Cursor::Cursor(tbc::val_a<Arguments> words) noexcept
       : words_(words) {}

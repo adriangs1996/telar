@@ -22,8 +22,8 @@ namespace telar::gui::inline foundation::inline keys {
 
     for (const auto& original : default_bindings) {
       const Binding binding{.keys = {prefix, original.suffix}, .length = 2, .action = original.action, .prefixed = true};
-      const bool overridden = std::ranges::any_of(explicit_bindings, [&](const auto& configured) {
-        return configured.conflictsWith(binding);
+      const bool overridden = std::ranges::any_of(explicit_bindings, [&](const auto& existing) {
+        return existing.conflictsWith(binding);
       });
       if (!overridden && count < resolved.size()) {
         resolved.atMut(count++) = binding;

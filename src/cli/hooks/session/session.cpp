@@ -13,21 +13,22 @@ namespace telar::runtime::cli::hooks {
       return;
     }
 
-    ds::Array<char, PATH_MAX> terminated;
+    ds::Array<char, PATH_MAX> terminated{};
 
-    std::memcpy(terminated.dataMut(), path.data(), path.size());
-    terminated.atMut(path.size()) = '\0';
-    FileDescriptor file{::open(terminated.data(), O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)};
-    struct stat status;
+    std::ranges::copy(path, terminated.viewMut().begin());
+    FileDescriptor file{::open(terminated.data(), combineFlags(O_RDONLY, O_NOFOLLOW, O_NONBLOCK, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+    struct stat status{};
     if (!file || ::fstat(file.get(), &status) != 0 || !S_ISREG(status.st_mode) || status.st_uid != ::getuid()) {
       return;
     }
 
-    ds::Array<char, 64 * 1024> window;
+    constexpr std::size_t window_bytes = std::size_t{64} * 1024;
+    ds::Array<char, window_bytes> window{};
     std::size_t held = 0;
 
     for (;;) {
-      const auto received = ::read(file.get(), window.dataMut() + held, window.size() - held);
+      const auto space = window.viewMut().subspan(held);
+      const auto received = ::read(file.get(), space.data(), space.size());
       if (received < 0 && sys::lastError() == EINTR) {
         continue;
       }
@@ -45,7 +46,7 @@ namespace telar::runtime::cli::hooks {
       }
 
       held = filled - consumed;
-      std::memmove(window.dataMut(), window.data() + consumed, held);
+      static_cast<void>(std::ranges::shift_left(window.viewMut().first(filled), static_cast<std::ptrdiff_t>(consumed)));
     }
   }
 
@@ -62,7 +63,7 @@ namespace telar::runtime::cli::hooks {
     item.remove_prefix(offset + key.size());
     const auto end = item.find('"');
 
-    return end == std::string_view::npos ? std::string_view{} : item.substr(0, end);
+    return end == std::string_view::npos ? std::string_view{} : std::string_view{item.data(), end};
   }
 
   std::size_t CodexSubagents::find(std::string_view identifier) const noexcept {
@@ -75,10 +76,10 @@ namespace telar::runtime::cli::hooks {
     return count_;
   }
 
-  void CodexSubagents::apply(std::string_view item) noexcept {
+  void CodexSubagents::apply(std::string_view item) noexcept { // NOLINT(bugprone-exception-escape): assign throws only past its capacity, which the size check rules out
     const auto kind = value(item, R"("kind":")");
     const auto identifier = value(item, R"("agent_thread_id":")");
-    if (identifier.empty() || identifier.size() > 64) {
+    if (identifier.empty() || identifier.size() > identifier_bytes) {
       return;
     }
 
@@ -105,7 +106,7 @@ namespace telar::runtime::cli::hooks {
       }
 
       const auto limit = std::min(bytes.size(), start + maximum_item_bytes);
-      const auto close = bytes.substr(0, limit).find('}', start + marker.size());
+      const auto close = std::string_view{bytes.data(), limit}.find('}', start + marker.size());
       if (close == std::string_view::npos) {
         if (limit == bytes.size() && !at_end) {
           return start;
@@ -115,7 +116,10 @@ namespace telar::runtime::cli::hooks {
         continue;
       }
 
-      apply(bytes.substr(start, close - start));
+      auto item = bytes;
+
+      item.remove_prefix(start);
+      apply({item.data(), close - start});
       cursor = close + 1;
     }
 
@@ -131,14 +135,16 @@ namespace telar::runtime::cli::hooks {
   Session::Session(Memory& memory, const char* socket, PaneTarget target)
       : control_(memory, socket, reply_bytes),
         target_(target) {
-    control_.receiveTimeout(30);
+    constexpr unsigned timeout_seconds = 30;
+
+    control_.receiveTimeout(timeout_seconds);
     exchange(VerifyPaneDescent{});
   }
 
   void Session::reportLimit(std::uint64_t received, std::size_t capacity) noexcept {
     try {
       control_.send(ReportLimit{.reach = {.name = "hooks.max_input_bytes", .noun = "bytes", .value = capacity, .requested = received}, .hits = 1});
-    } catch (const std::exception&) {
+    } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): the limit's report is best effort, as every report is.
     }
   }
 

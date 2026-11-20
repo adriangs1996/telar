@@ -107,7 +107,9 @@ namespace telar::gui::features::components {
       return {};
     }
 
-    return {text_.data() + range.offset, range.length};
+    const auto chars = text_.view().subspan(range.offset, range.length);
+
+    return {chars.data(), chars.size()};
   }
 
   template <Capacity Bounds>

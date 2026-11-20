@@ -49,7 +49,7 @@ namespace telar::gui::inline foundation::inline core {
     }
 
     if (!text.empty()) {
-      std::memcpy(buffer_.data() + length_, text.data(), text.size());
+      std::ranges::copy(text, buffer_.subspan(length_).begin());
       length_ += text.size();
     }
   }
@@ -77,7 +77,7 @@ namespace telar::gui::inline foundation::inline core {
         throw std::length_error{"WriteFailed"};
       }
 
-      const auto result = std::to_chars(output.data(), output.data() + output.size(), value);
+      const auto result = std::to_chars(output.data(), std::to_address(output.end()), value);
       if (result.ec == std::errc::value_too_large) {
         throw std::length_error{"WriteFailed"};
       }
@@ -117,7 +117,7 @@ namespace telar::gui::inline foundation::inline core {
 
     constexpr std::size_t capacity = std::numeric_limits<double>::max_exponent10 + std::numeric_limits<double>::max_digits10 + sizeof("-0.");
     ds::Array<char, capacity> encoded{};
-    const auto result = std::to_chars(encoded.dataMut(), encoded.dataMut() + encoded.size(), value, std::chars_format::fixed);
+    const auto result = std::to_chars(encoded.dataMut(), std::to_address(encoded.viewMut().end()), value, std::chars_format::fixed);
     if (result.ec == std::errc::value_too_large) {
       throw std::length_error{"WriteFailed"};
     }

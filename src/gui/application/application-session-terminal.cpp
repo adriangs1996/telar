@@ -349,7 +349,7 @@ namespace telar::gui::application {
       pane->document.clear();
       pane->document_shown = false;
     } else {
-      pane->document_parts.extend({message.bytes.begin(), message.bytes.end()});
+      pane->document_parts.extend(message.bytes);
       if (pane->document_parts.size() < message.size) {
         return Change::none;
       }
@@ -386,7 +386,7 @@ namespace telar::gui::application {
           return Change::none;
         }
 
-        document.parts.extend({message.bytes.begin(), message.bytes.end()});
+        document.parts.extend(message.bytes);
         if (document.parts.size() == message.size) {
           document.shown = render::decode(document.parts, document.document) == render::DecodeError::none;
           document.whole = true;
