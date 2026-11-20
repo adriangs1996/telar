@@ -1,6 +1,7 @@
 telar_add_domain(runtime traffic/proxy
   SOURCES
     authenticate/authenticate.cpp
+    client_configuration/client_configuration.cpp
     http2_capture_streams/http2_capture_streams.cpp
     intercepted_relay/intercepted_relay.cpp
     runtime/runtime.cpp

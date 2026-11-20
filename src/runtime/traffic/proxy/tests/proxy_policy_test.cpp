@@ -13,7 +13,7 @@ import telar.testing;
 import telar.config.runtime;
 import telar.lua;
 import telar.platform.process;
-import telar.runtime.traffic.proxy.runtime;
+import telar.runtime.traffic.proxy.client_configuration;
 import telar.vocabulary;
 import telar.runtime.traffic.proxy.authenticate;
 import telar.base.ds;

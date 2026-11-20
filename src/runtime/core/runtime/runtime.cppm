@@ -62,7 +62,7 @@ import telar.runtime.history.event;
 import telar.runtime.host.event_loop;
 import telar.runtime.core.model.slot_store;
 import telar.runtime.host.host_metrics;
-import telar.runtime.traffic.proxy.runtime;
+import telar.runtime.traffic.proxy.client_configuration;
 import telar.runtime.terminal.shell_integration.git_context;
 import telar.runtime.transport.connection;
 import telar.runtime.traffic.tap.protocol;

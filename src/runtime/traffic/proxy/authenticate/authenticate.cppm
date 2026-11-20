@@ -102,11 +102,14 @@ export {
   }
 }
 
-namespace telar::runtime {
+export {
+  namespace telar::runtime {
 
-  // The bytes as the characters they hold, for ProxySecretFile::ensure to write a secret's text.
-  tbc::val_a<std::span<char>> charsOf(tbc::val_a<std::span<std::uint8_t>> bytes) noexcept;
+    // The bytes as the characters they hold, for whoever writes a secret's text into storage it
+    // erases: the secret's file and the proxy URL a child process is given.
+    tbc::val_a<std::span<char>> charsOf(tbc::val_a<std::span<std::uint8_t>> bytes) noexcept;
 
+  }
 }
 
 // Interface: proxy/secret_file.cppm

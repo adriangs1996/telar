@@ -63,7 +63,7 @@ import telar.testing;
 import telar.testing.test_memory;
 import telar.runtime.core.model.slot_store;
 import telar.runtime.host.event_loop;
-import telar.runtime.traffic.proxy.runtime;
+import telar.runtime.traffic.proxy.client_configuration;
 import telar.runtime.core.execution_service;
 import telar.runtime.terminal.ghostty;
 import telar.runtime.transport.connection;
