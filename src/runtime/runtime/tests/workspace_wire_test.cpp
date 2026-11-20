@@ -136,23 +136,33 @@ namespace {
   }
 
   // A window sends `update`, then its layout is what a window of the same identity restores.
-  ClientLayoutSnapshot layoutAfter(const RuntimeHost& host, std::uint64_t identity, std::span<const UpdateClientLayout> updates) {
-    {
-      ProtocolPeer window{host.socket()};
+  // A window that opens as `identity`, sends `updates` and closes.
+  void updateLayout(const RuntimeHost& host, std::uint64_t identity, std::span<const UpdateClientLayout> updates) {
+    ProtocolPeer window{host.socket()};
 
-      window.send(RequestRuntimeState{.client_identity = identity, .interactive = true});
-      for (const auto& update : updates) {
-        window.send(update);
-      }
-
-      window.exchange<ClientList>(QueryClients{.request_id = 1});
+    window.send(RequestRuntimeState{.client_identity = identity, .interactive = true});
+    for (const auto& update : updates) {
+      window.send(update);
     }
 
-    ProtocolPeer restored{host.socket()};
+    window.exchange<ClientList>(QueryClients{.request_id = 1});
+  }
 
-    restored.send(RequestRuntimeState{.client_identity = identity, .interactive = true});
-    restored.deadline(std::chrono::seconds{5});
-    return restored.receive<ClientLayoutSnapshot>();
+  // The layout the runtime restores to `window` opening as `identity`: its tabs view the window's receive
+  // buffer, so it is read while the window lives.
+  ClientLayoutSnapshot restoredLayout(ProtocolPeer& window, std::uint64_t identity) {
+    window.send(RequestRuntimeState{.client_identity = identity, .interactive = true});
+    window.deadline(std::chrono::seconds{5});
+    return window.receive<ClientLayoutSnapshot>();
+  }
+
+  // Whether a window reopening as `identity`, after one sent `updates` under it, is restored a layout.
+  bool restoredAfter(const RuntimeHost& host, std::uint64_t identity, std::span<const UpdateClientLayout> updates) {
+    updateLayout(host, identity, updates);
+
+    ProtocolPeer window{host.socket()};
+
+    return restoredLayout(window, identity).restored;
   }
 
   ClientTabLayout tabLayout(const TabCreated& tab, bool workspace_active, std::span<const ClientLayoutNode> nodes) {
@@ -182,14 +192,20 @@ namespace {
 
     // The window shows A, then switches to B: A's tabs stay, A1 still A's active tab.
     const ds::Array<UpdateClientLayout, 2> switched{UpdateClientLayout{true, 30, false, a1.location, workspace_a}, UpdateClientLayout{true, 30, false, b1.location, workspace_b}};
-    const auto both = layoutAfter(host, 91, switched);
+    updateLayout(host, 91, switched);
+
+    ProtocolPeer reopened{host.socket()};
+    const auto both = restoredLayout(reopened, 91);
 
     check(both.restored && both.tabs.size() == 3, "switching workspaces forgot the other workspace's tabs");
     check(shows(both, a1.location, true) && shows(both, a2.location, false) && shows(both, b1.location, true));
 
     // Back in A on A2: A1 is no longer A's active tab, and B keeps its own.
     const ds::Array<UpdateClientLayout, 1> returned{UpdateClientLayout{true, 30, false, a2.location, back_to_a}};
-    const auto again = layoutAfter(host, 91, returned);
+    updateLayout(host, 91, returned);
+
+    ProtocolPeer reopened_again{host.socket()};
+    const auto again = restoredLayout(reopened_again, 91);
 
     check(again.tabs.size() == 3 && shows(again, a1.location, false) && shows(again, a2.location, true) && shows(again, b1.location, true));
   }
@@ -204,14 +220,14 @@ namespace {
 
     // As many windows as the runtime remembers, the first of them reopened since.
     for (std::uint64_t identity = 1; identity <= 16; ++identity) {
-      layoutAfter(host, identity, update);
+      check(restoredAfter(host, identity, update));
     }
 
-    check(layoutAfter(host, 1, {}).restored);
+    check(restoredAfter(host, 1, {}));
 
     // A new window takes a place, and the window just reopened keeps its own.
-    check(layoutAfter(host, 17, update).restored);
-    check(layoutAfter(host, 1, {}).restored, "the most recently used layout was evicted");
+    check(restoredAfter(host, 17, update));
+    check(restoredAfter(host, 1, {}), "the most recently used layout was evicted");
   }
 
   const telar::testing::Case case_workspace_capacity{"workspace_wire.workspace_capacity", testWorkspaceCapacity};

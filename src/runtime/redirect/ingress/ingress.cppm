@@ -31,10 +31,12 @@ export {
   namespace telar::runtime::redirect {
 
     // Whether `bits` carries any of `flags`, as poll's revents and the kernel's flag words carry
-    // them; the bits are tested unsigned.
-    template <std::integral Bits, std::same_as<int>... Flag>
+    // them; the bits are tested unsigned. A flag is an int or, as glibc declares MSG_CTRUNC and
+    // IFF_UP, an enumerator.
+    template <std::integral Bits, typename... Flag>
+      requires((std::integral<Flag> || std::is_enum_v<Flag>) && ...)
     constexpr bool anyFlag(Bits bits, Flag... flags) noexcept {
-      return (static_cast<unsigned>(bits) & static_cast<unsigned>(combineFlags(flags...))) != 0;
+      return (static_cast<unsigned>(bits) & (0U | ... | static_cast<unsigned>(flags))) != 0;
     }
 
     // A trivially copyable value read from the front of `bytes`, as the kernel and the C interfaces

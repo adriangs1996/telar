@@ -26,12 +26,14 @@ namespace telar::runtime::redirect {
 
   }
 
+#ifdef __APPLE__
   PfCommandError::PfCommandError(std::string_view output) noexcept
       : message_(output) {}
 
   const char* PfCommandError::what() const noexcept {
     return message_.cStr();
   }
+#endif
 
   LocalAddresses::LocalAddresses()
       : addresses_(nullptr, &freeifaddrs) {
