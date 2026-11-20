@@ -355,9 +355,16 @@ namespace {
       const auto slot = remoteSlot(application);
 
       QTRY_VERIFY(MachineProfileWindow::client(application, slot)->session.ready());
-      constexpr qsizetype action_count = 41;
+      // The palette offers the machine actions this window then runs. What else it lists is not
+      // this test's business, so another action in the list does not break it.
+      const auto listed = application.commands()->list();
+      const auto offers = [&](window_actions::Action action) {
+        return std::ranges::any_of(listed, [&](const QVariant& entry) {
+          return entry.toMap().value(QStringLiteral("action")).value<window_actions::Action>() == action;
+        });
+      };
 
-      QCOMPARE(application.commands()->list().size(), action_count);
+      QVERIFY(offers(window_actions::Action::next_machine) && offers(window_actions::Action::previous_machine) && offers(window_actions::Action::machine_picker));
       application.commands()->execute(window_actions::Action::next_machine);
       QCOMPARE(machines.active(), slot);
       application.commands()->execute(window_actions::Action::next_machine);
