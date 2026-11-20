@@ -18,9 +18,9 @@ static_assert(true);
 #include "ui/app/panes/terminal/history/history_controller.hpp"
 #include "ui/app/panes/terminal/terminal_controller.hpp"
 #include "ui/app/panes/terminal/terminal_item.hpp"
-#include "ui/foundation/input/mouse_buttons.hpp"
-#include "ui/foundation/input/native_pointer_events.hpp"
-#include "ui/foundation/store/store.hpp"
+#include "ui/kit/input/mouse_buttons.hpp"
+#include "ui/kit/input/native_pointer_events.hpp"
+#include "ui/kit/store/store.hpp"
 #include "window_display.hpp"
 #include <QCoreApplication>
 #include <QKeyEvent>

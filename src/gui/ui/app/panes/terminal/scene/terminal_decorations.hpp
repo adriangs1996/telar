@@ -4,9 +4,9 @@ static_assert(true);
 #endif
 
 #include "telar_wire/serializers/telar_cells.hpp"
-#include "ui/foundation/models/projection.hpp"
-#include "ui/foundation/scene/rounded_rectangle_scene.hpp"
-#include "ui/foundation/scene/scene_nodes.hpp"
+#include "ui/kit/models/projection.hpp"
+#include "ui/kit/scene/rounded_rectangle_scene.hpp"
+#include "ui/kit/scene/scene_nodes.hpp"
 #include <QQuickWindow>
 #include <QRectF>
 #include <QSGNode>

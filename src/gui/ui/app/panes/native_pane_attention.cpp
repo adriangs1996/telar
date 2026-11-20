@@ -4,9 +4,9 @@ static_assert(true);
 #endif
 
 #include "native_pane_attention.hpp"
-#include "ui/foundation/models/pane_attention_value.hpp"
-#include "ui/foundation/scene/rounded_paints_scene.hpp"
-#include "ui/foundation/scene/window_animation_clock.hpp"
+#include "ui/kit/models/pane_attention_value.hpp"
+#include "ui/kit/scene/rounded_paints_scene.hpp"
+#include "ui/kit/scene/window_animation_clock.hpp"
 #include <QColor>
 #include <QMetaObject>
 #include <QQuickItem>

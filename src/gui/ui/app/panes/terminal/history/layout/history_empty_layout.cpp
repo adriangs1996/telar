@@ -5,7 +5,7 @@ static_assert(true);
 
 #include "history_empty_layout.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "ui/foundation/models/projection.hpp"
+#include "ui/kit/models/projection.hpp"
 #include <QPointer>
 #include <QQuickItem>
 #include <QQuickWindow>

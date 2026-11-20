@@ -4,8 +4,8 @@ static_assert(true);
 #endif
 
 #include "machine_prompt_controller.hpp"
-#include "ui/foundation/models/projection.hpp"
-#include "ui/foundation/text/utf16_encoding.hpp"
+#include "ui/kit/models/projection.hpp"
+#include "ui/kit/text/utf16_encoding.hpp"
 #include <QByteArray>
 #include <QStringView>
 #include <string_view>

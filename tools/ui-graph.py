@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Measure the folder graph of src/gui/ui at a git revision and check the UI rules.
 
-A node is a directory under ui/ at any depth (`app/chrome/activity`, `foundation/scene`), so
+A node is a directory under ui/ at any depth (`app/chrome/activity`, `kit/scene`), so
 the graph keeps measuring as the tree nests. Files directly in ui/ belong to no node.
 
 - C++ edges come from `#include "ui/<folder>/<header>.hpp"` in .cpp, .hpp, .h and .mm files.
@@ -16,15 +16,15 @@ the graph keeps measuring as the tree nests. Files directly in ui/ belong to no 
 
 The report prints how many files outside app/ include the root header, how often the shared
 headers of app/ are used from outside it, and the edges and cycles of four graphs: C++ as it
-is, C++ with the shared app/ headers counted as `foundation`, the same without the edges to
+is, C++ with the shared app/ headers counted as `kit`, the same without the edges to
 app/ that are not shared headers (the root and U4's runtime_connection/application_effects),
 and QML. `-v` lists the edges of the third graph, the files that include the root header and the
 QML edges.
 
 `--rules` checks the target rules of the UI and exits with 1 when anything breaks them:
-- Every folder lives in one of three trees: app/, design/ or foundation/.
-- Anyone may use foundation/. foundation/ uses only its own subfolders.
-- design/ uses only foundation/ and its own subfolders. Anyone outside foundation/ may use it.
+- Every folder lives in one of three trees: app/, design/ or kit/.
+- Anyone may use kit/. kit/ uses only its own subfolders.
+- design/ uses only kit/ and its own subfolders. Anyone outside kit/ may use it.
 - A directory of the app/ tree is reachable only from its ancestors: its parent, its parent's
   parent, up to app/ itself. Never from a sibling, a cousin or a descendant.
 - Neither the C++ graph nor the QML graph has a cycle.
@@ -58,7 +58,7 @@ QML_NON_CODE_RE = re.compile(
 # Headers of app/ that make a file depend on ApplicationController.
 ROOT_HEADERS = {'application.hpp', 'application_controller.hpp'}
 # Headers of app/ that are utilities, not the root (U3). The second graph counts them as
-# foundation/, the third keeps them while it drops every other edge to app/.
+# kit/, the third keeps them while it drops every other edge to app/.
 SHARED_HEADERS = {
     'projection.hpp', 'list_model.hpp', 'deadline_timer.hpp', 'command_process.hpp', 'host_command.hpp',
     'utf16_encoding.hpp', 'window_frame_pacer.hpp', 'window_identity.hpp', 'launch_arguments.hpp',
@@ -66,7 +66,7 @@ SHARED_HEADERS = {
 # Long cycles print as their size only.
 CYCLE_LISTING_LIMIT = 8
 # The trees of the target layout of ui/.
-TREES = ('app', 'design', 'foundation')
+TREES = ('app', 'design', 'kit')
 
 
 def main():
@@ -200,13 +200,13 @@ def qml_graph(sources):
 
 
 def include_graph(edges, drop_root, shared_out):
-    """Return the C++ graph, with the shared app/ headers as foundation when `shared_out`, and
+    """Return the C++ graph, with the shared app/ headers as kit when `shared_out`, and
     without the other edges to app/ when `drop_root`."""
     graph = collections.defaultdict(set)
     for _, node, included, header in edges:
         shared = included == 'app' and header in SHARED_HEADERS
         if shared and shared_out:
-            included = 'foundation'
+            included = 'kit'
         if included == 'app' and drop_root and not shared:
             continue
 
@@ -257,11 +257,11 @@ def allowed(node, target):
     """Whether the target rules of the UI let `node` depend on `target`."""
     user = node.split('/')[0]
     used = target.split('/')[0]
-    if user == 'foundation':
-        return used == 'foundation'
+    if user == 'kit':
+        return used == 'kit'
     if user == 'design':
-        return used in ('foundation', 'design')
-    if used in ('foundation', 'design'):
+        return used in ('kit', 'design')
+    if used in ('kit', 'design'):
         return True
 
     # A directory of app/ is reachable only from its ancestors.
@@ -299,7 +299,7 @@ def report(rev, sources, verbose, rules):
         f'{sorted(root_folders)}',
         f'shared app headers used from outside: {dict(shared_uses)}',
         summary('C++ as is', as_is),
-        summary('C++ shared->foundation', include_graph(edges, drop_root=False, shared_out=True)),
+        summary('C++ shared->kit', include_graph(edges, drop_root=False, shared_out=True)),
         summary('C++ shared out + no root edges', without_root),
         summary('QML', qml),
     ]

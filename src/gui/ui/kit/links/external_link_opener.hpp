@@ -1,0 +1,114 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+#include "telar_base/memory/fixed_text.hpp"
+#include "telar_wire/codecs/telar_value_codec.hpp"
+#include "ui/kit/models/projection.hpp"
+#include "ui/kit/process/command_process.hpp"
+#include <QIODevice>
+#include <QProcess>
+#include <QStringList>
+#include <algorithm>
+#include <array>
+#include <chrono>
+#include <concepts>
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+#include <optional>
+#include <stdexcept>
+#include <string_view>
+#include <utility>
+#include <variant>
+
+#pragma once
+
+#include "tbc/view.hpp"
+
+import telar.gui.application;
+import telar.gui.foundation.system;
+import telar.base.ds;
+
+namespace telar::gui::qt {
+
+  using LinkOpeningFailure = CommandFailure;
+
+  struct NativeLinkHost {
+    static constexpr auto timeout = std::chrono::seconds{5};
+
+    static void start(QProcess& process, const application::terminal::links::LinkTarget& target) {
+      process.start(toQString(system::NativeExternalLinks::executable), {toQString(target.text())}, QIODevice::ReadOnly);
+    }
+  };
+
+#ifndef TELAR_GUI_LINK_HOST
+#define TELAR_GUI_LINK_HOST ::telar::gui::qt::NativeLinkHost
+#endif
+
+  using ApplicationLinkHost = TELAR_GUI_LINK_HOST;
+
+  template <typename Host>
+  concept ExternalLinkHost = CommandHost<Host, application::terminal::links::LinkTarget>;
+
+  template <typename Observer, typename Context>
+  concept LinkOpeningObserver = requires(Observer& observer, Context context, ds::Option<LinkOpeningFailure> failure) {
+    { observer.linkOpeningFinished(context, failure) } -> std::same_as<void>;
+  };
+
+  template <ExternalLinkHost Host, typename Observer, std::semiregular Context = std::monostate>
+  class ExternalLinkOpener final {
+  public:
+    static constexpr std::size_t output_limit = CommandProcess<Host, application::terminal::links::LinkTarget, ExternalLinkOpener>::output_limit;
+
+    explicit ExternalLinkOpener(Observer& observer)
+        : observer_(observer),
+          process_(*this) {
+      static_assert(LinkOpeningObserver<Observer, Context>);
+    }
+
+    ~ExternalLinkOpener() = default;
+    ExternalLinkOpener(const ExternalLinkOpener&) = delete;
+    ExternalLinkOpener& operator=(const ExternalLinkOpener&) = delete;
+    ExternalLinkOpener(ExternalLinkOpener&&) = delete;
+    ExternalLinkOpener& operator=(ExternalLinkOpener&&) = delete;
+
+    void request(const application::terminal::links::LinkTarget& target, Context context = {}) {
+      if (target.scheme() == application::terminal::links::LinkScheme::file || target.scheme() == application::terminal::links::LinkScheme::path) {
+        throw std::invalid_argument{"File links require the editor flow"};
+      }
+
+      if (opening_.request(target)) {
+        current_context_ = context;
+        process_.start(target);
+      } else {
+        pending_context_ = context;
+      }
+    }
+
+    [[nodiscard]] bool active() const noexcept {
+      return opening_.active();
+    }
+
+    void commandFinished(ds::Option<CommandFailure> failure) {
+      const auto completed = current_context_;
+
+      if (const auto next = opening_.complete()) {
+        current_context_ = pending_context_;
+        process_.start(*next);
+      }
+
+      observer_.linkOpeningFinished(completed, failure);
+    }
+
+  private:
+    Observer& observer_;
+    application::terminal::links::LinkOpening opening_;
+    Context current_context_{};
+    Context pending_context_{};
+    // The process reports back to this opener.
+    tbc::val_self<CommandProcess<Host, application::terminal::links::LinkTarget, ExternalLinkOpener>> process_;
+  };
+
+}

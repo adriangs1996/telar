@@ -5,7 +5,7 @@ static_assert(true);
 
 #include "ui/app/chrome/activity/activity_controller.hpp"
 #include "ui/app/chrome/workspaces/workspaces_controller.hpp"
-#include "ui/foundation/store/store.hpp"
+#include "ui/kit/store/store.hpp"
 #include <QObject>
 #include <QPointer>
 #include <QQuickWindow>

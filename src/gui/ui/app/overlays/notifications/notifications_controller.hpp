@@ -2,7 +2,7 @@
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);
 #endif
-#include "ui/foundation/store/store.hpp"
+#include "ui/kit/store/store.hpp"
 #include <QObject>
 #include <QPointer>
 #include <QQuickItem>

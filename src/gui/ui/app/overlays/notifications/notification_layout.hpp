@@ -7,9 +7,9 @@ static_assert(true);
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/overlays/notifications/notifications_controller.hpp"
-#include "ui/foundation/fonts/font_collection.hpp"
-#include "ui/foundation/fonts/resident_fonts.hpp"
-#include "ui/foundation/models/list_model.hpp"
+#include "ui/kit/fonts/font_collection.hpp"
+#include "ui/kit/fonts/resident_fonts.hpp"
+#include "ui/kit/models/list_model.hpp"
 #include <QAbstractItemModel>
 #include <QMetaObject>
 #include <QPointer>

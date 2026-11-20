@@ -7,7 +7,7 @@ static_assert(true);
 #include "provider_artwork.hpp"
 #include "tbc/view.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "ui/foundation/scene/scene_nodes.hpp"
+#include "ui/kit/scene/scene_nodes.hpp"
 #include <QColor>
 #include <QImage>
 #include <QMatrix4x4>

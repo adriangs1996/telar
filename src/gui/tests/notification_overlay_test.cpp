@@ -9,9 +9,9 @@ static_assert(true);
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/application_controller.hpp"
 #include "ui/app/overlays/notifications/notification_layout.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/models/list_model.hpp"
-#include "ui/foundation/models/projection.hpp"
+#include "ui/kit/fonts/bundled_fonts.hpp"
+#include "ui/kit/models/list_model.hpp"
+#include "ui/kit/models/projection.hpp"
 #include <QAbstractItemModel>
 #include <QByteArray>
 #include <QColor>

@@ -15,7 +15,7 @@ static_assert(true);
 #include "telar_wire/protocol/runtime.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/foundation/plugins/plugin_worker.hpp"
+#include "ui/kit/plugins/plugin_worker.hpp"
 #include <QByteArray>
 #include <QColor>
 #include <algorithm>
@@ -39,7 +39,7 @@ static_assert(true);
 #include "ui/app/panes/attachments/attachment_shelf.hpp"
 #endif
 #ifdef __APPLE__
-#include "ui/foundation/input/key_adapter.hpp"
+#include "ui/kit/input/key_adapter.hpp"
 #endif
 #ifdef __APPLE__
 #include "platform/private_clipboard.hpp"
@@ -77,10 +77,10 @@ static_assert(true);
 #include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/app/chrome/components/machine_chrome/machine_chrome_layout.hpp"
 #include "ui/app/panes/terminal/terminal_item.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/links/external_link_opener.hpp"
-#include "ui/foundation/machines/machine_client.hpp"
-#include "ui/foundation/models/list_model.hpp"
+#include "ui/kit/fonts/bundled_fonts.hpp"
+#include "ui/kit/links/external_link_opener.hpp"
+#include "ui/kit/machines/machine_client.hpp"
+#include "ui/kit/models/list_model.hpp"
 #include "wire_runtime.hpp"
 #include <QAbstractItemModel>
 #include <QCoreApplication>

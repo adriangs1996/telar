@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "history_selection_layout.hpp"
-#include "ui/foundation/scene/window_animation_clock.hpp"
+#include "ui/kit/scene/window_animation_clock.hpp"
 #include <QMetaObject>
 #include <QPointer>
 #include <QQuickItem>

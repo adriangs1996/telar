@@ -7,8 +7,8 @@ static_assert(true);
 #include "ui/app/chrome/mode_bar/mode_projection.hpp"
 #include "ui/design/controls/cell_text_grid.hpp"
 #include "ui/design/controls/native_cell_text.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/models/projection.hpp"
+#include "ui/kit/fonts/bundled_fonts.hpp"
+#include "ui/kit/models/projection.hpp"
 #include <QCoreApplication>
 #include <QDebug>
 #include <QFont>

@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "ui/app/overlays/machine_prompt/machine_profiles_source.hpp"
-#include "ui/foundation/store/store.hpp"
+#include "ui/kit/store/store.hpp"
 #include <QByteArray>
 #include <QObject>
 #include <QString>

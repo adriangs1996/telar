@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "cell_text_grid.hpp"
-#include "ui/foundation/fonts/resident_fonts.hpp"
+#include "ui/kit/fonts/resident_fonts.hpp"
 #include <QString>
 #include <algorithm>
 #include <cstdint>

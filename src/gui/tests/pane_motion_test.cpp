@@ -6,7 +6,7 @@ static_assert(true);
 #include "frame_fixture.hpp"
 #include "gui_wait.hpp"
 #include "ui/app/panes/pane_motion_layout.hpp"
-#include "ui/foundation/models/list_model.hpp"
+#include "ui/kit/models/list_model.hpp"
 #include <QGuiApplication>
 #include <QQuickWindow>
 #include <QRectF>

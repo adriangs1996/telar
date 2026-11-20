@@ -5,7 +5,7 @@
 #include "telar_wire/protocol/pane_io.hpp"
 #include "telar_wire/protocol/runtime.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "ui/foundation/machines/runtime_connection.hpp"
+#include "ui/kit/machines/runtime_connection.hpp"
 #include <QByteArrayView>
 #include <QCoreApplication>
 #include <QObject>

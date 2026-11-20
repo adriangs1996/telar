@@ -4,8 +4,8 @@ static_assert(true);
 #endif
 
 #include "native_chrome_icon.hpp"
-#include "ui/foundation/fonts/resident_fonts.hpp"
-#include "ui/foundation/scene/chrome_icon_scene.hpp"
+#include "ui/kit/fonts/resident_fonts.hpp"
+#include "ui/kit/scene/chrome_icon_scene.hpp"
 #include <QByteArray>
 #include <QColor>
 #include <QMetaObject>

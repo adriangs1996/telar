@@ -6,9 +6,9 @@ static_assert(true);
 #include "foundation/core/wheel_accumulator.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
 #include "terminal_item.hpp"
-#include "ui/foundation/input/key_adapter.hpp"
-#include "ui/foundation/input/mouse_buttons.hpp"
-#include "ui/foundation/input/scroll_event.hpp"
+#include "ui/kit/input/key_adapter.hpp"
+#include "ui/kit/input/mouse_buttons.hpp"
+#include "ui/kit/input/scroll_event.hpp"
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QHoverEvent>

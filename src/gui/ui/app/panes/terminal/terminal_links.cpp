@@ -6,8 +6,8 @@ static_assert(true);
 #include "telar_wire/serializers/telar_frame.hpp"
 #include "terminal_item.hpp"
 #include "ui/app/panes/terminal/links/link_preview.hpp"
-#include "ui/foundation/input/key_adapter.hpp"
-#include "ui/foundation/models/projection.hpp"
+#include "ui/kit/input/key_adapter.hpp"
+#include "ui/kit/models/projection.hpp"
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QHoverEvent>

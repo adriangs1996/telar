@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "native_rounded_rectangle.hpp"
-#include "ui/foundation/scene/rounded_rectangle_scene.hpp"
+#include "ui/kit/scene/rounded_rectangle_scene.hpp"
 #include <QColor>
 #include <QQuickItem>
 #include <QQuickWindow>

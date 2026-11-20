@@ -14,9 +14,9 @@ static_assert(true);
 #include "ui/app/panes/terminal/history/layout/history_inspection_layout.hpp"
 #include "ui/app/panes/terminal/history/layout/history_loading_layout.hpp"
 #include "ui/app/panes/terminal/history/layout/history_selection_layout.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/input/scroll_event.hpp"
-#include "ui/foundation/models/projection.hpp"
+#include "ui/kit/fonts/bundled_fonts.hpp"
+#include "ui/kit/input/scroll_event.hpp"
+#include "ui/kit/models/projection.hpp"
 #include <QColor>
 #include <QCoreApplication>
 #include <QElapsedTimer>

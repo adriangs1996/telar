@@ -14,7 +14,7 @@ static_assert(true);
 #include "ui/design/controls/native_agent_status.hpp"
 #include "ui/design/controls/native_tab_activity.hpp"
 #include "ui/design/elements/element_layout.hpp"
-#include "ui/foundation/scene/window_animation_clock.hpp"
+#include "ui/kit/scene/window_animation_clock.hpp"
 
 namespace telar::gui::qt {
 

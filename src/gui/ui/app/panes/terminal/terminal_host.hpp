@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "ui/foundation/fonts/font_resolver.hpp"
+#include "ui/kit/fonts/font_resolver.hpp"
 #include <QKeyEvent>
 #include <QtCore/qtypes.h>
 #include <cstdint>

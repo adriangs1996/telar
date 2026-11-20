@@ -5,7 +5,7 @@ static_assert(true);
 
 #include "native_progress_ring.hpp"
 #include "telar_base/ds/values.hpp"
-#include "ui/foundation/scene/rounded_paints_scene.hpp"
+#include "ui/kit/scene/rounded_paints_scene.hpp"
 #include <QColor>
 #include <QQuickItem>
 #include <QQuickWindow>

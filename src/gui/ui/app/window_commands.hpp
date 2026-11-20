@@ -7,10 +7,10 @@ static_assert(true);
 #include "key_bindings.hpp"
 #include "telar_wire/protocol/clients.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "ui/foundation/config/configuration_source.hpp"
-#include "ui/foundation/input/window_actions.hpp"
-#include "ui/foundation/plugins/plugin_runner.hpp"
-#include "ui/foundation/store/store.hpp"
+#include "ui/kit/config/configuration_source.hpp"
+#include "ui/kit/input/window_actions.hpp"
+#include "ui/kit/plugins/plugin_runner.hpp"
+#include "ui/kit/store/store.hpp"
 #include <QKeyEvent>
 #include <QObject>
 #include <QPointF>

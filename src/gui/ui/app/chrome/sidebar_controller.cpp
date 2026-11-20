@@ -5,10 +5,10 @@ static_assert(true);
 
 #include "sidebar_controller.hpp"
 #include "sidebar_projection.hpp"
-#include "ui/foundation/fonts/resident_fonts.hpp"
-#include "ui/foundation/fonts/typography_projection.hpp"
-#include "ui/foundation/fonts/window_font_catalog.hpp"
-#include "ui/foundation/models/projection.hpp"
+#include "ui/kit/fonts/resident_fonts.hpp"
+#include "ui/kit/fonts/typography_projection.hpp"
+#include "ui/kit/fonts/window_font_catalog.hpp"
+#include "ui/kit/models/projection.hpp"
 #include <QAbstractItemModel>
 #include <QString>
 #include <QtCore/qstringliteral.h>

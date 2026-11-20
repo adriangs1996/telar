@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "workspace_form_controller.hpp"
-#include "ui/foundation/process/environment.hpp"
+#include "ui/kit/process/environment.hpp"
 #include <QByteArray>
 #include <QFileInfo>
 #include <QStringList>

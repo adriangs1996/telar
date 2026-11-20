@@ -9,8 +9,8 @@ static_assert(true);
 #include "surface_command.hpp"
 #include "tbc/view.hpp"
 #include "ui/design/elements/element_slots.hpp"
-#include "ui/foundation/config/configuration_source.hpp"
-#include "ui/foundation/store/store.hpp"
+#include "ui/kit/config/configuration_source.hpp"
+#include "ui/kit/store/store.hpp"
 #include <QObject>
 #include <QPointF>
 #include <QPointer>

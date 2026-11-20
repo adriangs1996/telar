@@ -8,7 +8,7 @@ static_assert(true);
 #include "machines_coordinator.hpp"
 #include "ui/app/chrome/activity/activity_controller.hpp"
 #include "ui/app/overlays/peek/peek_controller.hpp"
-#include "ui/foundation/models/activity_availability.hpp"
+#include "ui/kit/models/activity_availability.hpp"
 #include <QString>
 #include <variant>
 

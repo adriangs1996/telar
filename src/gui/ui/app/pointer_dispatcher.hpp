@@ -4,8 +4,8 @@ static_assert(true);
 #endif
 
 #include "tbc/view.hpp"
-#include "ui/foundation/input/history_scroll_events.hpp"
-#include "ui/foundation/input/native_pointer_events.hpp"
+#include "ui/kit/input/history_scroll_events.hpp"
+#include "ui/kit/input/native_pointer_events.hpp"
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QObject>

@@ -7,7 +7,7 @@ static_assert(true);
 #include "pane_projection.hpp"
 #include "telar_base/ds/values.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "ui/foundation/models/projection.hpp"
+#include "ui/kit/models/projection.hpp"
 #include <QList>
 #include <QString>
 #include <algorithm>

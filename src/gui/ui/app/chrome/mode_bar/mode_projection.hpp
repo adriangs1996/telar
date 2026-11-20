@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "ui/foundation/models/projection.hpp"
+#include "ui/kit/models/projection.hpp"
 #include <QString>
 #include <QVariantList>
 #include <QVariantMap>

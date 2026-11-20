@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "foundation/core/memory.hpp"
-#include "ui/foundation/store/store.hpp"
+#include "ui/kit/store/store.hpp"
 #include <QObject>
 #include <QString>
 #include <QtQml/qqmlregistration.h>

@@ -24,8 +24,8 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
-#include "ui/foundation/config/configuration_source.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
+#include "ui/kit/config/configuration_source.hpp"
+#include "ui/kit/fonts/bundled_fonts.hpp"
 #include <QCoreApplication>
 #include <QDir>
 #include <QElapsedTimer>

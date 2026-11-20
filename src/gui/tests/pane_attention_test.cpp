@@ -7,8 +7,8 @@ static_assert(true);
 #include "gui_wait.hpp"
 #include "shape_atlas.hpp"
 #include "ui/app/panes/native_pane_attention.hpp"
-#include "ui/foundation/models/pane_attention_value.hpp"
-#include "ui/foundation/scene/window_animation_clock.hpp"
+#include "ui/kit/models/pane_attention_value.hpp"
+#include "ui/kit/scene/window_animation_clock.hpp"
 #include <QColor>
 #include <QCoreApplication>
 #include <QDebug>

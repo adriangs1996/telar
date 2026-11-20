@@ -139,12 +139,12 @@ if(TELAR_GUI_NATIVE)
     target_link_libraries(gui-platform-native PRIVATE Fontconfig::Fontconfig)
     target_sources(gui-platform-native PRIVATE platform/linux/font.c)
     target_sources(gui-platform-native PRIVATE platform/linux/window.cpp platform/linux/clipboard_image_source.cpp platform/linux/clipboard_image_monitor.cpp platform/linux/xcb_clipboard_image_monitor.cpp platform/linux/wayland_clipboard_image_monitor.cpp)
-    target_sources(gui-platform-native PRIVATE ui/foundation/scene/optical_text_fallback.cpp)
+    target_sources(gui-platform-native PRIVATE ui/kit/scene/optical_text_fallback.cpp)
   else()
     message(FATAL_ERROR "The GUI supports macOS and Linux")
   endif()
 
-  add_library(gui-keyboard STATIC ui/foundation/input/terminal_input.cpp)
+  add_library(gui-keyboard STATIC ui/kit/input/terminal_input.cpp)
   # It imports no domain; the lowest, gui-foundation-core, gives it the GUI's settings.
   target_link_libraries(gui-keyboard PUBLIC gui-foundation-core Qt6::Gui)
 
@@ -204,24 +204,24 @@ if(TELAR_GUI_NATIVE)
 
   qt_add_shaders(gui-quick gui-curve-shaders
     PREFIX "/telar/shaders"
-    BASE "${CMAKE_CURRENT_SOURCE_DIR}/ui/foundation/scene/shaders"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/ui/kit/scene/shaders"
     BATCHABLE
-    FILES ui/foundation/scene/shaders/alpha_mask.vert ui/foundation/scene/shaders/alpha_mask.frag ui/foundation/scene/shaders/nearest_alpha_mask.frag ui/foundation/scene/shaders/filtered_alpha_mask.frag ui/foundation/scene/shaders/tab_caption.frag)
+    FILES ui/kit/scene/shaders/alpha_mask.vert ui/kit/scene/shaders/alpha_mask.frag ui/kit/scene/shaders/nearest_alpha_mask.frag ui/kit/scene/shaders/filtered_alpha_mask.frag ui/kit/scene/shaders/tab_caption.frag)
 
   qt_add_shaders(gui-quick gui-shape-shaders
     PREFIX "/telar/shaders"
-    BASE "${CMAKE_CURRENT_SOURCE_DIR}/ui/foundation/scene/shaders"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/ui/kit/scene/shaders"
     BATCHABLE
     PERTARGETCOMPILE
-    FILES ui/foundation/scene/shaders/rounded_rectangle.vert ui/foundation/scene/shaders/rounded_rectangle.frag)
+    FILES ui/kit/scene/shaders/rounded_rectangle.vert ui/kit/scene/shaders/rounded_rectangle.frag)
 
   qt_add_shaders(gui-quick gui-straight-mask-shaders
     PREFIX "/telar/shaders"
-    BASE "${CMAKE_CURRENT_SOURCE_DIR}/ui/foundation/scene/shaders"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/ui/kit/scene/shaders"
     BATCHABLE
     DEFINES TELAR_STRAIGHT_ALPHA=1
     OUTPUTS straight/alpha_mask.frag.qsb straight/nearest_alpha_mask.frag.qsb straight/filtered_alpha_mask.frag.qsb
-    FILES ui/foundation/scene/shaders/alpha_mask.frag ui/foundation/scene/shaders/nearest_alpha_mask.frag ui/foundation/scene/shaders/filtered_alpha_mask.frag)
+    FILES ui/kit/scene/shaders/alpha_mask.frag ui/kit/scene/shaders/nearest_alpha_mask.frag ui/kit/scene/shaders/filtered_alpha_mask.frag)
 
   # Each folder of ui/ adds its sources and hands its QML files up (telar_add_qml_sources).
   add_subdirectory(ui)

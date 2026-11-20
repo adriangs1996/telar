@@ -35,7 +35,7 @@ namespace telar::gui::qt {
   namespace {
 
     // Spans over the pixels QImage hands out as raw pointers. This target has no Qt Quick, so it
-    // cannot use ui/foundation/scene/qt_buffers.hpp.
+    // cannot use ui/kit/scene/qt_buffers.hpp.
     std::span<uchar> imageBytes(QImage& image) {
 #pragma clang unsafe_buffer_usage begin
       return {image.bits(), static_cast<std::size_t>(image.sizeInBytes())};

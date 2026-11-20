@@ -6,9 +6,9 @@ static_assert(true);
 #include "foundation/core/memory.hpp"
 #include "telar_wire/protocol/pane_io.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "ui/foundation/models/agent_status_value.hpp"
-#include "ui/foundation/models/progress_value.hpp"
-#include "ui/foundation/models/projection.hpp"
+#include "ui/kit/models/agent_status_value.hpp"
+#include "ui/kit/models/progress_value.hpp"
+#include "ui/kit/models/projection.hpp"
 #include <QString>
 #include <QVariantMap>
 #include <QtCore/qcontainerfwd.h>

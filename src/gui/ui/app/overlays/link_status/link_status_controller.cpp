@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "link_status_controller.hpp"
-#include "ui/foundation/models/projection.hpp"
+#include "ui/kit/models/projection.hpp"
 #include <QString>
 #include <optional>
 #include <string_view>

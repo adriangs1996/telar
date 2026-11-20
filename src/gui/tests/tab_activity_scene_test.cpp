@@ -10,10 +10,10 @@ static_assert(true);
 #include "ui/design/controls/native_agent_status.hpp"
 #include "ui/design/controls/native_progress_ring.hpp"
 #include "ui/design/controls/native_tab_activity.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/models/list_model.hpp"
-#include "ui/foundation/models/progress_value.hpp"
-#include "ui/foundation/models/projection.hpp"
+#include "ui/kit/fonts/bundled_fonts.hpp"
+#include "ui/kit/models/list_model.hpp"
+#include "ui/kit/models/progress_value.hpp"
+#include "ui/kit/models/projection.hpp"
 #include <QAbstractItemModel>
 #include <QColor>
 #include <QDebug>

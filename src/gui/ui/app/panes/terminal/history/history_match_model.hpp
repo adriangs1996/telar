@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ui/foundation/models/list_model.hpp"
+#include "ui/kit/models/list_model.hpp"
 #include <QAbstractItemModel>
 #include <QList>
 #include <QObject>

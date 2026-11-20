@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "history_inspection_layout.hpp"
-#include "ui/foundation/input/scroll_event.hpp"
+#include "ui/kit/input/scroll_event.hpp"
 #include <QByteArray>
 #include <QQuickItem>
 #include <QQuickWindow>

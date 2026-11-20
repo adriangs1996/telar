@@ -11,9 +11,9 @@ static_assert(true);
 #include "telar_base/text/utf8.hpp"
 #include "ui/design/controls/form_input_context.hpp"
 #include "ui/design/controls/native_form_field.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/models/projection.hpp"
-#include "ui/foundation/text/utf16_encoding.hpp"
+#include "ui/kit/fonts/bundled_fonts.hpp"
+#include "ui/kit/models/projection.hpp"
+#include "ui/kit/text/utf16_encoding.hpp"
 #include <QClipboard>
 #include <QFont>
 #include <QGuiApplication>

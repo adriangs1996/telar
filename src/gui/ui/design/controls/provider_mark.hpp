@@ -2,7 +2,7 @@
 
 #include "tbc/view.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "ui/foundation/scene/ancestor_geometry.hpp"
+#include "ui/kit/scene/ancestor_geometry.hpp"
 #include <QColor>
 #include <QQuickItem>
 #include <QSGNode>

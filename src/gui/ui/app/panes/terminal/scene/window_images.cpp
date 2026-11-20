@@ -7,8 +7,8 @@ static_assert(true);
 #include "graphics_scene.hpp"
 #include "image_resource.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "ui/foundation/scene/scene_nodes.hpp"
-#include "ui/foundation/timing/deadline_timer.hpp"
+#include "ui/kit/scene/scene_nodes.hpp"
+#include "ui/kit/timing/deadline_timer.hpp"
 #include <QEvent>
 #include <QImage>
 #include <QObject>

@@ -63,7 +63,7 @@ def main():
     identities = {name: dict(path=str(path), sha256=digest(path)) for name, path in binaries.items()}
     manifest = dict(binaries=identities, command_line=sys.argv,
                     uptime=subprocess.check_output(['uptime'], text=True).strip(),
-                    scope='Glyph geometry and ink reads of ui/foundation/scene/cell_glyphs.hpp, without Qt scene nodes or rendering.')
+                    scope='Glyph geometry and ink reads of ui/kit/scene/cell_glyphs.hpp, without Qt scene nodes or rendering.')
     (output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     dumps = {name: digest(dump(path, output, name)) for name, path in binaries.items()}
     if dumps['baseline'] != dumps['candidate']:

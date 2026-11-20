@@ -4,8 +4,8 @@ static_assert(true);
 #endif
 
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "ui/foundation/process/command_process.hpp"
-#include "ui/foundation/process/host_command.hpp"
+#include "ui/kit/process/command_process.hpp"
+#include "ui/kit/process/host_command.hpp"
 #include <QProcess>
 #include <algorithm>
 #include <array>

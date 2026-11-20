@@ -6,7 +6,7 @@ static_assert(true);
 #include "prompt_controller.hpp"
 #include "prompt_editor_item.hpp"
 #include "telar_base/ds/values.hpp"
-#include "ui/foundation/models/projection.hpp"
+#include "ui/kit/models/projection.hpp"
 #include <QClipboard>
 #include <QGuiApplication>
 #include <algorithm>

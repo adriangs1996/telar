@@ -6,7 +6,7 @@ static_assert(true);
 #include "foundation/core/application_memory.hpp"
 #include "platform/window.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
+#include "ui/kit/fonts/bundled_fonts.hpp"
 #include <QDir>
 #include <QFileInfo>
 #include <QFileSystemWatcher>

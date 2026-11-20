@@ -11,7 +11,7 @@ static_assert(true);
 #include "ui/app/panes/attachments/attachments_controller.hpp"
 #include "ui/app/panes/terminal/copy_controller.hpp"
 #include "ui/app/panes/terminal/terminal_controller.hpp"
-#include "ui/foundation/store/store.hpp"
+#include "ui/kit/store/store.hpp"
 #include "window_commands.hpp"
 #include <algorithm>
 #include <array>
@@ -32,8 +32,8 @@ static_assert(true);
 
 #include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/app/panes/terminal/terminal_item.hpp"
-#include "ui/foundation/input/key_adapter.hpp"
-#include "ui/foundation/input/key_encoding.hpp"
+#include "ui/kit/input/key_adapter.hpp"
+#include "ui/kit/input/key_encoding.hpp"
 #include <QCoreApplication>
 #include <QScopedValueRollback>
 #include <QtCore/qchar.h>

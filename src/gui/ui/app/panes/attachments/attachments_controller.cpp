@@ -6,7 +6,7 @@ static_assert(true);
 #include "attachments_controller.hpp"
 #include "features/terminal/attachments/types.hpp"
 #include "platform/clipboard_image_source.hpp"
-#include "ui/foundation/models/projection.hpp"
+#include "ui/kit/models/projection.hpp"
 #include <QByteArray>
 #include <QEvent>
 #include <algorithm>

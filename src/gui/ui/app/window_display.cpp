@@ -5,8 +5,8 @@ static_assert(true);
 
 #include "window_display.hpp"
 #include "platform/window.hpp"
-#include "ui/foundation/fonts/typography_projection.hpp"
-#include "ui/foundation/models/projection.hpp"
+#include "ui/kit/fonts/typography_projection.hpp"
+#include "ui/kit/models/projection.hpp"
 #include <QQuickWindow>
 #include <QVariantMap>
 #include <QtCore/qcontainerfwd.h>

@@ -7,10 +7,10 @@ static_assert(true);
 #include "tbc/view.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "ui/foundation/fonts/resident_fonts.hpp"
-#include "ui/foundation/fonts/window_font_catalog.hpp"
-#include "ui/foundation/models/projection.hpp"
-#include "ui/foundation/scene/window_animation_clock.hpp"
+#include "ui/kit/fonts/resident_fonts.hpp"
+#include "ui/kit/fonts/window_font_catalog.hpp"
+#include "ui/kit/models/projection.hpp"
+#include "ui/kit/scene/window_animation_clock.hpp"
 #include <QAbstractItemModel>
 #include <QList>
 #include <QMetaObject>

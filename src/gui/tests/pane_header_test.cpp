@@ -9,10 +9,10 @@ static_assert(true);
 #include "ui/app/panes/pane_projection.hpp"
 #include "ui/design/controls/native_agent_status.hpp"
 #include "ui/design/controls/native_tab_activity.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/models/agent_status_value.hpp"
-#include "ui/foundation/models/progress_value.hpp"
-#include "ui/foundation/models/projection.hpp"
+#include "ui/kit/fonts/bundled_fonts.hpp"
+#include "ui/kit/models/agent_status_value.hpp"
+#include "ui/kit/models/progress_value.hpp"
+#include "ui/kit/models/projection.hpp"
 #include <QColor>
 #include <QFont>
 #include <QGuiApplication>

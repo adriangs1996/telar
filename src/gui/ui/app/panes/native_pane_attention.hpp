@@ -4,8 +4,8 @@ static_assert(true);
 #endif
 
 #include "tbc/view.hpp"
-#include "ui/foundation/scene/ancestor_geometry.hpp"
-#include "ui/foundation/scene/window_animation_clock.hpp"
+#include "ui/kit/scene/ancestor_geometry.hpp"
+#include "ui/kit/scene/window_animation_clock.hpp"
 #include <QColor>
 #include <QPointer>
 #include <QQuickItem>

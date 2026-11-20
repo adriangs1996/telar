@@ -382,14 +382,14 @@ DOMAIN_TESTS = ('runtime', 'cli', 'gui')
 HARNESS = 'telar.testing'
 # src/gui/ui is no domain: its folders are one QML module, and a UI test is placed by the
 # headers of ui/ it includes. Its trees, the one a test checks first.
-UI_TREES = ('app', 'design', 'foundation')
+UI_TREES = ('app', 'design', 'kit')
 UI_INCLUDE_RE = re.compile(r'^[ \t]*#[ \t]*include[ \t]*"(ui/[^"]+)/[^/"]+"', re.M)
 
 
 def ui_folder(text):
     """The ui/ folder a GUI test checks: of the folders whose headers it includes, those of the
-    tree it reaches first in UI_TREES (an app folder uses design and foundation, a design one
-    foundation), and the deepest folder that holds them all. None without a ui/ include."""
+    tree it reaches first in UI_TREES (an app folder uses design and kit, a design one
+    kit), and the deepest folder that holds them all. None without a ui/ include."""
     folders = [folder.split('/') for folder in UI_INCLUDE_RE.findall(text)]
     for tree in UI_TREES:
         checked = [folder for folder in folders if len(folder) > 1 and folder[1] == tree]

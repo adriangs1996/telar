@@ -12,7 +12,7 @@ static_assert(true);
 #include "ui/app/panes/terminal/scene/window_images.hpp"
 #include "ui/app/panes/terminal/terminal_controller.hpp"
 #include "ui/app/panes/terminal/terminal_item.hpp"
-#include "ui/foundation/scene/window_animation_clock.hpp"
+#include "ui/kit/scene/window_animation_clock.hpp"
 #include "window_display.hpp"
 #include "window_status.hpp"
 #include <QPointer>

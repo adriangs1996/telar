@@ -5,10 +5,10 @@ static_assert(true);
 
 #include "native_cell_text.hpp"
 #include "cell_text_grid.hpp"
-#include "ui/foundation/fonts/font_collection.hpp"
-#include "ui/foundation/fonts/resident_fonts.hpp"
-#include "ui/foundation/fonts/window_font_catalog.hpp"
-#include "ui/foundation/scene/chrome_text_scene.hpp"
+#include "ui/kit/fonts/font_collection.hpp"
+#include "ui/kit/fonts/resident_fonts.hpp"
+#include "ui/kit/fonts/window_font_catalog.hpp"
+#include "ui/kit/scene/chrome_text_scene.hpp"
 #include <QByteArray>
 #include <QColor>
 #include <QMetaObject>

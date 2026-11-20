@@ -8,7 +8,7 @@ static_assert(true);
 #include "foundation/core/memory.hpp"
 #include "prompt_controller.hpp"
 #include "ui/design/controls/cell_text_grid.hpp"
-#include "ui/foundation/scene/ancestor_geometry.hpp"
+#include "ui/kit/scene/ancestor_geometry.hpp"
 #include <QColor>
 #include <QElapsedTimer>
 #include <QPointer>

@@ -5,8 +5,8 @@ static_assert(true);
 
 #include "telar_platform/file_descriptor.hpp"
 #include "telar_wire/codecs/telar_wire.hpp"
-#include "ui/foundation/machines/remote_bridge.hpp"
-#include "ui/foundation/machines/ssh_options.hpp"
+#include "ui/kit/machines/remote_bridge.hpp"
+#include "ui/kit/machines/ssh_options.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QIODevice>

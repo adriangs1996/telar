@@ -6,10 +6,10 @@ static_assert(true);
 #include "machine_chrome_layout.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_wire/serializers/telar_cells.hpp"
-#include "ui/foundation/fonts/resident_fonts.hpp"
-#include "ui/foundation/fonts/window_font_catalog.hpp"
-#include "ui/foundation/machines/machine_client.hpp"
-#include "ui/foundation/models/projection.hpp"
+#include "ui/kit/fonts/resident_fonts.hpp"
+#include "ui/kit/fonts/window_font_catalog.hpp"
+#include "ui/kit/machines/machine_client.hpp"
+#include "ui/kit/models/projection.hpp"
 #include <QAbstractItemModel>
 #include <QColor>
 #include <QLatin1StringView>

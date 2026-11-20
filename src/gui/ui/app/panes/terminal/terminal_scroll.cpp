@@ -10,7 +10,7 @@ static_assert(true);
 #include "terminal_item.hpp"
 #include "ui/app/panes/terminal/scene/terminal_scene.hpp"
 #include "ui/app/panes/terminal/scroll_motion.hpp"
-#include "ui/foundation/scene/window_animation_clock.hpp"
+#include "ui/kit/scene/window_animation_clock.hpp"
 #include <QQuickWindow>
 #include <QWheelEvent>
 #include <algorithm>

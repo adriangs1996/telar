@@ -68,7 +68,7 @@ int* libraryElementCopy() {
 
 // CASE: library.container_storage_escape
 // PAIR: library.owner_pointer
-// SOURCE: src/gui/ui/foundation/config/configuration_source.cpp :: optionalText
+// SOURCE: src/gui/ui/kit/config/configuration_source.cpp :: optionalText
 // STATUS: implemented
 // CONTRACT: A pointer returned by a library container designates its storage.
 // SCENARIO: The data of a local library container is returned.
@@ -81,7 +81,7 @@ const int* libraryContainerStorageEscape() {
 
 // CASE: library.non_container_pointer
 // PAIR: library.owner_pointer
-// SOURCE: src/gui/ui/foundation/scene/curve_scene.cpp :: QQuickWindow::createTextureFromImage
+// SOURCE: src/gui/ui/kit/scene/curve_scene.cpp :: QQuickWindow::createTextureFromImage
 // STATUS: implemented
 // CONTRACT: A pointer from a library owner that is not a container has no inferable relation to it and is not reported.
 // SCENARIO: A created object outlives the local component that created it; accept.

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "tbc/view.hpp"
-#include "ui/foundation/scene/ancestor_geometry.hpp"
+#include "ui/kit/scene/ancestor_geometry.hpp"
 #include <QColor>
 #include <QQuickItem>
 #include <QRectF>

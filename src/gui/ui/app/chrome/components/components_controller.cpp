@@ -8,9 +8,9 @@ static_assert(true);
 #include "surface_command.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/design/elements/component_projection.hpp"
-#include "ui/foundation/config/configuration_source.hpp"
-#include "ui/foundation/machines/machine_client.hpp"
-#include "ui/foundation/models/projection.hpp"
+#include "ui/kit/config/configuration_source.hpp"
+#include "ui/kit/machines/machine_client.hpp"
+#include "ui/kit/models/projection.hpp"
 #include <QByteArray>
 #include <QDateTime>
 #include <QFontDatabase>

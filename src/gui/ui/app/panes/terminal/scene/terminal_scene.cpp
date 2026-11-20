@@ -10,10 +10,10 @@ static_assert(true);
 #include "telar_wire/serializers/telar_cells.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
 #include "terminal_decorations.hpp"
-#include "ui/foundation/models/projection.hpp"
-#include "ui/foundation/scene/cell_glyphs.hpp"
-#include "ui/foundation/scene/scene_nodes.hpp"
-#include "ui/foundation/scene/text_scene.hpp"
+#include "ui/kit/models/projection.hpp"
+#include "ui/kit/scene/cell_glyphs.hpp"
+#include "ui/kit/scene/scene_nodes.hpp"
+#include "ui/kit/scene/text_scene.hpp"
 #include <QMatrix4x4>
 #include <QPointF>
 #include <QRectF>

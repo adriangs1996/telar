@@ -3,7 +3,7 @@
 #include "qt_case.hpp"
 #include "ui/app/application_controller.hpp"
 #include "ui/app/panes/terminal/terminal_item.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
+#include "ui/kit/fonts/bundled_fonts.hpp"
 #include <QCoreApplication>
 #include <QEvent>
 #include <QGuiApplication>

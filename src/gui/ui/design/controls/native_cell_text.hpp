@@ -6,8 +6,8 @@ static_assert(true);
 #include "cell_text_grid.hpp"
 #include "foundation/core/memory.hpp"
 #include "tbc/view.hpp"
-#include "ui/foundation/fonts/font_collection.hpp"
-#include "ui/foundation/scene/ancestor_geometry.hpp"
+#include "ui/kit/fonts/font_collection.hpp"
+#include "ui/kit/scene/ancestor_geometry.hpp"
 #include <QColor>
 #include <QMetaObject>
 #include <QPointer>

@@ -10,8 +10,8 @@ static_assert(true);
 #include "ui/app/panes/terminal/history/layout/history_inspection_layout.hpp"
 #include "ui/app/panes/terminal/history/layout/history_meta_layout.hpp"
 #include "ui/app/panes/terminal/history/layout/history_row_layout.hpp"
-#include "ui/foundation/input/scroll_event.hpp"
-#include "ui/foundation/models/projection.hpp"
+#include "ui/kit/input/scroll_event.hpp"
+#include "ui/kit/models/projection.hpp"
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QRectF>

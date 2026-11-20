@@ -5,9 +5,9 @@ static_assert(true);
 
 #include "foundation/core/memory.hpp"
 #include "tbc/view.hpp"
-#include "ui/foundation/fonts/font_asset.hpp"
-#include "ui/foundation/fonts/resident_fonts.hpp"
-#include "ui/foundation/scene/ancestor_geometry.hpp"
+#include "ui/kit/fonts/font_asset.hpp"
+#include "ui/kit/fonts/resident_fonts.hpp"
+#include "ui/kit/scene/ancestor_geometry.hpp"
 #include <QColor>
 #include <QQuickItem>
 #include <QSGNode>

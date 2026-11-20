@@ -8,9 +8,9 @@ static_assert(true);
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/chrome/activity/agent_projection.hpp"
 #include "ui/app/chrome/sidebar_projection.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/models/list_model.hpp"
-#include "ui/foundation/models/projection.hpp"
+#include "ui/kit/fonts/bundled_fonts.hpp"
+#include "ui/kit/models/list_model.hpp"
+#include "ui/kit/models/projection.hpp"
 #include <QAbstractItemModel>
 #include <QColor>
 #include <QGuiApplication>

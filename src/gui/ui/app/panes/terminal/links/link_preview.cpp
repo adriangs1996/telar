@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "link_preview.hpp"
-#include "ui/foundation/models/projection.hpp"
+#include "ui/kit/models/projection.hpp"
 #include <QFontMetricsF>
 #include <QPointF>
 #include <QTextLayout>

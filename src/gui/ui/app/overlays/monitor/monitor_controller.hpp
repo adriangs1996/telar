@@ -3,9 +3,9 @@
 static_assert(true);
 #endif
 
-#include "ui/foundation/input/window_actions.hpp"
-#include "ui/foundation/models/list_model.hpp"
-#include "ui/foundation/store/store.hpp"
+#include "ui/kit/input/window_actions.hpp"
+#include "ui/kit/models/list_model.hpp"
+#include "ui/kit/store/store.hpp"
 #include <QAbstractItemModel>
 #include <QObject>
 #include <QString>

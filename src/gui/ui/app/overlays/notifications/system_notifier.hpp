@@ -8,8 +8,8 @@ static_assert(true);
 #include "telar_wire/serializers/telar_cells.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "ui/foundation/process/command_process.hpp"
-#include "ui/foundation/process/host_command.hpp"
+#include "ui/kit/process/command_process.hpp"
+#include "ui/kit/process/host_command.hpp"
 #include <QProcess>
 #include <algorithm>
 #include <array>

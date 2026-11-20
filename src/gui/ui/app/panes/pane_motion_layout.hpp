@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "ui/foundation/models/list_model.hpp"
+#include "ui/kit/models/list_model.hpp"
 #include <QAbstractItemModel>
 #include <QMetaObject>
 #include <QPointer>

@@ -6,8 +6,8 @@ static_assert(true);
 // projection.hpp declares telar::String textually; it comes before the header that imports
 // telar.gui.application, or clang does not merge the std::basic_string_view the two declare.
 #include "history_loading_layout.hpp"
-#include "ui/foundation/models/projection.hpp"
-#include "ui/foundation/scene/window_animation_clock.hpp"
+#include "ui/kit/models/projection.hpp"
+#include "ui/kit/scene/window_animation_clock.hpp"
 #include <QPointer>
 #include <QQuickItem>
 #include <QQuickWindow>

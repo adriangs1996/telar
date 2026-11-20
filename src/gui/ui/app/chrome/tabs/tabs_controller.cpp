@@ -7,7 +7,7 @@ static_assert(true);
 #include "tab_strip_layout.hpp"
 #include "telar_base/ds/values.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "ui/foundation/models/projection.hpp"
+#include "ui/kit/models/projection.hpp"
 #include <QList>
 #include <QtCore/qnamespace.h>
 #include <algorithm>

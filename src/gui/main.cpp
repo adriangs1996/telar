@@ -7,7 +7,7 @@ static_assert(true);
 #include "platform/window.hpp"
 #include "ui/app/application_controller.hpp"
 #include "ui/app/local_runtime_endpoint.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
+#include "ui/kit/fonts/bundled_fonts.hpp"
 #include <QCommandLineParser>
 #include <QFileInfo>
 #include <QFont>

@@ -5,8 +5,8 @@ static_assert(true);
 
 #include "prompt_editor_item.hpp"
 #include "ui/design/controls/native_cell_text.hpp"
-#include "ui/foundation/scene/qt_buffers.hpp"
-#include "ui/foundation/scene/scene_nodes.hpp"
+#include "ui/kit/scene/qt_buffers.hpp"
+#include "ui/kit/scene/scene_nodes.hpp"
 #include <QEasingCurve>
 #include <QQuickWindow>
 #include <QSGFlatColorMaterial>

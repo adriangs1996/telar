@@ -8,7 +8,7 @@ static_assert(true);
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/overlays/notifications/sound_player.hpp"
 #include "ui/app/overlays/notifications/system_notifier.hpp"
-#include "ui/foundation/process/command_process.hpp"
+#include "ui/kit/process/command_process.hpp"
 #include <QCoreApplication>
 #include <QIODevice>
 #include <QObject>

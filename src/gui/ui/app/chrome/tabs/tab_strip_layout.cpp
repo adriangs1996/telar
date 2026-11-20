@@ -5,9 +5,9 @@ static_assert(true);
 
 #include "tab_strip_layout.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "ui/foundation/fonts/chrome_fonts.hpp"
-#include "ui/foundation/models/list_model.hpp"
-#include "ui/foundation/scene/window_animation_clock.hpp"
+#include "ui/kit/fonts/chrome_fonts.hpp"
+#include "ui/kit/models/list_model.hpp"
+#include "ui/kit/scene/window_animation_clock.hpp"
 #include <QAbstractItemModel>
 #include <QByteArray>
 #include <QFont>

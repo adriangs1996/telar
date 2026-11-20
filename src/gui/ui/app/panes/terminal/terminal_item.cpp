@@ -19,11 +19,11 @@ static_assert(true);
 #include "ui/app/panes/terminal/scene/graphics_scene.hpp"
 #include "ui/app/panes/terminal/scene/terminal_scene.hpp"
 #include "ui/app/panes/terminal/scene/window_images.hpp"
-#include "ui/foundation/fonts/resident_fonts.hpp"
-#include "ui/foundation/fonts/terminal_font.hpp"
-#include "ui/foundation/fonts/window_font_catalog.hpp"
-#include "ui/foundation/input/key_adapter.hpp"
-#include "ui/foundation/input/key_encoding.hpp"
+#include "ui/kit/fonts/resident_fonts.hpp"
+#include "ui/kit/fonts/terminal_font.hpp"
+#include "ui/kit/fonts/window_font_catalog.hpp"
+#include "ui/kit/input/key_adapter.hpp"
+#include "ui/kit/input/key_encoding.hpp"
 #include <QClipboard>
 #include <QDebug>
 #include <QGuiApplication>

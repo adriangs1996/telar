@@ -12,9 +12,9 @@ static_assert(true);
 #include "telar_wire/codecs/telar_value_codec.hpp"
 #include "telar_wire/serializers/telar_cells.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
-#include "ui/foundation/fonts/terminal_font.hpp"
-#include "ui/foundation/scene/cell_glyphs.hpp"
-#include "ui/foundation/scene/text_scene.hpp"
+#include "ui/kit/fonts/terminal_font.hpp"
+#include "ui/kit/scene/cell_glyphs.hpp"
+#include "ui/kit/scene/text_scene.hpp"
 #include <QList>
 #include <QQuickWindow>
 #include <QRectF>

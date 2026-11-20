@@ -95,25 +95,25 @@ if(TELAR_GUI_NATIVE)
   target_include_directories(gui-ui-app-tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
   # native_pointer_events observes Qt's private window system interface, and on macOS
   # optical_text compares against the CoreText rasterizer of platform/macos.
-  telar_add_tests(gui-ui-foundation-tests LABEL gui.ui.foundation DIRECTORY ../ui/foundation RECURSE QT MAIN gui-testing-main
+  telar_add_tests(gui-ui-kit-tests LABEL gui.ui.kit DIRECTORY ../ui/kit RECURSE QT MAIN gui-testing-main
     LINK gui-quick gui-quickplugin Qt6::Test Qt6::GuiPrivate TIMEOUT 30)
-  set_target_properties(gui-ui-foundation-tests PROPERTIES AUTOMOC ON)
-  target_include_directories(gui-ui-foundation-tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+  set_target_properties(gui-ui-kit-tests PROPERTIES AUTOMOC ON)
+  target_include_directories(gui-ui-kit-tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
   if(APPLE)
-    target_include_directories(gui-ui-foundation-tests PRIVATE "${TELAR_PROCESS_SOURCE_DIR}/platform/macos")
+    target_include_directories(gui-ui-kit-tests PRIVATE "${TELAR_PROCESS_SOURCE_DIR}/platform/macos")
   endif()
-  qt_add_resources(gui-ui-foundation-tests gui-font-fixtures
+  qt_add_resources(gui-ui-kit-tests gui-font-fixtures
     PREFIX "/telar/test-fonts"
-    BASE "${TELAR_PROCESS_SOURCE_DIR}/ui/foundation/fonts/tests/fixtures"
-    FILES "${TELAR_PROCESS_SOURCE_DIR}/ui/foundation/fonts/tests/fixtures/metrics-variable.ttf"
-          "${TELAR_PROCESS_SOURCE_DIR}/ui/foundation/fonts/tests/fixtures/metrics-collection.ttc"
-          "${TELAR_PROCESS_SOURCE_DIR}/ui/foundation/fonts/tests/fixtures/metrics-wide-glyph.ttf")
+    BASE "${TELAR_PROCESS_SOURCE_DIR}/ui/kit/fonts/tests/fixtures"
+    FILES "${TELAR_PROCESS_SOURCE_DIR}/ui/kit/fonts/tests/fixtures/metrics-variable.ttf"
+          "${TELAR_PROCESS_SOURCE_DIR}/ui/kit/fonts/tests/fixtures/metrics-collection.ttc"
+          "${TELAR_PROCESS_SOURCE_DIR}/ui/kit/fonts/tests/fixtures/metrics-wide-glyph.ttf")
   # Package inspection hashes contents with OpenSSL; the GUI itself does not link it.
   include("${TELAR_ROOT}/cmake/openssl.cmake")
   telar_add_test(gui-plugin-packages-test SOURCES plugin_packages_test.cpp LIBRARIES gui-posix Qt6::Core OpenSSL::Crypto gui-test-fixtures
     TEST gui-plugin-packages LABELS gui.ui TIMEOUT 30)
   telar_add_test(gui-ssh-runtime-fixture NO_TEST SOURCES ssh_runtime_fixture.cpp LIBRARIES gui-foundation-core)
-  telar_add_test(gui-remote-connection-test QT SOURCES remote_connection_test.cpp ${TELAR_PROCESS_SOURCE_DIR}/ui/foundation/machines/runtime_connection.cpp ${TELAR_PROCESS_SOURCE_DIR}/ui/foundation/machines/runtime_connection.hpp LIBRARIES gui-foundation-system gui-posix Qt6::Concurrent Qt6::Network Qt6::Test gui-platform gui-features-machines gui-application gui-application
+  telar_add_test(gui-remote-connection-test QT SOURCES remote_connection_test.cpp ${TELAR_PROCESS_SOURCE_DIR}/ui/kit/machines/runtime_connection.cpp ${TELAR_PROCESS_SOURCE_DIR}/ui/kit/machines/runtime_connection.hpp LIBRARIES gui-foundation-system gui-posix Qt6::Concurrent Qt6::Network Qt6::Test gui-platform gui-features-machines gui-application gui-application
     TEST gui-remote-connection LABELS gui.ui TIMEOUT 30)
   target_include_directories(gui-remote-connection-test PRIVATE "${TELAR_PROCESS_SOURCE_DIR}")
   add_dependencies(gui-remote-connection-test gui-ssh-runtime-fixture)

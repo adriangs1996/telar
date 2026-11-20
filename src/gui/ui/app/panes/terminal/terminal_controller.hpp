@@ -8,8 +8,8 @@ static_assert(true);
 #include "foundation/core/memory.hpp"
 #include "terminal_host.hpp"
 #include "ui/app/panes/terminal/prompt/prompt_controller.hpp"
-#include "ui/foundation/input/mouse_buttons.hpp"
-#include "ui/foundation/store/store.hpp"
+#include "ui/kit/input/mouse_buttons.hpp"
+#include "ui/kit/store/store.hpp"
 #include <QByteArray>
 #include <QHash>
 #include <QMouseEvent>

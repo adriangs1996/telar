@@ -5,8 +5,8 @@ static_assert(true);
 
 #include "path_picker_controller.hpp"
 #include "platform/window.hpp"
-#include "ui/foundation/fonts/chrome_fonts.hpp"
-#include "ui/foundation/models/projection.hpp"
+#include "ui/kit/fonts/chrome_fonts.hpp"
+#include "ui/kit/models/projection.hpp"
 #include <QVariantList>
 #include <QVariantMap>
 #include <algorithm>

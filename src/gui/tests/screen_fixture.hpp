@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "telar_wire/serializers/telar_frame.hpp"
-#include "ui/foundation/models/projection.hpp"
+#include "ui/kit/models/projection.hpp"
 #include <QString>
 #include <QtCore/qchar.h>
 #include <cstddef>

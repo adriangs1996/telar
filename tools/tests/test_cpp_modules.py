@@ -480,7 +480,7 @@ class UiPlacement(unittest.TestCase):
             'src/gui/ui/app/chrome/tests/tabs_test.cpp': ui_unit(
                 ['ui/app/chrome/tabs/strip.hpp', 'ui/app/chrome/bar.hpp', 'ui/design/controls/button.hpp']),
             'src/gui/ui/design/controls/tests/button_test.cpp': ui_unit(
-                ['ui/design/controls/button.hpp', 'ui/foundation/fonts/font.hpp'], 'telar.gui.foundation.core'),
+                ['ui/design/controls/button.hpp', 'ui/kit/fonts/font.hpp'], 'telar.gui.foundation.core'),
             'src/gui/ui/app/tests/window_test.cpp': ui_unit(['ui/app/window.hpp', 'ui/app/panes/pane.hpp'], 'telar.gui.application'),
         }), 3)
 

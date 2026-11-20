@@ -9,7 +9,7 @@ static_assert(true);
 #include "telar_platform/file_descriptor.hpp"
 #include "telar_platform/open_directory.h"
 #include "telar_wire/codecs/telar_value_codec.hpp"
-#include "ui/foundation/config/plugin_packages.hpp"
+#include "ui/kit/config/plugin_packages.hpp"
 #include <algorithm>
 #include <array>
 #include <cerrno>

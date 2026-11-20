@@ -7,8 +7,8 @@ static_assert(true);
 #include "telar_config/graphics/limits.hpp"
 #include "telar_wire/serializers/telar_cells.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "ui/foundation/models/agent_status_value.hpp"
-#include "ui/foundation/models/projection.hpp"
+#include "ui/kit/models/agent_status_value.hpp"
+#include "ui/kit/models/projection.hpp"
 #include <QString>
 #include <QVariantMap>
 #include <algorithm>

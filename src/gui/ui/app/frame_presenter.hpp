@@ -6,8 +6,8 @@ static_assert(true);
 #include "foundation/core/application_memory.hpp"
 #include "tbc/annotations.hpp"
 #include "ui/app/panes/terminal/history/history_controller.hpp"
-#include "ui/foundation/store/store.hpp"
-#include "ui/foundation/timing/window_frame_pacer.hpp"
+#include "ui/kit/store/store.hpp"
+#include "ui/kit/timing/window_frame_pacer.hpp"
 #include <QObject>
 #include <QPointer>
 #include <QQuickWindow>

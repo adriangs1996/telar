@@ -6,7 +6,7 @@ static_assert(true);
 #include "assertions.hpp"
 #include "gui_wait.hpp"
 #include "platform/window.hpp"
-#include "ui/foundation/timing/window_frame_pacer.hpp"
+#include "ui/kit/timing/window_frame_pacer.hpp"
 #include <QEvent>
 #include <QGuiApplication>
 #include <QWindow>

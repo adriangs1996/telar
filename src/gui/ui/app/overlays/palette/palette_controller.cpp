@@ -5,8 +5,8 @@ static_assert(true);
 
 #include "palette_controller.hpp"
 #include "ui/design/controls/form_text_grid.hpp"
-#include "ui/foundation/models/projection.hpp"
-#include "ui/foundation/text/utf16_encoding.hpp"
+#include "ui/kit/models/projection.hpp"
+#include "ui/kit/text/utf16_encoding.hpp"
 #include <QByteArray>
 #include <QChar>
 #include <QLatin1StringView>

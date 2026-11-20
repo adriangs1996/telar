@@ -7,9 +7,9 @@ static_assert(true);
 #include "qml_fixture.hpp"
 #include "qt_case.hpp"
 #include "ui/design/controls/native_chrome_icon.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/fonts/resident_fonts.hpp"
-#include "ui/foundation/scene/alpha_mask_material.hpp"
+#include "ui/kit/fonts/bundled_fonts.hpp"
+#include "ui/kit/fonts/resident_fonts.hpp"
+#include "ui/kit/scene/alpha_mask_material.hpp"
 #include <QColor>
 #include <QDebug>
 #include <QGuiApplication>

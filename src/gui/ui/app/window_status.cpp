@@ -8,7 +8,7 @@ static_assert(true);
 #include "ui/app/chrome/metrics_projection.hpp"
 #include "ui/app/chrome/mode_bar/mode_projection.hpp"
 #include "ui/app/panes/terminal/copy_controller.hpp"
-#include "ui/foundation/models/projection.hpp"
+#include "ui/kit/models/projection.hpp"
 #include <QString>
 #include <QVariantMap>
 #include <cstddef>

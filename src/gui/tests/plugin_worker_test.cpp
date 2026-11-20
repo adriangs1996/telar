@@ -8,8 +8,8 @@ static_assert(true);
 #include "telar_wire/codecs/telar_value_codec.hpp"
 #include "telar_wire/codecs/telar_wire.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "ui/foundation/config/plugin_packages.hpp"
-#include "ui/foundation/plugins/plugin_worker.hpp"
+#include "ui/kit/config/plugin_packages.hpp"
+#include "ui/kit/plugins/plugin_worker.hpp"
 #include <QCoreApplication>
 #include <QFile>
 #include <QIODevice>

@@ -35,7 +35,7 @@ def main():
     cases = options.font or [
         (root / 'assets' / name, 'regular') for name in
         ('IBMPlexSans-Regular.ttf', 'IBMPlexSans-SemiBold.ttf', 'JetBrainsMono-Regular.ttf', 'SymbolsNerdFontMono-Regular.ttf')
-    ] + [(root / 'src/gui/ui/foundation/fonts/tests/fixtures/metrics-variable.ttf', variant) for variant in ('regular', 'wide')]
+    ] + [(root / 'src/gui/ui/kit/fonts/tests/fixtures/metrics-variable.ttf', variant) for variant in ('regular', 'wide')]
     cases = [(Path(path), variant) for path, variant in cases]
     if any(variant not in ('regular', 'wide') for _, variant in cases):
         parser.error('font variants must be regular or wide')

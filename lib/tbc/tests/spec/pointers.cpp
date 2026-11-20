@@ -799,7 +799,7 @@ int pointerOpaqueHandleComplete(pointers::complete_state& state) {
 
 // CASE: pointer.function_signature_elided
 // PAIR: pointer.function_signature
-// SOURCE: src/gui/ui/foundation/scene/window_animation_clock.cpp :: WindowAnimationClock (each lane is made by a function pointer from the arena)
+// SOURCE: src/gui/ui/kit/scene/window_animation_clock.cpp :: WindowAnimationClock (each lane is made by a function pointer from the arena)
 // STATUS: implemented
 // CONTRACT: A call through a function pointer borrows by the pointer's own signature, as Rust reads a `fn(&'a T) -> &'a U`: a result labeled with a region borrows what that region's parameters lend, and an unlabeled one what its one lending parameter lends.
 // SCENARIO: A name read through a function pointer from the text a caller lends is returned under the caller's region; accept.
@@ -840,7 +840,7 @@ tbc::view<std::string_view, tbc::lt::a> pointerFunctionSignatureLabeled(tbc::vie
 
 // CASE: pointer.function_signature_local
 // PAIR: pointer.function_signature
-// SOURCE: src/gui/ui/foundation/scene/window_animation_clock.cpp :: WindowAnimationClock (each lane is made by a function pointer from the arena)
+// SOURCE: src/gui/ui/kit/scene/window_animation_clock.cpp :: WindowAnimationClock (each lane is made by a function pointer from the arena)
 // STATUS: implemented
 // CONTRACT: A call through a function pointer borrows by the pointer's own signature, as Rust reads a `fn(&'a T) -> &'a U`: a result labeled with a region borrows what that region's parameters lend, and an unlabeled one what its one lending parameter lends.
 // SCENARIO: A name read through a function pointer from a local is returned past the local's end; reject at the return.

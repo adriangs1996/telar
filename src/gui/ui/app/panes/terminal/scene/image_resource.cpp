@@ -10,8 +10,8 @@ static_assert(true);
 #include "tbc/view.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "ui/foundation/scene/qt_buffers.hpp"
-#include "ui/foundation/scene/scene_nodes.hpp"
+#include "ui/kit/scene/qt_buffers.hpp"
+#include "ui/kit/scene/scene_nodes.hpp"
 #include <QImage>
 #include <QRgb>
 #include <QScopeGuard>

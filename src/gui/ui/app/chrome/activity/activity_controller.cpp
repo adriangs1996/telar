@@ -6,8 +6,8 @@ static_assert(true);
 #include "activity_controller.hpp"
 #include "activity_projection.hpp"
 #include "agent_projection.hpp"
-#include "ui/foundation/machines/machine_client.hpp"
-#include "ui/foundation/models/activity_availability.hpp"
+#include "ui/kit/machines/machine_client.hpp"
+#include "ui/kit/models/activity_availability.hpp"
 #include <QByteArray>
 #include <QList>
 #include <QMetaObject>

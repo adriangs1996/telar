@@ -6,9 +6,9 @@
 #include "ui/app/application_controller.hpp"
 #include "ui/app/panes/terminal/terminal_item.hpp"
 #include "ui/design/controls/native_form_field.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/input/key_adapter.hpp"
-#include "ui/foundation/models/list_model.hpp"
+#include "ui/kit/fonts/bundled_fonts.hpp"
+#include "ui/kit/input/key_adapter.hpp"
+#include "ui/kit/models/list_model.hpp"
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>

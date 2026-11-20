@@ -15,11 +15,11 @@ static_assert(true);
 #include "ui/app/chrome/tabs/tab_strip_layout.hpp"
 #include "ui/design/controls/provider_artwork.hpp"
 #include "ui/design/controls/provider_mark.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/fonts/typography_projection.hpp"
-#include "ui/foundation/models/list_model.hpp"
-#include "ui/foundation/models/projection.hpp"
-#include "ui/foundation/scene/window_animation_clock.hpp"
+#include "ui/kit/fonts/bundled_fonts.hpp"
+#include "ui/kit/fonts/typography_projection.hpp"
+#include "ui/kit/models/list_model.hpp"
+#include "ui/kit/models/projection.hpp"
+#include "ui/kit/scene/window_animation_clock.hpp"
 #include <QAbstractItemModel>
 #include <QColor>
 #include <QCoreApplication>

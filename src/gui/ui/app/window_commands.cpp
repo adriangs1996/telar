@@ -24,8 +24,8 @@ static_assert(true);
 #include "ui/app/panes/terminal/terminal_controller.hpp"
 #include "ui/design/controls/native_form_field.hpp"
 #include "ui/design/elements/element_slots.hpp"
-#include "ui/foundation/config/configuration_source.hpp"
-#include "ui/foundation/links/links_controller.hpp"
+#include "ui/kit/config/configuration_source.hpp"
+#include "ui/kit/links/links_controller.hpp"
 #include "window_display.hpp"
 #include "window_status.hpp"
 #include <QScopeGuard>
@@ -45,7 +45,7 @@ static_assert(true);
 #include <variant>
 
 #include "platform/window.hpp"
-#include "ui/foundation/models/projection.hpp"
+#include "ui/kit/models/projection.hpp"
 #include <QString>
 #include <QStringLiteral>
 #include <QVariantList>

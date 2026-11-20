@@ -12,9 +12,9 @@ static_assert(true);
 #include "ui/app/chrome/tabs/tab_strip_layout.hpp"
 #include "ui/design/controls/modal_reveal_layout.hpp"
 #include "ui/design/controls/native_rounded_rectangle.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/models/list_model.hpp"
-#include "ui/foundation/scene/window_animation_clock.hpp"
+#include "ui/kit/fonts/bundled_fonts.hpp"
+#include "ui/kit/models/list_model.hpp"
+#include "ui/kit/scene/window_animation_clock.hpp"
 #include <QCommandLineParser>
 #include <QGuiApplication>
 #include <QJsonDocument>

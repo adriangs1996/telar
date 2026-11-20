@@ -9,8 +9,8 @@ static_assert(true);
 #include "telar_wire/protocol/pane_io.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/application_controller.hpp"
-#include "ui/foundation/fonts/bundled_fonts.hpp"
-#include "ui/foundation/models/list_model.hpp"
+#include "ui/kit/fonts/bundled_fonts.hpp"
+#include "ui/kit/models/list_model.hpp"
 #include "wire_runtime.hpp"
 #include <QAbstractItemModel>
 #include <QFont>

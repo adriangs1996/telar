@@ -6,7 +6,7 @@ static_assert(true);
 #include "application_controller.hpp"
 #include "ui/app/overlays/palette/palette_controller.hpp"
 #include "ui/design/elements/element_slots.hpp"
-#include "ui/foundation/config/configuration_source.hpp"
+#include "ui/kit/config/configuration_source.hpp"
 #include <QByteArray>
 #include <QPointF>
 #include <QString>

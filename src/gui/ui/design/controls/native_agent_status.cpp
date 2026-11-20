@@ -5,8 +5,8 @@ static_assert(true);
 
 #include "native_agent_status.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "ui/foundation/models/agent_status_value.hpp"
-#include "ui/foundation/scene/window_animation_clock.hpp"
+#include "ui/kit/models/agent_status_value.hpp"
+#include "ui/kit/scene/window_animation_clock.hpp"
 #include <QAnyStringView>
 #include <QPointer>
 #include <QQuickItem>

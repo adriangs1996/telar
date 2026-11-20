@@ -5,8 +5,8 @@ static_assert(true);
 
 #include "notifications_controller.hpp"
 #include "telar_base/ds/values.hpp"
-#include "ui/foundation/models/projection.hpp"
-#include "ui/foundation/timing/deadline_timer.hpp"
+#include "ui/kit/models/projection.hpp"
+#include "ui/kit/timing/deadline_timer.hpp"
 #include <QLatin1Char>
 #include <QMetaObject>
 #include <exception>

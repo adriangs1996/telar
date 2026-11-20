@@ -5,7 +5,7 @@ static_assert(true);
 
 #include "modal_reveal_layout.hpp"
 #include "telar_base/ds/values.hpp"
-#include "ui/foundation/scene/window_animation_clock.hpp"
+#include "ui/kit/scene/window_animation_clock.hpp"
 #include <QMetaObject>
 #include <QPointer>
 #include <QQuickItem>

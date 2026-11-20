@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "tbc/view.hpp"
-#include "ui/foundation/scene/ancestor_geometry.hpp"
+#include "ui/kit/scene/ancestor_geometry.hpp"
 #include <QColor>
 #include <QPointer>
 #include <QQuickItem>

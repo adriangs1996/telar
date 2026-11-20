@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "gui_wait.hpp"
-#include "ui/foundation/timing/window_frame_pacer.hpp"
+#include "ui/kit/timing/window_frame_pacer.hpp"
 #include <QCoreApplication>
 #include <QEvent>
 #include <QObject>

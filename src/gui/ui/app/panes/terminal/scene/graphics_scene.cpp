@@ -5,7 +5,7 @@ static_assert(true);
 
 #include "graphics_scene.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "ui/foundation/scene/scene_nodes.hpp"
+#include "ui/kit/scene/scene_nodes.hpp"
 #include "window_images.hpp"
 #include <QQuickWindow>
 #include <QSGTransformNode>

@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "ui/foundation/store/store.hpp"
+#include "ui/kit/store/store.hpp"
 #include <QObject>
 #include <QString>
 #include <QVariantMap>

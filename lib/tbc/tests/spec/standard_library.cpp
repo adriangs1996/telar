@@ -578,7 +578,7 @@ const char* rangesFindEscape() {
 
 // CASE: std.release_handoff
 // PAIR: std.release
-// SOURCE: src/gui/ui/foundation/scene/scene_nodes.hpp :: adoptSceneNode
+// SOURCE: src/gui/ui/kit/scene/scene_nodes.hpp :: adoptSceneNode
 // STATUS: implemented
 // CONTRACT: Releasing a unique owner hands its object to an owner the analysis does not see, as Rust's Box::into_raw does; borrows of it become unchecked.
 // SCENARIO: A scene node is adopted by its parent and a reference to it is returned; accept.
@@ -602,7 +602,7 @@ standard::scene_node& stdReleaseHandoff(standard::scene_parent& parent, std::uni
 
 // CASE: std.release_kept
 // PAIR: std.release
-// SOURCE: src/gui/ui/foundation/scene/scene_nodes.hpp :: adoptSceneNode
+// SOURCE: src/gui/ui/kit/scene/scene_nodes.hpp :: adoptSceneNode
 // STATUS: implemented
 // CONTRACT: Releasing a unique owner hands its object to an owner the analysis does not see, as Rust's Box::into_raw does; borrows of it become unchecked.
 // SCENARIO: Without the release, the local owner destroys the node the returned reference designates.

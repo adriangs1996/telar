@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "foundation/core/memory.hpp"
-#include "ui/foundation/models/projection.hpp"
+#include "ui/kit/models/projection.hpp"
 #include <QString>
 #include <QVariantMap>
 #include <array>

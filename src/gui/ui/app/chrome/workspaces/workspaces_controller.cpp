@@ -6,7 +6,7 @@ static_assert(true);
 #include "workspaces_controller.hpp"
 #include "project_projection.hpp"
 #include "telar_base/ds/values.hpp"
-#include "ui/foundation/models/projection.hpp"
+#include "ui/kit/models/projection.hpp"
 #include <algorithm>
 #include <span>
 #include <utility>
