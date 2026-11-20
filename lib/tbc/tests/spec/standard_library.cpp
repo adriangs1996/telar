@@ -378,7 +378,7 @@ std::vector<std::string_view> rangeCopyDangling() {
 
 // CASE: std.initializer_list_range
 // PAIR: std.initializer_list_range
-// SOURCE: src/runtime/tests/worktree_probe_test.cpp :: worktree
+// SOURCE: src/runtime/workspaces/worktrees/tests/worktree_probe_test.cpp :: worktree
 // STATUS: implemented
 // CONTRACT: Elements copied out of an initializer list keep their own dependencies, not the backing array's.
 // SCENARIO: Literal pointers copied by a range-for are used after the loop; accept.
@@ -395,7 +395,7 @@ void initializerListRange() {
 
 // CASE: std.initializer_list_range_dangling
 // PAIR: std.initializer_list_range
-// SOURCE: src/runtime/tests/worktree_probe_test.cpp :: worktree
+// SOURCE: src/runtime/workspaces/worktrees/tests/worktree_probe_test.cpp :: worktree
 // STATUS: implemented
 // CONTRACT: A view copied out of an initializer list keeps its referent's dependency.
 // SCENARIO: The listed view's string dies before the copied view is read.

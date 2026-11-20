@@ -2383,6 +2383,7 @@ namespace tbc_lint {
           const auto source_annotation = parameterAnnotation(*parameter, context_);
           const auto* source_region = source_annotation.region;
           // A `&Pane<'a>` lets its holder keep what the pane holds, never the pane.
+
           if (source_annotation.held && !contents) {
             report(issue::retention, where, &source);
             continue;
@@ -3731,7 +3732,7 @@ namespace tbc_lint {
             return contents;
           }
 
-          result.merge(std::move(contents));
+          result.merge(contents);
         }
 
         // A region also comes from what the arguments of a type that carries it hold.
@@ -3756,7 +3757,7 @@ namespace tbc_lint {
               }
             }
 
-            result.merge(std::move(contents));
+            result.merge(contents);
           }
         }
 
@@ -4485,7 +4486,7 @@ namespace tbc_lint {
       }
 
       // The outermost expression, or declaration, that a statement is evaluated as part of.
-      const clang::Stmt* expressionRoot(const clang::Stmt& statement) const {
+      [[nodiscard]] const clang::Stmt* expressionRoot(const clang::Stmt& statement) const {
         auto node = clang::DynTypedNode::create(statement);
         const clang::Stmt* last = &statement;
 
@@ -4511,11 +4512,11 @@ namespace tbc_lint {
       }
 
       // Whether an expression is part of a statement: the statement itself or one of its subexpressions.
-      [[nodiscard]] bool partOf(const clang::Stmt& node, const clang::Stmt& statement) const {
+      [[nodiscard]] bool partOf(const clang::Stmt& node, const clang::Stmt* statement) const {
         clang::DynTypedNode next = clang::DynTypedNode::create(node);
 
         while (true) {
-          if (next.get<clang::Stmt>() == &statement) {
+          if (next.get<clang::Stmt>() == statement) {
             return true;
           }
 
@@ -4537,7 +4538,7 @@ namespace tbc_lint {
           }
 
           if (source.invalidated != nullptr) {
-            if (llvm::is_contained(applied_, source.invalidated) && partOf(use, *source.invalidated)) {
+            if (llvm::is_contained(applied_, source.invalidated) && partOf(use, source.invalidated)) {
               continue;
             }
 
@@ -4779,6 +4780,7 @@ namespace tbc_lint {
         const auto named = [](const projection& step) {
           return step.field != nullptr;
         };
+
         const auto first = path.empty() ? std::ranges::find_if(select, named) : path.begin();
         if (first == (path.empty() ? select.end() : path.end())) {
           return false;
@@ -5655,6 +5657,7 @@ namespace tbc_lint {
       void applyDeclaredInvalidations(const clang::CallExpr& call, state& current) {
         const auto* callee = call.getDirectCallee();
         const auto& sources = context_.getSourceManager();
+
         if (callee == nullptr || standardDeclaration(*callee) || rawFunction(*callee)) {
           return;
         }

@@ -1,3 +1,6 @@
+# The linter's own profile. Off, besides trailing return types, which tbc does not write:
+#   bugprone-derived-method-shadowing-base-method: clang's RecursiveASTVisitor is CRTP, and a visitor
+#   hooks a node by declaring the Visit method its base declares, which is what this check reports.
 InheritParentConfig: false
 Checks: >-
   -*,
@@ -7,6 +10,7 @@ Checks: >-
   portability-*,
   modernize-*,
   -modernize-use-trailing-return-type,
+  -bugprone-derived-method-shadowing-base-method,
   readability-identifier-naming
 WarningsAsErrors: '*'
 HeaderFilterRegex: '.*'

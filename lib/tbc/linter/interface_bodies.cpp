@@ -144,6 +144,7 @@ namespace tbc_lint {
         };
 
         const auto templated = function.isTemplated();
+
         if (carries(generic)) {
           if (!templated) {
             bodies_.push_back(body{.location = function.getLocation(), .kind = violation::not_template});

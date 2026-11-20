@@ -8,6 +8,7 @@
 #include <llvm/Support/MemoryBuffer.h>
 
 #include <algorithm>
+#include <array>
 #include <system_error>
 
 namespace tbc_lint {
@@ -17,21 +18,22 @@ namespace tbc_lint {
       llvm::StringLiteral telar;
     };
 
-    constexpr replacement replacements[] = {
-        {"vector", "Vec"},
-        {"array", "Array"},
-        {"optional", "Option"},
-        {"basic_string", "String"},
-        {"string", "String"},
-        {"map", "Map"},
-        {"unordered_map", "Map"},
-        {"function", "Function"},
-        {"move_only_function", "Function"},
-    };
+    constexpr std::array<replacement, 9> replacements{{
+        {.standard = "vector", .telar = "Vec"},
+        {.standard = "array", .telar = "Array"},
+        {.standard = "optional", .telar = "Option"},
+        {.standard = "basic_string", .telar = "String"},
+        {.standard = "string", .telar = "String"},
+        {.standard = "map", .telar = "Map"},
+        {.standard = "unordered_map", .telar = "Map"},
+        {.standard = "function", .telar = "Function"},
+        {.standard = "move_only_function", .telar = "Function"},
+    }};
 
     // The telar::ds container a standard declaration's name stands for, if it is one.
     const replacement* replacementOf(const clang::NamedDecl& declaration) {
       const auto* context = declaration.getDeclContext()->getRedeclContext();
+
       for (const auto* inline_space = llvm::dyn_cast<clang::NamespaceDecl>(context); inline_space != nullptr && inline_space->isInlineNamespace(); inline_space = llvm::dyn_cast<clang::NamespaceDecl>(context)) {
         context = inline_space->getParent()->getRedeclContext();
       }
@@ -42,9 +44,9 @@ namespace tbc_lint {
       }
 
       const auto name = declaration.getName();
-      const auto* found = std::ranges::find(replacements, name, &replacement::standard);
+      const auto found = std::ranges::find(replacements, name, &replacement::standard);
 
-      return found == std::end(replacements) ? nullptr : found;
+      return found == replacements.end() ? nullptr : &*found;
     }
   }
 
@@ -168,6 +170,7 @@ namespace tbc_lint {
 
   void standard_container_check::run(const clang::ast_matchers::MatchFinder::MatchResult& result) {
     const auto& sources = result.Context->getSourceManager();
+
     if (result.Nodes.getNodeAs<clang::TranslationUnitDecl>("unit") != nullptr) {
       reported_.clear();
       if (sources.getFileEntryRefForID(sources.getMainFileID())) {
@@ -190,6 +193,7 @@ namespace tbc_lint {
 
     if (const auto specialization = type->getAs<clang::TemplateSpecializationTypeLoc>()) {
       const auto* pattern = specialization.getTypePtr()->getTemplateName().getAsTemplateDecl();
+
       found = pattern == nullptr ? nullptr : replacementOf(*pattern);
       spelled = found == nullptr ? "" : "std::" + found->standard.str();
     } else if (const auto alias = type->getAs<clang::TypedefTypeLoc>()) {
@@ -203,7 +207,7 @@ namespace tbc_lint {
         spelled = found == nullptr ? "" : "std::" + declaration->getName().str();
       }
     } else if (type->getAs<clang::ConstantArrayTypeLoc>()) {
-      static constexpr replacement array{"", "Array"};
+      static constexpr replacement array{.standard = "", .telar = "Array"};
 
       found = &array;
       spelled = "a C array";
