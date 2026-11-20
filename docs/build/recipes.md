@@ -46,8 +46,9 @@ them through the tree with `git grep -n HistoryWorkspaces`.
    client sees.
 
 A client then sends it: the CLI with `ControlSession::exchange<Reply>(Request{})`, the window
-with `session.link.ask(request)` or `sendRegistered` from a use case of `application`. The
-window ignores a reply no `apply` takes (`by_tag` in `application-session.cpp`).
+with `session.link.ask(request)` or `sendRegistered` from a use case of `application`. A reply
+the window takes joins `messages` in `Session::consume` (`application-session.cpp`) and one it
+has no use for joins `ignored` beside it. *compiler*: a message in neither does not compile.
 
 ## Add a use case to the window
 
