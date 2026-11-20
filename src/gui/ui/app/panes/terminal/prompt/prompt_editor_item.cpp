@@ -690,7 +690,7 @@ namespace telar::gui::qt {
 
   // Lays the display out, remembers what from, and scrolls so the caret's row shows.
   void PromptEditorItem::lay(std::size_t caret, std::size_t mark) {
-    application::prompt::layout(layout_, display_.view(), styles_.view(), caret, mark, static_cast<std::uint32_t>(maximum_columns_), groups_.view());
+    application::prompt::layout(layout_, {.text = display_.view(), .styles = styles_.view(), .groups = groups_.view()}, {.cursor = caret, .anchor = mark}, static_cast<std::uint32_t>(maximum_columns_));
     laid_.display.assign(display_.view());
     laid_.styles.clear();
     laid_.styles.extend(styles_.view());
@@ -720,7 +720,7 @@ namespace telar::gui::qt {
     QVariantList glows;
 
     // By index and a copy of each run: placing one reaches the item, which holds the layout.
-    for (std::size_t index = 0; index < layout_.runs.size(); ++index) {
+    for (std::size_t index = 0; index < layout_.runs.size(); ++index) { // NOLINT(modernize-loop-convert): tbc rejects an iterator held across placeRun.
       if (const auto run = layout_.runs[index]; rowVisible(run.row)) {
         placeRun(used++, run, look(run, cell, now, glows), cell);
       }
@@ -825,7 +825,7 @@ namespace telar::gui::qt {
       return role("syntax_parameter", "foreground");
     case application::prompt::Style::string:
       return role("syntax_string", "foreground");
-    case application::prompt::Style::operator_:
+    case application::prompt::Style::shell_operator:
       return role("syntax_operator", "muted");
     case application::prompt::Style::keyword:
       return role("syntax_keyword", "accent");

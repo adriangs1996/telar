@@ -21,13 +21,15 @@ namespace telar::gui::application {
     return pane.scrollback_trimmed + pane.blocks[index].row;
   }
 
-  bool Session::folded(std::uint64_t pane_id, std::size_t index) const noexcept {
+  bool Session::folded(BlockAt block) const noexcept {
+    const auto [pane_id, index] = block;
     const auto* pane = findPane(pane_id);
 
     return pane != nullptr && index < pane->blocks.size() && std::ranges::find(pane->folded, blockKey(*pane, index)) != pane->folded.end();
   }
 
-  void Session::fold(std::uint64_t pane_id, std::size_t index, bool fold) {
+  void Session::fold(BlockAt block, bool fold) {
+    const auto [pane_id, index] = block;
     auto* pane = findPaneMut(pane_id);
     if (pane == nullptr || index >= pane->blocks.size() || (fold && !readsRows())) {
       return;
@@ -237,7 +239,7 @@ namespace telar::gui::application {
 
     const auto pending = features::prompt::takeChord(*line);
     if (pending == '[' || pending == ']') {
-      const int direction = pending == '[' ? -1 : 1;
+      const auto direction = pending == '[' ? BlockStep::up : BlockStep::down;
 
       if (character == static_cast<unsigned>(pending)) {
         stepBlock(pane_id, direction);
@@ -257,7 +259,7 @@ namespace telar::gui::application {
       return ds::none;
     }
 
-    if (blockChord(pending, pane_id, *selection, character) || blockCommand(pane_id, *selection, character)) {
+    if (blockChord(pending, {.pane_id = pane_id, .index = *selection}, character) || blockCommand({.pane_id = pane_id, .index = *selection}, character)) {
       return Outcome::edited;
     }
 
@@ -287,31 +289,31 @@ namespace telar::gui::application {
     selectBlock(pane_id, index);
   }
 
-  void Session::stepBlock(std::uint64_t pane_id, int direction) {
+  void Session::stepBlock(std::uint64_t pane_id, BlockStep direction) {
     const auto* pane = findPaneMut(pane_id);
     const auto* line = features::prompt::find(prompt_lines, pane_id);
-    if (pane == nullptr || line == nullptr || pane->blocks.size() == 0) {
+    if (pane == nullptr || line == nullptr || pane->blocks.empty()) {
       return;
     }
 
     const auto count = pane->blocks.size();
     const auto selection = blockSelection(*pane, *line);
     if (!selection) {
-      if (direction < 0) {
+      if (direction == BlockStep::up) {
         jumpToBlock(pane_id, count - 1);
       }
 
       return;
     }
 
-    if (direction < 0) {
+    if (direction == BlockStep::up) {
       jumpToBlock(pane_id, *selection == 0 ? 0 : *selection - 1);
     } else {
       jumpToBlock(pane_id, *selection + 1 < count ? ds::Option<std::size_t>{*selection + 1} : ds::none);
     }
   }
 
-  void Session::stepFailedBlock(std::uint64_t pane_id, int direction) {
+  void Session::stepFailedBlock(std::uint64_t pane_id, BlockStep direction) {
     const auto* pane = findPaneMut(pane_id);
     const auto* line = features::prompt::find(prompt_lines, pane_id);
     if (pane == nullptr || line == nullptr) {
@@ -321,7 +323,9 @@ namespace telar::gui::application {
     const auto count = pane->blocks.size();
     auto index = static_cast<std::ptrdiff_t>(blockSelection(*pane, *line).valueOr(count));
 
-    for (index += direction; index >= 0 && std::cmp_less(index, count); index += direction) {
+    const auto step = std::to_underlying(direction);
+
+    for (index += step; index >= 0 && std::cmp_less(index, count); index += step) {
       if (pane->blocks[static_cast<std::size_t>(index)].state == CommandBlockState::failed) {
         jumpToBlock(pane_id, static_cast<std::size_t>(index));
         return;
@@ -340,7 +344,7 @@ namespace telar::gui::application {
     case 'u':
     case 'd':
       static_cast<void>(features::prompt::takeChord(*line));
-      stepBlock(pane_id, character == 'u' ? -1 : 1);
+      stepBlock(pane_id, character == 'u' ? BlockStep::up : BlockStep::down);
       return true;
     case 'o':
     case 'i':
@@ -357,7 +361,8 @@ namespace telar::gui::application {
     }
   }
 
-  bool Session::blockChord(char pending, std::uint64_t pane_id, std::size_t index, char32_t character) {
+  bool Session::blockChord(char pending, BlockAt block, char32_t character) {
+    const auto [pane_id, index] = block;
     const auto* pane = findPaneMut(pane_id);
     auto* line = features::prompt::find(prompt_lines, pane_id);
     if (pane == nullptr || line == nullptr) {
@@ -380,7 +385,7 @@ namespace telar::gui::application {
 
       return true;
     case 'z':
-      foldChord(pane_id, index, character);
+      foldChord(block, character);
       changed_pane_ = pane_id;
       block_changed_ = true;
       return true;
@@ -389,7 +394,8 @@ namespace telar::gui::application {
     }
   }
 
-  void Session::foldChord(std::uint64_t pane_id, std::size_t index, char32_t character) {
+  void Session::foldChord(BlockAt block, char32_t character) {
+    const auto [pane_id, index] = block;
     const auto* pane = findPaneMut(pane_id);
     auto* line = features::prompt::find(prompt_lines, pane_id);
     if (pane == nullptr || line == nullptr) {
@@ -401,13 +407,13 @@ namespace telar::gui::application {
 
     switch (character) {
     case 'a':
-      fold(pane_id, index, !folded(pane_id, index));
+      fold(block, !folded(block));
       break;
     case 'c':
-      fold(pane_id, index, true);
+      fold(block, true);
       break;
     case 'o':
-      fold(pane_id, index, false);
+      fold(block, false);
       break;
     case 'M':
       foldAll(pane_id, true);
@@ -435,7 +441,8 @@ namespace telar::gui::application {
     }
   }
 
-  bool Session::blockCommand(std::uint64_t pane_id, std::size_t index, char32_t character) {
+  bool Session::blockCommand(BlockAt block, char32_t character) {
+    const auto [pane_id, index] = block;
     auto* pane = findPaneMut(pane_id);
     auto* line = features::prompt::find(prompt_lines, pane_id);
     if (pane == nullptr || line == nullptr) {
@@ -514,8 +521,8 @@ namespace telar::gui::application {
     const auto [first, last] = blockOutput(pane, index);
     const auto grid = copyGrid(pane.screen);
 
-    if (folded(pane.id, index)) {
-      fold(pane.id, index, false);
+    if (folded({.pane_id = pane.id, .index = index})) {
+      fold({.pane_id = pane.id, .index = index}, false);
     }
 
     if (features::terminal::copy_mode::searchOutput(copy_mode, pane.id, grid, {.block = index, .first = first, .last = last}, readsRows())) {
@@ -543,7 +550,7 @@ namespace telar::gui::application {
     const auto grid = copyGrid(pane.screen);
     const auto columns = static_cast<std::uint16_t>(grid.columns == 0 ? 0 : grid.columns - 1);
     const CopyPoint start{.x = 0, .y = first};
-    if (features::terminal::copy_mode::select(copy_mode, pane.id, grid, lines ? CopyPoint{.x = columns, .y = last} : start, start, lines)) {
+    if (features::terminal::copy_mode::select(copy_mode, pane.id, grid, {.cursor = lines ? CopyPoint{.x = columns, .y = last} : start, .anchor = start, .linewise = lines})) {
       changed_pane_ = pane.id;
       block_changed_ = true;
     }

@@ -225,7 +225,7 @@ namespace telar::gui::qt {
     }
   }
 
-  const ElementSlots::Instance* ElementSlots::find(const QString& slot, const QString& key) const {
+  const ElementSlots::Instance* ElementSlots::find(QStringView slot, const QString& key) const {
     const auto* const found = std::ranges::find_if(application::components::slot_names, [&](std::string_view name) {
       return slot == QLatin1StringView{name.data(), static_cast<qsizetype>(name.size())};
     });

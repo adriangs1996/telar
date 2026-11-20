@@ -428,7 +428,7 @@ namespace {
     check(application::workbench::dropTab(client, move), "a drag must move its captured source even when another tab has focus");
     const auto request = transport.last<MoveTab>();
 
-    check(request.location.tab_id == 1 && request.relative_to == 3 && request.direction == TabMoveDirection::next, "the request must preserve the source and anchor identities");
+    check(request.location.tab_id == 1 && request.relative_to == 3U && request.direction == TabMoveDirection::next, "the request must preserve the source and anchor identities");
     check(client.activeTab()->location.tab_id == 3 && (*source)->position == 0, "a move request must preserve focus and wait for canonical order");
     check(!application::workbench::dropTab(client, move), "a pending drag must retain the shared tab-operation owner");
     deliver(client, TabMoved{.request_id = request.request_id, .location = request.location, .position = 2});

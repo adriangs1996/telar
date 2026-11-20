@@ -21,7 +21,7 @@ namespace telar::clipboard {
 
     const auto result = read();
     if (!result) {
-      std::println(stderr, "{}", error_message(result.error()));
+      std::println(stderr, "{}", errorMessage(result.error()));
       return 1;
     }
 

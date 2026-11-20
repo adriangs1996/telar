@@ -177,7 +177,8 @@ namespace telar::gui::application {
     ++view_version.viewport;
   }
 
-  bool Session::measureInline(std::uint64_t pane_id, std::uint64_t id, std::uint32_t rows) {
+  bool Session::measureInline(InlineDocumentAt document, std::uint32_t rows) {
+    const auto [pane_id, id] = document;
     auto* pane = findPaneMut(pane_id);
     if (pane == nullptr) {
       return false;

@@ -20,8 +20,8 @@ namespace telar::gui::test {
 
     // From a literal without string_view's constructor from a pointer, which may throw before main.
     template <std::size_t Size>
-    ObjcCase(const char (&name)[Size], void (*run)()) noexcept
-        : ObjcCase(std::string_view(name, Size - 1), run) {}
+    ObjcCase(const char (&name)[Size], void (*run)()) noexcept // NOLINT(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays): a string literal binds only to an array reference.
+        : ObjcCase(std::string_view(std::data(name), Size - 1), run) {}
 
     ObjcCase(const ObjcCase&) = delete;
     ObjcCase& operator=(const ObjcCase&) = delete;

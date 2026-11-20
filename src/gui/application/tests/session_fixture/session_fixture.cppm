@@ -24,7 +24,7 @@ export {
   namespace telar::gui::application::tests::session_fixture {
 
     // Holds the storage messages are encoded into, so Transport keeps only the state tests read.
-    class EncodingTransport : public application::RuntimeTransport {
+    class EncodingTransport : public application::BasicRuntimeTransport {
     public:
       EncodingTransport() = default;
       EncodingTransport(const EncodingTransport&) = default;

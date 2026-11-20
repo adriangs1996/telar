@@ -585,7 +585,8 @@ namespace telar::gui::application {
   }
 
   template <Allocator Memory>
-  ds::Box<features::components::ResolvedEffects<Memory>, Memory> ConfigurationGeneration<Memory>::invokeElement(std::uint64_t instance, std::uint32_t callback, const features::components::Context& context, std::string_view item) {
+  ds::Box<features::components::ResolvedEffects<Memory>, Memory> ConfigurationGeneration<Memory>::invokeElement(ElementCallback target, const features::components::Context& context, std::string_view item) {
+    const auto [instance, callback] = target;
     const auto found = std::ranges::find(element_handlers_, instance, &ElementHandlers::instance);
     if (found == element_handlers_.end() || callback >= found->references.size()) {
       throw std::invalid_argument{"That element changed before its click arrived"};
@@ -1182,7 +1183,6 @@ namespace telar::gui::application::configuration {
       const runtime::config::RetainedCommandTabRegistry& commands,
       ConfigurationQuery query,
       const ClientQueryContext& context,
-      bool default_titlebar,
       tbc::view<std::span<char>, tbc::lt::a> output
   ) {
     using Section = ConfigurationQuery::Section;
@@ -1203,7 +1203,7 @@ namespace telar::gui::application::configuration {
     case Section::runtime:
       return features::configuration::RuntimeQuery::write(generation.runtimeValues(), output);
     case Section::gui:
-      return features::configuration::GuiQuery::write(generation.configuration(), output, default_titlebar);
+      return features::configuration::GuiQuery::write(generation.configuration(), output, context.default_titlebar);
     case Section::input:
       return features::configuration::InputQuery::write(generation.input(), output);
     case Section::theme:
@@ -1213,7 +1213,7 @@ namespace telar::gui::application::configuration {
     }
   }
 
-  template tbc::view<std::string_view, tbc::lt::a> query<telar::Memory>(const ConfigurationGeneration<telar::Memory>& generation, const runtime::config::RetainedCommandTabRegistry& commands, ConfigurationQuery query, const ClientQueryContext& context, bool default_titlebar, tbc::view<std::span<char>, tbc::lt::a> output);
-  template tbc::view<std::string_view, tbc::lt::a> query<telar::ConcurrentMemory>(const ConfigurationGeneration<telar::ConcurrentMemory>& generation, const runtime::config::RetainedCommandTabRegistry& commands, ConfigurationQuery query, const ClientQueryContext& context, bool default_titlebar, tbc::view<std::span<char>, tbc::lt::a> output);
+  template tbc::view<std::string_view, tbc::lt::a> query<telar::Memory>(const ConfigurationGeneration<telar::Memory>& generation, const runtime::config::RetainedCommandTabRegistry& commands, ConfigurationQuery query, const ClientQueryContext& context, tbc::view<std::span<char>, tbc::lt::a> output);
+  template tbc::view<std::string_view, tbc::lt::a> query<telar::ConcurrentMemory>(const ConfigurationGeneration<telar::ConcurrentMemory>& generation, const runtime::config::RetainedCommandTabRegistry& commands, ConfigurationQuery query, const ClientQueryContext& context, tbc::view<std::span<char>, tbc::lt::a> output);
 
 }

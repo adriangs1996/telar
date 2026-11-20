@@ -725,7 +725,9 @@ namespace telar::gui::qt {
 
     auto& session = controller_->sessionMut();
 
-    session.fold(pane_id_, static_cast<std::size_t>(index), !session.folded(pane_id_, static_cast<std::size_t>(index)));
+    const application::BlockAt block{.pane_id = pane_id_, .index = static_cast<std::size_t>(index)};
+
+    session.fold(block, !session.folded(block));
     refresh();
   }
 
@@ -803,7 +805,7 @@ namespace telar::gui::qt {
           {QStringLiteral("top"), static_cast<qreal>(first) / static_cast<qreal>(shown)},
           {QStringLiteral("height"), static_cast<qreal>(end > first ? end - first : 0) / static_cast<qreal>(shown)},
           {QStringLiteral("selected"), selected == index},
-          {QStringLiteral("folded"), session.folded(pane_id_, index)},
+          {QStringLiteral("folded"), session.folded({.pane_id = pane_id_, .index = index})},
       });
     }
 
@@ -864,7 +866,7 @@ namespace telar::gui::qt {
         {QStringLiteral("status"), block.status},
         {QStringLiteral("duration"), static_cast<qulonglong>(block.duration_ms)},
         {QStringLiteral("selected"), selected == index},
-        {QStringLiteral("folded"), controller_->session().folded(pane_id_, index)},
+        {QStringLiteral("folded"), controller_->session().folded({.pane_id = pane_id_, .index = index})},
         {QStringLiteral("foldable"), output_end > output_first},
         {QStringLiteral("rows"), static_cast<int>(output_end - output_first)},
         {QStringLiteral("push"), push},

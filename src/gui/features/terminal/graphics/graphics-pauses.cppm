@@ -21,7 +21,8 @@ namespace telar::gui::features::terminal::graphics {
     static constexpr std::uint8_t requests_per_window = GraphicsPauseLimits::requests_per_window;
     static constexpr std::uint8_t maximum_doublings = GraphicsPauseLimits::maximum_doublings;
 
-    struct Focus {
+    // A pane and the moment something happens to it.
+    struct Moment {
       std::uint64_t pane_id = 0;
       std::uint64_t now_ns = 0;
     };
@@ -46,7 +47,7 @@ namespace telar::gui::features::terminal::graphics {
     template <typename Request, typename Notice>
       requires std::invocable<const Request&, std::uint64_t> && std::invocable<const Notice&, std::uint64_t>
     TBC_GENERIC void pause(std::uint64_t pane_id, std::uint64_t now_ns, const Request& request, const Notice& notice) {
-      pause(pane_id, now_ns, PaneCall<void>::of(request), PaneCall<void>::of(notice));
+      pause(Moment{.pane_id = pane_id, .now_ns = now_ns}, PaneCall<void>::of(request), PaneCall<void>::of(notice));
     }
 
     template <typename Request>
@@ -57,7 +58,7 @@ namespace telar::gui::features::terminal::graphics {
 
     template <typename Request>
       requires std::invocable<const Request&, std::uint64_t>
-    TBC_GENERIC void focus(Focus event, const Request& request) {
+    TBC_GENERIC void focus(Moment event, const Request& request) {
       focus(event, PaneCall<void>::of(request));
     }
 
@@ -92,9 +93,9 @@ namespace telar::gui::features::terminal::graphics {
       Result operator()(std::uint64_t pane_id) const;
     };
 
-    void pause(std::uint64_t pane_id, std::uint64_t now_ns, PaneCall<void> request, PaneCall<void> notice);
+    void pause(Moment event, PaneCall<void> request, PaneCall<void> notice);
     void resumeDue(std::uint64_t now_ns, PaneCall<void> request);
-    void focus(Focus event, PaneCall<void> request);
+    void focus(Moment event, PaneCall<void> request);
     void forgetClosed(PaneCall<bool> mirrored);
     [[nodiscard]] static std::uint64_t elapsed(std::uint64_t now_ns, std::uint64_t since_ns) noexcept;
     [[nodiscard]] static std::uint64_t deadlineAfter(std::uint64_t now_ns, std::uint64_t duration_ns) noexcept;
@@ -104,7 +105,7 @@ namespace telar::gui::features::terminal::graphics {
     std::size_t start(std::uint64_t pane_id, std::uint64_t now_ns, PaneCall<void> request);
     void remove(std::size_t slot) noexcept;
     void setWaiting(std::size_t slot, bool waiting) noexcept;
-    void resume(std::size_t slot, std::uint64_t now_ns) noexcept;
+    void resume(std::size_t slot, std::chrono::nanoseconds now) noexcept;
 
     ds::Array<Row, capacity> rows_{};
     std::size_t count_ = 0;

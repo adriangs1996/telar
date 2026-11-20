@@ -18,8 +18,8 @@ namespace telar::gui::features::terminal::copy_mode {
     return entered;
   }
 
-  bool select(State& state, std::uint64_t pane_id, const CopyGrid& grid, CopyPoint cursor, ds::Option<CopyPoint> anchor, bool linewise) noexcept {
-    const auto entered = Access::mode(state).enterAt(pane_id, grid, cursor, anchor, linewise);
+  bool select(State& state, std::uint64_t pane_id, const CopyGrid& grid, CopySelectionStart start) noexcept {
+    const auto entered = Access::mode(state).enterAt(pane_id, grid, start.cursor, start.anchor, start.linewise);
     if (entered) {
       Access::search(state).request = 0;
     }

@@ -21,17 +21,17 @@ import telar.base.ds;
 
 namespace telar::gui::qt {
 
-  Dialogs::Dialogs(Store& store, PeekController& peek, MachinePromptController& machine_prompt, PaletteController& palette, PathPickerController& paths, HistoryController& history, WorkspaceFormController& workspace_form, KeyBindings& keys, PointerDispatcher& pointers, QObject* parent)
+  Dialogs::Dialogs(tbc::holds<const Parts&, tbc::lt::a> parts, QObject* parent)
       : QObject(parent),
-        store_(store),
-        peek_(peek),
-        machine_prompt_(machine_prompt),
-        palette_(palette),
-        paths_(paths),
-        history_(history),
-        workspace_form_(workspace_form),
-        keys_(keys),
-        pointers_(pointers) {}
+        store_(parts.store),
+        peek_(parts.peek),
+        machine_prompt_(parts.machine_prompt),
+        palette_(parts.palette),
+        paths_(parts.paths),
+        history_(parts.history),
+        workspace_form_(parts.workspace_form),
+        keys_(parts.keys),
+        pointers_(parts.pointers) {}
 
   void Dialogs::show(Dialog kind) {
     if (kind != Dialog::peek) {

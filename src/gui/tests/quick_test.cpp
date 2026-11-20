@@ -884,7 +884,7 @@ return {api_version = 2, client = {
       const auto fits_framed_content = [this, terminal] {
         const auto bounds = client_->display()->geometry().value(QStringLiteral("terminal")).toRectF();
         const auto density = window_->effectiveDevicePixelRatio();
-        const auto resolved = client_->resolveFont(density);
+        const auto resolved = client_->display()->resolveFont(density);
         constexpr std::uint16_t border_cells = 2;
         const auto header_cells = static_cast<std::uint16_t>(std::ceil(ChromeMetrics::logical_pane_header * density / resolved.grid.height));
         const auto columns = static_cast<std::uint16_t>(std::floor(bounds.width() * density / resolved.grid.width) - border_cells);
@@ -2321,7 +2321,7 @@ return {api_version = 2, client = {
         QCOMPARE(surface->size(), frame->size());
         // A pane surface and its frame share one radius, the pane decoration's.
         QCOMPARE(surface->property("radius").toReal(), frame->property("radius").toReal());
-        QCOMPARE(frame->property("radius").toReal(), telar::gui::features::workbench::PaneDecorationGeometry::frame_radius * client_->display()->chromeRatio());
+        QCOMPARE(frame->property("radius").toReal(), telar::gui::features::workbench::PaneDecorationGeometry::frame_radius * WindowDisplay::chromeRatio());
       }
 
       // Focus is a full accent frame on one pane; the others keep a faint hairline.
@@ -2899,14 +2899,14 @@ return {api_version=2, client={keybindings={
       writeTestFile(path, configuration);
       client_->loadConfiguration(path, {}, {});
       QVERIFY2(client_->status()->error().isEmpty(), qPrintable(client_->status()->error()));
-      QTRY_VERIFY_WITH_TIMEOUT(client_->tabs()->dropSurface(client_->display()->chromeRatio()).count > 0, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->tabs()->dropSurface(WindowDisplay::chromeRatio()).count > 0, runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       const auto* label = componentItem(QStringLiteral("label"), QStringLiteral("Configured action"));
 
       QVERIFY(label != nullptr);
       const auto bounds = label->mapRectToScene(label->boundingRect());
       const auto point = bounds.center().toPoint();
-      const auto live = client_->tabs()->dropSurface(client_->display()->chromeRatio());
+      const auto live = client_->tabs()->dropSurface(WindowDisplay::chromeRatio());
 
       QVERIFY(live.at({point.x() * live.scale, point.y() * live.scale}) == nullptr);
       auto stale = live;
@@ -5395,7 +5395,7 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(client_->tabs()->rows()->rowCount(), before.count + 1, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id != before.pane_id, runtime_wait_ms);
       const auto bounds = client_->display()->geometry().value(QStringLiteral("terminal")).toRectF();
-      const auto resolved = client_->resolveFont(window_->devicePixelRatio());
+      const auto resolved = client_->display()->resolveFont(window_->devicePixelRatio());
       const TerminalGrid grid{.cell_width_px = resolved.grid.width, .cell_height_px = resolved.grid.height, .scale = window_->devicePixelRatio()};
       const auto full = grid.fit(bounds.width(), bounds.height());
 

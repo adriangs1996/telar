@@ -18,6 +18,8 @@ namespace telar::gui::features::palette {
     void expect(std::uint64_t request_id) noexcept;
     void invalidate() noexcept;
     bool receive(const CommandSuggestion& suggestion);
+    // Ends the pending request as failed, as a failed answer without text would.
+    void fail() noexcept;
 
     [[nodiscard]] SuggestionPhase phase() const noexcept;
     [[nodiscard]] SuggestionStatus status() const noexcept;

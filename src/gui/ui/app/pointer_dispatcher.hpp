@@ -41,7 +41,19 @@ namespace telar::gui::qt {
     Q_OBJECT
 
   public:
-    PointerDispatcher(WindowDisplay& display, ApplicationAllocator& memory, Store& store, TabsController& tabs, HistoryController& history, ActivityController& activity, AttachmentsController& attachments, TerminalController& terminals);
+    struct Parts {
+      WindowDisplay& display;
+      ApplicationAllocator& memory;
+      Store& store;
+      TabsController& tabs;
+      HistoryController& history;
+      ActivityController& activity;
+      AttachmentsController& attachments;
+      TerminalController& terminals;
+    };
+
+    // Keeps what the parts refer to, region `a`, not the parts themselves.
+    explicit PointerDispatcher(tbc::holds<const Parts&, tbc::lt::a> parts);
     ~PointerDispatcher() override = default;
     PointerDispatcher(const PointerDispatcher&) = delete;
     PointerDispatcher& operator=(const PointerDispatcher&) = delete;
@@ -65,13 +77,13 @@ namespace telar::gui::qt {
     bool move(QMouseEvent& event);
     bool release(QMouseEvent& event);
 
-    WindowDisplay& display_;
-    Store& store_;
-    TabsController& tabs_;
-    HistoryController& history_;
-    ActivityController& activity_;
-    AttachmentsController& attachments_;
-    TerminalController& terminals_;
+    tbc::view<WindowDisplay&, tbc::lt::a> display_;
+    tbc::view<Store&, tbc::lt::a> store_;
+    tbc::view<TabsController&, tbc::lt::a> tabs_;
+    tbc::view<HistoryController&, tbc::lt::a> history_;
+    tbc::view<ActivityController&, tbc::lt::a> activity_;
+    tbc::view<AttachmentsController&, tbc::lt::a> attachments_;
+    tbc::view<TerminalController&, tbc::lt::a> terminals_;
     NativePointerEvents native_events_;
     tbc::view<ActiveHistoryScrollEvents<PointerDispatcher>, tbc::lt::self> history_scroll_events_;
     QPointer<QQuickWindow> window_;

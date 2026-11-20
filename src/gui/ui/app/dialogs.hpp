@@ -11,6 +11,8 @@ static_assert(true);
 
 #pragma once
 
+#include "tbc/view.hpp"
+
 import telar.gui.application;
 import telar.base.ds;
 
@@ -43,7 +45,20 @@ namespace telar::gui::qt {
   public:
     using Dialog = Store::Dialog;
 
-    Dialogs(Store& store, PeekController& peek, MachinePromptController& machine_prompt, PaletteController& palette, PathPickerController& paths, HistoryController& history, WorkspaceFormController& workspace_form, KeyBindings& keys, PointerDispatcher& pointers, QObject* parent = nullptr);
+    struct Parts {
+      Store& store;
+      PeekController& peek;
+      MachinePromptController& machine_prompt;
+      PaletteController& palette;
+      PathPickerController& paths;
+      HistoryController& history;
+      WorkspaceFormController& workspace_form;
+      KeyBindings& keys;
+      PointerDispatcher& pointers;
+    };
+
+    // Keeps what the parts refer to, region `a`, not the parts themselves.
+    explicit Dialogs(tbc::holds<const Parts&, tbc::lt::a> parts, QObject* parent = nullptr);
     ~Dialogs() override = default;
     Dialogs(const Dialogs&) = delete;
     Dialogs& operator=(const Dialogs&) = delete;
@@ -65,15 +80,15 @@ namespace telar::gui::qt {
     void changed();
 
   private:
-    Store& store_;
-    PeekController& peek_;
-    MachinePromptController& machine_prompt_;
-    PaletteController& palette_;
-    PathPickerController& paths_;
-    HistoryController& history_;
-    WorkspaceFormController& workspace_form_;
-    KeyBindings& keys_;
-    PointerDispatcher& pointers_;
+    tbc::view<Store&, tbc::lt::a> store_;
+    tbc::view<PeekController&, tbc::lt::a> peek_;
+    tbc::view<MachinePromptController&, tbc::lt::a> machine_prompt_;
+    tbc::view<PaletteController&, tbc::lt::a> palette_;
+    tbc::view<PathPickerController&, tbc::lt::a> paths_;
+    tbc::view<HistoryController&, tbc::lt::a> history_;
+    tbc::view<WorkspaceFormController&, tbc::lt::a> workspace_form_;
+    tbc::view<KeyBindings&, tbc::lt::a> keys_;
+    tbc::view<PointerDispatcher&, tbc::lt::a> pointers_;
   };
 
 }

@@ -9,6 +9,7 @@ static_assert(true);
 #include <QHash>
 #include <QObject>
 #include <QString>
+#include <QStringView>
 #include <QTimer>
 #include <QVariantList>
 #include <QVariantMap>
@@ -78,7 +79,7 @@ namespace telar::gui::qt {
     // Changes whenever what the instances draw may have changed: a render settled, or the
     // instances were forgotten or invalidated. A pass that saw this revision has nothing new.
     [[nodiscard]] std::uint64_t revision() const noexcept;
-    [[nodiscard]] const Instance* find(const QString& slot, const QString& key) const;
+    [[nodiscard]] const Instance* find(QStringView slot, const QString& key) const;
     // Reruns every instance, after a click function may have changed what the mod draws.
     void invalidate();
 

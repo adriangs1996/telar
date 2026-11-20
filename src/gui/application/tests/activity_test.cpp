@@ -138,7 +138,7 @@ namespace {
 
     Order::write(sources, 0, plan);
     check(allocator.allocations() == allocations, "activity ordering must not allocate");
-    check(plan.count == 3 && plan.entries.front().agent == 0 && plan.entries.front().coordinator, "the root agent must own its task and tracked command");
+    check(plan.count == 3 && plan.entries.front().agent == 0U && plan.entries.front().coordinator, "the root agent must own its task and tracked command");
     check(plan.entries[1].agent == 1 && plan.entries[1].parent == 0 && plan.entries[1].depth == 1 && plan.entries[1].card == ActivityCard::task, "tasks must be nested under their creator");
     check(!plan.entries[2].agent && plan.entries[2].worktree == 1 && plan.entries[2].parent == 0, "an unrepresented tracked command must remain visible under its creator");
   }

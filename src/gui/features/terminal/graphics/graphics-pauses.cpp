@@ -41,7 +41,8 @@ namespace telar::gui::features::terminal::graphics {
     return earliest;
   }
 
-  void GraphicsPauses::pause(std::uint64_t pane_id, std::uint64_t now_ns, PaneCall<void> request, PaneCall<void> notice) {
+  void GraphicsPauses::pause(Moment event, PaneCall<void> request, PaneCall<void> notice) {
+    const auto [pane_id, now_ns] = event;
     auto slot = find(pane_id);
     if (slot) {
       auto& row = rows_.atMut(*slot);
@@ -91,13 +92,13 @@ namespace telar::gui::features::terminal::graphics {
 
     for (std::size_t slot = 0; slot < count_; ++slot) {
       if (rows_[slot].waiting && now_ns >= rows_[slot].due_ns) {
-        resume(slot, now_ns);
+        resume(slot, std::chrono::nanoseconds{now_ns});
         request(rows_[slot].pane_id);
       }
     }
   }
 
-  void GraphicsPauses::focus(Focus event, PaneCall<void> request) {
+  void GraphicsPauses::focus(Moment event, PaneCall<void> request) {
     const auto [pane_id, now_ns] = event;
 
     if (waiting_count_ == 0) {
@@ -106,7 +107,7 @@ namespace telar::gui::features::terminal::graphics {
 
     const auto slot = find(pane_id);
     if (slot && rows_[*slot].waiting && elapsed(now_ns, rows_[*slot].since_ns) >= healthy_window_ns) {
-      resume(*slot, now_ns);
+      resume(*slot, std::chrono::nanoseconds{now_ns});
       request(pane_id);
     }
   }
@@ -222,11 +223,11 @@ namespace telar::gui::features::terminal::graphics {
     }
   }
 
-  void GraphicsPauses::resume(std::size_t slot, std::uint64_t now_ns) noexcept {
+  void GraphicsPauses::resume(std::size_t slot, std::chrono::nanoseconds now) noexcept {
     auto& row = rows_.atMut(slot);
 
     row.resyncs = 1;
-    row.since_ns = now_ns;
+    row.since_ns = static_cast<std::uint64_t>(now.count());
     row.snapshot_begun = false;
     setWaiting(slot, false);
   }

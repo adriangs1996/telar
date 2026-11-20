@@ -255,7 +255,7 @@ namespace telar::gui::qt {
 
   void ConfigurationSource::invokeElement(std::uint64_t instance, std::uint32_t callback, const application::components::Context& context, const QByteArray& item, Done<Effects> done) {
     run<Effects>([instance, callback, item, context = ContextCopy{context}](Generation& generation) {
-      return generation.invokeElement(instance, callback, context.view(), {item.constData(), static_cast<std::size_t>(item.size())});
+      return generation.invokeElement({.instance = instance, .callback = callback}, context.view(), {item.constData(), static_cast<std::size_t>(item.size())});
     },
         std::move(done));
   }
@@ -516,9 +516,10 @@ namespace telar::gui::qt {
         .profile = optionalText(profile_name_),
         .generation = generation_->number(),
         .view = view,
+        .default_titlebar = platform::defaultTitlebar(),
     };
 
-    return application::configuration::query(*generation_, *commands_, query, context, platform::defaultTitlebar(), query_buffer_.viewMut());
+    return application::configuration::query(*generation_, *commands_, query, context, query_buffer_.viewMut());
   }
 
   application::plugins::PluginPage ConfigurationSource::queryPlugins(const ClientCommand& request) {

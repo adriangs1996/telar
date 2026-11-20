@@ -17,7 +17,7 @@ export namespace telar::gui::features::prompt {
     option,
     string,
     variable,
-    operator_,
+    shell_operator,
     keyword,
     comment,
     pending,
@@ -76,9 +76,22 @@ export namespace telar::gui::features::prompt {
   // `memory` for the call.
   bool incomplete(Memory& memory, std::string_view text, shell::Syntax syntax = {});
 
-  // Lays out `text` in rows of `columns` cells into `result`, replacing what it held. `styles`
-  // holds one style per byte and `groups`, when given, the animation each byte takes part in: a
-  // run never spans two.
-  void layout(Layout& result, std::string_view text, std::span<const Style> styles, std::size_t cursor, std::size_t anchor, std::uint32_t columns, std::span<const std::uint8_t> groups = {});
+  // The text to lay out: `styles` holds one style per byte and `groups`, when given, the
+  // animation each byte takes part in.
+  struct StyledText {
+    std::string_view text;
+    std::span<const Style> styles;
+    std::span<const std::uint8_t> groups;
+  };
+
+  // The caret's byte and the selection's other end; nothing is selected when they meet.
+  struct Selection {
+    std::size_t cursor = 0;
+    std::size_t anchor = 0;
+  };
+
+  // Lays out `styled` in rows of `columns` cells into `result`, replacing what it held. A run
+  // never spans two styles or two groups.
+  void layout(Layout& result, const StyledText& styled, Selection selection, std::uint32_t columns);
 
 }

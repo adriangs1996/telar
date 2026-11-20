@@ -51,21 +51,21 @@ namespace telar::gui::application {
     return false;
   }
 
-  bool RuntimeTransport::report(std::span<const Byte> message) {
+  bool BasicRuntimeTransport::report(std::span<const Byte> message) {
     send(message);
 
     return true;
   }
 
-  void RuntimeTransport::willDetach([[maybe_unused]] std::uint64_t pane_id) {}
+  void BasicRuntimeTransport::willDetach([[maybe_unused]] std::uint64_t pane_id) {}
 
-  void RuntimeTransport::recover([[maybe_unused]] std::string_view reason) {}
+  void BasicRuntimeTransport::recover([[maybe_unused]] std::string_view reason) {}
 
-  bool RuntimeTransport::supportsSharedMemory() const noexcept {
+  bool BasicRuntimeTransport::supportsSharedMemory() const noexcept {
     return false;
   }
 
-  system::SharedImageSource RuntimeTransport::sharedImage([[maybe_unused]] std::string_view name) const {
+  system::SharedImageSource BasicRuntimeTransport::sharedImage([[maybe_unused]] std::string_view name) const {
     throw EncodingError{"Shared graphics was not negotiated"};
   }
 

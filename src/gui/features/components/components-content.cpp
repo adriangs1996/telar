@@ -292,11 +292,11 @@ namespace telar::gui::features::components {
     return nodes <= room.nodes && text <= room.text && samples <= room.samples && actions <= room.actions;
   }
 
-  ComponentColors::Color ComponentColors::index(std::uint8_t index) const noexcept {
+  ComponentColors::Color ComponentColors::index(std::uint8_t index) noexcept {
     return CellColor{.kind = CellColor::Kind::indexed, .channels = {index, 0, 0}};
   }
 
-  ds::Option<ComponentColors::Color> ComponentColors::name(std::string_view name) const noexcept {
+  ds::Option<ComponentColors::Color> ComponentColors::name(std::string_view name) noexcept {
     return ColorName::parse(name);
   }
 

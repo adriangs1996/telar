@@ -110,11 +110,12 @@ namespace {
     constexpr std::uint32_t shorter_display = shorter - fold_rows + (longer_shown - longer_rows);
     constexpr std::uint64_t between_documents = 30;
     constexpr std::uint64_t total_rows = 100;
-    const ds::Array<application::FoldMap<>::Span, 3> spans{{
-        {.first = shorter, .count = shorter_rows, .shown = shorter_shown},
-        {.first = fold, .count = fold_rows},
-        {.first = longer, .count = longer_rows, .shown = longer_shown},
-    }};
+    using Span = application::FoldMap<>::Span;
+    const ds::Array spans{
+        Span{.first = shorter, .count = shorter_rows, .shown = shorter_shown},
+        Span{.first = fold, .count = fold_rows},
+        Span{.first = longer, .count = longer_rows, .shown = longer_shown},
+    };
 
     folds.assign(spans);
     check(folds.display(fold - 1) == fold - 1 && folds.display(fold + 2) == fold && folds.display(fold + fold_rows) == fold, "a fold still hides its rows");
@@ -285,23 +286,23 @@ namespace {
     const auto blocks = blocks_at(0);
 
     deliver(client, PaneBlocks{.pane_id = 1, .blocks = blocks});
-    client.fold(1, 0, true);
+    client.fold({.pane_id = 1, .index = 0}, true);
     const auto& pane = *client.findPane(1);
     const auto output = first_row + first_rows;
 
-    check(client.folded(1, 0) && pane.folds.hides(output) && pane.folds.hides(second_row - 1) && !pane.folds.hides(second_row) && !pane.folds.hides(output - 1), "a fold hides the rows between its prompt and the next");
+    check(client.folded({.pane_id = 1, .index = 0}) && pane.folds.hides(output) && pane.folds.hides(second_row - 1) && !pane.folds.hides(second_row) && !pane.folds.hides(output - 1), "a fold hides the rows between its prompt and the next");
     client.foldAll(1, true);
-    check(client.folded(1, 1) && !client.folded(1, 2), "folding all leaves the running command open");
+    check(client.folded({.pane_id = 1, .index = 1}) && !client.folded({.pane_id = 1, .index = 2}), "folding all leaves the running command open");
     deliver(client, PaneScrollback{.pane_id = 1, .generation = 1, .trimmed = trimmed + dropped});
     const auto moved = blocks_at(dropped);
 
     deliver(client, PaneBlocks{.pane_id = 1, .blocks = moved});
-    check(client.folded(1, 0) && client.folded(1, 1) && pane.folds.hides(output - dropped) && !pane.folds.hides(second_row - dropped), "folds stay with their blocks when the scrollback drops rows above them");
+    check(client.folded({.pane_id = 1, .index = 0}) && client.folded({.pane_id = 1, .index = 1}) && pane.folds.hides(output - dropped) && !pane.folds.hides(second_row - dropped), "folds stay with their blocks when the scrollback drops rows above them");
     deliver(client, PaneScrollback{.pane_id = 1, .generation = 2, .trimmed = 0});
     deliver(client, PaneBlocks{.pane_id = 1, .blocks = blocks});
-    check(client.folded(1, 0) && client.folded(1, 1) && !client.folded(1, 2), "renumbered rows keep the folds by block order");
+    check(client.folded({.pane_id = 1, .index = 0}) && client.folded({.pane_id = 1, .index = 1}) && !client.folded({.pane_id = 1, .index = 2}), "renumbered rows keep the folds by block order");
     client.foldAll(1, false);
-    check(!client.folded(1, 0) && pane.folds.empty(), "unfolding all shows every row");
+    check(!client.folded({.pane_id = 1, .index = 0}) && pane.folds.empty(), "unfolding all shows every row");
   }
 
   const telar::testing::Case case_documents_show_their_own_rows{"scroll.documents_show_their_own_rows", documentsShowTheirOwnRows};

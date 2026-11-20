@@ -60,17 +60,17 @@ namespace telar::gui::qt {
 
   }
 
-  MachinesCoordinator::MachinesCoordinator(ApplicationAllocator& memory, Store& store, ConfigurationSource& configuration, application::HostEffects& desktop, FramePresenter& frames, WindowDisplay& display, WindowStatus& status, Dialogs& dialogs, MachinesHost& host, QByteArray hostname, QObject* parent)
+  MachinesCoordinator::MachinesCoordinator(tbc::holds<const Parts&, tbc::lt::a> parts, QByteArray hostname, QObject* parent)
       : QObject(parent),
-        memory_(memory),
-        store_(store),
-        configuration_source_(configuration),
-        desktop_(desktop),
-        frames_(frames),
-        display_(display),
-        status_(status),
-        dialogs_(dialogs),
-        host_(host),
+        memory_(parts.memory),
+        store_(parts.store),
+        configuration_source_(parts.configuration),
+        desktop_(parts.desktop),
+        frames_(parts.frames),
+        display_(parts.display),
+        status_(parts.status),
+        dialogs_(parts.dialogs),
+        host_(parts.host),
         hostname_(std::move(hostname)) {}
 
   void MachinesCoordinator::release(MachineClient& client) {

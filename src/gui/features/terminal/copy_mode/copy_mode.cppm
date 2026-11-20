@@ -85,9 +85,16 @@ export namespace telar::gui::features::terminal::copy_mode {
   // false while it is on or the grid is empty.
   bool enter(State& state, std::uint64_t pane_id, const CopyGrid& grid, const Cursor& cursor) noexcept;
 
-  // Copy mode at `cursor`, already selecting from `anchor` when one is given: a command block's
-  // text, picked from telar's editor.
-  bool select(State& state, std::uint64_t pane_id, const CopyGrid& grid, CopyPoint cursor, ds::Option<CopyPoint> anchor, bool linewise) noexcept;
+  // Where a selection copy mode enters with starts: at `cursor`, already selecting from `anchor`
+  // when one is given, by lines when `linewise`.
+  struct CopySelectionStart {
+    CopyPoint cursor;
+    ds::Option<CopyPoint> anchor;
+    bool linewise = false;
+  };
+
+  // Copy mode already selecting: a command block's text, picked from telar's editor.
+  bool select(State& state, std::uint64_t pane_id, const CopyGrid& grid, CopySelectionStart start) noexcept;
 
   // Copy mode at the first row of a command's output, the scrollback search asked for and,
   // `scoped`, confined to `rows`.

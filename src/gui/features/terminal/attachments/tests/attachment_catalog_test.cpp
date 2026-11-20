@@ -232,7 +232,7 @@ namespace {
     const auto removal = catalog.planMarkerRemoval(1, screen);
 
     check(removal.removal && removal.removal->steps == 2 && removal.removal->deletions == 1, "navigation must count another placeholder atomically");
-    check(catalog.markerAtDeletion(screen, AttachmentMarkerDeletion::backward) == 2, "backspace at the marker boundary must select its exact preview");
+    check(catalog.markerAtDeletion(screen, AttachmentMarkerDeletion::backward) == 2U, "backspace at the marker boundary must select its exact preview");
     check(catalog.openModal(2), "the learned second preview must open");
 
     catalog.expectMarkerDeletion(prompt);

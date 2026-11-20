@@ -28,12 +28,14 @@ namespace telar::gui::inline foundation::inline system {
       auto* next = std::ranges::copy(basename, output.data()).out;
 
       next = std::ranges::copy(prefix, next).out;
-      auto formatted = std::to_chars(next, output.data() + output.size() - suffix.size(), slot);
+      const auto formatted = std::to_chars(next, output.data() + output.size() - suffix.size(), slot);
       if (formatted.ec == std::errc::value_too_large) {
         throw std::runtime_error{"GUI identity filename exceeds capacity"};
       }
 
-      const auto* end = std::ranges::copy(suffix, formatted.ptr).out;
+      next = formatted.ptr;
+
+      const auto* end = std::ranges::copy(suffix, next).out;
 
       return {output.data(), static_cast<std::size_t>(end - output.data())};
     }

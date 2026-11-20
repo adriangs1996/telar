@@ -48,6 +48,14 @@ namespace telar::gui::features::palette {
     return true;
   }
 
+  void SuggestionState::fail() noexcept {
+    text_ = {};
+    pending_request_ = 0;
+    status_ = SuggestionStatus::failed;
+    phase_ = SuggestionPhase::failed;
+    ++revision_;
+  }
+
   SuggestionPhase SuggestionState::phase() const noexcept {
     return phase_;
   }
@@ -100,11 +108,7 @@ namespace telar::gui::features::palette {
   }
 
   void fail(State& state) noexcept {
-    constexpr std::uint64_t failed_request = 1;
-    auto& current = Access::suggestion(state);
-
-    current.expect(failed_request);
-    static_cast<void>(current.receive({.request_id = failed_request, .status = SuggestionStatus::failed}));
+    Access::suggestion(state).fail();
   }
 
   bool receive(State& state, const CommandSuggestion& suggestion) {

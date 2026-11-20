@@ -19,6 +19,8 @@ static_assert(true);
 
 #pragma once
 
+#include "tbc/view.hpp"
+
 import telar.gui.foundation.model;
 import telar.gui.application;
 import telar.base.ds;
@@ -50,7 +52,19 @@ namespace telar::gui::qt {
     Q_OBJECT
 
   public:
-    FramePresenter(ApplicationAllocator& memory, Store& store, WindowDisplay& display, TabsController& tabs, HistoryController& history, TerminalController& terminals, PointerDispatcher& pointers, WindowStatus& status, QObject* parent = nullptr);
+    struct Parts {
+      ApplicationAllocator& memory;
+      Store& store;
+      WindowDisplay& display;
+      TabsController& tabs;
+      HistoryController& history;
+      TerminalController& terminals;
+      PointerDispatcher& pointers;
+      WindowStatus& status;
+    };
+
+    // Keeps what the parts refer to, region `a`, not the parts themselves.
+    explicit FramePresenter(tbc::holds<const Parts&, tbc::lt::a> parts, QObject* parent = nullptr);
     ~FramePresenter() override = default;
     FramePresenter(const FramePresenter&) = delete;
     FramePresenter& operator=(const FramePresenter&) = delete;
@@ -121,14 +135,14 @@ namespace telar::gui::qt {
     void present(const PresentedFrame& frame);
     [[nodiscard]] std::size_t collectPacingPanes(std::span<application::window::FramePacer::Pane, PaneLayout::maximum_panes> panes) const;
 
-    ApplicationAllocator& memory_;
-    Store& store_;
-    WindowDisplay& display_;
-    TabsController& tabs_;
-    HistoryController& history_;
-    TerminalController& terminals_;
-    PointerDispatcher& pointers_;
-    WindowStatus& status_;
+    tbc::view<ApplicationAllocator&, tbc::lt::a> memory_;
+    tbc::view<Store&, tbc::lt::a> store_;
+    tbc::view<WindowDisplay&, tbc::lt::a> display_;
+    tbc::view<TabsController&, tbc::lt::a> tabs_;
+    tbc::view<HistoryController&, tbc::lt::a> history_;
+    tbc::view<TerminalController&, tbc::lt::a> terminals_;
+    tbc::view<PointerDispatcher&, tbc::lt::a> pointers_;
+    tbc::view<WindowStatus&, tbc::lt::a> status_;
     QPointer<QQuickWindow> window_;
     std::uint64_t window_generation_ = 0;
     ds::Option<WindowFramePacer<>> frame_pacer_;

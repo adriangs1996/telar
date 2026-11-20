@@ -127,7 +127,8 @@ namespace telar::gui::features::terminal::links {
     return normalized;
   }
 
-  std::span<const std::string_view> EditorLaunch::arguments(std::string_view executable, std::string_view path, std::uint32_t line, std::uint32_t column) {
+  std::span<const std::string_view> EditorLaunch::arguments(std::string_view executable, PathLocation location) {
+    const auto [path, line, column] = location;
     const auto convention = conventionOf(executable);
 
     executable_.truncate(0);
@@ -142,7 +143,7 @@ namespace telar::gui::features::terminal::links {
     }
 
     position_.truncate(0);
-    writePosition({.path = path, .line = line, .column = column}, convention);
+    writePosition(location, convention);
     if (convention == Convention::path_suffix) {
       arguments_.atMut(1) = position_.view();
 
@@ -202,7 +203,7 @@ namespace telar::gui::features::terminal::links {
     return Convention::none;
   }
 
-  void EditorLaunch::writePosition(Position position, Convention convention) {
+  void EditorLaunch::writePosition(PathLocation position, Convention convention) {
     if (convention == Convention::path_suffix || convention == Convention::goto_flag) {
       position_.append(position.path);
       position_.append(":");

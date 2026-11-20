@@ -237,7 +237,7 @@ namespace {
 
         QCoreApplication::sendEvent(&window, &density);
         QCOMPARE(window.effectiveDevicePixelRatio(), scale);
-        QCOMPARE(terminal.cellSize(), client.resolveFont(scale).font.cell);
+        QCOMPARE(terminal.cellSize(), client.display()->resolveFont(scale).font.cell);
       }
     }
 

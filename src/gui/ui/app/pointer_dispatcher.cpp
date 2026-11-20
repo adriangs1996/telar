@@ -59,15 +59,15 @@ import telar.base.ds;
 
 namespace telar::gui::qt {
 
-  PointerDispatcher::PointerDispatcher(WindowDisplay& display, ApplicationAllocator& memory, Store& store, TabsController& tabs, HistoryController& history, ActivityController& activity, AttachmentsController& attachments, TerminalController& terminals)
-      : display_(display),
-        store_(store),
-        tabs_(tabs),
-        history_(history),
-        activity_(activity),
-        attachments_(attachments),
-        terminals_(terminals),
-        native_events_(memory),
+  PointerDispatcher::PointerDispatcher(tbc::holds<const Parts&, tbc::lt::a> parts)
+      : display_(parts.display),
+        store_(parts.store),
+        tabs_(parts.tabs),
+        history_(parts.history),
+        activity_(parts.activity),
+        attachments_(parts.attachments),
+        terminals_(parts.terminals),
+        native_events_(parts.memory),
         history_scroll_events_(*this) {}
 
   void PointerDispatcher::setWindow(QQuickWindow& window) {
@@ -152,7 +152,7 @@ namespace telar::gui::qt {
   }
 
   bool PointerDispatcher::press(QMouseEvent& event) {
-    if (tabs_.press(event, display_.chromeRatio())) {
+    if (tabs_.press(event, WindowDisplay::chromeRatio())) {
       return false;
     }
 

@@ -16,13 +16,13 @@ import telar.gui.application;
 
 namespace telar::gui::qt {
 
-  ActivitySelection::ActivitySelection(Store& store, ActivityController& activity, PeekController& peek, Dialogs& dialogs, MachinesCoordinator& machines, QObject* parent)
+  ActivitySelection::ActivitySelection(tbc::holds<const Parts&, tbc::lt::a> parts, QObject* parent)
       : QObject(parent),
-        store_(store),
-        activity_(activity),
-        peek_(peek),
-        dialogs_(dialogs),
-        machines_(machines) {
+        store_(parts.store),
+        activity_(parts.activity),
+        peek_(parts.peek),
+        dialogs_(parts.dialogs),
+        machines_(parts.machines) {
     connect(&store_, &Store::interacting, this, &ActivitySelection::cancel);
     connect(&machines_, &MachinesCoordinator::selecting, this, [this] {
       pending_.reset();

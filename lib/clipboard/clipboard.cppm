@@ -11,7 +11,7 @@ export namespace telar::clipboard {
   using telar::clipboard::byte;
   using telar::clipboard::content;
   using telar::clipboard::default_maximum_bytes;
-  using telar::clipboard::error_message;
+  using telar::clipboard::errorMessage;
   using telar::clipboard::read;
   using telar::clipboard::read_error;
 }

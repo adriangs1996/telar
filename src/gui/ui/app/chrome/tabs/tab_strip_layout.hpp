@@ -24,6 +24,7 @@ static_assert(true);
 
 #pragma once
 
+import telar.gui.foundation.core;
 import telar.gui.application;
 import telar.base.ds;
 
@@ -119,7 +120,22 @@ namespace telar::gui::qt {
     void bindClock();
     static constexpr std::size_t model_connection_count = 6;
     [[nodiscard]] float captionAdvance(const QString& label);
+
+    // The row the tabs are laid out in: where it starts, how tall it is and how wide it may grow.
+    struct StripRow {
+      float top = 0;
+      float height = 0;
+      float available = 0;
+    };
+
     void rebuild();
+    // Forgets the layout: the strip has no room to lay tabs out in.
+    void clearLayout();
+    // Places the counter of the hidden tabs after `left`, if any are; returns where the strip ends.
+    [[nodiscard]] float placeCounter(const QList<QVariantMap>& records, const application::workbench::TabStripGeometry::Plan& plan, const application::workbench::TabStripGeometry::Metrics& metrics, StripRow row, float left);
+    // Moves the selection's highlight toward the selected tab, in device pixels at `density`.
+    void placeSelection(ds::Option<Rect> selection, bool dragging, application::workbench::TabMotionFrame& frame, qreal density);
+    void finishMotions(const application::workbench::TabMotionFrame& frame);
     void raiseDraggedSlot();
     [[nodiscard]] QRectF placeTab(std::uint64_t id, QRectF bounds, application::workbench::TabMotionFrame& frame);
     [[nodiscard]] QVariantList placeCards(const QVariantMap& tab, application::workbench::TabMotionFrame& frame);

@@ -19,13 +19,13 @@ import telar.base.ds;
 
 namespace telar::gui::qt {
 
-  TerminalController::TerminalController(Store& store, CopyController& copy, PromptController& prompt, TerminalHost& host, ApplicationAllocator& memory, QObject* parent)
+  TerminalController::TerminalController(tbc::holds<const Parts&, tbc::lt::a> parts, QObject* parent)
       : QObject(parent),
-        store_(store),
-        copy_(copy),
-        prompt_(prompt),
-        host_(host),
-        memory_(memory) {}
+        store_(parts.store),
+        copy_(parts.copy),
+        prompt_(parts.prompt),
+        host_(parts.host),
+        memory_(parts.memory) {}
 
   ViewVersion TerminalController::viewVersion() const noexcept {
     auto version = store_.session().viewVersion();

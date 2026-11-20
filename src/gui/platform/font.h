@@ -16,6 +16,9 @@ enum TelarFontLimits {
   telar_font_name_capacity = 256,
 };
 
+// A unit that includes this header and imports a module whose global fragment includes it sees each
+// declaration twice, merged into one entity; clang-tidy reports the second as redundant.
+// NOLINTBEGIN(readability-redundant-declaration)
 #ifdef __cplusplus
 inline constexpr auto telar_font_max_bytes = static_cast<uint32_t>(TelarFontLimits::telar_font_max_bytes);
 inline constexpr auto telar_font_max_axes = static_cast<uint32_t>(TelarFontLimits::telar_font_max_axes);
@@ -59,6 +62,7 @@ int telarGuiFindFallbackFont(const char* text, telar_font_match* match);
 typedef int (*telar_font_validator)(const telar_font_match* match, void* context);
 
 int telarGuiFindValidatedFallbackFont(const char* text, telar_font_match* match, telar_font_validator validator, void* context);
+// NOLINTEND(readability-redundant-declaration)
 
 #ifdef __cplusplus
 }

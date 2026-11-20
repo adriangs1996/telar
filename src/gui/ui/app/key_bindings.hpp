@@ -41,7 +41,17 @@ namespace telar::gui::qt {
     Q_OBJECT
 
   public:
-    KeyBindings(WindowCommands& commands, Store& store, CopyController& copy, ComponentsController& components, AttachmentsController& attachments, TerminalController& terminals);
+    struct Parts {
+      WindowCommands& commands;
+      Store& store;
+      CopyController& copy;
+      ComponentsController& components;
+      AttachmentsController& attachments;
+      TerminalController& terminals;
+    };
+
+    // Keeps what the parts refer to, region `a`, not the parts themselves.
+    explicit KeyBindings(tbc::holds<const Parts&, tbc::lt::a> parts);
     void setWindow(QQuickWindow& window);
     void configure(const InputConfiguration& configuration, const BindingMap<BindingAction>& map);
     bool route(QKeyEvent& event, QQuickItem& recipient, bool captures = false);
@@ -107,12 +117,12 @@ namespace telar::gui::qt {
     void expire();
     void drain();
 
-    WindowCommands& commands_;
-    Store& store_;
-    CopyController& copy_;
-    ComponentsController& components_;
-    AttachmentsController& attachments_;
-    TerminalController& terminals_;
+    tbc::view<WindowCommands&, tbc::lt::a> commands_;
+    tbc::view<Store&, tbc::lt::a> store_;
+    tbc::view<CopyController&, tbc::lt::a> copy_;
+    tbc::view<ComponentsController&, tbc::lt::a> components_;
+    tbc::view<AttachmentsController&, tbc::lt::a> attachments_;
+    tbc::view<TerminalController&, tbc::lt::a> terminals_;
     Router router_;
     QPointer<QQuickWindow> window_;
     QElapsedTimer clock_;

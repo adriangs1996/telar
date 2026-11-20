@@ -146,7 +146,6 @@ namespace telar::gui::qt {
     bool eventFilter(QObject* watched, QEvent* event) override;
     [[nodiscard]] const application::Pane<Memory>* pane(std::uint64_t identity) const noexcept;
     [[nodiscard]] const Configuration& configuration() const noexcept;
-    [[nodiscard]] ResolvedFont resolveFont(qreal scale) override;
     void soundPlaybackFinished(ds::Option<CommandFailure> failure);
 
     [[nodiscard]] static int controlModifier();
@@ -325,6 +324,7 @@ namespace telar::gui::qt {
     void pressKey(TerminalItem& terminal, QKeyEvent& event) override;
     [[nodiscard]] bool releaseKey(TerminalItem& terminal, QKeyEvent& event) override;
     void interruptKeys() override;
+    [[nodiscard]] ResolvedFont resolveFont(qreal scale) override;
     void focusPane(TerminalItem& terminal) override;
     void ungrabPointer(TerminalItem& terminal) override;
     void openLink(const application::terminal::links::LinkTarget& target, std::uint64_t pane_id) override;

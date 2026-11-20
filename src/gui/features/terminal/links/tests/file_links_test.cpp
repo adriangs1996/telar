@@ -133,26 +133,26 @@ namespace {
     constexpr std::uint32_t line = 12;
     constexpr std::uint32_t column = 3;
     EditorLaunch launch;
-    auto arguments = launch.arguments("/usr/bin/nvim", path, line, column);
+    auto arguments = launch.arguments("/usr/bin/nvim", {.path = path, .line = line, .column = column});
 
     check(arguments.size() == 3 && arguments[1] == "+call cursor(12, 3)" && arguments[2] == path, "Neovim must receive a literal path and cursor expression as separate arguments");
-    arguments = launch.arguments("vim.nox", path, line, 0);
+    arguments = launch.arguments("vim.nox", {.path = path, .line = line, .column = 0});
     check(arguments.size() == 3 && arguments[1] == "+12" && arguments[2] == path, "Vim variants must preserve the plus-line convention");
-    arguments = launch.arguments("emacsclient", path, line, column);
+    arguments = launch.arguments("emacsclient", {.path = path, .line = line, .column = column});
     check(arguments[1] == "+12:3" && arguments[2] == path, "Emacs must receive colon-separated coordinates");
-    arguments = launch.arguments("nano", path, line, column);
+    arguments = launch.arguments("nano", {.path = path, .line = line, .column = column});
     check(arguments[1] == "+12,3", "nano must receive comma-separated coordinates");
-    arguments = launch.arguments("helix", path, line, column);
+    arguments = launch.arguments("helix", {.path = path, .line = line, .column = column});
     check(arguments.size() == 2 && arguments[1] == std::string{path} + ":12:3", "Helix must receive a positioned path as one argument");
-    arguments = launch.arguments("code-insiders", path, line, column);
+    arguments = launch.arguments("code-insiders", {.path = path, .line = line, .column = column});
     check(arguments.size() == 3 && arguments[1] == "-g" && arguments[2] == std::string{path} + ":12:3", "VS Code variants must receive a goto flag and one positioned path");
-    arguments = launch.arguments("unknown-editor", path, line, column);
+    arguments = launch.arguments("unknown-editor", {.path = path, .line = line, .column = column});
     check(arguments.size() == 2 && arguments[1] == path, "unknown editors must open the literal path without inventing coordinate flags");
-    arguments = launch.arguments("nvim", path, 0, column);
+    arguments = launch.arguments("nvim", {.path = path, .line = 0, .column = column});
     check(arguments.size() == 2 && arguments[1] == path, "line zero must disable every coordinate convention");
     constexpr auto maximum = std::numeric_limits<std::uint32_t>::max();
 
-    arguments = launch.arguments("nvim", path, maximum, maximum);
+    arguments = launch.arguments("nvim", {.path = path, .line = maximum, .column = maximum});
     check(arguments[1] == "+call cursor(4294967295, 4294967295)", "position formatting must preserve the full wire coordinate range");
   }
 

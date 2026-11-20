@@ -34,7 +34,7 @@ namespace telar::gui::application::paths {
         return false;
       }
 
-      return features::prompt::replace(session.prompt, session.prompt_lines, pane_id, seed.begin, seed.text, path);
+      return features::prompt::replace(session.prompt, session.prompt_lines, {.pane_id = pane_id, .begin = seed.begin, .text = seed.text}, path);
     }
 
   }

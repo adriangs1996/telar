@@ -412,7 +412,7 @@ return {api_version = 2, client = {
     check(elements[canvas_element].kind == Kind::canvas && elements[canvas_element].steps_count == 4 && rendered->steps[elements[canvas_element].steps_offset + 1].count == 1, "canvas operations must keep their values and optional widths");
     check(elements[builtin_element].kind == Kind::builtin && rendered->view(elements[builtin_element].text) == "tab_cards", "built-in pieces must name a known piece");
 
-    const auto effects = generation.invokeElement(instance, 0, invocation, R"({"title":"Tab λ","panes":[]})");
+    const auto effects = generation.invokeElement({.instance = instance, .callback = 0}, invocation, R"({"title":"Tab λ","panes":[]})");
 
     check(effects->effects.length == 1 && effects->effects.actions[0].kind == BindingActionKind::toggle_sidebar, "a click function must return its actions");
     const auto again = generation.renderElements(features::components::Slot::tab, instance, invocation, R"({"title":"Tab λ","panes":[]})");
@@ -431,14 +431,14 @@ return {api_version = 2, client = {
       check(rejected, "runaway, unknown and invalid elements must fail the render");
     }
 
-    const auto effects_after = generation.invokeElement(instance, 0, invocation, "{}");
+    const auto effects_after = generation.invokeElement({.instance = instance, .callback = 0}, invocation, "{}");
 
     check(effects_after->effects.length == 1, "a failed render must keep the handlers of the last valid one");
     generation.forgetElements(instance);
     bool forgotten = false;
 
     try {
-      static_cast<void>(generation.invokeElement(instance, 0, invocation, "{}"));
+      static_cast<void>(generation.invokeElement({.instance = instance, .callback = 0}, invocation, "{}"));
     } catch (const std::invalid_argument&) {
       forgotten = true;
     }

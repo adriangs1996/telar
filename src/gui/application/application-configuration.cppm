@@ -128,8 +128,14 @@ export {
       // element tree it returns. The instance keeps the `on_click` functions of its last render.
       [[nodiscard]] ds::Box<features::components::RenderedElements<Memory>, Memory> renderElements(features::components::Slot slot, std::uint64_t instance, const features::components::Context& context, std::string_view item);
 
+      // One `on_click` function of an instance's last render.
+      struct ElementCallback {
+        std::uint64_t instance = 0;
+        std::uint32_t callback = 0;
+      };
+
       // Runs one `on_click` function of the instance's last render and resolves what it returns.
-      [[nodiscard]] ds::Box<features::components::ResolvedEffects<Memory>, Memory> invokeElement(std::uint64_t instance, std::uint32_t callback, const features::components::Context& context, std::string_view item);
+      [[nodiscard]] ds::Box<features::components::ResolvedEffects<Memory>, Memory> invokeElement(ElementCallback target, const features::components::Context& context, std::string_view item);
 
       void forgetElements(std::uint64_t instance) noexcept;
 
@@ -275,6 +281,8 @@ export {
       ds::Option<std::string_view> profile;
       std::uint64_t generation = 0;
       ClientViewState view;
+      // Whether the platform draws the window's titlebar when the configuration names none.
+      bool default_titlebar = false;
     };
 
     class ClientQuery {
@@ -324,11 +332,10 @@ export namespace telar::gui::application::configuration {
       const runtime::config::RetainedCommandTabRegistry& commands,
       ConfigurationQuery query,
       const ClientQueryContext& context,
-      bool default_titlebar,
       tbc::view<std::span<char>, tbc::lt::a> output
   );
 
-  extern template tbc::view<std::string_view, tbc::lt::a> query<telar::Memory>(const ConfigurationGeneration<telar::Memory>& generation, const runtime::config::RetainedCommandTabRegistry& commands, ConfigurationQuery query, const ClientQueryContext& context, bool default_titlebar, tbc::view<std::span<char>, tbc::lt::a> output);
-  extern template tbc::view<std::string_view, tbc::lt::a> query<telar::ConcurrentMemory>(const ConfigurationGeneration<telar::ConcurrentMemory>& generation, const runtime::config::RetainedCommandTabRegistry& commands, ConfigurationQuery query, const ClientQueryContext& context, bool default_titlebar, tbc::view<std::span<char>, tbc::lt::a> output);
+  extern template tbc::view<std::string_view, tbc::lt::a> query<telar::Memory>(const ConfigurationGeneration<telar::Memory>& generation, const runtime::config::RetainedCommandTabRegistry& commands, ConfigurationQuery query, const ClientQueryContext& context, tbc::view<std::span<char>, tbc::lt::a> output);
+  extern template tbc::view<std::string_view, tbc::lt::a> query<telar::ConcurrentMemory>(const ConfigurationGeneration<telar::ConcurrentMemory>& generation, const runtime::config::RetainedCommandTabRegistry& commands, ConfigurationQuery query, const ClientQueryContext& context, tbc::view<std::span<char>, tbc::lt::a> output);
 
 }

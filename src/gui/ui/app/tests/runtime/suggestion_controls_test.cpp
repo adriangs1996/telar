@@ -118,7 +118,7 @@ namespace {
         }
       });
 
-      panel_ = test::createChrome(engine_, QStringLiteral("PalettePanel"), {{QStringLiteral("controller"), QVariant::fromValue(client_->palette())}, {QStringLiteral("colors"), client_->colors()}, {QStringLiteral("typography"), client_->display()->geometry().value(QStringLiteral("typography"))}, {QStringLiteral("controlModifier"), ApplicationController::controlModifier()}, {QStringLiteral("ratio"), client_->display()->chromeRatio()}});
+      panel_ = test::createChrome(engine_, QStringLiteral("PalettePanel"), {{QStringLiteral("controller"), QVariant::fromValue(client_->palette())}, {QStringLiteral("colors"), client_->colors()}, {QStringLiteral("typography"), client_->display()->geometry().value(QStringLiteral("typography"))}, {QStringLiteral("controlModifier"), ApplicationController::controlModifier()}, {QStringLiteral("ratio"), WindowDisplay::chromeRatio()}});
       panel_->setParentItem(window_->contentItem());
       connect(client_->display(), &WindowDisplay::changed, this, &SuggestionControlsTest::synchronizeSurfaces);
       connect(client_->palette(), &PaletteController::changed, this, &SuggestionControlsTest::synchronizeSurfaces);

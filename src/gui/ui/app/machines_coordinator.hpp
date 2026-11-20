@@ -18,6 +18,8 @@ static_assert(true);
 
 #pragma once
 
+#include "tbc/view.hpp"
+
 import telar.gui.application;
 import telar.base.ds;
 
@@ -73,7 +75,20 @@ namespace telar::gui::qt {
     Q_PROPERTY(QVariantMap context READ context NOTIFY listChanged)
 
   public:
-    MachinesCoordinator(ApplicationAllocator& memory, Store& store, ConfigurationSource& configuration, application::HostEffects& desktop, FramePresenter& frames, WindowDisplay& display, WindowStatus& status, Dialogs& dialogs, MachinesHost& host, QByteArray hostname, QObject* parent = nullptr);
+    struct Parts {
+      ApplicationAllocator& memory;
+      Store& store;
+      ConfigurationSource& configuration;
+      application::HostEffects& desktop;
+      FramePresenter& frames;
+      WindowDisplay& display;
+      WindowStatus& status;
+      Dialogs& dialogs;
+      MachinesHost& host;
+    };
+
+    // Keeps what the parts refer to, region `a`, not the parts themselves.
+    MachinesCoordinator(tbc::holds<const Parts&, tbc::lt::a> parts, QByteArray hostname, QObject* parent = nullptr);
     ~MachinesCoordinator() override = default;
     MachinesCoordinator(const MachinesCoordinator&) = delete;
     MachinesCoordinator& operator=(const MachinesCoordinator&) = delete;
@@ -125,15 +140,15 @@ namespace telar::gui::qt {
     void connectMachine(application::machines::Machines::Slot slot);
     void release(MachineClient& client);
 
-    ApplicationAllocator& memory_;
-    Store& store_;
-    ConfigurationSource& configuration_source_;
-    application::HostEffects& desktop_;
-    FramePresenter& frames_;
-    WindowDisplay& display_;
-    WindowStatus& status_;
-    Dialogs& dialogs_;
-    MachinesHost& host_;
+    tbc::view<ApplicationAllocator&, tbc::lt::a> memory_;
+    tbc::view<Store&, tbc::lt::a> store_;
+    tbc::view<ConfigurationSource&, tbc::lt::a> configuration_source_;
+    tbc::view<application::HostEffects&, tbc::lt::a> desktop_;
+    tbc::view<FramePresenter&, tbc::lt::a> frames_;
+    tbc::view<WindowDisplay&, tbc::lt::a> display_;
+    tbc::view<WindowStatus&, tbc::lt::a> status_;
+    tbc::view<Dialogs&, tbc::lt::a> dialogs_;
+    tbc::view<MachinesHost&, tbc::lt::a> host_;
     QByteArray hostname_;
     // The client whose agent the desktop's one sound plays for.
     ds::Cell<ds::Option<application::machines::MachineClientKey>> sound_owner_;

@@ -262,21 +262,21 @@ namespace telar::gui::features::prompt {
     state.written = line.pane_id;
   }
 
-  bool replace(State& state, Lines& lines, std::uint64_t pane_id, std::size_t begin, std::string_view word, std::string_view text) {
-    auto* line = lineOf(lines, pane_id);
+  bool replace(State& state, Lines& lines, const LineWord& word, std::string_view text) {
+    auto* line = lineOf(lines, word.pane_id);
     if (line == nullptr) {
       return false;
     }
 
     auto& typed = line->line;
     const auto& current = typed.editor().text();
-    const auto end = begin + word.size();
-    if (current.cursor() != end || current.view().substr(begin, word.size()) != word) {
+    const auto end = word.begin + word.text.size();
+    if (current.cursor() != end || current.view().substr(word.begin, word.text.size()) != word.text) {
       return false;
     }
 
-    typed.replaceText(begin, end, text);
-    state.written = pane_id;
+    typed.replaceText(word.begin, end, text);
+    state.written = word.pane_id;
     return true;
   }
 
@@ -689,7 +689,8 @@ namespace telar::gui::features::prompt {
 
   }
 
-  tbc::view<CompletionPlan, tbc::lt::a> plan(State& state, const PaneLine& line, tbc::view<CompletionContext, tbc::lt::a> context, bool specified, bool asks, std::string_view directory, shell::Dialect dialect) {
+  tbc::view<CompletionPlan, tbc::lt::a> plan(State& state, const PaneLine& line, tbc::view<CompletionContext, tbc::lt::a> context, const CompletionSources& sources) {
+    const auto& [specified, asks, directory, dialect] = sources;
     auto& memory = state.memory;
     const auto& specs = state.specs;
     const ebnf::command_spec* found = nullptr;
@@ -731,13 +732,13 @@ namespace telar::gui::features::prompt {
     return plan.questions.size();
   }
 
-  std::variant<FindPaths, CompleteWords> request(const CompletionPlan& plan, std::size_t index, std::uint64_t pane_id, std::uint64_t request_id) noexcept {
-    const auto& question = plan.questions[index];
+  std::variant<FindPaths, CompleteWords> request(const CompletionPlan& plan, Asking asking) noexcept {
+    const auto& question = plan.questions[asking.index];
     if (question.paths) {
-      return FindPaths{.request_id = request_id, .root = question.root.view(), .query = question.query.view(), .kind = question.kind, .limit = path_matches};
+      return FindPaths{.request_id = asking.request_id, .root = question.root.view(), .query = question.query.view(), .kind = question.kind, .limit = path_matches};
     }
 
-    return CompleteWords{.request_id = request_id, .pane_id = pane_id, .provider = question.provider, .prefix = question.query.view()};
+    return CompleteWords{.request_id = asking.request_id, .pane_id = asking.pane_id, .provider = question.provider, .prefix = question.query.view()};
   }
 
   void sent(CompletionPlan& plan, std::size_t index, std::uint64_t request_id) noexcept {

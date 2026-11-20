@@ -673,7 +673,7 @@ namespace telar::gui::qt {
           {QStringLiteral("duration"), static_cast<qulonglong>(block.duration_ms)},
           {QStringLiteral("index"), static_cast<int>(index)},
           {QStringLiteral("selected"), context.selected == index},
-          {QStringLiteral("folded"), context.session.folded(context.pane_id, index)},
+          {QStringLiteral("folded"), context.session.folded({.pane_id = context.pane_id, .index = index})},
           {QStringLiteral("rows"), static_cast<int>(output_end - output_first)},
           {QStringLiteral("foldable"), context.mapped && output_end > output_first},
           {QStringLiteral("remote"), block.nest == CommandBlockNest::inside},

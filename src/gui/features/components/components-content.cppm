@@ -195,9 +195,9 @@ export {
     struct ComponentColors {
       using Color = ColorName::Value;
 
-      [[nodiscard]] Color index(std::uint8_t index) const noexcept;
+      [[nodiscard]] static Color index(std::uint8_t index) noexcept;
 
-      [[nodiscard]] ds::Option<Color> name(std::string_view name) const noexcept;
+      [[nodiscard]] static ds::Option<Color> name(std::string_view name) noexcept;
     };
 
     // Maps what the configuration's readers read onto the GUI's nodes.

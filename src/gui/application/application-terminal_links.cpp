@@ -16,7 +16,7 @@ namespace telar::gui::application::terminal::links {
     void launch(const features::terminal::links::EditorTarget& target, const Open& open) {
       features::terminal::links::EditorLaunch command;
 
-      open(command.arguments(target.editor(), target.path(), target.line(), target.column()));
+      open(command.arguments(target.editor(), {.path = target.path(), .line = target.line(), .column = target.column()}));
     }
 
     void split(Session& session, const features::terminal::links::EditorRequest& request) {

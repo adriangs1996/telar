@@ -1309,7 +1309,7 @@ export {
           return "Clipboard exceeds clipboard.max_capture_bytes (33554432 bytes)";
         }
 
-        return clipboard::error_message(error);
+        return clipboard::errorMessage(error);
       }
 
       inline void send(ClientSession& client, std::uint64_t request) {

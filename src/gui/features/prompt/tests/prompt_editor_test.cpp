@@ -48,7 +48,7 @@ namespace {
     }
 
     Outcome press(const KeyPress& key) {
-      return feature::press(state_, line(), Surface::editor, key, configuration_, telar::shell::Dialect::posix);
+      return feature::press(state_, line(), Surface::editor, key, {.configuration = configuration_, .dialect = telar::shell::Dialect::posix});
     }
 
     // `command` replaces the line, the caret at its end.
@@ -440,10 +440,10 @@ namespace {
       return styleOf(memory, text);
     };
 
-    const auto layout = [&memory](std::string_view text, std::span<const Style> styles, std::size_t cursor, std::size_t anchor, std::uint32_t columns, std::span<const std::uint8_t> groups = {}) {
+    const auto layout = [&memory](const feature::StyledText& text, feature::Selection selection, std::uint32_t columns) {
       Layout result{memory};
 
-      feature::layout(result, text, styles, cursor, anchor, columns, groups);
+      feature::layout(result, text, selection, columns);
       return result;
     };
 
@@ -452,7 +452,7 @@ namespace {
 
     require(styles[0] == Style::command && styles[command.find("git")] == Style::command, "sudo and the command it runs are commands");
     require(styles[command.find("-m")] == Style::option && styles[command.find('"')] == Style::string && styles[command.find('$')] == Style::variable, "options, strings and variables inside them");
-    require(styles[command.find('|')] == Style::operator_ && styles[command.find("tee")] == Style::command, "a pipe starts a command");
+    require(styles[command.find('|')] == Style::shell_operator && styles[command.find("tee")] == Style::command, "a pipe starts a command");
     require(styles[command.find('#')] == Style::comment, "comments");
     const std::string_view typing = "sudo gi";
 
@@ -476,13 +476,13 @@ namespace {
 
     groups.resize(grouped.size(), 0);
     groups.atMut(grouped_byte) = 1;
-    const auto split = layout(grouped, styled(grouped).view(), grouped.size(), grouped.size(), 80, groups.view());
+    const auto split = layout({.text = grouped, .styles = styled(grouped).view(), .groups = groups.view()}, {.cursor = grouped.size(), .anchor = grouped.size()}, 80);
 
     require(split.runs.size() == 4 && split.runs[2].group == 1 && split.runs[2].start == grouped_byte && split.runs[2].end == grouped_byte + 1, "a group is a run of its own");
 
     // Wraps at the width, never cutting, and continues under the text.
     const std::string_view text = "echo abcdefghij";
-    const auto wrapped = layout(text, styled(text).view(), text.size(), text.size(), 10);
+    const auto wrapped = layout({.text = text, .styles = styled(text).view()}, {.cursor = text.size(), .anchor = text.size()}, 10);
 
     require(wrapped.rows == 2 && wrapped.runs.back().row == 1 && wrapped.runs.back().column == Layout::indent, "long lines wrap under the text");
     std::uint32_t cells = 0;
@@ -498,7 +498,7 @@ namespace {
     require(wrapped.caret_row == 1 && wrapped.caret_column == Layout::indent + wrapped_caret_column, "the caret follows the text");
 
     const std::string_view lines = "for f in *; do\n  echo $f\ndone";
-    const auto multiline = layout(lines, styled(lines).view(), 0, lines.size(), 80);
+    const auto multiline = layout({.text = lines, .styles = styled(lines).view()}, {.cursor = 0, .anchor = lines.size()}, 80);
 
     require(multiline.rows == 3 && multiline.caret_row == 0 && multiline.caret_column == Layout::indent, "newlines start rows");
     require(multiline.selection.size() == 3, "a selection spans rows");
@@ -506,7 +506,7 @@ namespace {
     const std::string_view wide = "echo 日本";
     constexpr std::uint32_t echo_cells = 5;
     constexpr std::uint32_t cjk_cells = 4;
-    const auto cjk = layout(wide, styled(wide).view(), wide.size(), wide.size(), 80);
+    const auto cjk = layout({.text = wide, .styles = styled(wide).view()}, {.cursor = wide.size(), .anchor = wide.size()}, 80);
 
     require(cjk.caret_column == Layout::indent + echo_cells + cjk_cells, "wide characters take two cells");
   }
@@ -535,7 +535,7 @@ namespace {
           key = {.key = Key::character, .character = U'r', .modifiers = {.control = true}};
         }
 
-        static_cast<void>(feature::press(state, line, Surface::editor, key, configuration, telar::shell::Dialect::posix));
+        static_cast<void>(feature::press(state, line, Surface::editor, key, {.configuration = configuration, .dialect = telar::shell::Dialect::posix}));
       }
 
       feature::remember(state, feature::delivery(line));

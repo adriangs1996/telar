@@ -77,7 +77,7 @@ namespace {
     const auto activity = ProjectActivity::derive(workspaces, std::span<const Agent<telar::ConcurrentMemory>>{agents}, 1);
 
     check(activity.worktrees == 2 && activity.working == 1 && activity.finished == 1, "only task agents in this project contribute to worktree progress");
-    check(activity.waiting == 2 && activity.urgent == 4, "project attention must use the shared priority rather than status severity");
+    check(activity.waiting == 2 && activity.urgent == 4U, "project attention must use the shared priority rather than status severity");
     ProjectActivity::Text text;
 
     check(activity.summary(text) == "\u2387 2 \u00b7 \u25cc 1 \u2713 1  /project", "project facts must preserve the original symbols and spacing");

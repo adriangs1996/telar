@@ -11,6 +11,8 @@ static_assert(true);
 
 #pragma once
 
+#include "tbc/view.hpp"
+
 import telar.gui.application;
 import telar.base.ds;
 
@@ -36,7 +38,16 @@ namespace telar::gui::qt {
     Q_OBJECT
 
   public:
-    ActivitySelection(Store& store, ActivityController& activity, PeekController& peek, Dialogs& dialogs, MachinesCoordinator& machines, QObject* parent = nullptr);
+    struct Parts {
+      Store& store;
+      ActivityController& activity;
+      PeekController& peek;
+      Dialogs& dialogs;
+      MachinesCoordinator& machines;
+    };
+
+    // Keeps what the parts refer to, region `a`, not the parts themselves.
+    explicit ActivitySelection(tbc::holds<const Parts&, tbc::lt::a> parts, QObject* parent = nullptr);
     ~ActivitySelection() override = default;
     ActivitySelection(const ActivitySelection&) = delete;
     ActivitySelection& operator=(const ActivitySelection&) = delete;
@@ -62,11 +73,11 @@ namespace telar::gui::qt {
 
     void openPeek(const application::machines::MachineActivityTarget& target, const QString& identity, std::uint64_t pointer_revision);
 
-    Store& store_;
-    ActivityController& activity_;
-    PeekController& peek_;
-    Dialogs& dialogs_;
-    MachinesCoordinator& machines_;
+    tbc::view<Store&, tbc::lt::a> store_;
+    tbc::view<ActivityController&, tbc::lt::a> activity_;
+    tbc::view<PeekController&, tbc::lt::a> peek_;
+    tbc::view<Dialogs&, tbc::lt::a> dialogs_;
+    tbc::view<MachinesCoordinator&, tbc::lt::a> machines_;
     ds::Option<Pending> pending_;
     std::uint64_t window_generation_ = 0;
   };

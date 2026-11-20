@@ -545,20 +545,81 @@ namespace telar::gui::qt {
     }
   }
 
+  void TabStripLayout::clearLayout() {
+    strip_bounds_ = {};
+    selection_bounds_ = {};
+    selection_motion_.reset();
+    motions_ = {};
+    next_sample_ns_.reset();
+    frame_requested_ = false;
+    drop_marker_ = {};
+    dragged_bounds_ = {};
+    drop_slot_count_ = 0;
+    counter_.clear();
+    items_.reconcile({});
+    emit layoutChanged();
+  }
+
+  float TabStripLayout::placeCounter(const QList<QVariantMap>& records, const application::workbench::TabStripGeometry::Plan& plan, const application::workbench::TabStripGeometry::Metrics& metrics, StripRow row, float left) {
+    counter_.clear();
+    const auto nearest = plan.nearestHidden();
+    if (!nearest) {
+      return left;
+    }
+
+    left += metrics.gap;
+    const auto counter_width = std::min(metrics.counter, std::max(0.0F, row.available - left));
+    const auto attention = hiddenAttention(records, plan);
+
+    counter_ = {
+        {QStringLiteral("bounds"), QRectF{left, row.top, counter_width, row.height}},
+        {QStringLiteral("count"), static_cast<qulonglong>(plan.hidden())},
+        {QStringLiteral("attentionColor"), attention},
+        {QStringLiteral("key"), records[static_cast<qsizetype>(*nearest)].value(QStringLiteral("key"))},
+    };
+
+    const auto id = records[static_cast<qsizetype>(*nearest)].value(QStringLiteral("key")).toString().toULongLong();
+
+    drop_slots_.atMut(drop_slot_count_++) = {.id = id, .bounds = {.x = left, .y = row.top, .width = counter_width, .height = row.height}};
+
+    return left + counter_width;
+  }
+
+  void TabStripLayout::placeSelection(ds::Option<Rect> selection, bool dragging, application::workbench::TabMotionFrame& frame, qreal density) {
+    selection_bounds_ = {};
+    if (!selection) {
+      selection_motion_.reset();
+
+      return;
+    }
+
+    if (!selection_motion_) {
+      selection_motion_ = application::workbench::TabMotion{.from = *selection, .to = *selection};
+    }
+
+    const auto visible = selection_motion_.getMut().place(*selection, frame, dragging || !workspace_);
+
+    selection_bounds_ = {visible.x / density, visible.y / density, visible.width / density, visible.height / density};
+  }
+
+  void TabStripLayout::finishMotions(const application::workbench::TabMotionFrame& frame) {
+    motions_.finish();
+    card_motions_.finish();
+    next_sample_ns_ = clock_.isNull() ? ds::none : frame.deadline_ns;
+    frame_requested_ = false;
+    if (clock_.isNull()) {
+      return;
+    }
+
+    clock_->requestSynchronization();
+    if (next_sample_ns_) {
+      window()->update();
+    }
+  }
+
   void TabStripLayout::rebuild() {
     if (width() <= 0 || height() <= 0 || !std::isfinite(width()) || !std::isfinite(height()) || width() > std::numeric_limits<float>::max() || height() > std::numeric_limits<float>::max()) {
-      strip_bounds_ = {};
-      selection_bounds_ = {};
-      selection_motion_.reset();
-      motions_ = {};
-      next_sample_ns_.reset();
-      frame_requested_ = false;
-      drop_marker_ = {};
-      dragged_bounds_ = {};
-      drop_slot_count_ = 0;
-      counter_.clear();
-      items_.reconcile({});
-      emit layoutChanged();
+      clearLayout();
 
       return;
     }
@@ -632,54 +693,15 @@ namespace telar::gui::qt {
 
     raiseDraggedSlot();
 
-    counter_.clear();
-    if (const auto nearest = plan.nearestHidden()) {
-      left += metrics.gap;
-      const auto counter_width = std::min(metrics.counter, std::max(0.0F, available - left));
-      const auto attention = hiddenAttention(records, plan);
-
-      counter_ = {
-          {QStringLiteral("bounds"), QRectF{left, top, counter_width, height}},
-          {QStringLiteral("count"), static_cast<qulonglong>(plan.hidden())},
-          {QStringLiteral("attentionColor"), attention},
-          {QStringLiteral("key"), records[static_cast<qsizetype>(*nearest)].value(QStringLiteral("key"))},
-      };
-
-      const auto id = records[static_cast<qsizetype>(*nearest)].value(QStringLiteral("key")).toString().toULongLong();
-
-      drop_slots_.atMut(drop_slot_count_++) = {.id = id, .bounds = {.x = left, .y = top, .width = counter_width, .height = height}};
-      left += counter_width;
-    }
-
+    left = placeCounter(records, plan, metrics, {.top = top, .height = height, .available = available}, left);
     strip_bounds_ = count != 0 ? QRectF{0, top, std::min(left, available), height} : QRectF{};
-    selection_bounds_ = {};
-    if (selection) {
-      if (!selection_motion_) {
-        selection_motion_ = application::workbench::TabMotion{.from = *selection, .to = *selection};
-      }
-
-      const auto visible = selection_motion_.getMut().place(*selection, frame, selection_dragging || !workspace_);
-
-      selection_bounds_ = {visible.x / density, visible.y / density, visible.width / density, visible.height / density};
-    } else {
-      selection_motion_.reset();
-    }
+    placeSelection(selection, selection_dragging, frame, density);
 
     if (count != 0) {
       anchor_ = records[static_cast<qsizetype>(plan.focus)].value(QStringLiteral("key")).toString();
     }
 
-    motions_.finish();
-    card_motions_.finish();
-    next_sample_ns_ = clock_.isNull() ? ds::none : frame.deadline_ns;
-    frame_requested_ = false;
-    if (!clock_.isNull()) {
-      clock_->requestSynchronization();
-      if (next_sample_ns_) {
-        window()->update();
-      }
-    }
-
+    finishMotions(frame);
     items_.reconcile(std::move(positioned));
     emit layoutChanged();
   }

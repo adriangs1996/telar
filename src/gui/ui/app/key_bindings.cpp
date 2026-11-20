@@ -58,13 +58,13 @@ namespace telar::gui::qt {
 
   }
 
-  KeyBindings::KeyBindings(WindowCommands& commands, Store& store, CopyController& copy, ComponentsController& components, AttachmentsController& attachments, TerminalController& terminals)
-      : commands_(commands),
-        store_(store),
-        copy_(copy),
-        components_(components),
-        attachments_(attachments),
-        terminals_(terminals) {
+  KeyBindings::KeyBindings(tbc::holds<const Parts&, tbc::lt::a> parts)
+      : commands_(parts.commands),
+        store_(parts.store),
+        copy_(parts.copy),
+        components_(parts.components),
+        attachments_(parts.attachments),
+        terminals_(parts.terminals) {
     clock_.start();
     timeout_.setSingleShot(true);
     connect(&timeout_, &QTimer::timeout, this, &KeyBindings::expire);

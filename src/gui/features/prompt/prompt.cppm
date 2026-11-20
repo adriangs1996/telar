@@ -316,9 +316,16 @@ export namespace telar::gui::features::prompt {
   template <typename Now>
   [[nodiscard]] TBC_GENERIC bool toProgram(const PaneLine& line, const KeyPress& key, const PaneShell& shell, std::uint32_t cursor_column, Now&& now);
 
-  // A key in the line: the action `configuration` binds to it in the editor's mode, or the
-  // editor's own. Enter continues a command the `dialect`'s shell would read more of.
-  [[nodiscard]] TBC_HOT_PATH inline Outcome press(const State& state, PaneLine& line, Surface surface, const KeyPress& key, const PromptConfiguration& configuration, shell::Dialect dialect);
+  // How the line reads a key: the bindings of `configuration`, and the `dialect` of the shell that
+  // runs the command.
+  struct KeyReading {
+    const PromptConfiguration& configuration;
+    shell::Dialect dialect = shell::Dialect::posix;
+  };
+
+  // A key in the line: the action the configuration binds to it in the editor's mode, or the
+  // editor's own. Enter continues a command the dialect's shell would read more of.
+  [[nodiscard]] TBC_HOT_PATH inline Outcome press(const State& state, PaneLine& line, Surface surface, const KeyPress& key, KeyReading reading);
 
   // What the line hands its owner with `run`, `answer` or `bytes`: the command, the answer or the
   // keys. Valid until the line's next key.
@@ -335,9 +342,16 @@ export namespace telar::gui::features::prompt {
   // `command` replaces the line, the caret at its end, as a history entry pasted does.
   void write(State& state, PaneLine& line, std::string_view command);
 
-  // `text` over `word`, which starts at `begin` of pane `pane_id`'s line, while the caret is right
-  // after it; false when the line no longer holds it there.
-  bool replace(State& state, Lines& lines, std::uint64_t pane_id, std::size_t begin, std::string_view word, std::string_view text);
+  // A word of pane `pane_id`'s line, from byte `begin`.
+  struct LineWord {
+    std::uint64_t pane_id = 0;
+    std::size_t begin = 0;
+    std::string_view text;
+  };
+
+  // `text` over `word` while the caret is right after it; false when the line no longer holds it
+  // there.
+  bool replace(State& state, Lines& lines, const LineWord& word, std::string_view text);
 
   // The pane whose line took text from outside the keyboard (a paste, a history entry, a
   // suggestion, a path) since the last call, for its view to show it.
@@ -415,14 +429,30 @@ export namespace telar::gui::features::prompt {
   // Tab waits for the spec of the line's command, and completes once it arrives (resume).
   void awaitSpec(State& state, const PaneLine& line);
 
-  // The choices for `context`: from the spec held for its command when `specified`, and, when
-  // `asks`, what only the runtime knows (files under `directory`, commands, branches…).
-  [[nodiscard]] tbc::view<CompletionPlan, tbc::lt::a> plan(State& state, const PaneLine& line, tbc::view<CompletionContext, tbc::lt::a> context, bool specified, bool asks, std::string_view directory, shell::Dialect dialect);
+  // Where a plan's choices come from: the spec held for the command when `specified`, and, when
+  // `asks`, what only the runtime knows (files under `directory`, commands, branches…), for the
+  // `dialect`'s shell.
+  struct CompletionSources {
+    bool specified = false;
+    bool asks = false;
+    std::string_view directory;
+    shell::Dialect dialect = shell::Dialect::posix;
+  };
+
+  // The choices for `context` in `line`, from `sources`.
+  [[nodiscard]] tbc::view<CompletionPlan, tbc::lt::a> plan(State& state, const PaneLine& line, tbc::view<CompletionContext, tbc::lt::a> context, const CompletionSources& sources);
 
   [[nodiscard]] std::size_t questions(const CompletionPlan& plan) noexcept;
 
-  // The `index`th question of the plan for pane `pane_id`, under `request_id`; it views the plan.
-  [[nodiscard]] std::variant<FindPaths, CompleteWords> request(const CompletionPlan& plan, std::size_t index, std::uint64_t pane_id, std::uint64_t request_id) noexcept;
+  // The `index`th question of pane `pane_id`'s plan, asked under `request_id`.
+  struct Asking {
+    std::uint64_t pane_id = 0;
+    std::size_t index = 0;
+    std::uint64_t request_id = 0;
+  };
+
+  // The question `asking` names; it views the plan.
+  [[nodiscard]] std::variant<FindPaths, CompleteWords> request(const CompletionPlan& plan, Asking asking) noexcept;
 
   // The `index`th question went out under `request_id`: its answer joins the choices.
   void sent(CompletionPlan& plan, std::size_t index, std::uint64_t request_id) noexcept;
@@ -524,14 +554,14 @@ namespace telar::gui::features::prompt {
   // key's path.
   [[nodiscard]] ds::Option<Action> bound(const KeyPress& key, const Editor& editor, const PromptConfiguration& configuration);
 
-  inline Outcome press(const State& state, PaneLine& line, Surface surface, const KeyPress& key, const PromptConfiguration& configuration, shell::Dialect dialect) {
+  inline Outcome press(const State& state, PaneLine& line, Surface surface, const KeyPress& key, KeyReading reading) {
     auto& edited = line.line;
-    const auto syntax = shell::Syntax{.dialect = dialect};
+    const auto syntax = shell::Syntax{.dialect = reading.dialect};
     const auto incomplete = [&memory = state.memory, syntax](std::string_view text) {
       return prompt::incomplete(memory, text, syntax);
     };
 
-    const auto action = bound(key, edited.editor(), configuration);
+    const auto action = bound(key, edited.editor(), reading.configuration);
 
     return action ? edited.perform(surface, *action, incomplete, history(state)) : edited.press(surface, key, incomplete, history(state));
   }

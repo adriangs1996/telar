@@ -764,16 +764,16 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
   void foldsBlocks(Client& client) {
     press(client, 'z');
     press(client, 'c');
-    check(client.folded(1, 1) && client.findPane(1)->folds.hides(failed_block_row + 1) && !client.findPane(1)->folds.hides(last_block_row), "zc folds the block's output");
+    check(client.folded({.pane_id = 1, .index = 1}) && client.findPane(1)->folds.hides(failed_block_row + 1) && !client.findPane(1)->folds.hides(last_block_row), "zc folds the block's output");
     press(client, 'z');
     press(client, 'o');
-    check(!client.folded(1, 1), "zo unfolds it");
+    check(!client.folded({.pane_id = 1, .index = 1}), "zo unfolds it");
     press(client, 'z');
     press(client, 'M');
-    check(client.folded(1, 0) && client.folded(1, 1) && client.folded(1, 2), "zM folds every block that is not running");
+    check(client.folded({.pane_id = 1, .index = 0}) && client.folded({.pane_id = 1, .index = 1}) && client.folded({.pane_id = 1, .index = 2}), "zM folds every block that is not running");
     press(client, 'z');
     press(client, 'R');
-    check(!client.folded(1, 0) && !client.folded(1, 2), "zR unfolds them all");
+    check(!client.folded({.pane_id = 1, .index = 0}) && !client.folded({.pane_id = 1, .index = 2}), "zR unfolds them all");
   }
 
   template <typename Client>

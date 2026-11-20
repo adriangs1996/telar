@@ -120,7 +120,7 @@ namespace telar::gui::application::prompt {
         }
       }
 
-      auto plan = features::prompt::plan(state, *line, std::move(context.getMut()), specified, asks, std::string_view{pane->cwd}, dialect);
+      auto plan = features::prompt::plan(state, *line, std::move(context.getMut()), {.specified = specified, .asks = asks, .directory = std::string_view{pane->cwd}, .dialect = dialect});
 
       for (std::size_t index = 0; index < features::prompt::questions(plan); ++index) {
         const auto request_id = session.link.nextRequest();
@@ -129,7 +129,7 @@ namespace telar::gui::application::prompt {
             [&](const auto& request) {
               return trySend(session.link, request);
             },
-            features::prompt::request(plan, index, pane_id, request_id)
+            features::prompt::request(plan, {.pane_id = pane_id, .index = index, .request_id = request_id})
         );
         if (queued) {
           features::prompt::sent(plan, index, request_id);
@@ -272,7 +272,7 @@ namespace telar::gui::application::prompt {
     }
 
     const auto shell = dialect(*pane);
-    const auto outcome = features::prompt::press(session.prompt, line, where, key, session.configuration.prompt, shell);
+    const auto outcome = features::prompt::press(session.prompt, line, where, key, {.configuration = session.configuration.prompt, .dialect = shell});
     if (outcome == Outcome::complete) {
       complete(session, pane_id, shell);
       return Outcome::edited;

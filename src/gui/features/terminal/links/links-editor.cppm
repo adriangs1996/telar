@@ -33,7 +33,7 @@ export {
       EditorLaunch& operator=(EditorLaunch&&) = delete;
 
       // The arguments view copies this launch keeps, valid until its next call.
-      [[nodiscard]] std::span<const std::string_view> arguments(std::string_view executable, std::string_view path, std::uint32_t line, std::uint32_t column);
+      [[nodiscard]] std::span<const std::string_view> arguments(std::string_view executable, PathLocation location);
 
     private:
       enum class Convention : std::uint8_t {
@@ -45,17 +45,11 @@ export {
         none,
       };
 
-      struct Position {
-        std::string_view path;
-        std::uint32_t line;
-        std::uint32_t column;
-      };
-
       [[nodiscard]] static std::string_view columnSeparator(Convention convention) noexcept;
 
       [[nodiscard]] static Convention conventionOf(std::string_view executable);
 
-      void writePosition(Position position, Convention convention);
+      void writePosition(PathLocation position, Convention convention);
 
       BoundedText<LinkText::maximum_uri_bytes> executable_;
       BoundedText<LinkText::maximum_uri_bytes> path_;

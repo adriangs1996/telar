@@ -61,7 +61,7 @@ namespace {
     return {.pane_id = target.agent.pane_id, .pane_generation = target.agent.pane_generation, .location = location, .pane_index = 1, .session_id = target.session, .workspace_label = "Other", .session_title = "Owned agent", .title_source = AgentTitleSource::agent, .title_state = AgentTitleState::ready, .provider = AgentProvider::codex, .provider_name = "codex", .status = AgentStatus::working, .sequence = 1};
   }
 
-  struct PeekTransport final : application::RuntimeTransport {
+  struct PeekTransport final : application::BasicRuntimeTransport {
     Transport recorded;
     bool reject = false;
     bool reject_open = false;
@@ -162,7 +162,7 @@ namespace {
         throw std::runtime_error{"A completed read must admit a later refresh"};
       }
 
-      check(features::peek::receive(screen, {.request_id = next.get().request_id, .pane_id = target.agent.pane_id, .text = copied, .exit_code = {}}) == 0 && budget.allocations() == allocations, "steady-state recent reads reuse their injected storage");
+      check(features::peek::receive(screen, {.request_id = next.get().request_id, .pane_id = target.agent.pane_id, .text = copied, .exit_code = {}}) == 0U && budget.allocations() == allocations, "steady-state recent reads reuse their injected storage");
       features::peek::close(screen);
       features::peek::open(screen, target);
       const auto current = features::peek::read(screen, first_request + 3);

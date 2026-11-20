@@ -26,6 +26,8 @@ static_assert(true);
 
 #pragma once
 
+#include "tbc/view.hpp"
+
 import telar.gui.application;
 import telar.gui.foundation.core;
 import telar.base.ds;
@@ -46,7 +48,16 @@ namespace telar::gui::qt {
     QML_UNCREATABLE("Use the window's terminals")
 
   public:
-    TerminalController(Store& store, CopyController& copy, PromptController& prompt, TerminalHost& host, ApplicationAllocator& memory, QObject* parent = nullptr);
+    struct Parts {
+      Store& store;
+      CopyController& copy;
+      PromptController& prompt;
+      TerminalHost& host;
+      ApplicationAllocator& memory;
+    };
+
+    // Keeps what the parts refer to, region `a`, not the parts themselves.
+    explicit TerminalController(tbc::holds<const Parts&, tbc::lt::a> parts, QObject* parent = nullptr);
     ~TerminalController() override = default;
     TerminalController(const TerminalController&) = delete;
     TerminalController& operator=(const TerminalController&) = delete;
@@ -186,11 +197,11 @@ namespace telar::gui::qt {
     void cancelPane(std::uint64_t pane_id);
     static void deliver(TerminalItem& terminal, const QMouseEvent& event, Qt::MouseButtons buttons);
 
-    Store& store_;
-    CopyController& copy_;
-    PromptController& prompt_;
-    TerminalHost& host_;
-    ApplicationAllocator& memory_;
+    tbc::view<Store&, tbc::lt::a> store_;
+    tbc::view<CopyController&, tbc::lt::a> copy_;
+    tbc::view<PromptController&, tbc::lt::a> prompt_;
+    tbc::view<TerminalHost&, tbc::lt::a> host_;
+    tbc::view<ApplicationAllocator&, tbc::lt::a> memory_;
     QPointer<QQuickWindow> window_;
     QMetaObject::Connection placements_connection_;
     qreal chrome_ratio_ = 1;

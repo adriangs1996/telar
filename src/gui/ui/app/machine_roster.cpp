@@ -52,14 +52,14 @@ namespace telar::gui::qt {
 
   }
 
-  MachineRoster::MachineRoster(Store& store, MachinesCoordinator& machines, MachineProfilesSource& profiles, WindowDisplay& display, Dialogs& dialogs, NotificationsController& notifications, QByteArray hostname, QObject* parent)
+  MachineRoster::MachineRoster(tbc::holds<const Parts&, tbc::lt::a> parts, QByteArray hostname, QObject* parent)
       : QObject(parent),
-        store_(store),
-        machines_(machines),
-        profiles_(profiles),
-        display_(display),
-        dialogs_(dialogs),
-        notifications_(notifications),
+        store_(parts.store),
+        machines_(parts.machines),
+        profiles_(parts.profiles),
+        display_(parts.display),
+        dialogs_(parts.dialogs),
+        notifications_(parts.notifications),
         hostname_(std::move(hostname)) {
     observeProfiles();
   }

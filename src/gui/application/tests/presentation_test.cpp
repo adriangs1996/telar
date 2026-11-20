@@ -129,7 +129,6 @@ namespace {
       const WorkbenchGeometry workbench{
           .area = {.width = 900.0F * static_cast<float>(scale), .height = 720.0F * static_cast<float>(scale)},
           .grid = {.cell_width_px = static_cast<std::uint16_t>(9 * scale), .cell_height_px = static_cast<std::uint16_t>(18 * scale)},
-          .layout_metrics = {},
       };
 
       const CellRectangle bounds{.width = 45, .height = 20};
@@ -236,7 +235,7 @@ namespace {
 
     check(narrow.first == 1 && narrow.end == 3 && narrow.shows(focus), "overflow must hide the farthest tabs while keeping the focus");
     check(narrow.fits[focus] == Geometry::Fit::truncated && narrow.fits[1] == Geometry::Fit::compact, "the focus must retain its caption before its neighbors");
-    check(narrow.nearestHidden() == 3, "the overflow counter must select the nearest hidden tab");
+    check(narrow.nearestHidden() == 3U, "the overflow counter must select the nearest hidden tab");
     check(narrow.footprint(metrics) <= narrow_room, "the overflow counter and gaps must share the strip's budget");
   }
 

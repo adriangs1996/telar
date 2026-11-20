@@ -110,18 +110,18 @@ export {
       virtual std::span<Byte> buffer(std::size_t size) = 0;
       virtual void send(std::span<const Byte> message) = 0;
       // Sends a limit report unless the transport is too busy for one; false when it dropped it.
-      virtual bool report(std::span<const Byte> message);
+      virtual bool report(std::span<const Byte> message) = 0;
 
       // The session stops showing the pane and is about to detach from it.
-      virtual void willDetach(std::uint64_t pane_id);
+      virtual void willDetach(std::uint64_t pane_id) = 0;
 
       // The session found the runtime's stream unusable and stopped reading it.
-      virtual void recover(std::string_view reason);
+      virtual void recover(std::string_view reason) = 0;
 
       // Whether the runtime shares images through named memory, which only a local one can.
-      [[nodiscard]] virtual bool supportsSharedMemory() const noexcept;
+      [[nodiscard]] virtual bool supportsSharedMemory() const noexcept = 0;
 
-      [[nodiscard]] virtual system::SharedImageSource sharedImage(std::string_view name) const;
+      [[nodiscard]] virtual system::SharedImageSource sharedImage(std::string_view name) const = 0;
 
     protected:
       RuntimeTransport() noexcept = default;
@@ -130,6 +130,25 @@ export {
       RuntimeTransport& operator=(const RuntimeTransport&) noexcept = default;
       RuntimeTransport& operator=(RuntimeTransport&&) noexcept = default;
       ~RuntimeTransport() = default;
+    };
+
+    // A transport with nothing past sending: a report goes as any message, nothing happens before a
+    // detach or a recovery, and images never come through shared memory.
+    class BasicRuntimeTransport : public RuntimeTransport {
+    public:
+      bool report(std::span<const Byte> message) override;
+      void willDetach(std::uint64_t pane_id) override;
+      void recover(std::string_view reason) override;
+      [[nodiscard]] bool supportsSharedMemory() const noexcept override;
+      [[nodiscard]] system::SharedImageSource sharedImage(std::string_view name) const override;
+
+    protected:
+      BasicRuntimeTransport() noexcept = default;
+      BasicRuntimeTransport(const BasicRuntimeTransport&) noexcept = default;
+      BasicRuntimeTransport(BasicRuntimeTransport&&) noexcept = default;
+      BasicRuntimeTransport& operator=(const BasicRuntimeTransport&) noexcept = default;
+      BasicRuntimeTransport& operator=(BasicRuntimeTransport&&) noexcept = default;
+      ~BasicRuntimeTransport() = default;
     };
 
   }

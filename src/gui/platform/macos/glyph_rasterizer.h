@@ -36,7 +36,7 @@ typedef struct {
   int32_t left, top;
 } telar_glyph_raster;
 
-typedef struct telar_glyph_rasterizer telar_glyph_rasterizer;
+typedef struct telar_glyph_rasterizer telar_glyph_rasterizer; // NOLINT(readability-identifier-naming): a C type, named as the header's others.
 
 // Borrowed font bytes and atlas storage outlive the single-owner rasterizer.
 telar_glyph_rasterizer* telarGlyphRasterizerCreate(const telar_glyph_rasterizer_options* options);

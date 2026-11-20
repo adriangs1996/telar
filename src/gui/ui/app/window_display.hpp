@@ -53,7 +53,7 @@ namespace telar::gui::qt {
     [[nodiscard]] ResolvedFont resolveFont(qreal scale);
 
     [[nodiscard]] QVariantMap geometry() const;
-    [[nodiscard]] qreal chromeRatio() const;
+    [[nodiscard]] static qreal chromeRatio();
     [[nodiscard]] qreal chromeTextScale() const;
     [[nodiscard]] qreal windowControls() const;
     [[nodiscard]] bool sidebarVisible() const;

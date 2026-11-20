@@ -96,6 +96,24 @@ export {
     // The pane the tab at `active` focuses, among `panes`, which it borrows alone.
     [[nodiscard]] tbc::view<const Pane<Memory>*, tbc::lt::a> focusedPane(tbc::view<const Panes&, tbc::lt::a> panes, const Tabs& tabs, ds::Option<TabLocation> active) noexcept;
 
+    // A command block of a pane: the pane's id and the block's index among its blocks.
+    struct BlockAt {
+      std::uint64_t pane_id = 0;
+      std::size_t index = 0;
+    };
+
+    // An inline document of a pane: the pane's id and the document's.
+    struct InlineDocumentAt {
+      std::uint64_t pane_id = 0;
+      std::uint64_t id = 0;
+    };
+
+    // The way a step through a pane's blocks goes.
+    enum class BlockStep : std::int8_t {
+      up = -1,
+      down = 1,
+    };
+
     class Session {
       // The use cases of application::<feature> reach the members below through it.
       friend struct Access;
@@ -221,11 +239,11 @@ export {
       // The stable number of a block's first row, which names it while rows above it are dropped.
       [[nodiscard]] static std::uint64_t blockKey(const Pane<Memory>& pane, std::size_t index) noexcept;
 
-      [[nodiscard]] bool folded(std::uint64_t pane_id, std::size_t index) const noexcept;
+      [[nodiscard]] bool folded(BlockAt block) const noexcept;
 
       // Folds the output of block `index`, or unfolds it. Only a runtime that sends rows apart from
       // the screen can show what follows a fold.
-      void fold(std::uint64_t pane_id, std::size_t index, bool fold);
+      void fold(BlockAt block, bool fold);
 
       // Folds every block but a running one, or unfolds them all.
       void foldAll(std::uint64_t pane_id, bool fold);
@@ -305,7 +323,7 @@ export {
       [[nodiscard]] bool ready() const noexcept;
 
       // The view measured an inline document in `rows` rows of its own.
-      bool measureInline(std::uint64_t pane_id, std::uint64_t id, std::uint32_t rows);
+      bool measureInline(InlineDocumentAt document, std::uint32_t rows);
 
       [[nodiscard]] std::uint64_t changedPane() const noexcept;
 
@@ -424,7 +442,8 @@ export {
         template <typename Request>
         void sendTabOperation(RequestKind kind, Request request);
 
-        tbc::view<RuntimeTransport&, tbc::lt::a> transport;
+        // Public beside a private counter, so that a use case borrows the transport alone.
+        tbc::view<RuntimeTransport&, tbc::lt::a> transport; // NOLINT(cppcoreguidelines-non-private-member-variables-in-classes,misc-non-private-member-variables-in-classes)
 
       private:
         std::uint64_t request_id_ = 0;
@@ -632,6 +651,9 @@ export {
 
       Change apply(const PaneFocusCommand& message);
 
+      // The fields below are public beside private state on purpose: the use cases borrow them one by
+      // one, as Rust borrows a struct's fields, where an accessor would lend the whole session.
+      // NOLINTBEGIN(cppcoreguidelines-non-private-member-variables-in-classes,misc-non-private-member-variables-in-classes)
     public:
       // The configuration the session runs with, a field the use cases read beside a feature's state.
       Configuration configuration;
@@ -659,23 +681,23 @@ export {
 
       // Selects the block above (`direction` -1) or below (1) the selected one. With none selected,
       // going up selects the last block.
-      void stepBlock(std::uint64_t pane_id, int direction);
+      void stepBlock(std::uint64_t pane_id, BlockStep direction);
 
       // Selects the next failed block above or below the selected one, or from the live end.
-      void stepFailedBlock(std::uint64_t pane_id, int direction);
+      void stepFailedBlock(std::uint64_t pane_id, BlockStep direction);
 
       // Ctrl-U, Ctrl-D, Ctrl-O and Ctrl-I; false for any other `character`.
       bool controlBlockKey(std::uint64_t pane_id, char32_t character);
 
       // The chord `pending` began, yc, gg or z and a key, ended by `character` on block `index`;
       // false when `pending` begins none of them.
-      bool blockChord(char pending, std::uint64_t pane_id, std::size_t index, char32_t character);
+      bool blockChord(char pending, BlockAt block, char32_t character);
 
       // The z chord ended by `character` on block `index`.
-      void foldChord(std::uint64_t pane_id, std::size_t index, char32_t character);
+      void foldChord(BlockAt block, char32_t character);
 
       // A key on block `index` outside a chord; false when it is none of block mode's.
-      bool blockCommand(std::uint64_t pane_id, std::size_t index, char32_t character);
+      bool blockCommand(BlockAt block, char32_t character);
 
       // The shown row at the view's top: as its view says, or as the runtime's view puts it.
       [[nodiscard]] static std::uint64_t shownTop(const Pane<Memory>& pane) noexcept;
@@ -820,6 +842,7 @@ export {
       std::uint16_t display_fps_ = Configuration::default_fps;
       std::uint16_t sidebar_columns_ = default_sidebar_columns;
       std::uint16_t host_columns_ = default_terminal_size.cols;
+      // NOLINTEND(cppcoreguidelines-non-private-member-variables-in-classes,misc-non-private-member-variables-in-classes)
     };
 
   }

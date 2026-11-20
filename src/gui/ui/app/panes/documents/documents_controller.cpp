@@ -59,7 +59,7 @@ namespace telar::gui::qt {
 
   void DocumentsController::measure(const QString& pane_id, qulonglong id, int rows) {
     const auto pane = pane_id.toULongLong();
-    if (rows > 0 && store_.sessionMut().measureInline(pane, id, static_cast<std::uint32_t>(rows))) {
+    if (rows > 0 && store_.sessionMut().measureInline({.pane_id = pane, .id = id}, static_cast<std::uint32_t>(rows))) {
       emit measured(pane);
     }
   }

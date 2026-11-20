@@ -63,7 +63,7 @@ namespace telar::gui::qt {
     return application::window::DisplayMetrics::resolve(configuration(), viewport_, cell_metrics_, density);
   }
 
-  qreal WindowDisplay::chromeRatio() const {
+  qreal WindowDisplay::chromeRatio() {
     return 1;
   }
 

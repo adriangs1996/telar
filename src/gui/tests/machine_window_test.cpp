@@ -682,7 +682,7 @@ namespace {
 
       auto shelf_properties = properties;
 
-      shelf_properties.insert(QStringLiteral("ratio"), application.display()->chromeRatio());
+      shelf_properties.insert(QStringLiteral("ratio"), WindowDisplay::chromeRatio());
       const auto shelf_view = createChrome(engine, QStringLiteral("AttachmentShelf"), shelf_properties);
       const auto modal_view = createChrome(engine, QStringLiteral("AttachmentModal"), properties);
 
@@ -761,7 +761,7 @@ namespace {
 
       auto shelf_properties = properties;
 
-      shelf_properties.insert(QStringLiteral("ratio"), application.display()->chromeRatio());
+      shelf_properties.insert(QStringLiteral("ratio"), WindowDisplay::chromeRatio());
       const auto shelf = createChrome(engine, QStringLiteral("AttachmentShelf"), shelf_properties);
       const auto modal = createChrome(engine, QStringLiteral("AttachmentModal"), properties);
 

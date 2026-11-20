@@ -50,7 +50,7 @@ namespace telar::gui::features::prompt {
       case shell::TokenKind::substitution:
       case shell::TokenKind::control:
       case shell::TokenKind::redirection:
-        style = Style::operator_;
+        style = Style::shell_operator;
         break;
       case shell::TokenKind::comment:
         style = Style::comment;
@@ -114,7 +114,10 @@ namespace telar::gui::features::prompt {
 
   }
 
-  void layout(Layout& result, std::string_view text, std::span<const Style> styles, std::size_t cursor, std::size_t anchor, std::uint32_t columns, std::span<const std::uint8_t> groups) {
+  void layout(Layout& result, const StyledText& styled, Selection selection, std::uint32_t columns) {
+    const auto& [text, styles, groups] = styled;
+    const auto [cursor, anchor] = selection;
+
     reset(result);
 
     columns = std::max<std::uint32_t>(columns, Layout::indent + 1);

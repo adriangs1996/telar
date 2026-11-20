@@ -32,16 +32,16 @@ import telar.base.ds;
 
 namespace telar::gui::qt {
 
-  FramePresenter::FramePresenter(ApplicationAllocator& memory, Store& store, WindowDisplay& display, TabsController& tabs, HistoryController& history, TerminalController& terminals, PointerDispatcher& pointers, WindowStatus& status, QObject* parent)
+  FramePresenter::FramePresenter(tbc::holds<const Parts&, tbc::lt::a> parts, QObject* parent)
       : QObject(parent),
-        memory_(memory),
-        store_(store),
-        display_(display),
-        tabs_(tabs),
-        history_(history),
-        terminals_(terminals),
-        pointers_(pointers),
-        status_(status) {}
+        memory_(parts.memory),
+        store_(parts.store),
+        display_(parts.display),
+        tabs_(parts.tabs),
+        history_(parts.history),
+        terminals_(parts.terminals),
+        pointers_(parts.pointers),
+        status_(parts.status) {}
 
   void FramePresenter::setWindow(QQuickWindow& window, std::uint64_t generation) {
     window_ = &window;
@@ -121,7 +121,7 @@ namespace telar::gui::qt {
     frame = {};
     frame.machine_view = store_.machineView();
     frame.preparation_ns = system::AwakeClock::nowNanoseconds();
-    frame.tabs = tabs_.dropSurface(display_.chromeRatio());
+    frame.tabs = tabs_.dropSurface(WindowDisplay::chromeRatio());
     if (window_ == nullptr) {
       return;
     }

@@ -256,7 +256,7 @@ namespace {
 
 }
 
-int telarGuiFindFont(const char* family, const char* style, telar_font_match* match) {
+int telarGuiFindFont(const char* family, const char* style, telar_font_match* match) { // NOLINT(bugprone-easily-swappable-parameters): font.h's C ABI, which the Linux backend implements too.
   @autoreleasepool {
     NSString* const requested = [NSString stringWithUTF8String:family];
     NSString* const face = [NSString stringWithUTF8String:style];

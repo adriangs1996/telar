@@ -15,6 +15,8 @@ static_assert(true);
 
 #pragma once
 
+#include "tbc/view.hpp"
+
 import telar.gui.application;
 import telar.base.ds;
 
@@ -40,7 +42,17 @@ namespace telar::gui::qt {
     Q_OBJECT
 
   public:
-    MachineRoster(Store& store, MachinesCoordinator& machines, MachineProfilesSource& profiles, WindowDisplay& display, Dialogs& dialogs, NotificationsController& notifications, QByteArray hostname, QObject* parent = nullptr);
+    struct Parts {
+      Store& store;
+      MachinesCoordinator& machines;
+      MachineProfilesSource& profiles;
+      WindowDisplay& display;
+      Dialogs& dialogs;
+      NotificationsController& notifications;
+    };
+
+    // Keeps what the parts refer to, region `a`, not the parts themselves.
+    MachineRoster(tbc::holds<const Parts&, tbc::lt::a> parts, QByteArray hostname, QObject* parent = nullptr);
     ~MachineRoster() override = default;
     MachineRoster(const MachineRoster&) = delete;
     MachineRoster& operator=(const MachineRoster&) = delete;
@@ -81,12 +93,12 @@ namespace telar::gui::qt {
     void retire(application::machines::Machines::Slot slot, Retirement reason);
     void setup(application::machines::MachineToken target);
 
-    Store& store_;
-    MachinesCoordinator& machines_;
-    MachineProfilesSource& profiles_;
-    WindowDisplay& display_;
-    Dialogs& dialogs_;
-    NotificationsController& notifications_;
+    tbc::view<Store&, tbc::lt::a> store_;
+    tbc::view<MachinesCoordinator&, tbc::lt::a> machines_;
+    tbc::view<MachineProfilesSource&, tbc::lt::a> profiles_;
+    tbc::view<WindowDisplay&, tbc::lt::a> display_;
+    tbc::view<Dialogs&, tbc::lt::a> dialogs_;
+    tbc::view<NotificationsController&, tbc::lt::a> notifications_;
     QByteArray hostname_;
     ds::Option<RemoteLaunch> remote_launch_;
     QTimer retry_;
