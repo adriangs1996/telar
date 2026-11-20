@@ -41,8 +41,9 @@ namespace telar::gui::features::terminal::graphics {
     return earliest;
   }
 
-  void GraphicsPauses::pause(Moment event, PaneCall<void> request, PaneCall<void> notice) {
+  void GraphicsPauses::pause(Moment event, PauseCalls calls) {
     const auto [pane_id, now_ns] = event;
+    const auto [request, notice] = calls;
     auto slot = find(pane_id);
     if (slot) {
       auto& row = rows_.atMut(*slot);

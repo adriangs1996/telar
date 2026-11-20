@@ -47,7 +47,7 @@ namespace telar::gui::features::terminal::graphics {
     template <typename Request, typename Notice>
       requires std::invocable<const Request&, std::uint64_t> && std::invocable<const Notice&, std::uint64_t>
     TBC_GENERIC void pause(std::uint64_t pane_id, std::uint64_t now_ns, const Request& request, const Notice& notice) {
-      pause(Moment{.pane_id = pane_id, .now_ns = now_ns}, PaneCall<void>::of(request), PaneCall<void>::of(notice));
+      pause(Moment{.pane_id = pane_id, .now_ns = now_ns}, {.request = PaneCall<void>::of(request), .notice = PaneCall<void>::of(notice)});
     }
 
     template <typename Request>
@@ -93,7 +93,13 @@ namespace telar::gui::features::terminal::graphics {
       Result operator()(std::uint64_t pane_id) const;
     };
 
-    void pause(Moment event, PaneCall<void> request, PaneCall<void> notice);
+    // What a pause asks of its caller: a snapshot request, and a notice that the pane paused.
+    struct PauseCalls {
+      PaneCall<void> request;
+      PaneCall<void> notice;
+    };
+
+    void pause(Moment event, PauseCalls calls);
     void resumeDue(std::uint64_t now_ns, PaneCall<void> request);
     void focus(Moment event, PaneCall<void> request);
     void forgetClosed(PaneCall<bool> mirrored);

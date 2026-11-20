@@ -12,6 +12,6 @@ Checks: >-
   -modernize-use-trailing-return-type
 WarningsAsErrors: '*'
 HeaderFilterRegex: '.*'
-ExcludeHeaderFilterRegex: '(^|/)(out|build[^/]*|cmake-build[^/]*|vendor|third_party|generated)/'
+ExcludeHeaderFilterRegex: '(^|/)(out|build[^/]*|cmake-build[^/]*|vendor|third_party|generated|\.toolchain)/'
 SystemHeaders: false
 FormatStyle: file

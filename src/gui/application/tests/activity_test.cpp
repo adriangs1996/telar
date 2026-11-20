@@ -139,8 +139,8 @@ namespace {
     Order::write(sources, 0, plan);
     check(allocator.allocations() == allocations, "activity ordering must not allocate");
     check(plan.count == 3 && plan.entries.front().agent == 0U && plan.entries.front().coordinator, "the root agent must own its task and tracked command");
-    check(plan.entries[1].agent == 1 && plan.entries[1].parent == 0 && plan.entries[1].depth == 1 && plan.entries[1].card == ActivityCard::task, "tasks must be nested under their creator");
-    check(!plan.entries[2].agent && plan.entries[2].worktree == 1 && plan.entries[2].parent == 0, "an unrepresented tracked command must remain visible under its creator");
+    check(plan.entries[1].agent == 1U && plan.entries[1].parent == 0U && plan.entries[1].depth == 1 && plan.entries[1].card == ActivityCard::task, "tasks must be nested under their creator");
+    check(!plan.entries[2].agent && plan.entries[2].worktree == 1U && plan.entries[2].parent == 0U, "an unrepresented tracked command must remain visible under its creator");
   }
 
   void exactReferencesAndCycles() {
@@ -169,7 +169,7 @@ namespace {
     Order::Plan plan;
 
     Order::write(sources, 0, plan);
-    check(plan.count == 2 && !plan.entries[0].parent && plan.entries[1].parent == 0 && plan.entries[1].depth == 1, "cyclic attribution must break only its cyclic edge without losing cards");
+    check(plan.count == 2 && !plan.entries[0].parent && plan.entries[1].parent == 0U && plan.entries[1].depth == 1, "cyclic attribution must break only its cyclic edge without losing cards");
     tasks.atMut(0).coordinator = coordinatorReference(2, 2);
     check(workspaces.apply({.revision = 2, .entries = projects, .worktrees = tasks}), "stale coordinator references remain representable");
     Order::write(sources, 0, plan);
@@ -219,7 +219,7 @@ namespace {
     Order::Plan plan;
 
     Order::write(sources, 0, plan);
-    check(plan.count == 3 && plan.entries[1].source == 2 && plan.entries[1].parent == 0 && plan.entries[2].source == 1, "aliased runtime identities must choose the first exact coordinator without hiding either alias");
+    check(plan.count == 3 && plan.entries[1].source == 2 && plan.entries[1].parent == 0U && plan.entries[2].source == 1, "aliased runtime identities must choose the first exact coordinator without hiding either alias");
   }
 
   void otherMachinesListOnlyAgentsThatWait() {

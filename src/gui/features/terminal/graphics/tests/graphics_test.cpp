@@ -119,7 +119,7 @@ namespace {
       throw std::runtime_error{"The reference placeholder must decode"};
     }
 
-    check(parsed->row == 0U && parsed->column == 1 && parsed->image_low == image_id, "placeholder diacritics and color ids must match the reference table");
+    check(parsed->row == 0U && parsed->column == 1U && parsed->image_low == image_id, "placeholder diacritics and color ids must match the reference table");
     auto run = PlaceholderRun::begin(*parsed, 3);
     PlaceholderCell next;
 
