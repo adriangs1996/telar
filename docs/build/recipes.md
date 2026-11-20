@@ -27,17 +27,17 @@ them through the tree with `git grep -n HistoryWorkspaces`.
    Never edit the file or the row of a published schema.
 5. **The runtime's table.** Add `ClientRequest<Request, Role, Lane>` to `ClientRequests` in
    `src/runtime/core/model/slot_store/slot_store.cppm`. `Role` is the role a client takes when
-   this is its first request, not who may send it. *silent*: a request missing here is
-   answered `Unknown request tag`.
+   this is its first request, not who may send it. *compiler*: a tag the wire names
+   without an entry here does not compile.
 6. **The handler.** Declare and define `Runtime::handle(std::uint64_t, const Request&)` in
    `src/runtime/core/runtime/runtime.cppm` and `.cpp`. *compiler*. A request another thread
    answers only submits itself there (`submitBackground`); the work goes in the service that
    owns the data, which for the history is `HistoryStore` and the branch for the request in
    `BackgroundService::execute` (`src/runtime/core/media_service/media_service.cpp`).
-   *silent*: `execute` answers nothing for a history request without a branch.
+   *compiler*: a history request without a branch there does not compile.
 7. **The reply's lane.** Add the reply's tag to `deliveryLane` in
-   `src/runtime/transport/connection/connection.cppm`. *silent*: a tag without a lane throws
-   when the runtime first sends it, so cover the request with a test that receives its reply.
+   `src/runtime/transport/connection/connection.cppm`. *compiler*: a message without a lane
+   does not compile.
 8. **The literals.** `git grep -n '<previous schema>'` finds the tools and guides that spell
    the schema: `src/cli/tools/check_*.py`, `src/cli/exec-runtime.md`,
    `src/runtime/control-queries.md`. *test* for the tools, *silent* for the guides.

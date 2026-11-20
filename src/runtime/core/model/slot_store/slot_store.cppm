@@ -118,6 +118,21 @@ export {
         return ((!std::exchange(seen.atMut(std::to_underlying(Requests::tag)), true)) && ...);
       }(),
           "Two requests share a tag");
+      // The wire names every request (clientTagName). One added to ClientTag without joining this
+      // list does not compile, where it used to be refused as an unknown tag once a client sent it.
+      static_assert([] {
+        ds::Array<bool, tag_values> listed{};
+
+        ((listed.atMut(std::to_underlying(Requests::tag)) = true), ...);
+        for (std::size_t value = 0; value < tag_values; ++value) {
+          if (!clientTagName(static_cast<ClientTag>(value)).empty() && !listed.at(value)) {
+            return false;
+          }
+        }
+
+        return true;
+      }(),
+          "A request of ClientTag has no entry in the list of requests");
     };
 
     using ClientRequests = ClientRequestList<

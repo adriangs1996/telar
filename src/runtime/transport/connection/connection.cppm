@@ -165,6 +165,11 @@ export {
       count,
     };
 
+    // The switch lists every message, and here a missing one is an error: a message added to
+    // ServerTag without a lane does not compile, where it used to throw when it was first sent.
+#pragma clang diagnostic push
+#pragma clang diagnostic error "-Wswitch"
+
     constexpr DeliveryLane deliveryLane(ServerTag tag) {
       switch (tag) {
       case ServerTag::runtime_stopping:
@@ -260,6 +265,8 @@ export {
 
       throw EncodingError{"Unknown outgoing message tag"};
     }
+
+#pragma clang diagnostic pop
 
     constexpr bool responseLane(DeliveryLane lane) noexcept {
       return lane == DeliveryLane::management || lane == DeliveryLane::observation;

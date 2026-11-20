@@ -199,6 +199,8 @@ namespace telar::runtime {
           store->workspaces(request, reply);
         } else if constexpr (std::same_as<Message, ReportAgentCommand>) {
           store->reportAgentCommand(request, context, reply);
+        } else {
+          static_assert(false, "BackgroundService::execute has no branch for this history request");
         }
 
         return;
