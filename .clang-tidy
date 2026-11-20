@@ -13,9 +13,13 @@
 #   readability-redundant-inline-specifier: a member defined in its class is implicitly inline only outside
 #   a named module; in a module interface the inline is what lets importers inline the body, and
 #   TBC_HOT_PATH requires it.
-# Checks that contradict tbc's lifetimes:
+# Checks that contradict tbc's lifetimes, whose const is deep as Rust's `&T`:
 #   cppcoreguidelines-avoid-const-or-ref-data-members: a field labeled tbc::mut_self or tbc::ref_a is how
 #   an object holds a borrow tbc checks.
+#   readability-make-member-function-const: a method that writes through a pointer or descriptor member is
+#   const to C++ and a mutation to tbc.
+#   misc-const-correctness skips the types whose const C++ keeps shallow (AllowedTypes below): a const span
+#   or owning pointer is one tbc forbids writing through.
 # Checks that -Wunsafe-buffer-usage covers, which also sees calls into libc:
 #   cppcoreguidelines-pro-bounds-avoid-unchecked-container-access, -pro-bounds-constant-array-index,
 #   -pro-bounds-pointer-arithmetic.
@@ -56,6 +60,7 @@ Checks: >-
   -readability-redundant-inline-specifier,
   -readability-redundant-declaration,
   -cppcoreguidelines-avoid-const-or-ref-data-members,
+  -readability-make-member-function-const,
   -cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,
   -cppcoreguidelines-pro-bounds-constant-array-index,
   -cppcoreguidelines-pro-bounds-pointer-arithmetic,
@@ -84,6 +89,7 @@ ExcludeHeaderFilterRegex: '(^|/)(lib/(tbc|ebnf)|dependencies|generated|out[^/]*|
 SystemHeaders: false
 FormatStyle: file
 CheckOptions:
+  misc-const-correctness.AllowedTypes: 'std::span;std::unique_ptr;std::shared_ptr;telar::ds::Box'
   cppcoreguidelines-macro-usage.AllowedRegexp: '^TELAR_GUI_(ALLOCATOR|LINK_HOST)$'
   readability-function-size.ParameterThreshold: '5'
   readability-function-size.LineThreshold: '100'
