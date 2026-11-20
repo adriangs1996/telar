@@ -6,6 +6,7 @@ include_guard(GLOBAL)
 #
 #   lint              clang-tidy, with the .clang-tidy nearest each source; a source with
 #                     none in the project has no lint profile and is not linted
+#   analyze           clang-tidy's static analyzer, which lint leaves out, over lint's sources
 #   lifetime          tbc-lint's lifetime analysis
 #   blank_lines       tbc-lint's blank lines of docs/code-style.md
 #   interface_bodies  tbc-lint's rule that module interfaces keep no function bodies
@@ -39,8 +40,8 @@ function(telar_register_checks)
 endfunction()
 
 # telar_checks(): the check targets of the top-level project, lint, lifetime, blank-lines
-# and interface-bodies for each check some target registered for, and format and
-# format-check. Their scope is written to <build>/checks/<check>.txt once the project is
+# and interface-bodies for each check some target registered for, analyze with lint, and
+# format and format-check. Their scope is written to <build>/checks/<check>.txt once the project is
 # configured, so the call can come before the targets.
 function(telar_checks)
   if(ARGN)
@@ -114,12 +115,19 @@ function(_telar_checks_define)
     list(SORT scope_${check})
     list(JOIN scope_${check} "\n" content)
     file(CONFIGURE OUTPUT "${CMAKE_BINARY_DIR}/checks/${check}.txt" CONTENT "${content}\n" @ONLY)
-    string(REPLACE "_" "-" name "${check}")
-    add_custom_target(${name}
-      COMMAND "${CMAKE_COMMAND}" "-DCHECK=${check}" "-DBUILD_DIRECTORY=${CMAKE_BINARY_DIR}"
-        "-DJOBS=${TELAR_CHECK_JOBS}" "-DTBC_LINTER=${TBC_LINTER}" -P "${script}"
-      USES_TERMINAL
-      VERBATIM)
+    set(names ${check})
+    # The static analyzer runs over lint's sources as a check of its own.
+    if(check STREQUAL "lint")
+      list(APPEND names analyze)
+    endif()
+    foreach(name IN LISTS names)
+      string(REPLACE "_" "-" target "${name}")
+      add_custom_target(${target}
+        COMMAND "${CMAKE_COMMAND}" "-DCHECK=${name}" "-DBUILD_DIRECTORY=${CMAKE_BINARY_DIR}"
+          "-DJOBS=${TELAR_CHECK_JOBS}" "-DTBC_LINTER=${TBC_LINTER}" -P "${script}"
+        USES_TERMINAL
+        VERBATIM)
+    endforeach()
   endforeach()
 endfunction()
 

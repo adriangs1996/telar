@@ -1,18 +1,20 @@
 # Runs one quality check of cmake/TelarChecks.cmake over a configured tree:
 #   cmake -DCHECK=<check> -DBUILD_DIRECTORY=<tree> [-DJOBS=<n>] [-DFIX=ON] [-DFULL=ON]
 #         [-DTBC_LINTER=<path>] -P cmake/scripts/check.cmake
-# CHECK is lint, lifetime, blank_lines, interface_bodies or standard_containers; its scope is the list of
-# sources <tree>/checks/<check>.txt, which configuring the tree writes. JOBS defaults to
-# 2 for lint and to the physical core count otherwise. FIX makes blank_lines insert the
-# missing blank lines instead of failing on them. lifetime and standard_containers check only the
-# units whose object, tbc-lint or allowlist changed since their last check, and report the others as
-# they did then; FULL checks them all.
+# CHECK is lint, analyze, lifetime, blank_lines, interface_bodies or standard_containers; its scope is
+# the list of sources <tree>/checks/<check>.txt, which configuring the tree writes. lint runs clang-tidy
+# without its static analyzer, and analyze runs only the analyzer over lint's scope: it takes most of
+# clang-tidy's time. JOBS defaults to half the physical cores for both, as each clang-tidy loads the
+# BMIs its unit imports, and to the physical core count otherwise. FIX makes blank_lines insert the
+# missing blank lines instead of failing on them. lint, analyze, lifetime and standard_containers check
+# only the units whose object, profile, linter or allowlist changed since their last check, and report
+# the others as they did then; FULL checks them all.
 cmake_minimum_required(VERSION 3.25)
 
 get_filename_component(root "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
 include("${root}/lib/tbc/cmake/tbcLifetimeCheck.cmake")
 
-set(checks lint lifetime blank_lines interface_bodies standard_containers)
+set(checks lint analyze lifetime blank_lines interface_bodies standard_containers)
 if(NOT CHECK IN_LIST checks)
   message(FATAL_ERROR "CHECK must be one of ${checks}, not '${CHECK}'")
 endif()
@@ -27,11 +29,15 @@ load_cache("${build}" READ_WITH_PREFIX tree_ CMAKE_HOME_DIRECTORY CMAKE_CXX_COMP
 set(project "${tree_CMAKE_HOME_DIRECTORY}")
 
 if(NOT JOBS)
-  if(CHECK STREQUAL "lint")
-    set(JOBS 2)
-  else()
-    cmake_host_system_information(RESULT JOBS QUERY NUMBER_OF_PHYSICAL_CORES)
+  cmake_host_system_information(RESULT JOBS QUERY NUMBER_OF_PHYSICAL_CORES)
+  if(CHECK STREQUAL "lint" OR CHECK STREQUAL "analyze")
+    math(EXPR JOBS "(${JOBS} + 1) / 2")
   endif()
+endif()
+# analyze analyses the sources lint does.
+set(scope_check "${CHECK}")
+if(CHECK STREQUAL "analyze")
+  set(scope_check lint)
 endif()
 if(NOT JOBS MATCHES "^[1-9][0-9]*$")
   message(FATAL_ERROR "JOBS must be a positive integer")
@@ -41,22 +47,21 @@ endif()
 # headers, module providers, dyndep/modmap files and the BMIs of CMake's synthetic
 # module targets. A tool analyses each database entry of a source, and an entry whose
 # BMI is missing parses into an invalid AST that checks then walk. Sets <sources> to the
-# selected source paths and <patterns> to them as run-clang-tidy file patterns.
-function(telar_check_prepare sources patterns)
+# selected source paths and check_units to their source|object pairs.
+function(telar_check_prepare sources)
   # Let Ninja refresh CMake's database and the scope first, including after a new target
   # or module.
   execute_process(COMMAND "${CMAKE_COMMAND}" --build "${build}" --parallel "${JOBS}" --target build.ninja
     COMMAND_ERROR_IS_FATAL ANY)
-  if(NOT EXISTS "${build}/checks/${CHECK}.txt")
-    message(FATAL_ERROR "No target of ${build} registers for ${CHECK}")
+  if(NOT EXISTS "${build}/checks/${scope_check}.txt")
+    message(FATAL_ERROR "No target of ${build} registers for ${scope_check}")
   endif()
-  file(STRINGS "${build}/checks/${CHECK}.txt" scope)
+  file(STRINGS "${build}/checks/${scope_check}.txt" scope)
   # CMake's Ninja generator writes one field per line, so reading the directory, file and output
   # lines in order is the database without parsing all of it once per entry, which string(JSON)
   # would do for each field it reads.
   file(STRINGS "${build}/compile_commands.json" fields REGEX "^  \"(directory|file|output)\": ")
   set(objects)
-  set(selected)
   set(paths)
   set(units)
   set(directory)
@@ -88,12 +93,8 @@ function(telar_check_prepare sources patterns)
     list(APPEND objects "${object}")
     list(APPEND paths "${source}")
     list(APPEND units "${source}|${output}")
-    # run-clang-tidy treats positional filenames as Python regular expressions.
-    string(REGEX REPLACE "([][+.*()?^$\\\\|])" "\\\\\\1" pattern "${source}")
-    list(APPEND selected "^${pattern}$")
   endforeach()
   list(REMOVE_DUPLICATES objects)
-  list(REMOVE_DUPLICATES selected)
   list(REMOVE_DUPLICATES paths)
   if(NOT objects)
     message(FATAL_ERROR "No translation unit of ${build} is in the scope of ${CHECK}")
@@ -101,7 +102,6 @@ function(telar_check_prepare sources patterns)
   execute_process(COMMAND "${CMAKE_COMMAND}" --build "${build}" --parallel "${JOBS}" --target ${objects}
     COMMAND_ERROR_IS_FATAL ANY)
   set(${sources} "${paths}" PARENT_SCOPE)
-  set(${patterns} "${selected}" PARENT_SCOPE)
   set(check_units "${units}" PARENT_SCOPE)
 endfunction()
 
@@ -116,20 +116,20 @@ function(telar_repository_headers out)
   set(${out} "^${escaped}/(src|lib)/[^/]+/(\\./)*${first}(/${component})*$" PARENT_SCOPE)
 endfunction()
 
-if(CHECK STREQUAL "lint")
+if(CHECK STREQUAL "lint" OR CHECK STREQUAL "analyze")
   get_filename_component(compiler "${tree_CMAKE_CXX_COMPILER}" REALPATH)
   get_filename_component(compiler_directory "${compiler}" DIRECTORY)
   find_program(clang_tidy NAMES clang-tidy HINTS "${compiler_directory}" NO_DEFAULT_PATH)
-  find_program(run_clang_tidy NAMES run-clang-tidy run-clang-tidy.py HINTS "${compiler_directory}" NO_DEFAULT_PATH)
-  if(NOT clang_tidy OR NOT run_clang_tidy)
-    message(FATAL_ERROR "Install clang-tidy and run-clang-tidy from the same LLVM installation as the C++ compiler")
+  if(NOT clang_tidy)
+    message(FATAL_ERROR "Install clang-tidy from the same LLVM installation as the C++ compiler")
   endif()
+  find_program(python NAMES python3 REQUIRED)
   execute_process(COMMAND "${clang_tidy}" --version OUTPUT_VARIABLE version COMMAND_ERROR_IS_FATAL ANY)
   string(REGEX MATCH "version ([0-9]+)" version_match "${version}")
   if(NOT version_match OR CMAKE_MATCH_1 LESS 23)
     message(FATAL_ERROR "The lint profiles require clang-tidy 23 or newer; found ${clang_tidy}")
   endif()
-  telar_check_prepare(sources patterns)
+  telar_check_prepare(sources)
   # Each source is analysed with the .clang-tidy nearest it, its project's profile; the
   # scope holds only sources that have one, and configuring lists the profiles.
   file(STRINGS "${build}/checks/lint-profiles.txt" profiles)
@@ -137,16 +137,22 @@ if(CHECK STREQUAL "lint")
     execute_process(COMMAND "${clang_tidy}" --verify-config "--config-file=${profile}"
       COMMAND_ERROR_IS_FATAL ANY)
   endforeach()
-  # run-clang-tidy first lists the checks of the working directory, the project root,
-  # which has no profile of its own: -allow-no-checks lets that probe pass. Every source
-  # in the scope has a profile, so none is analysed without checks.
-  execute_process(COMMAND "${run_clang_tidy}"
-      -clang-tidy-binary "${clang_tidy}"
-      -p "${build}" -j "${JOBS}"
-      -export-fixes "${build}/clang-tidy.yaml"
-      -allow-no-checks
-      -quiet
-      ${patterns}
+  # Every profile enables the analyzer whole, so analyze keeps only it and lint everything else.
+  if(CHECK STREQUAL "analyze")
+    set(checks_option "-*,clang-analyzer-*")
+  else()
+    set(checks_option "-clang-analyzer-*")
+  endif()
+  # Each unit's stamp and the fixes it exported, a directory clang-apply-replacements reads.
+  set(stamps "${build}/checks/stamps/${CHECK}")
+  if(FULL)
+    file(REMOVE_RECURSE "${stamps}")
+  endif()
+  list(JOIN check_units "\n" listed)
+  file(WRITE "${build}/checks/${CHECK}.units" "${listed}\n")
+  execute_process(COMMAND "${python}" "${CMAKE_CURRENT_LIST_DIR}/clang_tidy.py"
+      --clang-tidy "${clang_tidy}" --build "${build}" --stamps "${stamps}" --jobs "${JOBS}"
+      "--checks=${checks_option}" --name "${CHECK}" "${build}/checks/${CHECK}.units"
     WORKING_DIRECTORY "${project}"
     COMMAND_ERROR_IS_FATAL ANY)
   return()
@@ -176,7 +182,7 @@ else()
   set(arguments --checks=interface-bodies --warnings-as-errors "--interface-allowlist=${root}/docs/build/interface-bodies-allowlist.txt")
 endif()
 
-telar_check_prepare(sources patterns)
+telar_check_prepare(sources)
 
 # Each unit is checked on its own, so a unit whose object and tbc-lint are older than the stamp its
 # last check left reports what it reported then, which tbc-lint replays: Ninja has rebuilt every

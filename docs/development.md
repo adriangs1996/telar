@@ -53,7 +53,8 @@ Test what you change before you commit:
 ```sh
 just runtime-test     # runtime and CLI CTest groups
 just gui-test         # GUI tests, the integration ones against the runtime
-just lint             # clang-tidy over the dev tree
+just lint             # clang-tidy over the dev tree, checking only the units that changed
+just analyze          # clang-tidy's static analyzer, which lint leaves out
 ```
 
 Extra arguments go to CTest, for example `just runtime-test -R server-cli`.

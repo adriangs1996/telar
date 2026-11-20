@@ -210,7 +210,8 @@ components can be tested without downloading or building Qt by configuring
 Sanitizer builds use the sanitize preset, in `out/sanitize`.
 
 ```sh
-cmake --build out/dev --target lint --parallel 2
+cmake --build out/dev --target lint
+cmake --build out/dev --target analyze
 ```
 
 Keep the existing clang-tidy profile, thresholds and diagnostics enabled. Generated

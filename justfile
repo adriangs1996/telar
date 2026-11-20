@@ -79,9 +79,13 @@ gui-test *args: dev-bin
 editor: (configure "dev")
     "{{ cpp }}" build dev -- --target cell-layout gui-editor --parallel 2
 
-# Analyze the C++ sources of the dev tree with clang-tidy, without applying fixes.
-lint jobs="2": (configure "dev")
-    "{{ cpp }}" exec -- cmake "-DJOBS={{ jobs }}" -DCHECK=lint "-DBUILD_DIRECTORY={{ build_dir }}/dev" -P cmake/scripts/check.cmake
+# Check the C++ sources of the dev tree with clang-tidy, without its static analyzer or applying fixes.
+lint: (configure "dev")
+    "{{ cpp }}" exec -- cmake -DCHECK=lint "-DBUILD_DIRECTORY={{ build_dir }}/dev" -P cmake/scripts/check.cmake
+
+# Run clang-tidy's static analyzer over the sources lint checks.
+analyze: (configure "dev")
+    "{{ cpp }}" exec -- cmake -DCHECK=analyze "-DBUILD_DIRECTORY={{ build_dir }}/dev" -P cmake/scripts/check.cmake
 
 # Build the optimized lifetime checker that the repository's .tbc.json names.
 lifetime-checker:
