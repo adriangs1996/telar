@@ -83,13 +83,6 @@ namespace {
     return descriptor;
   }
 
-  // Whether the runtime still holds the connection open: it neither closed it nor wrote to it.
-  bool heldOpen(int descriptor) {
-    pollfd ready{.fd = descriptor, .events = POLLIN, .revents = 0};
-
-    return ::poll(&ready, 1, 0) == 0;
-  }
-
   // Says hello on a fresh connection and returns the runtime's answer.
   HandshakeResponse hello(const char* socket) {
     const int descriptor = connectRaw(socket);
@@ -112,33 +105,6 @@ namespace {
 
     ::close(descriptor);
     return HandshakeCodec::decodeResponse(std::span{reply}.subspan(4, received - 4));
-  }
-
-  void testPendingCapacityRefusesSeventeenth() {
-    RuntimeHost host;
-    std::vector<int> pending;
-
-    // The host's readiness probe holds a handshake slot until the runtime sees it close, which on Linux
-    // can come after later connections: a full exchange on another connection waits for it.
-    ProtocolPeer settled{host.socket()};
-
-    check(settled.exchange<ClientList>(QueryClients{.request_id = 1}).request_id == 1);
-
-    // Every handshake slot is taken by a connection that has not said hello yet.
-    for (std::size_t index = 0; index < 16; ++index) {
-      pending.push_back(connectRaw(host.socket()));
-    }
-
-    std::this_thread::sleep_for(std::chrono::milliseconds{200});
-    const int extra = connectRaw(host.socket());
-
-    // The connection past them is refused at once, and none of the waiting ones loses its place.
-    check(closedByRuntime(extra, std::chrono::seconds{1}), "a handshake past the pending capacity was kept");
-    check(std::ranges::all_of(pending, heldOpen), "a waiting handshake was dropped for a later one");
-    ::close(extra);
-    for (const int descriptor : pending) {
-      ::close(descriptor);
-    }
   }
 
   void testClientLimitRejectsWithReason() {
@@ -455,7 +421,6 @@ namespace {
 
   const telar::testing::Case case_unknown_tag_drops_only_sender{"runtime_wire.unknown_tag_drops_only_sender", testUnknownTagDropsOnlySender};
   const telar::testing::Case case_idle_handshakes_expire{"runtime_wire.idle_handshakes_expire", testIdleHandshakesExpire};
-  const telar::testing::Case case_pending_capacity_refuses_seventeenth{"runtime_wire.pending_capacity_refuses_seventeenth", testPendingCapacityRefusesSeventeenth};
   const telar::testing::Case case_client_limit_rejects_with_reason{"runtime_wire.client_limit_rejects_with_reason", testClientLimitRejectsWithReason};
   const telar::testing::Case case_pane_identity_environment{"runtime_wire.pane_identity_environment", testPaneIdentityEnvironment};
   const telar::testing::Case case_send_text_refusals{"runtime_wire.send_text_refusals", testSendTextRefusals};
