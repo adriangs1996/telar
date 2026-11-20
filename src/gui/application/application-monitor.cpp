@@ -16,7 +16,12 @@ namespace telar::gui::application::monitor {
       return false;
     }
 
-    session.link.send(features::monitor::ask(session.monitor, session.link.nextRequest()));
+    const auto asked = session.link.ask(features::monitor::query(session.monitor));
+    if (!asked) {
+      return false;
+    }
+
+    features::monitor::wait(session.monitor, *asked);
     return true;
   }
 
@@ -33,10 +38,12 @@ namespace telar::gui::application::monitor {
       return false;
     }
 
-    const auto request_id = session.link.nextRequest();
+    const auto asked = session.link.ask(RequestProcessSignal{.process = process, .signal = signal});
+    if (!asked) {
+      return false;
+    }
 
-    session.link.send(RequestProcessSignal{.request_id = request_id, .process = process, .signal = signal});
-    session.monitor.acting = request_id;
+    session.monitor.acting = *asked;
     return true;
   }
 
@@ -45,10 +52,12 @@ namespace telar::gui::application::monitor {
       return false;
     }
 
-    const auto request_id = session.link.nextRequest();
+    const auto asked = session.link.ask(RequestProcessPriority{.process = process, .nice = nice});
+    if (!asked) {
+      return false;
+    }
 
-    session.link.send(RequestProcessPriority{.request_id = request_id, .process = process, .nice = nice});
-    session.monitor.acting = request_id;
+    session.monitor.acting = *asked;
     return true;
   }
 

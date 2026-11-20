@@ -415,6 +415,12 @@ export {
         template <typename Message>
         void send(const Message& message);
 
+        // Sends `request` under a new id and returns it, or nothing when the transport's queue is
+        // full and the request did not leave. A use case records what it waits for from the id it
+        // gets back, so a request the transport refused leaves nothing waiting for an answer.
+        template <typename Request>
+        [[nodiscard]] ds::Option<std::uint64_t> ask(Request request);
+
         // Sends a limit report unless the transport is too busy for one; false when it dropped it.
         bool report(const ReportLimit& report);
 

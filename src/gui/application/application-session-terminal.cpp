@@ -206,8 +206,9 @@ namespace telar::gui::application {
     const auto previous_offset = pane->screen.scroll().offset;
     const auto outcome = pane->screen.apply(message);
     if (outcome == FrameApplication::needs_snapshot && !pane->snapshot_requested) {
-      pane->snapshot_requested = true;
+      // Marked once the request left: one the transport refused is asked again with the next frame.
       link.send(RequestSnapshot{.pane_id = message.pane_id, .known_frame_id = pane->screen.frameId()});
+      pane->snapshot_requested = true;
     }
 
     if (outcome == FrameApplication::applied) {

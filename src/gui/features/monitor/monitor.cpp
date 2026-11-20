@@ -45,11 +45,8 @@ namespace telar::gui::features::monitor {
         interfaces(memory),
         processes(memory) {}
 
-  QueryMonitor ask(State& state, std::uint64_t request_id) noexcept {
-    state.waiting = request_id;
-
+  QueryMonitor query(const State& state) noexcept {
     return {
-        .request_id = request_id,
         .sections = MonitorSections::all,
         .sort = state.view.sort,
         .reverse = state.view.reverse,
@@ -59,6 +56,10 @@ namespace telar::gui::features::monitor {
         .limit = View::rows,
         .detail = state.view.selected,
     };
+  }
+
+  void wait(State& state, std::uint64_t request_id) noexcept {
+    state.waiting = request_id;
   }
 
   bool receive(State& state, const MonitorSnapshot& snapshot) {

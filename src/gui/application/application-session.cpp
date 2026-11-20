@@ -46,6 +46,19 @@ namespace telar::gui::application {
     transport.send(encode(message));
   }
 
+  template <typename Request>
+  ds::Option<std::uint64_t> Session::Link::ask(Request request) {
+    request.request_id = nextRequest();
+
+    try {
+      send(request);
+    } catch (const std::length_error&) {
+      return ds::none;
+    }
+
+    return request.request_id;
+  }
+
   bool Session::Link::report(const ReportLimit& report) {
     return transport.report(encode(report));
   }
@@ -702,9 +715,9 @@ namespace telar::gui::application {
   template void Session::Link::send<ConfigureFrameInterval>(const ConfigureFrameInterval& message);
   template void Session::Link::send<ConfigureShellPrompt>(const ConfigureShellPrompt& message);
   template void Session::Link::send<ConfigureTerminalColors>(const ConfigureTerminalColors& message);
-  template void Session::Link::send<QueryMonitor>(const QueryMonitor& message);
-  template void Session::Link::send<RequestProcessPriority>(const RequestProcessPriority& message);
-  template void Session::Link::send<RequestProcessSignal>(const RequestProcessSignal& message);
+  template ds::Option<std::uint64_t> Session::Link::ask<QueryMonitor>(QueryMonitor request);
+  template ds::Option<std::uint64_t> Session::Link::ask<RequestProcessPriority>(RequestProcessPriority request);
+  template ds::Option<std::uint64_t> Session::Link::ask<RequestProcessSignal>(RequestProcessSignal request);
   template void Session::Link::send<CopySelection>(const CopySelection& message);
   template void Session::Link::send<CreatePane>(const CreatePane& message);
   template void Session::Link::send<CreateTab>(const CreateTab& message);

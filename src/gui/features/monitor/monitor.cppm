@@ -107,8 +107,11 @@ export namespace telar::gui::features::monitor {
     ds::Option<ProcessDetail> detail;
   };
 
-  // The query for what the window shows, under `request_id`, which the state now waits for.
-  [[nodiscard]] QueryMonitor ask(State& state, std::uint64_t request_id) noexcept;
+  // The query for what the window shows. Whoever sends it gives it its id.
+  [[nodiscard]] QueryMonitor query(const State& state) noexcept;
+
+  // The state now waits for the answer to `request_id`: the query that left under it.
+  void wait(State& state, std::uint64_t request_id) noexcept;
 
   // Keeps the answer the state waits for; false for any other.
   bool receive(State& state, const MonitorSnapshot& snapshot);
