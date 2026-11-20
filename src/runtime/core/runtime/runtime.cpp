@@ -22,6 +22,16 @@ namespace telar::runtime {
 
   namespace {
 
+    // The socket to listen on, once a fresh start has set the previous session aside: the listener
+    // makes the runtime reachable, so a client that finds the socket finds the session set aside.
+    std::string_view setAsideBeforeListening(ConcurrentMemory& memory, const RuntimeOptions& options) {
+      if (options.fresh && !options.session.path.empty()) {
+        checkpoint::FileStore<ConcurrentMemory>::setAside(memory, options.session.path);
+      }
+
+      return options.socket;
+    }
+
     // The bytes a key's encoding takes at most.
     constexpr std::size_t encoded_key_bytes = 128;
 
@@ -1739,7 +1749,7 @@ namespace telar::runtime {
         poller_(poller),
         background_(background),
         proxy_(proxy),
-        listener_(options.socket),
+        listener_(setAsideBeforeListening(memory, options)),
         model_(memory, options.graphics),
         clients_(memory),
         admissions_(poller_, limits_),
@@ -1767,10 +1777,6 @@ namespace telar::runtime {
     model_.capture_output = options.capture_output;
     model_.manifests = *options.manifests;
     agents_.enableDescriptions(descriptions_.enabled());
-    if (options.fresh && !options.session.path.empty()) {
-      checkpoint::FileStore<ConcurrentMemory>::setAside(memory, options.session.path);
-    }
-
     session_.configure(model_, panes_, client_layouts_, options.session);
     poller_.watch(listener_.descriptor(), eventToken(EventSource::listener, 0));
     for (const int descriptor : background_.descriptors()) {
