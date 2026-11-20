@@ -66,6 +66,8 @@ jobs:
         run: sudo packaging/release/install-linux-deps.sh
 
       - uses: ./.github/actions/cpp-toolchain
+        with:
+          variant: ${{ matrix.configuration }}
 
       - name: Identify the Qt build toolchain
         id: toolchain
@@ -76,8 +78,11 @@ jobs:
 
       - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
-          path: .qt-cache
-          key: qt-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.key }}-${{ hashFiles('tools/toolchain/manifest.json', 'tools/bootstrap-cpp.py', 'cmake/TelarToolchain.cmake', 'cmake/managed_toolchain.cmake', 'src/gui/cmake/qt.cmake', 'src/gui/cmake/qt/**') }}
+          # Qt's installation and completion stamp, about 200 MB, not its 2-4 GB build tree.
+          path: |
+            .qt-cache/*/install
+            .qt-cache/*/complete
+          key: qt-${{ runner.os }}-${{ runner.arch }}-${{ matrix.configuration }}-${{ steps.toolchain.outputs.key }}-${{ hashFiles('tools/toolchain/manifest.json', 'tools/bootstrap-cpp.py', 'cmake/TelarToolchain.cmake', 'cmake/managed_toolchain.cmake', 'src/gui/cmake/qt.cmake', 'src/gui/cmake/qt/**') }}
 
       - name: Test dependency integrity and package isolation
         run: python3 -m unittest discover -s src/gui/tools -p test_qt_dependency.py -v
@@ -104,11 +109,23 @@ jobs:
           tools/cpp build ci -- --parallel 3 --target gui-platform-tests
           QT_QUICK_BACKEND=software tools/cpp test ci -- -R '^gui\.platform\.native_window_appearance\.'
 
+      - name: Restore tbc-lint
+        id: tbc-lint
+        if: matrix.configuration == 'Release'
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: lib/tbc/out/release/tbc-lint
+          key: tbc-lint-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('lib/tbc/**', 'tools/toolchain/manifest.json', 'tools/bootstrap-cpp.py', 'tools/cpp') }}
+
+      # A cached tbc-lint is used as it is: its build tree would rebuild anyway, as the checkout gives every
+      # source a new time.
       - name: Check lifetimes
         if: matrix.configuration == 'Release'
         run: |
-          tools/cpp configure tbc -B lib/tbc/out/release --config Release -- -DBUILD_TESTING=OFF
-          tools/cpp build tbc -B lib/tbc/out/release -- --target tbc-lint --parallel 3
+          if [ "${{ steps.tbc-lint.outputs.cache-hit }}" != true ]; then
+            tools/cpp configure tbc -B lib/tbc/out/release --config Release -- -DBUILD_TESTING=OFF
+            tools/cpp build tbc -B lib/tbc/out/release -- --target tbc-lint --parallel 3
+          fi
           tools/cpp build ci -- --target lifetime
 
       - name: Check interface bodies

@@ -55,9 +55,6 @@ def vt():
     CACHE.mkdir(exist_ok=True)
     with (CACHE / '.vt-lock').open('w') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        if not (zig / '.complete').exists():
-            run(ROOT / 'packaging/release/install-zig.sh', zig, manifest['versions']['zig'])
-            (zig / '.complete').touch()
         recipe = ROOT / 'src/runtime'
         identity = hashlib.sha256()
         for file in ('tools/build_ghostty.py', 'vendor/ghostty-vt-state.patch', 'vendor/wuffs-codec.json'):
@@ -72,6 +69,10 @@ def vt():
         complete = build / '.complete'
         if not complete.exists() or not all((prefix / path).is_file() for path in
                                             ('lib/libghostty-vt.a', 'include/ghostty/vt.h', 'include/ghostty/wuffs-v0.4.h')):
+            # Zig is needed only to build the library, so a cached build skips its download.
+            if not (zig / '.complete').exists():
+                run(ROOT / 'packaging/release/install-zig.sh', zig, manifest['versions']['zig'])
+                (zig / '.complete').touch()
             run(sys.executable, recipe / 'tools/build_ghostty.py', '--zig', zig / 'zig', '--build-dir', build, '--prefix', prefix)
             complete.write_text(identity.hexdigest() + '\n')
         return prefix
