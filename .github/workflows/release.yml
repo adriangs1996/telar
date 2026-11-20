@@ -3,10 +3,13 @@ name: Release
 # Pushing a tag vX.Y.Z whose version matches VERSION builds every
 # platform, publishes the GitHub release with SHA256SUMS and provenance
 # attestations, and updates the Homebrew tap. docs/packaging.md lists the
-# secrets; without them the release still publishes, unsigned.
+# secrets; without them the release still publishes, unsigned. Running it by
+# hand builds and signs every platform from VERSION and keeps the archives as
+# the run's artifacts, without publishing a release or touching the tap.
 on:
   push:
     tags: ['v[0-9]+.[0-9]+.[0-9]+']
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -32,6 +35,10 @@ jobs:
         id: version
         run: |
           manifest=$(head -n 1 VERSION)
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            echo "version=$manifest" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           tag=${GITHUB_REF_NAME#v}
           if [ "$manifest" != "$tag" ]; then
             echo "::error::tag $GITHUB_REF_NAME does not match VERSION $manifest"
@@ -314,6 +321,8 @@ jobs:
 
   publish:
     needs: [version, linux, linux-headless, macos-sign]
+    # A run by hand is a rehearsal: its archives stay artifacts of the run.
+    if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
