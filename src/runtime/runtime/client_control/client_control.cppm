@@ -194,7 +194,7 @@ export {
           return ReportDecision::accepted;
         }
 
-        auto* pane = &requireReporterPane(panes, client, reporter.pane, reporter.generation);
+        auto* pane = &requireReporterPane(panes, client, {.id = reporter.pane, .generation = reporter.generation});
 
         if (accepts(agents, reporter)) {
           return ReportDecision::accepted;
@@ -222,7 +222,7 @@ export {
         report.observed = ObservationTime::now();
         report.sequence = ++sequence_;
         report.pending = true;
-        client.connection.read_paused = true;
+        client.connection.flagsMut().read_paused = true;
         pane->process_recheck_requested = true;
         ++pending_;
         return ReportDecision::deferred;
@@ -231,7 +231,7 @@ export {
       inline void cancel(ClientSession& client) noexcept {
         if (client.deferred_report.pending) {
           client.deferred_report.pending = false;
-          client.connection.read_paused = false;
+          client.connection.flagsMut().read_paused = false;
           --pending_;
         }
       }
@@ -252,7 +252,7 @@ export {
           }
 
           auto& report = client->deferred_report;
-          const auto* pane = findPane(panes, report.reporter.pane, report.reporter.generation);
+          const auto* pane = findPane(panes, {.id = report.reporter.pane, .generation = report.reporter.generation});
           const bool gone = pane == nullptr || pane->exit_status;
           const bool timed_out = now.nanoseconds - report.observed.nanoseconds >= report_timeout.count();
           const bool rechecked = !gone && report.rechecked(pane->process_rechecks);
@@ -281,7 +281,7 @@ export {
       inline void open(ClientSession& client, ds::Vec<Byte, ConcurrentMemory>& payload) noexcept { // NOLINT(bugprone-exception-escape): the payloads share the client's allocator, so the swap hands storage over without allocating
         cancel(client);
         client.deferred_report.answering = true;
-        client.connection.read_paused = false;
+        client.connection.flagsMut().read_paused = false;
         std::swap(payload, client.deferred_report.payload);
       }
 
@@ -347,7 +347,7 @@ export {
           : worker_(std::in_place, inspector) {}
 
       inline static void verify(const PaneStore& panes, ClientSession& client, const VerifyPaneDescent& request) {
-        const auto* pane = findPane(panes, request.pane_id, request.pane_generation);
+        const auto* pane = findPane(panes, {.id = request.pane_id, .generation = request.pane_generation});
         if (pane == nullptr || pane->exit_status) {
           throw RequestError{FailureCode::pane_not_found, "Pane not found"};
         }
@@ -364,7 +364,7 @@ export {
         }
 
         client.pending_descent = DescentCheck{.client = client.id, .client_generation = client.generation, .pane = pane->id, .pane_generation = pane->generation, .request_id = request.request_id, .peer = *client.peer_identity, .root = pane->process->processId()};
-        client.connection.read_paused = true;
+        client.connection.flagsMut().read_paused = true;
       }
 
       inline void collect(ClientStore& clients, const PaneStore& panes) {
@@ -395,7 +395,7 @@ export {
         typename DescentProbe<Inspector>::Request request;
 
         for (const auto* client : clients.items()) {
-          if (client != nullptr && client->pending_descent && !client->descent_running && !client->connection.closing) {
+          if (client != nullptr && client->pending_descent && !client->descent_running && !client->connection.flags().closing) {
             request.checks.atMut(request.count++) = *client->pending_descent;
           }
         }
@@ -420,13 +420,13 @@ export {
 
         client->pending_descent.reset();
         client->descent_running = false;
-        client->connection.read_paused = false;
-        if (client->connection.closing) {
+        client->connection.flagsMut().read_paused = false;
+        if (client->connection.flags().closing) {
           return;
         }
 
         try {
-          const auto* pane = findPane(panes, check.pane, check.pane_generation);
+          const auto* pane = findPane(panes, {.id = check.pane, .generation = check.pane_generation});
           if (pane == nullptr || pane->exit_status) {
             client->connection.send(RequestFailed{.request_id = check.request_id, .code = FailureCode::pane_not_found, .message = "Pane not found"});
           } else if (!completed.lineage.descends) {
@@ -438,7 +438,7 @@ export {
             client->connection.send(RequestCompleted{.request_id = check.request_id});
           }
         } catch (...) {
-          client->connection.closing = true;
+          client->connection.flagsMut().closing = true;
         }
       }
 
@@ -716,9 +716,7 @@ export {
           }
         }
 
-        const auto& process = action.process;
-        const auto result = action.signal ? ProcessTable::signal(process.pid, process.started_seconds, process.started_microseconds, nativeSignal(*action.signal))
-                                          : ProcessTable::prioritize(process.pid, process.started_seconds, process.started_microseconds, action.nice);
+        const auto result = action.signal ? ProcessTable::signal(action.process, nativeSignal(*action.signal)) : ProcessTable::prioritize(action.process, action.nice);
 
         switch (result) {
         case ProcessActionResult::done:
@@ -1061,7 +1059,7 @@ export {
 
       // Applies one pane's observation, unless the pane is gone or exited since it was taken.
       inline static void applyEntry(RuntimeModel& model, Agents& agents, const Processor::ResultEntry& entry) {
-        auto* pane = findPane(model.panes, entry.pane, entry.generation);
+        auto* pane = findPane(model.panes, {.id = entry.pane, .generation = entry.generation});
         if (pane == nullptr || pane->exit_status) {
           return;
         }
@@ -1108,7 +1106,7 @@ export {
         while (*link && request.count < request.entries.size()) {
           auto& observer = **link;
           if (observer.idle()) {
-            auto next = std::move(observer.retired_next);
+            auto next = std::move(observer.retiredNextMut());
 
             *link = std::move(next);
             --model.retired_observer_count;
@@ -1119,7 +1117,7 @@ export {
             request.entries.atMut(request.count++).observer = *link;
           }
 
-          link = &observer.retired_next;
+          link = &observer.retiredNextMut();
         }
       }
 
@@ -1227,7 +1225,7 @@ export {
     class RuntimeClipboardReader {
     public:
       using Request = bool;
-      using Result = std::expected<clipboard::content, clipboard::read_error>;
+      using Result = std::expected<clipboard::Content, clipboard::ReadError>;
 
       static Result observe(const Request& /*request*/) noexcept;
 
@@ -1279,14 +1277,14 @@ export {
         worker_.collect([&](Reader::Result& result) {
           pending_ = false;
           auto* client = clients.find(owner_);
-          if (client == nullptr || client->generation != generation_ || client->connection.closing || Clock::now() >= expires_) {
+          if (client == nullptr || client->generation != generation_ || client->connection.flags().closing || Clock::now() >= expires_) {
             clear();
             return;
           }
 
           try {
             if (!result) {
-              const auto code = result.error() == clipboard::read_error::content_too_large ? FailureCode::resource_limit : FailureCode::invalid_request;
+              const auto code = result.error() == clipboard::ReadError::content_too_large ? FailureCode::resource_limit : FailureCode::invalid_request;
 
               client->connection.send(RequestFailed{.request_id = transfer_, .code = code, .message = errorMessage(result.error())});
               clear();
@@ -1305,7 +1303,7 @@ export {
       inline void expire(const ClientStore& clients, Clock::time_point now) noexcept {
         if (!pending_ && owner_ != 0) {
           const auto* client = clients.find(owner_);
-          if (now >= expires_ || client == nullptr || client->generation != generation_ || client->connection.closing) {
+          if (now >= expires_ || client == nullptr || client->generation != generation_ || client->connection.flags().closing) {
             clear();
           }
         }
@@ -1316,8 +1314,8 @@ export {
       }
 
     private:
-      inline static std::string_view errorMessage(clipboard::read_error error) noexcept {
-        if (error == clipboard::read_error::content_too_large) {
+      inline static std::string_view errorMessage(clipboard::ReadError error) noexcept {
+        if (error == clipboard::ReadError::content_too_large) {
           return "Clipboard exceeds clipboard.max_capture_bytes (33554432 bytes)";
         }
 
@@ -1346,7 +1344,7 @@ export {
       }
 
       ObservationWorker<Reader> worker_;
-      clipboard::content content_;
+      clipboard::Content content_;
       std::uint64_t owner_ = 0;
       std::uint64_t generation_ = 0;
       std::uint64_t transfer_ = 0;
@@ -1405,7 +1403,7 @@ export {
       inline void collect(RuntimeModel& model) {
         worker_.collect([&](const WorktreeDetectionResult& result) {
           pending_ = false;
-          const auto* pane = findPane(model.panes, result.pane, result.generation);
+          const auto* pane = findPane(model.panes, {.id = result.pane, .generation = result.generation});
           if (pane == nullptr || pane->cwd_revision != result.cwd_revision || result.root_length == 0 || result.root_length > pane->cwd.size() || pane->location.workspace.kind != WorkspaceLocation::Kind::workspace) {
             return;
           }

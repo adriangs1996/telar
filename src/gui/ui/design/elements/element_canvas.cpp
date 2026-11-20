@@ -129,16 +129,16 @@ namespace telar::gui::qt {
       switch (command) {
       case u'M':
       case u'L':
-        return 2;
+        return std::size_t{2};
       case u'H':
       case u'V':
-        return 1;
+        return std::size_t{1};
       case u'C':
         return cubic_numbers;
       case u'Q':
-        return 4;
+        return std::size_t{4};
       case u'Z':
-        return 0;
+        return std::size_t{0};
       default:
         return ds::none;
       }

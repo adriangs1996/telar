@@ -157,7 +157,7 @@ namespace telar::runtime::cli {
       } catch (const std::invalid_argument& error) {
         const auto reference = helpReference(words);
 
-        std::println(stderr, "telar: {}; see `{}`", error.what(), reference.c_str());
+        std::println(stderr, "telar: {}; see `{}`", error.what(), reference.cStr());
         return 1;
       }
     }
@@ -232,7 +232,7 @@ namespace telar::runtime::cli {
       if (dynamic_cast<const std::invalid_argument*>(&error) != nullptr) {
         const auto reference = helpReference(words);
 
-        std::println(stderr, "telar: {}; see `{}`", error.what(), reference.c_str());
+        std::println(stderr, "telar: {}; see `{}`", error.what(), reference.cStr());
       } else if (dynamic_cast<const CommandError*>(&error) != nullptr) {
         std::println(stderr, "error: {}", error.what());
       } else if (const auto* system = dynamic_cast<const SystemError*>(&error)) {

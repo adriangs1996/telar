@@ -343,7 +343,7 @@ namespace telar::runtime::cli::machine {
       ds::Array<char, PATH_MAX> executable{};
 
       for (std::size_t agent = 0; agent < agent_names.size(); ++agent) {
-        if (findExecutable(path.view(), agent_commands[agent], executable.viewMut())) {
+        if (findExecutable({.path = path.view(), .program = agent_commands[agent]}, executable.viewMut())) {
           found.insert(agent_names[agent]);
         }
       }
@@ -2953,7 +2953,7 @@ exit 1
       const auto& target = run.target;
 
       if (!interactive) {
-        return run.report.refuse(run.memory, target.label, target.destination, "--confirm needs a terminal to ask on; nothing was changed");
+        return run.report.refuse(run.memory, {.label = target.label, .destination = target.destination}, "--confirm needs a terminal to ask on; nothing was changed");
       }
 
       std::print(stdout, "This installs telar {} on {} ({}), and the agents you have here with their official installers; it copies their configuration, never a credential, and opens their logins there. Set it up? [y/N] ", version, target.label.data(), target.destination.data());
@@ -3135,14 +3135,14 @@ mkdir -p "$HOME/.local/bin" && "$telar" cli install --dir "$HOME/.local/bin" >/d
 
       const auto platform = reach(memory, report, target, build.directory);
       if (!platform || !install(memory, report, target, *platform, build)) {
-        return report.finish(memory, target.label, target.destination);
+        return report.finish(memory, {.label = target.label, .destination = target.destination});
       }
 
       Random random;
       const auto remote = MachineProfile::create(MachineId::generate(random), {.label = target.label, .destination = target.destination, .program = platform->target.view()});
 
       if (!startRuntime(memory, report, target, remote, interactive)) {
-        return report.finish(memory, target.label, target.destination);
+        return report.finish(memory, {.label = target.label, .destination = target.destination});
       }
 
       linkProgram(run, *platform);
@@ -3167,7 +3167,7 @@ mkdir -p "$HOME/.local/bin" && "$telar" cli install --dir "$HOME/.local/bin" >/d
 
       logIn(run, current, wanted, interactive);
       checkAttach(run, remote);
-      return report.finish(memory, target.label, target.destination);
+      return report.finish(memory, {.label = target.label, .destination = target.destination});
     }
 
   }

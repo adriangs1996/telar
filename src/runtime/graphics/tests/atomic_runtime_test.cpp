@@ -146,12 +146,12 @@ namespace {
 
       auto& terminal = *media.terminal();
 
-      check(terminal.graphics.images().size() == 1);
-      const auto image = terminal.graphics.images().front();
+      check(terminal.graphics().images().size() == 1);
+      const auto image = terminal.graphics().images().front();
 
       check(image.description.byte_len == newest.pixels.size() && std::ranges::equal(image.pixels, newest.pixels));
-      check(terminal.graphics.placements().size() == 2);
-      for (const auto& placement : terminal.graphics.placements()) {
+      check(terminal.graphics().placements().size() == 2);
+      for (const auto& placement : terminal.graphics().placements()) {
         check(placement.x == (placement.placement_id == 9 ? 5 : 0));
         check(placement.y == (placement.placement_id == 9 ? 3 : 0));
       }
@@ -184,10 +184,10 @@ namespace {
       AtomicImageFixture replacement{medium, 49};
 
       process(media, replacement.frame());
-      check(media.terminal()->graphics.images().front().description.key.generation > image.description.key.generation);
-      check(std::ranges::equal(media.terminal()->graphics.images().front().pixels, replacement.pixels));
+      check(media.terminal()->graphics().images().front().description.key.generation > image.description.key.generation);
+      check(std::ranges::equal(media.terminal()->graphics().images().front().pixels, replacement.pixels));
       process(media, "\x1b_Ga=d,d=I,i=1,q=2;\x1b\\");
-      check(media.terminal()->graphics.images().empty());
+      check(media.terminal()->graphics().images().empty());
     }
 
     check(budget.used() == 0);

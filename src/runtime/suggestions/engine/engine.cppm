@@ -73,7 +73,15 @@ export {
 export {
   namespace telar::runtime {
 
-    tbc::val_a<ds::String<ConcurrentMemory>> suggestionPrompt(tbc::mut_a<ConcurrentMemory> memory, std::string_view cwd, std::string_view screen, std::string_view request);
+    // What a suggestion is asked from: the pane's working directory, its last screen rows and what
+    // the user asked for.
+    struct SuggestionContext {
+      std::string_view cwd;
+      std::string_view screen;
+      std::string_view request;
+    };
+
+    tbc::val_a<ds::String<ConcurrentMemory>> suggestionPrompt(tbc::mut_a<ConcurrentMemory> memory, SuggestionContext context);
 
   }
 }

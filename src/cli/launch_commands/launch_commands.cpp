@@ -25,7 +25,7 @@ namespace telar::runtime::cli {
       } catch (const std::invalid_argument& error) {
         const auto reference = helpReference(command);
 
-        std::println(stderr, "telar: {}; see `{}`", error.what(), reference.c_str());
+        std::println(stderr, "telar: {}; see `{}`", error.what(), reference.cStr());
         return 1;
       }
 
@@ -48,7 +48,7 @@ namespace telar::runtime::cli {
       } catch (const std::invalid_argument& error) {
         const auto reference = helpReference(command);
 
-        std::println(stderr, "telar: {}; see `{}`", error.what(), reference.c_str());
+        std::println(stderr, "telar: {}; see `{}`", error.what(), reference.cStr());
         return false;
       }
 

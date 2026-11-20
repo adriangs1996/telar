@@ -282,16 +282,16 @@ namespace telar::runtime {
     }
   }
 
-  tbc::val_a<ds::String<ConcurrentMemory>> suggestionPrompt(tbc::mut_a<ConcurrentMemory> memory, std::string_view cwd, std::string_view screen, std::string_view request) {
+  tbc::val_a<ds::String<ConcurrentMemory>> suggestionPrompt(tbc::mut_a<ConcurrentMemory> memory, SuggestionContext context) {
     ds::String<ConcurrentMemory> prompt{memory};
 
     prompt.reserve(prompt_capacity);
     prompt.assign("You are a shell assistant inside a terminal multiplexer. Reply with exactly one shell command line that fulfils the request, and nothing else: no markdown, no code fences, no quotes around the command, no explanation. If one command cannot fulfil the request, reply with one line starting with '#' that says why.\nWorking directory: ");
-    prompt.append(cwd);
+    prompt.append(context.cwd);
     prompt.append("\nLast screen rows:\n");
-    prompt.append(screen);
+    prompt.append(context.screen);
     prompt.append("\nRequest: ");
-    prompt.append(request);
+    prompt.append(context.request);
     prompt.push('\n');
     return prompt;
   }

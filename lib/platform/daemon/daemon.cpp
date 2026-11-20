@@ -103,7 +103,7 @@ namespace telar::runtime::cli {
     ds::String<Memory> log_path{memory, paths.socket};
 
     log_path.append(".runtime.start.log");
-    return spawnDaemon(executable.c_str(), arguments.data(), log_path.data());
+    return spawnDaemon(executable.cStr(), arguments.data(), log_path.data());
   }
 
   template pid_t launchDaemon<Memory>(Memory&, const ServerOptions&, const RuntimePaths<Memory>&, const ExecutablePath&);

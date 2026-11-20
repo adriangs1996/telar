@@ -1893,7 +1893,7 @@ namespace telar::runtime::cli {
       return;
     }
 
-    auto arguments = launch::words(memory, {shell.view(), "-l", "-c", script, ExecutablePath{}.c_str(), "gui"});
+    auto arguments = launch::words(memory, {shell.view(), "-l", "-c", script, ExecutablePath{}.cStr(), "gui"});
 
     for (const std::string_view word : words) {
       if (word != "--login-shell") {

@@ -593,17 +593,17 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  void JsonNode<Memory>::setString(std::string_view name, std::string_view value) {
-    auto& child = ensure(name, JsonKind::string);
+  void JsonNode<Memory>::setString(JsonMember member) {
+    auto& child = ensure(member.name, JsonKind::string);
 
-    child.text_.assign(value);
+    child.text_.assign(member.value);
   }
 
   template <Allocator Memory>
-  void JsonNode<Memory>::setLiteral(std::string_view name, std::string_view value) {
-    auto& child = ensure(name, JsonKind::literal);
+  void JsonNode<Memory>::setLiteral(JsonMember member) {
+    auto& child = ensure(member.name, JsonKind::literal);
 
-    child.text_.assign(value);
+    child.text_.assign(member.value);
   }
 
   template <Allocator Memory>

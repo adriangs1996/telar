@@ -50,10 +50,7 @@ export {
     void optionalUtf8Text(const lua::Value& value, std::size_t maximum_bytes);
 
     template <typename Number>
-    struct Bounds {
-      Number minimum;
-      Number maximum;
-    };
+    using Bounds = lua::Bounds<Number>;
 
     // The position of the value in `names`, if the value is present.
     [[nodiscard]] ds::Option<std::size_t> optionalChoiceIndex(const lua::Value& value, std::span<const std::string_view> names);

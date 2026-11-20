@@ -94,15 +94,15 @@ namespace {
     const auto found = ProcessTable::find(child);
 
     check(found.hasValue());
-    check(ProcessTable::signal(child, found->started_seconds + 1, 0, SIGTERM) == ProcessActionResult::gone);
-    check(ProcessTable::prioritize(child, found->started_seconds, found->started_microseconds, 5) == ProcessActionResult::done);
+    check(ProcessTable::signal({.pid = child, .started_seconds = found->started_seconds + 1}, SIGTERM) == ProcessActionResult::gone);
+    check(ProcessTable::prioritize({.pid = child, .started_seconds = found->started_seconds, .started_microseconds = found->started_microseconds}, 5) == ProcessActionResult::done);
     check(::getpriority(PRIO_PROCESS, static_cast<id_t>(child)) == 5);
-    check(ProcessTable::signal(child, found->started_seconds, found->started_microseconds, SIGTERM) == ProcessActionResult::done);
+    check(ProcessTable::signal({.pid = child, .started_seconds = found->started_seconds, .started_microseconds = found->started_microseconds}, SIGTERM) == ProcessActionResult::done);
 
     int status = 0;
 
     check(::waitpid(child, &status, 0) == child && WIFSIGNALED(status) && WTERMSIG(status) == SIGTERM);
-    check(ProcessTable::signal(child, 0, 0, SIGTERM) == ProcessActionResult::gone);
+    check(ProcessTable::signal({.pid = child}, SIGTERM) == ProcessActionResult::gone);
   }
 
   const telar::testing::Case case_lists_this_process{"process_table.lists_this_process", testListsThisProcess};

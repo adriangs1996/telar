@@ -237,12 +237,12 @@ namespace {
       two.visible = true;
       panes.configureDesktop(model, clients, second.session().id, two);
       ptyReports(pane, panes, "\x1b[I");
-      panes.detach(model, clients, first.session().id, pane.id);
+      panes.detach(model, clients, {.client = first.session().id, .pane = pane.id});
       ptyReports(pane, panes, "\x1b[?997;1n");
       panes.resize(model, second.session(), PaneResize{.pane_id = pane.id, .size = {100, 40, 8, 16}});
       ptyReports(pane, panes, "\x1b[48;40;100;640;800t");
 
-      second.session().connection.closing = true;
+      second.session().connection.flagsMut().closing = true;
       panes.detachAll(model, clients, second.session().id);
       ptyReports(pane, panes, "\x1b[?997;1n\x1b[?999;2n\x1b[O");
       check(query(pane.terminal, "\x1b[18t", *pane.media) == "\x1b[8;40;100t");
@@ -466,9 +466,9 @@ namespace {
 
       check(unattached);
 
-      panes.release(model, clients, first.session().id, pane.id);
+      panes.release(model, clients, {.client = first.session().id, .pane = pane.id});
       check(query(pane.terminal, "\x1b[?996n\x1b[?998n\x1b]12;?\x1b\\", *pane.media) == "\x1b[?997;1n\x1b[?999;1n\x1b]12;rgb:0404/0505/0606\x1b\\");
-      second.session().connection.closing = true;
+      second.session().connection.flagsMut().closing = true;
       panes.detachAll(model, clients, second.session().id);
       check(query(pane.terminal, "\x1b[?996n\x1b[?998n", *pane.media) == "\x1b[?997;1n\x1b[?999;2n");
       panes.remove(model, clients, pane.id);

@@ -156,7 +156,7 @@ namespace {
 
   void testIncompleteUploads(ConcurrentMemory& memory) {
     GraphicsLimitFixture fixture{memory};
-    GraphicsUploadLimits limits{6, 2};
+    GraphicsUploadLimits limits{{.bytes = 6, .chunks = 2}};
     const auto feed = [&](std::string_view bytes) {
       const auto observation = limits.observe(fixture.terminal(), graphicsBytes(bytes));
 
@@ -205,8 +205,8 @@ namespace {
     const auto generated = std::string{"\x1b_Ga=t,f=32,s=64,v=64,i=7,m=1,q=2;"} + std::string(4096, 'A') + "\x1b\\";
 
     for (const std::string_view prefix : {"", "plain text", "\x1b", "\x1b_", "\x1b_G", "\x1b_Gm=1;AAAA", "\x1b_X", "\x1b_Xother"}) {
-      GraphicsUploadLimits scanned{graphics_screen_bytes};
-      GraphicsUploadLimits encoded{graphics_screen_bytes};
+      GraphicsUploadLimits scanned{{.bytes = graphics_screen_bytes}};
+      GraphicsUploadLimits encoded{{.bytes = graphics_screen_bytes}};
 
       scanned.observe(fixture.terminal(), graphicsBytes(prefix));
       encoded.observe(fixture.terminal(), graphicsBytes(prefix));

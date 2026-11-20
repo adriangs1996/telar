@@ -41,7 +41,7 @@ namespace telar::runtime::config {
     }
 
     std::chrono::milliseconds boundedTimeout(const lua::Value& field, std::chrono::milliseconds fallback, TimeoutBounds bounds) {
-      return std::chrono::milliseconds{field.boundedInteger(millisecondCount(fallback), millisecondCount(bounds.minimum), millisecondCount(bounds.maximum))};
+      return std::chrono::milliseconds{field.boundedInteger(millisecondCount(fallback), {.minimum = millisecondCount(bounds.minimum), .maximum = millisecondCount(bounds.maximum)})};
     }
 
     // The continuation bytes a UTF-8 lead byte announces.
@@ -281,8 +281,8 @@ namespace telar::runtime::config {
     }
 
     table.onlyFields({"pane_mib", "global_mib"});
-    values_.graphics.pane_bytes = table.field("pane_mib").boundedInteger(values_.graphics.pane_bytes / GraphicsLimits::mebibyte, 2, GraphicsLimits::maximum_pane_bytes / GraphicsLimits::mebibyte) * GraphicsLimits::mebibyte;
-    values_.graphics.global_bytes = table.field("global_mib").boundedInteger(values_.graphics.global_bytes / GraphicsLimits::mebibyte, 2, GraphicsLimits::maximum_global_bytes / GraphicsLimits::mebibyte) * GraphicsLimits::mebibyte;
+    values_.graphics.pane_bytes = table.field("pane_mib").boundedInteger(values_.graphics.pane_bytes / GraphicsLimits::mebibyte, {.minimum = 2, .maximum = GraphicsLimits::maximum_pane_bytes / GraphicsLimits::mebibyte}) * GraphicsLimits::mebibyte;
+    values_.graphics.global_bytes = table.field("global_mib").boundedInteger(values_.graphics.global_bytes / GraphicsLimits::mebibyte, {.minimum = 2, .maximum = GraphicsLimits::maximum_global_bytes / GraphicsLimits::mebibyte}) * GraphicsLimits::mebibyte;
     if (values_.graphics.global_bytes < values_.graphics.pane_bytes) {
       table.fail("global memory must cover the pane memory limit");
     }

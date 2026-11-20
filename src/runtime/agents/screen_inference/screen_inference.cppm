@@ -99,7 +99,7 @@ export {
 
     class AgentScreenReader {
     public:
-      explicit AgentScreenReader(const Terminal& terminal, const AgentManifests& manifests = builtin_manifests);
+      explicit AgentScreenReader(const Terminal& terminal, const AgentManifests& manifests = builtinManifests());
 
       AgentScreenReader(AgentScreenView screen, std::string_view title, const AgentManifests& manifests) noexcept;
 

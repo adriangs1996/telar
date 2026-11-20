@@ -991,16 +991,16 @@ namespace {
       Terminal terminal{memory, TerminalSize{80, 24, 9, 18}};
 
       terminal.feed(bytes("\x1b]52;c;aGVsbG8=\x1b\\"));
-      check(terminal.effects.clipboard.empty());
+      check(terminal.effects().clipboard.empty());
       check(!terminal.clipboardControl().route());
-      const auto revision = terminal.effects.clipboard_revision;
+      const auto revision = terminal.effects().clipboard_revision;
 
       terminal.controlPolicy().clipboard_write = control::Access::deny;
       terminal.feed(bytes("\x1b]52;c;c2VjcmV0\x1b\\"));
-      check(terminal.effects.clipboard_revision == revision);
+      check(terminal.effects().clipboard_revision == revision);
       terminal.controlPolicy().clipboard_write = control::Access::ask;
       terminal.feed(bytes("\x1b]52;c;c2VjcmV0\x1b\\"));
-      check(terminal.effects.clipboard_revision == revision);
+      check(terminal.effects().clipboard_revision == revision);
       terminal.feed(bytes("\x1b]52;c;?\x1b\\"));
       check(drain(terminal).empty());
     }
@@ -1020,7 +1020,7 @@ namespace {
           request.push_back(static_cast<char>(byte));
           request.append("2;c;aGVsbG8=\x1b\\");
           terminal.feed(bytes(request));
-          check(terminal.effects.clipboard_revision == 0);
+          check(terminal.effects().clipboard_revision == 0);
         }
       }
     }
@@ -1088,10 +1088,10 @@ namespace {
       drain(terminal, 1);
       check(terminal.dirty());
       check(terminal.contentRevision() > revision);
-      check(terminal.effects.title() == "Deferred title");
-      check(terminal.effects.cwd() == "/deferred");
+      check(terminal.effects().title() == "Deferred title");
+      check(terminal.effects().cwd() == "/deferred");
       terminal.refresh();
-      check(terminal.screen.cursor.x == 1);
+      check(terminal.screen().cursor.x == 1);
     }
 
     void sizeEncodings(ConcurrentMemory& memory) {
@@ -1686,17 +1686,17 @@ namespace {
     for (const std::string& begin : {std::string{"\x1b]7780;begin;!!!!\x1b\\"}, oversized}) {
       terminal.feed(bytes(begin + "first\r\n\x1b]7780;end\x1b\\"));
       terminal.refresh();
-      check(terminal.effects.inline_documents.empty());
-      check(terminal.screen.cells[0].text[0] == 'f');
+      check(terminal.effects().inline_documents.empty());
+      check(terminal.screen().cells[0].text[0] == 'f');
 
       terminal.feed(bytes("\x1b[?1049h" + begin));
-      check(terminal.effects.document.empty());
+      check(terminal.effects().document.empty());
       terminal.feed(bytes("\x1b[?1049l\x1b"
                           "c"));
     }
 
     terminal.feed(bytes("\x1b[?1049h\x1b]7780;begin;AAECAw==\x1b\\"));
-    check(terminal.effects.document.size() == 4);
+    check(terminal.effects().document.size() == 4);
   }
 
   // Each case owns the budget its calls share and leaves nothing allocated there.

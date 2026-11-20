@@ -317,7 +317,7 @@ namespace telar::runtime::cli {
     // The plugins, the tap and the control backend share the one traffic service.
     auto* const shared_traffic = traffic_service ? &traffic_service.getMut() : nullptr;
 
-    plugins::Service plugin_service{memory, tap_configuration.specifications(), executable.c_str(), options.trace, shared_traffic};
+    plugins::Service plugin_service{memory, tap_configuration.specifications(), executable.cStr(), options.trace, shared_traffic};
 
     if (!tap_configuration.specifications().empty()) {
       plugin_service.watchTrust(plugins::Paths::trust(memory, process_environment));

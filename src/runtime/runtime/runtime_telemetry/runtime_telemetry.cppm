@@ -73,12 +73,20 @@ export {
 export {
   namespace telar::runtime::diagnostics {
 
+    // The file a log sink writes: the process it is named after, and the bytes it holds before it
+    // rotates.
+    struct LogFile {
+      static constexpr std::size_t default_limit = std::size_t{4} * 1024 * 1024;
+
+      pid_t process = ::getpid();
+      std::size_t limit = default_limit;
+    };
+
     class LogSink {
     public:
-      static constexpr std::size_t file_limit = std::size_t{4} * 1024 * 1024;
       static constexpr std::size_t cleanup_limit = 4096;
 
-      explicit LogSink(std::string_view endpoint, pid_t process = ::getpid(), std::size_t limit = file_limit) noexcept;
+      explicit LogSink(std::string_view endpoint, LogFile file = {}) noexcept;
 
       [[nodiscard]] bool available() const noexcept;
 
@@ -219,6 +227,13 @@ export {
 
   namespace telar::runtime::diagnostics {
 
+    // The runtime's services a sample reads.
+    template <typename Captures, typename Background>
+    struct TelemetryServices {
+      const Captures& captures;
+      const Background& background;
+    };
+
     class RuntimeTelemetry {
     public:
 #if TELAR_DIAGNOSTICS
@@ -229,7 +244,7 @@ export {
 
       // Kept here: Captures and Background are the runtime's services, from modules that import this one.
       template <typename Captures, typename Background>
-      TBC_GENERIC inline std::chrono::nanoseconds tick(RuntimeModel& model, const ClientStore& clients, ConcurrentMemory& memory, const Captures& captures, const Background& background, Clock::time_point now) noexcept {
+      TBC_GENERIC inline std::chrono::nanoseconds tick(RuntimeModel& model, const ClientStore& clients, ConcurrentMemory& memory, TelemetryServices<Captures, Background> services, Clock::time_point now) noexcept {
         if (now < next_sample_) {
           return next_sample_ - now;
         }
@@ -238,22 +253,22 @@ export {
         session_.sample([&](Line& line) {
           line.field("ts_ms", static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count()));
           line.field("uptime_ms", static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(now - started_).count()));
-          line.literal("role", "\"runtime\"");
+          line.literal("role", RawJson{.text = "\"runtime\""});
           writeRuntimeSample(line, model, clients);
           model.metrics.write(line);
           line.field("proxy_active", proxy_.active);
           line.field("proxy_port", ds::Option<std::uint64_t>{proxy_.port});
           line.field("proxy_preferred_port", ds::Option<std::uint64_t>{proxy_.preferred_port});
-          if constexpr (requires { captures.captureMetrics(); }) {
-            writeCaptureSample(line, captures.captureMetrics());
+          if constexpr (requires { services.captures.captureMetrics(); }) {
+            writeCaptureSample(line, services.captures.captureMetrics());
           }
 
-          if constexpr (requires { captures.proxyMetrics(); }) {
-            writeProxySample(line, captures.proxyMetrics());
+          if constexpr (requires { services.captures.proxyMetrics(); }) {
+            writeProxySample(line, services.captures.proxyMetrics());
           }
 
-          if constexpr (requires { background.historyMetrics(); }) {
-            writeHistorySample(line, background.historyMetrics());
+          if constexpr (requires { services.background.historyMetrics(); }) {
+            writeHistorySample(line, services.background.historyMetrics());
           }
 
           line.field("rss_bytes", residentBytes());

@@ -265,13 +265,13 @@ namespace {
     progress.apply(ReportAgentProgress{.final_message = "Finished", .plan_op = AgentPlanOp::mark, .plan_index = 1, .plan_status = AgentPlanStatus::completed});
     check(progress.total() == 1 && progress.done() == 1 && progress.step().empty());
     progress.apply(ReportAgentProgress{});
-    check(progress.final_message.view() == "Finished");
+    check(progress.finalMessage() == "Finished");
     for (std::size_t index = 2; index < AgentProgress::task_capacity; ++index) {
       check(progress.apply(ReportAgentProgress{.plan_op = AgentPlanOp::add, .plan_text = "Another task"}));
     }
 
     check(!progress.apply(ReportAgentProgress{.final_message = "Preserved at capacity", .plan_op = AgentPlanOp::add, .plan_text = "Overflow"}));
-    check(progress.final_message.view() == "Preserved at capacity");
+    check(progress.finalMessage() == "Preserved at capacity");
     PromptBudget budget;
     const auto now = std::chrono::steady_clock::now();
 
@@ -328,16 +328,16 @@ namespace {
     check(inspector.descent_checks == 1);
 
     // A reporter's pane must still run the generation it names and be the one it was verified in.
-    check(&requireReporterPane(model.panes, reporter.session(), pane.id, pane.generation) == &pane);
-    check(findPane(model.panes, pane.id, 0) == nullptr && livePane(model.panes, pane.id, pane.generation) == &pane);
+    check(&requireReporterPane(model.panes, reporter.session(), {.id = pane.id, .generation = pane.generation}) == &pane);
+    check(findPane(model.panes, {.id = pane.id, .generation = 0}) == nullptr && livePane(model.panes, {.id = pane.id, .generation = pane.generation}) == &pane);
     check(rejected([&] {
-      static_cast<void>(requireReporterPane(model.panes, other_client.session(), pane.id, pane.generation));
+      static_cast<void>(requireReporterPane(model.panes, other_client.session(), {.id = pane.id, .generation = pane.generation}));
     },
         FailureCode::foreign_process));
     pane.exit_status = 0;
-    check(livePane(model.panes, pane.id, pane.generation) == nullptr);
+    check(livePane(model.panes, {.id = pane.id, .generation = pane.generation}) == nullptr);
     check(rejected([&] {
-      static_cast<void>(requireReporterPane(model.panes, reporter.session(), pane.id, pane.generation));
+      static_cast<void>(requireReporterPane(model.panes, reporter.session(), {.id = pane.id, .generation = pane.generation}));
     },
         FailureCode::pane_not_found));
     const RegisterWorktree from_exited{.request_id = 9, .source = pane.location.workspace.id, .created_by = pane.id, .path = "/tmp", .branch = "exited"};
@@ -396,7 +396,7 @@ namespace {
   }
 
   void testEvidencePrecedence() {
-    Agent codex{1, 1};
+    Agent codex{{.id = 1, .generation = 1}};
 
     codex.observeProcess(ProcessIdentity{41, 1, 1, 0}, AgentProvider::codex, {100, 100});
     check(codex.status == AgentStatus::unknown);
@@ -421,7 +421,7 @@ namespace {
     check(codex.report(ReportAgent{.state = AgentReportState::exited}, {300'500, 300'500}));
     check(codex.status == AgentStatus::unknown && codex.source == AgentSource::foreground_process);
 
-    Agent cursor{2, 1};
+    Agent cursor{{.id = 2, .generation = 1}};
 
     cursor.observeProcess(ProcessIdentity{42, 1, 1, 0}, AgentProvider::cursor, {100, 100});
     cursor.report(ReportAgent{.provider = AgentProvider::cursor, .state = AgentReportState::working}, {200, 200});
@@ -433,7 +433,7 @@ namespace {
     cursor.report(ReportAgent{.state = AgentReportState::working}, {500, 500});
     check(cursor.status == AgentStatus::working && cursor.authority == AgentAuthority::active);
 
-    Agent claude{3, 1};
+    Agent claude{{.id = 3, .generation = 1}};
 
     claude.observeProcess(ProcessIdentity{43, 1, 1, 0}, AgentProvider::claude, {100, 100});
     claude.observeScreen({AgentProvider::claude, AgentStatus::working, 78}, {200, 200});
@@ -445,10 +445,10 @@ namespace {
     claude.setSession("old-session");
     claude.progress.apply(ReportAgentProgress{.final_message = "Preserved"});
     claude.setSession("new-session");
-    check(claude.progress.final_message.view() == "Preserved");
+    check(claude.progress.finalMessage() == "Preserved");
     claude.reportTitle("Previous agent title");
     claude.observeProcess(ProcessIdentity{44, 1, 2, 0}, AgentProvider::codex, {700, 700});
-    check(claude.session.view().empty() && claude.progress.final_message.view().empty());
+    check(claude.session.view().empty() && claude.progress.finalMessage().empty());
     check(claude.status == AgentStatus::unknown);
     check(claude.title.view().empty());
     check(claude.description_phase == DescriptionPhase::waiting_query);

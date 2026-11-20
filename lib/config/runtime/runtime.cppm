@@ -166,7 +166,8 @@ export {
 
     AgentManifests makeBuiltinManifests();
 
-    inline const AgentManifests builtin_manifests = makeBuiltinManifests();
+    // The manifests telar ships with, built on first use.
+    const AgentManifests& builtinManifests();
 
   }
 }
@@ -218,7 +219,8 @@ export {
       static bool matchesAssignment(std::string_view command, std::string_view marker) noexcept;
     };
 
-    inline const HistoryFilters default_history_filters{};
+    // The filters a history keeps when the configuration names none, built on first use.
+    const HistoryFilters& defaultHistoryFilters() noexcept;
 
   }
 }
@@ -369,7 +371,7 @@ export {
       tbc::val_a<ProxyOptions<Memory>> proxy;
       plugins::Specifications plugins;
       FixedText<PATH_MAX> configuration_directory;
-      AgentManifests manifests = builtin_manifests;
+      AgentManifests manifests = builtinManifests();
       tbc::val_a<LimitNotices> limits;
       GraphicsLimits graphics;
       control::Policy control_policy{};

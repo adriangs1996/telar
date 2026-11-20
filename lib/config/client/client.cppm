@@ -615,11 +615,11 @@ export {
             sample.fail("must be a number");
           }
 
-          kept.atMut(index) = sample.boundedNumber(0, 0, std::numeric_limits<double>::max());
+          kept.atMut(index) = sample.boundedNumber(0, {.minimum = 0, .maximum = std::numeric_limits<double>::max()});
           largest = std::max(largest, kept[index]);
         }
 
-        const auto scale = maximum.boundedNumber(largest, std::numeric_limits<double>::lowest(), std::numeric_limits<double>::max());
+        const auto scale = maximum.boundedNumber(largest, {.minimum = std::numeric_limits<double>::lowest(), .maximum = std::numeric_limits<double>::max()});
 
         for (std::size_t index = 0; index < result.sample_count; ++index) {
           const auto fraction = scale > 0 ? std::clamp(kept[index] / scale, 0.0, 1.0) : 0;
@@ -1018,7 +1018,7 @@ export {
           value.onlyFields(std::span<const std::string_view>{combined(layout_fields, {"text", "size", "bold", "italic", "color", "tone", "max_lines"})});
           element.text = text(value.field("text"));
           typography(value, element);
-          element.max_lines = static_cast<std::uint8_t>(value.field("max_lines").boundedInteger(1, 1, maximum_lines));
+          element.max_lines = static_cast<std::uint8_t>(value.field("max_lines").boundedInteger(1, {.minimum = 1, .maximum = maximum_lines}));
           break;
         case Kind::icon:
           value.onlyFields(std::span<const std::string_view>{combined(layout_fields, {"name", "glyph", "size", "color", "tone"})});
@@ -1085,17 +1085,17 @@ export {
         element.max_width = length(value.field("max_width"), -1);
         element.min_height = length(value.field("min_height"), 0);
         element.max_height = length(value.field("max_height"), -1);
-        element.grow = static_cast<float>(value.field("grow").boundedNumber(element.grow, 0, maximum_grow));
+        element.grow = static_cast<float>(value.field("grow").boundedNumber(element.grow, {.minimum = 0, .maximum = maximum_grow}));
         if (const auto align = value.field("align_self"); align.present()) {
           element.align_self = choice(align, {"start", "center", "end", "stretch"}, 0);
         }
 
         element.x = offset(value.field("x"));
         element.y = offset(value.field("y"));
-        element.rotation = static_cast<float>(value.field("rotation").boundedNumber(0, -maximum_rotation, maximum_rotation));
-        element.scale = static_cast<float>(value.field("scale").boundedNumber(1, 0, maximum_scale));
-        element.opacity = static_cast<float>(value.field("opacity").boundedNumber(1, 0, 1));
-        element.z = static_cast<std::int16_t>(std::lround(value.field("z").boundedNumber(0, -maximum_z, maximum_z)));
+        element.rotation = static_cast<float>(value.field("rotation").boundedNumber(0, {.minimum = -maximum_rotation, .maximum = maximum_rotation}));
+        element.scale = static_cast<float>(value.field("scale").boundedNumber(1, {.minimum = 0, .maximum = maximum_scale}));
+        element.opacity = static_cast<float>(value.field("opacity").boundedNumber(1, {.minimum = 0, .maximum = 1}));
+        element.z = static_cast<std::int16_t>(std::lround(value.field("z").boundedNumber(0, {.minimum = -maximum_z, .maximum = maximum_z})));
         element.background = color(value.field("background"));
         element.radius = length(value.field("radius"), 0);
         element.shadow = value.field("shadow").boolean(false);
@@ -1144,12 +1144,12 @@ export {
         }
 
         if (!value.is(LUA_TTABLE)) {
-          element.transition_ms = static_cast<std::uint16_t>(value.boundedInteger(default_transition_ms, 0, maximum_transition_ms));
+          element.transition_ms = static_cast<std::uint16_t>(value.boundedInteger(default_transition_ms, {.minimum = 0, .maximum = maximum_transition_ms}));
           return;
         }
 
         value.onlyFields({"duration", "easing"});
-        element.transition_ms = static_cast<std::uint16_t>(value.field("duration").boundedInteger(default_transition_ms, 0, maximum_transition_ms));
+        element.transition_ms = static_cast<std::uint16_t>(value.field("duration").boundedInteger(default_transition_ms, {.minimum = 0, .maximum = maximum_transition_ms}));
         element.easing = choice(value.field("easing"), {"ease_out", "linear", "ease_in_out"}, 0);
       }
 
@@ -1180,7 +1180,7 @@ export {
           if (size.is(LUA_TSTRING)) {
             element.size_role = choice(size, {"title", "body", "small"}, 1);
           } else {
-            element.size = static_cast<float>(size.boundedNumber(0, 1, maximum_text_size));
+            element.size = static_cast<float>(size.boundedNumber(0, {.minimum = 1, .maximum = maximum_text_size}));
           }
         }
 
@@ -1291,7 +1291,7 @@ export {
           }
 
           for (std::uint8_t number = 0; number < step.count; ++number) {
-            step.values.atMut(number) = static_cast<float>(operation.element(next++).boundedNumber(0, -maximum_canvas_value, maximum_canvas_value));
+            step.values.atMut(number) = static_cast<float>(operation.element(next++).boundedNumber(0, {.minimum = -maximum_canvas_value, .maximum = maximum_canvas_value}));
           }
 
           sink_.step(step);
@@ -1340,11 +1340,11 @@ export {
       }
 
       inline static float length(const Value& value, float fallback) {
-        return static_cast<float>(value.boundedNumber(static_cast<double>(fallback), 0, maximum_length));
+        return static_cast<float>(value.boundedNumber(static_cast<double>(fallback), {.minimum = 0, .maximum = maximum_length}));
       }
 
       inline static float offset(const Value& value) {
-        return static_cast<float>(value.boundedNumber(0, -maximum_length, maximum_length));
+        return static_cast<float>(value.boundedNumber(0, {.minimum = -maximum_length, .maximum = maximum_length}));
       }
 
       inline static std::uint8_t choice(const Value& value, std::initializer_list<std::string_view> names, std::uint8_t fallback) {

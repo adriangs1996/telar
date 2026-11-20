@@ -104,13 +104,19 @@ export {
       }
     };
 
+    // The descriptors a pipe stream reads from and writes to.
+    struct PipeEnds {
+      int input;
+      int output;
+    };
+
     // Generic over the caller's wait, and called for every frame a tap worker exchanges.
     template <PipeWait Wait = BlockingPipeWait>
     class TBC_GENERIC PipeStream {
     public:
-      inline explicit PipeStream(int input, int output, Wait wait = {}) noexcept
-          : input_(input),
-            output_(output),
+      inline explicit PipeStream(PipeEnds ends, Wait wait = {}) noexcept
+          : input_(ends.input),
+            output_(ends.output),
             wait_(std::move(wait)) {}
 
       inline Wait& waitMut() noexcept {

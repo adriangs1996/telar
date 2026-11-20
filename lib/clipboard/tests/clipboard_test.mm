@@ -25,7 +25,7 @@ namespace {
     }
   }
 
-  void checkFile(const telar::clipboard::content& expected) {
+  void checkFile(const telar::clipboard::Content& expected) {
     std::string path = (std::filesystem::temp_directory_path() / "clipboard-test-XXXXXX").string();
     const int descriptor = mkstemp(path.data());
 
@@ -61,7 +61,7 @@ namespace {
       isolated.clear();
       auto result = telar::clipboard::read();
 
-      check(!result && result.error() == telar::clipboard::read_error::no_supported_content, "empty clipboard");
+      check(!result && result.error() == telar::clipboard::ReadError::no_supported_content, "empty clipboard");
       auto program = std::to_array("clipboard");
       std::array arguments{program.data()};
 
@@ -80,7 +80,7 @@ namespace {
       checkFile(*result);
       const auto limited_text = telar::clipboard::read(text_data.length - 1);
 
-      check(!limited_text && limited_text.error() == telar::clipboard::read_error::content_too_large, "text byte limit enforced");
+      check(!limited_text && limited_text.error() == telar::clipboard::ReadError::content_too_large, "text byte limit enforced");
       check(telar::clipboard::read(text_data.length).has_value(), "text at exact byte limit accepted");
 
       isolated.clear();
@@ -128,14 +128,14 @@ namespace {
         checkFile(*result);
         const auto limited_image = telar::clipboard::read(data.length - 1);
 
-        check(!limited_image && limited_image.error() == telar::clipboard::read_error::content_too_large, "image byte limit enforced");
+        check(!limited_image && limited_image.error() == telar::clipboard::ReadError::content_too_large, "image byte limit enforced");
         check(telar::clipboard::read(data.length).has_value(), "image at exact byte limit accepted");
       }
 
       isolated.clear();
       check([board setData:[NSData dataWithBytes:"unsupported" length:11] forType:@"org.telar.unsupported"], "set unsupported content");
       result = telar::clipboard::read();
-      check(!result && result.error() == telar::clipboard::read_error::no_supported_content, "unsupported content rejected");
+      check(!result && result.error() == telar::clipboard::ReadError::no_supported_content, "unsupported content rejected");
 
       std::puts("Passed: large UTF-8 text, empty text, PNG, TIFF, JPEG, MIME types, image priority, exact CLI files and unsupported content. System clipboard unchanged.");
     }

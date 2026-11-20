@@ -286,7 +286,7 @@ namespace telar::runtime {
 
   void notifyWorkspaceObservers(ClientStore& clients, std::uint64_t workspace, std::uint64_t origin, ds::Option<std::uint64_t> previous) noexcept { // NOLINT(misc-const-correctness): the clients are written through the store's slots, a mutation tbc sees through the store
     for (auto* client : clients.items()) {
-      if (client != nullptr && client->id != origin && client->connection.negotiated && !client->connection.closing && client->workspace == workspace) {
+      if (client != nullptr && client->id != origin && client->connection.flags().negotiated && !client->connection.flags().closing && client->workspace == workspace) {
         client->workspace_resync = ResyncRequired{.workspace = {.id = workspace}, .previous_workspace = previous};
       }
     }
@@ -578,7 +578,7 @@ namespace telar::runtime {
     const ds::String<ConcurrentMemory> home{memory_, std::string_view{value}};
 
     const auto identity = model.workspaces.nextId();
-    auto workspace = ds::makeBox<Workspace>(memory_, memory_, identity, home.view(), "Administration");
+    auto workspace = ds::makeBox<Workspace>(memory_, memory_, WorkspaceSpec{.id = identity, .path = home.view(), .name = "Administration"});
 
     model.workspaces.insert(identity, std::move(workspace));
     administration_ = identity;

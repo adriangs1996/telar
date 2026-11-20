@@ -90,7 +90,7 @@ namespace telar::runtime {
       bytes_.atMut(length_) = '\0';
     }
 
-    [[nodiscard]] const char* c_str() const noexcept {
+    [[nodiscard]] const char* cStr() const noexcept {
       return bytes_.data();
     }
 

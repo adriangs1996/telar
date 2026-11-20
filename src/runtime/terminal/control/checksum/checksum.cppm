@@ -25,7 +25,8 @@ export namespace telar::runtime::control {
 
     std::uint16_t compute(const VtState& state, const Parameters& request);
 
-    unsigned flags = 0;
+    // The ChecksumFlags the next computations follow.
+    void setFlags(unsigned value) noexcept;
 
   private:
     template <bool NoAttributes>
@@ -72,6 +73,7 @@ export namespace telar::runtime::control {
     static constexpr std::size_t maximum_batch_columns = 256;
     static constexpr std::size_t batch_points = 256;
     ds::Vec<std::uint32_t, ConcurrentMemory> graphemes_;
+    unsigned flags_ = 0;
   };
 
 }

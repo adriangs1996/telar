@@ -10,6 +10,17 @@ export namespace telar::runtime::diagnostics {
   using ::telar::TimedScope;
   using ::telar::Timing;
 
+  // A value already written as JSON, which a line copies as it is.
+  struct RawJson {
+    std::string_view text;
+  };
+
+  // The names of the two fields a timing writes.
+  struct TimingFields {
+    std::string_view average;
+    std::string_view maximum;
+  };
+
   // One diagnostics record as a line of JSON, written into a fixed buffer: reset, then fields,
   // then finish. A line past the capacity throws std::length_error.
   class Line { // NOLINT(cppcoreguidelines-pro-type-member-init): a line writes its bytes before it reads them, so constructing one leaves its 12 KiB unwritten
@@ -19,9 +30,9 @@ export namespace telar::runtime::diagnostics {
     void reset() noexcept;
     void field(std::string_view name, std::uint64_t value);
     void field(std::string_view name, ds::Option<std::uint64_t> value);
-    void literal(std::string_view name, std::string_view value);
+    void literal(std::string_view name, RawJson value);
     // The average and the maximum of `value`, in microseconds.
-    void timing(std::string_view average_name, std::string_view maximum_name, const Timing& value);
+    void timing(TimingFields names, const Timing& value);
     std::string_view finish();
 
   private:

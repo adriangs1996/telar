@@ -146,7 +146,7 @@ namespace {
         FailureCode::invalid_request,
         unavailable);
     pane.exit_status.reset();
-    panes.detach(model, clients, owner.session().id, pane.id);
+    panes.detach(model, clients, {.client = owner.session().id, .pane = pane.id});
     expectFailure([&] {
       resolveLaunchDirectory(model, owner.session(), launch, directory);
     },
@@ -172,7 +172,7 @@ namespace {
     ClientPeer owner{memory, model, clients, ClientRole::interactive};
     ClientPeer spectator{memory, model, clients, ClientRole::interactive};
     const auto identity = model.workspaces.nextId();
-    auto workspace = ds::makeBox<Workspace>(memory, memory, identity, "/", "Existing");
+    auto workspace = ds::makeBox<Workspace>(memory, memory, WorkspaceSpec{.id = identity, .path = "/", .name = "Existing"});
 
     workspace.getMut().tabs.emplace(memory, model.next_tab_id++, "Default");
     workspace.getMut().tabs.emplace(memory, model.next_tab_id++, "Running");
@@ -182,7 +182,7 @@ namespace {
     const TabLocation empty{WorkspaceLocation{.id = identity}, stored.tabs.front().id};
     const Launch launch{.cwd = "/", .arguments = arguments};
     Command command{memory, launch};
-    auto& existing = panes.launch(model, nullptr, false, command, TabLocation{empty.workspace, stored.tabs.back().id}, size);
+    auto& existing = panes.launch(model, {.location = TabLocation{empty.workspace, stored.tabs.back().id}, .size = size}, command);
 
     stored.tabs.atMut(stored.tabs.size() - 1).panes.push(existing.id);
 
@@ -226,7 +226,7 @@ namespace {
     ClientPeer owner{memory, model, clients, ClientRole::interactive};
     ClientPeer spectator{memory, model, clients, ClientRole::interactive};
     const auto identity = model.workspaces.nextId();
-    auto workspace = ds::makeBox<Workspace>(memory, memory, identity, "/", "Existing");
+    auto workspace = ds::makeBox<Workspace>(memory, memory, WorkspaceSpec{.id = identity, .path = "/", .name = "Existing"});
 
     workspace.getMut().tabs.emplace(memory, model.next_tab_id++, "Default");
     auto& stored = *workspace;
@@ -274,7 +274,7 @@ namespace {
     auto& pane = panes.require(model.panes, opened.pane_id);
 
     pane.terminal.refresh();
-    const auto revision = pane.terminal.screen.revision;
+    const auto revision = pane.terminal.screen().revision;
     const auto* attachment = owner.session().attachment(pane.id);
 
     workspaces.open(model, panes, clients, owner.session().id, request);
@@ -282,7 +282,7 @@ namespace {
 
     pane.terminal.refresh();
     check(!reused.created && reused.pane_id == pane.id);
-    check(owner.session().attachment(pane.id) == attachment && pane.terminal.screen.revision == revision);
+    check(owner.session().attachment(pane.id) == attachment && pane.terminal.screen().revision == revision);
 
     const auto& background = *model.panes.find(workspaces.launchBackground(model, panes, decltype(workspaces)::ownerColors(model.workspaces, clients, opened.location.workspace.id), false, LaunchTab{.request_id = 2, .workspace = opened.location.workspace.id, .label = "Background", .size = size, .launch = launch}));
     GhosttyColorRgb foreground;

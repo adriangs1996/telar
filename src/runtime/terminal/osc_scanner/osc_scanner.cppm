@@ -200,8 +200,9 @@ export {
 
       PaneMatches result();
 
-      std::uint64_t request_id;
-      std::uint64_t pane_id;
+      [[nodiscard]] std::uint64_t requestId() const noexcept;
+
+      [[nodiscard]] std::uint64_t paneId() const noexcept;
 
     private:
       // The rows a search may read, both ends included.
@@ -232,6 +233,7 @@ export {
       ds::Array<std::uint32_t, maximum_needle> needle_{};
       ds::Array<std::size_t, maximum_needle> prefix_{};
       ds::Array<PaneMatch, maximum_matches> matches_{};
+      Origin origin_;
       Rows rows_;
       std::uint64_t revision_;
       Clock::time_point deadline_;

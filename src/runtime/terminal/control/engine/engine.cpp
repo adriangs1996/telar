@@ -84,6 +84,10 @@ namespace telar::runtime::control {
         responses_(responses),
         enabled_(enabled) {}
 
+  Policy& Engine::policyMut() noexcept {
+    return policy_;
+  }
+
   void Engine::bind(tbc::val_a<GhosttyTerminal> terminal, tbc::val_a<GhosttyRenderState> render, bool separate_media) noexcept {
     state_.bind(terminal, render, separate_media);
   }
@@ -219,11 +223,11 @@ namespace telar::runtime::control {
 
   bool Engine::enquire() {
     escapeBoundary();
-    if (!enabled_ || policy.answerback_length == 0) {
+    if (!enabled_ || policy_.answerback_length == 0) {
       return true;
     }
 
-    return responses_.tryPush(byteView(std::string_view{policy.answerback.view().first(policy.answerback_length)}));
+    return responses_.tryPush(byteView(std::string_view{policy_.answerback.view().first(policy_.answerback_length)}));
   }
 
   bool Engine::complete(Sequence sequence) {
@@ -292,7 +296,7 @@ namespace telar::runtime::control {
     if (sequence.kind == Kind::osc) {
       const auto operation = oscOperation(sequence.body().substr(0, sequence.body().find(';')));
       if (operation == palette_operation || operation == special_color_operation) {
-        return colors_.palette({.state = state_, .reply = reply_, .policy = policy}, sequence, enabled_, responses_);
+        return colors_.palette({.state = state_, .reply = reply_, .policy = policy_}, sequence, enabled_, responses_);
       }
     }
 
@@ -461,7 +465,7 @@ namespace telar::runtime::control {
     }
 
     if (sequence.body() == "c") {
-      checksum_.flags = 0;
+      checksum_.setFlags(0);
       paste_events_ = false;
       saved_desktop_modes_.fill(false);
       clipboard_.reset();
@@ -478,7 +482,7 @@ namespace telar::runtime::control {
     if (secondary) {
       reply_.append("\x1b[>1;0;0c");
     } else {
-      reply_.append(policy.clipboard_write == Access::deny ? "\x1b[?62;22c" : "\x1b[?62;22;52c");
+      reply_.append(policy_.clipboard_write == Access::deny ? "\x1b[?62;22c" : "\x1b[?62;22;52c");
     }
   }
 
@@ -580,7 +584,7 @@ namespace telar::runtime::control {
     const auto modifiers = parameters.modifiers();
 
     if (modifiers == "!") {
-      checksum_.flags = 0;
+      checksum_.setFlags(0);
     }
 
     if (modifiers == "$" || modifiers == "?$") {
@@ -626,7 +630,7 @@ namespace telar::runtime::control {
     const auto modifiers = parameters.modifiers();
 
     if (modifiers == "*" && parameters.count <= checksum_parameters) {
-      if (enabled_ && policy.checksum_report) {
+      if (enabled_ && policy_.checksum_report) {
         reply_.append("\x1bP");
         reply_.number(parameters.count == 0 ? 0 : parameters.values[0]);
         reply_.append("!~");
@@ -638,8 +642,8 @@ namespace telar::runtime::control {
     }
 
     if (modifiers == "#" && parameters.count <= 1) {
-      if (policy.checksum_report) {
-        checksum_.flags = parameters.count == 0 ? 0 : static_cast<unsigned>(parameters.values[0]) & checksum_flags;
+      if (policy_.checksum_report) {
+        checksum_.setFlags(parameters.count == 0 ? 0 : static_cast<unsigned>(parameters.values[0]) & checksum_flags);
       }
 
       return true;
@@ -838,7 +842,7 @@ namespace telar::runtime::control {
     }
 
     if (request == title_request) {
-      if (policy.title_report) {
+      if (policy_.title_report) {
         titleReport();
       }
 
@@ -1017,7 +1021,7 @@ namespace telar::runtime::control {
       return;
     }
 
-    if (colors_.handle({.state = state_, .reply = reply_, .policy = policy}, sequence, enabled_)) {
+    if (colors_.handle({.state = state_, .reply = reply_, .policy = policy_}, sequence, enabled_)) {
       return;
     }
 
@@ -1027,7 +1031,7 @@ namespace telar::runtime::control {
     const auto operation = oscOperation(takeField(remaining));
     if (operation == clipboard_operation) {
       if (enabled_) {
-        clipboard_.traditional(remaining, policy);
+        clipboard_.traditional(remaining, policy_);
       }
 
       return;
@@ -1035,7 +1039,7 @@ namespace telar::runtime::control {
 
     if (operation == kitty_clipboard_operation) {
       if (enabled_) {
-        clipboard_.kitty(remaining, sequence.ending, policy, reply_);
+        clipboard_.kitty(remaining, sequence.ending, policy_, reply_);
       }
 
       return;

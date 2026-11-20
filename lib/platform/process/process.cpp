@@ -74,7 +74,11 @@ namespace telar::runtime {
 
   }
 
-  bool findExecutable(std::string_view path, std::string_view program, std::span<char, PATH_MAX> found, std::string_view cwd) noexcept {
+  bool findExecutable(ExecutableSearch search, std::span<char, PATH_MAX> found) noexcept {
+    auto path = search.path;
+    const auto program = search.program;
+    const auto cwd = search.cwd;
+
     for (;;) {
       const auto separator = path.find(':');
       const auto directory = separator == std::string_view::npos ? path : std::string_view{path.data(), separator};
@@ -151,7 +155,7 @@ namespace telar::runtime {
     }
 
     for (const auto& entry : launch.environment) {
-      setEnvironment(entry.name, entry.value);
+      setEnvironment(entry);
     }
 
     const auto drops = [purpose](const auto& entry) {
@@ -173,11 +177,11 @@ namespace telar::runtime {
     }));
 
     if (purpose == CommandPurpose::terminal) {
-      setEnvironment("TERM_PROGRAM", control::program_name);
-      setEnvironment("TERM_PROGRAM_VERSION", control::program_version);
-      setEnvironment("TELAR_TERM_PROGRAM", "telar");
-      setEnvironment("TERM", "xterm-256color");
-      setEnvironment("COLORTERM", "truecolor");
+      setEnvironment({.name = "TERM_PROGRAM", .value = control::program_name});
+      setEnvironment({.name = "TERM_PROGRAM_VERSION", .value = control::program_version});
+      setEnvironment({.name = "TELAR_TERM_PROGRAM", .value = "telar"});
+      setEnvironment({.name = "TERM", .value = "xterm-256color"});
+      setEnvironment({.name = "COLORTERM", .value = "truecolor"});
     }
 
     resolveExecutable();
@@ -229,11 +233,12 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  void Command<Memory>::setEnvironment(std::string_view name, std::string_view value) {
+  void Command<Memory>::setEnvironment(EnvironmentEntry variable) {
+    const auto name = variable.name;
     ds::String<SensitiveMemory> entry{environment_memory_, name};
 
     entry.push('=');
-    entry.append(value);
+    entry.append(variable.value);
 
     for (auto& existing : environment_.viewMut()) {
       const auto separator = existing.view().find('=');
@@ -314,7 +319,7 @@ namespace telar::runtime {
     }
 
     ds::Array<char, PATH_MAX> found{};
-    if (!findExecutable(path, program, found.viewMut(), cwd())) {
+    if (!findExecutable({.path = path, .program = program, .cwd = cwd()}, found.viewMut())) {
       throw SystemError{"resolve pane executable", ENOENT};
     }
 
@@ -529,7 +534,7 @@ namespace telar::runtime {
     return ds::none;
   }
 
-  const char* ExecutablePath::c_str() const noexcept {
+  const char* ExecutablePath::cStr() const noexcept {
     return path_.data();
   }
 

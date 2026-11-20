@@ -56,7 +56,7 @@ namespace telar::runtime::cli {
           : message_(message) {}
 
       [[nodiscard]] const char* what() const noexcept override {
-        return message_.c_str();
+        return message_.cStr();
       }
 
     private:

@@ -203,7 +203,7 @@ namespace telar {
     static constexpr std::size_t width = sizeof(T);
     static constexpr std::size_t byte_bits = 8;
 
-    static void encode(T value, _changes std::span<Byte>& output) _throw(EncodingError) {
+    static void encode(T value, TELAR_CHANGES std::span<Byte>& output) TELAR_THROWS(EncodingError) {
       if (output.size() < width) {
         throw EncodingError{"Output buffer too small\0"};
       }
@@ -215,7 +215,7 @@ namespace telar {
       output = output.subspan(width);
     }
 
-    static T decode(_changes std::span<const Byte>& input) _throw(EncodingError) {
+    static T decode(TELAR_CHANGES std::span<const Byte>& input) TELAR_THROWS(EncodingError) {
       if (input.size() < width) {
         throw EncodingError{"Input buffer is too small\0"};
       }
@@ -243,7 +243,7 @@ namespace telar {
     using value_type = ds::Array<Byte, N>;
     static constexpr std::size_t width = N;
 
-    static void encode(const ds::Array<Byte, N>& value, std::span<Byte>& output) _throw(EncodingError) {
+    static void encode(const ds::Array<Byte, N>& value, std::span<Byte>& output) TELAR_THROWS(EncodingError) {
       if (output.size() < width) {
         throw EncodingError{"Output buffer too small"};
       }
@@ -255,7 +255,7 @@ namespace telar {
       output = output.subspan(width);
     }
 
-    static ds::Array<Byte, N> decode(std::span<const Byte>& input) _throw(EncodingError) {
+    static ds::Array<Byte, N> decode(std::span<const Byte>& input) TELAR_THROWS(EncodingError) {
       if (input.size() < width) {
         throw EncodingError{"Input buffer is too small"};
       }
@@ -275,8 +275,8 @@ namespace telar {
     using value_type = bool;
     static constexpr std::size_t width = u8::width;
 
-    static void encode(bool value, std::span<Byte>& output) _throw(EncodingError);
-    static bool decode(_changes std::span<const Byte>& input) _throw(EncodingError);
+    static void encode(bool value, std::span<Byte>& output) TELAR_THROWS(EncodingError);
+    static bool decode(TELAR_CHANGES std::span<const Byte>& input) TELAR_THROWS(EncodingError);
   };
 
   template <typename WireCodec>

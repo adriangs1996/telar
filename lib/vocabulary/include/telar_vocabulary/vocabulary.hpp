@@ -23,6 +23,13 @@ namespace telar {
     bool operator==(const TerminalSize&) const noexcept = default;
   };
 
+  // A pane as the runtime names it: its id, and the generation that tells apart the panes a
+  // reused id has named.
+  struct PaneKey {
+    std::uint64_t id = 0;
+    std::uint64_t generation = 0;
+  };
+
   enum class EnvironmentMode : Byte {
     inherit_runtime = 0,
     replace = 1,

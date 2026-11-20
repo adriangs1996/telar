@@ -432,15 +432,15 @@ namespace telar::runtime {
     return child_.get();
   }
 
-  TlsSession::TlsSession(tbc::ref_a<TlsContexts> contexts, tbc::val_a<std::shared_ptr<const CertificateAuthority>> authority, TunnelSockets sockets, std::string_view hostname, tbc::mut_a<ConcurrentMemory> memory, tbc::val_a<ds::Box<AlpnOffer, ConcurrentMemory>> offer)
+  TlsSession::TlsSession(tbc::ref_a<TlsContexts> contexts, tbc::val_a<std::shared_ptr<const CertificateAuthority>> authority, TunnelRoute route, tbc::mut_a<ConcurrentMemory> memory, tbc::val_a<ds::Box<AlpnOffer, ConcurrentMemory>> offer)
       : contexts_(contexts),
         authority_(std::move(authority)),
-        sockets_(sockets),
+        sockets_(route.sockets),
         offered_(offer.hasValue()),
         offer_(offer ? std::move(offer) : ds::makeBox<AlpnOffer>(memory)) {
     requireTls(authority_ != nullptr, "TLS authority is unavailable");
-    requireTls(TlsHostname::valid(hostname), "Invalid TLS session hostname");
-    hostname_.assign(hostname);
+    requireTls(TlsHostname::valid(route.hostname), "Invalid TLS session hostname");
+    hostname_.assign(route.hostname);
   }
 
   TlsSession::~TlsSession() {
@@ -693,7 +693,7 @@ namespace telar::runtime {
 
   tbc::val_a<ds::Box<TlsSession, ConcurrentMemory>> TlsInterception::open(tbc::mut_a<ConcurrentMemory> memory, TunnelSockets sockets, std::string_view hostname, tbc::val_a<ds::Box<AlpnOffer, ConcurrentMemory>> offer) const {
     requireTls(!suspended_.load(std::memory_order_acquire), "TLS authority synchronization is in progress");
-    return ds::makeBox<TlsSession>(memory, contexts_, snapshot(), sockets, hostname, memory, std::move(offer));
+    return ds::makeBox<TlsSession>(memory, contexts_, snapshot(), TunnelRoute{.sockets = sockets, .hostname = hostname}, memory, std::move(offer));
   }
 
   tbc::val_a<ds::Box<TlsSession, ConcurrentMemory>> TlsInterception::open(tbc::mut_a<ConcurrentMemory> memory, TunnelSockets sockets, std::string_view hostname) const {

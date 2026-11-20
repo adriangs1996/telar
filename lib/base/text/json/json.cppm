@@ -276,6 +276,12 @@ export {
       literal,
     };
 
+    // A member of a JSON object: its name and the text of its value.
+    struct JsonMember {
+      std::string_view name;
+      std::string_view value;
+    };
+
     template <Allocator Memory>
     class JsonNode {
     public:
@@ -292,8 +298,8 @@ export {
       [[nodiscard]] const JsonNode* find(std::string_view name) const noexcept;
       void erase(std::size_t index);
       JsonNode& ensure(std::string_view name, JsonKind kind);
-      void setString(std::string_view name, std::string_view value);
-      void setLiteral(std::string_view name, std::string_view value);
+      void setString(JsonMember member);
+      void setLiteral(JsonMember member);
       void append(JsonNode child);
       void remove(std::string_view name);
       [[nodiscard]] ds::String<Memory> format() const;

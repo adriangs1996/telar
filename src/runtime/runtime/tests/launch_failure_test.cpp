@@ -136,7 +136,7 @@ namespace {
       constexpr TerminalSize size{80, 24, 0, 0};
       constexpr ds::Array<std::string_view, 1> arguments{"/bin/cat"};
       const Launch launch{.cwd = "/", .arguments = arguments};
-      auto workspace = ds::makeBox<Workspace>(memory, memory, location.workspace.id, "/workspace with spaces", "Failure fixture");
+      auto workspace = ds::makeBox<Workspace>(memory, memory, WorkspaceSpec{.id = location.workspace.id, .path = "/workspace with spaces", .name = "Failure fixture"});
 
       model.workspaces.insert(location.workspace.id, std::move(workspace));
 
@@ -145,7 +145,7 @@ namespace {
         bool failed = false;
 
         try {
-          panes.launch(model, nullptr, false, launch, location, size);
+          panes.launch(model, {.location = location, .size = size}, launch);
         } catch (const SystemError& error) {
           failed = error.code() == ENOMEM;
         }
@@ -159,7 +159,7 @@ namespace {
       check(history.submissions == 2 && model.next_pane_generation == 3);
       history.accepting = true;
       poller.fail = false;
-      auto& pane = panes.launch(model, nullptr, false, launch, location, size);
+      auto& pane = panes.launch(model, {.location = location, .size = size}, launch);
 
       check(model.panes.size() == 1 && pane.generation == 3 && history.submissions == 2);
       const auto retained_process = pane.process->processId();
@@ -167,7 +167,7 @@ namespace {
       bool registration_failed = false;
 
       try {
-        panes.launch(model, nullptr, false, command, location, size, pane.id);
+        panes.launch(model, {.location = location, .size = size}, command, pane.id);
       } catch (const std::bad_alloc&) {
         registration_failed = true;
       }
@@ -180,7 +180,7 @@ namespace {
       bool missing_rejected = false;
 
       try {
-        panes.launch(model, nullptr, false, Launch{.cwd = "/", .arguments = missing}, location, size);
+        panes.launch(model, {.location = location, .size = size}, Launch{.cwd = "/", .arguments = missing});
       } catch (const std::exception&) {
         missing_rejected = true;
       }

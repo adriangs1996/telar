@@ -57,7 +57,7 @@ namespace telar::runtime::diagnostics {
     line.field("graphics_transfers_adopted", transfers_adopted);
     line.field("graphics_stage_blocked", stage_blocked);
     line.field("graphics_stage_deferred", stage_deferred);
-    line.timing("graphics_freeze_avg_us", "graphics_freeze_max_us", Timing{});
+    line.timing({.average = "graphics_freeze_avg_us", .maximum = "graphics_freeze_max_us"}, Timing{});
   }
 
   void MediaCounters::merge(const MediaCounters& batch) noexcept {
@@ -83,7 +83,7 @@ namespace telar::runtime::diagnostics {
     line.field("graphics_transfers_prepared", prepared_frames);
     line.field("media_resets", resets);
     line.field("media_failures", failures);
-    line.timing("media_ingest_avg_us", "media_ingest_max_us", ingest);
+    line.timing({.average = "media_ingest_avg_us", .maximum = "media_ingest_max_us"}, ingest);
   }
 
   void ObservationCounters::merge(const ObservationCounters& batch) noexcept {
@@ -105,7 +105,7 @@ namespace telar::runtime::diagnostics {
   }
 
   void SystemCounters::write(Line& line) const {
-    line.timing("system_sample_avg_us", "system_sample_max_us", sample);
+    line.timing({.average = "system_sample_avg_us", .maximum = "system_sample_max_us"}, sample);
     const auto age = std::chrono::steady_clock::now() - captured;
     const auto age_ms = static_cast<std::uint64_t>(std::max<std::int64_t>(0, std::chrono::duration_cast<std::chrono::milliseconds>(age).count()));
 
@@ -118,8 +118,8 @@ namespace telar::runtime::diagnostics {
     line.field("pty_events", pty_events);
     line.field("pty_bytes", pty_bytes);
     line.field("folded_pty_events", folded_pty_events);
-    line.timing("input_write_avg_us", "input_write_max_us", input_write);
-    line.timing("ingest_avg_us", "ingest_max_us", ingest);
+    line.timing({.average = "input_write_avg_us", .maximum = "input_write_max_us"}, input_write);
+    line.timing({.average = "ingest_avg_us", .maximum = "ingest_max_us"}, ingest);
   }
 
   void FrameCounters::merge(const FrameCounters& other) noexcept {
@@ -146,8 +146,8 @@ namespace telar::runtime::diagnostics {
     line.field("noop_frames", noop_frames);
     line.field("damaged_rows", damaged_rows);
     line.field("diff_scanned_cells", diff_scanned_cells);
-    line.timing("encode_avg_us", "encode_max_us", encode);
-    line.timing("ack_avg_us", "ack_max_us", ack);
+    line.timing({.average = "encode_avg_us", .maximum = "encode_max_us"}, encode);
+    line.timing({.average = "ack_avg_us", .maximum = "ack_max_us"}, ack);
   }
 
 #if TELAR_DIAGNOSTICS
@@ -159,7 +159,7 @@ namespace telar::runtime::diagnostics {
     line.field("client_resyncs", client_resyncs);
     line.field("agent_process_inspections", agent_process_inspections);
     line.field("agent_process_misses", agent_process_misses);
-    line.timing("decode_avg_us", "decode_max_us", decode);
+    line.timing({.average = "decode_avg_us", .maximum = "decode_max_us"}, decode);
     panes.write(line);
     frames.write(line);
     media.write(line);

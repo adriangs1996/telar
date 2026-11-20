@@ -146,9 +146,9 @@ namespace {
     telar::testing::TestMemory adapter;
     sessions::WorktreeGit worktrees{adapter};
 
-    check(!worktrees.merged(root, "feature"));
+    check(!worktrees.merged({.root = root, .branch = "feature"}));
     git(root, {"branch", "--quiet", "--unset-upstream", "feature"});
-    check(worktrees.merged(root, "feature"));
+    check(worktrees.merged({.root = root, .branch = "feature"}));
   }
 
   // A branch that already exists is checked out at its own tip, not reset to the base.

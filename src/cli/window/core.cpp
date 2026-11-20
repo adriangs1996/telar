@@ -272,16 +272,16 @@ namespace telar::runtime::cli::machine {
     });
   }
 
-  int SetupReport::refuse(Memory& memory, std::string_view label, std::string_view destination, std::string_view reason) const {
+  int SetupReport::refuse(Memory& memory, SetupTarget target, std::string_view reason) const {
     if (!json) {
-      std::print("telar machine setup {}: {}.\n", label, reason);
+      std::print("telar machine setup {}: {}.\n", target.label, reason);
     } else {
       ds::String<Memory> output{memory};
 
       output.append("{\"label\":");
-      appendJsonText(output, label, JsonEscapes::control);
+      appendJsonText(output, target.label, JsonEscapes::control);
       output.append(",\"destination\":");
-      appendJsonText(output, destination, JsonEscapes::control);
+      appendJsonText(output, target.destination, JsonEscapes::control);
       output.append(R"(,"ready":false,"pending":false,"changed":false,"refused":)");
       appendJsonText(output, reason, JsonEscapes::control);
       output.append(",\"steps\":[]}\n");
@@ -291,7 +291,7 @@ namespace telar::runtime::cli::machine {
     return 1;
   }
 
-  int SetupReport::finish(Memory& memory, std::string_view label, std::string_view destination) const {
+  int SetupReport::finish(Memory& memory, SetupTarget target) const {
     const Outcome outcome{
         .failed = has(Status::failed),
         .pending = has(Status::pending),
@@ -299,16 +299,16 @@ namespace telar::runtime::cli::machine {
     };
 
     if (!json) {
-      std::print("{} {}.\n", label, verdict(outcome));
+      std::print("{} {}.\n", target.label, verdict(outcome));
       return outcome.failed ? 1 : 0;
     }
 
     ds::String<Memory> output{memory};
 
     output.append("{\"label\":");
-    appendJsonText(output, label, JsonEscapes::control);
+    appendJsonText(output, target.label, JsonEscapes::control);
     output.append(",\"destination\":");
-    appendJsonText(output, destination, JsonEscapes::control);
+    appendJsonText(output, target.destination, JsonEscapes::control);
     output.append(",\"ready\":");
     output.append(!outcome.failed && !outcome.pending ? "true" : "false");
     output.append(",\"pending\":");

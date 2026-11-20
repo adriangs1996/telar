@@ -115,7 +115,7 @@ export {
     // share one inspector.
     class TBC_SHARED ProcessInspector {
     public:
-      explicit ProcessInspector(const AgentManifests& manifests = builtin_manifests, uid_t uid = ::geteuid()) noexcept;
+      explicit ProcessInspector(const AgentManifests& manifests = builtinManifests(), uid_t uid = ::geteuid()) noexcept;
 
       [[nodiscard]] ds::Option<ProcessIdentity> identity(pid_t process) const noexcept;
       [[nodiscard]] ds::Option<ProcessSnapshot> snapshot(pid_t process) const noexcept;

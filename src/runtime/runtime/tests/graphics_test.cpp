@@ -146,28 +146,28 @@ namespace {
     Terminal terminal{memory, TerminalSize{.cols = 80, .rows = 24, .cell_width_px = 8, .cell_height_px = 16}};
 
     feedGraphics(terminal, "\x1b_Ga=T,f=32,s=1,v=1,i=17,p=5,q=2;/wAA/w==\x1b\\");
-    check(terminal.graphics.images().size() == 1);
-    const auto& image = terminal.graphics.images().front();
+    check(terminal.graphics().images().size() == 1);
+    const auto& image = terminal.graphics().images().front();
 
     check(image.description.key.image_id == 17 && image.description.format == ImageFormat::rgba);
     check(image.pixels.size() == 4 && image.pixels[0] == 255 && image.pixels[3] == 255);
-    check(terminal.graphics.placements().size() == 1);
-    const auto placement = terminal.graphics.placements().front();
+    check(terminal.graphics().placements().size() == 1);
+    const auto placement = terminal.graphics().placements().front();
 
     check(placement.placement_id == 5 && placement.virtual_id == (std::uint64_t{1} << 32) + 6);
     check(placement.source_width == 1 && placement.source_height == 1);
-    const auto revision = terminal.graphics.revision();
+    const auto revision = terminal.graphics().revision();
 
     feedGraphics(terminal, "ordinary text");
-    check(terminal.graphics.revision() == revision);
+    check(terminal.graphics().revision() == revision);
     feedGraphics(terminal, "\x1b_Ga=p,i=17,p=6,U=1,c=2,r=3,q=2;\x1b\\");
-    check(terminal.graphics.placements().size() == 2);
-    check(std::ranges::any_of(terminal.graphics.placements(), [](const auto& value) {
+    check(terminal.graphics().placements().size() == 2);
+    check(std::ranges::any_of(terminal.graphics().placements(), [](const auto& value) {
       return value.placement_id == 6 && value.location == PlacementLocation::placeholders && value.columns == 2 && value.rows == 3;
     }));
 
     feedGraphics(terminal, "\x1b_Ga=d,d=I,i=17,q=2;\x1b\\");
-    check(terminal.graphics.images().empty() && terminal.graphics.placements().empty());
+    check(terminal.graphics().images().empty() && terminal.graphics().placements().empty());
 
     for (unsigned identity = 1; identity <= 40; ++identity) {
       ds::Array<char, 128> command;
@@ -176,8 +176,8 @@ namespace {
       feedGraphics(terminal, {command.data(), static_cast<std::size_t>(length)});
     }
 
-    check(terminal.graphics.images().size() == graphics_image_count);
-    check(std::ranges::none_of(terminal.graphics.images(), [](const auto& value) {
+    check(terminal.graphics().images().size() == graphics_image_count);
+    check(std::ranges::none_of(terminal.graphics().images(), [](const auto& value) {
       return value.description.key.image_id <= 8;
     }));
   }
@@ -196,11 +196,11 @@ namespace {
     };
 
     const auto publish = [&] {
-      const bool pending = sync.publish(peer.session().connection, terminal.graphics);
+      const bool pending = sync.publish(peer.session().connection, terminal.graphics());
       if (!pending && media->seal()) {
         check(!media->process());
         media->complete();
-        return sync.publish(peer.session().connection, terminal.graphics);
+        return sync.publish(peer.session().connection, terminal.graphics());
       }
 
       return pending;
@@ -279,7 +279,7 @@ namespace {
 
     sync.configure(shared);
 
-    auto& storage = media->terminal()->graphics;
+    auto& storage = media->terminal()->graphics();
 
     if (shared) {
       check(sync.publish(peer.session().connection, storage));
@@ -386,14 +386,14 @@ namespace {
     Terminal terminal{memory, TerminalSize{.cols = 80, .rows = 24, .cell_width_px = 8, .cell_height_px = 16}};
 
     feedGraphics(terminal, "\x1b_Ga=t,f=100,i=42,q=2;iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==\x1b\\");
-    check(terminal.graphics.images().size() == 1);
-    const auto pixels = terminal.graphics.images().front().pixels;
+    check(terminal.graphics().images().size() == 1);
+    const auto pixels = terminal.graphics().images().front().pixels;
 
     check(pixels.size() == 4 && pixels[0] == 255 && pixels[1] == 0 && pixels[2] == 0 && pixels[3] == 255);
     feedGraphics(terminal, "\x1b_Ga=t,f=100,i=43,q=2;aW52YWxpZA==\x1b\\");
-    check(terminal.graphics.images().size() == 1);
+    check(terminal.graphics().images().size() == 1);
     feedGraphics(terminal, "\x1b_Ga=T,f=8,s=1,v=1,i=44,q=2;AQ==\x1b\\");
-    check(terminal.graphics.images().size() == 1);
+    check(terminal.graphics().images().size() == 1);
   }
 
   void testGraphicsCredit() {
@@ -454,7 +454,7 @@ namespace {
 
     // Publishes once, running the pane's pending batch when the synchronizer waits on it.
     bool publish() {
-      auto& storage = media->terminal()->graphics;
+      auto& storage = media->terminal()->graphics();
       const bool pending = sync.publish(connection(), storage);
 
       if (!pending && media->seal()) {
@@ -557,7 +557,7 @@ namespace {
     MediaBudget budget{limit};
     SyncedPane pane{memory, &budget};
     auto& connection = pane.connection();
-    auto& storage = pane.media->terminal()->graphics;
+    auto& storage = pane.media->terminal()->graphics();
     std::size_t others = 0;
 
     pane.feed("\x1b_Ga=T,f=32,s=1,v=1,i=1,p=1,q=2;/wAA/w==\x1b\\");

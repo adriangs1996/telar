@@ -14,7 +14,7 @@ namespace {
   void testReadLastRows() {
     auto exited = std::make_unique<ExitedPanes>();
 
-    exited->record(4, 1, PaneText{.request_id = 1, .pane_id = 4, .text = "one\ntwo\nthree\nfour\nfive\n", .exit_code = 3});
+    exited->record({.id = 4, .generation = 1}, PaneText{.request_id = 1, .pane_id = 4, .text = "one\ntwo\nthree\nfour\nfive\n", .exit_code = 3});
     const auto* record = exited->find(4, 1);
 
     check(record != nullptr);
@@ -31,7 +31,7 @@ namespace {
     }
 
     long_text += "last line";
-    exited->record(5, 1, PaneText{.request_id = 4, .pane_id = 5, .text = long_text});
+    exited->record({.id = 5, .generation = 1}, PaneText{.request_id = 4, .pane_id = 5, .text = long_text});
     const auto whole = exited->find(5, 1)->response(ReadPane{.request_id = 5, .pane_id = 5});
 
     check(whole.truncated && whole.text.ends_with("last line") && whole.text.size() <= ExitedPanes::maximum_bytes);

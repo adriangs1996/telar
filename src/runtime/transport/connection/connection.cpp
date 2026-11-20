@@ -369,8 +369,8 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   void Connection<Memory>::closeImmediately() noexcept {
-    closing = true;
-    read_paused = true;
+    flags_.closing = true;
+    flags_.read_paused = true;
     output_.clear();
   }
 

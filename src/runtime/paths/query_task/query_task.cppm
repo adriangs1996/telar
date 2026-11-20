@@ -108,7 +108,10 @@ export {
 
       void finish() noexcept;
 
-      // One builder appends to fixed storage; readers access only the released prefix.
+      // One builder appends to fixed storage; readers access only the released prefix. Public beside
+      // the private storage: the git reader borrows `cancelled` alone while the builder appends, as
+      // Rust borrows one field of a struct, where an accessor would lend the whole storage.
+      // NOLINTBEGIN(cppcoreguidelines-non-private-member-variables-in-classes,misc-non-private-member-variables-in-classes)
       std::atomic<std::size_t> published{0};
       std::atomic<bool> complete{false};
       std::atomic<bool> cancelled{false};
@@ -116,6 +119,7 @@ export {
       std::size_t bytes_used = 0;
       bool truncated = false;
       PathBuildFailure failure = PathBuildFailure::none;
+      // NOLINTEND(cppcoreguidelines-non-private-member-variables-in-classes,misc-non-private-member-variables-in-classes)
 
     private:
       static constexpr std::size_t entry_bytes = maximum_entries * sizeof(IndexedPath);

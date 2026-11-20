@@ -357,7 +357,7 @@ export {
 
     class HistoryStore {
     public:
-      explicit HistoryStore(ConcurrentMemory& memory, const char* path, const HistoryFilters& filters = default_history_filters);
+      explicit HistoryStore(ConcurrentMemory& memory, const char* path, const HistoryFilters& filters = defaultHistoryFilters());
 
       void reportAgentCommand(const ReportAgentCommand& request, const RequestContext& context, EncodedReply<ConcurrentMemory>& reply);
       void record(const HistoryEventView& event);

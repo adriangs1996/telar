@@ -240,7 +240,7 @@ namespace {
       const ExecutablePath executable;
 
       {
-        tap::Service service{memory, std::span<const tap::ServiceSpec>{}, executable.c_str()};
+        tap::Service service{memory, std::span<const tap::ServiceSpec>{}, executable.cStr()};
 
         check(!service.listening() && service.descriptor() == -1);
         auto exchange = captured(memory, quota);
@@ -254,7 +254,7 @@ namespace {
 
         specifications.atMut(1).package_index = 1;
         specifications.atMut(1).plugin_id = 18;
-        tap::Service service{memory, std::span<const tap::ServiceSpec>{specifications}, executable.c_str()};
+        tap::Service service{memory, std::span<const tap::ServiceSpec>{specifications}, executable.cStr()};
 
         check(service.listening() && service.descriptor() >= 0);
         unsigned notifications = 0;
@@ -308,7 +308,7 @@ namespace {
 
       {
         const ds::Array specifications{specification("callback-error")};
-        tap::Service service{memory, std::span<const tap::ServiceSpec>{specifications}, executable.c_str()};
+        tap::Service service{memory, std::span<const tap::ServiceSpec>{specifications}, executable.cStr()};
         auto first = captured(memory, quota);
 
         service.submit(first);
@@ -335,7 +335,7 @@ namespace {
 
       {
         const ds::Array specifications{specification("stale")};
-        tap::Service service{memory, std::span<const tap::ServiceSpec>{specifications}, executable.c_str()};
+        tap::Service service{memory, std::span<const tap::ServiceSpec>{specifications}, executable.cStr()};
 
         for (unsigned attempt = 0; attempt < tap::Limits::restarts; ++attempt) {
           auto exchange = captured(memory, quota);
@@ -363,7 +363,7 @@ namespace {
 
       {
         const ds::Array specifications{specification("timeout")};
-        tap::Service service{memory, std::span<const tap::ServiceSpec>{specifications}, executable.c_str()};
+        tap::Service service{memory, std::span<const tap::ServiceSpec>{specifications}, executable.cStr()};
         auto exchange = captured(memory, quota);
 
         service.submit(exchange);
@@ -431,7 +431,7 @@ namespace {
       for (const auto& replacement : {std::string{}, grant("trusted", 'b')}) {
         writeTrust(path, grant("trusted"));
         const ds::Array specifications{trusted("trusted")};
-        tap::Service service{memory, std::span<const tap::ServiceSpec>{specifications}, executable.c_str()};
+        tap::Service service{memory, std::span<const tap::ServiceSpec>{specifications}, executable.cStr()};
 
         service.watchTrust(path);
         check(service.listening());
@@ -486,7 +486,7 @@ namespace {
           writeTrust(path, both, 0644);
         }
 
-        tap::Service service{memory, std::span<const tap::ServiceSpec>{specifications}, executable.c_str()};
+        tap::Service service{memory, std::span<const tap::ServiceSpec>{specifications}, executable.cStr()};
 
         service.watchTrust(path);
         check(service.listening() == (damage == 0), std::to_string(damage));
@@ -530,7 +530,7 @@ namespace {
       granted.name.assign("tapper");
       granted.digest.fill(0x11);
       writeTapperTrust(path, R"(["proxy.tap","notifications"])");
-      tap::Service service{memory, std::span<const tap::ServiceSpec>{&granted, 1}, executable.c_str()};
+      tap::Service service{memory, std::span<const tap::ServiceSpec>{&granted, 1}, executable.cStr()};
 
       service.watchTrust(path);
       check(service.listening());
@@ -567,7 +567,7 @@ namespace {
 
     results.activate();
     {
-      tap::Worker<> worker{memory, identity, results, held, tap::WorkerLaunch{.executable = executable.c_str(), .cancellation = cancellation, .timeout = std::chrono::milliseconds{500}}};
+      tap::Worker<> worker{memory, identity, results, held, tap::WorkerLaunch{.executable = executable.cStr(), .cancellation = cancellation, .timeout = std::chrono::milliseconds{500}}};
       const auto submit = [&](std::uint64_t event_id) {
         auto exchange = captured(memory, quota);
         auto charge = held.charge(tap::SharedExchange::capturedBytes(exchange));

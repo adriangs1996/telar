@@ -181,7 +181,7 @@ namespace {
     for (const std::string_view name : {"sh", "dash", "bash", "zsh", "fish"}) {
       ds::Array<char, PATH_MAX> shell{};
       const char* path = std::getenv("PATH");
-      if (!findExecutable(path == nullptr ? "/usr/bin:/bin" : path, name, shell.viewMut())) {
+      if (!findExecutable({.path = path == nullptr ? "/usr/bin:/bin" : path, .program = name}, shell.viewMut())) {
         continue;
       }
 

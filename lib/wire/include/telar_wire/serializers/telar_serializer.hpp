@@ -28,12 +28,12 @@ namespace telar {
     }
 
     template <typename Message>
-    static void encode(const Message& message, std::span<Byte>& output) _throw(EncodingError) {
+    static void encode(const Message& message, std::span<Byte>& output) TELAR_THROWS(EncodingError) {
       WireCodec::encode(memberValue<Member>(message), output);
     }
 
     template <typename Message>
-    static void decode(std::span<const Byte>& input, Message& message) _throw(EncodingError) {
+    static void decode(std::span<const Byte>& input, Message& message) TELAR_THROWS(EncodingError) {
       memberValue<Member>(message) = WireCodec::decode(input);
     }
 
@@ -228,12 +228,12 @@ namespace telar {
     }
 
     template <typename Message>
-    static void encodeBody(const Message& message, _changes std::span<Byte>& output) _throw(EncodingError) {
+    static void encodeBody(const Message& message, TELAR_CHANGES std::span<Byte>& output) TELAR_THROWS(EncodingError) {
       (Fields::encode(message, output), ...);
     }
 
     template <typename Message>
-    static void decodeBody(std::span<const Byte>& input, _changes Message& message) _throw(EncodingError) {
+    static void decodeBody(std::span<const Byte>& input, TELAR_CHANGES Message& message) TELAR_THROWS(EncodingError) {
       (Fields::decode(input, message), ...);
     }
 

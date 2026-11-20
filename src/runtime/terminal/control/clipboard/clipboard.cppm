@@ -130,7 +130,7 @@ export namespace telar::runtime::control {
 
     static ds::Option<std::string_view> token(std::string_view& remaining) noexcept;
 
-    ClipboardMetadata metadata;
+    [[nodiscard]] const ClipboardMetadata& metadata() const noexcept;
 
   private:
     struct Entry {
@@ -153,6 +153,7 @@ export namespace telar::runtime::control {
     void reserve(std::size_t count);
 
     static constexpr std::size_t initial_capacity = 4096;
+    ClipboardMetadata metadata_;
     tbc::mut_a<ConcurrentMemory> memory_;
     tbc::val_a<ds::Vec<std::uint8_t, ConcurrentMemory>> spool_;
     std::size_t limit_;

@@ -39,5 +39,5 @@ export namespace telar::clipboard::linux_backend {
   };
 
   // Waits until `fd` reports one of the poll `events`, or fails once `expires` passes.
-  std::expected<void, read_error> wait(int fd, short events, deadline expires);
+  std::expected<void, ReadError> wait(int fd, short events, deadline expires);
 }

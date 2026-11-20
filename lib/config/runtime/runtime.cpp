@@ -321,6 +321,12 @@ namespace telar::runtime {
     return table;
   }
 
+  const AgentManifests& builtinManifests() {
+    static const AgentManifests manifests = makeBuiltinManifests();
+
+    return manifests;
+  }
+
   void HistoryPatternList::append(std::string_view pattern) {
     if (pattern.empty() || pattern.contains('\0')) {
       throw std::invalid_argument{"History filter patterns must not be empty or contain NUL"};
@@ -338,6 +344,12 @@ namespace telar::runtime {
     return std::ranges::any_of(std::span{patterns_}.first(count_), [text](const auto& pattern) {
       return text.contains(pattern.view());
     });
+  }
+
+  const HistoryFilters& defaultHistoryFilters() noexcept {
+    static const HistoryFilters filters{};
+
+    return filters;
   }
 
   bool HistoryFilters::allowsPane(std::string_view command, std::string_view directory) const noexcept {
@@ -702,7 +714,7 @@ namespace telar::runtime::config {
 
   template <Allocator Memory>
   std::size_t ProxyReader<Memory>::positive(const lua::Value& field, std::size_t fallback) {
-    return field.boundedInteger(fallback, 1, std::numeric_limits<std::size_t>::max());
+    return field.boundedInteger(fallback, {.minimum = 1, .maximum = std::numeric_limits<std::size_t>::max()});
   }
 
   template <Allocator Memory>

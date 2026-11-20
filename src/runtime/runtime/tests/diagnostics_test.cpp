@@ -85,7 +85,7 @@ namespace {
     void testRotation() {
       TemporaryDirectory directory{"/tmp/telar-diagnostics-XXXXXX"};
       const auto endpoint = std::string{directory.path()} + "/runtime.sock";
-      LogSink sink{endpoint, ::getpid(), 8};
+      LogSink sink{endpoint, {.limit = 8}};
 
       check(sink.available());
       const std::string path{sink.path()};
@@ -109,7 +109,7 @@ namespace {
 
       check(!LogSink{"relative.sock"}.available());
       check(!LogSink{std::string_view{"/tmp/hidden\0suffix", 18}}.available());
-      check(!LogSink{endpoint, 0}.available());
+      check(!LogSink{endpoint, {.process = 0}}.available());
     }
 
     void testOrphans() {
@@ -156,9 +156,9 @@ namespace {
       Line line;
 
       line.reset();
-      line.literal("role", "\"runtime\"");
+      line.literal("role", RawJson{.text = "\"runtime\""});
       line.field("port", ds::Option<std::uint64_t>{});
-      line.timing("average", "maximum", timing);
+      line.timing({.average = "average", .maximum = "maximum"}, timing);
       check(line.finish() == "{\"role\":\"runtime\",\"port\":null,\"average\":3,\"maximum\":4}\n");
 
       timing.total_ns = std::numeric_limits<std::uint64_t>::max() - 1;
@@ -169,7 +169,7 @@ namespace {
 
       try {
         line.reset();
-        line.literal("too_large", std::string(Line::capacity, '0'));
+        line.literal("too_large", RawJson{.text = std::string(Line::capacity, '0')});
       } catch (const std::length_error&) {
         overflowed = true;
       }
@@ -283,7 +283,7 @@ namespace {
       };
 
       terminal.refresh();
-      const auto snapshot = frames.prepare(terminal.screen);
+      const auto snapshot = frames.prepare(terminal.screen());
 
       collect();
       check(!snapshot.empty() && counters.frames == 1 && counters.snapshots == 1 && counters.frame_cells == 80);
@@ -294,12 +294,12 @@ namespace {
 
       terminal.feed(input);
       terminal.refresh();
-      check(!frames.prepare(terminal.screen).empty());
+      check(!frames.prepare(terminal.screen()).empty());
       collect();
       check(counters.frames == 2 && counters.snapshots == 1);
       check(counters.frame_cells == 81 && counters.damaged_rows >= 1 && counters.diff_scanned_cells >= 20);
       check(counters.encode.count == 2 && frames.acknowledge(2));
-      check(frames.prepare(terminal.screen).empty());
+      check(frames.prepare(terminal.screen()).empty());
       collect();
       check(counters.frames == 2);
     }
@@ -377,8 +377,10 @@ namespace {
         model.metrics.panes.pty_bytes = 72;
         model.metrics.client_messages = 9;
         RuntimeTelemetry telemetry{endpoint, {}};
+        constexpr int no_captures = 0;
+        constexpr int no_background = 0;
 
-        telemetry.tick(model, clients, memory, 0, 0, RuntimeTelemetry::Clock::now() + std::chrono::seconds{2});
+        telemetry.tick(model, clients, memory, TelemetryServices{.captures = no_captures, .background = no_background}, RuntimeTelemetry::Clock::now() + std::chrono::seconds{2});
       }
 
       const auto contents = readFile(path);

@@ -56,9 +56,9 @@ namespace telar::runtime::diagnostics {
     line.field("graphics_busy_panes", busy_panes);
   }
 
-  void MediaQueue::observe(std::size_t event_count, std::size_t byte_count) noexcept {
-    events = event_count;
-    bytes = byte_count;
+  void MediaQueue::observe(QueueDepth depth) noexcept {
+    events = depth.events;
+    bytes = depth.bytes;
     event_high_water = std::max(event_high_water, events);
     byte_high_water = std::max(byte_high_water, bytes);
   }

@@ -216,6 +216,21 @@ export {
       TBC_GENERIC inline void operator()(const PaneType& /*pane*/, std::span<const Byte> /*bytes*/) const noexcept {}
     };
 
+    // Where a pane launches, and how its terminal and shell start. `bare_prompt`: the client it is
+    // for draws telar's editor, so its shell prints no prompt.
+    struct PanePlacement {
+      const ConfigureTerminalColors* owner_colors = nullptr;
+      bool bare_prompt = false;
+      TabLocation location;
+      TerminalSize size{};
+    };
+
+    // A client's attachment to a pane, by the ids of both.
+    struct AttachmentKey {
+      std::uint64_t client = 0;
+      std::uint64_t pane = 0;
+    };
+
     // Kept whole: tests instantiate it with their own fake Poller and History (launch_failure_test's
     // FailingPoller and QueuedHistory).
     template <EventLoop Poller, HistoryEventSink History = DiscardedHistory>
@@ -246,7 +261,7 @@ export {
       inline static Pane& requireGeneration(PaneStore& panes, std::uint64_t identity, std::uint64_t generation) {
         auto& pane = require(panes, identity);
 
-        if (generation != 0 && findPane(panes, identity, generation) == nullptr) {
+        if (generation != 0 && findPane(panes, {.id = identity, .generation = generation}) == nullptr) {
           throw RequestError{FailureCode::pane_not_found, "Pane generation no longer exists"};
         }
 
@@ -254,8 +269,7 @@ export {
       }
 
       // A new pane in a tab, in the colors of the workspace's geometry owner when there is one.
-      // `bare_prompt`: the client it is for draws telar's editor, so its shell prints no prompt.
-      inline tbc::mut_a<Pane> launch(tbc::mut_a<RuntimeModel> model, const ConfigureTerminalColors* owner_colors, bool bare_prompt, const Launch& launch, TabLocation location, TerminalSize size) {
+      inline tbc::mut_a<Pane> launch(tbc::mut_a<RuntimeModel> model, const PanePlacement& placement, const Launch& launch) {
         const auto identity = allocateIdentity(model);
 
         if (launch.environment_mode != EnvironmentMode::inherit_runtime || !launch.environment.empty()) {
@@ -264,11 +278,11 @@ export {
 
         Command command{memory_, launch};
 
-        return launchPrepared(model, {.owner_colors = owner_colors, .bare_prompt = bare_prompt, .location = location, .size = size}, command, identity);
+        return launchPrepared(model, placement, command, identity);
       }
 
-      inline tbc::mut_a<Pane> launch(tbc::mut_a<RuntimeModel> model, const ConfigureTerminalColors* owner_colors, bool bare_prompt, Command<ConcurrentMemory>& command, TabLocation location, TerminalSize size, std::uint64_t restored_identity = 0) {
-        return launchPrepared(model, {.owner_colors = owner_colors, .bare_prompt = bare_prompt, .location = location, .size = size}, command, allocateIdentity(model, restored_identity));
+      inline tbc::mut_a<Pane> launch(tbc::mut_a<RuntimeModel> model, const PanePlacement& placement, Command<ConcurrentMemory>& command, std::uint64_t restored_identity = 0) {
+        return launchPrepared(model, placement, command, allocateIdentity(model, restored_identity));
       }
 
       inline tbc::mut_a<Attachment> attach(RuntimeModel& model, tbc::mut_a<ClientSession> client, std::uint64_t pane_id, TerminalSize size) {
@@ -299,7 +313,7 @@ export {
 
         attachment.getMut().slot = slot;
         attachment.getMut().graphics.configure(client.shared_graphics);
-        attachment.getMut().clipboard_revision = pane.terminal.effects.clipboard_revision;
+        attachment.getMut().clipboard_revision = pane.terminal.effects().clipboard_revision;
 
         // The attachment as the client keeps it, once its box is in the client's list.
         auto& result = client.attachments.push(std::move(attachment)).getMut();
@@ -309,19 +323,20 @@ export {
         return result;
       }
 
-      inline void detach(RuntimeModel& model, ClientStore& clients, std::uint64_t client_id, std::uint64_t identity) noexcept {
-        if (!release(model, clients, client_id, identity)) {
+      inline void detach(RuntimeModel& model, ClientStore& clients, AttachmentKey key) noexcept {
+        if (!release(model, clients, key)) {
           return;
         }
 
-        if (const auto* client = clients.find(client_id); client != nullptr && client->attachments.empty()) {
-          detachAll(model, clients, client_id);
+        if (const auto* client = clients.find(key.client); client != nullptr && client->attachments.empty()) {
+          detachAll(model, clients, key.client);
         }
       }
 
       // Drops a client's attachment to a pane; whether it had one.
-      inline bool release(RuntimeModel& model, ClientStore& clients, std::uint64_t client_id, std::uint64_t identity) noexcept {
-        auto* client = clients.find(client_id);
+      inline bool release(RuntimeModel& model, ClientStore& clients, AttachmentKey key) noexcept {
+        const auto identity = key.pane;
+        auto* client = clients.find(key.client);
         if (client == nullptr) {
           return false;
         }
@@ -410,10 +425,10 @@ export {
 
         removed.observer->finishSession();
         removed.media->cancel();
-        removed.observer->retired_next = std::move(model.retired_observers);
+        removed.observer->retiredNextMut() = std::move(model.retired_observers);
         model.retired_observers = removed.observer;
         ++model.retired_observer_count;
-        removed.media->retired_next = std::move(model.retired_media);
+        removed.media->retiredNextMut() = std::move(model.retired_media);
         model.retired_media = removed.media;
         ++model.retired_media_count;
         model.panes.erase(identity);
@@ -550,7 +565,7 @@ export {
         const auto pane = requireGeneration(model.panes, request.pane_id, request.pane_generation).id;
         auto* client = clients.find(client_id);
         auto* attachment = client == nullptr ? nullptr : client->attachmentMut(pane);
-        if (attachment == nullptr || client->connection.closing) {
+        if (attachment == nullptr || client->connection.flags().closing) {
           throw RequestError{FailureCode::invalid_request, "Desktop state requires a live pane attachment"};
         }
 
@@ -704,7 +719,7 @@ export {
         }
 
         if (client.search) {
-          client.connection.send(RequestFailed{.request_id = client.search->request_id, .code = FailureCode::resource_limit, .message = "Pane search superseded"});
+          client.connection.send(RequestFailed{.request_id = client.search->requestId(), .code = FailureCode::resource_limit, .message = "Pane search superseded"});
         }
 
         client.search.emplace(request, pane.terminal.contentRevision());
@@ -715,7 +730,7 @@ export {
       // the owner's colors before the asking client is borrowed to send it, as the owner may
       // be that client.
       [[nodiscard]] inline static PaneTheme readTheme(const PaneStore& panes, const ConfigureTerminalColors* owner_colors, const ReadPaneTheme& request) {
-        const auto* pane = findPane(panes, request.pane_id, request.pane_generation);
+        const auto* pane = findPane(panes, {.id = request.pane_id, .generation = request.pane_generation});
         if (pane == nullptr || pane->exit_status) {
           throw RequestError{FailureCode::pane_not_found, "Pane not found"};
         }
@@ -754,13 +769,13 @@ export {
         }
 
         try {
-          auto& pane = require(panes, client.search->pane_id);
+          auto& pane = require(panes, client.search->paneId());
           if (client.search.getMut().advance(pane.terminal.handle(), pane.terminal.contentRevision())) {
             client.connection.send(client.search.getMut().result());
             client.search.reset();
           }
         } catch (const std::exception&) {
-          client.connection.send(RequestFailed{.request_id = client.search->request_id, .code = FailureCode::resource_limit, .message = "Pane search stopped; retry"});
+          client.connection.send(RequestFailed{.request_id = client.search->requestId(), .code = FailureCode::resource_limit, .message = "Pane search stopped; retry"});
           client.search.reset();
         }
 
@@ -772,14 +787,6 @@ export {
       struct InputOrigin {
         std::uint64_t client;
         std::uint64_t pane;
-      };
-
-      // Where a pane launches, and how its terminal and shell start.
-      struct Placement {
-        const ConfigureTerminalColors* owner_colors = nullptr;
-        bool bare_prompt = false;
-        TabLocation location;
-        TerminalSize size{};
       };
 
       static constexpr std::size_t encoded_key_bytes = 128;
@@ -811,7 +818,7 @@ export {
         std::uint64_t theme_client = std::numeric_limits<std::uint64_t>::max();
 
         for (const auto* client : clients.items()) {
-          if (client == nullptr || client->connection.closing) {
+          if (client == nullptr || client->connection.flags().closing) {
             continue;
           }
 
@@ -843,19 +850,14 @@ export {
           const auto* workspace = model.workspaces.find(pane.location.workspace.id);
           const auto* owner = workspace != nullptr && workspace->geometry_client ? clients.find(*workspace->geometry_client) : nullptr;
 
-          pane.terminal.configureColors(owner != nullptr && !owner->connection.closing ? owner->colors : ConfigureTerminalColors{});
+          pane.terminal.configureColors(owner != nullptr && !owner->connection.flags().closing ? owner->colors : ConfigureTerminalColors{});
         }
 
         pane.terminal.configureClientFacts(facts);
         ClipboardService::configure(clients, pane);
       }
 
-      struct Identity {
-        std::uint64_t id;
-        std::uint64_t generation;
-      };
-
-      inline static Identity allocateIdentity(RuntimeModel& model, std::uint64_t restored_identity = 0) {
+      inline static PaneKey allocateIdentity(RuntimeModel& model, std::uint64_t restored_identity = 0) {
         if (model.panes.size() + std::max(model.retired_observer_count, model.retired_media_count) >= pane_capacity) {
           throw RequestError{FailureCode::resource_limit, "Pane capacity is occupied by active processes or pending observations"};
         }
@@ -867,25 +869,25 @@ export {
         const auto identity = restored_identity == 0 ? model.panes.nextId() : restored_identity;
 
         model.panes.advanceCounter(identity + 1);
-        return {identity, model.next_pane_generation++};
+        return {.id = identity, .generation = model.next_pane_generation++};
       }
 
-      inline tbc::mut_a<Pane> launchPrepared(tbc::mut_a<RuntimeModel> model, const Placement& placement, Command<ConcurrentMemory>& command, Identity identity) {
+      inline tbc::mut_a<Pane> launchPrepared(tbc::mut_a<RuntimeModel> model, const PanePlacement& placement, Command<ConcurrentMemory>& command, PaneKey identity) {
         constexpr std::size_t identity_text_bytes = 32;
         const auto set_identity = [&](std::string_view name, std::uint64_t value) {
           ds::Array<char, identity_text_bytes> text{};
           const auto converted = std::to_chars(text.dataMut(), text.dataMut() + text.size(), value);
 
-          command.setEnvironment(name, {text.data(), static_cast<std::size_t>(converted.ptr - text.data())});
+          command.setEnvironment({.name = name, .value = {text.data(), static_cast<std::size_t>(converted.ptr - text.data())}});
         };
 
         set_identity("TELAR_PANE_ID", identity.id);
         set_identity("TELAR_PANE_GENERATION", identity.generation);
         set_identity("TELAR_WORKSPACE_ID", placement.location.workspace.id);
         set_identity("TELAR_TAB_ID", placement.location.tab_id);
-        command.setEnvironment("TELAR_SOCKET_PATH", socket_path_);
+        command.setEnvironment({.name = "TELAR_SOCKET_PATH", .value = socket_path_});
         if (!model.cli_executable.empty()) {
-          command.setEnvironment("TELAR_BIN_PATH", model.cli_executable);
+          command.setEnvironment({.name = "TELAR_BIN_PATH", .value = model.cli_executable});
         }
 
         proxy_.apply(command);
@@ -921,7 +923,7 @@ export {
           phase = LaunchPhase::output_actor;
           poller_.watch(inserted.process->descriptor(), eventToken(EventSource::pane, handle));
         } catch (const std::exception& error) {
-          history_.recordHistory(HistoryEventView{.kind = HistoryEventKind::launch_failed, .session = session, .finished_at_ms = ObservationTime::now().milliseconds, .failure = {identity.generation, phase, launchFailureCause(error)}});
+          history_.recordHistory(HistoryEventView{.kind = HistoryEventKind::launch_failed, .session = session, .finished_at_ms = ObservationTime::now().milliseconds, .failure = {.generation = identity.generation, .phase = phase, .cause = launchFailureCause(error)}});
           if (registered) {
             poller_.remove(model.panes.find(identity.id)->process->descriptor());
             model.panes.erase(identity.id);

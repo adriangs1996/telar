@@ -144,7 +144,7 @@ namespace {
     watch.configure("changed", "/tmp/a", AgentSessionFileKind::claude_transcript);
     check(!watch.offset && !watch.last_title && watch.revision != revision);
 
-    Agent agent{1, 1};
+    Agent agent{{.id = 1, .generation = 1}};
 
     agent.title.assign("Generated");
     agent.title_source = AgentTitleSource::generated;

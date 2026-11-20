@@ -37,7 +37,7 @@ namespace telar::clipboard::linux_backend {
       std::uint64_t revision = 0;
       std::uint32_t seat_id = 0;
       std::uint32_t manager_id = 0;
-      std::optional<read_error> failure;
+      std::optional<ReadError> failure;
 
       ~connection() {
         offers.clear();
@@ -79,7 +79,7 @@ namespace telar::clipboard::linux_backend {
         zwlr_data_control_offer_v1_add_listener(handle, &offer_listener, &value);
       } catch (const std::bad_alloc&) {
         zwlr_data_control_offer_v1_destroy(handle);
-        state.failure = read_error::allocation_failed;
+        state.failure = ReadError::allocation_failed;
       }
     }
 
@@ -101,7 +101,7 @@ namespace telar::clipboard::linux_backend {
     }
 
     void finished(void* context, zwlr_data_control_device_v1*) {
-      static_cast<connection*>(context)->failure = read_error::read_failed;
+      static_cast<connection*>(context)->failure = ReadError::read_failed;
     }
 
     void primarySelection(void*, zwlr_data_control_device_v1*, zwlr_data_control_offer_v1*) {}
@@ -136,16 +136,16 @@ namespace telar::clipboard::linux_backend {
     void removed(void* context, wl_registry*, std::uint32_t id) {
       auto& state = *static_cast<connection*>(context);
       if (id == state.seat_id || id == state.manager_id) {
-        state.failure = read_error::read_failed;
+        state.failure = ReadError::read_failed;
       }
     }
 
     const wl_registry_listener registry_listener{.global = global, .global_remove = removed};
 
-    std::expected<void, read_error> flush(connection& state, deadline expires) {
+    std::expected<void, ReadError> flush(connection& state, deadline expires) {
       while (wl_display_flush(state.display) < 0) {
         if (sys::lastError() != EAGAIN) {
-          return std::unexpected(read_error::read_failed);
+          return std::unexpected(ReadError::read_failed);
         }
 
         if (auto status = wait(wl_display_get_fd(state.display), POLLOUT, expires); !status) {
@@ -157,7 +157,7 @@ namespace telar::clipboard::linux_backend {
     }
 
     // A bounded round trip avoids hanging on an unresponsive compositor.
-    std::expected<void, read_error> synchronize(connection& state, deadline expires) {
+    std::expected<void, ReadError> synchronize(connection& state, deadline expires) {
       bool done = false;
       const wl_callback_listener listener{
           .done = [](void* context, wl_callback*, std::uint32_t) {
@@ -166,13 +166,13 @@ namespace telar::clipboard::linux_backend {
       };
       std::unique_ptr<wl_callback, decltype(&wl_callback_destroy)> callback(wl_display_sync(state.display), wl_callback_destroy);
       if (!callback) {
-        return std::unexpected(read_error::allocation_failed);
+        return std::unexpected(ReadError::allocation_failed);
       }
 
       wl_callback_add_listener(callback.get(), &listener, &done);
       while (!done) {
         if (wl_display_dispatch_pending(state.display) < 0 || state.failure) {
-          return std::unexpected(state.failure.value_or(read_error::read_failed));
+          return std::unexpected(state.failure.value_or(ReadError::read_failed));
         }
 
         if (done) {
@@ -194,7 +194,7 @@ namespace telar::clipboard::linux_backend {
         }
 
         if (wl_display_read_events(state.display) < 0) {
-          return std::unexpected(read_error::read_failed);
+          return std::unexpected(ReadError::read_failed);
         }
       }
 
@@ -205,17 +205,17 @@ namespace telar::clipboard::linux_backend {
       return {};
     }
 
-    std::expected<content, read_error> receive(connection& state, const format& type, deadline expires, std::size_t maximum_bytes) {
+    std::expected<Content, ReadError> receive(connection& state, const format& type, deadline expires, std::size_t maximum_bytes) {
       int pipe[2];
       if (pipe2(pipe, O_CLOEXEC) != 0) {
-        return std::unexpected(read_error::read_failed);
+        return std::unexpected(ReadError::read_failed);
       }
 
       const descriptor reading(pipe[0]);
       {
         const descriptor writing(pipe[1]);
         if (fcntl(reading.get(), F_SETFL, O_NONBLOCK) < 0) {
-          return std::unexpected(read_error::read_failed);
+          return std::unexpected(ReadError::read_failed);
         }
 
         zwlr_data_control_offer_v1_receive(state.selected->handle, type.target, writing.get());
@@ -225,17 +225,17 @@ namespace telar::clipboard::linux_backend {
         return std::unexpected(status.error());
       }
 
-      content result{.mime_type = type.mime_type, .bytes = {}};
+      Content result{.mime_type = type.mime_type, .bytes = {}};
       std::array<byte, 64 * 1024> buffer;
       for (;;) {
         if (clock::now() >= expires) {
-          return std::unexpected(read_error::timed_out);
+          return std::unexpected(ReadError::timed_out);
         }
 
         const auto count = ::read(reading.get(), buffer.data(), buffer.size());
         if (count > 0) {
           if (static_cast<std::size_t>(count) > maximum_bytes - result.bytes.size()) {
-            return std::unexpected(read_error::content_too_large);
+            return std::unexpected(ReadError::content_too_large);
           }
           result.bytes.insert(result.bytes.end(), buffer.begin(), buffer.begin() + count);
         } else if (count == 0) {
@@ -245,28 +245,28 @@ namespace telar::clipboard::linux_backend {
             return std::unexpected(status.error());
           }
         } else if (sys::lastError() != EINTR) {
-          return std::unexpected(read_error::read_failed);
+          return std::unexpected(ReadError::read_failed);
         }
       }
 
       if (result.bytes.empty() && type.mime_type.starts_with("image/")) {
-        return std::unexpected(read_error::read_failed);
+        return std::unexpected(ReadError::read_failed);
       }
 
       return result;
     }
   }
 
-  std::expected<content, read_error> readWayland(deadline expires, std::size_t maximum_bytes) {
+  std::expected<Content, ReadError> readWayland(deadline expires, std::size_t maximum_bytes) {
     connection state;
     state.display = wl_display_connect(nullptr);
     if (state.display == nullptr) {
-      return std::unexpected(read_error::session_unavailable);
+      return std::unexpected(ReadError::session_unavailable);
     }
 
     state.registry = wl_display_get_registry(state.display);
     if (state.registry == nullptr) {
-      return std::unexpected(read_error::allocation_failed);
+      return std::unexpected(ReadError::allocation_failed);
     }
 
     wl_registry_add_listener(state.registry, &registry_listener, &state);
@@ -275,12 +275,12 @@ namespace telar::clipboard::linux_backend {
     }
 
     if (state.manager == nullptr || state.seat == nullptr) {
-      return std::unexpected(read_error::unsupported_protocol);
+      return std::unexpected(ReadError::unsupported_protocol);
     }
 
     state.device = zwlr_data_control_manager_v1_get_data_device(state.manager, state.seat);
     if (state.device == nullptr) {
-      return std::unexpected(read_error::allocation_failed);
+      return std::unexpected(ReadError::allocation_failed);
     }
 
     zwlr_data_control_device_v1_add_listener(state.device, &device_listener, &state);
@@ -289,7 +289,7 @@ namespace telar::clipboard::linux_backend {
     }
 
     if (state.selected == nullptr) {
-      return std::unexpected(read_error::no_supported_content);
+      return std::unexpected(ReadError::no_supported_content);
     }
 
     for (std::size_t index = 0; index < formats.size(); ++index) {
@@ -308,12 +308,12 @@ namespace telar::clipboard::linux_backend {
       }
 
       if (state.revision != revision) {
-        return std::unexpected(read_error::changed);
+        return std::unexpected(ReadError::changed);
       }
 
       return result;
     }
 
-    return std::unexpected(read_error::no_supported_content);
+    return std::unexpected(ReadError::no_supported_content);
   }
 }

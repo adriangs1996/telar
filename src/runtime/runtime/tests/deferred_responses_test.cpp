@@ -139,7 +139,7 @@ namespace {
     workspaces.workspaceSnapshot(model, reader.session(), RequestWorkspaceSnapshot{7, location.workspace});
     workspaces.tabSnapshot(model, clients, reader.session().id, RequestTabSnapshot{8, location});
     panes.readText(reader.session(), read);
-    model.exited_panes.record(pane.id, pane.generation, PaneText{.text = "Exited text", .exit_code = 17});
+    model.exited_panes.record({.id = pane.id, .generation = pane.generation}, PaneText{.text = "Exited text", .exit_code = 17});
     panes.remove(model, clients, pane.id);
     model.workspaces.erase(location.workspace.id);
     const auto closed = reader.receive<RequestFailed>();
@@ -152,12 +152,12 @@ namespace {
 
     panes.readText(reader.session(), read);
     for (unsigned index = 0; index < ExitedPanes::capacity; ++index) {
-      model.exited_panes.record(read.pane_id + index + 1, 1, PaneText{});
+      model.exited_panes.record({.id = read.pane_id + index + 1, .generation = 1}, PaneText{});
     }
 
     check(reader.receive<RequestFailed>().code == FailureCode::pane_not_found);
     reader.session().connection.send(RequestCompleted{.request_id = 9});
-    check(reader.receive<RequestCompleted>().request_id == 9 && !reader.session().connection.closing);
+    check(reader.receive<RequestCompleted>().request_id == 9 && !reader.session().connection.flags().closing);
   }
 
   const telar::testing::Case case_deferred_responses{"deferred_responses.deferred_responses", testDeferredResponses};

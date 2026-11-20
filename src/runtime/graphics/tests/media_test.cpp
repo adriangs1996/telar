@@ -83,14 +83,14 @@ namespace {
 
     terminal.feed(mediaBytes("x\x1b_Ga=T,s=16,v=32,i=1,q=2;invalid\x1b\\z"));
     terminal.refresh();
-    check(terminal.screen.cursor.x == 4 && terminal.screen.cursor.y == 1);
-    check(terminal.screen.cells[13].text[0] == 'z');
-    check(terminal.responses().empty() && terminal.graphics.images().empty());
+    check(terminal.screen().cursor.x == 4 && terminal.screen().cursor.y == 1);
+    check(terminal.screen().cells[13].text[0] == 'z');
+    check(terminal.responses().empty() && terminal.graphics().images().empty());
 
     terminal.feed(mediaBytes("\x1b[2;3r\x1b[3;9H\x1b_Ga=T,c=2,r=2,q=2;invalid\x1b\\z"));
     terminal.refresh();
-    check(terminal.screen.cursor.x == 1 && terminal.screen.cursor.y == 2);
-    check(terminal.screen.cells[20].text[0] == 'z');
+    check(terminal.screen().cursor.x == 1 && terminal.screen().cursor.y == 2);
+    check(terminal.screen().cells[20].text[0] == 'z');
   }
 
   void testMediaBatches(ConcurrentMemory& memory) {
@@ -147,9 +147,9 @@ namespace {
       media.resize(TerminalSize{20, 8, 8, 16});
       check(media.seal() && !media.process());
       media.complete();
-      check(media.terminal() && media.terminal()->graphics.images().size() == 1);
-      check(media.terminal()->graphics.images().front().pixels.size() == 4);
-      const auto placement = media.terminal()->graphics.placements().front();
+      check(media.terminal() && media.terminal()->graphics().images().size() == 1);
+      check(media.terminal()->graphics().images().front().pixels.size() == 4);
+      const auto placement = media.terminal()->graphics().placements().front();
 
       check(placement.x == 2 && placement.y == 1);
     }
@@ -237,8 +237,8 @@ namespace {
 
     terminal.feed(mediaBytes("\x1b_Ga=T,t=f,f=32,s=1,v=1,i=7,C=1,q=2,O=4,S=4;" + encodedPath(file_path) + "\x1b\\"));
     terminal.refresh();
-    check(terminal.graphics.images().size() == 1);
-    const auto pixels = terminal.graphics.images().front().pixels;
+    check(terminal.graphics().images().size() == 1);
+    const auto pixels = terminal.graphics().images().front().pixels;
 
     check(pixels.size() == 4 && pixels[0] == 255 && pixels[3] == 255);
 
@@ -417,7 +417,7 @@ namespace {
     check(sample.images == 2 && sample.placements == 2 && sample.resident_bytes == 7);
     check(sample.loading_bytes == 3 && sample.prepared_bytes == 3);
     media.terminal()->refresh();
-    const auto image = media.terminal()->graphics.images().front().description;
+    const auto image = media.terminal()->graphics().images().front().description;
 
     check(image.key.image_id == 2);
 

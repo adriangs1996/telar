@@ -302,7 +302,7 @@ namespace {
 
     const auto secret = ProxySecret::generate();
     auto origin_listener = ProxyListener::bind(ds::none, {});
-    ProxyService<Poller, ServiceResolver> service{memory, options, secret, interception, ProxyListener::bind(ds::none, {})};
+    ProxyService<Poller, ServiceResolver> service{memory, ProxyServiceParts{.options = options, .secret = secret, .interception = interception}, ProxyListener::bind(ds::none, {})};
     auto child = connectLocal(service.port());
 
     writeText(child.get(), request(secret, origin_listener.port(), "origin.test"));
@@ -458,7 +458,7 @@ namespace {
     const auto secret = ProxySecret::generate();
     ds::Option<ProxyService<NativeEventLoop<TlsTestMemory>, ServiceResolver>> service;
 
-    service.emplace(memory, options, secret, interception, ProxyListener::bind(ds::none, {}));
+    service.emplace(memory, ProxyServiceParts{.options = options, .secret = secret, .interception = interception}, ProxyListener::bind(ds::none, {}));
     ds::Array<FileDescriptor, ProxyConnectionPolicy::maximum_unauthenticated> silent;
 
     for (auto& socket : silent.viewMut()) {
@@ -515,7 +515,7 @@ namespace {
     ProxyOptions options{memory};
     const auto secret = ProxySecret::generate();
     auto origin_listener = ProxyListener::bind(ds::none, {});
-    ProxyService<NativeEventLoop<TlsTestMemory>, ServiceResolver> service{memory, options, secret, interception, ProxyListener::bind(ds::none, {})};
+    ProxyService<NativeEventLoop<TlsTestMemory>, ServiceResolver> service{memory, ProxyServiceParts{.options = options, .secret = secret, .interception = interception}, ProxyListener::bind(ds::none, {})};
     ds::Array<FileDescriptor, ProxyConnectionPolicy::maximum_unauthenticated> silent;
 
     silent.atMut(0) = connectLocal(service.port());

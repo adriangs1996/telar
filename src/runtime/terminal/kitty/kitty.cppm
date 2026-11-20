@@ -398,7 +398,7 @@ export namespace telar::runtime {
   struct GraphicsQueryResources {
     constexpr GraphicsQueryResources() = default;
 
-    constexpr GraphicsQueryResources(GraphicsLimits values) noexcept
+    constexpr explicit GraphicsQueryResources(GraphicsLimits values) noexcept
         : limits(values) {}
 
     constexpr GraphicsQueryResources(GraphicsLimits values, MediaBudget& shared, MediaUsage* pane_usage = nullptr) noexcept

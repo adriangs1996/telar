@@ -164,7 +164,7 @@ export {
       ::fcntl(guard[1], F_SETFD, FD_CLOEXEC);
       const telar::runtime::ExecutablePath executable;
       const auto descriptor = std::to_string(guard[0]);
-      std::vector<const char*> arguments{executable.c_str(), "--runtime-host", directory_.c_str(), descriptor.c_str()};
+      std::vector<const char*> arguments{executable.cStr(), "--runtime-host", directory_.c_str(), descriptor.c_str()};
 
       if (options_.session) {
         arguments.push_back("--session");

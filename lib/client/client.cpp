@@ -121,7 +121,7 @@ namespace telar {
 
 #ifdef TELAR_DEBUG
   template <typename Message>
-  void HandshakeCodec::pretty_print(const Message& message, std::FILE* output) {
+  void HandshakeCodec::prettyPrint(const Message& message, std::FILE* output) {
     const auto payload = encode(message);
 
     debug::printFrame<HandshakeSchema<Message>>(payload, output);
@@ -129,18 +129,18 @@ namespace telar {
 
   template <Direction Side, HandshakeTag Tag, typename... Fields>
   template <typename Message>
-  void HandshakeLayout<Side, Tag, Fields...>::pretty_print(const Message& message, std::FILE* output) {
-    HandshakeCodec::pretty_print(message, output);
+  void HandshakeLayout<Side, Tag, Fields...>::prettyPrint(const Message& message, std::FILE* output) {
+    HandshakeCodec::prettyPrint(message, output);
   }
 
-  template void HandshakeCodec::pretty_print(const ClientHello&, std::FILE*);
-  template void HandshakeCodec::pretty_print(const ServerAccept&, std::FILE*);
-  template void HandshakeCodec::pretty_print(const ServerReject&, std::FILE*);
-  // A message's schema derives from the HandshakeLayout that declares its pretty_print, which its
+  template void HandshakeCodec::prettyPrint(const ClientHello&, std::FILE*);
+  template void HandshakeCodec::prettyPrint(const ServerAccept&, std::FILE*);
+  template void HandshakeCodec::prettyPrint(const ServerReject&, std::FILE*);
+  // A message's schema derives from the HandshakeLayout that declares its prettyPrint, which its
   // injected class name names.
-  template void HandshakeSchema<ClientHello>::HandshakeLayout::pretty_print(const ClientHello&, std::FILE*);
-  template void HandshakeSchema<ServerAccept>::HandshakeLayout::pretty_print(const ServerAccept&, std::FILE*);
-  template void HandshakeSchema<ServerReject>::HandshakeLayout::pretty_print(const ServerReject&, std::FILE*);
+  template void HandshakeSchema<ClientHello>::HandshakeLayout::prettyPrint(const ClientHello&, std::FILE*);
+  template void HandshakeSchema<ServerAccept>::HandshakeLayout::prettyPrint(const ServerAccept&, std::FILE*);
+  template void HandshakeSchema<ServerReject>::HandshakeLayout::prettyPrint(const ServerReject&, std::FILE*);
 #endif
 
   SocketError::SocketError(const char* message)

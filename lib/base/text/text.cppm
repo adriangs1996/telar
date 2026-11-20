@@ -383,10 +383,16 @@ export {
 export {
   namespace telar::runtime {
 
-    // The fields of `text`, region `a`, between the occurrences of `delimiter`, region `b`.
+    // A text, region `a`, and the delimiter between its fields, region `b`.
+    struct TextSplit {
+      tbc::val_a<std::string_view> text;
+      tbc::val_b<std::string_view> delimiter;
+    };
+
+    // The fields of a text between the occurrences of its delimiter.
     class TextFields {
     public:
-      explicit TextFields(tbc::val_a<std::string_view> text, tbc::val_b<std::string_view> delimiter) noexcept;
+      explicit TextFields(TextSplit split) noexcept;
 
       tbc::val_a<ds::Option<std::string_view>> next() noexcept;
 

@@ -155,7 +155,7 @@ namespace {
 
     connection.exchange(frames);
     const bool remaining = Link::dispatch(frames, [&] {
-      return !connection.read_paused;
+      return !connection.flags().read_paused;
     },
         visit);
 
@@ -214,14 +214,14 @@ namespace {
     const auto pause_after_request = [&](std::span<const Byte> payload, DecodeStorage&) {
       check(std::ranges::equal(payload, hello));
       ++requests;
-      connection.read_paused = true;
+      connection.flagsMut().read_paused = true;
     };
 
     check(dispatchFrames(memory, connection, pause_after_request));
     check(requests == 1);
     check(dispatchFrames(memory, connection, pause_after_request));
     check(requests == 1);
-    connection.read_paused = false;
+    connection.flagsMut().read_paused = false;
     check(!dispatchFrames(memory, connection, pause_after_request));
     check(requests == 2);
   }
@@ -265,7 +265,7 @@ namespace {
 
     check(child >= 0);
     if (child == 0) {
-      closeChildDescriptors(source.get(), getdtablesize());
+      closeChildDescriptors({.retained = source.get(), .limit = getdtablesize()});
       const bool closed = ::fcntl(high.get(), F_GETFD) < 0 && errno == EBADF;
       const bool retained = ::fcntl(source.get(), F_GETFD) >= 0;
 
@@ -501,9 +501,9 @@ namespace {
   void testCommandHelpers(SystemAllocator& memory) {
     ds::Array<char, PATH_MAX> found;
 
-    check(findExecutable("/nonexistent-telar:/bin", "sh", found.viewMut()) && std::string_view{found.dataMut()} == "/bin/sh");
-    check(!findExecutable("/nonexistent-telar", "sh", found.viewMut()));
-    check(findExecutable("bin", "sh", found.viewMut(), "/"));
+    check(findExecutable({.path = "/nonexistent-telar:/bin", .program = "sh"}, found.viewMut()) && std::string_view{found.dataMut()} == "/bin/sh");
+    check(!findExecutable({.path = "/nonexistent-telar", .program = "sh"}, found.viewMut()));
+    check(findExecutable({.path = "bin", .program = "sh", .cwd = "/"}, found.viewMut()));
 
     const auto self = ExecutablePath::sibling({"missing-telar-program", "runtime-platform-tests"});
 

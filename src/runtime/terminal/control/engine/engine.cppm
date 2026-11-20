@@ -91,7 +91,8 @@ export namespace telar::runtime::control {
 
     bool pasteEvents() const noexcept;
 
-    Policy policy;
+    // What the programs in the terminal may do, which its owner sets.
+    Policy& policyMut() noexcept;
 
   private:
     // Keeps the encoded document a sequence begins. On the alternate screen it covers the pane;
@@ -232,6 +233,7 @@ export namespace telar::runtime::control {
     ds::Array<bool, desktop_modes.size()> saved_desktop_modes_{};
     std::size_t capability_offset_ = 0;
     bool paste_events_ = false;
+    Policy policy_;
   };
 
 }

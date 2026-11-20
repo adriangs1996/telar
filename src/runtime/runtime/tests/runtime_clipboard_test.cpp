@@ -95,10 +95,10 @@ namespace {
         }
 
         if (fail) {
-          return std::unexpected(clipboard::read_error::session_unavailable);
+          return std::unexpected(clipboard::ReadError::session_unavailable);
         }
 
-        clipboard::content value{.mime_type = "image/png", .bytes = std::vector<Byte>(size)};
+        clipboard::Content value{.mime_type = "image/png", .bytes = std::vector<Byte>(size)};
 
         for (std::size_t index = 0; index < value.bytes.size(); ++index) {
           value.bytes[index] = static_cast<Byte>(index);
@@ -207,7 +207,7 @@ namespace {
       service.read(clients, first.session().id, {.request_id = 10});
       collect(service, clients);
       first.receive<RuntimeClipboardChunk>();
-      first.session().connection.closing = true;
+      first.session().connection.flagsMut().closing = true;
       service.read(clients, other.session().id, {.request_id = 11});
       collect(service, clients);
       other.receive<RuntimeClipboardChunk>();

@@ -111,7 +111,7 @@ namespace telar::runtime::config {
   }
 
   void optionalWholeNumber(const lua::Value& value, double minimum, double maximum) {
-    const auto number = value.boundedNumber(minimum, minimum, maximum);
+    const auto number = value.boundedNumber(minimum, {.minimum = minimum, .maximum = maximum});
     if (std::trunc(number) != number) {
       value.fail("must be a whole number");
     }
@@ -144,12 +144,12 @@ namespace telar::runtime::config {
   }
 
   ds::Option<double> optionalNumber(const lua::Value& value, Bounds<double> bounds) {
-    return value.present() ? ds::Option{value.boundedNumber(bounds.minimum, bounds.minimum, bounds.maximum)} : ds::none;
+    return value.present() ? ds::Option{value.boundedNumber(bounds.minimum, bounds)} : ds::none;
   }
 
   ds::Option<double> optionalWholeValue(const lua::Value& value, Bounds<double> bounds) {
     optionalWholeNumber(value, bounds.minimum, bounds.maximum);
-    return value.present() ? ds::Option{value.boundedNumber(bounds.minimum, bounds.minimum, bounds.maximum)} : ds::none;
+    return value.present() ? ds::Option{value.boundedNumber(bounds.minimum, bounds)} : ds::none;
   }
 
   ds::Option<bool> optionalBoolean(const lua::Value& value) {

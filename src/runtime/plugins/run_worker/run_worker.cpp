@@ -403,7 +403,7 @@ namespace telar::runtime::plugins {
 
     message.response = value.field("response").boolean(false);
     message.response_to_head = value.field("response_to_head").boolean(false);
-    message.stream = static_cast<std::uint32_t>(value.field("stream_id").boundedInteger(0, 0, std::numeric_limits<std::int32_t>::max()));
+    message.stream = static_cast<std::uint32_t>(value.field("stream_id").boundedInteger(0, {.minimum = 0, .maximum = std::numeric_limits<std::int32_t>::max()}));
     message.method = value.field("method").string();
     message.target = value.field("target").string();
     message.reason = value.field("reason").string();
@@ -412,7 +412,7 @@ namespace telar::runtime::plugins {
     // The largest status HTTP defines.
     constexpr std::uint64_t last_status = 599;
 
-    message.status = static_cast<std::uint16_t>(value.field("status").boundedInteger(0, 0, last_status));
+    message.status = static_cast<std::uint16_t>(value.field("status").boundedInteger(0, {.minimum = 0, .maximum = last_status}));
     message.header_count = fields(value.field("headers"), message.headers.viewMut());
     message.trailer_count = fields(value.field("trailers"), message.trailers.viewMut());
     const auto body = value.field("body").string();
@@ -483,11 +483,11 @@ namespace telar::runtime::plugins {
 
       recording.id = identity(options.field("id"));
       recording.cursor = identity(options.field("cursor"));
-      recording.max_bytes = options.field("max_bytes").boundedInteger(recording.max_bytes, 1, recording::Limits::session_bytes);
+      recording.max_bytes = options.field("max_bytes").boundedInteger(recording.max_bytes, {.minimum = 1, .maximum = recording::Limits::session_bytes});
       // Each is bounded by a limit of its own width, so it fits.
-      recording.max_events = static_cast<std::uint32_t>(options.field("max_events").boundedInteger(recording.max_events, 1, recording::Limits::events));
-      recording.max_age_ms = static_cast<std::uint32_t>(options.field("max_age_ms").boundedInteger(recording.max_age_ms, 1, recording::Limits::age_ms));
-      recording.limit = static_cast<std::uint32_t>(options.field("limit").boundedInteger(recording.limit, 1, recording::Limits::page_events));
+      recording.max_events = static_cast<std::uint32_t>(options.field("max_events").boundedInteger(recording.max_events, {.minimum = 1, .maximum = recording::Limits::events}));
+      recording.max_age_ms = static_cast<std::uint32_t>(options.field("max_age_ms").boundedInteger(recording.max_age_ms, {.minimum = 1, .maximum = recording::Limits::age_ms}));
+      recording.limit = static_cast<std::uint32_t>(options.field("limit").boundedInteger(recording.limit, {.minimum = 1, .maximum = recording::Limits::page_events}));
       recording.selection = LuaTrafficValue::selection(options.field("events"), recording.selection);
       const auto filter = options.field("filter");
       const auto host = options.field("host");
@@ -525,7 +525,7 @@ namespace telar::runtime::plugins {
         }
 
         for (std::size_t index = 0; index < request.process_count; ++index) {
-          request.processes.atMut(index) = static_cast<std::uint32_t>(processes.element(static_cast<lua_Integer>(index) + 1).boundedInteger(0, 1, std::numeric_limits<std::int32_t>::max()));
+          request.processes.atMut(index) = static_cast<std::uint32_t>(processes.element(static_cast<lua_Integer>(index) + 1).boundedInteger(0, {.minimum = 1, .maximum = std::numeric_limits<std::int32_t>::max()}));
         }
       }
     } else {
@@ -830,7 +830,7 @@ namespace telar::runtime::plugins {
   std::uint32_t LuaTraffic<Memory>::identifier(lua_State* state, int index) {
     const lua::Value value{state, index, "Traffic operation identifier"};
 
-    return static_cast<std::uint32_t>(value.boundedInteger(0, 1, std::numeric_limits<std::uint32_t>::max()));
+    return static_cast<std::uint32_t>(value.boundedInteger(0, {.minimum = 1, .maximum = std::numeric_limits<std::uint32_t>::max()}));
   }
 
   template <Allocator Memory>
@@ -972,7 +972,7 @@ namespace telar::runtime::plugins {
       registration.visibility = visibilityOf(visibility.string());
     }
 
-    registration.timeout_ms = static_cast<std::uint32_t>(options.field("timeout_ms").boundedInteger(traffic::default_timeout_ms, 1, traffic::maximum_timeout_ms));
+    registration.timeout_ms = static_cast<std::uint32_t>(options.field("timeout_ms").boundedInteger(traffic::default_timeout_ms, {.minimum = 1, .maximum = traffic::maximum_timeout_ms}));
     const auto failure = options.field("failure");
     if (failure.present()) {
       const auto name = failure.string();
@@ -1289,7 +1289,7 @@ namespace telar::runtime::plugins {
   }
 
   void runWorker(Memory& memory, const char* entry_path, bool traffic) {
-    PipeStream stream{STDIN_FILENO, STDOUT_FILENO};
+    PipeStream stream{PipeEnds{.input = STDIN_FILENO, .output = STDOUT_FILENO}};
     FrameChannel channel{stream};
     ds::Option<ServiceSpec> specification;
 

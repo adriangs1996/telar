@@ -271,7 +271,7 @@ export {
     // What a request's Expect field asks: nothing, 100-continue, or something no relay supports.
     enum class HttpExpectation : std::uint8_t {
       none,
-      continue_,
+      hundred_continue,
       unsupported,
     };
 

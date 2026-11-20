@@ -58,14 +58,14 @@ export {
       // One process, none once it is gone.
       static ds::Option<ProcessRecord> find(pid_t process) noexcept;
 
-      // Sends the signal to the process if it is still the instance that started then; a start of
+      // Sends the signal to the process if it is still that instance; a start of
       // zero accepts whichever process has the pid. Linux sends it through a pidfd, so a pid recycled
       // after the check never receives it; macOS has none, which leaves the instant between the
       // check and kill.
-      static ProcessActionResult signal(pid_t process, std::uint64_t started_seconds, std::uint64_t started_microseconds, int signal) noexcept;
+      static ProcessActionResult signal(ProcessInstance process, int signal) noexcept;
 
       // Sets the nice value of the process if it is still that instance.
-      static ProcessActionResult prioritize(pid_t process, std::uint64_t started_seconds, std::uint64_t started_microseconds, int nice) noexcept;
+      static ProcessActionResult prioritize(ProcessInstance process, int nice) noexcept;
 
     private:
       tbc::val_a<ds::Vec<std::byte, ConcurrentMemory>> buffer_;
@@ -78,7 +78,7 @@ export {
 namespace telar::runtime {
 
   // Whether the process with the pid is still the instance that started then.
-  bool sameProcessInstance(pid_t process, std::uint64_t started_seconds, std::uint64_t started_microseconds) noexcept;
+  bool sameProcessInstance(ProcessInstance process) noexcept;
 
   ProcessActionResult actionFailure(int error) noexcept;
 

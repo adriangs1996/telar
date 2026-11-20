@@ -58,10 +58,10 @@ namespace telar::runtime::diagnostics {
     line.field("history_query_failures", metrics.query_refusals);
     line.field("sqlite_writes", metrics.writes.timing.count);
     line.field("sqlite_write_failures", metrics.writes.failures);
-    line.timing("sqlite_write_avg_us", "sqlite_write_max_us", metrics.writes.timing);
+    line.timing({.average = "sqlite_write_avg_us", .maximum = "sqlite_write_max_us"}, metrics.writes.timing);
     line.field("sqlite_queries", metrics.queries.timing.count);
     line.field("sqlite_query_failures", metrics.queries.failures);
-    line.timing("sqlite_query_avg_us", "sqlite_query_max_us", metrics.queries.timing);
+    line.timing({.average = "sqlite_query_avg_us", .maximum = "sqlite_query_max_us"}, metrics.queries.timing);
   }
 
   ds::Option<LogName> LogName::parse(std::string_view name) noexcept {
@@ -107,8 +107,9 @@ namespace telar::runtime::diagnostics {
     return LogName{.endpoint = name, .role = role == "runtime" ? Role::runtime : Role::client, .process = process, .rotated = rotated};
   }
 
-  LogSink::LogSink(std::string_view endpoint, pid_t process, std::size_t limit) noexcept
-      : limit_(limit) {
+  LogSink::LogSink(std::string_view endpoint, LogFile file) noexcept
+      : limit_(file.limit) {
+    const auto process = file.process;
     if (endpoint.empty() || endpoint.front() != '/' || endpoint.contains('\0') || endpoint.size() >= PATH_MAX || process <= 0) {
       return;
     }

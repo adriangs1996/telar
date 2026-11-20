@@ -656,7 +656,7 @@ return {}
       identity.declared.insert(app::Capability::notifications);
       identity.granted.insert(app::Capability::notifications);
       const ds::Array specifications{identity};
-      app::Service plugins{memory, std::span<const app::ServiceSpec>{specifications}, executable.c_str(), {}, &network};
+      app::Service plugins{memory, std::span<const app::ServiceSpec>{specifications}, executable.cStr(), {}, &network};
       const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10};
       std::uint64_t ticket = 0;
 
@@ -878,7 +878,7 @@ return {}
       CancellationSignal cancellation;
 
       results.activate();
-      app::Worker<> worker{memory, identity, results, held, app::WorkerLaunch{.executable = executable.c_str(), .cancellation = cancellation, .timeout = std::chrono::milliseconds{1000}, .traffic = &network}};
+      app::Worker<> worker{memory, identity, results, held, app::WorkerLaunch{.executable = executable.cStr(), .cancellation = cancellation, .timeout = std::chrono::milliseconds{1000}, .traffic = &network}};
       const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{20};
       std::uint64_t ticket = 0;
 

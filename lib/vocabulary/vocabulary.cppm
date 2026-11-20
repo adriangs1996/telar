@@ -11,6 +11,7 @@ export namespace telar {
   using telar::EnvironmentMode;
   using telar::FailureCode;
   using telar::Launch;
+  using telar::PaneKey;
   using telar::TerminalSize;
 }
 

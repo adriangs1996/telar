@@ -1402,7 +1402,7 @@ namespace telar::runtime {
   template class CommandOutputTail<ConcurrentMemory>;
 
   CommandScreen commandScreen(const Terminal& terminal) noexcept {
-    return {.terminal = terminal.handle(), .columns = terminal.screen.cols};
+    return {.terminal = terminal.handle(), .columns = terminal.screen().cols};
   }
 
   ds::Option<bool> captureCommandText(const Terminal& terminal, const GhosttySelection& selection, ds::Vec<Byte, ConcurrentMemory>& destination) {

@@ -60,6 +60,12 @@ export {
 export {
   namespace telar::runtime::diagnostics {
 
+    // What a media queue holds at one moment: its events and their bytes.
+    struct QueueDepth {
+      std::size_t events = 0;
+      std::size_t bytes = 0;
+    };
+
     struct MediaQueue {
       std::uint64_t events = 0;
       std::uint64_t bytes = 0;
@@ -69,7 +75,7 @@ export {
       std::uint64_t dropped_bytes = 0;
       std::uint64_t held_reads = 0;
 
-      void observe(std::size_t event_count, std::size_t byte_count) noexcept;
+      void observe(QueueDepth depth) noexcept;
       void merge(const MediaQueue& other) noexcept;
       void write(Line& line) const;
     };

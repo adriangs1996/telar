@@ -227,7 +227,7 @@ export {
       // `offer` is the child's ClientHello when the caller already read it complete; without one the
       // session reads its own, from an offer allocated in `memory`. Either is released once the origin
       // has the protocols.
-      explicit TlsSession(tbc::ref_a<TlsContexts> contexts, tbc::val_a<std::shared_ptr<const CertificateAuthority>> authority, TunnelSockets sockets, std::string_view hostname, tbc::mut_a<ConcurrentMemory> memory, tbc::val_a<ds::Box<AlpnOffer, ConcurrentMemory>> offer);
+      explicit TlsSession(tbc::ref_a<TlsContexts> contexts, tbc::val_a<std::shared_ptr<const CertificateAuthority>> authority, TunnelRoute route, tbc::mut_a<ConcurrentMemory> memory, tbc::val_a<ds::Box<AlpnOffer, ConcurrentMemory>> offer);
 
       ~TlsSession();
 

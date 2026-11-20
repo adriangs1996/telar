@@ -82,7 +82,7 @@ namespace telar::runtime {
         }
       }
 
-      closeChildDescriptors(descriptors.status_writer, descriptors.limit);
+      closeChildDescriptors({.retained = descriptors.status_writer, .limit = descriptors.limit});
 
       sigset_t signals{};
 
@@ -129,7 +129,10 @@ namespace telar::runtime {
 
   }
 
-  void closeChildDescriptors(int retained, int descriptor_limit) noexcept {
+  void closeChildDescriptors(RetainedDescriptor kept) noexcept {
+    const int retained = kept.retained;
+    const int descriptor_limit = kept.limit;
+
 #ifdef __APPLE__
     // Only the forked child enumerates descriptors, so no other thread can open
     // one during the scan. proc_pidinfo copies kernel data into this stack buffer.

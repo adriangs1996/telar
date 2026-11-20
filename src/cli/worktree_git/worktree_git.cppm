@@ -87,12 +87,18 @@ export {
 
     void printable(std::string_view value, std::size_t maximum);
 
+    // A branch of the repository whose checkout is at `root`.
+    struct RepositoryBranch {
+      std::string_view root;
+      std::string_view branch;
+    };
+
     // Where a branch's worktree is checked out unless told otherwise: beside the repository, under
     // `<root>-worktrees/`, named after the branch with slashes and backslashes as dashes. Appended
     // to `path`.
     template <typename Text>
-    void appendWorktreeCheckout(Text& path, std::string_view root, std::string_view branch);
-    extern template void appendWorktreeCheckout<ds::String<Memory>>(ds::String<Memory>& path, std::string_view root, std::string_view branch);
+    void appendWorktreeCheckout(Text& path, RepositoryBranch checkout);
+    extern template void appendWorktreeCheckout<ds::String<Memory>>(ds::String<Memory>& path, RepositoryBranch checkout);
 
     void branch(std::string_view value);
 
@@ -260,7 +266,7 @@ export {
       // The merge check runs through the untrusted Git: hooks, filters and lazy
       // fetches off. A clone that could still fetch lazily, on a Git too old to
       // switch that off, counts as not merged and asks a person.
-      [[nodiscard]] bool merged(std::string_view root, std::string_view branch) const;
+      [[nodiscard]] bool merged(RepositoryBranch checkout) const;
 
     private:
       tbc::mut_a<Memory> memory_;

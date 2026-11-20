@@ -170,7 +170,10 @@ export {
 
       ScreenObservationResult observe(const AgentManifests& manifests, AgentProvider provider, bool inspect_screen = true) noexcept;
 
-      std::shared_ptr<PaneObserver> retired_next;
+      // The next observer of the retired list this one is on.
+      TBC_HOT_PATH inline std::shared_ptr<PaneObserver>& retiredNextMut() noexcept {
+        return retired_next_;
+      }
 
     private:
       template <HistoryEventSink History>
@@ -259,6 +262,7 @@ export {
       bool reset_needed_ = false;
       bool session_started_ = false;
       std::atomic<std::uint64_t> injected_submissions_{0};
+      std::shared_ptr<PaneObserver> retired_next_;
     };
 
   }

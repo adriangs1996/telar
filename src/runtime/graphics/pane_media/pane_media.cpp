@@ -254,9 +254,9 @@ namespace telar::runtime {
     return GraphicsChildSharedMemory::read(shared_.get(), destination, 0);
   }
 
-  GraphicsUploadLimits::GraphicsUploadLimits(std::size_t byte_limit, std::size_t chunk_limit) noexcept
-      : byte_limit_(byte_limit),
-        chunk_limit_(chunk_limit) {}
+  GraphicsUploadLimits::GraphicsUploadLimits(GraphicsUploadBounds bounds) noexcept
+      : byte_limit_(bounds.bytes),
+        chunk_limit_(bounds.chunks) {}
 
   auto GraphicsUploadLimits::observe(GhosttyTerminal terminal, std::span<const std::uint8_t> bytes) -> Observation {
     Observation observation{.loading_image = loadingImage(storage(terminal))};
@@ -335,13 +335,13 @@ namespace telar::runtime {
   }
 
   MediaTerminal::MediaTerminal(telar::runtime::MediaAllocator<ConcurrentMemory>& memory, TerminalSize size, GraphicsLimits limits, std::shared_ptr<PtyResponseQueue> responses)
-      : graphics(memory),
+      : graphics_(memory),
         control_parser_(memory),
         allocator_(memory),
         responses_(responses ? std::move(responses) : std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, telar::runtime::MediaAllocator<ConcurrentMemory>>{memory})),
         response_outbox_(memory, responses_),
         storage_limit_(limits.screenBytes()),
-        uploads_(limits.screenBytes()) {
+        uploads_({.bytes = limits.screenBytes()}) {
     checkGhostty(ghostty_terminal_new(allocator_.get(), terminal_.output(), size.cols, size.rows));
     checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_USERDATA, this));
     checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_WRITE_PTY, reinterpret_cast<const void*>(&receiveResponse))); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): ghostty_terminal_set takes a callback as a const void*
@@ -437,7 +437,7 @@ namespace telar::runtime {
   }
 
   void MediaTerminal::refresh() {
-    graphics.update(terminal_.get());
+    graphics_.update(terminal_.get());
   }
 
   bool MediaTerminal::insertImage(const AtomicFrameControl& control, std::span<const Byte> data) noexcept {
@@ -468,7 +468,7 @@ namespace telar::runtime {
 
 #if TELAR_DIAGNOSTICS
   diagnostics::GraphicsStorageSnapshot MediaTerminal::storageMetrics() {
-    return graphics.storageMetrics(terminal_.get());
+    return graphics_.storageMetrics(terminal_.get());
   }
 #endif
 
@@ -840,10 +840,10 @@ namespace telar::runtime {
 
       terminal_.getMut().refresh();
       if (shared_clients_.load(std::memory_order_acquire) != 0) {
-        prepared_.prepare(terminal_->graphics.images());
+        prepared_.prepare(terminal_->graphics().images());
       }
 
-      requests_.process(terminal_->graphics.images());
+      requests_.process(terminal_->graphics().images());
     } catch (...) {
       progress_.failed = !responses_->closed() || (terminal_ && terminal_->responseFailed());
       progress_.cancelled = !progress_.failed;
@@ -975,7 +975,7 @@ namespace telar::runtime {
 
 #if TELAR_DIAGNOSTICS
   void PaneMedia::observeQueue() noexcept {
-    queue_metrics_.observe(batches_[0].events().size() + batches_[1].events().size(), batches_[0].byteCount() + batches_[1].byteCount());
+    queue_metrics_.observe({.events = batches_[0].events().size() + batches_[1].events().size(), .bytes = batches_[0].byteCount() + batches_[1].byteCount()});
   }
 #endif
 

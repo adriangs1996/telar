@@ -24,20 +24,20 @@ namespace telar::runtime::diagnostics {
     if (value) {
       field(name, *value);
     } else {
-      literal(name, "null");
+      literal(name, RawJson{.text = "null"});
     }
   }
 
-  void Line::literal(std::string_view name, std::string_view value) {
+  void Line::literal(std::string_view name, RawJson value) {
     key(name);
-    append(value);
+    append(value.text);
   }
 
-  void Line::timing(std::string_view average_name, std::string_view maximum_name, const Timing& value) {
+  void Line::timing(TimingFields names, const Timing& value) {
     constexpr std::uint64_t nanoseconds_per_microsecond = 1000;
 
-    field(average_name, value.average() / nanoseconds_per_microsecond);
-    field(maximum_name, value.maximum_ns / nanoseconds_per_microsecond);
+    field(names.average, value.average() / nanoseconds_per_microsecond);
+    field(names.maximum, value.maximum_ns / nanoseconds_per_microsecond);
   }
 
   std::string_view Line::finish() {

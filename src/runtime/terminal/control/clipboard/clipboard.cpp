@@ -280,10 +280,14 @@ namespace telar::runtime::control {
   }
 
   ClipboardWrite::ClipboardWrite(tbc::mut_a<ConcurrentMemory> memory, ClipboardMetadata request, std::size_t limit)
-      : metadata(std::move(request)),
+      : metadata_(std::move(request)),
         memory_(memory),
         spool_(memory),
         limit_(limit) {}
+
+  const ClipboardMetadata& ClipboardWrite::metadata() const noexcept {
+    return metadata_;
+  }
 
   ds::Option<ClipboardStatus> ClipboardWrite::selectEntry(std::string_view mime) {
     if (current_ && entries_[*current_].mime.view() == mime) {
@@ -1021,7 +1025,7 @@ namespace telar::runtime::control {
   }
 
   void Clipboard::abort(ClipboardStatus result, Ending ending, Reply<ConcurrentMemory>& reply) {
-    status(transaction_->metadata, result, ending, reply);
+    status(transaction_->metadata(), result, ending, reply);
     transaction_.reset();
   }
 
@@ -1114,7 +1118,7 @@ namespace telar::runtime::control {
     pending_ = ds::makeBox<Pending>(memory_, memory_);
     auto& request = pending_.getMut();
 
-    request.metadata = transaction_.getMut().metadata;
+    request.metadata = transaction_->metadata();
     request.write = true;
     request.ending = ending;
     const auto granted = authorizedRoute(grants_, request.metadata, true, false);

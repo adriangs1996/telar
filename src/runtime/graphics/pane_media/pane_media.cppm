@@ -158,6 +158,12 @@ export {
 export {
   namespace telar::runtime {
 
+    // The bytes an image's upload may take on screen, and the chunks it may arrive in.
+    struct GraphicsUploadBounds {
+      std::size_t bytes = 0;
+      std::size_t chunks = GraphicsLimits::maximum_chunks_per_image;
+    };
+
     class GraphicsUploadLimits {
     public:
       struct Observation {
@@ -170,7 +176,7 @@ export {
         bool bytes = false;
       };
 
-      explicit GraphicsUploadLimits(std::size_t byte_limit, std::size_t chunk_limit = GraphicsLimits::maximum_chunks_per_image) noexcept;
+      explicit GraphicsUploadLimits(GraphicsUploadBounds bounds) noexcept;
 
       Observation observe(GhosttyTerminal terminal, std::span<const std::uint8_t> bytes);
 
@@ -251,7 +257,13 @@ export {
 
       GraphicsUploadLimits::Reached takeUploadLimits() noexcept;
 
-      GraphicsStorage<telar::runtime::MediaAllocator<ConcurrentMemory>> graphics;
+      [[nodiscard]] TBC_HOT_PATH inline const GraphicsStorage<telar::runtime::MediaAllocator<ConcurrentMemory>>& graphics() const noexcept {
+        return graphics_;
+      }
+
+      TBC_HOT_PATH inline GraphicsStorage<telar::runtime::MediaAllocator<ConcurrentMemory>>& graphicsMut() noexcept {
+        return graphics_;
+      }
 
     private:
       struct ResponseFailure : std::exception {};
@@ -262,6 +274,7 @@ export {
 
       static void receiveResponse(GhosttyTerminal, void* context, const Byte* bytes, std::size_t count) noexcept;
 
+      GraphicsStorage<telar::runtime::MediaAllocator<ConcurrentMemory>> graphics_;
       control::Parser<telar::runtime::MediaAllocator<ConcurrentMemory>> control_parser_;
       GhosttyAllocatorBridge<telar::runtime::MediaAllocator<ConcurrentMemory>> allocator_;
       TerminalHandle terminal_;
@@ -406,7 +419,10 @@ export {
 
       std::uint64_t takeDroppedBytes() noexcept;
 
-      std::shared_ptr<PaneMedia> retired_next;
+      // The next media of the retired list this one is on.
+      TBC_HOT_PATH inline std::shared_ptr<PaneMedia>& retiredNextMut() noexcept {
+        return retired_next_;
+      }
 
     private:
       void responseProgress() noexcept;
@@ -453,6 +469,7 @@ export {
       } progress_;
 
       std::atomic<unsigned> shared_clients_{0};
+      std::shared_ptr<PaneMedia> retired_next_;
     };
 
   }

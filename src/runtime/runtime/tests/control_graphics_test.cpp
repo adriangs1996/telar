@@ -192,7 +192,7 @@ namespace {
     }
 
     void configuredLimits(auto& memory) {
-      Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, {}, GraphicsLimits{.pane_bytes = 128 * 1024}};
+      Terminal terminal{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, {}, GraphicsQueryResources{GraphicsLimits{.pane_bytes = 128 * 1024}}};
       std::vector<Byte> raw(256 * 256 * 4, 0);
 
       check(query(terminal, "s=256,v=256", encoded(raw)) == "\x1b_Gi=9;ENOMEM: out of memory\x1b\\");
@@ -203,7 +203,7 @@ namespace {
       compressed.resize(length);
       check(query(terminal, "s=256,v=256,o=z", encoded(compressed)) == "\x1b_Gi=9;EINVAL: dimensions too large\x1b\\");
       check(query(terminal, "s=1,v=1", "AAAAAA==") == "\x1b_Gi=9;OK\x1b\\");
-      Terminal disabled{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, {}, GraphicsLimits{.pane_bytes = 0}};
+      Terminal disabled{memory, TerminalSize{80, 24, 9, 18}, TerminalPurpose::separate_media, {}, GraphicsQueryResources{GraphicsLimits{.pane_bytes = 0}}};
 
       check(query(disabled, "s=1,v=1", "AAAAAA==").empty());
     }
@@ -389,7 +389,7 @@ namespace {
       check(!media->seal());
       check(!media->failed());
       const auto generation = media->terminal()->imageKey(7);
-      const auto revision = media->terminal()->graphics.revision();
+      const auto revision = media->terminal()->graphics().revision();
       std::string received;
 
       while (!media->idle()) {
@@ -408,7 +408,7 @@ namespace {
         const auto current = media->terminal()->imageKey(7);
 
         check(current.generation == generation.generation && current.image_id == generation.image_id);
-        check(media->terminal()->graphics.revision() == revision);
+        check(media->terminal()->graphics().revision() == revision);
       }
 
       while (const auto message = queue->peek()) {
@@ -447,8 +447,8 @@ namespace {
 
       terminal.feed(bytes(commands));
       check(terminal.hasPendingControl());
-      check(terminal.graphics.images().size() == 1);
-      const auto generation = terminal.graphics.images()[0].description.key.generation;
+      check(terminal.graphics().images().size() == 1);
+      const auto generation = terminal.graphics().images()[0].description.key.generation;
 
       terminal.feed(bytes("\x1b[5n"));
       expected.append("\x1b[0n");
@@ -463,7 +463,7 @@ namespace {
       }
 
       check(received == expected && !terminal.hasPendingControl());
-      check(terminal.graphics.images()[0].description.key.generation == generation);
+      check(terminal.graphics().images()[0].description.key.generation == generation);
     }
 
     struct FailingResponseAllocator {
@@ -732,8 +732,8 @@ namespace {
         const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
         const Launch launch{.cwd = "/tmp", .arguments = arguments};
         const TabLocation location{.workspace = {.id = 7}, .tab_id = 1};
-        auto& failed = panes.launch(model, nullptr, false, launch, location, {80, 24, 9, 18});
-        auto& healthy = panes.launch(model, nullptr, false, launch, location, {80, 24, 9, 18});
+        auto& failed = panes.launch(model, {.location = location, .size = {80, 24, 9, 18}}, launch);
+        auto& healthy = panes.launch(model, {.location = location, .size = {80, 24, 9, 18}}, launch);
 
         failed.media->resize({80, 25, 9, 18});
         for (unsigned index = 0; index < MediaBatch::event_capacity / 2; ++index) {
@@ -778,8 +778,8 @@ namespace {
         const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
         const Launch launch{.cwd = "/tmp", .arguments = arguments};
         const TabLocation location{.workspace = {.id = 7}, .tab_id = 1};
-        auto& failed = panes.launch(model, nullptr, false, launch, location, {80, 24, 9, 18});
-        auto& healthy = panes.launch(model, nullptr, false, launch, location, {80, 24, 9, 18});
+        auto& failed = panes.launch(model, {.location = location, .size = {80, 24, 9, 18}}, launch);
+        auto& healthy = panes.launch(model, {.location = location, .size = {80, 24, 9, 18}}, launch);
 
         for (std::size_t index = 0; index < PtyResponseQueue::message_capacity; ++index) {
           failed.terminal.feed(bytes("\x1b[5n"), *failed.media);
@@ -856,7 +856,7 @@ namespace {
       check(media.batchMetrics().direct_frames == 1 && media.batchMetrics().discarded_frames == 7);
 #endif
       media.complete();
-      check(media.terminal()->graphics.images().size() == 1);
+      check(media.terminal()->graphics().images().size() == 1);
       const auto first = media.terminal()->imageKey(7);
 
       terminal.resumeControl(media);

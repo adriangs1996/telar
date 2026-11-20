@@ -212,7 +212,7 @@ namespace telar::runtime {
 
   bool AgentProgress::apply(const ReportAgentProgress& report) {
     if (!report.final_message.empty()) {
-      final_message.assign(report.final_message);
+      final_message_.assign(report.final_message);
     }
 
     switch (report.plan_op) {
@@ -286,6 +286,10 @@ namespace telar::runtime {
     return pending;
   }
 
+  std::string_view AgentProgress::finalMessage() const noexcept {
+    return final_message_.view();
+  }
+
   void SessionFileWatch::configure(std::string_view reference, std::string_view file, AgentSessionFileKind format) {
     if (reference.empty() || file.empty() || (session.view() == reference && path.view() == file && kind == format)) {
       return;
@@ -319,9 +323,9 @@ namespace telar::runtime {
     checked_at = {};
   }
 
-  Agent::Agent(std::uint64_t pane_id, std::uint64_t pane_generation)
-      : pane(pane_id),
-        generation(pane_generation) {}
+  Agent::Agent(PaneKey key)
+      : pane(key.id),
+        generation(key.generation) {}
 
   void Agent::setSession(std::string_view value) {
     if (!value.empty()) {
@@ -581,7 +585,7 @@ namespace telar::runtime {
       throw RequestError{FailureCode::resource_limit, "Agent capacity reached"};
     }
 
-    records_.push(ds::makeBox<Agent>(memory_, pane, generation));
+    records_.push(ds::makeBox<Agent>(memory_, PaneKey{.id = pane, .generation = generation}));
     return records_.backMut().getMut();
   }
 

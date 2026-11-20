@@ -35,11 +35,11 @@ namespace telar::clipboard::linux_backend {
     };
 
     template <typename T>
-    std::expected<owned<T>, read_error> reply(connection& state, unsigned int sequence, deadline expires) {
+    std::expected<owned<T>, ReadError> reply(connection& state, unsigned int sequence, deadline expires) {
       for (;;) {
         if (clock::now() >= expires) {
           xcb_discard_reply(state.handle, sequence);
-          return std::unexpected(read_error::timed_out);
+          return std::unexpected(ReadError::timed_out);
         }
 
         void* value = nullptr;
@@ -48,14 +48,14 @@ namespace telar::clipboard::linux_backend {
           const owned<xcb_generic_error_t> failure(error);
           owned<T> result(static_cast<T*>(value));
           if (failure || !result) {
-            return std::unexpected(read_error::read_failed);
+            return std::unexpected(ReadError::read_failed);
           }
 
           return result;
         }
 
         if (xcb_connection_has_error(state.handle) != 0) {
-          return std::unexpected(read_error::read_failed);
+          return std::unexpected(ReadError::read_failed);
         }
 
         xcb_flush(state.handle);
@@ -66,7 +66,7 @@ namespace telar::clipboard::linux_backend {
       }
     }
 
-    std::expected<xcb_atom_t, read_error> intern(connection& state, const char* name, deadline expires) {
+    std::expected<xcb_atom_t, ReadError> intern(connection& state, const char* name, deadline expires) {
       const auto cookie = xcb_intern_atom(state.handle, 0, static_cast<std::uint16_t>(std::strlen(name)), name);
       auto value = reply<xcb_intern_atom_reply_t>(state, cookie.sequence, expires);
       if (!value) {
@@ -76,22 +76,22 @@ namespace telar::clipboard::linux_backend {
       return (*value)->atom;
     }
 
-    std::expected<owned<xcb_generic_event_t>, read_error> nextEvent(connection& state, deadline expires) {
+    std::expected<owned<xcb_generic_event_t>, ReadError> nextEvent(connection& state, deadline expires) {
       for (;;) {
         if (clock::now() >= expires) {
-          return std::unexpected(read_error::timed_out);
+          return std::unexpected(ReadError::timed_out);
         }
 
         if (owned<xcb_generic_event_t> event{xcb_poll_for_event(state.handle)}; event) {
           if (event->response_type == 0) {
-            return std::unexpected(read_error::read_failed);
+            return std::unexpected(ReadError::read_failed);
           }
 
           return event;
         }
 
         if (xcb_connection_has_error(state.handle) != 0) {
-          return std::unexpected(read_error::read_failed);
+          return std::unexpected(ReadError::read_failed);
         }
 
         xcb_flush(state.handle);
@@ -108,7 +108,7 @@ namespace telar::clipboard::linux_backend {
     };
 
     // Check the remaining budget before appending each chunk, including INCR transfers.
-    std::expected<property_info, read_error> readProperty(connection& state, std::vector<byte>& bytes, deadline expires, std::size_t maximum_bytes) {
+    std::expected<property_info, ReadError> readProperty(connection& state, std::vector<byte>& bytes, deadline expires, std::size_t maximum_bytes) {
       constexpr std::uint32_t chunk_bytes = 64 * 1024;
       constexpr std::uint32_t property_unit_bytes = 4;
       std::uint32_t offset = 0;
@@ -123,19 +123,19 @@ namespace telar::clipboard::linux_backend {
         const auto& part = **value;
         const int count = xcb_get_property_value_length(value->get());
         if (count < 0 || static_cast<unsigned int>(count) > chunk_bytes || part.type == XCB_ATOM_NONE) {
-          return std::unexpected(read_error::read_failed);
+          return std::unexpected(ReadError::read_failed);
         }
 
         if (offset == 0) {
           info.type = part.type;
           info.format = part.format;
         } else if (part.type != info.type || part.format != info.format) {
-          return std::unexpected(read_error::read_failed);
+          return std::unexpected(ReadError::read_failed);
         }
 
         if (count != 0) {
           if (static_cast<std::size_t>(count) > maximum_bytes - bytes.size()) {
-            return std::unexpected(read_error::content_too_large);
+            return std::unexpected(ReadError::content_too_large);
           }
           const auto* data = static_cast<const byte*>(xcb_get_property_value(value->get()));
           bytes.insert(bytes.end(), data, data + count);
@@ -148,14 +148,14 @@ namespace telar::clipboard::linux_backend {
 
         const auto units = static_cast<std::uint32_t>(count) / property_unit_bytes;
         if (count == 0 || static_cast<unsigned int>(count) % property_unit_bytes != 0 || offset > std::numeric_limits<std::uint32_t>::max() - units) {
-          return std::unexpected(read_error::read_failed);
+          return std::unexpected(ReadError::read_failed);
         }
 
         offset += units;
       }
     }
 
-    std::expected<void, read_error> convert(connection& state, xcb_atom_t target, deadline expires) {
+    std::expected<void, ReadError> convert(connection& state, xcb_atom_t target, deadline expires) {
       xcb_convert_selection(state.handle, state.window, state.clipboard, target, state.property, XCB_CURRENT_TIME);
       xcb_flush(state.handle);
       for (;;) {
@@ -171,7 +171,7 @@ namespace telar::clipboard::linux_backend {
         const auto* notification = reinterpret_cast<const xcb_selection_notify_event_t*>(event->get());
         if (notification->requestor == state.window && notification->selection == state.clipboard && notification->target == target) {
           if (notification->property != state.property) {
-            return std::unexpected(read_error::no_supported_content);
+            return std::unexpected(ReadError::no_supported_content);
           }
 
           return {};
@@ -179,7 +179,7 @@ namespace telar::clipboard::linux_backend {
       }
     }
 
-    std::expected<void, read_error> waitIncrement(connection& state, deadline expires) {
+    std::expected<void, ReadError> waitIncrement(connection& state, deadline expires) {
       for (;;) {
         auto event = nextEvent(state, expires);
         if (!event) {
@@ -197,12 +197,12 @@ namespace telar::clipboard::linux_backend {
       }
     }
 
-    std::expected<content, read_error> receive(connection& state, xcb_atom_t target, std::string_view mime_type, deadline expires, std::size_t maximum_bytes) {
+    std::expected<Content, ReadError> receive(connection& state, xcb_atom_t target, std::string_view mime_type, deadline expires, std::size_t maximum_bytes) {
       if (auto status = convert(state, target, expires); !status) {
         return std::unexpected(status.error());
       }
 
-      content result{.mime_type = mime_type, .bytes = {}};
+      Content result{.mime_type = mime_type, .bytes = {}};
       auto info = readProperty(state, result.bytes, expires, maximum_bytes);
       if (!info) {
         return std::unexpected(info.error());
@@ -211,7 +211,7 @@ namespace telar::clipboard::linux_backend {
       if (info->type == state.incremental) {
         // xclip can omit the size hint; an empty 32-bit INCR property is safe to accept.
         if (info->format != 32 || (info->length != 0 && info->length != sizeof(std::uint32_t))) {
-          return std::unexpected(read_error::read_failed);
+          return std::unexpected(ReadError::read_failed);
         }
 
         // Never allocate using the owner's untrusted INCR size hint.
@@ -227,21 +227,21 @@ namespace telar::clipboard::linux_backend {
           }
 
           if (info->type != target || info->format != 8) {
-            return std::unexpected(read_error::read_failed);
+            return std::unexpected(ReadError::read_failed);
           }
         } while (info->length != 0);
       } else if (info->type != target || info->format != 8) {
-        return std::unexpected(read_error::read_failed);
+        return std::unexpected(ReadError::read_failed);
       }
 
       if (result.bytes.empty() && mime_type.starts_with("image/")) {
-        return std::unexpected(read_error::read_failed);
+        return std::unexpected(ReadError::read_failed);
       }
 
       return result;
     }
 
-    std::expected<xcb_window_t, read_error> owner(connection& state, deadline expires) {
+    std::expected<xcb_window_t, ReadError> owner(connection& state, deadline expires) {
       auto value = reply<xcb_get_selection_owner_reply_t>(state, xcb_get_selection_owner(state.handle, state.clipboard).sequence, expires);
       if (!value) {
         return std::unexpected(value.error());
@@ -251,12 +251,12 @@ namespace telar::clipboard::linux_backend {
     }
   }
 
-  std::expected<content, read_error> readX11(deadline expires, std::size_t maximum_bytes) {
+  std::expected<Content, ReadError> readX11(deadline expires, std::size_t maximum_bytes) {
     connection state;
     int screen_index = 0;
     state.handle = xcb_connect(nullptr, &screen_index);
     if (state.handle == nullptr || xcb_connection_has_error(state.handle) != 0) {
-      return std::unexpected(read_error::session_unavailable);
+      return std::unexpected(ReadError::session_unavailable);
     }
 
     auto screen = xcb_setup_roots_iterator(xcb_get_setup(state.handle));
@@ -265,7 +265,7 @@ namespace telar::clipboard::linux_backend {
     }
 
     if (screen.rem == 0) {
-      return std::unexpected(read_error::session_unavailable);
+      return std::unexpected(ReadError::session_unavailable);
     }
 
     state.window = xcb_generate_id(state.handle);
@@ -294,7 +294,7 @@ namespace telar::clipboard::linux_backend {
     }
 
     if (*original_owner == XCB_WINDOW_NONE) {
-      return std::unexpected(read_error::no_supported_content);
+      return std::unexpected(ReadError::no_supported_content);
     }
 
     if (auto status = convert(state, targets, expires); !status) {
@@ -304,7 +304,7 @@ namespace telar::clipboard::linux_backend {
     std::vector<byte> available;
     const auto info = readProperty(state, available, expires, 64 * 1024);
     if (!info || info->type != XCB_ATOM_ATOM || info->format != 32 || available.size() % sizeof(xcb_atom_t) != 0) {
-      return std::unexpected(info ? read_error::read_failed : info.error());
+      return std::unexpected(info ? ReadError::read_failed : info.error());
     }
 
     for (const auto& format : formats) {
@@ -331,13 +331,13 @@ namespace telar::clipboard::linux_backend {
         }
 
         if (*current_owner != *original_owner) {
-          return std::unexpected(read_error::changed);
+          return std::unexpected(ReadError::changed);
         }
 
         return result;
       }
     }
 
-    return std::unexpected(read_error::no_supported_content);
+    return std::unexpected(ReadError::no_supported_content);
   }
 }

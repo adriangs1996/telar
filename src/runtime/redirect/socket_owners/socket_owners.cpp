@@ -30,7 +30,7 @@ namespace telar::runtime::redirect {
       : message_(output) {}
 
   const char* PfCommandError::what() const noexcept {
-    return message_.c_str();
+    return message_.cStr();
   }
 
   LocalAddresses::LocalAddresses()
@@ -421,7 +421,7 @@ namespace telar::runtime::redirect {
 #endif
 
   SocketOwners::SocketOwners(uid_t uid, std::span<const ProcessIdentity> selected)
-      : inspector_(builtin_manifests, uid) {
+      : inspector_(builtinManifests(), uid) {
     if (selected.size() > maximum_processes) {
       throw std::invalid_argument{"Too many selected processes"};
     }

@@ -237,12 +237,12 @@ namespace telar::runtime::cli::sessions {
   }
 
   template <typename Text>
-  void appendWorktreeCheckout(Text& path, std::string_view root, std::string_view branch) {
-    path.append(root);
+  void appendWorktreeCheckout(Text& path, RepositoryBranch checkout) {
+    path.append(checkout.root);
     path.append("-worktrees/");
 
     // A branch's separators would make directories: each becomes a dash.
-    for (const char character : branch) {
+    for (const char character : checkout.branch) {
       const char safe = character == '/' || character == '\\' ? '-' : character;
 
       path.append(std::string_view{&safe, 1});
@@ -514,7 +514,7 @@ namespace telar::runtime::cli::repository {
 
 namespace telar::runtime::cli::sessions {
 
-  template void appendWorktreeCheckout<ds::String<Memory>>(ds::String<Memory>& path, std::string_view root, std::string_view branch);
+  template void appendWorktreeCheckout<ds::String<Memory>>(ds::String<Memory>& path, RepositoryBranch checkout);
 
 }
 
@@ -941,7 +941,7 @@ namespace telar::runtime::cli::sessions {
     Command command{memory_, Launch{.arguments = arguments}, CommandPurpose::configured_helper};
 
     for (const auto& [name, value] : environment) {
-      command.setEnvironment(name, value);
+      command.setEnvironment({.name = name, .value = value});
     }
 
     if (hardened) {
@@ -1046,19 +1046,19 @@ namespace telar::runtime::cli::sessions {
     }
   }
 
-  bool WorktreeGit::merged(std::string_view root, std::string_view branch) const {
+  bool WorktreeGit::merged(RepositoryBranch checkout) const {
     try {
-      repository::Git git{memory_, root};
+      repository::Git git{memory_, checkout.root};
       // The branch's upstream when it has one, else what is checked out.
       const auto against = [&] -> Text {
         try {
-          return git.read({"rev-parse", "--verify", "--quiet", "--end-of-options", ds::format(memory_, "{}@{{upstream}}", branch)});
+          return git.read({"rev-parse", "--verify", "--quiet", "--end-of-options", ds::format(memory_, "{}@{{upstream}}", checkout.branch)});
         } catch (const std::exception&) {
           return Text{memory_, "HEAD"};
         }
       }();
 
-      git.read({"merge-base", "--is-ancestor", ds::format(memory_, "refs/heads/{}", branch), against});
+      git.read({"merge-base", "--is-ancestor", ds::format(memory_, "refs/heads/{}", checkout.branch), against});
       return true;
     } catch (const std::exception&) {
       return false;

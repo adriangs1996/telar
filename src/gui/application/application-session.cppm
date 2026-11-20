@@ -133,10 +133,10 @@ export {
 
       // The session keeps the allocator and the transport, region `a`, which also holds what its replies and
       // requests view of the session's own panes, workspaces and responses.
-      Session(tbc::mut_a<Memory> memory, tbc::mut_a<RuntimeTransport> transport, tbc::val_static<MonotonicNow> now = &system::AwakeClock::nowNanoseconds);
+      Session(tbc::mut_a<Memory> allocator, tbc::mut_a<RuntimeTransport> transport, tbc::val_static<MonotonicNow> now = &system::AwakeClock::nowNanoseconds);
 
       // The session also keeps `effects`, region `a`.
-      Session(tbc::mut_a<Memory> memory, tbc::mut_a<RuntimeTransport> transport, tbc::mut_a<HostEffects> effects, tbc::val_static<MonotonicNow> now = &system::AwakeClock::nowNanoseconds);
+      Session(tbc::mut_a<Memory> allocator, tbc::mut_a<RuntimeTransport> transport, tbc::mut_a<HostEffects> effects, tbc::val_static<MonotonicNow> now = &system::AwakeClock::nowNanoseconds);
 
       Session(const Session&) = delete;
       Session& operator=(const Session&) = delete;
@@ -148,7 +148,7 @@ export {
       // so it stays where it is made.
       class LaunchDefaults {
       public:
-        explicit LaunchDefaults(tbc::mut_a<Memory> memory);
+        explicit LaunchDefaults(tbc::mut_a<Memory> allocator);
 
         LaunchDefaults(const LaunchDefaults&) = delete;
         LaunchDefaults& operator=(const LaunchDefaults&) = delete;
@@ -387,7 +387,7 @@ export {
       // use case asks and sends while it holds a feature's state, as Rust borrows one field at a time.
       class Link {
       public:
-        explicit Link(tbc::mut_a<RuntimeTransport> transport) noexcept;
+        explicit Link(tbc::mut_a<RuntimeTransport> runtime_transport) noexcept;
 
         [[nodiscard]] std::uint64_t nextRequest() noexcept;
 

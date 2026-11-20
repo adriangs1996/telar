@@ -275,20 +275,20 @@ namespace {
     void testErrorText() {
       const telar::runtime::ErrorText<16> joined{"unknown ", "field ", std::string_view{"x"}};
 
-      check(joined.view() == "unknown field x" && std::strlen(joined.c_str()) == joined.view().size());
+      check(joined.view() == "unknown field x" && std::strlen(joined.cStr()) == joined.view().size());
 
       // Two texts are two parts, never the bounds of one view.
       const telar::runtime::ErrorText<8> cut{"abcdef", "ghijkl"};
 
-      check(cut.view() == "abcdefgh" && cut.c_str()[8] == '\0', "a long message is cut at the capacity");
+      check(cut.view() == "abcdefgh" && cut.cStr()[8] == '\0', "a long message is cut at the capacity");
 
       const telar::runtime::ErrorText<4> empty{std::string_view{}};
 
-      check(empty.view().empty() && *empty.c_str() == '\0');
+      check(empty.view().empty() && *empty.cStr() == '\0');
 
       const telar::runtime::ErrorText<4> exact{"four"};
 
-      check(exact.view() == "four" && exact.c_str()[4] == '\0');
+      check(exact.view() == "four" && exact.cStr()[4] == '\0');
     }
 
     void testBracketedPaste() {

@@ -117,7 +117,7 @@ namespace {
 
     pane.output_closed = true;
     pane.exit_status = 0;
-    panes.release(model, clients, owner.session().id, pane.id);
+    panes.release(model, clients, {.client = owner.session().id, .pane = pane.id});
     workspaces.collectExited(model, panes, clients);
     check(model.panes.find(opened.pane_id) == nullptr);
     check(workspaces.requireTab(model.workspaces, location).panes.empty());
@@ -127,9 +127,9 @@ namespace {
     workspaces.holdTab(model, panes, clients, owner.session().id, HoldTab{.request_id = 4, .location = location, .held = false});
     owner.receive<RequestCompleted>();
     check(tabHeld(clients, location));
-    holder.session().connection.closing = true;
+    holder.session().connection.flagsMut().closing = true;
     check(!tabHeld(clients, location));
-    holder.session().connection.closing = false;
+    holder.session().connection.flagsMut().closing = false;
 
     workspaces.createPane(model, panes, clients, owner.session().id, CreatePane{.request_id = 5, .location = location, .size = size, .launch = launch});
     const auto reopened = owner.receive<PaneOpened>();
@@ -159,7 +159,7 @@ namespace {
     ClientPeer owner{memory, model, clients, ClientRole::control};
     ClientPeer holder{memory, model, clients, ClientRole::control};
     const auto workspace_id = model.workspaces.nextId();
-    auto workspace = ds::makeBox<Workspace>(memory, memory, workspace_id, "/tmp", "Held tabs");
+    auto workspace = ds::makeBox<Workspace>(memory, memory, WorkspaceSpec{.id = workspace_id, .path = "/tmp", .name = "Held tabs"});
 
     for (std::size_t index = 0; index < HeldTabs::capacity; ++index) {
       workspace.getMut().tabs.emplace(memory, index + 1, "Empty");
@@ -167,7 +167,7 @@ namespace {
 
     model.workspaces.insert(workspace_id, std::move(workspace));
     const auto other_id = model.workspaces.nextId();
-    auto other = ds::makeBox<Workspace>(memory, memory, other_id, "/", "Other workspace");
+    auto other = ds::makeBox<Workspace>(memory, memory, WorkspaceSpec{.id = other_id, .path = "/", .name = "Other workspace"});
 
     other.getMut().tabs.emplace(memory, HeldTabs::capacity + 1, "Empty");
     model.workspaces.insert(other_id, std::move(other));
@@ -199,7 +199,7 @@ namespace {
 
     workspaces.holdTab(model, panes, clients, holder.session().id, HoldTab{.request_id = 101, .location = first, .held = true});
     holder.receive<RequestCompleted>();
-    owner.session().connection.closing = true;
+    owner.session().connection.flagsMut().closing = true;
     workspaces.releaseHeldTabs(model, panes, clients, owner.session().id);
     check(workspaces.require(model.workspaces, first.workspace).tabs.size() == 1);
     check(tabHeld(clients, first));

@@ -147,12 +147,12 @@ namespace telar::runtime {
     return record(information);
   }
 
-  ProcessActionResult ProcessTable::signal(pid_t process, std::uint64_t started_seconds, std::uint64_t started_microseconds, int signal) noexcept {
-    if (process <= 0 || !sameProcessInstance(process, started_seconds, started_microseconds)) {
+  ProcessActionResult ProcessTable::signal(ProcessInstance process, int signal) noexcept {
+    if (process.pid <= 0 || !sameProcessInstance(process)) {
       return ProcessActionResult::gone;
     }
 
-    if (::kill(process, signal) != 0) {
+    if (::kill(process.pid, signal) != 0) {
       return actionFailure(sys::lastError());
     }
 

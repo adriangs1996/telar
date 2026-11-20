@@ -200,6 +200,13 @@ export {
 export {
   namespace telar::runtime::lua {
 
+    // The inclusive range a setting's number must lie in.
+    template <typename Number>
+    struct Bounds {
+      Number minimum;
+      Number maximum;
+    };
+
     class Value {
     public:
       // A value views a slot of the state; its label is its own copy.
@@ -228,8 +235,8 @@ export {
       [[nodiscard]] bool boolean(bool fallback) const;
       [[nodiscard]] lua_Integer integer() const;
       [[nodiscard]] ds::Option<lua_Integer> asInteger() const noexcept;
-      [[nodiscard]] std::uint64_t boundedInteger(std::uint64_t fallback, std::uint64_t minimum, std::uint64_t maximum) const;
-      [[nodiscard]] double boundedNumber(double fallback, double minimum, double maximum) const;
+      [[nodiscard]] std::uint64_t boundedInteger(std::uint64_t fallback, Bounds<std::uint64_t> bounds) const;
+      [[nodiscard]] double boundedNumber(double fallback, Bounds<double> bounds) const;
       void onlyFields(std::initializer_list<std::string_view> allowed, bool allow_children = false) const;
       void onlyFields(std::span<const std::string_view> allowed, bool allow_children = false) const;
       [[nodiscard]] std::size_t arraySize() const;

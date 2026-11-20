@@ -20,7 +20,14 @@ import telar.base.ds;
 export {
   namespace telar::runtime {
 
-    void closeChildDescriptors(int retained, int descriptor_limit) noexcept;
+    // The descriptor a forked child keeps open past its standard streams, and the bound of the
+    // descriptors it may hold.
+    struct RetainedDescriptor {
+      int retained;
+      int limit;
+    };
+
+    void closeChildDescriptors(RetainedDescriptor kept) noexcept;
 
   }
 }
@@ -82,11 +89,19 @@ export {
 export {
   namespace telar::runtime {
 
-    // Where exec finds `program` along `path`, a colon-separated directory list: the first
-    // `directory/program` this process may execute, written to `found` with its terminator. A
+    // What findExecutable looks for: `program` along `path`, a colon-separated directory list. A
     // relative directory, the empty one included, is relative to `cwd`, or to this process's
-    // working directory when `cwd` is empty. A candidate longer than PATH_MAX is passed over.
-    bool findExecutable(std::string_view path, std::string_view program, std::span<char, PATH_MAX> found, std::string_view cwd = {}) noexcept;
+    // working directory when `cwd` is empty.
+    struct ExecutableSearch {
+      std::string_view path;
+      std::string_view program;
+      std::string_view cwd;
+    };
+
+    // Where exec finds the program `search` names: the first `directory/program` this process may
+    // execute, written to `found` with its terminator. A candidate longer than PATH_MAX is passed
+    // over.
+    bool findExecutable(ExecutableSearch search, std::span<char, PATH_MAX> found) noexcept;
 
     enum class CommandPurpose : std::uint8_t {
       terminal,
@@ -114,7 +129,7 @@ export {
       // which stay what the pane records and restores.
       void replaceSpawnArguments(std::span<const std::string_view> arguments);
 
-      void setEnvironment(std::string_view name, std::string_view value);
+      void setEnvironment(EnvironmentEntry variable);
       SpawnSpec specification(TerminalSize size);
       [[nodiscard]] std::string_view cwd() const noexcept;
       [[nodiscard]] std::span<const ds::String<Memory>> arguments() const noexcept;
@@ -282,7 +297,7 @@ export {
       // The path found is resolved to the file itself.
       static ds::Option<ExecutablePath> sibling(std::initializer_list<std::string_view> candidates);
 
-      [[nodiscard]] const char* c_str() const noexcept;
+      [[nodiscard]] const char* cStr() const noexcept;
       [[nodiscard]] std::string_view view() const noexcept;
 
     private:

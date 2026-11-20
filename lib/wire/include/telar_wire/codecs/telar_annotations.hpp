@@ -2,9 +2,9 @@
 
 // TBC annotations, kept apart so module units can use them without the wire codec.
 #ifdef __clang__
-#define _throw(ExceptionType) __attribute__((annotate("throws:" #ExceptionType)))
+#define TELAR_THROWS(ExceptionType) __attribute__((annotate("throws:" #ExceptionType)))
 #else
-#define _throw(ExceptionType)
+#define TELAR_THROWS(ExceptionType)
 #endif
 
-#define _changes
+#define TELAR_CHANGES

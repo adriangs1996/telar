@@ -389,7 +389,7 @@ namespace telar::runtime {
       }
     }
 
-    for (auto media = model.retired_media; media; media = media->retired_next) {
+    for (auto media = model.retired_media; media; media = media->retiredNextMut()) {
       media->cancel();
     }
 
@@ -443,7 +443,7 @@ namespace telar::runtime {
     while (*link && request.count < request.entries.size()) {
       auto& media = **link;
       if (media.idle()) {
-        auto next = std::move(media.retired_next);
+        auto next = std::move(media.retiredNextMut());
 
         *link = std::move(next);
         --model.retired_media_count;
@@ -454,7 +454,7 @@ namespace telar::runtime {
         request.entries.atMut(request.count++).media = *link;
       }
 
-      link = &media.retired_next;
+      link = &media.retiredNextMut();
     }
   }
 
@@ -467,7 +467,7 @@ namespace telar::runtime {
     }
 
     for (const auto& entry : std::span{result.entries}.first(result.count)) {
-      auto* pane = findPane(model.panes, entry.pane, entry.generation);
+      auto* pane = findPane(model.panes, {.id = entry.pane, .generation = entry.generation});
       if (pane == nullptr) {
         continue;
       }
@@ -483,7 +483,7 @@ namespace telar::runtime {
 
       if (auto* terminal = pane->media->terminal()) {
         reportLimits(model.graphics_limits, *terminal);
-        stageTransfers(clients, model.metrics, pane->id, terminal->graphics);
+        stageTransfers(clients, model.metrics, pane->id, terminal->graphics());
       }
 
       if (!pane->output_closed) {
@@ -510,7 +510,7 @@ namespace telar::runtime {
 
   template <EventLoop Poller, typename Limits, HistoryEventSink History>
   void MediaService<Poller, Limits, History>::reportLimits(const GraphicsLimits& graphics, MediaTerminal& terminal) {
-    auto& storage = terminal.graphics;
+    auto& storage = terminal.graphicsMut();
     if (const auto images = storage.takeTrimmedImages()) {
       limits_.report(LimitReach{.name = "graphics.images_per_screen", .noun = "images", .value = graphics_image_count, .requested = images});
     }

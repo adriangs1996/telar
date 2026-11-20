@@ -33,8 +33,8 @@ import telar.base.ds;
 
 namespace telar::gui::application {
 
-  Session::Link::Link(tbc::mut_a<RuntimeTransport> transport) noexcept
-      : transport(transport) {}
+  Session::Link::Link(tbc::mut_a<RuntimeTransport> runtime_transport) noexcept
+      : transport(runtime_transport) {}
 
   template <typename Message>
   std::span<const Byte> Session::Link::encode(const Message& message) {
@@ -50,37 +50,37 @@ namespace telar::gui::application {
     return transport.report(encode(report));
   }
 
-  Session::Session(tbc::mut_a<Memory> memory, tbc::mut_a<RuntimeTransport> transport, tbc::val_static<MonotonicNow> now)
-      : Session(memory, transport, discard_effects_, now) {}
+  Session::Session(tbc::mut_a<Memory> allocator, tbc::mut_a<RuntimeTransport> transport, tbc::val_static<MonotonicNow> now)
+      : Session(allocator, transport, discard_effects_, now) {}
 
-  Session::Session(tbc::mut_a<Memory> memory, tbc::mut_a<RuntimeTransport> transport, tbc::mut_a<HostEffects> effects, tbc::val_static<MonotonicNow> now)
-      : prompt(memory),
-        prompt_lines(memory),
-        copy_mode(memory),
-        memory(memory),
+  Session::Session(tbc::mut_a<Memory> allocator, tbc::mut_a<RuntimeTransport> transport, tbc::mut_a<HostEffects> effects, tbc::val_static<MonotonicNow> now)
+      : prompt(allocator),
+        prompt_lines(allocator),
+        copy_mode(allocator),
+        memory(allocator),
         link(transport),
         effects_(effects),
         now_(now),
-        panes(memory),
-        tabs(memory),
-        workspace_list(memory),
-        agent_list(memory),
-        pane_list_(memory),
-        history(memory),
-        peek(memory),
-        monitor(memory),
-        decode_(memory),
-        clipboard_(memory),
-        error_(memory),
-        command_response_(memory),
-        launch_defaults(memory) {
+        panes(allocator),
+        tabs(allocator),
+        workspace_list(allocator),
+        agent_list(allocator),
+        pane_list_(allocator),
+        history(allocator),
+        peek(allocator),
+        monitor(allocator),
+        decode_(allocator),
+        clipboard_(allocator),
+        error_(allocator),
+        command_response_(allocator),
+        launch_defaults(allocator) {
     decode_.resize(decode_capacity);
   }
 
-  Session::LaunchDefaults::LaunchDefaults(tbc::mut_a<Memory> memory)
-      : memory_(&memory),
-        cwd_(memory),
-        storage_(memory) {}
+  Session::LaunchDefaults::LaunchDefaults(tbc::mut_a<Memory> allocator)
+      : memory_(&allocator),
+        cwd_(allocator),
+        storage_(allocator) {}
 
   Launch Session::LaunchDefaults::launch() const noexcept {
     static constexpr ds::Array<std::string_view, 1> default_shell{"/bin/sh"};

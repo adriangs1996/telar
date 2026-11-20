@@ -220,7 +220,7 @@ namespace telar::runtime {
         return;
       }
 
-      TextFields fields{textPrefix(bytes, line_end), " "};
+      TextFields fields{{.text = textPrefix(bytes, line_end), .delimiter = " "}};
       const auto method = fields.next();
       const auto target = fields.next();
       if (!method || !target) {
@@ -231,7 +231,7 @@ namespace telar::runtime {
       setTarget(*target);
     }
 
-    TextFields lines{bytes, "\r\n"};
+    TextFields lines{{.text = bytes, .delimiter = "\r\n"}};
 
     lines.next();
     while (const auto line = lines.next()) {

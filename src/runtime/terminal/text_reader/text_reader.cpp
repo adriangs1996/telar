@@ -638,9 +638,9 @@ namespace telar::runtime {
 #endif
 
   Terminal::Terminal(tbc::mut_a<ConcurrentMemory> memory, TerminalSize size, TerminalPurpose purpose, tbc::val_a<std::shared_ptr<PtyResponseQueue>> responses, tbc::val_a<GraphicsQueryResources> resources)
-      : screen(memory),
-        effects(memory),
-        graphics(memory),
+      : screen_(memory),
+        effects_(memory),
+        graphics_(memory),
         ghostty_memory_{.memory = memory},
         allocator_(ghostty_memory_),
         responses_(responses ? std::move(responses) : std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, ConcurrentMemory>{memory})),
@@ -648,7 +648,7 @@ namespace telar::runtime {
         control_(memory, *responses_, purpose != TerminalPurpose::observation, resources),
         pending_control_input_(memory, control_input_limit),
         purpose_(purpose) {
-    screen.resize(size.cols, size.rows);
+    screen_.resize(size.cols, size.rows);
     checkGhostty(ghostty_terminal_new(allocator_.get(), terminal_.output(), size.cols, size.rows));
     checkGhostty(ghostty_render_state_new(allocator_.get(), render_state_.output()));
     checkGhostty(ghostty_render_state_row_iterator_new(allocator_.get(), row_iterator_.output()));
@@ -710,7 +710,7 @@ namespace telar::runtime {
   }
 
   Terminal::~Terminal() {
-    effects.inline_documents.clear();
+    effects_.inline_documents.clear();
   }
 
   void Terminal::feed(std::span<const Byte> bytes) {
@@ -749,7 +749,7 @@ namespace telar::runtime {
   }
 
   control::Policy& Terminal::controlPolicy() noexcept {
-    return control_.policy;
+    return control_.policyMut();
   }
 
   control::Clipboard& Terminal::clipboardControl() noexcept {
@@ -824,7 +824,7 @@ namespace telar::runtime {
     checkGhostty(ghostty_render_state_get(render_state_.get(), GHOSTTY_RENDER_STATE_DATA_ROW_ITERATOR, static_cast<void*>(&iterator)));
     const bool recolored = projection_.updateColors(terminal_.get(), render_state_.get());
 
-    ++screen.revision;
+    ++screen_.revision;
     // Rows drawn with the previous default colors are projected again, with every other row.
     const bool all_rows = force_ || recolored || damage == GHOSTTY_RENDER_STATE_DIRTY_FULL;
     bool rebuild_links = all_rows;
@@ -832,15 +832,15 @@ namespace telar::runtime {
     std::uint16_t row = 0;
 
     while (all_rows ? ghostty_render_state_row_iterator_next(iterator) : ghostty_render_state_row_iterator_next_dirty(iterator, &row)) {
-      auto destination = std::span<ScreenCell>{screen.cells.viewMut()}.subspan(static_cast<std::size_t>(row) * screen.cols, screen.cols);
+      auto destination = std::span<ScreenCell>{screen_.cells.viewMut()}.subspan(static_cast<std::size_t>(row) * screen_.cols, screen_.cols);
 
       projection_.copyRow(iterator, row_cells_.get(), destination);
-      screen.row_revisions.atMut(row) = screen.revision;
+      screen_.row_revisions.atMut(row) = screen_.revision;
       const auto flags = readRowFlags(iterator);
 
-      rebuild_links |= (static_cast<Byte>(screen.row_flags[row] | flags) & static_cast<Byte>(RowFlag::hyperlinks)) != 0;
-      metadata_changed |= screen.row_flags[row] != flags;
-      screen.row_flags.atMut(row) = flags;
+      rebuild_links |= (static_cast<Byte>(screen_.row_flags[row] | flags) & static_cast<Byte>(RowFlag::hyperlinks)) != 0;
+      metadata_changed |= screen_.row_flags[row] != flags;
+      screen_.row_flags.atMut(row) = flags;
 
       if (all_rows) {
         ++row;
@@ -848,15 +848,15 @@ namespace telar::runtime {
     }
 
     if (rebuild_links) {
-      screen.metadata.capture(render_state_.get(), iterator, screen.row_flags, screen.cols);
+      screen_.metadata.capture(render_state_.get(), iterator, screen_.row_flags, screen_.cols);
     }
 
     if (rebuild_links || metadata_changed) {
-      ++screen.metadata_revision;
+      ++screen_.metadata_revision;
     }
 
     if (purpose_ == TerminalPurpose::interactive) {
-      graphics.update(terminal_.get());
+      graphics_.update(terminal_.get());
     }
 
     updateCursor();
@@ -977,7 +977,7 @@ namespace telar::runtime {
     std::size_t page_bytes = 0;
 
     checkGhostty(ghostty_terminal_page_bytes(terminal_.get(), &page_bytes));
-    return {.page_bytes = page_bytes, .screen_bytes = screen.cells.size() * sizeof(ScreenCell)};
+    return {.page_bytes = page_bytes, .screen_bytes = screen_.cells.size() * sizeof(ScreenCell)};
   }
 #endif
 
@@ -1035,14 +1035,14 @@ namespace telar::runtime {
     }
 
     // A reflow moves the documents' text to other rows; what they hold is learnt anew.
-    for (auto& document : effects.inline_documents.viewMut()) {
+    for (auto& document : effects_.inline_documents.viewMut()) {
       std::ranges::fill(document.contents.viewMut(), 0);
     }
 
-    screen.reserve(size.cols, size.rows);
+    screen_.reserve(size.cols, size.rows);
     checkGhostty(ghostty_terminal_resize(terminal_.get(), size.cols, size.rows, size.cell_width_px, size.cell_height_px));
-    if (screen.cols != size.cols || screen.rows != size.rows) {
-      screen.resize(size.cols, size.rows);
+    if (screen_.cols != size.cols || screen_.rows != size.rows) {
+      screen_.resize(size.cols, size.rows);
     }
 
     size_ = size;
@@ -1060,12 +1060,12 @@ namespace telar::runtime {
     const auto atomic = media != nullptr && control_.ground() && !control_.blocked() ? media->atomicPrefix(bytes) : 0;
     const auto consumed = atomic != 0 ? control_.feedAtomicMedia(bytes.first(atomic)) : control_.feed(bytes);
 
-    if (control_.takeDocument(effects.document)) {
-      ++effects.document_revision;
+    if (control_.takeDocument(effects_.document)) {
+      ++effects_.document_revision;
     }
 
     while (auto zone = control_.takeZone()) {
-      effects.keepInline(std::move(zone.getMut().bytes), std::move(zone.getMut().first), std::move(zone.getMut().end), zone->end_inclusive);
+      effects_.keepInline(std::move(zone.getMut().bytes), std::move(zone.getMut().first), std::move(zone.getMut().end), zone->end_inclusive);
     }
 
     if (media != nullptr && consumed != 0) {
@@ -1081,9 +1081,9 @@ namespace telar::runtime {
   void Terminal::finishControlInput() {
     response_outbox_.drain();
     dirty_ = true;
-    effects.refresh(terminal_.get());
+    effects_.refresh(terminal_.get());
     if (purpose_ == TerminalPurpose::interactive) {
-      graphics.update(terminal_.get());
+      graphics_.update(terminal_.get());
     }
 
     bool processing_error = false;
@@ -1096,11 +1096,11 @@ namespace telar::runtime {
   }
 
   void Terminal::titleChanged(GhosttyTerminal /*terminal*/, void* context) noexcept {
-    static_cast<Terminal*>(context)->effects.title_pending = true;
+    static_cast<Terminal*>(context)->effects_.title_pending = true;
   }
 
   void Terminal::cwdChanged(GhosttyTerminal /*terminal*/, void* context) noexcept {
-    static_cast<Terminal*>(context)->effects.cwd_pending = true;
+    static_cast<Terminal*>(context)->effects_.cwd_pending = true;
   }
 
   GhosttyClipboardWriteResult Terminal::clipboardWrite(GhosttyTerminal /*terminal*/, void* context, const GhosttyClipboardWrite* write) noexcept {
@@ -1118,7 +1118,7 @@ namespace telar::runtime {
 
     const auto percent = report->progress >= 0 ? ds::Option<Byte>{static_cast<Byte>(report->progress)} : ds::none;
 
-    static_cast<Terminal*>(context)->effects.setProgress(static_cast<PaneProgressState>(report->state), percent);
+    static_cast<Terminal*>(context)->effects_.setProgress(static_cast<PaneProgressState>(report->state), percent);
   }
 
   bool Terminal::reportSize(GhosttyTerminal /*terminal*/, void* context, GhosttySizeReportSize* output) noexcept {
@@ -1239,44 +1239,44 @@ namespace telar::runtime {
     auto cursor = ghosttySized<GhosttyRenderStateCursor>();
 
     checkGhostty(ghostty_render_state_get(render_state_.get(), GHOSTTY_RENDER_STATE_DATA_CURSOR, &cursor));
-    screen.cursor.visible = cursor.visible && cursor.viewport_has_value;
-    screen.cursor.x = screen.cursor.visible ? cursor.viewport_x : 0;
-    screen.cursor.y = screen.cursor.visible ? cursor.viewport_y : 0;
-    screen.cursor.blink = cursor.blinking;
+    screen_.cursor.visible = cursor.visible && cursor.viewport_has_value;
+    screen_.cursor.x = screen_.cursor.visible ? cursor.viewport_x : 0;
+    screen_.cursor.y = screen_.cursor.visible ? cursor.viewport_y : 0;
+    screen_.cursor.blink = cursor.blinking;
     bool default_shape = false;
 
     checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_CURSOR_IS_DEFAULT, &default_shape));
-    if (default_shape || !screen.cursor.visible) {
-      screen.cursor.shape = CursorShape::default_shape;
-      if (!screen.cursor.visible) {
-        screen.cursor.blink = true;
+    if (default_shape || !screen_.cursor.visible) {
+      screen_.cursor.shape = CursorShape::default_shape;
+      if (!screen_.cursor.visible) {
+        screen_.cursor.blink = true;
       }
 
       return;
     }
 
-    screen.cursor.shape = cursorShape(cursor.visual_style);
+    screen_.cursor.shape = cursorShape(cursor.visual_style);
   }
 
   void Terminal::updateModes() {
-    screen.input_modes.cursor_keys = mode(GHOSTTY_MODE_DECCKM);
-    screen.input_modes.keypad_keys = mode(GHOSTTY_MODE_KEYPAD_KEYS);
-    screen.input_modes.bracketed_paste = mode(GHOSTTY_MODE_BRACKETED_PASTE);
-    screen.input_modes.paste_events = control_.pasteEvents();
-    screen.input_modes.focus_events = mode(GHOSTTY_MODE_FOCUS_EVENT);
-    screen.input_modes.alternate_scroll = mode(GHOSTTY_MODE_ALT_SCROLL);
+    screen_.input_modes.cursor_keys = mode(GHOSTTY_MODE_DECCKM);
+    screen_.input_modes.keypad_keys = mode(GHOSTTY_MODE_KEYPAD_KEYS);
+    screen_.input_modes.bracketed_paste = mode(GHOSTTY_MODE_BRACKETED_PASTE);
+    screen_.input_modes.paste_events = control_.pasteEvents();
+    screen_.input_modes.focus_events = mode(GHOSTTY_MODE_FOCUS_EVENT);
+    screen_.input_modes.alternate_scroll = mode(GHOSTTY_MODE_ALT_SCROLL);
     GhosttyTerminalScreen active_screen{};
 
     checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_ACTIVE_SCREEN, &active_screen));
-    screen.input_modes.alternate_screen = active_screen == GHOSTTY_TERMINAL_SCREEN_ALTERNATE;
-    if (!screen.input_modes.alternate_screen) {
-      effects.closeDocument();
-      effects.placeInline(terminal_.get());
+    screen_.input_modes.alternate_screen = active_screen == GHOSTTY_TERMINAL_SCREEN_ALTERNATE;
+    if (!screen_.input_modes.alternate_screen) {
+      effects_.closeDocument();
+      effects_.placeInline(terminal_.get());
     }
 
-    checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_KITTY_KEYBOARD_FLAGS, &screen.input_modes.kitty_keyboard_flags));
+    checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_KITTY_KEYBOARD_FLAGS, &screen_.input_modes.kitty_keyboard_flags));
 
-    checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_MODIFY_OTHER_KEYS_2, &screen.input_modes.modify_other_keys_2));
+    checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_MODIFY_OTHER_KEYS_2, &screen_.input_modes.modify_other_keys_2));
     GhosttyString pointer{};
 
     checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_MOUSE_SHAPE_NAME, &pointer));
@@ -1320,11 +1320,11 @@ namespace telar::runtime {
     const auto shape = textView(ghosttyBytes(pointer));
     const auto* const found = std::ranges::find(shapes, shape);
 
-    screen.pointer_shape = found == shapes.end() ? PointerShape::default_shape : static_cast<PointerShape>(found - shapes.begin());
+    screen_.pointer_shape = found == shapes.end() ? PointerShape::default_shape : static_cast<PointerShape>(found - shapes.begin());
 
-    screen.mouse.tracking = mouseTracking(*this);
-    screen.mouse.sgr = mode(GHOSTTY_MODE_SGR_MOUSE);
-    screen.mouse.pixels = mode(GHOSTTY_MODE_SGR_PIXELS_MOUSE);
+    screen_.mouse.tracking = mouseTracking(*this);
+    screen_.mouse.sgr = mode(GHOSTTY_MODE_SGR_MOUSE);
+    screen_.mouse.pixels = mode(GHOSTTY_MODE_SGR_PIXELS_MOUSE);
   }
 
   bool Terminal::primaryScreen() const {
@@ -1335,14 +1335,14 @@ namespace telar::runtime {
   }
 
   void Terminal::checkInline() {
-    if (effects.inline_documents.empty() || !primaryScreen()) {
+    if (effects_.inline_documents.empty() || !primaryScreen()) {
       return;
     }
 
-    const auto top = static_cast<std::uint64_t>(screen.scroll.offset);
-    const auto rows = static_cast<std::uint64_t>(screen.rows);
-    const auto cols = static_cast<std::size_t>(screen.cols);
-    auto& documents = effects.inline_documents;
+    const auto top = static_cast<std::uint64_t>(screen_.scroll.offset);
+    const auto rows = static_cast<std::uint64_t>(screen_.rows);
+    const auto cols = static_cast<std::size_t>(screen_.cols);
+    auto& documents = effects_.inline_documents;
 
     for (std::size_t index = 0; index < documents.size();) {
       auto& document = documents.atMut(index);
@@ -1354,11 +1354,11 @@ namespace telar::runtime {
       for (auto row = first; row < end && !changed; ++row) {
         const auto screen_row = static_cast<std::size_t>(row - top);
         auto& known = document.contents.atMut(static_cast<std::size_t>(row - document.row));
-        if (known != 0 && screen.row_revisions[screen_row] != screen.revision) {
+        if (known != 0 && screen_.row_revisions[screen_row] != screen_.revision) {
           continue;
         }
 
-        const auto cells = std::span<const ScreenCell>{screen.cells}.subspan(screen_row * cols, cols);
+        const auto cells = std::span<const ScreenCell>{screen_.cells}.subspan(screen_row * cols, cols);
         const auto content = std::hash<std::string_view>{}(std::string_view{reinterpret_cast<const char*>(cells.data()), cells.size_bytes()}) | std::size_t{1}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): hashes the cells' bytes, which char may alias
 
         changed = known != 0 && known != content;
@@ -1366,9 +1366,9 @@ namespace telar::runtime {
       }
 
       if (changed) {
-        effects.inline_bytes -= document.bytes.size();
+        effects_.inline_bytes -= document.bytes.size();
         static_cast<void>(documents.remove(index));
-        ++effects.inline_revision;
+        ++effects_.inline_revision;
         continue;
       }
 
@@ -1395,8 +1395,8 @@ namespace telar::runtime {
     GhosttyTerminalScrollbar scrollbar{};
 
     checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_SCROLLBAR, &scrollbar));
-    screen.scroll.total_rows = static_cast<std::uint32_t>(std::min<std::uint64_t>(scrollbar.total, std::numeric_limits<std::uint32_t>::max()));
-    screen.scroll.offset = static_cast<std::uint32_t>(std::min<std::uint64_t>(scrollbar.offset, std::numeric_limits<std::uint32_t>::max()));
+    screen_.scroll.total_rows = static_cast<std::uint32_t>(std::min<std::uint64_t>(scrollbar.total, std::numeric_limits<std::uint32_t>::max()));
+    screen_.scroll.offset = static_cast<std::uint32_t>(std::min<std::uint64_t>(scrollbar.offset, std::numeric_limits<std::uint32_t>::max()));
   }
 
   ScrollbackRows::ScrollbackRows(tbc::mut_a<ConcurrentMemory> memory)
@@ -1409,7 +1409,7 @@ namespace telar::runtime {
     const auto trimmed = terminal.scrollbackTrimmed();
     const auto first = std::max(request.from, trimmed);
     PaneRows reply{.request_id = request.request_id, .pane_id = request.pane_id, .generation = terminal.scrollbackGeneration(), .trimmed = trimmed, .from = first};
-    const auto& screen = terminal.screen;
+    const auto& screen = terminal.screen();
     const auto total = static_cast<std::uint64_t>(screen.scroll.total_rows);
     const auto end = request.from + request.count;
     if (first >= end || first - trimmed >= total || screen.rows == 0 || screen.cols == 0) {
@@ -1430,15 +1430,16 @@ namespace telar::runtime {
 
     terminal.scrollTo(top);
     terminal.refresh();
-    const auto cols = static_cast<std::size_t>(screen.cols);
+    const auto& scrolled = terminal.screen();
+    const auto cols = static_cast<std::size_t>(scrolled.cols);
 
     cells_.resize(static_cast<std::size_t>(count) * cols * maximum_cell_bytes);
     auto output = std::span<Byte>{cells_.viewMut()};
 
-    encodeScreenCells(std::span<const ScreenCell>{screen.cells}.subspan(static_cast<std::size_t>(skip) * cols, static_cast<std::size_t>(count) * cols), output);
+    encodeScreenCells(std::span<const ScreenCell>{scrolled.cells}.subspan(static_cast<std::size_t>(skip) * cols, static_cast<std::size_t>(count) * cols), output);
 
     // The links' runs of these rows, counted from their first cell.
-    const auto metadata = screen.metadata.view(screen.row_flags);
+    const auto metadata = scrolled.metadata.view(scrolled.row_flags);
     const auto first_cell = static_cast<std::uint64_t>(skip) * cols;
     const auto end_cell = first_cell + (static_cast<std::uint64_t>(count) * cols);
 
@@ -1454,7 +1455,7 @@ namespace telar::runtime {
     // next refresh, so the screen still holds the rows read.
     terminal.scrollToBottom();
 
-    const auto& read = terminal.screen;
+    const auto& read = terminal.screen();
     const auto kept = read.metadata.view(read.row_flags);
 
     reply.cols = read.cols;
@@ -1484,8 +1485,8 @@ namespace telar::runtime {
 
   void TextReader::read(PaneTextSource source, std::uint16_t wanted_rows) {
     const auto tag = source == PaneTextSource::screen ? GHOSTTY_POINT_TAG_ACTIVE : GHOSTTY_POINT_TAG_SCREEN;
-    auto rows = source == PaneTextSource::screen ? terminal_.screen.rows : totalRows();
-    const auto blank_limit = static_cast<std::size_t>(wanted_rows) + terminal_.screen.rows;
+    auto rows = source == PaneTextSource::screen ? terminal_.screen().rows : totalRows();
+    const auto blank_limit = static_cast<std::size_t>(wanted_rows) + terminal_.screen().rows;
     std::size_t inspected = 0;
 
     while (rows != 0 && inspected++ < blank_limit && rowIsBlank(tag, rows - 1)) {
@@ -1500,12 +1501,12 @@ namespace telar::runtime {
     auto selection = ghosttySized<GhosttySelection>();
 
     selection.start = reference(tag, {.x = 0, .y = rows - count});
-    selection.end = reference(tag, {.x = static_cast<std::uint16_t>(terminal_.screen.cols - 1), .y = rows - 1});
+    selection.end = reference(tag, {.x = static_cast<std::uint16_t>(terminal_.screen().cols - 1), .y = rows - 1});
     format(selection, false, TrailingSpaces::kept);
   }
 
   void TextReader::copy(const CopySelection& request) {
-    const auto columns = terminal_.screen.cols;
+    const auto columns = terminal_.screen().cols;
     const auto bottom = totalRows() - 1;
     GhosttyPointCoordinate start{
         .x = request.linewise ? std::uint16_t{0} : std::min<std::uint16_t>(request.start_x, columns - 1),
@@ -1553,7 +1554,7 @@ namespace telar::runtime {
   bool TextReader::rowIsBlank(GhosttyPointTag tag, std::uint32_t row) const {
     auto cell_ref = reference(tag, {.x = 0, .y = row});
 
-    for (std::uint16_t column = 0; column < terminal_.screen.cols; ++column) {
+    for (std::uint16_t column = 0; column < terminal_.screen().cols; ++column) {
       cell_ref.x = column;
       GhosttyCell raw = 0;
 

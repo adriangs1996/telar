@@ -52,7 +52,7 @@ export {
       auto client = telar::ds::makeBox<telar::runtime::ClientSession>(memory, memory, id_, telar::runtime::FileDescriptor{sockets[0]});
 
       client.getMut().role = role;
-      client.getMut().connection.negotiated = true;
+      client.getMut().connection.flagsMut().negotiated = true;
       const auto handle = clients.insert(id_, std::move(client));
 
       clients.find(id_)->event_identity = handle;

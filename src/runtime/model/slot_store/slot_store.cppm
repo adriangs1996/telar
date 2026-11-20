@@ -235,7 +235,7 @@ export {
         [[nodiscard]] PaneText response(const ReadPane& request) const noexcept;
       };
 
-      void record(std::uint64_t pane_id, std::uint64_t generation, const PaneText& text) noexcept;
+      void record(PaneKey pane, const PaneText& text) noexcept;
 
       [[nodiscard]] const Record* find(std::uint64_t pane_id, std::uint64_t generation) const noexcept;
 

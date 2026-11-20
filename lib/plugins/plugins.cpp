@@ -55,7 +55,7 @@ namespace telar::runtime::plugins {
           continue;
         }
 
-        auto file = openBeneath(directory, entry.path, O_RDONLY);
+        auto file = openBeneath(directory, entry.path, {.flags = O_RDONLY});
         const auto bytes = readFileContents(memory, file.get(), PackageLimits::total_bytes - total - 1);
 
         total += bytes.size();
@@ -466,12 +466,12 @@ namespace telar::runtime::plugins {
           continue;
         }
 
-        auto original = openBeneath(source.get(), entry.path, O_RDONLY);
+        auto original = openBeneath(source.get(), entry.path, {.flags = O_RDONLY});
         const auto contents = readFileContents(memory, original.get(), PackageLimits::total_bytes - total - 1);
 
         total += contents.size();
         constexpr mode_t private_file_mode = 0600;
-        auto copied = openBeneath(destination, entry.path, combineFlags(O_WRONLY, O_CREAT, O_EXCL), private_file_mode);
+        auto copied = openBeneath(destination, entry.path, {.flags = combineFlags(O_WRONLY, O_CREAT, O_EXCL), .permissions = private_file_mode});
         const auto error = writeFile(copied, contents);
         if (error != 0) {
           throw SystemError{"Write plugin package file", error};
@@ -529,13 +529,13 @@ namespace telar::runtime::plugins {
       throw SystemError{"Open plugin package"};
     }
 
-    auto manifest_file = openBeneath(directory.get(), "plugin.json", O_RDONLY);
+    auto manifest_file = openBeneath(directory.get(), "plugin.json", {.flags = O_RDONLY});
     const auto source = readFileContents(memory, manifest_file.get(), PackageLimits::manifest_bytes - 1);
     Package package;
 
     package.root.assign(canonical.data());
     package.manifest = Manifest::parse(memory, source);
-    auto entry = openBeneath(directory.get(), package.manifest.entry.view(), O_RDONLY);
+    auto entry = openBeneath(directory.get(), package.manifest.entry.view(), {.flags = O_RDONLY});
 
     readFileContents(memory, entry.get(), Limits::entry_bytes - 1);
     package.digest = digest(memory, directory.get(), hashing);
@@ -568,7 +568,7 @@ namespace telar::runtime::plugins {
       throw SystemError{"Create plugin installation staging directory"};
     }
 
-    auto copied = openBeneath(staging.descriptor(), staged_package, combineFlags(O_RDONLY, O_DIRECTORY));
+    auto copied = openBeneath(staging.descriptor(), staged_package, {.flags = combineFlags(O_RDONLY, O_DIRECTORY)});
     ds::String<Memory> staged_path{memory_, staging.path()};
 
     staged_path.push('/');

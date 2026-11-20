@@ -31,7 +31,7 @@ namespace {
     // A permission question above the composer waits on the user, whatever the composer shows.
     feed(terminal, "\x1b[2J\x1b[10;1HNot in allowlist: rm -rf build\x1b[22;1H→ Add a follow-up");
     AgentScreenInference inference;
-    const auto signal = inference.observe(terminal, builtin_manifests, AgentProvider::cursor, {1000, 1'000'000'000});
+    const auto signal = inference.observe(terminal, builtinManifests(), AgentProvider::cursor, {1000, 1'000'000'000});
 
     check(signal && signal->status == AgentStatus::blocked, "a blocked cursor agent reads as ready");
   }

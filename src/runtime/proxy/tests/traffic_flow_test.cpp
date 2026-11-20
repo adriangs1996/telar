@@ -126,7 +126,7 @@ namespace {
       Control control{memory};
       FlowState gate;
 
-      gate.open(&control, 1, -1, -1, "fixture.test");
+      gate.open(&control, 1, {.child = -1, .origin = -1}, "fixture.test");
       PartialStream stream;
       const ds::Array<Byte, 3> original{'o', 0, 'd'};
       const ds::Array<Byte, 7> replacement{'c', 'h', 0, 'n', 'g', 'e', 'd'};
@@ -158,7 +158,7 @@ namespace {
       Control control{memory};
       FlowState gate;
 
-      gate.open(&control, 3, -1, -1, "fixture.test");
+      gate.open(&control, 3, {.child = -1, .origin = -1}, "fixture.test");
       PartialStream stream;
       const ds::Array<Byte, 3> original{'o', 0, 'd'};
 
@@ -176,7 +176,7 @@ namespace {
       control.broker.disconnect();
       FlowState gate;
 
-      gate.open(&control, 2, -1, -1, "fixture.test");
+      gate.open(&control, 2, {.child = -1, .origin = -1}, "fixture.test");
       PartialStream stream;
       const ds::Array<Byte, 3> original{'o', 'l', 'd'};
 

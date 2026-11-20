@@ -656,9 +656,9 @@ namespace telar::runtime::cli::window {
         throw std::invalid_argument{"TooManyConfigArguments"};
       }
 
-      arguments.atMut(0) = const_cast<char*>(helper.c_str()); // NOLINT(cppcoreguidelines-pro-type-const-cast): execv takes char* const[] for C's sake and never writes through them
+      arguments.atMut(0) = const_cast<char*>(helper.cStr()); // NOLINT(cppcoreguidelines-pro-type-const-cast): execv takes char* const[] for C's sake and never writes through them
       std::ranges::copy(words, arguments.viewMut().begin() + 1);
-      ::execv(helper.c_str(), arguments.dataMut());
+      ::execv(helper.cStr(), arguments.dataMut());
       throw SystemError{"Execute telar-config-check"};
     }
 

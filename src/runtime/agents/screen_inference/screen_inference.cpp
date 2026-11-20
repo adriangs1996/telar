@@ -225,7 +225,7 @@ namespace telar::runtime {
   }
 
   AgentScreenReader::AgentScreenReader(const Terminal& terminal, const AgentManifests& manifests)
-      : AgentScreenReader(agentScreenView(terminal.screen), terminal.effects.title(), manifests) {}
+      : AgentScreenReader(agentScreenView(terminal.screen()), terminal.effects().title(), manifests) {}
 
   AgentScreenReader::AgentScreenReader(AgentScreenView screen, std::string_view title, const AgentManifests& manifests) noexcept
       : screen_(screen),
@@ -490,9 +490,9 @@ namespace telar::runtime {
 
     terminal.refresh();
 
-    const auto screen = agentScreenView(terminal.screen);
+    const auto screen = agentScreenView(terminal.screen());
 
-    return infer(AgentScreenReader{screen, terminal.effects.title(), manifests}, screen, manifests, provider, now);
+    return infer(AgentScreenReader{screen, terminal.effects().title(), manifests}, screen, manifests, provider, now);
   }
 
   ds::Option<AgentSignal> AgentScreenInference::infer(const AgentScreenReader& reader, AgentScreenView screen, const AgentManifests& manifests, AgentProvider provider, ObservationTime now) {

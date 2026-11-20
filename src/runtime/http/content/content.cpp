@@ -31,7 +31,7 @@ namespace telar::runtime {
 
   ContentCodings ContentCodings::parse(std::string_view value) noexcept {
     ContentCodings result;
-    TextFields fields{value, ","};
+    TextFields fields{{.text = value, .delimiter = ","}};
 
     while (const auto field = fields.next()) {
       if (result.count == maximum) {
@@ -52,7 +52,7 @@ namespace telar::runtime {
   }
 
   bool ContentCodings::onlyIdentity(std::string_view value) noexcept {
-    TextFields fields{value, ","};
+    TextFields fields{{.text = value, .delimiter = ","}};
 
     while (const auto field = fields.next()) {
       if (coding(trimText(*field, " \t")) != ContentCoding::identity) {

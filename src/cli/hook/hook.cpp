@@ -591,7 +591,7 @@ namespace telar::runtime::cli::hooks {
       }
 
       path_.clear();
-      sessions::appendWorktreeCheckout(path_, root_, branch_);
+      sessions::appendWorktreeCheckout(path_, {.root = root_, .branch = branch_});
       ds::String<Memory> reference{memory_, "refs/heads/"};
 
       reference.append(branch_);

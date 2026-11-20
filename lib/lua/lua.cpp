@@ -228,7 +228,7 @@ namespace telar::runtime::lua {
   }
 
   const char* Error::what() const noexcept {
-    return message_.c_str();
+    return message_.cStr();
   }
 
   template <Allocator Memory>
@@ -762,27 +762,27 @@ namespace telar::runtime::lua {
     return (valid != 0) ? ds::Option{result} : ds::none;
   }
 
-  std::uint64_t Value::boundedInteger(std::uint64_t fallback, std::uint64_t minimum, std::uint64_t maximum) const {
+  std::uint64_t Value::boundedInteger(std::uint64_t fallback, Bounds<std::uint64_t> bounds) const {
     if (!present()) {
       return fallback;
     }
 
     const auto result = integer();
-    if (std::cmp_less(result, minimum) || std::cmp_greater(result, maximum)) {
+    if (std::cmp_less(result, bounds.minimum) || std::cmp_greater(result, bounds.maximum)) {
       fail("is outside its bounds");
     }
 
     return static_cast<std::uint64_t>(result);
   }
 
-  double Value::boundedNumber(double fallback, double minimum, double maximum) const {
+  double Value::boundedNumber(double fallback, Bounds<double> bounds) const {
     if (!present()) {
       return fallback;
     }
 
     require(LUA_TNUMBER, "must be a number");
     const auto result = lua_tonumber(state_, index_);
-    if (!std::isfinite(result) || result < minimum || result > maximum) {
+    if (!std::isfinite(result) || result < bounds.minimum || result > bounds.maximum) {
       fail("is outside its bounds");
     }
 

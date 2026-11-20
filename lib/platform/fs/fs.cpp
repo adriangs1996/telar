@@ -206,7 +206,7 @@ namespace telar::runtime {
     return std::string_view{buffer.data(), length};
   }
 
-  FileDescriptor openBeneath(int root, std::string_view path, int flags, mode_t permissions) {
+  FileDescriptor openBeneath(int root, std::string_view path, OpenMode mode) {
     if (path.empty() || path.front() == '/' || path.size() >= PATH_MAX || path.contains('\0')) {
       throw SystemError{"Invalid package-relative path", EINVAL};
     }
@@ -223,8 +223,8 @@ namespace telar::runtime {
 
       copyTerminated(component, name);
 
-      const auto selected_flags = separator == std::string_view::npos ? flags : combineFlags(O_RDONLY, O_DIRECTORY);
-      FileDescriptor selected{::openat(parent ? parent.get() : root, name.data(), combineFlags(selected_flags, O_NOFOLLOW, O_NONBLOCK, O_NOCTTY, O_CLOEXEC), permissions)}; // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
+      const auto selected_flags = separator == std::string_view::npos ? mode.flags : combineFlags(O_RDONLY, O_DIRECTORY);
+      FileDescriptor selected{::openat(parent ? parent.get() : root, name.data(), combineFlags(selected_flags, O_NOFOLLOW, O_NONBLOCK, O_NOCTTY, O_CLOEXEC), mode.permissions)}; // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
       if (!selected) {
         throw SystemError{"Open package-relative file"};
       }

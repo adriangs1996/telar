@@ -108,7 +108,7 @@ namespace {
       refused = true;
     }
 
-    check(refused && !requester.session().connection.closing);
+    check(refused && !requester.session().connection.flags().closing);
     check(requester.session().connection.responseDepth() == 128);
     check(!observer.session().connection.hasOutput());
   }
@@ -139,12 +139,12 @@ namespace {
       refused = error.code() == FailureCode::invalid_request && std::string_view{error.what()} == "ResponseQueueFull";
     }
 
-    check(refused && !target.session().connection.closing);
+    check(refused && !target.session().connection.flags().closing);
     check(target.session().connection.responseDepth() == 128);
     check(!requester.session().pending_command);
     limits.report(LimitReach{.name = "runtime.request_capacity", .route = "request"});
     limits.deliver(model, clients);
-    check(!target.session().connection.closing && target.session().connection.droppedResponses() == 1);
+    check(!target.session().connection.flags().closing && target.session().connection.droppedResponses() == 1);
   }
 
   void testClosureResync(ConcurrentMemory& memory) {
@@ -165,7 +165,7 @@ namespace {
     }
 
     workspaces.closeWorkspace(model, clients, opened.location.workspace.id);
-    check(!owner.session().connection.closing);
+    check(!owner.session().connection.flags().closing);
     check(owner.session().connection.responseDepth() == 128);
     check(owner.session().connection.droppedResponses() == 1);
     check(owner.session().workspace_resync.hasValue());
@@ -263,7 +263,7 @@ namespace {
 
     ClientControl::detach(clients, requester.session().id, DetachClient{.request_id = 5, .client_id = replacement.session().id, .client_generation = replacement.session().generation});
     check(requester.receive<RequestCompleted>().request_id == 5);
-    check(replacement.session().connection.closing);
+    check(replacement.session().connection.flags().closing);
   }
 
   void testFocusAndLayouts(ConcurrentMemory& memory) {
@@ -278,7 +278,7 @@ namespace {
     target.session().identity = reconnect.session().identity = 123;
 
     const auto workspace_id = model.workspaces.nextId();
-    auto workspace = ds::makeBox<Workspace>(memory, memory, workspace_id, "/tmp", "Test");
+    auto workspace = ds::makeBox<Workspace>(memory, memory, WorkspaceSpec{.id = workspace_id, .path = "/tmp", .name = "Test"});
 
     workspace.getMut().tabs.emplace(memory, 1, "Shell");
     const TabLocation location{WorkspaceLocation{.id = workspace_id}, 1};
@@ -307,7 +307,7 @@ namespace {
     completion.pane_generation = pane_generation;
     ClientControl::completeFocus(clients, target.session().id, completion);
     check(requester.receive<PaneFocusResult>().focused_pane_id == pane_id);
-    check(requester.session().connection.closing);
+    check(requester.session().connection.flags().closing);
 
     ds::Array<ClientLayoutNode, 1> nodes{ClientLayoutPane{pane_id}};
     ds::Array<ClientTabLayout, 1> tabs{ClientTabLayout{.location = location, .focused_pane = pane_id, .workspace_active = true, .nodes = nodes}};
@@ -362,7 +362,7 @@ namespace {
     ClientPeer requester{memory, model, clients, ClientRole::control};
     ClientPeer closing{memory, model, clients, ClientRole::interactive};
 
-    closing.session().connection.closing = true;
+    closing.session().connection.flagsMut().closing = true;
     PluginEventsFixture events;
 
     for (const auto& invalid : {NotificationBody{.duration_ms = 499, .title = "invalid"}, NotificationBody{.duration_ms = 60001, .title = "invalid"}, NotificationBody{.title = ""}, NotificationBody{.title = "line\nbreak"}, NotificationBody{.title = "\xff"}}) {

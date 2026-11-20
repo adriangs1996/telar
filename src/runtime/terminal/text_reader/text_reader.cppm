@@ -209,6 +209,10 @@ export {
 
       void setProgress(PaneProgressState state, ds::Option<Byte> percent) noexcept;
 
+      // Public beside the title and cwd buffers: the terminal that owns these effects records each
+      // as its programs act, and the runtime reads each as it delivers it. Only the buffers, which
+      // hold validated text, stay private.
+      // NOLINTBEGIN(cppcoreguidelines-non-private-member-variables-in-classes,misc-non-private-member-variables-in-classes)
       tbc::val_a<ds::Vec<Byte, ConcurrentMemory>> clipboard;
       // The encoded document the pane's program shows over the pane, empty when none.
       tbc::val_a<ds::Vec<Byte, ConcurrentMemory>> document;
@@ -227,6 +231,7 @@ export {
       ds::Option<Byte> progress_percent;
       bool title_pending = false;
       bool cwd_pending = false;
+      // NOLINTEND(cppcoreguidelines-non-private-member-variables-in-classes,misc-non-private-member-variables-in-classes)
 
     private:
       void updateTitle(std::string_view raw);
@@ -454,9 +459,21 @@ export {
       diagnostics::TerminalStorageSnapshot storageMetrics() const;
 #endif
 
-      tbc::val_a<Screen> screen;
-      tbc::val_a<TerminalEffects> effects;
-      tbc::val_a<GraphicsStorage<ConcurrentMemory>> graphics;
+      [[nodiscard]] TBC_HOT_PATH inline const Screen& screen() const noexcept {
+        return screen_;
+      }
+
+      [[nodiscard]] TBC_HOT_PATH inline const TerminalEffects& effects() const noexcept {
+        return effects_;
+      }
+
+      TBC_HOT_PATH inline TerminalEffects& effectsMut() noexcept {
+        return effects_;
+      }
+
+      [[nodiscard]] TBC_HOT_PATH inline const GraphicsStorage<ConcurrentMemory>& graphics() const noexcept {
+        return graphics_;
+      }
 
     private:
       // The media to feed, or none once abortControl let it go.
@@ -528,6 +545,9 @@ export {
         std::atomic<std::size_t> refusals = 0;
       };
 
+      tbc::val_a<Screen> screen_;
+      tbc::val_a<TerminalEffects> effects_;
+      tbc::val_a<GraphicsStorage<ConcurrentMemory>> graphics_;
       tbc::val_a<GhosttyMemory> ghostty_memory_;
       tbc::val_a<GhosttyAllocatorBridge<GhosttyMemory>> allocator_;
       TerminalHandle terminal_;

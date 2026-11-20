@@ -27,11 +27,11 @@ namespace telar::runtime {
     return PaneText{.request_id = request.request_id, .pane_id = pane_id, .truncated = start == 0 && truncated, .text = text, .exit_code = exit_code};
   }
 
-  void ExitedPanes::record(std::uint64_t pane_id, std::uint64_t generation, const PaneText& text) noexcept {
+  void ExitedPanes::record(PaneKey pane, const PaneText& text) noexcept {
     auto& entry = entries_.atMut(next_);
 
-    entry.pane_id = pane_id;
-    entry.generation = generation;
+    entry.pane_id = pane.id;
+    entry.generation = pane.generation;
     entry.exit_code = text.exit_code.valueOr(0);
     entry.length = std::min(text.text.size(), maximum_bytes);
     entry.truncated = text.truncated || entry.length != text.text.size();

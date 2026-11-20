@@ -111,9 +111,9 @@ namespace telar::gui::features::prompt {
         aliases(memory),
         alias_targets(memory) {}
 
-  PaneLine::PaneLine(Memory& memory, std::uint64_t pane_id, Keymap keymap)
+  PaneLine::PaneLine(Memory& memory, std::uint64_t pane, Keymap keymap)
       : line(memory, keymap),
-        pane_id(pane_id),
+        pane_id(pane),
         jumps(memory) {}
 
   CompletionPlan::Question::Question(Memory& memory)
@@ -127,17 +127,17 @@ namespace telar::gui::features::prompt {
         label(memory),
         questions(memory) {}
 
-  State::State(tbc::mut_a<Memory> memory)
-      : memory(memory),
-        specs(memory),
-        scratch(memory),
-        history(memory),
-        completions(memory),
-        command_requests(memory),
-        command_checks(memory),
-        spec_requests(memory),
-        spec_completions(memory),
-        command_root(memory) {}
+  State::State(tbc::mut_a<Memory> allocator)
+      : memory(allocator),
+        specs(allocator),
+        scratch(allocator),
+        history(allocator),
+        completions(allocator),
+        command_requests(allocator),
+        command_checks(allocator),
+        spec_requests(allocator),
+        spec_completions(allocator),
+        command_root(allocator) {}
 
   // ---- lines ------------------------------------------------------------------------------------
 

@@ -355,7 +355,7 @@ namespace telar::runtime {
       return;
     }
 
-    if (expectation != HttpExpectation::continue_) {
+    if (expectation != HttpExpectation::hundred_continue) {
       unavailable("http_unsupported_expectation");
       return;
     }

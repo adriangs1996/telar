@@ -40,7 +40,7 @@ namespace {
       report.end(step, status, "fixture");
     }
 
-    return report.finish(adapter, "box", "box.example.invalid");
+    return report.finish(adapter, {.label = "box", .destination = "box.example.invalid"});
   }
 
   // An interactive setup with a failed step exits non-zero, so a script that chains it stops;

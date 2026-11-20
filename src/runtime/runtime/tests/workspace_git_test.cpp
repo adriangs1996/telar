@@ -167,8 +167,8 @@ namespace {
     LimitService limits;
     ControlledGitProbe probe;
     GitService service{limits, probe};
-    auto first = ds::makeBox<Workspace>(memory, memory, 7, "/first", "first");
-    auto second = ds::makeBox<Workspace>(memory, memory, 9, "/second", "second");
+    auto first = ds::makeBox<Workspace>(memory, memory, WorkspaceSpec{.id = 7, .path = "/first", .name = "first"});
+    auto second = ds::makeBox<Workspace>(memory, memory, WorkspaceSpec{.id = 9, .path = "/second", .name = "second"});
     auto& workspace = *first;
 
     model.workspaces.insert(7, std::move(first));

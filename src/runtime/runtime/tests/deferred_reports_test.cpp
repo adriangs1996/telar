@@ -42,7 +42,7 @@ namespace {
   using namespace telar::runtime;
 
   struct RecordedAgents {
-    Agent current{1, 1};
+    Agent current{{.id = 1, .generation = 1}};
 
     const Agent* find(std::uint64_t pane, std::uint64_t generation) const noexcept {
       return pane == current.pane && generation == current.generation ? &current : nullptr;
@@ -88,7 +88,7 @@ namespace {
         ds::Vec<Byte, ConcurrentMemory> payload{memory};
 
         reports.open(client, payload);
-        if (!client.connection.closing) {
+        if (!client.connection.flags().closing) {
           consume(client, std::span<const Byte>{payload});
         }
 
@@ -118,7 +118,7 @@ namespace {
     check(answered == 0);
     ++fixture.pane().process_rechecks;
     fixture.answerDue(ObservationTime::now(), receive);
-    check(answered == 1 && !client.connection.read_paused);
+    check(answered == 1 && !client.connection.flags().read_paused);
     check(fixture.pane().rejected_reporter == ds::Option{RejectedReporter{42, 42, 70}});
     check(fixture.evaluate(client, payload) == ReportDecision::rejected);
 

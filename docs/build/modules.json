@@ -689,7 +689,7 @@
     "lib/base/include/telar_base/memory/allocator.hpp": "Objective-C++ ABI",
     "lib/base/include/telar_base/memory/fixed_text.hpp": "Qt adapters include it; module units import its owner module",
     "lib/base/include/telar_base/text/utf8.hpp": "Qt adapters include it; module units import its owner module",
-    "lib/wire/include/telar_wire/codecs/telar_annotations.hpp": "Project macro header: the codec annotations _throw and _changes; includes nothing",
+    "lib/wire/include/telar_wire/codecs/telar_annotations.hpp": "Project macro header: the codec annotations TELAR_THROWS and TELAR_CHANGES; includes nothing",
     "lib/wire/include/telar_wire/codecs/telar_cells.hpp": "Included by other textual headers and tests; module units import its owner module",
     "lib/wire/include/telar_wire/codecs/telar_codec.hpp": "Qt adapters include it; module units import its owner module",
     "lib/wire/include/telar_wire/codecs/telar_value_codec.hpp": "Qt adapters include it; module units import its owner module",

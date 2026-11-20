@@ -67,7 +67,13 @@ export {
 export {
   namespace telar::runtime {
 
-    FileDescriptor openBeneath(int root, std::string_view path, int flags, mode_t permissions = 0);
+    // How openBeneath opens the file: open(2)'s flags, and the permissions of a file it creates.
+    struct OpenMode {
+      int flags = 0;
+      mode_t permissions = 0;
+    };
+
+    FileDescriptor openBeneath(int root, std::string_view path, OpenMode mode);
 
   }
 }

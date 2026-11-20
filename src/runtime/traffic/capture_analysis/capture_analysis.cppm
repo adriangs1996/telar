@@ -453,7 +453,7 @@ export {
 
       // A flow event to publish and its kind.
       struct Notice {
-        Kind kind;
+        Kind kind{};
         FlowEvent item;
       };
 
@@ -487,12 +487,12 @@ export {
             evictOldest(event, emit);
           }
 
-          const bool initial_reverse = (packet.flags & syn) && (packet.flags & ack) ? !reverse : reverse;
+          const bool initial_reverse = (packet.flags & syn) != 0 && (packet.flags & ack) != 0 ? !reverse : reverse;
 
           static_cast<void>(flows_.insert(key, Flow{memory_, capture_flow_bit | ++next_, initial_reverse, event.offline}));
           found = flows_.findMut(key);
           publish(key, *found, event, {.kind = Kind::flow_open}, emit);
-          if (!(packet.flags & syn)) {
+          if ((packet.flags & syn) == 0) {
             publish(key, *found, event, {.kind = Kind::flow_gap, .item = {.reason = "capture_started_midstream"}}, emit);
           }
         }
@@ -507,25 +507,14 @@ export {
           return;
         }
 
-        if (packet.flags & rst) {
+        if ((packet.flags & rst) != 0) {
           close(key, event, "reset", emit, false);
           return;
         }
 
-        const auto sequence = packet.sequence + ((packet.flags & syn) ? 1U : 0U);
+        const auto sequence = packet.sequence + ((packet.flags & syn) != 0 ? 1U : 0U);
 
-        if (!side.started) {
-          side.started = true;
-          side.initial = side.next = sequence;
-        }
-
-        if (packet.flags & fin) {
-          side.fin = sequence + static_cast<std::uint32_t>(packet.bytes.size());
-          if (distance(*side.fin, side.next) > 0 && !side.gap) {
-            side.gap = Clock::now();
-          }
-        }
-
+        track(side, packet, sequence);
         if (side.closed && !packet.bytes.empty() && distance(sequence + static_cast<std::uint32_t>(packet.bytes.size()), side.next - 1U) > 0) {
           close(key, event, "data_after_fin", emit, true);
           return;
@@ -542,10 +531,26 @@ export {
         }
       }
 
+      // Starts a side at the first sequence it sees, and marks where a FIN ends it: a FIN past the
+      // bytes the side has seen leaves a gap until they come.
+      TBC_HOT_PATH inline static void track(Side& side, const TcpPacket& packet, std::uint32_t sequence) noexcept {
+        if (!side.started) {
+          side.started = true;
+          side.initial = side.next = sequence;
+        }
+
+        if ((packet.flags & fin) != 0) {
+          side.fin = sequence + static_cast<std::uint32_t>(packet.bytes.size());
+          if (distance(*side.fin, side.next) > 0 && !side.gap) {
+            side.gap = Clock::now();
+          }
+        }
+      }
+
       // Whether a SYN without ACK opens the flow's tuple anew, at a sequence other than the one it
       // started at.
       TBC_HOT_PATH inline static bool reused(const Flow& flow, const TcpPacket& packet, bool reverse) noexcept {
-        if (!(packet.flags & syn) || (packet.flags & ack)) {
+        if ((packet.flags & syn) == 0 || (packet.flags & ack) != 0) {
           return false;
         }
 
@@ -596,7 +601,7 @@ export {
       TBC_GENERIC inline static bool consume(const Arrival& arrival, tbc::mut_a<Flow> flow, std::size_t& total_buffered, tbc::mut_a<Secure> memory, Emit emit) {
         const auto& packet = arrival.packet;
         auto& side = arrival.direction == Direction::outbound ? flow.outbound : flow.inbound;
-        auto sequence = packet.sequence + ((packet.flags & syn) ? 1U : 0U);
+        auto sequence = packet.sequence + ((packet.flags & syn) != 0 ? 1U : 0U);
         auto bytes = packet.bytes;
         const auto behind = distance(side.next, sequence);
         if (behind > 0) {

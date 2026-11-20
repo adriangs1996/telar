@@ -101,13 +101,13 @@ namespace telar::runtime {
 
       labelDirectory(directories.atMut(count), pane->cwd);
 
-      const bool terminal_title = agent->title_source == AgentTitleSource::telar && !pane->terminal.effects.title().empty();
+      const bool terminal_title = agent->title_source == AgentTitleSource::telar && !pane->terminal.effects().title().empty();
       const bool placeholder_title = !terminal_title && agent->title.view().empty();
       auto session_title = placeholder_title ? provider.placeholder : agent->title.view();
       auto title_source = agent->title_source;
 
       if (terminal_title) {
-        session_title = utf8Prefix(pane->terminal.effects.title(), title_bytes);
+        session_title = utf8Prefix(pane->terminal.effects().title(), title_bytes);
         title_source = AgentTitleSource::terminal;
       }
 
@@ -140,7 +140,7 @@ namespace telar::runtime {
           .observed_at_ms = agent->observed_at,
           .expires_at_ms = agent->expires_at,
           .work_tree = agent->worktree,
-          .final_message = agent->progress.final_message.view(),
+          .final_message = agent->progress.finalMessage(),
           .plan_done = agent->progress.done(),
           .plan_total = agent->progress.total(),
           .plan_step = agent->progress.step(),
@@ -432,7 +432,7 @@ namespace telar::runtime {
   template <EventLoop Poller, HistoryEventSink History>
   bool AgentService<Poller, History>::focused(const ClientStore& clients, const ClientLayouts& layouts, std::uint64_t pane) noexcept {
     return std::ranges::any_of(clients.items(), [&](const ClientSession* client) {
-      return client != nullptr && client->role == ClientRole::interactive && !client->connection.closing && layouts.focusedPane(client->identity) == pane;
+      return client != nullptr && client->role == ClientRole::interactive && !client->connection.flags().closing && layouts.focusedPane(client->identity) == pane;
     });
   }
 
@@ -552,7 +552,7 @@ namespace telar::runtime {
   template <EventLoop Poller, HistoryEventSink History>
   void AgentService<Poller, History>::refresh(RuntimeModel& model, Panes& panes, const ClientStore& clients, const ClientLayouts& layouts, std::chrono::steady_clock::time_point now) {
     agents_.removeIf([&](const Agent& agent) {
-      return findPane(model.panes, agent.pane, agent.generation) == nullptr || (!agent.evidence.choose(wallMilliseconds()) && agent.observed_at != 0);
+      return findPane(model.panes, {.id = agent.pane, .generation = agent.generation}) == nullptr || (!agent.evidence.choose(wallMilliseconds()) && agent.observed_at != 0);
     });
 
     for (auto* pane : model.panes.items()) {
@@ -566,10 +566,10 @@ namespace telar::runtime {
       }
 
       // The registry learns of the change once this agent is no longer borrowed from it.
-      const bool revised = agent->cwd_revision != pane->cwd_revision || agent->title_revision != pane->terminal.effects.title_revision;
+      const bool revised = agent->cwd_revision != pane->cwd_revision || agent->title_revision != pane->terminal.effects().title_revision;
       if (revised) {
         agent->cwd_revision = pane->cwd_revision;
-        agent->title_revision = pane->terminal.effects.title_revision;
+        agent->title_revision = pane->terminal.effects().title_revision;
       }
 
       const bool settled = agent->interrupt_at && settleInterrupt(panes, focused(clients, layouts, pane->id), *pane, *agent, now);
@@ -979,7 +979,7 @@ namespace telar::runtime {
         launch.cwd = ownDirectory(directory, workspace.path);
       }
 
-      const auto pane = panes.launch(model, owner_colors, bare_prompt, launch, TabLocation{.workspace = {.id = request.workspace}, .tab_id = tab_id}, request.size).id;
+      const auto pane = panes.launch(model, {.owner_colors = owner_colors, .bare_prompt = bare_prompt, .location = TabLocation{.workspace = {.id = request.workspace}, .tab_id = tab_id}, .size = request.size}, launch).id;
 
       require(model.workspaces, WorkspaceLocation{.id = request.workspace}).tabs.backMut().panes.push(pane);
       ++model.next_tab_id;
@@ -1236,7 +1236,7 @@ namespace telar::runtime {
   void WorkspaceService<Poller, History>::deliverNotices(ClientStore& clients) noexcept {
     if (overflowed_) {
       for (auto* client : clients.items()) {
-        if (client != nullptr && client->workspace && client->connection.negotiated && !client->connection.closing) {
+        if (client != nullptr && client->workspace && client->connection.flags().negotiated && !client->connection.flags().closing) {
           client->workspace_resync = ResyncRequired{.workspace = {.id = *client->workspace}};
         }
       }
@@ -1287,7 +1287,7 @@ namespace telar::runtime {
   template <typename Seen>
   void WorkspaceService<Poller, History>::broadcastTabClosed(ClientStore& clients, const TabClosed& closed, const Seen& seen) noexcept {
     deliver(clients, [&](const ClientSession& client) {
-      return client.connection.negotiated && client.workspace == closed.location.workspace.id;
+      return client.connection.flags().negotiated && client.workspace == closed.location.workspace.id;
     },
         [&](ClientSession& client) {
           seen(client);
@@ -1364,13 +1364,13 @@ namespace telar::runtime {
       reader.read(PaneTextSource::recent, ExitedPanes::kept_rows);
       const auto rows = pane.terminal.totalRows();
 
-      exited.record(pane.id, pane.generation, PaneText{
-                                                  .truncated = reader.truncated() || rows > ExitedPanes::kept_rows,
-                                                  .text = reader.text(),
-                                                  .exit_code = exit_code,
-                                              });
+      exited.record({.id = pane.id, .generation = pane.generation}, PaneText{
+                                                                        .truncated = reader.truncated() || rows > ExitedPanes::kept_rows,
+                                                                        .text = reader.text(),
+                                                                        .exit_code = exit_code,
+                                                                    });
     } catch (...) {
-      exited.record(pane.id, pane.generation, PaneText{.truncated = true, .exit_code = exit_code});
+      exited.record({.id = pane.id, .generation = pane.generation}, PaneText{.truncated = true, .exit_code = exit_code});
     }
   }
 
@@ -1383,7 +1383,7 @@ namespace telar::runtime {
     }
 
     const auto workspace_id = model.workspaces.nextId();
-    auto workspace = ds::makeBox<Workspace>(memory_, memory_, workspace_id, launch.cwd, name);
+    auto workspace = ds::makeBox<Workspace>(memory_, memory_, WorkspaceSpec{.id = workspace_id, .path = launch.cwd, .name = name});
     const auto tab_id = model.next_tab_id;
 
     workspace.getMut().tabs.emplace(memory_, tab_id, std::string_view{});
@@ -1394,7 +1394,7 @@ namespace telar::runtime {
       const TabLocation location{.workspace = {.id = workspace_id}, .tab_id = tab_id};
       const auto* requester = clients.find(client_id);
 
-      pane = panes.launch(model, nullptr, requester != nullptr && requester->bare_prompt, launch, location, size).id;
+      pane = panes.launch(model, {.bare_prompt = requester != nullptr && requester->bare_prompt, .location = location, .size = size}, launch).id;
       model.workspaces.find(workspace_id)->tabs.atMut(0).panes.push(*pane);
       if (replace_view) {
         panes.detachAll(model, clients, client_id);
@@ -1451,7 +1451,7 @@ namespace telar::runtime {
       launch.cwd = ownDirectory(fallback, require(model.workspaces, location.workspace).path);
     }
 
-    const auto pane = panes.launch(model, &client.colors, client.bare_prompt, launch, location, size).id;
+    const auto pane = panes.launch(model, {.owner_colors = &client.colors, .bare_prompt = client.bare_prompt, .location = location, .size = size}, launch).id;
 
     try {
       panes.attach(model, requireClient(clients, client_id), pane, size);
@@ -1532,7 +1532,7 @@ namespace telar::runtime {
   void WorktreeService<Poller, History>::registerEntry(RuntimeModel& model, ClientSession& client, const RegisterWorktree& request) {
     Workspaces::require(model.workspaces, WorkspaceLocation{.id = request.source});
     if (request.created_by) {
-      const auto* pane = findPane(model.panes, *request.created_by, client.verified_generation);
+      const auto* pane = findPane(model.panes, {.id = *request.created_by, .generation = client.verified_generation});
       if (pane == nullptr || pane->exit_status || !client.verifiedFor(*pane)) {
         throw RequestError{FailureCode::foreign_process, "Only a process inside the pane may register for it"};
       }
@@ -1557,7 +1557,7 @@ namespace telar::runtime {
     if (created) {
       workspace = model.workspaces.nextId();
       const auto title = entry.title.view().empty() ? entry.branch.view() : entry.title.view();
-      auto owned = ds::makeBox<Workspace>(memory_, memory_, workspace, entry.path, utf8Prefix(title, workspace_title_bytes));
+      auto owned = ds::makeBox<Workspace>(memory_, memory_, WorkspaceSpec{.id = workspace, .path = entry.path, .name = utf8Prefix(title, workspace_title_bytes)});
 
       model.workspaces.insertProvisional(workspace, std::move(owned));
     }
@@ -1872,7 +1872,7 @@ namespace telar::runtime {
     const auto identity = clients_.nextId();
     auto client = ds::makeBox<ClientSession>(memory_, memory_, identity, std::move(descriptor));
 
-    client.getMut().connection.negotiated = true;
+    client.getMut().connection.flagsMut().negotiated = true;
     client.getMut().peer_identity = process_inspector_.peer(client->connection.descriptor());
     const auto handle = clients_.insert(identity, std::move(client));
     auto& admitted = requireClient(clients_, identity);
@@ -1905,7 +1905,7 @@ namespace telar::runtime {
 
     background_.cancel(identity);
     deferred_reports_.cancel(*client);
-    client->connection.closing = true;
+    client->connection.flagsMut().closing = true;
     const int descriptor = client->connection.descriptor();
 
     panes_.detachAll(model_, clients_, identity);
@@ -1937,7 +1937,7 @@ namespace telar::runtime {
 
     try {
       if (event.kind == EventKind::readable) {
-        if (client->connection.read_paused) {
+        if (client->connection.flags().read_paused) {
           return;
         }
 
@@ -2005,10 +2005,10 @@ namespace telar::runtime {
           [&] {
             const auto* client = clients_.find(identity);
 
-            return client != nullptr && !client->connection.read_paused;
+            return client != nullptr && !client->connection.flags().read_paused;
           },
           [&](std::span<const Byte> payload, DecodeStorage& storage) {
-            if (!requireClient(clients_, identity).connection.closing) {
+            if (!requireClient(clients_, identity).connection.flags().closing) {
               dispatch(identity, payload, storage);
             }
           }
@@ -2023,7 +2023,7 @@ namespace telar::runtime {
 
     if (auto* client = clients_.find(identity)) {
       client->connection.exchange(frames);
-      client->connection.buffered_requests = remaining;
+      client->connection.flagsMut().buffered_requests = remaining;
     }
   }
 
@@ -2298,7 +2298,7 @@ namespace telar::runtime {
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const OpenEditor& message) {
     // Generation 0 names whatever generation the pane has, as an editor asked from a client
     // that predates generations does.
-    const auto* source = message.pane_generation == 0 ? model_.panes.find(message.pane_id) : findPane(model_.panes, message.pane_id, message.pane_generation);
+    const auto* source = message.pane_generation == 0 ? model_.panes.find(message.pane_id) : findPane(model_.panes, {.id = message.pane_id, .generation = message.pane_generation});
     if (source == nullptr) {
       throw RequestError{FailureCode::pane_not_found, "Could not request editor reuse"};
     }
@@ -2357,7 +2357,7 @@ namespace telar::runtime {
       TextReader reader{memory_, pane->terminal, suggestion_screen_bytes};
 
       reader.read(PaneTextSource::screen, suggestion_screen_rows);
-      const auto prompt = suggestionPrompt(memory_, pane->cwd, reader.text(), message.text);
+      const auto prompt = suggestionPrompt(memory_, {.cwd = pane->cwd, .screen = reader.text(), .request = message.text});
 
       submitBackground(background_, client, message, RequestContext{.prompt = prompt});
     } catch (const RequestError&) {
@@ -2503,7 +2503,7 @@ namespace telar::runtime {
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const ReadPaneTheme& message) {
-    const auto* pane = findPane(model_.panes, message.pane_id, message.pane_generation);
+    const auto* pane = findPane(model_.panes, {.id = message.pane_id, .generation = message.pane_generation});
     const auto* owner_colors = pane == nullptr ? nullptr : Workspaces::ownerColors(model_.workspaces, clients_, pane->location.workspace.id);
 
     const auto reply = Panes::readTheme(model_.panes, owner_colors, message);
@@ -2552,7 +2552,7 @@ namespace telar::runtime {
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const DetachPane& message) {
-    panes_.detach(model_, clients_, identity, message.pane_id);
+    panes_.detach(model_, clients_, {.client = identity, .pane = message.pane_id});
   }
 
   template <EventLoop Poller, typename Background>
@@ -2581,7 +2581,7 @@ namespace telar::runtime {
       std::uint32_t bottom = 0;
 
       if (const auto* pane = model_.panes.find(message.pane_id)) {
-        const auto& screen = pane->terminal.screen;
+        const auto& screen = pane->terminal.screen();
 
         bottom = screen.scroll.total_rows - std::min<std::uint32_t>(screen.scroll.total_rows, screen.rows);
       }
@@ -2805,7 +2805,7 @@ namespace telar::runtime {
     runtime_clipboard_.collect(clients_);
     workspace_git_.collect(model_, Clock::now());
     shell_git_.collect([&](const ShellGitResult& result) {
-      auto* pane = findPane(model_.panes, result.pane, result.generation);
+      auto* pane = findPane(model_.panes, {.id = result.pane, .generation = result.generation});
       if (pane != nullptr && !pane->shell_state.remote && !(pane->git == result.summary)) {
         pane->git = result.summary;
         ++pane->git_revision;
@@ -2871,7 +2871,7 @@ namespace telar::runtime {
     }
 
     auto* client = clients_.find(client_id);
-    if (client == nullptr || client->connection.closing) {
+    if (client == nullptr || client->connection.flags().closing) {
       return;
     }
 
@@ -2887,7 +2887,7 @@ namespace telar::runtime {
         }
 
         if (client->role == ClientRole::control && isHistoryRequest(request_tag)) {
-          client->connection.closing = true;
+          client->connection.flagsMut().closing = true;
         }
 
         if (request_tag == ClientTag::open_editor) {
@@ -2908,8 +2908,8 @@ namespace telar::runtime {
     ds::Array<Byte, decode_scratch_bytes> scratch{};
     DecodeStorage storage{scratch.viewMut()};
     auto reply = Codec::decode<EditorOpened>(payload, storage);
-    const auto* source = livePane(panes, client.editor_source, client.editor_generation);
-    const auto* target = livePane(panes, reply.pane_id, reply.pane_generation);
+    const auto* source = livePane(panes, {.id = client.editor_source, .generation = client.editor_generation});
+    const auto* target = livePane(panes, {.id = reply.pane_id, .generation = reply.pane_generation});
     if (source == nullptr ||
         (reply.outcome == EditorOutcome::opened && (target == nullptr || target->location.workspace.id != source->location.workspace.id || target->location.tab_id != source->location.tab_id))) {
       reply.outcome = EditorOutcome::failed;
@@ -2991,13 +2991,13 @@ namespace telar::runtime {
 
     const auto identity = listed->id;
 
-    if (listed->connection.closing && !listed->connection.hasOutput()) {
+    if (listed->connection.flags().closing && !listed->connection.hasOutput()) {
       dropClient(identity);
       return timeout;
     }
 
     try {
-      if (listed->connection.closing) {
+      if (listed->connection.flags().closing) {
         auto& closing = requireClient(clients_, identity);
 
         closing.connection.write(ResponseProjection{memory_, model_});
@@ -3005,7 +3005,7 @@ namespace telar::runtime {
         return timeout;
       }
 
-      if (listed->connection.buffered_requests && !listed->connection.read_paused) {
+      if (listed->connection.flags().buffered_requests && !listed->connection.flags().read_paused) {
         receive(identity);
         timeout = std::chrono::nanoseconds::zero();
       }
@@ -3110,7 +3110,7 @@ namespace telar::runtime {
     StateProjection state{workspaces_, agents_, metrics_, client_layouts_, proxy_};
     const auto result = ClientDelivery{memory_, model_}.write(requireClient(clients_, identity), state, now);
     if (result.detach_pane) {
-      panes_.release(model_, clients_, identity, *result.detach_pane);
+      panes_.release(model_, clients_, {.client = identity, .pane = *result.detach_pane});
     }
 
     return result.timeout;
@@ -3120,15 +3120,15 @@ namespace telar::runtime {
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::updateWriteInterest(Poller& poller, ClientSession& client) {
     const bool enabled = client.connection.hasOutput();
-    if (enabled != client.connection.write_interest) {
+    if (enabled != client.connection.flags().write_interest) {
       poller.writeInterest(client.connection.descriptor(), eventToken(EventSource::client, client.event_identity), enabled);
-      client.connection.write_interest = enabled;
+      client.connection.flagsMut().write_interest = enabled;
     }
 
-    const bool readable = !client.connection.read_paused;
-    if (readable != client.connection.read_interest) {
+    const bool readable = !client.connection.flags().read_paused;
+    if (readable != client.connection.flags().read_interest) {
       poller.readInterest(client.connection.descriptor(), eventToken(EventSource::client, client.event_identity), readable);
-      client.connection.read_interest = readable;
+      client.connection.flagsMut().read_interest = readable;
     }
   }
 
@@ -3152,7 +3152,7 @@ namespace telar::runtime {
       bool answered = false;
 
       try {
-        if (!client->connection.closing) {
+        if (!client->connection.flags().closing) {
           DecodeStorage storage{frames.decode.viewMut()};
 
           dispatch(identity, std::span<const Byte>{payload}, storage);

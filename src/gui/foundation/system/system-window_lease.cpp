@@ -83,7 +83,7 @@ namespace telar::gui::inline foundation::inline system {
       ds::Array<char, NAME_MAX> filename{};
       const auto name = lockFilename(filename.viewMut(), basename, slot);
       constexpr mode_t private_file_permissions = 0600;
-      auto file = runtime::openBeneath(directory.get(), name, combineFlags(O_RDWR, O_CREAT), private_file_permissions);
+      auto file = runtime::openBeneath(directory.get(), name, {.flags = combineFlags(O_RDWR, O_CREAT), .permissions = private_file_permissions});
 
       validateFile(file.get());
       if (::flock(file.get(), combineFlags(LOCK_EX, LOCK_NB)) != 0) {

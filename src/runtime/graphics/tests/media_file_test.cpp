@@ -69,7 +69,7 @@ namespace {
     std::span<const GraphicsImageView> feed(std::string_view input) {
       terminal.feed(bytes(input));
       terminal.refresh();
-      return terminal.graphics.images();
+      return terminal.graphics().images();
     }
 
     std::string responses() {

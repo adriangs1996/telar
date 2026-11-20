@@ -79,11 +79,11 @@ export {
     struct HandshakeReasonByte {
       static constexpr std::size_t width = u8::width;
 
-      static HandshakeRejectReason validate(HandshakeRejectReason reason) _throw(EncodingError);
+      static HandshakeRejectReason validate(HandshakeRejectReason reason) TELAR_THROWS(EncodingError);
 
-      static void encode(HandshakeRejectReason reason, std::span<Byte>& output) _throw(EncodingError);
+      static void encode(HandshakeRejectReason reason, std::span<Byte>& output) TELAR_THROWS(EncodingError);
 
-      static HandshakeRejectReason decode(std::span<const Byte>& input) _throw(EncodingError);
+      static HandshakeRejectReason decode(std::span<const Byte>& input) TELAR_THROWS(EncodingError);
     };
 
     template <Direction Side, HandshakeTag Tag, typename... Fields>
@@ -94,7 +94,7 @@ export {
 
 #ifdef TELAR_DEBUG
       template <typename Message>
-      static void pretty_print(const Message& message, std::FILE* output = stderr);
+      static void prettyPrint(const Message& message, std::FILE* output = stderr);
 #endif
     };
 
@@ -125,25 +125,25 @@ export {
       static constexpr std::size_t max_message_size = HandshakeSchema<ServerReject>::payload_size;
 
       template <typename Message>
-      static ds::Array<Byte, HandshakeSchema<Message>::payload_size> encode(const Message& message) _throw(EncodingError);
+      static ds::Array<Byte, HandshakeSchema<Message>::payload_size> encode(const Message& message) TELAR_THROWS(EncodingError);
 
       template <typename Message>
-      static Message decode(std::span<const Byte> input) _throw(EncodingError);
+      static Message decode(std::span<const Byte> input) TELAR_THROWS(EncodingError);
 
-      static HandshakeResponse decodeResponse(std::span<const Byte> input) _throw(EncodingError);
+      static HandshakeResponse decodeResponse(std::span<const Byte> input) TELAR_THROWS(EncodingError);
 
 #ifdef TELAR_DEBUG
       template <typename Message>
-      static void pretty_print(const Message& message, std::FILE* output = stderr);
+      static void prettyPrint(const Message& message, std::FILE* output = stderr);
 #endif
 
     private:
       static constexpr std::size_t header_size = handshake::magic.size() + u8::width;
 
-      static HandshakeTag decodeHeader(std::span<const Byte>& input) _throw(EncodingError);
+      static HandshakeTag decodeHeader(std::span<const Byte>& input) TELAR_THROWS(EncodingError);
 
       template <typename Message>
-      static Message decodeBody(std::span<const Byte> input) _throw(EncodingError);
+      static Message decodeBody(std::span<const Byte> input) TELAR_THROWS(EncodingError);
     };
 
   } // namespace telar
@@ -194,9 +194,9 @@ export {
       Client& operator=(Client&& other) noexcept;
       ~Client();
 
-      static Client init(const char* socket_path) _throw(SocketError);
+      static Client init(const char* socket_path) TELAR_THROWS(SocketError);
 
-      void handshake() _throw(std::exception);
+      void handshake() TELAR_THROWS(std::exception);
 
       void deinit();
 
@@ -223,7 +223,7 @@ export {
         writeAll(frame_buffer.first(frame_prefix_size + payload.size()));
       }
 
-      tbc::val_a<std::span<const Byte>> receiveFrame(tbc::val_a<std::span<Byte>> buffer) _throw(SocketError);
+      tbc::val_a<std::span<const Byte>> receiveFrame(tbc::val_a<std::span<Byte>> buffer) TELAR_THROWS(SocketError);
 
       [[nodiscard]] int descriptor() const noexcept;
 
@@ -236,7 +236,7 @@ export {
       };
 
       template <std::size_t N>
-      TBC_GENERIC inline void sendFrame(const ds::Array<Byte, N>& payload) _throw(SocketError) {
+      TBC_GENERIC inline void sendFrame(const ds::Array<Byte, N>& payload) TELAR_THROWS(SocketError) {
         static_assert(N > 0 && N <= max_payload_size, "Invalid runtime frame length");
         ds::Array<Byte, frame_prefix_size + N> frame{};
         std::span<Byte> output = frame.viewMut();
@@ -247,9 +247,9 @@ export {
         writeAll(frame.view());
       }
 
-      void writeAll(std::span<const std::uint8_t> bytes) const _throw(SocketError);
+      void writeAll(std::span<const std::uint8_t> bytes) const TELAR_THROWS(SocketError);
 
-      void readAll(std::span<std::uint8_t> bytes) const _throw(SocketError);
+      void readAll(std::span<std::uint8_t> bytes) const TELAR_THROWS(SocketError);
 
       sockaddr_un address_ = {};
       int fd_ = -1;

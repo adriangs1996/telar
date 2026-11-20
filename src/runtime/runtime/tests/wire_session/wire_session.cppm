@@ -137,7 +137,7 @@ export {
     const auto path = host.directory() + "/" + std::string{name};
 
     if (!std::filesystem::exists(path)) {
-      std::filesystem::copy_file(self.c_str(), path);
+      std::filesystem::copy_file(self.cStr(), path);
     }
 
     return path;

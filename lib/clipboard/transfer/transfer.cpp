@@ -17,11 +17,11 @@ namespace telar::clipboard::linux_backend {
     return value_;
   }
 
-  std::expected<void, read_error> wait(int fd, short events, deadline expires) {
+  std::expected<void, ReadError> wait(int fd, short events, deadline expires) {
     for (;;) {
       const auto remaining = std::chrono::ceil<std::chrono::milliseconds>(expires - clock::now()).count();
       if (remaining <= 0) {
-        return std::unexpected(read_error::timed_out);
+        return std::unexpected(ReadError::timed_out);
       }
 
       pollfd event{.fd = fd, .events = events, .revents = 0};
@@ -29,14 +29,14 @@ namespace telar::clipboard::linux_backend {
       const int result = poll(&event, 1, timeout);
       if (result > 0) {
         if ((event.revents & POLLNVAL) != 0) {
-          return std::unexpected(read_error::read_failed);
+          return std::unexpected(ReadError::read_failed);
         }
 
         return {};
       }
 
       if (result < 0 && sys::lastError() != EINTR) {
-        return std::unexpected(read_error::read_failed);
+        return std::unexpected(ReadError::read_failed);
       }
     }
   }

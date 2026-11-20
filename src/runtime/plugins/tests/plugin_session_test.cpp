@@ -100,7 +100,7 @@ namespace {
     // restarted session to answer.
     constexpr std::string_view stall_once = "timeout-once:";
     const bool stall = mode == "timeout" || (mode.starts_with(stall_once) && FileDescriptor{::open(std::string{mode.substr(stall_once.size())}.c_str(), O_CREAT | O_EXCL | O_WRONLY, 0600)});
-    tap::PipeStream stream{STDIN_FILENO, STDOUT_FILENO};
+    tap::PipeStream stream{tap::PipeEnds{.input = STDIN_FILENO, .output = STDOUT_FILENO}};
     tap::FrameChannel channel{stream};
     ds::Array<Byte, tap::Limits::effect_bytes> output;
     unsigned count = 0;

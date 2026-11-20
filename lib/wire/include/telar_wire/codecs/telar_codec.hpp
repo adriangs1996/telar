@@ -329,7 +329,7 @@ namespace telar {
     // Prints the frame's bytes, field names and values in three aligned rows; the text it builds lives
     // in `memory` until it returns.
     template <typename Message, Allocator Memory>
-    static void pretty_print(Memory& memory, const Message& message, std::FILE* output = stderr) {
+    static void prettyPrint(Memory& memory, const Message& message, std::FILE* output = stderr) {
       ds::Vec<Byte, Memory> buffer{memory};
 
       buffer.resize(encodedSize(message));
@@ -371,7 +371,7 @@ namespace telar {
 #endif
 
     template <typename Message>
-    static auto encode(const Message& message) _throw(EncodingError) {
+    static auto encode(const Message& message) TELAR_THROWS(EncodingError) {
       using Sch = MessageSchema<Message>;
       static_assert(Sch::fixed_size, "Variable messages require Codec::encode(message, buffer)");
       static_assert(Sch::payload_size <= max_payload_size);
@@ -384,7 +384,7 @@ namespace telar {
     }
 
     template <typename Message>
-    static Message decode(std::span<const Byte> input) _throw(EncodingError) {
+    static Message decode(std::span<const Byte> input) TELAR_THROWS(EncodingError) {
       DecodeStorage storage{};
 
       return decode<Message>(input, storage);
@@ -419,7 +419,7 @@ namespace telar {
   template <Direction Side, auto Tag, typename Body>
   template <typename Message, Allocator Memory>
   void MessageLayout<Side, Tag, Body>::prettyPrint(Memory& memory, const Message& message, std::FILE* output) {
-    Codec::pretty_print(memory, message, output);
+    Codec::prettyPrint(memory, message, output);
   }
 #endif
 

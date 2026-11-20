@@ -201,10 +201,10 @@ namespace telar::runtime {
   template <Allocator Memory>
   void HardenedGit<Memory>::configure(Command<Memory>& command) {
     command.removeEnvironmentPrefix("GIT_");
-    command.setEnvironment("GIT_OPTIONAL_LOCKS", "0");
-    command.setEnvironment("GIT_NO_LAZY_FETCH", "1");
-    command.setEnvironment("GIT_TERMINAL_PROMPT", "0");
-    command.setEnvironment("LC_ALL", "C");
+    command.setEnvironment({.name = "GIT_OPTIONAL_LOCKS", .value = "0"});
+    command.setEnvironment({.name = "GIT_NO_LAZY_FETCH", .value = "1"});
+    command.setEnvironment({.name = "GIT_TERMINAL_PROMPT", .value = "0"});
+    command.setEnvironment({.name = "LC_ALL", .value = "C"});
   }
 
   template <Allocator Memory>

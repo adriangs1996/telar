@@ -109,23 +109,23 @@ namespace telar::runtime {
     return record(process);
   }
 
-  ProcessActionResult ProcessTable::signal(pid_t process, std::uint64_t started_seconds, std::uint64_t started_microseconds, int signal) noexcept {
-    if (process <= 0) {
+  ProcessActionResult ProcessTable::signal(ProcessInstance process, int signal) noexcept {
+    if (process.pid <= 0) {
       return ProcessActionResult::gone;
     }
 
     // The descriptor names this instance: the check below and the signal reach the same process.
-    FileDescriptor instance{static_cast<int>(::syscall(SYS_pidfd_open, process, 0))};
+    FileDescriptor instance{static_cast<int>(::syscall(SYS_pidfd_open, process.pid, 0))};
     if (!instance && sys::lastError() != ENOSYS) {
       return actionFailure(sys::lastError());
     }
 
-    if (!sameProcessInstance(process, started_seconds, started_microseconds)) {
+    if (!sameProcessInstance(process)) {
       return ProcessActionResult::gone;
     }
 
     // Kernels before 5.3 have no pidfd; they keep the instant between the check and kill.
-    const auto sent = instance ? ::syscall(SYS_pidfd_send_signal, instance.get(), signal, nullptr, 0) : ::kill(process, signal);
+    const auto sent = instance ? ::syscall(SYS_pidfd_send_signal, instance.get(), signal, nullptr, 0) : ::kill(process.pid, signal);
     if (sent != 0) {
       return actionFailure(sys::lastError());
     }

@@ -482,6 +482,18 @@ export {
 export {
   namespace telar::runtime {
 
+    // What the client loop knows of a connection: whether the client finished its handshake, whether
+    // the connection is closing, whether requests wait in its buffer, and what the loop asks of its
+    // descriptor.
+    struct ConnectionFlags {
+      bool negotiated = false;
+      bool closing = false;
+      bool buffered_requests = false;
+      bool write_interest = false;
+      bool read_paused = false;
+      bool read_interest = true;
+    };
+
     template <Allocator Memory>
     class Connection {
     public:
@@ -622,12 +634,13 @@ export {
 
       [[nodiscard]] std::size_t queuedBytes() const noexcept;
 
-      bool negotiated = false;
-      bool closing = false;
-      bool buffered_requests = false;
-      bool write_interest = false;
-      bool read_paused = false;
-      bool read_interest = true;
+      [[nodiscard]] TBC_HOT_PATH inline const ConnectionFlags& flags() const noexcept {
+        return flags_;
+      }
+
+      TBC_HOT_PATH inline ConnectionFlags& flagsMut() noexcept {
+        return flags_;
+      }
 
     private:
       static constexpr std::size_t read_batch_size = std::size_t{64} * 1024;
@@ -637,6 +650,7 @@ export {
       ByteQueue<Memory> input_;
       OutgoingFrames<Memory> output_;
       ds::Vec<Byte, Memory> decode_bytes_;
+      ConnectionFlags flags_;
     };
 
     extern template class Connection<SystemAllocator>;

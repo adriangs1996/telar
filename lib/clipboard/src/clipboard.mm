@@ -7,12 +7,12 @@
 
 namespace telar::clipboard {
   namespace {
-    std::expected<content, read_error> copyData(NSData* data, std::string_view mime_type, std::size_t maximum_bytes) {
+    std::expected<Content, ReadError> copyData(NSData* data, std::string_view mime_type, std::size_t maximum_bytes) {
       if (data.length > maximum_bytes) {
-        return std::unexpected(read_error::content_too_large);
+        return std::unexpected(ReadError::content_too_large);
       }
 
-      content result{.mime_type = mime_type, .bytes = {}};
+      Content result{.mime_type = mime_type, .bytes = {}};
 
       if (data.length != 0) {
         const std::span<const byte> bytes{static_cast<const byte*>(data.bytes), data.length}; // NOLINT(clang-diagnostic-unsafe-buffer-usage-in-container): NSData hands out its bytes and their length
@@ -23,7 +23,7 @@ namespace telar::clipboard {
       return result;
     }
 
-    std::expected<content, read_error> capture(NSPasteboard* board, std::size_t maximum_bytes) {
+    std::expected<Content, ReadError> capture(NSPasteboard* board, std::size_t maximum_bytes) {
       struct ImageFormat {
         NSPasteboardType type;
         std::string_view mime_type;
@@ -53,19 +53,19 @@ namespace telar::clipboard {
 
       NSString* const text = [board stringForType:NSPasteboardTypeString];
       if (text == nil) {
-        return std::unexpected(read_error::no_supported_content);
+        return std::unexpected(ReadError::no_supported_content);
       }
 
       NSData* const data = [text dataUsingEncoding:NSUTF8StringEncoding];
       if (data == nil) {
-        return std::unexpected(read_error::encoding_failed);
+        return std::unexpected(ReadError::encoding_failed);
       }
 
       return copyData(data, "text/plain;charset=utf-8", maximum_bytes);
     }
   }
 
-  std::expected<content, read_error> read(std::size_t maximum_bytes) {
+  std::expected<Content, ReadError> read(std::size_t maximum_bytes) {
     @autoreleasepool {
       NSPasteboard* const board = [NSPasteboard generalPasteboard];
       const auto revision = board.changeCount;
@@ -74,14 +74,14 @@ namespace telar::clipboard {
         auto result = capture(board, maximum_bytes);
 
         if (board.changeCount != revision) {
-          result = std::unexpected(read_error::changed);
+          result = std::unexpected(ReadError::changed);
         }
 
         return result;
       } catch (const std::bad_alloc&) {
-        return std::unexpected(read_error::allocation_failed);
+        return std::unexpected(ReadError::allocation_failed);
       } catch (const std::length_error&) {
-        return std::unexpected(read_error::allocation_failed);
+        return std::unexpected(ReadError::allocation_failed);
       }
     }
   }

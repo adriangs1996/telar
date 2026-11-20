@@ -33,7 +33,7 @@ namespace telar::runtime::config {
 
     // Reads a whole number within bounds of an integer setting.
     std::uint64_t boundedWhole(const lua::Value& value, std::uint64_t fallback, Bounds<std::uint64_t> bounds) {
-      return value.boundedInteger(fallback, bounds.minimum, bounds.maximum);
+      return value.boundedInteger(fallback, bounds);
     }
 
     unsigned toneBonus(std::string_view tone) noexcept {
@@ -361,7 +361,7 @@ namespace telar::runtime::config {
     }
 
     result.level = optionalChoice<NotificationLevel>(action.field("level"), notification_level_names).valueOr(NotificationLevel::info);
-    result.duration_ms = static_cast<std::uint32_t>(action.field("duration_ms").boundedInteger(default_notification_duration_ms, min_notification_duration_ms, max_notification_duration_ms));
+    result.duration_ms = static_cast<std::uint32_t>(action.field("duration_ms").boundedInteger(default_notification_duration_ms, {.minimum = min_notification_duration_ms, .maximum = max_notification_duration_ms}));
     constexpr ds::Array targets{"pane_id", "tab_id", "workspace_id"};
 
     for (std::size_t index = 0; index < targets.size(); ++index) {
@@ -639,7 +639,7 @@ namespace telar::runtime::config {
   void BasicActionValidator<Commands>::notification(const lua::Value& action) {
     action.onlyFields({"kind", "title", "body", "level", "duration_ms", "pane_id", "tab_id", "workspace_id"});
     optionalChoice(action.field("level"), {"info", "success", "warning", "failure"});
-    NotificationBody body{.duration_ms = static_cast<std::uint32_t>(action.field("duration_ms").boundedInteger(default_notification_duration_ms, min_notification_duration_ms, max_notification_duration_ms))};
+    NotificationBody body{.duration_ms = static_cast<std::uint32_t>(action.field("duration_ms").boundedInteger(default_notification_duration_ms, {.minimum = min_notification_duration_ms, .maximum = max_notification_duration_ms}))};
     const auto title = action.field("title");
     const auto message = action.field("body");
 
@@ -836,7 +836,7 @@ namespace telar::runtime::config {
     shape.kind = kind(value.field("ui"));
     shape.form = ComponentForm::component;
     fields(value, shape.kind);
-    shape.priority = static_cast<unsigned>(std::round(value.field("priority").boundedNumber(inherited_priority, 0, maximum_priority)));
+    shape.priority = static_cast<unsigned>(std::round(value.field("priority").boundedNumber(inherited_priority, {.minimum = 0, .maximum = maximum_priority})));
     const auto tone = value.field("tone");
 
     optionalChoice(tone, {"neutral", "muted", "accent", "success", "warning", "danger"});
@@ -1012,7 +1012,7 @@ namespace telar::runtime::config {
   }
 
   void ComponentShapeReader::finiteNumber(const lua::Value& value) {
-    static_cast<void>(value.boundedNumber(0, std::numeric_limits<double>::lowest(), std::numeric_limits<double>::max()));
+    static_cast<void>(value.boundedNumber(0, {.minimum = std::numeric_limits<double>::lowest(), .maximum = std::numeric_limits<double>::max()}));
   }
 
   std::size_t ComponentShapeReader::samples(const lua::Value& value, LimitNotices& limits) {
@@ -1030,7 +1030,7 @@ namespace telar::runtime::config {
         sample.fail("must be a number");
       }
 
-      static_cast<void>(sample.boundedNumber(0, 0, std::numeric_limits<double>::max()));
+      static_cast<void>(sample.boundedNumber(0, {.minimum = 0, .maximum = std::numeric_limits<double>::max()}));
     }
 
     return kept;
@@ -1081,7 +1081,7 @@ namespace telar::runtime::config {
       return ds::none;
     }
 
-    return value.boundedNumber(0, std::numeric_limits<double>::lowest(), std::numeric_limits<double>::max());
+    return value.boundedNumber(0, {.minimum = std::numeric_limits<double>::lowest(), .maximum = std::numeric_limits<double>::max()});
   }
 
   bool componentAllowed(ComponentKind kind, ComponentPlace place) noexcept {

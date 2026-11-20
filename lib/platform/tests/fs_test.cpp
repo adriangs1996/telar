@@ -94,19 +94,19 @@ namespace {
     check(static_cast<bool>(directory));
     for (const std::string_view path : {"../outside", "a/../b", "./a/b", "a//b", "/etc/hosts", "", "a/."}) {
       check(openFailure([&] {
-        return openBeneath(directory.get(), path, O_RDONLY);
+        return openBeneath(directory.get(), path, {.flags = O_RDONLY});
       }) == EINVAL);
     }
 
     for (const std::string_view path : {"link", "up/outside"}) {
       const auto failure = openFailure([&] {
-        return openBeneath(directory.get(), path, O_RDONLY);
+        return openBeneath(directory.get(), path, {.flags = O_RDONLY});
       });
 
       check(failure == ELOOP || failure == ENOTDIR);
     }
 
-    const auto file = openBeneath(directory.get(), "a/b", O_RDONLY);
+    const auto file = openBeneath(directory.get(), "a/b", {.flags = O_RDONLY});
     struct stat opened{};
     struct stat expected{};
 

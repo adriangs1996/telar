@@ -83,7 +83,7 @@ namespace telar::runtime::cli {
     }
 
     if (action == "install") {
-      if (::symlink(target.c_str(), path) != 0) {
+      if (::symlink(target.cStr(), path) != 0) {
         const auto failure = sys::lastError();
         if (failure == EACCES || failure == EPERM) {
           std::println(stderr, "telar cli: cannot write {}; rerun with sudo or pass --dir ~/.local/bin", path);
@@ -92,7 +92,7 @@ namespace telar::runtime::cli {
         throw fileError(failure);
       }
 
-      std::println(stdout, "telar cli: installed {} -> {}", path, target.c_str());
+      std::println(stdout, "telar cli: installed {} -> {}", path, target.cStr());
     } else {
       std::println(stdout, "telar cli: removed {}", path);
     }

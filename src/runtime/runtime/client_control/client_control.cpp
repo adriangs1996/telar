@@ -40,7 +40,7 @@ namespace telar::runtime {
 
     requester.connection.send(RequestCompleted{.request_id = request.request_id});
     // Found again: answering the requester borrowed the store both clients lie in.
-    resolve(clients, route)->connection.closing = true;
+    resolve(clients, route)->connection.flagsMut().closing = true;
   }
 
   void ClientControl::requestCommand(ClientStore& clients, std::uint64_t requester_id, const RequestClientCommand& request) {
@@ -73,7 +73,7 @@ namespace telar::runtime {
 
     requireRole(sender, ClientRole::interactive);
     auto* requester = resolve(clients, completion.route);
-    if (requester == nullptr || requester->connection.closing || requester->role != ClientRole::control || !requester->pending_command) {
+    if (requester == nullptr || requester->connection.flags().closing || requester->role != ClientRole::control || !requester->pending_command) {
       return;
     }
 
@@ -94,7 +94,7 @@ namespace telar::runtime {
     auto& requester = requireClient(clients, requester_id);
 
     requireRole(requester, ClientRole::control);
-    const auto* pane = findPane(panes, request.pane_id, request.pane_generation);
+    const auto* pane = findPane(panes, {.id = request.pane_id, .generation = request.pane_generation});
     if (pane == nullptr) {
       throw RequestError{FailureCode::pane_not_found, "Pane does not exist or its generation is stale"};
     }
@@ -128,7 +128,7 @@ namespace telar::runtime {
 
     requireRole(sender, ClientRole::interactive);
     auto* requester = resolve(clients, completion.requester);
-    if (requester == nullptr || requester->connection.closing || requester->role != ClientRole::control || !requester->pending_focus) {
+    if (requester == nullptr || requester->connection.flags().closing || requester->role != ClientRole::control || !requester->pending_focus) {
       return;
     }
 
@@ -139,7 +139,7 @@ namespace telar::runtime {
 
     requester->connection.send(PaneFocusResult{.request_id = completion.request_id, .outcome = completion.outcome, .focused_pane_id = completion.focused_pane_id});
     requester->pending_focus.reset();
-    requester->connection.closing = true;
+    requester->connection.flagsMut().closing = true;
   }
 
   void ClientControl::notify(ClientStore& clients, std::uint64_t requester_id, const ShowNotification& request) {
@@ -174,7 +174,7 @@ namespace telar::runtime {
       if (client->pending_focus && client->pending_focus->target == departed) {
         failAbandoned(*client, client->pending_focus->request_id);
         client->pending_focus.reset();
-        client->connection.closing = true;
+        client->connection.flagsMut().closing = true;
       }
     }
   }
@@ -186,7 +186,7 @@ namespace telar::runtime {
   }
 
   bool ClientControl::routable(const ClientSession* client) noexcept {
-    return client != nullptr && !client->connection.closing && client->role == ClientRole::interactive && client->identity != 0;
+    return client != nullptr && !client->connection.flags().closing && client->role == ClientRole::interactive && client->identity != 0;
   }
 
   ClientSession* ClientControl::resolve(ClientStore& clients, ClientRoute target) noexcept {
@@ -203,7 +203,7 @@ namespace telar::runtime {
     ClientSession* selected = nullptr;
 
     for (auto* client : clients.items()) {
-      if (client == nullptr || client->connection.closing || client->role != ClientRole::interactive || client->last_input_pane != pane_id || client->attachment(pane_id) == nullptr || client->last_input_sequence == 0) {
+      if (client == nullptr || client->connection.flags().closing || client->role != ClientRole::interactive || client->last_input_pane != pane_id || client->attachment(pane_id) == nullptr || client->last_input_sequence == 0) {
         continue;
       }
 

@@ -98,8 +98,8 @@ namespace {
         const ds::Array<std::string_view, 3> arguments{"/bin/zsh", "-l", "-i"};
         Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
 
-        command.setEnvironment("ZDOTDIR", "/custom");
-        command.setEnvironment("TELAR_BASH_LOGIN", "1");
+        command.setEnvironment({.name = "ZDOTDIR", .value = "/custom"});
+        command.setEnvironment({.name = "TELAR_BASH_LOGIN", .value = "1"});
         const auto launch = integration.apply(command);
 
         check(launch && launch->shell == IntegratedShell::zsh && command.environment("TELAR_SHELL_TOKEN") == launch->token.text());
@@ -128,7 +128,7 @@ namespace {
         check(integration.apply(command).hasValue());
         check(command.environment("XDG_DATA_DIRS") == text(directory) + "/fish:/usr/local/share:/usr/share");
         check(!command.environment("TELAR_FISH_XDG_DATA_DIRS"));
-        command.setEnvironment("XDG_DATA_DIRS", "/a:/b");
+        command.setEnvironment({.name = "XDG_DATA_DIRS", .value = "/a:/b"});
         check(integration.apply(command).hasValue());
         check(command.environment("TELAR_FISH_XDG_DATA_DIRS") == "/a:/b");
       }
@@ -137,7 +137,7 @@ namespace {
         const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
         Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
 
-        command.setEnvironment("TELAR_SHELL_TOKEN", "inherited");
+        command.setEnvironment({.name = "TELAR_SHELL_TOKEN", .value = "inherited"});
         check(!integration.apply(command));
         check(!command.environment("TELAR_SHELL_TOKEN"));
         check(spawnedArguments(command) == std::vector<std::string>{"/bin/cat"});
@@ -223,7 +223,7 @@ namespace {
       const ds::Array<std::string_view, 3> arguments{shell, "-l", "-i"};
       Command command{memory, Launch{.cwd = home, .arguments = arguments}};
 
-      command.setEnvironment("HOME", home);
+      command.setEnvironment({.name = "HOME", .value = home});
       for (const auto name : {"ZDOTDIR", "ENV", "BASH_ENV", "PROMPT_COMMAND", "PS1", "XDG_CONFIG_HOME", "TELAR_PROMPT_MODE"}) {
         command.removeEnvironment(name);
       }
@@ -294,9 +294,9 @@ namespace {
     void runOnTerminal(ConcurrentMemory& memory, std::span<const std::string_view> arguments, std::string_view home, std::span<const std::pair<std::string_view, std::string_view>> environment, CommandZones& zones) {
       Command command{memory, Launch{.cwd = home, .arguments = arguments}};
 
-      command.setEnvironment("HOME", home);
+      command.setEnvironment({.name = "HOME", .value = home});
       for (const auto& [name, value] : environment) {
-        command.setEnvironment(name, value);
+        command.setEnvironment({.name = name, .value = value});
       }
 
       PtyProcess process{command.specification(TerminalSize{80, 24, 0, 0})};
@@ -389,8 +389,8 @@ namespace {
       const ds::Array<std::string_view, 3> arguments{shell, "-c", remote};
       Command command{memory, Launch{.cwd = home.path(), .arguments = arguments}};
 
-      command.setEnvironment("HOME", home.path());
-      command.setEnvironment("SHELL", shell);
+      command.setEnvironment({.name = "HOME", .value = home.path()});
+      command.setEnvironment({.name = "SHELL", .value = shell});
       for (const auto name : {"ZDOTDIR", "ENV", "BASH_ENV", "PROMPT_COMMAND", "PS1", "XDG_DATA_HOME", "XDG_CONFIG_HOME", "TELAR_SHELL_TOKEN", "TELAR_PROMPT_MODE"}) {
         command.removeEnvironment(name);
       }
@@ -517,7 +517,7 @@ namespace {
     const ds::Array<std::string_view, 3> arguments{*zsh, "-l", "-i"};
     Command command{memory, Launch{.cwd = home.path(), .arguments = arguments}};
 
-    command.setEnvironment("HOME", home.path());
+    command.setEnvironment({.name = "HOME", .value = home.path()});
     command.removeEnvironment("ZDOTDIR");
     RuntimeModel model{memory};
     auto owned = ds::makeBox<Pane>(memory, memory, 7, TabLocation{}, command, PaneLaunch{TerminalSize{80, 24, 8, 16}, model.media_budget, model.graphics_limits, integration.apply(command)});
@@ -549,7 +549,7 @@ namespace {
 
     // The shell's marks reach the terminal too, which flags its prompt row for clients.
     pane.terminal.refresh();
-    const auto& screen = pane.terminal.screen;
+    const auto& screen = pane.terminal.screen();
 
     check(screen.cursor.y < screen.row_flags.size() && (screen.row_flags[screen.cursor.y] & static_cast<Byte>(RowFlag::prompt)) != 0);
     const auto revision = pane.shell_state == PaneShell{} ? 0 : pane.shell_revision;
@@ -608,7 +608,7 @@ namespace {
 
     // A block's row is where the terminal flagged its prompt.
     pane.terminal.refresh();
-    const auto top = pane.terminal.screen.scroll.offset;
+    const auto top = pane.terminal.screen().scroll.offset;
 
     check(blocks[3].row >= top && (screen.row_flags[blocks[3].row - top] & static_cast<Byte>(RowFlag::prompt)) != 0);
     // Output scrolls the rows and the anchors follow them.
@@ -648,7 +648,7 @@ namespace {
     const ds::Array<std::string_view, 3> arguments{*zsh, "-l", "-i"};
     Command command{memory, Launch{.cwd = home.path(), .arguments = arguments}};
 
-    command.setEnvironment("HOME", home.path());
+    command.setEnvironment({.name = "HOME", .value = home.path()});
     command.removeEnvironment("ZDOTDIR");
     RuntimeModel model{memory};
     auto owned = ds::makeBox<Pane>(memory, memory, 7, TabLocation{}, command, PaneLaunch{TerminalSize{80, 24, 8, 16}, model.media_budget, model.graphics_limits, integration.apply(command)});

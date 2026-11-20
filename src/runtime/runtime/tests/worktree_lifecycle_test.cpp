@@ -130,8 +130,8 @@ namespace {
     pane.exit_status = SIGKILL;
     workspaces.collectExited(model, panes, clients);
     check(model.panes.find(opened.pane_id) != nullptr);
-    panes.release(model, clients, owner.session().id, opened.pane_id);
-    panes.release(model, clients, observer.session().id, opened.pane_id);
+    panes.release(model, clients, {.client = owner.session().id, .pane = opened.pane_id});
+    panes.release(model, clients, {.client = observer.session().id, .pane = opened.pane_id});
     workspaces.collectExited(model, panes, clients);
     check(model.panes.find(opened.pane_id) == nullptr);
     check(!owner.session().workspace && !observer.session().workspace);

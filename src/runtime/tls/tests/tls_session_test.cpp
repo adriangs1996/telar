@@ -190,7 +190,7 @@ namespace {
       check(SSL_set_alpn_protos(client.get(), offered.data(), offered.size()) == 0);
     }
 
-    TlsSession session{contexts, authority, TunnelSockets{downstream.local.get(), upstream.local.get()}, scenario == SessionCase::wrong_hostname ? "wrong.test" : "origin.test", memory, ds::Box<AlpnOffer, TlsTestMemory>{}};
+    TlsSession session{contexts, authority, TunnelRoute{.sockets = {downstream.local.get(), upstream.local.get()}, .hostname = scenario == SessionCase::wrong_hostname ? "wrong.test" : "origin.test"}, memory, ds::Box<AlpnOffer, TlsTestMemory>{}};
     bool client_failed = false;
     bool server_failed = false;
     bool client_ready = false;

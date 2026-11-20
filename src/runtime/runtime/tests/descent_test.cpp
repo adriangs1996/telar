@@ -96,7 +96,7 @@ namespace {
     check(first.receive<RequestFailed>().code == FailureCode::pane_not_found);
     check(second.receive<RequestFailed>().code == FailureCode::pane_not_found);
     check(first.session().verified_pane == 0 && second.session().verified_pane == 0);
-    check(!first.session().connection.read_paused && !second.session().connection.read_paused);
+    check(!first.session().connection.flags().read_paused && !second.session().connection.flags().read_paused);
 
     inspector.released.store(false, std::memory_order_release);
     service.verify(model.panes, first.session(), VerifyPaneDescent{3, 1, pane.generation});
@@ -105,7 +105,7 @@ namespace {
       return inspector.calls.load(std::memory_order_acquire) == 3;
     });
 
-    first.session().connection.closing = true;
+    first.session().connection.flagsMut().closing = true;
     service.verify(model.panes, second.session(), VerifyPaneDescent{4, 1, pane.generation});
     service.schedule(clients);
     inspector.released.store(true, std::memory_order_release);

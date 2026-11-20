@@ -231,7 +231,7 @@ namespace telar::runtime::plugins {
   Session<Memory>::Session(Memory& memory, const SessionOptions& options)
       : memory_(memory),
         process_(spawn(options)),
-        stream_(process_.output(), process_.input(), SessionIo{process_, options.cancellation}),
+        stream_(PipeEnds{.input = process_.output(), .output = process_.input()}, SessionIo{process_, options.cancellation}),
         channel_(stream_),
         timeout_(options.timeout),
         tracing_(options.trace_path != nullptr) {}

@@ -99,7 +99,7 @@ export namespace telar::gui::features::prompt {
   // selected from it. Opaque: only the use cases below reach it. It stays where it is until its
   // pane is forgotten.
   struct PaneLine {
-    PaneLine(Memory& memory, std::uint64_t pane_id, Keymap keymap);
+    PaneLine(Memory& memory, std::uint64_t pane, Keymap keymap);
 
     Line line;
     std::uint64_t pane_id;
@@ -253,8 +253,8 @@ export namespace telar::gui::features::prompt {
     // replace the oldest instead of growing it for as long as the client lives.
     static constexpr std::uint16_t history_limit = 1000;
 
-    // Every line and what it asks for live in `memory`.
-    explicit State(tbc::mut_a<Memory> memory);
+    // Every line and what it asks for live in `allocator`.
+    explicit State(tbc::mut_a<Memory> allocator);
 
     // Everything below lives in memory's region.
     tbc::mut_a<Memory> memory;

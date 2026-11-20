@@ -73,7 +73,7 @@ namespace {
 
     terminal.feed(bytes("\x1b]2;" + title + "\x1b\\"));
     terminal.refresh();
-    const auto shown = terminal.effects.title();
+    const auto shown = terminal.effects().title();
 
     check(shown.starts_with("ab\xe7\x95\x8c") && shown.size() <= 256 && validUtf8(shown));
     check(std::ranges::none_of(shown, [](char byte) {
@@ -111,7 +111,7 @@ namespace {
 
     terminal.feed(bytes(history));
     terminal.refresh();
-    check(terminal.screen.scroll.total_rows > terminal.screen.rows);
+    check(terminal.screen().scroll.total_rows > terminal.screen().rows);
 
     terminal.feed(bytes("\x1b[?1049h"));
     std::size_t both_screen_bytes = 0;
@@ -131,7 +131,7 @@ namespace {
 
     terminal.feed(bytes("\x1b[?1049l\x1b[3J"));
     terminal.refresh();
-    check(terminal.screen.scroll.total_rows == terminal.screen.rows);
+    check(terminal.screen().scroll.total_rows == terminal.screen().rows);
     terminal.resize(TerminalSize{120, 40, 0, 0});
 #if TELAR_DIAGNOSTICS
     check(terminal.storageMetrics().screen_bytes == 120 * 40 * sizeof(ScreenCell));
@@ -153,15 +153,15 @@ namespace {
     terminal.feed(bytes(history + "\x1b]133;A\x07$ \x1b]133;B\x07clear\r\n\x1b]133;C\x07"));
     terminal.feed(bytes("\x1b[3J\x1b[H\x1b[2J"));
     terminal.refresh();
-    check(terminal.screen.scroll.total_rows == terminal.screen.rows);
+    check(terminal.screen().scroll.total_rows == terminal.screen().rows);
 
     terminal.feed(bytes("\x1b]133;A\x07$ \x1b]133;B\x07\x1b[H\x1b[2J"));
     terminal.refresh();
-    check(terminal.screen.scroll.total_rows > terminal.screen.rows);
+    check(terminal.screen().scroll.total_rows > terminal.screen().rows);
 
     terminal.feed(bytes("\x1b[3Jprinted\r\n\x1b]133;A\x07$ \x1b]133;B\x07\x1b[H\x1b[2J"));
     terminal.refresh();
-    check(terminal.screen.scroll.total_rows > terminal.screen.rows);
+    check(terminal.screen().scroll.total_rows > terminal.screen().rows);
   }
 
   // The text a `PaneRows` reply holds on its row `index`, trailing spaces trimmed.
@@ -235,7 +235,7 @@ namespace {
 
     // Rows on the live screen, nearer the bottom than a screen, come from the last full view.
     terminal.refresh();
-    const auto last = trimmed + terminal.screen.scroll.total_rows - 2;
+    const auto last = trimmed + terminal.screen().scroll.total_rows - 2;
     const auto tail = rows.read(terminal, ReadPaneRows{.request_id = 4, .pane_id = 1, .from = last, .count = 5});
 
     check(tail.from == last && tail.rows == 2 && replyRow(tail, 0) == "line " + std::to_string(printed - 1));
@@ -254,7 +254,7 @@ namespace {
                                                                             "c"}) {
         terminal.feed(bytes(input));
         terminal.refresh();
-        check(terminal.screen.input_modes.paste_events == terminal.pasteEvents());
+        check(terminal.screen().input_modes.paste_events == terminal.pasteEvents());
         check(terminal.pasteEvents() == std::string_view{input}.ends_with('h'));
       }
     }
@@ -270,7 +270,7 @@ namespace {
 
       terminal.feed(bytes("Hello \x1b[1;31mred\x1b[0m\r\n\xe7\x95\x8c e\xcc\x81"));
       terminal.refresh();
-      const auto& screen = terminal.screen;
+      const auto& screen = terminal.screen();
 
       check(screen.cells[0].text[0] == 'H');
       check(screen.cells[6].style.foreground.kind == CellColor::Kind::indexed);
@@ -298,34 +298,34 @@ namespace {
 
       check(budget.allocations() == allocations);
       terminal.feed(bytes("\x1b]2;safe\x07\x1b]7;file://localhost/tmp/hello%20world\x07\x1b]52;c;aGVsbG8=\x07"));
-      check(terminal.effects.title() == "safe");
-      check(terminal.effects.cwd() == "/tmp/hello world");
-      check(terminal.effects.clipboard.empty());
+      check(terminal.effects().title() == "safe");
+      check(terminal.effects().cwd() == "/tmp/hello world");
+      check(terminal.effects().clipboard.empty());
       check(!terminal.clipboardControl().route());
       terminal.feed(bytes("\x1b]9;4;1;42\x07"));
-      check(terminal.effects.progress_state == PaneProgressState::set && terminal.effects.progress_percent == 42);
-      const auto progress_revision = terminal.effects.progress_revision;
+      check(terminal.effects().progress_state == PaneProgressState::set && terminal.effects().progress_percent == 42);
+      const auto progress_revision = terminal.effects().progress_revision;
 
       terminal.feed(bytes("\x1b]9;4;1;42\x07"));
-      check(terminal.effects.progress_revision == progress_revision);
+      check(terminal.effects().progress_revision == progress_revision);
       terminal.feed(bytes("\x1b]9;4;3\x07"));
-      check(terminal.effects.progress_state == PaneProgressState::indeterminate && !terminal.effects.progress_percent);
+      check(terminal.effects().progress_state == PaneProgressState::indeterminate && !terminal.effects().progress_percent);
       terminal.feed(bytes("\x1b]9;4;2;75\x07"));
-      check(terminal.effects.progress_state == PaneProgressState::error && terminal.effects.progress_percent == 75);
+      check(terminal.effects().progress_state == PaneProgressState::error && terminal.effects().progress_percent == 75);
       terminal.feed(bytes("\x1b]9;4;0\x07"));
-      check(terminal.effects.progress_state == PaneProgressState::remove && !terminal.effects.progress_percent);
+      check(terminal.effects().progress_state == PaneProgressState::remove && !terminal.effects().progress_percent);
       terminal.resize(TerminalSize{.cols = 80, .rows = 24, .cell_width_px = 0, .cell_height_px = 0});
       terminal.refresh();
-      check(terminal.screen.cells.size() == 80 * 24);
-      const auto revision = terminal.screen.revision;
+      check(terminal.screen().cells.size() == 80 * 24);
+      const auto revision = terminal.screen().revision;
 
       terminal.resize(TerminalSize{80, 24, 0, 0});
       terminal.refresh();
-      check(terminal.screen.revision == revision);
+      check(terminal.screen().revision == revision);
       terminal.resize(TerminalSize{80, 24, 8, 16});
       check(terminal.hasSize(TerminalSize{80, 24, 8, 16}));
       terminal.refresh();
-      check(terminal.screen.revision > revision);
+      check(terminal.screen().revision > revision);
     }
 
     check(budget.liveBytes() == 0);
@@ -362,9 +362,9 @@ namespace {
 
     for (const auto& uri : rejected) {
       terminal.feed(bytes("\x1b]7;file://localhost/tmp/start\x1b\\"));
-      check(terminal.effects.cwd() == "/tmp/start");
+      check(terminal.effects().cwd() == "/tmp/start");
       terminal.feed(bytes("\x1b]7;" + uri + "\x1b\\"));
-      telar::testing::expect(terminal.effects.cwd() == "/tmp/start", uri.substr(0, 40));
+      telar::testing::expect(terminal.effects().cwd() == "/tmp/start", uri.substr(0, 40));
     }
   }
 
@@ -387,7 +387,7 @@ namespace {
                           "\x1b[48;2;7;8;9m\x1b[K\x1b[0m\r\n"
                           "\xf0\x9f\x98\x80"));
       terminal.refresh();
-      const auto& cells = terminal.screen.cells;
+      const auto& cells = terminal.screen().cells;
 
       check(cells[0].style.foreground == rgb(1, 2, 3) && cells[0].style.background == rgb(4, 5, 6));
       check(cells[10].style.background == CellColor{.kind = CellColor::Kind::indexed, .channels = {9, 0, 0}});
@@ -404,7 +404,7 @@ namespace {
       // A wide character that does not fit the last column moves to the next row.
       terminal.feed(bytes("xxxxxxxxx\xe7\x95\x8c"));
       terminal.refresh();
-      const auto& cells = terminal.screen.cells;
+      const auto& cells = terminal.screen().cells;
 
       check(cells[9].length == 1 && cells[9].text[0] == ' ');
       check(cells[10].width == CellWidth::wide && cells[10].length == 3);
@@ -416,7 +416,7 @@ namespace {
 
       terminal.feed(bytes("\x1b]4;1;rgb:ff/00/00\x1b\\\x1b]10;rgb:11/22/33\x1b\\\x1b]11;rgb:44/55/66\x1b\\\x1b[31mR\x1b[0mD"));
       terminal.refresh();
-      const auto& cells = terminal.screen.cells;
+      const auto& cells = terminal.screen().cells;
 
       check(cells[0].style.foreground == rgb(0xff, 0, 0));
       check(cells[1].style.foreground == rgb(0x11, 0x22, 0x33) && cells[1].style.background == rgb(0x44, 0x55, 0x66));
@@ -426,8 +426,8 @@ namespace {
 
     terminal.feed(bytes("\x1b[?5hD"));
     terminal.refresh();
-    check(terminal.screen.cells[0].style.foreground.kind == CellColor::Kind::rgb);
-    check(terminal.screen.cells[0].style.background.kind == CellColor::Kind::rgb);
+    check(terminal.screen().cells[0].style.foreground.kind == CellColor::Kind::rgb);
+    check(terminal.screen().cells[0].style.background.kind == CellColor::Kind::rgb);
   }
 
   // The default colours a pane changes apply to the whole screen, rows already drawn
@@ -442,11 +442,11 @@ namespace {
 
       terminal.feed(bytes("D\r\n"));
       terminal.refresh();
-      check(terminal.screen.cells[0].style.foreground.kind == CellColor::Kind::default_color);
+      check(terminal.screen().cells[0].style.foreground.kind == CellColor::Kind::default_color);
       terminal.feed(bytes(change));
       terminal.refresh();
-      telar::testing::expect(terminal.screen.cells[0].style.foreground.kind == CellColor::Kind::rgb, change.substr(2, 3));
-      telar::testing::expect(terminal.screen.cells[0].style.background.kind == CellColor::Kind::rgb, change.substr(2, 3));
+      telar::testing::expect(terminal.screen().cells[0].style.foreground.kind == CellColor::Kind::rgb, change.substr(2, 3));
+      telar::testing::expect(terminal.screen().cells[0].style.background.kind == CellColor::Kind::rgb, change.substr(2, 3));
     }
   }
 

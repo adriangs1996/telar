@@ -65,8 +65,8 @@ export {
       [[nodiscard]] std::uint16_t done() const noexcept;
       [[nodiscard]] std::uint16_t total() const noexcept;
       [[nodiscard]] std::string_view step() const noexcept;
+      [[nodiscard]] std::string_view finalMessage() const noexcept;
 
-      FixedText<agent_report_message_bytes> final_message;
       static constexpr std::size_t task_capacity = 128;
 
     private:
@@ -75,6 +75,7 @@ export {
         AgentPlanStatus status = AgentPlanStatus::pending;
       };
 
+      FixedText<agent_report_message_bytes> final_message_;
       ds::Array<Task, task_capacity> tasks_{};
       std::size_t count_ = 0;
       bool uses_tasks_ = false;
@@ -127,7 +128,7 @@ export {
   namespace telar::runtime {
 
     struct Agent {
-      Agent(std::uint64_t pane, std::uint64_t generation);
+      explicit Agent(PaneKey key);
 
       void setSession(std::string_view value);
       bool report(const ReportAgent& incoming, ObservationTime now = ObservationTime::now());

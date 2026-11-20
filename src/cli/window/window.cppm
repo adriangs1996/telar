@@ -42,6 +42,12 @@ export {
       pending,
     };
 
+    // The machine a setup report speaks of: the name it goes by and where it is reached.
+    struct SetupTarget {
+      std::string_view label;
+      std::string_view destination;
+    };
+
     // What a machine setup did, step by step, with notes, for a person or as JSON. Remote hosts
     // supply much of its text: each line reaches the terminal without its control bytes, trimmed,
     // and cut at max_text_bytes.
@@ -90,9 +96,9 @@ export {
 
       [[nodiscard]] bool has(Status status) const;
 
-      int refuse(Memory& memory, std::string_view label, std::string_view destination, std::string_view reason) const;
+      int refuse(Memory& memory, SetupTarget target, std::string_view reason) const;
 
-      int finish(Memory& memory, std::string_view label, std::string_view destination) const;
+      int finish(Memory& memory, SetupTarget target) const;
 
     private:
       template <typename... Arguments>

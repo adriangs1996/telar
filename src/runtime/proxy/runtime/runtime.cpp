@@ -73,11 +73,11 @@ namespace telar::runtime {
     }
   }
 
-  void FlowState::open(tbc::val_a<traffic::FlowControl*> control, std::uint64_t id, int child, int origin, std::string_view host) noexcept {
+  void FlowState::open(tbc::val_a<traffic::FlowControl*> control, std::uint64_t id, TunnelSockets sockets, std::string_view host) noexcept {
     control_ = control;
     identity_.id = id;
-    endpoint(child, identity_.client);
-    endpoint(origin, identity_.server);
+    endpoint(sockets.child, identity_.client);
+    endpoint(sockets.origin, identity_.server);
     // The host is cut to its capacity first, so the assignment never throws.
     try {
       identity_.host.assign(substring(host, 0, ProxyHostname::maximum_bytes));
@@ -667,7 +667,7 @@ namespace telar::runtime {
   template <Allocator Memory>
   void ProxyClientConfiguration::apply(Command<Memory>& command) const {
     environment(&command, [](void* target, std::string_view name, std::string_view value) {
-      static_cast<Command<Memory>*>(target)->setEnvironment(name, value);
+      static_cast<Command<Memory>*>(target)->setEnvironment({.name = name, .value = value});
     });
   }
 

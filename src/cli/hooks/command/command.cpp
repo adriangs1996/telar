@@ -581,7 +581,7 @@ namespace telar::runtime::cli::hooks {
     }
 
     const auto provider = describeProvider(input.provider()).name;
-    const auto* manifest = builtin_manifests.find(input.provider());
+    const auto* manifest = builtinManifests().find(input.provider());
     const auto field = manifest == nullptr ? std::string_view{} : manifest->commandField(input.fields().text("tool_name"));
     const auto command = input.tools().stringField(field);
     if (!command || command->empty()) {

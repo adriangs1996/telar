@@ -33,7 +33,7 @@ namespace telar::runtime {
 
     // Folds a Content-Length field's values into `length`, throwing when one is invalid or disagrees.
     void readLengths(std::string_view value, ds::Option<std::size_t>& length) {
-      TextFields values{value, ","};
+      TextFields values{{.text = value, .delimiter = ","}};
 
       while (const auto part = values.next()) {
         const auto parsed = parseHttpNumber<http_decimal>(trimText(*part, blanks));
@@ -52,7 +52,7 @@ namespace telar::runtime {
     // Whether a Connection field lists `name` as hop-by-hop.
     template <typename Field>
     bool listsToken(const Field& connection, std::string_view name) noexcept {
-      TextFields tokens{connection.value(), ","};
+      TextFields tokens{{.text = connection.value(), .delimiter = ","}};
 
       while (const auto token = tokens.next()) {
         if (asciiEqualIgnoreCase(name, trimText(*token, blanks))) {
@@ -623,7 +623,7 @@ namespace telar::runtime {
     stream = 0;
     body_materialized = false;
     response_to_head = head_response;
-    TextFields lines{input, "\r\n"};
+    TextFields lines{{.text = input, .delimiter = "\r\n"}};
     const auto start = *lines.next();
 
     if (response) {
@@ -712,7 +712,7 @@ namespace telar::runtime {
       return HttpExpectation::none;
     }
 
-    return asciiEqualIgnoreCase(*expect, "100-continue") ? HttpExpectation::continue_ : HttpExpectation::unsupported;
+    return asciiEqualIgnoreCase(*expect, "100-continue") ? HttpExpectation::hundred_continue : HttpExpectation::unsupported;
   }
 
   template <Allocator Memory>

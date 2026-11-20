@@ -58,7 +58,7 @@ namespace {
     const auto native = argumentBlock({"/usr/local/bin/codex", "--no-daemon", "resume", "session"});
     ProcessArguments arguments{native};
 
-    check(arguments.provider(builtin_manifests, "codex") == AgentProvider::codex);
+    check(arguments.provider(builtinManifests(), "codex") == AgentProvider::codex);
     check(arguments.sessionHost(AgentProvider::codex) == SessionHost::pane);
     check(arguments.sessionHost(AgentProvider::claude) == SessionHost::unknown);
     for (const auto batch : codex_batch_arguments) {
@@ -73,19 +73,19 @@ namespace {
     check(ProcessArguments{{}}.sessionHost(AgentProvider::codex) == SessionHost::unknown);
     const auto aliased = argumentBlock({"cursor-agent", "chat"});
 
-    check(ProcessArguments{aliased}.provider(builtin_manifests, "unrecognized-launcher") == AgentProvider::cursor);
+    check(ProcessArguments{aliased}.provider(builtinManifests(), "unrecognized-launcher") == AgentProvider::cursor);
     const auto script = argumentBlock({"/usr/bin/node", "--trace-warnings", "--no-deprecation", "/pkg/@openai/codex/bin/codex.js"});
 
-    check(ProcessArguments{script}.provider(builtin_manifests, "node") == AgentProvider::codex);
-    check(ProcessArguments{script}.provider(builtin_manifests, "wrapper") == AgentProvider::codex);
+    check(ProcessArguments{script}.provider(builtinManifests(), "node") == AgentProvider::codex);
+    check(ProcessArguments{script}.provider(builtinManifests(), "wrapper") == AgentProvider::codex);
     const auto user_script = argumentBlock({"node", "--inspect", "/project/app.js", "codex"});
 
-    check(ProcessArguments{user_script}.provider(builtin_manifests, "node") == AgentProvider::unknown);
+    check(ProcessArguments{user_script}.provider(builtinManifests(), "node") == AgentProvider::unknown);
     const auto unrelated = argumentBlock({"python", "/project/codex.js"});
 
-    check(ProcessArguments{unrelated}.provider(builtin_manifests, "python") == AgentProvider::unknown);
+    check(ProcessArguments{unrelated}.provider(builtinManifests(), "python") == AgentProvider::unknown);
 
-    auto custom = builtin_manifests;
+    auto custom = builtinManifests();
 
     custom.add("fixture").process_names.append("custom-agent");
     const auto custom_script = argumentBlock({"node", "--trace-warnings", "custom-agent.js"});
@@ -100,7 +100,7 @@ namespace {
     kernel.append(argumentBlock({"codex", "resume", "session", "exec"}));
     const auto parsed = ProcessArguments::fromMacos(kernel);
 
-    check(parsed.provider(builtin_manifests, "unknown") == AgentProvider::codex);
+    check(parsed.provider(builtinManifests(), "unknown") == AgentProvider::codex);
     check(parsed.sessionHost(AgentProvider::codex) == SessionHost::shared_server);
     check(ProcessArguments::fromMacos(std::span{kernel}.first(2)).sessionHost(AgentProvider::codex) == SessionHost::unknown);
     kernel.resize(kernel.size() - 6);
@@ -126,7 +126,7 @@ namespace {
   }
 
   void testSharedServerEvidence() {
-    Agent agent{1, 1};
+    Agent agent{{.id = 1, .generation = 1}};
     const ProcessIdentity identity{42, 1, 100, 0, 42};
 
     agent.observeProcess(identity, AgentProvider::codex, {100, 100});
@@ -183,19 +183,19 @@ namespace {
     std::filesystem::path directory = root;
     std::error_code error;
 
-    std::filesystem::create_hard_link(executable.c_str(), directory / "codex", error);
+    std::filesystem::create_hard_link(executable.cStr(), directory / "codex", error);
     // A link cannot cross volumes, and the directory beside the binary is always on its volume.
     if (error == std::errc::cross_device_link) {
       auto beside = (std::filesystem::path{executable.view()}.parent_path() / "telar-process-test-XXXXXX").string();
 
       check(::mkdtemp(beside.data()) != nullptr);
       directory = beside;
-      std::filesystem::create_hard_link(executable.c_str(), directory / "codex");
+      std::filesystem::create_hard_link(executable.cStr(), directory / "codex");
     } else {
       check(!error);
     }
 
-    std::filesystem::create_hard_link(executable.c_str(), directory / "claude");
+    std::filesystem::create_hard_link(executable.cStr(), directory / "claude");
     const auto codex = (directory / "codex").string();
     const auto claude = (directory / "claude").string();
     const ds::Array<std::string_view, 6> arguments{"/bin/sh", "-c", "\"$1\" --process-identification-fixture & \"$2\" --process-identification-fixture & wait", "fixture", codex, claude};

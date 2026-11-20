@@ -41,14 +41,14 @@ namespace telar::gui::inline foundation::inline system {
     runtime::FileDescriptor openProfileLockFile(int directory, std::string_view name) {
       try {
         try {
-          return runtime::openBeneath(directory, name, combineFlags(O_RDWR, O_CREAT, O_EXCL), PrivateMode::file);
+          return runtime::openBeneath(directory, name, {.flags = combineFlags(O_RDWR, O_CREAT, O_EXCL), .permissions = PrivateMode::file});
         } catch (const runtime::SystemError& error) {
           if (error.code() != EEXIST) {
             throw;
           }
         }
 
-        return runtime::openBeneath(directory, name, O_RDWR);
+        return runtime::openBeneath(directory, name, {.flags = O_RDWR});
       } catch (const runtime::SystemError& error) {
         if (error.code() == ELOOP) {
           throw InsecureProfileFile{};
@@ -96,7 +96,7 @@ namespace telar::gui::inline foundation::inline system {
         for (unsigned attempt = 0; attempt < maximum_attempts; ++attempt) {
           generateName();
           try {
-            file_ = runtime::openBeneath(parent_, name_.data(), combineFlags(O_WRONLY, O_CREAT, O_EXCL), PrivateMode::file);
+            file_ = runtime::openBeneath(parent_, name_.data(), {.flags = combineFlags(O_WRONLY, O_CREAT, O_EXCL), .permissions = PrivateMode::file});
 
             return;
           } catch (const runtime::SystemError& error) {

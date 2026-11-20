@@ -60,7 +60,7 @@ namespace {
 
   ScreenObservationResult observe(PaneObserver& observer, AgentProvider provider) {
     check(observer.seal());
-    const auto result = observer.observe(builtin_manifests, provider);
+    const auto result = observer.observe(builtinManifests(), provider);
 
     observer.complete();
     check(!result.failed);
@@ -111,7 +111,7 @@ namespace {
 
     check(drop && drop->name == "history.observer_batch_events" && drop->requested == 513);
     check(!observer.takeDrop());
-    auto result = observer.observe(builtin_manifests, AgentProvider::codex);
+    auto result = observer.observe(builtinManifests(), AgentProvider::codex);
 
     check(result.signal && result.signal->status == AgentStatus::ready);
     observer.complete();
@@ -152,7 +152,7 @@ namespace {
     const auto oversized_drop = observer.takeDrop();
 
     check(oversized_drop && oversized_drop->name == "history.observer_batch_bytes");
-    auto result = observer.observe(builtin_manifests, AgentProvider::codex);
+    auto result = observer.observe(builtinManifests(), AgentProvider::codex);
 
     check(result.signal && result.signal->status == AgentStatus::ready);
     observer.complete();
@@ -164,7 +164,7 @@ namespace {
   }
 
   void testManifests() {
-    auto manifests = builtin_manifests;
+    auto manifests = builtinManifests();
 
     check(manifests.fromExecutable("CLAUDE.EXE") == AgentProvider::claude);
     check(manifests.fromPath("C:\\node_modules\\@openai\\codex\\cli.js") == AgentProvider::codex);
@@ -319,7 +319,7 @@ namespace {
       auto observer = std::allocate_shared<PaneObserver>(AllocatorRef<PaneObserver, ConcurrentMemory>{memory}, memory, TerminalSize{80, 24, 8, 16}, "/initial");
 
       observer->configureHistory({.pane = 1, .workspace_path = "/initial", .shell = "/bin/sh"});
-      ObservationProcessor<ChangedDirectoryProbe, DirectoryHistory> processor{builtin_manifests, probe, history};
+      ObservationProcessor<ChangedDirectoryProbe, DirectoryHistory> processor{builtinManifests(), probe, history};
       decltype(processor)::Request request;
 
       request.count = 1;
@@ -445,7 +445,7 @@ namespace {
 
       observer->bytes(ObservationKind::input, {reinterpret_cast<const Byte*>(input.data()), input.size()}, true);
       feedObserver(*observer, "echo\r\nresult");
-      observer->retired_next = std::move(model.retired_observers);
+      observer->retiredNextMut() = std::move(model.retired_observers);
       model.retired_observers = observer;
       ++model.retired_observer_count;
       service.refresh(model, agents);
@@ -478,7 +478,7 @@ namespace {
     observer->bytes(ObservationKind::command, {reinterpret_cast<const Byte*>(command.data()), command.size()}, true);
     observer->bytes(ObservationKind::input, {reinterpret_cast<const Byte*>(typed.data()), typed.size()}, true);
     feedObserver(*observer, "echo 'a\r\nb'\r\na\r\nb");
-    observer->retired_next = std::move(model.retired_observers);
+    observer->retiredNextMut() = std::move(model.retired_observers);
     model.retired_observers = observer;
     ++model.retired_observer_count;
     service.refresh(model, agents);

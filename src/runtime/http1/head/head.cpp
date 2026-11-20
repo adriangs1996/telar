@@ -37,7 +37,7 @@ namespace telar::runtime {
     }
 
     bool endsWithChunked(std::string_view value) noexcept {
-      TextFields tokens{value, ","};
+      TextFields tokens{{.text = value, .delimiter = ","}};
       std::string_view last;
 
       while (const auto token = tokens.next()) {
@@ -58,7 +58,7 @@ namespace telar::runtime {
 
     // Folds a Content-Length field's values into `length`; false when one is invalid or disagrees.
     bool readContentLength(std::string_view value, ds::Option<std::size_t>& length) noexcept {
-      TextFields lengths{value, ","};
+      TextFields lengths{{.text = value, .delimiter = ","}};
 
       while (const auto part = lengths.next()) {
         const auto parsed = parseHttpNumber<http_decimal>(trimText(*part, blanks));
@@ -100,7 +100,7 @@ namespace telar::runtime {
 
     ds::Option<FramingFields> readFramingFields(std::string_view bytes) noexcept {
       FramingFields fields;
-      TextFields lines{bytes, "\r\n"};
+      TextFields lines{{.text = bytes, .delimiter = "\r\n"}};
 
       lines.next();
       while (const auto line = lines.next()) {
@@ -222,7 +222,7 @@ namespace telar::runtime {
   }
 
   bool Http1Head::connectionCloses(std::string_view bytes) noexcept {
-    TextFields lines{bytes, "\r\n"};
+    TextFields lines{{.text = bytes, .delimiter = "\r\n"}};
 
     lines.next();
     while (const auto line = lines.next()) {
@@ -231,7 +231,7 @@ namespace telar::runtime {
         continue;
       }
 
-      TextFields tokens{textAfter(*line, colon + 1), ","};
+      TextFields tokens{{.text = textAfter(*line, colon + 1), .delimiter = ","}};
 
       while (const auto token = tokens.next()) {
         if (equals(trimText(*token, blanks), "close")) {
@@ -244,7 +244,7 @@ namespace telar::runtime {
   }
 
   ds::Option<std::uint16_t> Http1Head::parseStatus(std::string_view line) noexcept {
-    TextFields parts{line, " "};
+    TextFields parts{{.text = line, .delimiter = " "}};
 
     parts.next();
     const auto text = parts.next();

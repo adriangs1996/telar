@@ -115,13 +115,13 @@ namespace telar::runtime {
 
     const auto token = ShellToken::generate();
 
-    command.setEnvironment("TELAR_SHELL_TOKEN", token.text());
+    command.setEnvironment({.name = "TELAR_SHELL_TOKEN", .value = token.text()});
     if (!ssh_.empty()) {
-      command.setEnvironment("TELAR_SHELL_SSH", ssh_);
+      command.setEnvironment({.name = "TELAR_SHELL_SSH", .value = ssh_});
     }
 
     if (bare_prompt) {
-      command.setEnvironment("TELAR_PROMPT_MODE", "telar");
+      command.setEnvironment({.name = "TELAR_PROMPT_MODE", .value = "telar"});
     }
 
     ds::String<Memory> path{memory_, directory_};
@@ -134,18 +134,18 @@ namespace telar::runtime {
       if (const auto previous = command.environment("ZDOTDIR")) {
         const ds::String<Memory> saved{memory_, *previous};
 
-        command.setEnvironment("TELAR_ZSH_ZDOTDIR", saved);
+        command.setEnvironment({.name = "TELAR_ZSH_ZDOTDIR", .value = saved});
       }
 
       path.append("/zsh");
-      command.setEnvironment("ZDOTDIR", path);
+      command.setEnvironment({.name = "ZDOTDIR", .value = path});
       break;
     case IntegratedShell::bash: {
       // A login shell ignores --rcfile, so the script reads the login files itself.
       if (std::ranges::any_of(command.arguments() | std::views::drop(1), [](std::string_view option) {
             return option == "-l" || option == "-il" || option == "-li" || option == "--login";
           })) {
-        command.setEnvironment("TELAR_BASH_LOGIN", "1");
+        command.setEnvironment({.name = "TELAR_BASH_LOGIN", .value = "1"});
       }
 
       path.append("/bash/telar.bash");
@@ -165,10 +165,10 @@ namespace telar::runtime {
       path.append("/fish:");
       path.append(saved);
       if (previous) {
-        command.setEnvironment("TELAR_FISH_XDG_DATA_DIRS", saved);
+        command.setEnvironment({.name = "TELAR_FISH_XDG_DATA_DIRS", .value = saved});
       }
 
-      command.setEnvironment("XDG_DATA_DIRS", path);
+      command.setEnvironment({.name = "XDG_DATA_DIRS", .value = path});
       break;
     }
     }

@@ -846,7 +846,7 @@ namespace {
     check(options.intercept_hosts.append("*"));
     options.intercept_hosts.finish();
     const auto secret = ProxySecret::generate();
-    ProxyService<NativeEventLoop<TlsTestMemory>, SystemNameResolver> service{memory, options, secret, interception, ProxyListener::bind(ds::none, {})};
+    ProxyService<NativeEventLoop<TlsTestMemory>, SystemNameResolver> service{memory, ProxyServiceParts{.options = options, .secret = secret, .interception = interception}, ProxyListener::bind(ds::none, {})};
 
     {
       redir::Ingress<decltype(service), SameUser> ingress{path, service};
@@ -947,7 +947,7 @@ namespace {
     check(options.intercept_hosts.append("*"));
     options.intercept_hosts.finish();
     const auto secret = ProxySecret::generate();
-    ProxyService<NativeEventLoop<TlsTestMemory>, SystemNameResolver> service{memory, options, secret, interception, ProxyListener::bind(ds::none, {})};
+    ProxyService<NativeEventLoop<TlsTestMemory>, SystemNameResolver> service{memory, ProxyServiceParts{.options = options, .secret = secret, .interception = interception}, ProxyListener::bind(ds::none, {})};
     TcpPair downstream;
     TcpPair upstream;
 
@@ -1219,7 +1219,7 @@ namespace {
     }
 
     auto& flows = owner ? static_cast<TlsFlowObserver&>(owner.getMut()) : observer;
-    ProxyService<NativeEventLoop<TlsTestMemory>, SystemNameResolver> service{memory, options, secret, interception, ProxyListener::bind(ds::none, {}), &flows};
+    ProxyService<NativeEventLoop<TlsTestMemory>, SystemNameResolver> service{memory, ProxyServiceParts{.options = options, .secret = secret, .interception = interception}, ProxyListener::bind(ds::none, {}), &flows};
     TcpPair downstream{numeric_ipv6};
     TcpPair upstream{numeric_ipv6};
 

@@ -388,7 +388,7 @@ namespace {
 
       // On the primary screen a sequence alone opens a zone no end closed: nothing shows.
       feed(sequence);
-      check(pane.terminal.effects.document.empty() && pane.terminal.effects.inline_documents.empty() && !deliver());
+      check(pane.terminal.effects().document.empty() && pane.terminal.effects().inline_documents.empty() && !deliver());
 
       feed("\x1b[?1049h");
       feed(sequence);
@@ -413,7 +413,7 @@ namespace {
       check(pane.terminal.outputSettled());
 
       feed("\x1b[?1049l");
-      check(pane.terminal.effects.document.empty());
+      check(pane.terminal.effects().document.empty());
       check(deliver());
       const auto closed = peer.receive<PaneDocument>();
 
@@ -425,12 +425,12 @@ namespace {
       const std::string small = "\x1b]7780;begin;AAECAw==\x1b\\";
 
       feed("\r\n" + small + "first\r\nsecond\r\n\x1b]7780;end\x1b\\");
-      check(pane.terminal.effects.inline_documents.size() == 1);
+      check(pane.terminal.effects().inline_documents.size() == 1);
       check(deliver());
       const auto zone = peer.receive<PaneDocument>();
 
       check(zone.id != 0 && zone.rows == 2 && zone.size == 4 && zone.offset == 0 && zone.bytes.size() == 4);
-      check(zone.generation == pane.terminal.scrollbackGeneration() && zone.first_row == pane.terminal.scrollbackTrimmed() + pane.terminal.effects.inline_documents.front().row);
+      check(zone.generation == pane.terminal.scrollbackGeneration() && zone.first_row == pane.terminal.scrollbackTrimmed() + pane.terminal.effects().inline_documents.front().row);
       check(!deliver());
 
       // A reflow numbers the rows anew: the client hears where the rows went, without the bytes.
@@ -447,17 +447,17 @@ namespace {
         feed(small + "more\r\n\x1b]7780;end\x1b\\");
       }
 
-      check(pane.terminal.effects.inline_documents.size() == ::telar::render::max_pane_documents);
+      check(pane.terminal.effects().inline_documents.size() == ::telar::render::max_pane_documents);
       check(deliver());
       const auto withdrawn = peer.receive<PaneDocument>();
 
       check(withdrawn.id == zone.id && withdrawn.size == 0);
 
       // A document stands for the text its rows held: erasing that text lets the document go.
-      const auto kept = pane.terminal.effects.inline_documents.size();
+      const auto kept = pane.terminal.effects().inline_documents.size();
 
       feed("\x1b[H\x1b[2J");
-      check(pane.terminal.effects.inline_documents.size() < kept);
+      check(pane.terminal.effects().inline_documents.size() < kept);
       panes.detachAll(model, clients, client.id);
       panes.remove(model, clients, pane.id);
     }
@@ -506,7 +506,7 @@ namespace {
         check(peer.receive<PaneCwd>().pane_id == ids[index]);
       }
 
-      panes.release(model, clients, client.id, ids[1]);
+      panes.release(model, clients, {.client = client.id, .pane = ids[1]});
       auto& reattached = panes.attach(model, client, ids[1], {80, 24, 0, 0});
 
       check(reattached.slot == 1 && client.next_attachment == 1);
@@ -524,7 +524,7 @@ namespace {
         attachment.getMut().scrollback_generation = pane.terminal.scrollbackGeneration();
         attachment.getMut().scrollback_trimmed = pane.terminal.scrollbackTrimmed();
         pane.terminal.refresh();
-        const auto payload = attachment.getMut().frames.prepare(pane.terminal.screen);
+        const auto payload = attachment.getMut().frames.prepare(pane.terminal.screen());
         if (!payload.empty()) {
           std::vector<Byte> storage(128 * 1024);
           DecodeStorage decoded{storage};
@@ -544,9 +544,9 @@ namespace {
       client.connection.send(RequestCompleted{55});
       delivery.write(client, state, now);
       check(client.connection.writing());
-      pane.terminal.effects.setProgress(PaneProgressState::set, Byte{20});
+      pane.terminal.effectsMut().setProgress(PaneProgressState::set, Byte{20});
       delivery.write(client, state, now);
-      pane.terminal.effects.setProgress(PaneProgressState::set, Byte{80});
+      pane.terminal.effectsMut().setProgress(PaneProgressState::set, Byte{80});
       delivery.write(client, state, now);
       check(client.attachment(pane.id)->progress_revision == 1);
       drainSocket(peer.descriptor(), blocked_bytes);

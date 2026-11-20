@@ -49,7 +49,7 @@ namespace {
     observer.bytes(ObservationKind::input, bytes(typed), true);
     observer.bytes(ObservationKind::output, bytes(typed + "\n\x1b]133;C\x07" + std::string{output} + "\r\n\x1b]133;D;0\x07"), true);
     check(observer.seal());
-    check(!observer.observe(builtin_manifests, AgentProvider::unknown, history).failed);
+    check(!observer.observe(builtinManifests(), AgentProvider::unknown, history).failed);
     observer.complete();
   }
 
@@ -119,7 +119,7 @@ namespace {
     ConcurrentMemory& memory = adapter;
     ReversedProbe probe;
     FinishedCommands history;
-    ObservationProcessor<ReversedProbe, FinishedCommands> processor{builtin_manifests, probe, history};
+    ObservationProcessor<ReversedProbe, FinishedCommands> processor{builtinManifests(), probe, history};
     decltype(processor)::Request request;
 
     for (std::uint64_t pane = 1; pane <= 2; ++pane) {
@@ -141,7 +141,7 @@ namespace {
 
       check(entry.process_result.hasValue() && entry.process_result->request.pane == entry.pane, "a pane got another pane's process");
       check(entry.process_result->provider == provider && entry.process_result->cwd.view() == directory);
-      check(entry.process_result->name.view() == builtin_manifests.find(provider)->displayName());
+      check(entry.process_result->name.view() == builtinManifests().find(provider)->displayName());
       check(entry.observer->observedDirectory() == directory);
       entry.observer->complete();
     }

@@ -159,7 +159,7 @@ export {
     public:
       using InternalRequest = HistoryEvent;
 
-      explicit BackgroundService(ConcurrentMemory& memory, const char* history_path, const HistoryFilters& filters = default_history_filters);
+      explicit BackgroundService(ConcurrentMemory& memory, const char* history_path, const HistoryFilters& filters = defaultHistoryFilters());
 
       void process(std::span<const Byte> payload, EncodedReply<ConcurrentMemory>& reply, const RequestContext& context = {});
 

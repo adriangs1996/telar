@@ -248,7 +248,7 @@ export {
       checkpoint::Options session;
       bool fresh = false;
       bool capture_output = false;
-      const AgentManifests* manifests = &builtin_manifests;
+      const AgentManifests* manifests = &builtinManifests();
       DescriptionOptions descriptions;
       GraphicsLimits graphics;
       control::Policy control_policy{};
@@ -577,7 +577,7 @@ export {
           auto timeout = publish(now);
 
           TELAR_DIAGNOSTIC(model_.metrics.system = metrics_.diagnostics());
-          TELAR_DIAGNOSTIC(timeout = std::min(timeout, telemetry_.tick(model_, clients_, memory_, captures, background_, Clock::now())));
+          TELAR_DIAGNOSTIC(timeout = std::min(timeout, telemetry_.tick(model_, clients_, memory_, diagnostics::TelemetryServices{.captures = captures, .background = background_}, Clock::now())));
 
           for (const auto& event : poller_.wait(timeout, ready.viewMut())) {
             if (!route(event)) {

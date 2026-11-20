@@ -124,7 +124,7 @@ namespace {
     terminal.refresh();
     DecodeStorage storage{decoded};
 
-    return Codec::decode<PaneFrame>(sync.prepare(terminal.screen), storage);
+    return Codec::decode<PaneFrame>(sync.prepare(terminal.screen()), storage);
   }
 
   // The URI of the run that starts at `position`, or nothing when no run starts there.

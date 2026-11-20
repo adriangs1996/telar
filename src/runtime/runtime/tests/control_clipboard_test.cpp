@@ -283,7 +283,7 @@ namespace {
       check(!task.prompt);
       complete(terminal, task, ClipboardConsent::once, provider);
       check(drain(terminal) == "\x1b]52;c;aGVsbG8=\x1b\\");
-      check(terminal.effects.clipboard_revision == 0);
+      check(terminal.effects().clipboard_revision == 0);
     }
 
     void lifetimeAndPressure(auto& memory) {
@@ -890,7 +890,7 @@ namespace {
         service.advance(clients, pane, std::chrono::steady_clock::now());
         check(!clipboard.execution() && !clipboard.route() && clipboard.hasReply());
         check(clipboard.cancellation().hasValue() == task.hasValue());
-        check(!client.session().connection.closing && client.session().connection.responseDepth() == client_capacity);
+        check(!client.session().connection.flags().closing && client.session().connection.responseDepth() == client_capacity);
         check(client.session().connection.droppedResponses() == 0);
         check(pane.pty_responses->snapshot().messages == PtyResponseQueue::message_capacity && pane.pty_responses->snapshot().dropped == 0);
         check(provider.inspections == 0 && provider.reads == 0 && provider.writes == 0);
@@ -997,7 +997,7 @@ namespace {
             panes.remove(model, clients, identity);
             Command command{memory, launch};
 
-            pane = &panes.launch(model, nullptr, false, command, location, size, identity);
+            pane = &panes.launch(model, {.location = location, .size = size}, command, identity);
             check(pane->id == old.ticket.pane_id && pane->generation != old.ticket.pane_generation);
             panes.attach(model, client.session(), pane->id, size);
             bool rejected = false;
@@ -1077,8 +1077,8 @@ namespace {
         const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
         const Launch launch{.cwd = "/tmp", .arguments = arguments};
         const TabLocation location{.workspace = {.id = 7}, .tab_id = 1};
-        auto& failed = panes.launch(model, nullptr, false, launch, location, {80, 24, 9, 18});
-        auto& healthy = panes.launch(model, nullptr, false, launch, location, {80, 24, 9, 18});
+        auto& failed = panes.launch(model, {.location = location, .size = {80, 24, 9, 18}}, launch);
+        auto& healthy = panes.launch(model, {.location = location, .size = {80, 24, 9, 18}}, launch);
         const auto failed_id = failed.id;
         const auto healthy_id = healthy.id;
         std::string input;

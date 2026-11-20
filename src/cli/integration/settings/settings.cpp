@@ -736,7 +736,7 @@ namespace telar::runtime::cli::integration {
     bool changed = false;
 
     if (provider_.flat_hooks && settings.find("version") == nullptr) {
-      settings.setLiteral("version", "1");
+      settings.setLiteral({.name = "version", .value = "1"});
       changed = true;
     }
 
@@ -823,7 +823,7 @@ namespace telar::runtime::cli::integration {
 
         present = true;
         if (hook->find("command")->text() != command) {
-          hook->setString("command", command);
+          hook->setString({.name = "command", .value = command});
           changed = true;
         }
       }
@@ -842,11 +842,11 @@ namespace telar::runtime::cli::integration {
       JsonNode<Memory> node{memory_};
 
       if (!provider_.flat_hooks) {
-        node.setString("type", "command");
+        node.setString({.name = "type", .value = "command"});
       }
 
-      node.setString("command", command.command);
-      node.setLiteral("timeout", command.timeout);
+      node.setString({.name = "command", .value = command.command});
+      node.setLiteral({.name = "timeout", .value = command.timeout});
       return node;
     };
 

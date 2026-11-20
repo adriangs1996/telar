@@ -44,7 +44,7 @@ namespace {
   }
 
   void testReportTitleRejectsControlBytes() {
-    Agent agent{1, 1};
+    Agent agent{{.id = 1, .generation = 1}};
 
     check(agent.reportTitle("Clean title"));
     for (const std::string_view invalid : {std::string_view{"x\x1b]0;y\x07"}, std::string_view{"line\nbreak"}, std::string_view{"\xff\xfe"}}) {

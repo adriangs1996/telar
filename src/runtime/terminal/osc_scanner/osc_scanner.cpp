@@ -371,14 +371,21 @@ namespace telar::runtime {
     return next_row_ == first_row_;
   }
 
+  std::uint64_t TextSearch::requestId() const noexcept {
+    return origin_.request_id;
+  }
+
+  std::uint64_t TextSearch::paneId() const noexcept {
+    return origin_.pane_id;
+  }
+
   PaneMatches TextSearch::result() {
     std::ranges::reverse(matches_.viewMut().first(count_));
-    return PaneMatches{.request_id = request_id, .pane_id = pane_id, .truncated = truncated_, .matches = std::span<const PaneMatch>{matches_}.first(count_)};
+    return PaneMatches{.request_id = origin_.request_id, .pane_id = origin_.pane_id, .truncated = truncated_, .matches = std::span<const PaneMatch>{matches_}.first(count_)};
   }
 
   TextSearch::TextSearch(Origin origin, std::string_view needle, Rows rows, std::uint64_t revision)
-      : request_id(origin.request_id),
-        pane_id(origin.pane_id),
+      : origin_(origin),
         rows_(rows),
         revision_(revision),
         deadline_(Clock::now() + deadline_budget) {

@@ -245,7 +245,7 @@ namespace {
     check(model.panes.size() == 2);
     check(model.panes.find(1)->generation == 900);
     check(model.panes.find(257)->generation == 901);
-    check(model.panes.find(257)->terminal.screen.cols == 90);
+    check(model.panes.find(257)->terminal.screen().cols == 90);
     check(model.panes.find(257)->launch.bytes() == model.panes.find(1)->launch.bytes());
     check(model.panes.nextId() == 300);
     check(model.workspaces.nextId() == 70);
@@ -380,11 +380,11 @@ namespace {
 
     constexpr ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", "read value"};
     Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
-    const auto first = panes.launch(model, nullptr, false, command, location, TerminalSize{.cols = 80, .rows = 24, .cell_width_px = 0, .cell_height_px = 0}).id;
+    const auto first = panes.launch(model, {.location = location, .size = TerminalSize{.cols = 80, .rows = 24, .cell_width_px = 0, .cell_height_px = 0}}, command).id;
 
     expect(true);
     model.panes.erase(first);
-    const auto replacement = panes.launch(model, nullptr, false, command, location, TerminalSize{.cols = 80, .rows = 24, .cell_width_px = 0, .cell_height_px = 0}).id;
+    const auto replacement = panes.launch(model, {.location = location, .size = TerminalSize{.cols = 80, .rows = 24, .cell_width_px = 0, .cell_height_px = 0}}, command).id;
 
     check(replacement != first);
     expect(true);
@@ -609,7 +609,7 @@ namespace {
       LiveAgents agents;
 
       for (const auto& [pane, session_id] : {std::pair{1, first_session}, std::pair{2, first_session}, std::pair{3, direct_session}}) {
-        auto agent = std::make_unique<Agent>(pane, live.model.panes.find(pane)->generation);
+        auto agent = std::make_unique<Agent>(PaneKey{.id = static_cast<std::uint64_t>(pane), .generation = live.model.panes.find(pane)->generation});
 
         agent->provider = AgentProvider::claude;
         agent->setSession(session_id);

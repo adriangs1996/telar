@@ -73,7 +73,7 @@ namespace {
     check(rejected && queue->empty() && queue->snapshot().dropped == 0);
     terminal.feed(responseBytes("still usable"));
     terminal.refresh();
-    check(terminal.screen.cells.front().text.front() == 's');
+    check(terminal.screen().cells.front().text.front() == 's');
   }
 
   const telar::testing::Case case_shared_terminal_responses{"pty_response.shared_terminal_responses", testSharedTerminalResponses};

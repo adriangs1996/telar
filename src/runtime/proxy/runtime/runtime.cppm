@@ -789,7 +789,7 @@ export {
       ~FlowState();
 
       // The control the flow reports to is region `a`; the reasons it gives are literals.
-      void open(tbc::val_a<traffic::FlowControl*> control, std::uint64_t id, int child, int origin, std::string_view host) noexcept;
+      void open(tbc::val_a<traffic::FlowControl*> control, std::uint64_t id, TunnelSockets sockets, std::string_view host) noexcept;
 
       void visibility(traffic::Visibility value) noexcept;
 
@@ -1812,7 +1812,7 @@ export {
 
       // Answers the child's Expect: 100-continue itself, as the hook waits for the body it holds back.
       inline void answerContinue(Half& half) {
-        if (half.message.expectation() != HttpExpectation::continue_) {
+        if (half.message.expectation() != HttpExpectation::hundred_continue) {
           return;
         }
 
@@ -2557,12 +2557,6 @@ export {
 export {
   namespace telar::runtime {
 
-    // The sockets a tunnel relays between and the host the child asked for, which the tunnel copies.
-    struct TunnelRoute {
-      TunnelSockets sockets;
-      std::string_view hostname;
-    };
-
     class TlsTunnel {
     public:
       // The tunnel keeps the allocator, the interception and the observation, region `a`, and its session
@@ -2613,12 +2607,12 @@ export {
       // Generic over the caller's resolver.
       template <HostnameResolver Resolver>
       TBC_GENERIC void open(tbc::ref_a<TlsInterception> interception, tbc::mut_a<ConnectHandshake<ConcurrentMemory, Resolver>> handshake, tbc::val_a<ConnectionObservation> observation) {
+        const TunnelSockets sockets{handshake.childDescriptor(), handshake.originDescriptor()};
+
         if (observation.flows) {
           flow_ = ds::makeBox<FlowState>(memory_);
-          flow_.getMut().open(observation.flows, observation.identity, handshake.childDescriptor(), handshake.originDescriptor(), handshake.hostname());
+          flow_.getMut().open(observation.flows, observation.identity, sockets, handshake.hostname());
         }
-
-        const TunnelSockets sockets{handshake.childDescriptor(), handshake.originDescriptor()};
 
         if (handshake.intercept()) {
           tls_ = ds::makeBox<TlsTunnel>(memory_, memory_, interception, TunnelRoute{.sockets = sockets, .hostname = handshake.hostname()}, handshake.takeOffer(), observation);
@@ -3105,6 +3099,14 @@ export {
 export {
   namespace telar::runtime {
 
+    // What a proxy service keeps for the connections it accepts: its options, its secret and its TLS
+    // interception.
+    struct ProxyServiceParts {
+      const ProxyOptions<ConcurrentMemory>& options;
+      const ProxySecret& secret;
+      const TlsInterception& interception;
+    };
+
     template <EventLoop Poller, HostnameResolver Resolver>
     // The proxy's worker thread. It keeps `this`, and the connections it accepts keep its options, its
     // secret and its observations, so it stays where it was built; other threads only stop it and read
@@ -3112,13 +3114,13 @@ export {
     // Generic over the caller's event loop and resolver.
     class TBC_SHARED TBC_GENERIC ProxyService {
     public:
-      inline explicit ProxyService(ConcurrentMemory& memory, const ProxyOptions<ConcurrentMemory>& options, const ProxySecret& secret, const TlsInterception& interception, ProxyListener listener, traffic::FlowControl* flows = nullptr)
+      inline explicit ProxyService(ConcurrentMemory& memory, ProxyServiceParts parts, ProxyListener listener, traffic::FlowControl* flows = nullptr)
           : memory_(memory),
-            options_(options),
-            secret_(secret),
-            interception_(interception),
+            options_(parts.options),
+            secret_(parts.secret),
+            interception_(parts.interception),
             listener_(std::move(listener)),
-            observations_(memory, options.capture, flows),
+            observations_(memory, parts.options.capture, flows),
             poller_(memory),
             resolutions_(resolution_signal_),
             flows_(flows) {
@@ -3651,7 +3653,7 @@ export {
         identity->certificate.assign(certificate_path_);
         identity->bundle.assign(bundle_path_);
         client_ = std::move(identity);
-        service_.emplace(memory, options, *secret_, *interception_, std::move(listener), flowControl(tap));
+        service_.emplace(memory, ProxyServiceParts{.options = options, .secret = *secret_, .interception = *interception_}, std::move(listener), flowControl(tap));
         if (options.transparent_redirect) {
           ds::String<ConcurrentMemory> redirect_path{memory, endpoint};
 

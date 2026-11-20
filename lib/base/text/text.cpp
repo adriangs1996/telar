@@ -24,9 +24,9 @@ namespace telar::runtime {
     return difference == 0;
   }
 
-  TextFields::TextFields(tbc::val_a<std::string_view> text, tbc::val_b<std::string_view> delimiter) noexcept
-      : remaining_(text),
-        delimiter_(delimiter) {}
+  TextFields::TextFields(TextSplit split) noexcept
+      : remaining_(split.text),
+        delimiter_(split.delimiter) {}
 
   tbc::val_a<ds::Option<std::string_view>> TextFields::next() noexcept {
     if (finished_) {

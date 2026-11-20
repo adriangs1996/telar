@@ -70,14 +70,12 @@ namespace telar::runtime {
     --count;
   }
 
-  bool SentDocuments::settled(std::uint64_t at_revision, std::uint64_t at_generation, std::uint64_t at_trimmed) const noexcept {
-    return revision == at_revision && generation == at_generation && trimmed == at_trimmed;
+  bool SentDocuments::settled(Mark current) const noexcept {
+    return mark == current;
   }
 
-  void SentDocuments::settle(std::uint64_t at_revision, std::uint64_t at_generation, std::uint64_t at_trimmed) noexcept {
-    revision = at_revision;
-    generation = at_generation;
-    trimmed = at_trimmed;
+  void SentDocuments::settle(Mark current) noexcept {
+    mark = current;
   }
 
   Attachment::Attachment(ConcurrentMemory& memory, GraphicsCreditBudget& budget, std::uint64_t pane, std::shared_ptr<PaneMedia> media)
@@ -424,7 +422,7 @@ namespace telar::runtime {
   }
 
   void Pane::expireProgress(ds::Option<bool> shell_foreground) noexcept {
-    if (terminal.effects.progress_state == PaneProgressState::remove) {
+    if (terminal.effects().progress_state == PaneProgressState::remove) {
       return;
     }
 
@@ -435,7 +433,7 @@ namespace telar::runtime {
     }
 
     if (*shell_foreground) {
-      terminal.effects.setProgress(PaneProgressState::remove, ds::none);
+      terminal.effectsMut().setProgress(PaneProgressState::remove, ds::none);
     }
   }
 
@@ -458,10 +456,10 @@ namespace telar::runtime {
     panes.reserve(reserved_panes);
   }
 
-  Workspace::Workspace(ConcurrentMemory& memory, std::uint64_t identity, std::string_view directory, std::string_view label)
-      : id(identity),
-        path(memory, directory),
-        name(memory, label),
+  Workspace::Workspace(ConcurrentMemory& memory, WorkspaceSpec spec)
+      : id(spec.id),
+        path(memory, spec.path),
+        name(memory, spec.name),
         tabs(memory) {
     tabs.reserve(reserved_tabs);
   }
@@ -603,7 +601,7 @@ namespace telar::runtime {
 
   bool tabHeld(const ClientStore& clients, TabLocation location) noexcept {
     return std::ranges::any_of(clients.items(), [&](const ClientSession* client) {
-      return client != nullptr && !client->connection.closing && client->held_tabs.contains(location);
+      return client != nullptr && !client->connection.flags().closing && client->held_tabs.contains(location);
     });
   }
 
@@ -616,32 +614,32 @@ namespace telar::runtime {
     return *client;
   }
 
-  tbc::val_a<Pane*> findPane(tbc::mut_a<PaneStore> panes, std::uint64_t identity, std::uint64_t generation) noexcept {
-    auto* pane = panes.find(identity);
+  tbc::val_a<Pane*> findPane(tbc::mut_a<PaneStore> panes, PaneKey key) noexcept {
+    auto* pane = panes.find(key.id);
 
-    return pane != nullptr && pane->generation == generation ? pane : nullptr;
+    return pane != nullptr && pane->generation == key.generation ? pane : nullptr;
   }
 
-  tbc::val_a<const Pane*> findPane(tbc::ref_a<PaneStore> panes, std::uint64_t identity, std::uint64_t generation) noexcept {
-    const auto* pane = panes.find(identity);
+  tbc::val_a<const Pane*> findPane(tbc::ref_a<PaneStore> panes, PaneKey key) noexcept {
+    const auto* pane = panes.find(key.id);
 
-    return pane != nullptr && pane->generation == generation ? pane : nullptr;
+    return pane != nullptr && pane->generation == key.generation ? pane : nullptr;
   }
 
-  tbc::val_a<Pane*> livePane(tbc::mut_a<PaneStore> panes, std::uint64_t identity, std::uint64_t generation) noexcept {
-    auto* pane = findPane(panes, identity, generation);
+  tbc::val_a<Pane*> livePane(tbc::mut_a<PaneStore> panes, PaneKey key) noexcept {
+    auto* pane = findPane(panes, key);
 
     return pane != nullptr && !pane->exit_status && !pane->close_requested ? pane : nullptr;
   }
 
-  tbc::val_a<const Pane*> livePane(tbc::ref_a<PaneStore> panes, std::uint64_t identity, std::uint64_t generation) noexcept {
-    const auto* pane = findPane(panes, identity, generation);
+  tbc::val_a<const Pane*> livePane(tbc::ref_a<PaneStore> panes, PaneKey key) noexcept {
+    const auto* pane = findPane(panes, key);
 
     return pane != nullptr && !pane->exit_status && !pane->close_requested ? pane : nullptr;
   }
 
-  tbc::mut_a<Pane> requireReporterPane(tbc::mut_a<PaneStore> panes, const ClientSession& client, std::uint64_t identity, std::uint64_t generation) {
-    auto* pane = findPane(panes, identity, generation);
+  tbc::mut_a<Pane> requireReporterPane(tbc::mut_a<PaneStore> panes, const ClientSession& client, PaneKey key) {
+    auto* pane = findPane(panes, key);
     if (pane == nullptr || pane->exit_status) {
       throw RequestError{FailureCode::pane_not_found, "Pane not found"};
     }

@@ -21,7 +21,7 @@ namespace telar::runtime {
     // Tells the client that held the pane's clipboard request that it is withdrawn; the client being gone
     // withdraws it too.
     void sendCancellation(ClientSession* client, const control::Clipboard::Cancellation& cancellation, control::Clipboard& clipboard) {
-      if (client == nullptr || client->generation != cancellation.route.generation || client->connection.closing) {
+      if (client == nullptr || client->generation != cancellation.route.generation || client->connection.flags().closing) {
         clipboard.cancelled();
         return;
       }
@@ -59,7 +59,7 @@ namespace telar::runtime {
   bool ClipboardService::eligible(const ClientSession& client, const Pane& pane) noexcept {
     const auto* attachment = client.attachment(pane.id);
 
-    return !pane.close_requested && !pane.output_closed && client.role == ClientRole::interactive && !client.connection.closing && attachment != nullptr && attachment->desktop && attachment->desktop->pane_generation == pane.generation && attachment->desktop->visible && attachment->desktop->clipboard;
+    return !pane.close_requested && !pane.output_closed && client.role == ClientRole::interactive && !client.connection.flags().closing && attachment != nullptr && attachment->desktop && attachment->desktop->pane_generation == pane.generation && attachment->desktop->visible && attachment->desktop->clipboard;
   }
 
   void ClipboardService::configure(const ClientStore& clients, Pane& pane) {
@@ -113,7 +113,7 @@ namespace telar::runtime {
   }
 
   tbc::val_a<Pane*> ClipboardService::complete(tbc::mut_a<PaneStore> panes, ClientSession& sender, const CompleteClipboardDesktop& completion) {
-    auto* pane = findPane(panes, completion.ticket.pane_id, completion.ticket.pane_generation);
+    auto* pane = findPane(panes, {.id = completion.ticket.pane_id, .generation = completion.ticket.pane_generation});
     if (pane == nullptr || sender.generation != completion.ticket.client_generation || !eligible(sender, *pane)) {
       return nullptr;
     }
@@ -171,7 +171,7 @@ namespace telar::runtime {
   }
 
   bool AttachmentDelivery::prepare(Output& output, Attachment& attachment, Pane& pane, DeliveryLane lane) {
-    const auto& effects = pane.terminal.effects;
+    const auto& effects = pane.terminal.effects();
 
     switch (lane) {
     case DeliveryLane::scrollback:
@@ -230,7 +230,7 @@ namespace telar::runtime {
 
   bool AttachmentDelivery::document(Connection<ConcurrentMemory>& connection, Attachment& attachment, const Pane& pane) {
     static_assert(PaneDocument::max_size == ::telar::render::max_document_bytes);
-    const auto& effects = pane.terminal.effects;
+    const auto& effects = pane.terminal.effects();
     if (attachment.document_revision != effects.document_revision) {
       attachment.document_revision = effects.document_revision;
       attachment.document_offset = 0;
@@ -256,11 +256,12 @@ namespace telar::runtime {
   }
 
   bool AttachmentDelivery::inlineDocuments(Connection<ConcurrentMemory>& connection, Attachment& attachment, const Pane& pane) {
-    const auto& effects = pane.terminal.effects;
+    const auto& effects = pane.terminal.effects();
     const auto generation = pane.terminal.scrollbackGeneration();
     const auto trimmed = pane.terminal.scrollbackTrimmed();
     auto& sent = attachment.inline_documents;
-    if (sent.settled(effects.inline_revision, generation, trimmed)) {
+    const SentDocuments::Mark current{.revision = effects.inline_revision, .generation = generation, .trimmed = trimmed};
+    if (sent.settled(current)) {
       return false;
     }
 
@@ -308,7 +309,7 @@ namespace telar::runtime {
       }
     }
 
-    sent.settle(effects.inline_revision, generation, trimmed);
+    sent.settle(current);
     return false;
   }
 
@@ -345,12 +346,12 @@ namespace telar::runtime {
   }
 
   bool AttachmentDelivery::cells(Output& output, Attachment& attachment, Pane& pane, Clock::time_point now, std::chrono::nanoseconds& timeout) {
-    if (attachment.frames.waitingForAck(pane.terminal.screen)) {
+    if (attachment.frames.waitingForAck(pane.terminal.screen())) {
       return false;
     }
 
-    const bool snapshot = attachment.frames.needsSnapshot(pane.terminal.screen);
-    if (!snapshot && !pane.terminal.dirty() && attachment.frames.observedRevision() == pane.terminal.screen.revision) {
+    const bool snapshot = attachment.frames.needsSnapshot(pane.terminal.screen());
+    if (!snapshot && !pane.terminal.dirty() && attachment.frames.observedRevision() == pane.terminal.screen().revision) {
       slots_.atMut(attachment.slot).cells_current = true;
       return false;
     }
@@ -386,7 +387,7 @@ namespace telar::runtime {
     }
 
     pane.terminal.refresh();
-    const auto payload = attachment.frames.prepare(pane.terminal.screen);
+    const auto payload = attachment.frames.prepare(pane.terminal.screen());
 
     TELAR_DIAGNOSTIC(output.metrics.frames.merge(attachment.frames.takeCounters()));
     slots_.atMut(attachment.slot).cells_current = true;
@@ -445,12 +446,12 @@ namespace telar::runtime {
     const auto* terminal = pane.media->terminal();
 
     try {
-      const bool pending = terminal == nullptr ? attachment.graphics.publish(connection, pane.terminal.graphics) : attachment.graphics.publish(connection, terminal->graphics);
+      const bool pending = terminal == nullptr ? attachment.graphics.publish(connection, pane.terminal.graphics()) : attachment.graphics.publish(connection, terminal->graphics());
       if (pending) {
         timeout = std::chrono::nanoseconds::zero();
       }
     } catch (const std::bad_alloc&) {
-      attachment.graphics.abandon(terminal == nullptr ? pane.terminal.graphics.revision() : terminal->graphics.revision());
+      attachment.graphics.abandon(terminal == nullptr ? pane.terminal.graphics().revision() : terminal->graphics().revision());
     }
 
     return connection.queuedBytes() != queued;
@@ -497,12 +498,12 @@ namespace telar::runtime {
 
     for (auto& attachment : client.attachments.viewMut()) {
       const auto* pane = model_.panes.find(attachment->pane_id);
-      if (pane == nullptr || attachment->clipboard_revision == pane->terminal.effects.clipboard_revision) {
+      if (pane == nullptr || attachment->clipboard_revision == pane->terminal.effects().clipboard_revision) {
         continue;
       }
 
-      client.connection.send(PaneClipboard{.pane_id = pane->id, .bytes = pane->terminal.effects.clipboard});
-      attachment.getMut().clipboard_revision = pane->terminal.effects.clipboard_revision;
+      client.connection.send(PaneClipboard{.pane_id = pane->id, .bytes = pane->terminal.effects().clipboard});
+      attachment.getMut().clipboard_revision = pane->terminal.effects().clipboard_revision;
       return true;
     }
 

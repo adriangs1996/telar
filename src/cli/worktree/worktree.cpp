@@ -1406,7 +1406,7 @@ namespace telar::runtime::cli::sessions {
         if (options_.directory) {
           checkout.assign(*options_.directory);
         } else {
-          sessions::appendWorktreeCheckout(checkout, root, branch);
+          sessions::appendWorktreeCheckout(checkout, {.root = root, .branch = branch});
         }
 
         for (const auto& entry : catalog_.worktrees) {
@@ -1649,7 +1649,7 @@ namespace telar::runtime::cli::sessions {
           throw Failure{"removal cancelled"};
         }
 
-        const bool merged = options_.delete_branch && root && git_.merged(*root, entry->branch);
+        const bool merged = options_.delete_branch && root && git_.merged({.root = *root, .branch = entry->branch});
         if (options_.delete_branch && !merged && !confirmRemoval("Also delete its branch and the commits no other branch has")) {
           throw Failure{"removal cancelled"};
         }

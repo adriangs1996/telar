@@ -180,10 +180,10 @@ namespace telar::runtime::cli {
     ds::Vec<char*, Memory> command{memory};
 
     command.reserve(arguments.size() + 2);
-    command.push(const_cast<char*>(runtime.c_str())); // NOLINT(cppcoreguidelines-pro-type-const-cast): execv's C signature takes the arguments as char*, and does not write them
+    command.push(const_cast<char*>(runtime.cStr())); // NOLINT(cppcoreguidelines-pro-type-const-cast): execv's C signature takes the arguments as char*, and does not write them
     command.extend({arguments.begin(), arguments.end()});
     command.push(nullptr);
-    ::execv(runtime.c_str(), command.data());
+    ::execv(runtime.cStr(), command.data());
     throw SystemError{"Start telar-runtime, which must be installed beside telar"};
   }
 

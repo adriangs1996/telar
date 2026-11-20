@@ -668,7 +668,7 @@ namespace {
     std::FILE* output = std::tmpfile();
 
     check(output != nullptr);
-    Codec::pretty_print(memory, CompleteWords{.request_id = 7, .pane_id = 3, .provider = CompletionProvider::branch, .prefix = "gi\"t"}, output);
+    Codec::prettyPrint(memory, CompleteWords{.request_id = 7, .pane_id = 3, .provider = CompletionProvider::branch, .prefix = "gi\"t"}, output);
     check(memory.liveBytes() == 0, "the printer returns its text to the allocator");
 
     ds::Array<char, 4096> printed{};

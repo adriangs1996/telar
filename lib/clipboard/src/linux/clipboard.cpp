@@ -7,7 +7,7 @@ import telar.clipboard.wayland;
 import telar.clipboard.x11;
 
 namespace telar::clipboard {
-  std::expected<content, read_error> read(std::size_t maximum_bytes) {
+  std::expected<Content, ReadError> read(std::size_t maximum_bytes) {
     const auto expires = linux_backend::clock::now() + linux_backend::read_timeout;
     try {
       const char* wayland = std::getenv("WAYLAND_DISPLAY");
@@ -21,11 +21,11 @@ namespace telar::clipboard {
         return linux_backend::readX11(expires, maximum_bytes);
       }
 
-      return std::unexpected(read_error::session_unavailable);
+      return std::unexpected(ReadError::session_unavailable);
     } catch (const std::bad_alloc&) {
-      return std::unexpected(read_error::allocation_failed);
+      return std::unexpected(ReadError::allocation_failed);
     } catch (const std::length_error&) {
-      return std::unexpected(read_error::allocation_failed);
+      return std::unexpected(ReadError::allocation_failed);
     }
   }
 }

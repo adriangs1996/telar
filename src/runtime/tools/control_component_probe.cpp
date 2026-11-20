@@ -63,7 +63,7 @@ static std::uint64_t benchmarkComponent(const Byte* bytes, std::size_t size, std
   try {
     ComponentProbe probe;
 
-    probe.controller.policy.checksum_report = setup != BenchmarkSetup::ordinary;
+    probe.controller.policyMut().checksum_report = setup != BenchmarkSetup::ordinary;
     const std::string_view cell = setup == BenchmarkSetup::checksum_ascii ? "A" : setup == BenchmarkSetup::checksum_styled ? "\x1b[1;3mA\x1b[0mB"
                                                                                                                            : "Á";
     const auto seed = [&](std::string_view input) {

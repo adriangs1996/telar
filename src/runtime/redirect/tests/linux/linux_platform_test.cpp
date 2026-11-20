@@ -79,7 +79,7 @@ namespace {
       const auto identity = inspector.identity(::getpid());
       check(identity && identity->parent == ::getppid() && identity->process_group == ::getpgrp());
       check(inspector.directory(::getpid()).view().starts_with('/'));
-      ProcessInspector foreign{builtin_manifests, static_cast<uid_t>(::geteuid() + 1)};
+      ProcessInspector foreign{builtinManifests(), static_cast<uid_t>(::geteuid() + 1)};
       check(!foreign.identity(::getpid()));
 
       int descriptors[2];

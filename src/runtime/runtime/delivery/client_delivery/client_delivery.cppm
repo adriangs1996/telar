@@ -142,7 +142,7 @@ export {
       // Kept here: `send` is the connection's callable, an open set no unit can instantiate ahead.
       TBC_GENERIC inline void project(const ReadPane& request, auto& send) {
         // Generation 0 reads whatever generation the pane has, as clients that predate generations ask.
-        auto* pane = request.pane_generation == 0 ? model_.panes.find(request.pane_id) : findPane(model_.panes, request.pane_id, request.pane_generation);
+        auto* pane = request.pane_generation == 0 ? model_.panes.find(request.pane_id) : findPane(model_.panes, {.id = request.pane_id, .generation = request.pane_generation});
         if (pane == nullptr) {
           if (const auto* exited = model_.exited_panes.find(request.pane_id, request.pane_generation)) {
             send(exited->response(request));
@@ -265,7 +265,7 @@ export {
         TELAR_TRACE("runtime.deliverClient");
         Result result;
 
-        if (!client.connection.writing() && !client.connection.closing) {
+        if (!client.connection.writing() && !client.connection.flags().closing) {
           prepare(client, source, now, result.timeout);
         }
 

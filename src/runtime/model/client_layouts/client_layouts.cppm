@@ -91,16 +91,23 @@ export {
 
       void erase(std::size_t index) noexcept;
 
-      [[nodiscard]] bool settled(std::uint64_t at_revision, std::uint64_t at_generation, std::uint64_t at_trimmed) const noexcept;
+      // A terminal's inline documents and scrollback numbering at one moment.
+      struct Mark {
+        std::uint64_t revision = std::numeric_limits<std::uint64_t>::max();
+        std::uint64_t generation = 0;
+        std::uint64_t trimmed = 0;
 
-      void settle(std::uint64_t at_revision, std::uint64_t at_generation, std::uint64_t at_trimmed) noexcept;
+        bool operator==(const Mark&) const noexcept = default;
+      };
+
+      [[nodiscard]] bool settled(Mark current) const noexcept;
+
+      void settle(Mark current) noexcept;
 
       ds::Array<Item, ::telar::render::max_pane_documents> items{};
       std::size_t count = 0;
-      // The terminal's inline documents and scrollback numbering the client is up to date with.
-      std::uint64_t revision = std::numeric_limits<std::uint64_t>::max();
-      std::uint64_t generation = 0;
-      std::uint64_t trimmed = 0;
+      // The numbering the client is up to date with.
+      Mark mark;
     };
 
     struct Attachment {
@@ -466,9 +473,16 @@ export {
       ds::Vec<std::uint64_t, ConcurrentMemory> panes;
     };
 
+    // What a workspace starts from: its id, its directory and its name, which it copies.
+    struct WorkspaceSpec {
+      std::uint64_t id = 0;
+      std::string_view path;
+      std::string_view name;
+    };
+
     class Workspace {
     public:
-      explicit Workspace(ConcurrentMemory& memory, std::uint64_t identity, std::string_view directory, std::string_view label);
+      explicit Workspace(ConcurrentMemory& memory, WorkspaceSpec spec);
 
       Tab* tabMut(std::uint64_t tab_id) noexcept;
 
@@ -577,14 +591,14 @@ export {
     template <typename Admits, typename Send>
     TBC_GENERIC inline void deliver(ClientStore& clients, Admits admits, Send send) noexcept {
       for (auto* client : clients.items()) {
-        if (client == nullptr || client->connection.closing || !admits(*client)) {
+        if (client == nullptr || client->connection.flags().closing || !admits(*client)) {
           continue;
         }
 
         try {
           send(*client);
         } catch (...) {
-          client->connection.closing = true;
+          client->connection.flagsMut().closing = true;
         }
       }
     }
@@ -608,20 +622,20 @@ export {
     // The stored client with an identity, which a request names.
     ClientSession& requireClient(const ClientStore& clients, std::uint64_t identity);
 
-    // The pane `identity` names while it has `generation`; none for another generation. No pane has
-    // generation 0, so 0 finds none.
-    tbc::val_a<Pane*> findPane(tbc::mut_a<PaneStore> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
+    // The pane `key` names while it has the key's generation; none for another generation. No pane
+    // has generation 0, so 0 finds none.
+    tbc::val_a<Pane*> findPane(tbc::mut_a<PaneStore> panes, PaneKey key) noexcept;
 
-    tbc::val_a<const Pane*> findPane(tbc::ref_a<PaneStore> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
+    tbc::val_a<const Pane*> findPane(tbc::ref_a<PaneStore> panes, PaneKey key) noexcept;
 
     // The same pane while its process runs and nobody asked it to close.
-    tbc::val_a<Pane*> livePane(tbc::mut_a<PaneStore> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
+    tbc::val_a<Pane*> livePane(tbc::mut_a<PaneStore> panes, PaneKey key) noexcept;
 
-    tbc::val_a<const Pane*> livePane(tbc::ref_a<PaneStore> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
+    tbc::val_a<const Pane*> livePane(tbc::ref_a<PaneStore> panes, PaneKey key) noexcept;
 
     // The pane an agent's report names, which must still run the generation it names and be the one
     // the runtime verified the reporting client inside.
-    tbc::mut_a<Pane> requireReporterPane(tbc::mut_a<PaneStore> panes, const ClientSession& client, std::uint64_t identity, std::uint64_t generation);
+    tbc::mut_a<Pane> requireReporterPane(tbc::mut_a<PaneStore> panes, const ClientSession& client, PaneKey key);
 
     // The runtime's data apart from its clients, whose table is separate so that a call can borrow one
     // client and the model at once, as Rust borrows two fields of a struct.
@@ -632,7 +646,7 @@ export {
       RuntimeLimits limits;
       [[no_unique_address]] diagnostics::RuntimeCounters metrics;
       MediaBudget media_budget;
-      AgentManifests manifests = builtin_manifests;
+      AgentManifests manifests = builtinManifests();
       std::string_view cli_executable;
       bool capture_output = false;
       PaneStore panes;

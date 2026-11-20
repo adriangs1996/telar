@@ -157,6 +157,10 @@ namespace telar::runtime::control {
   Checksum::Checksum(ConcurrentMemory& memory)
       : graphemes_(memory) {}
 
+  void Checksum::setFlags(unsigned value) noexcept {
+    flags_ = value;
+  }
+
   void Checksum::discard() noexcept { // NOLINT(bugprone-exception-escape): the empty Vec shares the old one's memory, so the move hands storage over without allocating
     graphemes_ = ds::Vec<std::uint32_t, ConcurrentMemory>{graphemes_.memory()};
   }
@@ -196,7 +200,7 @@ namespace telar::runtime::control {
     }
 
     const Rectangle rectangle{.top = top, .left = left, .bottom = bottom, .right = right};
-    const auto selected_flags = flags;
+    const auto selected_flags = flags_;
     const auto sum = (this->*accumulators[(selected_flags >> 1U) & (accumulators.size() - 1)])(state, rectangle);
 
     return (selected_flags & static_cast<unsigned>(ChecksumFlag::positive)) != 0 ? sum : static_cast<std::uint16_t>(0U - sum);

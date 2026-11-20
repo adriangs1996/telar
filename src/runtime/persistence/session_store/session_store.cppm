@@ -252,7 +252,7 @@ export {
     // The service that launches the restored panes and writes the input that resumes their agents.
     template <typename Panes>
     concept PaneLauncher = requires(Panes& panes, RuntimeModel& model, Command<ConcurrentMemory>& command, Pane& pane, TabLocation location, TerminalSize size, std::uint64_t identity) {
-      panes.launch(model, nullptr, false, command, location, size, identity).id;
+      panes.launch(model, {.location = location, .size = size}, command, identity).id;
       panes.flushInput(pane);
     };
 
@@ -329,7 +329,7 @@ export {
       inline void restore(const WorkspaceRecord& record) {
         validateIdentity(record.id);
         validateIdentity(record.first_tab);
-        auto workspace = ds::makeBox<Workspace>(memory_, memory_, record.id, record.path, record.name);
+        auto workspace = ds::makeBox<Workspace>(memory_, memory_, WorkspaceSpec{.id = record.id, .path = record.path, .name = record.name});
 
         workspace.getMut().tabs.emplace(memory_, record.first_tab, record.first_label);
         model_.workspaces.insert(record.id, std::move(workspace));
@@ -389,7 +389,7 @@ export {
         const TerminalSize size{.cols = record.columns == 0 ? std::uint16_t{80} : record.columns, .rows = record.rows == 0 ? std::uint16_t{24} : record.rows, .cell_width_px = 0, .cell_height_px = 0};
         // Launching changes the model: the tab is found again, and the pane by its identity.
         // No client asked for it: its shell keeps its prompt, which telar's editor covers.
-        const auto identity = panes_.launch(model_, nullptr, false, command, TabLocation{.workspace = {.id = record.workspace}, .tab_id = record.tab}, size, record.id).id;
+        const auto identity = panes_.launch(model_, {.location = TabLocation{.workspace = {.id = record.workspace}, .tab_id = record.tab}, .size = size}, command, record.id).id;
 
         model_.workspaces.find(record.workspace)->tabMut(record.tab)->panes.push(identity);
         auto& pane = *model_.panes.find(identity);
@@ -588,7 +588,7 @@ export {
             continue;
           }
 
-          PaneRecord record{.id = pane->id, .workspace = pane->location.workspace.id, .tab = pane->location.tab_id, .cwd = pane->cwd, .columns = pane->terminal.screen.cols, .rows = pane->terminal.screen.rows, .argument_count = pane->launch.count(), .arguments = pane->launch.bytes()};
+          PaneRecord record{.id = pane->id, .workspace = pane->location.workspace.id, .tab = pane->location.tab_id, .cwd = pane->cwd, .columns = pane->terminal.screen().cols, .rows = pane->terminal.screen().rows, .argument_count = pane->launch.count(), .arguments = pane->launch.bytes()};
 
           if (const auto* agent = agents.find(pane->id, pane->generation); agent != nullptr && validResumeSession(agent->provider, agent->session.view())) {
             record.provider = agent->provider;
@@ -631,7 +631,7 @@ export {
 
         for (std::size_t index = 0; index < panes.size(); ++index) {
           const auto* pane = panes[index];
-          const PaneStamp stamp = pane == nullptr ? PaneStamp{} : PaneStamp{pane->id, pane->cwd_revision, pane->terminal.screen.cols, pane->terminal.screen.rows, pane->output_closed || pane->exit_status.hasValue() || pane->close_requested};
+          const PaneStamp stamp = pane == nullptr ? PaneStamp{} : PaneStamp{pane->id, pane->cwd_revision, pane->terminal.screen().cols, pane->terminal.screen().rows, pane->output_closed || pane->exit_status.hasValue() || pane->close_requested};
 
           changed |= stamp != stamps_[index];
           stamps_.atMut(index) = stamp;

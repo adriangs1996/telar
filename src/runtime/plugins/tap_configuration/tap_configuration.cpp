@@ -179,7 +179,7 @@ namespace telar::runtime::plugins {
     constexpr ds::Array levels{"info", "success", "warning", "failure"};
 
     u8::encode(level.present() ? static_cast<Byte>(std::ranges::find(levels, level.string()) - levels.begin()) : Byte{0}, output);
-    u32::encode(static_cast<std::uint32_t>(value.field("duration_ms").boundedInteger(default_notification_duration_ms, min_notification_duration_ms, max_notification_duration_ms)), output);
+    u32::encode(static_cast<std::uint32_t>(value.field("duration_ms").boundedInteger(default_notification_duration_ms, {.minimum = min_notification_duration_ms, .maximum = max_notification_duration_ms})), output);
     constexpr ds::Array targets{"pane_id", "tab_id", "workspace_id"};
     Byte target_kind = 0;
     std::uint64_t target_id = 0;
@@ -234,7 +234,7 @@ namespace telar::runtime::plugins {
       throw SystemError{"Create plugin snapshot"};
     }
 
-    auto target = openBeneath(directory_->descriptor(), name.data(), combineFlags(O_RDONLY, O_DIRECTORY));
+    auto target = openBeneath(directory_->descriptor(), name.data(), {.flags = combineFlags(O_RDONLY, O_DIRECTORY)});
     ds::String<Memory> destination{memory_, directory_->path()};
 
     destination.push('/');
