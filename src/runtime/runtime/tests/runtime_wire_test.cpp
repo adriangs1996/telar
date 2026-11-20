@@ -118,6 +118,12 @@ namespace {
     RuntimeHost host;
     std::vector<int> pending;
 
+    // The host's readiness probe holds a handshake slot until the runtime sees it close, which on Linux
+    // can come after later connections: a full exchange on another connection waits for it.
+    ProtocolPeer settled{host.socket()};
+
+    check(settled.exchange<ClientList>(QueryClients{.request_id = 1}).request_id == 1);
+
     // Every handshake slot is taken by a connection that has not said hello yet.
     for (std::size_t index = 0; index < 16; ++index) {
       pending.push_back(connectRaw(host.socket()));
