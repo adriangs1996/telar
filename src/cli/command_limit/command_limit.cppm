@@ -127,7 +127,7 @@ export {
 
     // The text as a JSON string literal where it is formatted.
     constexpr JsonQuoted quoteJson(std::string_view text, JsonEscapes escapes = JsonEscapes::standard) noexcept {
-      return {text, escapes};
+      return {.text = text, .escapes = escapes};
     }
 
     void writeBytes(int descriptor, std::span<const Byte> bytes);
@@ -219,7 +219,7 @@ export {
     };
 
     constexpr LimitDescription limitDescription(const LimitReach& reach, std::uint64_t hits = 1) noexcept {
-      return {reach, hits};
+      return {.reach = reach, .hits = hits};
     }
 
     void reportCommandLimit(const LimitReach& reach);

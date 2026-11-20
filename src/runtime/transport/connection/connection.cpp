@@ -268,7 +268,7 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  typename OutgoingFrames<Memory>::Frame OutgoingFrames<Memory>::inspect(std::size_t offset) const noexcept {
+  OutgoingFrames<Memory>::Frame OutgoingFrames<Memory>::inspect(std::size_t offset) const noexcept {
     auto payload = bytes_.readable().subspan(offset);
     const auto size = u32::decode(payload);
 

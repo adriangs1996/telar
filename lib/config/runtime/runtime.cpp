@@ -13,11 +13,11 @@ namespace telar::runtime {
   }
 
   AgentEvidence AgentEvidence::process(AgentProvider provider, ObservationTime now) noexcept {
-    return {provider, AgentStatus::ready, AgentSource::foreground_process, 100, now, std::numeric_limits<std::int64_t>::max()};
+    return {.provider = provider, .status = AgentStatus::ready, .source = AgentSource::foreground_process, .confidence = 100, .observed = now, .expires_at = std::numeric_limits<std::int64_t>::max()};
   }
 
   AgentEvidence AgentEvidence::screen(AgentProvider provider, AgentSignal signal, ObservationTime now) noexcept {
-    return {provider, signal.status, AgentSource::screen, signal.confidence, now, now.milliseconds + (signal.status == AgentStatus::working ? screen_working_expiry : settled_expiry).count()};
+    return {.provider = provider, .status = signal.status, .source = AgentSource::screen, .confidence = signal.confidence, .observed = now, .expires_at = now.milliseconds + (signal.status == AgentStatus::working ? screen_working_expiry : settled_expiry).count()};
   }
 
   AgentEvidence AgentEvidence::report(AgentProvider provider, AgentReportState state, ObservationTime now) noexcept {
@@ -26,7 +26,7 @@ namespace telar::runtime {
     const auto status = working ? AgentStatus::working : state == AgentReportState::blocked ? AgentStatus::blocked
                                                                                             : AgentStatus::ready;
 
-    return {provider, status, AgentSource::lifecycle_report, 100, now, now.milliseconds + expiry.count()};
+    return {.provider = provider, .status = status, .source = AgentSource::lifecycle_report, .confidence = 100, .observed = now, .expires_at = now.milliseconds + expiry.count()};
   }
 
   bool completionRequiresSignal(AgentProvider provider) noexcept {
@@ -198,25 +198,25 @@ namespace telar::runtime {
   ds::Option<AgentSignal> AgentManifests::detect(std::string_view text) const noexcept {
     for (const auto& entry : entries()) {
       if (entry.blocked.matches(text)) {
-        return AgentSignal{inferProvider(text), AgentStatus::blocked, 88};
+        return AgentSignal{.provider = inferProvider(text), .status = AgentStatus::blocked, .confidence = 88};
       }
     }
 
     for (const auto& entry : entries()) {
       if (entry.working.matches(text)) {
-        return AgentSignal{inferProvider(text), AgentStatus::working, 78};
+        return AgentSignal{.provider = inferProvider(text), .status = AgentStatus::working, .confidence = 78};
       }
     }
 
     for (const auto& entry : entries()) {
       if (entry.ready_prompt.matches(text)) {
-        return AgentSignal{entry.provider, AgentStatus::ready, 94, true, true};
+        return AgentSignal{.provider = entry.provider, .status = AgentStatus::ready, .confidence = 94, .identity_confirmed = true, .ready_confirmed = true};
       }
     }
 
     for (const auto& entry : entries()) {
       if (entry.identity.matches(text)) {
-        return AgentSignal{entry.provider, AgentStatus::ready, 90, true, false};
+        return AgentSignal{.provider = entry.provider, .status = AgentStatus::ready, .confidence = 90, .identity_confirmed = true, .ready_confirmed = false};
       }
     }
 
@@ -257,23 +257,23 @@ namespace telar::runtime {
     auto& claude = table.add("claude");
 
     claude.process_paths.append("/@anthropic-ai/claude-code/");
-    claude.process_paths.append("\\@anthropic-ai\\claude-code\\");
+    claude.process_paths.append(R"(\@anthropic-ai\claude-code\)");
     claude.brand.append("claude");
     claude.identity.append("claude code");
     claude.addCommandTool("Bash", "command");
     claude.interrupt = AgentInterruptKey::control_c;
-    for (const auto phrase : {"press enter to confirm", "enter to submit answer", "enter to select", "allow command?", "[y/n]", "do you want to proceed?", "waiting for permission", "yes, and don't ask again"}) {
+    for (const auto* const phrase : {"press enter to confirm", "enter to submit answer", "enter to select", "allow command?", "[y/n]", "do you want to proceed?", "waiting for permission", "yes, and don't ask again"}) {
       claude.blocked.append(phrase);
     }
 
-    for (const auto phrase : {"esc to interrupt", "working (", "waiting for background agents", "tasks still running", "background shells"}) {
+    for (const auto* const phrase : {"esc to interrupt", "working (", "waiting for background agents", "tasks still running", "background shells"}) {
       claude.working.append(phrase);
     }
 
     auto& codex = table.add("codex");
 
     codex.process_paths.append("/@openai/codex/");
-    codex.process_paths.append("\\@openai\\codex\\");
+    codex.process_paths.append(R"(\@openai\codex\)");
     codex.brand.append("codex");
     codex.ready_prompt.append("ask codex to do anything");
     codex.addCommandTool("Bash", "command");
@@ -283,16 +283,16 @@ namespace telar::runtime {
     auto& pi = table.add("pi");
 
     pi.process_paths.append("/@earendil-works/pi-coding-agent/");
-    pi.process_paths.append("\\@earendil-works\\pi-coding-agent\\");
+    pi.process_paths.append(R"(\@earendil-works\pi-coding-agent\)");
     pi.process_paths.append("/@mariozechner/pi-coding-agent/");
-    pi.process_paths.append("\\@mariozechner\\pi-coding-agent\\");
+    pi.process_paths.append(R"(\@mariozechner\pi-coding-agent\)");
     pi.addCommandTool("bash", "command");
 
     auto& cursor = table.add("cursor");
 
     cursor.process_paths.append("/cursor-agent/versions/");
     cursor.addCommandTool("Shell", "command");
-    for (const auto phrase : {"not in allowlist:", "skip & tell the agent what to do instead", "yes, build locally", "do you trust the contents of this directory?"}) {
+    for (const auto* const phrase : {"not in allowlist:", "skip & tell the agent what to do instead", "yes, build locally", "do you trust the contents of this directory?"}) {
       cursor.blocked.append(phrase);
     }
 
@@ -336,15 +336,15 @@ namespace telar::runtime {
 
   bool HistoryFilters::looksLikeSecret(std::string_view command) noexcept {
     constexpr ds::Array tokens{
-        TokenRule{"AKIA", 16},
-        TokenRule{"ghp_", 20},
-        TokenRule{"gho_", 20},
-        TokenRule{"github_pat_", 20},
-        TokenRule{"npm_", 30},
-        TokenRule{"sk_live_", 12},
-        TokenRule{"rk_live_", 12},
-        TokenRule{"xoxb-", 10},
-        TokenRule{"xoxp-", 10},
+        TokenRule{.marker = "AKIA", .minimum_length = 16},
+        TokenRule{.marker = "ghp_", .minimum_length = 20},
+        TokenRule{.marker = "gho_", .minimum_length = 20},
+        TokenRule{.marker = "github_pat_", .minimum_length = 20},
+        TokenRule{.marker = "npm_", .minimum_length = 30},
+        TokenRule{.marker = "sk_live_", .minimum_length = 12},
+        TokenRule{.marker = "rk_live_", .minimum_length = 12},
+        TokenRule{.marker = "xoxb-", .minimum_length = 10},
+        TokenRule{.marker = "xoxp-", .minimum_length = 10},
     };
 
     for (const auto& rule : tokens) {
@@ -749,7 +749,7 @@ namespace telar::runtime::config {
   }
 
   template <Allocator Memory>
-  typename CommandValues<Memory>::Views CommandValues<Memory>::views() const noexcept {
+  CommandValues<Memory>::Views CommandValues<Memory>::views() const noexcept {
     Views views;
 
     for (const auto& argument : arguments) {

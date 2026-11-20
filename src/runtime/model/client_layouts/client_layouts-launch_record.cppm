@@ -16,8 +16,8 @@ export {
 
       void capture(std::span<const ds::String<Memory>> arguments, bool restorable);
       void restore(std::string_view arguments, std::uint16_t count);
-      std::string_view bytes() const noexcept;
-      std::uint16_t count() const noexcept;
+      [[nodiscard]] std::string_view bytes() const noexcept;
+      [[nodiscard]] std::uint16_t count() const noexcept;
 
     private:
       ds::String<Memory> bytes_;

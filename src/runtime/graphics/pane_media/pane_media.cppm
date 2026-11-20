@@ -125,7 +125,7 @@ export {
     public:
       static ds::Option<GraphicsFramePixels> open(const AtomicFrameResource& resource) noexcept;
 
-      bool copyTo(std::span<std::uint8_t> destination) const noexcept;
+      [[nodiscard]] bool copyTo(std::span<std::uint8_t> destination) const noexcept;
 
     private:
       ds::Option<GraphicsChildFile> file_;
@@ -189,11 +189,11 @@ export {
 
       void ordinary(std::span<const Byte> bytes);
 
-      bool enquire() const noexcept;
+      [[nodiscard]] bool enquire() const noexcept;
 
       // Documents stream past the media terminal, which ignores them, instead of being buffered
       // whole: the interactive terminal keeps them.
-      bool streamable(control::Sequence sequence) const noexcept;
+      [[nodiscard]] bool streamable(control::Sequence sequence) const noexcept;
 
       bool complete(control::Sequence sequence);
 
@@ -215,19 +215,19 @@ export {
       diagnostics::GraphicsStorageSnapshot storageMetrics();
 #endif
 
-      std::size_t storageLimit() const noexcept;
+      [[nodiscard]] std::size_t storageLimit() const noexcept;
 
-      std::span<const Byte> responses() const noexcept;
+      [[nodiscard]] std::span<const Byte> responses() const noexcept;
 
       void consumeResponses(std::size_t count) noexcept;
 
       bool drainResponses() noexcept;
 
-      bool pendingResponses() const noexcept;
+      [[nodiscard]] bool pendingResponses() const noexcept;
 
-      std::size_t nextResponseSize() const noexcept;
+      [[nodiscard]] std::size_t nextResponseSize() const noexcept;
 
-      bool responseFailed() const noexcept;
+      [[nodiscard]] bool responseFailed() const noexcept;
 
       void requireOpen() const;
 

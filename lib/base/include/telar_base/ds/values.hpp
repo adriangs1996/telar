@@ -13,7 +13,7 @@
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
-#if defined(_LIBCPP_VERSION)
+#ifdef _LIBCPP_VERSION
 #include <__type_traits/is_trivially_relocatable.h>
 #endif
 
@@ -400,7 +400,7 @@ namespace telar::ds {
         return left.value_ <=> right.value_;
       }
 
-      return Ordering{left.full_ <=> right.full_};
+      return Ordering{static_cast<int>(left.full_) <=> static_cast<int>(right.full_)};
     }
 
   private:

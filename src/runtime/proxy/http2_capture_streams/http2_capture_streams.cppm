@@ -121,15 +121,15 @@ export {
 
       void exchanges(std::uint32_t count) noexcept;
 
-      Phase phase() const noexcept;
+      [[nodiscard]] Phase phase() const noexcept;
 
-      Time since() const noexcept;
+      [[nodiscard]] Time since() const noexcept;
 
-      Time active() const noexcept;
+      [[nodiscard]] Time active() const noexcept;
 
-      Closure expired(Time now) const noexcept;
+      [[nodiscard]] Closure expired(Time now) const noexcept;
 
-      bool evictable(Closure reason, Time now) const noexcept;
+      [[nodiscard]] bool evictable(Closure reason, Time now) const noexcept;
 
     private:
       Phase phase_ = Phase::connect_head;
@@ -314,7 +314,7 @@ export {
         return state_;
       }
 
-      inline ds::Option<Time> deadline() const noexcept {
+      [[nodiscard]] inline ds::Option<Time> deadline() const noexcept {
         if (state_ == State::probing && probe_until_ != Time{}) {
           return std::min(probe_until_, probe_after_);
         }
@@ -322,11 +322,11 @@ export {
         return state_ == State::draining ? ds::Option{drain_until_} : ds::none;
       }
 
-      inline int childDescriptor() const noexcept {
+      [[nodiscard]] inline int childDescriptor() const noexcept {
         return child_.get();
       }
 
-      inline int originDescriptor() const noexcept {
+      [[nodiscard]] inline int originDescriptor() const noexcept {
         if (transparent_) {
           return adopted_origin_.get();
         }
@@ -334,7 +334,7 @@ export {
         return origin_ ? origin_->descriptor() : -1;
       }
 
-      inline std::size_t originAttempt() const noexcept {
+      [[nodiscard]] inline std::size_t originAttempt() const noexcept {
         if (transparent_) {
           return 1;
         }
@@ -342,31 +342,31 @@ export {
         return origin_ ? origin_->attempt() : 0;
       }
 
-      inline bool wantsChildRead() const noexcept {
+      [[nodiscard]] inline bool wantsChildRead() const noexcept {
         return state_ == State::reading || state_ == State::draining || (state_ == State::probing && probe_after_ == Time{});
       }
 
-      inline bool wantsChildWrite() const noexcept {
+      [[nodiscard]] inline bool wantsChildWrite() const noexcept {
         return state_ == State::replying;
       }
 
-      inline bool wantsOriginRead() const noexcept {
+      [[nodiscard]] inline bool wantsOriginRead() const noexcept {
         return state_ == State::probing && !hello_->tls();
       }
 
-      inline std::string_view failure() const noexcept {
+      [[nodiscard]] inline std::string_view failure() const noexcept {
         return failure_;
       }
 
-      inline bool wantsOriginWrite() const noexcept {
+      [[nodiscard]] inline bool wantsOriginWrite() const noexcept {
         return state_ == State::establishing && origin_ && origin_->state() == Origin::State::connecting;
       }
 
-      inline std::string_view hostname() const noexcept {
+      [[nodiscard]] inline std::string_view hostname() const noexcept {
         return hostname_.view();
       }
 
-      inline bool intercept() const noexcept {
+      [[nodiscard]] inline bool intercept() const noexcept {
         return transparent_ ? inspected_ : options_.intercept_hosts.contains(hostname_.view());
       }
 
@@ -555,14 +555,14 @@ export {
       // the handshake is established.
       ds::Box<ConnectHead, Memory> head_;
       ds::Box<AlpnOffer, Memory> hello_;
-      Time probe_until_{};
-      Time probe_after_{};
+      Time probe_until_;
+      Time probe_after_;
       std::string_view failure_ = "connection_failed";
       bool inspected_ = false;
       FixedText<ProxyHostname::maximum_bytes> hostname_;
       ds::Option<Origin> origin_;
       StaticReply response_;
-      Time drain_until_{};
+      Time drain_until_;
       State state_ = State::reading;
       bool successful_ = false;
       bool transparent_ = false;
@@ -703,7 +703,7 @@ export {
         return &slots_.atMut(*index).getMut().getMut();
       }
 
-      inline ds::Option<std::size_t> find(std::uint32_t stream) const noexcept {
+      [[nodiscard]] inline ds::Option<std::size_t> find(std::uint32_t stream) const noexcept {
         ds::Option<std::size_t> found;
 
         occupied_.forEach([&](std::size_t index) {
@@ -743,7 +743,7 @@ export {
       std::uint32_t active_connections = 0;
       std::uint64_t connection_limit_drops = 0;
 
-      std::uint64_t read(ProxyCounter counter) const noexcept;
+      [[nodiscard]] std::uint64_t read(ProxyCounter counter) const noexcept;
     };
 
   }

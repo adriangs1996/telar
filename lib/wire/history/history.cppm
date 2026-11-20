@@ -18,9 +18,9 @@ export extern "C++" {
 
     struct QueryHistory {
       std::uint64_t request_id{};
-      std::string_view query{};
+      std::string_view query;
       HistoryScope scope{};
-      HistoryScopeValue scope_value{};
+      HistoryScopeValue scope_value;
       bool failed_only{};
       HistoryAuthorFilter author{};
       HistoryMatch match{};
@@ -37,9 +37,9 @@ export extern "C++" {
 
     struct ImportHistory {
       std::uint64_t request_id{};
-      std::string_view source{};
+      std::string_view source;
       std::uint64_t base_sequence{};
-      std::span<const ImportHistoryEntry> entries{};
+      std::span<const ImportHistoryEntry> entries;
     };
 
     template <>
@@ -59,10 +59,10 @@ export extern "C++" {
     struct PruneHistory {
       std::uint64_t request_id{};
       HistoryScope scope{};
-      HistoryScopeValue scope_value{};
+      HistoryScopeValue scope_value;
       std::int64_t before_ms{};
       bool failed_only{};
-      std::string_view match{};
+      std::string_view match;
     };
 
     template <>
@@ -81,7 +81,7 @@ export extern "C++" {
     struct HistoryStatsQuery {
       std::uint64_t request_id{};
       HistoryScope scope{};
-      HistoryScopeValue scope_value{};
+      HistoryScopeValue scope_value;
       std::int64_t since_ms{};
     };
 
@@ -93,7 +93,7 @@ export extern "C++" {
       std::uint64_t request_id{};
       std::uint64_t snapshot_id{};
       bool has_more{};
-      std::span<const HistoryEntry> entries{};
+      std::span<const HistoryEntry> entries;
     };
 
     template <>
@@ -114,7 +114,7 @@ export extern "C++" {
       std::uint64_t id{};
       bool truncated{};
       std::uint64_t observed_bytes{};
-      std::span<const Byte> content{};
+      std::span<const Byte> content;
     };
 
     template <>
@@ -125,7 +125,7 @@ export extern "C++" {
       std::uint64_t request_id{};
       std::uint64_t total{};
       std::uint64_t unique{};
-      std::span<const HistoryStatsEntry> top{};
+      std::span<const HistoryStatsEntry> top;
     };
 
     template <>

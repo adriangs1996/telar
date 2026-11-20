@@ -33,18 +33,18 @@ export {
     public:
       void apply(const HostCounters& counters) noexcept;
 
-      const ds::Option<HostValues>& latest() const noexcept;
+      [[nodiscard]] const ds::Option<HostValues>& latest() const noexcept;
 
-      std::uint64_t revision() const noexcept;
+      [[nodiscard]] std::uint64_t revision() const noexcept;
 
 #if TELAR_DIAGNOSTICS
       void recordSample(std::chrono::steady_clock::time_point started, std::chrono::steady_clock::time_point captured) noexcept;
 
-      const diagnostics::SystemCounters& diagnostics() const noexcept;
+      [[nodiscard]] const diagnostics::SystemCounters& diagnostics() const noexcept;
 #endif
 
     private:
-      std::uint8_t cpuPercent(const HostCounters& counters) const noexcept;
+      [[nodiscard]] std::uint8_t cpuPercent(const HostCounters& counters) const noexcept;
 
       static std::uint16_t decigib(std::uint64_t bytes) noexcept;
 

@@ -25,12 +25,12 @@ export {
         return traffic_;
       }
 
-      inline bool listening() const noexcept {
-        return plugins_.listening() || (traffic_ && traffic_->listening());
+      [[nodiscard]] inline bool listening() const noexcept {
+        return plugins_.listening() || ((traffic_ != nullptr) && traffic_->listening());
       }
 
       inline void submit(CapturedExchange& exchange) noexcept {
-        if (traffic_) {
+        if (traffic_ != nullptr) {
           traffic_->submit(exchange);
         }
 

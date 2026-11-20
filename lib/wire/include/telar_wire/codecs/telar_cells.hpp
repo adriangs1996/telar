@@ -14,9 +14,9 @@ namespace telar {
     ds::Option<Cell> next();
 
   private:
-    std::span<const Byte> input{};
+    std::span<const Byte> input;
     std::uint32_t remaining = 0;
-    ds::Option<CellStyle> previous_style{};
+    ds::Option<CellStyle> previous_style;
   };
 
   struct CellRunCodec {

@@ -115,7 +115,7 @@ export {
       struct Pending {
         Pending(Secure& memory, std::uint64_t ticket, const FlowEvent& event, std::span<const Route> matches);
 
-        auto event() const noexcept -> FlowEvent;
+        [[nodiscard]] auto event() const noexcept -> FlowEvent;
 
         std::uint64_t ticket;
         std::uint64_t decision_ticket;
@@ -124,7 +124,7 @@ export {
         Direction direction;
         Visibility visibility;
         FlowSource source;
-        FlowControl::Time deadline{};
+        FlowControl::Time deadline;
         SensitiveText<128> client, server, reason;
         SensitiveText<253> host;
         Verdict verdict = Verdict::pending;
@@ -248,7 +248,7 @@ export {
       FileDescriptor socket;
       std::uint64_t owner;
 
-      int get() const noexcept;
+      [[nodiscard]] int get() const noexcept;
     };
 
     // Only native runtime code can attach a package. Lua never supplies this grant
@@ -282,11 +282,11 @@ export {
 
       static Owner package(const plugins::ServiceSpec& package);
 
-      bool authorized() const noexcept;
+      [[nodiscard]] bool authorized() const noexcept;
 
-      bool matches(const Owner& other) const noexcept;
+      [[nodiscard]] bool matches(const Owner& other) const noexcept;
 
-      bool canRead(const Owner& other) const noexcept;
+      [[nodiscard]] bool canRead(const Owner& other) const noexcept;
     };
 
   }
@@ -304,7 +304,7 @@ export {
 
       struct Entry {
         std::uint64_t cursor;
-        typename Clock::time_point created;
+        Clock::time_point created;
         std::shared_ptr<EventFrame> frame;
       };
 
@@ -342,7 +342,7 @@ export {
           ++evicted;
         }
 
-        inline void expire(typename Clock::time_point now) noexcept {
+        inline void expire(Clock::time_point now) noexcept {
           while (count != 0 && now - at(0).created >= age) {
             evict();
           }
@@ -531,7 +531,7 @@ export {
             break;
           }
 
-          if (!session) {
+          if (session == nullptr) {
             throw EncodingError{"Recording session limit reached"};
           }
 
@@ -544,7 +544,7 @@ export {
             }
           }
 
-          if (!session) {
+          if (session == nullptr) {
             throw EncodingError{"Unknown or expired recording identity"};
           }
         }
@@ -701,7 +701,7 @@ export {
     class TBC_SHARED Service : public FlowControl, public HttpControl, public PackagePort {
       using SensitiveMemory = ErasingAllocator<ConcurrentMemory>;
       using Bytes = ds::Vec<Byte, SensitiveMemory>;
-      static constexpr std::size_t maximum_peers = Limits::subscribers * 2 + 1;
+      static constexpr std::size_t maximum_peers = (Limits::subscribers * 2) + 1;
 
       using Frame = EventFrame;
 
@@ -746,14 +746,14 @@ export {
 
       struct Attachment {
         FileDescriptor socket;
-        typename Peer::PackageIdentity package;
+        Peer::PackageIdentity package;
         std::uint64_t owner;
       };
 
     public:
       explicit Service(ConcurrentMemory& memory, std::string_view path, bool allow_interception = false);
 
-      ~Service();
+      ~Service() override;
 
       Service(const Service&) = delete;
       Service& operator=(const Service&) = delete;
@@ -922,7 +922,7 @@ export {
       inline ~Backend() {
         capture_cancelled_ = true;
         redirect_cancelled_ = true;
-        if (capture_child_ > 0 && capture_) {
+        if (capture_child_ > 0 && (capture_ != nullptr)) {
           capture_->stopCapture();
         }
 
@@ -941,7 +941,7 @@ export {
       inline void tick() noexcept {
         reap(capture_child_);
         reap(redirect_child_);
-        if (capture_cancelled_ && capture_child_ > 0 && capture_ && capture_->captureStatus().state != traffic::Service::CaptureState::idle) {
+        if (capture_cancelled_ && capture_child_ > 0 && (capture_ != nullptr) && capture_->captureStatus().state != traffic::Service::CaptureState::idle) {
           capture_->stopCapture();
         }
 
@@ -959,7 +959,7 @@ export {
         ds::Array<char, 1025> error{};
 
         try {
-          if (package && !authorized(*package, request)) {
+          if ((package != nullptr) && !authorized(*package, request)) {
             reply.result = Result::disabled;
             reply.message = "Package traffic capability denied or revoked";
           } else if (request.operation != Operation::status && request.operation != Operation::ca_certificate && request.operation != Operation::recording && !configuration_.administration) {
@@ -975,7 +975,7 @@ export {
               start(request, reply, cancelled);
               break;
             case Operation::capture_stop:
-              if (!capture_) {
+              if (capture_ == nullptr) {
                 reply.result = Result::disabled;
               } else {
                 capture_cancelled_ = true;
@@ -1027,11 +1027,11 @@ export {
 
               break;
             case Operation::recording:
-              if (!capture_) {
+              if (capture_ == nullptr) {
                 reply.result = Result::disabled;
               } else {
                 recording_output.emplace(memory_, recording::Limits::page_bytes);
-                reply.recording = capture_->recording(*request.recording, recording_output.getMut().bytesMut(), package ? recording::Owner::package(*package) : recording::Owner{});
+                reply.recording = capture_->recording(*request.recording, recording_output.getMut().bytesMut(), (package != nullptr) ? recording::Owner::package(*package) : recording::Owner{});
               }
 
               break;
@@ -1046,7 +1046,7 @@ export {
         }
 
         reply.status = status();
-        if (package && !package->allows(plugins::Capability::traffic_control)) {
+        if ((package != nullptr) && !package->allows(plugins::Capability::traffic_control)) {
           reply.status.administration = false;
         }
 
@@ -1066,12 +1066,12 @@ export {
       }
 
     private:
-      inline Status status() const noexcept {
+      [[nodiscard]] inline Status status() const noexcept {
         Status status{.proxy = configuration_.proxy, .transparent_tls = configuration_.transparent_tls, .interception = configuration_.interception, .administration = configuration_.administration};
         const auto proxy = proxy_.clientConfiguration().status();
 
         status.port = proxy.port.valueOr(0);
-        if (capture_) {
+        if (capture_ != nullptr) {
           const auto capture = capture_->captureStatus();
 
           switch (capture.state) {
@@ -1336,7 +1336,7 @@ export {
               run();
             }) {}
 
-      inline ~Service() {
+      inline ~Service() override {
         stopping_.store(true, std::memory_order_release);
         wake_.notify();
         worker_.join();
@@ -1399,7 +1399,7 @@ export {
 
         handler_.tick();
 
-        if (descriptors[1].revents & POLLIN) {
+        if ((descriptors[1].revents & POLLIN) != 0) {
           wake_.drain();
           while (auto attachment = attachments_.tryReceive()) {
             for (auto& peer : peers_.viewMut()) {
@@ -1422,7 +1422,7 @@ export {
           bool close = (readiness & (POLLERR | POLLNVAL)) || Clock::now() >= peer->deadline;
 
           try {
-            if (!close && (readiness & (POLLIN | POLLOUT | POLLHUP))) {
+            if (!close && ((readiness & (POLLIN | POLLOUT | POLLHUP)) != 0)) {
               close = advance(peer.getMut(), handler_, stopping_);
             }
           } catch (const std::exception&) {
@@ -1434,7 +1434,7 @@ export {
           }
         }
 
-        if (descriptors[0].revents & POLLIN) {
+        if ((descriptors[0].revents & POLLIN) != 0) {
           auto socket = listener_.accept();
           if (!socket) {
             return;

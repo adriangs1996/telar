@@ -290,7 +290,7 @@ namespace telar::shell {
           std::size_t j = i + 2;
 
           for (u32 digit = 0; j < s.size() && j < i + 2 + digits && hexValue(s[j], digit); ++j) {
-            code = code * 16 + digit;
+            code = (code * 16) + digit;
           }
 
           if (j == i + 2) {
@@ -311,7 +311,7 @@ namespace telar::shell {
             std::size_t j = i + 1;
 
             for (; j < s.size() && j < i + 4 && s[j] >= '0' && s[j] <= '7'; ++j) {
-              code = code * 8 + static_cast<u32>(s[j] - '0');
+              code = (code * 8) + static_cast<u32>(s[j] - '0');
             }
 
             put(static_cast<char>(code & 0xff));
@@ -659,7 +659,7 @@ namespace telar::shell {
           return;
         }
 
-        tokens_[count_++] = Token{static_cast<u32>(begin), static_cast<u32>(end), command, kind, role, quote, flags};
+        tokens_[count_++] = Token{.begin = static_cast<u32>(begin), .end = static_cast<u32>(end), .command = command, .kind = kind, .role = role, .quote = quote, .flags = flags};
       }
 
       void control(std::size_t length, TokenKind kind = TokenKind::control) noexcept {
@@ -788,7 +788,7 @@ namespace telar::shell {
         const char c = s_[p_];
         if (c == ' ' || c == '\t') {
           ++p_;
-          while (p_ < n_ && (bits(p_) & k_blank)) {
+          while (p_ < n_ && ((bits(p_) & k_blank) != 0)) {
             ++p_;
           }
 
@@ -889,10 +889,10 @@ namespace telar::shell {
 
           break;
         default:
-          if (bits(p_) & k_digit) {
+          if ((bits(p_) & k_digit) != 0) {
             std::size_t q = p_ + 1;
 
-            while (q < n_ && (bits(q) & k_digit)) {
+            while (q < n_ && ((bits(q) & k_digit) != 0)) {
               ++q;
             }
 
@@ -1136,7 +1136,7 @@ namespace telar::shell {
         }
 
         gap(false);
-        if (c == ']' && next(p_ + 1, ']') && (p_ + 2 == n_ || (bits(p_ + 2) & k_end))) {
+        if (c == ']' && next(p_ + 1, ']') && (p_ + 2 == n_ || ((bits(p_ + 2) & k_end) != 0))) {
           emit(TokenKind::keyword, TokenKind::keyword, frames_[frame].command, Quote::none, Token::word_start, p_, p_ + 2);
           touch(frames_[frame].command, p_, p_ + 2);
           p_ += 2;
@@ -1169,7 +1169,7 @@ namespace telar::shell {
           return;
         }
 
-        if (bits(p_) & k_end) {
+        if ((bits(p_) & k_end) != 0) {
           gap(true);
           control(1, TokenKind::error);
           return;
@@ -1181,7 +1181,7 @@ namespace telar::shell {
       }
 
       [[nodiscard]] TokenKind optionOrArgument() const noexcept {
-        return s_[p_] == '-' && !(p_ + 1 < n_ && (bits(p_ + 1) & k_end)) ? TokenKind::option : TokenKind::argument;
+        return s_[p_] == '-' && !(p_ + 1 < n_ && ((bits(p_ + 1) & k_end) != 0)) ? TokenKind::option : TokenKind::argument;
       }
 
       void startWord(std::size_t frame, TokenKind role) noexcept {
@@ -1197,13 +1197,13 @@ namespace telar::shell {
       }
 
       [[nodiscard]] bool isAssignment(std::size_t q) const noexcept {
-        if (!(bits(p_) & k_name_start)) {
+        if ((bits(p_) & k_name_start) == 0) {
           return false;
         }
 
         std::size_t i = p_ + 1;
 
-        while (i < q && (bits(i) & k_name)) {
+        while (i < q && ((bits(i) & k_name) != 0)) {
           ++i;
         }
 
@@ -1231,11 +1231,11 @@ namespace telar::shell {
       void beginWord(std::size_t frame) noexcept {
         std::size_t q = p_;
 
-        while (q < n_ && !(bits(q) & k_stop)) {
+        while (q < n_ && ((bits(q) & k_stop) == 0)) {
           ++q;
         }
 
-        const bool whole = q == n_ || (bits(q) & k_end);
+        const bool whole = q == n_ || ((bits(q) & k_end) != 0);
         if (!frames_[frame].redirect && whole && q - p_ <= 8 && q > p_ && keyword(frame, q)) {
           return;
         }
@@ -1512,7 +1512,7 @@ namespace telar::shell {
           }
         }
 
-        if ((bits(p_) & k_end) || (!fish_ && c == '`' && frames_[frame].kind == FrameKind::backtick)) {
+        if (((bits(p_) & k_end) != 0) || (!fish_ && c == '`' && frames_[frame].kind == FrameKind::backtick)) {
           endWord(frame, level());
           return;
         }
@@ -1564,7 +1564,7 @@ namespace telar::shell {
 
         std::size_t q = p_ + 1;
 
-        while (q < n_ && !(bits(q) & k_stop)) {
+        while (q < n_ && ((bits(q) & k_stop) == 0)) {
           ++q;
         }
 
@@ -1732,16 +1732,16 @@ namespace telar::shell {
         } else if (unquoted && c == '"') {
           out(frame, TokenKind::string, Quote::none, b, b + 1);
           p_ = b + 1;
-        } else if (bits(b + 1) & k_name_start) {
+        } else if ((bits(b + 1) & k_name_start) != 0) {
           std::size_t q = b + 2;
 
-          while (q < n_ && (bits(q) & k_name)) {
+          while (q < n_ && ((bits(q) & k_name) != 0)) {
             ++q;
           }
 
           out(frame, TokenKind::variable, Quote::none, b, q);
           p_ = q;
-        } else if ((bits(b + 1) & k_digit) || c == '@' || c == '*' || c == '#' || c == '?' || c == '$' ||
+        } else if (((bits(b + 1) & k_digit) != 0) || c == '@' || c == '*' || c == '#' || c == '?' || c == '$' ||
                    c == '!' || c == '-') {
           out(frame, TokenKind::variable, Quote::none, b, b + 2);
           p_ = b + 2;
@@ -1770,20 +1770,20 @@ namespace telar::shell {
           ++q;
         }
 
-        if (q == n_ || !(bits(q) & k_name)) {
+        if (q == n_ || ((bits(q) & k_name) == 0)) {
           out(frame, q == n_ ? TokenKind::variable : literal, q == n_ ? Quote::none : quote, b, q);
           p_ = q;
           return;
         }
 
-        while (q < n_ && (bits(q) & k_name)) {
+        while (q < n_ && ((bits(q) & k_name) != 0)) {
           ++q;
         }
 
         if (next(q, '[')) {
           std::size_t r = q + 1;
 
-          while (r < n_ && s_[r] != ']' && !(bits(r) & k_newline) && s_[r] != '$' && s_[r] != '(' &&
+          while (r < n_ && s_[r] != ']' && ((bits(r) & k_newline) == 0) && s_[r] != '$' && s_[r] != '(' &&
                  s_[r] != '\'' && s_[r] != '"') {
             ++r;
           }
@@ -1830,7 +1830,7 @@ namespace telar::shell {
 
         std::size_t q = p_ + 1;
 
-        while (q < n_ && !(bits(q) & k_quote_stop)) {
+        while (q < n_ && ((bits(q) & k_quote_stop) == 0)) {
           ++q;
         }
 
@@ -2129,7 +2129,7 @@ namespace telar::shell {
       if (id >= count) {
         if (id < segments.size()) {
           for (std::size_t j = count; j <= id; ++j) {
-            segments[j] = Segment{{t.begin, t.begin}, static_cast<u32>(i), static_cast<u32>(i)};
+            segments[j] = Segment{.source = {.begin = t.begin, .end = t.begin}, .first_token = static_cast<u32>(i), .end_token = static_cast<u32>(i)};
           }
         }
 
@@ -2163,7 +2163,7 @@ namespace telar::shell {
     const u32 command = lexed.cursor_command;
 
     tokens = tokens.first(std::min(tokens.size(), lexed.tokens));
-    at.replace = Range{static_cast<u32>(cursor), static_cast<u32>(cursor)};
+    at.replace = Range{.begin = static_cast<u32>(cursor), .end = static_cast<u32>(cursor)};
     if (command == no_command) {
       at.current = 0;
       return at;
@@ -2229,14 +2229,14 @@ namespace telar::shell {
         continue;
       }
 
-      if (!open || (t.flags & Token::word_start)) {
+      if (!open || ((t.flags & Token::word_start) != 0)) {
         if (!closeWord(i)) {
           at.overflow = true;
           return at;
         }
 
         open = true;
-        word = Word{{t.begin, t.end}, {}, t.role, static_cast<u8>(t.flags & Token::redirect_target)};
+        word = Word{.source = {.begin = t.begin, .end = t.end}, .text = {}, .role = t.role, .flags = static_cast<u8>(t.flags & Token::redirect_target)};
         text_begin = unquoter.size();
         gap = t.begin;
         first = i;

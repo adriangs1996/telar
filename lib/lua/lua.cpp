@@ -132,12 +132,12 @@ namespace telar::runtime::lua {
 
     int openSandbox(lua_State* state) {
       constexpr ds::Array libraries{
-          luaL_Reg{"_G", luaopen_base},
-          luaL_Reg{LUA_COLIBNAME, luaopen_coroutine},
-          luaL_Reg{LUA_MATHLIBNAME, luaopen_math},
-          luaL_Reg{LUA_STRLIBNAME, luaopen_string},
-          luaL_Reg{LUA_TABLIBNAME, luaopen_table},
-          luaL_Reg{LUA_UTF8LIBNAME, luaopen_utf8},
+          luaL_Reg{.name = "_G", .func = luaopen_base},
+          luaL_Reg{.name = LUA_COLIBNAME, .func = luaopen_coroutine},
+          luaL_Reg{.name = LUA_MATHLIBNAME, .func = luaopen_math},
+          luaL_Reg{.name = LUA_STRLIBNAME, .func = luaopen_string},
+          luaL_Reg{.name = LUA_TABLIBNAME, .func = luaopen_table},
+          luaL_Reg{.name = LUA_UTF8LIBNAME, .func = luaopen_utf8},
       };
 
       for (const auto& library : libraries) {
@@ -152,9 +152,9 @@ namespace telar::runtime::lua {
 
       // Only the clock: the standard os library also spawns processes and reads the environment.
       constexpr ds::Array clock{
-          luaL_Reg{"time", &osTime},
-          luaL_Reg{"clock", &osClock},
-          luaL_Reg{"date", &osDate},
+          luaL_Reg{.name = "time", .func = &osTime},
+          luaL_Reg{.name = "clock", .func = &osClock},
+          luaL_Reg{.name = "date", .func = &osDate},
       };
 
       lua_createtable(state, 0, static_cast<int>(clock.size()));
@@ -358,7 +358,7 @@ namespace telar::runtime::lua {
 
   template <Allocator Memory>
   void JsonDecoder<Memory>::push(lua_State* state, const JsonValue& value, unsigned depth) {
-    if (depth == maximum_depth || !lua_checkstack(state, 6)) {
+    if (depth == maximum_depth || (lua_checkstack(state, 6) == 0)) {
       throw Error{"JSON exceeds the depth limit"};
     }
 
@@ -368,7 +368,7 @@ namespace telar::runtime::lua {
       break;
     case 't':
     case 'f':
-      lua_pushboolean(state, value.boolean());
+      lua_pushboolean(state, static_cast<int>(value.boolean()));
       break;
     case '"':
       value.string(text_);
@@ -583,7 +583,7 @@ namespace telar::runtime::lua {
 
     if (lua_isnil(state, -1)) {
       lua_pop(state, 1);
-      lua_pushboolean(state, true);
+      lua_pushboolean(state, 1);
     }
 
     if (domain == ModuleDomain::configuration && modules.loaded_ == module_limit) {
@@ -706,7 +706,7 @@ namespace telar::runtime::lua {
     int valid = 0;
     const auto result = lua_tointegerx(state_, index_, &valid);
 
-    if (!valid) {
+    if (valid == 0) {
       fail("must be an integer");
     }
 
@@ -717,7 +717,7 @@ namespace telar::runtime::lua {
     int valid = 0;
     const auto result = lua_tointegerx(state_, index_, &valid);
 
-    return valid ? ds::Option{result} : ds::none;
+    return (valid != 0) ? ds::Option{result} : ds::none;
   }
 
   std::uint64_t Value::boundedInteger(std::uint64_t fallback, std::uint64_t minimum, std::uint64_t maximum) const {
@@ -757,7 +757,7 @@ namespace telar::runtime::lua {
 
     lua_pushnil(state_);
     while (lua_next(state_, index_) != 0) {
-      if (children != 0 && lua_isinteger(state_, -2)) {
+      if (children != 0 && (lua_isinteger(state_, -2) != 0)) {
         const auto position = lua_tointeger(state_, -2);
         if (position < 1 || static_cast<std::uint64_t>(position) > children) {
           fail("children must form an array");
@@ -787,7 +787,7 @@ namespace telar::runtime::lua {
     while (lua_next(state_, index_) != 0) {
       int valid = 0;
       const auto key = lua_tointegerx(state_, -2, &valid);
-      if (!valid || lua_type(state_, -2) != LUA_TNUMBER || key < 1 || static_cast<std::uint64_t>(key) > size) {
+      if ((valid == 0) || lua_type(state_, -2) != LUA_TNUMBER || key < 1 || static_cast<std::uint64_t>(key) > size) {
         fail("contains a non-array key");
       }
 

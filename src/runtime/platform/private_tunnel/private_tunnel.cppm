@@ -7,7 +7,7 @@ import telar.base.memory.containers;
 import telar.platform.primitives;
 import telar.sys.socket;
 
-#if defined(__linux__)
+#ifdef __linux__
 // Interface: platform/linux/private_tunnel.cppm
 export {
   namespace telar::runtime {
@@ -35,7 +35,7 @@ export {
 
 #endif
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
 // Interface: platform/macos/private_tunnel.cppm
 export {
   namespace telar::runtime {
@@ -44,13 +44,13 @@ export {
     public:
       PrivateTunnel();
 
-      ssize_t write(std::span<const std::uint8_t> bytes) const noexcept;
+      [[nodiscard]] ssize_t write(std::span<const std::uint8_t> bytes) const noexcept;
 
-      int descriptor() const noexcept;
+      [[nodiscard]] int descriptor() const noexcept;
 
-      unsigned index() const noexcept;
+      [[nodiscard]] unsigned index() const noexcept;
 
-      std::string_view name() const noexcept;
+      [[nodiscard]] std::string_view name() const noexcept;
 
     private:
       FileDescriptor tunnel_;
@@ -65,7 +65,7 @@ export {
 
 // Interface: platform/private_tunnel.cppm
 export {
-#if defined(__APPLE__)
+#ifdef __APPLE__
 #else
 #endif
 }

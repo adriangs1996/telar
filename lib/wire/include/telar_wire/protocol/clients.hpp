@@ -63,7 +63,7 @@ namespace telar {
 
   struct ClientList {
     std::uint64_t request_id{};
-    std::span<const ClientDescriptor> entries{};
+    std::span<const ClientDescriptor> entries;
 
     void validate() const;
   };

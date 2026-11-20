@@ -340,9 +340,9 @@ export {
     struct ComponentShape {
       ComponentKind kind = ComponentKind::label;
       ComponentForm form = ComponentForm::text;
-      std::string_view text{};
-      std::string_view detail{};
-      std::string_view url{};
+      std::string_view text;
+      std::string_view detail;
+      std::string_view url;
       const char* action_field = nullptr;
       std::size_t samples = 0;
       unsigned priority = 50;
@@ -366,7 +366,7 @@ export {
 
         Usage operator+(Usage other) const noexcept;
         Usage operator-(Usage other) const noexcept;
-        bool fits(Usage room) const noexcept;
+        [[nodiscard]] bool fits(Usage room) const noexcept;
       };
 
       void count(const ComponentShape& shape, unsigned rank) noexcept;
@@ -374,14 +374,14 @@ export {
       bool admit(const ComponentShape& shape, unsigned rank) noexcept;
       void release(const ComponentShape& shape, unsigned rank) noexcept;
       bool stage(const ComponentShape& shape) noexcept;
-      bool nodesFull() const noexcept;
+      [[nodiscard]] bool nodesFull() const noexcept;
       void report(LimitNotices& limits) const noexcept;
 
     private:
       static Usage usage(const ComponentShape& shape) noexcept;
 
       static constexpr unsigned rank_count = 256;
-      static constexpr Usage staging_capacity{254, 32 * 1024, 64, 2048};
+      static constexpr Usage staging_capacity{.nodes = 254, .text = 32 * 1024, .actions = 64, .samples = 2048};
       ds::Array<Usage, rank_count> ranked_{};
       Usage offered_;
       Usage taken_;
@@ -1418,8 +1418,8 @@ export {
     inline constexpr ds::Array<std::string_view, 6> source_kind_names{"tabs", "metrics", "machines", "static", "dynamic", "command"};
 
     struct SourceSetting {
-      static constexpr Bounds<double> every_ms_bounds{100, 3'600'000};
-      static constexpr Bounds<double> timeout_ms_bounds{100, 10'000};
+      static constexpr Bounds<double> every_ms_bounds{.minimum = 100, .maximum = 3'600'000};
+      static constexpr Bounds<double> timeout_ms_bounds{.minimum = 100, .maximum = 10'000};
       static constexpr std::uint32_t default_every_ms = 1000;
       static constexpr std::uint32_t default_timeout_ms = 2000;
       SourceKind kind = SourceKind::tabs;
@@ -1539,7 +1539,7 @@ export {
       std::uint32_t character = 0;
       unsigned modifiers = 0;
 
-      bool has(Modifier modifier) const noexcept;
+      [[nodiscard]] bool has(Modifier modifier) const noexcept;
 
       bool operator==(const KeyChord&) const = default;
     };
@@ -1560,7 +1560,7 @@ export {
       };
 
       void setPrefix(KeyChord prefix) noexcept;
-      KeyChord prefix() const noexcept;
+      [[nodiscard]] KeyChord prefix() const noexcept;
       void clear() noexcept;
       void append(Sequence sequence) noexcept;
       void report(LimitNotices& limits) const noexcept;
@@ -1574,53 +1574,53 @@ export {
         constexpr auto alt = static_cast<unsigned>(KeyChord::Modifier::alt);
 
         return ds::Array<KeyChord, 43>{{
-            {Key::character, '-'},
-            {Key::character, '='},
-            {Key::character, '%'},
-            {Key::character, '"'},
-            {Key::left},
-            {Key::right},
-            {Key::up},
-            {Key::down},
-            {Key::left, 0, shift},
-            {Key::right, 0, shift},
-            {Key::up, 0, shift},
-            {Key::down, 0, shift},
-            {Key::character, 'z'},
-            {Key::character, 's'},
-            {Key::left, 0, alt},
-            {Key::right, 0, alt},
-            {Key::character, 'w'},
-            {Key::character, 'u'},
-            {Key::character, 'N'},
-            {Key::character, 'W'},
-            {Key::character, 'x'},
-            {Key::character, 'd'},
-            {Key::character, '['},
-            {Key::character, 'g'},
-            {Key::character, '/'},
-            {Key::character, 'f'},
-            {Key::character, '?'},
-            {Key::character, 'c'},
-            {Key::character, 'n'},
-            {Key::character, 'p'},
-            {Key::character, '1'},
-            {Key::character, '2'},
-            {Key::character, '3'},
-            {Key::character, '4'},
-            {Key::character, '5'},
-            {Key::character, '6'},
-            {Key::character, '7'},
-            {Key::character, '8'},
-            {Key::character, '9'},
-            {Key::character, 'T'},
-            {Key::character, 'X'},
-            {Key::character, ','},
-            {Key::character, '.'},
+            {.key = Key::character, .character = '-'},
+            {.key = Key::character, .character = '='},
+            {.key = Key::character, .character = '%'},
+            {.key = Key::character, .character = '"'},
+            {.key = Key::left},
+            {.key = Key::right},
+            {.key = Key::up},
+            {.key = Key::down},
+            {.key = Key::left, .character = 0, .modifiers = shift},
+            {.key = Key::right, .character = 0, .modifiers = shift},
+            {.key = Key::up, .character = 0, .modifiers = shift},
+            {.key = Key::down, .character = 0, .modifiers = shift},
+            {.key = Key::character, .character = 'z'},
+            {.key = Key::character, .character = 's'},
+            {.key = Key::left, .character = 0, .modifiers = alt},
+            {.key = Key::right, .character = 0, .modifiers = alt},
+            {.key = Key::character, .character = 'w'},
+            {.key = Key::character, .character = 'u'},
+            {.key = Key::character, .character = 'N'},
+            {.key = Key::character, .character = 'W'},
+            {.key = Key::character, .character = 'x'},
+            {.key = Key::character, .character = 'd'},
+            {.key = Key::character, .character = '['},
+            {.key = Key::character, .character = 'g'},
+            {.key = Key::character, .character = '/'},
+            {.key = Key::character, .character = 'f'},
+            {.key = Key::character, .character = '?'},
+            {.key = Key::character, .character = 'c'},
+            {.key = Key::character, .character = 'n'},
+            {.key = Key::character, .character = 'p'},
+            {.key = Key::character, .character = '1'},
+            {.key = Key::character, .character = '2'},
+            {.key = Key::character, .character = '3'},
+            {.key = Key::character, .character = '4'},
+            {.key = Key::character, .character = '5'},
+            {.key = Key::character, .character = '6'},
+            {.key = Key::character, .character = '7'},
+            {.key = Key::character, .character = '8'},
+            {.key = Key::character, .character = '9'},
+            {.key = Key::character, .character = 'T'},
+            {.key = Key::character, .character = 'X'},
+            {.key = Key::character, .character = ','},
+            {.key = Key::character, .character = '.'},
         }};
       }
 
-      KeyChord prefix_{KeyChord::Key::character, 'b', static_cast<unsigned>(KeyChord::Modifier::control)};
+      KeyChord prefix_{.key = KeyChord::Key::character, .character = 'b', .modifiers = static_cast<unsigned>(KeyChord::Modifier::control)};
       ds::Array<Sequence, maximum_bindings> bindings_{};
       std::size_t count_ = 0;
     };
@@ -1887,7 +1887,7 @@ export {
     };
 
     struct PanelSetting {
-      static constexpr Bounds<double> width_bounds{240, 720};
+      static constexpr Bounds<double> width_bounds{.minimum = 240, .maximum = 720};
       static constexpr std::uint16_t default_width = 420;
       DefinitionHeading heading;
       std::uint16_t width = default_width;
@@ -1898,7 +1898,7 @@ export {
     };
 
     struct PickSetting {
-      static constexpr Bounds<double> timeout_ms_bounds{100, 60'000};
+      static constexpr Bounds<double> timeout_ms_bounds{.minimum = 100, .maximum = 60'000};
       DefinitionHeading heading;
       std::uint32_t timeout_ms = SourceSetting::default_timeout_ms;
       // Whether a command lists the options, and whether a function renders them.
@@ -2027,7 +2027,7 @@ export {
     inline constexpr ds::Array<std::string_view, 2> prompt_binding_mode_names{"insert", "normal"};
 
     struct PromptBounds {
-      static constexpr Bounds<double> max_lines{1, 64};
+      static constexpr Bounds<double> max_lines{.minimum = 1, .maximum = 64};
       static constexpr std::size_t bindings = 256;
     };
 
@@ -2114,7 +2114,7 @@ export {
 
     // `client.prefix` and `client.input`.
     struct ClientInputSettings {
-      static constexpr Bounds<double> sequence_timeout_bounds{10, 10'000};
+      static constexpr Bounds<double> sequence_timeout_bounds{.minimum = 10, .maximum = 10'000};
       ds::Option<KeyChord> prefix;
       ds::Option<std::uint16_t> sequence_timeout_ms;
     };

@@ -50,7 +50,7 @@ namespace telar::runtime::cli::hooks {
   }
 
   std::size_t CodexSubagents::countExcept(std::string_view finished) const noexcept {
-    return count_ - (find(finished) != count_);
+    return count_ - static_cast<std::size_t>(find(finished) != count_);
   }
 
   tbc::val_a<std::string_view> CodexSubagents::value(tbc::val_a<std::string_view> item, std::string_view key) noexcept {
@@ -76,8 +76,8 @@ namespace telar::runtime::cli::hooks {
   }
 
   void CodexSubagents::apply(std::string_view item) noexcept {
-    const auto kind = value(item, "\"kind\":\"");
-    const auto identifier = value(item, "\"agent_thread_id\":\"");
+    const auto kind = value(item, R"("kind":")");
+    const auto identifier = value(item, R"("agent_thread_id":")");
     if (identifier.empty() || identifier.size() > 64) {
       return;
     }
@@ -94,7 +94,7 @@ namespace telar::runtime::cli::hooks {
   }
 
   std::size_t CodexSubagents::scan(std::string_view bytes, bool at_end) noexcept {
-    constexpr std::string_view marker = "\"item\":{\"type\":\"SubAgentActivity\"";
+    constexpr std::string_view marker = R"("item":{"type":"SubAgentActivity")";
     constexpr std::size_t maximum_item_bytes = 1024;
     std::size_t cursor = 0;
 

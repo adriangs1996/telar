@@ -19,7 +19,7 @@ export {
       Kind kind = Kind::none;
       std::size_t length = 0;
 
-      bool hasBody() const noexcept;
+      [[nodiscard]] bool hasBody() const noexcept;
     };
 
   }

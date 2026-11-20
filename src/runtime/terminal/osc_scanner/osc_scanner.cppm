@@ -23,12 +23,12 @@ export {
 
       void noteInput(Time time) noexcept;
 
-      ds::Option<Time> deadline(Time now) const noexcept;
+      [[nodiscard]] ds::Option<Time> deadline(Time now) const noexcept;
 
       void record(Time now, ds::Option<Time> scheduled) noexcept;
 
     private:
-      unsigned available(Time now) const noexcept;
+      [[nodiscard]] unsigned available(Time now) const noexcept;
 
       static constexpr unsigned idle_burst = 4;
       static constexpr unsigned input_burst = 16;
@@ -71,7 +71,7 @@ export {
 
       void clearSensitive() noexcept;
 
-      ds::Option<std::string_view> typedText() const noexcept;
+      [[nodiscard]] ds::Option<std::string_view> typedText() const noexcept;
 
     private:
       enum class State {
@@ -156,9 +156,9 @@ export {
 
       void discard() noexcept;
 
-      bool pending() const noexcept;
+      [[nodiscard]] bool pending() const noexcept;
 
-      std::size_t nextSize() const noexcept;
+      [[nodiscard]] std::size_t nextSize() const noexcept;
 
     private:
       static constexpr std::size_t inline_bytes = 2048;
@@ -205,7 +205,7 @@ export {
 
       TextSearch(std::uint64_t request, std::uint64_t pane, std::string_view needle, Rows rows, std::uint64_t revision);
 
-      std::uint32_t normalize(std::uint32_t codepoint) const noexcept;
+      [[nodiscard]] std::uint32_t normalize(std::uint32_t codepoint) const noexcept;
 
       bool searchRow(GhosttyTerminal terminal, std::uint32_t row);
 

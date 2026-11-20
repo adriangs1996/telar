@@ -22,7 +22,7 @@ export {
 
       bool consume() noexcept;
 
-      int descriptor() const noexcept;
+      [[nodiscard]] int descriptor() const noexcept;
 
     private:
       FileDescriptor reader_;

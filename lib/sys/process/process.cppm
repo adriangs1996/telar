@@ -9,7 +9,7 @@ module;
 #include <sys/wait.h>
 #include <termios.h>
 #include <unistd.h>
-#if defined(__APPLE__)
+#ifdef __APPLE__
 #include <util.h>
 #else
 #include <pty.h>
@@ -160,7 +160,7 @@ namespace telar::sys::captured {
   TELAR_SYS_SIGNALS(TELAR_SYS_CAPTURE)
   TELAR_SYS_SPAWN(TELAR_SYS_CAPTURE)
   TELAR_SYS_TERMINALS(TELAR_SYS_CAPTURE)
-#if !defined(__GLIBC__)
+#ifndef __GLIBC__
   TELAR_SYS_ENUMERATORS(TELAR_SYS_CAPTURE)
 #endif
 
@@ -218,7 +218,7 @@ namespace telar::sys::captured {
 #undef WTERMSIG
 
 #define TELAR_SYS_CONSTANT(name) inline constexpr auto name = telar::sys::captured::name##_;
-#if defined(__GLIBC__)
+#ifdef __GLIBC__
 #define TELAR_SYS_ENUMERATOR(name) using ::name;
 #else
 #define TELAR_SYS_ENUMERATOR TELAR_SYS_CONSTANT

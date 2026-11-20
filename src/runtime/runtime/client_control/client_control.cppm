@@ -88,7 +88,7 @@ export {
         });
       }
 
-      inline int descriptor() const noexcept {
+      [[nodiscard]] inline int descriptor() const noexcept {
         return worker_.descriptor();
       }
 
@@ -184,7 +184,7 @@ export {
         ds::Array<std::uint64_t, client_capacity> clients{};
         std::size_t count = 0;
 
-        inline std::span<const std::uint64_t> ids() const noexcept {
+        [[nodiscard]] inline std::span<const std::uint64_t> ids() const noexcept {
           return std::span{clients}.first(count);
         }
       };
@@ -363,7 +363,7 @@ export {
           throw RequestError{FailureCode::foreign_process, "The process does not descend from this pane"};
         }
 
-        client.pending_descent = DescentCheck{client.id, client.generation, pane->id, pane->generation, request.request_id, *client.peer_identity, pane->process->processId()};
+        client.pending_descent = DescentCheck{.client = client.id, .client_generation = client.generation, .pane = pane->id, .pane_generation = pane->generation, .request_id = request.request_id, .peer = *client.peer_identity, .root = pane->process->processId()};
         client.connection.read_paused = true;
       }
 
@@ -372,7 +372,7 @@ export {
           return;
         }
 
-        worker_.collect([&](const typename DescentProbe<Inspector>::Result& result) {
+        worker_.collect([&](const DescentProbe<Inspector>::Result& result) {
           pending_ = false;
           for (const auto& completed : std::span{result.checks}.first(result.count)) {
             finish(clients, panes, completed);
@@ -382,7 +382,7 @@ export {
         schedule(clients);
       }
 
-      inline int descriptor() const noexcept {
+      [[nodiscard]] inline int descriptor() const noexcept {
         return worker_.descriptor();
       }
 
@@ -411,7 +411,7 @@ export {
       }
 
     private:
-      inline static void finish(ClientStore& clients, const PaneStore& panes, const typename DescentProbe<Inspector>::Completion& completed) noexcept {
+      inline static void finish(ClientStore& clients, const PaneStore& panes, const DescentProbe<Inspector>::Completion& completed) noexcept {
         const auto& check = completed.check;
         auto* client = clients.find(check.client);
         if (client == nullptr || client->generation != check.client_generation) {
@@ -535,12 +535,12 @@ export {
         client.metrics_revision = sampler_.revision();
       }
 
-      inline int descriptor() const noexcept {
+      [[nodiscard]] inline int descriptor() const noexcept {
         return worker_.descriptor();
       }
 
 #if TELAR_DIAGNOSTICS
-      inline const diagnostics::SystemCounters& diagnostics() const noexcept {
+      [[nodiscard]] inline const diagnostics::SystemCounters& diagnostics() const noexcept {
         return sampler_.diagnostics();
       }
 #endif
@@ -580,10 +580,10 @@ export {
       std::uint64_t client = 0;
       std::uint64_t request_id = 0;
       ProcessInstance process{};
-      ds::Option<ProcessSignal> signal{};
+      ds::Option<ProcessSignal> signal;
       std::int32_t nice = 0;
       // The process that asked, when the runtime could name it.
-      ds::Option<ProcessIdentity> peer{};
+      ds::Option<ProcessIdentity> peer;
     };
 
     // What the runtime hands the monitor's worker: take a reading, answer queries, act on processes.
@@ -599,12 +599,12 @@ export {
 
     struct MonitorAnswer {
       // Valid until the next work is submitted: it views the sampler.
-      ds::Option<MonitorSnapshot> snapshot{};
+      ds::Option<MonitorSnapshot> snapshot;
     };
 
     struct MonitorActionOutcome {
-      ds::Option<FailureCode> failure{};
-      std::string_view message{};
+      ds::Option<FailureCode> failure;
+      std::string_view message;
     };
 
     struct MonitorOutcome {
@@ -694,7 +694,7 @@ export {
       }
 
       // An agent may act only on the processes of the pane it runs in; anything else asks the user.
-      inline MonitorActionOutcome act(const MonitorWork& work, const MonitorActionTicket& action) const noexcept {
+      [[nodiscard]] inline MonitorActionOutcome act(const MonitorWork& work, const MonitorActionTicket& action) const noexcept {
         if (action.peer) {
           for (std::size_t index = 0; index < work.root_count; ++index) {
             const auto& root = work.roots[index];
@@ -872,7 +872,7 @@ export {
         });
       }
 
-      inline int descriptor() const noexcept {
+      [[nodiscard]] inline int descriptor() const noexcept {
         return worker_.descriptor();
       }
 
@@ -907,8 +907,8 @@ export {
       std::size_t pending_queries_ = 0;
       ds::Array<MonitorActionTicket, MonitorLimitsOfWork::maximum_actions> actions_{};
       std::size_t pending_actions_ = 0;
-      Clock::time_point active_until_{};
-      Clock::time_point next_sample_{};
+      Clock::time_point active_until_;
+      Clock::time_point next_sample_;
       std::uint8_t readings_ = 0;
       bool busy_ = false;
     };
@@ -997,14 +997,14 @@ export {
           return;
         }
 
-        worker_.collect([&](const typename Processor::Result& result) {
+        worker_.collect([&](const Processor::Result& result) {
           apply(model, agents, result);
         });
       }
 
       inline void finish(RuntimeModel& model) noexcept {
         for (;;) {
-          worker_.wait([&](const typename Processor::Result& result) {
+          worker_.wait([&](const Processor::Result& result) {
             pending_ = false;
             for (const auto& entry : std::span{result.entries}.first(result.count)) {
               entry.observer->complete();
@@ -1031,12 +1031,12 @@ export {
         }
       }
 
-      inline int descriptor() const noexcept {
+      [[nodiscard]] inline int descriptor() const noexcept {
         return worker_.descriptor();
       }
 
     private:
-      inline void apply(RuntimeModel& model, Agents& agents, const typename Processor::Result& result) {
+      inline void apply(RuntimeModel& model, Agents& agents, const Processor::Result& result) {
         pending_ = false;
         for (const auto& entry : std::span{result.entries}.first(result.count)) {
           entry.observer->complete();
@@ -1264,7 +1264,7 @@ export {
       }
 
       inline void collect(ClientStore& clients) {
-        worker_.collect([&](typename Reader::Result& result) {
+        worker_.collect([&](Reader::Result& result) {
           pending_ = false;
           auto* client = clients.find(owner_);
           if (client == nullptr || client->generation != generation_ || client->connection.closing || Clock::now() >= expires_) {
@@ -1299,7 +1299,7 @@ export {
         }
       }
 
-      inline int descriptor() const noexcept {
+      [[nodiscard]] inline int descriptor() const noexcept {
         return worker_.descriptor();
       }
 
@@ -1339,7 +1339,7 @@ export {
       std::uint64_t generation_ = 0;
       std::uint64_t transfer_ = 0;
       std::size_t offset_ = 0;
-      Clock::time_point expires_{};
+      Clock::time_point expires_;
       bool pending_ = false;
     };
 
@@ -1412,7 +1412,7 @@ export {
         });
       }
 
-      inline int descriptor() const noexcept {
+      [[nodiscard]] inline int descriptor() const noexcept {
         return worker_.descriptor();
       }
 

@@ -40,7 +40,7 @@ export namespace telar::runtime::control {
         return ds::none;
       }
 
-      value = value * 10 + static_cast<unsigned>(byte - '0');
+      value = (value * 10) + static_cast<unsigned>(byte - '0');
     }
 
     return value;

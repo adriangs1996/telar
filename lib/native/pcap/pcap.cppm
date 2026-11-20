@@ -106,10 +106,10 @@ export {
 
 export {
   constexpr bpf_insn BPF_STMT(unsigned short code, bpf_u_int32 k) noexcept {
-    return bpf_insn{code, 0, 0, k};
+    return bpf_insn{.code = code, .jt = 0, .jf = 0, .k = k};
   }
 
   constexpr bpf_insn BPF_JUMP(unsigned short code, bpf_u_int32 k, unsigned char jump_true, unsigned char jump_false) noexcept {
-    return bpf_insn{code, jump_true, jump_false, k};
+    return bpf_insn{.code = code, .jt = jump_true, .jf = jump_false, .k = k};
   }
 }

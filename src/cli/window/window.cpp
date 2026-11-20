@@ -31,7 +31,7 @@ namespace telar::runtime::cli::window {
   constexpr unsigned receive_timeout = 30;
   constexpr std::size_t maximum_command_text = 4096;
 
-  constexpr const char* statusName(ClientCommandStatus status) {
+  static constexpr const char* statusName(ClientCommandStatus status) {
     switch (status) {
     case ClientCommandStatus::applied:
       return "applied";
@@ -46,21 +46,21 @@ namespace telar::runtime::cli::window {
     return "request";
   }
 
-  void number(Text& output, std::uint64_t value) {
+  static void number(Text& output, std::uint64_t value) {
     ds::Array<char, std::numeric_limits<std::uint64_t>::digits10 + 2> buffer;
     const char* const end = std::to_chars(buffer.dataMut(), buffer.dataMut() + buffer.size(), value).ptr;
 
     output.append(std::string_view{buffer.data(), end});
   }
 
-  void signedNumber(Text& output, std::int64_t value) {
+  static void signedNumber(Text& output, std::int64_t value) {
     ds::Array<char, std::numeric_limits<std::int64_t>::digits10 + 3> buffer;
     const char* const end = std::to_chars(buffer.dataMut(), buffer.dataMut() + buffer.size(), value).ptr;
 
     output.append(std::string_view{buffer.data(), end});
   }
 
-  void descriptor(Text& output, const ClientDescriptor& entry, bool json) {
+  static void descriptor(Text& output, const ClientDescriptor& entry, bool json) {
     if (json) {
       output.append("{\"id\":");
       number(output, entry.id);
@@ -89,7 +89,7 @@ namespace telar::runtime::cli::window {
     }
   }
 
-  void clients(Session& session, const ClientOptions& options, Text& output) {
+  static void clients(Session& session, const ClientOptions& options, Text& output) {
     const auto list = session.exchange<ClientList>(QueryClients{});
 
     if (options.action == ClientOptions::Action::list) {
@@ -147,7 +147,7 @@ namespace telar::runtime::cli::window {
     throw Failure{"ClientNotFound", 2};
   }
 
-  tbc::val_a<ClientCommandResult> exchangeCommand(tbc::mut_a<Session> session, const ClientCommand& command) {
+  static tbc::val_a<ClientCommandResult> exchangeCommand(tbc::mut_a<Session> session, const ClientCommand& command) {
     const auto reply = session.exchange<ClientCommandResult>(RequestClientCommand{command});
     if (reply.route.id != command.route.id || reply.route.generation != command.route.generation || reply.action != command.action || reply.target_id != command.target_id || reply.status == ClientCommandStatus::request) {
       throw Failure{"unexpected reply from the runtime"};
@@ -157,7 +157,7 @@ namespace telar::runtime::cli::window {
   }
 
   // Collect owned pages before printing: a concurrent reload must never mix generations.
-  void plugins(Session& session, ClientCommand command, ClientCommandResult reply, Text& output) {
+  static void plugins(Session& session, ClientCommand command, ClientCommandResult reply, Text& output) {
     ds::Vec<Text, Memory> entries{output.memory()};
     ds::Option<std::int64_t> generation;
     const std::int64_t limit = command.action == ClientAction::plugin_get ? 65 : 32;
@@ -252,7 +252,7 @@ namespace telar::runtime::cli::window {
     }
   }
 
-  int routed(Session& session, const RoutedOptions& options, Text& output) {
+  static int routed(Session& session, const RoutedOptions& options, Text& output) {
     const auto list = session.exchange<ClientList>(QueryClients{});
     const auto route = std::ranges::find(list.entries, options.client_id, &ClientDescriptor::id);
     if (route == list.entries.end()) {
@@ -345,7 +345,7 @@ namespace telar::runtime::cli::window {
     return 0;
   }
 
-  int suggest(Session& session, const SuggestionOptions& options, Text& output) {
+  static int suggest(Session& session, const SuggestionOptions& options, Text& output) {
     const auto reply = session.exchange<CommandSuggestion>(SuggestCommand{
         .pane_id = options.pane,
         .text = options.text,
@@ -371,7 +371,7 @@ namespace telar::runtime::cli::window {
                                                                                                    : 1;
   }
 
-  std::string_view utf8Prefix(std::string_view text, std::size_t maximum) {
+  static std::string_view utf8Prefix(std::string_view text, std::size_t maximum) {
     if (text.size() <= maximum) {
       return text;
     }
@@ -383,7 +383,7 @@ namespace telar::runtime::cli::window {
     return text.substr(0, maximum);
   }
 
-  int notify(Session& session, NotificationBody notification) {
+  static int notify(Session& session, NotificationBody notification) {
     ds::Option<LimitReach> reach;
 
     if (notification.title.size() > max_notification_title_bytes) {
@@ -455,24 +455,24 @@ namespace telar::runtime::cli::window {
     return 0;
   }
 
-  const char* socketOption(const RoutedOptions& options) {
+  static const char* socketOption(const RoutedOptions& options) {
     return options.socket;
   }
 
-  const char* socketOption(const ClientOptions& options) {
+  static const char* socketOption(const ClientOptions& options) {
     return options.socket;
   }
 
-  const char* socketOption(const SuggestionOptions& options) {
+  static const char* socketOption(const SuggestionOptions& options) {
     return options.socket;
   }
 
-  const char* socketOption(const NotificationOptions& options) {
+  static const char* socketOption(const NotificationOptions& options) {
     return options.socket;
   }
 
   template <typename Options, typename Execute>
-  int connected(const Options& options, const char* prefix, Execute execute) {
+  static int connected(const Options& options, const char* prefix, Execute execute) {
     try {
       SystemAllocator system;
       BudgetAllocator budget{system, memory_budget};

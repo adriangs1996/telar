@@ -139,7 +139,7 @@ namespace telar::git {
       }
     }
 
-    return Divergence{ahead_, behind_};
+    return Divergence{.ahead = ahead_, .behind = behind_};
   }
 
   void DivergenceWalk::reset() {
@@ -309,7 +309,7 @@ namespace telar::git {
       ++interesting_;
     }
 
-    heap_.push({node.key, index});
+    heap_.push({.key = node.key, .node = index});
     std::ranges::push_heap(heap_.viewMut(), std::less{}, &Queued::key);
   }
 

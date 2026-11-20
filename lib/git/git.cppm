@@ -157,7 +157,7 @@ export namespace telar::git {
     // throws: failures and limits show as unknown parts of the status.
     const Status& read(std::string_view directory) noexcept;
 
-    const Status& status() const noexcept;
+    [[nodiscard]] const Status& status() const noexcept;
 
     // The remotes the repository's config names, from the last read().
     template <typename Visit>
@@ -171,7 +171,7 @@ export namespace telar::git {
     }
 
     // stash@{0} to stash@{N}: one per line of the stash's reflog, newest first, at most `limit`.
-    std::size_t stashes(std::size_t limit) const noexcept;
+    [[nodiscard]] std::size_t stashes(std::size_t limit) const noexcept;
 
     // The local branches of the repository the last read() found: loose refs under refs/heads,
     // then packed ones, each a valid ref name, at most `limit` of them, a name possibly twice.
@@ -191,7 +191,7 @@ export namespace telar::git {
     // each and nothing read. Edits to tracked files do not change these: only
     // read() sees them. It assumes the directory still belongs to the same
     // repository; a new or removed .git below it shows only on the next read().
-    bool changed() const noexcept;
+    [[nodiscard]] bool changed() const noexcept;
 
   private:
     void visitRemotes(void* target, void (*visit)(void*, std::string_view)) noexcept;
@@ -201,8 +201,8 @@ export namespace telar::git {
     // Drops every cache that belongs to the previous repository.
     void forget() noexcept;
 
-    Inputs probe() const noexcept;
-    Fingerprint referenceFingerprint(std::string_view name) const noexcept;
+    [[nodiscard]] Inputs probe() const noexcept;
+    [[nodiscard]] Fingerprint referenceFingerprint(std::string_view name) const noexcept;
     void readRepository(std::string_view directory);
 
     // Walks up from `directory` as git's setup_git_directory does: a .git

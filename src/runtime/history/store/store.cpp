@@ -123,7 +123,7 @@ namespace telar::runtime {
       if (input.size() >= 48) {
         while (offset + 48 < input.size()) {
           for (std::size_t lane = 0; lane < state.size(); ++lane) {
-            state.atMut(lane) = mix(read<std::uint64_t>(input.data() + offset + 16 * lane) ^ secret[lane + 1], read<std::uint64_t>(input.data() + offset + 16 * lane + 8) ^ state[lane]);
+            state.atMut(lane) = mix(read<std::uint64_t>(input.data() + offset + (16 * lane)) ^ secret[lane + 1], read<std::uint64_t>(input.data() + offset + (16 * lane) + 8) ^ state[lane]);
           }
 
           offset += 48;
@@ -248,7 +248,7 @@ namespace telar::runtime {
     command_.reset();
     bindContext(command_, session);
     command_.bind(7, command.command);
-    command_.bind(8, command.truncated);
+    command_.bind(8, static_cast<std::int64_t>(command.truncated));
     command_.bind(9, command.directory);
     command_.bind(10, command.started.milliseconds);
     command_.bind(11, command.duration_ns);
@@ -264,7 +264,7 @@ namespace telar::runtime {
     if (!command.output.empty() || command.output_observed != 0) {
       output_.reset();
       output_.bind(1, std::string_view{reinterpret_cast<const char*>(command.output.data()), command.output.size()});
-      output_.bind(2, command.outputTruncated());
+      output_.bind(2, static_cast<std::int64_t>(command.outputTruncated()));
       output_.bind(3, static_cast<std::int64_t>(std::min<std::uint64_t>(command.output_observed, std::numeric_limits<std::int64_t>::max())));
       output_.finish();
     }
@@ -369,15 +369,15 @@ namespace telar::runtime {
     };
 
     constexpr ds::Array migrations{
-        Migration{"session", "tab_id", "ALTER TABLE session ADD COLUMN tab_id INTEGER NOT NULL DEFAULT 0"},
-        Migration{"command", "tab_id", "ALTER TABLE command ADD COLUMN tab_id INTEGER NOT NULL DEFAULT 0"},
-        Migration{"session", "title", "ALTER TABLE session ADD COLUMN title TEXT"},
-        Migration{"session", "title_source", "ALTER TABLE session ADD COLUMN title_source INTEGER"},
-        Migration{"session", "title_state", "ALTER TABLE session ADD COLUMN title_state INTEGER"},
-        Migration{"command", "author", "ALTER TABLE command ADD COLUMN author INTEGER NOT NULL DEFAULT 0"},
-        Migration{"command", "origin", "ALTER TABLE command ADD COLUMN origin INTEGER NOT NULL DEFAULT 0"},
-        Migration{"command", "provider", "ALTER TABLE command ADD COLUMN provider TEXT"},
-        Migration{"command", "tool_call_id", "ALTER TABLE command ADD COLUMN tool_call_id TEXT"},
+        Migration{.table = "session", .column = "tab_id", .sql = "ALTER TABLE session ADD COLUMN tab_id INTEGER NOT NULL DEFAULT 0"},
+        Migration{.table = "command", .column = "tab_id", .sql = "ALTER TABLE command ADD COLUMN tab_id INTEGER NOT NULL DEFAULT 0"},
+        Migration{.table = "session", .column = "title", .sql = "ALTER TABLE session ADD COLUMN title TEXT"},
+        Migration{.table = "session", .column = "title_source", .sql = "ALTER TABLE session ADD COLUMN title_source INTEGER"},
+        Migration{.table = "session", .column = "title_state", .sql = "ALTER TABLE session ADD COLUMN title_state INTEGER"},
+        Migration{.table = "command", .column = "author", .sql = "ALTER TABLE command ADD COLUMN author INTEGER NOT NULL DEFAULT 0"},
+        Migration{.table = "command", .column = "origin", .sql = "ALTER TABLE command ADD COLUMN origin INTEGER NOT NULL DEFAULT 0"},
+        Migration{.table = "command", .column = "provider", .sql = "ALTER TABLE command ADD COLUMN provider TEXT"},
+        Migration{.table = "command", .column = "tool_call_id", .sql = "ALTER TABLE command ADD COLUMN tool_call_id TEXT"},
     };
 
     for (const auto& migration : migrations) {
@@ -721,7 +721,7 @@ END;
       }
 
       if (candidate.score) {
-        ranked.push(RankedEntry{candidate.id, *candidate.score, order++});
+        ranked.push(RankedEntry{.id = candidate.id, .score = *candidate.score, .order = order++});
       }
     }
 
@@ -773,7 +773,7 @@ END;
     std::size_t characters = 0;
 
     for (const unsigned char byte : query) {
-      characters += (byte & 0xc0) != 0x80;
+      characters += static_cast<std::size_t>((byte & 0xc0) != 0x80);
     }
 
     return indexed_ && characters >= 3;

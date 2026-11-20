@@ -36,7 +36,7 @@ namespace telar::runtime::cli::machine {
   // Rewrites the profiles at `path` under an exclusive lock: `edit` changes what
   // was loaded, and the result replaces the file.
   // `path` from the working directory when it is relative.
-  tbc::val_a<Text> absolutePath(tbc::mut_a<Memory> memory, std::string_view path) {
+  static tbc::val_a<Text> absolutePath(tbc::mut_a<Memory> memory, std::string_view path) {
     if (path.starts_with('/')) {
       return Text{memory, path};
     }
@@ -50,7 +50,7 @@ namespace telar::runtime::cli::machine {
   }
 
   template <typename Edit>
-  void update(Memory& memory, std::string_view path, Edit edit) {
+  static void update(Memory& memory, std::string_view path, Edit edit) {
     const auto absolute = absolutePath(memory, path);
     const auto slash = absolute.view().rfind('/');
     const auto name = absolute.view().substr(slash + 1);
@@ -101,14 +101,14 @@ namespace telar::runtime::cli::machine {
     // Each agent's path there, by its name in machine_agent_names.
     ds::Map<std::string_view, Text, Memory> agents;
 
-    bool has(std::string_view tool) const {
-      const auto found = std::ranges::find(tool_names, tool);
+    [[nodiscard]] bool has(std::string_view tool) const {
+      const auto* const found = std::ranges::find(tool_names, tool);
 
       return found != tool_names.end() && ((tools >> (found - tool_names.begin())) & 1) != 0;
     }
 
     // The directory the telar binary sits in there.
-    std::string_view binDirectory() const {
+    [[nodiscard]] std::string_view binDirectory() const {
       const auto slash = target.view().rfind('/');
 
       return target.view().substr(0, slash == 0 ? 1 : slash);
@@ -181,7 +181,7 @@ namespace telar::runtime::cli::machine {
         } else if (key == "node") {
           result.node = Text{memory, value};
         } else if (key == "tool") {
-          const auto tool = std::ranges::find(tool_names, value);
+          const auto* const tool = std::ranges::find(tool_names, value);
           if (tool == tool_names.end()) {
             throw CommandError{"MachineProbeUnreadable"};
           }
@@ -189,7 +189,7 @@ namespace telar::runtime::cli::machine {
           result.tools |= static_cast<std::uint8_t>(1u << (tool - tool_names.begin()));
         } else if (key == "agent") {
           const auto colon = value.find(':');
-          const auto agent = std::ranges::find(machine_agent_names, value.substr(0, colon));
+          const auto* const agent = std::ranges::find(machine_agent_names, value.substr(0, colon));
           if (colon == std::string_view::npos || agent == machine_agent_names.end() || colon + 1 == value.size() || value[colon + 1] != '/') {
             throw CommandError{"MachineProbeUnreadable"};
           }
@@ -221,12 +221,12 @@ namespace telar::runtime::cli::machine {
     }
   };
 
-  tbc::val_a<launch::Output> runScript(tbc::mut_a<Memory> memory, std::string_view destination, std::string_view script, std::chrono::seconds timeout = probe_timeout) {
+  static tbc::val_a<launch::Output> runScript(tbc::mut_a<Memory> memory, std::string_view destination, std::string_view script, std::chrono::seconds timeout = probe_timeout) {
     return launch::capture(memory, ssh(memory, destination, "exec /bin/sh -s").view(), script, timeout);
   }
 
   // Appends the shell assignment `name='value'` and a newline.
-  void appendAssign(Text& script, std::string_view name, std::string_view value) {
+  static void appendAssign(Text& script, std::string_view name, std::string_view value) {
     script.append(name);
     script.push('=');
     launch::appendQuoted(script, value);
@@ -234,7 +234,7 @@ namespace telar::runtime::cli::machine {
   }
 
   // The output, when nothing of it was dropped.
-  std::string_view whole(const launch::Output& output) {
+  static std::string_view whole(const launch::Output& output) {
     if (output.dropped != 0) {
       throw CommandError{"RemoteOutputTooLong"};
     }
@@ -242,7 +242,7 @@ namespace telar::runtime::cli::machine {
     return output.out.view();
   }
 
-  bool answeredYes() {
+  static bool answeredYes() {
     ds::Array<char, 18> answer{};
     if (!std::cin.getline(answer.dataMut(), answer.size())) {
       std::cin.clear();
@@ -265,7 +265,7 @@ namespace telar::runtime::cli::machine {
       return static_cast<std::size_t>(std::ranges::find(agent_names, agent) - agent_names.begin());
     }
 
-    bool contains(std::string_view agent) const {
+    [[nodiscard]] bool contains(std::string_view agent) const {
       const auto at = index(agent);
 
       return at < agent_names.size() && ((bits >> at) & 1) != 0;
@@ -277,19 +277,19 @@ namespace telar::runtime::cli::machine {
       }
     }
 
-    bool empty() const {
+    [[nodiscard]] bool empty() const {
       return bits == 0;
     }
 
-    std::size_t size() const {
+    [[nodiscard]] std::size_t size() const {
       return static_cast<std::size_t>(std::popcount(bits));
     }
   };
 
-  AgentSet localAgents(Memory& memory) {
+  static AgentSet localAgents(Memory& memory) {
     AgentSet found;
     const auto* variable = std::getenv("PATH");
-    if (!variable) {
+    if (variable == nullptr) {
       return found;
     }
 
@@ -308,7 +308,7 @@ namespace telar::runtime::cli::machine {
   }
 
   // The agents' names, comma-separated; every name together fits.
-  FixedText<64> names(AgentSet agents) {
+  static FixedText<64> names(AgentSet agents) {
     FixedText<64> text;
     ds::Array<char, 64> bytes;
     std::size_t size = 0;
@@ -329,7 +329,7 @@ namespace telar::runtime::cli::machine {
     bool musl = true;
   };
 
-  AgentInstaller installerFor(std::string_view agent) {
+  static AgentInstaller installerFor(std::string_view agent) {
     static constexpr ds::Array<std::string_view, 2> curl_bash{"curl", "bash"};
     static constexpr ds::Array<std::string_view, 2> curl_tar{"curl", "tar"};
     static constexpr ds::Array<std::string_view, 3> curl_node_npm{"curl", "node", "npm"};
@@ -363,7 +363,7 @@ bash "$installer" </dev/null
   }
 
   // One numeric part of a Node.js version, or nullopt when it is not a u32.
-  ds::Option<std::uint32_t> maybeVersion(std::string_view part) noexcept {
+  static ds::Option<std::uint32_t> maybeVersion(std::string_view part) noexcept {
     try {
       return parseInt<std::uint32_t>(part);
     } catch (const std::invalid_argument&) {
@@ -373,7 +373,7 @@ bash "$installer" </dev/null
 
   using Reason = ErrorText<127>;
 
-  ds::Option<Reason> missingPrerequisite(const Platform& platform, std::string_view agent, const AgentInstaller& installer) {
+  static ds::Option<Reason> missingPrerequisite(const Platform& platform, std::string_view agent, const AgentInstaller& installer) {
     if (platform.libc == "musl" && !installer.musl) {
       return Reason{"its binary needs glibc and this machine has musl"};
     }
@@ -408,7 +408,7 @@ bash "$installer" </dev/null
     return ds::none;
   }
 
-  bool installAgents(Memory& memory, SetupReport& report, std::string_view destination, const Platform& platform, AgentSet wanted) {
+  static bool installAgents(Memory& memory, SetupReport& report, std::string_view destination, const Platform& platform, AgentSet wanted) {
     if (wanted.empty()) {
       report.end(Step::agents, Status::skipped, "no agent on this machine's PATH to install there");
       return false;
@@ -465,7 +465,7 @@ fetch() {
     return ran;
   }
 
-  void integrateAgents(Memory& memory, SetupReport& report, std::string_view destination, const Platform& platform) {
+  static void integrateAgents(Memory& memory, SetupReport& report, std::string_view destination, const Platform& platform) {
     if (platform.agents.empty()) {
       report.end(Step::integrations, Status::skipped, "no agent there");
       return;
@@ -523,13 +523,13 @@ fetch() {
     bool hooks = false;
   };
 
-  std::span<const SyncEntry> entriesFor(std::string_view agent) {
+  static std::span<const SyncEntry> entriesFor(std::string_view agent) {
     using enum SyncEntry::Format;
-    static constexpr ds::Array<SyncEntry, 9> claude{{{"settings.json", json, true}, {"CLAUDE.md"}, {"keybindings.json", json}, {"rules", tree}, {"skills", tree}, {"commands", tree}, {"agents", tree}, {"output-styles", tree}, {"themes", tree}}};
-    static constexpr ds::Array<SyncEntry, 6> codex{{{"config.toml", toml}, {"hooks.json", json, true}, {"AGENTS.md"}, {"AGENTS.override.md"}, {"rules", tree}, {"prompts", tree}}};
-    static constexpr ds::Array<SyncEntry, 9> pi{{{"settings.json", json}, {"keybindings.json", json}, {"AGENTS.md"}, {"SYSTEM.md"}, {"APPEND_SYSTEM.md"}, {"skills", tree}, {"prompts", tree}, {"themes", tree}, {"extensions", tree}}};
-    static constexpr ds::Array<SyncEntry, 10> opencode{{{"opencode.json", json}, {"opencode.jsonc", json}, {"tui.json", json}, {"AGENTS.md"}, {"agents", tree}, {"commands", tree}, {"modes", tree}, {"skills", tree}, {"themes", tree}, {"plugins", tree}}};
-    static constexpr ds::Array<SyncEntry, 4> cursor{{{"cli-config.json", json}, {"hooks.json", json, true}, {"skills", tree}, {"agents", tree}}};
+    static constexpr ds::Array<SyncEntry, 9> claude{{{.name = "settings.json", .format = json, .hooks = true}, {.name = "CLAUDE.md"}, {.name = "keybindings.json", .format = json}, {.name = "rules", .format = tree}, {.name = "skills", .format = tree}, {.name = "commands", .format = tree}, {.name = "agents", .format = tree}, {.name = "output-styles", .format = tree}, {.name = "themes", .format = tree}}};
+    static constexpr ds::Array<SyncEntry, 6> codex{{{.name = "config.toml", .format = toml}, {.name = "hooks.json", .format = json, .hooks = true}, {.name = "AGENTS.md"}, {.name = "AGENTS.override.md"}, {.name = "rules", .format = tree}, {.name = "prompts", .format = tree}}};
+    static constexpr ds::Array<SyncEntry, 9> pi{{{.name = "settings.json", .format = json}, {.name = "keybindings.json", .format = json}, {.name = "AGENTS.md"}, {.name = "SYSTEM.md"}, {.name = "APPEND_SYSTEM.md"}, {.name = "skills", .format = tree}, {.name = "prompts", .format = tree}, {.name = "themes", .format = tree}, {.name = "extensions", .format = tree}}};
+    static constexpr ds::Array<SyncEntry, 10> opencode{{{.name = "opencode.json", .format = json}, {.name = "opencode.jsonc", .format = json}, {.name = "tui.json", .format = json}, {.name = "AGENTS.md"}, {.name = "agents", .format = tree}, {.name = "commands", .format = tree}, {.name = "modes", .format = tree}, {.name = "skills", .format = tree}, {.name = "themes", .format = tree}, {.name = "plugins", .format = tree}}};
+    static constexpr ds::Array<SyncEntry, 4> cursor{{{.name = "cli-config.json", .format = json}, {.name = "hooks.json", .format = json, .hooks = true}, {.name = "skills", .format = tree}, {.name = "agents", .format = tree}}};
 
     if (agent == "claude") {
       return claude.view();
@@ -550,7 +550,7 @@ fetch() {
     return cursor.view();
   }
 
-  std::string_view remoteRoot(std::string_view agent) {
+  static std::string_view remoteRoot(std::string_view agent) {
     if (agent == "claude") {
       return ".claude";
     }
@@ -570,7 +570,7 @@ fetch() {
     return ".cursor";
   }
 
-  tbc::val_a<Text> localRoot(tbc::mut_a<Memory> memory, std::string_view agent, std::string_view home) {
+  static tbc::val_a<Text> localRoot(tbc::mut_a<Memory> memory, std::string_view agent, std::string_view home) {
     const auto* variable = agent == "claude" ? "CLAUDE_CONFIG_DIR" : agent == "codex"  ? "CODEX_HOME"
                                                                  : agent == "pi"       ? "PI_CODING_AGENT_DIR"
                                                                  : agent == "opencode" ? "XDG_CONFIG_HOME"
@@ -583,7 +583,7 @@ fetch() {
 
   // Calls `visit` with each word of a shell command, split at its separators.
   template <typename Visit>
-  void commandTokens(std::string_view command, Visit&& visit) {
+  static void commandTokens(std::string_view command, Visit&& visit) {
     constexpr std::string_view separators = " \t\n;&|()'\"=";
 
     while (!command.empty()) {
@@ -604,8 +604,8 @@ fetch() {
     }
   }
 
-  tbc::val_a<ds::Option<Text>> homePath(tbc::mut_a<Memory> memory, std::string_view token, std::string_view home) {
-    for (const auto prefix : {"~/", "$HOME/", "${HOME}/"}) {
+  static tbc::val_a<ds::Option<Text>> homePath(tbc::mut_a<Memory> memory, std::string_view token, std::string_view home) {
+    for (const auto* const prefix : {"~/", "$HOME/", "${HOME}/"}) {
       if (token.starts_with(prefix)) {
         return ds::format(memory, "{}/{}", home, token.substr(std::string_view{prefix}.size()));
       }
@@ -618,7 +618,7 @@ fetch() {
     return ds::none;
   }
 
-  void commands(Memory& memory, JsonValue value, ds::Vec<Text, Memory>& output, bool inside = false) {
+  static void commands(Memory& memory, JsonValue value, ds::Vec<Text, Memory>& output, bool inside = false) {
     if (value.encoded().starts_with('{')) {
       value.eachMember([&](JsonValue key, JsonValue child) {
         Text name{memory};
@@ -648,7 +648,7 @@ fetch() {
         : texts_(memory) {}
 
     void insert(std::string_view text) {
-      const auto at = std::ranges::lower_bound(texts_, text, {}, &Text::view);
+      const auto* const at = std::ranges::lower_bound(texts_, text, {}, &Text::view);
       if (at != texts_.end() && *at == text) {
         return;
       }
@@ -656,7 +656,7 @@ fetch() {
       static_cast<void>(texts_.insert(static_cast<std::size_t>(at - texts_.begin()), Text{texts_.memory(), text}));
     }
 
-    bool contains(std::string_view text) const {
+    [[nodiscard]] bool contains(std::string_view text) const {
       return std::ranges::binary_search(texts_, text, {}, &Text::view);
     }
 
@@ -701,7 +701,7 @@ fetch() {
     }
 
     // The canonical path of `path`, when it resolves.
-    tbc::val_a<ds::Option<Text>> canonical(std::string_view path) const {
+    [[nodiscard]] tbc::val_a<ds::Option<Text>> canonical(std::string_view path) const {
       const Text given{memory_, path};
       ds::Array<char, PATH_MAX> resolved{};
       if (::realpath(given.data(), resolved.dataMut()) == nullptr) {
@@ -711,7 +711,7 @@ fetch() {
       return Text{memory_, std::string_view{resolved.data()}};
     }
 
-    bool inside(std::string_view remote, std::string_view real) const {
+    [[nodiscard]] bool inside(std::string_view remote, std::string_view real) const {
       for (const auto& root : roots_) {
         if (below(remote, root.remote)) {
           return real == root.real.view() || below(real, root.real);
@@ -721,7 +721,7 @@ fetch() {
       return false;
     }
 
-    bool staged(std::string_view path) const {
+    [[nodiscard]] bool staged(std::string_view path) const {
       return std::ranges::any_of(files_, [&](const File& file) {
         return file.remote == path;
       });
@@ -740,7 +740,7 @@ fetch() {
     // What telar installs in an agent's directory itself, which setup leaves to the other
     // machine's telar. `remote` names a file from the home; each path is from an agent's root,
     // or from the parent of a shared root such as .agents/skills.
-    bool owned(std::string_view remote) const {
+    [[nodiscard]] bool owned(std::string_view remote) const {
       static constexpr auto paths = ds::Array<std::string_view, 4>{"skills/telar", "skills/telar-coordinator", "extensions/telar.ts", "plugins/telar.ts"};
       const auto matches = [](std::string_view relative) {
         return std::ranges::any_of(paths, [&](auto path) {
@@ -1176,7 +1176,7 @@ fetch() {
       auto& memory = left.memory();
 
       if (node.kind() == JsonKind::object) {
-        if (const auto* command = node.find("command"); command && command->kind() == JsonKind::string && !commandRuns(memory, remote_home, staged, command->text(), existing)) {
+        if (const auto* command = node.find("command"); (command != nullptr) && command->kind() == JsonKind::string && !commandRuns(memory, remote_home, staged, command->text(), existing)) {
           left.push(ds::format(memory, "{}: left out `{}`, whose program is not there", path, command->text()));
           return false;
         }
@@ -1267,7 +1267,7 @@ fetch() {
           continue;
         }
 
-        if (auto* status = file.json.getMut().findMut("statusLine"); status && !keepCommands(remote_home_, left_, staged, *status, existing, file.remote)) {
+        if (auto* status = file.json.getMut().findMut("statusLine"); (status != nullptr) && !keepCommands(remote_home_, left_, staged, *status, existing, file.remote)) {
           file.json.getMut().remove("statusLine");
         }
 
@@ -1328,7 +1328,7 @@ fetch() {
     }
   };
 
-  void syncConfig(Memory& memory, SetupReport& report, std::string_view destination, const Platform& platform, AgentSet wanted) {
+  static void syncConfig(Memory& memory, SetupReport& report, std::string_view destination, const Platform& platform, AgentSet wanted) {
     if (wanted.empty()) {
       report.end(Step::configuration, Status::skipped, "no agent here to take configuration from");
       return;
@@ -1336,7 +1336,7 @@ fetch() {
 
     try {
       const auto* variable = std::getenv("HOME");
-      if (!variable) {
+      if (variable == nullptr) {
         throw CommandError{"HomeUnavailable"};
       }
 
@@ -1350,7 +1350,7 @@ fetch() {
   }
 
   // The decimal digits of a number, as a command argument.
-  FixedText<24> decimal(std::uint64_t value) {
+  static FixedText<24> decimal(std::uint64_t value) {
     ds::Array<char, 24> digits;
     FixedText<24> text;
 
@@ -1371,7 +1371,7 @@ fetch() {
     std::string_view instructions;
   };
 
-  tbc::val_static<ds::Option<LoginPlan>> planFor(std::string_view agent, ds::Option<std::string_view> provider) {
+  static tbc::val_static<ds::Option<LoginPlan>> planFor(std::string_view agent, ds::Option<std::string_view> provider) {
     static constexpr ds::Array<std::string_view, 2> auth_login{"auth", "login"};
     static constexpr ds::Array<std::string_view, 2> device_login{"login", "--device-auth"};
     static constexpr ds::Array<std::string_view, 1> login{"login"};
@@ -1415,7 +1415,7 @@ fetch() {
     ds::Option<Text> code;
   };
 
-  tbc::val_a<ds::Option<LoginLink>> findLoginLink(tbc::mut_a<Memory> memory, std::string_view text, const LoginPlan& plan) {
+  static tbc::val_a<ds::Option<LoginLink>> findLoginLink(tbc::mut_a<Memory> memory, std::string_view text, const LoginPlan& plan) {
     std::string_view url;
 
     for (std::size_t start = 0;;) {
@@ -1525,7 +1525,7 @@ fetch() {
     }
 
     static LoginPane pane(JsonValue value) {
-      return {number(required(value, "workspace_id")), number(required(value, "tab_id")), number(required(value, "pane_id"))};
+      return {.workspace = number(required(value, "workspace_id")), .tab = number(required(value, "tab_id")), .pane = number(required(value, "pane_id"))};
     }
 
     Text capture(std::span<const std::string_view> words, ds::Option<std::string_view> input = ds::none) {
@@ -1740,7 +1740,7 @@ fetch() {
       }
 
       const auto* home = std::getenv("HOME");
-      if (!home) {
+      if (home == nullptr) {
         return ds::none;
       }
 
@@ -1793,11 +1793,11 @@ fetch() {
       } else if (agent == "codex") {
         check = "\"$agent\" login status >/dev/null 2>&1";
       } else if (agent == "cursor") {
-        check = "\"$agent\" status --format json 2>/dev/null | grep -Eq '\"status\": *\"authenticated\"|\"isAuthenticated\": *true'";
+        check = R"("$agent" status --format json 2>/dev/null | grep -Eq '"status": *"authenticated"|"isAuthenticated": *true')";
       } else if (agent == "pi") {
-        check = "[ -n \"$provider\" ] && \"$agent\" auth check --provider \"$provider\" --no-refresh >/dev/null 2>&1";
+        check = R"([ -n "$provider" ] && "$agent" auth check --provider "$provider" --no-refresh >/dev/null 2>&1)";
       } else {
-        check = "[ -n \"$provider\" ] && \"$agent\" auth list 2>/dev/null | grep -qi -- \"$provider\"";
+        check = R"([ -n "$provider" ] && "$agent" auth list 2>/dev/null | grep -qi -- "$provider")";
       }
 
       Text bytes{memory_};
@@ -2069,7 +2069,7 @@ fetch() {
         } else {
           started = true;
           try {
-            result = loginOne({agent, path, chosen, *plan});
+            result = loginOne({.agent = agent, .path = path, .provider = chosen, .plan = *plan});
           } catch (const std::exception& error) {
             report_.note(Step::logins, "{}: {}", agent, error.what());
             result = MachineLogin::failed;
@@ -2090,7 +2090,7 @@ fetch() {
           update(memory_, profiles_path, [&](MachineProfiles& profiles) {
             for (std::size_t index = 0; index < results.size(); ++index) {
               if (results[index]) {
-                const auto found = std::ranges::find(machine_agent_names, agent_names[index]);
+                const auto* const found = std::ranges::find(machine_agent_names, agent_names[index]);
 
                 profiles.recordLogin(profile_.label(), static_cast<MachineAgent>(found - machine_agent_names.begin()), *results[index]);
               }
@@ -2100,7 +2100,7 @@ fetch() {
       } catch (const std::exception& error) {
         const auto* text = describe(error.what());
 
-        report_.note(Step::logins, "machines.json keeps the logins it had: {}", text ? text : error.what());
+        report_.note(Step::logins, "machines.json keeps the logins it had: {}", (text != nullptr) ? text : error.what());
       }
 
       const auto has = [&](MachineLogin outcome) {
@@ -2177,7 +2177,7 @@ fetch() {
   // A file's SHA-256, as 64 lowercase hexadecimal digits.
   using Digest = FixedText<SHA256_DIGEST_LENGTH * 2>;
 
-  Digest fileDigest(const char* path) {
+  static Digest fileDigest(const char* path) {
     FileDescriptor file{::open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC)};
     struct stat state{};
     if (!file || ::fstat(file.get(), &state) != 0 || !S_ISREG(state.st_mode)) {
@@ -2213,13 +2213,13 @@ fetch() {
   }
 
   // The directory a path names a file in.
-  std::string_view parentOf(std::string_view path) {
+  static std::string_view parentOf(std::string_view path) {
     const auto slash = path.rfind('/');
 
     return slash == std::string_view::npos ? std::string_view{"."} : path.substr(0, slash == 0 ? 1 : slash);
   }
 
-  tbc::val_a<ds::Option<Platform>> reach(tbc::mut_a<Memory> memory, SetupReport& report, const Target& target, std::string_view directory) {
+  static tbc::val_a<ds::Option<Platform>> reach(tbc::mut_a<Memory> memory, SetupReport& report, const Target& target, std::string_view directory) {
     launch::Output probe{memory};
     bool confirmed = false;
     const auto run = [&] {
@@ -2233,7 +2233,7 @@ fetch() {
     try {
       probe = run();
       const auto failure = sshFailure(probe);
-      if (probe.status != 0 && !report.json && ::isatty(STDIN_FILENO) && (failure == MachineError::host_key_rejected || failure == MachineError::authentication_failed)) {
+      if (probe.status != 0 && !report.json && (::isatty(STDIN_FILENO) != 0) && (failure == MachineError::host_key_rejected || failure == MachineError::authentication_failed)) {
         std::printf("Batch-mode SSH to %s was refused. Connecting once with your terminal: OpenSSH asks, you answer; telar accepts nothing for you.\n", target.destination.data());
         std::fflush(stdout);
         confirmed = launch::inherit(launch::words(memory, {"ssh", "-o", "ControlPath=none", "-o", "ForwardAgent=no", "--", target.destination, "true"}).view()) == 0;
@@ -2285,13 +2285,13 @@ fetch() {
     Text directory;
   };
 
-  std::string_view releasesUrl() {
+  static std::string_view releasesUrl() {
     const auto* configured = std::getenv("TELAR_RELEASES_URL");
 
-    return configured && *configured ? std::string_view{configured} : std::string_view{"https://github.com/adriangs1996/telar/releases"};
+    return (configured != nullptr) && ((*configured) != 0) ? std::string_view{configured} : std::string_view{"https://github.com/adriangs1996/telar/releases"};
   }
 
-  Digest releaseDigest(Memory& memory, std::string_view asset) {
+  static Digest releaseDigest(Memory& memory, std::string_view asset) {
     const auto url = ds::format(memory, "{}/download/v{}/SHA256SUMS", releasesUrl(), version);
     constexpr std::size_t max_url_bytes = 2048;
     if (url.size() >= max_url_bytes) {
@@ -2353,7 +2353,7 @@ fetch() {
     throw CommandError{"ReleaseAssetMissing"};
   }
 
-  ds::Option<bool> installRuntime(Memory& memory, SetupReport& report, const Target& target, const Platform& platform, const Install& build) {
+  static ds::Option<bool> installRuntime(Memory& memory, SetupReport& report, const Target& target, const Platform& platform, const Install& build) {
     if (!build.binary) {
       return false;
     }
@@ -2421,7 +2421,7 @@ cat > "$temporary" && [ "$(hash "$temporary")" = "$expected" ] && chmod 755 "$te
     return changed;
   }
 
-  tbc::val_a<bool> install(tbc::mut_a<Memory> memory, SetupReport& report, const Target& target, const Platform& platform, const Install& build) {
+  static tbc::val_a<bool> install(tbc::mut_a<Memory> memory, SetupReport& report, const Target& target, const Platform& platform, const Install& build) {
     try {
       MachineFieldRules::program(platform.target);
     } catch (const MachineFailure&) {
@@ -2443,7 +2443,7 @@ cat > "$temporary" && [ "$(hash "$temporary")" = "$expected" ] && chmod 755 "$te
 
     if (build.binary) {
       const auto short_digest = build.digest->view().substr(0, MachineId::hex_digits);
-      const auto upload_command = ds::format(memory, "exec /bin/sh -c 'umask 077 && mkdir -p \"$HOME/.local/share/telar/versions\" && exec cat > \"$HOME/.local/share/telar/versions/.upload-{}\"'", short_digest);
+      const auto upload_command = ds::format(memory, R"(exec /bin/sh -c 'umask 077 && mkdir -p "$HOME/.local/share/telar/versions" && exec cat > "$HOME/.local/share/telar/versions/.upload-{}"')", short_digest);
       const Text binary_path{memory, *build.binary};
       FileDescriptor binary{::open(binary_path.data(), O_RDONLY | O_CLOEXEC)};
       if (!binary) {
@@ -2525,11 +2525,11 @@ cat > "$temporary" && [ "$(hash "$temporary")" = "$expected" ] && chmod 755 "$te
     return true;
   }
 
-  std::string_view schemaText(const SchemaId& schema) {
+  static std::string_view schemaText(const SchemaId& schema) {
     return {reinterpret_cast<const char*>(schema.data()), schema.size()};
   }
 
-  bool startRuntime(Memory& memory, SetupReport& report, const Target& target, const MachineProfile& remote, bool interactive) {
+  static bool startRuntime(Memory& memory, SetupReport& report, const Target& target, const MachineProfile& remote, bool interactive) {
     const auto program = *remote.program();
     Text detail{memory};
 
@@ -2607,7 +2607,7 @@ exit 1
     return false;
   }
 
-  int setup(Memory& memory, const MachineOptions& options) {
+  static int setup(Memory& memory, const MachineOptions& options) {
     SetupReport report{memory, options.json};
     const auto path = profilesPath(memory);
     const auto profiles = load(memory, path);
@@ -2638,7 +2638,7 @@ exit 1
       } else {
         const auto* detail = describe(error.what());
 
-        std::fprintf(stderr, "telar machine setup: %s\n", detail ? detail : error.what());
+        std::fprintf(stderr, "telar machine setup: %s\n", (detail != nullptr) ? detail : error.what());
       }
 
       return 1;
@@ -2651,7 +2651,7 @@ exit 1
       std::fflush(stdout);
     }
 
-    const bool interactive = !options.json && ::isatty(STDIN_FILENO);
+    const bool interactive = !options.json && (::isatty(STDIN_FILENO) != 0);
 
     if (options.confirm) {
       if (!interactive) {
@@ -2723,7 +2723,7 @@ mkdir -p "$HOME/.local/bin" && "$telar" cli install --dir "$HOME/.local/bin" >/d
     } catch (const std::exception& error) {
       const auto* description = describe(error.what());
 
-      report.end(Step::profile, Status::failed, "{}", description ? description : error.what());
+      report.end(Step::profile, Status::failed, "{}", (description != nullptr) ? description : error.what());
     }
 
     const auto wanted = localAgents(memory);

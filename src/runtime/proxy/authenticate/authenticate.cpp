@@ -25,7 +25,7 @@ namespace telar::runtime {
 
     for (std::size_t index = 0; index < byte_count; ++index) {
       const auto high = digit(text[index * 2]);
-      const auto low = digit(text[index * 2 + 1]);
+      const auto low = digit(text[(index * 2) + 1]);
       if (!high || !low) {
         return ds::none;
       }
@@ -57,7 +57,7 @@ namespace telar::runtime {
 
     for (std::size_t index = 0; index < byte_count; ++index) {
       destination[index * 2] = hexadecimal[bytes_[index] >> 4];
-      destination[index * 2 + 1] = hexadecimal[bytes_[index] & 15];
+      destination[(index * 2) + 1] = hexadecimal[bytes_[index] & 15];
     }
 
     return std::string_view{destination.data(), hexadecimal_bytes};
@@ -167,7 +167,7 @@ namespace telar::runtime {
         return ProxyRejection{ProxyRejection::Reason::invalid_authorization};
       }
 
-      return ProxyAdmission{*target, false};
+      return ProxyAdmission{.target = *target, .authenticated = false};
     }
 
     const auto presented = ProxyAuthorization::parse(head);
@@ -184,7 +184,7 @@ namespace telar::runtime {
       return ProxyRejection{ProxyRejection::Reason::invalid_target};
     }
 
-    return ProxyAdmission{*target, true};
+    return ProxyAdmission{.target = *target, .authenticated = true};
   }
 
   ds::Option<ProxySecret> ProxySecretFile::load(Memory& memory, int directory) {

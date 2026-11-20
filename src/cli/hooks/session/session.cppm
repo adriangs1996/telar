@@ -25,12 +25,12 @@ export {
     public:
       void read(std::string_view path) noexcept;
 
-      std::size_t countExcept(std::string_view finished) const noexcept;
+      [[nodiscard]] std::size_t countExcept(std::string_view finished) const noexcept;
 
     private:
       static tbc::val_a<std::string_view> value(tbc::val_a<std::string_view> item, std::string_view key) noexcept;
 
-      std::size_t find(std::string_view identifier) const noexcept;
+      [[nodiscard]] std::size_t find(std::string_view identifier) const noexcept;
 
       void apply(std::string_view item) noexcept;
 
@@ -63,7 +63,7 @@ export {
       ds::Option<ReportAgentTitle> title;
       ds::Option<ReportAgentProgress> progress;
 
-      bool empty() const noexcept;
+      [[nodiscard]] bool empty() const noexcept;
     };
 
   }

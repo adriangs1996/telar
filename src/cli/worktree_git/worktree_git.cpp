@@ -280,7 +280,7 @@ namespace telar::runtime::cli::sessions {
     return *chosen;
   }
 
-  void workspaceEntry(Output& output, const WorkspaceListEntry& entry, bool json) {
+  static void workspaceEntry(Output& output, const WorkspaceListEntry& entry, bool json) {
     if (json) {
       output.text("{\"workspace_id\":").number(entry.workspace).text(",\"name\":").json(entry.name).text(",\"path\":").json(entry.path).text(",\"tab_count\":").number(entry.tab_count).text(",\"branch\":").json(entry.branch).text(",\"dirty\":").boolean(entry.dirty).text("}");
     } else {
@@ -310,7 +310,7 @@ namespace telar::runtime::cli::sessions {
         ds::Array<std::string_view, workspace_command_words> command;
         std::size_t count = 0;
 
-        for (const auto word : options.command) {
+        for (auto* const word : options.command) {
           command.atMut(count++) = word;
         }
 
@@ -398,7 +398,7 @@ namespace telar::runtime::cli::sessions {
 
     for (std::size_t index = 0; index < result.session_id.size(); ++index) {
       unsigned byte{};
-      const auto begin = value.data() + index * 2;
+      const auto* const begin = value.data() + (index * 2);
       const auto parsed = std::from_chars(begin, begin + 2, byte, 16);
       if (parsed.ec != std::errc{} || parsed.ptr != begin + 2) {
         usage("InvalidCoordinatorReference");
@@ -527,8 +527,8 @@ namespace telar::runtime::cli::sessions {
       return *id;
     }
 
-    const auto value = std::getenv(variable);
-    if (!value) {
+    auto* const value = std::getenv(variable);
+    if (value == nullptr) {
       throw std::runtime_error{"MissingCurrentIdentity"};
     }
 
@@ -579,7 +579,9 @@ namespace telar::runtime::cli::sessions {
         }
 
         break;
-      } else if (arg == "--columns" && self.action == Action::create) {
+      }
+
+      if (arg == "--columns" && self.action == Action::create) {
         const auto value = maybeUnsigned(cursor.take("MissingWorkspaceColumns"));
         constexpr unsigned minimum_columns = 20, maximum_columns = 1024;
         if (!value || *value < minimum_columns || *value > maximum_columns) {
@@ -980,7 +982,9 @@ namespace telar::runtime::cli::sessions {
         }
 
         break;
-      } else if (arg == "--setup" && self.action == Action::create) {
+      }
+
+      if (arg == "--setup" && self.action == Action::create) {
         self.setup = true;
       } else if (arg == "--title" && self.action == Action::create) {
         single(self.title, cursor.take("MissingWorktreeTitle"), "DuplicateWorktreeOption");

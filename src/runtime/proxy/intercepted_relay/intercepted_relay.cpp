@@ -135,7 +135,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   const traffic::HttpPolicy& HttpInterceptionSlot<Memory>::select(traffic::HttpControl* control, const traffic::FlowEvent& event) noexcept {
-    policy_ = control ? control->policy(event) : traffic::HttpPolicy{};
+    policy_ = (control != nullptr) ? control->policy(event) : traffic::HttpPolicy{};
     collect_until_ = std::chrono::steady_clock::now() + collection_timeout;
     return policy_;
   }
@@ -157,7 +157,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   auto HttpInterceptionSlot<Memory>::deadline(traffic::HttpControl* control) const noexcept -> ds::Option<Time> {
-    return ticket_ ? control->httpDeadline(ticket_) : ds::none;
+    return (ticket_ != 0u) ? control->httpDeadline(ticket_) : ds::none;
   }
 
   template <Allocator Memory>
@@ -167,7 +167,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   void HttpInterceptionSlot<Memory>::cancel(traffic::HttpControl* control) noexcept {
-    if (ticket_) {
+    if (ticket_ != 0u) {
       control->cancelHttp(ticket_);
       ticket_ = 0;
     }
@@ -178,7 +178,7 @@ namespace telar::runtime {
   template <Allocator Memory>
   void HttpInterceptionSlot<Memory>::unavailable(traffic::HttpControl* control, traffic::FlowEvent event, std::string_view reason) noexcept {
     event.reason = reason;
-    if (control) {
+    if (control != nullptr) {
       control->httpUnavailable(event);
     }
 

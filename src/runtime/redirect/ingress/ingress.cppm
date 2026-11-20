@@ -66,9 +66,9 @@ export {
     public:
       Discovery();
 
-      int descriptor() const noexcept;
+      [[nodiscard]] int descriptor() const noexcept;
 
-      std::string_view name() const noexcept;
+      [[nodiscard]] std::string_view name() const noexcept;
 
       tbc::val_a<std::span<Byte>> receive(tbc::val_a<std::span<Byte>> bytes);
 
@@ -123,7 +123,7 @@ export {
     public:
       bool receive(int channel);
 
-      Kind kind() const;
+      [[nodiscard]] Kind kind() const;
 
       void validateMonitor() const;
 
@@ -212,7 +212,7 @@ export {
           return;
         }
 
-        if (descriptors[1].revents & POLLIN) {
+        if ((descriptors[1].revents & POLLIN) != 0) {
           wake_.drain();
         }
 
@@ -228,7 +228,7 @@ export {
           }
         }
 
-        if (descriptors[0].revents & POLLIN) {
+        if ((descriptors[0].revents & POLLIN) != 0) {
           accept();
         }
 
@@ -239,7 +239,7 @@ export {
           }
 
           const auto readiness = descriptors[index + 2].revents;
-          bool close = readiness & (POLLERR | POLLNVAL);
+          bool close = (readiness & (POLLERR | POLLNVAL)) != 0;
 
           try {
             if (!peer->monitor && (readiness & (POLLIN | POLLHUP)) && peer.getMut().incoming.receive(peer->socket.get())) {
@@ -437,7 +437,7 @@ export {
           }
 
           if (remaining != 0) {
-            pollfd descriptor{signal.descriptor(), POLLIN, 0};
+            pollfd descriptor{.fd = signal.descriptor(), .events = POLLIN, .revents = 0};
             if (::poll(&descriptor, 1, 20) < 0 && sys::lastError() != EINTR) {
               throw SystemError{"Wait for redirect hostname resolution"};
             }
@@ -447,11 +447,11 @@ export {
         }
       }
 
-      inline std::span<const Target> targets() const noexcept {
+      [[nodiscard]] inline std::span<const Target> targets() const noexcept {
         return std::span{targets_}.first(count_);
       }
 
-      inline std::string_view argument(std::size_t index) const noexcept {
+      [[nodiscard]] inline std::string_view argument(std::size_t index) const noexcept {
         return arguments_[index].view();
       }
 
@@ -471,12 +471,12 @@ export {
         ds::Array<char, INET6_ADDRSTRLEN> host{};
 
         if (family == AF_INET) {
-          if (address.length != sizeof(sockaddr_in) || !::inet_ntop(AF_INET, &reinterpret_cast<const sockaddr_in*>(&address.storage)->sin_addr, host.dataMut(), host.size())) {
+          if (address.length != sizeof(sockaddr_in) || (::inet_ntop(AF_INET, &reinterpret_cast<const sockaddr_in*>(&address.storage)->sin_addr, host.dataMut(), host.size()) == nullptr)) {
             throw std::invalid_argument{"Invalid resolved IPv4 destination"};
           }
         } else if (family == AF_INET6) {
           const auto& v6 = *reinterpret_cast<const sockaddr_in6*>(&address.storage);
-          if (address.length != sizeof(sockaddr_in6) || v6.sin6_scope_id != 0 || !::inet_ntop(AF_INET6, &v6.sin6_addr, host.dataMut(), host.size())) {
+          if (address.length != sizeof(sockaddr_in6) || v6.sin6_scope_id != 0 || (::inet_ntop(AF_INET6, &v6.sin6_addr, host.dataMut(), host.size()) == nullptr)) {
             throw std::invalid_argument{"Invalid resolved IPv6 destination"};
           }
         } else {

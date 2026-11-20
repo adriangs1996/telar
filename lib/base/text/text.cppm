@@ -45,7 +45,7 @@ export namespace telar::runtime {
         return std::unexpected{NumberError::overflow};
       }
 
-      value = static_cast<Integer>(value * base + worth);
+      value = static_cast<Integer>((value * base) + worth);
     }
 
     return value;
@@ -109,7 +109,7 @@ export namespace telar::runtime::base64 {
   inline constexpr ds::Option<std::size_t> encode(std::span<const std::uint8_t> bytes, std::span<char> destination) noexcept {
     const auto complete_groups = bytes.size() / 3;
     const auto remaining = bytes.size() % 3;
-    if (complete_groups > destination.size() / 4 || (remaining != 0 && destination.size() - complete_groups * 4 < 4)) {
+    if (complete_groups > destination.size() / 4 || (remaining != 0 && destination.size() - (complete_groups * 4) < 4)) {
       return ds::none;
     }
 
@@ -344,7 +344,7 @@ export {
       TELAR_ASSERT(output.size() >= 2 * bytes.size());
       for (std::size_t index = 0; index < bytes.size(); ++index) {
         output[2 * index] = digits[bytes[index] >> 4];
-        output[2 * index + 1] = digits[bytes[index] & 15];
+        output[(2 * index) + 1] = digits[bytes[index] & 15];
       }
 
       return {output.data(), 2 * bytes.size()};

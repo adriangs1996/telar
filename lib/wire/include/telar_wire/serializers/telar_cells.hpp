@@ -61,7 +61,7 @@ namespace telar {
   struct Cell {
     CellWidth width = CellWidth::single;
     CellStyle style{};
-    std::span<const Byte> text{};
+    std::span<const Byte> text;
 
     void validate() const;
   };

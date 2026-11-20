@@ -261,7 +261,7 @@ namespace telar::runtime {
 
   void RemoteEditor::vimEndpoint(Session& session, std::string_view endpoint) {
     const std::string_view option = session.kind == EditorKind::neovim ? "--server" : "--servername";
-    const ds::Array<std::string_view, 5> identity_arguments{editor_, option, endpoint, "--remote-expr", "getpid() . \"\\n\" . hostname()"};
+    const ds::Array<std::string_view, 5> identity_arguments{editor_, option, endpoint, "--remote-expr", R"(getpid() . "\n" . hostname())"};
     std::string_view identity;
 
     try {

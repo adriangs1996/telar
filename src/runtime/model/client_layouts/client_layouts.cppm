@@ -56,9 +56,9 @@ export {
 
       void replace(std::uint64_t pane, std::span<const Byte> bytes);
 
-      bool pending() const noexcept;
+      [[nodiscard]] bool pending() const noexcept;
 
-      PaneClipboard message() const noexcept;
+      [[nodiscard]] PaneClipboard message() const noexcept;
 
       void delivered() noexcept;
 
@@ -153,16 +153,16 @@ export {
 
       explicit ClientSession(ConcurrentMemory& memory, std::uint64_t identity, FileDescriptor descriptor);
 
-      std::size_t availableAttachmentSlot() const;
+      [[nodiscard]] std::size_t availableAttachmentSlot() const;
 
       // The bit its slot sets in a pane's observers; none before the client is stored.
-      std::uint32_t observerBit() const noexcept;
+      [[nodiscard]] std::uint32_t observerBit() const noexcept;
 
-      const Attachment* attachment(std::uint64_t pane_id) const noexcept;
+      [[nodiscard]] const Attachment* attachment(std::uint64_t pane_id) const noexcept;
       Attachment* attachmentMut(std::uint64_t pane_id) noexcept;
 
       // Whether the runtime verified this client runs inside `pane`, the generation it has now.
-      bool verifiedFor(const Pane& pane) const noexcept;
+      [[nodiscard]] bool verifiedFor(const Pane& pane) const noexcept;
 
       std::uint64_t id;
       std::uint64_t generation;
@@ -196,7 +196,7 @@ export {
       bool descent_running = false;
       DeferredReport<ConcurrentMemory> deferred_report;
       unsigned limit_reports = 0;
-      std::chrono::steady_clock::time_point limit_report_window{};
+      std::chrono::steady_clock::time_point limit_report_window;
       ds::Option<std::uint64_t> workspace;
       std::chrono::nanoseconds frame_interval{1'000'000'000 / 60};
       std::uint64_t workspace_revision = 0;
@@ -267,7 +267,7 @@ export {
             for (std::size_t index = 0; index < batch.count; ++index) {
               const auto message = batch.message(index);
 
-              vectors.atMut(index) = {const_cast<Byte*>(message.data()), message.size()};
+              vectors.atMut(index) = {.iov_base = const_cast<Byte*>(message.data()), .iov_len = message.size()};
             }
 
             return write_responses(process->descriptor(), std::span<const iovec>{vectors}.first(batch.count));
@@ -354,7 +354,7 @@ export {
       bool foreground_shell = true;
       // The TCP ports that process group listens on, and when they were last read.
       ListeningPorts listening_ports;
-      std::chrono::steady_clock::time_point ports_checked{};
+      std::chrono::steady_clock::time_point ports_checked;
       bool output_closed = false;
       bool exit_observed = false;
       bool shell_markers = false;
@@ -382,7 +382,7 @@ export {
       bool write_interest = false;
       bool read_paused = false;
       ds::Option<int> exit_status;
-      std::chrono::steady_clock::time_point sync_started{};
+      std::chrono::steady_clock::time_point sync_started;
       ds::Option<std::chrono::steady_clock::time_point> last_input;
       bool close_requested = false;
       ProcessCache process_cache;
@@ -409,7 +409,7 @@ export {
 
         void mark(CommandMark mark) noexcept;
 
-        std::span<const Mark> marks() const noexcept;
+        [[nodiscard]] std::span<const Mark> marks() const noexcept;
       };
 
       // Folds one round trip into the link's; clients hear of it when it moves by a tenth.
@@ -456,9 +456,9 @@ export {
 
       Tab* tabMut(std::uint64_t tab_id) noexcept;
 
-      const Tab* tab(std::uint64_t tab_id) const noexcept;
+      [[nodiscard]] const Tab* tab(std::uint64_t tab_id) const noexcept;
 
-      std::string_view displayName() const noexcept;
+      [[nodiscard]] std::string_view displayName() const noexcept;
 
       std::uint64_t id;
       ds::String<ConcurrentMemory> path;
@@ -466,7 +466,7 @@ export {
       ds::Vec<Tab, ConcurrentMemory> tabs;
       ds::Option<std::uint64_t> geometry_client;
       FixedText<200> git_branch;
-      std::chrono::steady_clock::time_point git_checked_at{};
+      std::chrono::steady_clock::time_point git_checked_at;
       bool git_dirty = false;
       bool git_timed_out = false;
     };
@@ -481,7 +481,7 @@ export {
     struct Worktree {
       explicit Worktree(ConcurrentMemory& memory, std::uint64_t identity, const RegisterWorktree& request);
 
-      WorktreeListEntry entry() const noexcept;
+      [[nodiscard]] WorktreeListEntry entry() const noexcept;
 
       std::uint64_t id;
       std::uint64_t source;
@@ -503,7 +503,7 @@ export {
       std::uint32_t commits_ahead = 0;
       unsigned probe_failures = 0;
       bool had_changes = false;
-      std::chrono::steady_clock::time_point checked_at{};
+      std::chrono::steady_clock::time_point checked_at;
       CommandState command_state = CommandState::none;
       std::int32_t command_exit = 0;
       ds::Option<std::uint64_t> command_pane;
@@ -517,13 +517,13 @@ export {
 
       Worktree* find(std::uint64_t identity) noexcept;
 
-      std::span<Worktree* const> items() const noexcept;
+      [[nodiscard]] std::span<Worktree* const> items() const noexcept;
 
       void remove(std::uint64_t identity) noexcept;
 
       Worktree* containing(std::string_view path) noexcept;
 
-      std::uint64_t sourceFor(std::uint64_t workspace) const noexcept;
+      [[nodiscard]] std::uint64_t sourceFor(std::uint64_t workspace) const noexcept;
 
       static constexpr std::size_t capacity = 64;
 
@@ -642,9 +642,9 @@ export {
 
       void publish(const RuntimeModel& model, ClientSession& client);
 
-      ds::Option<std::uint64_t> focusedPane(std::uint64_t identity) const noexcept;
+      [[nodiscard]] ds::Option<std::uint64_t> focusedPane(std::uint64_t identity) const noexcept;
 
-      std::uint64_t revision() const noexcept;
+      [[nodiscard]] std::uint64_t revision() const noexcept;
 
       // Generic over the caller's consumer, which each record is handed to.
       template <typename Consumer>
@@ -669,7 +669,7 @@ export {
             continue;
           }
 
-          consume(record.identity, record.last_used, UpdateClientLayout{record.sidebar_visible, record.sidebar_width, record.workspace_list_collapsed, record.active_tab, std::span{tabs}.first(count)});
+          consume(record.identity, record.last_used, UpdateClientLayout{.sidebar_visible = record.sidebar_visible, .sidebar_width = record.sidebar_width, .workspace_list_collapsed = record.workspace_list_collapsed, .active_tab = record.active_tab, .tabs = std::span{tabs}.first(count)});
         }
       }
 
@@ -699,7 +699,7 @@ export {
         std::size_t tab_count = 0;
         std::size_t node_count = 0;
 
-        ClientTabLayout tabAt(std::size_t index) const noexcept;
+        [[nodiscard]] ClientTabLayout tabAt(std::size_t index) const noexcept;
 
         void append(const ClientTabLayout& tab);
       };

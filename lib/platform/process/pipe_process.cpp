@@ -6,7 +6,7 @@ import telar.sys.process;
 import telar.sys.socket;
 import telar.platform.error;
 import telar.base.ds;
-#if defined(__APPLE__)
+#ifdef __APPLE__
 import telar.sys.apple;
 #else
 // Linux suppresses SIGPIPE on the input pipe the way it does on sockets.
@@ -56,7 +56,7 @@ namespace telar::runtime {
     auto error = makePipe();
 
     setNonblocking(input[1].get());
-#if defined(__APPLE__)
+#ifdef __APPLE__
     if (::fcntl(input[1].get(), F_SETNOSIGPIPE, 1) < 0) {
       throw SystemError{"Suppress pipe signals"};
     }

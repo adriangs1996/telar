@@ -30,9 +30,9 @@ namespace telar {
   using i32 = SignedLittleEndian<std::int32_t>;
   using i64 = SignedLittleEndian<std::int64_t>;
 
-  template <typename IntegerCodec, typename IntegerCodec::value_type Minimum, typename IntegerCodec::value_type Maximum = std::numeric_limits<typename IntegerCodec::value_type>::max()>
+  template <typename IntegerCodec, IntegerCodec::value_type Minimum, IntegerCodec::value_type Maximum = std::numeric_limits<typename IntegerCodec::value_type>::max()>
   struct BoundedInteger : CodecWidth<IntegerCodec> {
-    using value_type = typename IntegerCodec::value_type;
+    using value_type = IntegerCodec::value_type;
 
     static value_type validate(value_type value) {
       if (value < Minimum || value > Maximum) {
@@ -152,7 +152,7 @@ namespace telar {
         throw EncodingError{"Output buffer too small"};
       }
 
-      LengthCodec::encode(static_cast<typename LengthCodec::value_type>(value.size()), output);
+      LengthCodec::encode(static_cast<LengthCodec::value_type>(value.size()), output);
       if (!value.empty()) {
         std::memcpy(output.data(), value.data(), value.size());
       }
@@ -209,7 +209,7 @@ namespace telar {
         throw EncodingError{"Output buffer too small"};
       }
 
-      LengthCodec::encode(static_cast<typename LengthCodec::value_type>(value.size()), output);
+      LengthCodec::encode(static_cast<LengthCodec::value_type>(value.size()), output);
       if (!value.empty()) {
         std::memcpy(output.data(), value.data(), value.size());
       }
@@ -292,13 +292,13 @@ namespace telar {
     }
   };
 
-  template <typename Enum, typename IntegerCodec, typename IntegerCodec::value_type Minimum, typename IntegerCodec::value_type Maximum>
+  template <typename Enum, typename IntegerCodec, IntegerCodec::value_type Minimum, IntegerCodec::value_type Maximum>
   struct EnumInteger : CodecWidth<IntegerCodec> {
     using value_type = Enum;
 
     static void encode(Enum value, std::span<Byte>& output) {
       BoundedInteger<IntegerCodec, Minimum, Maximum>::encode(
-          static_cast<typename IntegerCodec::value_type>(value),
+          static_cast<IntegerCodec::value_type>(value),
           output
       );
     }
@@ -347,10 +347,10 @@ namespace telar {
 
   template <typename CountCodec, typename ElementCodec, std::size_t Maximum, std::size_t Minimum = 0>
   struct CountedSpan {
-    using Element = typename ElementCodec::value_type;
+    using Element = ElementCodec::value_type;
     using value_type = std::span<const Element>;
     static constexpr std::size_t min_width =
-        CountCodec::width + Minimum * minimumWidth<ElementCodec>();
+        CountCodec::width + (Minimum * minimumWidth<ElementCodec>());
     static_assert(Maximum <= std::numeric_limits<typename CountCodec::value_type>::max());
     static_assert(minimumWidth<ElementCodec>() > 0);
 
@@ -376,7 +376,7 @@ namespace telar {
         throw EncodingError{"Output buffer too small"};
       }
 
-      CountCodec::encode(static_cast<typename CountCodec::value_type>(values.size()), output);
+      CountCodec::encode(static_cast<CountCodec::value_type>(values.size()), output);
       for (const auto& value : values) {
         ElementCodec::encode(value, output);
       }

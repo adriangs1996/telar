@@ -363,7 +363,7 @@ namespace telar::runtime::control {
     current_.reset();
     content_count_ = 0;
     for (const auto& entry : std::span{entries_}.first(entry_count_)) {
-      contents_.atMut(content_count_++) = {entry.mime.view(), std::span<const std::uint8_t>{spool_}.subspan(entry.offset, entry.length)};
+      contents_.atMut(content_count_++) = {.mime = entry.mime.view(), .data = std::span<const std::uint8_t>{spool_}.subspan(entry.offset, entry.length)};
     }
 
     for (const auto& alias : std::span{aliases_}.first(alias_count_)) {
@@ -391,7 +391,7 @@ namespace telar::runtime::control {
       }
 
       if (!replaced) {
-        contents_.atMut(content_count_++) = {alias.name.view(), *target};
+        contents_.atMut(content_count_++) = {.mime = alias.name.view(), .data = *target};
       }
     }
 
@@ -556,8 +556,6 @@ namespace telar::runtime::control {
   Clipboard::Clipboard(ConcurrentMemory& memory)
       : memory_(memory),
         decoded_(memory),
-        transaction_(),
-        pending_(),
         replies_{.replies{Reply<ConcurrentMemory>{memory}, Reply<ConcurrentMemory>{memory}}} {}
 
   void Clipboard::routes(std::span<const ClipboardRoute> routes, ds::Option<ClipboardRoute> preferred) {
@@ -693,7 +691,7 @@ namespace telar::runtime::control {
 
     auto& pending = pending_.getMut();
 
-    pending.ticket = {pane, generation, pending.route.generation, pending.nonce};
+    pending.ticket = {.pane_id = pane, .pane_generation = generation, .client_generation = pending.route.generation, .nonce = pending.nonce};
     const auto contents = pending.prepareViews();
 
     return ClipboardDesktopRequest{
@@ -767,7 +765,7 @@ namespace telar::runtime::control {
     const auto result = completion.status == ClipboardDesktopStatus::success ? ClipboardStatus::done : completion.status == ClipboardDesktopStatus::denied    ? ClipboardStatus::denied
                                                                                                    : completion.status == ClipboardDesktopStatus::unsupported ? ClipboardStatus::unsupported
                                                                                                                                                               : ClipboardStatus::io_error;
-    auto& pending = *pending_;
+    const auto& pending = *pending_;
 
     if (result != ClipboardStatus::done) {
       finish(result);
@@ -817,7 +815,7 @@ namespace telar::runtime::control {
             return;
           }
 
-          contents.atMut(count++) = {mime, content.data};
+          contents.atMut(count++) = {.mime = mime, .data = content.data};
           total += content.data.size();
           break;
         }
@@ -911,8 +909,7 @@ namespace telar::runtime::control {
   }
 
   Clipboard::Pending::Pending(ConcurrentMemory& memory)
-      : text(memory),
-        transaction() {
+      : text(memory) {
     randomBytes(&nonce, sizeof(nonce));
     if (nonce == 0) {
       nonce = 1;
@@ -928,10 +925,10 @@ namespace telar::runtime::control {
 
     if (transaction) {
       for (const auto& content : transaction->contents()) {
-        content_views.atMut(contents++) = {content.mime, content.data};
+        content_views.atMut(contents++) = {.mime = content.mime, .data = content.data};
       }
     } else if (traditional && write) {
-      content_views.atMut(contents++) = {"text/plain", text};
+      content_views.atMut(contents++) = {.mime = "text/plain", .data = text};
     }
 
     return contents;
@@ -951,7 +948,7 @@ namespace telar::runtime::control {
       return false;
     }
 
-    decoded_.resize(std::min(maximum_bytes, encoded.size() / 4 * 3 + encoded.size() % 4 * 3 / 4));
+    decoded_.resize(std::min(maximum_bytes, (encoded.size() / 4 * 3) + (encoded.size() % 4 * 3 / 4)));
     const auto size = base64::decode<Rule>(encoded, decoded_.viewMut());
     if (!size) {
       return false;
@@ -972,7 +969,7 @@ namespace telar::runtime::control {
 
   void Clipboard::cancelPending() noexcept {
     if (pending_->announced) {
-      cancellation_ = Cancellation{pending_->route, pending_->ticket};
+      cancellation_ = Cancellation{.route = pending_->route, .ticket = pending_->ticket};
     }
   }
 

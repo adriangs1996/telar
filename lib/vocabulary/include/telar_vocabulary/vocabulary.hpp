@@ -29,16 +29,16 @@ namespace telar {
   };
 
   struct EnvironmentEntry {
-    std::string_view name{};
-    std::string_view value{};
+    std::string_view name;
+    std::string_view value;
   };
 
   struct Launch {
-    std::string_view cwd{};
+    std::string_view cwd;
     std::uint64_t cwd_source = 0;
-    std::span<const std::string_view> arguments{};
+    std::span<const std::string_view> arguments;
     EnvironmentMode environment_mode = EnvironmentMode::inherit_runtime;
-    std::span<const EnvironmentEntry> environment{};
+    std::span<const EnvironmentEntry> environment;
   };
 
   enum class FailureCode : std::uint16_t {
@@ -71,11 +71,11 @@ namespace telar::runtime {
         : code_(code),
           message_(message) {}
 
-    inline FailureCode code() const noexcept {
+    [[nodiscard]] inline FailureCode code() const noexcept {
       return code_;
     }
 
-    inline const char* what() const noexcept override {
+    [[nodiscard]] inline const char* what() const noexcept override {
       return message_;
     }
 

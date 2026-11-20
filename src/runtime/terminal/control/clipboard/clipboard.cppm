@@ -122,7 +122,7 @@ export namespace telar::runtime::control {
 
     ClipboardStatus commit();
 
-    std::span<const ClipboardContentView> contents() const noexcept;
+    [[nodiscard]] std::span<const ClipboardContentView> contents() const noexcept;
 
     static ds::Option<std::string_view> token(std::string_view& remaining) noexcept;
 
@@ -165,10 +165,10 @@ export namespace telar::runtime::control {
     ClipboardOperation operation = ClipboardOperation::read;
     ClipboardStatus status = ClipboardStatus::ok;
     bool primary = false;
-    std::string_view id{};
-    ds::Option<std::string_view> mime{};
-    ds::Option<std::string_view> password{};
-    std::span<const std::uint8_t> payload{};
+    std::string_view id;
+    ds::Option<std::string_view> mime;
+    ds::Option<std::string_view> password;
+    std::span<const std::uint8_t> payload;
     Ending ending = Ending::escape;
   };
 
@@ -199,7 +199,7 @@ export namespace telar::runtime::control {
     // returning; only the owning Pending crosses event-loop turns.
     ds::Option<ClipboardDesktopRequest> request(std::uint64_t pane, std::uint64_t generation);
 
-    ds::Option<ClipboardRoute> route() const noexcept;
+    [[nodiscard]] ds::Option<ClipboardRoute> route() const noexcept;
 
     void announced() noexcept;
 
@@ -230,7 +230,7 @@ export namespace telar::runtime::control {
       return true;
     }
 
-    bool hasReply() const noexcept;
+    [[nodiscard]] bool hasReply() const noexcept;
 
     void reset();
 
@@ -241,11 +241,11 @@ export namespace telar::runtime::control {
       ClipboardTicket ticket;
     };
 
-    ds::Option<Cancellation> cancellation() const noexcept;
+    [[nodiscard]] ds::Option<Cancellation> cancellation() const noexcept;
 
     void cancelled() noexcept;
 
-    ds::Option<ClipboardDesktopExecute> execution() const noexcept;
+    [[nodiscard]] ds::Option<ClipboardDesktopExecute> execution() const noexcept;
 
     void committed() noexcept;
 
@@ -285,7 +285,7 @@ export namespace telar::runtime::control {
 
     static bool textMime(std::string_view mime) noexcept;
 
-    bool live(ClipboardRoute route) const noexcept;
+    [[nodiscard]] bool live(ClipboardRoute route) const noexcept;
 
     template <base64::Padding Rule = base64::Padding::required>
     bool decode(std::string_view encoded);

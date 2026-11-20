@@ -121,15 +121,15 @@ export {
         return active_;
       }
 
-      State state() const noexcept;
+      [[nodiscard]] State state() const noexcept;
 
-      const ds::Option<Http1Head>& head() const noexcept;
+      [[nodiscard]] const ds::Option<Http1Head>& head() const noexcept;
 
-      bool started() const noexcept;
+      [[nodiscard]] bool started() const noexcept;
 
-      StreamReadiness sourceInterest() const noexcept;
+      [[nodiscard]] StreamReadiness sourceInterest() const noexcept;
 
-      StreamReadiness destinationInterest() const noexcept;
+      [[nodiscard]] StreamReadiness destinationInterest() const noexcept;
 
     private:
       enum class BodyStage {
@@ -357,11 +357,11 @@ export {
       // Takes the policy `control` sets for `event`'s message, and starts the time to collect it.
       const traffic::HttpPolicy& select(traffic::HttpControl* control, const traffic::FlowEvent& event) noexcept;
 
-      const traffic::HttpPolicy& policy() const noexcept;
+      [[nodiscard]] const traffic::HttpPolicy& policy() const noexcept;
 
-      Time collectUntil() const noexcept;
+      [[nodiscard]] Time collectUntil() const noexcept;
 
-      bool waiting() const noexcept;
+      [[nodiscard]] bool waiting() const noexcept;
 
       // Offers the complete message to the hook; false when the hook takes no ticket, so the message
       // goes on as it is.
@@ -408,7 +408,7 @@ export {
 
     private:
       traffic::HttpPolicy policy_;
-      Time collect_until_{};
+      Time collect_until_;
       std::uint64_t ticket_ = 0;
       tbc::val_a<ds::Option<SensitiveAllocation<Memory>>> decision_;
     };
@@ -548,35 +548,35 @@ export {
         Destination& destination;
 
         inline StreamResult read(std::span<Byte>) noexcept {
-          return {StreamResult::State::failed};
+          return {.state = StreamResult::State::failed};
         }
 
         inline void halfClose() noexcept {}
 
         inline StreamResult write(std::span<const Byte> bytes) noexcept {
           if (relay.mode_ == Mode::failed) {
-            return {StreamResult::State::failed};
+            return {.state = StreamResult::State::failed};
           }
 
           if (relay.synthetic_) {
-            return {StreamResult::State::blocked, 0, StreamReadiness::completion};
+            return {.state = StreamResult::State::blocked, .bytes = 0, .waiting = StreamReadiness::completion};
           }
 
           if (relay.mode_ == Mode::streaming) {
-            return relay.hasPrefix() ? StreamResult{StreamResult::State::blocked, 0, StreamReadiness::completion} : destination.write(bytes);
+            return relay.hasPrefix() ? StreamResult{.state = StreamResult::State::blocked, .bytes = 0, .waiting = StreamReadiness::completion} : destination.write(bytes);
           }
 
           try {
             if (bytes.size() > maximum_wire_body + Http1Head::capacity - relay.wire_.size()) {
               relay.unavailable("http_wire_limit");
-              return {relay.mode_ == Mode::failed ? StreamResult::State::failed : StreamResult::State::blocked, 0, StreamReadiness::completion};
+              return {.state = relay.mode_ == Mode::failed ? StreamResult::State::failed : StreamResult::State::blocked, .bytes = 0, .waiting = StreamReadiness::completion};
             }
 
             relay.wire_.extend({bytes.begin(), bytes.end()});
-            return {StreamResult::State::data, bytes.size()};
+            return {.state = StreamResult::State::data, .bytes = bytes.size()};
           } catch (...) {
             relay.unavailable("http_allocation_failed");
-            return {relay.mode_ == Mode::failed ? StreamResult::State::failed : StreamResult::State::blocked, 0, StreamReadiness::completion};
+            return {.state = relay.mode_ == Mode::failed ? StreamResult::State::failed : StreamResult::State::blocked, .bytes = 0, .waiting = StreamReadiness::completion};
           }
         }
       };
@@ -637,31 +637,31 @@ export {
         return flush(destination) || active;
       }
 
-      auto state() const noexcept -> State;
+      [[nodiscard]] auto state() const noexcept -> State;
 
-      auto head() const noexcept -> const ds::Option<Http1Head>&;
+      [[nodiscard]] auto head() const noexcept -> const ds::Option<Http1Head>&;
 
-      bool started() const noexcept;
+      [[nodiscard]] bool started() const noexcept;
 
-      bool originalHead() const noexcept;
+      [[nodiscard]] bool originalHead() const noexcept;
 
       void destinationHead(bool head) noexcept;
 
-      bool captureIncomplete() const noexcept;
+      [[nodiscard]] bool captureIncomplete() const noexcept;
 
-      auto sourceInterest() const noexcept -> StreamReadiness;
+      [[nodiscard]] auto sourceInterest() const noexcept -> StreamReadiness;
 
-      auto destinationInterest() const noexcept -> StreamReadiness;
+      [[nodiscard]] auto destinationInterest() const noexcept -> StreamReadiness;
 
-      auto deadline() const noexcept -> ds::Option<Time>;
+      [[nodiscard]] auto deadline() const noexcept -> ds::Option<Time>;
 
       // The 100 Continue the child waits for before it sends a body; empty unless it asked.
       StaticReply& continueReplyMut() noexcept;
 
-      const StaticReply& continueReply() const noexcept;
+      [[nodiscard]] const StaticReply& continueReply() const noexcept;
 
     private:
-      bool hasPrefix() const noexcept;
+      [[nodiscard]] bool hasPrefix() const noexcept;
 
       void readHead(std::string_view bytes) noexcept;
 

@@ -42,9 +42,9 @@ export {
       std::uint32_t stream = 0;
       std::uint16_t status = 0;
       bool event_stream = false;
-      std::string_view name{};
-      std::string_view value{};
-      std::span<const std::uint8_t> bytes{};
+      std::string_view name;
+      std::string_view value;
+      std::span<const std::uint8_t> bytes;
     };
 
     template <typename Sink>
@@ -63,11 +63,11 @@ export {
     public:
       void observe(std::string_view name, std::string_view value) noexcept;
 
-      std::uint16_t status() const noexcept;
+      [[nodiscard]] std::uint16_t status() const noexcept;
 
-      bool request() const noexcept;
+      [[nodiscard]] bool request() const noexcept;
 
-      bool eventStream() const noexcept;
+      [[nodiscard]] bool eventStream() const noexcept;
 
     private:
       std::uint16_t status_ = 0;
@@ -97,7 +97,7 @@ export {
       HpackDecoder(const HpackDecoder&) = delete;
       HpackDecoder& operator=(const HpackDecoder&) = delete;
 
-      bool ready() const noexcept;
+      [[nodiscard]] bool ready() const noexcept;
 
       // Generic over the caller's visitor, and called for every header block relayed.
       template <typename Visitor>
@@ -210,7 +210,7 @@ export {
 
       Statistics finish() noexcept;
 
-      const Statistics& statistics() const noexcept;
+      [[nodiscard]] const Statistics& statistics() const noexcept;
 
     private:
       enum class BlockKind {
@@ -398,7 +398,7 @@ export {
         observer_.observe(bytes, sink);
       }
 
-      typename Http2Observer<Memory>::Statistics finish() noexcept;
+      Http2Observer<Memory>::Statistics finish() noexcept;
 
     private:
       Http2Observer<Memory> observer_;

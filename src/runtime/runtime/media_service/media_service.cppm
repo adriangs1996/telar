@@ -195,7 +195,7 @@ export {
     public:
       void enable(bool enabled) noexcept;
 
-      bool enabled() const noexcept;
+      [[nodiscard]] bool enabled() const noexcept;
 
       // How many descriptions are pending, which project reads before it changes an agent.
       static std::size_t pending(const AgentRegistry<ConcurrentMemory>& agents) noexcept;
@@ -238,7 +238,7 @@ export {
         }
       }
 
-      inline bool enabled() const noexcept {
+      [[nodiscard]] inline bool enabled() const noexcept {
         return worker_.hasValue();
       }
 
@@ -270,7 +270,7 @@ export {
         });
       }
 
-      inline int descriptor() const noexcept {
+      [[nodiscard]] inline int descriptor() const noexcept {
         return worker_ ? worker_->descriptor() : -1;
       }
 
@@ -312,7 +312,7 @@ export {
       // The request shares the model's retired media, and so what that media keeps: region `a`.
       static void enqueueRetired(tbc::mut_a<RuntimeModel> model, tbc::mut_a<typename Processor::Request> request) noexcept;
 
-      void apply(RuntimeModel& model, ClientStore& clients, Panes& service, const typename Processor::Result& result);
+      void apply(RuntimeModel& model, ClientStore& clients, Panes& service, const Processor::Result& result);
 
       static void stageTransfers(ClientStore& clients, [[maybe_unused]] diagnostics::RuntimeCounters& metrics, std::uint64_t pane, const GraphicsStorage<MediaAllocator<ConcurrentMemory>>& storage);
 
@@ -353,7 +353,7 @@ export {
         }
       }
 
-      inline int descriptor() const noexcept {
+      [[nodiscard]] inline int descriptor() const noexcept {
         return completion_.descriptor();
       }
 
@@ -397,7 +397,7 @@ export {
             pending |= answered_partial && !querying;
           });
 
-          slot.query_worker.collect([&querying = slot.querying, &answered_partial = slot.answered_partial, &pending = slot.pending, &index = std::as_const(slot.index), rebuild = slot.rebuild, abandoned = slot.abandoned, client = slot.client, &consume](const typename PathQueryTask<Memory, Index>::Result& result) {
+          slot.query_worker.collect([&querying = slot.querying, &answered_partial = slot.answered_partial, &pending = slot.pending, &index = std::as_const(slot.index), rebuild = slot.rebuild, abandoned = slot.abandoned, client = slot.client, &consume](const PathQueryTask<Memory, Index>::Result& result) {
             querying = false;
             answered_partial = !result.complete;
             if (!result.complete && index.complete() && !rebuild) {
@@ -621,7 +621,7 @@ export {
         });
       }
 
-      inline int descriptor() const noexcept {
+      [[nodiscard]] inline int descriptor() const noexcept {
         return worker_.descriptor();
       }
 
@@ -629,7 +629,7 @@ export {
       LimitService& limits_;
       ObservationWorker<Probe> worker_;
       ds::Option<std::uint64_t> pending_;
-      Clock::time_point next_check_{};
+      Clock::time_point next_check_;
       std::uint64_t checked_revision_ = 0;
     };
 

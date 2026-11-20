@@ -6,10 +6,10 @@ import telar.wire.vocabulary;
 import telar.sys.posix;
 import telar.sys.socket;
 import telar.base.ds;
-#if defined(__APPLE__)
+#ifdef __APPLE__
 import telar.sys.apple;
 #endif
-#if defined(__linux__)
+#ifdef __linux__
 import telar.sys.linux_api;
 #endif
 
@@ -179,7 +179,7 @@ namespace telar {
 
     std::memcpy(client._address.sun_path, socket_path, path_length + 1);
 
-#if defined(__linux__)
+#ifdef __linux__
     client._fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
 #else
     // Darwin has no SOCK_CLOEXEC: a fork between these two calls can still inherit it.
@@ -199,7 +199,7 @@ namespace telar {
       throw SocketError{"Error configuring runtime I/O timeout"};
     }
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
     const int enabled = 1;
     if (setsockopt(client._fd, SOL_SOCKET, SO_NOSIGPIPE, &enabled, sizeof(enabled)) < 0) {
       client.deinit();
@@ -207,7 +207,7 @@ namespace telar {
     }
 #endif
 
-    auto address_ptr = reinterpret_cast<sockaddr*>(&client._address);
+    auto* address_ptr = reinterpret_cast<sockaddr*>(&client._address);
 
     while (connect(client._fd, address_ptr, sizeof(client._address)) < 0) {
       if (sys::lastError() == EINTR) {
@@ -298,7 +298,7 @@ namespace telar {
 
   void Client::writeAll(const std::uint8_t* bytes, std::size_t size) {
     while (size != 0) {
-#if defined(__linux__)
+#ifdef __linux__
       const auto count = ::send(_fd, bytes, size, MSG_NOSIGNAL);
 #else
       // SO_NOSIGPIPE already keeps a closed peer from raising SIGPIPE.

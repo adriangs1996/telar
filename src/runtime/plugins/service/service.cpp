@@ -48,7 +48,7 @@ namespace telar::runtime::plugins {
     trust_path_.assign(path);
     refreshTrust();
     trust_monitor_ = std::jthread{[this] {
-      pollfd wake{cancellation_->descriptor(), POLLIN, 0};
+      pollfd wake{.fd = cancellation_->descriptor(), .events = POLLIN, .revents = 0};
 
       while (!cancellation_->requested()) {
         const auto ready = ::poll(&wake, 1, static_cast<int>(Limits::trust_check_interval.count()));
@@ -128,7 +128,7 @@ namespace telar::runtime::plugins {
 
       totals.dropped_queue += metrics.dropped;
       totals.timeouts += metrics.timeouts;
-      totals.disabled += metrics.disabled;
+      totals.disabled += static_cast<std::uint64_t>(metrics.disabled);
     }
 
     return totals;

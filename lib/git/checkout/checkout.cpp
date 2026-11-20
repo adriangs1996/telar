@@ -212,7 +212,7 @@ namespace telar::runtime {
     }
 
     for (std::size_t index = 0; index < facts->driver_count; ++index) {
-      for (const auto suffix : {".clean=", ".smudge=", ".process="}) {
+      for (const auto* const suffix : {".clean=", ".smudge=", ".process="}) {
         overrides_.emplace(memory_, "filter.");
         overrides_.atMut(overrides_.size() - 1).append(facts->drivers[index]);
         overrides_.atMut(overrides_.size() - 1).append(suffix);
@@ -226,7 +226,7 @@ namespace telar::runtime {
   Command<Memory> HardenedGit<Memory>::commandFor(std::span<const std::string_view> arguments) const {
     ds::Vec<std::string_view, Memory> complete{memory_};
 
-    complete.reserve(git_observation_options.size() + 2 * overrides_.size() + arguments.size());
+    complete.reserve(git_observation_options.size() + (2 * overrides_.size()) + arguments.size());
     complete.extend({git_observation_options.begin(), git_observation_options.end()});
     for (const auto& override : overrides_) {
       complete.push("-c");
@@ -261,7 +261,7 @@ namespace telar::runtime {
 
         const auto branch = linkedBranch(directory);
 
-        return branch ? ds::Option{Found{directory.size(), *branch}} : ds::none;
+        return branch ? ds::Option{Found{.root_length = directory.size(), .branch = *branch}} : ds::none;
       }
 
       while (directory.size() > 1 && directory.ends_with('/')) {

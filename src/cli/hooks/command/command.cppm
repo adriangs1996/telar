@@ -37,11 +37,11 @@ export {
     public:
       explicit Object(Memory& memory, JsonValue value, bool reject_duplicates = false);
 
-      ds::Option<JsonValue> value(std::string_view name) const;
-      ds::Option<std::string_view> optionalText(std::string_view name) const;
-      std::string_view text(std::string_view name) const;
-      ds::Option<std::string_view> stringField(std::string_view name) const;
-      ds::Option<bool> boolean(std::string_view name) const;
+      [[nodiscard]] ds::Option<JsonValue> value(std::string_view name) const;
+      [[nodiscard]] ds::Option<std::string_view> optionalText(std::string_view name) const;
+      [[nodiscard]] std::string_view text(std::string_view name) const;
+      [[nodiscard]] ds::Option<std::string_view> stringField(std::string_view name) const;
+      [[nodiscard]] ds::Option<bool> boolean(std::string_view name) const;
 
       // Generic over the caller's integer type, so it stays here and reads the field through text.
       template <typename Integer>
@@ -74,11 +74,11 @@ export {
         bool duplicate = false;
       };
 
-      const Member* find(std::string_view name) const noexcept;
+      [[nodiscard]] const Member* find(std::string_view name) const noexcept;
       void indexMembers();
       // Each string member is decoded once, as the object is built, so reading one reads nothing new.
       void decodeStrings();
-      tbc::val_a<std::string_view> decoded(tbc::ref_a<Member> member) const;
+      [[nodiscard]] tbc::val_a<std::string_view> decoded(tbc::ref_a<Member> member) const;
       void checkUnique(const Member& member) const;
 
       Memory& memory_;
@@ -115,12 +115,12 @@ export {
       Payload(const Payload&) = delete;
       Payload& operator=(const Payload&) = delete;
 
-      std::string_view event() const;
-      std::string_view session() const;
-      bool subagent() const;
-      std::string_view workspace() const noexcept;
-      std::string_view toolEvent() const;
-      AgentBlockedReason blockedReason() const;
+      [[nodiscard]] std::string_view event() const;
+      [[nodiscard]] std::string_view session() const;
+      [[nodiscard]] bool subagent() const;
+      [[nodiscard]] std::string_view workspace() const noexcept;
+      [[nodiscard]] std::string_view toolEvent() const;
+      [[nodiscard]] AgentBlockedReason blockedReason() const;
 
       Memory& memory;
       AgentProvider provider;

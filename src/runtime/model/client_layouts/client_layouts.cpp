@@ -197,13 +197,13 @@ namespace telar::runtime {
 
         expireProgress(foreground);
         observer->bytes(ObservationKind::output, bytes, foreground);
-        ShellCompletions completions{shell_state};
+        ShellCompletions completions{.state = shell_state};
 
         if (shell_zones) {
           const auto before = shell_state.commands;
 
           shell_zones.getMut().feed(bytes, ObservationTime{}, completions);
-          shell_revision += shell_state.commands != before;
+          shell_revision += static_cast<std::uint64_t>(shell_state.commands != before);
         }
 
         {
@@ -379,7 +379,7 @@ namespace telar::runtime {
       return;
     }
 
-    link_average_ms = link_average_ms == 0 ? sample : link_average_ms * 0.7 + sample * 0.3;
+    link_average_ms = link_average_ms == 0 ? sample : (link_average_ms * 0.7) + (sample * 0.3);
     const auto shown = static_cast<std::uint32_t>(std::max(1.0, std::round(link_average_ms)));
     const auto published = shell_state.link_ms;
     if (published == 0 || std::max(shown, published) - std::min(shown, published) >= std::max<std::uint32_t>(2, published / 10)) {
@@ -412,7 +412,7 @@ namespace telar::runtime {
 
     diagnostics::accumulate(counters->pty_events);
     diagnostics::accumulate(counters->pty_bytes, size);
-    diagnostics::accumulate(counters->folded_pty_events, folded);
+    diagnostics::accumulate(counters->folded_pty_events, static_cast<std::uint64_t>(folded));
   }
 #endif
 
@@ -501,7 +501,7 @@ namespace telar::runtime {
         entry->coordinator = request.coordinator;
       }
 
-      return {request.request_id, entry->id, false};
+      return {.request_id = request.request_id, .worktree = entry->id, .created = false};
     }
 
     if (request.origin == WorktreeOrigin::external && entries_.size() >= capacity - reserved_for_telar) {
@@ -512,7 +512,7 @@ namespace telar::runtime {
     auto entry = ds::makeBox<Worktree>(memory_, memory_, identity, request);
 
     entries_.insert(identity, std::move(entry));
-    return {request.request_id, identity, true};
+    return {.request_id = request.request_id, .worktree = identity, .created = true};
   }
 
   Worktree* Worktrees::find(std::uint64_t identity) noexcept {
@@ -749,7 +749,7 @@ namespace telar::runtime {
   ClientTabLayout ClientLayouts::Record::tabAt(std::size_t index) const noexcept {
     const auto& tab = tabs[index];
 
-    return ClientTabLayout{tab.location, tab.focused_pane, tab.fullscreen, tab.workspace_active, std::span{nodes}.subspan(tab.node_start, tab.node_count)};
+    return ClientTabLayout{.location = tab.location, .focused_pane = tab.focused_pane, .fullscreen = tab.fullscreen, .workspace_active = tab.workspace_active, .nodes = std::span{nodes}.subspan(tab.node_start, tab.node_count)};
   }
 
   void ClientLayouts::Record::append(const ClientTabLayout& tab) {
@@ -757,7 +757,7 @@ namespace telar::runtime {
       throw std::bad_alloc{};
     }
 
-    tabs.atMut(tab_count++) = StoredTab{tab.location, tab.focused_pane, tab.fullscreen, tab.workspace_active, static_cast<std::uint16_t>(node_count), static_cast<std::uint16_t>(tab.nodes.size())};
+    tabs.atMut(tab_count++) = StoredTab{.location = tab.location, .focused_pane = tab.focused_pane, .fullscreen = tab.fullscreen, .workspace_active = tab.workspace_active, .node_start = static_cast<std::uint16_t>(node_count), .node_count = static_cast<std::uint16_t>(tab.nodes.size())};
     std::copy(tab.nodes.begin(), tab.nodes.end(), nodes.dataMut() + node_count);
     node_count += tab.nodes.size();
   }
@@ -772,7 +772,7 @@ namespace telar::runtime {
 
   bool ClientLayouts::current(const RuntimeModel& model, const ClientTabLayout& layout) noexcept {
     auto* workspace = model.workspaces.find(layout.location.workspace.id);
-    auto* tab = workspace == nullptr ? nullptr : workspace->tab(layout.location.tab_id);
+    const auto* tab = workspace == nullptr ? nullptr : workspace->tab(layout.location.tab_id);
     if (layout.location.workspace.kind != WorkspaceLocation::Kind::workspace || tab == nullptr) {
       return false;
     }

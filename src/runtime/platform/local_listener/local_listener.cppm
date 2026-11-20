@@ -23,11 +23,11 @@ export {
       LocalListener(const LocalListener&) = delete;
       LocalListener& operator=(const LocalListener&) = delete;
 
-      int descriptor() const noexcept;
+      [[nodiscard]] int descriptor() const noexcept;
 
       FileDescriptor accept(LocalPeerPolicy policy = LocalPeerPolicy::same_user);
 
-      std::string_view path() const noexcept;
+      [[nodiscard]] std::string_view path() const noexcept;
 
     private:
       void removeStaleSocket(const sockaddr_un& address);

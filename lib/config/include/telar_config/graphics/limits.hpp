@@ -15,7 +15,7 @@ namespace telar::runtime {
     std::size_t pane_bytes = maximum_pane_bytes;
     std::size_t global_bytes = maximum_global_bytes;
 
-    std::size_t screenBytes() const noexcept {
+    [[nodiscard]] std::size_t screenBytes() const noexcept {
       return pane_bytes / 2;
     }
   };

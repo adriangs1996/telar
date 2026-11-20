@@ -6,7 +6,7 @@ import telar.base.text;
 import telar.platform.error;
 import telar.sys.posix;
 import telar.base.ds;
-#if defined(__APPLE__)
+#ifdef __APPLE__
 import telar.sys.apple;
 #else
 import telar.sys.linux_api;
@@ -45,7 +45,7 @@ namespace telar::runtime {
 namespace telar::runtime {
 
   void randomBytes(void* data, std::size_t size) noexcept {
-#if defined(__linux__)
+#ifdef __linux__
     auto* cursor = static_cast<unsigned char*>(data);
     while (size != 0) {
       const auto count = ::getrandom(cursor, size, 0);
@@ -149,7 +149,7 @@ namespace telar::runtime {
       return true;
     }
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
     // Darwin POSIX shared-memory descriptors do not support pread. Copy via
     // the kernel so invalid backing pages return an error instead of delivering
     // SIGBUS while the runtime dereferences a peer-controlled mapping.

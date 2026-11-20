@@ -162,7 +162,7 @@ export {
       std::uint64_t client_id = 0;
       std::uint64_t target_id = 0;
       std::int64_t value = 0;
-      tbc::val_a<std::string_view> text{};
+      tbc::val_a<std::string_view> text;
       bool json = false;
       tbc::val_a<const char*> socket = nullptr;
 

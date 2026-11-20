@@ -7,10 +7,10 @@ import telar.sys.process;
 import telar.platform.error;
 import telar.base.ds;
 import telar.base.text;
-#if defined(__APPLE__)
+#ifdef __APPLE__
 import telar.sys.apple;
 #endif
-#if defined(__linux__)
+#ifdef __linux__
 import telar.sys.linux_api;
 #endif
 
@@ -344,7 +344,7 @@ namespace telar::runtime {
         throw RequestError{FailureCode::resource_limit, "Command deadline exceeded"};
       }
 
-      ds::Array<pollfd, 3> descriptors{{{process.output(), POLLIN, 0}, {process.error(), POLLIN, 0}, {process.input(), POLLOUT, 0}}};
+      ds::Array<pollfd, 3> descriptors{{{.fd = process.output(), .events = POLLIN, .revents = 0}, {.fd = process.error(), .events = POLLIN, .revents = 0}, {.fd = process.input(), .events = POLLOUT, .revents = 0}}};
       const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - Clock::now()).count();
       const int result = ::poll(descriptors.dataMut(), descriptors.size(), static_cast<int>(std::clamp<std::int64_t>(remaining, 0, 20)));
       if (result < 0 && sys::lastError() != EINTR) {
@@ -424,7 +424,7 @@ namespace telar::runtime {
 
   ExecutablePath::ExecutablePath() {
     ds::Array<char, PATH_MAX> original;
-#if defined(__APPLE__)
+#ifdef __APPLE__
     auto size = static_cast<std::uint32_t>(original.size());
     if (::_NSGetExecutablePath(original.dataMut(), &size) != 0) {
       throw SystemError{"Executable path exceeds its limit", ENAMETOOLONG};
@@ -492,12 +492,12 @@ namespace telar::runtime {
   }
 
   bool ExecutablePath::exactlyNamed(const char* path) noexcept {
-#if defined(__APPLE__)
+#ifdef __APPLE__
     attrlist request{};
 
     request.bitmapcount = ATTR_BIT_MAP_COUNT;
     request.commonattr = ATTR_CMN_NAME;
-    alignas(attrreference_t) ds::Array<char, sizeof(std::uint32_t) + sizeof(attrreference_t) + NAME_MAX * 3 + 1> answer{};
+    alignas(attrreference_t) ds::Array<char, sizeof(std::uint32_t) + sizeof(attrreference_t) + (NAME_MAX * 3) + 1> answer{};
     if (::getattrlist(path, &request, answer.dataMut(), answer.size(), FSOPT_NOFOLLOW) != 0) {
       return false;
     }
@@ -546,11 +546,11 @@ namespace telar::runtime {
   std::string_view loginShellScript(std::string_view shell) noexcept {
     const auto name = shell.substr(shell.rfind('/') + 1);
     if (name == "bash" || name == "zsh" || name == "ksh") {
-      return "exec -- \"$0\" \"$@\"";
+      return R"(exec -- "$0" "$@")";
     }
 
     if (name == "sh" || name == "dash") {
-      return "exec \"$0\" \"$@\"";
+      return R"(exec "$0" "$@")";
     }
 
     return name == "fish" ? "exec $argv" : std::string_view{};
@@ -581,7 +581,7 @@ namespace telar::runtime {
     posix_spawnattr_setsigmask(&attributes, &empty);
     posix_spawnattr_setsigdefault(&attributes, &defaults);
     posix_spawnattr_setpgroup(&attributes, 0);
-#if defined(__APPLE__)
+#ifdef __APPLE__
     flags |= POSIX_SPAWN_CLOEXEC_DEFAULT;
 #endif
     checkSpawn(posix_spawnattr_setflags(&attributes, flags | POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK));
@@ -597,7 +597,7 @@ namespace telar::runtime {
   }
 
   void SpawnOptions::changeDirectory(const char* path) {
-#if defined(__APPLE__)
+#ifdef __APPLE__
     checkSpawn(::posix_spawn_file_actions_addchdir(&actions, path));
 #else
     checkSpawn(::posix_spawn_file_actions_addchdir_np(&actions, path));
@@ -605,7 +605,7 @@ namespace telar::runtime {
   }
 
   void SpawnOptions::closeOthers() {
-#if defined(__linux__)
+#ifdef __linux__
     if (const int added = sys::addSpawnCloseFrom(&actions, STDERR_FILENO + 1); added != ENOSYS) {
       checkSpawn(added);
       return;

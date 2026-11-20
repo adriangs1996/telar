@@ -98,7 +98,7 @@ export extern "C++" {
       bool reverse{};
       MonitorScope scope{};
       bool tree{};
-      std::string_view filter{};
+      std::string_view filter;
       std::uint16_t limit{};
       // A process whose arguments, directory, ports and children the reply carries; pid 0 for none.
       ProcessInstance detail{};
@@ -120,9 +120,9 @@ export extern "C++" {
               Field<&QueryMonitor::detail, ValueCodec<ProcessInstance>, "detail">> {};
 
     struct MonitorDisk {
-      std::string_view path{};
-      std::string_view device{};
-      std::string_view type{};
+      std::string_view path;
+      std::string_view device;
+      std::string_view type;
       std::uint64_t total_bytes{};
       std::uint64_t used_bytes{};
       std::uint64_t available_bytes{};
@@ -139,7 +139,7 @@ export extern "C++" {
               Field<&MonitorDisk::available_bytes, u64, "available_bytes">> {};
 
     struct MonitorInterface {
-      std::string_view name{};
+      std::string_view name;
       std::uint64_t received_per_second{};
       std::uint64_t sent_per_second{};
       std::uint64_t received_bytes{};
@@ -159,11 +159,11 @@ export extern "C++" {
       ProcessInstance instance{};
       std::int32_t parent{};
       std::uint32_t user_id{};
-      std::string_view user{};
-      std::string_view name{};
+      std::string_view user;
+      std::string_view name;
       // The command line, its arguments joined by spaces and cut to command_bytes; empty when the
       // runtime may not read it.
-      std::string_view command{};
+      std::string_view command;
       ProcessState state{};
       // Whether CPU, memory and threads were read; macOS lends them for other users' processes only
       // to root.
@@ -203,10 +203,10 @@ export extern "C++" {
     struct MonitorDetail {
       MonitorProcess process{};
       // Every argument, joined by spaces and cut to arguments_bytes.
-      std::string_view arguments{};
-      std::string_view directory{};
-      std::span<const std::uint16_t> ports{};
-      std::span<const std::int32_t> children{};
+      std::string_view arguments;
+      std::string_view directory;
+      std::span<const std::uint16_t> ports;
+      std::span<const std::int32_t> children;
     };
 
     template <>
@@ -223,7 +223,7 @@ export extern "C++" {
       std::uint8_t sections{};
       // Of all cores together: 1000 is every core busy.
       std::uint16_t cpu_permille{};
-      std::span<const std::uint16_t> cores{};
+      std::span<const std::uint16_t> cores;
       std::uint64_t memory_total_bytes{};
       std::uint64_t memory_used_bytes{};
       std::uint64_t memory_available_bytes{};
@@ -234,12 +234,12 @@ export extern "C++" {
       std::uint32_t thread_count{};
       std::uint64_t disk_read_per_second{};
       std::uint64_t disk_written_per_second{};
-      std::span<const MonitorDisk> disks{};
-      std::span<const MonitorInterface> interfaces{};
+      std::span<const MonitorDisk> disks;
+      std::span<const MonitorInterface> interfaces;
       // How many processes match the query; the reply lists at most its limit of them.
       std::uint32_t matched{};
-      std::span<const MonitorProcess> processes{};
-      ds::Option<MonitorDetail> detail{};
+      std::span<const MonitorProcess> processes;
+      ds::Option<MonitorDetail> detail;
     };
 
     template <>

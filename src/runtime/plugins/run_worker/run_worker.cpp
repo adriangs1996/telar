@@ -51,7 +51,7 @@ namespace telar::runtime::plugins {
 
     const auto absolute = lua_absindex(state_, index);
     const auto count = lua_rawlen(state_, absolute);
-    if (count > Limits::effects || !lua_checkstack(state_, static_cast<int>(Limits::effects * fields_per_effect))) {
+    if (count > Limits::effects || (lua_checkstack(state_, static_cast<int>(Limits::effects * fields_per_effect)) == 0)) {
       throw lua::Error{"Too many effects"};
     }
 
@@ -105,7 +105,7 @@ namespace telar::runtime::plugins {
     int valid = 0;
     const auto result = lua_tointegerx(state_, -1, &valid);
 
-    if (!valid) {
+    if (valid == 0) {
       throw lua::Error{"Invalid effect"};
     }
 
@@ -408,7 +408,7 @@ namespace telar::runtime::plugins {
       const auto entry = value.element(static_cast<lua_Integer>(index + 1));
 
       entry.onlyFields({"name", "value"});
-      fields[index] = {entry.field("name").string(), entry.field("value").string()};
+      fields[index] = {.name = entry.field("name").string(), .value = entry.field("value").string()};
     }
 
     return count;
@@ -677,7 +677,7 @@ namespace telar::runtime::plugins {
   template <Allocator Memory>
   void LuaTraffic<Memory>::invoke(lua_State* state, const TrafficEvent& event) {
     auto* binding = find(event.registration);
-    if (!binding) {
+    if (binding == nullptr) {
       return;
     }
 
@@ -960,7 +960,7 @@ namespace telar::runtime::plugins {
   bool LuaTraffic<Memory>::decide(lua_State* state) {
     const auto id = identifier(state, 1);
     const auto* binding = find(id);
-    if (!binding || (binding->registration.stage != TrafficStage::stream && binding->registration.stage != TrafficStage::http)) {
+    if ((binding == nullptr) || (binding->registration.stage != TrafficStage::stream && binding->registration.stage != TrafficStage::http)) {
       return false;
     }
 
@@ -985,7 +985,7 @@ namespace telar::runtime::plugins {
     if (verdict == traffic::Verdict::replace && binding->registration.stage == TrafficStage::http) {
       decision.onlyFields({"action", "message"});
       const auto message = LuaTrafficValue::message(decision.field("message"));
-      constexpr auto header_bytes = 2 * sizeof(Byte) + sizeof(std::uint64_t) + sizeof(std::uint32_t);
+      constexpr auto header_bytes = (2 * sizeof(Byte)) + sizeof(std::uint64_t) + sizeof(std::uint32_t);
       // One mutable borrow of the scratch: the payload is encoded past the header, then the header written.
       const auto scratch = scratch_.bytesMut();
       const auto payload = HttpMessageCodec::encode(scratch.subspan(header_bytes), message);
@@ -1019,7 +1019,7 @@ namespace telar::runtime::plugins {
 
   Host::Host(Memory& memory, const char* entry_path, const ServiceSpec* traffic)
       : memory_(memory),
-        vm_(erased_, {Limits::lua_bytes, Limits::lua_instructions, Limits::callback_deadline}) {
+        vm_(erased_, {.memory = Limits::lua_bytes, .instructions = Limits::lua_instructions, .deadline = Limits::callback_deadline}) {
     ds::Array<char, PATH_MAX> resolved;
     if (::realpath(entry_path, resolved.dataMut()) == nullptr) {
       throw SystemError{"Resolve tap entrypoint"};
@@ -1033,13 +1033,13 @@ namespace telar::runtime::plugins {
 
     vm_.execute(bootstrap, "@telar-tap-bootstrap.lua");
     lua_setglobal(vm_.state(), "telar");
-    if (traffic) {
+    if (traffic != nullptr) {
       traffic_.emplace(memory_, *traffic);
     }
 
     vm_.invoke(&install, this, 0);
     vm_.resetBudget();
-    Entrypoint entry{*this, source};
+    Entrypoint entry{.host = *this, .source = source};
 
     vm_.invoke(&loadEntrypoint, &entry, 0);
     lua_settop(vm_.state(), 0);
@@ -1061,7 +1061,7 @@ namespace telar::runtime::plugins {
     lua_settop(vm_.state(), 0);
     vm_.resetBudget();
     traffic_.getMut().begin();
-    TrafficInvocation invocation{*this, event};
+    TrafficInvocation invocation{.host = *this, .event = event};
 
     try {
       vm_.invoke(&invokeTrafficCallback, &invocation, 0);
@@ -1079,7 +1079,7 @@ namespace telar::runtime::plugins {
 
     lua_settop(state, 0);
     vm_.resetBudget();
-    Invocation invocation{*this, exchange, output};
+    Invocation invocation{.host = *this, .exchange = exchange, .output = output};
 
     try {
       vm_.invoke(&invokeCallback, &invocation, 0);

@@ -22,7 +22,7 @@ namespace telar {
       maximum_ns = duration > maximum_ns ? duration : maximum_ns;
     }
 
-    std::uint64_t average() const noexcept {
+    [[nodiscard]] std::uint64_t average() const noexcept {
       return count == 0 ? 0 : total_ns / count;
     }
 

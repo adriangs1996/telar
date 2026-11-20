@@ -190,19 +190,19 @@ namespace telar::runtime {
         throw std::bad_alloc{};
       }
 
-      if (!BrotliEncoderSetParameter(state.get(), BROTLI_PARAM_QUALITY, brotli_quality)) {
+      if (BrotliEncoderSetParameter(state.get(), BROTLI_PARAM_QUALITY, brotli_quality) == 0) {
         throw std::invalid_argument{"Invalid Brotli parameters"};
       }
 
-      while (!BrotliEncoderIsFinished(state.get())) {
+      while (BrotliEncoderIsFinished(state.get()) == 0) {
         const auto before_input = remaining_input;
         const auto before_output = remaining_output;
 
-        if (!BrotliEncoderCompressStream(state.get(), BROTLI_OPERATION_FINISH, &remaining_input, &next_input, &remaining_output, &next_output, nullptr)) {
+        if (BrotliEncoderCompressStream(state.get(), BROTLI_OPERATION_FINISH, &remaining_input, &next_input, &remaining_output, &next_output, nullptr) == 0) {
           throw std::invalid_argument{"Brotli encoding failed"};
         }
 
-        if (BrotliEncoderIsFinished(state.get())) {
+        if (BrotliEncoderIsFinished(state.get()) != 0) {
           break;
         }
 
@@ -240,12 +240,12 @@ namespace telar::runtime {
         throw std::bad_alloc{};
       }
 
-      if (ZSTD_isError(ZSTD_CCtx_setParameter(state.get(), ZSTD_c_checksumFlag, 1))) {
+      if (ZSTD_isError(ZSTD_CCtx_setParameter(state.get(), ZSTD_c_checksumFlag, 1)) != 0u) {
         throw std::invalid_argument{"Invalid Zstd parameters"};
       }
 
       const auto size = ZSTD_compress2(state.get(), output.data(), output.size(), input.data(), input.size());
-      if (ZSTD_isError(size)) {
+      if (ZSTD_isError(size) != 0u) {
         throw std::length_error{"HTTP Zstd encoding exceeds its limit"};
       }
 
@@ -257,18 +257,18 @@ namespace telar::runtime {
       throw std::bad_alloc{};
     }
 
-    if (ZSTD_isError(ZSTD_DCtx_setParameter(state.get(), ZSTD_d_windowLogMax, maximum_window_log))) {
+    if (ZSTD_isError(ZSTD_DCtx_setParameter(state.get(), ZSTD_d_windowLogMax, maximum_window_log)) != 0u) {
       throw std::invalid_argument{"Invalid Zstd parameters"};
     }
 
-    ZSTD_inBuffer source{input.data(), input.size(), 0};
-    ZSTD_outBuffer destination{output.data(), output.size(), 0};
+    ZSTD_inBuffer source{.src = input.data(), .size = input.size(), .pos = 0};
+    ZSTD_outBuffer destination{.dst = output.data(), .size = output.size(), .pos = 0};
 
     for (;;) {
       const auto before_input = source.pos;
       const auto before_output = destination.pos;
       const auto remaining = ZSTD_decompressStream(state.get(), &destination, &source);
-      if (ZSTD_isError(remaining)) {
+      if (ZSTD_isError(remaining) != 0u) {
         throw std::invalid_argument{"Invalid Zstd entity"};
       }
 
@@ -491,7 +491,7 @@ namespace telar::runtime {
     }
 
     for (auto& field : fields.first(count)) {
-      field = {reader.text(), reader.text()};
+      field = {.name = reader.text(), .value = reader.text()};
     }
 
     return count;
@@ -639,7 +639,7 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  auto HttpMessage<Memory>::encodeBody() -> typename HttpContentCodec<Memory>::Coded {
+  auto HttpMessage<Memory>::encodeBody() -> HttpContentCodec<Memory>::Coded {
     return HttpContentCodec{upstream_}.encodeView(body, contentEncoding(), maximum_body_bytes + content_overhead_bytes);
   }
 
@@ -721,7 +721,7 @@ namespace telar::runtime {
     }
 
     validateTrailers();
-    const auto protocol = version == HttpVersion::http10 ? "HTTP/1.0" : "HTTP/1.1";
+    const auto* const protocol = version == HttpVersion::http10 ? "HTTP/1.0" : "HTTP/1.1";
 
     if (response) {
       append(output, protocol);

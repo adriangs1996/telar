@@ -46,7 +46,7 @@ export {
       ObservationTime observed;
       std::int64_t expires_at = 0;
 
-      bool expired(std::int64_t now) const noexcept;
+      [[nodiscard]] bool expired(std::int64_t now) const noexcept;
       static AgentEvidence process(AgentProvider provider, ObservationTime now) noexcept;
       static AgentEvidence screen(AgentProvider provider, AgentSignal signal, ObservationTime now) noexcept;
       static AgentEvidence report(AgentProvider provider, AgentReportState state, ObservationTime now) noexcept;
@@ -72,8 +72,8 @@ export {
     class ManifestTextList {
     public:
       void append(std::string_view text);
-      bool matches(std::string_view text) const noexcept;
-      std::span<const FixedText<TextCapacity>> entries() const noexcept;
+      [[nodiscard]] bool matches(std::string_view text) const noexcept;
+      [[nodiscard]] std::span<const FixedText<TextCapacity>> entries() const noexcept;
 
     private:
       ds::Array<FixedText<TextCapacity>, Capacity> entries_;
@@ -94,8 +94,8 @@ export {
 
     struct AgentManifest {
       void addCommandTool(std::string_view name, std::string_view field);
-      std::string_view commandField(std::string_view tool) const noexcept;
-      std::string_view displayName() const noexcept;
+      [[nodiscard]] std::string_view commandField(std::string_view tool) const noexcept;
+      [[nodiscard]] std::string_view displayName() const noexcept;
 
       // The manifest's own placeholder, or one built in the caller's storage.
       tbc::val_a<std::string_view> placeholderTitle(tbc::mut_a<FixedText<96>> storage) const;
@@ -122,15 +122,15 @@ export {
     public:
       AgentManifest& add(std::string_view name);
       AgentManifest* tryAdd(std::string_view name);
-      const AgentManifest* find(AgentProvider provider) const noexcept;
-      AgentProvider named(std::string_view name) const noexcept;
-      AgentProvider fromExecutable(std::string_view name) const noexcept;
-      AgentProvider fromPath(std::string_view path) const noexcept;
-      ds::Option<AgentSignal> detect(std::string_view text) const noexcept;
-      std::span<const AgentManifest> entries() const noexcept;
+      [[nodiscard]] const AgentManifest* find(AgentProvider provider) const noexcept;
+      [[nodiscard]] AgentProvider named(std::string_view name) const noexcept;
+      [[nodiscard]] AgentProvider fromExecutable(std::string_view name) const noexcept;
+      [[nodiscard]] AgentProvider fromPath(std::string_view path) const noexcept;
+      [[nodiscard]] ds::Option<AgentSignal> detect(std::string_view text) const noexcept;
+      [[nodiscard]] std::span<const AgentManifest> entries() const noexcept;
 
     private:
-      AgentProvider inferProvider(std::string_view text) const noexcept;
+      [[nodiscard]] AgentProvider inferProvider(std::string_view text) const noexcept;
 
       static constexpr Byte first_custom_provider = first_custom_agent_provider;
       static constexpr Byte maximum_custom_agents = max_agent_provider_index - first_custom_provider + 1;
@@ -169,7 +169,7 @@ export {
     class HistoryPatternList {
     public:
       void append(std::string_view pattern);
-      bool matches(std::string_view text) const noexcept;
+      [[nodiscard]] bool matches(std::string_view text) const noexcept;
 
     private:
       ds::Array<FixedText<256>, 64> patterns_;
@@ -178,8 +178,8 @@ export {
 
     class HistoryFilters {
     public:
-      bool allowsPane(std::string_view command, std::string_view directory) const noexcept;
-      bool allowsAgent(std::string_view command, std::string_view directory, bool redact = true) const noexcept;
+      [[nodiscard]] bool allowsPane(std::string_view command, std::string_view directory) const noexcept;
+      [[nodiscard]] bool allowsAgent(std::string_view command, std::string_view directory, bool redact = true) const noexcept;
       static bool looksLikeSecret(std::string_view command) noexcept;
 
       bool secrets = true;
@@ -218,7 +218,7 @@ export {
       std::chrono::milliseconds join_timeout{std::chrono::minutes{15}};
       bool enabled = false;
 
-      bool valid() const noexcept;
+      [[nodiscard]] bool valid() const noexcept;
     };
 
   }
@@ -242,11 +242,11 @@ export {
       bool append(std::string_view pattern);
       void finish();
       void clear() noexcept;
-      bool contains(std::string_view hostname) const noexcept;
-      std::span<const ds::String<Memory>> patterns() const noexcept;
+      [[nodiscard]] bool contains(std::string_view hostname) const noexcept;
+      [[nodiscard]] std::span<const ds::String<Memory>> patterns() const noexcept;
 
     private:
-      bool find(std::string_view pattern) const noexcept;
+      [[nodiscard]] bool find(std::string_view pattern) const noexcept;
 
       static constexpr std::string_view wildcard_prefix = "*.";
       tbc::val_a<ds::Vec<ds::String<Memory>, Memory>> patterns_;

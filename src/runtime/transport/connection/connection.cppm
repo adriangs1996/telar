@@ -39,15 +39,15 @@ export {
 
       void write();
 
-      int descriptor() const noexcept;
+      [[nodiscard]] int descriptor() const noexcept;
 
       FileDescriptor takeDescriptor() noexcept;
 
-      Stage stage() const noexcept;
+      [[nodiscard]] Stage stage() const noexcept;
 
-      bool reservesClient() const noexcept;
+      [[nodiscard]] bool reservesClient() const noexcept;
 
-      bool expired(std::chrono::steady_clock::time_point now) const noexcept;
+      [[nodiscard]] bool expired(std::chrono::steady_clock::time_point now) const noexcept;
 
     private:
       void negotiate();
@@ -96,13 +96,13 @@ export {
 
       void append(std::size_t offset, const DeferredResponse& response);
 
-      bool precedes(std::size_t offset) const noexcept;
+      [[nodiscard]] bool precedes(std::size_t offset) const noexcept;
 
-      std::size_t offset() const noexcept;
+      [[nodiscard]] std::size_t offset() const noexcept;
 
-      const DeferredResponse& response() const noexcept;
+      [[nodiscard]] const DeferredResponse& response() const noexcept;
 
-      bool empty() const noexcept;
+      [[nodiscard]] bool empty() const noexcept;
 
       void clear() noexcept;
 
@@ -273,7 +273,7 @@ export {
 
     class ResponseQueueFull : public std::exception {
     public:
-      const char* what() const noexcept override;
+      [[nodiscard]] const char* what() const noexcept override;
     };
 
     template <Allocator Memory>
@@ -393,19 +393,19 @@ export {
 
       void recordDrop() noexcept;
 
-      bool active() const noexcept;
+      [[nodiscard]] bool active() const noexcept;
 
-      DeliveryLane nextLane() const noexcept;
+      [[nodiscard]] DeliveryLane nextLane() const noexcept;
 
-      bool empty() const noexcept;
+      [[nodiscard]] bool empty() const noexcept;
 
-      std::size_t size() const noexcept;
+      [[nodiscard]] std::size_t size() const noexcept;
 
-      std::size_t responseDepth() const noexcept;
+      [[nodiscard]] std::size_t responseDepth() const noexcept;
 
-      std::size_t responseHighWater() const noexcept;
+      [[nodiscard]] std::size_t responseHighWater() const noexcept;
 
-      std::uint64_t dropped() const noexcept;
+      [[nodiscard]] std::uint64_t dropped() const noexcept;
 
     private:
       // Generic over the caller's encoder, so it stays a template here.
@@ -448,7 +448,7 @@ export {
         DeliveryLane lane;
       };
 
-      Frame inspect(std::size_t offset) const noexcept;
+      [[nodiscard]] Frame inspect(std::size_t offset) const noexcept;
 
       void requireCapacity(DeliveryLane lane) const;
 
@@ -606,21 +606,21 @@ export {
 
       void closeImmediately() noexcept;
 
-      std::size_t responseDepth() const noexcept;
+      [[nodiscard]] std::size_t responseDepth() const noexcept;
 
-      std::size_t responseHighWater() const noexcept;
+      [[nodiscard]] std::size_t responseHighWater() const noexcept;
 
-      std::uint64_t droppedResponses() const noexcept;
+      [[nodiscard]] std::uint64_t droppedResponses() const noexcept;
 
-      bool writing() const noexcept;
+      [[nodiscard]] bool writing() const noexcept;
 
-      DeliveryLane nextLane() const noexcept;
+      [[nodiscard]] DeliveryLane nextLane() const noexcept;
 
-      int descriptor() const noexcept;
+      [[nodiscard]] int descriptor() const noexcept;
 
-      bool hasOutput() const noexcept;
+      [[nodiscard]] bool hasOutput() const noexcept;
 
-      std::size_t queuedBytes() const noexcept;
+      [[nodiscard]] std::size_t queuedBytes() const noexcept;
 
       bool negotiated = false;
       bool closing = false;
@@ -672,7 +672,7 @@ export {
         Codec::encode(message, bytes_.viewMut());
       }
 
-      inline std::span<const Byte> payload() const noexcept {
+      [[nodiscard]] inline std::span<const Byte> payload() const noexcept {
         return bytes_;
       }
 

@@ -19,10 +19,10 @@ export namespace telar::runtime {
     HistoryStatus status = HistoryStatus::completed;
     HistoryAuthor author = HistoryAuthor::human;
     bool truncated = false;
-    std::span<const Byte> output{};
+    std::span<const Byte> output;
     std::uint64_t output_observed = 0;
 
-    constexpr bool outputTruncated() const noexcept {
+    [[nodiscard]] constexpr bool outputTruncated() const noexcept {
       return output_observed > output.size();
     }
   };

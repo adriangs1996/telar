@@ -35,7 +35,7 @@ namespace telar::runtime {
       copy(text);
     }
 
-    std::string_view view() const noexcept {
+    [[nodiscard]] std::string_view view() const noexcept {
       return {bytes_.data(), length_};
     }
 

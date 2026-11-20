@@ -23,15 +23,15 @@ export {
           : text_(text) {}
 
       // Whether there is no message to write at all.
-      constexpr bool empty() const noexcept {
+      [[nodiscard]] constexpr bool empty() const noexcept {
         return text_.empty();
       }
 
-      constexpr bool sent() const noexcept {
+      [[nodiscard]] constexpr bool sent() const noexcept {
         return offset_ == text_.size();
       }
 
-      constexpr std::string_view remaining() const noexcept {
+      [[nodiscard]] constexpr std::string_view remaining() const noexcept {
         return text_.substr(offset_);
       }
 
@@ -117,9 +117,9 @@ export {
                                                                         : Result::pending;
       }
 
-      std::size_t length() const noexcept;
+      [[nodiscard]] std::size_t length() const noexcept;
 
-      StreamReadiness waiting() const noexcept;
+      [[nodiscard]] StreamReadiness waiting() const noexcept;
 
       void reset() noexcept;
 
@@ -226,7 +226,7 @@ export {
 
       void consume(std::size_t count) noexcept;
 
-      bool empty() const noexcept;
+      [[nodiscard]] bool empty() const noexcept;
 
     private:
       SensitiveBuffer<Capacity> storage_;

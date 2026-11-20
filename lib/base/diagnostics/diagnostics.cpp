@@ -26,7 +26,7 @@ namespace telar::runtime {
   }
 
   LimitReach LimitLedger::Row::reach() const noexcept {
-    return {name.view(), noun.view(), value, requested, route.view()};
+    return {.name = name.view(), .noun = noun.view(), .value = value, .requested = requested, .route = route.view()};
   }
 
   LimitLedger::Recorded LimitLedger::record(const LimitReach& reach, std::uint32_t hits) {
@@ -66,7 +66,7 @@ namespace telar::runtime {
       row->shown = now;
     }
 
-    return {*row, show, static_cast<std::size_t>(row - rows_.data())};
+    return {.row = *row, .show = show, .slot = static_cast<std::size_t>(row - rows_.data())};
   }
 
   std::span<const LimitLedger::Row> LimitLedger::rows() const noexcept {

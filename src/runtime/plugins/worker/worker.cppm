@@ -140,9 +140,9 @@ export {
       explicit Result(const ServiceSpec& specification, tbc::val_a<SensitiveAllocation<Memory>> storage, std::size_t effects_offset, std::size_t effects_size, bool traffic = false);
 
       // The batch views the result's storage.
-      EffectBatch batch() const;
+      [[nodiscard]] EffectBatch batch() const;
 
-      bool authorized(const ServiceSpec& specification) const noexcept;
+      [[nodiscard]] bool authorized(const ServiceSpec& specification) const noexcept;
 
       std::uint8_t package_index;
       std::uint64_t plugin_id;
@@ -154,7 +154,7 @@ export {
       bool traffic = false;
 
     private:
-      std::span<const Byte> effectBytes() const;
+      [[nodiscard]] std::span<const Byte> effectBytes() const;
 
       std::size_t effects_offset_;
       std::size_t effects_size_;
@@ -198,7 +198,7 @@ export {
 
       void close() noexcept;
 
-      int descriptor() const noexcept;
+      [[nodiscard]] int descriptor() const noexcept;
 
     private:
       tbc::val_a<DropChannel<OwnedResult<Memory>, Limits::queue_depth, ChannelPolicy::keep_oldest>> results_;
@@ -221,20 +221,20 @@ export {
 
       void deadline(std::chrono::milliseconds timeout) noexcept;
 
-      bool active() const noexcept;
+      [[nodiscard]] bool active() const noexcept;
 
       bool ready(int descriptor, short events) noexcept;
 
       void drainError() noexcept;
 
-      std::string_view retainedError() const noexcept;
+      [[nodiscard]] std::string_view retainedError() const noexcept;
 
     private:
       using Clock = std::chrono::steady_clock;
       static constexpr std::size_t error_chunk_bytes = 1024;
       static constexpr std::size_t maximum_error_drain_bytes = 64 * 1024;
 
-      int remainingMilliseconds() const noexcept;
+      [[nodiscard]] int remainingMilliseconds() const noexcept;
 
       PipeProcess& process_;
       const CancellationSignal& cancellation_;
@@ -288,11 +288,11 @@ export {
 
       SensitiveAllocation<Memory> request(std::span<const Byte> frame, std::size_t maximum_bytes);
 
-      std::string_view retainedError() const noexcept;
+      [[nodiscard]] std::string_view retainedError() const noexcept;
 
-      pid_t processId() const noexcept;
+      [[nodiscard]] pid_t processId() const noexcept;
 
-      int outputDescriptor() const noexcept;
+      [[nodiscard]] int outputDescriptor() const noexcept;
 
     private:
       static PipeProcess spawn(const SessionOptions& options);
@@ -348,9 +348,9 @@ export {
       bool fail_closed = false;
       FixedText<traffic::control::Limits::request_bytes> request;
 
-      std::span<const Byte> requestBytes() const noexcept;
+      [[nodiscard]] std::span<const Byte> requestBytes() const noexcept;
 
-      traffic::InterceptionRule rule() const noexcept;
+      [[nodiscard]] traffic::InterceptionRule rule() const noexcept;
 
       bool operator==(const TrafficRegistration&) const noexcept = default;
     };
@@ -447,9 +447,9 @@ export {
 
       void detach() noexcept;
 
-      std::uint64_t errors() const noexcept;
+      [[nodiscard]] std::uint64_t errors() const noexcept;
 
-      bool transportFailed() const noexcept;
+      [[nodiscard]] bool transportFailed() const noexcept;
 
       // `session` is the worker's session, or null while it restarts.
       template <typename Consumer>
@@ -499,14 +499,14 @@ export {
         ds::Array<pollfd, TrafficLimits::registrations + 3> descriptors{};
         ds::Array<std::uint32_t, TrafficLimits::registrations> identities{};
 
-        descriptors.atMut(0) = {wake, POLLIN, 0};
-        descriptors.atMut(1) = {cancellation.descriptor(), POLLIN, 0};
-        descriptors.atMut(2) = {session ? session->outputDescriptor() : -1, POLLIN, 0};
+        descriptors.atMut(0) = {.fd = wake, .events = POLLIN, .revents = 0};
+        descriptors.atMut(1) = {.fd = cancellation.descriptor(), .events = POLLIN, .revents = 0};
+        descriptors.atMut(2) = {.fd = session ? session->outputDescriptor() : -1, .events = POLLIN, .revents = 0};
         for (std::size_t index = 0; index < connections_.size(); ++index) {
           const auto& connection = connections_[index];
 
           identities.atMut(index) = connection ? connection->registration.id : 0;
-          descriptors.atMut(index + 3) = {connection ? connection->socket.get() : -1, static_cast<short>(POLLIN | (connection && connection->output.size() ? POLLOUT : 0)), 0};
+          descriptors.atMut(index + 3) = {.fd = connection ? connection->socket.get() : -1, .events = static_cast<short>(POLLIN | (connection && !connection->output.empty() ? POLLOUT : 0)), .revents = 0};
         }
 
         if (::poll(descriptors.dataMut(), descriptors.size(), immediate ? 0 : 100) < 0) {
@@ -762,7 +762,7 @@ export {
       const char* executable;
       CancellationSignal& cancellation;
       std::chrono::milliseconds timeout = Limits::reply_deadline;
-      std::string_view trace_prefix{};
+      std::string_view trace_prefix;
       traffic::PackagePort* traffic = nullptr;
     };
 
@@ -834,7 +834,7 @@ export {
       tbc::val_a<DropChannel<Shared, Limits::queue_depth, ChannelPolicy::keep_newest>> requests_;
       CancellationSignal cancellation_;
       ds::Option<Session<ConcurrentMemory>> session_;
-      ds::Box<TrafficBridge, ConcurrentMemory> bridge_{};
+      ds::Box<TrafficBridge, ConcurrentMemory> bridge_;
       CompletionSignal wake_;
       std::uint64_t callback_errors_base_ = 0;
       RestartWindow restarts_;

@@ -72,7 +72,7 @@ export {
 
       void* allocate(std::size_t size, std::size_t alignment) noexcept;
       void deallocate(void* pointer, std::size_t size, std::size_t alignment) noexcept;
-      std::size_t retainedBytes() const noexcept;
+      [[nodiscard]] std::size_t retainedBytes() const noexcept;
 
       static constexpr std::size_t maximum_retained_bytes = 512 * 1024;
 
@@ -149,7 +149,7 @@ export {
         return {storage_, size_};
       }
 
-      inline std::span<const std::uint8_t> bytes() const noexcept {
+      [[nodiscard]] inline std::span<const std::uint8_t> bytes() const noexcept {
         return {static_cast<const std::uint8_t*>(storage_), size_};
       }
 
@@ -263,7 +263,7 @@ export {
         truncate(0);
       }
 
-      inline std::string_view view() const noexcept {
+      [[nodiscard]] inline std::string_view view() const noexcept {
         return {bytes_.data(), length_};
       }
 

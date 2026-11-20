@@ -27,7 +27,7 @@ namespace telar::runtime {
         constexpr std::uint32_t base_score = 4096;
         constexpr std::uint32_t leading_penalty = 8;
         constexpr std::uint32_t inner_penalty = 16;
-        const auto penalty = first * leading_penalty + (index - first + 1 - query.size()) * inner_penalty;
+        const auto penalty = (first * leading_penalty) + ((index - first + 1 - query.size()) * inner_penalty);
 
         return penalty >= base_score ? 0 : base_score - static_cast<std::uint32_t>(penalty);
       }

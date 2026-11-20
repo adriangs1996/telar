@@ -691,7 +691,7 @@ namespace telar::git {
       // Extensions that change nothing this reader reads; any other is unknown to it.
       bool known = false;
 
-      for (const auto name : {"noop", "noop-v1", "preciousobjects", "partialclone", "compatobjectformat", "relativeworktrees", "submodulepathconfig"}) {
+      for (const auto* const name : {"noop", "noop-v1", "preciousobjects", "partialclone", "compatobjectformat", "relativeworktrees", "submodulepathconfig"}) {
         known = known || asciiEqualIgnoreCase(entry.key, name);
       }
 
@@ -1039,7 +1039,7 @@ namespace telar::git {
 
     ChangeCounts counts;
 
-    status_.unstaged = unstaged_.compare(worktree_.get(), index_, {config_.format, config_.file_mode, config_.symlinks}, limits_, counts) ? Accuracy::exact : Accuracy::unknown;
+    status_.unstaged = unstaged_.compare(worktree_.get(), index_, {.format = config_.format, .file_mode = config_.file_mode, .symlinks = config_.symlinks}, limits_, counts) ? Accuracy::exact : Accuracy::unknown;
     status_.changes = status_.unstaged == Accuracy::exact ? counts : ChangeCounts{};
     if (status_.staged == Accuracy::exact) {
       status_.changes.staged_added = staged_counts_.staged_added;

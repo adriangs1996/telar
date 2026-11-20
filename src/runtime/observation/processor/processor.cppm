@@ -60,7 +60,7 @@ export {
     struct ObservationBatch {
       void clear() noexcept;
 
-      std::span<const Byte> bytesOf(const ObservationEvent& event) const noexcept;
+      [[nodiscard]] std::span<const Byte> bytesOf(const ObservationEvent& event) const noexcept;
 
       static constexpr std::size_t byte_capacity = 128 * 1024;
       static constexpr std::size_t event_capacity = 512;

@@ -42,7 +42,7 @@ export {
       DirectoryStream(const DirectoryStream&) = delete;
       DirectoryStream& operator=(const DirectoryStream&) = delete;
 
-      int descriptor() const noexcept;
+      [[nodiscard]] int descriptor() const noexcept;
       const dirent* next();
 
     private:
@@ -114,8 +114,8 @@ export {
     public:
       explicit FileReadError(FileReadFailure failure) noexcept;
 
-      FileReadFailure failure() const noexcept;
-      const char* what() const noexcept override;
+      [[nodiscard]] FileReadFailure failure() const noexcept;
+      [[nodiscard]] const char* what() const noexcept override;
 
     private:
       FileReadFailure failure_;
@@ -208,8 +208,8 @@ export {
       TemporaryDirectory(const TemporaryDirectory&) = delete;
       TemporaryDirectory& operator=(const TemporaryDirectory&) = delete;
 
-      int descriptor() const noexcept;
-      std::string_view path() const noexcept;
+      [[nodiscard]] int descriptor() const noexcept;
+      [[nodiscard]] std::string_view path() const noexcept;
 
     private:
       static void removeContents(int directory) noexcept;

@@ -22,7 +22,7 @@ namespace telar::runtime {
       return ds::none;
     }
 
-    return KittyControlField{field.front(), field.substr(2)};
+    return KittyControlField{.key = field.front(), .value = field.substr(2)};
   }
 
   DisplayCells displayCells(const ImageDisplayRequest& request) noexcept {
@@ -50,7 +50,7 @@ namespace telar::runtime {
     const auto occupied_width = saturatedDimension(static_cast<std::uint64_t>(width) + offset_x);
     const auto occupied_height = saturatedDimension(static_cast<std::uint64_t>(height) + offset_y);
 
-    return {occupied_width / request.cell_width + (occupied_width % request.cell_width != 0), occupied_height / request.cell_height + (occupied_height % request.cell_height != 0)};
+    return {(occupied_width / request.cell_width) + static_cast<std::uint32_t>(occupied_width % request.cell_width != 0), (occupied_height / request.cell_height) + static_cast<std::uint32_t>(occupied_height % request.cell_height != 0)};
   }
 
   bool KittyFraming::canSkip(std::span<const std::uint8_t> bytes) const noexcept {
@@ -161,7 +161,7 @@ namespace telar::runtime {
         truncated_ = false;
       } else {
         capture(bytes.subspan(start, position - start - 1));
-        return KittyCommandView{position, {control_.data(), control_length_}, {payload_.data(), payload_length_}, truncated_};
+        return KittyCommandView{.end = position, .control = {control_.data(), control_length_}, .payload_prefix = {payload_.data(), payload_length_}, .truncated = truncated_};
       }
     }
   }
@@ -432,7 +432,7 @@ namespace telar::runtime {
 
     const auto target_x = static_cast<std::uint64_t>(x) + cells.columns;
     const bool wraps = target_x >= size.cols;
-    const auto requested_rows = static_cast<std::uint64_t>(cells.rows - 1) + wraps;
+    const auto requested_rows = static_cast<std::uint64_t>(cells.rows - 1) + static_cast<std::uint64_t>(wraps);
     const bool inside = y >= top && y <= bottom && x >= left && x <= right;
     const auto rows_before_scroll = inside ? bottom - y : 0;
     const auto rows = std::min<std::uint64_t>(requested_rows, rows_before_scroll + size.rows);
@@ -474,7 +474,7 @@ namespace telar::runtime {
       return ds::none;
     }
 
-    return GraphicsChildFile{std::move(file), static_cast<std::uint64_t>(metadata.st_size)};
+    return GraphicsChildFile{.descriptor = std::move(file), .size = static_cast<std::uint64_t>(metadata.st_size)};
   }
 
   bool GraphicsChildFile::read(std::span<std::uint8_t> bytes, std::uint64_t offset) const noexcept {
@@ -630,7 +630,7 @@ namespace telar::runtime {
     const std::string_view path{path_.data()};
     bool temporary = inside("/tmp", path) || inside("/dev/shm", path);
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
     temporary |= inside("/private/tmp", path);
 #endif
     if (!temporary) {

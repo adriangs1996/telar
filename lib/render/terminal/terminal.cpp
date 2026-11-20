@@ -10,7 +10,7 @@ namespace telar::render::terminal {
 
   // Columns a character occupies: two for East Asian wide and emoji ranges,
   // zero for combining marks, one otherwise. An approximation of wcwidth.
-  constexpr unsigned columns(char32_t value) noexcept {
+  static constexpr unsigned columns(char32_t value) noexcept {
     if ((value >= 0x0300 && value <= 0x036f) || (value >= 0x200b && value <= 0x200f) || (value >= 0xfe00 && value <= 0xfe0f)) {
       return 0;
     }
@@ -24,7 +24,7 @@ namespace telar::render::terminal {
   }
 
   // Decodes the character at index of valid UTF-8 and advances index.
-  inline char32_t next(std::string_view text, std::size_t& index) noexcept {
+  static inline char32_t next(std::string_view text, std::size_t& index) noexcept {
     const auto lead = static_cast<std::uint8_t>(text[index]);
     const std::size_t length = lead < 0x80 ? 1 : lead < 0xe0 ? 2
                                              : lead < 0xf0   ? 3
@@ -39,7 +39,7 @@ namespace telar::render::terminal {
     return value;
   }
 
-  inline std::size_t displayWidth(std::string_view text) noexcept {
+  static inline std::size_t displayWidth(std::string_view text) noexcept {
     std::size_t width = 0;
 
     for (std::size_t index = 0; index < text.size();) {
@@ -49,11 +49,11 @@ namespace telar::render::terminal {
     return width;
   }
 
-  inline bool control(char32_t value) noexcept {
+  static inline bool control(char32_t value) noexcept {
     return value < 0x20 || (value >= 0x7f && value < 0xa0);
   }
 
-  inline std::string_view calloutColor(Callout callout) noexcept {
+  static inline std::string_view calloutColor(Callout callout) noexcept {
     switch (callout) {
     case Callout::note:
       return "\x1b[34m";
@@ -70,7 +70,7 @@ namespace telar::render::terminal {
     }
   }
 
-  inline std::string_view calloutTitle(Callout callout) noexcept {
+  static inline std::string_view calloutTitle(Callout callout) noexcept {
     switch (callout) {
     case Callout::note:
       return "Note";
@@ -187,7 +187,7 @@ namespace telar::render::terminal {
         break;
       case Marker::ordered:
       case Marker::footnote: {
-        const auto end = std::to_chars(text.dataMut() + length, text.dataMut() + text.size() - 2, block.number).ptr;
+        auto* const end = std::to_chars(text.dataMut() + length, text.dataMut() + text.size() - 2, block.number).ptr;
 
         shown += static_cast<std::size_t>(end - (text.data() + length));
         length = static_cast<std::size_t>(end - text.data());
@@ -224,7 +224,7 @@ namespace telar::render::terminal {
       }
     }
 
-    std::size_t available(std::size_t used) const noexcept {
+    [[nodiscard]] std::size_t available(std::size_t used) const noexcept {
       return width_ > used + 1 ? width_ - used : 1;
     }
 
@@ -375,7 +375,7 @@ namespace telar::render::terminal {
     }
 
     void verbatim(const Block& block) {
-      const auto text = document_.view(Span{block.first, block.count});
+      const auto text = document_.view(Span{.offset = block.first, .size = block.count});
       const auto info = document_.view(block.info);
       if (!info.empty()) {
         prefix(block, true);
@@ -429,7 +429,7 @@ namespace telar::render::terminal {
       output_.push('\n');
     }
 
-    std::size_t cellWidth(const Cell& cell) const noexcept {
+    [[nodiscard]] std::size_t cellWidth(const Cell& cell) const noexcept {
       std::size_t width = 0;
 
       for (const auto& run : document_.runsOf(cell)) {
@@ -455,9 +455,9 @@ namespace telar::render::terminal {
       Block plain = block;
 
       plain.marker = Marker::none;
-      const auto used = std::size_t{plain.quote} * 2 + std::size_t{plain.list} * list_indent;
+      const auto used = (std::size_t{plain.quote} * 2) + (std::size_t{plain.list} * list_indent);
       const auto room = available(used);
-      const auto borders = shown * 3 + 1;
+      const auto borders = (shown * 3) + 1;
       std::size_t total = 0;
 
       for (std::size_t column = 0; column < shown; ++column) {
@@ -496,7 +496,7 @@ namespace telar::render::terminal {
         prefix(plain, false);
         for (std::size_t column = 0; column < shown; ++column) {
           output_.append("\x1b[2m│\x1b[0m ");
-          const auto& cell = cells[row * columns_count + column];
+          const auto& cell = cells[(row * columns_count) + column];
 
           cellText(cell, widths[column], row == 0 ? style::strong : 0);
           output_.push(' ');

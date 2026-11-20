@@ -63,7 +63,7 @@ export extern "C++" {
       GraphicsHeader header{};
       ImageKey key{};
       std::uint64_t offset{};
-      std::span<const Byte> bytes{};
+      std::span<const Byte> bytes;
     };
 
     template <>
@@ -102,7 +102,7 @@ export extern "C++" {
     struct GraphicsSharedImage {
       GraphicsHeader header{};
       ImageDescription image{};
-      std::string_view name{};
+      std::string_view name;
 
       void validate() const;
     };

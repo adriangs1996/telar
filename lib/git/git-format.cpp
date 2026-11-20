@@ -9,7 +9,7 @@ namespace telar::git {
 
   namespace {
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
     const timespec& modifiedTime(const struct stat& status) noexcept {
       return status.st_mtimespec;
     }
@@ -87,7 +87,7 @@ namespace telar::git {
     id.size = static_cast<std::uint8_t>(size);
     for (std::size_t index = 0; index < size; ++index) {
       const auto high = hexValue(text[2 * index]);
-      const auto low = hexValue(text[2 * index + 1]);
+      const auto low = hexValue(text[(2 * index) + 1]);
       if (high < 0 || low < 0) {
         return ds::none;
       }

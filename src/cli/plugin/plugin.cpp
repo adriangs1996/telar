@@ -102,7 +102,7 @@ namespace telar::runtime::cli {
 
   // The granted capabilities: the manifest's, or the requested ones, each
   // declared there and named once.
-  plugins::Capabilities grantedCapabilities(const plugins::Manifest& manifest, const PluginOptions& options) {
+  static plugins::Capabilities grantedCapabilities(const plugins::Manifest& manifest, const PluginOptions& options) {
     if (options.capability_count == 0) {
       return manifest.capabilities;
     }
@@ -121,7 +121,7 @@ namespace telar::runtime::cli {
   }
 
   template <Allocator Memory, EnvironmentLookup Environment>
-  void executePlugin(Memory& memory, const PluginOptions& options, const Environment& environment) {
+  static void executePlugin(Memory& memory, const PluginOptions& options, const Environment& environment) {
     if (options.action == PluginAction::untrust) {
       plugins::revokeTrust(memory, options.path, plugins::Paths::trust(memory, environment));
       constexpr std::string_view message = "telar plugin trust revoked\n";
@@ -192,18 +192,18 @@ namespace telar::runtime::cli {
     // Only installation chooses a backend; status
     // and removal ignore --linux.
     if (options.action == ProxyTrustAction::install) {
-#if defined(__APPLE__)
+#ifdef __APPLE__
       if (selected) {
         throw CommandError{"LinuxTrustFlagOnMacOS"};
       }
-#elif defined(__linux__)
+#elifdef __linux__
       if (!selected) {
         throw CommandError{"LinuxTrustBackendRequired"};
       }
 #endif
     }
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
     selected.reset();
 #endif
     const auto destination = paths.nativeDestination(memory, environment, selected);
@@ -407,7 +407,7 @@ namespace telar::runtime::cli {
     const auto name = bytes.viewMut().first(static_cast<std::size_t>(written.size));
 
     std::ranges::replace(name, '-', '_');
-    const auto found = std::ranges::find(client_action_names, std::string_view{name.data(), name.size()});
+    const auto* const found = std::ranges::find(client_action_names, std::string_view{name.data(), name.size()});
     if (found == client_action_names.end()) {
       return ds::none;
     }

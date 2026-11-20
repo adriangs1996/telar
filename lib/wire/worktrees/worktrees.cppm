@@ -20,15 +20,15 @@ export extern "C++" {
     struct RegisterWorktree {
       std::uint64_t request_id{};
       std::uint64_t source{};
-      ds::Option<std::uint64_t> created_by{};
+      ds::Option<std::uint64_t> created_by;
       WorktreeOrigin origin{};
-      std::string_view path{};
-      std::string_view branch{};
-      std::string_view base{};
-      std::string_view title{};
-      std::string_view brief{};
-      std::string_view dispatched_from{};
-      ds::Option<CoordinatorReference> coordinator{};
+      std::string_view path;
+      std::string_view branch;
+      std::string_view base;
+      std::string_view title;
+      std::string_view brief;
+      std::string_view dispatched_from;
+      ds::Option<CoordinatorReference> coordinator;
 
       void validate() const;
     };
@@ -40,7 +40,7 @@ export extern "C++" {
     struct LaunchWorktree {
       std::uint64_t request_id{};
       std::uint64_t worktree{};
-      std::string_view label{};
+      std::string_view label;
       TerminalSize size{};
       Launch launch{};
     };

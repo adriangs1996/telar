@@ -80,15 +80,15 @@ export {
     public:
       // Bit tests the runtime runs on every plugin traffic result and authorization check;
       // constexpr, so importers evaluate and inline them.
-      constexpr bool contains(Capability capability) const noexcept {
+      [[nodiscard]] constexpr bool contains(Capability capability) const noexcept {
         return (bits_ & bit(capability)) != 0;
       }
 
-      constexpr bool containsAll(Capabilities other) const noexcept {
+      [[nodiscard]] constexpr bool containsAll(Capabilities other) const noexcept {
         return (bits_ & other.bits_) == other.bits_;
       }
 
-      constexpr Capabilities intersection(Capabilities other) const noexcept {
+      [[nodiscard]] constexpr Capabilities intersection(Capabilities other) const noexcept {
         Capabilities result;
 
         result.bits_ = bits_ & other.bits_;
@@ -277,7 +277,7 @@ export {
 
       explicit PackageFiles(Memory& memory, int directory);
 
-      std::span<const Entry> entries() const noexcept;
+      [[nodiscard]] std::span<const Entry> entries() const noexcept;
 
     private:
       void scan(DirectoryStream& iterator, ds::String<Memory>& prefix);
@@ -455,7 +455,7 @@ export {
       ds::Array<ConfiguredPlugin, PackageLimits::configured> entries;
       std::size_t count = 0;
 
-      std::span<const ConfiguredPlugin> configured() const noexcept;
+      [[nodiscard]] std::span<const ConfiguredPlugin> configured() const noexcept;
     };
 
   }
@@ -487,7 +487,7 @@ export {
         });
       }
 
-      TBC_GENERIC std::span<const Package> packages() const noexcept {
+      [[nodiscard]] TBC_GENERIC std::span<const Package> packages() const noexcept {
         return packages_;
       }
 
@@ -557,7 +557,7 @@ export {
 
     class TrustStore {
     public:
-      std::span<const TrustGrant> grants() const noexcept;
+      [[nodiscard]] std::span<const TrustGrant> grants() const noexcept;
 
       template <Allocator Memory>
       static TrustStore load(Memory& memory, std::string_view path);
@@ -565,7 +565,7 @@ export {
       template <Allocator Memory>
       static tbc::val_a<TrustStore> parse(tbc::mut_a<Memory> memory, std::string_view bytes);
 
-      Capabilities granted(std::string_view id, const PackageDigest& digest) const noexcept;
+      [[nodiscard]] Capabilities granted(std::string_view id, const PackageDigest& digest) const noexcept;
       void upsert(const Manifest& manifest, const PackageDigest& digest, Capabilities capabilities);
       bool revoke(std::string_view id);
 

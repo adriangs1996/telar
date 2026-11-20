@@ -36,13 +36,13 @@ namespace telar::runtime {
         break;
       }
 
-      routes.atMut(count++) = {client->id, client->generation};
+      routes.atMut(count++) = {.client = client->id, .generation = client->generation};
       if (preferred == nullptr || precedes(*client, *preferred, pane.id)) {
         preferred = client;
       }
     }
 
-    pane.terminal.clipboardControl().routes(std::span{routes}.first(count), preferred != nullptr ? ds::Option{control::ClipboardRoute{preferred->id, preferred->generation}} : ds::none);
+    pane.terminal.clipboardControl().routes(std::span{routes}.first(count), preferred != nullptr ? ds::Option{control::ClipboardRoute{.client = preferred->id, .generation = preferred->generation}} : ds::none);
   }
 
   bool ClipboardService::advance(ClientStore& clients, Pane& pane, std::chrono::steady_clock::time_point now) {
@@ -104,7 +104,7 @@ namespace telar::runtime {
     }
 
     pane->terminal.clipboardControl().expire(std::chrono::steady_clock::now());
-    if (!pane->terminal.clipboardControl().complete({sender.id, sender.generation}, completion)) {
+    if (!pane->terminal.clipboardControl().complete({.client = sender.id, .generation = sender.generation}, completion)) {
       return nullptr;
     }
 
@@ -129,7 +129,7 @@ namespace telar::runtime {
     for (std::size_t index = 0; index < client.attachments.size(); ++index) {
       const auto& attachment = *client.attachments[index];
       if (model.panes.find(attachment.pane_id) != nullptr && !attachment.exit_sent) {
-        slots_.atMut(attachment.slot) = {static_cast<std::uint8_t>(index), false};
+        slots_.atMut(attachment.slot) = {.index = static_cast<std::uint8_t>(index), .cells_current = false};
         occupied_ |= std::uint64_t{1} << attachment.slot;
       }
     }
@@ -145,7 +145,7 @@ namespace telar::runtime {
       candidates &= candidates - 1;
       auto& attachment = client.attachments.atMut(slots_[slot].index).getMut();
       auto& pane = *model.panes.find(attachment.pane_id);
-      Output output{client.connection, client.completing_exit, client.frame_interval, model.metrics};
+      Output output{.connection = client.connection, .completing_exit = client.completing_exit, .frame_interval = client.frame_interval, .metrics = model.metrics};
       if (prepare(output, attachment, pane, lane, now, timeout)) {
         client.next_attachment = (slot + 1) % ClientSession::attachment_capacity;
         return true;
@@ -164,13 +164,13 @@ namespace telar::runtime {
     case DeliveryLane::cells:
       return cells(output, attachment, pane, now, timeout);
     case DeliveryLane::cwd:
-      return metadata(output.connection, attachment.cwd_revision, pane.cwd_revision + 1, PaneCwd{pane.id, pane.cwd});
+      return metadata(output.connection, attachment.cwd_revision, pane.cwd_revision + 1, PaneCwd{.pane_id = pane.id, .cwd = pane.cwd});
     case DeliveryLane::foreground:
-      return metadata(output.connection, attachment.foreground_revision, pane.foreground_revision, PaneForeground{pane.id, pane.foreground.view()});
+      return metadata(output.connection, attachment.foreground_revision, pane.foreground_revision, PaneForeground{.pane_id = pane.id, .name = pane.foreground.view()});
     case DeliveryLane::title:
-      return metadata(output.connection, attachment.title_revision, effects.title_revision, PaneTitle{pane.id, effects.title()});
+      return metadata(output.connection, attachment.title_revision, effects.title_revision, PaneTitle{.pane_id = pane.id, .title = effects.title()});
     case DeliveryLane::progress:
-      return metadata(output.connection, attachment.progress_revision, effects.progress_revision, PaneProgress{pane.id, effects.progress_state, effects.progress_percent});
+      return metadata(output.connection, attachment.progress_revision, effects.progress_revision, PaneProgress{.pane_id = pane.id, .state = effects.progress_state, .percent = effects.progress_percent});
     case DeliveryLane::shell:
       return metadata(output.connection, attachment.shell_revision, pane.shell_revision, pane.shell_state);
     case DeliveryLane::git:
@@ -472,7 +472,7 @@ namespace telar::runtime {
         continue;
       }
 
-      client.connection.send(PaneClipboard{pane->id, pane->terminal.effects.clipboard});
+      client.connection.send(PaneClipboard{.pane_id = pane->id, .bytes = pane->terminal.effects.clipboard});
       attachment.getMut().clipboard_revision = pane->terminal.effects.clipboard_revision;
       return true;
     }
@@ -511,7 +511,7 @@ namespace telar::runtime {
       };
     }
 
-    client.connection.send(PaneList{model_.pane_revision + model_.workspace_revision, std::span{entries}.first(count)});
+    client.connection.send(PaneList{.revision = model_.pane_revision + model_.workspace_revision, .entries = std::span{entries}.first(count)});
     client.pane_revision = model_.pane_revision;
     client.pane_workspace_revision = model_.workspace_revision;
     return true;
@@ -532,8 +532,8 @@ namespace telar::runtime {
 
       auto& sent = client.foregrounds.atMut(slot);
       if (sent.pane != pane->id || sent.revision != pane->foreground_revision) {
-        client.connection.send(PaneForeground{pane->id, pane->foreground.view()});
-        sent = {pane->id, pane->foreground_revision};
+        client.connection.send(PaneForeground{.pane_id = pane->id, .name = pane->foreground.view()});
+        sent = {.pane = pane->id, .revision = pane->foreground_revision};
         return true;
       }
     }

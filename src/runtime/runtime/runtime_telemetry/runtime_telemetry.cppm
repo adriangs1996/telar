@@ -80,9 +80,9 @@ export {
 
       explicit LogSink(std::string_view endpoint, pid_t process = ::getpid(), std::size_t limit = file_limit) noexcept;
 
-      bool available() const noexcept;
+      [[nodiscard]] bool available() const noexcept;
 
-      std::string_view path() const noexcept;
+      [[nodiscard]] std::string_view path() const noexcept;
 
       void disable() noexcept;
 
@@ -120,7 +120,7 @@ export {
 
       void stop() noexcept;
 
-      bool available() const noexcept;
+      [[nodiscard]] bool available() const noexcept;
 
     private:
       LogSink sink_;
@@ -174,7 +174,7 @@ export {
 
 // Interface: diagnostics/memory_sample.cppm
 export {
-#if defined(__APPLE__)
+#ifdef __APPLE__
 #else
 #endif
 

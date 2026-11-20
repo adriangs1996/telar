@@ -66,7 +66,7 @@ namespace telar::runtime::checkpoint {
   }
 
   template <Allocator Memory>
-  typename FileStore<Memory>::Result FileStore<Memory>::observe(const Request& bytes) noexcept {
+  FileStore<Memory>::Result FileStore<Memory>::observe(const Request& bytes) noexcept {
     return writePrivateFile(parent_.get(), name_, bytes, PrivateFileMode::replace);
   }
 
@@ -108,7 +108,7 @@ namespace telar::runtime::checkpoint {
       throw EncodingError{"Unsupported checkpoint version"};
     }
 
-    counters = {u64::decode(input_), u64::decode(input_), u64::decode(input_), u64::decode(input_)};
+    counters = {.workspace = u64::decode(input_), .tab = u64::decode(input_), .pane = u64::decode(input_), .generation = u64::decode(input_)};
     if (counters.workspace == 0 || counters.tab == 0 || counters.pane == 0 || counters.generation == 0) {
       throw EncodingError{"Invalid checkpoint counters"};
     }
@@ -145,7 +145,7 @@ namespace telar::runtime::checkpoint {
   }
 
   ds::Option<PaneRecord> Reader::pane() {
-    PaneRecord record{u64::decode(input_), u64::decode(input_), u64::decode(input_), text16(), u16::decode(input_), u16::decode(input_), u16::decode(input_), {}};
+    PaneRecord record{.id = u64::decode(input_), .workspace = u64::decode(input_), .tab = u64::decode(input_), .cwd = text16(), .columns = u16::decode(input_), .rows = u16::decode(input_), .argument_count = u16::decode(input_), .arguments = {}};
 
     record.arguments = version_ >= 9 ? text(u32::decode(input_)) : text16();
     validatePath(record.cwd);
@@ -218,7 +218,7 @@ namespace telar::runtime::checkpoint {
   Writer::Writer(tbc::val_a<std::span<Byte>> buffer, Counters counters)
       : buffer_(buffer),
         remaining_(buffer.empty() ? buffer : buffer.first(buffer.size() - 1)) {
-    constexpr std::size_t header_bytes = magic.size() + sizeof(current_version) + 4 * sizeof(std::uint64_t);
+    constexpr std::size_t header_bytes = magic.size() + sizeof(current_version) + (4 * sizeof(std::uint64_t));
     if (buffer.size() <= header_bytes) {
       throw EncodingError{"Checkpoint buffer cannot hold its header"};
     }

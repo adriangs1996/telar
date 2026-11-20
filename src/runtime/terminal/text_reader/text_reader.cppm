@@ -38,7 +38,7 @@ export {
     public:
       explicit TextMetadataCapture(tbc::mut_a<ConcurrentMemory> memory);
 
-      tbc::val_a<TextMetadata> view(tbc::val_a<std::span<const Byte>> row_flags) const noexcept;
+      [[nodiscard]] tbc::val_a<TextMetadata> view(tbc::val_a<std::span<const Byte>> row_flags) const noexcept;
 
       // Not inlined: Terminal::refresh runs on every frame and captures only when rows with links
       // changed; the link table in its frame would put every frame's calls on deeper stack pages.
@@ -95,7 +95,7 @@ export {
 
       bool operator==(const ScreenCell& other) const noexcept;
 
-      Cell view() const noexcept;
+      [[nodiscard]] Cell view() const noexcept;
     };
 
     static_assert(sizeof(ScreenCell) == 32);
@@ -139,9 +139,9 @@ export {
       void copyRow(GhosttyRenderStateRowIterator row, GhosttyRenderStateRowCells cells, std::span<ScreenCell> destination) const;
 
     private:
-      CellColor paletteColor(Byte index) const noexcept;
-      CellColor resolveColor(const GhosttyStyleColor& color, CellColor fallback) const noexcept;
-      CellStyle translateStyle(const GhosttyStyle& style) const noexcept;
+      [[nodiscard]] CellColor paletteColor(Byte index) const noexcept;
+      [[nodiscard]] CellColor resolveColor(const GhosttyStyleColor& color, CellColor fallback) const noexcept;
+      [[nodiscard]] CellStyle translateStyle(const GhosttyStyle& style) const noexcept;
       static void writeGrapheme(GhosttyRenderStateRowCells cells, ScreenCell& destination);
 
       GhosttyRenderStateColors colors_ = ghosttySized<GhosttyRenderStateColors>();
@@ -190,9 +190,9 @@ export {
 
       void refresh(GhosttyTerminal terminal);
 
-      std::string_view title() const noexcept;
+      [[nodiscard]] std::string_view title() const noexcept;
 
-      std::string_view cwd() const noexcept;
+      [[nodiscard]] std::string_view cwd() const noexcept;
 
       void setProgress(PaneProgressState state, ds::Option<Byte> percent) noexcept;
 
@@ -279,7 +279,7 @@ export {
       void appendSpan(std::span<const ScreenCell> cells, std::size_t start, std::size_t& written);
 
       static constexpr std::size_t maximum_spans = 4096;
-      static constexpr std::size_t maximum_metadata_bytes = 153098 + maximum_spans * 12 + 62;
+      static constexpr std::size_t maximum_metadata_bytes = 153098 + (maximum_spans * 12) + 62;
 #if TELAR_DIAGNOSTICS
       void recordFrame(std::size_t bytes, bool snapshot) noexcept;
 
@@ -322,10 +322,10 @@ export {
     public:
       virtual void requireOrderedInput() noexcept = 0;
       // The prefix of the input made of whole atomic frames, which the terminal parses as one unit.
-      virtual std::size_t atomicPrefix(std::span<const Byte> bytes) const noexcept = 0;
+      [[nodiscard]] virtual std::size_t atomicPrefix(std::span<const Byte> bytes) const noexcept = 0;
       virtual void output(std::span<const Byte> bytes) noexcept = 0;
-      virtual bool failed() const noexcept = 0;
-      virtual bool idle() const noexcept = 0;
+      [[nodiscard]] virtual bool failed() const noexcept = 0;
+      [[nodiscard]] virtual bool idle() const noexcept = 0;
 
     protected:
       TerminalMedia() = default;
@@ -585,18 +585,18 @@ export {
 
       void copy(const CopySelection& request);
 
-      std::span<const Byte> bytes() const noexcept;
+      [[nodiscard]] std::span<const Byte> bytes() const noexcept;
 
-      std::string_view text() const noexcept;
+      [[nodiscard]] std::string_view text() const noexcept;
 
-      bool truncated() const noexcept;
+      [[nodiscard]] bool truncated() const noexcept;
 
     private:
-      std::uint32_t totalRows() const;
+      [[nodiscard]] std::uint32_t totalRows() const;
 
-      GhosttyGridRef reference(GhosttyPointTag tag, GhosttyPointCoordinate coordinate) const;
+      [[nodiscard]] GhosttyGridRef reference(GhosttyPointTag tag, GhosttyPointCoordinate coordinate) const;
 
-      bool rowIsBlank(GhosttyPointTag tag, std::uint32_t row) const;
+      [[nodiscard]] bool rowIsBlank(GhosttyPointTag tag, std::uint32_t row) const;
 
       void format(const GhosttySelection& selection, bool unwrap, TrailingSpaces spaces);
 

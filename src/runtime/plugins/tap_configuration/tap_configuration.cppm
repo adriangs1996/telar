@@ -65,7 +65,7 @@ export {
 
       Package copy(const Package& package, std::size_t index);
 
-      std::string_view path() const noexcept;
+      [[nodiscard]] std::string_view path() const noexcept;
 
     private:
       Memory& memory_;
@@ -89,11 +89,11 @@ export {
     };
 
     struct BlockingPipeWait {
-      constexpr bool active() const noexcept {
+      [[nodiscard]] constexpr bool active() const noexcept {
         return true;
       }
 
-      constexpr bool ready(int, short) const noexcept {
+      [[nodiscard]] constexpr bool ready(int, short) const noexcept {
         return true;
       }
     };
@@ -127,23 +127,23 @@ export {
           }
 
           if (count < 0) {
-            return {StreamResult::State::failed};
+            return {.state = StreamResult::State::failed};
           }
 
           if (count == 0) {
-            return {StreamResult::State::ended};
+            return {.state = StreamResult::State::ended};
           }
 
-          return {StreamResult::State::data, static_cast<std::size_t>(count)};
+          return {.state = StreamResult::State::data, .bytes = static_cast<std::size_t>(count)};
         }
 
-        return {StreamResult::State::failed};
+        return {.state = StreamResult::State::failed};
       }
 
       inline void write(std::span<const std::uint8_t> prefix, std::span<const std::uint8_t> payload) {
         ds::Array vectors{
-            iovec{const_cast<std::uint8_t*>(prefix.data()), prefix.size()},
-            iovec{const_cast<std::uint8_t*>(payload.data()), payload.size()},
+            iovec{.iov_base = const_cast<std::uint8_t*>(prefix.data()), .iov_len = prefix.size()},
+            iovec{.iov_base = const_cast<std::uint8_t*>(payload.data()), .iov_len = payload.size()},
         };
 
         std::size_t first = 0;
@@ -315,7 +315,7 @@ export {
         }
       }
 
-      std::span<const ServiceSpec> specifications() const noexcept;
+      [[nodiscard]] std::span<const ServiceSpec> specifications() const noexcept;
 
     private:
       template <EnvironmentLookup Environment>

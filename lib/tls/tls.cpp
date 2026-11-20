@@ -184,7 +184,7 @@ namespace telar::runtime {
     requireTls(EVP_PKEY_keygen_init(generator.get()) == 1 && EVP_PKEY_CTX_set_ec_paramgen_curve_nid(generator.get(), NID_X9_62_prime256v1) == 1, "Configure TLS P-256 key generator");
     EVP_PKEY* generated = nullptr;
     const auto result = EVP_PKEY_keygen(generator.get(), &generated);
-    CertificatePair pair{TlsKey{generated}, TlsCertificate{X509_new()}};
+    CertificatePair pair{.key = TlsKey{generated}, .certificate = TlsCertificate{X509_new()}};
 
     requireTls(result == 1 && pair.key != nullptr && pair.certificate != nullptr, "Generate TLS key pair");
     constexpr long version_three = 2;
@@ -359,7 +359,7 @@ namespace telar::runtime {
 
     for (std::size_t index = 0; index < digest_bytes; ++index) {
       result.atMut(index * 2) = hexadecimal[digest[index] >> 4];
-      result.atMut(index * 2 + 1) = hexadecimal[digest[index] & 15];
+      result.atMut((index * 2) + 1) = hexadecimal[digest[index] & 15];
     }
 
     return result;
@@ -644,7 +644,7 @@ namespace telar::runtime::proxy_trust {
   }
 
   Destination Paths::nativeDestinationFrom(ConcurrentMemory& memory, ds::Option<Backend> selected, const EnvironmentSource& environment) const {
-#if defined(__APPLE__)
+#ifdef __APPLE__
     if (selected && *selected != Backend::macos) {
       throw std::invalid_argument{"Linux trust backend is not supported on macOS"};
     }
@@ -733,7 +733,7 @@ namespace telar::runtime::proxy_trust {
     makeName(certificate_, canonical_.certificate, "rotate", nonce);
     makeName(previous_key_, canonical_.key, "previous", nonce);
     makeName(previous_certificate_, canonical_.certificate, "previous", nonce);
-    authority_.emplace(CertificateAuthority::create(memory, library, directory, {key_.data(), certificate_.data()}, options.kind));
+    authority_.emplace(CertificateAuthority::create(memory, library, directory, {.key = key_.data(), .certificate = certificate_.data()}, options.kind));
     temporary_ = true;
   }
 

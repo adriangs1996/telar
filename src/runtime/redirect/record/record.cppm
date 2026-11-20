@@ -382,11 +382,11 @@ export {
         }
       }
 
-      unsigned index() const noexcept;
+      [[nodiscard]] unsigned index() const noexcept;
 
-      int descriptor() const noexcept;
+      [[nodiscard]] int descriptor() const noexcept;
 
-      const Metadata& metadata() const noexcept;
+      [[nodiscard]] const Metadata& metadata() const noexcept;
 
       std::span<Byte> receive();
 

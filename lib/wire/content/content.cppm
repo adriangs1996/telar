@@ -33,7 +33,7 @@ export extern "C++" {
     struct SearchPane {
       std::uint64_t request_id{};
       std::uint64_t pane_id{};
-      std::string_view needle{};
+      std::string_view needle;
     };
 
     template <>
@@ -45,7 +45,7 @@ export extern "C++" {
     struct SearchPaneRows {
       std::uint64_t request_id{};
       std::uint64_t pane_id{};
-      std::string_view needle{};
+      std::string_view needle;
       std::uint32_t first_row{};
       std::uint32_t last_row{};
 
@@ -76,8 +76,8 @@ export extern "C++" {
       std::uint64_t request_id{};
       std::uint64_t pane_id{};
       bool truncated{};
-      std::string_view text{};
-      ds::Option<std::int32_t> exit_code{};
+      std::string_view text;
+      ds::Option<std::int32_t> exit_code;
     };
 
     template <>
@@ -88,7 +88,7 @@ export extern "C++" {
       std::uint64_t request_id{};
       std::uint64_t pane_id{};
       bool truncated{};
-      std::span<const PaneMatch> matches{};
+      std::span<const PaneMatch> matches;
     };
 
     template <>
@@ -101,7 +101,7 @@ export extern "C++" {
       static constexpr std::size_t capacity = 64;
 
       std::uint64_t pane_id{};
-      std::span<const CommandBlock> blocks{};
+      std::span<const CommandBlock> blocks;
     };
 
     template <>
@@ -144,7 +144,7 @@ export extern "C++" {
       std::uint32_t rows{};
       std::uint32_t size{};
       std::uint32_t offset{};
-      std::span<const Byte> bytes{};
+      std::span<const Byte> bytes;
 
       void validate() const;
     };
@@ -163,8 +163,8 @@ export extern "C++" {
       std::uint64_t from{};
       std::uint16_t cols{};
       std::uint16_t rows{};
-      ds::Option<TextMetadata> text_metadata{};
-      std::span<const Byte> cells{};
+      ds::Option<TextMetadata> text_metadata;
+      std::span<const Byte> cells;
 
       // A reader over the message's cells, which borrows them.
       [[nodiscard]] CellReader reader() const;

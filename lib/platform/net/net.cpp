@@ -6,10 +6,10 @@ import telar.sys.process;
 import telar.sys.socket;
 import telar.platform.error;
 import telar.base.ds;
-#if defined(__APPLE__)
+#ifdef __APPLE__
 import telar.sys.apple;
 #endif
-#if defined(__linux__)
+#ifdef __linux__
 import telar.sys.linux_api;
 #endif
 
@@ -32,7 +32,7 @@ namespace telar::runtime {
   }
 
   void suppressSocketSignals(int descriptor) {
-#if defined(__APPLE__)
+#ifdef __APPLE__
     const int enabled = 1;
     if (::setsockopt(descriptor, SOL_SOCKET, SO_NOSIGPIPE, &enabled, sizeof(enabled)) != 0) {
       throw SystemError{"Disable socket SIGPIPE"};
@@ -46,7 +46,7 @@ namespace telar::runtime {
   }
 
   ds::Option<PeerCredentials> peerCredentials(int socket) noexcept {
-#if defined(__APPLE__)
+#ifdef __APPLE__
     PeerCredentials credentials{};
     if (::getpeereid(socket, &credentials.user, &credentials.group) != 0) {
       return ds::none;
@@ -66,7 +66,7 @@ namespace telar::runtime {
   NetworkAddress NetworkAddress::ipv4(const in_addr& host, std::uint16_t port) noexcept {
     sockaddr_in address{};
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
     address.sin_len = sizeof(address);
 #endif
     address.sin_family = AF_INET;
@@ -78,7 +78,7 @@ namespace telar::runtime {
   NetworkAddress NetworkAddress::ipv6(const in6_addr& host, std::uint16_t port) noexcept {
     sockaddr_in6 address{};
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
     address.sin6_len = sizeof(address);
 #endif
     address.sin6_family = AF_INET6;
@@ -141,12 +141,12 @@ namespace telar::runtime {
     constexpr int idle_seconds = 60;
     constexpr int interval_seconds = 10;
     constexpr int probe_count = 6;
-#if defined(__APPLE__)
+#ifdef __APPLE__
     constexpr int idle_option = TCP_KEEPALIVE;
 #else
     constexpr int idle_option = TCP_KEEPIDLE;
 #endif
-    constexpr Option options[] = {{SOL_SOCKET, SO_KEEPALIVE, enabled}, {IPPROTO_TCP, idle_option, idle_seconds}, {IPPROTO_TCP, TCP_KEEPINTVL, interval_seconds}, {IPPROTO_TCP, TCP_KEEPCNT, probe_count}};
+    constexpr Option options[] = {{.level = SOL_SOCKET, .name = SO_KEEPALIVE, .value = enabled}, {.level = IPPROTO_TCP, .name = idle_option, .value = idle_seconds}, {.level = IPPROTO_TCP, .name = TCP_KEEPINTVL, .value = interval_seconds}, {.level = IPPROTO_TCP, .name = TCP_KEEPCNT, .value = probe_count}};
 
     for (const auto& option : options) {
       if (::setsockopt(socket.get(), option.level, option.name, &option.value, sizeof(option.value)) != 0) {
@@ -182,14 +182,14 @@ namespace telar::runtime {
 
   StreamResult SocketStream::result(ssize_t count, StreamReadiness waiting) noexcept {
     if (count > 0) {
-      return {StreamResult::State::data, static_cast<std::size_t>(count)};
+      return {.state = StreamResult::State::data, .bytes = static_cast<std::size_t>(count)};
     }
 
     if (count == 0) {
-      return {StreamResult::State::ended};
+      return {.state = StreamResult::State::ended};
     }
 
-    return socketWouldBlock(sys::lastError()) ? StreamResult{StreamResult::State::blocked, 0, waiting} : StreamResult{StreamResult::State::failed};
+    return socketWouldBlock(sys::lastError()) ? StreamResult{.state = StreamResult::State::blocked, .bytes = 0, .waiting = waiting} : StreamResult{.state = StreamResult::State::failed};
   }
 
 }

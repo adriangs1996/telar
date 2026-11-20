@@ -121,7 +121,7 @@ export {
 
     struct SystemCounters {
       Timing sample;
-      std::chrono::steady_clock::time_point captured{};
+      std::chrono::steady_clock::time_point captured;
 
       void write(Line& line) const;
     };

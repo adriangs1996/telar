@@ -147,7 +147,7 @@ namespace telar::runtime {
   void InputScanner::sequenceByte(std::uint8_t byte, bool pasted) noexcept {
     if (byte >= '0' && byte <= '9') {
       has_parameter_ = true;
-      const auto next = static_cast<std::uint32_t>(parameter_) * 10 + byte - '0';
+      const auto next = (static_cast<std::uint32_t>(parameter_) * 10) + byte - '0';
 
       parameter_ = static_cast<std::uint16_t>(next > std::numeric_limits<std::uint16_t>::max() ? std::numeric_limits<std::uint16_t>::max() : next);
       return;
@@ -405,7 +405,7 @@ namespace telar::runtime {
   }
 
   bool TextSearch::searchRow(GhosttyTerminal terminal, std::uint32_t row) {
-    auto reference = gridReference(terminal, GHOSTTY_POINT_TAG_SCREEN, {0, row});
+    auto reference = gridReference(terminal, GHOSTTY_POINT_TAG_SCREEN, {.x = 0, .y = row});
     ds::Array<std::uint16_t, maximum_columns> positions;
     ds::Array<PaneMatch, maximum_columns> found;
     std::size_t found_count = 0;

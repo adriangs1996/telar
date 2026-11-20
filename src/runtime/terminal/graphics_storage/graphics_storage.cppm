@@ -97,11 +97,11 @@ export {
       diagnostics::GraphicsStorageSnapshot storageMetrics(GhosttyTerminal terminal);
 #endif
 
-      std::span<const GraphicsImageView> images() const noexcept;
+      [[nodiscard]] std::span<const GraphicsImageView> images() const noexcept;
 
-      std::span<const GraphicsPlacement> placements() const noexcept;
+      [[nodiscard]] std::span<const GraphicsPlacement> placements() const noexcept;
 
-      std::uint64_t revision() const noexcept;
+      [[nodiscard]] std::uint64_t revision() const noexcept;
 
       std::size_t takeTrimmedImages() noexcept;
 

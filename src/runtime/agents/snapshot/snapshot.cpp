@@ -675,7 +675,7 @@ namespace telar::runtime {
       const auto line = input.substr(consumed, newline - consumed);
 
       consumed = newline + 1;
-      if (line.size() > line_capacity || !line.starts_with("{\"type\":\"custom-title\"")) {
+      if (line.size() > line_capacity || !line.starts_with(R"({"type":"custom-title")")) {
         continue;
       }
 

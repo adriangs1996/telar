@@ -27,11 +27,11 @@ export {
       ProxySecret(const ProxySecret&) = default;
       ProxySecret& operator=(const ProxySecret&) = default;
 
-      bool matches(const ProxySecret& other) const noexcept;
+      [[nodiscard]] bool matches(const ProxySecret& other) const noexcept;
 
-      tbc::val_a<ds::Option<std::string_view>> formatHexadecimal(tbc::val_a<std::span<char>> destination) const noexcept;
+      [[nodiscard]] tbc::val_a<ds::Option<std::string_view>> formatHexadecimal(tbc::val_a<std::span<char>> destination) const noexcept;
 
-      tbc::val_a<ds::Option<std::string_view>> formatUrl(tbc::val_a<std::span<char>> destination, std::uint16_t port) const noexcept;
+      [[nodiscard]] tbc::val_a<ds::Option<std::string_view>> formatUrl(tbc::val_a<std::span<char>> destination, std::uint16_t port) const noexcept;
 
     private:
       ProxySecret() noexcept;
@@ -83,7 +83,7 @@ export {
 
       Reason reason;
 
-      tbc::val_static<std::string_view> response() const noexcept;
+      [[nodiscard]] tbc::val_static<std::string_view> response() const noexcept;
     };
 
     using ProxyDecision = std::variant<ProxyAdmission, ProxyRejection>;

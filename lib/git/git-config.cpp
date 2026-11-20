@@ -22,7 +22,7 @@ namespace telar::git {
   }
 
   bool parseConfigEntries(std::string_view text, ds::String<Memory>& scratch, void* target, bool (*visit)(void*, const ConfigEntry&)) {
-    scratch.resize(2 * text.size() + 2);
+    scratch.resize((2 * text.size()) + 2);
     char* const subsection_buffer = scratch.dataMut();
     char* const value_buffer = subsection_buffer + text.size() + 1;
 
@@ -263,7 +263,7 @@ namespace telar::git {
         value = std::string_view{value_buffer, length};
       }
 
-      if (!visit(target, ConfigEntry{section, subsection, key, value})) {
+      if (!visit(target, ConfigEntry{.section = section, .subsection = subsection, .key = key, .value = value})) {
         return true;
       }
 
@@ -278,13 +278,13 @@ namespace telar::git {
       return true;
     }
 
-    for (const auto yes : {"true", "yes", "on", "1"}) {
+    for (const auto* const yes : {"true", "yes", "on", "1"}) {
       if (asciiEqualIgnoreCase(*value, yes)) {
         return true;
       }
     }
 
-    for (const auto no : {"false", "no", "off", "0", ""}) {
+    for (const auto* const no : {"false", "no", "off", "0", ""}) {
       if (asciiEqualIgnoreCase(*value, no)) {
         return false;
       }

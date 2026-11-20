@@ -177,7 +177,7 @@ namespace telar::runtime {
         direction_(direction) {}
 
   template <Allocator Memory>
-  typename Http2Observer<Memory>::Statistics Http2DirectionObserver<Memory>::finish() noexcept {
+  Http2Observer<Memory>::Statistics Http2DirectionObserver<Memory>::finish() noexcept {
     if (direction_ == Http2Direction::request && preface_offset_ != client_preface.size()) {
       observer_.fail();
     }

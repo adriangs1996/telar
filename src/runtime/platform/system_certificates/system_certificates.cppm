@@ -6,7 +6,7 @@ export module telar.runtime.platform.system_certificates;
 import std;
 import telar.base.ds;
 
-#if defined(__linux__)
+#ifdef __linux__
 // Interface: platform/linux/system_certificates.cppm
 export {
   namespace telar::runtime {
@@ -49,7 +49,7 @@ export {
 
 #endif
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
 // Interface: platform/macos/system_certificates.cppm
 export {
   namespace telar::runtime {
@@ -64,7 +64,7 @@ export {
           (*static_cast<Target*>(target))(bytes);
         };
 
-        for (const auto path : keychains) {
+        for (const auto* const path : keychains) {
           readKeychain(path, const_cast<std::remove_const_t<Target>*>(std::addressof(consume)), sink);
         }
       }
@@ -86,7 +86,7 @@ export {
 
 // Interface: platform/system_certificates.cppm
 export {
-#if defined(__APPLE__)
+#ifdef __APPLE__
 #else
 #endif
 }

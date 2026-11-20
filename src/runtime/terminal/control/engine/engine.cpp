@@ -178,7 +178,7 @@ namespace telar::runtime::control {
     if (sequence.kind == Kind::osc) {
       const auto operation = oscOperation(sequence.body().substr(0, sequence.body().find(';')));
       if (operation == 4 || operation == 5) {
-        return colors_.palette({state_, reply_, policy}, sequence, enabled_, responses_);
+        return colors_.palette({.state = state_, .reply = reply_, .policy = policy}, sequence, enabled_, responses_);
       }
     }
 
@@ -323,7 +323,7 @@ namespace telar::runtime::control {
     try {
       ds::Vec<std::uint8_t, ConcurrentMemory> bytes{document_.memory()};
 
-      bytes.resize(encoded.size() / 4 * 3 + 3);
+      bytes.resize((encoded.size() / 4 * 3) + 3);
       const auto size = base64::decode<base64::Padding::optional>(encoded, bytes.viewMut());
       if (!size || *size > ::telar::render::max_document_bytes) {
         return;
@@ -581,7 +581,7 @@ namespace telar::runtime::control {
   void Engine::privateModes(const Parameters& parameters) {
     for (std::size_t index = 0; index < parameters.count; ++index) {
       const auto mode = parameters.values[index];
-      const auto owned = std::find(desktop_modes.begin(), desktop_modes.end(), mode);
+      const auto* const owned = std::find(desktop_modes.begin(), desktop_modes.end(), mode);
       if (owned != desktop_modes.end()) {
         const auto slot = static_cast<std::size_t>(owned - desktop_modes.begin());
 
@@ -906,7 +906,7 @@ namespace telar::runtime::control {
       const unsigned style = shape == GHOSTTY_RENDER_STATE_CURSOR_VISUAL_STYLE_BAR ? 5 : shape == GHOSTTY_RENDER_STATE_CURSOR_VISUAL_STYLE_UNDERLINE ? 3
                                                                                                                                                      : 1;
 
-      reply_.number(style + !state_.mode(cursor_blink_mode));
+      reply_.number(style + static_cast<unsigned int>(!state_.mode(cursor_blink_mode)));
       reply_.append(" q");
     } else if (request == "r" || horizontal) {
       const auto margins = state_.margins();
@@ -951,7 +951,7 @@ namespace telar::runtime::control {
     if (color.tag == GHOSTTY_STYLE_COLOR_PALETTE) {
       const auto index = color.value.palette;
       if (index < 16) {
-        reply_.number((background ? (index < 8 ? 40 : 100) : (index < 8 ? 30 : 90)) + index % 8);
+        reply_.number((background ? (index < 8 ? 40 : 100) : (index < 8 ? 30 : 90)) + (index % 8));
       } else {
         reply_.append(background ? "48:5:" : "38:5:");
         reply_.number(index);
@@ -978,7 +978,7 @@ namespace telar::runtime::control {
       return;
     }
 
-    if (colors_.handle({state_, reply_, policy}, sequence, enabled_)) {
+    if (colors_.handle({.state = state_, .reply = reply_, .policy = policy}, sequence, enabled_)) {
       return;
     }
 

@@ -5,10 +5,10 @@ import telar.sys.posix;
 import telar.tbc;
 import telar.platform.error;
 import telar.base.ds;
-#if defined(__linux__)
+#ifdef __linux__
 import telar.sys.linux_api;
 #endif
-#if defined(__APPLE__)
+#ifdef __APPLE__
 import telar.sys.apple;
 #endif
 
@@ -333,7 +333,7 @@ namespace telar::runtime {
   template ds::String<RecyclingAllocator<Memory>> readFile<RecyclingAllocator<Memory>>(RecyclingAllocator<Memory>& memory, const char* path, std::size_t maximum_bytes);
 
   int renameAt(int source_directory, const char* source, int destination_directory, const char* destination, RenameMode mode) noexcept {
-#if defined(__APPLE__)
+#ifdef __APPLE__
     const auto flags = mode == RenameMode::create_only ? RENAME_EXCL : 0;
 
     return ::renameatx_np(source_directory, source, destination_directory, destination, flags);

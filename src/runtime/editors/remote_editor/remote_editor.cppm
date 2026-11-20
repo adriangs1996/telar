@@ -49,7 +49,7 @@ export {
       void discoverNeovim(Session& session);
       void discoverVim(Session& session);
       // A candidate of the session's context, region `a`.
-      tbc::val_a<const EditorCandidate*> candidate(const Session& session, pid_t pid) const noexcept;
+      [[nodiscard]] tbc::val_a<const EditorCandidate*> candidate(const Session& session, pid_t pid) const noexcept;
       void quote(std::string_view value, bool lisp);
       void number(std::uint32_t value);
       void vimEndpoint(Session& session, std::string_view endpoint);

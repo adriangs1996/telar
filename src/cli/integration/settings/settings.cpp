@@ -28,7 +28,7 @@ namespace telar::runtime::cli::integration {
   }
 
   template <Allocator Memory>
-  tbc::val_a<ds::String<Memory>> joinPath(tbc::mut_a<Memory> memory, std::string_view directory, std::string_view name) {
+  static tbc::val_a<ds::String<Memory>> joinPath(tbc::mut_a<Memory> memory, std::string_view directory, std::string_view name) {
     ds::String<Memory> path{memory, directory};
 
     path.push('/');
@@ -59,7 +59,7 @@ namespace telar::runtime::cli::integration {
   }
 
   template <Allocator Memory>
-  void createParents(const ds::String<Memory>& path) {
+  static void createParents(const ds::String<Memory>& path) {
     ds::Array<char, PATH_MAX> directory;
     if (path.size() >= directory.size() || path.view().contains('\0')) {
       throw std::length_error{"Invalid integration file path"};
@@ -80,7 +80,7 @@ namespace telar::runtime::cli::integration {
   }
 
   template <Allocator Memory>
-  void write(Memory& memory, const ds::String<Memory>& path, std::string_view source, bool preserve_settings) {
+  static void write(Memory& memory, const ds::String<Memory>& path, std::string_view source, bool preserve_settings) {
     ds::String<Memory> target{memory, path};
     ds::Option<mode_t> permissions;
 
@@ -121,7 +121,7 @@ namespace telar::runtime::cli::integration {
     foreign,
   };
 
-  std::string_view ownershipName(Ownership ownership) noexcept {
+  static std::string_view ownershipName(Ownership ownership) noexcept {
     switch (ownership) {
     case Ownership::absent:
       return "absent";
@@ -158,7 +158,7 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
   }};
 
   template <Allocator Memory>
-  tbc::val_a<ds::String<Memory>> skillPath(tbc::mut_a<Memory> memory, std::string_view root, const Skill& skill) {
+  static tbc::val_a<ds::String<Memory>> skillPath(tbc::mut_a<Memory> memory, std::string_view root, const Skill& skill) {
     auto path = joinPath(memory, root, "skills");
 
     path = joinPath(memory, path, skill.name);
@@ -166,7 +166,7 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
   }
 
   template <Allocator Memory>
-  Ownership skillOwnership(const ds::String<Memory>& path, const Skill& skill) noexcept {
+  static Ownership skillOwnership(const ds::String<Memory>& path, const Skill& skill) noexcept {
     struct stat state{};
     if (::stat(path.data(), &state) != 0) {
       return sys::lastError() == ENOENT ? Ownership::absent : Ownership::foreign;
@@ -186,7 +186,7 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
   }
 
   template <Allocator Memory>
-  void installSkills(Memory& memory, std::string_view root) {
+  static void installSkills(Memory& memory, std::string_view root) {
     for (const auto& skill : skills) {
       const auto path = skillPath(memory, root, skill);
       if (skillOwnership(path, skill) == Ownership::foreign) {
@@ -205,7 +205,7 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
   }
 
   template <Allocator Memory>
-  void reportSkills(Memory& memory, std::string_view root) {
+  static void reportSkills(Memory& memory, std::string_view root) {
     for (const auto& skill : skills) {
       const auto path = skillPath(memory, root, skill);
 
@@ -214,7 +214,7 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
   }
 
   template <Allocator Memory>
-  void removeSkills(Memory& memory, std::string_view root) noexcept {
+  static void removeSkills(Memory& memory, std::string_view root) noexcept {
     for (const auto& skill : skills) {
       try {
         const auto path = skillPath(memory, root, skill);
@@ -233,11 +233,11 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
 
     static Extension describe(AgentProvider provider) {
       if (provider == AgentProvider::pi) {
-        return {"extension", "// telar-integration: pi", assets::pi_extension};
+        return {.noun = "extension", .marker = "// telar-integration: pi", .source = assets::pi_extension};
       }
 
       if (provider == AgentProvider::opencode) {
-        return {"plugin", "// telar-integration: opencode", assets::opencode_extension};
+        return {.noun = "plugin", .marker = "// telar-integration: opencode", .source = assets::opencode_extension};
       }
 
       throw std::invalid_argument{"Provider does not use an integration extension"};
@@ -286,8 +286,8 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
     }
 
     if (existing && !owned && *existing != rendered) {
-      const auto action = options.action == IntegrationAction::install ? "exists and is not telar's" : "is not telar's";
-      const auto resolution = options.action == IntegrationAction::install ? "move it first" : "left untouched";
+      const auto* const action = options.action == IntegrationAction::install ? "exists and is not telar's" : "is not telar's";
+      const auto* const resolution = options.action == IntegrationAction::install ? "move it first" : "left untouched";
 
       std::fprintf(stderr, "telar integration: %s %s %s; %s\n", path.data(), action, extension.noun.data(), resolution);
       return 1;
@@ -323,7 +323,7 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
   constexpr std::size_t maximum_settings_bytes = 4 * 1024 * 1024;
 
   template <Allocator Memory, EnvironmentLookup Environment>
-  tbc::val_a<ds::Option<ds::String<Memory>>> legacySettings(tbc::mut_a<Memory> memory, Provider provider, const Environment& environment) {
+  static tbc::val_a<ds::Option<ds::String<Memory>>> legacySettings(tbc::mut_a<Memory> memory, Provider provider, const Environment& environment) {
     if (provider.environment == nullptr || environment.lookup(provider.environment).empty() || environment.lookup("HOME").empty()) {
       return ds::none;
     }
@@ -344,7 +344,7 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
     return legacy;
   }
 
-  bool reportLegacy(Memory& memory, const ds::String<Memory>& path, const HookSettings& hooks, Provider provider) {
+  static bool reportLegacy(Memory& memory, const ds::String<Memory>& path, const HookSettings& hooks, Provider provider) {
     const auto source = read(memory, path, maximum_settings_bytes);
     if (!source) {
       return false;
@@ -455,7 +455,7 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
 
   // $XDG_DATA_HOME/$NVIM_APPNAME/site, as Neovim's stdpath("data") .. "/site" names it.
   template <EnvironmentLookup Environment>
-  tbc::val_a<ds::String<Memory>> neovimSite(tbc::mut_a<Memory> memory, const Environment& environment) {
+  static tbc::val_a<ds::String<Memory>> neovimSite(tbc::mut_a<Memory> memory, const Environment& environment) {
     const auto application = environment.lookup("NVIM_APPNAME");
     if (application.starts_with('/') || application.contains("..")) {
       throw std::invalid_argument{"InvalidNvimAppName"};
@@ -477,7 +477,7 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
 
   // The telar-owned files under the package's directories that the package no longer has.
   template <Allocator Memory>
-  void removeStaleNeovimFiles(Memory& memory, std::string_view site) noexcept {
+  static void removeStaleNeovimFiles(Memory& memory, std::string_view site) noexcept {
     ds::Array<std::string_view, std::size(assets::neovim_files)> directories{};
     std::size_t count = 0;
 
@@ -646,7 +646,7 @@ namespace telar::runtime::cli::integration {
     worktree_command_.append(executable);
     worktree_command_.append("'}; exec \"$telar_hook_bin\"");
     worktree_command_.append(marker_);
-    command_.assign("[ -n \"$TELAR_PANE_ID\" ] && [ -n \"$TELAR_PANE_GENERATION\" ] || exit 0; ");
+    command_.assign(R"([ -n "$TELAR_PANE_ID" ] && [ -n "$TELAR_PANE_GENERATION" ] || exit 0; )");
     command_.append(worktree_command_);
   }
 
@@ -670,7 +670,7 @@ namespace telar::runtime::cli::integration {
       changed = true;
     }
 
-    if (const auto* hooks = settings.find("hooks"); hooks && hooks->kind() != JsonKind::object) {
+    if (const auto* hooks = settings.find("hooks"); (hooks != nullptr) && hooks->kind() != JsonKind::object) {
       throw CommandError{"SettingsFieldNotAnObject"};
     }
 
@@ -738,7 +738,7 @@ namespace telar::runtime::cli::integration {
     bool changed = false;
 
     for (const auto event : events) {
-      if (const auto* entries = hooks.find(event); entries && entries->kind() != JsonKind::array) {
+      if (const auto* entries = hooks.find(event); (entries != nullptr) && entries->kind() != JsonKind::array) {
         throw CommandError{"SettingsFieldNotAnArray"};
       }
 

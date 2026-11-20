@@ -28,11 +28,11 @@ export {
 
       void read(int descriptor);
 
-      bool limited() const noexcept;
+      [[nodiscard]] bool limited() const noexcept;
 
-      std::uint64_t received() const noexcept;
+      [[nodiscard]] std::uint64_t received() const noexcept;
 
-      std::string_view text() const noexcept;
+      [[nodiscard]] std::string_view text() const noexcept;
 
     private:
       void keepWholeMembers();

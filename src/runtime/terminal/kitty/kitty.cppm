@@ -30,7 +30,7 @@ export namespace telar::runtime {
 
     ds::Option<KittyControlField> next() noexcept;
 
-    constexpr bool valid() const noexcept {
+    [[nodiscard]] constexpr bool valid() const noexcept {
       return valid_;
     }
 
@@ -66,7 +66,7 @@ export namespace telar::runtime {
   }
 
   constexpr std::uint32_t scaledDimension(std::uint32_t value, std::uint32_t numerator, std::uint32_t denominator) noexcept {
-    return denominator == 0 ? 0 : saturatedDimension((static_cast<std::uint64_t>(value) * numerator + denominator / 2) / denominator);
+    return denominator == 0 ? 0 : saturatedDimension(((static_cast<std::uint64_t>(value) * numerator) + (denominator / 2)) / denominator);
   }
 
   DisplayCells displayCells(const ImageDisplayRequest& request) noexcept;
@@ -78,16 +78,16 @@ export namespace telar::runtime {
       ended,
     };
 
-    constexpr bool ground() const noexcept {
+    [[nodiscard]] constexpr bool ground() const noexcept {
       return state_ == State::ground;
     }
 
-    bool canSkip(std::span<const std::uint8_t> bytes) const noexcept;
+    [[nodiscard]] bool canSkip(std::span<const std::uint8_t> bytes) const noexcept;
 
     // One complete ASCII CSI leaves graphics framing unchanged at exact ground.
-    bool canSkipCsi(std::span<const std::uint8_t> bytes) const noexcept;
+    [[nodiscard]] bool canSkipCsi(std::span<const std::uint8_t> bytes) const noexcept;
 
-    constexpr bool inside() const noexcept {
+    [[nodiscard]] constexpr bool inside() const noexcept {
       return state_ == State::kitty;
     }
 
@@ -132,13 +132,13 @@ export namespace telar::runtime {
 
   class KittyCommandScanner {
   public:
-    constexpr bool ground() const noexcept {
+    [[nodiscard]] constexpr bool ground() const noexcept {
       return framing_.ground();
     }
 
-    bool canSkip(std::span<const std::uint8_t> bytes) const noexcept;
+    [[nodiscard]] bool canSkip(std::span<const std::uint8_t> bytes) const noexcept;
 
-    bool canSkipCsi(std::span<const std::uint8_t> bytes) const noexcept;
+    [[nodiscard]] bool canSkipCsi(std::span<const std::uint8_t> bytes) const noexcept;
 
     ds::Option<KittyCommandView> next(std::span<const std::uint8_t> bytes) noexcept;
 
@@ -179,7 +179,7 @@ export namespace telar::runtime {
       bool stays = false;
       bool more = false;
 
-      constexpr bool transmits() const noexcept {
+      [[nodiscard]] constexpr bool transmits() const noexcept {
         return action == 't' || action == 'T';
       }
     };
@@ -202,7 +202,7 @@ export namespace telar::runtime {
   // the commands to the terminal. One call per write runs the scan and the placements together.
   class GraphicsCursor {
   public:
-    constexpr bool ground() const noexcept {
+    [[nodiscard]] constexpr bool ground() const noexcept {
       return scanner_.ground();
     }
 
@@ -227,7 +227,7 @@ export namespace telar::runtime {
 
     static ds::Option<GraphicsChildFile> openPath(const char* decoded) noexcept;
 
-    bool read(std::span<std::uint8_t> bytes, std::uint64_t offset) const noexcept;
+    [[nodiscard]] bool read(std::span<std::uint8_t> bytes, std::uint64_t offset) const noexcept;
   };
 
   // Mappings that stand in for placeholder allocations, shared by the threads that decode and draw

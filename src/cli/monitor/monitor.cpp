@@ -116,16 +116,16 @@ namespace telar::runtime::cli::monitor {
 
     // The process as a JSON object; `open` leaves the object open for more members.
     void appendProcessJson(Text& output, const MonitorProcess& process, bool open = false) {
-      ds::formatTo(output, "{{\"pid\":{},\"started\":\"", process.instance.pid);
+      ds::formatTo(output, R"({{"pid":{},"started":")", process.instance.pid);
       appendStarted(output, process.instance);
-      ds::formatTo(output, "\",\"parent\":{},\"user\":{},\"user_id\":{},\"name\":{},\"program\":{},\"command\":{},\"state\":{},\"measured\":{},", process.parent, quoteJson(process.user), process.user_id, quoteJson(process.name), quoteJson(program(process)), quoteJson(process.command), quoteJson(nameOf(process.state, state_names)), jsonBoolean(process.measured));
+      ds::formatTo(output, R"(","parent":{},"user":{},"user_id":{},"name":{},"program":{},"command":{},"state":{},"measured":{},)", process.parent, quoteJson(process.user), process.user_id, quoteJson(process.name), quoteJson(program(process)), quoteJson(process.command), quoteJson(nameOf(process.state, state_names)), jsonBoolean(process.measured));
       if (process.measured) {
-        ds::formatTo(output, "\"cpu_permille\":{},\"resident_bytes\":{},\"threads\":{},", process.cpu_permille, process.resident_bytes, process.threads);
+        ds::formatTo(output, R"("cpu_permille":{},"resident_bytes":{},"threads":{},)", process.cpu_permille, process.resident_bytes, process.threads);
       } else {
-        output.append("\"cpu_permille\":null,\"resident_bytes\":null,\"threads\":null,");
+        output.append(R"("cpu_permille":null,"resident_bytes":null,"threads":null,)");
       }
 
-      ds::formatTo(output, "\"nice\":{},\"pane_id\":{},\"agent\":", process.nice, orNull(process.pane_id == 0 ? ds::Option<std::uint64_t>{} : ds::Option{process.pane_id}));
+      ds::formatTo(output, R"("nice":{},"pane_id":{},"agent":)", process.nice, orNull(process.pane_id == 0 ? ds::Option<std::uint64_t>{} : ds::Option{process.pane_id}));
       if (process.agent == AgentProvider::unknown) {
         output.append("null");
       } else {
@@ -139,7 +139,7 @@ namespace telar::runtime::cli::monitor {
     }
 
     void appendListJson(Text& output, const MonitorSnapshot& snapshot) {
-      ds::formatTo(output, "{{\"matched\":{},\"processes\":[", snapshot.matched);
+      ds::formatTo(output, R"({{"matched":{},"processes":[)", snapshot.matched);
       for (const auto& process : snapshot.processes) {
         if (&process != snapshot.processes.data()) {
           output.push(',');
@@ -195,7 +195,7 @@ namespace telar::runtime::cli::monitor {
 
     void appendDetailJson(Text& output, const MonitorDetail& detail) {
       appendProcessJson(output, detail.process, true);
-      ds::formatTo(output, ",\"arguments\":{},\"directory\":{},\"ports\":[", quoteJson(detail.arguments), quoteJson(detail.directory));
+      ds::formatTo(output, R"(,"arguments":{},"directory":{},"ports":[)", quoteJson(detail.arguments), quoteJson(detail.directory));
       for (std::size_t index = 0; index < detail.ports.size(); ++index) {
         ds::formatTo(output, "{}{}", index == 0 ? "" : ",", detail.ports[index]);
       }
@@ -243,7 +243,7 @@ namespace telar::runtime::cli::monitor {
 
     void appendHost(Text& output, const MonitorSnapshot& snapshot, bool json) {
       if (json) {
-        ds::formatTo(output, "{{\"cpu_permille\":{},\"cores\":[", snapshot.cpu_permille);
+        ds::formatTo(output, R"({{"cpu_permille":{},"cores":[)", snapshot.cpu_permille);
         for (std::size_t index = 0; index < snapshot.cores.size(); ++index) {
           ds::formatTo(output, "{}{}", index == 0 ? "" : ",", snapshot.cores[index]);
         }
@@ -277,9 +277,9 @@ namespace telar::runtime::cli::monitor {
 
     void appendDisks(Text& output, const MonitorSnapshot& snapshot, bool json) {
       if (json) {
-        ds::formatTo(output, "{{\"read_per_second\":{},\"written_per_second\":{},\"disks\":[", snapshot.disk_read_per_second, snapshot.disk_written_per_second);
+        ds::formatTo(output, R"({{"read_per_second":{},"written_per_second":{},"disks":[)", snapshot.disk_read_per_second, snapshot.disk_written_per_second);
         for (const auto& disk : snapshot.disks) {
-          ds::formatTo(output, "{}{{\"path\":{},\"device\":{},\"type\":{},\"total_bytes\":{},\"used_bytes\":{},\"available_bytes\":{}}}", &disk == snapshot.disks.data() ? "" : ",", quoteJson(disk.path), quoteJson(disk.device), quoteJson(disk.type), disk.total_bytes, disk.used_bytes, disk.available_bytes);
+          ds::formatTo(output, R"({}{{"path":{},"device":{},"type":{},"total_bytes":{},"used_bytes":{},"available_bytes":{}}})", &disk == snapshot.disks.data() ? "" : ",", quoteJson(disk.path), quoteJson(disk.device), quoteJson(disk.type), disk.total_bytes, disk.used_bytes, disk.available_bytes);
         }
 
         output.append("]}\n");
@@ -307,7 +307,7 @@ namespace telar::runtime::cli::monitor {
       if (json) {
         output.append("{\"interfaces\":[");
         for (const auto& interface : snapshot.interfaces) {
-          ds::formatTo(output, "{}{{\"name\":{},\"received_per_second\":{},\"sent_per_second\":{},\"received_bytes\":{},\"sent_bytes\":{}}}", &interface == snapshot.interfaces.data() ? "" : ",", quoteJson(interface.name), interface.received_per_second, interface.sent_per_second, interface.received_bytes, interface.sent_bytes);
+          ds::formatTo(output, R"({}{{"name":{},"received_per_second":{},"sent_per_second":{},"received_bytes":{},"sent_bytes":{}}})", &interface == snapshot.interfaces.data() ? "" : ",", quoteJson(interface.name), interface.received_per_second, interface.sent_per_second, interface.received_bytes, interface.sent_bytes);
         }
 
         output.append("]}\n");
@@ -370,7 +370,7 @@ namespace telar::runtime::cli::monitor {
 
     // The system tool that shows `tool` of a process here, and its arguments.
     tbc::val_a<ds::Array<std::string_view, 6>> reviewCommand(ReviewTool tool, tbc::val_a<std::string_view> pid, tbc::val_a<std::string_view> predicate) noexcept {
-#if defined(__APPLE__)
+#ifdef __APPLE__
       switch (tool) {
       case ReviewTool::stack:
         return {"sample", pid};
@@ -402,7 +402,7 @@ namespace telar::runtime::cli::monitor {
       Text predicate{memory};
 
       ds::formatTo(pid, "{}", options.process.pid);
-#if defined(__APPLE__)
+#ifdef __APPLE__
       ds::formatTo(predicate, "processID == {}", options.process.pid);
 #else
       ds::formatTo(predicate, "_PID={}", options.process.pid);

@@ -172,7 +172,7 @@ namespace telar::runtime::cli {
       }
     }
 
-    if (!socket || (!cleanup && count == 0)) {
+    if ((socket == nullptr) || (!cleanup && count == 0)) {
       throw std::invalid_argument{"Expected traffic redirect --socket PATH --target IP:PORT [--direction outbound|inbound|both] [--process PID[@SECONDS.MICROSECONDS]] [--dry-run]"};
     }
 

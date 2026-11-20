@@ -122,7 +122,7 @@ namespace telar::runtime {
         }
 
         if ((stream_.data_type & block_boundary) != 0 && (stream_.data_type & final_block) == 0) {
-          const auto bit_offset = stream_.total_in * bits_per_byte - (stream_.data_type & unused_bits_mask);
+          const auto bit_offset = (stream_.total_in * bits_per_byte) - (stream_.data_type & unused_bits_mask);
 
           kind = blockKind(input, bit_offset);
         }
@@ -153,7 +153,7 @@ namespace telar::runtime {
   ZstdBlock ZstdBlock::parse(std::span<const std::uint8_t, 3> bytes) noexcept {
     const auto value = bytes[0] | (bytes[1] << 8) | (bytes[2] << 16);
 
-    return {static_cast<Kind>((value >> 1) & 3), static_cast<std::size_t>(value >> 3)};
+    return {.kind = static_cast<Kind>((value >> 1) & 3), .size = static_cast<std::size_t>(value >> 3)};
   }
 
   auto ZstdBlock::literals(std::span<const std::uint8_t> bytes) noexcept -> ds::Option<Literals> {
@@ -196,7 +196,7 @@ namespace telar::runtime {
       return ds::none;
     }
 
-    return Literals{regenerated_size, bytes[header_size + payload_size] != 0};
+    return Literals{.regenerated_size = regenerated_size, .has_sequences = bytes[header_size + payload_size] != 0};
   }
 
   ds::Option<std::uint64_t> ZstdBlock::read(std::span<const std::uint8_t> bytes, std::size_t count) noexcept {
@@ -243,7 +243,7 @@ namespace telar::runtime {
         return ds::none;
       }
 
-      if (ZSTD_isError(ZSTD_decompressBegin(state_))) {
+      if (ZSTD_isError(ZSTD_decompressBegin(state_)) != 0u) {
         return ds::none;
       }
 
@@ -315,7 +315,7 @@ namespace telar::runtime {
         }
 
         const auto decoded = ZSTD_decompressContinue(state_, output.data() + produced, output.size() - produced, input.data(), needed);
-        if (ZSTD_isError(decoded)) {
+        if (ZSTD_isError(decoded) != 0u) {
           return ds::none;
         }
 
@@ -587,7 +587,7 @@ namespace telar::runtime {
         truncated_.fetch_add(1, std::memory_order_relaxed);
       }
 
-      countTruncation({half.truncation.part && !previous.part, half.truncation.exchange && !previous.exchange, half.truncation.total && !previous.total});
+      countTruncation({.part = half.truncation.part && !previous.part, .exchange = half.truncation.exchange && !previous.exchange, .total = half.truncation.total && !previous.total});
     } catch (...) {
       decode_failed_.fetch_add(1, std::memory_order_relaxed);
     }

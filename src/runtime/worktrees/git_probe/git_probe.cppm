@@ -50,7 +50,7 @@ export {
       std::uint64_t pane = 0;
       std::uint64_t generation = 0;
       std::uint64_t cwd_revision = 0;
-      FixedText<4096> cwd{};
+      FixedText<4096> cwd;
     };
 
     struct WorktreeDetectionResult {
@@ -58,7 +58,7 @@ export {
       std::uint64_t generation = 0;
       std::uint64_t cwd_revision = 0;
       std::size_t root_length = 0;
-      FixedText<200> branch{};
+      FixedText<200> branch;
     };
 
     template <typename Probe>
@@ -86,7 +86,7 @@ export {
     struct WorktreeProbeRequest {
       std::uint64_t identity = 0;
       FixedText<4096> path;
-      FixedText<200> base{};
+      FixedText<200> base;
     };
 
     enum class GitProbeTimeout {
@@ -100,8 +100,8 @@ export {
       bool present = false;
       bool measured = false;
       bool dirty = false;
-      FixedText<200> branch{};
-      FixedText<200> base{};
+      FixedText<200> branch;
+      FixedText<200> base;
       std::uint32_t added = 0;
       std::uint32_t removed = 0;
       std::uint32_t files = 0;

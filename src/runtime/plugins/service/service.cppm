@@ -38,11 +38,11 @@ export {
     };
 
     struct IgnoreEvents {
-      constexpr int descriptor() const noexcept {
+      [[nodiscard]] constexpr int descriptor() const noexcept {
         return -1;
       }
 
-      constexpr TapMetrics metrics() const noexcept {
+      [[nodiscard]] constexpr TapMetrics metrics() const noexcept {
         return {};
       }
 

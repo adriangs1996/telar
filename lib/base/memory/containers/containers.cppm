@@ -47,7 +47,7 @@ export {
         std::swap(consumed_, other.consumed_);
       }
 
-      inline std::span<const std::uint8_t> readable() const noexcept {
+      [[nodiscard]] inline std::span<const std::uint8_t> readable() const noexcept {
         return {bytes_ == nullptr ? nullptr : bytes_ + consumed_, size()};
       }
 
@@ -146,11 +146,11 @@ export {
         capacity_ = capacity;
       }
 
-      inline std::size_t size() const noexcept {
+      [[nodiscard]] inline std::size_t size() const noexcept {
         return written_ - consumed_;
       }
 
-      inline bool empty() const noexcept {
+      [[nodiscard]] inline bool empty() const noexcept {
         return size() == 0;
       }
 
@@ -192,7 +192,7 @@ export {
       ByteStorage& operator=(const ByteStorage&) = delete;
 
       std::span<std::uint8_t> bytesMut() noexcept;
-      std::span<const std::uint8_t> bytes() const noexcept;
+      [[nodiscard]] std::span<const std::uint8_t> bytes() const noexcept;
 
     private:
       tbc::mut_a<Memory> memory_;
@@ -375,7 +375,7 @@ export {
       }
 
       inline TransferQueueMetrics metrics() const noexcept {
-        return {queued_.load(std::memory_order_relaxed), high_water_.load(std::memory_order_relaxed), dropped_.load(std::memory_order_relaxed)};
+        return {.queued = queued_.load(std::memory_order_relaxed), .high_water = high_water_.load(std::memory_order_relaxed), .dropped = dropped_.load(std::memory_order_relaxed)};
       }
 
     private:
@@ -432,9 +432,9 @@ export {
 
       void append(std::span<const Byte> bytes) noexcept;
       // The bytes copied into the caller's destination, not a view of the stream.
-      tbc::val_a<std::span<const Byte>> read(std::uint64_t offset, tbc::val_a<std::span<Byte>> destination) const noexcept;
-      std::uint64_t total() const noexcept;
-      std::uint64_t retainedOffset() const noexcept;
+      [[nodiscard]] tbc::val_a<std::span<const Byte>> read(std::uint64_t offset, tbc::val_a<std::span<Byte>> destination) const noexcept;
+      [[nodiscard]] std::uint64_t total() const noexcept;
+      [[nodiscard]] std::uint64_t retainedOffset() const noexcept;
 
     private:
       Memory& memory_;
@@ -475,10 +475,10 @@ export {
         words_.atMut(index / word_bits) &= ~(std::uint64_t{1} << (index % word_bits));
       }
 
-      inline ds::Option<std::size_t> firstUnused() const noexcept {
+      [[nodiscard]] inline ds::Option<std::size_t> firstUnused() const noexcept {
         for (std::size_t word = 0; word < words_.size(); ++word) {
           if (const auto available = ~words_[word]; available != 0) {
-            const auto index = word * word_bits + std::countr_zero(available);
+            const auto index = (word * word_bits) + std::countr_zero(available);
 
             return index < Capacity ? ds::Option{index} : ds::none;
           }
@@ -496,7 +496,7 @@ export {
             const auto bit = std::countr_zero(remaining);
 
             remaining &= remaining - 1;
-            visit(word * word_bits + bit);
+            visit((word * word_bits) + bit);
           }
         }
       }

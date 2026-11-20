@@ -240,7 +240,7 @@ namespace telar::runtime {
   PtyResponseQueue::Snapshot PtyResponseQueue::snapshot() const noexcept {
     const std::lock_guard lock{mutex_};
 
-    return {count_, byte_count_, dropped_};
+    return {.messages = count_, .bytes = byte_count_, .dropped = dropped_};
   }
 
 }

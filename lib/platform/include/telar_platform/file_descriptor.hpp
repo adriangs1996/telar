@@ -28,7 +28,7 @@ namespace telar::runtime {
       return *this;
     }
 
-    int get() const noexcept {
+    [[nodiscard]] int get() const noexcept {
       return descriptor_;
     }
 

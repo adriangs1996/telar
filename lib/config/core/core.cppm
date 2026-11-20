@@ -28,7 +28,7 @@ export {
     class LimitNotices {
     public:
       void add(tbc::ref_a<LimitReach> reach) noexcept;
-      std::span<const LimitReach> entries() const noexcept;
+      [[nodiscard]] std::span<const LimitReach> entries() const noexcept;
       void print() const noexcept;
 
     private:
@@ -126,13 +126,13 @@ export {
       std::string_view name;
       const char* environment = nullptr;
       std::string_view home_directory;
-      std::string_view environment_suffix{};
+      std::string_view environment_suffix;
       std::string_view file;
-      std::span<const std::string_view> events{};
-      std::span<const std::string_view> worktree_events{};
-      std::string_view timeout{};
+      std::span<const std::string_view> events;
+      std::span<const std::string_view> worktree_events;
+      std::string_view timeout;
       bool flat_hooks = false;
-      std::string_view launch_note{};
+      std::string_view launch_note;
 
       static IntegrationProvider describe(AgentProvider provider);
 

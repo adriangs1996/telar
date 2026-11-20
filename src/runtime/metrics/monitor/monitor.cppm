@@ -35,7 +35,7 @@ export {
       bool reverse = false;
       MonitorScope scope = MonitorScope::all;
       bool tree = false;
-      FixedText<MonitorLimits::filter_bytes> filter{};
+      FixedText<MonitorLimits::filter_bytes> filter;
       std::uint16_t limit = 0;
       ProcessInstance detail{};
     };
@@ -51,9 +51,9 @@ export {
       // It is an agent or descends from one.
       bool under_agent = false;
       bool described = false;
-      FixedText<MonitorLimits::name_bytes> name{};
-      FixedText<MonitorLimits::user_bytes> user{};
-      FixedText<MonitorLimits::command_bytes> command{};
+      FixedText<MonitorLimits::name_bytes> name;
+      FixedText<MonitorLimits::user_bytes> user;
+      FixedText<MonitorLimits::command_bytes> command;
     };
 
     inline constexpr std::size_t maximum_monitor_answers = 16;
@@ -65,7 +65,7 @@ export {
     // A user's name as the sampler caches it.
     struct UserName {
       uid_t user = 0;
-      FixedText<MonitorLimits::user_bytes> name{};
+      FixedText<MonitorLimits::user_bytes> name;
     };
 
     // Keeps the processes and the host between readings and answers queries about them. A reading
@@ -100,9 +100,9 @@ export {
         // A process that started after the last reading, read for this answer.
         MonitorEntry fresh{};
         // The entry the detail is of, or none for `fresh`.
-        ds::Option<std::uint32_t> entry{};
-        FixedText<MonitorLimits::arguments_bytes> arguments{};
-        FixedText<MonitorLimits::directory_bytes> directory{};
+        ds::Option<std::uint32_t> entry;
+        FixedText<MonitorLimits::arguments_bytes> arguments;
+        FixedText<MonitorLimits::directory_bytes> directory;
         ListeningPorts ports{};
         ds::Array<std::int32_t, MonitorLimits::maximum_children> children{};
         std::uint16_t child_count = 0;

@@ -64,7 +64,7 @@ namespace telar::runtime::cli {
     Memory& memory = budget_memory;
     const auto family = parseFamily(first);
     // SSH uses no PTY, so the remote CLI cannot see whether this stdout is a terminal.
-    if (family == Family::clipboard && ::isatty(STDOUT_FILENO)) {
+    if (family == Family::clipboard && (::isatty(STDOUT_FILENO) != 0)) {
       std::fputs("telar clipboard: pipe clipboard content to a consumer or redirect stdout to a file\n", stderr);
       return 1;
     }

@@ -42,7 +42,7 @@ namespace telar::runtime::control {
           return ds::none;
         }
 
-        accumulator = std::min(maximum_value, accumulator * 10 + static_cast<unsigned>(byte - '0'));
+        accumulator = std::min(maximum_value, (accumulator * 10) + static_cast<unsigned>(byte - '0'));
         continue;
       }
 
@@ -336,7 +336,7 @@ namespace telar::runtime::control {
         return {};
       }
 
-      decoded.atMut(index / 2) = static_cast<char>(high * 16 + low);
+      decoded.atMut(index / 2) = static_cast<char>((high * 16) + low);
     }
 
     const std::string_view name{decoded.data(), hex.size() / 2};
@@ -344,7 +344,7 @@ namespace telar::runtime::control {
     std::size_t last = capabilities.size();
 
     while (first != last) {
-      const auto middle = first + (last - first) / 2;
+      const auto middle = first + ((last - first) / 2);
       if (capabilities[middle].name < name) {
         first = middle + 1;
       } else {
@@ -390,7 +390,7 @@ namespace telar::runtime::control {
       if (fractional) {
         nonzero_fraction |= c != '0';
       } else {
-        integral = integral * 10 + static_cast<unsigned>(c - '0');
+        integral = (integral * 10) + static_cast<unsigned>(c - '0');
         if (integral > 1) {
           return false;
         }

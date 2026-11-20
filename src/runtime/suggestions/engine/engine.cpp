@@ -46,7 +46,7 @@ namespace telar::runtime {
   void SuggestionEngine::suggest(const SuggestCommand& request, std::string_view prompt, EncodedReply<ConcurrentMemory>& reply) {
     TELAR_TRACE("suggestions.ask");
     if (!available()) {
-      reply.send(CommandSuggestion{request.request_id, SuggestionStatus::unavailable});
+      reply.send(CommandSuggestion{.request_id = request.request_id, .status = SuggestionStatus::unavailable});
       return;
     }
 
@@ -63,7 +63,7 @@ namespace telar::runtime {
       }
 
       deadline_ = Clock::now() + options_.timeout;
-      encoded_.assign("{\"type\":\"prompt\",\"message\":");
+      encoded_.assign(R"({"type":"prompt","message":)");
       appendJsonText(encoded_, prompt);
       encoded_.append("}\n");
       write(encoded_);
@@ -128,7 +128,7 @@ namespace telar::runtime {
       process_.reset();
     }
 
-    reply.send(CommandSuggestion{request.request_id, status, status == SuggestionStatus::ready ? suggestion : std::string_view{}});
+    reply.send(CommandSuggestion{.request_id = request.request_id, .status = status, .text = status == SuggestionStatus::ready ? suggestion : std::string_view{}});
   }
 
   std::string_view SuggestionEngine::extract(std::string_view text) noexcept {
@@ -170,7 +170,7 @@ namespace telar::runtime {
       throw Timeout{};
     }
 
-    ds::Array<pollfd, 3> descriptors{{{process_->output(), POLLIN, 0}, {process_->error(), POLLIN, 0}, {writing ? process_->input() : -1, POLLOUT, 0}}};
+    ds::Array<pollfd, 3> descriptors{{{.fd = process_->output(), .events = POLLIN, .revents = 0}, {.fd = process_->error(), .events = POLLIN, .revents = 0}, {.fd = writing ? process_->input() : -1, .events = POLLOUT, .revents = 0}}};
     if (::poll(descriptors.dataMut(), descriptors.size(), 20) < 0 && sys::lastError() != EINTR) {
       throw SystemError{"Poll suggestion engine"};
     }
@@ -237,7 +237,9 @@ namespace telar::runtime {
         input_.consume(length + 1);
         discarded = false;
         continue;
-      } else if (bytes.size() > maximum_record || discarded) {
+      }
+
+      if (bytes.size() > maximum_record || discarded) {
         input_.clear();
         discarded = true;
       }

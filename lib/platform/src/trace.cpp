@@ -112,7 +112,7 @@ namespace telar::runtime::trace {
       return;
     }
 
-    sink.pending[sink.count++] = {name, start, end - start, currentThreadId()};
+    sink.pending[sink.count++] = {.name = name, .start = start, .duration = end - start, .thread = currentThreadId()};
     if (sink.count == sink.pending.size()) {
       sink.wake.notify_one();
     }

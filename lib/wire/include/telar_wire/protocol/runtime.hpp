@@ -45,7 +45,7 @@ namespace telar {
   struct RequestFailed {
     std::uint64_t request_id{};
     FailureCode code{};
-    std::string_view message{};
+    std::string_view message;
   };
 
   template <>
@@ -61,8 +61,8 @@ namespace telar {
     bool active{};
     ProxyScope scope{};
     bool system_trusted{};
-    ds::Option<std::uint16_t> port{};
-    ds::Option<std::uint16_t> preferred_port{};
+    ds::Option<std::uint16_t> port;
+    ds::Option<std::uint16_t> preferred_port;
   };
 
   template <>
@@ -82,7 +82,7 @@ namespace telar {
     std::uint64_t runtime_evicted{};
     std::uint64_t client_evicted{};
     std::uint64_t refused_reports{};
-    std::span<const LimitListEntry> entries{};
+    std::span<const LimitListEntry> entries;
   };
 
   template <>

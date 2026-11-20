@@ -62,7 +62,7 @@ export {
 
     struct HistorySessionTitle {
       ds::Array<Byte, 16> session{};
-      FixedText<96> title{};
+      FixedText<96> title;
       AgentTitleSource source = AgentTitleSource::telar;
       AgentTitleState state = AgentTitleState::failed;
     };
@@ -80,7 +80,7 @@ export {
     public:
       explicit HistoryEvent(ConcurrentMemory& memory, const HistoryEventView& event);
 
-      HistoryEventView view() const noexcept;
+      [[nodiscard]] HistoryEventView view() const noexcept;
 
     private:
       HistoryEventView event_;

@@ -23,7 +23,7 @@ export {
       Target source;
       Target destination;
 
-      bool matches(const FlowKey& other) const noexcept;
+      [[nodiscard]] bool matches(const FlowKey& other) const noexcept;
 
       static bool same(const Target& left, const Target& right) noexcept;
 
@@ -40,7 +40,7 @@ export {
 
 // pf's NAT lookup, the routing socket and pf's rules exist on macOS only; a flow's key is
 // shared with the Linux socket table.
-#if defined(__APPLE__)
+#ifdef __APPLE__
 
 // Interface: redirect/nat_lookup.cppm
 export {
@@ -69,7 +69,7 @@ export {
     public:
       NatLookup();
 
-      bool matches(int socket, const FlowKey& flow) const;
+      [[nodiscard]] bool matches(int socket, const FlowKey& flow) const;
 
       static bool peerMatches(int socket, const FlowKey& flow);
 
@@ -118,7 +118,7 @@ export {
 
       // Established inbound packets can hit NAT state on the physical interface;
       // preserve the local IP so their translated destination remains deliverable.
-      std::string_view listenerAddress() const noexcept;
+      [[nodiscard]] std::string_view listenerAddress() const noexcept;
     };
 
     struct Bypass {
@@ -131,11 +131,11 @@ export {
       std::string_view label;
       std::string_view discovery_interface;
       std::span<const FlowKey> flows;
-      ds::Option<unsigned> log_interface{};
-      std::span<const Bypass> bypasses{};
+      ds::Option<unsigned> log_interface;
+      std::span<const Bypass> bypasses;
       bool log_all = false;
       Direction direction = Direction::outbound;
-      std::span<const FlowKey> incoming_flows{};
+      std::span<const FlowKey> incoming_flows;
     };
 
     template <Allocator Memory>

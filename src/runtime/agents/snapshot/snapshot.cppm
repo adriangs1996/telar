@@ -27,12 +27,12 @@ export {
 
     class AgentEvidenceState {
     public:
-      AgentProvider provider() const noexcept;
-      bool accepts(AgentProvider incoming) const noexcept;
+      [[nodiscard]] AgentProvider provider() const noexcept;
+      [[nodiscard]] bool accepts(AgentProvider incoming) const noexcept;
       void claim(AgentProvider incoming) noexcept;
       bool applyReport(const ReportAgent& incoming, ObservationTime now);
       bool applyScreen(AgentSignal signal, ObservationTime now, AgentStatus projected, bool interrupted) noexcept;
-      ds::Option<AgentEvidence> choose(std::int64_t now) const noexcept;
+      [[nodiscard]] ds::Option<AgentEvidence> choose(std::int64_t now) const noexcept;
       void expire(std::int64_t now) noexcept;
       void clearReport() noexcept;
 
@@ -58,9 +58,9 @@ export {
     class AgentProgress {
     public:
       bool apply(const ReportAgentProgress& report);
-      std::uint16_t done() const noexcept;
-      std::uint16_t total() const noexcept;
-      std::string_view step() const noexcept;
+      [[nodiscard]] std::uint16_t done() const noexcept;
+      [[nodiscard]] std::uint16_t total() const noexcept;
+      [[nodiscard]] std::string_view step() const noexcept;
 
       FixedText<2048> final_message;
       static constexpr std::size_t task_capacity = 128;
@@ -96,7 +96,7 @@ export {
       AgentSessionFileKind kind = AgentSessionFileKind::claude_transcript;
       ds::Option<std::uint64_t> offset;
       ds::Option<FixedText<96>> last_title;
-      std::chrono::steady_clock::time_point checked_at{};
+      std::chrono::steady_clock::time_point checked_at;
       std::uint64_t revision = 0;
 
     private:
@@ -130,14 +130,14 @@ export {
       bool observeProcess(ProcessIdentity identity, AgentProvider incoming, ObservationTime now = ObservationTime::now());
       bool observeScreen(AgentSignal signal, ObservationTime now = ObservationTime::now());
       bool setProcessContext(SessionHost host, bool installed, ds::Option<ProcessIdentity> identity) noexcept;
-      std::string_view eventFor(const AgentEvidence& selected, std::int64_t now) const noexcept;
+      [[nodiscard]] std::string_view eventFor(const AgentEvidence& selected, std::int64_t now) const noexcept;
       bool project(std::int64_t now);
       void forgetReports();
       bool reportTitle(std::string_view value);
       void observeInput(std::span<const Byte> bytes);
       bool queueDescription() noexcept;
       void finishTitleCapture() noexcept;
-      bool hasPendingDescription() const noexcept;
+      [[nodiscard]] bool hasPendingDescription() const noexcept;
 
       std::uint64_t pane;
       std::uint64_t generation;
@@ -192,7 +192,7 @@ export {
     public:
       explicit AgentRegistry(Memory& memory);
 
-      const Agent* find(std::uint64_t pane, std::uint64_t generation) const noexcept;
+      [[nodiscard]] const Agent* find(std::uint64_t pane, std::uint64_t generation) const noexcept;
       Agent* findMut(std::uint64_t pane, std::uint64_t generation) noexcept;
       Agent& ensure(std::uint64_t pane, std::uint64_t generation);
 
@@ -206,10 +206,10 @@ export {
         }
       }
 
-      std::span<const ds::Box<Agent, Memory>> records() const noexcept;
+      [[nodiscard]] std::span<const ds::Box<Agent, Memory>> records() const noexcept;
       std::span<ds::Box<Agent, Memory>> recordsMut() noexcept;
       void changed() noexcept;
-      std::uint64_t revision() const noexcept;
+      [[nodiscard]] std::uint64_t revision() const noexcept;
 
       static constexpr std::size_t capacity = 64;
 

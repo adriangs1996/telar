@@ -65,7 +65,7 @@ namespace telar::runtime::cli::render_command {
     return self;
   }
 
-  bool writeAll(int descriptor, std::string_view bytes) noexcept {
+  static bool writeAll(int descriptor, std::string_view bytes) noexcept {
     while (!bytes.empty()) {
       const auto written = ::write(descriptor, bytes.data(), bytes.size());
       if (written < 0) {
@@ -85,7 +85,7 @@ namespace telar::runtime::cli::render_command {
   // Reads all of descriptor, up to one byte past the limit so an oversized
   // source is detected without reading the rest of it.
   template <Allocator Memory>
-  bool readSource(int descriptor, ds::String<Memory>& source) {
+  static bool readSource(int descriptor, ds::String<Memory>& source) {
     constexpr std::size_t chunk = 64 * 1024;
     const auto limit = render::markdown::max_source_bytes + 1;
 
@@ -112,7 +112,7 @@ namespace telar::runtime::cli::render_command {
     return true;
   }
 
-  std::uint16_t terminalWidth(int descriptor) noexcept {
+  static std::uint16_t terminalWidth(int descriptor) noexcept {
     winsize size{};
     if (::ioctl(descriptor, TIOCGWINSZ, &size) == 0 && size.ws_col != 0) {
       return size.ws_col;
@@ -121,9 +121,9 @@ namespace telar::runtime::cli::render_command {
     return 80;
   }
 
-  volatile std::sig_atomic_t stop_signal = 0;
+  static volatile std::sig_atomic_t stop_signal = 0;
 
-  void onStopSignal(int signal) noexcept {
+  static void onStopSignal(int signal) noexcept {
     stop_signal = signal;
   }
 
@@ -192,22 +192,22 @@ namespace telar::runtime::cli::render_command {
     bool entered_ = false;
   };
 
-  void report(std::string_view message) noexcept {
+  static void report(std::string_view message) noexcept {
     std::fprintf(stderr, "telar render: %.*s\n", static_cast<int>(message.size()), message.data());
   }
 
-  void reportDocumentLimit() noexcept {
+  static void reportDocumentLimit() noexcept {
     std::fprintf(stderr, "telar render: the document exceeds the %zu KiB limit render.max_document_bytes\n", render::max_document_bytes / 1024);
   }
 
-  bool insidePane() noexcept {
+  static bool insidePane() noexcept {
     const char* pane = std::getenv("TELAR_PANE_ID");
 
     return pane != nullptr && *pane != '\0';
   }
 
   template <Allocator Memory>
-  int showPager(Memory& memory, const render::Document<Memory>& document, std::string_view name) {
+  static int showPager(Memory& memory, const render::Document<Memory>& document, std::string_view name) {
     const auto descriptor = ::open("/dev/tty", O_RDWR | O_CLOEXEC | O_NOCTTY);
     if (descriptor < 0) {
       report("native rendering needs a controlling terminal; use --format ansi");

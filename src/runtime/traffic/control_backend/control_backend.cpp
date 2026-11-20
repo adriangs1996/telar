@@ -100,8 +100,8 @@ namespace telar::runtime::traffic {
   Interception<maximum_bytes>::Interception(ConcurrentMemory& memory, CompletionSignal* completion, CompletionSignal* requests)
       : upstream_(memory),
         memory_(memory),
-        completion_(completion ? *completion : wake_),
-        request_signal_(requests ? *requests : requests_) {
+        completion_((completion != nullptr) ? *completion : wake_),
+        request_signal_((requests != nullptr) ? *requests : requests_) {
     randomBytes(&next_, sizeof(next_));
     next_ >>= 1;
   }
@@ -171,7 +171,7 @@ namespace telar::runtime::traffic {
   void Interception<maximum_bytes>::setAvailable(Owner owner, bool available) noexcept {
     std::scoped_lock lock{mutex_};
     auto* entry = registration(owner);
-    if (!entry || (!available && !entry->available)) {
+    if ((entry == nullptr) || (!available && !entry->available)) {
       return;
     }
 
@@ -192,7 +192,7 @@ namespace telar::runtime::traffic {
   bool Interception<maximum_bytes>::pending(Owner owner, std::uint64_t ticket) noexcept {
     std::scoped_lock lock{mutex_};
     const auto* entry = registration(owner);
-    if (!entry || !entry->available) {
+    if ((entry == nullptr) || !entry->available) {
       return false;
     }
 
@@ -466,7 +466,7 @@ namespace telar::runtime::traffic {
 namespace telar::runtime::traffic::recording {
 
   Owner Owner::package(const plugins::ServiceSpec& package) {
-    return {package.plugin_id, package.digest, package.permission};
+    return {.id = package.plugin_id, .digest = package.digest, .permission = package.permission};
   }
 
   bool Owner::authorized() const noexcept {
@@ -523,8 +523,8 @@ namespace telar::runtime::traffic {
   }
 
   FileDescriptor Service::openControl(const plugins::ServiceSpec& package) {
-    const auto port = package_control_.load(std::memory_order_acquire);
-    if (!port) {
+    auto* const port = package_control_.load(std::memory_order_acquire);
+    if (port == nullptr) {
       throw SystemError{"Package control is starting", EAGAIN};
     }
 
@@ -553,12 +553,12 @@ namespace telar::runtime::traffic {
     configureProxySocket(client.get());
     const auto order = (static_cast<std::uint64_t>(specification.package_index) << 32) | registration;
     const auto owner = ++next_owner_;
-    if (!attachments_.publish(Attachment{std::move(native), {specification.plugin_id, specification.digest, specification.generation, observe, intercept, order, specification.permission}, owner})) {
+    if (!attachments_.publish(Attachment{.socket = std::move(native), .package = {.id = specification.plugin_id, .digest = specification.digest, .generation = specification.generation, .observe = observe, .intercept = intercept, .order = order, .permission = specification.permission}, .owner = owner})) {
       throw SystemError{"Package traffic attachment queue is full", EBUSY};
     }
 
     wake_.notify();
-    return {std::move(client), owner};
+    return {.socket = std::move(client), .owner = owner};
   }
 
   void Service::setPackageAvailable(std::uint64_t owner, bool available) noexcept {
@@ -605,7 +605,7 @@ namespace telar::runtime::traffic {
     try {
       SensitiveBuffer<Limits::frame_bytes> output;
       const auto sequence = next_exchange_.fetch_add(1, std::memory_order_relaxed);
-      const auto payload = plugins::Protocol::encodeExchange(output.bytes(), {sequence, session_}, exchange, Limits::http_part_bytes);
+      const auto payload = plugins::Protocol::encodeExchange(output.bytes(), {.id = sequence, .generation = session_}, exchange, Limits::http_part_bytes);
       auto frame = encode(Event{.kind = Kind::exchange, .session = session_, .sequence = sequence, .bytes = payload});
 
       injections_.publish(std::move(frame));
@@ -704,7 +704,7 @@ namespace telar::runtime::traffic {
     for (std::size_t index = 0; index < peers_.size(); ++index) {
       const auto& peer = peers_[index];
 
-      descriptors.atMut(index + 3) = {.fd = peer ? peer->socket.get() : -1, .events = static_cast<short>(POLLIN | (peer && peer->count ? POLLOUT : 0)), .revents = 0};
+      descriptors.atMut(index + 3) = {.fd = peer ? peer->socket.get() : -1, .events = static_cast<short>(POLLIN | (peer && (peer->count != 0u) ? POLLOUT : 0)), .revents = 0};
     }
 
     constexpr int heartbeat_ms = 1000;
@@ -726,7 +726,7 @@ namespace telar::runtime::traffic {
       }
     }
 
-    if (descriptors[1].revents & POLLIN) {
+    if ((descriptors[1].revents & POLLIN) != 0) {
       wake_.drain();
       while (auto attachment = attachments_.tryReceive()) {
         for (auto& slot : peers_.viewMut()) {
@@ -747,7 +747,7 @@ namespace telar::runtime::traffic {
       }
     }
 
-    if (descriptors[2].revents & POLLIN) {
+    if ((descriptors[2].revents & POLLIN) != 0) {
       interception_.drainRequests();
     }
 
@@ -760,11 +760,11 @@ namespace telar::runtime::traffic {
       const auto ready = descriptors[index + 3].revents;
 
       try {
-        if (ready & (POLLIN | POLLHUP)) {
+        if ((ready & (POLLIN | POLLHUP)) != 0) {
           read(peer.getMut());
         }
 
-        if (ready & POLLOUT) {
+        if ((ready & POLLOUT) != 0) {
           write(peer.getMut());
         }
       } catch (const std::exception&) {
@@ -773,7 +773,7 @@ namespace telar::runtime::traffic {
 
       constexpr auto handshake_timeout = std::chrono::seconds{5};
       const bool expired = !peer->role && std::chrono::steady_clock::now() - peer->connected >= handshake_timeout;
-      if (peer->failed || expired || (ready & (POLLERR | POLLNVAL))) {
+      if (peer->failed || expired || ((ready & (POLLERR | POLLNVAL)) != 0)) {
         const bool producer = peer->role == Role::live_capture || peer->role == Role::offline_capture;
 
         if (peer->role == Role::intercept) {
@@ -813,7 +813,7 @@ namespace telar::runtime::traffic {
 
     capture_stopped_.store(stop_capture, std::memory_order_release);
 
-    if (descriptors[0].revents & POLLIN) {
+    if ((descriptors[0].revents & POLLIN) != 0) {
       accept();
     }
 
@@ -1178,7 +1178,7 @@ namespace telar::runtime::traffic::control {
 
   void TrustCommand::run(std::span<const std::string_view> arguments) {
     bool allowed = !arguments.empty() && arguments.front() == "/usr/bin/security";
-#if defined(__linux__)
+#ifdef __linux__
     constexpr ds::Array executables{"/usr/bin/trust", "/usr/bin/install", "/usr/bin/rm", "/usr/sbin/update-ca-certificates"};
     allowed = arguments.size() >= 3 && arguments[0] == "/usr/bin/sudo" && arguments[1] == "--" && std::ranges::find(executables, arguments[2]) != executables.end();
 #endif

@@ -96,7 +96,7 @@ namespace telar::runtime::control {
       constexpr auto slash_correction = static_cast<std::uint8_t>('/' - '+' - 1);
       const auto correction = vandq_u8(vceqq_u8(bytes, vdupq_n_u8('/')), vdupq_n_u8(slash_correction));
 
-      return {vsubq_u8(vaddq_u8(bytes, offset), correction), valid};
+      return {.values = vsubq_u8(vaddq_u8(bytes, offset), correction), .valid = valid};
     }
 #endif
 

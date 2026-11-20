@@ -228,12 +228,12 @@ export {
         std::size_t length = 0;
         bool truncated = false;
 
-        PaneText response(const ReadPane& request) const noexcept;
+        [[nodiscard]] PaneText response(const ReadPane& request) const noexcept;
       };
 
       void record(std::uint64_t pane_id, std::uint64_t generation, const PaneText& text) noexcept;
 
-      const Record* find(std::uint64_t pane_id, std::uint64_t generation) const noexcept;
+      [[nodiscard]] const Record* find(std::uint64_t pane_id, std::uint64_t generation) const noexcept;
 
     private:
       ds::Array<Record, capacity> entries_{};
@@ -251,7 +251,7 @@ export {
     public:
       static constexpr std::size_t capacity = 64;
 
-      bool contains(TabLocation location) const noexcept;
+      [[nodiscard]] bool contains(TabLocation location) const noexcept;
 
       bool insert(TabLocation location) noexcept;
 
@@ -260,7 +260,7 @@ export {
       ds::Option<TabLocation> pop() noexcept;
 
     private:
-      ds::Option<std::size_t> find(TabLocation location) const noexcept;
+      [[nodiscard]] ds::Option<std::size_t> find(TabLocation location) const noexcept;
 
       ds::Array<TabLocation, capacity> locations_;
       std::size_t count_ = 0;
@@ -287,7 +287,7 @@ export {
       MediaBudget& media_budget;
       GraphicsLimits graphics;
       // Present when the pane runs a shell telar integrated with.
-      ds::Option<ShellLaunch> shell{};
+      ds::Option<ShellLaunch> shell;
     };
 
   }
@@ -319,7 +319,7 @@ export {
       SlotStore(const SlotStore&) = delete;
       SlotStore& operator=(const SlotStore&) = delete;
 
-      inline std::uint64_t nextId() const {
+      [[nodiscard]] inline std::uint64_t nextId() const {
         if (count_ == Capacity || next_id_ == 0) {
           throw std::bad_alloc{};
         }
@@ -345,7 +345,7 @@ export {
           ++slot;
         }
 
-        if (generations_[slot] == std::numeric_limits<std::uint64_t>::max() / Capacity - 1) {
+        if (generations_[slot] == (std::numeric_limits<std::uint64_t>::max() / Capacity) - 1) {
           throw std::bad_alloc{};
         }
 
@@ -354,7 +354,7 @@ export {
         lookup_.atMut(bucket(id)) = static_cast<std::uint16_t>(slot + 1);
         items_.atMut(slot) = value.intoRaw();
         ++count_;
-        return generations_[slot] * Capacity + slot;
+        return (generations_[slot] * Capacity) + slot;
       }
 
       inline Value* findHandle(std::uint64_t handle) const noexcept {
@@ -385,7 +385,7 @@ export {
         ds::Box<Value, Memory>::fromRaw(value, memory_).reset();
       }
 
-      inline std::size_t size() const noexcept {
+      [[nodiscard]] inline std::size_t size() const noexcept {
         return count_;
       }
 
@@ -393,7 +393,7 @@ export {
         advanceIdentityCounter(next_id_, next);
       }
 
-      inline std::uint64_t nextCounter() const noexcept {
+      [[nodiscard]] inline std::uint64_t nextCounter() const noexcept {
         return next_id_;
       }
 
@@ -401,7 +401,7 @@ export {
         return items_;
       }
 
-      inline ds::Option<std::size_t> slotOf(std::uint64_t id) const noexcept {
+      [[nodiscard]] inline ds::Option<std::size_t> slotOf(std::uint64_t id) const noexcept {
         const auto stored = id == 0 ? 0 : lookup_[bucket(id)];
 
         return stored == 0 ? ds::none : ds::Option<std::size_t>{stored - 1};
@@ -414,7 +414,7 @@ export {
         return static_cast<std::size_t>(identity % lookup_capacity);
       }
 
-      inline std::size_t bucket(std::uint64_t identity) const noexcept {
+      [[nodiscard]] inline std::size_t bucket(std::uint64_t identity) const noexcept {
         auto position = hash(identity);
 
         while (lookup_[position] != 0 && identities_[lookup_[position] - 1] != identity) {

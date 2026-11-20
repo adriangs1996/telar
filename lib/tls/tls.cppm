@@ -30,8 +30,8 @@ export {
     public:
       explicit TlsError(const char* operation) noexcept;
 
-      const char* what() const noexcept override;
-      unsigned long code() const noexcept;
+      [[nodiscard]] const char* what() const noexcept override;
+      [[nodiscard]] unsigned long code() const noexcept;
 
     private:
       const char* operation_;
@@ -92,7 +92,7 @@ export {
       PemDocument(const PemDocument&) = delete;
       PemDocument& operator=(const PemDocument&) = delete;
 
-      std::span<const std::uint8_t> bytes() const noexcept;
+      [[nodiscard]] std::span<const std::uint8_t> bytes() const noexcept;
 
     private:
       static void clearBuffer(BIO* buffer) noexcept;
@@ -118,7 +118,7 @@ export {
       TlsCertificate certificate;
 
       static CertificatePair authority(std::string_view name, std::chrono::seconds lifetime);
-      CertificatePair mint(std::string_view hostname) const;
+      [[nodiscard]] CertificatePair mint(std::string_view hostname) const;
       static CertificatePair parse(std::span<const std::uint8_t> key_pem, std::span<const std::uint8_t> certificate_pem);
       void validateAuthority(std::string_view name, bool system) const;
 
@@ -151,7 +151,7 @@ export {
       TlsLibrary(const TlsLibrary&) = delete;
       TlsLibrary& operator=(const TlsLibrary&) = delete;
 
-      bool uses(const ConcurrentMemory& memory) const noexcept;
+      [[nodiscard]] bool uses(const ConcurrentMemory& memory) const noexcept;
 
     private:
       static void* allocate(std::size_t size, const char*, int) noexcept;
@@ -180,7 +180,7 @@ export {
       std::string_view certificate;
 
       static constexpr AuthorityFiles forKind(AuthorityKind kind) noexcept {
-        return kind == AuthorityKind::system_trust ? AuthorityFiles{"ca-system-key.pem", "ca-system-cert.pem"} : AuthorityFiles{"ca-key.pem", "ca-cert.pem"};
+        return kind == AuthorityKind::system_trust ? AuthorityFiles{.key = "ca-system-key.pem", .certificate = "ca-system-cert.pem"} : AuthorityFiles{.key = "ca-key.pem", .certificate = "ca-cert.pem"};
       }
     };
 
@@ -193,17 +193,17 @@ export {
       static tbc::val_a<ds::Option<CertificateAuthority>> loadExisting(tbc::mut_a<ConcurrentMemory> memory, const TlsLibrary& library, int directory, AuthorityKind kind);
       static tbc::val_a<CertificateAuthority> create(tbc::mut_a<ConcurrentMemory> memory, const TlsLibrary& library, int directory, AuthorityFiles files, AuthorityKind kind);
 
-      CertificatePair mint(std::string_view hostname) const;
-      X509* certificate() const noexcept;
-      ds::Array<char, 40> fingerprint() const;
-      ds::Array<char, 64> fingerprintSha256() const;
+      [[nodiscard]] CertificatePair mint(std::string_view hostname) const;
+      [[nodiscard]] X509* certificate() const noexcept;
+      [[nodiscard]] ds::Array<char, 40> fingerprint() const;
+      [[nodiscard]] ds::Array<char, 64> fingerprintSha256() const;
 
     private:
       template <std::size_t digest_bytes>
       ds::Array<char, digest_bytes * 2> fingerprint(const EVP_MD* algorithm) const;
 
     public:
-      bool expiresWithin(std::chrono::seconds duration) const;
+      [[nodiscard]] bool expiresWithin(std::chrono::seconds duration) const;
       void writeBundle(int directory, std::span<const std::uint8_t> roots) const;
 
     private:
@@ -324,10 +324,10 @@ export {
     public:
       explicit Paths(ConcurrentMemory& memory, std::string_view directory);
 
-      const ds::String<ConcurrentMemory>& directory() const noexcept;
-      ds::String<ConcurrentMemory> file(std::string_view name) const;
-      FileDescriptor open() const;
-      FileDescriptor prepare() const;
+      [[nodiscard]] const ds::String<ConcurrentMemory>& directory() const noexcept;
+      [[nodiscard]] ds::String<ConcurrentMemory> file(std::string_view name) const;
+      [[nodiscard]] FileDescriptor open() const;
+      [[nodiscard]] FileDescriptor prepare() const;
       static void validateDirectory(int descriptor);
 
       // Generic over the caller's environment, so it stays here and hands it to keychainFrom.
@@ -395,8 +395,8 @@ export {
       PreparedAuthority(const PreparedAuthority&) = delete;
       PreparedAuthority& operator=(const PreparedAuthority&) = delete;
 
-      std::string_view certificateName() const noexcept;
-      const CertificateAuthority& authority() const noexcept;
+      [[nodiscard]] std::string_view certificateName() const noexcept;
+      [[nodiscard]] const CertificateAuthority& authority() const noexcept;
       void activate();
       void commit() noexcept;
 
@@ -440,7 +440,7 @@ export {
     public:
       explicit Service(ConcurrentMemory& memory, const TlsLibrary& library, const Paths& paths, TrustCommandRunner& executor, Destination destination) noexcept;
 
-      Inspection inspect() const noexcept;
+      [[nodiscard]] Inspection inspect() const noexcept;
       Record install(const ds::Option<Record>& previous, bool force_rotation = false);
       void uninstall(const Record& record);
       ds::Option<Record> rotateIfNeeded();

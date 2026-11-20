@@ -33,7 +33,7 @@ export namespace telar::render {
   inline constexpr std::size_t max_pane_document_bytes = std::size_t{16} << 20;
 
   // The longest OSC body that can carry a document.
-  inline constexpr std::size_t max_sequence_body = sequence_begin.size() + (max_document_bytes + 2) / 3 * 4;
+  inline constexpr std::size_t max_sequence_body = sequence_begin.size() + ((max_document_bytes + 2) / 3 * 4);
   static_assert(max_sequence_body <= std::size_t{8} << 20);
 
 }
@@ -195,7 +195,7 @@ export namespace telar::render {
 
   namespace detail {
     constexpr std::uint64_t encodedSize(std::uint64_t blocks, std::uint64_t cells, std::uint64_t runs, std::uint64_t text) noexcept {
-      return header_bytes + blocks * block_bytes + cells * cell_bytes + runs * run_bytes + text;
+      return header_bytes + (blocks * block_bytes) + (cells * cell_bytes) + (runs * run_bytes) + text;
     }
 
     // The counts an encoding's header promises.

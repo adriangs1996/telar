@@ -43,7 +43,7 @@ namespace telar::runtime::config {
     }
 
     const auto title = definition.field("title");
-    const auto text = fittedUiText(title.present() ? title.string() : name, {"panels.title_bytes", "title bytes", maximum_title_bytes, {}, {}}, limits);
+    const auto text = fittedUiText(title.present() ? title.string() : name, {.name = "panels.title_bytes", .noun = "title bytes", .value = maximum_title_bytes, .requested = {}, .route = {}}, limits);
 
     printableUiText(title, text);
     return text;
@@ -207,7 +207,7 @@ namespace telar::runtime::config {
   }
 
   template <CommandTabLifetime Lifetime>
-  typename CommandTabStorage<Lifetime>::Checkpoint CommandTabStorage<Lifetime>::checkpoint() const noexcept {
+  CommandTabStorage<Lifetime>::Checkpoint CommandTabStorage<Lifetime>::checkpoint() const noexcept {
     return {.rows = rows_, .bytes = used_};
   }
 
@@ -563,7 +563,7 @@ namespace telar::runtime::config {
     }
 
     if (count > maximum_arguments) {
-      limits_.add({"command_tab.max_arguments", "arguments", maximum_arguments, count, {}});
+      limits_.add({.name = "command_tab.max_arguments", .noun = "arguments", .value = maximum_arguments, .requested = count, .route = {}});
       return false;
     }
 
@@ -596,7 +596,7 @@ namespace telar::runtime::config {
 
       kept_bytes += argument.size();
       if (kept_bytes > maximum_bytes) {
-        limits_.add({"command_tab.max_command_bytes", "argv bytes", maximum_bytes, total_bytes, {}});
+        limits_.add({.name = "command_tab.max_command_bytes", .noun = "argv bytes", .value = maximum_bytes, .requested = total_bytes, .route = {}});
         return false;
       }
     }
@@ -644,11 +644,11 @@ namespace telar::runtime::config {
   }
 
   ComponentBudget::Usage ComponentBudget::Usage::operator+(Usage other) const noexcept {
-    return {nodes + other.nodes, text + other.text, actions + other.actions, samples + other.samples};
+    return {.nodes = nodes + other.nodes, .text = text + other.text, .actions = actions + other.actions, .samples = samples + other.samples};
   }
 
   ComponentBudget::Usage ComponentBudget::Usage::operator-(Usage other) const noexcept {
-    return {nodes - other.nodes, text - other.text, actions - other.actions, samples - other.samples};
+    return {.nodes = nodes - other.nodes, .text = text - other.text, .actions = actions - other.actions, .samples = samples - other.samples};
   }
 
   bool ComponentBudget::Usage::fits(Usage room) const noexcept {
@@ -719,10 +719,10 @@ namespace telar::runtime::config {
 
   void ComponentBudget::report(LimitNotices& limits) const noexcept {
     const ds::Array<LimitReach, 4> reaches{{
-        {"bars.max_bar_nodes", "components", 64, offered_.nodes, {}},
-        {"bars.max_bar_text_bytes", "text bytes", 4096, offered_.text, {}},
-        {"bars.max_bar_actions", "click actions", 32, offered_.actions, {}},
-        {"bars.max_samples", "sparkline samples", 256, offered_.samples, {}},
+        {.name = "bars.max_bar_nodes", .noun = "components", .value = 64, .requested = offered_.nodes, .route = {}},
+        {.name = "bars.max_bar_text_bytes", .noun = "text bytes", .value = 4096, .requested = offered_.text, .route = {}},
+        {.name = "bars.max_bar_actions", .noun = "click actions", .value = 32, .requested = offered_.actions, .route = {}},
+        {.name = "bars.max_samples", .noun = "sparkline samples", .value = 256, .requested = offered_.samples, .route = {}},
     }};
 
     for (const auto& reach : reaches) {
@@ -733,7 +733,7 @@ namespace telar::runtime::config {
   }
 
   ComponentBudget::Usage ComponentBudget::usage(const ComponentShape& shape) noexcept {
-    return {1, shape.text.size() + shape.detail.size() + shape.url.size(), shape.action_field != nullptr ? 1u : 0u, shape.samples};
+    return {.nodes = 1, .text = shape.text.size() + shape.detail.size() + shape.url.size(), .actions = shape.action_field != nullptr ? 1u : 0u, .samples = shape.samples};
   }
 
   class ComponentStyleValidator {
@@ -900,7 +900,7 @@ namespace telar::runtime::config {
 
   ComponentKind ComponentShapeReader::kind(const lua::Value& value) {
     constexpr std::string_view names[]{"label", "icon", "mark", "meter", "sparkline", "badge", "clock", "metric", "machines", "group", "heading", "text", "meter_row", "kv", "callout", "actions", "button", "divider"};
-    const auto found = std::ranges::find(names, value.string());
+    const auto* const found = std::ranges::find(names, value.string());
     if (found == std::end(names)) {
       value.fail("names an unknown component");
     }
@@ -981,7 +981,7 @@ namespace telar::runtime::config {
     const auto total = values.listLength();
     const auto kept = std::min(total, maximum_samples);
     if (total > kept) {
-      limits.add({"bars.max_node_samples", "sparkline values", maximum_samples, total, {}});
+      limits.add({.name = "bars.max_node_samples", .noun = "sparkline values", .value = maximum_samples, .requested = total, .route = {}});
     }
 
     for (std::size_t index = total - kept + 1; index <= total; ++index) {
@@ -1586,11 +1586,11 @@ namespace telar::runtime::config {
         return binding.keys[0] == prefix_ && (binding.length == 1 || binding.keys[1] == suffix);
       });
 
-      wanted += !overridden;
+      wanted += static_cast<std::size_t>(!overridden);
     }
 
     if (wanted > maximum_bindings) {
-      limits.add({"config.max_bindings", "key bindings", maximum_bindings, wanted, {}});
+      limits.add({.name = "config.max_bindings", .noun = "key bindings", .value = maximum_bindings, .requested = wanted, .route = {}});
     }
   }
 
@@ -1747,7 +1747,7 @@ namespace telar::runtime::config {
 
     keymap.clear();
     if (listed > maximum_bindings) {
-      limits.add({"config.max_bindings", "key bindings", maximum_bindings, listed, {}});
+      limits.add({.name = "config.max_bindings", .noun = "key bindings", .value = maximum_bindings, .requested = listed, .route = {}});
     }
 
     BindingReader::read(bindings, keymap.prefix(), [&](const BindingSetting& binding, const lua::Value& action) {
@@ -1936,17 +1936,17 @@ namespace telar::runtime::config {
       });
 
       if (count > maximum_items) {
-        limits_.add({"picks.max_items", "options", maximum_items, count, {}});
+        limits_.add({.name = "picks.max_items", .noun = "options", .value = maximum_items, .requested = count, .route = {}});
       }
 
       if (text_full_) {
-        limits_.add({"picks.max_text_bytes", "option text bytes", maximum_text_bytes, offered_text_bytes_, {}});
+        limits_.add({.name = "picks.max_text_bytes", .noun = "option text bytes", .value = maximum_text_bytes, .requested = offered_text_bytes_, .route = {}});
       }
 
       const ds::Array<LimitReach, 3> text_limits{{
-          {"picks.max_label_bytes", "label bytes", maximum_label_bytes, longest_label_, {}},
-          {"picks.max_value_bytes", "value bytes", maximum_value_bytes, longest_value_, {}},
-          {"picks.max_detail_bytes", "detail bytes", maximum_detail_bytes, longest_detail_, {}},
+          {.name = "picks.max_label_bytes", .noun = "label bytes", .value = maximum_label_bytes, .requested = longest_label_, .route = {}},
+          {.name = "picks.max_value_bytes", .noun = "value bytes", .value = maximum_value_bytes, .requested = longest_value_, .route = {}},
+          {.name = "picks.max_detail_bytes", .noun = "detail bytes", .value = maximum_detail_bytes, .requested = longest_detail_, .route = {}},
       }};
 
       for (const auto& reach : text_limits) {
@@ -2086,7 +2086,7 @@ namespace telar::runtime::config {
     entry.onlyFields({"keys", "action", "mode"});
     const auto chord = KeyChordValidator::parse(entry.field("keys"));
     const auto action = entry.field("action");
-    const auto found = std::ranges::find(prompt_action_names, action.string());
+    const auto* const found = std::ranges::find(prompt_action_names, action.string());
     if (found == prompt_action_names.end()) {
       action.fail("names an unknown prompt action");
     }

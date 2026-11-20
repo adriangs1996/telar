@@ -69,7 +69,7 @@ export namespace telar::runtime {
 
     Event feed(std::span<const Byte> bytes) noexcept;
     void reset() noexcept;
-    ds::Option<std::string_view> typedText() const noexcept;
+    [[nodiscard]] ds::Option<std::string_view> typedText() const noexcept;
 
   private:
     enum class State {
@@ -153,14 +153,14 @@ export namespace telar::runtime {
     // The shell's names are kept in `memory`, which must outlive the zones and every copy of them.
     explicit CommandZones(ConcurrentMemory& memory, std::string_view directory, ds::Option<ShellToken> token = ds::none);
 
-    ConcurrentMemory& memory() const noexcept;
+    [[nodiscard]] ConcurrentMemory& memory() const noexcept;
 
-    ds::Option<ShellToken> token() const noexcept;
+    [[nodiscard]] ds::Option<ShellToken> token() const noexcept;
 
     // Whether the marks come from a shell on another host, which `ssh` started with telar's
     // integration, and which shell that is.
-    bool remote() const noexcept;
-    IntegratedShell remoteShell() const noexcept;
+    [[nodiscard]] bool remote() const noexcept;
+    [[nodiscard]] IntegratedShell remoteShell() const noexcept;
 
     // A shell over scan, for any sink: the sink only hears of a finished sequence, so the
     // bytes are read without a virtual call.
@@ -177,26 +177,26 @@ export namespace telar::runtime {
     // and the directory.
     void restart();
     void input(std::span<const Byte> bytes) noexcept;
-    bool editing() const noexcept;
-    bool markersReady() const noexcept;
-    bool running() const noexcept;
+    [[nodiscard]] bool editing() const noexcept;
+    [[nodiscard]] bool markersReady() const noexcept;
+    [[nodiscard]] bool running() const noexcept;
     void setDirectory(std::string_view directory);
-    std::string_view directory() const noexcept;
+    [[nodiscard]] std::string_view directory() const noexcept;
 
     // The PATH the integrated shell last reported; empty until it does.
-    std::string_view path() const noexcept;
+    [[nodiscard]] std::string_view path() const noexcept;
 
     // The aliases and functions the shell last reported, blank-separated: names it runs that
     // no PATH directory holds. Null until it reports them, or when they did not fit.
     // Shared, not copied, with the completion requests that read them on another thread.
-    const std::shared_ptr<const ds::String<ConcurrentMemory>>& names() const noexcept;
+    [[nodiscard]] const std::shared_ptr<const ds::String<ConcurrentMemory>>& names() const noexcept;
 
     // The host a shell `ssh` reached runs on, as its working directory report names it.
-    std::string_view remoteHost() const noexcept;
+    [[nodiscard]] std::string_view remoteHost() const noexcept;
 
     // Where that shell works, as it reports it; empty until it does. `directory()` stays this
     // host's.
-    std::string_view remoteDirectory() const noexcept;
+    [[nodiscard]] std::string_view remoteDirectory() const noexcept;
 
 #if TELAR_DIAGNOSTICS
     diagnostics::CommandCaptureCounters takeMetrics() noexcept;
@@ -268,8 +268,8 @@ export namespace telar::runtime {
     static constexpr std::size_t capacity = 64 * 1024;
 
     void append(std::span<std::uint8_t> storage, std::span<const std::uint8_t> bytes) noexcept;
-    tbc::val_a<std::span<const std::uint8_t>> bytes(tbc::val_a<std::span<const std::uint8_t>> storage) const noexcept;
-    std::uint64_t observed() const noexcept;
+    [[nodiscard]] tbc::val_a<std::span<const std::uint8_t>> bytes(tbc::val_a<std::span<const std::uint8_t>> storage) const noexcept;
+    [[nodiscard]] std::uint64_t observed() const noexcept;
     void clear() noexcept;
 
   private:
@@ -286,8 +286,8 @@ export namespace telar::runtime {
 
     void enable();
     void append(std::span<const std::uint8_t> bytes) noexcept;
-    std::span<const std::uint8_t> bytes() const noexcept;
-    std::uint64_t observed() const noexcept;
+    [[nodiscard]] std::span<const std::uint8_t> bytes() const noexcept;
+    [[nodiscard]] std::uint64_t observed() const noexcept;
     void clear() noexcept;
 
   private:
@@ -315,7 +315,7 @@ export namespace telar::runtime {
     // Cuts the text to a whole UTF-8 prefix of at most CommandSelection::maximum_bytes. Whether
     // that cut it short, or nothing when it is empty.
     ds::Option<bool> finish() noexcept;
-    std::size_t length() const noexcept;
+    [[nodiscard]] std::size_t length() const noexcept;
 
   private:
     static bool receive(void* context, const Byte* bytes, std::size_t count) noexcept;
@@ -335,20 +335,20 @@ export namespace telar::runtime {
 
     explicit CommandSelection(GhosttyTerminal terminal);
 
-    bool primary(CommandScreen screen) const;
+    [[nodiscard]] bool primary(CommandScreen screen) const;
     void begin(CommandScreen screen);
     void rebase(CommandScreen screen, ds::Option<std::string_view> typed);
 
     // What to read from the anchor to the cursor, or nothing when there is no text to read.
     // Ghostty's own references into its grid, which it keeps valid until the screen changes: a raw
     // value, as Rust keeps an FFI library's handles.
-    TBC_RAW tbc::val_a<ds::Option<GhosttySelection>> select(tbc::val_a<CommandScreen> screen) const;
+    [[nodiscard]] TBC_RAW tbc::val_a<ds::Option<GhosttySelection>> select(tbc::val_a<CommandScreen> screen) const;
 
   private:
     using TrackedReference = GhosttyHandle<GhosttyTrackedGridRef, ghostty_tracked_grid_ref_free>;
 
     void findRightPrompt(CommandScreen screen);
-    GhosttyPointCoordinate selectionFinish(CommandScreen screen, GhosttyPointCoordinate start, GhosttyPointCoordinate fallback) const;
+    [[nodiscard]] GhosttyPointCoordinate selectionFinish(CommandScreen screen, GhosttyPointCoordinate start, GhosttyPointCoordinate fallback) const;
 
     tbc::val_a<TrackedReference> anchor_;
     TrackedReference right_prompt_;
@@ -384,7 +384,7 @@ export namespace telar::runtime {
     // and they stay as they were.
     void follow(bool reflowed = false);
 
-    std::uint64_t revision() const noexcept;
+    [[nodiscard]] std::uint64_t revision() const noexcept;
     // The blocks view their commands in the ring, region `b`, through `storage`.
     tbc::val_b<PaneBlocks> message(std::uint64_t pane_id, tbc::mut_b<ds::Array<CommandBlock, capacity>> storage) const;
 
@@ -403,7 +403,7 @@ export namespace telar::runtime {
       TrackedReference& operator=(TrackedReference&& other) noexcept;
       ~TrackedReference();
 
-      GhosttyTrackedGridRef get() const noexcept;
+      [[nodiscard]] GhosttyTrackedGridRef get() const noexcept;
       GhosttyTrackedGridRef* output() noexcept;
 
     private:
@@ -421,21 +421,21 @@ export namespace telar::runtime {
       CommandBlockNest nest = CommandBlockNest::none;
       std::int32_t status = 0;
       std::uint32_t duration_ms = 0;
-      std::chrono::steady_clock::time_point started{};
+      std::chrono::steady_clock::time_point started;
       FixedText<command_bytes> command;
     };
 
-    virtual CommandScreen screen() const noexcept = 0;
+    [[nodiscard]] virtual CommandScreen screen() const noexcept = 0;
 
     // Reads `selection` into the buffer `captured` shows.
     virtual ds::Option<bool> capture(const GhosttySelection& selection) = 0;
-    virtual std::span<const Byte> captured() const noexcept = 0;
+    [[nodiscard]] virtual std::span<const Byte> captured() const noexcept = 0;
 
     Entry& entryMut(std::size_t index) noexcept;
-    tbc::ref_b<Entry> entry(std::size_t index) const noexcept;
+    [[nodiscard]] tbc::ref_b<Entry> entry(std::size_t index) const noexcept;
     // A tracked reference ghostty keeps into its grid, which the block owns: a raw handle.
     TBC_RAW ds::Option<TrackedReference> track();
-    ds::Option<std::uint32_t> row(const TrackedReference& tracked) const;
+    [[nodiscard]] ds::Option<std::uint32_t> row(const TrackedReference& tracked) const;
     void start(std::chrono::steady_clock::time_point now);
     void finish(CommandBlockState state, std::int32_t status, std::chrono::steady_clock::time_point now);
     void closeSession(CommandBlockState state, std::int32_t status, std::chrono::steady_clock::time_point now);
@@ -459,9 +459,9 @@ export namespace telar::runtime {
     CommandBlocks(ConcurrentMemory& memory, Terminal& terminal);
 
   private:
-    CommandScreen screen() const noexcept override;
+    [[nodiscard]] CommandScreen screen() const noexcept override;
     ds::Option<bool> capture(const GhosttySelection& selection) override;
-    std::span<const Byte> captured() const noexcept override;
+    [[nodiscard]] std::span<const Byte> captured() const noexcept override;
 
     Terminal& terminal_;
     ds::Vec<Byte, ConcurrentMemory> text_;
@@ -480,9 +480,9 @@ export namespace telar::runtime {
     void reset() noexcept;
     void resetObservation();
     void updateDirectory(std::string_view directory);
-    std::string_view directory() const noexcept;
-    bool markersReady() const noexcept;
-    bool needsForegroundObservation() const noexcept;
+    [[nodiscard]] std::string_view directory() const noexcept;
+    [[nodiscard]] bool markersReady() const noexcept;
+    [[nodiscard]] bool needsForegroundObservation() const noexcept;
 
 #if TELAR_DIAGNOSTICS
     diagnostics::CommandCaptureCounters takeMetrics() noexcept;
@@ -502,14 +502,14 @@ export namespace telar::runtime {
 
     class CompletionRelay;
 
-    virtual CommandScreen screen() const noexcept = 0;
+    [[nodiscard]] virtual CommandScreen screen() const noexcept = 0;
 
     // Feeds the terminal and drops what it would answer.
     virtual void feedTerminal(std::span<const Byte> bytes) = 0;
 
     // Reads `selection` into the buffer `command` shows.
     virtual ds::Option<bool> capture(const GhosttySelection& selection) = 0;
-    virtual std::span<const Byte> command() const noexcept = 0;
+    [[nodiscard]] virtual std::span<const Byte> command() const noexcept = 0;
     virtual void clearCommand() noexcept = 0;
 
     // Makes the submitted text the command, whole: the protocol bounds it to the capture's
@@ -570,10 +570,10 @@ export namespace telar::runtime {
     }
 
   private:
-    CommandScreen screen() const noexcept override;
+    [[nodiscard]] CommandScreen screen() const noexcept override;
     void feedTerminal(std::span<const Byte> bytes) override;
     ds::Option<bool> capture(const GhosttySelection& selection) override;
-    std::span<const Byte> command() const noexcept override;
+    [[nodiscard]] std::span<const Byte> command() const noexcept override;
     void clearCommand() noexcept override;
     bool adoptSubmitted() noexcept override;
     void clearSubmitted() noexcept override;

@@ -26,7 +26,7 @@ export {
       static constexpr std::size_t packet_bytes = 262144;
       static constexpr std::size_t metadata_bytes = 1024;
       static constexpr std::size_t frame_bytes = packet_bytes + metadata_bytes;
-      static constexpr std::size_t http_frame_bytes = HttpMessageLimits::message_bytes + 2 * metadata_bytes;
+      static constexpr std::size_t http_frame_bytes = HttpMessageLimits::message_bytes + (2 * metadata_bytes);
       static constexpr std::size_t filter_bytes = 4096;
       static constexpr std::size_t interface_bytes = 64;
       static constexpr std::size_t interfaces = 128;
@@ -174,7 +174,7 @@ export {
 
     class Protocol {
     public:
-      static constexpr std::size_t page_header_bytes = 8 * sizeof(std::uint64_t) + 3 * sizeof(Byte) + sizeof(std::uint32_t);
+      static constexpr std::size_t page_header_bytes = (8 * sizeof(std::uint64_t)) + (3 * sizeof(Byte)) + sizeof(std::uint32_t);
 
       static void write(plugins::FrameWriter& writer, const Request& request);
 
@@ -409,7 +409,7 @@ export {
 
       static FlowIdentity of(const FlowEvent& event) noexcept;
 
-      FlowEvent event(Direction direction = Direction::outbound) const noexcept;
+      [[nodiscard]] FlowEvent event(Direction direction = Direction::outbound) const noexcept;
     };
 
     class FlowCodec {
@@ -436,7 +436,7 @@ export {
       virtual Decision poll(std::uint64_t ticket, std::span<Byte> replacement) noexcept = 0;
       virtual void cancel(std::uint64_t ticket) noexcept = 0;
       virtual ds::Option<Time> deadline(std::uint64_t ticket) noexcept = 0;
-      virtual int descriptor() const noexcept = 0;
+      [[nodiscard]] virtual int descriptor() const noexcept = 0;
       virtual void drain() noexcept = 0;
 
       virtual HttpControl* http() noexcept;

@@ -8,7 +8,7 @@ import telar.base.text;
 import telar.platform.fs;
 import telar.runtime.diagnostics.operation;
 import telar.base.ds;
-#if defined(__APPLE__)
+#ifdef __APPLE__
 import telar.sys.apple;
 #else
 import telar.runtime.platform.proc_file;
@@ -17,9 +17,9 @@ import telar.runtime.platform.proc_file;
 namespace telar::runtime::diagnostics {
 
   void writeHistorySample(Line& line, const HistoryMetrics& metrics) {
-    line.field("history_available", metrics.available);
+    line.field("history_available", static_cast<std::uint64_t>(metrics.available));
     line.field("history_sqlite_bytes", metrics.sqlite_bytes);
-    line.field("sqlite_open_failures", !metrics.available);
+    line.field("sqlite_open_failures", static_cast<std::uint64_t>(!metrics.available));
     line.field("history_queue_depth", metrics.queue.depth);
     line.field("history_queue_high_water", metrics.queue.high_water);
     line.field("history_queue_dropped", metrics.queue.dropped);
@@ -64,7 +64,7 @@ namespace telar::runtime::diagnostics {
       return ds::none;
     }
 
-    return LogName{name.substr(0, dot), role == "runtime" ? Role::runtime : Role::client, process, rotated};
+    return LogName{.endpoint = name.substr(0, dot), .role = role == "runtime" ? Role::runtime : Role::client, .process = process, .rotated = rotated};
   }
 
   LogSink::LogSink(std::string_view endpoint, pid_t process, std::size_t limit) noexcept
@@ -222,7 +222,7 @@ namespace telar::runtime::diagnostics {
   }
 
   std::uint64_t residentBytes() noexcept {
-#if defined(__APPLE__)
+#ifdef __APPLE__
     task_vm_info_data_t information{};
     mach_msg_type_number_t count = TASK_VM_INFO_COUNT;
     if (::task_info(::mach_task_self(), TASK_VM_INFO, reinterpret_cast<task_info_t>(&information), &count) != KERN_SUCCESS) {
@@ -342,7 +342,7 @@ namespace telar::runtime::diagnostics {
       response_queue_high_water += client->connection.responseHighWater();
       accumulate(response_queue_dropped, client->connection.droppedResponses());
       for (const auto& attachment : client->attachments) {
-        outstanding_frames += attachment->frames.waitingForAck();
+        outstanding_frames += static_cast<std::size_t>(attachment->frames.waitingForAck());
         accumulate(graphics_storage.transfer_bytes, attachment->graphics.transferBytes());
       }
     }
@@ -352,7 +352,7 @@ namespace telar::runtime::diagnostics {
         continue;
       }
 
-      dirty_panes += pane->terminal.dirty();
+      dirty_panes += static_cast<std::size_t>(pane->terminal.dirty());
       pane_input_queue_depth += pane->input.size();
       accumulate(pane_input_dropped_bytes, pane->input_dropped_bytes);
       const auto responses = pane->pty_responses->snapshot();

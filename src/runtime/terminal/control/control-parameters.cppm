@@ -20,7 +20,7 @@ export namespace telar::runtime::control {
     bool colon = false;
     char final = 0;
 
-    constexpr std::string_view modifiers() const noexcept {
+    [[nodiscard]] constexpr std::string_view modifiers() const noexcept {
       return {intermediate.data(), intermediate_count};
     }
 

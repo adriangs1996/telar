@@ -13,7 +13,7 @@ namespace telar {
   namespace debug {
 
     std::size_t columnWidth(std::size_t byte_count, const char* name, const char* value) {
-      const auto bytes_width = byte_count == 0 ? 0 : byte_count * 3 - 1;
+      const auto bytes_width = byte_count == 0 ? 0 : (byte_count * 3) - 1;
       const auto name_width = std::strlen(name);
       const auto value_width = std::strlen(value);
       const auto width = bytes_width > name_width ? bytes_width : name_width;
@@ -31,7 +31,7 @@ namespace telar {
       }
 
       if (more) {
-        const auto bytes_width = bytes.empty() ? 0 : bytes.size() * 3 - 1;
+        const auto bytes_width = bytes.empty() ? 0 : (bytes.size() * 3) - 1;
         const auto padding = columnWidth(bytes.size(), name, value) - bytes_width;
 
         std::fprintf(output, "%*s | ", static_cast<int>(padding), "");
@@ -635,7 +635,7 @@ namespace telar {
       throw EncodingError{"Truncated cell text"};
     }
 
-    Cell cell{static_cast<CellWidth>((header >> 5) & 3), *previous_style, input.first(length)};
+    Cell cell{.width = static_cast<CellWidth>((header >> 5) & 3), .style = *previous_style, .text = input.first(length)};
 
     cell.validate();
     input = input.subspan(length);
@@ -654,7 +654,7 @@ namespace telar {
     for (const auto& cell : cells) {
       cell.validate();
       size = checkedWireSize(size, 1 + cell.text.size());
-      if (!previous || !(*previous == cell.style)) {
+      if ((previous == nullptr) || !(*previous == cell.style)) {
         size = checkedWireSize(size, ValueCodec<CellStyle>::encodedSize(cell.style));
       }
 
@@ -674,7 +674,7 @@ namespace telar {
     const CellStyle* previous = nullptr;
 
     for (const auto& cell : cells) {
-      const auto changed = !previous || !(*previous == cell.style);
+      const auto changed = (previous == nullptr) || !(*previous == cell.style);
 
       u8::encode(static_cast<Byte>(cell.text.size() | (static_cast<Byte>(cell.width) << 5) | (changed ? 0x80 : 0)), output);
       if (changed) {
@@ -751,7 +751,7 @@ namespace telar {
       throw EncodingError{"Text metadata exceeds capacity"};
     }
 
-    return 11 + value.row_flags.size() + value.links.size() * 6 + value.runs.size() * 10 +
+    return 11 + value.row_flags.size() + (value.links.size() * 6) + (value.runs.size() * 10) +
            value.uris.size();
   }
 
@@ -781,7 +781,7 @@ namespace telar {
     const auto runs = u16::decode(input);
     const auto uri_length = u32::decode(input);
     if (links > 256 || runs > 2048 || uri_length > 65536 ||
-        rows + static_cast<std::size_t>(links) * 6 + static_cast<std::size_t>(runs) * 10 +
+        rows + (static_cast<std::size_t>(links) * 6) + (static_cast<std::size_t>(runs) * 10) +
                 uri_length >
             input.size()) {
       throw EncodingError{"Invalid text metadata lengths"};

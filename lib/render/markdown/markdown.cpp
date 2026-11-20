@@ -18,7 +18,7 @@ namespace telar::render::markdown {
   inline constexpr char32_t replacement = U'�';
 
   template <typename Text>
-  void appendUtf8(Text& text, char32_t value) {
+  static void appendUtf8(Text& text, char32_t value) {
     if (value == 0 || value > 0x10ffff || (value >= 0xd800 && value <= 0xdfff)) {
       value = replacement;
     }
@@ -42,7 +42,7 @@ namespace telar::render::markdown {
 
   // Appends an entity as md4c reports it (`&amp;`, `&#38;`, `&#x26;`), decoded.
   template <typename Text>
-  void appendEntity(Text& text, std::string_view entity) {
+  static void appendEntity(Text& text, std::string_view entity) {
     if (entity.size() > 3 && entity[1] == '#') {
       const bool hex = entity[2] == 'x' || entity[2] == 'X';
       const auto digits = entity.substr(hex ? 3 : 2, entity.size() - (hex ? 4 : 3));
@@ -67,7 +67,7 @@ namespace telar::render::markdown {
 
   // A copy of source with every invalid UTF-8 sequence replaced by U+FFFD, so
   // that every span of the document starts and ends on a character.
-  tbc::val_a<ds::String<Memory>> repairUtf8(std::string_view source, tbc::mut_a<Memory> memory) {
+  static tbc::val_a<ds::String<Memory>> repairUtf8(std::string_view source, tbc::mut_a<Memory> memory) {
     ds::String<Memory> repaired{memory};
 
     repaired.reserve(source.size());
@@ -202,8 +202,8 @@ namespace telar::render::markdown {
         const auto* item = static_cast<const MD_BLOCK_LI_DETAIL*>(detail);
         auto& list = lists_.backMut();
 
-        marker_ = item->is_task ? (item->task_mark == ' ' ? Marker::task_open : Marker::task_done) : list.ordered ? Marker::ordered
-                                                                                                                  : Marker::bullet;
+        marker_ = (item->is_task != 0) ? (item->task_mark == ' ' ? Marker::task_open : Marker::task_done) : list.ordered ? Marker::ordered
+                                                                                                                         : Marker::bullet;
         number_ = list.ordered ? list.next++ : 0;
         break;
       }
@@ -334,7 +334,7 @@ namespace telar::render::markdown {
         break;
       case MD_SPAN_FOOTNOTE_REF: {
         ds::Array<char, 16> digits;
-        const auto end = std::to_chars(digits.dataMut(), digits.dataMut() + digits.size(), static_cast<const MD_SPAN_FOOTNOTE_REF_DETAIL*>(detail)->id).ptr;
+        auto* const end = std::to_chars(digits.dataMut(), digits.dataMut() + digits.size(), static_cast<const MD_SPAN_FOOTNOTE_REF_DETAIL*>(detail)->id).ptr;
 
         appendRun(std::string_view{digits.data(), static_cast<std::size_t>(end - digits.data())}, style::superscript);
         break;
@@ -518,7 +518,7 @@ namespace telar::render::markdown {
         return;
       }
 
-      runs.push(Run{.text = Span{offset, static_cast<std::uint32_t>(value.size())}, .target = target_, .style = style});
+      runs.push(Run{.text = Span{.offset = offset, .size = static_cast<std::uint32_t>(value.size())}, .target = target_, .style = style});
     }
 
     void appendVerbatim(std::string_view value) {
@@ -552,7 +552,7 @@ namespace telar::render::markdown {
         }
       }
 
-      return Span{offset, static_cast<std::uint32_t>(document_.text.size() - offset)};
+      return Span{.offset = offset, .size = static_cast<std::uint32_t>(document_.text.size() - offset)};
     }
 
     static Callout calloutOf(const MD_ATTRIBUTE& type) {

@@ -98,7 +98,7 @@ namespace telar::runtime {
 
     for (std::uint16_t column = 0; column < cells.len; ++column) {
       const auto raw = cells.ptr[column];
-      if (!cell_layout::hyperlink(raw) || cell_layout::wide(raw) == GHOSTTY_CELL_WIDE_SPACER_HEAD) {
+      if ((cell_layout::hyperlink(raw) == 0u) || cell_layout::wide(raw) == GHOSTTY_CELL_WIDE_SPACER_HEAD) {
         continuing = false;
         continue;
       }
@@ -114,7 +114,7 @@ namespace telar::runtime {
       }
 
       checkGhostty(result);
-      const auto index = intern(table, Identity{stringView(uri), stringView(explicit_id), implicit_id});
+      const auto index = intern(table, Identity{.uri = stringView(uri), .explicit_id = stringView(explicit_id), .implicit_id = implicit_id});
       if (!index) {
         continuing = false;
         continue;
@@ -138,7 +138,7 @@ namespace telar::runtime {
   }
 
   Cell ScreenCell::view() const noexcept {
-    return Cell{width, style, std::span<const Byte>{text}.first(length)};
+    return Cell{.width = width, .style = style, .text = std::span<const Byte>{text}.first(length)};
   }
 
   Screen::Screen(ConcurrentMemory& memory)
@@ -422,7 +422,7 @@ namespace telar::runtime {
       snapshot_pending_ = true;
       baseline_.resize(screen.cells.size());
       cell_bytes_.resize(screen.cells.size() * maximum_cell_bytes);
-      payload_.resize(std::min(max_payload_size, screen.cells.size() * maximum_cell_bytes + maximum_metadata_bytes));
+      payload_.resize(std::min(max_payload_size, (screen.cells.size() * maximum_cell_bytes) + maximum_metadata_bytes));
     }
 
     if (waitingForAck() || (!snapshot_pending_ && observed_revision_ == screen.revision)) {
@@ -585,8 +585,8 @@ namespace telar::runtime {
     diagnostics::accumulate(counters_.frames);
     diagnostics::accumulate(counters_.frame_bytes, bytes);
     diagnostics::accumulate(counters_.frame_spans, spans_.size());
-    diagnostics::accumulate(counters_.snapshots, snapshot);
-    diagnostics::accumulate(counters_.cursor_only_frames, spans_.empty());
+    diagnostics::accumulate(counters_.snapshots, static_cast<std::uint64_t>(snapshot));
+    diagnostics::accumulate(counters_.cursor_only_frames, static_cast<std::uint64_t>(spans_.empty()));
     for (const auto& span : spans_) {
       diagnostics::accumulate(counters_.frame_cells, span.count);
     }
@@ -623,8 +623,8 @@ namespace telar::runtime {
 
     checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_SCROLLBACK_MAX_BYTES, &scrollback_bytes));
 
-    const GhosttyColorRgb foreground{255, 255, 255};
-    const GhosttyColorRgb background{0, 0, 0};
+    const GhosttyColorRgb foreground{.r = 255, .g = 255, .b = 255};
+    const GhosttyColorRgb background{.r = 0, .g = 0, .b = 0};
 
     checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_COLOR_FOREGROUND, &foreground));
     checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_COLOR_BACKGROUND, &background));
@@ -730,9 +730,9 @@ namespace telar::runtime {
   }
 
   void Terminal::configureColors(const TerminalTheme& colors) {
-    const auto foreground = colors.foreground ? GhosttyColorRgb{(*colors.foreground)[0], (*colors.foreground)[1], (*colors.foreground)[2]} : GhosttyColorRgb{255, 255, 255};
-    const auto background = colors.background ? GhosttyColorRgb{(*colors.background)[0], (*colors.background)[1], (*colors.background)[2]} : GhosttyColorRgb{};
-    const auto cursor = colors.cursor ? GhosttyColorRgb{(*colors.cursor)[0], (*colors.cursor)[1], (*colors.cursor)[2]} : GhosttyColorRgb{};
+    const auto foreground = colors.foreground ? GhosttyColorRgb{.r = (*colors.foreground)[0], .g = (*colors.foreground)[1], .b = (*colors.foreground)[2]} : GhosttyColorRgb{.r = 255, .g = 255, .b = 255};
+    const auto background = colors.background ? GhosttyColorRgb{.r = (*colors.background)[0], .g = (*colors.background)[1], .b = (*colors.background)[2]} : GhosttyColorRgb{};
+    const auto cursor = colors.cursor ? GhosttyColorRgb{.r = (*colors.cursor)[0], .g = (*colors.cursor)[1], .b = (*colors.cursor)[2]} : GhosttyColorRgb{};
 
     checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_COLOR_FOREGROUND, &foreground));
     checkGhostty(ghostty_terminal_set(terminal_.get(), GHOSTTY_TERMINAL_OPT_COLOR_BACKGROUND, &background));
@@ -741,7 +741,7 @@ namespace telar::runtime {
 
     if (colors.palette) {
       for (std::size_t index = 0; index < colors.palette->size() / 3; ++index) {
-        palette.atMut(index) = {(*colors.palette)[index * 3], (*colors.palette)[index * 3 + 1], (*colors.palette)[index * 3 + 2]};
+        palette.atMut(index) = {.r = (*colors.palette)[index * 3], .g = (*colors.palette)[(index * 3) + 1], .b = (*colors.palette)[(index * 3) + 2]};
       }
     }
 
@@ -775,7 +775,7 @@ namespace telar::runtime {
     GhosttyRenderStateDirty damage{};
 
     checkGhostty(ghostty_render_state_get(render_state_.get(), GHOSTTY_RENDER_STATE_DATA_DIRTY, &damage));
-    auto iterator = row_iterator_.get();
+    auto* iterator = row_iterator_.get();
 
     checkGhostty(ghostty_render_state_get(render_state_.get(), GHOSTTY_RENDER_STATE_DATA_ROW_ITERATOR, &iterator));
     const bool recolored = projection_.updateColors(terminal_.get(), render_state_.get());
@@ -933,7 +933,7 @@ namespace telar::runtime {
     std::size_t page_bytes = 0;
 
     checkGhostty(ghostty_terminal_page_bytes(terminal_.get(), &page_bytes));
-    return {page_bytes, screen.cells.size() * sizeof(ScreenCell)};
+    return {.page_bytes = page_bytes, .screen_bytes = screen.cells.size() * sizeof(ScreenCell)};
   }
 #endif
 
@@ -1244,7 +1244,7 @@ namespace telar::runtime {
     };
 
     const std::string_view shape{reinterpret_cast<const char*>(pointer.ptr), pointer.len};
-    const auto found = std::find(shapes.begin(), shapes.end(), shape);
+    const auto* const found = std::find(shapes.begin(), shapes.end(), shape);
 
     screen.pointer_shape = found == shapes.end() ? PointerShape::default_shape : static_cast<PointerShape>(found - shapes.begin());
 
@@ -1370,7 +1370,7 @@ namespace telar::runtime {
     // The links' runs of these rows, counted from their first cell.
     const auto metadata = screen.metadata.view(screen.row_flags);
     const auto first_cell = static_cast<std::uint64_t>(skip) * cols;
-    const auto end_cell = first_cell + static_cast<std::uint64_t>(count) * cols;
+    const auto end_cell = first_cell + (static_cast<std::uint64_t>(count) * cols);
 
     runs_.clear();
     for (const auto& run : metadata.runs) {
@@ -1429,8 +1429,8 @@ namespace telar::runtime {
     const auto count = std::min<std::uint32_t>(wanted_rows, rows);
     auto selection = ghosttySized<GhosttySelection>();
 
-    selection.start = reference(tag, {0, rows - count});
-    selection.end = reference(tag, {static_cast<std::uint16_t>(terminal_.screen.cols - 1), rows - 1});
+    selection.start = reference(tag, {.x = 0, .y = rows - count});
+    selection.end = reference(tag, {.x = static_cast<std::uint16_t>(terminal_.screen.cols - 1), .y = rows - 1});
     format(selection, false, TrailingSpaces::kept);
   }
 
@@ -1449,7 +1449,7 @@ namespace telar::runtime {
 
     for (auto* point : {&start, &end}) {
       if (point->y > bottom) {
-        *point = {static_cast<std::uint16_t>(columns - 1), bottom};
+        *point = {.x = static_cast<std::uint16_t>(columns - 1), .y = bottom};
       }
     }
 
@@ -1481,7 +1481,7 @@ namespace telar::runtime {
   }
 
   bool TextReader::rowIsBlank(GhosttyPointTag tag, std::uint32_t row) const {
-    auto cell_ref = reference(tag, {0, row});
+    auto cell_ref = reference(tag, {.x = 0, .y = row});
 
     for (std::uint16_t column = 0; column < terminal_.screen.cols; ++column) {
       cell_ref.x = column;

@@ -38,7 +38,7 @@ export extern "C++" {
       std::uint64_t request_id{};
       std::uint64_t pane_id{};
       std::uint64_t pane_generation{};
-      std::string_view session{};
+      std::string_view session;
 
       void validate() const;
     };
@@ -53,11 +53,11 @@ export extern "C++" {
       std::uint64_t pane_generation{};
       AgentProvider provider{};
       AgentReportState state{};
-      std::string_view session{};
-      std::string_view session_file{};
+      std::string_view session;
+      std::string_view session_file;
       AgentSessionFileKind session_file_kind{};
       AgentBlockedReason blocked_reason{};
-      std::string_view event{};
+      std::string_view event;
 
       void validate() const;
     };
@@ -83,12 +83,12 @@ export extern "C++" {
       std::uint64_t pane_id{};
       std::uint64_t pane_generation{};
       AgentCommandPhase phase{};
-      std::string_view provider{};
-      std::string_view tool_call_id{};
-      std::string_view command{};
-      std::string_view cwd{};
-      std::string_view session{};
-      ds::Option<std::int32_t> exit_code{};
+      std::string_view provider;
+      std::string_view tool_call_id;
+      std::string_view command;
+      std::string_view cwd;
+      std::string_view session;
+      ds::Option<std::int32_t> exit_code;
 
       void validate() const;
     };
@@ -102,7 +102,7 @@ export extern "C++" {
       std::uint64_t pane_id{};
       std::uint64_t pane_generation{};
       AgentProvider provider{};
-      std::string_view title{};
+      std::string_view title;
     };
 
     template <>
@@ -124,16 +124,16 @@ export extern "C++" {
       std::uint64_t pane_id{};
       std::uint64_t pane_generation{};
       AgentProvider provider{};
-      std::string_view cwd{};
-      std::string_view work_tree_path{};
-      std::string_view work_tree_branch{};
-      std::string_view final_message{};
+      std::string_view cwd;
+      std::string_view work_tree_path;
+      std::string_view work_tree_branch;
+      std::string_view final_message;
       AgentPlanOp plan_op{};
       std::uint16_t plan_index{};
       AgentPlanStatus plan_status{};
       std::uint16_t plan_done{};
       std::uint16_t plan_total{};
-      std::string_view plan_text{};
+      std::string_view plan_text;
 
       void validate() const;
     };
@@ -160,7 +160,7 @@ export extern "C++" {
 
     struct AgentSnapshot {
       std::uint64_t revision{};
-      std::span<const AgentSnapshotEntry> entries{};
+      std::span<const AgentSnapshotEntry> entries;
     };
 
     template <>

@@ -213,7 +213,7 @@ namespace telar::render {
     }
 
     DecodeError decodeCells(std::span<const std::uint8_t> input, const Counts& counts, std::span<Cell> cells) noexcept {
-      Reader records{input.subspan(header_bytes + std::size_t{counts.blocks} * block_bytes)};
+      Reader records{input.subspan(header_bytes + (std::size_t{counts.blocks} * block_bytes))};
 
       for (auto& cell : cells) {
         cell.first = records.u32();
@@ -235,7 +235,7 @@ namespace telar::render {
 
     DecodeError decodeRuns(std::span<const std::uint8_t> input, const Counts& counts, std::span<Run> runs) noexcept {
       const auto content = text(input, counts);
-      Reader records{input.subspan(header_bytes + std::size_t{counts.blocks} * block_bytes + std::size_t{counts.cells} * cell_bytes)};
+      Reader records{input.subspan(header_bytes + (std::size_t{counts.blocks} * block_bytes) + (std::size_t{counts.cells} * cell_bytes))};
 
       for (auto& run : runs) {
         run.text.offset = records.u32();
@@ -291,7 +291,7 @@ namespace telar::render {
             return within(block.first, block.count, counts.cells);
           case BlockKind::code:
           case BlockKind::html:
-            return validSpan(content, Span{block.first, block.count});
+            return validSpan(content, Span{.offset = block.first, .size = block.count});
           default:
             return true;
           }

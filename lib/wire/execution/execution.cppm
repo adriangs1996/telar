@@ -25,9 +25,9 @@ export extern "C++" {
       std::uint64_t stderr_offset{};
       std::uint64_t input_offset{};
       bool stdin_open{};
-      std::string_view cwd{};
-      std::span<const std::string_view> arguments{};
-      std::span<const Byte> bytes{};
+      std::string_view cwd;
+      std::span<const std::string_view> arguments;
+      std::span<const Byte> bytes;
 
       void validate() const;
     };
@@ -49,9 +49,9 @@ export extern "C++" {
       ExecutionState state{};
       std::int32_t exit_code{};
       bool stdin_open{};
-      std::span<const Byte> failure{};
-      std::span<const Byte> stdout_bytes{};
-      std::span<const Byte> stderr_bytes{};
+      std::span<const Byte> failure;
+      std::span<const Byte> stdout_bytes;
+      std::span<const Byte> stderr_bytes;
     };
 
     template <>

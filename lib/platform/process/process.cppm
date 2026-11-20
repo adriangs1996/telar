@@ -44,11 +44,11 @@ export {
       PtyProcess(const PtyProcess&) = delete;
       PtyProcess& operator=(const PtyProcess&) = delete;
 
-      int descriptor() const noexcept;
-      pid_t processId() const noexcept;
+      [[nodiscard]] int descriptor() const noexcept;
+      [[nodiscard]] pid_t processId() const noexcept;
 
       void resize(TerminalSize size);
-      ds::Option<pid_t> foregroundProcessGroup() const noexcept;
+      [[nodiscard]] ds::Option<pid_t> foregroundProcessGroup() const noexcept;
       void signal(int signal_number) const noexcept;
       void shutdown() const noexcept;
       ds::Option<int> reap() noexcept;
@@ -102,7 +102,7 @@ export {
       Command& operator=(const Command&) = delete;
 
       void removeEnvironmentPrefix(std::string_view prefix);
-      ds::Option<std::string_view> environment(std::string_view name) const noexcept;
+      [[nodiscard]] ds::Option<std::string_view> environment(std::string_view name) const noexcept;
       void removeEnvironment(std::string_view name);
 
       // The process starts with these after the program instead of the launch's own arguments,
@@ -111,9 +111,9 @@ export {
 
       void setEnvironment(std::string_view name, std::string_view value);
       SpawnSpec specification(TerminalSize size);
-      std::string_view cwd() const noexcept;
-      std::span<const ds::String<Memory>> arguments() const noexcept;
-      bool restorable() const noexcept;
+      [[nodiscard]] std::string_view cwd() const noexcept;
+      [[nodiscard]] std::span<const ds::String<Memory>> arguments() const noexcept;
+      [[nodiscard]] bool restorable() const noexcept;
 
     private:
       static bool definesVariable(std::string_view entry, std::string_view name) noexcept;
@@ -157,10 +157,10 @@ export {
       PipeProcess(const PipeProcess&) = delete;
       PipeProcess& operator=(const PipeProcess&) = delete;
 
-      int input() const noexcept;
-      int output() const noexcept;
-      int error() const noexcept;
-      pid_t processId() const noexcept;
+      [[nodiscard]] int input() const noexcept;
+      [[nodiscard]] int output() const noexcept;
+      [[nodiscard]] int error() const noexcept;
+      [[nodiscard]] pid_t processId() const noexcept;
 
       void closeInput() noexcept;
       void closeOutput() noexcept;
@@ -227,12 +227,12 @@ export {
       // returns false to stop reading, which ends the command.
       int streamWithInput(Command<Memory>& command, Clock::time_point deadline, std::span<const std::string_view> input, BytesConsumer output, BytesConsumer error);
 
-      bool truncated() const noexcept;
-      std::string_view text() const noexcept;
+      [[nodiscard]] bool truncated() const noexcept;
+      [[nodiscard]] std::string_view text() const noexcept;
 
     private:
       struct ExecutionOptions {
-        std::span<const std::string_view> input{};
+        std::span<const std::string_view> input;
         const std::atomic<bool>* cancelled = nullptr;
       };
 
@@ -268,8 +268,8 @@ export {
       // The path found is resolved to the file itself.
       static ds::Option<ExecutablePath> sibling(std::initializer_list<std::string_view> candidates);
 
-      const char* c_str() const noexcept;
-      std::string_view view() const noexcept;
+      [[nodiscard]] const char* c_str() const noexcept;
+      [[nodiscard]] std::string_view view() const noexcept;
 
     private:
       static bool exactlyNamed(const char* path) noexcept;

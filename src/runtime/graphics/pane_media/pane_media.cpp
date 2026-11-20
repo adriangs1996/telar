@@ -51,10 +51,10 @@ namespace telar::runtime {
           const auto frame = AtomicFrame::at(text, position).unwrap();
           const auto selected = selectedStart(entries, frame.control.key);
           if (selected == frame.start) {
-            const AtomicFrameView view{bytes.subspan(frame.start, frame.end - frame.start), frame.command_start - frame.start, frame.command_end - frame.start, frame.encoded_name, frame.control};
+            const AtomicFrameView view{.bytes = bytes.subspan(frame.start, frame.end - frame.start), .command_start = frame.command_start - frame.start, .command_end = frame.command_end - frame.start, .encoded_name = frame.encoded_name, .control = frame.control};
             if (sink.atomicFrame(view)) {
               ++statistics.direct;
-              statistics.file += frame.control.medium == GraphicsInputMedium::file;
+              statistics.file += static_cast<std::uint64_t>(frame.control.medium == GraphicsInputMedium::file);
               ++statistics.forwarded;
             } else if (frame.control.medium == GraphicsInputMedium::file) {
               ++statistics.unavailable;
@@ -69,8 +69,8 @@ namespace telar::runtime {
               sink.output({reinterpret_cast<const std::uint8_t*>(AtomicFrame::cursor_save.data()), AtomicFrame::cursor_save.size()});
             }
 
-            statistics.unavailable += !selected.hasValue();
-            statistics.discarded += selected.hasValue();
+            statistics.unavailable += static_cast<std::uint64_t>(!selected.hasValue());
+            statistics.discarded += static_cast<std::uint64_t>(selected.hasValue());
           }
 
           position = frame.end;
@@ -125,7 +125,7 @@ namespace telar::runtime {
   }
 
   AtomicFrameResource AtomicFrameFilter::resource(const AtomicFrame& frame, std::size_t storage_limit) noexcept {
-    return {frame.encoded_name, frame.control.byte_count, storage_limit, frame.control.medium};
+    return {.encoded_name = frame.encoded_name, .byte_count = frame.control.byte_count, .limit = storage_limit, .medium = frame.control.medium};
   }
 
   void AtomicFrameFilter::output(std::span<const std::uint8_t> bytes, AtomicFrameSink& sink) {
@@ -212,7 +212,7 @@ namespace telar::runtime {
     std::size_t position = 0;
 
     while (const auto transition = framing_.advance(bytes, position)) {
-      observation.completed_commands += *transition == KittyFraming::Transition::ended;
+      observation.completed_commands += static_cast<std::size_t>(*transition == KittyFraming::Transition::ended);
     }
 
     return observation;
@@ -226,7 +226,7 @@ namespace telar::runtime {
   }
 
   ds::Option<std::uint32_t> GraphicsUploadLimits::enforce(GhosttyTerminal terminal, const Observation& observation) {
-    const auto graphics = storage(terminal);
+    auto* const graphics = storage(terminal);
     const auto loading = loadingImage(graphics);
     if (loading || observation.loading_image) {
       loading_chunks_ += std::min(observation.completed_commands, std::numeric_limits<std::size_t>::max() - loading_chunks_);
@@ -418,8 +418,8 @@ namespace telar::runtime {
     GhosttyKittyGraphics storage = nullptr;
 
     checkGhostty(ghostty_terminal_get(terminal_.get(), GHOSTTY_TERMINAL_DATA_KITTY_GRAPHICS, &storage));
-    const auto image = ghostty_kitty_graphics_image(storage, identity);
-    ImageKey key{identity, 0};
+    const auto* const image = ghostty_kitty_graphics_image(storage, identity);
+    ImageKey key{.image_id = identity, .generation = 0};
 
     checkGhostty(ghostty_kitty_graphics_image_get(image, GHOSTTY_KITTY_IMAGE_DATA_GENERATION, &key.generation));
     return key;
@@ -524,7 +524,7 @@ namespace telar::runtime {
 
   bool AtomicFrameLoader::load(const AtomicFrameView& frame, bool shared_transport) {
     TELAR_TRACE("media.loadAtomicFrame");
-    const auto child = GraphicsFramePixels::open({frame.encoded_name, frame.control.byte_count, terminal_.storageLimit(), frame.control.medium});
+    const auto child = GraphicsFramePixels::open({.encoded_name = frame.encoded_name, .byte_count = frame.control.byte_count, .limit = terminal_.storageLimit(), .medium = frame.control.medium});
     if (!child) {
       return false;
     }

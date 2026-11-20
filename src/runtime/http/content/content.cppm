@@ -48,7 +48,7 @@ export {
       // Whether every element of `value`, however many, names identity.
       static bool onlyIdentity(std::string_view value) noexcept;
 
-      std::span<const ContentCoding> list() const noexcept;
+      [[nodiscard]] std::span<const ContentCoding> list() const noexcept;
     };
 
   }
@@ -95,7 +95,7 @@ export {
     struct DecodedBody {
       explicit DecodedBody(Memory& memory, std::size_t capacity);
 
-      std::span<const std::uint8_t> bytes() const noexcept;
+      [[nodiscard]] std::span<const std::uint8_t> bytes() const noexcept;
 
       SensitiveAllocation<Memory> storage;
       std::size_t size = 0;

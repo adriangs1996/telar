@@ -14,7 +14,7 @@ namespace telar::runtime {
     });
     if (entry == pairs.end()) {
       entry = std::ranges::min_element(pairs, {}, &Pair::started);
-      *entry = Pair{sender, target, now, 0};
+      *entry = Pair{.sender = sender, .target = target, .started = now, .count = 0};
     }
 
     if (now - entry->started >= window) {
@@ -153,7 +153,7 @@ namespace telar::runtime {
       return ds::none;
     }
 
-    return AgentSignal{provider, *observation.status, static_cast<Byte>(provider == AgentProvider::claude ? 96 : 94), observation.identity_confirmed, observation.status == AgentStatus::ready};
+    return AgentSignal{.provider = provider, .status = *observation.status, .confidence = static_cast<Byte>(provider == AgentProvider::claude ? 96 : 94), .identity_confirmed = observation.identity_confirmed, .ready_confirmed = observation.status == AgentStatus::ready};
   }
 
   std::span<const ScreenCell> AgentScreenReader::rowCells(std::size_t row) const noexcept {
@@ -187,7 +187,7 @@ namespace telar::runtime {
 
   AgentScreenObservation AgentScreenReader::claude() const noexcept {
     if (title_.starts_with("◐") || title_.starts_with("◑")) {
-      return {AgentStatus::working};
+      return {.status = AgentStatus::working};
     }
 
     AgentScreenObservation result;
@@ -292,7 +292,7 @@ namespace telar::runtime {
         }
 
         if (codexStatus(line)) {
-          return {AgentStatus::working, false, identified};
+          return {.status = AgentStatus::working, .restored_draft = false, .identity_confirmed = identified};
         }
       }
 
@@ -307,7 +307,7 @@ namespace telar::runtime {
         }
       }
 
-      return {AgentStatus::ready, false, identified};
+      return {.status = AgentStatus::ready, .restored_draft = false, .identity_confirmed = identified};
     }
 
     return {};
@@ -325,7 +325,7 @@ namespace telar::runtime {
       const bool identified = composer.text().starts_with("Add a follow-up") || composer.text().starts_with("Plan, search, build anything");
 
       if (composer.text().find("ctrl+c to stop") != std::string_view::npos) {
-        return {AgentStatus::working, false, identified};
+        return {.status = AgentStatus::working, .restored_draft = false, .identity_confirmed = identified};
       }
 
       const auto top = std::max<std::size_t>(first, y > 6 ? y - 6 : 0);
@@ -334,11 +334,11 @@ namespace telar::runtime {
         const auto line = row(above);
         const auto label = line.text();
         if (line.first >= 0x2800 && line.first <= 0x28ff && !label.empty() && ((label.front() >= 'A' && label.front() <= 'Z') || (label.front() >= 'a' && label.front() <= 'z'))) {
-          return {AgentStatus::working, false, identified};
+          return {.status = AgentStatus::working, .restored_draft = false, .identity_confirmed = identified};
         }
       }
 
-      return {AgentStatus::ready, false, identified};
+      return {.status = AgentStatus::ready, .restored_draft = false, .identity_confirmed = identified};
     }
 
     return {};

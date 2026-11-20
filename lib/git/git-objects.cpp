@@ -531,7 +531,7 @@ namespace telar::git {
 
     pack.index_size = static_cast<std::uint64_t>(status.st_size);
     ds::Array<std::uint8_t, pack_index_header> header;
-    if (pack.index_size < pack_index_header + 2 * hash_size || !readAt(pack.index.get(), header.dataMut(), header.size(), 0)) {
+    if (pack.index_size < pack_index_header + (2 * hash_size) || !readAt(pack.index.get(), header.dataMut(), header.size(), 0)) {
       return false;
     }
 
@@ -542,7 +542,7 @@ namespace telar::git {
     std::uint32_t previous = 0;
 
     for (std::size_t index = 0; index < pack.fanout.size(); ++index) {
-      pack.fanout.atMut(index) = loadBig32(header.data() + 8 + 4 * index);
+      pack.fanout.atMut(index) = loadBig32(header.data() + 8 + (4 * index));
       if (pack.fanout[index] < previous) {
         return false;
       }
@@ -551,7 +551,7 @@ namespace telar::git {
     }
 
     pack.count = pack.fanout[255];
-    const auto fixed = pack_index_header + std::uint64_t{pack.count} * (hash_size + 8) + 2 * hash_size;
+    const auto fixed = pack_index_header + (std::uint64_t{pack.count} * (hash_size + 8)) + (2 * hash_size);
     if (pack.index_size < fixed || (pack.index_size - fixed) % 8 != 0 || (pack.index_size - fixed) / 8 > pack.count) {
       return false;
     }
@@ -582,9 +582,9 @@ namespace telar::git {
     const auto key = id.view();
 
     while (high > low && std::size_t{high - low} * hash_size > block.size()) {
-      const auto middle = low + (high - low) / 2;
+      const auto middle = low + ((high - low) / 2);
       ds::Array<std::uint8_t, maximum_hash_size> name;
-      if (!readAt(pack.index.get(), name.dataMut(), hash_size, pack_index_header + std::uint64_t{middle} * hash_size)) {
+      if (!readAt(pack.index.get(), name.dataMut(), hash_size, pack_index_header + (std::uint64_t{middle} * hash_size))) {
         return ds::none;
       }
 
@@ -605,7 +605,7 @@ namespace telar::git {
     }
 
     const auto count = std::size_t{high - low};
-    if (!readAt(pack.index.get(), block.data(), count * hash_size, pack_index_header + std::uint64_t{low} * hash_size)) {
+    if (!readAt(pack.index.get(), block.data(), count * hash_size, pack_index_header + (std::uint64_t{low} * hash_size))) {
       return ds::none;
     }
 
@@ -613,8 +613,8 @@ namespace telar::git {
     std::size_t end = count;
 
     while (begin < end) {
-      const auto middle = begin + (end - begin) / 2;
-      const auto order = compareBytes(key, {block.data() + middle * hash_size, hash_size});
+      const auto middle = begin + ((end - begin) / 2);
+      const auto order = compareBytes(key, {block.data() + (middle * hash_size), hash_size});
       if (order == 0) {
         return low + static_cast<std::uint32_t>(middle);
       }
@@ -631,16 +631,16 @@ namespace telar::git {
 
   ds::Option<std::uint64_t> ObjectDatabase::packOffset(ObjectFormat format, const Pack& pack, std::uint32_t position) noexcept {
     const auto hash_size = hashSize(format);
-    const auto offsets = pack_index_header + std::uint64_t{pack.count} * (hash_size + 4);
+    const auto offsets = pack_index_header + (std::uint64_t{pack.count} * (hash_size + 4));
     ds::Array<std::uint8_t, 8> bytes;
-    if (!readAt(pack.index.get(), bytes.dataMut(), 4, offsets + 4 * std::uint64_t{position})) {
+    if (!readAt(pack.index.get(), bytes.dataMut(), 4, offsets + (4 * std::uint64_t{position}))) {
       return ds::none;
     }
 
     std::uint64_t offset = loadBig32(bytes.data());
     if ((offset & 0x80000000u) != 0) {
       const auto large = offset & 0x7fffffffu;
-      if (large >= pack.large_offsets || !readAt(pack.index.get(), bytes.dataMut(), 8, offsets + 4 * std::uint64_t{pack.count} + 8 * large)) {
+      if (large >= pack.large_offsets || !readAt(pack.index.get(), bytes.dataMut(), 8, offsets + (4 * std::uint64_t{pack.count}) + (8 * large))) {
         return ds::none;
       }
 
@@ -762,7 +762,7 @@ namespace telar::git {
       return false;
     }
 
-    PackSource source{pack.data.get(), data_offset, pack.data_size - hashSize(format), chunk};
+    PackSource source{.descriptor = pack.data.get(), .offset = data_offset, .end = pack.data_size - hashSize(format), .buffer = chunk};
 
     if (whole) {
       return inflateExactly(inflater.stream(), source, output);
@@ -790,7 +790,7 @@ namespace telar::git {
         return Lookup::invalid;
       }
 
-      chain_.push({pack, entry.data_offset, entry.size});
+      chain_.push({.pack = pack, .data_offset = entry.data_offset, .size = entry.size});
       if (entry.kind == 6) {
         offset = entry.base_offset;
         continue;
@@ -1054,9 +1054,9 @@ namespace telar::git {
       std::uint32_t high = layer.fanout[first];
 
       while (low < high) {
-        const auto middle = low + (high - low) / 2;
+        const auto middle = low + ((high - low) / 2);
         ds::Array<std::uint8_t, maximum_hash_size> name;
-        if (!readAt(layer.file.get(), name.dataMut(), hash_size, layer.names + std::uint64_t{middle} * hash_size)) {
+        if (!readAt(layer.file.get(), name.dataMut(), hash_size, layer.names + (std::uint64_t{middle} * hash_size))) {
           return ds::none;
         }
 
@@ -1080,7 +1080,7 @@ namespace telar::git {
     const auto* layer = layerOf(position);
     const auto hash_size = hashSize(format_);
     ds::Array<std::uint8_t, maximum_hash_size> name;
-    if (layer == nullptr || !readAt(layer->file.get(), name.dataMut(), hash_size, layer->names + std::uint64_t{position - layer->base} * hash_size)) {
+    if (layer == nullptr || !readAt(layer->file.get(), name.dataMut(), hash_size, layer->names + (std::uint64_t{position - layer->base} * hash_size))) {
       return ds::none;
     }
 
@@ -1091,7 +1091,7 @@ namespace telar::git {
     const auto* layer = layerOf(position);
     const auto hash_size = hashSize(format_);
     ds::Array<std::uint8_t, maximum_hash_size + 16> record;
-    if (layer == nullptr || !readAt(layer->file.get(), record.dataMut(), hash_size + 16, layer->commits + std::uint64_t{position - layer->base} * (hash_size + 16))) {
+    if (layer == nullptr || !readAt(layer->file.get(), record.dataMut(), hash_size + 16, layer->commits + (std::uint64_t{position - layer->base} * (hash_size + 16)))) {
       return ds::none;
     }
 
@@ -1139,7 +1139,7 @@ namespace telar::git {
 
     for (std::size_t count = 1;; ++count, ++edge) {
       ds::Array<std::uint8_t, 4> bytes;
-      if (count >= maximum || !fits(commit.layer->edges_size, 4 * edge, 4) || !readAt(commit.layer->file.get(), bytes.dataMut(), 4, commit.layer->edges + 4 * edge)) {
+      if (count >= maximum || !fits(commit.layer->edges_size, 4 * edge, 4) || !readAt(commit.layer->file.get(), bytes.dataMut(), 4, commit.layer->edges + (4 * edge))) {
         return false;
       }
 
@@ -1176,7 +1176,7 @@ namespace telar::git {
 
     layer.size = static_cast<std::uint64_t>(status.st_size);
     constexpr std::size_t maximum_chunks = 32;
-    ds::Array<std::uint8_t, 8 + 12 * (maximum_chunks + 1)> header;
+    ds::Array<std::uint8_t, 8 + (12 * (maximum_chunks + 1))> header;
     if (layer.size < 8 + hash_size || !readAt(layer.file.get(), header.dataMut(), 8, 0)) {
       return false;
     }
@@ -1197,7 +1197,7 @@ namespace telar::git {
     std::uint64_t commits_size = 0;
 
     for (std::size_t chunk = 0; chunk < chunk_count; ++chunk) {
-      const auto* entry = header.data() + 8 + 12 * chunk;
+      const auto* entry = header.data() + 8 + (12 * chunk);
       const auto identifier = loadBig32(entry);
       const auto start = loadBig64(entry + 4);
       const auto end = loadBig64(entry + 16);
@@ -1228,14 +1228,14 @@ namespace telar::git {
     }
 
     ds::Array<std::uint8_t, 256 * 4> fanout_bytes;
-    if (loadBig32(header.dataMut() + 8 + 12 * chunk_count) != 0 || fanout_size != fanout_bytes.size() || !readAt(layer.file.get(), fanout_bytes.dataMut(), fanout_bytes.size(), fanout)) {
+    if (loadBig32(header.dataMut() + 8 + (12 * chunk_count)) != 0 || fanout_size != fanout_bytes.size() || !readAt(layer.file.get(), fanout_bytes.dataMut(), fanout_bytes.size(), fanout)) {
       return false;
     }
 
     std::uint32_t previous = 0;
 
     for (std::size_t index = 0; index < layer.fanout.size(); ++index) {
-      layer.fanout.atMut(index) = loadBig32(fanout_bytes.data() + 4 * index);
+      layer.fanout.atMut(index) = loadBig32(fanout_bytes.data() + (4 * index));
       if (layer.fanout[index] < previous) {
         return false;
       }

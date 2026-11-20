@@ -188,7 +188,7 @@ export {
 
       void resolveStorage(const ServerOptions& options, const EnvironmentSource& environment);
       void prepareSocket() const;
-      bool isDefaultSocket(const EnvironmentSource& environment) const;
+      [[nodiscard]] bool isDefaultSocket(const EnvironmentSource& environment) const;
 
       // telar's configuration directory: XDG_CONFIG_HOME/telar, else ~/.config/telar; empty without either.
       [[nodiscard]] static tbc::val_a<ds::String<Memory>> configHome(tbc::mut_a<Memory> memory, const EnvironmentSource& environment);

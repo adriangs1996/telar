@@ -18,13 +18,13 @@ namespace telar::runtime {
   namespace {
 
     ds::Option<std::int32_t> integerValue(CFDictionaryRef dictionary, CFStringRef key) noexcept {
-      const auto value = CFDictionaryGetValue(dictionary, key);
+      const auto* const value = CFDictionaryGetValue(dictionary, key);
       if (value == nullptr || CFGetTypeID(value) != CFNumberGetTypeID()) {
         return ds::none;
       }
 
       std::int32_t integer = 0;
-      if (!CFNumberGetValue(static_cast<CFNumberRef>(value), kCFNumberSInt32Type, &integer)) {
+      if (CFNumberGetValue(static_cast<CFNumberRef>(value), kCFNumberSInt32Type, &integer) == 0u) {
         return ds::none;
       }
 
@@ -42,11 +42,11 @@ namespace telar::runtime {
         return ds::none;
       }
 
-      const auto array = static_cast<CFArrayRef>(sources.get());
+      const auto* const array = static_cast<CFArrayRef>(sources.get());
       const auto count = CFArrayGetCount(array);
 
       for (CFIndex index = 0; index < count; ++index) {
-        const auto description = IOPSGetPowerSourceDescription(information.get(), CFArrayGetValueAtIndex(array, index));
+        const auto* const description = IOPSGetPowerSourceDescription(information.get(), CFArrayGetValueAtIndex(array, index));
         if (description == nullptr) {
           continue;
         }
@@ -197,9 +197,9 @@ namespace telar::runtime {
     }
 
     std::uint64_t numberValue(CFDictionaryRef dictionary, CFStringRef key) noexcept {
-      const auto value = CFDictionaryGetValue(dictionary, key);
+      const auto* const value = CFDictionaryGetValue(dictionary, key);
       std::int64_t number = 0;
-      if (value == nullptr || CFGetTypeID(value) != CFNumberGetTypeID() || !CFNumberGetValue(static_cast<CFNumberRef>(value), kCFNumberSInt64Type, &number)) {
+      if (value == nullptr || CFGetTypeID(value) != CFNumberGetTypeID() || (CFNumberGetValue(static_cast<CFNumberRef>(value), kCFNumberSInt64Type, &number) == 0u)) {
         return 0;
       }
 
@@ -220,7 +220,7 @@ namespace telar::runtime {
       while (const auto driver = IOIteratorNext(drivers)) {
         CFMutableDictionaryRef properties = nullptr;
         if (IORegistryEntryCreateCFProperties(driver, &properties, kCFAllocatorDefault, 0) == KERN_SUCCESS && properties != nullptr) {
-          const auto statistics = CFDictionaryGetValue(properties, block_storage_keys::statistics);
+          const auto* const statistics = CFDictionaryGetValue(properties, block_storage_keys::statistics);
           if (statistics != nullptr && CFGetTypeID(statistics) == CFDictionaryGetTypeID()) {
             detail.disk_read_bytes += numberValue(static_cast<CFDictionaryRef>(statistics), block_storage_keys::bytes_read);
             detail.disk_written_bytes += numberValue(static_cast<CFDictionaryRef>(statistics), block_storage_keys::bytes_written);

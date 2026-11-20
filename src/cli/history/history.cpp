@@ -97,7 +97,7 @@ namespace telar::runtime::cli::file_transfer {
     return file;
   }
 
-  void checkSize(std::uint64_t size) {
+  static void checkSize(std::uint64_t size) {
     if (size > max_bytes) {
       reportCommandLimit({.name = "file_transfer.max_bytes", .noun = "bytes", .value = max_bytes, .requested = size});
       throw std::runtime_error{"FileTransferLimit"};
@@ -219,7 +219,7 @@ namespace telar::runtime::cli::diagnostics {
     std::uint32_t pid;
   };
 
-  tbc::val_a<ds::Option<Log>> parseLog(tbc::mut_a<Memory> memory, std::string_view name, std::string_view base) {
+  static tbc::val_a<ds::Option<Log>> parseLog(tbc::mut_a<Memory> memory, std::string_view name, std::string_view base) {
     if (!name.starts_with(base) || !name.ends_with(".log")) {
       return ds::none;
     }
@@ -245,7 +245,7 @@ namespace telar::runtime::cli::diagnostics {
     return ds::none;
   }
 
-  std::string_view tail(std::string_view bytes, std::uint16_t lines) {
+  static std::string_view tail(std::string_view bytes, std::uint16_t lines) {
     if (bytes.empty()) {
       return bytes;
     }
@@ -262,7 +262,7 @@ namespace telar::runtime::cli::diagnostics {
     return bytes;
   }
 
-  tbc::val_a<ds::Vec<Log, Memory>> findLogs(tbc::mut_a<Memory> memory, DIR* directory, std::string_view base, const DiagnosticsOptions& options) {
+  static tbc::val_a<ds::Vec<Log, Memory>> findLogs(tbc::mut_a<Memory> memory, DIR* directory, std::string_view base, const DiagnosticsOptions& options) {
     ds::Vec<Log, Memory> logs{memory};
     std::size_t visited = 0;
     std::size_t skipped = 0;
@@ -295,7 +295,7 @@ namespace telar::runtime::cli::diagnostics {
     }
 
     if (options.component != DiagnosticsOptions::Component::client && !options.pid) {
-      for (const auto suffix : {".runtime.start.log", ".runtime.log"}) {
+      for (const auto* const suffix : {".runtime.start.log", ".runtime.log"}) {
         auto name = ds::format(memory, "{}{}", base, suffix);
         struct stat state{};
         if (::fstatat(::dirfd(directory), name.data(), &state, 0) == 0) {
@@ -319,7 +319,7 @@ namespace telar::runtime::cli::diagnostics {
     return logs;
   }
 
-  void readLogs(Memory& memory, std::string_view endpoint, const DiagnosticsOptions& options) {
+  static void readLogs(Memory& memory, std::string_view endpoint, const DiagnosticsOptions& options) {
     const auto slash = endpoint.rfind('/');
     if (slash == endpoint.npos) {
       throw std::runtime_error{"InvalidSocketPath"};
@@ -382,7 +382,7 @@ namespace telar::runtime::cli::diagnostics {
           output.push(',');
         }
 
-        ds::formatTo(output, "{{\"path\":{},\"component\":{},\"pid\":{},\"truncated\":{},\"text\":{}}}", quoteJson(path), quoteJson(log.component == DiagnosticsOptions::Component::runtime ? "runtime" : "client"), log.pid, jsonBoolean(truncated), quoteJson(selected));
+        ds::formatTo(output, R"({{"path":{},"component":{},"pid":{},"truncated":{},"text":{}}})", quoteJson(path), quoteJson(log.component == DiagnosticsOptions::Component::runtime ? "runtime" : "client"), log.pid, jsonBoolean(truncated), quoteJson(selected));
       } else {
         ds::formatTo(output, "{}{}{}", path, truncated ? " (tail)\n" : "\n", selected);
         if (selected.empty() || selected.back() != '\n') {
@@ -398,24 +398,24 @@ namespace telar::runtime::cli::diagnostics {
     writeText(output);
   }
 
-  void printLimits(Memory& memory, const LimitList& list, bool json) {
+  static void printLimits(Memory& memory, const LimitList& list, bool json) {
     Text output{memory};
 
     if (json) {
-      ds::formatTo(output, "{{\"runtime_evicted\":{},\"client_evicted\":{},\"refused_reports\":{},\"limits\":[", list.runtime_evicted, list.client_evicted, list.refused_reports);
+      ds::formatTo(output, R"({{"runtime_evicted":{},"client_evicted":{},"refused_reports":{},"limits":[)", list.runtime_evicted, list.client_evicted, list.refused_reports);
     } else if (list.entries.empty()) {
       output.append("no limit reached\n");
     }
 
     for (const auto& entry : list.entries) {
-      const auto origin = entry.origin == LimitOrigin::runtime ? "runtime" : "client";
+      const auto* const origin = entry.origin == LimitOrigin::runtime ? "runtime" : "client";
 
       if (json) {
         if (&entry != list.entries.data()) {
           output.push(',');
         }
 
-        ds::formatTo(output, "{{\"name\":{},\"noun\":{},\"value\":{},\"requested\":{},\"route\":{},\"origin\":{},\"hits\":{},\"last_ms\":{}}}", quoteJson(entry.reach.name), quoteJson(entry.reach.noun), entry.reach.value, orNull(entry.reach.requested), quoteJson(entry.reach.route), quoteJson(origin), entry.hits, entry.last_ms);
+        ds::formatTo(output, R"({{"name":{},"noun":{},"value":{},"requested":{},"route":{},"origin":{},"hits":{},"last_ms":{}}})", quoteJson(entry.reach.name), quoteJson(entry.reach.noun), entry.reach.value, orNull(entry.reach.requested), quoteJson(entry.reach.route), quoteJson(origin), entry.hits, entry.last_ms);
       } else {
         constexpr std::int64_t seconds_per_day = 24 * 60 * 60;
         constexpr std::int64_t seconds_per_hour = 60 * 60;
@@ -662,7 +662,7 @@ namespace telar::runtime::cli::history {
     bool active_ = false;
   };
 
-  tbc::val_a<std::pair<HistoryOptions::ImportKind, Text>> resolveImport(tbc::mut_a<Memory> memory, const HistoryOptions& options) {
+  static tbc::val_a<std::pair<HistoryOptions::ImportKind, Text>> resolveImport(tbc::mut_a<Memory> memory, const HistoryOptions& options) {
     using Kind = HistoryOptions::ImportKind;
 
     if (options.import_file) {
@@ -699,7 +699,7 @@ namespace telar::runtime::cli::history {
     throw std::runtime_error{"HistfileNotFound"};
   }
 
-  tbc::val_a<std::pair<Text, bool>> newestLines(tbc::mut_a<Memory> memory, const Text& path) {
+  static tbc::val_a<std::pair<Text, bool>> newestLines(tbc::mut_a<Memory> memory, const Text& path) {
     FileDescriptor file{::open(path.data(), O_RDONLY | O_CLOEXEC)};
     struct stat inode{};
     if (!file || ::fstat(file.get(), &inode) != 0) {
@@ -747,14 +747,14 @@ namespace telar::runtime::cli::history {
     bool truncated;
   };
 
-  tbc::val_a<ImportSource> loadImport(tbc::mut_a<Memory> memory, const HistoryOptions& options) {
+  static tbc::val_a<ImportSource> loadImport(tbc::mut_a<Memory> memory, const HistoryOptions& options) {
     auto [kind, path] = resolveImport(memory, options);
     auto [text, truncated] = newestLines(memory, path);
 
     return {.kind = kind, .path = std::move(path), .text = std::move(text), .truncated = truncated};
   }
 
-  int importHistory(Memory& memory, ControlSession& session, const ImportSource& input) {
+  static int importHistory(Memory& memory, ControlSession& session, const ImportSource& input) {
     constexpr ds::Array kind_names{"auto", "zsh", "bash", "fish"};
     const auto source = ds::format(memory, "{}:{}", kind_names.at(static_cast<std::size_t>(input.kind)), input.path);
     ds::Vec<ImportedLine, Memory> batch{memory};
@@ -822,7 +822,7 @@ namespace telar::runtime::cli::history {
     return input.truncated || parser.skipped != 0 ? 1 : 0;
   }
 
-  void print(Memory& memory, const HistoryResults& results) {
+  static void print(Memory& memory, const HistoryResults& results) {
     Text output{memory};
 
     for (const auto& entry : results.entries) {
@@ -849,7 +849,7 @@ namespace telar::runtime::cli::history {
     writeText(output);
   }
 
-  tbc::val_a<HistoryScopeValue> scopeValue(tbc::ref_a<HistoryOptions> options, tbc::val_a<std::string_view> cwd) {
+  static tbc::val_a<HistoryScopeValue> scopeValue(tbc::ref_a<HistoryOptions> options, tbc::val_a<std::string_view> cwd) {
     switch (options.scope) {
     case HistoryScope::cwd:
       return cwd;
@@ -875,7 +875,7 @@ namespace telar::runtime::cli::history {
     });
   }
 
-  bool confirmPrune() {
+  static bool confirmPrune() {
     constexpr std::size_t confirmation_bytes = 16;
     ds::Array<char, confirmation_bytes> typed;
 
@@ -946,7 +946,7 @@ namespace telar::runtime::cli::history {
     writeText(ds::format(memory, "removed {} entries\n", result.removed));
   }
 
-  void show(Memory& memory, ControlSession& session, const HistoryOptions& options) {
+  static void show(Memory& memory, ControlSession& session, const HistoryOptions& options) {
     const auto output = session.template exchange<HistoryOutput>(ReadHistoryOutput{.id = options.id});
     if (output.observed_bytes == 0) {
       writeText(ds::format(memory, "telar history: no output captured for entry {} (runtime.history.output = \"bounded\" enables capture)\n", output.id), STDERR_FILENO);
@@ -959,13 +959,13 @@ namespace telar::runtime::cli::history {
     }
   }
 
-  void stats(Memory& memory, ControlSession& session, const HistoryOptions& options, const HistoryScopeValue& scope) {
+  static void stats(Memory& memory, ControlSession& session, const HistoryOptions& options, const HistoryScopeValue& scope) {
     constexpr std::int64_t milliseconds_per_day = 86400000;
     const auto now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     const auto result = session.template exchange<HistoryStatsResult>(HistoryStatsQuery{
         .scope = options.scope,
         .scope_value = scope,
-        .since_ms = options.period_days == 0 ? 0 : now - static_cast<std::int64_t>(options.period_days) * milliseconds_per_day,
+        .since_ms = options.period_days == 0 ? 0 : now - (static_cast<std::int64_t>(options.period_days) * milliseconds_per_day),
     });
 
     auto output = ds::format(memory, "commands: {}\nunique:   {}\n", result.total, result.unique);
@@ -1026,7 +1026,7 @@ namespace telar::runtime::cli::history {
 
       return 0;
     } catch (const ControlFailure& error) {
-      const auto context = options.action == HistoryOptions::Action::import ? "telar history import: " : "telar history: ";
+      const auto* const context = options.action == HistoryOptions::Action::import ? "telar history import: " : "telar history: ";
 
       const std::string_view message = error.message().empty() ? std::string_view{error.what()} : error.message();
 
@@ -1161,12 +1161,12 @@ namespace telar::runtime::cli {
     constexpr std::int64_t epoch_adjustment = 719468;
     constexpr std::int64_t milliseconds_per_day = 86400000;
     const auto era = adjusted_year / years_per_era;
-    const auto year_of_era = adjusted_year - era * years_per_era;
+    const auto year_of_era = adjusted_year - (era * years_per_era);
     const auto adjusted_month = (month + 9) % 12;
-    const auto day_of_year = (153 * adjusted_month + 2) / 5 + day - 1;
-    const auto day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
+    const auto day_of_year = (((153 * adjusted_month) + 2) / 5) + day - 1;
+    const auto day_of_era = (year_of_era * 365) + (year_of_era / 4) - (year_of_era / 100) + day_of_year;
 
-    return (era * days_per_era + day_of_era - epoch_adjustment) * milliseconds_per_day;
+    return ((era * days_per_era) + day_of_era - epoch_adjustment) * milliseconds_per_day;
   }
 
   HistoryOptions HistoryOptions::parse(Arguments words) {

@@ -12,7 +12,7 @@ export {
       std::int64_t nanoseconds = 0;
 
       static ObservationTime now() noexcept;
-      bool before(ObservationTime other) const noexcept;
+      [[nodiscard]] bool before(ObservationTime other) const noexcept;
     };
 
   }

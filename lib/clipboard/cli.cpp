@@ -4,7 +4,11 @@ import telar.clipboard;
 import telar.sys.posix;
 
 namespace telar::clipboard {
-  int runCli(int argc, char** argv) {
+  // main.cpp and the Objective-C++ tests declare it themselves: a header shared with them would be a textual
+  // include, which the module layout keeps to its listed exceptions.
+  int runCli(int argc, char** argv);
+
+  int runCli(int argc, char** argv) { // NOLINT(misc-use-internal-linkage): main.cpp and the tests call it
     const char* output_path = nullptr;
 
     if (argc == 2 && std::string_view(argv[1]) == "--help") {
@@ -25,7 +29,7 @@ namespace telar::clipboard {
       return 1;
     }
 
-    if (output_path == nullptr && result->mime_type.starts_with("image/") && isatty(STDOUT_FILENO)) {
+    if (output_path == nullptr && result->mime_type.starts_with("image/") && (isatty(STDOUT_FILENO) != 0)) {
       std::println(stderr, "Clipboard contains {:.{}}; use --output PATH or redirect stdout.", result->mime_type.data(), static_cast<int>(result->mime_type.size()));
       return 1;
     }

@@ -55,7 +55,7 @@ namespace telar {
     EncodingError(const char* message)
         : message{message} {}
 
-    const char* what() const noexcept override {
+    [[nodiscard]] const char* what() const noexcept override {
       return message;
     }
 

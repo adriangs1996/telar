@@ -128,7 +128,7 @@ namespace telar {
     static void encode(const Message& message, std::span<Byte>& output) {
       (void)encodedSize(message);
       CountCodec::encode(
-          static_cast<typename CountCodec::value_type>(memberValue<Member>(message).size()),
+          static_cast<CountCodec::value_type>(memberValue<Member>(message).size()),
           output
       );
     }
@@ -182,7 +182,7 @@ namespace telar {
       }
 
       // SpanCountField created these mutable objects in the caller's storage.
-      auto* output = const_cast<typename ElementCodec::value_type*>(values.data());
+      auto* output = const_cast<ElementCodec::value_type*>(values.data());
 
       for (std::size_t i = 0; i < values.size(); ++i) {
         output[i] = decodeValue<ElementCodec>(input, storage);

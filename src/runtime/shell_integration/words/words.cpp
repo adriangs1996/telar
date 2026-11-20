@@ -2,7 +2,7 @@ module telar.runtime.shell_integration.words;
 
 import std;
 import telar.sys.posix;
-#if defined(__APPLE__)
+#ifdef __APPLE__
 import telar.sys.apple;
 #endif
 import telar.base.text;
@@ -333,7 +333,7 @@ namespace telar::runtime {
           return;
         }
 
-        for (const auto keyword : {"set ", "import ", "mod ", "export "}) {
+        for (const auto* const keyword : {"set ", "import ", "mod ", "export "}) {
           if (line.starts_with(keyword)) {
             return;
           }
@@ -543,7 +543,7 @@ namespace telar::runtime {
     template <typename Add>
     void processes(ConcurrentMemory& memory, Add& add) {
       ds::Vec<std::pair<int, Text>, ConcurrentMemory> found{memory};
-#if defined(__APPLE__)
+#ifdef __APPLE__
       ds::Vec<pid_t, ConcurrentMemory> pids{memory};
 
       pids.resize(4096);
@@ -597,7 +597,7 @@ namespace telar::runtime {
       std::ranges::sort(found.viewMut(), std::greater{}, &std::pair<int, Text>::first);
       for (const auto& [pid, name] : found) {
         ds::Array<char, 16> digits;
-        const auto end = std::to_chars(digits.dataMut(), digits.dataMut() + digits.size(), pid).ptr;
+        auto* const end = std::to_chars(digits.dataMut(), digits.dataMut() + digits.size(), pid).ptr;
 
         add(std::string_view{digits.data(), end}, name.view());
       }
@@ -758,7 +758,7 @@ namespace telar::runtime {
 
     auto source = userSpec(name);
     if (source.empty()) {
-      const auto shipped = std::ranges::find(shipped::specs, name, &std::pair<std::string_view, std::string_view>::first);
+      const auto* const shipped = std::ranges::find(shipped::specs, name, &std::pair<std::string_view, std::string_view>::first);
       if (shipped == shipped::specs.end()) {
         return;
       }

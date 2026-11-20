@@ -27,7 +27,7 @@ export {
       TBC_GENERIC explicit Error(const Parts&... parts) noexcept
           : message_(parts...) {}
 
-      const char* what() const noexcept override;
+      [[nodiscard]] const char* what() const noexcept override;
 
     private:
       ErrorText<1023> message_;
@@ -55,8 +55,8 @@ export {
       void resetBudget(std::uint64_t instructions, std::chrono::nanoseconds deadline) noexcept;
       void execute(std::string_view source, const char* name, int results = 1);
       void invoke(lua_CFunction function, void* context, int results);
-      lua_State* state() const noexcept;
-      std::size_t usedBytes() const noexcept;
+      [[nodiscard]] lua_State* state() const noexcept;
+      [[nodiscard]] std::size_t usedBytes() const noexcept;
 
     private:
       using Clock = std::chrono::steady_clock;
@@ -201,26 +201,26 @@ export {
       // The same value under another name: a profile's tables are reported as
       // the configuration's, as diagnostics name them.
       // Another value of the same state, in region `a`; it does not view this one.
-      tbc::val_a<Value> as(std::string_view label) const;
+      [[nodiscard]] tbc::val_a<Value> as(std::string_view label) const;
       tbc::val_a<Value> field(const char* name) const;
-      tbc::val_a<Value> element(lua_Integer position) const;
-      tbc::val_a<Value> entry(std::string_view key) const;
-      bool present() const noexcept;
-      bool is(int type) const noexcept;
+      [[nodiscard]] tbc::val_a<Value> element(lua_Integer position) const;
+      [[nodiscard]] tbc::val_a<Value> entry(std::string_view key) const;
+      [[nodiscard]] bool present() const noexcept;
+      [[nodiscard]] bool is(int type) const noexcept;
       void pushCopy() const;
 
       // The state's string, which outlives this slot while the table that holds it does.
-      tbc::val_a<std::string_view> string() const;
+      [[nodiscard]] tbc::val_a<std::string_view> string() const;
 
-      bool boolean(bool fallback) const;
-      lua_Integer integer() const;
-      ds::Option<lua_Integer> asInteger() const noexcept;
-      std::uint64_t boundedInteger(std::uint64_t fallback, std::uint64_t minimum, std::uint64_t maximum) const;
-      double boundedNumber(double fallback, double minimum, double maximum) const;
+      [[nodiscard]] bool boolean(bool fallback) const;
+      [[nodiscard]] lua_Integer integer() const;
+      [[nodiscard]] ds::Option<lua_Integer> asInteger() const noexcept;
+      [[nodiscard]] std::uint64_t boundedInteger(std::uint64_t fallback, std::uint64_t minimum, std::uint64_t maximum) const;
+      [[nodiscard]] double boundedNumber(double fallback, double minimum, double maximum) const;
       void onlyFields(std::initializer_list<std::string_view> allowed, bool allow_children = false) const;
       void onlyFields(std::span<const std::string_view> allowed, bool allow_children = false) const;
-      std::size_t arraySize() const;
-      std::size_t listLength() const;
+      [[nodiscard]] std::size_t arraySize() const;
+      [[nodiscard]] std::size_t listLength() const;
 
       // Generic over the caller's consumer, so it stays here and hands the walk to visitFields.
       template <typename Consumer>

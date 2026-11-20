@@ -121,7 +121,7 @@ export {
 
       void reportTitle(RuntimeModel& model, ClientSession& client, const ReportAgentTitle& request);
 
-      ds::Option<SessionFileRequest> nextSessionFile(std::chrono::steady_clock::time_point now) const;
+      [[nodiscard]] ds::Option<SessionFileRequest> nextSessionFile(std::chrono::steady_clock::time_point now) const;
 
       void completeSessionFile(const SessionFileResult& result, std::chrono::steady_clock::time_point now);
 
@@ -140,13 +140,13 @@ export {
       // Whether an attached window focuses a pane.
       static bool focused(const ClientStore& clients, const ClientLayouts& layouts, std::uint64_t pane) noexcept;
 
-      bool blocked(const Pane& pane) const noexcept;
+      [[nodiscard]] bool blocked(const Pane& pane) const noexcept;
 
       void query(const RuntimeModel& model, ClientSession& client);
 
-      std::uint64_t revision() const noexcept;
+      [[nodiscard]] std::uint64_t revision() const noexcept;
 
-      const Agent* find(std::uint64_t pane, std::uint64_t generation) const noexcept;
+      [[nodiscard]] const Agent* find(std::uint64_t pane, std::uint64_t generation) const noexcept;
 
       void observeProcess(Pane& pane, ds::Option<ProcessIdentity> identity, AgentProvider provider);
 
@@ -182,7 +182,7 @@ export {
       public:
         void push(const Agent& agent) noexcept;
 
-        std::span<const AgentSoundNotification> queued() const noexcept;
+        [[nodiscard]] std::span<const AgentSoundNotification> queued() const noexcept;
 
         void clear() noexcept;
 
@@ -499,7 +499,7 @@ export {
       using Worktrees = WorktreeService<Poller, Background>;
       using Control = ClientControl;
       using Descents = DescentService<ProcessInspector>;
-      using Frames = typename Connection<ConcurrentMemory>::Frames;
+      using Frames = Connection<ConcurrentMemory>::Frames;
 
     public:
       explicit Runtime(ConcurrentMemory& memory, Poller& poller, Background& background, const RuntimeOptions& options, ProxyClientConfiguration proxy = {});
@@ -819,7 +819,7 @@ export {
       DescriptionService<ConcurrentMemory, Agents, Background> descriptions_;
       [[no_unique_address]] diagnostics::RuntimeTelemetry telemetry_;
       static constexpr auto pane_poll_interval = std::chrono::milliseconds{100};
-      Clock::time_point next_pane_poll_{};
+      Clock::time_point next_pane_poll_;
       // Set when SIGCHLD arrives; true at first so a child that exited before the loop is reaped.
       bool children_exited_ = true;
     };

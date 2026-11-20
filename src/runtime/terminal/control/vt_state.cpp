@@ -3,7 +3,7 @@ module;
 
 #if defined(__aarch64__) && defined(__AARCH64EL__)
 #include <arm_neon.h>
-#elif defined(__SSE2__)
+#elifdef __SSE2__
 #include <emmintrin.h>
 #endif
 
@@ -33,7 +33,7 @@ namespace telar::runtime::control {
       public:
         static constexpr std::size_t block_bytes = sizeof(std::uint64_t);
 
-        bool contains(std::uint64_t word) const noexcept {
+        [[nodiscard]] bool contains(std::uint64_t word) const noexcept {
           return word == newest_ || word == older_;
         }
 
@@ -80,7 +80,7 @@ namespace telar::runtime::control {
           }
 
           if (candidates != 0) {
-            return window_begin_ + std::countr_zero(candidates) / match_bits<Set>;
+            return window_begin_ + (std::countr_zero(candidates) / match_bits<Set>);
           }
 
           offset = window_end_;
@@ -178,7 +178,7 @@ namespace telar::runtime::control {
       vst1q_u32(output + 8, vmovl_u16(vget_low_u16(high)));
       vst1q_u32(output + 12, vmovl_high_u16(high));
     }
-#elif defined(__SSE2__)
+#elifdef __SSE2__
     using ByteVector = __m128i;
 
     ByteVector load(const std::uint8_t* input) noexcept {
@@ -235,7 +235,7 @@ namespace telar::runtime::control {
 
           widenBlock(bytes, output.data() + offset);
           if (stops != 0) {
-            return offset + std::countr_zero(stops) / styled_detail::vector_match_bits;
+            return offset + (std::countr_zero(stops) / styled_detail::vector_match_bits);
           }
 
           offset += styled_detail::vector_bytes;
@@ -426,7 +426,7 @@ namespace telar::runtime::control {
   [[gnu::always_inline]] Position VtState::cursor() const {
     [[clang::noinline]] return cursor_cache_.get(epoch_, [&] {
       const auto snapshot = readCursorState();
-      const Position result{snapshot.x, snapshot.y};
+      const Position result{.column = snapshot.x, .row = snapshot.y};
 
       return result;
     });
@@ -507,7 +507,7 @@ namespace telar::runtime::control {
 
   ds::Option<GhosttyGridRef> VtState::reference(Position position) const {
     auto result = ghosttySized<GhosttyGridRef>();
-    const GhosttyPoint point{.tag = GHOSTTY_POINT_TAG_ACTIVE, .value = {.coordinate = {position.column, position.row}}};
+    const GhosttyPoint point{.tag = GHOSTTY_POINT_TAG_ACTIVE, .value = {.coordinate = {.x = position.column, .y = position.row}}};
     if (ghostty_terminal_grid_ref(terminal_, point, &result) != GHOSTTY_SUCCESS) {
       return ds::none;
     }
@@ -570,10 +570,10 @@ namespace telar::runtime::control {
 
     const auto& result = snapshot.state;
 
-    margin_cache_.store(epoch_, {result.top, result.bottom, result.left, result.right});
+    margin_cache_.store(epoch_, {.top = result.top, .bottom = result.bottom, .left = result.left, .right = result.right});
     auto& origin = modes_.atMut(origin_mode % modes_.size());
 
-    origin = {epoch_, origin_mode, false, result.origin != 0};
+    origin = {.epoch = epoch_, .number = origin_mode, .ansi = false, .value = result.origin != 0};
     return result;
   }
 

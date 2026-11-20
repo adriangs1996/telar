@@ -1553,7 +1553,7 @@ namespace telar::ds {
       auto capacity = Group::width - 1;
 
       while (growthOf(capacity) < count) {
-        capacity = capacity * 2 + 1;
+        capacity = (capacity * 2) + 1;
       }
 
       rehash(capacity);
@@ -1604,7 +1604,7 @@ namespace telar::ds {
 
     // Fills seven slots in eight, and always leaves one empty, where every probe ends.
     [[nodiscard]] static std::size_t growthOf(std::size_t capacity) noexcept {
-      return capacity - (capacity + 1) / 8;
+      return capacity - ((capacity + 1) / 8);
     }
 
     // The control bytes are the slots', the sentinel's, and copies of the first slots' after it, so
@@ -1622,7 +1622,7 @@ namespace telar::ds {
         throw std::bad_array_new_length{};
       }
 
-      return entriesOffset(capacity) + capacity * sizeof(Entry);
+      return entriesOffset(capacity) + (capacity * sizeof(Entry));
     }
 
     static void setControl(std::int8_t* control, std::size_t mask, std::size_t index, std::int8_t byte) noexcept {
@@ -1695,7 +1695,7 @@ namespace telar::ds {
       if (mask_ != 0 && size_ * 32 <= mask_ * 25) {
         rehash(mask_);
       } else {
-        rehash(mask_ == 0 ? Group::width - 1 : mask_ * 2 + 1);
+        rehash(mask_ == 0 ? Group::width - 1 : (mask_ * 2) + 1);
       }
     }
 
@@ -1800,7 +1800,7 @@ namespace telar::ds {
 
     // The result borrows what the callable at the storage holds, region `a`, never the arguments, region
     // `b`, as Rust's FnMut returns an Output that borrows none of them.
-    using Invoke = typename detail::FunctionResult<Result>::type (*)(tbc::val_a<void*>, tbc::val_b<Pass<Arguments>>...);
+    using Invoke = detail::FunctionResult<Result>::type (*)(tbc::val_a<void*>, tbc::val_b<Pass<Arguments>>...);
 
     // Moves the callable at `source` to `target` and destroys it, or only destroys it when `target`
     // is null.

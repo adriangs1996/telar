@@ -292,9 +292,7 @@ namespace telar::runtime {
     return nullptr;
   }
 
-  CapturedExchange::CapturedExchange(tbc::mut_a<ConcurrentMemory>) noexcept
-      : request(),
-        response() {}
+  CapturedExchange::CapturedExchange(tbc::mut_a<ConcurrentMemory>) noexcept {}
 
   void CapturedExchange::include(tbc::val_a<Half> half) noexcept {
     (half->side == CaptureSide::request ? request : response) = std::move(half);
@@ -323,7 +321,7 @@ namespace telar::runtime {
     const auto flags = input[3];
     auto offset = header_size;
 
-    if (flags & static_cast<unsigned>(GzipFlag::extra)) {
+    if ((flags & static_cast<unsigned>(GzipFlag::extra)) != 0u) {
       if (input.size() - offset < sizeof(std::uint16_t)) {
         return ds::none;
       }
@@ -339,7 +337,7 @@ namespace telar::runtime {
     }
 
     for (const auto field : {GzipFlag::name, GzipFlag::comment}) {
-      if (flags & static_cast<unsigned>(field)) {
+      if ((flags & static_cast<unsigned>(field)) != 0u) {
         while (offset < input.size() && input[offset] != 0) {
           ++offset;
         }
@@ -352,7 +350,7 @@ namespace telar::runtime {
       }
     }
 
-    if (flags & static_cast<unsigned>(GzipFlag::header_checksum)) {
+    if ((flags & static_cast<unsigned>(GzipFlag::header_checksum)) != 0u) {
       if (input.size() - offset < sizeof(std::uint16_t)) {
         return ds::none;
       }

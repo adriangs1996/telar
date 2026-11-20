@@ -31,7 +31,7 @@ namespace telar::runtime {
     }
 
     return ProcessSnapshot{
-        .identity = {process, static_cast<pid_t>(information.pbi_ppid), information.pbi_start_tvsec, information.pbi_start_tvusec, static_cast<pid_t>(information.pbi_pgid)},
+        .identity = {.pid = process, .parent = static_cast<pid_t>(information.pbi_ppid), .started_seconds = information.pbi_start_tvsec, .started_microseconds = information.pbi_start_tvusec, .process_group = static_cast<pid_t>(information.pbi_pgid)},
         .terminal_foreground = static_cast<pid_t>(information.e_tpgid),
     };
   }

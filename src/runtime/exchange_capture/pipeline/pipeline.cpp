@@ -14,7 +14,7 @@ namespace telar::runtime {
         timeout_ms_(timeout.count()) {}
 
   auto CaptureJoiner::push(std::int64_t now_ms, tbc::val_a<Half> half) noexcept -> tbc::val_a<Result> {
-    Result result{State::pending, CapturedExchange{memory_}};
+    Result result{.state = State::pending, .exchange = CapturedExchange{memory_}};
     const auto existing = find(half->key);
     if (existing) {
       auto& entry = slots_.atMut(*existing).getMut();

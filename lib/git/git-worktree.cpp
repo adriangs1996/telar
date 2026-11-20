@@ -823,7 +823,7 @@ namespace telar::git {
     const bool modified = *content != entry.id;
 
     // A file modified in the second it was hashed could change again unseen.
-    verified = {file, modified, file.modified_seconds < started && file.changed_seconds < started};
+    verified = {.file = file, .modified = modified, .valid = file.modified_seconds < started && file.changed_seconds < started};
     return modified ? Verdict::modified : Verdict::clean;
   }
 

@@ -166,7 +166,7 @@ export {
     struct SocketError final : std::exception {
       SocketError(const char* message);
 
-      const char* what() const noexcept override;
+      [[nodiscard]] const char* what() const noexcept override;
 
     private:
       const char* message;
@@ -215,7 +215,7 @@ export {
 
       tbc::val_a<std::span<const Byte>> receiveFrame(tbc::val_a<std::span<Byte>> buffer) _throw(SocketError);
 
-      int descriptor() const noexcept;
+      [[nodiscard]] int descriptor() const noexcept;
 
       void interrupt() const noexcept;
 

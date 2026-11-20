@@ -423,7 +423,7 @@ namespace telar {
 
   struct PaneForeground {
     std::uint64_t pane_id = 0;
-    std::string_view name{};
+    std::string_view name;
   };
 
   inline constexpr std::size_t max_listed_ports = 4;
@@ -435,55 +435,55 @@ namespace telar {
     std::uint64_t pane_id = 0;
     std::uint64_t pane_generation = 0;
     TabLocation location{};
-    std::string_view foreground{};
+    std::string_view foreground;
     std::uint32_t foreground_age_s = 0;
     bool shell = false;
-    std::span<const std::uint16_t> ports{};
+    std::span<const std::uint16_t> ports;
   };
 
   // What a client shows for a pane of a tab it has not loaded. `cwd` is empty until the runtime observes one.
   struct TabPane {
     std::uint64_t pane_id = 0;
-    std::string_view foreground{};
-    std::string_view cwd{};
+    std::string_view foreground;
+    std::string_view cwd;
   };
 
   struct TabDescriptor {
     std::uint64_t tab_id = 0;
     std::uint16_t position = 0;
     std::uint16_t pane_count = 0;
-    std::string_view label{};
-    std::span<const TabPane> panes{};
+    std::string_view label;
+    std::span<const TabPane> panes;
   };
 
   struct WorkspaceListEntry {
     std::uint64_t workspace = 0;
-    std::string_view name{};
-    std::string_view path{};
+    std::string_view name;
+    std::string_view path;
     std::uint16_t tab_count = 0;
-    std::string_view branch{};
+    std::string_view branch;
     bool dirty = false;
   };
 
   struct WorktreeListEntry {
     std::uint64_t worktree = 0;
     std::uint64_t source = 0;
-    ds::Option<std::uint64_t> workspace{};
-    ds::Option<std::uint64_t> created_by{};
+    ds::Option<std::uint64_t> workspace;
+    ds::Option<std::uint64_t> created_by;
     WorktreeOrigin origin = WorktreeOrigin::telar;
     WorktreeState state = WorktreeState::active;
-    std::string_view path{};
-    std::string_view branch{};
-    std::string_view base{};
-    std::string_view title{};
-    std::string_view brief{};
-    std::string_view dispatched_from{};
-    ds::Option<CoordinatorReference> coordinator{};
+    std::string_view path;
+    std::string_view branch;
+    std::string_view base;
+    std::string_view title;
+    std::string_view brief;
+    std::string_view dispatched_from;
+    ds::Option<CoordinatorReference> coordinator;
     std::uint32_t diff_added = 0;
     std::uint32_t diff_removed = 0;
     std::uint32_t diff_files = 0;
     std::uint32_t commits_ahead = 0;
-    std::string_view command_label{};
+    std::string_view command_label;
     CommandState command_state = CommandState::none;
     std::int32_t command_exit = 0;
   };
@@ -493,14 +493,14 @@ namespace telar {
     std::uint64_t pane_id = 0;
     std::int64_t started_at_ms = 0;
     std::int64_t duration_ns = 0;
-    ds::Option<std::int32_t> exit_code{};
+    ds::Option<std::int32_t> exit_code;
     HistoryStatus status = HistoryStatus::completed;
     HistoryAuthor author = HistoryAuthor::human;
     HistoryOrigin origin = HistoryOrigin::pane;
-    std::string_view provider{};
-    std::string_view command{};
-    std::string_view cwd{};
-    std::string_view workspace_path{};
+    std::string_view provider;
+    std::string_view command;
+    std::string_view cwd;
+    std::string_view workspace_path;
     bool command_truncated = false;
   };
 
@@ -511,20 +511,20 @@ namespace telar {
     std::uint16_t pane_index = 0;
     std::uint32_t process_id = 0;
     ds::Array<Byte, 16> session_id{};
-    std::string_view workspace_label{};
-    std::string_view tab_label{};
-    std::string_view session_title{};
+    std::string_view workspace_label;
+    std::string_view tab_label;
+    std::string_view session_title;
     AgentTitleSource title_source = AgentTitleSource::telar;
     AgentTitleState title_state = AgentTitleState::placeholder;
-    std::string_view cwd_label{};
+    std::string_view cwd_label;
     AgentProvider provider = AgentProvider::unknown;
-    std::string_view provider_name{};
-    std::string_view display_name{};
-    std::string_view icon{};
+    std::string_view provider_name;
+    std::string_view display_name;
+    std::string_view icon;
     AgentAttachmentMarkers attachments = AgentAttachmentMarkers::none;
     AgentStatus status = AgentStatus::unknown;
     AgentBlockedReason blocked_reason = AgentBlockedReason::none;
-    std::string_view last_event{};
+    std::string_view last_event;
     std::uint32_t status_age_s = 0;
     AgentSource source = AgentSource::screen;
     AgentAuthority authority = AgentAuthority::candidate;
@@ -533,10 +533,10 @@ namespace telar {
     std::int64_t observed_at_ms = 0;
     std::int64_t expires_at_ms = 0;
     std::uint64_t work_tree = 0;
-    std::string_view final_message{};
+    std::string_view final_message;
     std::uint16_t plan_done = 0;
     std::uint16_t plan_total = 0;
-    std::string_view plan_step{};
+    std::string_view plan_step;
   };
 
   struct ClientDescriptor {
@@ -555,7 +555,7 @@ namespace telar {
     ClientCommandStatus status = ClientCommandStatus::request;
     std::uint64_t target_id = 0;
     std::int64_t value = 0;
-    std::string_view text{};
+    std::string_view text;
   };
 
   struct ClientLayoutPane {
@@ -574,7 +574,7 @@ namespace telar {
     std::uint64_t focused_pane = 0;
     bool fullscreen = false;
     bool workspace_active = false;
-    std::span<const ClientLayoutNode> nodes{};
+    std::span<const ClientLayoutNode> nodes;
   };
 
   struct NotificationTarget {
@@ -597,15 +597,15 @@ namespace telar {
     NotificationLevel level = NotificationLevel::info;
     std::uint32_t duration_ms = default_notification_duration_ms;
     NotificationTarget target{};
-    std::string_view title{};
-    std::string_view message{};
-    std::string_view link{};
+    std::string_view title;
+    std::string_view message;
+    std::string_view link;
   };
 
   struct PathMatch {
-    std::string_view path{};
+    std::string_view path;
     PathKind kind = PathKind::file;
-    std::span<const std::uint16_t> positions{};
+    std::span<const std::uint16_t> positions;
   };
 
   struct LimitListEntry {
@@ -876,8 +876,8 @@ namespace telar {
 
   // One value a completion provider found.
   struct CompletionWord {
-    std::string_view text{};
-    std::string_view description{};
+    std::string_view text;
+    std::string_view description;
   };
 
   template <>
@@ -913,7 +913,7 @@ namespace telar {
     CommandBlockState state{};
     std::int32_t status = 0;
     std::uint32_t duration_ms = 0;
-    std::string_view command{};
+    std::string_view command;
     CommandBlockNest nest{};
   };
 
@@ -1166,7 +1166,7 @@ namespace telar {
 
   struct ImportHistoryEntry {
     std::int64_t started_at_ms = 0;
-    std::string_view command{};
+    std::string_view command;
   };
 
   struct PaneDescriptor {
@@ -1183,7 +1183,7 @@ namespace telar {
 
   struct HistoryStatsEntry {
     std::uint64_t count = 0;
-    std::string_view command{};
+    std::string_view command;
   };
 
   template <>

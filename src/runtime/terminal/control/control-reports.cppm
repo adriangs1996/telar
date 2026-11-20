@@ -35,7 +35,7 @@ export namespace telar::runtime::control {
       pending_ |= static_cast<std::uint8_t>(report);
     }
 
-    bool pending() const noexcept {
+    [[nodiscard]] bool pending() const noexcept {
       return pending_ != 0 || prepared_;
     }
 

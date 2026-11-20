@@ -74,10 +74,10 @@ export namespace telar::git {
     friend bool operator==(const ObjectId&, const ObjectId&) = default;
 
     explicit operator bool() const noexcept;
-    std::span<const std::uint8_t> view() const noexcept;
+    [[nodiscard]] std::span<const std::uint8_t> view() const noexcept;
 
     // The first `digits` hexadecimal digits, written into `buffer`.
-    tbc::val_a<std::string_view> hex(tbc::val_a<std::span<char, 2 * maximum_hash_size>> buffer, std::size_t digits = 2 * maximum_hash_size) const noexcept;
+    [[nodiscard]] tbc::val_a<std::string_view> hex(tbc::val_a<std::span<char, 2 * maximum_hash_size>> buffer, std::size_t digits = 2 * maximum_hash_size) const noexcept;
 
     static ds::Option<ObjectId> fromHex(std::string_view text, ObjectFormat format) noexcept;
 
@@ -132,8 +132,8 @@ namespace telar::git {
   public:
     PathName() noexcept;
     bool assign(std::initializer_list<std::string_view> parts) noexcept;
-    const char* c_str() const noexcept;
-    std::string_view view() const noexcept;
+    [[nodiscard]] const char* c_str() const noexcept;
+    [[nodiscard]] std::string_view view() const noexcept;
 
   private:
     ds::Array<char, 4096> bytes_;

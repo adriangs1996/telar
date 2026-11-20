@@ -11,8 +11,8 @@ export {
     public:
       explicit SystemError(const char* operation, int code = sys::lastError()) noexcept;
 
-      const char* what() const noexcept override;
-      int code() const noexcept;
+      [[nodiscard]] const char* what() const noexcept override;
+      [[nodiscard]] int code() const noexcept;
 
     private:
       const char* operation_;

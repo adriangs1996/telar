@@ -42,7 +42,7 @@ export {
       void execute(const char* sql);
       bool tryExecute(const char* sql) noexcept;
 
-      sqlite3* handle() const noexcept;
+      [[nodiscard]] sqlite3* handle() const noexcept;
 
     private:
       sqlite3* database_ = nullptr;
@@ -63,9 +63,9 @@ export {
       bool next();
       void finish();
       void reset();
-      std::int64_t integer(int column) const noexcept;
-      std::string_view text(int column) const;
-      bool isNull(int column) const noexcept;
+      [[nodiscard]] std::int64_t integer(int column) const noexcept;
+      [[nodiscard]] std::string_view text(int column) const;
+      [[nodiscard]] bool isNull(int column) const noexcept;
 
     private:
       tbc::val_a<sqlite3_stmt*> statement_ = nullptr;
@@ -256,7 +256,7 @@ export {
       static tbc::val_static<HistoryEntry> header(const Statement& row);
 
       static constexpr std::size_t maximum_entries = 1000;
-      static constexpr std::size_t result_header_bytes = sizeof(Byte) + sizeof(std::uint64_t) * 2 + sizeof(std::uint16_t) + sizeof(Byte);
+      static constexpr std::size_t result_header_bytes = sizeof(Byte) + (sizeof(std::uint64_t) * 2) + sizeof(std::uint16_t) + sizeof(Byte);
       // Reserved whole and bounded before each copy, so the texts the entries view never move.
       mutable ByteQueue<ConcurrentMemory> text_;
       tbc::val_self<ds::Vec<HistoryEntry, ConcurrentMemory>> entries_;

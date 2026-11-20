@@ -45,7 +45,7 @@ namespace telar::runtime {
 
   void LimitService::deliver(RuntimeModel& model, ClientStore& clients) noexcept {
     for (const auto& reached : std::span{reached_}.first(reports_)) {
-      const auto recorded = model.limits.runtime.record({reached.name.view(), reached.noun.view(), reached.value, reached.requested, reached.route.view()}, 1);
+      const auto recorded = model.limits.runtime.record({.name = reached.name.view(), .noun = reached.noun.view(), .value = reached.value, .requested = reached.requested, .route = reached.route.view()}, 1);
       if (recorded.show) {
         queueShow(Ledger::runtime, recorded.slot);
       }
@@ -131,17 +131,17 @@ namespace telar::runtime {
     std::size_t reserved = 0;
 
     for (const auto& pending : pending_) {
-      reserved += pending && pending->reservesClient();
+      reserved += static_cast<std::size_t>(pending && pending->reservesClient());
     }
 
     const auto requested = clients + reserved + 1;
     const bool refused = requested > maximum_clients;
     if (refused) {
-      limits_.report({"clients.max_clients", "clients", maximum_clients, requested, {}});
+      limits_.report({.name = "clients.max_clients", .noun = "clients", .value = maximum_clients, .requested = requested, .route = {}});
     }
 
     for (std::size_t slot = 0; slot < capacity; ++slot) {
-      if (pending_[slot] || generations_[slot] >= maximum_event_identity / capacity - 1) {
+      if (pending_[slot] || generations_[slot] >= (maximum_event_identity / capacity) - 1) {
         continue;
       }
 
@@ -158,7 +158,7 @@ namespace telar::runtime {
       return;
     }
 
-    limits_.report({"clients.max_pending_handshakes", "handshakes", capacity, {}, {}});
+    limits_.report({.name = "clients.max_pending_handshakes", .noun = "handshakes", .value = capacity, .requested = {}, .route = {}});
   }
 
   template <EventLoop Poller>
@@ -228,7 +228,7 @@ namespace telar::runtime {
 
   template <EventLoop Poller>
   std::uint64_t ClientAdmission<Poller>::token(std::size_t slot) const noexcept {
-    return eventToken(EventSource::handshake, generations_[slot] * capacity + slot);
+    return eventToken(EventSource::handshake, (generations_[slot] * capacity) + slot);
   }
 
   template <EventLoop Poller>

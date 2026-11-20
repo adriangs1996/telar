@@ -33,7 +33,7 @@ export extern "C++" {
 
     struct PaneClipboard {
       std::uint64_t pane_id{};
-      std::span<const Byte> bytes{};
+      std::span<const Byte> bytes;
     };
 
     template <>
@@ -73,9 +73,9 @@ export extern "C++" {
       bool prompt = false;
       bool listing = false;
       bool rememberable = false;
-      std::string_view name{};
-      std::span<const std::string_view> mimes{};
-      std::span<const ClipboardRepresentation> contents{};
+      std::string_view name;
+      std::span<const std::string_view> mimes;
+      std::span<const ClipboardRepresentation> contents;
 
       void validate() const;
     };
@@ -96,8 +96,8 @@ export extern "C++" {
       ClipboardDesktopStatus status = ClipboardDesktopStatus::denied;
       bool remember = false;
       bool prepared = false;
-      std::span<const ClipboardRepresentation> contents{};
-      std::span<const std::string_view> available{};
+      std::span<const ClipboardRepresentation> contents;
+      std::span<const std::string_view> available;
 
       void validate() const;
     };

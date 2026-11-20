@@ -13,7 +13,7 @@ import telar.base.text;
 namespace telar::runtime::cli::window {
 
   template <Allocator Memory>
-  void appendJsonNumber(ds::String<Memory>& output, std::string_view encoded) {
+  static void appendJsonNumber(ds::String<Memory>& output, std::string_view encoded) {
     if (encoded.find_first_of(".eE") == std::string_view::npos) {
       output.append(encoded);
       return;
@@ -111,7 +111,7 @@ namespace telar::runtime::cli::window {
 
       if (pretty) {
         output.push('\n');
-        output.resize(output.size() + (depth + 1) * 2, ' ');
+        output.resize(output.size() + ((depth + 1) * 2), ' ');
       }
     };
 
@@ -131,7 +131,7 @@ namespace telar::runtime::cli::window {
 
     if (pretty && count != 0) {
       output.push('\n');
-      output.resize(output.size() + depth * 2, ' ');
+      output.resize(output.size() + (depth * 2), ' ');
     }
 
     output.push(object ? '}' : ']');
@@ -218,7 +218,7 @@ namespace telar::runtime::cli::machine {
       appendJsonText(output, label, JsonEscapes::control);
       output.append(",\"destination\":");
       appendJsonText(output, destination, JsonEscapes::control);
-      output.append(",\"ready\":false,\"pending\":false,\"changed\":false,\"refused\":");
+      output.append(R"(,"ready":false,"pending":false,"changed":false,"refused":)");
       appendJsonText(output, reason, JsonEscapes::control);
       output.append(",\"steps\":[]}\n");
       std::fwrite(output.data(), 1, output.size(), stdout);
@@ -271,11 +271,11 @@ namespace telar::runtime::cli::machine {
       }
 
       first = false;
-      output.append("{\"step\":\"");
+      output.append(R"({"step":")");
       output.append(steps[index]);
-      output.append("\",\"status\":\"");
+      output.append(R"(","status":")");
       output.append(statuses[static_cast<std::size_t>(*result.status)]);
-      output.append("\",\"detail\":");
+      output.append(R"(","detail":)");
       appendJsonText(output, result.detail.view(), JsonEscapes::control);
       output.append(",\"notes\":[");
       bool first_note = true;
@@ -444,8 +444,8 @@ namespace telar::runtime::cli::window {
           throw std::invalid_argument{"ConflictingNotificationTargets"};
         }
 
-        const auto missing = option == "--pane" ? "MissingPaneId" : option == "--tab" ? "MissingTabId"
-                                                                                      : "MissingWorkspaceId";
+        const auto* const missing = option == "--pane" ? "MissingPaneId" : option == "--tab" ? "MissingTabId"
+                                                                                             : "MissingWorkspaceId";
 
         self.notification.target.id = parseUnsigned<std::uint64_t>(args.take(missing));
         if (self.notification.target.id == 0) {

@@ -60,7 +60,7 @@ namespace telar::runtime::cli {
       length_ = &sqlite3_column_bytes;
       const Timeout timeout = &sqlite3_busy_timeout;
 #else
-#if defined(__linux__)
+#ifdef __linux__
       if (!::dlopen || !::dlsym || !::dlclose) {
         return false;
       }
@@ -72,7 +72,7 @@ namespace telar::runtime::cli {
 #else
       library_ = ::dlopen("/usr/lib/libsqlite3.dylib", RTLD_NOW | RTLD_LOCAL);
 #endif
-      if (!library_) {
+      if (library_ == nullptr) {
         return false;
       }
 
@@ -137,7 +137,7 @@ namespace telar::runtime::cli {
           throw std::runtime_error{"RepositoryDiscoveryLimit"};
         }
 
-        const auto bytes = text_(statement_, first_column);
+        const auto* const bytes = text_(statement_, first_column);
         const auto length = length_(statement_, first_column);
         if (length < 0 || (!bytes && length != 0)) {
           throw std::runtime_error{"RepositoryHistoryUnavailable"};
@@ -178,7 +178,7 @@ namespace telar::runtime::cli {
 
     template <typename Function>
     Function symbol(const char* name) {
-      const auto address = ::dlsym(library_, name);
+      auto* const address = ::dlsym(library_, name);
       if (!address) {
         throw std::runtime_error{"RepositoryHistoryUnavailable"};
       }
@@ -187,7 +187,7 @@ namespace telar::runtime::cli {
     }
 
     void prepare(const char* sql) {
-      if (statement_) {
+      if (statement_ != nullptr) {
         finalize_(std::exchange(statement_, nullptr));
       }
 
@@ -198,15 +198,15 @@ namespace telar::runtime::cli {
     }
 
     void release() noexcept {
-      if (statement_) {
+      if (statement_ != nullptr) {
         finalize_(std::exchange(statement_, nullptr));
       }
 
-      if (database_ && close_) {
+      if ((database_ != nullptr) && (close_ != nullptr)) {
         close_(std::exchange(database_, nullptr));
       }
 
-      if (library_) {
+      if (library_ != nullptr) {
 #if !TELAR_LINKED_SQLITE
         ::dlclose(std::exchange(library_, nullptr));
 #endif
@@ -244,7 +244,7 @@ namespace telar::runtime::cli {
 
 namespace telar::runtime::cli::sessions {
 
-  void tabSnapshot(Output& output, const TabSnapshot& reply, bool json) {
+  static void tabSnapshot(Output& output, const TabSnapshot& reply, bool json) {
     if (json) {
       output.text("{\"workspace_id\":").number(reply.location.workspace.id).text(",\"tab_id\":").number(reply.location.tab_id).text(",\"panes\":[");
     } else {
@@ -254,7 +254,7 @@ namespace telar::runtime::cli::sessions {
     bool first = true;
 
     for (const auto& pane : reply.panes) {
-      const auto lifecycle = pane.lifecycle == PaneLifecycle::running ? "running" : "exited";
+      const auto* const lifecycle = pane.lifecycle == PaneLifecycle::running ? "running" : "exited";
 
       if (json) {
         if (!first) {
@@ -274,7 +274,7 @@ namespace telar::runtime::cli::sessions {
     }
   }
 
-  void tabList(Output& output, const WorkspaceSnapshot& reply, bool json) {
+  static void tabList(Output& output, const WorkspaceSnapshot& reply, bool json) {
     output.text(json ? "[" : "ID\tPOSITION\tPANES\tLABEL\n");
     bool first = true;
 
@@ -297,7 +297,7 @@ namespace telar::runtime::cli::sessions {
     }
   }
 
-  void tabOperation(Channel& session, Output& output, const TabOptions& options, TabLocation location) {
+  static void tabOperation(Channel& session, Output& output, const TabOptions& options, TabLocation location) {
     using Action = TabOptions::Action;
 
     if (options.action == Action::get) {
@@ -333,7 +333,7 @@ namespace telar::runtime::cli::sessions {
 
       checkLocation(reply.location, location);
       if (options.json) {
-        output.text(",\"closed\":true,\"workspace_closed\":").boolean(reply.workspace_closed);
+        output.text(R"(,"closed":true,"workspace_closed":)").boolean(reply.workspace_closed);
       } else {
         output.text(" closed");
       }

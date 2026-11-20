@@ -73,7 +73,7 @@ export {
 
       [[nodiscard]] FailureCode code() const noexcept;
 
-      std::string_view message() const noexcept;
+      [[nodiscard]] std::string_view message() const noexcept;
 
     private:
       FailureCode code_;

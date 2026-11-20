@@ -38,7 +38,7 @@ export extern "C++" {
     struct CreateTab {
       std::uint64_t request_id{};
       WorkspaceLocation workspace{};
-      std::string_view label{};
+      std::string_view label;
       TerminalSize size{};
       Launch launch{};
     };
@@ -50,7 +50,7 @@ export extern "C++" {
     struct RenameTab {
       std::uint64_t request_id{};
       TabLocation location{};
-      std::string_view label{};
+      std::string_view label;
     };
 
     template <>
@@ -81,7 +81,7 @@ export extern "C++" {
       std::uint64_t request_id{};
       TabLocation location{};
       TabMoveDirection direction{};
-      ds::Option<std::uint64_t> relative_to{};
+      ds::Option<std::uint64_t> relative_to;
     };
 
     template <>
@@ -91,7 +91,7 @@ export extern "C++" {
     struct CreateWorkspace {
       std::uint64_t request_id{};
       TerminalSize size{};
-      std::string_view name{};
+      std::string_view name;
       bool create_cwd{};
       Launch launch{};
     };
@@ -103,7 +103,7 @@ export extern "C++" {
     struct RenameWorkspace {
       std::uint64_t request_id{};
       WorkspaceLocation workspace{};
-      std::string_view name{};
+      std::string_view name;
     };
 
     template <>
@@ -115,7 +115,7 @@ export extern "C++" {
       std::uint16_t sidebar_width{};
       bool workspace_list_collapsed{};
       TabLocation active_tab{};
-      std::span<const ClientTabLayout> tabs{};
+      std::span<const ClientTabLayout> tabs;
 
       void validate() const;
     };
@@ -155,7 +155,7 @@ export extern "C++" {
     struct LaunchTab {
       std::uint64_t request_id{};
       std::uint64_t workspace{};
-      std::string_view label{};
+      std::string_view label;
       TerminalSize size{};
       Launch launch{};
     };
@@ -167,7 +167,7 @@ export extern "C++" {
     struct TabSnapshot {
       std::uint64_t request_id{};
       TabLocation location{};
-      std::span<const PaneDescriptor> panes{};
+      std::span<const PaneDescriptor> panes;
 
       void validate() const;
     };
@@ -179,8 +179,8 @@ export extern "C++" {
     struct WorkspaceSnapshot {
       std::uint64_t request_id{};
       WorkspaceLocation workspace{};
-      std::string_view name{};
-      std::span<const TabDescriptor> tabs{};
+      std::string_view name;
+      std::span<const TabDescriptor> tabs;
     };
 
     template <>
@@ -191,7 +191,7 @@ export extern "C++" {
       std::uint64_t request_id{};
       TabLocation location{};
       std::uint16_t position{};
-      std::string_view label{};
+      std::string_view label;
       std::uint64_t root_pane_id{};
       std::uint64_t pane_generation{};
     };
@@ -203,7 +203,7 @@ export extern "C++" {
     struct TabRenamed {
       std::uint64_t request_id{};
       TabLocation location{};
-      std::string_view label{};
+      std::string_view label;
     };
 
     template <>
@@ -214,7 +214,7 @@ export extern "C++" {
       std::uint64_t request_id{};
       TabLocation location{};
       bool workspace_closed{};
-      ds::Option<std::uint64_t> previous_workspace{};
+      ds::Option<std::uint64_t> previous_workspace;
 
       void validate() const;
     };
@@ -236,7 +236,7 @@ export extern "C++" {
     struct ResyncRequired {
       WorkspaceLocation workspace{};
       bool workspace_closed{};
-      ds::Option<std::uint64_t> previous_workspace{};
+      ds::Option<std::uint64_t> previous_workspace;
 
       void validate() const;
     };
@@ -247,8 +247,8 @@ export extern "C++" {
 
     struct WorkspaceList {
       std::uint64_t revision{};
-      std::span<const WorkspaceListEntry> entries{};
-      std::span<const WorktreeListEntry> worktrees{};
+      std::span<const WorkspaceListEntry> entries;
+      std::span<const WorktreeListEntry> worktrees;
     };
 
     template <>
@@ -268,8 +268,8 @@ export extern "C++" {
       bool sidebar_visible{};
       std::uint16_t sidebar_width{};
       bool workspace_list_collapsed{};
-      ds::Option<TabLocation> active_tab{};
-      std::span<const ClientTabLayout> tabs{};
+      ds::Option<TabLocation> active_tab;
+      std::span<const ClientTabLayout> tabs;
 
       void validate() const;
     };

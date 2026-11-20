@@ -6,7 +6,7 @@ import telar.platform.error;
 import telar.platform.fs;
 import telar.base.ds;
 import telar.base.text;
-#if defined(__APPLE__)
+#ifdef __APPLE__
 import telar.sys.apple;
 #endif
 
@@ -202,7 +202,7 @@ namespace telar::runtime::redirect {
       return 0;
     }
 
-    if (metadata) {
+    if (metadata != nullptr) {
       // The name ends at its NUL; one that fills the field is malformed.
       const auto length = ::strnlen(header.interface.data(), header.interface.size());
       if (length == header.interface.size()) {

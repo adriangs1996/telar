@@ -35,7 +35,7 @@ namespace telar::runtime::cli {
   // `InvalidCharacter` and `Overflow`. An unsigned integer accepts "-0" when
   // signs are accepted.
   template <typename Integer>
-  Integer parseDecimal(std::string_view text, Sign sign) {
+  static Integer parseDecimal(std::string_view text, Sign sign) {
     const bool negative = sign == Sign::accepted && text.starts_with('-');
     if (sign == Sign::accepted && (text.starts_with('+') || negative)) {
       text.remove_prefix(1);

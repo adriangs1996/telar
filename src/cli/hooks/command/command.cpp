@@ -170,12 +170,12 @@ namespace telar::runtime::cli::hooks {
       }
     }
 
-    for (const auto name : {"tool_name", "cwd"}) {
+    for (const auto* const name : {"tool_name", "cwd"}) {
       fields.text(name);
     }
 
     if (provider == AgentProvider::pi || provider == AgentProvider::opencode) {
-      for (const auto name : {"event", "session_id", "tool_call_id"}) {
+      for (const auto* const name : {"event", "session_id", "tool_call_id"}) {
         fields.text(name);
       }
 
@@ -190,12 +190,12 @@ namespace telar::runtime::cli::hooks {
         blockedReason();
       }
     } else {
-      for (const auto name : {"hook_event_name", "tool_use_id"}) {
+      for (const auto* const name : {"hook_event_name", "tool_use_id"}) {
         fields.text(name);
       }
 
       if (provider == AgentProvider::cursor) {
-        for (const auto name : {"conversation_id", "tool_output", "chat_meta"}) {
+        for (const auto* const name : {"conversation_id", "tool_output", "chat_meta"}) {
           fields.text(name);
         }
 
@@ -211,12 +211,12 @@ namespace telar::runtime::cli::hooks {
         }
       } else {
         fields.optionalText("agent_id");
-        for (const auto name : {"session_id", "transcript_path"}) {
+        for (const auto* const name : {"session_id", "transcript_path"}) {
           fields.text(name);
         }
 
         if (provider == AgentProvider::claude) {
-          for (const auto name : {"session_title", "notification_type", "message", "last_assistant_message", "new_cwd"}) {
+          for (const auto* const name : {"session_title", "notification_type", "message", "last_assistant_message", "new_cwd"}) {
             fields.text(name);
           }
 
@@ -276,7 +276,7 @@ namespace telar::runtime::cli::hooks {
   AgentBlockedReason Payload::blockedReason() const {
     const auto name = fields.value("blocked") ? fields.text("blocked") : "none";
     constexpr ds::Array names{"none", "permission", "question", "plan", "other"};
-    const auto found = std::ranges::find(names, name);
+    const auto* const found = std::ranges::find(names, name);
     if (found == names.end()) {
       throw std::invalid_argument{"Unknown hook blocked reason"};
     }
@@ -392,7 +392,7 @@ namespace telar::runtime::cli::hooks {
   }
 
   void eventLine(FixedText<96>& output, std::string_view text) {
-    const auto control = std::ranges::find_if(text, [](unsigned char byte) {
+    const auto* const control = std::ranges::find_if(text, [](unsigned char byte) {
       return byte < 0x20 || byte == 0x7f;
     });
 
@@ -445,7 +445,7 @@ namespace telar::runtime::cli::hooks {
 
     append("» ");
     append(name);
-    for (const auto key : {"command", "cmd", "file_path", "filePath", "filepath", "path", "pattern", "url", "query", "prompt", "description"}) {
+    for (const auto* const key : {"command", "cmd", "file_path", "filePath", "filepath", "path", "pattern", "url", "query", "prompt", "description"}) {
       if (const auto argument = input.tools.stringField(key); argument && !argument->empty()) {
         append(" ");
         append(*argument);
@@ -480,7 +480,7 @@ namespace telar::runtime::cli::hooks {
     return found;
   }
 
-  ds::Option<std::int32_t> commandExitCode(const Payload& input) {
+  static ds::Option<std::int32_t> commandExitCode(const Payload& input) {
     if (input.provider == AgentProvider::claude) {
       return input.event() == "PostToolUse" ? ds::Option<std::int32_t>{0} : ds::none;
     }

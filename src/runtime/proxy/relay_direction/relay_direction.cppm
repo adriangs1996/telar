@@ -83,15 +83,15 @@ export {
         return state_;
       }
 
-      inline int descriptor() const noexcept {
+      [[nodiscard]] inline int descriptor() const noexcept {
         return socket_.get();
       }
 
-      inline std::size_t attempt() const noexcept {
+      [[nodiscard]] inline std::size_t attempt() const noexcept {
         return next_address_;
       }
 
-      inline bool truncated() const noexcept {
+      [[nodiscard]] inline bool truncated() const noexcept {
         return resolved_.summary.found > Resolutions::maximum_addresses;
       }
 
@@ -132,7 +132,7 @@ export {
       State state_ = State::resolving;
       FileDescriptor socket_;
       ds::Option<typename Resolutions::Ticket> resolution_;
-      typename Resolutions::Result resolved_{};
+      Resolutions::Result resolved_{};
       std::size_t next_address_ = 0;
     };
 
@@ -159,7 +159,7 @@ export {
         std::size_t read = 0;
         std::size_t written = 0;
 
-        inline bool active() const noexcept {
+        [[nodiscard]] inline bool active() const noexcept {
           return read != 0 || written != 0;
         }
       };
@@ -218,23 +218,23 @@ export {
         return progress;
       }
 
-      inline bool wantsRead() const noexcept {
+      [[nodiscard]] inline bool wantsRead() const noexcept {
         return !ended_ && length_ == 0;
       }
 
-      inline bool wantsWrite() const noexcept {
+      [[nodiscard]] inline bool wantsWrite() const noexcept {
         return length_ != 0;
       }
 
-      inline bool finished() const noexcept {
+      [[nodiscard]] inline bool finished() const noexcept {
         return ended_ && length_ == 0;
       }
 
-      inline StreamReadiness sourceInterest() const noexcept {
+      [[nodiscard]] inline StreamReadiness sourceInterest() const noexcept {
         return wantsRead() ? read_waiting_ : StreamReadiness::none;
       }
 
-      inline StreamReadiness destinationInterest() const noexcept {
+      [[nodiscard]] inline StreamReadiness destinationInterest() const noexcept {
         return wantsWrite() ? write_waiting_ : StreamReadiness::none;
       }
 

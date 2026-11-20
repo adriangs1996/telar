@@ -90,9 +90,9 @@ namespace telar::runtime::plugins {
   bool SessionIo::ready(int descriptor, short events) noexcept {
     for (;;) {
       ds::Array watches{
-          pollfd{descriptor, events, 0},
-          pollfd{process_.error(), POLLIN, 0},
-          pollfd{cancellation_.descriptor(), POLLIN, 0},
+          pollfd{.fd = descriptor, .events = events, .revents = 0},
+          pollfd{.fd = process_.error(), .events = POLLIN, .revents = 0},
+          pollfd{.fd = cancellation_.descriptor(), .events = POLLIN, .revents = 0},
       };
 
       const auto timeout = remainingMilliseconds();
@@ -324,7 +324,7 @@ namespace telar::runtime::plugins {
   }
 
   traffic::InterceptionRule TrafficRegistration::rule() const noexcept {
-    return {host.view(), directions, visibility, timeout_ms, fail_closed, stage == TrafficStage::http};
+    return {.host = host.view(), .directions = directions, .visibility = visibility, .timeout_ms = timeout_ms, .fail_closed = fail_closed, .http = stage == TrafficStage::http};
   }
 
   tbc::val_a<std::span<const Byte>> TrafficProtocol::setup(tbc::val_a<std::span<Byte>> output, const ServiceSpec& specification) {
@@ -649,7 +649,7 @@ namespace telar::runtime::plugins {
           }
 
           if (registration.stage == TrafficStage::control) {
-            connection.emplace(secure_, registration, traffic::PackageChannel{FileDescriptor{}, 0});
+            connection.emplace(secure_, registration, traffic::PackageChannel{.socket = FileDescriptor{}, .owner = 0});
             connection.getMut().output.append(traffic::control::Protocol::prefix(registration.requestBytes().size()));
             connection.getMut().output.append(registration.requestBytes());
             break;
@@ -673,7 +673,7 @@ namespace telar::runtime::plugins {
 
     for (const auto& decision : std::span{outcome.decisions}.first(outcome.decision_count)) {
       auto* connection = find(connections_.viewMut(), decision.registration);
-      if (!connection) {
+      if (connection == nullptr) {
         continue;
       }
 
@@ -820,7 +820,7 @@ namespace telar::runtime::plugins {
     disabled_.store(true, std::memory_order_relaxed);
     cancellation_.request();
     requests_.close();
-    if (launch_.traffic) {
+    if (launch_.traffic != nullptr) {
       launch_.traffic->revokePackage(specification_);
     }
   }
@@ -840,7 +840,7 @@ namespace telar::runtime::plugins {
 
   template <WorkerClock Clock>
   WorkerMetrics Worker<Clock>::metrics() const noexcept {
-    return {requests_.metrics().dropped, timeouts_.load(std::memory_order_relaxed), disabled_.load(std::memory_order_relaxed), callback_errors_.load(std::memory_order_relaxed)};
+    return {.dropped = requests_.metrics().dropped, .timeouts = timeouts_.load(std::memory_order_relaxed), .disabled = disabled_.load(std::memory_order_relaxed), .callback_errors = callback_errors_.load(std::memory_order_relaxed)};
   }
 
   template <WorkerClock Clock>
@@ -860,7 +860,7 @@ namespace telar::runtime::plugins {
 
   template <WorkerClock Clock>
   void Worker<Clock>::run() noexcept {
-    if (launch_.traffic && specification_.traffic()) {
+    if ((launch_.traffic != nullptr) && specification_.traffic()) {
       runTraffic();
     } else {
       while (auto request = requests_.receive()) {
@@ -880,7 +880,7 @@ namespace telar::runtime::plugins {
   void Worker<Clock>::runTraffic() noexcept {
     while (!launch_.cancellation.requested() && !cancellation_.requested()) {
       if (disabled_.load(std::memory_order_relaxed)) {
-        ds::Array watches{pollfd{cancellation_.descriptor(), POLLIN, 0}, pollfd{launch_.cancellation.descriptor(), POLLIN, 0}};
+        ds::Array watches{pollfd{.fd = cancellation_.descriptor(), .events = POLLIN, .revents = 0}, pollfd{.fd = launch_.cancellation.descriptor(), .events = POLLIN, .revents = 0}};
         if (::poll(watches.dataMut(), watches.size(), -1) < 0 && sys::lastError() != EINTR) {
           return;
         }
@@ -946,7 +946,7 @@ namespace telar::runtime::plugins {
       }
 
       SensitiveAllocation frame{memory_, encoded_size};
-      const auto payload = Protocol::encodeExchange(frame.bytesMut(), {shared.event_id, specification_.generation}, shared.exchange);
+      const auto payload = Protocol::encodeExchange(frame.bytesMut(), {.id = shared.event_id, .generation = specification_.generation}, shared.exchange);
 
       exchange(shared.event_id, payload);
     } catch (...) {

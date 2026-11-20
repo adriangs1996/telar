@@ -33,11 +33,11 @@ export {
 
       FrozenImage& operator=(FrozenImage&& other) noexcept;
 
-      std::span<const std::uint8_t> pixels() const noexcept;
+      [[nodiscard]] std::span<const std::uint8_t> pixels() const noexcept;
 
-      std::size_t byteCount() const noexcept;
+      [[nodiscard]] std::size_t byteCount() const noexcept;
 
-      std::string_view name() const noexcept;
+      [[nodiscard]] std::string_view name() const noexcept;
 
       void published() noexcept;
 
@@ -95,7 +95,7 @@ export {
 #if TELAR_DIAGNOSTICS
       std::uint64_t takePreparedCount() noexcept;
 
-      std::size_t storedBytes() const noexcept;
+      [[nodiscard]] std::size_t storedBytes() const noexcept;
 #endif
 
     private:
@@ -106,7 +106,7 @@ export {
 
       void retain(std::span<const GraphicsImageView> images) noexcept;
 
-      bool covered(ImageKey key) const noexcept;
+      [[nodiscard]] bool covered(ImageKey key) const noexcept;
 
       ds::Option<Entry>* availableSlot(std::uint32_t identity) noexcept;
 
@@ -152,7 +152,7 @@ export {
       void clear() noexcept;
 
 #if TELAR_DIAGNOSTICS
-      std::size_t storedBytes() const noexcept;
+      [[nodiscard]] std::size_t storedBytes() const noexcept;
 #endif
 
     private:
@@ -166,7 +166,7 @@ export {
         ImageKey key;
         bool shared;
         State state = State::pending;
-        ds::Option<FrozenImage> frozen{};
+        ds::Option<FrozenImage> frozen;
       };
 
       ConcurrentMemory& memory_;

@@ -24,9 +24,9 @@ export namespace telar::runtime::control {
     std::span<const std::uint8_t> bytes;
     Ending ending;
 
-    std::string_view body() const noexcept;
+    [[nodiscard]] std::string_view body() const noexcept;
 
-    constexpr std::string_view terminator() const noexcept {
+    [[nodiscard]] constexpr std::string_view terminator() const noexcept {
       return ending == Ending::bell ? "\a" : "\x1b\\";
     }
   };

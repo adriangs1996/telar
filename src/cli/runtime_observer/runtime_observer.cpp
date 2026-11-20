@@ -17,48 +17,48 @@ import telar.base.text;
 
 namespace telar::runtime::cli {
 
-  std::string_view nativeSchemaVersion() {
+  static std::string_view nativeSchemaVersion() {
     return {reinterpret_cast<const char*>(handshake::schema_id.data()), handshake::schema_id.size()};
   }
 
-  void appendProxyStatusJson(Text& output, const ProxyStatus& status) {
-    ds::formatTo(output, "{{\"active\":{},\"scope\":{},\"system_trusted\":{},\"port\":{},\"preferred_port\":{}}}", jsonBoolean(status.active), quoteJson(status.scope == ProxyScope::exact ? "exact" : "wildcard"), jsonBoolean(status.system_trusted), orNull(status.port), orNull(status.preferred_port));
+  static void appendProxyStatusJson(Text& output, const ProxyStatus& status) {
+    ds::formatTo(output, R"({{"active":{},"scope":{},"system_trusted":{},"port":{},"preferred_port":{}}})", jsonBoolean(status.active), quoteJson(status.scope == ProxyScope::exact ? "exact" : "wildcard"), jsonBoolean(status.system_trusted), orNull(status.port), orNull(status.preferred_port));
   }
 
-  void appendMetricsJson(Text& output, const SystemMetrics& metrics, bool event) {
-    ds::formatTo(output, "{{\"revision\":{},\"cpu_percent\":{},\"memory_used_decigib\":{},", metrics.revision, metrics.cpu_percent, metrics.memory_used_decigib);
+  static void appendMetricsJson(Text& output, const SystemMetrics& metrics, bool event) {
+    ds::formatTo(output, R"({{"revision":{},"cpu_percent":{},"memory_used_decigib":{},)", metrics.revision, metrics.cpu_percent, metrics.memory_used_decigib);
     if (event) {
-      ds::formatTo(output, "\"has_battery\":{},\"battery_percent\":{},\"cpu_count\":{},\"memory_total_decigib\":{}}}", jsonBoolean(metrics.has_battery), metrics.battery_percent, metrics.cpu_count, metrics.memory_total_decigib);
+      ds::formatTo(output, R"("has_battery":{},"battery_percent":{},"cpu_count":{},"memory_total_decigib":{}}})", jsonBoolean(metrics.has_battery), metrics.battery_percent, metrics.cpu_count, metrics.memory_total_decigib);
     } else {
-      ds::formatTo(output, "\"memory_total_decigib\":{},\"cpu_count\":{},\"battery_percent\":{}}}", metrics.memory_total_decigib, metrics.cpu_count, orNull(metrics.has_battery ? ds::Option{metrics.battery_percent} : ds::none));
+      ds::formatTo(output, R"("memory_total_decigib":{},"cpu_count":{},"battery_percent":{}}})", metrics.memory_total_decigib, metrics.cpu_count, orNull(metrics.has_battery ? ds::Option{metrics.battery_percent} : ds::none));
     }
   }
 
-  void appendWorkspaceEventJson(Text& output, const WorkspaceList& list) {
-    ds::formatTo(output, "{{\"type\":\"workspace_list\",\"revision\":{},\"data\":[", list.revision);
+  static void appendWorkspaceEventJson(Text& output, const WorkspaceList& list) {
+    ds::formatTo(output, R"({{"type":"workspace_list","revision":{},"data":[)", list.revision);
     for (const auto& entry : list.entries) {
       if (&entry != list.entries.data()) {
         output.push(',');
       }
 
-      ds::formatTo(output, "{{\"workspace_id\":{},\"name\":{},\"path\":{},\"tab_count\":{},\"branch\":{},\"dirty\":{}}}", entry.workspace, quoteJson(entry.name), quoteJson(entry.path), entry.tab_count, quoteJson(entry.branch), jsonBoolean(entry.dirty));
+      ds::formatTo(output, R"({{"workspace_id":{},"name":{},"path":{},"tab_count":{},"branch":{},"dirty":{}}})", entry.workspace, quoteJson(entry.name), quoteJson(entry.path), entry.tab_count, quoteJson(entry.branch), jsonBoolean(entry.dirty));
     }
 
     output.append("]}");
   }
 
-  void appendAgentEventEntryJson(Text& output, const AgentSnapshotEntry& agent) {
+  static void appendAgentEventEntryJson(Text& output, const AgentSnapshotEntry& agent) {
     constexpr ds::Array status_names{"unknown", "working", "blocked", "ready", "failed", "done"};
     constexpr ds::Array reason_names{"none", "permission", "question", "plan", "other"};
     constexpr auto escapes = JsonEscapes::control;
     ds::Array<char, 2 * agent.session_id.size()> session;
     const auto session_text = encodeLowerHex(agent.session_id.view(), session.viewMut());
 
-    ds::formatTo(output, "{{\"pane_id\":{},\"pane_generation\":{},\"workspace_id\":{},\"tab_id\":{},\"pane_index\":{},\"provider\":{},\"provider_index\":{},\"status\":{},\"workspace\":{},\"tab\":{},\"title\":{},\"cwd\":{},\"blocked_reason\":{},\"status_age_s\":{},\"worktree_id\":{},\"last_event\":{},\"plan\":{{\"done\":{},\"total\":{},\"step\":{}}},\"final_message\":{},\"session_id\":{}}}", agent.pane_id, agent.pane_generation, agent.location.workspace.id, agent.location.tab_id, agent.pane_index, quoteJson(agent.provider_name.empty() ? "unknown" : agent.provider_name, escapes), static_cast<Byte>(agent.provider), quoteJson(status_names.at(static_cast<std::size_t>(agent.status)), escapes), quoteJson(agent.workspace_label, escapes), quoteJson(agent.tab_label, escapes), quoteJson(agent.session_title, escapes), quoteJson(agent.cwd_label, escapes), quoteJson(reason_names.at(static_cast<std::size_t>(agent.blocked_reason)), escapes), agent.status_age_s, agent.work_tree, quoteJson(agent.last_event, escapes), agent.plan_done, agent.plan_total, quoteJson(agent.plan_step, escapes), quoteJson(agent.final_message, escapes), quoteJson(session_text, escapes));
+    ds::formatTo(output, R"({{"pane_id":{},"pane_generation":{},"workspace_id":{},"tab_id":{},"pane_index":{},"provider":{},"provider_index":{},"status":{},"workspace":{},"tab":{},"title":{},"cwd":{},"blocked_reason":{},"status_age_s":{},"worktree_id":{},"last_event":{},"plan":{{"done":{},"total":{},"step":{}}},"final_message":{},"session_id":{}}})", agent.pane_id, agent.pane_generation, agent.location.workspace.id, agent.location.tab_id, agent.pane_index, quoteJson(agent.provider_name.empty() ? "unknown" : agent.provider_name, escapes), static_cast<Byte>(agent.provider), quoteJson(status_names.at(static_cast<std::size_t>(agent.status)), escapes), quoteJson(agent.workspace_label, escapes), quoteJson(agent.tab_label, escapes), quoteJson(agent.session_title, escapes), quoteJson(agent.cwd_label, escapes), quoteJson(reason_names.at(static_cast<std::size_t>(agent.blocked_reason)), escapes), agent.status_age_s, agent.work_tree, quoteJson(agent.last_event, escapes), agent.plan_done, agent.plan_total, quoteJson(agent.plan_step, escapes), quoteJson(agent.final_message, escapes), quoteJson(session_text, escapes));
   }
 
-  void appendAgentEventJson(Text& output, const AgentSnapshot& snapshot) {
-    ds::formatTo(output, "{{\"type\":\"agent_snapshot\",\"revision\":{},\"data\":[", snapshot.revision);
+  static void appendAgentEventJson(Text& output, const AgentSnapshot& snapshot) {
+    ds::formatTo(output, R"({{"type":"agent_snapshot","revision":{},"data":[)", snapshot.revision);
     for (const auto& entry : snapshot.entries) {
       if (&entry != snapshot.entries.data()) {
         output.push(',');
@@ -248,7 +248,7 @@ namespace telar::runtime::cli::api {
       NamedValue{.name = "max_clipboard_chunk_bytes", .value = runtime_clipboard_chunk_bytes},
   };
 
-  void appendTable(Text& output, std::span<const NamedValue> values, bool json) {
+  static void appendTable(Text& output, std::span<const NamedValue> values, bool json) {
     for (const auto& entry : values) {
       if (json) {
         if (&entry != values.data()) {
@@ -281,7 +281,7 @@ namespace telar::runtime::cli::api {
     Text output{memory};
 
     if (json) {
-      ds::formatTo(output, "{{\"schema_version\":{},\"fingerprint\":\"{}\",\"client_requests\":{{", quoteJson(nativeSchemaVersion()), fingerprint);
+      ds::formatTo(output, R"({{"schema_version":{},"fingerprint":"{}","client_requests":{{)", quoteJson(nativeSchemaVersion()), fingerprint);
       appendTable(output, client_requests, true);
       output.append("},\"server_messages\":{");
       appendTable(output, server_messages, true);
@@ -316,7 +316,7 @@ namespace telar::runtime::cli::runtime_clipboard {
 
   int run(Memory& memory, const Options& options) {
     // Text may also contain terminal escape sequences. Reject before capturing.
-    if (::isatty(STDOUT_FILENO)) {
+    if (::isatty(STDOUT_FILENO) != 0) {
       throw std::runtime_error{"Pipe clipboard content to a consumer or redirect stdout to a file"};
     }
 
@@ -363,11 +363,11 @@ namespace telar::runtime::cli::runtime_clipboard {
 
 namespace telar::runtime::cli {
 
-  void printRuntimeStatus(Memory& memory, const ProxyStatus& status, bool json) {
+  static void printRuntimeStatus(Memory& memory, const ProxyStatus& status, bool json) {
     Text output{memory};
 
     if (json) {
-      ds::formatTo(output, "{{\"running\":true,\"schema_version\":{},\"proxy\":", quoteJson(nativeSchemaVersion()));
+      ds::formatTo(output, R"({{"running":true,"schema_version":{},"proxy":)", quoteJson(nativeSchemaVersion()));
       appendProxyStatusJson(output, status);
       output.append("}\n");
       writeText(output);
@@ -389,7 +389,7 @@ namespace telar::runtime::cli {
     writeText(output);
   }
 
-  void printRuntimeMetrics(Memory& memory, const SystemMetrics& metrics, bool json) {
+  static void printRuntimeMetrics(Memory& memory, const SystemMetrics& metrics, bool json) {
     Text output{memory};
 
     if (json) {
@@ -410,15 +410,15 @@ namespace telar::runtime::cli {
   }
 
   // Appends the frame as one JSON event line, and says whether the frame is one the watch reports.
-  bool appendRuntimeEventJson(Text& output, std::span<const Byte> frame, DecodeStorage& storage) {
+  static bool appendRuntimeEventJson(Text& output, std::span<const Byte> frame, DecodeStorage& storage) {
     switch (static_cast<ServerTag>(frame.front())) {
     case ServerTag::proxy_status:
-      output.append("{\"type\":\"proxy_status\",\"data\":");
+      output.append(R"({"type":"proxy_status","data":)");
       appendProxyStatusJson(output, Codec::decode<ProxyStatus>(frame, storage));
       output.push('}');
       return true;
     case ServerTag::system_metrics:
-      output.append("{\"type\":\"system_metrics\",\"data\":");
+      output.append(R"({"type":"system_metrics","data":)");
       appendMetricsJson(output, Codec::decode<SystemMetrics>(frame, storage), true);
       output.push('}');
       return true;
@@ -430,11 +430,11 @@ namespace telar::runtime::cli {
       return true;
     case ServerTag::runtime_stopping:
       Codec::decode<RuntimeStopping>(frame, storage);
-      output.append("{\"type\":\"runtime_stopping\"}");
+      output.append(R"({"type":"runtime_stopping"})");
       return true;
     case ServerTag::resync_required:
       Codec::decode<ResyncRequired>(frame, storage);
-      output.append("{\"type\":\"resync_required\"}");
+      output.append(R"({"type":"resync_required"})");
       return true;
     default:
       return false;
@@ -442,7 +442,7 @@ namespace telar::runtime::cli {
   }
 
   template <Allocator Memory>
-  void observeRuntime(Memory& memory, const RuntimeOptions& options) {
+  static void observeRuntime(Memory& memory, const RuntimeOptions& options) {
     ServerOptions server_options{};
 
     server_options.socket = options.socket.valueOr("");

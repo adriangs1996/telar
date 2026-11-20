@@ -28,7 +28,7 @@ export {
   namespace telar::runtime {
 
     template <typename Service>
-    concept ObservationService = requires(Service& service, const typename Service::Request& request) {
+    concept ObservationService = requires(Service& service, const Service::Request& request) {
       { service.observe(request) } noexcept -> std::same_as<typename Service::Result>;
       { service.stop() } noexcept -> std::same_as<void>;
     };
@@ -47,8 +47,8 @@ export {
     template <typename Service>
       requires ObservationService<std::remove_reference_t<Service>>
     class TBC_SHARED TBC_GENERIC ObservationWorker {
-      using Request = typename std::remove_reference_t<Service>::Request;
-      using Result = typename std::remove_reference_t<Service>::Result;
+      using Request = std::remove_reference_t<Service>::Request;
+      using Result = std::remove_reference_t<Service>::Result;
 
     public:
       template <typename... Arguments>
@@ -278,15 +278,15 @@ export {
         slots_.resize(Capacity);
       }
 
-      inline bool empty() const noexcept {
+      [[nodiscard]] inline bool empty() const noexcept {
         return count_ == 0;
       }
 
-      inline bool full() const noexcept {
+      [[nodiscard]] inline bool full() const noexcept {
         return count_ == Capacity;
       }
 
-      inline std::size_t size() const noexcept {
+      [[nodiscard]] inline std::size_t size() const noexcept {
         return count_;
       }
 
@@ -348,7 +348,7 @@ export {
     struct HistoryQueryOrder {
       explicit HistoryQueryOrder(const QueryHistory& query, bool persistent_client) noexcept;
 
-      bool supersededBy(const HistoryQueryOrder& newer) const noexcept;
+      [[nodiscard]] bool supersededBy(const HistoryQueryOrder& newer) const noexcept;
 
       bool replaceable;
       bool distinct;
@@ -368,7 +368,7 @@ export {
 
     template <typename Service>
     struct InternalRequestType<Service, std::void_t<typename Service::InternalRequest>> {
-      using Type = typename Service::InternalRequest;
+      using Type = Service::InternalRequest;
     };
 
     template <typename Service, typename Memory>
@@ -585,7 +585,7 @@ export {
         bool superseded = false;
         ds::Option<HistoryQueryOrder> history_query;
 
-        inline bool durable() const noexcept {
+        [[nodiscard]] inline bool durable() const noexcept {
           if (internal) {
             return true;
           }

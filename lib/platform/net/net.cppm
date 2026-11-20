@@ -105,7 +105,7 @@ export {
       static ds::Option<NetworkAddress> copy(const sockaddr* source, socklen_t size) noexcept;
 
       void setPort(std::uint16_t port) noexcept;
-      const sockaddr* address() const noexcept;
+      [[nodiscard]] const sockaddr* address() const noexcept;
     };
 
   }

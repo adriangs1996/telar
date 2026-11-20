@@ -99,7 +99,7 @@ export {
     void single(tbc::mut_a<ds::Option<std::string_view>> field, tbc::val_a<std::string_view> value, const char* error);
 
     struct Target {
-      ds::Option<std::uint64_t> id{};
+      ds::Option<std::uint64_t> id;
 
       static Target parse(std::string_view value);
 
@@ -116,9 +116,9 @@ export {
       };
       Action action{};
       Target target{};
-      ds::Option<std::string_view> name{}, directory{}, worktree{}, socket{};
-      Arguments command{};
-      ds::Option<std::uint16_t> columns{};
+      ds::Option<std::string_view> name, directory, worktree, socket;
+      Arguments command;
+      ds::Option<std::uint16_t> columns;
       bool json = false;
 
       static WorkspaceOptions parse(Arguments words);
@@ -135,9 +135,9 @@ export {
       };
       Action action{};
       Target workspace{}, target{};
-      ds::Option<std::string_view> label{}, socket{};
+      ds::Option<std::string_view> label, socket;
       TabMoveDirection direction{};
-      ds::Option<std::uint64_t> relative{};
+      ds::Option<std::uint64_t> relative;
       bool background = false, json = false;
 
       static TabOptions parse(Arguments words);
@@ -176,7 +176,7 @@ export {
 
       WorkspaceList catalog();
 
-      const char* socket() const;
+      [[nodiscard]] const char* socket() const;
 
       // The conversation itself, for commands shared with families that hold a bare session.
       ControlSession& control() noexcept;
@@ -239,22 +239,22 @@ export {
 
       tbc::val_a<Text> run(std::initializer_list<std::string_view> arguments, const char* failure = "NotARepository", bool stream = false, bool hardened = false) const;
 
-      tbc::val_a<Text> line(std::initializer_list<std::string_view> arguments, bool hardened = false) const;
+      [[nodiscard]] tbc::val_a<Text> line(std::initializer_list<std::string_view> arguments, bool hardened = false) const;
 
-      tbc::val_a<Text> root(std::string_view directory) const;
+      [[nodiscard]] tbc::val_a<Text> root(std::string_view directory) const;
 
-      tbc::val_a<Text> currentBranch(std::string_view directory) const;
+      [[nodiscard]] tbc::val_a<Text> currentBranch(std::string_view directory) const;
 
-      bool succeeds(std::initializer_list<std::string_view> arguments, bool hardened = false) const;
+      [[nodiscard]] bool succeeds(std::initializer_list<std::string_view> arguments, bool hardened = false) const;
 
       void add(std::string_view root, std::string_view directory, std::string_view branch, std::string_view base) const;
 
-      tbc::val_a<ds::Vec<GitWorktree, Memory>> listed(std::string_view directory, const WorktreeFilter& keep) const;
+      [[nodiscard]] tbc::val_a<ds::Vec<GitWorktree, Memory>> listed(std::string_view directory, const WorktreeFilter& keep) const;
 
       // The merge check runs through the untrusted Git: hooks, filters and lazy
       // fetches off. A clone that could still fetch lazily, on a Git too old to
       // switch that off, counts as not merged and asks a person.
-      bool merged(std::string_view root, std::string_view branch) const;
+      [[nodiscard]] bool merged(std::string_view root, std::string_view branch) const;
 
     private:
       tbc::mut_a<Memory> memory_;
@@ -285,9 +285,9 @@ export {
         resolve,
       };
       Action action{};
-      ds::Option<std::string_view> branch{}, title{}, from{}, label{}, workspace{}, directory{}, machine{}, dispatched_from{}, repository{}, socket{};
-      ds::Option<CoordinatorReference> coordinator{};
-      Arguments command{};
+      ds::Option<std::string_view> branch, title, from, label, workspace, directory, machine, dispatched_from, repository, socket;
+      ds::Option<CoordinatorReference> coordinator;
+      Arguments command;
       std::uint64_t client = 0;
       unsigned timeout = default_wait_seconds;
       bool json = false, setup = false, uncommitted = false, stat = false, force = false, delete_branch = false, wait = false;

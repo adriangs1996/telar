@@ -43,7 +43,7 @@ namespace telar::runtime {
         return info;
       }();
 
-      return ticks / timebase.denom * timebase.numer + ticks % timebase.denom * timebase.numer / timebase.denom;
+      return (ticks / timebase.denom * timebase.numer) + (ticks % timebase.denom * timebase.numer / timebase.denom);
     }
 
     ProcessRecord record(const kinfo_proc& process) noexcept {
@@ -112,7 +112,7 @@ namespace telar::runtime {
       for (std::size_t index = 0; index < count; ++index) {
         kinfo_proc process;
 
-        std::memcpy(&process, buffer_.data() + index * sizeof(kinfo_proc), sizeof(kinfo_proc));
+        std::memcpy(&process, buffer_.data() + (index * sizeof(kinfo_proc)), sizeof(kinfo_proc));
         if (process.kp_proc.p_pid > 0) {
           records.push(record(process));
         }

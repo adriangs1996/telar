@@ -132,7 +132,7 @@ export {
       template <typename Run, typename Reject>
       TBC_GENERIC void inspect(Run&& run, Reject&& reject) {
         // Stays generic over the caller's runner and failure; the listing is read in the implementation unit.
-        const auto [status, text] = with({"config", "--show-scope", "-z", "--get-regexp", "^(filter\\.|extensions\\.partialclone$|remote\\..*\\.(promisor|partialclonefilter|uploadpack)$)"}, run);
+        const auto [status, text] = with({"config", "--show-scope", "-z", "--get-regexp", R"(^(filter\.|extensions\.partialclone$|remote\..*\.(promisor|partialclonefilter|uploadpack)$))"}, run);
         const auto may_fetch = overrideFilters(status, text);
         if (!may_fetch) {
           reject();
@@ -177,7 +177,7 @@ export {
       ds::Option<bool> overrideFilters(int status, std::string_view listing);
 
       // `git`, the hardening options and overrides, then `arguments`, run in the repository.
-      Command<Memory> commandFor(std::span<const std::string_view> arguments) const;
+      [[nodiscard]] Command<Memory> commandFor(std::span<const std::string_view> arguments) const;
 
       tbc::mut_a<Memory> memory_;
       tbc::val_a<ds::String<Memory>> root_;

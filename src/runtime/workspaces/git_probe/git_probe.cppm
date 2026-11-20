@@ -13,13 +13,13 @@ export {
 
     struct WorkspaceGitRequest {
       std::uint64_t identity = 0;
-      FixedText<4096> path{};
+      FixedText<4096> path;
     };
 
     struct WorkspaceGitResult {
       std::uint64_t identity = 0;
-      FixedText<200> branch{};
-      ds::Option<bool> dirty{};
+      FixedText<200> branch;
+      ds::Option<bool> dirty;
       bool present = false;
       bool timed_out = false;
     };

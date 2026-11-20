@@ -28,8 +28,8 @@ namespace telar::runtime::redirect {
   }
 
   bool LocalAddresses::contains(const Target& target) const noexcept {
-    for (auto* interface = addresses_.get(); interface; interface = interface->ifa_next) {
-      if (!interface->ifa_addr || !(interface->ifa_flags & IFF_UP) || (interface->ifa_flags & IFF_LOOPBACK) || interface->ifa_addr->sa_family != target.endpoint.storage.ss_family) {
+    for (auto* interface = addresses_.get(); interface != nullptr; interface = interface->ifa_next) {
+      if ((interface->ifa_addr == nullptr) || ((interface->ifa_flags & IFF_UP) == 0u) || ((interface->ifa_flags & IFF_LOOPBACK) != 0u) || interface->ifa_addr->sa_family != target.endpoint.storage.ss_family) {
         continue;
       }
 
@@ -80,7 +80,7 @@ namespace telar::runtime::redirect {
     return selected;
   }
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
 
   PfCommand::PfCommand(Memory& memory) noexcept
       : memory_(memory) {}
@@ -95,7 +95,7 @@ namespace telar::runtime::redirect {
 
     argv.atMut(0) = "/sbin/pfctl";
     std::ranges::copy(arguments, argv.viewMut().begin() + 1);
-    const ds::Array<EnvironmentEntry, 2> environment{{{"LC_ALL", "C"}, {"PATH", "/usr/bin:/bin:/usr/sbin:/sbin"}}};
+    const ds::Array<EnvironmentEntry, 2> environment{{{.name = "LC_ALL", .value = "C"}, {.name = "PATH", .value = "/usr/bin:/bin:/usr/sbin:/sbin"}}};
     Command command{memory_, Launch{.cwd = "/", .arguments = std::span{argv}.first(arguments.size() + 1), .environment_mode = EnvironmentMode::replace, .environment = environment}, CommandPurpose::administration};
     // pfctl reports some results, the token `-E` hands out among them, on its standard error,
     // so both streams make one output in the order they arrive.
@@ -182,7 +182,7 @@ namespace telar::runtime::redirect {
     return *result;
   }
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
 
   SocketAccounts::SocketAccounts(Memory& memory) noexcept
       : memory_(memory) {}
@@ -294,7 +294,7 @@ namespace telar::runtime::redirect {
       }
 
       if (!snapshot_ || snapshot_->bytes().size() < needed) {
-        snapshot_.emplace(memory_, std::min(maximum_bytes, needed + needed / 4 + sizeof(xtcpcb64)));
+        snapshot_.emplace(memory_, std::min(maximum_bytes, needed + (needed / 4) + sizeof(xtcpcb64)));
       }
 
       size_ = snapshot_->bytes().size();
@@ -315,14 +315,14 @@ namespace telar::runtime::redirect {
       return false;
     }
 
-    if (local.ss_family == AF_INET && (pcb.inp_vflag & INP_IPV4)) {
+    if (local.ss_family == AF_INET && ((pcb.inp_vflag & INP_IPV4) != 0)) {
       const auto& origin = reinterpret_cast<const sockaddr_in&>(local);
       const auto& server = reinterpret_cast<const sockaddr_in&>(peer);
 
       return pcb.inp_lport == server.sin_port && pcb.inp_fport == origin.sin_port && sys::localAddress(pcb).s_addr == server.sin_addr.s_addr && sys::foreignAddress(pcb).s_addr == origin.sin_addr.s_addr;
     }
 
-    if (local.ss_family == AF_INET6 && (pcb.inp_vflag & INP_IPV6)) {
+    if (local.ss_family == AF_INET6 && ((pcb.inp_vflag & INP_IPV6) != 0)) {
       const auto& origin = reinterpret_cast<const sockaddr_in6&>(local);
       const auto& server = reinterpret_cast<const sockaddr_in6&>(peer);
 
@@ -333,7 +333,7 @@ namespace telar::runtime::redirect {
   }
 #endif
 
-#if defined(__linux__)
+#ifdef __linux__
 
   bool LinuxTcpSocket::matches(const Target& source, const Target& destination) const noexcept {
     return endpointMatches(local, source.endpoint.storage) && endpointMatches(remote, destination.endpoint.storage);
@@ -446,7 +446,7 @@ namespace telar::runtime::redirect {
     return std::span{processes_}.first(count_);
   }
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
 
   bool matchesMacosSocket(const in_sockinfo& socket, const FlowKey& flow) noexcept {
     if (ntohs(static_cast<std::uint16_t>(socket.insi_lport)) != flow.source.port || ntohs(static_cast<std::uint16_t>(socket.insi_fport)) != flow.destination.port) {
@@ -458,14 +458,14 @@ namespace telar::runtime::redirect {
       return false;
     }
 
-    if (family == AF_INET && (socket.insi_vflag & INI_IPV4)) {
+    if (family == AF_INET && ((socket.insi_vflag & INI_IPV4) != 0)) {
       const auto& local = reinterpret_cast<const sockaddr_in&>(flow.source.endpoint.storage).sin_addr;
       const auto& remote = reinterpret_cast<const sockaddr_in&>(flow.destination.endpoint.storage).sin_addr;
 
       return socket.insi_laddr.ina_46.i46a_addr4.s_addr == local.s_addr && socket.insi_faddr.ina_46.i46a_addr4.s_addr == remote.s_addr;
     }
 
-    if (family == AF_INET6 && (socket.insi_vflag & INI_IPV6)) {
+    if (family == AF_INET6 && ((socket.insi_vflag & INI_IPV6) != 0)) {
       const auto& local = reinterpret_cast<const sockaddr_in6&>(flow.source.endpoint.storage).sin6_addr;
       const auto& remote = reinterpret_cast<const sockaddr_in6&>(flow.destination.endpoint.storage).sin6_addr;
 
@@ -529,7 +529,7 @@ namespace telar::runtime::redirect {
   }
 #endif
 
-#if !defined(__APPLE__)
+#ifndef __APPLE__
 
   SocketOwners::Result SocketOwners::find(const FlowKey& flow) noexcept {
     Result result;
@@ -594,7 +594,7 @@ namespace telar::runtime::redirect {
   }
 #endif
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
 
   Listener::Listener(const Target& target, bool incoming)
       : target_(target),
@@ -662,7 +662,7 @@ namespace telar::runtime::redirect {
   ShutdownSignals::~ShutdownSignals() {
     // Consume the handled shutdown signal before restoring the old mask.
     sigset_t pending;
-    if (::sigpending(&pending) == 0 && (sigismember(&pending, SIGINT) || sigismember(&pending, SIGTERM))) {
+    if (::sigpending(&pending) == 0 && ((sigismember(&pending, SIGINT) != 0) || (sigismember(&pending, SIGTERM) != 0))) {
       int received;
 
       ::sigwait(&selected_, &received);
@@ -674,7 +674,7 @@ namespace telar::runtime::redirect {
   bool ShutdownSignals::stopping() const noexcept {
     sigset_t pending;
 
-    return ::sigpending(&pending) == 0 && (sigismember(&pending, SIGINT) || sigismember(&pending, SIGTERM));
+    return ::sigpending(&pending) == 0 && ((sigismember(&pending, SIGINT) != 0) || (sigismember(&pending, SIGTERM) != 0));
   }
 
   Helper::Helper(Memory& memory, std::string_view endpoint, std::span<const Target> targets, std::span<const ProcessIdentity> processes, Direction direction)
@@ -806,7 +806,7 @@ namespace telar::runtime::redirect {
         throw SystemError{"Poll transparent TCP helper"};
       }
 
-      if (descriptors[0].revents & POLLIN) {
+      if ((descriptors[0].revents & POLLIN) != 0) {
         Byte command;
         const auto received = ::recv(monitor.get(), &command, 1, 0);
         if (received == 1 && command != stop_request) {
@@ -816,14 +816,14 @@ namespace telar::runtime::redirect {
         break;
       }
 
-      if (descriptors[0].revents & (POLLHUP | POLLERR | POLLNVAL)) {
+      if ((descriptors[0].revents & (POLLHUP | POLLERR | POLLNVAL)) != 0) {
         break;
       }
 
       bool changed = false;
 
       for (std::size_t index = 0; index < flows_.size(); ++index) {
-        if (flows_[index] && ((descriptors[pending_offset + maximum_pending + index].revents & (POLLIN | POLLHUP | POLLERR | POLLNVAL)) || std::chrono::steady_clock::now() >= flows_[index]->deadline)) {
+        if (flows_[index] && (((descriptors[pending_offset + maximum_pending + index].revents & (POLLIN | POLLHUP | POLLERR | POLLNVAL)) != 0) || std::chrono::steady_clock::now() >= flows_[index]->deadline)) {
           flows_.atMut(index).reset();
           changed = true;
         }
@@ -834,7 +834,7 @@ namespace telar::runtime::redirect {
       }
 
       for (std::size_t index = 0; index < count_; ++index) {
-        if (descriptors[index + 3].revents & POLLIN) {
+        if ((descriptors[index + 3].revents & POLLIN) != 0) {
           accept(index, uid);
         }
       }
@@ -850,7 +850,7 @@ namespace telar::runtime::redirect {
           continue;
         }
 
-        if (descriptors[pending_offset + index].revents & (POLLOUT | POLLERR | POLLHUP)) {
+        if ((descriptors[pending_offset + index].revents & (POLLOUT | POLLERR | POLLHUP)) != 0) {
           int failure = 0;
           socklen_t length = sizeof(failure);
           // The connection leaves the pending table before the handoff, which updates the flows.
@@ -860,7 +860,7 @@ namespace telar::runtime::redirect {
           if (::getsockopt(connected.connection.origin.get(), SOL_SOCKET, SO_ERROR, &failure, &length) == 0 && failure == 0) {
             handoff(connected.connection, connected.flow, uid);
           } else if (flows_[connected.flow]->incoming) {
-            std::fprintf(stderr, "telar redirect: incoming origin connection failed: %s\n", std::strerror(failure ? failure : sys::lastError()));
+            std::fprintf(stderr, "telar redirect: incoming origin connection failed: %s\n", std::strerror((failure != 0) ? failure : sys::lastError()));
           }
         } else if (std::chrono::steady_clock::now() >= pending->deadline) {
           if (flows_[pending->flow]->incoming) {
@@ -871,7 +871,7 @@ namespace telar::runtime::redirect {
         }
       }
 
-      if (descriptors[1].revents & POLLIN) {
+      if ((descriptors[1].revents & POLLIN) != 0) {
         discover(session, uid, identity);
       }
 

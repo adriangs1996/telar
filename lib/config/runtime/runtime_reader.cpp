@@ -49,7 +49,7 @@ namespace telar::runtime::config {
       }
 
       if (dropped != 0) {
-        limits_.add({"agent_manifest.max_custom_agents", "agents", 27, 27 + dropped, {}});
+        limits_.add({.name = "agent_manifest.max_custom_agents", .noun = "agents", .value = 27, .requested = 27 + dropped, .route = {}});
       }
     }
 
@@ -91,11 +91,11 @@ namespace telar::runtime::config {
     }
 
     inline void paths(const lua::Value& value, ManifestTextList<8, 128>& destination) {
-      list(value, destination, {"agent_manifest.max_paths", "entries", 8, {}, {}}, {"agent_manifest.max_path_bytes", "bytes", 128, {}, {}});
+      list(value, destination, {.name = "agent_manifest.max_paths", .noun = "entries", .value = 8, .requested = {}, .route = {}}, {.name = "agent_manifest.max_path_bytes", .noun = "bytes", .value = 128, .requested = {}, .route = {}});
     }
 
     inline void phrases(const lua::Value& value, ManifestTextList<16, 64>& destination) {
-      list(value, destination, {"agent_manifest.max_phrases", "phrases", 16, {}, {}}, {"agent_manifest.max_phrase_bytes", "bytes", 64, {}, {}});
+      list(value, destination, {.name = "agent_manifest.max_phrases", .noun = "phrases", .value = 16, .requested = {}, .route = {}}, {.name = "agent_manifest.max_phrase_bytes", .noun = "bytes", .value = 64, .requested = {}, .route = {}});
     }
 
     inline void commandTools(const lua::Value& value, AgentManifest& manifest) {
@@ -117,14 +117,14 @@ namespace telar::runtime::config {
 
         if (tool.size() > 64 || field.size() > 32) {
           if (tool.size() > 64) {
-            limits_.add({"agent_manifest.max_tool_name_bytes", "bytes", 64, tool.size(), {}});
+            limits_.add({.name = "agent_manifest.max_tool_name_bytes", .noun = "bytes", .value = 64, .requested = tool.size(), .route = {}});
           }
 
           if (field.size() > 32) {
-            limits_.add({"agent_manifest.max_command_field_bytes", "bytes", 32, field.size(), {}});
+            limits_.add({.name = "agent_manifest.max_command_field_bytes", .noun = "bytes", .value = 32, .requested = field.size(), .route = {}});
           }
         } else if (manifest.tool_count == manifest.command_tools.size()) {
-          limits_.add({"agent_manifest.max_command_tools", "command tools", 8, 8 + count - position + 1, {}});
+          limits_.add({.name = "agent_manifest.max_command_tools", .noun = "command tools", .value = 8, .requested = 8 + count - position + 1, .route = {}});
           return;
         } else {
           manifest.addCommandTool(tool, field);

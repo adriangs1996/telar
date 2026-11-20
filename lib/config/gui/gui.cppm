@@ -14,19 +14,19 @@ export {
     // What `gui` admits; the GUI's own limits follow these.
     struct GuiBounds {
       static constexpr std::size_t font_name_bytes = 256;
-      static constexpr Bounds<double> font_size{6, 96};
-      static constexpr Bounds<double> line_height{0.75, 3};
-      static constexpr Bounds<double> letter_spacing{-5, 20};
-      static constexpr Bounds<double> thicken_strength{0, 255};
-      static constexpr Bounds<double> blink_interval_ms{100, 5000};
-      static constexpr Bounds<double> wheel_ms{0, 400};
-      static constexpr Bounds<double> overscan{0, 4};
-      static constexpr Bounds<double> opacity{0, 1};
-      static constexpr Bounds<double> background_blur{0, 255};
-      static constexpr Bounds<double> padding{0, 256};
-      static constexpr Bounds<double> chrome_scale{0.5, 2};
-      static constexpr Bounds<double> sidebar_width{220, 800};
-      static constexpr Bounds<double> max_fps{30, 240};
+      static constexpr Bounds<double> font_size{.minimum = 6, .maximum = 96};
+      static constexpr Bounds<double> line_height{.minimum = 0.75, .maximum = 3};
+      static constexpr Bounds<double> letter_spacing{.minimum = -5, .maximum = 20};
+      static constexpr Bounds<double> thicken_strength{.minimum = 0, .maximum = 255};
+      static constexpr Bounds<double> blink_interval_ms{.minimum = 100, .maximum = 5000};
+      static constexpr Bounds<double> wheel_ms{.minimum = 0, .maximum = 400};
+      static constexpr Bounds<double> overscan{.minimum = 0, .maximum = 4};
+      static constexpr Bounds<double> opacity{.minimum = 0, .maximum = 1};
+      static constexpr Bounds<double> background_blur{.minimum = 0, .maximum = 255};
+      static constexpr Bounds<double> padding{.minimum = 0, .maximum = 256};
+      static constexpr Bounds<double> chrome_scale{.minimum = 0.5, .maximum = 2};
+      static constexpr Bounds<double> sidebar_width{.minimum = 220, .maximum = 800};
+      static constexpr Bounds<double> max_fps{.minimum = 30, .maximum = 240};
     };
 
     enum class CursorStyle : std::uint8_t {

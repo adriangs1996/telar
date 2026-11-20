@@ -124,7 +124,7 @@ export namespace telar::runtime::control {
       std::string_view result;
 
       try {
-        decoded_.resize(payload.size() / 4 * 3 + (payload.size() % 4 == 0 ? 0 : 3));
+        decoded_.resize((payload.size() / 4 * 3) + (payload.size() % 4 == 0 ? 0 : 3));
         const auto decoded_size = decodeGraphicsPayload(payload, decoded_.viewMut());
         if (!decoded_size) {
           return true;
@@ -153,7 +153,7 @@ export namespace telar::runtime::control {
       constexpr std::string_view image_prefix = "\x1b_Gi=";
       constexpr std::string_view number_prefix = ",I=";
       constexpr std::string_view placement_prefix = ",p=";
-      constexpr std::size_t maximum_prefix_bytes = image_prefix.size() + number_prefix.size() + placement_prefix.size() + 3 * identifier_digits + 1;
+      constexpr std::size_t maximum_prefix_bytes = image_prefix.size() + number_prefix.size() + placement_prefix.size() + (3 * identifier_digits) + 1;
       constexpr std::string_view terminator = "\x1b\\";
       static_assert(maximum_reply_bytes > maximum_prefix_bytes + terminator.size());
       ds::Array<char, maximum_reply_bytes> encoded;
@@ -341,7 +341,7 @@ export namespace telar::runtime::control {
         return nullptr;
       }
 
-      const auto bytes = static_cast<std::size_t>(count) * size + sizeof(InflateAllocation);
+      const auto bytes = (static_cast<std::size_t>(count) * size) + sizeof(InflateAllocation);
       auto* allocation = static_cast<InflateAllocation*>(static_cast<QueryMemory*>(context)->allocate(bytes, alignof(InflateAllocation)));
       if (allocation == nullptr) {
         return nullptr;

@@ -25,11 +25,11 @@ export {
     inline constexpr std::uint32_t default_interval_ms = 250;
 
     struct Options {
-      std::string_view action{};
-      std::string_view target{};
-      std::string_view text{};
-      ds::Option<std::string_view> workspace{};
-      ds::Option<std::string_view> tab{};
+      std::string_view action;
+      std::string_view target;
+      std::string_view text;
+      ds::Option<std::string_view> workspace;
+      ds::Option<std::string_view> tab;
       tbc::val_a<const char*> socket = nullptr;
       bool json = false;
       bool stdin_text = false;
@@ -41,8 +41,8 @@ export {
       std::uint32_t timeout = 30;
       std::uint16_t lines = 40;
       PaneTextSource source = PaneTextSource::recent;
-      ds::Option<PaneDirection> direction{};
-      ds::Option<std::uint32_t> count{};
+      ds::Option<PaneDirection> direction;
+      ds::Option<std::uint32_t> count;
       std::uint32_t interval = default_interval_ms;
       ReportAgent report{};
       ReportAgentCommand command{};

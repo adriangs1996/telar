@@ -192,7 +192,7 @@ export {
 
         for (const auto& tab : workspace->tabs) {
           const auto first = pane_count;
-          const TabLocation location{request.workspace, tab.id};
+          const TabLocation location{.workspace = request.workspace, .tab_id = tab.id};
 
           for (const auto* pane : model_.panes.items()) {
             if (pane != nullptr && matchesSnapshot(*pane, location)) {
@@ -220,14 +220,14 @@ export {
         std::size_t count = 0;
 
         for (const auto& row : model_.limits.runtime.rows()) {
-          entries.atMut(count++) = {row.reach(), LimitOrigin::runtime, row.hits, row.last_ms};
+          entries.atMut(count++) = {.reach = row.reach(), .origin = LimitOrigin::runtime, .hits = row.hits, .last_ms = row.last_ms};
         }
 
         for (const auto& row : model_.limits.clients.rows()) {
-          entries.atMut(count++) = {row.reach(), LimitOrigin::client, row.hits, row.last_ms};
+          entries.atMut(count++) = {.reach = row.reach(), .origin = LimitOrigin::client, .hits = row.hits, .last_ms = row.last_ms};
         }
 
-        send(LimitList{request.request_id, model_.limits.runtime.evicted(), model_.limits.clients.evicted(), model_.limits.refused_reports, std::span{entries}.first(count)});
+        send(LimitList{.request_id = request.request_id, .runtime_evicted = model_.limits.runtime.evicted(), .client_evicted = model_.limits.clients.evicted(), .refused_reports = model_.limits.refused_reports, .entries = std::span{entries}.first(count)});
       }
 
       ConcurrentMemory& memory_;

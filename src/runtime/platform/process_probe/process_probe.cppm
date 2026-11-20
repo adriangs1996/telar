@@ -27,12 +27,12 @@ export {
 
       static ProcessArguments fromMacos(std::span<const char> buffer) noexcept;
 
-      AgentProvider provider(const AgentManifests& manifests, std::string_view command) const noexcept;
+      [[nodiscard]] AgentProvider provider(const AgentManifests& manifests, std::string_view command) const noexcept;
 
-      SessionHost sessionHost(AgentProvider provider) const noexcept;
+      [[nodiscard]] SessionHost sessionHost(AgentProvider provider) const noexcept;
 
       // The arguments joined by spaces into `output`, cut where it ends.
-      tbc::val_a<std::string_view> joined(tbc::val_a<std::span<char>> output) const noexcept;
+      [[nodiscard]] tbc::val_a<std::string_view> joined(tbc::val_a<std::span<char>> output) const noexcept;
 
     private:
       static ds::Option<std::string_view> next(std::string_view& remaining) noexcept;
@@ -50,7 +50,7 @@ export {
   namespace telar::runtime {
 
     struct ProcessLineage {
-      std::span<const pid_t> ancestors() const noexcept;
+      [[nodiscard]] std::span<const pid_t> ancestors() const noexcept;
 
       ds::Array<pid_t, 64> processes{};
       unsigned count = 0;
@@ -72,14 +72,14 @@ export {
       pid_t process_group = 0;
       bool operator==(const ProcessIdentity&) const = default;
 
-      bool sameInstance(const ProcessIdentity& other) const noexcept;
+      [[nodiscard]] bool sameInstance(const ProcessIdentity& other) const noexcept;
     };
 
     struct IdentifiedProcess {
-      ds::Option<ProcessIdentity> identity{};
+      ds::Option<ProcessIdentity> identity;
       AgentProvider provider = AgentProvider::unknown;
       SessionHost session_host = SessionHost::unknown;
-      FixedText<48> name{};
+      FixedText<48> name;
     };
 
     // A process's command line, its arguments joined by spaces, and the agent it runs.
@@ -111,26 +111,26 @@ export {
     public:
       explicit ProcessInspector(const AgentManifests& manifests = builtin_manifests, uid_t uid = ::geteuid()) noexcept;
 
-      ds::Option<ProcessIdentity> identity(pid_t process) const noexcept;
-      ds::Option<ProcessSnapshot> snapshot(pid_t process) const noexcept;
-      ds::Option<ProcessIdentity> peer(int socket) const noexcept;
-      bool descendsFrom(const ProcessIdentity& process, pid_t root) const noexcept;
-      ProcessLineage lineage(const ProcessIdentity& process, pid_t root) const noexcept;
-      AgentProvider provider(pid_t process) const noexcept;
-      FixedText<48> name(pid_t process) const noexcept;
-      FixedText<4096> directory(pid_t process) const noexcept;
-      FixedText<4096> terminal(pid_t process) const noexcept;
-      IdentifiedProcess identifyGroup(pid_t group, AgentProvider preferred) const noexcept;
-      ListeningPorts listeningPorts(pid_t group) const noexcept;
+      [[nodiscard]] ds::Option<ProcessIdentity> identity(pid_t process) const noexcept;
+      [[nodiscard]] ds::Option<ProcessSnapshot> snapshot(pid_t process) const noexcept;
+      [[nodiscard]] ds::Option<ProcessIdentity> peer(int socket) const noexcept;
+      [[nodiscard]] bool descendsFrom(const ProcessIdentity& process, pid_t root) const noexcept;
+      [[nodiscard]] ProcessLineage lineage(const ProcessIdentity& process, pid_t root) const noexcept;
+      [[nodiscard]] AgentProvider provider(pid_t process) const noexcept;
+      [[nodiscard]] FixedText<48> name(pid_t process) const noexcept;
+      [[nodiscard]] FixedText<4096> directory(pid_t process) const noexcept;
+      [[nodiscard]] FixedText<4096> terminal(pid_t process) const noexcept;
+      [[nodiscard]] IdentifiedProcess identifyGroup(pid_t group, AgentProvider preferred) const noexcept;
+      [[nodiscard]] ListeningPorts listeningPorts(pid_t group) const noexcept;
       // Of any user's process the system lets the runtime read; the text views `output`.
-      tbc::val_a<CommandLine> commandLine(pid_t process, tbc::val_a<std::span<char>> output) const noexcept;
+      [[nodiscard]] tbc::val_a<CommandLine> commandLine(pid_t process, tbc::val_a<std::span<char>> output) const noexcept;
 
     private:
       // The arguments view the caller's buffer.
       static tbc::val_a<ProcessArguments> readArguments(pid_t process, tbc::val_a<std::span<char>> buffer) noexcept;
       static FixedText<4096> executable(pid_t process) noexcept;
       static std::size_t groupMembers(pid_t group, std::span<pid_t> members) noexcept;
-      IdentifiedProcess identifyProcess(pid_t process) const noexcept;
+      [[nodiscard]] IdentifiedProcess identifyProcess(pid_t process) const noexcept;
       const AgentManifests& manifests_;
       uid_t uid_;
     };
@@ -206,9 +206,9 @@ export {
     struct ProcessCache {
       static constexpr unsigned acquisition_attempts = 6;
 
-      bool needsIdentification(pid_t foreground, bool recheck) const noexcept;
+      [[nodiscard]] bool needsIdentification(pid_t foreground, bool recheck) const noexcept;
 
-      AgentProvider preferred(pid_t foreground) const noexcept;
+      [[nodiscard]] AgentProvider preferred(pid_t foreground) const noexcept;
 
       void update(pid_t foreground, const IdentifiedProcess& process, bool installed) noexcept;
 
@@ -333,7 +333,7 @@ export {
 
       inline void stop() noexcept {}
 
-      inline FixedText<4096> directory(pid_t process) const noexcept {
+      [[nodiscard]] inline FixedText<4096> directory(pid_t process) const noexcept {
         return inspector_.directory(process);
       }
 

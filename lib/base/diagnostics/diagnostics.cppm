@@ -60,7 +60,7 @@ export {
         std::int64_t last_ms = 0;
         ds::Option<std::chrono::steady_clock::time_point> shown;
 
-        LimitReach reach() const noexcept;
+        [[nodiscard]] LimitReach reach() const noexcept;
       };
 
       struct Recorded {
@@ -70,8 +70,8 @@ export {
       };
 
       Recorded record(const LimitReach& reach, std::uint32_t hits);
-      std::span<const Row> rows() const noexcept;
-      std::uint64_t evicted() const noexcept;
+      [[nodiscard]] std::span<const Row> rows() const noexcept;
+      [[nodiscard]] std::uint64_t evicted() const noexcept;
 
       static constexpr std::size_t capacity = 128;
 

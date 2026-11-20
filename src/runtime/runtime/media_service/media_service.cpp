@@ -220,7 +220,7 @@ namespace telar::runtime {
         return ds::none;
       }
 
-      pending += agent->hasPendingDescription();
+      pending += static_cast<std::size_t>(agent->hasPendingDescription());
     }
 
     // The registry learns of the change once its records are no longer borrowed.
@@ -248,7 +248,7 @@ namespace telar::runtime {
         agent.getMut().description_capture.clear();
         agent.getMut().description_phase = DescriptionPhase::running;
         agent.getMut().description_revision = ++description_revision_;
-        return DescriptionRequest{.identity = {agent->pane, agent->generation, agent->session_id, agent->description_revision}, .query = std::move(query)};
+        return DescriptionRequest{.identity = {.pane = agent->pane, .generation = agent->generation, .session = agent->session_id, .revision = agent->description_revision}, .query = std::move(query)};
       } catch (const EncodingError&) {
         agent.getMut().description_capture.clear();
         agent.getMut().description_phase = DescriptionPhase::failed;
@@ -328,7 +328,7 @@ namespace telar::runtime {
       }
 
       if (pane->media->seal()) {
-        request.entries.atMut(request.count++) = {pane->id, pane->generation, pane->media};
+        request.entries.atMut(request.count++) = {.pane = pane->id, .generation = pane->generation, .media = pane->media};
       }
 
       updateReadInterest(*pane);
@@ -342,7 +342,7 @@ namespace telar::runtime {
   template <EventLoop Poller, typename Limits, HistoryEventSink History>
   void MediaService<Poller, Limits, History>::collect(RuntimeModel& model, ClientStore& clients, Panes& service) {
     if (pending_) {
-      worker_.collect([&](const typename Processor::Result& result) {
+      worker_.collect([&](const Processor::Result& result) {
         apply(model, clients, service, result);
       });
     }
@@ -374,7 +374,7 @@ namespace telar::runtime {
     }
 
     for (;;) {
-      worker_.wait([&](const typename Processor::Result& result) {
+      worker_.wait([&](const Processor::Result& result) {
         pending_ = false;
         for (const auto& entry : std::span{result.entries}.first(result.count)) {
           entry.media->complete();
@@ -390,7 +390,7 @@ namespace telar::runtime {
         }
 
         if (pane != nullptr && pane->media->seal()) {
-          request.entries.atMut(request.count++) = {pane->id, pane->generation, pane->media};
+          request.entries.atMut(request.count++) = {.pane = pane->id, .generation = pane->generation, .media = pane->media};
         }
       }
 
@@ -420,7 +420,7 @@ namespace telar::runtime {
   }
 
   template <EventLoop Poller, typename Limits, HistoryEventSink History>
-  void MediaService<Poller, Limits, History>::enqueueRetired(tbc::mut_a<RuntimeModel> model, tbc::mut_a<typename Processor::Request> request) noexcept {
+  void MediaService<Poller, Limits, History>::enqueueRetired(tbc::mut_a<RuntimeModel> model, tbc::mut_a<Processor::Request> request) noexcept {
     auto* link = &model.retired_media;
 
     while (*link && request.count < request.entries.size()) {
@@ -442,7 +442,7 @@ namespace telar::runtime {
   }
 
   template <EventLoop Poller, typename Limits, HistoryEventSink History>
-  void MediaService<Poller, Limits, History>::apply(RuntimeModel& model, ClientStore& clients, Panes& service, const typename Processor::Result& result) {
+  void MediaService<Poller, Limits, History>::apply(RuntimeModel& model, ClientStore& clients, Panes& service, const Processor::Result& result) {
     pending_ = false;
     for (const auto& entry : std::span{result.entries}.first(result.count)) {
       entry.media->complete();

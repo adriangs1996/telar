@@ -40,7 +40,7 @@ namespace telar::runtime::control {
       return 0;
     }
 
-    const Rectangle rectangle{top, left, bottom, right};
+    const Rectangle rectangle{.top = top, .left = left, .bottom = bottom, .right = right};
     const auto selected_flags = flags;
     const auto sum = (this->*accumulators[(selected_flags >> 1) & (accumulators.size() - 1)])(state, rectangle);
 
@@ -62,7 +62,7 @@ namespace telar::runtime::control {
     bool first = true;
 
     for (unsigned row = rectangle.top; row <= rectangle.bottom; ++row) {
-      auto reference = state.reference({0, static_cast<std::uint16_t>(row)});
+      auto reference = state.reference({.column = 0, .row = static_cast<std::uint16_t>(row)});
       if (!reference) {
         if (!no_trim) {
           first = false;

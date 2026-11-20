@@ -132,7 +132,7 @@ namespace telar::sys::captured {
 #define TELAR_SYS_CAPTURE(name) inline constexpr auto name##_ = name;
   TELAR_SYS_SOCKET_OPTIONS(TELAR_SYS_CAPTURE)
   TELAR_SYS_ADDRESSES(TELAR_SYS_CAPTURE)
-#if !defined(__GLIBC__)
+#ifndef __GLIBC__
   TELAR_SYS_ENUMERATORS(TELAR_SYS_CAPTURE)
 #endif
 
@@ -219,7 +219,7 @@ namespace telar::sys::captured {
 #undef ntohs
 
 #define TELAR_SYS_CONSTANT(name) inline constexpr auto name = telar::sys::captured::name##_;
-#if defined(__GLIBC__)
+#ifdef __GLIBC__
 #define TELAR_SYS_ENUMERATOR(name) using ::name;
 #else
 #define TELAR_SYS_ENUMERATOR TELAR_SYS_CONSTANT
@@ -256,7 +256,7 @@ export {
   bool IN6_IS_ADDR_UNSPECIFIED(const in6_addr* address) noexcept;
   bool IN6_IS_ADDR_V4MAPPED(const in6_addr* address) noexcept;
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
   // Darwin defines the byte-order conversions only as macros, over static functions an inline
   // body cannot expose; every Darwin target is little-endian, so each is a byte swap.
   static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__);

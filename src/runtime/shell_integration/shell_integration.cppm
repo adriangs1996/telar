@@ -30,13 +30,13 @@ namespace telar::runtime::shell_files {
 
   // Each shell's scripts, installed here and sent to the hosts `ssh` reaches.
   inline constexpr ds::Array<ScriptFile, 4> shells{{
-      {"zsh", ".zshenv", shell_scripts::zsh_environment},
-      {"zsh", "telar.zsh", shell_scripts::zsh},
-      {"bash", "telar.bash", shell_scripts::bash},
-      {"fish/fish/vendor_conf.d", "telar.fish", shell_scripts::fish},
+      {.directory = "zsh", .name = ".zshenv", .content = shell_scripts::zsh_environment},
+      {.directory = "zsh", .name = "telar.zsh", .content = shell_scripts::zsh},
+      {.directory = "bash", .name = "telar.bash", .content = shell_scripts::bash},
+      {.directory = "fish/fish/vendor_conf.d", .name = "telar.fish", .content = shell_scripts::fish},
   }};
 
-  inline constexpr ScriptFile ssh{"ssh", "ssh.sh", shell_scripts::ssh};
+  inline constexpr ScriptFile ssh{.directory = "ssh", .name = "ssh.sh", .content = shell_scripts::ssh};
 
   // FNV-1a over every script's place and content, computed at compile time.
   inline constexpr std::uint64_t digest = [] {
@@ -61,7 +61,7 @@ namespace telar::runtime::shell_files {
     ds::Array<char, 16> text{};
 
     for (std::size_t index = 0; index < text.size(); ++index) {
-      text.atMut(index) = digits[(digest >> (60 - 4 * index)) & 0x0f];
+      text.atMut(index) = digits[(digest >> (60 - (4 * index))) & 0x0f];
     }
 
     return text;
@@ -154,7 +154,7 @@ namespace telar::runtime::shell_files {
   // quote, backslash or `!`, which runs the script carried in base64, and the login shell as
   // usual when the host cannot decode it.
   inline constexpr std::string_view remote_command_prefix = "exec /bin/sh -c 'p=";
-  inline constexpr std::string_view remote_command_suffix = ";{ s=$(printf %s \"$p\" | base64 -d 2>/dev/null) || s=$(printf %s \"$p\" | base64 -D); } && eval \"$s\" || exec \"${SHELL:-/bin/sh}\" -l' telar";
+  inline constexpr std::string_view remote_command_suffix = R"(;{ s=$(printf %s "$p" | base64 -d 2>/dev/null) || s=$(printf %s "$p" | base64 -D); } && eval "$s" || exec "${SHELL:-/bin/sh}" -l' telar)";
   inline constexpr std::size_t remote_script_encoded_bytes = (remote_script.size() + 2) / 3 * 4;
 
   inline constexpr auto remote_command = [] {
@@ -177,7 +177,7 @@ namespace telar::runtime::shell_files {
       shells[2],
       shells[3],
       ssh,
-      {"ssh", "remote", {remote_command.data(), remote_command.size()}},
+      {.directory = "ssh", .name = "remote", .content = {remote_command.data(), remote_command.size()}},
   }};
 
 }
@@ -233,7 +233,7 @@ export namespace telar::runtime {
     static constexpr const auto& files = shell_files::installed;
 
     // Writes the scripts again if something removed them since the runtime started.
-    bool present() const noexcept;
+    [[nodiscard]] bool present() const noexcept;
 
     ds::String<Memory> directory_;
     ds::String<Memory> sentinel_;

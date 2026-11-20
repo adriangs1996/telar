@@ -40,13 +40,13 @@ namespace telar::runtime::cli {
   }
 
   // The command a family's second word names, when its help lists it.
-  std::string_view knownCommand(Family family, std::string_view word) noexcept {
+  static std::string_view knownCommand(Family family, std::string_view word) noexcept {
     const HelpTopic topic{.family = familyName(family), .command = word};
 
     return !word.empty() && helpText(topic) ? word : std::string_view{};
   }
 
-  bool isHelpFlag(std::string_view word) noexcept {
+  static bool isHelpFlag(std::string_view word) noexcept {
     return word == "--help" || word == "-h";
   }
 
@@ -139,7 +139,7 @@ namespace telar::runtime::cli {
   }
 
   template <Allocator Memory>
-  void printEndpoint(Memory& memory, const ServerOptions& options, const RuntimePaths<Memory>& paths) {
+  static void printEndpoint(Memory& memory, const ServerOptions& options, const RuntimePaths<Memory>& paths) {
     ds::Option<RuntimeConnection> connection;
     if (!connectExisting(connection, paths.socket.data())) {
       const auto started = startRuntime(memory, options, paths);
@@ -157,7 +157,7 @@ namespace telar::runtime::cli {
     std::fputc('\n', stdout);
   }
 
-  void stopRuntime(const char* socket) {
+  static void stopRuntime(const char* socket) {
     ds::Option<RuntimeConnection> connection;
     if (!connectExisting(connection, socket)) {
       std::puts("telar runtime is not running");

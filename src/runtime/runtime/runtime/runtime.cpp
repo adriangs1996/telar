@@ -43,7 +43,7 @@ namespace telar::runtime {
         continue;
       }
 
-      const auto position = std::find(tab->panes.begin(), tab->panes.end(), pane->id);
+      const auto* const position = std::find(tab->panes.begin(), tab->panes.end(), pane->id);
       if (position == tab->panes.end()) {
         continue;
       }
@@ -118,7 +118,7 @@ namespace telar::runtime {
       }
     }
 
-    client.connection.send(AgentSnapshot{registry.revision() + model.workspace_revision, std::span{entries}.first(count)});
+    client.connection.send(AgentSnapshot{.revision = registry.revision() + model.workspace_revision, .entries = std::span{entries}.first(count)});
     client.agent_revision = registry.revision();
     client.agent_workspace_revision = model.workspace_revision;
   }
@@ -226,7 +226,7 @@ namespace telar::runtime {
       }
     }
 
-    return selected == nullptr ? ds::none : ds::Option{SessionFileRequest{selected->pane, selected->generation, selected->file_watch}};
+    return selected == nullptr ? ds::none : ds::Option{SessionFileRequest{.pane = selected->pane, .generation = selected->generation, .watch = selected->file_watch}};
   }
 
   template <EventLoop Poller, HistoryEventSink History>
@@ -636,7 +636,7 @@ namespace telar::runtime {
       agent.interrupt_idle_at.reset();
       agent.evidence.report.reset();
       if (hasIdleScreen(agent.provider)) {
-        agent.evidence.applyScreen(AgentSignal{agent.provider, AgentStatus::ready, 94, true, true}, ObservationTime::now(), agent.status, false);
+        agent.evidence.applyScreen(AgentSignal{.provider = agent.provider, .status = AgentStatus::ready, .confidence = 94, .identity_confirmed = true, .ready_confirmed = true}, ObservationTime::now(), agent.status, false);
       }
 
       return agent.project(wallMilliseconds());
@@ -741,10 +741,10 @@ namespace telar::runtime {
       : limits_(limits) {}
 
   void PluginDelivery::reportMetrics(const plugins::TapMetrics& now) {
-    reportGrowth(now.dropped_queue, previous_.dropped_queue, {"plugins.tap.queue_depth", "exchanges", plugins::Limits::queue_depth});
-    reportGrowth(now.dropped_bytes, previous_.dropped_bytes, {"plugins.tap.max_held_bytes", "bytes", plugins::Limits::held_bytes});
-    reportGrowth(now.timeouts, previous_.timeouts, {"plugins.tap.reply_timeout_ms", "ms", std::chrono::duration_cast<std::chrono::milliseconds>(plugins::Limits::reply_deadline).count()});
-    reportGrowth(now.disabled, previous_.disabled, {"plugins.tap.restart_limit", "restarts in 10 min", plugins::Limits::restarts});
+    reportGrowth(now.dropped_queue, previous_.dropped_queue, {.name = "plugins.tap.queue_depth", .noun = "exchanges", .value = plugins::Limits::queue_depth});
+    reportGrowth(now.dropped_bytes, previous_.dropped_bytes, {.name = "plugins.tap.max_held_bytes", .noun = "bytes", .value = plugins::Limits::held_bytes});
+    reportGrowth(now.timeouts, previous_.timeouts, {.name = "plugins.tap.reply_timeout_ms", .noun = "ms", .value = std::chrono::duration_cast<std::chrono::milliseconds>(plugins::Limits::reply_deadline).count()});
+    reportGrowth(now.disabled, previous_.disabled, {.name = "plugins.tap.restart_limit", .noun = "restarts in 10 min", .value = plugins::Limits::restarts});
     previous_ = now;
   }
 
@@ -841,7 +841,7 @@ namespace telar::runtime {
       if (workspace != nullptr) {
         pane = firstPane(model.panes, *workspace);
         if (!pane && !workspace->tabs.empty()) {
-          pane = createAt(model, panes, clients, client_id, TabLocation{WorkspaceLocation{.id = workspace->id}, workspace->tabs.front().id}, launch, request.size);
+          pane = createAt(model, panes, clients, client_id, TabLocation{.workspace = WorkspaceLocation{.id = workspace->id}, .tab_id = workspace->tabs.front().id}, launch, request.size);
           created = true;
         }
       } else {
@@ -892,7 +892,7 @@ namespace telar::runtime {
     workspace.tabs.emplace(memory_, tab_id, request.label);
 
     try {
-      const auto pane = createAt(model, panes, clients, client_id, TabLocation{request.workspace, tab_id}, launch, request.size);
+      const auto pane = createAt(model, panes, clients, client_id, TabLocation{.workspace = request.workspace, .tab_id = tab_id}, launch, request.size);
 
       ++model.next_tab_id;
       const auto& opened = Panes::require(model.panes, pane);
@@ -979,7 +979,7 @@ namespace telar::runtime {
     require(model.workspaces, request.workspace).name.assign(request.name);
     ++model.workspace_revision;
     notify(request.workspace.id, client.id);
-    workspaceSnapshot(model, client, RequestWorkspaceSnapshot{request.request_id, request.workspace});
+    workspaceSnapshot(model, client, RequestWorkspaceSnapshot{.request_id = request.request_id, .workspace = request.workspace});
   }
 
   template <EventLoop Poller, HistoryEventSink History>
@@ -995,7 +995,7 @@ namespace telar::runtime {
   template <EventLoop Poller, HistoryEventSink History>
   void WorkspaceService<Poller, History>::moveTab(RuntimeModel& model, ClientSession& client, const MoveTab& request) {
     auto& workspace = require(model.workspaces, request.location.workspace);
-    auto* tab = workspace.tab(request.location.tab_id);
+    const auto* tab = workspace.tab(request.location.tab_id);
     if (tab == nullptr) {
       throw RequestError{FailureCode::tab_not_found, "Tab does not exist"};
     }
@@ -1004,7 +1004,7 @@ namespace telar::runtime {
     auto to = from;
 
     if (request.relative_to) {
-      auto* relative = workspace.tab(*request.relative_to);
+      const auto* relative = workspace.tab(*request.relative_to);
       if (relative == nullptr) {
         throw RequestError{FailureCode::tab_not_found, "Relative tab does not exist"};
       }
@@ -1121,7 +1121,7 @@ namespace telar::runtime {
     auto* workspace = model.workspaces.find(identity);
 
     while (workspace != nullptr && !workspace->tabs.empty()) {
-      const auto closed = removeTab(model, TabLocation{WorkspaceLocation{.id = identity}, workspace->tabs.front().id});
+      const auto closed = removeTab(model, TabLocation{.workspace = WorkspaceLocation{.id = identity}, .tab_id = workspace->tabs.front().id});
 
       broadcastTabClosed(clients, closed, [](const ClientSession&) {});
 
@@ -1215,7 +1215,7 @@ namespace telar::runtime {
   template <EventLoop Poller, HistoryEventSink History>
   void WorkspaceService<Poller, History>::releaseEmptyTab(RuntimeModel& model, Panes& panes, ClientStore& clients, TabLocation location) {
     auto* workspace = model.workspaces.find(location.workspace.id);
-    auto* tab = workspace == nullptr ? nullptr : workspace->tab(location.tab_id);
+    const auto* tab = workspace == nullptr ? nullptr : workspace->tab(location.tab_id);
     if (tab == nullptr || !tab->panes.empty() || tabHeld(clients, location)) {
       return;
     }
@@ -1252,7 +1252,7 @@ namespace telar::runtime {
   template <EventLoop Poller, HistoryEventSink History>
   TabClosed WorkspaceService<Poller, History>::removeTab(RuntimeModel& model, TabLocation location) {
     auto* workspace = model.workspaces.find(location.workspace.id);
-    auto* tab = workspace == nullptr ? nullptr : workspace->tab(location.tab_id);
+    const auto* tab = workspace == nullptr ? nullptr : workspace->tab(location.tab_id);
     if (location.workspace.kind != WorkspaceLocation::Kind::workspace || tab == nullptr) {
       throw RequestError{FailureCode::tab_not_found, "tab not found"};
     }
@@ -1512,7 +1512,7 @@ namespace telar::runtime {
 
       launch.cwd = ownDirectory(directory, require(model.worktrees, request.worktree).path);
       launch.cwd_source = 0;
-      pane = workspaces.launchBackground(model, panes, Workspaces::ownerColors(model.workspaces, clients, workspace), Workspaces::ownerBarePrompt(model.workspaces, clients, workspace), LaunchTab{request.request_id, workspace, request.label, request.size, launch});
+      pane = workspaces.launchBackground(model, panes, Workspaces::ownerColors(model.workspaces, clients, workspace), Workspaces::ownerBarePrompt(model.workspaces, clients, workspace), LaunchTab{.request_id = request.request_id, .workspace = workspace, .label = request.label, .size = request.size, .launch = launch});
     } catch (...) {
       if (created) {
         model.workspaces.erase(workspace);
@@ -1601,7 +1601,7 @@ namespace telar::runtime {
     auto* entry = model.worktrees.find(result.identity);
     if (result.timeout != GitProbeTimeout::none && (entry == nullptr || entry->probe_failures == 0)) {
       const auto timeout = result.timeout == GitProbeTimeout::status ? git_status_timeout : git_distance_timeout;
-      const auto name = result.timeout == GitProbeTimeout::status ? "gitstatus.status_timeout" : "gitstatus.base_distance_timeout";
+      const auto* const name = result.timeout == GitProbeTimeout::status ? "gitstatus.status_timeout" : "gitstatus.base_distance_timeout";
 
       limits_.report(LimitReach{.name = name, .noun = "milliseconds", .value = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(timeout).count())});
     }
@@ -1645,7 +1645,7 @@ namespace telar::runtime {
       }
     }
 
-    model.workspace_revision += changed;
+    model.workspace_revision += static_cast<std::uint64_t>(changed);
   }
 
   template <EventLoop Poller, HistoryEventSink History>
@@ -1697,7 +1697,7 @@ namespace telar::runtime {
         clients_(memory),
         admissions_(poller_, limits_),
         client_layouts_(memory),
-        panes_(memory, poller_, limits_, PaneLaunchOptions{options.socket, proxy, options.control_policy, options.shell_integration, options.ssh_integration}, background),
+        panes_(memory, poller_, limits_, PaneLaunchOptions{.socket = options.socket, .proxy = proxy, .control_policy = options.control_policy, .shell_integration = options.shell_integration, .ssh_integration = options.ssh_integration}, background),
         workspaces_(memory),
         worktrees_(memory, limits_),
         executions_(memory, poller_, limits_),
@@ -2270,7 +2270,7 @@ namespace telar::runtime {
         const auto group = ::tcgetpgrp(pane->process->descriptor());
         const auto process = group > 0 ? process_inspector_.identity(group) : ds::none;
         if (process && context.editor_candidate_count < context.editor_candidates.size()) {
-          context.editor_candidates.atMut(context.editor_candidate_count++) = {pane->id, pane->generation, *process};
+          context.editor_candidates.atMut(context.editor_candidate_count++) = {.pane = pane->id, .generation = pane->generation, .process = *process};
         }
       }
     }
@@ -2288,13 +2288,13 @@ namespace telar::runtime {
     auto& client = requireClient(clients_, identity);
 
     if (!background_.suggestionsAvailable()) {
-      client.connection.send(CommandSuggestion{message.request_id, SuggestionStatus::unavailable});
+      client.connection.send(CommandSuggestion{.request_id = message.request_id, .status = SuggestionStatus::unavailable});
       return;
     }
 
     auto* pane = model_.panes.find(message.pane_id);
     if (pane == nullptr) {
-      client.connection.send(CommandSuggestion{message.request_id, SuggestionStatus::failed});
+      client.connection.send(CommandSuggestion{.request_id = message.request_id, .status = SuggestionStatus::failed});
       return;
     }
 
@@ -2306,9 +2306,9 @@ namespace telar::runtime {
 
       submitBackground(background_, client, message, RequestContext{.prompt = prompt});
     } catch (const RequestError&) {
-      client.connection.send(CommandSuggestion{message.request_id, SuggestionStatus::failed});
+      client.connection.send(CommandSuggestion{.request_id = message.request_id, .status = SuggestionStatus::failed});
     } catch (const std::bad_alloc&) {
-      client.connection.send(CommandSuggestion{message.request_id, SuggestionStatus::failed});
+      client.connection.send(CommandSuggestion{.request_id = message.request_id, .status = SuggestionStatus::failed});
     }
   }
 
@@ -2794,7 +2794,7 @@ namespace telar::runtime {
 
     words.reserve(result.words.size());
     for (const auto& word : result.words) {
-      words.push({word.text.view(), word.description.view()});
+      words.push({.text = word.text.view(), .description = word.description.view()});
     }
 
     client->connection.send(CompletionWords{.request_id = result.request, .truncated = result.truncated, .words = words.view()});
@@ -2897,7 +2897,7 @@ namespace telar::runtime {
       // child whose signal went to no one, such as one reaped while a test drives the loop.
       if (pane != nullptr && !pane->exit_status && (reap || pane->output_closed)) {
         pane->exit_status = pane->process.getMut().reap();
-        model_.pane_revision += pane->exit_status.hasValue();
+        model_.pane_revision += static_cast<std::uint64_t>(pane->exit_status.hasValue());
       }
 
       // A program can change the terminal without printing, as `read -s` does; one that

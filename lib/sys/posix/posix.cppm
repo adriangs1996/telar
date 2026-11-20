@@ -248,7 +248,7 @@ namespace telar::sys::captured {
   TELAR_SYS_FILE_FLAGS(TELAR_SYS_CAPTURE)
   TELAR_SYS_FILE_CONSTANTS(TELAR_SYS_CAPTURE)
   TELAR_SYS_LIMITS(TELAR_SYS_CAPTURE)
-#if !defined(__GLIBC__)
+#ifndef __GLIBC__
   TELAR_SYS_ENUMERATORS(TELAR_SYS_CAPTURE)
 #endif
 
@@ -375,7 +375,7 @@ namespace telar::sys::captured {
 #undef stdout
 
 #define TELAR_SYS_CONSTANT(name) inline constexpr auto name = telar::sys::captured::name##_;
-#if defined(__GLIBC__)
+#ifdef __GLIBC__
 #define TELAR_SYS_ENUMERATOR(name) using ::name;
 #else
 #define TELAR_SYS_ENUMERATOR TELAR_SYS_CONSTANT
@@ -404,7 +404,7 @@ export {
 
   // Darwin's stream macros name __stdinp, __stdoutp and __stderrp; glibc and musl declare the
   // streams under their own names.
-#if defined(__APPLE__)
+#ifdef __APPLE__
   inline FILE*& stdin = ::__stdinp;
   inline FILE*& stdout = ::__stdoutp;
   inline FILE*& stderr = ::__stderrp;

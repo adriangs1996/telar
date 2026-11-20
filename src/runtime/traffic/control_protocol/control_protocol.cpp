@@ -22,7 +22,7 @@ namespace telar::runtime::traffic {
 
   std::size_t Protocol::encodedSize(const Event& event) {
     validate(event);
-    constexpr auto fixed_bytes = 2 * sizeof(Byte) + 6 * sizeof(std::uint64_t) + 5 * sizeof(std::uint32_t);
+    constexpr auto fixed_bytes = (2 * sizeof(Byte)) + (6 * sizeof(std::uint64_t)) + (5 * sizeof(std::uint32_t));
 
     return fixed_bytes + event.interface.size() + event.bytes.size();
   }
@@ -194,13 +194,13 @@ namespace telar::runtime::traffic::control {
 
   Request Protocol::action(std::string_view name) {
     constexpr ds::Array names{"status", "capture.start", "capture.stop", "redirect.start", "redirect.stop", "ca.certificate", "ca.install", "ca.uninstall", "ca.rotate"};
-    const auto found = std::ranges::find(names, name);
+    const auto* const found = std::ranges::find(names, name);
     if (found != names.end()) {
       return {.operation = static_cast<Operation>(found - names.begin())};
     }
 
     constexpr ds::Array recordings{"recording.start", "recording.query", "recording.stop", "recording.remove", "recording.export", "recording.list"};
-    const auto recording = std::ranges::find(recordings, name);
+    const auto* const recording = std::ranges::find(recordings, name);
     if (recording != recordings.end()) {
       return {.operation = Operation::recording, .recording = recording::Request{.operation = static_cast<recording::Operation>(recording - recordings.begin())}};
     }
@@ -453,7 +453,7 @@ namespace telar::runtime::traffic {
       return true;
     }
 
-    for (auto& entry : programs_) {
+    for (const auto& entry : programs_) {
       if (entry && entry->link_type == event.link_type) {
         return apply(entry->program, event);
       }

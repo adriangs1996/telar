@@ -181,7 +181,7 @@ namespace telar::runtime::cli {
           const auto& other = sequences[previous];
           const auto shared = std::min(other.count, sequence.count);
           if (std::equal(sequence.keys.begin(), sequence.keys.begin() + shared, other.keys.begin())) {
-            const auto error = other.count == sequence.count ? "DuplicateBinding" : "AmbiguousBindingPrefix";
+            const auto* const error = other.count == sequence.count ? "DuplicateBinding" : "AmbiguousBindingPrefix";
 
             std::fprintf(stderr, "telar config: keybindings do not compile: %s\n", error);
             throw ConfigurationFailure{error};
@@ -191,7 +191,7 @@ namespace telar::runtime::cli {
     }
 
     void validateSelectedBindings(const lua::Value& root, std::string_view profile, std::span<const plugins::Package> packages) {
-      config::KeyChord prefix{config::KeyChord::Key::character, 'b', static_cast<unsigned>(config::KeyChord::Modifier::control)};
+      config::KeyChord prefix{.key = config::KeyChord::Key::character, .character = 'b', .modifiers = static_cast<unsigned>(config::KeyChord::Modifier::control)};
       const auto client = root.field("client");
       if (client.present() && client.field("prefix").present()) {
         prefix = config::KeyChordValidator::parse(client.field("prefix"));
@@ -240,7 +240,7 @@ namespace telar::runtime::cli {
 
       ds::Array<char, PATH_MAX> canonical;
       if (::realpath(path.data(), canonical.dataMut()) == nullptr) {
-        const auto error = sys::errorName(sys::lastError());
+        const auto* const error = sys::errorName(sys::lastError());
 
         diagnostic(error, "cannot resolve config '{}': {}", std::string_view{path}, error);
       }

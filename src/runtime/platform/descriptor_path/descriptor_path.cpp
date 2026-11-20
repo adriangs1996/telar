@@ -1,7 +1,7 @@
 module telar.runtime.platform.descriptor_path;
 
 import telar.sys.posix;
-#if defined(__APPLE__)
+#ifdef __APPLE__
 import telar.sys.apple;
 #endif
 
@@ -15,9 +15,9 @@ namespace telar::runtime {
     // The path the open file `descriptor` has now, written terminated into `path`; false, with
     // errno set, when the system cannot tell or the path does not fit.
     bool resolve(int descriptor, ds::Array<char, PATH_MAX>& path) noexcept {
-#if defined(__APPLE__)
+#ifdef __APPLE__
       return ::fcntl(descriptor, F_GETPATH, path.data()) == 0;
-#elif defined(__linux__)
+#elifdef __linux__
       ds::Array<char, sizeof("/proc/self/fd/") + std::numeric_limits<int>::digits10 + 1> link{};
 
       std::snprintf(link.dataMut(), link.size(), "/proc/self/fd/%d", descriptor);

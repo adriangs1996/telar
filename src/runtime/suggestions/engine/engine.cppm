@@ -49,8 +49,8 @@ export {
       ds::String<ConcurrentMemory> line_;
       ds::String<ConcurrentMemory> text_;
       ds::String<ConcurrentMemory> encoded_;
-      Clock::time_point deadline_{};
-      Clock::time_point last_used_{};
+      Clock::time_point deadline_;
+      Clock::time_point last_used_;
       std::atomic<bool> stopping_{false};
     };
 

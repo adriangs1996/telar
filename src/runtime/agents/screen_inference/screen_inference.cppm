@@ -26,7 +26,7 @@ export {
       struct Pair {
         std::uint64_t sender = 0;
         std::uint64_t target = 0;
-        std::chrono::steady_clock::time_point started{};
+        std::chrono::steady_clock::time_point started;
         unsigned count = 0;
       };
 
@@ -44,8 +44,8 @@ export {
 
     struct AgentResume {
       AgentProvider provider = AgentProvider::unknown;
-      FixedText<64> session{};
-      FixedText<96> title{};
+      FixedText<64> session;
+      FixedText<96> title;
       AgentTitleSource title_source = AgentTitleSource::telar;
       bool in_pane = false;
     };
@@ -77,7 +77,7 @@ export {
       std::uint32_t first = 0;
       std::size_t column = 0;
 
-      std::string_view text() const noexcept;
+      [[nodiscard]] std::string_view text() const noexcept;
     };
 
     // What the agent readers look at in a screen.
@@ -97,17 +97,17 @@ export {
 
       AgentScreenReader(AgentScreenView screen, std::string_view title, const AgentManifests& manifests) noexcept;
 
-      AgentScreenObservation observe(AgentProvider provider) const noexcept;
-      ds::Option<AgentSignal> signal(AgentProvider provider) const noexcept;
+      [[nodiscard]] AgentScreenObservation observe(AgentProvider provider) const noexcept;
+      [[nodiscard]] ds::Option<AgentSignal> signal(AgentProvider provider) const noexcept;
 
     private:
-      std::span<const ScreenCell> rowCells(std::size_t row) const noexcept;
-      AgentScreenRow row(std::size_t y) const noexcept;
+      [[nodiscard]] std::span<const ScreenCell> rowCells(std::size_t row) const noexcept;
+      [[nodiscard]] AgentScreenRow row(std::size_t y) const noexcept;
       static bool blank(std::uint32_t codepoint) noexcept;
-      AgentScreenObservation claude() const noexcept;
+      [[nodiscard]] AgentScreenObservation claude() const noexcept;
       static bool codexStatus(const AgentScreenRow& row) noexcept;
-      AgentScreenObservation codex() const noexcept;
-      AgentScreenObservation cursor() const noexcept;
+      [[nodiscard]] AgentScreenObservation codex() const noexcept;
+      [[nodiscard]] AgentScreenObservation cursor() const noexcept;
 
       static constexpr std::uint32_t claude_prompt = 0x276f;
       AgentScreenView screen_;
@@ -130,7 +130,7 @@ export {
 
     private:
       bool prepend(std::string_view bytes) noexcept;
-      std::string_view text() const noexcept;
+      [[nodiscard]] std::string_view text() const noexcept;
 
       ds::Array<char, 16 * 1024> bytes_{};
       std::size_t start_ = bytes_.size();

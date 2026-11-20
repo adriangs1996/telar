@@ -152,7 +152,7 @@ namespace telar::runtime {
           continue;
         }
 
-        slot->emplace(Entry{image.description.key, std::move(frozen)});
+        slot->emplace(Entry{.key = image.description.key, .frozen = std::move(frozen)});
         remember(image.description.key);
         TELAR_DIAGNOSTIC(diagnostics::accumulate(prepared_count_));
       } catch (...) {
@@ -179,7 +179,7 @@ namespace telar::runtime {
       return false;
     }
 
-    slot->emplace(Entry{key, std::move(image)});
+    slot->emplace(Entry{.key = key, .frozen = std::move(image)});
     remember(key);
     return true;
   }

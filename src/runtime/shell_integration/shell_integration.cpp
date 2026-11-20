@@ -105,7 +105,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   ds::Option<ShellLaunch> ShellIntegration<Memory>::apply(Command<Memory>& command, bool bare_prompt) const {
-    for (const auto name : {"TELAR_SHELL_TOKEN", "TELAR_SHELL_SSH", "TELAR_PROMPT_MODE", "TELAR_ZSH_ZDOTDIR", "TELAR_BASH_LOGIN", "TELAR_FISH_XDG_DATA_DIRS"}) {
+    for (const auto* const name : {"TELAR_SHELL_TOKEN", "TELAR_SHELL_SSH", "TELAR_PROMPT_MODE", "TELAR_ZSH_ZDOTDIR", "TELAR_BASH_LOGIN", "TELAR_FISH_XDG_DATA_DIRS"}) {
       command.removeEnvironment(name);
     }
 

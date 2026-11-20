@@ -169,7 +169,7 @@ export {
 
       bool adopt(MappedRegion& mapping) noexcept;
 
-      std::span<const std::uint8_t> placeholder() const noexcept;
+      [[nodiscard]] std::span<const std::uint8_t> placeholder() const noexcept;
 
       void release() noexcept;
 
@@ -205,13 +205,13 @@ export {
 
       void clear() noexcept;
 
-      std::span<const Event> events() const noexcept;
+      [[nodiscard]] std::span<const Event> events() const noexcept;
 
-      std::span<const Byte> bytes(Output output) const noexcept;
+      [[nodiscard]] std::span<const Byte> bytes(Output output) const noexcept;
 
-      std::size_t byteCount() const noexcept;
+      [[nodiscard]] std::size_t byteCount() const noexcept;
 
-      bool hasReadCapacity(std::size_t bytes) const noexcept;
+      [[nodiscard]] bool hasReadCapacity(std::size_t bytes) const noexcept;
 
       bool reset_before = false;
       bool kitty = false;

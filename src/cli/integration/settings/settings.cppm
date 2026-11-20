@@ -86,21 +86,21 @@ export {
     public:
       explicit HookSettings(Memory& memory, Provider provider, std::string_view executable);
 
-      bool installed(const JsonNode<Memory>& settings, std::string_view event) const noexcept;
+      [[nodiscard]] bool installed(const JsonNode<Memory>& settings, std::string_view event) const noexcept;
 
       bool install(JsonNode<Memory>& settings) const;
 
       bool uninstall(JsonNode<Memory>& settings) const;
 
     private:
-      bool isOwnCommand(const JsonNode<Memory>& hook) const noexcept;
+      [[nodiscard]] bool isOwnCommand(const JsonNode<Memory>& hook) const noexcept;
 
       template <typename Node>
       tbc::val_a<Node*> findHook(tbc::mut_a<Node> entry) const noexcept;
 
       bool installEvents(JsonNode<Memory>& hooks, std::span<const std::string_view> events, std::string_view command, std::string_view timeout) const;
 
-      JsonNode<Memory> newEntry(std::string_view command, std::string_view timeout) const;
+      [[nodiscard]] JsonNode<Memory> newEntry(std::string_view command, std::string_view timeout) const;
 
       bool removeEvents(JsonNode<Memory>& hooks, std::span<const std::string_view> events) const;
       // Erases telar's own hooks from a list of them, noting in `changed` whether it erased any;

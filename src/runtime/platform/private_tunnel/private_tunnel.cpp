@@ -3,14 +3,14 @@ module telar.runtime.platform.private_tunnel;
 import telar.platform.error;
 import telar.base.ds;
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
 import telar.sys.apple;
 #endif
-#if defined(__linux__)
+#ifdef __linux__
 import telar.sys.linux_api;
 #endif
 
-#if defined(__linux__)
+#ifdef __linux__
 namespace telar::runtime {
 
   PrivateTunnel::PrivateTunnel()
@@ -80,7 +80,7 @@ namespace telar::runtime {
 
 #endif
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
 namespace telar::runtime {
 
   PrivateTunnel::PrivateTunnel()

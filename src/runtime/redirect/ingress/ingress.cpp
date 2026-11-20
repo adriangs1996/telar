@@ -24,7 +24,7 @@ namespace telar::runtime::redirect {
       throw std::invalid_argument{"Invalid redirect target"};
     }
 
-    return {host, static_cast<std::uint16_t>(port)};
+    return {.hostname = host, .port = static_cast<std::uint16_t>(port)};
   }
 
   Target Target::parse(std::string_view text) {
@@ -209,7 +209,7 @@ namespace telar::runtime::redirect {
 
     bool invalid = (message.msg_flags & MSG_CTRUNC) != 0;
 
-    for (auto* header = CMSG_FIRSTHDR(&message); header; header = CMSG_NXTHDR(&message, header)) {
+    for (auto* header = CMSG_FIRSTHDR(&message); header != nullptr; header = CMSG_NXTHDR(&message, header)) {
       if (header->cmsg_level != SOL_SOCKET || header->cmsg_type != SCM_RIGHTS || header->cmsg_len < CMSG_LEN(0)) {
         invalid = true;
         continue;
@@ -220,7 +220,7 @@ namespace telar::runtime::redirect {
       for (std::size_t index = 0; index < descriptors; ++index) {
         int raw;
 
-        std::memcpy(&raw, CMSG_DATA(header) + index * sizeof(int), sizeof(raw));
+        std::memcpy(&raw, CMSG_DATA(header) + (index * sizeof(int)), sizeof(raw));
         FileDescriptor received{raw};
 
         if (received_ == sockets_.size()) {

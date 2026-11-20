@@ -20,7 +20,7 @@ export namespace telar::runtime::control {
   public:
     static constexpr std::size_t inline_bytes = 256;
     static constexpr std::size_t header_limit = 8192;
-    static constexpr std::size_t dcs_limit = 1024 * 1024 + header_limit;
+    static constexpr std::size_t dcs_limit = (1024 * 1024) + header_limit;
     static constexpr std::size_t osc_limit = 8 * 1024 * 1024;
     static constexpr std::size_t apc_limit = 65 * 1024 * 1024;
     static constexpr std::size_t string_limit = apc_limit;
@@ -68,7 +68,7 @@ export namespace telar::runtime::control {
             const auto sequence = remaining.first(length);
 
             consumed += length;
-            if (consumer.complete(Sequence{Kind::csi, sequence, Ending::final_byte})) {
+            if (consumer.complete(Sequence{.kind = Kind::csi, .bytes = sequence, .ending = Ending::final_byte})) {
               continue;
             }
 
@@ -208,7 +208,7 @@ export namespace telar::runtime::control {
       }
     }
 
-    bool ground() const noexcept {
+    [[nodiscard]] bool ground() const noexcept {
       return phase_ == Phase::ground;
     }
 
@@ -221,11 +221,11 @@ export namespace telar::runtime::control {
       following_c1_ = 0;
     }
 
-    bool blocked() const noexcept {
+    [[nodiscard]] bool blocked() const noexcept {
       return phase_ == Phase::ready;
     }
 
-    std::uint64_t overLimit() const noexcept {
+    [[nodiscard]] std::uint64_t overLimit() const noexcept {
       return over_limit_;
     }
 
@@ -491,11 +491,11 @@ export namespace telar::runtime::control {
 
       const auto sequence = remaining.first(length);
       const auto* separator = static_cast<const std::uint8_t*>(std::memchr(sequence.data(), ';', sequence.size()));
-      if (separator == nullptr || !consumer.borrowableApc(Sequence{Kind::apc, sequence.first(separator + 1 - sequence.data()), Ending::final_byte})) {
+      if (separator == nullptr || !consumer.borrowableApc(Sequence{.kind = Kind::apc, .bytes = sequence.first(separator + 1 - sequence.data()), .ending = Ending::final_byte})) {
         return ds::none;
       }
 
-      const bool delivered = consumer.complete(Sequence{Kind::apc, sequence, Ending::escape});
+      const bool delivered = consumer.complete(Sequence{.kind = Kind::apc, .bytes = sequence, .ending = Ending::escape});
 
       clear();
       consumed = start + length + 1;
@@ -514,7 +514,7 @@ export namespace telar::runtime::control {
       return delivered;
     }
 
-    bool stringControl(std::uint8_t byte) const noexcept {
+    [[nodiscard]] bool stringControl(std::uint8_t byte) const noexcept {
       return byte == escape || byte == cancel || byte == substitute || (kind_ == Kind::osc && byte == bell) || (kind_ == Kind::apc && byte >= c1_first && byte <= c1_last);
     }
 
@@ -587,7 +587,7 @@ export namespace telar::runtime::control {
       return startEscape(static_cast<std::uint8_t>(introducer));
     }
 
-    std::span<const std::uint8_t> bytes() const noexcept {
+    [[nodiscard]] std::span<const std::uint8_t> bytes() const noexcept {
       return overflow_.empty() ? std::span<const std::uint8_t>{inline_}.first(size_) : std::span<const std::uint8_t>{overflow_};
     }
 

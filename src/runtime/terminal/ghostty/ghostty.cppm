@@ -25,13 +25,13 @@ export namespace telar::runtime {
   public:
     explicit TerminalError(GhosttyResult result, std::source_location location = std::source_location::current()) noexcept;
 
-    const char* what() const noexcept override;
+    [[nodiscard]] const char* what() const noexcept override;
 
-    constexpr GhosttyResult result() const noexcept {
+    [[nodiscard]] constexpr GhosttyResult result() const noexcept {
       return result_;
     }
 
-    constexpr std::source_location location() const noexcept {
+    [[nodiscard]] constexpr std::source_location location() const noexcept {
       return location_;
     }
 
@@ -85,7 +85,7 @@ export namespace telar::runtime {
     explicit GhosttyAllocatorBridge(tbc::mut_a<Memory> memory) noexcept
         : allocator_{.ctx = &memory, .vtable = &callbacks_} {}
 
-    const GhosttyAllocator* get() const noexcept {
+    [[nodiscard]] const GhosttyAllocator* get() const noexcept {
       return &allocator_;
     }
 

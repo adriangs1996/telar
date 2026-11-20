@@ -28,7 +28,7 @@ export {
 
       bool feed(std::span<const Byte> input);
       void clear() noexcept;
-      DescriptionQuery normalized() const;
+      [[nodiscard]] DescriptionQuery normalized() const;
 
     private:
       static constexpr Byte clear_line = 0x15;
@@ -84,13 +84,13 @@ export {
 
     struct DescriptionRequest {
       DescriptionIdentity identity;
-      DescriptionQuery query{};
+      DescriptionQuery query;
     };
 
     struct DescriptionResult {
       DescriptionIdentity identity;
       DescriptionStatus status = DescriptionStatus::failed;
-      FixedText<96> title{};
+      FixedText<96> title;
     };
 
     FixedText<96> normalizeDescriptionTitle(std::string_view output);
@@ -154,8 +154,8 @@ export {
     struct DeferredReport {
       explicit DeferredReport(Memory& memory);
 
-      bool rechecked(std::uint32_t completed) const noexcept;
-      ObservationTime reportTime() const noexcept;
+      [[nodiscard]] bool rechecked(std::uint32_t completed) const noexcept;
+      [[nodiscard]] ObservationTime reportTime() const noexcept;
 
       ds::Vec<Byte, Memory> payload;
       ReporterIdentity reporter;

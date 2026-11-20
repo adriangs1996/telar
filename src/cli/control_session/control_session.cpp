@@ -43,8 +43,8 @@ namespace telar::runtime::cli {
 
   int commandFailure(const char* family, const std::exception& error) {
     const auto* system = dynamic_cast<const SystemError*>(&error);
-    const auto socket_timeout = dynamic_cast<const SocketError*>(&error) && (sys::lastError() == EAGAIN || sys::lastError() == EWOULDBLOCK);
-    const auto timeout = socket_timeout || (system && (system->code() == EAGAIN || system->code() == EWOULDBLOCK));
+    const auto socket_timeout = (dynamic_cast<const SocketError*>(&error) != nullptr) && (sys::lastError() == EAGAIN || sys::lastError() == EWOULDBLOCK);
+    const auto timeout = socket_timeout || ((system != nullptr) && (system->code() == EAGAIN || system->code() == EWOULDBLOCK));
 
     std::fprintf(stderr, "%s: %s\n", family, timeout ? "RuntimeTimeout" : error.what());
     if (timeout) {

@@ -90,12 +90,12 @@ namespace telar::runtime::diagnostics {
     while (duration > maximum && !maximum_ns_.compare_exchange_weak(maximum, duration, std::memory_order_relaxed)) {
     }
 
-    failures_.fetch_add(failed, std::memory_order_relaxed);
+    failures_.fetch_add(static_cast<unsigned long long>(failed), std::memory_order_relaxed);
     count_.fetch_add(1, std::memory_order_relaxed);
   }
 
   OperationSnapshot OperationCounters::snapshot() const noexcept {
-    return {{count_.load(std::memory_order_relaxed), total_ns_.load(std::memory_order_relaxed), maximum_ns_.load(std::memory_order_relaxed)}, failures_.load(std::memory_order_relaxed)};
+    return {.timing = {.count = count_.load(std::memory_order_relaxed), .total_ns = total_ns_.load(std::memory_order_relaxed), .maximum_ns = maximum_ns_.load(std::memory_order_relaxed)}, .failures = failures_.load(std::memory_order_relaxed)};
   }
 
   OperationTimer::OperationTimer(OperationCounters* counters) noexcept

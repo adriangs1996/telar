@@ -33,7 +33,7 @@ namespace telar::runtime {
     auto& requester = requireClient(clients, requester_id);
 
     requireRole(requester, ClientRole::control);
-    const ClientRoute route{request.client_id, request.client_generation};
+    const ClientRoute route{.id = request.client_id, .generation = request.client_generation};
     if (const auto* target = resolve(clients, route); !routable(target) || target == &requester) {
       throw RequestError{FailureCode::invalid_request, "Interactive client is absent, closing, or stale"};
     }
@@ -65,7 +65,7 @@ namespace telar::runtime {
       throw RequestError{FailureCode::invalid_request, "ResponseQueueFull"};
     }
 
-    requester.pending_command = PendingClientCommand{target->id, request.request_id, request.action, request.target_id};
+    requester.pending_command = PendingClientCommand{.target = target->id, .request_id = request.request_id, .action = request.action, .target_id = request.target_id};
   }
 
   void ClientControl::completeCommand(ClientStore& clients, std::uint64_t sender_id, const CompleteClientCommand& completion) {
@@ -120,7 +120,7 @@ namespace telar::runtime {
         .direction = request.direction,
     });
 
-    requester.pending_focus = PendingPaneFocus{target->id, request.request_id, pane->id, pane->generation};
+    requester.pending_focus = PendingPaneFocus{.target = target->id, .request_id = request.request_id, .pane_id = pane->id, .pane_generation = pane->generation};
   }
 
   void ClientControl::completeFocus(ClientStore& clients, std::uint64_t sender_id, const CompletePaneFocus& completion) {
@@ -196,7 +196,7 @@ namespace telar::runtime {
   }
 
   ClientRoute ClientControl::route(const ClientSession& client) noexcept {
-    return ClientRoute{client.id, client.generation};
+    return ClientRoute{.id = client.id, .generation = client.generation};
   }
 
   ClientSession* ClientControl::focusOrigin(ClientStore& clients, std::uint64_t pane_id) noexcept {

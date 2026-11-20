@@ -31,7 +31,7 @@ namespace telar::runtime::cli::repository {
   };
 
   template <Allocator Memory>
-  tbc::val_a<Catalog> catalog(tbc::mut_a<Memory> memory, const char* socket) {
+  static tbc::val_a<Catalog> catalog(tbc::mut_a<Memory> memory, const char* socket) {
     RuntimeConnection connection{socket};
 
     connection.receiveTimeout(30);
@@ -67,7 +67,7 @@ namespace telar::runtime::cli::repository {
     }
   }
 
-  tbc::val_a<Text> managedPath(tbc::mut_a<Memory> memory, std::string_view identity) {
+  static tbc::val_a<Text> managedPath(tbc::mut_a<Memory> memory, std::string_view identity) {
     const ProcessEnvironment environment;
     // A later lookup may overwrite the storage an earlier one returned.
     const Text home{memory, environment.lookup("HOME")};
@@ -89,7 +89,7 @@ namespace telar::runtime::cli::repository {
   }
 
   template <Allocator Memory>
-  tbc::val_a<Text> mainRoot(tbc::mut_a<Memory> memory, std::string_view path) {
+  static tbc::val_a<Text> mainRoot(tbc::mut_a<Memory> memory, std::string_view path) {
     Git git{memory, path};
     const auto common = git.read({"rev-parse", "--path-format=absolute", "--git-common-dir"});
     auto trimmed = common.view();
@@ -112,7 +112,7 @@ namespace telar::runtime::cli::repository {
   }
 
   template <Allocator Memory>
-  tbc::val_a<ds::Option<Text>> matching(tbc::mut_a<Memory> memory, std::string_view path, std::string_view identity) {
+  static tbc::val_a<ds::Option<Text>> matching(tbc::mut_a<Memory> memory, std::string_view path, std::string_view identity) {
     if (path.contains('\0') || path.size() >= PATH_MAX) {
       return ds::none;
     }
@@ -143,7 +143,7 @@ namespace telar::runtime::cli::repository {
   // `identity` among the runtime's workspaces and worktrees, the workspaces
   // history recorded and the managed clone. It starts the runtime if needed.
   template <Allocator Memory>
-  tbc::val_a<ds::Option<Text>> find(tbc::mut_a<Memory> memory, std::string_view identity, ds::Option<std::string_view> selected, ds::Option<std::string_view> socket = ds::none) {
+  static tbc::val_a<ds::Option<Text>> find(tbc::mut_a<Memory> memory, std::string_view identity, ds::Option<std::string_view> selected, ds::Option<std::string_view> socket = ds::none) {
     const ProcessEnvironment environment;
     ServerOptions server;
 
@@ -245,7 +245,7 @@ namespace telar::runtime::cli::repository {
     Text path_;
   };
 
-  bool validCommit(std::string_view commit) {
+  static bool validCommit(std::string_view commit) {
     constexpr std::size_t sha1_chars = 40;
     constexpr std::size_t sha256_chars = 64;
 
@@ -254,7 +254,7 @@ namespace telar::runtime::cli::repository {
     });
   }
 
-  FileDescriptor lockRepository(Memory& memory, int parent, std::string_view name) {
+  static FileDescriptor lockRepository(Memory& memory, int parent, std::string_view name) {
     const auto lock_name = ds::format(memory, "{}.lock", name);
     auto file = openLockFile(parent, lock_name.data());
     struct stat state{};
@@ -272,7 +272,7 @@ namespace telar::runtime::cli::repository {
   }
 
   template <Allocator Memory>
-  void clearPriorStage(Memory& memory, const Text& stage, std::string_view identity) {
+  static void clearPriorStage(Memory& memory, const Text& stage, std::string_view identity) {
     struct stat state{};
     if (::lstat(stage.data(), &state) != 0) {
       if (sys::lastError() == ENOENT) {
@@ -295,7 +295,7 @@ namespace telar::runtime::cli::repository {
     std::filesystem::remove_all(stage.view());
   }
 
-  void receiveBundle(int descriptor, std::uint64_t expected) {
+  static void receiveBundle(int descriptor, std::uint64_t expected) {
     ds::Array<Byte, file_transfer::copy_buffer_bytes> bytes;
     std::uint64_t total = 0;
 
@@ -422,7 +422,7 @@ namespace telar::runtime::cli::repository {
     return listing;
   }
 
-  void appendHashes(ds::Vec<Text, Memory>& hashes, std::string_view listing) {
+  static void appendHashes(ds::Vec<Text, Memory>& hashes, std::string_view listing) {
     for (const auto line : std::views::split(listing, '\n')) {
       const std::string_view hash{line.begin(), line.end()};
       if (hashes.size() < max_transfer_tips && validCommit(hash)) {
@@ -434,7 +434,7 @@ namespace telar::runtime::cli::repository {
   // What the bundle leaves out: the machine's tips, which its clone holds with
   // all their history. When they already reach `commit`, its parents instead,
   // since Git refuses an empty bundle. Only hashes pass, never an option.
-  tbc::val_a<ds::Vec<Text, Memory>> exclusions(tbc::mut_a<Memory> memory, Git& git, std::string_view commit, std::string_view listing) {
+  static tbc::val_a<ds::Vec<Text, Memory>> exclusions(tbc::mut_a<Memory> memory, Git& git, std::string_view commit, std::string_view listing) {
     ds::Vec<Text, Memory> tips{memory};
 
     appendHashes(tips, listing);
@@ -460,7 +460,7 @@ namespace telar::runtime::cli::repository {
   }
 
   template <Allocator Memory>
-  tbc::val_a<PreparedRepository> parsePrepared(tbc::mut_a<Memory> memory, std::string_view output, std::string_view commit, std::string_view identity) {
+  static tbc::val_a<PreparedRepository> parsePrepared(tbc::mut_a<Memory> memory, std::string_view output, std::string_view commit, std::string_view identity) {
     const auto result = JsonNode<Memory>::parse(memory, output);
     const auto* path = result.find("path");
     const auto* received_commit = result.find("commit");
@@ -642,7 +642,7 @@ namespace telar::runtime::cli::sessions {
   };
 
   // Descriptions of the errors only dispatch raises.
-  std::string_view describeDispatchError(std::string_view name) {
+  static std::string_view describeDispatchError(std::string_view name) {
     static constexpr ds::Array<std::pair<std::string_view, std::string_view>, 12> descriptions{{
         {"UnknownMachine", "no saved machine or local label has that name; see `telar machine list`"},
         {"FetchNeedsAnotherMachine", "fetch brings a branch from another machine; this label names this one"},
@@ -658,7 +658,7 @@ namespace telar::runtime::cli::sessions {
         {"NotARepository", "not inside a git repository"},
     }};
 
-    const auto found = std::ranges::find(descriptions, name, &std::pair<std::string_view, std::string_view>::first);
+    const auto* const found = std::ranges::find(descriptions, name, &std::pair<std::string_view, std::string_view>::first);
 
     return found == descriptions.end() ? name : found->second;
   }
@@ -851,7 +851,7 @@ namespace telar::runtime::cli::sessions {
   };
 
   // A session id as the 32 hexadecimal digits it is written in.
-  FixedText<32> hexSession(const ds::Array<Byte, 16>& session) {
+  static FixedText<32> hexSession(const ds::Array<Byte, 16>& session) {
     ds::Array<char, 32> digits;
     FixedText<32> text;
 
@@ -859,7 +859,7 @@ namespace telar::runtime::cli::sessions {
     return text;
   }
 
-  std::string_view agentStatus(AgentStatus status) {
+  static std::string_view agentStatus(AgentStatus status) {
     switch (status) {
     case AgentStatus::unknown:
       return "unknown";
@@ -878,7 +878,7 @@ namespace telar::runtime::cli::sessions {
     return "unknown";
   }
 
-  std::string_view blockedReason(AgentBlockedReason reason) {
+  static std::string_view blockedReason(AgentBlockedReason reason) {
     switch (reason) {
     case AgentBlockedReason::none:
       return "none";
@@ -895,13 +895,13 @@ namespace telar::runtime::cli::sessions {
     return "none";
   }
 
-  void worktreeAgent(Output& output, const AgentSnapshotEntry& agent) {
+  static void worktreeAgent(Output& output, const AgentSnapshotEntry& agent) {
     constexpr auto escapes = JsonEscapes::control;
 
-    output.text("{\"pane_id\":").number(agent.pane_id).text(",\"pane_generation\":").number(agent.pane_generation).text(",\"workspace_id\":").number(agent.location.workspace.id).text(",\"tab_id\":").number(agent.location.tab_id).text(",\"pane_index\":").number(agent.pane_index).text(",\"provider\":").json(agent.provider_name.empty() ? "unknown" : agent.provider_name, escapes).text(",\"provider_index\":").number(static_cast<Byte>(agent.provider)).text(",\"status\":").json(agentStatus(agent.status), escapes).text(",\"workspace\":").json(agent.workspace_label, escapes).text(",\"tab\":").json(agent.tab_label, escapes).text(",\"title\":").json(agent.session_title, escapes).text(",\"cwd\":").json(agent.cwd_label, escapes).text(",\"blocked_reason\":").json(blockedReason(agent.blocked_reason), escapes).text(",\"status_age_s\":").number(agent.status_age_s).text(",\"worktree_id\":").number(agent.work_tree).text(",\"last_event\":").json(agent.last_event, escapes).text(",\"plan\":{\"done\":").number(agent.plan_done).text(",\"total\":").number(agent.plan_total).text(",\"step\":").json(agent.plan_step, escapes).text("},\"final_message\":").json(agent.final_message, escapes).text(",\"session_id\":").json(hexSession(agent.session_id).view(), escapes).text("}");
+    output.text("{\"pane_id\":").number(agent.pane_id).text(",\"pane_generation\":").number(agent.pane_generation).text(",\"workspace_id\":").number(agent.location.workspace.id).text(",\"tab_id\":").number(agent.location.tab_id).text(",\"pane_index\":").number(agent.pane_index).text(",\"provider\":").json(agent.provider_name.empty() ? "unknown" : agent.provider_name, escapes).text(",\"provider_index\":").number(static_cast<Byte>(agent.provider)).text(",\"status\":").json(agentStatus(agent.status), escapes).text(",\"workspace\":").json(agent.workspace_label, escapes).text(",\"tab\":").json(agent.tab_label, escapes).text(",\"title\":").json(agent.session_title, escapes).text(",\"cwd\":").json(agent.cwd_label, escapes).text(",\"blocked_reason\":").json(blockedReason(agent.blocked_reason), escapes).text(",\"status_age_s\":").number(agent.status_age_s).text(",\"worktree_id\":").number(agent.work_tree).text(",\"last_event\":").json(agent.last_event, escapes).text(R"(,"plan":{"done":)").number(agent.plan_done).text(",\"total\":").number(agent.plan_total).text(",\"step\":").json(agent.plan_step, escapes).text("},\"final_message\":").json(agent.final_message, escapes).text(",\"session_id\":").json(hexSession(agent.session_id).view(), escapes).text("}");
   }
 
-  std::string_view worktreeState(WorktreeState state) {
+  static std::string_view worktreeState(WorktreeState state) {
     switch (state) {
     case WorktreeState::active:
       return "active";
@@ -914,7 +914,7 @@ namespace telar::runtime::cli::sessions {
     return "active";
   }
 
-  std::string_view commandState(CommandState state) {
+  static std::string_view commandState(CommandState state) {
     switch (state) {
     case CommandState::none:
       return "none";
@@ -927,7 +927,7 @@ namespace telar::runtime::cli::sessions {
     return "none";
   }
 
-  void worktreeEntry(Output& output, const WorktreeListEntry& entry, std::span<const AgentSnapshotEntry> agents, bool json) {
+  static void worktreeEntry(Output& output, const WorktreeListEntry& entry, std::span<const AgentSnapshotEntry> agents, bool json) {
     constexpr auto escapes = JsonEscapes::control;
 
     if (!json) {
@@ -951,7 +951,7 @@ namespace telar::runtime::cli::sessions {
       output.text("null");
     }
 
-    output.text(",\"diff\":{\"added\":").number(entry.diff_added).text(",\"removed\":").number(entry.diff_removed).text(",\"files\":").number(entry.diff_files).text(",\"commits_ahead\":").number(entry.commits_ahead).text("},\"command\":{\"label\":").json(entry.command_label, escapes).text(",\"state\":").json(commandState(entry.command_state)).text(",\"exit_code\":").number(entry.command_exit).text("},\"agents\":[");
+    output.text(R"(,"diff":{"added":)").number(entry.diff_added).text(",\"removed\":").number(entry.diff_removed).text(",\"files\":").number(entry.diff_files).text(",\"commits_ahead\":").number(entry.commits_ahead).text(R"(},"command":{"label":)").json(entry.command_label, escapes).text(",\"state\":").json(commandState(entry.command_state)).text(",\"exit_code\":").number(entry.command_exit).text("},\"agents\":[");
     bool first = true;
 
     for (const auto& agent : agents) {
@@ -971,13 +971,13 @@ namespace telar::runtime::cli::sessions {
   }
 
   struct WorktreeLaunch {
-    ds::Option<std::uint64_t> setup{};
+    ds::Option<std::uint64_t> setup;
     std::uint64_t worktree{};
-    std::string_view path{}, branch{}, base{};
+    std::string_view path, branch, base;
     PaneOpened opened{};
   };
 
-  void worktreeLaunch(Output& output, const WorktreeLaunch& launch, bool json) {
+  static void worktreeLaunch(Output& output, const WorktreeLaunch& launch, bool json) {
     if (json) {
       output.text("{\"worktree_id\":").number(launch.worktree).text(",\"setup_execution_id\":");
       if (launch.setup) {
@@ -992,20 +992,20 @@ namespace telar::runtime::cli::sessions {
     }
   }
 
-  ds::Option<std::uint64_t> currentWorkspace() {
-    const auto value = std::getenv("TELAR_WORKSPACE_ID");
+  static ds::Option<std::uint64_t> currentWorkspace() {
+    auto* const value = std::getenv("TELAR_WORKSPACE_ID");
 
-    return value ? maybeUnsigned(value) : ds::none;
+    return (value != nullptr) ? maybeUnsigned(value) : ds::none;
   }
 
-  bool confirmRemoval(const char* question) {
-    if (!::isatty(STDIN_FILENO)) {
+  static bool confirmRemoval(const char* question) {
+    if (::isatty(STDIN_FILENO) == 0) {
       throw Failure{"this removal needs a person to confirm it at a terminal"};
     }
 
     std::fprintf(stderr, "%s? [y/N] ", question);
     ds::Array<char, 16> buffer;
-    if (!std::fgets(buffer.dataMut(), buffer.size(), stdin)) {
+    if (std::fgets(buffer.dataMut(), buffer.size(), stdin) == nullptr) {
       return false;
     }
 
@@ -1066,13 +1066,13 @@ namespace telar::runtime::cli::sessions {
     }
 
   private:
-    const WorkspaceListEntry* workspace(std::uint64_t id) const {
+    [[nodiscard]] const WorkspaceListEntry* workspace(std::uint64_t id) const {
       const auto found = std::ranges::find(catalog_.entries, id, &WorkspaceListEntry::workspace);
 
       return found == catalog_.entries.end() ? nullptr : &*found;
     }
 
-    const WorkspaceListEntry* workspaceAt(std::string_view path) const {
+    [[nodiscard]] const WorkspaceListEntry* workspaceAt(std::string_view path) const {
       for (const auto& entry : catalog_.entries) {
         const bool holds_worktree = std::ranges::any_of(catalog_.worktrees, [&](const auto& worktree) {
           return worktree.workspace == entry.workspace;
@@ -1085,7 +1085,7 @@ namespace telar::runtime::cli::sessions {
       return nullptr;
     }
 
-    const WorktreeListEntry* find(std::string_view reference) const {
+    [[nodiscard]] const WorktreeListEntry* find(std::string_view reference) const {
       const WorktreeListEntry* found = nullptr;
 
       for (const auto& entry : catalog_.worktrees) {
@@ -1093,14 +1093,14 @@ namespace telar::runtime::cli::sessions {
           continue;
         }
 
-        if (found) {
+        if (found != nullptr) {
           throw Failure{"more than one worktree has that branch or title; name it by the other"};
         }
 
         found = &entry;
       }
 
-      if (found) {
+      if (found != nullptr) {
         return found;
       }
 
@@ -1109,7 +1109,7 @@ namespace telar::runtime::cli::sessions {
           continue;
         }
 
-        if (found) {
+        if (found != nullptr) {
           throw Failure{"more than one worktree has that branch or title; name it by the other"};
         }
 
@@ -1122,8 +1122,8 @@ namespace telar::runtime::cli::sessions {
     Text originDirectory() {
       if (options_.workspace) {
         if (const auto id = maybeUnsigned(*options_.workspace)) {
-          const auto entry = workspace(*id);
-          if (!entry) {
+          const auto* const entry = workspace(*id);
+          if (entry == nullptr) {
             throw Failure{"workspace not found", 2};
           }
 
@@ -1134,7 +1134,7 @@ namespace telar::runtime::cli::sessions {
       }
 
       if (const auto id = currentWorkspace()) {
-        if (const auto entry = workspace(*id)) {
+        if (const auto* const entry = workspace(*id)) {
           return Text{memory_, entry->path};
         }
       }
@@ -1150,7 +1150,7 @@ namespace telar::runtime::cli::sessions {
       }
 
       if (const auto id = currentWorkspace()) {
-        if (const auto entry = workspace(*id)) {
+        if (const auto* const entry = workspace(*id)) {
           try {
             if (git_.root(entry->path) == root) {
               return *id;
@@ -1160,7 +1160,7 @@ namespace telar::runtime::cli::sessions {
         }
       }
 
-      if (const auto entry = workspaceAt(root)) {
+      if (const auto* const entry = workspaceAt(root)) {
         return entry->workspace;
       }
 
@@ -1175,9 +1175,9 @@ namespace telar::runtime::cli::sessions {
     ds::Option<std::uint64_t> attributedPane() {
       // Each value is parsed before the next getenv, which may overwrite the storage it returned.
       const auto* id_text = std::getenv("TELAR_PANE_ID");
-      const auto id = id_text ? maybeUnsigned(id_text) : ds::none;
+      const auto id = (id_text != nullptr) ? maybeUnsigned(id_text) : ds::none;
       const auto* generation_text = std::getenv("TELAR_PANE_GENERATION");
-      const auto generation = generation_text ? maybeUnsigned(generation_text) : ds::none;
+      const auto generation = (generation_text != nullptr) ? maybeUnsigned(generation_text) : ds::none;
       if (!id || !generation || *id == 0 || *generation == 0) {
         return ds::none;
       }
@@ -1213,7 +1213,7 @@ namespace telar::runtime::cli::sessions {
       return ds::none;
     }
 
-    Text brief() const {
+    [[nodiscard]] Text brief() const {
       Text result{memory_};
 
       for (std::size_t index = 1; index < options_.command.size(); ++index) {
@@ -1334,7 +1334,7 @@ namespace telar::runtime::cli::sessions {
     }
 
     WorktreeListEntry findOrAdopt() {
-      if (const auto entry = find(*options_.branch)) {
+      if (const auto* const entry = find(*options_.branch)) {
         return *entry;
       }
 
@@ -1415,8 +1415,8 @@ namespace telar::runtime::cli::sessions {
       if (options_.workspace) {
         source = maybeUnsigned(*options_.workspace);
         if (!source) {
-          const auto entry = workspaceAt(*options_.workspace);
-          if (!entry) {
+          const auto* const entry = workspaceAt(*options_.workspace);
+          if (entry == nullptr) {
             throw Failure{"workspace not found", 2};
           }
 
@@ -1446,7 +1446,7 @@ namespace telar::runtime::cli::sessions {
             output_.text(",");
           }
 
-          output_.text("{\"worktree_id\":null,\"branch\":").json(entry.branch, JsonEscapes::control).text(",\"path\":").json(entry.path, JsonEscapes::control).text(",\"origin\":\"untracked\",\"agents\":[]}");
+          output_.text(R"({"worktree_id":null,"branch":)").json(entry.branch, JsonEscapes::control).text(",\"path\":").json(entry.path, JsonEscapes::control).text(R"(,"origin":"untracked","agents":[]})");
         } else {
           output_.text(entry.branch).text("\t-\tuntracked\t-\t-\t-\t").text(entry.path).text("\n");
         }
@@ -1460,8 +1460,8 @@ namespace telar::runtime::cli::sessions {
     }
 
     void open() {
-      const auto entry = find(*options_.branch);
-      if (!entry) {
+      const auto* const entry = find(*options_.branch);
+      if (entry == nullptr) {
         throw Failure{"no tracked worktree matches that branch or title", 2};
       }
 
@@ -1510,8 +1510,8 @@ namespace telar::runtime::cli::sessions {
     }
 
     void remove() {
-      const auto entry = find(*options_.branch);
-      if (!entry) {
+      const auto* const entry = find(*options_.branch);
+      if (entry == nullptr) {
         throw Failure{"no tracked worktree matches that branch or title", 2};
       }
 
@@ -1570,7 +1570,7 @@ namespace telar::runtime::cli::sessions {
       try {
         found = repository::find(memory_, *options_.repository, options_.workspace, options_.socket);
       } catch (const std::runtime_error& error) {
-        const auto description = std::ranges::find(descriptions, std::string_view{error.what()}, &std::pair<std::string_view, const char*>::first);
+        const auto* const description = std::ranges::find(descriptions, std::string_view{error.what()}, &std::pair<std::string_view, const char*>::first);
         if (description == descriptions.end()) {
           throw;
         }
@@ -1708,11 +1708,11 @@ namespace telar::runtime::cli::repository {
   void PreparedRepository::print(bool receiver) const {
     DescriptorWriter output{STDOUT_FILENO};
 
-    output.print("{{\"path\":{},\"commit\":{},\"repository\":{},", quoteJson(path), quoteJson(commit), quoteJson(repository));
+    output.print(R"({{"path":{},"commit":{},"repository":{},)", quoteJson(path), quoteJson(commit), quoteJson(repository));
     if (receiver) {
-      output.print("\"repository_ready\":true,\"reused\":{}", jsonBoolean(reused));
+      output.print(R"("repository_ready":true,"reused":{})", jsonBoolean(reused));
     } else {
-      output.print("\"reused\":{},\"repository_ready\":true", jsonBoolean(reused));
+      output.print(R"("reused":{},"repository_ready":true)", jsonBoolean(reused));
     }
 
     output.print(",\"environment\":\"not_run\"}}\n");

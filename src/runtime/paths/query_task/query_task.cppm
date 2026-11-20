@@ -214,7 +214,7 @@ export {
             continue;
           }
 
-          const Candidate candidate{index, *score};
+          const Candidate candidate{.entry = index, .score = *score};
           std::size_t position = count;
 
           while (position != 0 && better(candidate, ranked[position - 1], request.query.empty())) {
@@ -247,10 +247,10 @@ export {
         for (std::size_t index = 0; index < count; ++index) {
           const auto& entry = storage_.entry(ranked[index].entry);
 
-          matches.atMut(index) = {path(entry), entry.kind, std::span{positions[index]}.first(request.query.size())};
+          matches.atMut(index) = {.path = path(entry), .kind = entry.kind, .positions = std::span{positions[index]}.first(request.query.size())};
         }
 
-        reply.send(PathResults{request.request_id, root_, static_cast<std::uint32_t>(published), complete, complete && storage_.truncated, std::span{matches}.first(count)});
+        reply.send(PathResults{.request_id = request.request_id, .root = root_, .scanned = static_cast<std::uint32_t>(published), .complete = complete, .truncated = complete && storage_.truncated, .matches = std::span{matches}.first(count)});
         return complete;
       }
 
@@ -294,7 +294,7 @@ export {
     struct OwnedPathQuery {
       void assign(const FindPaths& request);
 
-      FindPaths view() const noexcept;
+      [[nodiscard]] FindPaths view() const noexcept;
 
       std::uint64_t request_id = 0;
       FixedText<4096> root;

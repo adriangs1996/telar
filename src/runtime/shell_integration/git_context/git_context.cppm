@@ -36,7 +36,7 @@ export namespace telar::runtime {
 
     bool operator==(const ShellGitSummary&) const noexcept = default;
 
-    PaneGit message(std::uint64_t pane) const noexcept;
+    [[nodiscard]] PaneGit message(std::uint64_t pane) const noexcept;
   };
 
   struct ShellGitResult {

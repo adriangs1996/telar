@@ -355,7 +355,7 @@ namespace telar::runtime::traffic {
     }
 
     std::ranges::copy(part.payload, entry.storage.getMut().bytesMut().begin() + maximum_prefix + part.offset);
-    entry.ranges.atMut(entry.count++) = {part.offset, part.payload.size(), part.more};
+    entry.ranges.atMut(entry.count++) = {.offset = part.offset, .size = part.payload.size(), .more = part.more};
     entry.received += part.payload.size();
     if (!part.more) {
       entry.length = end;
@@ -383,7 +383,7 @@ namespace telar::runtime::traffic {
         sum += NetworkPacket::word(bytes, index);
       }
 
-      while (sum >> 16) {
+      while ((sum >> 16) != 0u) {
         sum = (sum & std::numeric_limits<std::uint16_t>::max()) + (sum >> 16);
       }
 
@@ -467,7 +467,7 @@ namespace telar::runtime::traffic {
       }
 
       add(endpoint->port);
-      add(endpoint->ipv6);
+      add(static_cast<unsigned int>(endpoint->ipv6));
     }
 
     // The table reads the low bits of the hash and the high ones apart, so every bit is mixed.

@@ -17,10 +17,10 @@ export namespace telar::runtime {
     // A token another shell chose, as 32 lowercase hexadecimal digits.
     static ds::Option<ShellToken> parse(std::string_view text) noexcept;
 
-    std::string_view text() const noexcept;
+    [[nodiscard]] std::string_view text() const noexcept;
 
     // Compares in constant time, so the time a forged mark takes does not reveal the token.
-    bool signs(std::string_view candidate) const noexcept;
+    [[nodiscard]] bool signs(std::string_view candidate) const noexcept;
 
   private:
     ds::Array<char, length> text_{};

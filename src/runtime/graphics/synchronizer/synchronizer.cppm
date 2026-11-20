@@ -30,9 +30,9 @@ export {
 
       void release(std::size_t bytes) noexcept;
 
-      std::size_t used() const noexcept;
+      [[nodiscard]] std::size_t used() const noexcept;
 
-      std::size_t available() const noexcept;
+      [[nodiscard]] std::size_t available() const noexcept;
 
       static constexpr std::size_t limit = 512 * 1024 * 1024;
 
@@ -49,13 +49,13 @@ export {
       GraphicsCreditLedger(const GraphicsCreditLedger&) = delete;
       GraphicsCreditLedger& operator=(const GraphicsCreditLedger&) = delete;
 
-      bool canReserve(std::size_t bytes) const noexcept;
+      [[nodiscard]] bool canReserve(std::size_t bytes) const noexcept;
 
       bool reserve(std::size_t bytes) noexcept;
 
       bool returnBytes(std::uint64_t bytes) noexcept;
 
-      std::size_t available() const noexcept;
+      [[nodiscard]] std::size_t available() const noexcept;
 
     private:
       GraphicsCreditBudget& budget_;
@@ -115,10 +115,10 @@ export {
       ~GraphicsSynchronizer();
 
       template <Allocator GraphicsMemory>
-      bool synchronized(const GraphicsStorage<GraphicsMemory>& storage) const noexcept;
+      [[nodiscard]] bool synchronized(const GraphicsStorage<GraphicsMemory>& storage) const noexcept;
 
 #if TELAR_DIAGNOSTICS
-      std::size_t transferBytes() const noexcept;
+      [[nodiscard]] std::size_t transferBytes() const noexcept;
 #endif
 
       void requestSnapshot() noexcept;
@@ -132,7 +132,7 @@ export {
       diagnostics::GraphicsCounters takeCounters() noexcept;
 #endif
 
-      bool wantsImage(ImageKey key, bool shared) const noexcept;
+      [[nodiscard]] bool wantsImage(ImageKey key, bool shared) const noexcept;
 
       void abandon(std::uint64_t revision) noexcept;
 
@@ -187,7 +187,7 @@ export {
 
       bool publishTransfer(Connection<ConcurrentMemory>& connection, GraphicsHeader header);
 
-      bool knows(ImageKey key) const noexcept;
+      [[nodiscard]] bool knows(ImageKey key) const noexcept;
 
       // The slot among the known placements for `identity`: those alone, so a transfer stays borrowed.
       static GraphicsPlacement& placementSlot(std::span<GraphicsPlacement> placements, std::uint64_t identity);

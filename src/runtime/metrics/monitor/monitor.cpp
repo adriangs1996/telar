@@ -200,7 +200,7 @@ namespace telar::runtime {
   }
 
   ds::Option<std::uint32_t> MonitorSampler::indexOf(pid_t process) const noexcept {
-    const auto found = std::ranges::lower_bound(entries_, process, {}, [](const MonitorEntry& entry) {
+    const auto* const found = std::ranges::lower_bound(entries_, process, {}, [](const MonitorEntry& entry) {
       return entry.record.pid;
     });
     if (found == entries_.end() || found->record.pid != process) {
@@ -450,7 +450,7 @@ namespace telar::runtime {
 
       const auto children = std::ranges::equal_range(selected_, pid, {}, parentOf);
 
-      for (auto child = children.end(); child != children.begin();) {
+      for (const auto* child = children.end(); child != children.begin();) {
         --child;
         if (*child != index) {
           stack_.push({*child, static_cast<std::uint8_t>(std::min<std::size_t>(depth + 1u, deepest))});
@@ -467,7 +467,7 @@ namespace telar::runtime {
       std::size_t first = 0;
       std::size_t count = 0;
       std::uint32_t matched = 0;
-      ds::Option<std::size_t> detail{};
+      ds::Option<std::size_t> detail;
     };
 
     const auto queries = std::min(views.size(), maximum_answers);

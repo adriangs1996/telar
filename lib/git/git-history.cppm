@@ -19,8 +19,8 @@ namespace telar::git {
     // Reloads <common>/shallow when it changed; false if it is unreadable.
     bool load(int common, ObjectFormat format, const Limits& limits);
 
-    bool empty() const noexcept;
-    bool contains(const ObjectId& id) const noexcept;
+    [[nodiscard]] bool empty() const noexcept;
+    [[nodiscard]] bool contains(const ObjectId& id) const noexcept;
 
   private:
     ds::Vec<ObjectId, Memory> ids_;

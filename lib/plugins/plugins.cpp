@@ -103,7 +103,7 @@ namespace telar::runtime::plugins {
   }
 
   Capability Capabilities::parseName(std::string_view name) {
-    const auto found = std::ranges::find(names_, name);
+    const auto* const found = std::ranges::find(names_, name);
     if (found == names_.end()) {
       throw std::invalid_argument{"UnknownCapability"};
     }
@@ -183,7 +183,7 @@ namespace telar::runtime::plugins {
       }
     }
 
-    Manifest validate() const {
+    [[nodiscard]] Manifest validate() const {
       constexpr std::uint64_t manifest_api = 1;
       if (api_version != manifest_api) {
         throw std::invalid_argument{"IncompatibleManifestApi"};
@@ -415,7 +415,7 @@ namespace telar::runtime::plugins {
 
       const auto parent_length = prefix.size();
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
       prefix.append(std::string_view{entry->d_name, entry->d_namlen});
 #else
       prefix.append(entry->d_name);
@@ -757,7 +757,7 @@ namespace telar::runtime::plugins {
   }
 
   tbc::val_a<ds::String<Memory>> TrustStore::json(tbc::mut_a<Memory> memory) const {
-    ds::String<Memory> output{memory, "{\"version\":1,\"grants\":["};
+    ds::String<Memory> output{memory, R"({"version":1,"grants":[)"};
 
     for (std::size_t index = 0; index < count_; ++index) {
       if (index != 0) {
@@ -768,9 +768,9 @@ namespace telar::runtime::plugins {
 
       output.append("{\"plugin\":");
       appendJsonText(output, entry.plugin.view());
-      output.append(",\"digest\":\"");
+      output.append(R"(,"digest":")");
       appendLowerHex(output, entry.digest);
-      output.append("\",\"capabilities\":[");
+      output.append(R"(","capabilities":[)");
       bool first = true;
 
       for (unsigned value = 0; value < static_cast<unsigned>(Capability::count); ++value) {
@@ -803,7 +803,7 @@ namespace telar::runtime::plugins {
     }
 
     for (std::size_t index = 0; index < digest.size(); ++index) {
-      digest.atMut(index) = static_cast<std::uint8_t>((hex(text[2 * index]) << 4) | hex(text[2 * index + 1]));
+      digest.atMut(index) = static_cast<std::uint8_t>((hex(text[2 * index]) << 4) | hex(text[(2 * index) + 1]));
     }
 
     return digest;

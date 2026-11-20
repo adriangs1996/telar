@@ -20,7 +20,7 @@ export extern "C++" {
     struct SuggestCommand {
       std::uint64_t request_id{};
       std::uint64_t pane_id{};
-      std::string_view text{};
+      std::string_view text;
     };
 
     template <>
@@ -31,8 +31,8 @@ export extern "C++" {
       std::uint64_t request_id{};
       std::uint64_t pane_id{};
       std::uint64_t pane_generation{};
-      std::string_view editor{};
-      std::string_view path{};
+      std::string_view editor;
+      std::string_view path;
       std::uint32_t line{};
       std::uint32_t column{};
 
@@ -45,8 +45,8 @@ export extern "C++" {
 
     struct FindPaths {
       std::uint64_t request_id{};
-      std::string_view root{};
-      std::string_view query{};
+      std::string_view root;
+      std::string_view query;
       PathKindFilter kind{};
       std::uint16_t limit{};
       bool refresh{};
@@ -61,7 +61,7 @@ export extern "C++" {
     struct CommandSuggestion {
       std::uint64_t request_id{};
       SuggestionStatus status{};
-      std::string_view text{};
+      std::string_view text;
 
       void validate() const;
     };
@@ -91,7 +91,7 @@ export extern "C++" {
       std::uint64_t request_id{};
       std::uint64_t pane_id{};
       CompletionProvider provider{};
-      std::string_view prefix{};
+      std::string_view prefix;
     };
 
     template <>
@@ -101,7 +101,7 @@ export extern "C++" {
     struct CompletionWords {
       std::uint64_t request_id{};
       bool truncated{};
-      std::span<const CompletionWord> words{};
+      std::span<const CompletionWord> words;
     };
 
     template <>
@@ -114,7 +114,7 @@ export extern "C++" {
     struct RequestCommandSpec {
       std::uint64_t request_id{};
       std::uint64_t pane_id{};
-      std::string_view command{};
+      std::string_view command;
       std::uint64_t known_digest = 0;
     };
 
@@ -135,13 +135,13 @@ export extern "C++" {
       static constexpr std::size_t maximum_source = 256 * 1024;
 
       std::uint64_t request_id{};
-      std::string_view command{};
+      std::string_view command;
       CommandSpecState state{};
       std::uint64_t digest = 0;
-      std::string_view source{};
+      std::string_view source;
       // When the command is an alias, the words it stands for: the spec is the first word's,
       // and completion follows the words.
-      std::string_view expansion{};
+      std::string_view expansion;
 
       void validate() const;
     };
@@ -165,11 +165,11 @@ export extern "C++" {
 
     struct PathResults {
       std::uint64_t request_id{};
-      std::string_view root{};
+      std::string_view root;
       std::uint32_t scanned{};
       bool complete{};
       bool truncated{};
-      std::span<const PathMatch> matches{};
+      std::span<const PathMatch> matches;
 
       void validate() const;
     };

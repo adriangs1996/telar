@@ -152,7 +152,7 @@ export {
 
       void install(lua_State* state);
 
-      bool listening() const noexcept;
+      [[nodiscard]] bool listening() const noexcept;
 
       void begin() noexcept;
 

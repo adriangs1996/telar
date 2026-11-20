@@ -55,18 +55,18 @@ export {
 
       void reset() noexcept;
 
-      std::span<const std::uint8_t> bytes() const noexcept;
+      [[nodiscard]] std::span<const std::uint8_t> bytes() const noexcept;
 
-      std::size_t size() const noexcept;
+      [[nodiscard]] std::size_t size() const noexcept;
 
-      std::size_t capacity() const noexcept;
+      [[nodiscard]] std::size_t capacity() const noexcept;
 
-      std::size_t remaining() const noexcept;
+      [[nodiscard]] std::size_t remaining() const noexcept;
 
       bool truncated = false;
 
     private:
-      std::size_t grownCapacity(std::size_t needed) const noexcept;
+      [[nodiscard]] std::size_t grownCapacity(std::size_t needed) const noexcept;
 
       std::size_t reserveAdditional(std::size_t bytes) noexcept;
 
@@ -141,9 +141,9 @@ export {
         text_.append(text.substr(0, capacity));
       }
 
-      std::string_view view() const noexcept;
+      [[nodiscard]] std::string_view view() const noexcept;
 
-      bool oversized() const noexcept;
+      [[nodiscard]] bool oversized() const noexcept;
 
     private:
       SensitiveText<capacity> text_;
@@ -154,7 +154,7 @@ export {
       CaptureKey key{};
       CaptureSide side = CaptureSide::request;
       CaptureProtocol protocol = CaptureProtocol::http1;
-      CaptureHost host{};
+      CaptureHost host;
       std::int64_t started_at_ms = 0;
     };
 
@@ -184,23 +184,23 @@ export {
 
       void finish(CaptureOutcome result, std::int64_t timestamp) noexcept;
 
-      CapturePart headPart() const noexcept;
+      [[nodiscard]] CapturePart headPart() const noexcept;
 
-      CapturePart bodyPart() const noexcept;
+      [[nodiscard]] CapturePart bodyPart() const noexcept;
 
-      std::size_t capturedBytes() const noexcept;
+      [[nodiscard]] std::size_t capturedBytes() const noexcept;
 
-      std::size_t remaining() const noexcept;
+      [[nodiscard]] std::size_t remaining() const noexcept;
 
-      std::size_t bodyLimit() const noexcept;
+      [[nodiscard]] std::size_t bodyLimit() const noexcept;
 
-      std::string_view host() const noexcept;
+      [[nodiscard]] std::string_view host() const noexcept;
 
-      std::string_view method() const noexcept;
+      [[nodiscard]] std::string_view method() const noexcept;
 
-      std::string_view target() const noexcept;
+      [[nodiscard]] std::string_view target() const noexcept;
 
-      std::string_view encoding() const noexcept;
+      [[nodiscard]] std::string_view encoding() const noexcept;
 
       static constexpr std::size_t maximum_host_bytes = CaptureHost::capacity;
       static constexpr std::size_t maximum_method_bytes = 32;
@@ -313,7 +313,7 @@ export {
     };
 
     struct IgnoreCaptureEvents {
-      constexpr int descriptor() const noexcept {
+      [[nodiscard]] constexpr int descriptor() const noexcept {
         return -1;
       }
 

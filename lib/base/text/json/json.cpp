@@ -599,7 +599,7 @@ namespace telar::runtime {
     output.push(kind_ == JsonKind::object ? '{' : '[');
     for (std::size_t index = 0; index < children_.size(); ++index) {
       output.append(index == 0 ? "\n" : ",\n");
-      output.resize(output.size() + (depth + 1) * indentation, ' ');
+      output.resize(output.size() + ((depth + 1) * indentation), ' ');
       const auto& child = children_[index];
 
       if (kind_ == JsonKind::object) {
@@ -612,7 +612,7 @@ namespace telar::runtime {
 
     if (!children_.empty()) {
       output.push('\n');
-      output.resize(output.size() + depth * indentation, ' ');
+      output.resize(output.size() + (depth * indentation), ' ');
     }
 
     output.push(kind_ == JsonKind::object ? '}' : ']');

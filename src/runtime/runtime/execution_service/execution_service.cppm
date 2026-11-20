@@ -129,7 +129,7 @@ export {
       // Advances the handshake an event names; the descriptor of the client it accepts, if any.
       ds::Option<FileDescriptor> advance(const Event& event);
 
-      std::uint64_t token(std::size_t slot) const noexcept;
+      [[nodiscard]] std::uint64_t token(std::size_t slot) const noexcept;
 
       void drop(std::size_t slot) noexcept;
 
@@ -186,10 +186,10 @@ export {
 
     struct PaneLaunchOptions {
       std::string_view socket;
-      ProxyClientConfiguration proxy{};
+      ProxyClientConfiguration proxy;
       control::Policy control_policy{};
       // The installed shell integration scripts; empty leaves shells as they start.
-      std::string_view shell_integration{};
+      std::string_view shell_integration;
       // Whether an integrated shell's `ssh` brings the integration to the hosts it reaches.
       bool ssh_integration = false;
     };
@@ -647,7 +647,7 @@ export {
         if (request.listing_only) {
           // A listing begun before a mode reset completes without reading text.
           if (pane.terminal.pasteEvents()) {
-            if (!pane.terminal.clipboardControl().paste({client->id, client->generation}, request.primary, request.available)) {
+            if (!pane.terminal.clipboardControl().paste({.client = client->id, .generation = client->generation}, request.primary, request.available)) {
               throw RequestError{FailureCode::resource_limit, "Clipboard response is pending"};
             }
 
@@ -793,7 +793,7 @@ export {
           facts.light = theme->light;
           const auto& previous = pane.desktop_theme;
           if (!previous || previous->foreground != theme->foreground || previous->background != theme->background || previous->palette != theme->palette || previous->cursor != theme->cursor) {
-            pane.terminal.configureColors({theme->foreground, theme->background, theme->palette, theme->cursor});
+            pane.terminal.configureColors({.foreground = theme->foreground, .background = theme->background, .palette = theme->palette, .cursor = theme->cursor});
           }
 
           pane.desktop_theme = *theme;
@@ -848,7 +848,7 @@ export {
 
         proxy_.apply(command);
         const auto shell = shell_integration_.apply(command, bare_prompt);
-        auto pane = ds::makeBox<Pane>(memory_, memory_, identity.id, location, command, PaneLaunch{size, model.media_budget, model.graphics_limits, shell});
+        auto pane = ds::makeBox<Pane>(memory_, memory_, identity.id, location, command, PaneLaunch{.size = size, .media_budget = model.media_budget, .graphics = model.graphics_limits, .shell = shell});
 
         TELAR_DIAGNOSTIC(pane.getMut().counters = &model.metrics.panes);
         pane.getMut().generation = identity.generation;
@@ -938,7 +938,7 @@ export {
       void disconnect(std::uint64_t client_id);
 
     private:
-      Execution<ConcurrentMemory>* find(std::uint64_t identity) const noexcept;
+      [[nodiscard]] Execution<ConcurrentMemory>* find(std::uint64_t identity) const noexcept;
 
       Execution<ConcurrentMemory>& start(RuntimeModel& model, std::uint64_t client_id, const ExecutionRequest& request);
 

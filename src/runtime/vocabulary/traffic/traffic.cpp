@@ -100,7 +100,7 @@ namespace telar::runtime::plugins {
     FrameReader reader{input};
 
     reader.require(FrameKind::error);
-    const ErrorReply reply{reader.integer<std::uint64_t>(), reader.text()};
+    const ErrorReply reply{.event_id = reader.integer<std::uint64_t>(), .message = reader.text()};
 
     reader.finish();
     return reply;

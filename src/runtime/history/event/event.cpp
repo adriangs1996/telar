@@ -47,14 +47,14 @@ namespace telar::runtime {
     }
 
     sqlite3_mem_methods methods{
-        &allocate,
-        &deallocate,
-        &reallocate,
-        &allocationSize,
-        &roundedSize,
-        &initialize,
-        &shutdown,
-        &memory,
+        .xMalloc = &allocate,
+        .xFree = &deallocate,
+        .xRealloc = &reallocate,
+        .xSize = &allocationSize,
+        .xRoundup = &roundedSize,
+        .xInit = &initialize,
+        .xShutdown = &shutdown,
+        .pAppData = &memory,
     };
     if (sqlite3_config(SQLITE_CONFIG_MALLOC, &methods) != SQLITE_OK) {
       throw std::logic_error{"Cannot install the SQLite allocator"};

@@ -24,7 +24,7 @@ export {
     private:
       static constexpr auto sample_interval = std::chrono::seconds{1};
       ds::String<Memory> path_;
-      Clock::time_point next_sample_{};
+      Clock::time_point next_sample_;
       std::atomic<std::uint64_t> bytes_{0};
     };
 

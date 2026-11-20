@@ -33,7 +33,7 @@ namespace telar::runtime {
   }
 
   FlowState::~FlowState() {
-    if (!control_) {
+    if (control_ == nullptr) {
       return;
     }
 
@@ -43,7 +43,7 @@ namespace telar::runtime {
                                                                                   : reason_;
     control_->observeFlow(traffic::Kind::flow_close, closed);
     for (const auto* gate : {&outbound_, &inbound_}) {
-      if (gate->ticket_) {
+      if (gate->ticket_ != 0u) {
         control_->cancel(gate->ticket_);
       }
     }
@@ -55,7 +55,7 @@ namespace telar::runtime {
     endpoint(child, identity_.client);
     endpoint(origin, identity_.server);
     identity_.host.assign(host.substr(0, ProxyHostname::maximum_bytes));
-    if (control_) {
+    if (control_ != nullptr) {
       control_->observeFlow(traffic::Kind::flow_open, event(traffic::Direction::outbound));
     }
   }
@@ -74,7 +74,7 @@ namespace telar::runtime {
 
   void FlowState::error(tbc::val_static<std::string_view> value) noexcept {
     reason_ = value;
-    if (control_) {
+    if (control_ != nullptr) {
       auto failed = event(traffic::Direction::outbound);
 
       failed.reason = value;
@@ -90,7 +90,7 @@ namespace telar::runtime {
     ds::Option<traffic::FlowControl::Time> soonest;
 
     for (const auto* gate : {&outbound_, &inbound_}) {
-      if (const auto due = gate->ticket_ ? control_->deadline(gate->ticket_) : ds::none) {
+      if (const auto due = (gate->ticket_ != 0u) ? control_->deadline(gate->ticket_) : ds::none) {
         soonest = earliest(soonest, due);
       }
     }
@@ -106,7 +106,7 @@ namespace telar::runtime {
 
     gate.rejected_ = true;
     gate.failure_ = reason;
-    if (control_) {
+    if (control_ != nullptr) {
       auto failed = event(reading ? opposite(direction) : direction);
 
       failed.offset = gate.offset_;
@@ -133,7 +133,7 @@ namespace telar::runtime {
     eraseSensitive(gate.replacement_.bytes().data(), gate.replacement_size_);
     gate.offered_ = gate.replacing_ = false;
     gate.sent_ = gate.replacement_size_ = 0;
-    return {StreamResult::State::data, count};
+    return {.state = StreamResult::State::data, .bytes = count};
   }
 
   void FlowState::endpoint(int socket, FixedText<traffic::FlowIdentity::endpoint_bytes>& result) noexcept {
@@ -309,8 +309,8 @@ namespace telar::runtime {
   [[nodiscard]] auto ApplicationRelay::Relays::captureStart(CaptureProtocol protocol) const noexcept -> CaptureStart {
     return {
         .key = {
-            observation_.identity,
-            0,
+            .connection = observation_.identity,
+            .stream = 0,
         },
         .protocol = protocol,
         .host = hostname_.view(),
@@ -470,10 +470,7 @@ namespace telar::runtime {
   }
 
   ConnectionTransport::ConnectionTransport(tbc::mut_a<ConcurrentMemory> memory) noexcept
-      : memory_(memory),
-        flow_(),
-        plain_(),
-        tls_() {}
+      : memory_(memory) {}
 
   bool ConnectionTransport::opened() const noexcept {
     return plain_ || tls_;
@@ -545,7 +542,7 @@ namespace telar::runtime {
         flows_(flows) {}
 
   ConnectionObservation ProxyObservations::connection() noexcept {
-    return {counters, capture_enabled_ ? &captures : nullptr, next_connection_++, flows_};
+    return {.counters = counters, .captures = capture_enabled_ ? &captures : nullptr, .identity = next_connection_++, .flows = flows_};
   }
 
   ProxyClientConfiguration::ProxyClientConfiguration(std::shared_ptr<const Identity> identity) noexcept
@@ -581,7 +578,7 @@ namespace telar::runtime {
     }
 
     set(target, "NODE_EXTRA_CA_CERTS", identity_->certificate.view());
-    for (const auto name : {"SSL_CERT_FILE", "CURL_CA_BUNDLE", "REQUESTS_CA_BUNDLE", "AWS_CA_BUNDLE", "GIT_SSL_CAINFO", "CLOUDSDK_CORE_CUSTOM_CA_CERTS_FILE"}) {
+    for (const auto* const name : {"SSL_CERT_FILE", "CURL_CA_BUNDLE", "REQUESTS_CA_BUNDLE", "AWS_CA_BUNDLE", "GIT_SSL_CAINFO", "CLOUDSDK_CORE_CUSTOM_CA_CERTS_FILE"}) {
       set(target, name, identity_->bundle.view());
     }
 

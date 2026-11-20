@@ -22,17 +22,17 @@ import telar.vocabulary;
 import telar.runtime.redirect.direction;
 import telar.base.ds;
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
 
 import telar.base.memory.allocators;
 import telar.base.memory.sensitive;
 
 #endif
 
-#if (!(defined(__APPLE__)))
+#ifndef __APPLE__
 #endif
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
 
 import telar.runtime.redirect.record;
 import telar.runtime.vocabulary.traffic;
@@ -48,7 +48,7 @@ export {
     public:
       LocalAddresses();
 
-      bool contains(const Target& target) const noexcept;
+      [[nodiscard]] bool contains(const Target& target) const noexcept;
 
       static ds::Array<bool, Target::maximum_targets> selection(std::span<const Target> targets, Direction direction);
 
@@ -60,7 +60,7 @@ export {
 }
 
 // pfctl and the sessions that drive it exist on macOS only.
-#if defined(__APPLE__)
+#ifdef __APPLE__
 
 // Interface: redirect/pf_command.cppm
 export {
@@ -71,7 +71,7 @@ export {
     public:
       explicit PfCommandError(std::string_view output) noexcept;
 
-      const char* what() const noexcept override;
+      [[nodiscard]] const char* what() const noexcept override;
 
     private:
       ErrorText<1023> message_;
@@ -149,7 +149,7 @@ export {
         // expire rather than killing unrelated connections with a broader match.
         std::exception_ptr failure;
 
-        for (const auto kind : {"rules", "nat"}) {
+        for (const auto* const kind : {"rules", "nat"}) {
           try {
             run({"-a", identity_.anchor, "-F", kind});
           } catch (...) {
@@ -247,7 +247,7 @@ export {
   }
 }
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
 // Interface: redirect/socket_accounts.cppm
 export {
   namespace telar::runtime::redirect {
@@ -278,7 +278,7 @@ export {
 
 #endif
 
-#if defined(__linux__)
+#ifdef __linux__
 // Interface: redirect/linux/tcp_table.cppm
 export {
   namespace telar::runtime::redirect {
@@ -388,9 +388,9 @@ export {
 
       explicit SocketOwners(uid_t uid, std::span<const ProcessIdentity> selected);
 
-      bool enabled() const noexcept;
+      [[nodiscard]] bool enabled() const noexcept;
 
-      std::span<const ProcessIdentity> processes() const noexcept;
+      [[nodiscard]] std::span<const ProcessIdentity> processes() const noexcept;
 
       Result find(const FlowKey& flow) noexcept;
 
@@ -398,14 +398,14 @@ export {
       ProcessInspector inspector_;
       ds::Array<ProcessIdentity, maximum_processes> processes_;
       std::size_t count_ = 0;
-#if defined(__APPLE__)
+#ifdef __APPLE__
       ds::Array<proc_fdinfo, maximum_descriptors> descriptors_;
 #endif
     };
 
   }
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
   namespace telar::runtime::redirect {
 
     bool matchesMacosSocket(const in_sockinfo& socket, const FlowKey& flow) noexcept;
@@ -414,7 +414,7 @@ export {
 #endif
 }
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
 // Interface: redirect/helper.cppm
 export {
   namespace telar::runtime::redirect {
@@ -423,11 +423,11 @@ export {
     public:
       explicit Listener(const Target& target, bool incoming = false);
 
-      int descriptor() const noexcept;
+      [[nodiscard]] int descriptor() const noexcept;
 
-      Mapping mapping() const noexcept;
+      [[nodiscard]] Mapping mapping() const noexcept;
 
-      FileDescriptor accept() const;
+      [[nodiscard]] FileDescriptor accept() const;
 
     private:
       Target target_;
@@ -442,7 +442,7 @@ export {
 
       ~ShutdownSignals();
 
-      bool stopping() const noexcept;
+      [[nodiscard]] bool stopping() const noexcept;
 
     private:
       sigset_t selected_{};
@@ -468,7 +468,7 @@ export {
     public:
       explicit Helper(Memory& memory, std::string_view endpoint, std::span<const Target> targets, std::span<const ProcessIdentity> processes = {}, Direction direction = Direction::outbound);
 
-      ds::String<Memory> plan(uid_t uid, const PfIdentity<Memory>& identity, bool dry_run = false) const;
+      [[nodiscard]] ds::String<Memory> plan(uid_t uid, const PfIdentity<Memory>& identity, bool dry_run = false) const;
 
       void run(const PfIdentity<Memory>& identity);
 

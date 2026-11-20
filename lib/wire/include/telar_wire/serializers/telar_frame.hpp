@@ -106,13 +106,13 @@ namespace telar {
 
   struct TextMetadata {
     MetadataStatus status{};
-    std::span<const Byte> row_flags{};
-    std::span<const MetadataLink> links{};
-    std::span<const MetadataRun> runs{};
-    std::span<const Byte> uris{};
+    std::span<const Byte> row_flags;
+    std::span<const MetadataLink> links;
+    std::span<const MetadataRun> runs;
+    std::span<const Byte> uris;
 
     void validate(std::uint16_t cols, std::uint16_t rows) const;
-    std::span<const Byte> link(std::size_t index) const;
+    [[nodiscard]] std::span<const Byte> link(std::size_t index) const;
   };
 
   template <>
@@ -165,9 +165,9 @@ namespace telar {
 
   struct FrameSpan {
     std::uint32_t start = 0, count = 0;
-    std::span<const Byte> cells{};
+    std::span<const Byte> cells;
 
-    CellReader reader() const;
+    [[nodiscard]] CellReader reader() const;
   };
 
   template <>
@@ -182,8 +182,8 @@ namespace telar {
     InputModes input_modes{};
     PointerShape pointer_shape{};
     Scroll scroll{};
-    ds::Option<TextMetadata> text_metadata{};
-    std::span<const FrameSpan> spans{};
+    ds::Option<TextMetadata> text_metadata;
+    std::span<const FrameSpan> spans;
 
     void validate() const;
   };

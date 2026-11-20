@@ -105,7 +105,7 @@ export {
 
       void text(std::string_view value);
 
-      std::size_t finish() const noexcept;
+      [[nodiscard]] std::size_t finish() const noexcept;
 
     private:
       void add(std::size_t count);
@@ -149,7 +149,7 @@ export {
 
       void append(std::span<const Byte> value);
 
-      tbc::val_a<std::span<const Byte>> finish() const noexcept;
+      [[nodiscard]] tbc::val_a<std::span<const Byte>> finish() const noexcept;
 
     private:
       tbc::val_a<std::span<Byte>> output_;

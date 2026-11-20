@@ -19,7 +19,7 @@ namespace telar::runtime {
 
   TrackedRow TrackedRow::active(GhosttyTerminal terminal, std::uint32_t row) noexcept {
     TrackedRow tracked;
-    const GhosttyPoint point{.tag = GHOSTTY_POINT_TAG_ACTIVE, .value = {.coordinate = {0, row}}};
+    const GhosttyPoint point{.tag = GHOSTTY_POINT_TAG_ACTIVE, .value = {.coordinate = {.x = 0, .y = row}}};
     if (ghostty_terminal_grid_ref_track(terminal, point, &tracked.ref_) != GHOSTTY_SUCCESS) {
       tracked.ref_ = nullptr;
     }

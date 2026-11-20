@@ -13,7 +13,7 @@ namespace telar::runtime::traffic {
   void KernelDrops::observe(Sample& previous, std::uint32_t buffer, std::uint32_t interface) noexcept {
     // libpcap counters are cumulative within one capture handle and can wrap.
     // A reopened handle gets a fresh Sample; the session total stays intact.
-    const auto delta = std::uint64_t{static_cast<std::uint32_t>(buffer - previous.buffer)} + static_cast<std::uint32_t>(interface - previous.interface);
+    const auto delta = std::uint64_t{(buffer - previous.buffer)} + (interface - previous.interface);
     constexpr auto maximum = std::numeric_limits<std::uint64_t>::max();
 
     total_ = delta > maximum - total_ ? maximum : total_ + delta;
@@ -70,7 +70,7 @@ namespace telar::runtime::traffic {
         throw SystemError{"Poll packet capture"};
       }
 
-      if (descriptors[0].revents & (POLLHUP | POLLERR | POLLNVAL)) {
+      if ((descriptors[0].revents & (POLLHUP | POLLERR | POLLNVAL)) != 0) {
         return;
       }
 
@@ -129,7 +129,7 @@ namespace telar::runtime::traffic {
   bool Capture::Signals::stopped() const noexcept {
     sigset_t pending;
 
-    return ::sigpending(&pending) == 0 && (sigismember(&pending, SIGTERM) || sigismember(&pending, SIGINT));
+    return ::sigpending(&pending) == 0 && ((sigismember(&pending, SIGTERM) != 0) || (sigismember(&pending, SIGINT) != 0));
   }
 
   void Capture::greet(Role role) {
@@ -249,7 +249,7 @@ namespace telar::runtime::traffic {
       }
 
       pcap_t* handle = pcap_create(interface->name, error.dataMut());
-      if (!handle) {
+      if (handle == nullptr) {
         channel_.notice(Kind::interface_error, name, error.data(), index);
         continue;
       }
@@ -313,7 +313,7 @@ namespace telar::runtime::traffic {
 
     emit(Event{
         .kind = Kind::packet,
-        .timestamp_us = static_cast<std::uint64_t>(header.ts.tv_sec) * micros_per_second + static_cast<std::uint64_t>(header.ts.tv_usec),
+        .timestamp_us = (static_cast<std::uint64_t>(header.ts.tv_sec) * micros_per_second) + static_cast<std::uint64_t>(header.ts.tv_usec),
         .interface_index = index,
         .link_type = link_type,
         .original_bytes = header.len,

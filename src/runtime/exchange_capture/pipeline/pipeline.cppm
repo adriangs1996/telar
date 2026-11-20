@@ -68,7 +68,7 @@ export {
         std::int64_t expires_at_ms;
       };
 
-      ds::Option<std::size_t> find(CaptureKey key) const noexcept;
+      [[nodiscard]] ds::Option<std::size_t> find(CaptureKey key) const noexcept;
 
       tbc::mut_a<ConcurrentMemory> memory_;
       std::int64_t timeout_ms_;
@@ -116,7 +116,7 @@ export {
     };
 
     struct IgnoreCaptureTap {
-      constexpr bool listening() const noexcept {
+      [[nodiscard]] constexpr bool listening() const noexcept {
         return false;
       }
 

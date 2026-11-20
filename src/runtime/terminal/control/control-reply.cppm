@@ -118,7 +118,7 @@ export namespace telar::runtime::control {
       owned_.reset();
     }
 
-    std::size_t size() const noexcept {
+    [[nodiscard]] std::size_t size() const noexcept {
       return size_;
     }
 

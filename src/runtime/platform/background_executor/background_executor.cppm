@@ -23,8 +23,8 @@ export {
     struct RequestContext {
       TabLocation location{};
       ds::Array<Byte, 16> history_session{};
-      std::string_view workspace_path{};
-      std::string_view prompt{};
+      std::string_view workspace_path;
+      std::string_view prompt;
       std::int64_t received_at_ms = 0;
       ds::Array<EditorCandidate, 64> editor_candidates{};
       std::size_t editor_candidate_count = 0;

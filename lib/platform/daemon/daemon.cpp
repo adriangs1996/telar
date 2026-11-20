@@ -48,7 +48,7 @@ namespace telar::runtime::cli {
     ds::Array<char, PATH_MAX> config_path;
     ds::Vec<char*, Memory> arguments{memory};
 
-    arguments.reserve(2 * options.engine_argument_count + 28);
+    arguments.reserve((2 * options.engine_argument_count) + 28);
     const auto append = [&](std::string_view value) {
       arguments.push(const_cast<char*>(value.data()));
     };

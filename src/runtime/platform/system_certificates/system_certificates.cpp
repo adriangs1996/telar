@@ -3,11 +3,11 @@ module telar.runtime.platform.system_certificates;
 import telar.sys.posix;
 import telar.tls;
 import telar.platform.error;
-#if defined(__APPLE__)
+#ifdef __APPLE__
 import telar.runtime.platform.frameworks;
 #endif
 
-#if defined(__linux__)
+#ifdef __linux__
 namespace telar::runtime {
 
   void SystemCertificates::FreeEncoded::operator()(unsigned char* bytes) const noexcept {
@@ -65,7 +65,7 @@ namespace telar::runtime {
 
 #endif
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
 namespace telar::runtime {
   namespace {
     using Resource = std::unique_ptr<const void, decltype(&CFRelease)>;
@@ -109,21 +109,21 @@ namespace telar::runtime {
       throw SystemError{"Read system certificate keychain", EIO};
     }
 
-    const auto certificates = static_cast<CFArrayRef>(result.get());
+    const auto* const certificates = static_cast<CFArrayRef>(result.get());
 
     for (CFIndex index = 0; index < CFArrayGetCount(certificates); ++index) {
-      const auto item = CFArrayGetValueAtIndex(certificates, index);
+      const auto* const item = CFArrayGetValueAtIndex(certificates, index);
       if (item == nullptr || CFGetTypeID(item) != SecCertificateGetTypeID()) {
         throw SystemError{"Invalid system certificate entry", EINVAL};
       }
 
-      const auto certificate = static_cast<SecCertificateRef>(const_cast<void*>(item));
+      auto* const certificate = static_cast<SecCertificateRef>(const_cast<void*>(item));
       const Resource encoded{SecCertificateCopyData(certificate), &CFRelease};
       if (!encoded) {
         throw std::bad_alloc{};
       }
 
-      const auto data = static_cast<CFDataRef>(encoded.get());
+      const auto* const data = static_cast<CFDataRef>(encoded.get());
 
       consume(target, std::span<const std::uint8_t>{CFDataGetBytePtr(data), static_cast<std::size_t>(CFDataGetLength(data))});
     }

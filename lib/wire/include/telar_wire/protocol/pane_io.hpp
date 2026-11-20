@@ -10,7 +10,7 @@ namespace telar {
     std::uint64_t request_id{};
     PaneTarget target{};
     TerminalSize size{};
-    ds::Option<Launch> launch{};
+    ds::Option<Launch> launch;
   };
 
   template <>
@@ -19,7 +19,7 @@ namespace telar {
 
   struct PaneInput {
     std::uint64_t pane_id{};
-    std::span<const Byte> bytes{};
+    std::span<const Byte> bytes;
   };
 
   template <>
@@ -31,7 +31,7 @@ namespace telar {
   // text instead of reading the command back from the screen.
   struct PaneCommand {
     std::uint64_t pane_id{};
-    std::span<const Byte> text{};
+    std::span<const Byte> text;
   };
 
   template <>
@@ -118,8 +118,8 @@ namespace telar {
     std::uint64_t pane_id{};
     std::uint64_t pane_generation{};
     PaneTextMode mode{};
-    std::string_view text{};
-    ds::Option<std::uint64_t> sender{};
+    std::string_view text;
+    ds::Option<std::uint64_t> sender;
 
     void validate() const;
   };
@@ -140,14 +140,14 @@ namespace telar {
     static constexpr ds::Array<std::string_view, syntax_roles> syntax_names{"plain", "keyword", "string", "number", "comment", "constant", "builtin_constant", "builtin", "func", "type", "parameter", "property", "namespace", "operator", "punctuation"};
     static constexpr ds::Array<std::string_view, chrome_roles> chrome_names{"accent", "panel_bg", "surface0", "surface1", "surface_dim", "overlay0", "overlay1", "text", "subtext0", "mauve", "green", "yellow", "red", "blue", "teal", "peach"};
 
-    ds::Option<ds::Array<Byte, 3>> foreground{};
-    ds::Option<ds::Array<Byte, 3>> background{};
-    ds::Option<ds::Array<Byte, 48>> palette{};
-    ds::Option<ds::Array<Byte, 3>> cursor{};
-    ds::Option<ds::Array<Byte, syntax_roles * 3>> syntax{};
+    ds::Option<ds::Array<Byte, 3>> foreground;
+    ds::Option<ds::Array<Byte, 3>> background;
+    ds::Option<ds::Array<Byte, 48>> palette;
+    ds::Option<ds::Array<Byte, 3>> cursor;
+    ds::Option<ds::Array<Byte, syntax_roles * 3>> syntax;
     std::uint16_t syntax_italic{};
     std::uint16_t syntax_bold{};
-    ds::Option<ds::Array<Byte, chrome_roles * 3>> chrome{};
+    ds::Option<ds::Array<Byte, chrome_roles * 3>> chrome;
 
     bool operator==(const TerminalTheme&) const = default;
 
@@ -190,7 +190,7 @@ namespace telar {
   struct PaneTheme {
     std::uint64_t request_id{};
     std::uint64_t pane_id{};
-    ds::Option<TerminalTheme> theme{};
+    ds::Option<TerminalTheme> theme;
   };
 
   template <>
@@ -204,10 +204,10 @@ namespace telar {
     bool focused{};
     bool light{};
     bool clipboard{};
-    ds::Option<ds::Array<Byte, 3>> foreground{};
-    ds::Option<ds::Array<Byte, 3>> background{};
-    ds::Option<ds::Array<Byte, 3>> cursor{};
-    ds::Option<ds::Array<Byte, 48>> palette{};
+    ds::Option<ds::Array<Byte, 3>> foreground;
+    ds::Option<ds::Array<Byte, 3>> background;
+    ds::Option<ds::Array<Byte, 3>> cursor;
+    ds::Option<ds::Array<Byte, 48>> palette;
 
     void validate() const;
 
@@ -263,7 +263,7 @@ namespace telar {
 
   struct PaneList {
     std::uint64_t revision{};
-    std::span<const PaneListEntry> entries{};
+    std::span<const PaneListEntry> entries;
   };
 
   template <>
@@ -273,7 +273,7 @@ namespace telar {
 
   struct PaneCwd {
     std::uint64_t pane_id{};
-    std::string_view cwd{};
+    std::string_view cwd;
   };
 
   template <>
@@ -285,7 +285,7 @@ namespace telar {
 
   struct PaneTitle {
     std::uint64_t pane_id{};
-    std::string_view title{};
+    std::string_view title;
   };
 
   template <>
@@ -294,7 +294,7 @@ namespace telar {
   struct PaneProgress {
     std::uint64_t pane_id{};
     PaneProgressState state{};
-    ds::Option<Byte> percent{};
+    ds::Option<Byte> percent;
 
     void validate() const;
   };
@@ -326,13 +326,13 @@ namespace telar {
     bool remote = false;
     // The host the shell runs on, as its working directory report names it; empty when
     // the shell runs on this one.
-    std::string_view host{};
+    std::string_view host;
     // The round trip to that host, from input reaching its line editor to the echo, in
     // milliseconds; 0 until timed.
     std::uint32_t link_ms = 0;
     // Where the shell works on that host, as it reports it; empty until it does, and when the
     // shell runs on this one.
-    std::string_view directory{};
+    std::string_view directory;
 
     bool operator==(const PaneShell&) const = default;
 
@@ -349,7 +349,7 @@ namespace telar {
     std::uint64_t pane_id{};
     bool repository = false;
     bool detached = false;
-    std::string_view branch{};
+    std::string_view branch;
     bool divergence_known = false;
     std::uint32_t ahead = 0;
     std::uint32_t behind = 0;

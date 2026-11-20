@@ -4,10 +4,10 @@ module;
 export module telar.runtime.platform.event_loop;
 
 import std;
-#if defined(__APPLE__)
+#ifdef __APPLE__
 import telar.sys.apple;
 #endif
-#if defined(__linux__)
+#ifdef __linux__
 import telar.sys.linux_api;
 #endif
 import telar.tbc;
@@ -34,7 +34,7 @@ export {
       bool closed;
     };
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
     // Registering and removing descriptors invalidates nothing the queue hands out: events land in the
     // caller's buffer, so many objects may keep the queue.
     class TBC_SHARED Kqueue {
@@ -79,7 +79,7 @@ export {
       { poller.wait(timeout, events) } -> std::same_as<std::span<const Event>>;
     };
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
     template <Allocator Memory>
     using NativeEventLoop = Kqueue;
 
@@ -88,7 +88,7 @@ export {
 
   }
 
-#if defined(__linux__)
+#ifdef __linux__
   namespace telar::runtime {
     namespace linux_signals {
 

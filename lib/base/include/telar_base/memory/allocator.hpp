@@ -80,24 +80,24 @@ namespace telar {
       TELAR_DIAGNOSTIC(--statistics_.live_allocations);
     }
 
-    std::size_t liveBytes() const noexcept {
+    [[nodiscard]] std::size_t liveBytes() const noexcept {
       return live_bytes_;
     }
 
-    std::size_t peakBytes() const noexcept {
+    [[nodiscard]] std::size_t peakBytes() const noexcept {
       return peak_bytes_;
     }
 
-    std::size_t allocations() const noexcept {
+    [[nodiscard]] std::size_t allocations() const noexcept {
       return allocations_;
     }
 
-    std::size_t failures() const noexcept {
+    [[nodiscard]] std::size_t failures() const noexcept {
       return failures_;
     }
 
 #if TELAR_DIAGNOSTICS
-    AllocationStatistics statistics() const noexcept {
+    [[nodiscard]] AllocationStatistics statistics() const noexcept {
       auto result = statistics_;
 
       result.live_bytes = live_bytes_;
@@ -182,7 +182,7 @@ namespace telar {
 
 #if TELAR_DIAGNOSTICS
     // What the allocator underneath counts, for the runtime's memory samples; nothing if it does not count.
-    virtual ds::Option<AllocationStatistics> statistics() const noexcept {
+    [[nodiscard]] virtual ds::Option<AllocationStatistics> statistics() const noexcept {
       return ds::none;
     }
 #endif
@@ -242,7 +242,7 @@ namespace telar {
     }
 
 #if TELAR_DIAGNOSTICS
-    ds::Option<AllocationStatistics> statistics() const noexcept override {
+    [[nodiscard]] ds::Option<AllocationStatistics> statistics() const noexcept override {
       if constexpr (requires(const Upstream& upstream) { upstream.statistics(); }) {
         return upstream_.statistics();
       } else {
@@ -290,7 +290,7 @@ namespace telar {
       memory_->deallocate(pointer, count * sizeof(Value), alignof(Value));
     }
 
-    tbc::mut_a<Memory> memory() const noexcept {
+    [[nodiscard]] tbc::mut_a<Memory> memory() const noexcept {
       return *memory_;
     }
 

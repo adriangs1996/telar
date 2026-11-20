@@ -76,7 +76,7 @@ namespace telar::runtime {
       return ds::none;
     }
 
-    return AtomicFrameControl{{*image, *placement}, *medium, *width, *height, static_cast<std::uint8_t>(*depth), static_cast<std::size_t>(pixels * bytes_per_pixel)};
+    return AtomicFrameControl{.key = {.image_id = *image, .placement_id = *placement}, .medium = *medium, .width = *width, .height = *height, .depth = static_cast<std::uint8_t>(*depth), .byte_count = static_cast<std::size_t>(pixels * bytes_per_pixel)};
   }
 
   ds::Option<AtomicFrame> AtomicFrame::at(std::string_view bytes, std::size_t start) noexcept {
@@ -112,7 +112,7 @@ namespace telar::runtime {
       return ds::none;
     }
 
-    return AtomicFrame{start, end + (wrapped ? cursor_restore.size() : 0), control_start - introducer.size(), terminator + command_terminator.size(), command.substr(separator + 1), *control, wrapped};
+    return AtomicFrame{.start = start, .end = end + (wrapped ? cursor_restore.size() : 0), .command_start = control_start - introducer.size(), .command_end = terminator + command_terminator.size(), .encoded_name = command.substr(separator + 1), .control = *control, .cursor_wrapped = wrapped};
   }
 
   ds::Option<AtomicFrame> AtomicFrame::find(std::string_view bytes, std::size_t from) noexcept {
@@ -202,7 +202,7 @@ namespace telar::runtime {
 
       sink.ingest(bytes.subspan(emitted, start - emitted));
       emitted = start;
-      if (forward(Transmission{control, path, *range, storage_limit}, sink)) {
+      if (forward(Transmission{.control = control, .path = path, .range = *range, .limit = storage_limit}, sink)) {
         emitted = search_from;
       }
     }
@@ -221,7 +221,7 @@ namespace telar::runtime {
           })) {
         const auto control = body.substr(0, separator);
         if (const auto range = KittyFileRange::parse(control)) {
-          if (forward(Transmission{control, body.substr(separator + 1), *range, storage_limit}, sink)) {
+          if (forward(Transmission{.control = control, .path = body.substr(separator + 1), .range = *range, .limit = storage_limit}, sink)) {
             return;
           }
         }
@@ -248,7 +248,7 @@ namespace telar::runtime {
       const auto command = text.substr(start + introducer.size(), end - start - introducer.size());
       const auto separator = command.find(';');
       if (separator != std::string_view::npos && separator + 1 != command.size()) {
-        return Command{start, command.substr(0, separator), command.substr(separator + 1)};
+        return Command{.start = start, .control = command.substr(0, separator), .path = command.substr(separator + 1)};
       }
     }
   }
@@ -394,7 +394,7 @@ namespace telar::runtime {
     if (previous != nullptr) {
       previous->length += bytes.size();
     } else {
-      events_.atMut(event_count_++) = Output{byte_count_, bytes.size()};
+      events_.atMut(event_count_++) = Output{.offset = byte_count_, .length = bytes.size()};
     }
 
     byte_count_ += bytes.size();

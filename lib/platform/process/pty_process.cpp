@@ -5,10 +5,10 @@ import telar.sys.posix;
 import telar.sys.process;
 import telar.platform.error;
 import telar.base.ds;
-#if defined(__APPLE__)
+#ifdef __APPLE__
 import telar.sys.apple;
 #endif
-#if defined(__linux__)
+#ifdef __linux__
 import telar.sys.linux_api;
 #endif
 
@@ -58,7 +58,7 @@ namespace telar::runtime {
   }
 
   void closeChildDescriptors(int retained, int descriptor_limit) noexcept {
-#if defined(__APPLE__)
+#ifdef __APPLE__
     // Only the forked child enumerates descriptors, so no other thread can open
     // one during the scan. proc_pidinfo copies kernel data into this stack buffer.
     ds::Array<proc_fdinfo, 1024> descriptors;

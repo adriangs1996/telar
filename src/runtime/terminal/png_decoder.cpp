@@ -41,11 +41,11 @@ namespace telar::runtime {
         return length_ == 0 || data_ != nullptr;
       }
 
-      Byte* data() const noexcept {
+      [[nodiscard]] Byte* data() const noexcept {
         return data_;
       }
 
-      std::size_t size() const noexcept {
+      [[nodiscard]] std::size_t size() const noexcept {
         return length_;
       }
 

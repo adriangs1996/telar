@@ -62,7 +62,7 @@ export {
       Text err;
       std::size_t dropped = 0;
 
-      std::string_view errorLine() const;
+      [[nodiscard]] std::string_view errorLine() const;
     };
 
     // Runs a program with `input` on its standard input, keeping the tail of each output stream.
@@ -237,7 +237,7 @@ export {
       std::size_t command_count = 0;
 
       // The command the window runs in its first pane, when given.
-      std::span<const std::string_view> command() const noexcept;
+      [[nodiscard]] std::span<const std::string_view> command() const noexcept;
 
       // One of the theme names, whatever case and alias `name` uses.
       static std::string_view canonicalTheme(std::string_view name);

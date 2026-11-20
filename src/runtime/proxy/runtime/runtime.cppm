@@ -345,7 +345,7 @@ export {
         return active;
       }
 
-      inline SocketInterest childInterest() const noexcept {
+      [[nodiscard]] inline SocketInterest childInterest() const noexcept {
         if (!rejection_.empty()) {
           SocketInterest interest;
 
@@ -367,7 +367,7 @@ export {
         return interest;
       }
 
-      inline SocketInterest originInterest() const noexcept {
+      [[nodiscard]] inline SocketInterest originInterest() const noexcept {
         SocketInterest interest;
 
         if (rejection_.empty()) {
@@ -380,31 +380,31 @@ export {
         return interest;
       }
 
-      inline bool readsChild() const noexcept {
+      [[nodiscard]] inline bool readsChild() const noexcept {
         return rejection_.empty() && request_.sourceInterest() != StreamReadiness::none;
       }
 
-      inline bool readsOrigin() const noexcept {
+      [[nodiscard]] inline bool readsOrigin() const noexcept {
         return rejection_.empty() && response_started_ && response_.sourceInterest() != StreamReadiness::none;
       }
 
-      inline bool finished() const noexcept {
+      [[nodiscard]] inline bool finished() const noexcept {
         return finished_;
       }
 
-      inline bool upgraded() const noexcept {
+      [[nodiscard]] inline bool upgraded() const noexcept {
         return upgraded_;
       }
 
-      inline bool idle() const noexcept {
+      [[nodiscard]] inline bool idle() const noexcept {
         return !finished_ && !upgraded_ && !request_.started();
       }
 
-      inline std::uint32_t inflight() const noexcept {
+      [[nodiscard]] inline std::uint32_t inflight() const noexcept {
         return !finished_ && !upgraded_ && request_.started() ? 1 : 0;
       }
 
-      inline auto deadline() const noexcept -> ds::Option<std::chrono::steady_clock::time_point> {
+      [[nodiscard]] inline auto deadline() const noexcept -> ds::Option<std::chrono::steady_clock::time_point> {
         return earliest(request_.deadline(), response_.deadline());
       }
 
@@ -546,7 +546,7 @@ export {
         interest_ = {};
       }
 
-      bool matches(const Event& event) const noexcept;
+      [[nodiscard]] bool matches(const Event& event) const noexcept;
 
     private:
       int descriptor_ = -1;
@@ -589,23 +589,23 @@ export {
         return outgoing || incoming;
       }
 
-      inline bool finished() const noexcept {
+      [[nodiscard]] inline bool finished() const noexcept {
         return outbound_.finished() && inbound_.finished();
       }
 
-      inline bool halfClosed() const noexcept {
+      [[nodiscard]] inline bool halfClosed() const noexcept {
         return outbound_.finished() || inbound_.finished();
       }
 
-      inline bool readsChild() const noexcept {
+      [[nodiscard]] inline bool readsChild() const noexcept {
         return outbound_.wantsRead();
       }
 
-      inline bool readsOrigin() const noexcept {
+      [[nodiscard]] inline bool readsOrigin() const noexcept {
         return inbound_.wantsRead();
       }
 
-      inline SocketInterest childInterest() const noexcept {
+      [[nodiscard]] inline SocketInterest childInterest() const noexcept {
         SocketInterest interest;
 
         interest.include(outbound_.sourceInterest());
@@ -613,7 +613,7 @@ export {
         return interest;
       }
 
-      inline SocketInterest originInterest() const noexcept {
+      [[nodiscard]] inline SocketInterest originInterest() const noexcept {
         SocketInterest interest;
 
         interest.include(inbound_.sourceInterest());
@@ -660,9 +660,9 @@ export {
     // identity every event carries and the control it reports to.
     class FlowGate {
     public:
-      bool rejected() const noexcept;
+      [[nodiscard]] bool rejected() const noexcept;
 
-      tbc::val_static<std::string_view> failureReason() const noexcept;
+      [[nodiscard]] tbc::val_static<std::string_view> failureReason() const noexcept;
 
     private:
       friend class FlowState;
@@ -733,13 +733,13 @@ export {
       void reason(tbc::val_static<std::string_view> value) noexcept;
 
       // The flow's identity, which views the flow.
-      traffic::FlowEvent context() const noexcept;
+      [[nodiscard]] traffic::FlowEvent context() const noexcept;
 
       void error(tbc::val_static<std::string_view> value) noexcept;
 
-      bool rejected() const noexcept;
+      [[nodiscard]] bool rejected() const noexcept;
 
-      ds::Option<traffic::FlowControl::Time> deadline() const noexcept;
+      [[nodiscard]] ds::Option<traffic::FlowControl::Time> deadline() const noexcept;
 
       // A direction fails once; the reason is reported as the opposite direction's when it was reading.
       void fail(traffic::Direction direction, tbc::val_static<std::string_view> reason, bool reading = false) noexcept;
@@ -749,7 +749,7 @@ export {
       TBC_GENERIC StreamResult write(traffic::Direction direction, Stream& stream, std::span<const Byte> bytes) noexcept {
         auto& gate = this->gate(direction);
         if (gate.rejected_) {
-          return {StreamResult::State::failed};
+          return {.state = StreamResult::State::failed};
         }
 
         if (!control_) {
@@ -769,13 +769,13 @@ export {
         if (gate.ticket_) {
           const auto decision = control_->poll(gate.ticket_, gate.replacement_.bytes());
           if (decision.verdict == traffic::Verdict::pending) {
-            return {StreamResult::State::blocked, 0, StreamReadiness::completion};
+            return {.state = StreamResult::State::blocked, .bytes = 0, .waiting = StreamReadiness::completion};
           }
 
           gate.ticket_ = 0;
           if (decision.verdict == traffic::Verdict::reject) {
             fail(direction, "hook_rejected");
-            return {StreamResult::State::failed};
+            return {.state = StreamResult::State::failed};
           }
 
           gate.replacing_ = decision.verdict == traffic::Verdict::replace;
@@ -805,7 +805,7 @@ export {
         gate.offset_ += result.bytes;
         if (gate.replacing_) {
           gate.sent_ += result.bytes;
-          return gate.sent_ == gate.replacement_size_ ? complete(gate) : StreamResult{StreamResult::State::blocked, 0, StreamReadiness::writable};
+          return gate.sent_ == gate.replacement_size_ ? complete(gate) : StreamResult{.state = StreamResult::State::blocked, .bytes = 0, .waiting = StreamReadiness::writable};
         }
 
         gate.offered_ = false;
@@ -817,7 +817,7 @@ export {
 
       FlowGate& gate(traffic::Direction direction) noexcept;
 
-      traffic::FlowEvent event(traffic::Direction direction) const noexcept;
+      [[nodiscard]] traffic::FlowEvent event(traffic::Direction direction) const noexcept;
 
       static StreamResult complete(FlowGate& gate) noexcept;
 
@@ -842,7 +842,7 @@ export {
 
     template <ByteStream Stream>
     inline StreamResult FlowStream<Stream>::write(std::span<const Byte> bytes) noexcept {
-      return flow_ ? flow_->write(direction_, stream_, bytes) : stream_.write(bytes);
+      return (flow_ != nullptr) ? flow_->write(direction_, stream_, bytes) : stream_.write(bytes);
     }
 
     template <ByteStream Stream>
@@ -964,27 +964,27 @@ export {
         return outgoing || incoming;
       }
 
-      inline bool finished() const noexcept {
+      [[nodiscard]] inline bool finished() const noexcept {
         return response_.relay.finished();
       }
 
-      inline bool halfClosed() const noexcept {
+      [[nodiscard]] inline bool halfClosed() const noexcept {
         return request_.relay.finished() || response_.relay.finished();
       }
 
-      inline bool readsChild() const noexcept {
+      [[nodiscard]] inline bool readsChild() const noexcept {
         return !finished() && request_.relay.wantsRead();
       }
 
-      inline bool readsOrigin() const noexcept {
+      [[nodiscard]] inline bool readsOrigin() const noexcept {
         return response_.relay.wantsRead();
       }
 
-      inline std::uint32_t inflight() const noexcept {
+      [[nodiscard]] inline std::uint32_t inflight() const noexcept {
         return streams_.size();
       }
 
-      inline SocketInterest childInterest() const noexcept {
+      [[nodiscard]] inline SocketInterest childInterest() const noexcept {
         SocketInterest interest;
 
         interest.include(request_.relay.sourceInterest());
@@ -992,7 +992,7 @@ export {
         return interest;
       }
 
-      inline SocketInterest originInterest() const noexcept {
+      [[nodiscard]] inline SocketInterest originInterest() const noexcept {
         SocketInterest interest;
 
         interest.include(response_.relay.sourceInterest());
@@ -1081,7 +1081,7 @@ export {
         capture_.finish(Http2Direction::response);
       }
 
-      inline void record(const typename Http2Observer<Memory>::Statistics& statistics) noexcept {
+      inline void record(const Http2Observer<Memory>::Statistics& statistics) noexcept {
         if (statistics.decode_failed) {
           counters_.record(ProxyCounter::h2_decode_failure);
         }
@@ -1192,7 +1192,7 @@ export {
             throw std::bad_alloc{};
           }
 
-          const ds::Array<nghttp2_settings_entry, 4> settings{{{NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, maximum_streams}, {NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE, wire_body_bytes}, {NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE, HttpMessageLimits::head_bytes}, {NGHTTP2_SETTINGS_ENABLE_PUSH, 0}}};
+          const ds::Array<nghttp2_settings_entry, 4> settings{{{.settings_id = NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, .value = maximum_streams}, {.settings_id = NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE, .value = wire_body_bytes}, {.settings_id = NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE, .value = HttpMessageLimits::head_bytes}, {.settings_id = NGHTTP2_SETTINGS_ENABLE_PUSH, .value = 0}}};
           if (nghttp2_submit_settings(session, NGHTTP2_FLAG_NONE, settings.data(), child ? settings.size() - 1 : settings.size()) != 0) {
             close();
             throw std::bad_alloc{};
@@ -1207,14 +1207,14 @@ export {
         Endpoint& operator=(const Endpoint&) = delete;
 
         inline void close() noexcept {
-          if (session) {
+          if (session != nullptr) {
             nghttp2_session_del(session);
             session = nullptr;
           }
         }
 
         // nghttp2 holds each stream by address and hands it back raw, as its callbacks re-enter the connection.
-        inline auto stream(std::int32_t id) const noexcept -> tbc::val_static<Stream*> {
+        [[nodiscard]] inline auto stream(std::int32_t id) const noexcept -> tbc::val_static<Stream*> {
           return tbc::raw(static_cast<Stream*>(nghttp2_session_get_stream_user_data(session, id)));
         }
 
@@ -1232,7 +1232,7 @@ export {
         inline static int header(nghttp2_session*, const nghttp2_frame* frame, const std::uint8_t* name, std::size_t name_size, const std::uint8_t* value, std::size_t value_size, std::uint8_t, void* context) noexcept {
           auto& endpoint = *static_cast<Endpoint*>(context);
           auto* stream = endpoint.stream(frame->hd.stream_id);
-          if (!stream || stream->rejected) {
+          if ((stream == nullptr) || stream->rejected) {
             return 0;
           }
 
@@ -1252,7 +1252,7 @@ export {
           }
 
           auto* stream = endpoint.stream(id);
-          if (!stream || stream->rejected) {
+          if ((stream == nullptr) || stream->rejected) {
             return 0;
           }
 
@@ -1311,7 +1311,7 @@ export {
 
           for (auto& slot : endpoint.owner->streams_.viewMut()) {
             auto* stream = tbc::raw(slot ? &slot.getMut() : nullptr);
-            if (!stream || (endpoint.child ? stream->child_id : stream->origin_id) != frame->hd.stream_id) {
+            if ((stream == nullptr) || (endpoint.child ? stream->child_id : stream->origin_id) != frame->hd.stream_id) {
               continue;
             }
 
@@ -1356,7 +1356,7 @@ export {
           fields_.push({reinterpret_cast<std::uint8_t*>(lower.dataMut()), reinterpret_cast<std::uint8_t*>(const_cast<char*>(value.data())), lower.size(), value.size(), NGHTTP2_NV_FLAG_NONE});
         }
 
-        inline auto bytes() const noexcept -> std::span<const nghttp2_nv> {
+        [[nodiscard]] inline auto bytes() const noexcept -> std::span<const nghttp2_nv> {
           return fields_;
         }
 
@@ -1449,37 +1449,37 @@ export {
         return active;
       }
 
-      inline bool finished() const noexcept {
+      [[nodiscard]] inline bool finished() const noexcept {
         return failed_;
       }
 
-      inline bool halfClosed() const noexcept {
+      [[nodiscard]] inline bool halfClosed() const noexcept {
         return child_.eof || origin_.eof;
       }
 
-      inline bool readsChild() const noexcept {
+      [[nodiscard]] inline bool readsChild() const noexcept {
         return !failed_ && !child_.eof;
       }
 
-      inline bool readsOrigin() const noexcept {
+      [[nodiscard]] inline bool readsOrigin() const noexcept {
         return !failed_ && !origin_.eof;
       }
 
-      inline std::uint32_t inflight() const noexcept {
+      [[nodiscard]] inline std::uint32_t inflight() const noexcept {
         return static_cast<std::uint32_t>(std::ranges::count_if(streams_, [](const auto& stream) {
           return bool(stream);
         }));
       }
 
-      inline auto childInterest() const noexcept -> SocketInterest {
+      [[nodiscard]] inline auto childInterest() const noexcept -> SocketInterest {
         return interest(child_);
       }
 
-      inline auto originInterest() const noexcept -> SocketInterest {
+      [[nodiscard]] inline auto originInterest() const noexcept -> SocketInterest {
         return interest(origin_);
       }
 
-      inline auto deadline() const noexcept -> ds::Option<Time> {
+      [[nodiscard]] inline auto deadline() const noexcept -> ds::Option<Time> {
         ds::Option<Time> result;
 
         for (const auto& stream : streams_) {
@@ -1536,7 +1536,7 @@ export {
         }
 
         auto* stream = side(child).stream(frame.hd.stream_id);
-        if (!stream && child && frame.headers.cat == NGHTTP2_HCAT_REQUEST && !draining_) {
+        if ((stream == nullptr) && child && frame.headers.cat == NGHTTP2_HCAT_REQUEST && !draining_) {
           for (auto& slot : streams_.viewMut()) {
             if (slot) {
               continue;
@@ -1552,7 +1552,7 @@ export {
           }
         }
 
-        if (!stream || stream->rejected) {
+        if ((stream == nullptr) || stream->rejected) {
           return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
         }
 
@@ -1627,7 +1627,7 @@ export {
         }
 
         auto* stream = side(child).stream(frame.hd.stream_id);
-        if (!stream || stream->rejected || (frame.hd.type != NGHTTP2_HEADERS && frame.hd.type != NGHTTP2_DATA)) {
+        if ((stream == nullptr) || stream->rejected || (frame.hd.type != NGHTTP2_HEADERS && frame.hd.type != NGHTTP2_DATA)) {
           return;
         }
 
@@ -1670,7 +1670,7 @@ export {
           }
 
           if (child && policy.enabled && !half.streaming && !stream->rejected) {
-            if (half.message.expectation() == HttpExpectation::continue_ && !(frame.hd.flags & NGHTTP2_FLAG_END_STREAM)) {
+            if (half.message.expectation() == HttpExpectation::continue_ && ((frame.hd.flags & NGHTTP2_FLAG_END_STREAM) == 0)) {
               Fields fields{secure_};
 
               fields.add(":status", "100");
@@ -1925,7 +1925,7 @@ export {
 
       inline void credit(Half& half, std::size_t count) noexcept {
         count = std::min(count, half.uncredited);
-        if (count) {
+        if (count != 0u) {
           nghttp2_session_consume_stream(source(half).session, sourceId(half), count);
           half.uncredited -= count;
         }
@@ -1960,7 +1960,7 @@ export {
         auto event = identity_.event();
 
         event.reason = reason;
-        if (control_) {
+        if (control_ != nullptr) {
           control_->httpUnavailable(event);
         }
 
@@ -2097,7 +2097,7 @@ export {
         auto event = identity_.event();
 
         event.reason = reason;
-        if (control_) {
+        if (control_ != nullptr) {
           control_->httpUnavailable(event);
         }
       }
@@ -2140,7 +2140,7 @@ export {
 
       std::span<const std::uint8_t> bytes() noexcept;
 
-      bool empty() const noexcept;
+      [[nodiscard]] bool empty() const noexcept;
 
       void consume(std::size_t count) noexcept;
 
@@ -2167,7 +2167,7 @@ export {
 
         std::memcpy(bytes.data(), prefix_.bytes().data(), count);
         prefix_.consume(count);
-        return {StreamResult::State::data, count};
+        return {.state = StreamResult::State::data, .bytes = count};
       }
 
       inline StreamResult peek(std::span<std::uint8_t> bytes) noexcept {
@@ -2178,7 +2178,7 @@ export {
         const auto count = std::min(prefix_.bytes().size(), bytes.size());
 
         std::memcpy(bytes.data(), prefix_.bytes().data(), count);
-        return {StreamResult::State::data, count};
+        return {.state = StreamResult::State::data, .bytes = count};
       }
 
       inline StreamResult write(std::span<const std::uint8_t> bytes) noexcept {
@@ -2319,7 +2319,7 @@ export {
               try {
                 Http1Capture capture{memory_, observation_.captures, captureStart(CaptureProtocol::http1)};
                 const auto event = flow ? flow->context() : traffic::FlowEvent{.id = observation_.identity, .host = hostname_.view()};
-                const HttpRelayContext context{observation_.flows ? observation_.flows->http() : nullptr, traffic::FlowIdentity::of(event)};
+                const HttpRelayContext context{.control = observation_.flows ? observation_.flows->http() : nullptr, .identity = traffic::FlowIdentity::of(event)};
 
                 http1_ = ds::makeBox<Http1>(memory_, memory_, observation_.counters, std::move(capture), context);
               } catch (...) {
@@ -2374,19 +2374,19 @@ export {
       // `flow` is the connection's flow, or null when no hook watches it.
       bool advance(TunnelReadiness readiness, FlowState* flow) noexcept;
 
-      bool finished() const noexcept;
+      [[nodiscard]] bool finished() const noexcept;
 
-      bool halfClosed() const noexcept;
+      [[nodiscard]] bool halfClosed() const noexcept;
 
-      bool idle() const noexcept;
+      [[nodiscard]] bool idle() const noexcept;
 
-      std::uint32_t inflight() const noexcept;
+      [[nodiscard]] std::uint32_t inflight() const noexcept;
 
-      bool buffered() const noexcept;
+      [[nodiscard]] bool buffered() const noexcept;
 
-      auto deadline() const noexcept;
+      [[nodiscard]] auto deadline() const noexcept;
 
-      SocketInterest interest(TlsSide side) const noexcept;
+      [[nodiscard]] SocketInterest interest(TlsSide side) const noexcept;
 
     private:
       TunnelSockets sockets_;
@@ -2410,7 +2410,7 @@ export {
       // `flow` is the connection's flow, or null when no hook watches it.
       auto advance(TunnelReadiness readiness, FlowState* flow) noexcept -> bool;
 
-      auto deadline() const noexcept;
+      [[nodiscard]] auto deadline() const noexcept;
 
       [[nodiscard]] auto established() const noexcept -> bool;
 
@@ -2465,25 +2465,25 @@ export {
         }
       }
 
-      bool opened() const noexcept;
+      [[nodiscard]] bool opened() const noexcept;
 
       bool advance(TunnelReadiness readiness) noexcept;
 
-      bool established() const noexcept;
+      [[nodiscard]] bool established() const noexcept;
 
-      bool finished() const noexcept;
+      [[nodiscard]] bool finished() const noexcept;
 
-      bool halfClosed() const noexcept;
+      [[nodiscard]] bool halfClosed() const noexcept;
 
-      bool idle() const noexcept;
+      [[nodiscard]] bool idle() const noexcept;
 
-      std::uint32_t inflight() const noexcept;
+      [[nodiscard]] std::uint32_t inflight() const noexcept;
 
-      bool buffered() const noexcept;
+      [[nodiscard]] bool buffered() const noexcept;
 
-      SocketInterest interest(TlsSide side) const noexcept;
+      [[nodiscard]] SocketInterest interest(TlsSide side) const noexcept;
 
-      ds::Option<traffic::FlowControl::Time> deadline() const noexcept;
+      [[nodiscard]] ds::Option<traffic::FlowControl::Time> deadline() const noexcept;
 
       void reason(tbc::val_static<std::string_view> value) noexcept;
 
@@ -2560,7 +2560,7 @@ export {
           }
 
           if (handshake_.state() == Handshake::State::closed) {
-            if (observation_ && observation_->flows) {
+            if (observation_ && (observation_->flows != nullptr)) {
               observation_->flows->observeFlow(traffic::Kind::flow_error, {.id = observation_->identity, .host = handshake_.hostname(), .reason = handshake_.failure()});
             }
 
@@ -2634,7 +2634,7 @@ export {
         }
       }
 
-      inline SocketInterest interest(TlsSide side) const noexcept {
+      [[nodiscard]] inline SocketInterest interest(TlsSide side) const noexcept {
         if (transport_.opened()) {
           return transport_.interest(side);
         }
@@ -2646,30 +2646,30 @@ export {
         return {.readable = handshake_.wantsOriginRead(), .writable = handshake_.wantsOriginWrite()};
       }
 
-      inline int descriptor(TlsSide side) const noexcept {
+      [[nodiscard]] inline int descriptor(TlsSide side) const noexcept {
         return side == TlsSide::child ? handshake_.childDescriptor() : handshake_.originDescriptor();
       }
 
-      inline std::size_t originAttempt() const noexcept {
+      [[nodiscard]] inline std::size_t originAttempt() const noexcept {
         return handshake_.originAttempt();
       }
 
-      inline bool closed() const noexcept {
+      [[nodiscard]] inline bool closed() const noexcept {
         return closed_;
       }
 
-      inline bool buffered() const noexcept {
+      [[nodiscard]] inline bool buffered() const noexcept {
         return transport_.buffered();
       }
 
-      inline ds::Option<Time> deadline() const noexcept {
+      [[nodiscard]] inline ds::Option<Time> deadline() const noexcept {
         const auto handshake = handshake_.deadline();
         const auto transport = transport_.deadline();
 
         return earliest(handshake, transport);
       }
 
-      inline const ProxyConnectionPolicy& policy() const noexcept {
+      [[nodiscard]] inline const ProxyConnectionPolicy& policy() const noexcept {
         return policy_;
       }
 
@@ -2716,7 +2716,7 @@ export {
 
       explicit ProxyClientConfiguration(std::shared_ptr<const Identity> identity) noexcept;
 
-      const ProxyStatus& status() const noexcept;
+      [[nodiscard]] const ProxyStatus& status() const noexcept;
 
       // The command takes each variable the child gets. Built in runtime.cpp for the allocators of
       // Command.
@@ -2764,11 +2764,11 @@ export {
     public:
       static ProxyListener bind(ds::Option<std::uint16_t> preferred, const ProxyPortRange::Set& reserved);
 
-      FileDescriptor accept() const;
+      [[nodiscard]] FileDescriptor accept() const;
 
-      int descriptor() const noexcept;
+      [[nodiscard]] int descriptor() const noexcept;
 
-      std::uint16_t port() const noexcept;
+      [[nodiscard]] std::uint16_t port() const noexcept;
 
       void close() noexcept;
 
@@ -2803,11 +2803,11 @@ export {
     public:
       explicit ProxyPortMemory(Memory& memory, int directory, std::string_view endpoint, bool inherit_legacy);
 
-      ds::Option<std::uint16_t> preferred() const noexcept;
+      [[nodiscard]] ds::Option<std::uint16_t> preferred() const noexcept;
 
-      const ProxyPortRange::Set& reserved() const noexcept;
+      [[nodiscard]] const ProxyPortRange::Set& reserved() const noexcept;
 
-      std::string_view filename() const noexcept;
+      [[nodiscard]] std::string_view filename() const noexcept;
 
       bool remember(std::uint16_t port) noexcept;
 
@@ -2872,7 +2872,7 @@ export {
       static constexpr std::string_view hexadecimal = "0123456789abcdef";
       static constexpr char legacy_name[] = "proxy-port";
       static constexpr std::size_t digest_bytes = 8;
-      static constexpr std::size_t filename_bytes = file_prefix.size() + digest_bytes * 2;
+      static constexpr std::size_t filename_bytes = file_prefix.size() + (digest_bytes * 2);
       static constexpr std::size_t maximum_scanned_entries = 4096;
       static constexpr std::size_t maximum_record_bytes = 8 + PATH_MAX + 1;
       Memory& memory_;
@@ -2903,11 +2903,11 @@ export {
 
       bool advance(ProxyConnectionPolicy::Time now) noexcept;
 
-      int descriptor() const noexcept;
+      [[nodiscard]] int descriptor() const noexcept;
 
-      SocketInterest interest() const noexcept;
+      [[nodiscard]] SocketInterest interest() const noexcept;
 
-      ProxyConnectionPolicy::Time deadline() const noexcept;
+      [[nodiscard]] ProxyConnectionPolicy::Time deadline() const noexcept;
 
     private:
       static constexpr auto drain_duration = std::chrono::milliseconds{20};
@@ -2944,7 +2944,7 @@ export {
         poller_.watch(stop_signal_.descriptor(), stop_token);
         poller_.watch(resolution_signal_.descriptor(), resolution_token);
         poller_.watch(adoption_signal_.descriptor(), adoption_token);
-        if (flows_) {
+        if (flows_ != nullptr) {
           poller_.watch(flows_->descriptor(), flow_token);
         }
 
@@ -3329,13 +3329,13 @@ export {
       CompletionSignal resolution_signal_;
       CompletionSignal adoption_signal_;
       DropChannel<redirect::Connection, 32> adoptions_;
-      typename NameResolutions<Resolver>::Notifications resolutions_;
+      NameResolutions<Resolver>::Notifications resolutions_;
       traffic::FlowControl* flows_;
       ds::Array<ds::Option<Slot>, Policy::capacity> slots_;
       SlotIndexes<Policy::capacity> occupied_;
       ds::Option<ProxyRefusal> refusal_;
       SocketWatch refusal_watch_;
-      Time accept_after_{};
+      Time accept_after_;
       std::uint64_t generation_ = 0;
       std::atomic<std::uint32_t> active_ = 0;
       std::atomic<std::uint64_t> limit_drops_ = 0;
@@ -3597,7 +3597,7 @@ export {
       inline static void raiseDescriptorLimit() noexcept {
         constexpr rlim_t descriptors_per_connection = 2;
         constexpr rlim_t reserved_descriptors = 448;
-        constexpr rlim_t wanted = ProxyConnectionPolicy::capacity * descriptors_per_connection + NameResolutions<Resolver>::capacity + reserved_descriptors;
+        constexpr rlim_t wanted = (ProxyConnectionPolicy::capacity * descriptors_per_connection) + NameResolutions<Resolver>::capacity + reserved_descriptors;
         static_assert(wanted == 1024);
         rlimit limit;
         if (::getrlimit(RLIMIT_NOFILE, &limit) == 0 && limit.rlim_cur < wanted) {

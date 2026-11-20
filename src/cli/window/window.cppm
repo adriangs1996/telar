@@ -88,7 +88,7 @@ export {
         progressLine(formatted(format, std::forward<Arguments>(arguments)...));
       }
 
-      bool has(Status status) const;
+      [[nodiscard]] bool has(Status status) const;
 
       int refuse(Memory& memory, std::string_view label, std::string_view destination, std::string_view reason) const;
 

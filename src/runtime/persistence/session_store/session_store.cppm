@@ -72,8 +72,8 @@ export {
       std::uint16_t argument_count;
       std::string_view arguments;
       AgentProvider provider = AgentProvider::unknown;
-      std::string_view session{};
-      std::string_view title{};
+      std::string_view session;
+      std::string_view title;
       AgentTitleSource title_source = AgentTitleSource::telar;
       bool in_pane = false;
     };
@@ -111,7 +111,7 @@ export {
 
       bool load(ds::Vec<Byte, Memory>& bytes);
 
-      FileDescriptor lock() const;
+      [[nodiscard]] FileDescriptor lock() const;
 
       Result observe(const Request& bytes) noexcept;
 
@@ -169,7 +169,7 @@ export {
 
             return;
           case Kind::workspace: {
-            const WorkspaceRecord record{u64::decode(input_), text16(), text16(), u64::decode(input_), text16()};
+            const WorkspaceRecord record{.id = u64::decode(input_), .path = text16(), .name = text16(), .first_tab = u64::decode(input_), .first_label = text16()};
 
             validatePath(record.path);
             if (record.name.size() > 256 || record.first_label.size() > 128 || (version_ < 3 && record.first_label.empty())) {
@@ -180,7 +180,7 @@ export {
             break;
           }
           case Kind::tab: {
-            const TabRecord record{u64::decode(input_), u64::decode(input_), text16()};
+            const TabRecord record{.workspace = u64::decode(input_), .id = u64::decode(input_), .label = text16()};
             if (record.label.size() > 128 || (version_ < 3 && record.label.empty())) {
               throw EncodingError{"Invalid checkpoint tab label"};
             }
@@ -202,7 +202,7 @@ export {
             break;
           }
           case Kind::layout: {
-            const LayoutRecord record{u64::decode(input_), u64::decode(input_), bytes32()};
+            const LayoutRecord record{.identity = u64::decode(input_), .last_used = u64::decode(input_), .payload = bytes32()};
             if (record.payload.empty() || record.payload.size() > 16 * 1024) {
               throw EncodingError{"Invalid checkpoint layout size"};
             }
@@ -369,7 +369,7 @@ export {
       inline void restore(const PaneRecord& record) {
         validateIdentity(record.id);
         auto* workspace = model_.workspaces.find(record.workspace);
-        auto* tab = workspace == nullptr ? nullptr : workspace->tab(record.tab);
+        const auto* tab = workspace == nullptr ? nullptr : workspace->tab(record.tab);
         if (tab == nullptr || tab->panes.size() == 64 || model_.panes.find(record.id) != nullptr) {
           return;
         }
@@ -432,7 +432,7 @@ export {
         input.append({&enter, 1});
       }
 
-      inline ds::Option<AgentResume> resumable(const PaneRecord& record) const {
+      [[nodiscard]] inline ds::Option<AgentResume> resumable(const PaneRecord& record) const {
         if (!resume_agents_ || !validResumeSession(record.provider, record.session)) {
           return ds::none;
         }
@@ -565,7 +565,7 @@ export {
     public:
       // The bytes view the buffer.
       inline static tbc::val_a<std::span<const Byte>> encode(const RuntimeModel& model, const ClientLayouts& layouts, const Agents& agents, tbc::val_a<std::span<Byte>> buffer, std::size_t& dropped) {
-        Writer writer{buffer, Counters{model.workspaces.nextCounter(), model.next_tab_id, model.panes.nextCounter(), model.next_pane_generation}};
+        Writer writer{buffer, Counters{.workspace = model.workspaces.nextCounter(), .tab = model.next_tab_id, .pane = model.panes.nextCounter(), .generation = model.next_pane_generation}};
 
         for (const auto* workspace : model.workspaces.items()) {
           if (workspace == nullptr || workspace->tabs.empty()) {
@@ -574,11 +574,11 @@ export {
 
           const auto& first = workspace->tabs.front();
 
-          writer.append(WorkspaceRecord{workspace->id, workspace->path, workspace->name, first.id, first.label});
+          writer.append(WorkspaceRecord{.id = workspace->id, .path = workspace->path, .name = workspace->name, .first_tab = first.id, .first_label = first.label});
           for (std::size_t index = 1; index < workspace->tabs.size(); ++index) {
             const auto& tab = workspace->tabs[index];
 
-            writer.append(TabRecord{workspace->id, tab.id, tab.label});
+            writer.append(TabRecord{.workspace = workspace->id, .id = tab.id, .label = tab.label});
           }
         }
 
@@ -589,7 +589,7 @@ export {
 
           const auto entry = worktree->entry();
 
-          writer.append(WorktreeRecord{entry.worktree, entry.workspace.valueOr(0), RegisterWorktree{.source = entry.source, .created_by = entry.created_by, .origin = entry.origin, .path = entry.path, .branch = entry.branch, .base = entry.base, .title = entry.title, .brief = entry.brief, .dispatched_from = entry.dispatched_from, .coordinator = entry.coordinator}});
+          writer.append(WorktreeRecord{.id = entry.worktree, .workspace = entry.workspace.valueOr(0), .registration = RegisterWorktree{.source = entry.source, .created_by = entry.created_by, .origin = entry.origin, .path = entry.path, .branch = entry.branch, .base = entry.base, .title = entry.title, .brief = entry.brief, .dispatched_from = entry.dispatched_from, .coordinator = entry.coordinator}});
         }
 
         for (const auto* pane : model.panes.items()) {
@@ -597,7 +597,7 @@ export {
             continue;
           }
 
-          PaneRecord record{pane->id, pane->location.workspace.id, pane->location.tab_id, pane->cwd, pane->terminal.screen.cols, pane->terminal.screen.rows, pane->launch.count(), pane->launch.bytes()};
+          PaneRecord record{.id = pane->id, .workspace = pane->location.workspace.id, .tab = pane->location.tab_id, .cwd = pane->cwd, .columns = pane->terminal.screen.cols, .rows = pane->terminal.screen.rows, .argument_count = pane->launch.count(), .arguments = pane->launch.bytes()};
 
           if (const auto* agent = agents.find(pane->id, pane->generation); agent != nullptr && validResumeSession(agent->provider, agent->session.view())) {
             record.provider = agent->provider;
@@ -624,7 +624,7 @@ export {
         ds::Array<Byte, 16 * 1024> payload;
 
         layouts.exportRecords(model, [&](std::uint64_t identity, std::uint64_t last_used, const UpdateClientLayout& layout) {
-          writer.append(LayoutRecord{identity, last_used, Codec::encode(layout, payload.viewMut())});
+          writer.append(LayoutRecord{.identity = identity, .last_used = last_used, .payload = Codec::encode(layout, payload.viewMut())});
         });
 
         dropped = writer.dropped;
@@ -808,7 +808,7 @@ export {
       ds::Vec<Byte, ConcurrentMemory> buffer_;
       // The worker stores the encoded buffer above until its result is collected, so the store stays put.
       tbc::val_self<ds::Option<ObservationWorker<FileStore<ConcurrentMemory>>>> worker_;
-      Clock::time_point due_{};
+      Clock::time_point due_;
       bool dirty_ = false;
       bool pending_ = false;
     };

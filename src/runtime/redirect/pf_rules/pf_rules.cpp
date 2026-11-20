@@ -7,7 +7,7 @@ import telar.platform.net;
 import telar.plugins;
 import telar.base.ds;
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
 import telar.sys.apple;
 #endif
 
@@ -100,7 +100,7 @@ namespace telar::runtime::redirect {
     return Target::parse(text.data());
   }
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
 
   NatLookup::NatLookup()
       : device_(::open("/dev/pf", O_RDWR | O_CLOEXEC | O_NOFOLLOW)) {
@@ -186,7 +186,7 @@ namespace telar::runtime::redirect {
     message.rtm_version = RTM_VERSION;
     message.rtm_type = RTM_GET;
     message.rtm_index = static_cast<unsigned short>(scope);
-    message.rtm_flags = RTF_UP | RTF_HOST | (scope ? RTF_IFSCOPE : 0);
+    message.rtm_flags = RTF_UP | RTF_HOST | ((scope != 0u) ? RTF_IFSCOPE : 0);
     message.rtm_addrs = RTA_DST | RTA_IFP;
     message.rtm_pid = ::getpid();
     message.rtm_seq = 1;
@@ -218,12 +218,12 @@ namespace telar::runtime::redirect {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds{500};
 
     while (std::chrono::steady_clock::now() < deadline) {
-      pollfd ready{socket.get(), POLLIN, 0};
+      pollfd ready{.fd = socket.get(), .events = POLLIN, .revents = 0};
       if (::poll(&ready, 1, 25) < 0 && sys::lastError() != EINTR) {
         throw SystemError{"Wait for original route"};
       }
 
-      if (!(ready.revents & POLLIN)) {
+      if ((ready.revents & POLLIN) == 0) {
         continue;
       }
 
@@ -270,7 +270,7 @@ namespace telar::runtime::redirect {
       throw SystemError{"Resolve original route", message.rtm_errno};
     }
 
-    if (message.rtm_flags & (RTF_REJECT | RTF_BLACKHOLE)) {
+    if ((message.rtm_flags & (RTF_REJECT | RTF_BLACKHOLE)) != 0) {
       throw SystemError{"Original route does not forward traffic", ENETUNREACH};
     }
 
@@ -280,7 +280,7 @@ namespace telar::runtime::redirect {
     std::size_t offset = sizeof(message);
 
     for (unsigned index = 0; index < RTAX_MAX; ++index) {
-      if (!(message.rtm_addrs & (1U << index))) {
+      if ((message.rtm_addrs & (1U << index)) == 0u) {
         continue;
       }
 
@@ -295,7 +295,7 @@ namespace telar::runtime::redirect {
         throw EncodingError{"Invalid route address size"};
       }
 
-      if (index == RTAX_GATEWAY && (message.rtm_flags & RTF_GATEWAY)) {
+      if (index == RTAX_GATEWAY && ((message.rtm_flags & RTF_GATEWAY) != 0)) {
         if (family == AF_INET && length >= sizeof(sockaddr_in)) {
           sockaddr_in address;
 
@@ -320,7 +320,7 @@ namespace telar::runtime::redirect {
     }
 
     ds::Array<char, IFNAMSIZ> name{};
-    if (path.index == 0 || !::if_indextoname(path.index, name.dataMut())) {
+    if (path.index == 0 || (::if_indextoname(path.index, name.dataMut()) == nullptr)) {
       throw SystemError{"Original route interface is unavailable", ENXIO};
     }
 
@@ -338,7 +338,7 @@ namespace telar::runtime::redirect {
 
   void RoutePath::addressText(FixedText<INET6_ADDRSTRLEN>& target, int family, const void* address) {
     ds::Array<char, INET6_ADDRSTRLEN> text{};
-    if (!::inet_ntop(family, address, text.dataMut(), text.size())) {
+    if (::inet_ntop(family, address, text.dataMut(), text.size()) == nullptr) {
       throw SystemError{"Format original route gateway"};
     }
 

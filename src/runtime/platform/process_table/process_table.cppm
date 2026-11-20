@@ -34,7 +34,7 @@ export {
       std::uint32_t threads = 0;
       std::int8_t nice = 0;
       ProcessState state = ProcessState::unknown;
-      FixedText<name_capacity> name{};
+      FixedText<name_capacity> name;
     };
 
     enum class ProcessActionResult : std::uint8_t {

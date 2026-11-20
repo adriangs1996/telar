@@ -38,9 +38,9 @@ export {
       Http2FrameKind kind = Http2FrameKind::data;
       std::uint8_t flags = 0;
 
-      bool has(Http2Flag flag) const noexcept;
+      [[nodiscard]] bool has(Http2Flag flag) const noexcept;
 
-      bool containsHeaders() const noexcept;
+      [[nodiscard]] bool containsHeaders() const noexcept;
     };
 
   }
@@ -60,7 +60,7 @@ export {
       Kind kind;
       const Http2Frame& frame;
       std::size_t offset = 0;
-      std::span<const std::uint8_t> bytes{};
+      std::span<const std::uint8_t> bytes;
     };
 
     class Http2FrameReader {
@@ -83,24 +83,24 @@ export {
             }
 
             decodeHeader();
-            receive(Http2FrameEvent{Http2FrameEvent::Kind::begin, frame_});
+            receive(Http2FrameEvent{.kind = Http2FrameEvent::Kind::begin, .frame = frame_});
           } else {
             const auto count = std::min(frame_.length - payload_offset_, input.size());
 
-            receive(Http2FrameEvent{Http2FrameEvent::Kind::payload, frame_, payload_offset_, input.first(count)});
+            receive(Http2FrameEvent{.kind = Http2FrameEvent::Kind::payload, .frame = frame_, .offset = payload_offset_, .bytes = input.first(count)});
             payload_offset_ += count;
             input = input.subspan(count);
           }
 
           if (payload_offset_ == frame_.length) {
-            receive(Http2FrameEvent{Http2FrameEvent::Kind::end, frame_});
+            receive(Http2FrameEvent{.kind = Http2FrameEvent::Kind::end, .frame = frame_});
             header_length_ = 0;
             payload_offset_ = 0;
           }
         }
       }
 
-      bool incomplete() const noexcept;
+      [[nodiscard]] bool incomplete() const noexcept;
 
     private:
       void decodeHeader() noexcept;
@@ -126,9 +126,9 @@ export {
 
       bool finish(std::uint32_t stream) noexcept;
 
-      bool full() const noexcept;
+      [[nodiscard]] bool full() const noexcept;
 
-      std::uint32_t size() const noexcept;
+      [[nodiscard]] std::uint32_t size() const noexcept;
 
     private:
       ds::Array<std::uint32_t, Capacity> ids_{};
@@ -158,15 +158,15 @@ export {
 
       void finishRequest(std::uint32_t stream) noexcept;
 
-      bool requestsFull() const noexcept;
+      [[nodiscard]] bool requestsFull() const noexcept;
 
       bool setResponse(Response response) noexcept;
 
-      Response response(std::uint32_t stream) const noexcept;
+      [[nodiscard]] Response response(std::uint32_t stream) const noexcept;
 
       void finishResponse(std::uint32_t stream) noexcept;
 
-      bool hasResponses() const noexcept;
+      [[nodiscard]] bool hasResponses() const noexcept;
 
     private:
       Http2StreamIds<capacity> requests_;

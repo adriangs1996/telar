@@ -35,16 +35,16 @@ export {
     };
 
     struct MountUsage {
-      FixedText<128> path{};
-      FixedText<64> device{};
-      FixedText<16> type{};
+      FixedText<128> path;
+      FixedText<64> device;
+      FixedText<16> type;
       std::uint64_t total_bytes = 0;
       std::uint64_t used_bytes = 0;
       std::uint64_t available_bytes = 0;
     };
 
     struct InterfaceCounters {
-      FixedText<16> name{};
+      FixedText<16> name;
       std::uint64_t received_bytes = 0;
       std::uint64_t sent_bytes = 0;
     };

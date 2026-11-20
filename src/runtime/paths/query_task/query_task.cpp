@@ -90,7 +90,7 @@ namespace telar::runtime {
         auto cell = minimum_score;
 
         if (index == 0) {
-          cell = static_cast<int>(column) * leading_gap + bonuses[column];
+          cell = (static_cast<int>(column) * leading_gap) + bonuses[column];
         } else if (column != 0) {
           cell = std::max(plus(previous_best[column - 1], bonuses[column]), plus(previous_ending[column - 1], consecutive_score));
         }
@@ -157,7 +157,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   std::span<std::int32_t> FuzzyMatch<Memory>::row(std::size_t index, bool best) noexcept {
-    return matrix_.viewMut().subspan((index * 2 + static_cast<unsigned>(best)) * maximum_path, maximum_path);
+    return matrix_.viewMut().subspan(((index * 2) + static_cast<unsigned>(best)) * maximum_path, maximum_path);
   }
 
   template class FuzzyMatch<SystemAllocator>;
@@ -203,7 +203,7 @@ namespace telar::runtime {
     }
 
     std::copy(relative.begin(), relative.end(), bytes_ + bytes_used);
-    entries_[count++] = {static_cast<std::uint32_t>(bytes_used), static_cast<std::uint16_t>(relative.size()), kind};
+    entries_[count++] = {.offset = static_cast<std::uint32_t>(bytes_used), .length = static_cast<std::uint16_t>(relative.size()), .kind = kind};
     bytes_used += relative.size();
     if (count % publication_batch == 0) {
       published.store(count, std::memory_order_release);
@@ -425,7 +425,7 @@ namespace telar::runtime {
       }
 
       ds::Array<char, 1024> relative;
-      const auto length = prefix.size() + name.size() + child_directory;
+      const auto length = prefix.size() + name.size() + static_cast<std::size_t>(child_directory);
       if (length > relative.size()) {
         continue;
       }

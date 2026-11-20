@@ -44,15 +44,15 @@ export {
       // Parses a handshake by copying it into the offer, which keeps where its protocols lie.
       void parse(std::span<const std::uint8_t> handshake) noexcept;
 
-      bool tls() const noexcept;
+      [[nodiscard]] bool tls() const noexcept;
 
-      bool valid() const noexcept;
+      [[nodiscard]] bool valid() const noexcept;
 
-      bool encrypted() const noexcept;
+      [[nodiscard]] bool encrypted() const noexcept;
 
-      std::string_view serverName() const noexcept;
+      [[nodiscard]] std::string_view serverName() const noexcept;
 
-      std::span<const std::uint8_t> encoded() const noexcept;
+      [[nodiscard]] std::span<const std::uint8_t> encoded() const noexcept;
 
     private:
       void parseStored(std::size_t size) noexcept;
@@ -67,18 +67,18 @@ export {
 
         std::uint16_t word() noexcept;
 
-        bool failed() const noexcept;
+        [[nodiscard]] bool failed() const noexcept;
 
-        bool empty() const noexcept;
+        [[nodiscard]] bool empty() const noexcept;
 
-        std::size_t remaining() const noexcept;
+        [[nodiscard]] std::size_t remaining() const noexcept;
 
       private:
         std::span<const std::uint8_t> bytes_;
         bool failed_ = false;
       };
 
-      Read incomplete(std::size_t count) const noexcept;
+      [[nodiscard]] Read incomplete(std::size_t count) const noexcept;
 
       // Reads the server name into `name`, from the hello the offer holds, so neither borrows it whole.
       static bool serverName(std::span<const std::uint8_t> extension, FixedText<ProxyHostname::maximum_bytes>& name) noexcept;
@@ -115,7 +115,7 @@ export {
     public:
       bool assign(std::span<const unsigned char> protocol) noexcept;
 
-      std::span<const unsigned char> protocol() const noexcept;
+      [[nodiscard]] std::span<const unsigned char> protocol() const noexcept;
 
       // OpenSSL fixes this ABI; the selection is borrowed from the stable session via SSL app data.
       static int select(SSL* connection, const unsigned char** selected, unsigned char* length, const unsigned char* offered, unsigned offered_length, void*) noexcept;
@@ -140,9 +140,9 @@ export {
 
       void add(X509* certificate);
 
-      X509_STORE* native() const noexcept;
+      [[nodiscard]] X509_STORE* native() const noexcept;
 
-      std::size_t count() const noexcept;
+      [[nodiscard]] std::size_t count() const noexcept;
 
     private:
       static constexpr std::size_t maximum_certificate_bytes = 1024 * 1024;
@@ -161,9 +161,9 @@ export {
     public:
       explicit TlsContexts(ConcurrentMemory& memory, const TlsLibrary& library, const TlsTrustStore& trust);
 
-      SSL_CTX* origin() const noexcept;
+      [[nodiscard]] SSL_CTX* origin() const noexcept;
 
-      SSL_CTX* child() const noexcept;
+      [[nodiscard]] SSL_CTX* child() const noexcept;
 
     private:
       TlsContext origin_;
@@ -222,17 +222,17 @@ export {
 
       State advance() noexcept;
 
-      State state() const noexcept;
+      [[nodiscard]] State state() const noexcept;
 
-      Failure failure() const noexcept;
+      [[nodiscard]] Failure failure() const noexcept;
 
-      StreamReadiness waiting(TlsSide side) const noexcept;
+      [[nodiscard]] StreamReadiness waiting(TlsSide side) const noexcept;
 
-      ds::Option<std::chrono::steady_clock::time_point> deadline() const noexcept;
+      [[nodiscard]] ds::Option<std::chrono::steady_clock::time_point> deadline() const noexcept;
 
-      HttpProtocol protocol() const noexcept;
+      [[nodiscard]] HttpProtocol protocol() const noexcept;
 
-      bool unnegotiated() const noexcept;
+      [[nodiscard]] bool unnegotiated() const noexcept;
 
       StreamResult read(TlsSide side, std::span<std::uint8_t> destination) noexcept;
 
@@ -244,7 +244,7 @@ export {
 
       void consume(TlsSide side, std::size_t count) noexcept;
 
-      bool buffered(TlsSide side) const noexcept;
+      [[nodiscard]] bool buffered(TlsSide side) const noexcept;
 
       void halfClose(TlsSide side) noexcept;
 
@@ -261,9 +261,9 @@ export {
 
       static StreamResult ioFailure(SSL* connection, int result) noexcept;
 
-      SSL* endpoint(TlsSide side) const noexcept;
+      [[nodiscard]] SSL* endpoint(TlsSide side) const noexcept;
 
-      std::chrono::steady_clock::time_point offer_after_{};
+      std::chrono::steady_clock::time_point offer_after_;
       static constexpr std::size_t read_capacity = 16 * 1024;
       StreamReadBuffer<read_capacity> child_input_;
       StreamReadBuffer<read_capacity> origin_input_;

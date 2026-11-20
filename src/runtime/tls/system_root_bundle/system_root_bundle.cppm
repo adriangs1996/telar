@@ -14,7 +14,7 @@ export {
     public:
       explicit SystemRootBundle(ConcurrentMemory& memory);
 
-      std::span<const std::uint8_t> bytes() const noexcept;
+      [[nodiscard]] std::span<const std::uint8_t> bytes() const noexcept;
 
     private:
       static constexpr std::size_t maximum_bytes = 4 * 1024 * 1024;

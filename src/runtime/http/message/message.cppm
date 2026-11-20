@@ -47,7 +47,7 @@ export {
         tbc::val_a<ds::Option<DecodedBody<Memory>>> storage;
         std::span<const std::uint8_t> input;
 
-        std::span<const std::uint8_t> bytes() const noexcept;
+        [[nodiscard]] std::span<const std::uint8_t> bytes() const noexcept;
       };
 
       // A body it produces is storage of the allocator, region `a`, not of the codec.
@@ -106,12 +106,12 @@ export {
         // The field copies its name and value into storage of the allocator, region `a`.
         Field(tbc::mut_a<Memory> memory, std::string_view name, std::string_view value);
 
-        auto name() const noexcept -> std::string_view;
+        [[nodiscard]] auto name() const noexcept -> std::string_view;
 
-        auto value() const noexcept -> std::string_view;
+        [[nodiscard]] auto value() const noexcept -> std::string_view;
 
       private:
-        auto text() const noexcept -> std::string_view;
+        [[nodiscard]] auto text() const noexcept -> std::string_view;
 
         tbc::val_a<SensitiveAllocation<Memory>> storage_;
         std::size_t name_bytes_;
@@ -128,11 +128,11 @@ export {
 
       void remove(std::string_view name) noexcept;
 
-      auto get(std::string_view name) const noexcept -> ds::Option<std::string_view>;
+      [[nodiscard]] auto get(std::string_view name) const noexcept -> ds::Option<std::string_view>;
 
-      auto fields() const noexcept -> std::span<const Field>;
+      [[nodiscard]] auto fields() const noexcept -> std::span<const Field>;
 
-      auto bytes() const noexcept -> std::size_t;
+      [[nodiscard]] auto bytes() const noexcept -> std::size_t;
 
       void clear() noexcept;
 
@@ -289,15 +289,15 @@ export {
       // `wire` may be the body itself, or part of it, as an HTTP/1 relay reads it.
       void decodeBody(std::span<const std::uint8_t> wire);
 
-      bool bodyless() const noexcept;
+      [[nodiscard]] bool bodyless() const noexcept;
 
       // Whether the body is an event stream, which never completes for a hook to see it whole.
-      bool streamingBody() const;
+      [[nodiscard]] bool streamingBody() const;
 
-      HttpExpectation expectation() const;
+      [[nodiscard]] HttpExpectation expectation() const;
 
       // The body in its content coding; a view of `body` when only identity codings describe it.
-      auto encodeBody() -> typename HttpContentCodec<Memory>::Coded;
+      auto encodeBody() -> HttpContentCodec<Memory>::Coded;
 
       void validateHttp2() const;
 
@@ -347,7 +347,7 @@ export {
       static constexpr std::size_t maximum_target_bytes = 8192;
       static constexpr std::size_t status_line_prefix_bytes = 13;
       static constexpr std::size_t content_overhead_bytes = 64 * 1024;
-      static constexpr std::size_t maximum_wire_bytes = maximum_body_bytes + 3 * content_overhead_bytes;
+      static constexpr std::size_t maximum_wire_bytes = maximum_body_bytes + (3 * content_overhead_bytes);
     };
 
     extern template class HttpMessage<SynchronizedAllocator<BudgetAllocator<ConcurrentMemory>>>;

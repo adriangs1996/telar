@@ -18,7 +18,7 @@ export {
     public:
       explicit Execution(Memory& memory, std::uint64_t token, const ExecutionRequest& request, std::uint64_t workspace, std::string_view cwd);
 
-      bool matches(const ExecutionRequest& request) const noexcept;
+      [[nodiscard]] bool matches(const ExecutionRequest& request) const noexcept;
 
       static constexpr std::size_t retained_capacity = 1024 * 1024;
       static constexpr std::size_t input_capacity = 64 * 1024;

@@ -49,10 +49,10 @@ namespace telar::git {
     std::uint16_t flags;
     std::uint16_t extended;
 
-    unsigned stage() const noexcept;
-    bool assumeValid() const noexcept;
-    bool skipWorktree() const noexcept;
-    bool intentToAdd() const noexcept;
+    [[nodiscard]] unsigned stage() const noexcept;
+    [[nodiscard]] bool assumeValid() const noexcept;
+    [[nodiscard]] bool skipWorktree() const noexcept;
+    [[nodiscard]] bool intentToAdd() const noexcept;
   };
 
   // One cache-tree node of the TREE extension; `end` is the index past its subtree. Its name is kept
@@ -79,11 +79,11 @@ namespace telar::git {
     // index is an empty one, as in a repository nobody added files to yet.
     IndexState load(int gitdir, ObjectFormat format, const Limits& limits);
 
-    std::string_view path(const IndexEntry& entry) const noexcept;
-    std::string_view treeName(const CacheTreeNode& node) const noexcept;
+    [[nodiscard]] std::string_view path(const IndexEntry& entry) const noexcept;
+    [[nodiscard]] std::string_view treeName(const CacheTreeNode& node) const noexcept;
 
     // The index's own modification time: entries modified at or after it are racy.
-    std::int64_t timestamp() const noexcept;
+    [[nodiscard]] std::int64_t timestamp() const noexcept;
 
     ds::Vec<IndexEntry, Memory> entries;
     ds::Vec<CacheTreeNode, Memory> tree;

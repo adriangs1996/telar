@@ -31,23 +31,23 @@ namespace telar::runtime::cli::pane_agents {
   constexpr ds::Array<std::string_view, 3> session_file_kinds{"claude_transcript", "codex_state", "cursor_meta"};
   constexpr ds::Array<std::string_view, 6> status_names{"unknown", "working", "blocked", "ready", "failed", "done"};
 
-  bool displayText(std::string_view text) {
+  static bool displayText(std::string_view text) {
     return inspectUtf8(text) == Utf8Validation::valid && std::none_of(text.begin(), text.end(), [](unsigned char byte) {
       return byte < 0x20 || byte == 0x7f;
     });
   }
 
-  void socketOption(tbc::mut_a<Options> options, Cursor& cursor) {
+  static void socketOption(tbc::mut_a<Options> options, Cursor& cursor) {
     const auto value = cursor.take("MissingSocketPath");
 
-    if (options.socket) {
+    if (options.socket != nullptr) {
       usage("DuplicateSocketOption");
     }
 
     options.socket = value.data();
   }
 
-  void readOption(Options& options, Cursor& cursor, std::string_view option) {
+  static void readOption(Options& options, Cursor& cursor, std::string_view option) {
     if (option == "--lines") {
       options.lines = number<std::uint16_t>(cursor.take("MissingLineCount"), "InvalidLineCount");
       if (options.lines == 0 || options.lines > max_read_rows) {
@@ -258,7 +258,7 @@ namespace telar::runtime::cli::pane_agents {
   constexpr auto start_grace = std::chrono::seconds{5};
   constexpr auto interrupt_settle = std::chrono::seconds{15};
 
-  std::uint64_t current(const char* name, bool nonzero = false) {
+  static std::uint64_t current(const char* name, bool nonzero = false) {
     const auto text = process_environment.lookup(name);
     const auto id = maybeUnsigned(text);
     if (!id || (nonzero && *id == 0)) {
@@ -268,7 +268,7 @@ namespace telar::runtime::cli::pane_agents {
     return *id;
   }
 
-  std::uint64_t paneId(std::string_view target) {
+  static std::uint64_t paneId(std::string_view target) {
     if (target == "--current") {
       return current("TELAR_PANE_ID");
     }
@@ -280,7 +280,7 @@ namespace telar::runtime::cli::pane_agents {
     throw Failure{"InvalidPaneId"};
   }
 
-  std::uint64_t entityId(std::string_view target, const char* variable) {
+  static std::uint64_t entityId(std::string_view target, const char* variable) {
     if (target == "--current") {
       const auto value = process_environment.lookup(variable);
       if (value.empty()) {
@@ -297,7 +297,7 @@ namespace telar::runtime::cli::pane_agents {
     return positive(target, "InvalidIdentity");
   }
 
-  void validateBytes(std::string_view value, std::size_t maximum, bool empty = true) {
+  static void validateBytes(std::string_view value, std::size_t maximum, bool empty = true) {
     if (value.size() > maximum || (!empty && value.empty())) {
       throw Failure{"InvalidByteString"};
     }
@@ -307,7 +307,7 @@ namespace telar::runtime::cli::pane_agents {
     }
   }
 
-  void validateSession(std::string_view value) {
+  static void validateSession(std::string_view value) {
     try {
       validateAgentSession(value, false);
     } catch (const EncodingError&) {
@@ -315,7 +315,7 @@ namespace telar::runtime::cli::pane_agents {
     }
   }
 
-  void validateReport(const Options& options) {
+  static void validateReport(const Options& options) {
     if (options.action == "report-state") {
       const auto& report = options.report;
       if (!report.session.empty()) {
@@ -348,21 +348,21 @@ namespace telar::runtime::cli::pane_agents {
     }
   }
 
-  bool equalTitle(std::string_view left, std::string_view right) {
+  static bool equalTitle(std::string_view left, std::string_view right) {
     return asciiEqualIgnoreCase(left, right);
   }
 
-  ServerOptions socketOptions(const char* socket) {
+  static ServerOptions socketOptions(const char* socket) {
     ServerOptions options;
 
-    options.socket = socket ? socket : "";
+    options.socket = (socket != nullptr) ? socket : "";
     return options;
   }
 
   // Attaches to the runtime (start false) or opens it, starting it when none
   // listens; a connection failure ends the command with `error: NAME`.
   template <Allocator Memory>
-  void connectRuntime(Memory& memory, const RuntimePaths<Memory>& paths, bool start) {
+  static void connectRuntime(Memory& memory, const RuntimePaths<Memory>& paths, bool start) {
     try {
       const RuntimeConnection probe{paths.socket.data()};
 
@@ -378,14 +378,14 @@ namespace telar::runtime::cli::pane_agents {
     }
   }
 
-  void writeAgent(Output& out, const AgentSnapshotEntry& agent, bool json) {
+  static void writeAgent(Output& out, const AgentSnapshotEntry& agent, bool json) {
     const auto provider = agent.provider_name.empty() ? std::string_view{"unknown"} : agent.provider_name;
     const auto status = status_names[static_cast<std::size_t>(agent.status)];
 
     if (json) {
       out.text("{\"pane_id\":").number(agent.pane_id).text(",\"pane_generation\":").number(agent.pane_generation).text(",\"workspace_id\":").number(agent.location.workspace.id).text(",\"tab_id\":").number(agent.location.tab_id).text(",\"pane_index\":").number(agent.pane_index).text(",\"provider\":").json(provider, JsonEscapes::control).text(",\"provider_index\":").number(static_cast<unsigned>(agent.provider)).text(",\"status\":").json(status, JsonEscapes::control);
       out.text(",\"workspace\":").json(agent.workspace_label, JsonEscapes::control).text(",\"tab\":").json(agent.tab_label, JsonEscapes::control).text(",\"title\":").json(agent.session_title, JsonEscapes::control).text(",\"cwd\":").json(agent.cwd_label, JsonEscapes::control).text(",\"blocked_reason\":").json(blocked_reasons[static_cast<std::size_t>(agent.blocked_reason)], JsonEscapes::control).text(",\"status_age_s\":").number(agent.status_age_s).text(",\"worktree_id\":").number(agent.work_tree).text(",\"last_event\":").json(agent.last_event, JsonEscapes::control);
-      out.text(",\"plan\":{\"done\":").number(agent.plan_done).text(",\"total\":").number(agent.plan_total).text(",\"step\":").json(agent.plan_step, JsonEscapes::control).text("},\"final_message\":").json(agent.final_message, JsonEscapes::control).text(",\"session_id\":\"");
+      out.text(R"(,"plan":{"done":)").number(agent.plan_done).text(",\"total\":").number(agent.plan_total).text(",\"step\":").json(agent.plan_step, JsonEscapes::control).text("},\"final_message\":").json(agent.final_message, JsonEscapes::control).text(R"(,"session_id":")");
       ds::Array<char, 2 * sizeof(agent.session_id)> session;
 
       out.text(encodeLowerHex(agent.session_id, session.viewMut()));
@@ -422,7 +422,7 @@ namespace telar::runtime::cli::pane_agents {
 
   constexpr std::string_view agent_header = "PANE  GEN  STATUS   PROV    WORKSPACE         TAB           TITLE\n";
 
-  void writeOne(Output& out, const AgentSnapshotEntry& agent, bool json) {
+  static void writeOne(Output& out, const AgentSnapshotEntry& agent, bool json) {
     if (!json) {
       out.text(agent_header);
     }
@@ -466,13 +466,13 @@ namespace telar::runtime::cli::pane_agents {
     PaneDescriptor pane;
   };
 
-  WorkspaceList runtimeList(ControlSession& session) {
+  static WorkspaceList runtimeList(ControlSession& session) {
     session.send(RequestRuntimeState{.client_identity = static_cast<std::uint64_t>(::getpid()), .interactive = false});
     return session.template receive<WorkspaceList>();
   }
 
   template <Allocator Memory>
-  tbc::val_a<ds::Vec<PaneRecord, Memory>> paneCatalog(tbc::mut_a<Memory> memory, const char* socket, const Options& options) {
+  static tbc::val_a<ds::Vec<PaneRecord, Memory>> paneCatalog(tbc::mut_a<Memory> memory, const char* socket, const Options& options) {
     ControlSession session{memory, socket};
 
     session.receiveTimeout(30);
@@ -523,7 +523,7 @@ namespace telar::runtime::cli::pane_agents {
   }
 
   template <Allocator Memory>
-  std::uint64_t worktreeId(Memory& memory, const char* socket, std::string_view reference) {
+  static std::uint64_t worktreeId(Memory& memory, const char* socket, std::string_view reference) {
     ControlSession session{memory, socket};
 
     session.receiveTimeout(30);
@@ -572,7 +572,7 @@ namespace telar::runtime::cli::pane_agents {
     return *found;
   }
 
-  ds::Option<std::uint64_t> senderPane(const Options& options, std::uint64_t target) {
+  static ds::Option<std::uint64_t> senderPane(const Options& options, std::uint64_t target) {
     const ProcessEnvironment environment;
     const auto id = maybeUnsigned(environment.lookup("TELAR_PANE_ID"));
     // A later lookup may overwrite the storage an earlier one returned.
@@ -585,7 +585,7 @@ namespace telar::runtime::cli::pane_agents {
 
     own.assign(socket_path);
 
-    const auto socket = options.socket ? std::string_view{options.socket} : environment.lookup("TELAR_SOCKET");
+    const auto socket = (options.socket != nullptr) ? std::string_view{options.socket} : environment.lookup("TELAR_SOCKET");
     if (!socket.empty() && socket != own.view()) {
       return ds::none;
     }
@@ -598,11 +598,11 @@ namespace telar::runtime::cli::pane_agents {
   }
 
   // The pane by its ids: an entry of a snapshot views the session's storage, which the exchange reuses.
-  void interruptAgent(ControlSession& session, std::uint64_t pane, std::uint64_t generation) {
+  static void interruptAgent(ControlSession& session, std::uint64_t pane, std::uint64_t generation) {
     session.template exchange<RequestCompleted>(InterruptAgent{.pane_id = pane, .pane_generation = generation});
   }
 
-  int waitAgent(ControlSession& session, const Options& options, ds::Option<std::uint64_t> worktree, Output& out) {
+  static int waitAgent(ControlSession& session, const Options& options, ds::Option<std::uint64_t> worktree, Output& out) {
     const auto deadline = std::chrono::system_clock::now() + std::chrono::seconds{options.timeout};
 
     for (;;) {
@@ -622,7 +622,7 @@ namespace telar::runtime::cli::pane_agents {
     }
   }
 
-  void settleAgent(ControlSession& session, std::uint64_t pane, std::uint64_t generation) {
+  static void settleAgent(ControlSession& session, std::uint64_t pane, std::uint64_t generation) {
     interruptAgent(session, pane, generation);
     const auto deadline = std::chrono::system_clock::now() + interrupt_settle;
 
@@ -644,7 +644,7 @@ namespace telar::runtime::cli::pane_agents {
     throw Failure{"InterruptNotSettled"};
   }
 
-  int promptAgent(ControlSession& session, const Options& options, std::uint64_t pane, std::uint64_t generation, AgentStatus status, Output& out) {
+  static int promptAgent(ControlSession& session, const Options& options, std::uint64_t pane, std::uint64_t generation, AgentStatus status, Output& out) {
     if (options.interrupt && status == AgentStatus::working) {
       settleAgent(session, pane, generation);
     }
@@ -687,7 +687,7 @@ namespace telar::runtime::cli::pane_agents {
     }
   }
 
-  void reportAgent(ControlSession& session, const Options& options, const std::pair<std::uint64_t, std::uint64_t>& pane, Output& out) {
+  static void reportAgent(ControlSession& session, const Options& options, const std::pair<std::uint64_t, std::uint64_t>& pane, Output& out) {
     try {
       session.template exchange<RequestCompleted>(VerifyPaneDescent{.pane_id = pane.first, .pane_generation = pane.second});
     } catch (const std::exception&) {
@@ -713,7 +713,7 @@ namespace telar::runtime::cli::pane_agents {
     }
   }
 
-  int executeAgent(Memory& memory, const RuntimePaths<Memory>& paths, const Options& options, Output& out) {
+  static int executeAgent(Memory& memory, const RuntimePaths<Memory>& paths, const Options& options, Output& out) {
     ControlSession session{memory, paths.socket.data()};
 
     session.receiveTimeout(30);
@@ -852,7 +852,7 @@ namespace telar::runtime::cli::execution {
   constexpr std::chrono::milliseconds poll_interval{10};
   constexpr std::size_t max_chunk = 4096;
 
-  std::string_view stateName(ExecutionState state) {
+  static std::string_view stateName(ExecutionState state) {
     constexpr ds::Array names{"starting", "running", "exited", "failed"};
 
     return names.at(static_cast<std::size_t>(state));
@@ -876,11 +876,11 @@ namespace telar::runtime::cli::execution {
     }
   }
 
-  void writeStatusJson(const ExecutionReply& reply) {
+  static void writeStatusJson(const ExecutionReply& reply) {
     writeFormatted(STDOUT_FILENO, "{{\"execution_id\":{},\"workspace_id\":{},\"state\":{},\"exit_code\":{},\"stdout_offset\":{},\"stderr_offset\":{},\"stdout_bytes\":{},\"stderr_bytes\":{},\"stdin_bytes\":{},\"stdin_open\":{},\"failure\":{}}}\n", reply.execution_id, reply.workspace_id, quoteJson(stateName(reply.state)), orNull(finished(reply) ? ds::Option{reply.exit_code} : ds::none), reply.stdout_offset, reply.stderr_offset, reply.stdout_total, reply.stderr_total, reply.input_offset, jsonBoolean(reply.stdin_open), quoteJson(textBytes(reply.failure)));
   }
 
-  void writeStreams(ExecutionRequest& request, const ExecutionReply& reply) {
+  static void writeStreams(ExecutionRequest& request, const ExecutionReply& reply) {
     if (request.stdout_offset != reply.stdout_offset || request.stderr_offset != reply.stderr_offset) {
       writeFormatted(STDERR_FILENO, "telar exec: retained output lost; resume with --stdout-offset {} --stderr-offset {}\n", reply.stdout_offset, reply.stderr_offset);
       throw std::runtime_error{"ExecutionOutputLost"};
@@ -908,7 +908,7 @@ namespace telar::runtime::cli::execution {
         output.print(",");
       }
 
-      output.print("{{\"execution_id\":{},\"workspace_id\":{},\"state\":{},\"exit_code\":{}}}", reply.execution_id, reply.workspace_id, quoteJson(stateName(reply.state)), orNull(finished(reply) ? ds::Option{reply.exit_code} : ds::none));
+      output.print(R"({{"execution_id":{},"workspace_id":{},"state":{},"exit_code":{}}})", reply.execution_id, reply.workspace_id, quoteJson(stateName(reply.state)), orNull(finished(reply) ? ds::Option{reply.exit_code} : ds::none));
       request.execution_id = reply.execution_id;
     }
 
@@ -917,7 +917,7 @@ namespace telar::runtime::cli::execution {
   }
 
   // Forgets a finished execution; a refusal leaves it retained, as before.
-  void release(ControlSession& session, ExecutionRequest request) noexcept {
+  static void release(ControlSession& session, ExecutionRequest request) noexcept {
     request.action = ExecutionAction::forget;
     try {
       exchange(session, request);
@@ -927,7 +927,7 @@ namespace telar::runtime::cli::execution {
 
   // Sends the request and follows the execution it starts or names. Each reply views the session's
   // storage, so it is asked for here, where the next exchange replaces it.
-  int observe(ControlSession& session, ExecutionRequest request, const ExecutionOptions& options) {
+  static int observe(ControlSession& session, ExecutionRequest request, const ExecutionOptions& options) {
     auto reply = exchange(session, request);
     const auto started = std::chrono::steady_clock::now();
     bool stdin_open = request.stdin_open;
@@ -1059,7 +1059,7 @@ namespace telar::runtime::cli::pane_agents {
   constexpr ds::Array<std::string_view, 3> focus_outcomes{"focused", "no_neighbor", "source_not_focused"};
   constexpr ds::Array<std::string_view, 2> lifecycles{"running", "exited"};
 
-  void writePane(Output& out, const PaneRecord& entry, bool json) {
+  static void writePane(Output& out, const PaneRecord& entry, bool json) {
     const auto& pane = entry.pane;
     const auto lifecycle = lifecycles.at(static_cast<std::size_t>(pane.lifecycle));
 
@@ -1070,7 +1070,7 @@ namespace telar::runtime::cli::pane_agents {
     }
   }
 
-  void inspectPanes(Memory& memory, const char* socket, const Options& options, Output& out) {
+  static void inspectPanes(Memory& memory, const char* socket, const Options& options, Output& out) {
     const auto catalog = paneCatalog(memory, socket, options);
 
     if (options.action == "get") {
@@ -1107,7 +1107,7 @@ namespace telar::runtime::cli::pane_agents {
     }
   }
 
-  void watchPane(ControlSession& session, const Options& options, const PaneDescriptor& pane, Output& out) {
+  static void watchPane(ControlSession& session, const Options& options, const PaneDescriptor& pane, Output& out) {
     ds::Option<ds::Array<unsigned char, SHA256_DIGEST_LENGTH>> previous;
     bool previous_truncated = false;
     std::uint64_t count = 0;
@@ -1137,13 +1137,13 @@ namespace telar::runtime::cli::pane_agents {
   }
 
   // `bytes` as "#rrggbb", or null when absent.
-  void writeColor(Output& out, std::span<const Byte> bytes) {
+  static void writeColor(Output& out, std::span<const Byte> bytes) {
     constexpr std::string_view digits = "0123456789abcdef";
     ds::Array<char, 9> text{'"', '#'};
 
     for (std::size_t index = 0; index < 3; ++index) {
-      text.atMut(2 + index * 2) = digits[bytes[index] >> 4];
-      text.atMut(3 + index * 2) = digits[bytes[index] & 0x0f];
+      text.atMut(2 + (index * 2)) = digits[bytes[index] >> 4];
+      text.atMut(3 + (index * 2)) = digits[bytes[index] & 0x0f];
     }
 
     text.atMut(8) = '"';
@@ -1151,7 +1151,7 @@ namespace telar::runtime::cli::pane_agents {
   }
 
   template <std::size_t Size>
-  void writeOptionalColor(Output& out, const ds::Option<ds::Array<Byte, Size>>& bytes) {
+  static void writeOptionalColor(Output& out, const ds::Option<ds::Array<Byte, Size>>& bytes) {
     if (bytes) {
       writeColor(out, bytes->view());
     } else {
@@ -1161,7 +1161,7 @@ namespace telar::runtime::cli::pane_agents {
 
   // The theme as JSON: the terminal's colors, the 16 ANSI colors in `ansi`, each syntax role's
   // color and style, and each chrome role's color, by the names telar's themes give them.
-  void writeTheme(Output& out, const TerminalTheme& theme) {
+  static void writeTheme(Output& out, const TerminalTheme& theme) {
     out.text("{\"foreground\":");
     writeOptionalColor(out, theme.foreground);
     out.text(",\"background\":");
@@ -1210,7 +1210,7 @@ namespace telar::runtime::cli::pane_agents {
     out.text("}\n");
   }
 
-  int executePane(Memory& memory, const RuntimePaths<Memory>& paths, Options options, Output& out) {
+  static int executePane(Memory& memory, const RuntimePaths<Memory>& paths, Options options, Output& out) {
     ControlSession session{memory, paths.socket.data()};
 
     session.receiveTimeout(30);
@@ -1363,7 +1363,7 @@ namespace telar::runtime::cli::project_setup {
   // The shared JSON parser intentionally has one generic syntax error. A recipe
   // keeps a distinct EOF diagnostic when its valid prefix can be completed.
   template <Allocator Memory>
-  const char* recipeJsonFailure(Memory& memory, std::string_view text) {
+  static const char* recipeJsonFailure(Memory& memory, std::string_view text) {
     // The brackets still open, innermost last; a recipe within its byte limit nests no deeper.
     ds::Array<char, max_recipe_bytes> closing;
     std::size_t open = 0;
@@ -1449,7 +1449,7 @@ namespace telar::runtime::cli::project_setup {
   }
 
   template <Allocator Memory>
-  tbc::val_a<ds::Vec<ds::String<Memory>, Memory>> recipeArguments(tbc::mut_a<Memory> memory, std::string_view text) {
+  static tbc::val_a<ds::Vec<ds::String<Memory>, Memory>> recipeArguments(tbc::mut_a<Memory> memory, std::string_view text) {
     auto recipe = [&] {
       try {
         return JsonNode<Memory>::parse(memory, text);
@@ -1509,7 +1509,7 @@ namespace telar::runtime::cli::project_setup {
   }
 
   template <Allocator Memory>
-  tbc::val_a<ds::Option<ds::Vec<ds::String<Memory>, Memory>>> loadRecipe(tbc::mut_a<Memory> memory, std::string_view cwd, bool authorized) {
+  static tbc::val_a<ds::Option<ds::Vec<ds::String<Memory>, Memory>>> loadRecipe(tbc::mut_a<Memory> memory, std::string_view cwd, bool authorized) {
     const auto path = ds::format(memory, "{}/.telar/setup.json", cwd);
     FileDescriptor parent;
     FileDescriptor file;
@@ -1565,7 +1565,7 @@ namespace telar::runtime::cli::project_setup {
 
   // Starts the recipe and waits for it to succeed. Each reply views the session's storage, so it is
   // asked for here, where the next exchange replaces it.
-  void awaitSetup(ControlSession& session, ExecutionRequest request) {
+  static void awaitSetup(ControlSession& session, ExecutionRequest request) {
     auto reply = execution::exchange(session, request);
 
     request.action = ExecutionAction::status;
@@ -1599,7 +1599,7 @@ namespace telar::runtime::cli::project_setup {
   }
 
   // Starts a recipe as an execution in `cwd` and, unless `detach`, waits for it to succeed.
-  std::uint64_t execute(ControlSession& session, std::string_view cwd, std::span<const ds::String<Memory>> recipe, bool detach) {
+  static std::uint64_t execute(ControlSession& session, std::string_view cwd, std::span<const ds::String<Memory>> recipe, bool detach) {
     ds::Array<std::string_view, ExecutionOptions::max_arguments> argv;
 
     for (std::size_t index = 0; index < recipe.size(); ++index) {

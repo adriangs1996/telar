@@ -55,7 +55,7 @@ namespace telar::runtime::cli {
       explicit StopRefused(std::string_view message) noexcept
           : message_(message) {}
 
-      const char* what() const noexcept override {
+      [[nodiscard]] const char* what() const noexcept override {
         return message_.c_str();
       }
 
@@ -131,7 +131,7 @@ namespace telar::runtime::cli {
 
   [[noreturn]] void RuntimeConnection::bridge() {
     ::signal(SIGPIPE, SIG_IGN);
-    RelayDirection upstream{STDIN_FILENO, client_.descriptor()};
+    RelayDirection upstream{.source = STDIN_FILENO, .destination = client_.descriptor()};
     pthread_t thread;
     const auto result = ::pthread_create(&thread, nullptr, &relayInput, &upstream);
     if (result != 0) {
@@ -139,7 +139,7 @@ namespace telar::runtime::cli {
     }
 
     ::pthread_detach(thread);
-    relay({client_.descriptor(), STDOUT_FILENO});
+    relay({.source = client_.descriptor(), .destination = STDOUT_FILENO});
   }
 
 }

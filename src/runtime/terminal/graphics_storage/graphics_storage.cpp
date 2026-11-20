@@ -115,13 +115,13 @@ namespace telar::runtime {
       checkGhostty(ghostty_kitty_graphics_image_iterator_new(allocator_.get(), images_.output()));
     }
 
-    auto iterator = images_.get();
+    auto* iterator = images_.get();
 
     checkGhostty(ghostty_kitty_graphics_get(storage, GHOSTTY_KITTY_GRAPHICS_DATA_IMAGE_ITERATOR, &iterator));
     ds::Option<std::uint32_t> oldest;
     std::uint64_t oldest_generation = std::numeric_limits<std::uint64_t>::max();
 
-    while (const auto image = ghostty_kitty_graphics_image_next(iterator)) {
+    while (const auto* const image = ghostty_kitty_graphics_image_next(iterator)) {
       if (placed) {
         std::size_t count = 0;
 
@@ -152,7 +152,7 @@ namespace telar::runtime {
       checkGhostty(ghostty_kitty_graphics_placement_iterator_new(allocator_.get(), placements_.output()));
     }
 
-    auto iterator = placements_.get();
+    auto* iterator = placements_.get();
 
     checkGhostty(ghostty_kitty_graphics_get(storage, GHOSTTY_KITTY_GRAPHICS_DATA_PLACEMENT_ITERATOR, &iterator));
     return iterator;
@@ -179,7 +179,7 @@ namespace telar::runtime {
     std::uint32_t identity = 0;
 
     checkGhostty(ghostty_kitty_graphics_placement_get(iterator, GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_IMAGE_ID, &identity));
-    const auto image = ghostty_kitty_graphics_image(storage, identity);
+    const auto* const image = ghostty_kitty_graphics_image(storage, identity);
     auto rectangle = ghosttySized<GhosttySelection>();
 
     return image != nullptr && ghostty_kitty_graphics_placement_rect(iterator, image, terminal, &rectangle) == GHOSTTY_SUCCESS &&
@@ -239,7 +239,7 @@ namespace telar::runtime {
       checkGhostty(ghostty_kitty_graphics_placement_iterator_new(allocator_.get(), iterator_.output()));
     }
 
-    auto iterator = iterator_.get();
+    auto* iterator = iterator_.get();
 
     checkGhostty(ghostty_kitty_graphics_get(storage, GHOSTTY_KITTY_GRAPHICS_DATA_PLACEMENT_ITERATOR, &iterator));
     std::size_t placement_count = 0;
@@ -254,7 +254,7 @@ namespace telar::runtime {
 
     changed |= placement_count_ != placement_count;
     placement_count_ = placement_count;
-    revision_ += changed;
+    revision_ += static_cast<std::uint64_t>(changed);
   }
 
 #if TELAR_DIAGNOSTICS
@@ -364,7 +364,7 @@ namespace telar::runtime {
       return ds::none;
     }
 
-    const auto image = ghostty_kitty_graphics_image(storage, placement.key.image_id);
+    const auto* const image = ghostty_kitty_graphics_image(storage, placement.key.image_id);
 
     checkGhostty(ghostty_kitty_graphics_image_get(image, GHOSTTY_KITTY_IMAGE_DATA_GENERATION, &placement.key.generation));
     checkGhostty(ghostty_kitty_graphics_placement_source_rect(iterator, image, &placement.source_x, &placement.source_y, &placement.source_width, &placement.source_height));

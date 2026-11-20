@@ -75,7 +75,7 @@ export {
       bool truncated = false;
       std::span<const Byte> bytes;
 
-      bool echo() const noexcept;
+      [[nodiscard]] bool echo() const noexcept;
     };
 
     class DatagramCodec {
@@ -302,7 +302,7 @@ export {
       // An address and its port, as `[address]:port` for IPv6.
       static constexpr std::size_t text_bytes = INET6_ADDRSTRLEN + 8;
 
-      FixedText<text_bytes> text() const;
+      [[nodiscard]] FixedText<text_bytes> text() const;
     };
 
     struct TcpPacket {
@@ -569,7 +569,7 @@ export {
             return false;
           }
 
-          side.pending.push({sequence, Bytes{memory, bytes}});
+          side.pending.push({.sequence = sequence, .bytes = Bytes{memory, bytes}});
           flow.buffered += bytes.size();
           total_buffered += bytes.size();
           if (!side.gap) {
@@ -578,13 +578,13 @@ export {
         }
 
         for (std::size_t index = 0; index < side.pending.size();) {
-          auto& pending = side.pending[index];
+          const auto& pending = side.pending[index];
           if (distance(pending.sequence, side.next) > 0) {
             ++index;
             continue;
           }
 
-          const auto skip = std::min(pending.bytes.size(), static_cast<std::size_t>(static_cast<std::uint32_t>(side.next - pending.sequence)));
+          const auto skip = std::min(pending.bytes.size(), static_cast<std::size_t>((side.next - pending.sequence)));
           const auto ready = std::span<const Byte>{pending.bytes}.subspan(skip);
           if (!ready.empty()) {
             publish(Kind::stream_data, key, flow, event, {.direction = direction, .offset = side.offset, .bytes = ready}, emit);

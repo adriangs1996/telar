@@ -27,7 +27,7 @@ namespace telar::runtime {
         return ds::none;
       }
 
-      value = value * Base + digit;
+      value = (value * Base) + digit;
     }
 
     return value;
@@ -134,17 +134,17 @@ namespace telar::runtime {
       }
 
       if (endsWithChunked(*transfer_encoding)) {
-        return Http1Framing{Kind::chunked};
+        return Http1Framing{.kind = Kind::chunked};
       }
 
-      return response ? ds::Option{Http1Framing{Kind::until_close}} : ds::none;
+      return response ? ds::Option{Http1Framing{.kind = Kind::until_close}} : ds::none;
     }
 
     if (content_length) {
-      return Http1Framing{Kind::content_length, *content_length};
+      return Http1Framing{.kind = Kind::content_length, .length = *content_length};
     }
 
-    return Http1Framing{response ? Kind::until_close : Kind::none};
+    return Http1Framing{.kind = response ? Kind::until_close : Kind::none};
   }
 
   bool Http1Head::connectionCloses(std::string_view bytes) noexcept {

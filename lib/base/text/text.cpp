@@ -55,7 +55,7 @@ namespace telar::runtime {
   void appendLowerHex(ds::String<Memory>& output, std::span<const std::uint8_t> bytes) {
     const auto start = output.size();
 
-    output.resize(start + 2 * bytes.size());
+    output.resize(start + (2 * bytes.size()));
     static_cast<void>(encodeLowerHex(bytes, std::span{output.dataMut(), output.size()}.subspan(start)));
   }
 
@@ -143,7 +143,7 @@ namespace telar::runtime {
           return false;
         }
 
-        value = std::min(exponent_limit, value * 10 + number);
+        value = std::min(exponent_limit, (value * 10) + number);
       }
 
       value = negative ? -value : value;
@@ -216,7 +216,7 @@ namespace telar::runtime {
     }
 
     exponent += integer_digits_ - static_cast<std::int64_t>(first);
-    if (hexadecimal && (digits_.size() - (first / 4) * 4) / 4 > 32) {
+    if (hexadecimal && (digits_.size() - ((first / 4) * 4)) / 4 > 32) {
       truncateHexFallback();
     }
 
@@ -247,7 +247,7 @@ namespace telar::runtime {
 
     while (consumed < digits_.size() && coefficient < hex_fallback_coefficient) {
       for (unsigned bit = 0; bit < 4; ++bit) {
-        coefficient = coefficient * 2 + static_cast<unsigned>(digits_[consumed++] - '0');
+        coefficient = (coefficient * 2) + static_cast<unsigned>(digits_[consumed++] - '0');
       }
     }
 
@@ -410,7 +410,7 @@ namespace telar::runtime {
       return ds::none;
     }
 
-    return ProxyTarget{hostname, port};
+    return ProxyTarget{.hostname = hostname, .port = port};
   }
 
 }

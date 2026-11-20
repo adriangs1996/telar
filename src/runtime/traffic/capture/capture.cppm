@@ -28,7 +28,7 @@ export {
 
       void observe(Sample& previous, std::uint32_t buffer, std::uint32_t interface) noexcept;
 
-      std::uint64_t count() const noexcept;
+      [[nodiscard]] std::uint64_t count() const noexcept;
 
     private:
       std::uint64_t total_ = 0;
@@ -73,7 +73,7 @@ export {
 
         ~Signals();
 
-        bool stopped() const noexcept;
+        [[nodiscard]] bool stopped() const noexcept;
 
       private:
         sigset_t selected_{};

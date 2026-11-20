@@ -65,7 +65,7 @@ namespace telar {
 
     template <std::size_t N>
     auto valueText(const ds::Array<Byte, N>& value) {
-      ds::Array<char, N * 4 + 3> text{};
+      ds::Array<char, (N * 4) + 3> text{};
       std::size_t position = 0;
 
       text.atMut(position++) = '"';
@@ -122,7 +122,7 @@ namespace telar {
   using Decoded = tbc::val_a<Value>;
 
   struct DecodeStorage {
-    tbc::val_a<std::span<Byte>> remaining{};
+    tbc::val_a<std::span<Byte>> remaining;
 
     template <typename T>
     tbc::val_a<std::span<T>> allocate(std::size_t count) {

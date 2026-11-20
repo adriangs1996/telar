@@ -78,7 +78,7 @@ namespace telar::git {
     std::string_view name;
     ObjectId id;
 
-    bool directory() const noexcept;
+    [[nodiscard]] bool directory() const noexcept;
   };
 
   // git's tree order: a directory sorts as if its name ended with '/'.
@@ -92,7 +92,7 @@ namespace telar::git {
     // False at the end, or when `failed()` because the tree is malformed.
     bool next(tbc::mut_a<TreeEntry> entry) noexcept;
 
-    bool failed() const noexcept;
+    [[nodiscard]] bool failed() const noexcept;
 
   private:
     bool fail() noexcept;
@@ -115,7 +115,7 @@ namespace telar::git {
     ds::Array<std::uint32_t, 256> fanout{};
   };
 
-  inline constexpr std::size_t pack_index_header = 8 + 256 * 4;
+  inline constexpr std::size_t pack_index_header = 8 + (256 * 4);
 
   class ObjectDatabase {
   public:
@@ -125,8 +125,8 @@ namespace telar::git {
     bool open(int common, ObjectFormat format, const Limits& limits);
 
     void close() noexcept;
-    int objects() const noexcept;
-    ObjectFormat format() const noexcept;
+    [[nodiscard]] int objects() const noexcept;
+    [[nodiscard]] ObjectFormat format() const noexcept;
 
     // Reads object `id` into `output`. With a non-zero `prefix`, only its first
     // `prefix` bytes are kept, and an undeltified object is inflated no further.
@@ -225,17 +225,17 @@ namespace telar::git {
     void load(int objects, ObjectFormat format, const Limits& limits, bool disabled);
 
     void clear() noexcept;
-    bool empty() const noexcept;
+    [[nodiscard]] bool empty() const noexcept;
 
     // The global position of `id`, nullopt when absent or unreadable.
-    ds::Option<std::uint32_t> find(const ObjectId& id) const noexcept;
+    [[nodiscard]] ds::Option<std::uint32_t> find(const ObjectId& id) const noexcept;
 
     // `position` must come from find() or parents().
-    ds::Option<ObjectId> id(std::uint32_t position) const noexcept;
+    [[nodiscard]] ds::Option<ObjectId> id(std::uint32_t position) const noexcept;
 
     // The commit at `position`. A generation of 0, which no released git
     // writes, would break the walk's order, so it reads as unreadable.
-    ds::Option<Commit> commit(std::uint32_t position) const noexcept;
+    [[nodiscard]] ds::Option<Commit> commit(std::uint32_t position) const noexcept;
 
     // Calls `output` with each parent of `commit`; false when the graph is malformed.
     template <typename Output>
@@ -249,7 +249,7 @@ namespace telar::git {
     }
 
   private:
-    const Layer* layerOf(std::uint32_t position) const noexcept;
+    [[nodiscard]] const Layer* layerOf(std::uint32_t position) const noexcept;
     bool visitParents(const Commit& commit, std::size_t maximum, void* target, void (*output)(void*, std::uint32_t)) const;
 
     // Validates the header, the chunk table and the fanout of one layer.

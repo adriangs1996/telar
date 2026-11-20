@@ -14,7 +14,7 @@ export {
 
     class JsonError final : public std::exception {
     public:
-      const char* what() const noexcept override;
+      [[nodiscard]] const char* what() const noexcept override;
     };
 
   }
@@ -29,7 +29,7 @@ export {
     public:
       explicit JsonValue(tbc::val_b<std::string_view> bytes, unsigned maximum_depth = 32);
 
-      tbc::val_b<std::string_view> encoded() const noexcept;
+      [[nodiscard]] tbc::val_b<std::string_view> encoded() const noexcept;
 
       template <typename Consumer>
       TBC_GENERIC void eachElement(Consumer&& consume) const {
@@ -57,9 +57,9 @@ export {
         }
       }
 
-      tbc::val_b<ds::Option<JsonValue>> field(std::string_view name) const;
-      bool equals(std::string_view expected) const;
-      bool boolean() const noexcept;
+      [[nodiscard]] tbc::val_b<ds::Option<JsonValue>> field(std::string_view name) const;
+      [[nodiscard]] bool equals(std::string_view expected) const;
+      [[nodiscard]] bool boolean() const noexcept;
 
       template <Allocator Memory>
       void string(ds::String<Memory>& output) const;
@@ -77,7 +77,7 @@ export {
       static void skipValue(std::string_view& input, unsigned maximum_depth);
 
       // The escaped text between the quotes of this string value.
-      tbc::val_b<std::string_view> stringContents() const;
+      [[nodiscard]] tbc::val_b<std::string_view> stringContents() const;
 
       // Writes the unescaped `encoded` to `output`, which holds at least encoded.size() bytes,
       // and returns how many it wrote: an escape never takes fewer bytes than what it spells.
@@ -228,11 +228,11 @@ export {
         });
       }
 
-      inline const ds::Option<JsonValue>& optional(std::string_view name) const {
+      [[nodiscard]] inline const ds::Option<JsonValue>& optional(std::string_view name) const {
         return values_[jsonFieldPosition(names_, name)];
       }
 
-      inline const JsonValue& required(std::string_view name) const {
+      [[nodiscard]] inline const JsonValue& required(std::string_view name) const {
         return requiredJsonField(optional(name));
       }
 
@@ -272,19 +272,19 @@ export {
 
       static tbc::val_a<JsonNode> parse(tbc::mut_a<Memory> memory, std::string_view source);
 
-      JsonKind kind() const noexcept;
-      std::string_view text() const noexcept;
+      [[nodiscard]] JsonKind kind() const noexcept;
+      [[nodiscard]] std::string_view text() const noexcept;
       std::span<JsonNode> childrenMut() noexcept;
-      std::span<const JsonNode> children() const noexcept;
+      [[nodiscard]] std::span<const JsonNode> children() const noexcept;
       JsonNode* findMut(std::string_view name) noexcept;
-      const JsonNode* find(std::string_view name) const noexcept;
+      [[nodiscard]] const JsonNode* find(std::string_view name) const noexcept;
       void erase(std::size_t index);
       JsonNode& ensure(std::string_view name, JsonKind kind);
       void setString(std::string_view name, std::string_view value);
       void setLiteral(std::string_view name, std::string_view value);
       void append(JsonNode child);
       void remove(std::string_view name);
-      ds::String<Memory> format() const;
+      [[nodiscard]] ds::String<Memory> format() const;
 
     private:
       static constexpr unsigned maximum_depth = 256;

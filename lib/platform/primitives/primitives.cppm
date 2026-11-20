@@ -46,7 +46,7 @@ export namespace telar::runtime {
       return !bytes_.empty();
     }
 
-    constexpr std::span<std::uint8_t> bytes() const noexcept {
+    [[nodiscard]] constexpr std::span<std::uint8_t> bytes() const noexcept {
       return bytes_;
     }
 
@@ -103,7 +103,7 @@ export extern "C++" {
     inline constexpr std::size_t buffer_capacity = 16 * 1024;
 
     consteval const char* literal(const char* name) {
-      for (const char* character = name; *character; ++character) {
+      for (const char* character = name; (*character) != 0; ++character) {
         if (*character == '"' || *character == '\\' || static_cast<unsigned char>(*character) < 0x20) {
           throw "Trace names must be JSON-safe literals";
         }

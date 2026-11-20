@@ -312,7 +312,7 @@ namespace telar::runtime {
 
   void TlsTrustStore::addDer(std::span<const unsigned char> encoded) {
     requireTls(!encoded.empty() && encoded.size() <= maximum_certificate_bytes, "Invalid TLS root certificate size");
-    auto* position = encoded.data();
+    const auto* position = encoded.data();
     TlsCertificate certificate{d2i_X509(nullptr, &position, static_cast<long>(encoded.size()))};
 
     requireTls(certificate != nullptr && position == encoded.data() + encoded.size(), "Decode TLS root certificate");
@@ -501,7 +501,7 @@ namespace telar::runtime {
   StreamResult TlsSession::read(TlsSide side, std::span<std::uint8_t> destination) noexcept {
     auto& buffer = input(side);
     if (!buffer.empty()) {
-      return {StreamResult::State::data, buffer.copyTo(destination)};
+      return {.state = StreamResult::State::data, .bytes = buffer.copyTo(destination)};
     }
 
     return readNative(side, destination);
@@ -509,7 +509,7 @@ namespace telar::runtime {
 
   StreamResult TlsSession::write(TlsSide side, std::span<const std::uint8_t> bytes) noexcept {
     if (state_ != State::established) {
-      return {StreamResult::State::failed};
+      return {.state = StreamResult::State::failed};
     }
 
     ERR_clear_error();
@@ -517,7 +517,7 @@ namespace telar::runtime {
     auto* connection = endpoint(side);
     const int result = SSL_write_ex(connection, bytes.data(), bytes.size(), &sent);
 
-    return result == 1 ? StreamResult{StreamResult::State::data, sent} : ioFailure(connection, result);
+    return result == 1 ? StreamResult{.state = StreamResult::State::data, .bytes = sent} : ioFailure(connection, result);
   }
 
   StreamResult TlsSession::peek(TlsSide side, std::span<std::uint8_t> destination) noexcept {
@@ -526,7 +526,7 @@ namespace telar::runtime {
       std::memcpy(destination.data(), visible.bytes.data(), visible.bytes.size());
     }
 
-    return {visible.state, visible.bytes.size(), visible.waiting};
+    return {.state = visible.state, .bytes = visible.bytes.size(), .waiting = visible.waiting};
   }
 
   StreamView TlsSession::peekView(TlsSide side, std::size_t maximum) noexcept {
@@ -552,7 +552,7 @@ namespace telar::runtime {
 
   StreamResult TlsSession::readNative(TlsSide side, std::span<std::uint8_t> destination) noexcept {
     if (state_ != State::established) {
-      return {StreamResult::State::failed};
+      return {.state = StreamResult::State::failed};
     }
 
     ERR_clear_error();
@@ -560,7 +560,7 @@ namespace telar::runtime {
     auto* connection = endpoint(side);
     const int result = SSL_read_ex(connection, destination.data(), destination.size(), &received);
 
-    return result == 1 ? StreamResult{StreamResult::State::data, received} : ioFailure(connection, result);
+    return result == 1 ? StreamResult{.state = StreamResult::State::data, .bytes = received} : ioFailure(connection, result);
   }
 
   void TlsSession::initialize() {
@@ -616,13 +616,13 @@ namespace telar::runtime {
   StreamResult TlsSession::ioFailure(SSL* connection, int result) noexcept {
     switch (SSL_get_error(connection, result)) {
     case SSL_ERROR_WANT_READ:
-      return {StreamResult::State::blocked, 0, StreamReadiness::readable};
+      return {.state = StreamResult::State::blocked, .bytes = 0, .waiting = StreamReadiness::readable};
     case SSL_ERROR_WANT_WRITE:
-      return {StreamResult::State::blocked, 0, StreamReadiness::writable};
+      return {.state = StreamResult::State::blocked, .bytes = 0, .waiting = StreamReadiness::writable};
     case SSL_ERROR_ZERO_RETURN:
-      return {StreamResult::State::ended};
+      return {.state = StreamResult::State::ended};
     default:
-      return {StreamResult::State::failed};
+      return {.state = StreamResult::State::failed};
     }
   }
 

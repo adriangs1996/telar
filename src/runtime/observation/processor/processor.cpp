@@ -60,7 +60,7 @@ namespace telar::runtime {
 
     std::copy(bytes.begin(), bytes.end(), batch.bytes.dataMut() + offset);
     batch.byte_count += bytes.size();
-    batch.events.atMut(batch.event_count++) = {kind, ObservationTime::now(), static_cast<std::uint32_t>(offset), static_cast<std::uint32_t>(bytes.size()), shell_foreground};
+    batch.events.atMut(batch.event_count++) = {.kind = kind, .time = ObservationTime::now(), .offset = static_cast<std::uint32_t>(offset), .length = static_cast<std::uint32_t>(bytes.size()), .shell_foreground = shell_foreground};
   }
 
   void PaneObserver::resize(TerminalSize size) noexcept {
