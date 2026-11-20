@@ -30,6 +30,8 @@ that work for you before you make one more module public: the list is meant to s
   path, so the tool renames it in every importer, with its target and its test label.
 - A function body in a `.cppm`: read "Interface bodies" in `lib/tbc/README.md` first. A body
   stays in an interface only as `TBC_HOT_PATH` or `TBC_GENERIC`.
+- Adding a request to the protocol or a use case to the window, with every place it touches
+  and what fails when you miss one: `docs/build/recipes.md`.
 - Toolchain, configure, build and test commands: `docs/build/cpp-modules.md`.
 - The GUI's layers and what a feature exports: `docs/build/gui-architecture.md`.
 
