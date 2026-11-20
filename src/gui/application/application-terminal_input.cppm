@@ -21,4 +21,13 @@ export namespace telar::gui::application::terminal::input {
   // to one on the alternate screen, the view scrolled otherwise.
   void scroll(Session& session, ScrollDirection direction);
 
+  // The row a pane's terminal draws at its top, which the session then scrolls from: the terminal
+  // glides between the runtime's views, so where it draws is not always where the runtime is.
+  // Nothing while it draws the runtime's own view.
+  void showTop(Session& session, std::uint64_t pane_id, ds::Option<std::uint64_t> top) noexcept;
+
+  // Gives back the rows a pane keeps beyond its screen once nothing folds them out of it; its
+  // terminal asks when its view has come to rest.
+  void releaseRows(Session& session, std::uint64_t pane_id);
+
 }

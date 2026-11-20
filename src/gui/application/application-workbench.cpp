@@ -322,6 +322,45 @@ namespace telar::gui::application::workbench {
     return true;
   }
 
+  bool dragDivider(Session& session, std::size_t node, double x, double y, bool commit) {
+    auto* tab = activeTabMut(session.tabs, session.active_tab);
+    if (tab == nullptr || tab->fullscreen || !std::isfinite(x) || !std::isfinite(y)) {
+      return false;
+    }
+
+    const auto dividers = tab->layout.dividers();
+    const auto divider = std::ranges::find_if(dividers, [&](const auto& entry) {
+      return entry.node_index == node;
+    });
+    if (divider == dividers.end()) {
+      return false;
+    }
+
+    const auto& frame = geometry(session);
+    const auto parent_bounds = frame.pixels(divider->parent_bounds);
+    const auto divider_bounds = frame.pixels(divider->bounds);
+    const bool horizontal = divider->axis == ClientLayoutAxis::horizontal;
+    const auto extent = horizontal ? parent_bounds.width - divider_bounds.width : parent_bounds.height - divider_bounds.height;
+    const auto offset = horizontal ? x - static_cast<double>(parent_bounds.x) - (static_cast<double>(divider_bounds.width / 2)) : y - static_cast<double>(parent_bounds.y) - (static_cast<double>(divider_bounds.height / 2));
+
+    if (extent <= 0) {
+      return false;
+    }
+
+    const auto ratio = static_cast<std::uint16_t>(std::clamp(offset / static_cast<double>(extent), 0.0, 1.0) * PaneLayout::ratio_maximum);
+    const bool moved = tab->layout.setSplitRatio({.node_index = node, .ratio = ratio});
+
+    if (moved) {
+      session.invalidateView();
+    }
+
+    if (commit) {
+      retainLayout(session);
+    }
+
+    return moved;
+  }
+
   bool split(Session& session, ClientLayoutAxis axis) {
     const auto* tab = activeTab(session.tabs, session.active_tab);
     if (tab == nullptr) {

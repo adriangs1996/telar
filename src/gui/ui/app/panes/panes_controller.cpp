@@ -36,39 +36,13 @@ namespace telar::gui::qt {
 
   void PanesController::resizeDivider(int index, qreal x, qreal y, bool commit) {
     try {
-      auto& session = store_.sessionMut();
-      auto* tab = session.activeTabMut();
-      if (tab == nullptr || tab->fullscreen || !std::isfinite(x) || !std::isfinite(y) || index < 0) {
+      if (index < 0) {
         return;
       }
 
-      const auto dividers = tab->layout.dividers();
-      const auto divider = std::ranges::find_if(dividers, [&](const auto& entry) {
-        return entry.node_index == static_cast<std::size_t>(index);
-      });
-      if (divider == dividers.end()) {
-        return;
-      }
-
-      const auto& geometry = application::workbench::geometry(session);
-      const auto parent_bounds = geometry.pixels(divider->parent_bounds);
-      const auto divider_bounds = geometry.pixels(divider->bounds);
-      const bool horizontal = divider->axis == ClientLayoutAxis::horizontal;
-      const auto extent = horizontal ? parent_bounds.width - divider_bounds.width : parent_bounds.height - divider_bounds.height;
-      const auto offset = horizontal ? (x * scale_) - static_cast<double>(parent_bounds.x) - (static_cast<double>(divider_bounds.width / 2)) : (y * scale_) - static_cast<double>(parent_bounds.y) - (static_cast<double>(divider_bounds.height / 2));
-
-      if (extent <= 0) {
-        return;
-      }
-
-      const auto ratio = static_cast<std::uint16_t>(std::clamp(offset / static_cast<double>(extent), 0.0, 1.0) * PaneLayout::ratio_maximum);
-      if (tab->layout.setSplitRatio({.node_index = static_cast<std::size_t>(index), .ratio = ratio})) {
-        session.invalidateView();
+      // The gesture is in the window's points; the workbench places the divider in its own pixels.
+      if (application::workbench::dragDivider(store_.sessionMut(), static_cast<std::size_t>(index), x * scale_, y * scale_, commit)) {
         synchronize();
-      }
-
-      if (commit) {
-        application::workbench::retainLayout(session);
       }
     } catch (const std::exception& error) {
       emit failed(QString::fromUtf8(error.what()));

@@ -126,8 +126,10 @@ namespace telar::gui::application::monitor {
   del módulo, los define.
 - Que un campo sea público es para los casos de uso de `application`. `ui` cambia el estado
   llamando a un caso de uso, no escribiendo en un campo: quien posee una regla (qué se invalida,
-  qué se retiene) es el caso de uso. Hoy hay excepciones en `ui` (el divisor de paneles, el
-  scroll de un terminal, la vista del monitor); una interacción nueva no añade otra.
+  qué se retiene) es el caso de uso: el gesto de un divisor llega como
+  `workbench::dragDivider`, y el terminal dice dónde dibuja con `terminal::input::showTop`. La
+  excepción es un valor sin reglas que `ui` edita entero, como la vista del monitor
+  (`monitor::view`), cuyos campos son lo que la persona eligió.
 
 ## Convenciones de una feature
 

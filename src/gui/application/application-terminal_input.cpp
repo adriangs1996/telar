@@ -9,6 +9,18 @@ import telar.gui.foundation.terminal;
 
 namespace telar::gui::application::terminal::input {
 
+  void showTop(Session& session, std::uint64_t pane_id, ds::Option<std::uint64_t> top) noexcept {
+    if (auto* pane = session.findPaneMut(pane_id)) {
+      pane->shown_top = top;
+    }
+  }
+
+  void releaseRows(Session& session, std::uint64_t pane_id) {
+    if (auto* pane = session.findPaneMut(pane_id); pane != nullptr && pane->folds.empty()) {
+      pane->rows.release();
+    }
+  }
+
   void scroll(Session& session, ScrollDirection direction) {
     const auto* pane = focusedPane(session.panes, session.tabs, session.active_tab);
     if (pane == nullptr || !pane->attached || pane->exited) {

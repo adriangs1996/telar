@@ -98,8 +98,8 @@ namespace telar::gui::qt {
     // At rest, with nothing drawn from them, the rows kept beyond the screen are given back.
     scroll_release_.setSingleShot(true);
     connect(&scroll_release_, &QTimer::timeout, this, [this] {
-      if (auto* current = controller_ == nullptr ? nullptr : controller_->sessionMut().findPaneMut(pane_id_); current != nullptr && !motion_.moving() && std::equal_to<>{}(shift_, 0) && current->folds.empty()) {
-        current->rows.release();
+      if (controller_ != nullptr && !motion_.moving() && std::equal_to<>{}(shift_, 0)) {
+        application::terminal::input::releaseRows(controller_->sessionMut(), pane_id_);
       }
     });
 
