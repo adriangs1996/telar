@@ -71,7 +71,9 @@ def main():
             send('textDocument/didOpen', {'textDocument': {'uri': source.as_uri(), 'languageId': 'cpp', 'version': 1, 'text': content}})
             diagnostics = wait(lambda m: m.get('method') == 'textDocument/publishDiagnostics'
                                and m.get('params', {}).get('uri') == source.as_uri())['params']['diagnostics']
-            errors = [d for d in diagnostics if d.get('severity') == 1]
+            # Compiler errors are what a broken import gives; clang-tidy's findings, which the repository's
+            # profile reports as errors and tests are not linted against, are not this check's subject.
+            errors = [d for d in diagnostics if d.get('severity') == 1 and d.get('source') != 'clang-tidy']
             if errors:
                 raise RuntimeError('Import diagnostics: ' + json.dumps(errors))
             send('textDocument/definition', {'textDocument': {'uri': source.as_uri()}, 'position': position}, 2)
