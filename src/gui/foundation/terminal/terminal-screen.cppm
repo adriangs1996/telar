@@ -1,4 +1,5 @@
 module;
+#include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
 
 export module telar.gui.foundation.terminal:screen;
@@ -11,18 +12,20 @@ import telar.base.ds;
 
 export namespace telar::gui::inline foundation::inline terminal {
 
-  struct CellPosition {
+  // Compared for every cell a selection covers.
+  struct TBC_HOT_PATH CellPosition {
     std::uint16_t x = 0;
     std::uint32_t y = 0;
 
-    [[nodiscard]] auto operator<=>(const CellPosition& other) const noexcept {
+    [[nodiscard]] inline auto operator<=>(const CellPosition& other) const noexcept {
       return std::tie(y, x) <=> std::tie(other.y, other.x);
     }
 
     bool operator==(const CellPosition&) const = default;
   };
 
-  struct CellValue {
+  // Built and read for every cell of a frame.
+  struct TBC_HOT_PATH CellValue {
     static constexpr std::size_t text_capacity = 16;
 
     CellStyle style;
@@ -30,18 +33,18 @@ export namespace telar::gui::inline foundation::inline terminal {
     CellWidth width = CellWidth::single;
     Byte length = 1;
 
-    CellValue() noexcept {
+    inline CellValue() noexcept {
       text.atMut(0) = ' ';
     }
 
-    explicit CellValue(const Cell& source) noexcept
+    inline explicit CellValue(const Cell& source) noexcept
         : style(source.style),
           width(source.width),
           length(static_cast<Byte>(source.text.size())) {
       std::ranges::copy(source.text, text.viewMut().begin());
     }
 
-    [[nodiscard]] std::string_view utf8() const noexcept {
+    [[nodiscard]] inline std::string_view utf8() const noexcept {
       return textView(std::span{text}.first(length));
     }
   };
@@ -53,7 +56,7 @@ export namespace telar::gui::inline foundation::inline terminal {
   };
 
   template <Allocator Memory>
-  class Screen {
+  class TBC_GENERIC Screen {
   public:
     static constexpr std::size_t maximum_cells = TerminalGrid::maximum_cells;
 

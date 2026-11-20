@@ -387,8 +387,7 @@ export {
       // use case asks and sends while it holds a feature's state, as Rust borrows one field at a time.
       class Link {
       public:
-        explicit Link(tbc::view<RuntimeTransport&, tbc::lt::a> transport) noexcept
-            : transport(transport) {}
+        explicit Link(tbc::view<RuntimeTransport&, tbc::lt::a> transport) noexcept;
 
         [[nodiscard]] std::uint64_t nextRequest() noexcept;
 

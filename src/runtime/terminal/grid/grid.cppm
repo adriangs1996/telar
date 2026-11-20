@@ -1,4 +1,5 @@
 module;
+#include "tbc/annotations.hpp"
 
 export module telar.runtime.terminal.grid;
 
@@ -17,14 +18,14 @@ export namespace telar::runtime::cell_layout {
 export namespace telar::runtime {
 
   // Whether a cell shows a character: a codepoint or a grapheme, not empty space.
-  inline bool cellHasText(GhosttyCell cell) noexcept {
+  TBC_HOT_PATH inline bool cellHasText(GhosttyCell cell) noexcept {
     const auto content = cell_layout::content_tag(cell);
 
     return (content == GHOSTTY_CELL_CONTENT_CODEPOINT || content == GHOSTTY_CELL_CONTENT_CODEPOINT_GRAPHEME) && cell_layout::codepoint(cell) != 0;
   }
 
   // The grid reference of a point of the terminal's screen, viewport or history.
-  inline GhosttyGridRef gridReference(GhosttyTerminal terminal, GhosttyPointTag tag, GhosttyPointCoordinate coordinate) {
+  TBC_HOT_PATH inline GhosttyGridRef gridReference(GhosttyTerminal terminal, GhosttyPointTag tag, GhosttyPointCoordinate coordinate) {
     auto result = ghosttySized<GhosttyGridRef>();
 
     checkGhostty(ghostty_terminal_grid_ref(terminal, GhosttyPoint{.tag = tag, .value = {.coordinate = coordinate}}, &result));
@@ -32,7 +33,7 @@ export namespace telar::runtime {
   }
 
   // The rows the terminal holds, its scrollback included.
-  inline std::size_t totalRows(GhosttyTerminal terminal) {
+  TBC_HOT_PATH inline std::size_t totalRows(GhosttyTerminal terminal) {
     std::size_t rows = 0;
 
     checkGhostty(ghostty_terminal_get(terminal, GHOSTTY_TERMINAL_DATA_TOTAL_ROWS, &rows));

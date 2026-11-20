@@ -10,6 +10,10 @@ import telar.base.memory.allocators;
 
 namespace telar::gui::features::prompt {
 
+  tbc::view<Choice, tbc::lt::a> Choice::clone() const {
+    return {.text = text.clone(), .description = description.clone(), .directory = directory};
+  }
+
   CompletionContext::CompletionContext(Memory& memory)
       : command(memory),
         words(memory),

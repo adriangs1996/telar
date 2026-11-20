@@ -11,6 +11,9 @@ import telar.base.ds;
 
 namespace telar::gui::features::terminal::copy_mode {
 
+  CopySearch::CopySearch(Memory& memory)
+      : query(memory) {}
+
   CopyEffect CopyNavigation::apply(CopyState& state, const TerminalKey& key, const CopyGrid& grid, std::span<const PaneMatch> matches) noexcept {
     const auto action = command(key);
     if (move(state, action, grid)) {

@@ -86,9 +86,7 @@ namespace telar::gui::features::prompt {
       tbc::view<ds::String<Memory>, tbc::lt::a> text;
 
       // The copy lives in the text's memory, region `a`, with the key it was recorded for.
-      [[nodiscard]] tbc::view<Recorded, tbc::lt::a> clone() const {
-        return {.key = key, .text = text.clone()};
-      }
+      [[nodiscard]] tbc::view<Recorded, tbc::lt::a> clone() const;
     };
 
     // The allocator the editor's texts come from.

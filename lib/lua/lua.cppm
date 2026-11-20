@@ -24,7 +24,7 @@ export {
     public:
       template <typename... Parts>
         requires std::is_constructible_v<ErrorText<1023>, const Parts&...>
-      explicit Error(const Parts&... parts) noexcept
+      TBC_GENERIC explicit Error(const Parts&... parts) noexcept
           : message_(parts...) {}
 
       const char* what() const noexcept override;
@@ -234,7 +234,7 @@ export {
 
       // Throws an error naming this value's path, then the parts of the message.
       template <typename... Parts>
-      [[noreturn]] void fail(const Parts&... parts) const {
+      [[noreturn]] TBC_GENERIC void fail(const Parts&... parts) const {
         throw Error{label_.view(), " ", parts...};
       }
 

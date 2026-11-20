@@ -1,3 +1,6 @@
+module;
+#include "tbc/annotations.hpp"
+
 // The status bar: the host's metrics the runtime samples, with the CPU's history and the alerts
 // each metric raises, and the mode bar's words and geometry.
 export module telar.gui.features.status_bar;
@@ -32,9 +35,10 @@ export namespace telar::gui::features::status_bar {
   };
 
   // What the bar reads of the host's metrics: a view of the state, valid until the next sample.
-  class HostMetrics {
+  // Inline, as the bar reads it whenever it draws.
+  class TBC_HOT_PATH HostMetrics {
   public:
-    explicit HostMetrics(tbc::view<const State&, tbc::lt::a> state) noexcept
+    inline explicit HostMetrics(tbc::view<const State&, tbc::lt::a> state) noexcept
         : state_(&state) {}
 
     [[nodiscard]] inline tbc::view<const SystemMetrics&, tbc::lt::a> sample() const noexcept;
@@ -50,7 +54,7 @@ export namespace telar::gui::features::status_bar {
   // A sample from the runtime: false when it is not newer than the one the bar shows.
   [[nodiscard]] bool receive(State& state, const SystemMetrics& sample);
 
-  [[nodiscard]] inline HostMetrics metrics(const State& state) noexcept {
+  [[nodiscard]] TBC_HOT_PATH inline HostMetrics metrics(const State& state) noexcept {
     return HostMetrics{state};
   }
 

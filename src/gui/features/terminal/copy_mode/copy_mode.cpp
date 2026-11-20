@@ -9,6 +9,9 @@ import telar.base.ds;
 
 namespace telar::gui::features::terminal::copy_mode {
 
+  State::State(Memory& memory)
+      : search_(memory) {}
+
   bool enter(State& state, std::uint64_t pane_id, const CopyGrid& grid, const Cursor& cursor) noexcept {
     const auto entered = Access::mode(state).enter(pane_id, grid, cursor);
     if (entered) {

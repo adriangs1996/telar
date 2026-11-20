@@ -33,6 +33,9 @@ import telar.base.ds;
 
 namespace telar::gui::application {
 
+  Session::Link::Link(tbc::view<RuntimeTransport&, tbc::lt::a> transport) noexcept
+      : transport(transport) {}
+
   template <typename Message>
   std::span<const Byte> Session::Link::encode(const Message& message) {
     return Codec::encode(message, transport.buffer(Codec::encodedSize(message)));

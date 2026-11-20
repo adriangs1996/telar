@@ -51,9 +51,7 @@ export namespace telar::gui::features::prompt {
     static constexpr std::uint32_t indent = 2;
     static constexpr std::size_t maximum_runs = 4096;
 
-    explicit Layout(Memory& memory)
-        : runs(memory),
-          selection(memory) {}
+    explicit Layout(Memory& memory);
 
     ds::Vec<Run, Memory> runs;
     ds::Vec<CellRange, Memory> selection;

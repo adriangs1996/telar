@@ -69,12 +69,9 @@ export {
     // pfctl failed; its output, cut to what fits, says why.
     class PfCommandError final : public std::exception {
     public:
-      explicit PfCommandError(std::string_view output) noexcept
-          : message_(output) {}
+      explicit PfCommandError(std::string_view output) noexcept;
 
-      const char* what() const noexcept override {
-        return message_.c_str();
-      }
+      const char* what() const noexcept override;
 
     private:
       ErrorText<1023> message_;

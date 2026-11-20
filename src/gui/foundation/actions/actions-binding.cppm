@@ -30,11 +30,11 @@ export {
       Action action{};
       bool prefixed = false;
 
-      [[nodiscard]] std::span<const KeyChord> sequence() const noexcept {
+      [[nodiscard]] inline std::span<const KeyChord> sequence() const noexcept {
         return std::span{keys}.first(length);
       }
 
-      [[nodiscard]] bool conflictsWith(const KeyBinding& other) const noexcept {
+      [[nodiscard]] inline bool conflictsWith(const KeyBinding& other) const noexcept {
         const auto shared = std::min(length, other.length);
 
         return std::equal(keys.begin(), keys.begin() + shared, other.keys.begin());
@@ -49,7 +49,7 @@ export {
         std::size_t end = 0;
       };
 
-      explicit BindingMap(std::span<const KeyBinding<Action>> bindings = {}) {
+      inline explicit BindingMap(std::span<const KeyBinding<Action>> bindings = {}) {
         if (bindings.size() > BindingLimits::bindings) {
           throw std::invalid_argument{"Too many key bindings"};
         }
@@ -79,19 +79,19 @@ export {
         }
       }
 
-      [[nodiscard]] std::size_t size() const noexcept {
+      [[nodiscard]] inline std::size_t size() const noexcept {
         return length_;
       }
 
-      [[nodiscard]] std::span<const KeyBinding<Action>> configured() const noexcept {
+      [[nodiscard]] inline std::span<const KeyBinding<Action>> configured() const noexcept {
         return std::span{bindings_}.first(length_);
       }
 
-      [[nodiscard]] const KeyBinding<Action>& at(std::size_t index) const noexcept {
+      [[nodiscard]] inline const KeyBinding<Action>& at(std::size_t index) const noexcept {
         return bindings_[order_[index]];
       }
 
-      [[nodiscard]] Range match(Range candidates, std::size_t depth, KeyChord key) const noexcept {
+      [[nodiscard]] inline Range match(Range candidates, std::size_t depth, KeyChord key) const noexcept {
         const auto first = boundary(candidates, depth, key, false);
         const auto last = boundary({first, candidates.end}, depth, key, true);
 
@@ -99,7 +99,7 @@ export {
       }
 
     private:
-      [[nodiscard]] std::size_t boundary(Range range, std::size_t depth, KeyChord key, bool inclusive) const noexcept {
+      [[nodiscard]] inline std::size_t boundary(Range range, std::size_t depth, KeyChord key, bool inclusive) const noexcept {
         while (range.begin < range.end) {
           const auto middle = range.begin + ((range.end - range.begin) / 2);
           const auto compared = compareChords(at(middle).keys[depth], key);

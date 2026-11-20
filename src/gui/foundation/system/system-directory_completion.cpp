@@ -6,6 +6,10 @@ import telar.base.ds;
 
 namespace telar::gui::inline foundation::inline system {
 
+  std::span<const DirectoryCompletion::Name> DirectoryCompletion::entries() const noexcept {
+    return names_.view().first(count_);
+  }
+
   namespace {
 
     // Joins `parts` into `Text`, which has room for all of them.

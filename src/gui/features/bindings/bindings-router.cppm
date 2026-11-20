@@ -85,12 +85,12 @@ export {
         ds::Option<BindingRepeat> repeat;
       };
 
-      explicit KeyRouter(BindingMap<Action> map = BindingMap<Action>{}, ds::Option<KeyChord> prefix = {})
+      inline explicit KeyRouter(BindingMap<Action> map = BindingMap<Action>{}, ds::Option<KeyChord> prefix = {})
           : map_(std::move(map)),
             prefix_(prefix),
             candidates_{0, map_.size()} {}
 
-      [[nodiscard]] bool wantsBinding(const Event& event) const noexcept {
+      [[nodiscard]] inline bool wantsBinding(const Event& event) const noexcept {
         if (event.phase != KeyPhase::press) {
           return leases_.owner(event.physical) == Owner::binding;
         }
@@ -100,11 +100,11 @@ export {
         return depth_ != 0 || matched.begin != matched.end;
       }
 
-      [[nodiscard]] bool prefixPending() const noexcept {
+      [[nodiscard]] inline bool prefixPending() const noexcept {
         return prefix_pending_;
       }
 
-      [[nodiscard]] ds::Option<KeyChord> prefixedKeyForAction(const Action& action) const noexcept {
+      [[nodiscard]] inline ds::Option<KeyChord> prefixedKeyForAction(const Action& action) const noexcept {
         if (!prefix_) {
           return ds::none;
         }
@@ -118,11 +118,11 @@ export {
         return ds::none;
       }
 
-      [[nodiscard]] bool hasPhysicalKey(std::uint64_t physical) const noexcept {
+      [[nodiscard]] inline bool hasPhysicalKey(std::uint64_t physical) const noexcept {
         return leases_.owner(physical).hasValue();
       }
 
-      [[nodiscard]] ds::Option<std::uint64_t> deadline() const noexcept {
+      [[nodiscard]] inline ds::Option<std::uint64_t> deadline() const noexcept {
         if (prefix_pending_ || !since_) {
           return {};
         }
@@ -132,17 +132,17 @@ export {
         return *since_ + std::min(timeout_ns_, available);
       }
 
-      void setTimeout(std::uint64_t timeout_ns) noexcept {
+      inline void setTimeout(std::uint64_t timeout_ns) noexcept {
         timeout_ns_ = timeout_ns;
       }
 
-      Decision expire(std::uint64_t now_ns) {
+      inline Decision expire(std::uint64_t now_ns) {
         const auto due = deadline();
 
         return due && now_ns >= *due ? replay() : Decision{.outcome = Outcome::pending};
       }
 
-      Decision route(const Event& event, std::uint64_t now_ns, Context context = {}) {
+      inline Decision route(const Event& event, std::uint64_t now_ns, Context context = {}) {
         if (event.phase == KeyPhase::press) {
           repeating_.reset();
         }
@@ -192,50 +192,50 @@ export {
         return decision;
       }
 
-      void actionCompleted(const Decision& decision, ds::Option<BindingRepeat> policy) {
+      inline void actionCompleted(const Decision& decision, ds::Option<BindingRepeat> policy) {
         if (!decision.repeated && decision.event.physical != 0 && policy && policy->interval_ns != 0) {
           repeating_ = Repeating{decision.event, decision.action, *policy, decision.now_ns};
         }
       }
 
-      [[nodiscard]] ds::Option<Action> repeatAction() const {
+      [[nodiscard]] inline ds::Option<Action> repeatAction() const {
         return repeating_ ? ds::Option{repeating_->action} : ds::none;
       }
 
-      void eventFailed(const Event& event) noexcept {
+      inline void eventFailed(const Event& event) noexcept {
         repeating_.reset();
         if (event.phase == KeyPhase::press) {
           release(event.physical);
         }
       }
 
-      void inheritLeases(const KeyRouter& previous) noexcept {
+      inline void inheritLeases(const KeyRouter& previous) noexcept {
         leases_ = previous.leases_;
         repeating_.reset();
       }
 
-      void relinquish(std::uint64_t physical) noexcept {
+      inline void relinquish(std::uint64_t physical) noexcept {
         release(physical);
       }
 
-      Decision interrupt() {
+      inline Decision interrupt() {
         repeating_.reset();
 
         return replay();
       }
 
-      void cancelSequence() noexcept {
+      inline void cancelSequence() noexcept {
         resetMatch();
         since_.reset();
         repeating_.reset();
       }
 
-      void clear() noexcept {
+      inline void clear() noexcept {
         cancelSequence();
         leases_.clear();
       }
 
-      [[nodiscard]] std::uint64_t overflowCount() const noexcept {
+      [[nodiscard]] inline std::uint64_t overflowCount() const noexcept {
         return leases_.overflowCount();
       }
 
@@ -249,11 +249,11 @@ export {
         std::uint64_t last_ns = 0;
       };
 
-      void transfer(std::uint64_t physical) noexcept {
+      inline void transfer(std::uint64_t physical) noexcept {
         leases_.transfer(physical);
       }
 
-      ds::Option<Owner> release(std::uint64_t physical) noexcept {
+      inline ds::Option<Owner> release(std::uint64_t physical) noexcept {
         if (repeating_ && repeating_->event.physical == physical) {
           repeating_.reset();
         }
@@ -261,7 +261,7 @@ export {
         return leases_.release(physical);
       }
 
-      Decision routeLease(const Event& event, std::uint64_t now_ns, ds::Option<BindingRepeat> policy) {
+      inline Decision routeLease(const Event& event, std::uint64_t now_ns, ds::Option<BindingRepeat> policy) {
         if (event.phase == KeyPhase::release) {
           return release(event.physical) == Owner::application ? Decision{.outcome = Outcome::forward, .event = event} : Decision{};
         }
@@ -294,7 +294,7 @@ export {
         return {.outcome = Outcome::action, .action = repeating_->action, .event = event, .repeated = true, .now_ns = now_ns};
       }
 
-      Decision match(const Event& event, std::uint64_t now_ns) {
+      inline Decision match(const Event& event, std::uint64_t now_ns) {
         constexpr KeyChord escape{.key = KeyChord::Key::escape};
         if (prefix_pending_ && event.chord == escape) {
           resetMatch();
@@ -327,7 +327,7 @@ export {
         return {.outcome = Outcome::pending};
       }
 
-      Decision missed(const Event& event) {
+      inline Decision missed(const Event& event) {
         if (depth_ == 0) {
           return {.outcome = Outcome::forward, .event = event};
         }
@@ -341,7 +341,7 @@ export {
         return decision;
       }
 
-      Decision replay() {
+      inline Decision replay() {
         Decision decision;
 
         if (depth_ != 0 && !prefix_pending_) {
@@ -360,7 +360,7 @@ export {
         return decision;
       }
 
-      void resetMatch() noexcept {
+      inline void resetMatch() noexcept {
         candidates_ = {0, map_.size()};
         depth_ = 0;
         prefix_pending_ = false;

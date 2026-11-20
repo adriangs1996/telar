@@ -35,11 +35,7 @@ export namespace telar::gui::features::prompt {
   struct Menu {
     static constexpr std::size_t capacity = 256;
 
-    explicit Menu(tbc::view<Memory&, tbc::lt::a> memory)
-        : choices(memory),
-          requests(memory),
-          label(memory),
-          all(memory) {}
+    explicit Menu(tbc::view<Memory&, tbc::lt::a> memory);
 
     tbc::view<Choices, tbc::lt::a> choices;
     std::size_t selected = 0;

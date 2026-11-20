@@ -7,6 +7,10 @@ import telar.base.memory.allocators;
 
 namespace telar::gui::features::prompt {
 
+  tbc::view<Editor::Recorded, tbc::lt::a> Editor::Recorded::clone() const {
+    return {.key = key, .text = text.clone()};
+  }
+
   Editor::Editor(tbc::view<Memory&, tbc::lt::a> memory, Keymap keymap)
       : text_(memory),
         keymap_(keymap),

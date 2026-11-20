@@ -23,11 +23,11 @@ export {
         std::uint32_t score = 0;
       };
 
-      void clear() noexcept {
+      inline void clear() noexcept {
         length_ = 0;
       }
 
-      void add(Target target, std::string_view label, std::string_view query) {
+      inline void add(Target target, std::string_view label, std::string_view query) {
         const auto score = runtime::historyScore(label, query);
         if (!score) {
           return;
@@ -36,7 +36,7 @@ export {
         addScored(std::move(target), *score);
       }
 
-      void addScored(Target target, std::uint32_t score) {
+      inline void addScored(Target target, std::uint32_t score) {
         auto position = length_;
 
         while (position != 0 && matches_[position - 1].score < score) {
@@ -58,7 +58,7 @@ export {
         length_ = std::min(length_ + 1, Capacity);
       }
 
-      [[nodiscard]] std::span<const Match> rows() const noexcept {
+      [[nodiscard]] inline std::span<const Match> rows() const noexcept {
         return std::span{matches_}.first(length_);
       }
 

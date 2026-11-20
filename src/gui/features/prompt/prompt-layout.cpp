@@ -8,6 +8,10 @@ import telar.base.ds;
 
 namespace telar::gui::features::prompt {
 
+  Layout::Layout(Memory& memory)
+      : runs(memory),
+        selection(memory) {}
+
   void classify(std::string_view text, std::span<Style> styles, ds::Vec<shell::Token, Memory>& tokens, shell::Syntax syntax) {
     std::ranges::fill(styles, Style::plain);
     tokens.resize(text.size() + 1);

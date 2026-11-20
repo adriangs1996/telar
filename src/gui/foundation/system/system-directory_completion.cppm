@@ -38,9 +38,7 @@ export {
       // A listed directory's path with the entry's name and a '/' after each.
       using Joined = runtime::FixedText<PATH_MAX + maximum_name_bytes + 2>;
 
-      [[nodiscard]] std::span<const Name> entries() const noexcept {
-        return names_.view().first(count_);
-      }
+      [[nodiscard]] std::span<const Name> entries() const noexcept;
 
       // The query for what the user typed: a field that is empty or ends with
       // '/' asks for the children of the expanded directory.

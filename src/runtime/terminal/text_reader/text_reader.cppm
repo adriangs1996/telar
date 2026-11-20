@@ -485,7 +485,7 @@ export {
       // when a page holds no more hyperlinks; only a refused allocation means the pane's memory
       // ran out.
       struct GhosttyMemory {
-        void* allocate(std::size_t size, std::size_t alignment) noexcept {
+        TBC_HOT_PATH inline void* allocate(std::size_t size, std::size_t alignment) noexcept {
           auto* const pointer = memory.allocate(size, alignment);
           if (pointer == nullptr) {
             refusals.fetch_add(1, std::memory_order_relaxed);
@@ -494,7 +494,7 @@ export {
           return pointer;
         }
 
-        void deallocate(void* pointer, std::size_t size, std::size_t alignment) noexcept {
+        TBC_HOT_PATH inline void deallocate(void* pointer, std::size_t size, std::size_t alignment) noexcept {
           memory.deallocate(pointer, size, alignment);
         }
 

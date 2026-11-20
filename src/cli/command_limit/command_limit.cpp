@@ -10,6 +10,17 @@ import telar.base.text;
 
 namespace telar::runtime::cli {
 
+  DescriptorWriter::DescriptorWriter(int descriptor) noexcept
+      : descriptor_(descriptor) {}
+
+  void DescriptorWriter::flush() {
+    if (used_ != 0) {
+      const auto used = std::exchange(used_, 0);
+
+      writeText({buffer_.data(), used}, descriptor_);
+    }
+  }
+
   [[noreturn]] void usage(const char* error) {
     throw std::invalid_argument{error};
   }

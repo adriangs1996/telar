@@ -143,8 +143,7 @@ namespace telar::gui::features::terminal::copy_mode {
   // where the search being typed began, what it looks for, and whether its answer kept fewer
   // matches than it found.
   struct CopySearch {
-    explicit CopySearch(Memory& memory)
-        : query(memory) {}
+    explicit CopySearch(Memory& memory);
 
     std::uint64_t request = 0;
     ds::Option<CopySearchRows> rows;

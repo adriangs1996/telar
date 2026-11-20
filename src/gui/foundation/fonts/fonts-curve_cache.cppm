@@ -427,7 +427,7 @@ export {
         return entry.payload ? &entry.payload.getMut() : nullptr;
       }
 
-      void reset() noexcept {
+      inline void reset() noexcept {
         for (auto& entry : entries_.viewMut().first(count_)) {
           entry.payload.reset();
         }
@@ -435,7 +435,7 @@ export {
         count_ = 0;
       }
 
-      [[nodiscard]] std::size_t size() const noexcept {
+      [[nodiscard]] inline std::size_t size() const noexcept {
         return count_;
       }
 

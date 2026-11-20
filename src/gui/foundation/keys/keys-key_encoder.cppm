@@ -175,7 +175,7 @@ export {
     // A paste as one bounded value, encoded by the paste encoder the runtime uses too.
     struct PasteEncoding {
       template <std::size_t Capacity>
-      [[nodiscard]] TBC_GENERIC static BoundedText<Capacity + BracketedPaste::framing_bytes> encode(std::string_view text, bool bracketed) {
+      [[nodiscard]] TBC_GENERIC inline static BoundedText<Capacity + BracketedPaste::framing_bytes> encode(std::string_view text, bool bracketed) {
         if (text.size() > Capacity) {
           throw std::length_error{"Paste text exceeds its capacity"};
         }

@@ -82,44 +82,22 @@ export {
 
       PromptBindings() = default;
 
-      PromptBindings(std::initializer_list<PromptBinding> bindings) {
-        for (const auto& binding : bindings) {
-          push(binding);
-        }
-      }
+      PromptBindings(std::initializer_list<PromptBinding> bindings);
 
-      void push(const PromptBinding& binding) {
-        if (count_ == capacity) {
-          throw std::length_error{"more prompt bindings than the configuration reads"};
-        }
+      void push(const PromptBinding& binding);
 
-        entries_.atMut(count_++) = binding;
-      }
+      [[nodiscard]] std::span<const PromptBinding> view() const noexcept;
 
-      [[nodiscard]] std::span<const PromptBinding> view() const noexcept {
-        return entries_.view().first(count_);
-      }
+      [[nodiscard]] std::size_t size() const noexcept;
 
-      [[nodiscard]] std::size_t size() const noexcept {
-        return count_;
-      }
+      [[nodiscard]] const PromptBinding& operator[](std::size_t index) const noexcept;
 
-      [[nodiscard]] const PromptBinding& operator[](std::size_t index) const noexcept {
-        return entries_[index];
-      }
+      [[nodiscard]] const PromptBinding* begin() const noexcept;
 
-      [[nodiscard]] const PromptBinding* begin() const noexcept {
-        return entries_.data();
-      }
-
-      [[nodiscard]] const PromptBinding* end() const noexcept {
-        return entries_.data() + count_;
-      }
+      [[nodiscard]] const PromptBinding* end() const noexcept;
 
       // Equal when they bind the same keys, whatever the slots past them held.
-      friend bool operator==(const PromptBindings& left, const PromptBindings& right) noexcept {
-        return std::ranges::equal(left.view(), right.view());
-      }
+      friend bool operator==(const PromptBindings& left, const PromptBindings& right) noexcept;
 
     private:
       ds::Array<PromptBinding, capacity> entries_{};

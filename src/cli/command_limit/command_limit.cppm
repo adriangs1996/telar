@@ -1,3 +1,6 @@
+module;
+#include "tbc/annotations.hpp"
+
 export module telar.cli.command_limit;
 
 import std;
@@ -135,50 +138,44 @@ export {
     // `flush`: nothing is allocated and the text has no limit on its length.
     class DescriptorWriter {
     public:
-      explicit DescriptorWriter(int descriptor) noexcept
-          : descriptor_(descriptor) {}
+      explicit DescriptorWriter(int descriptor) noexcept;
 
       DescriptorWriter(const DescriptorWriter&) = delete;
       DescriptorWriter& operator=(const DescriptorWriter&) = delete;
 
       template <typename... Arguments>
-      void print(std::format_string<Arguments...> format, Arguments&&... arguments) {
+      TBC_GENERIC void print(std::format_string<Arguments...> format, Arguments&&... arguments) {
         std::format_to(Appender{this}, format, std::forward<Arguments>(arguments)...);
       }
 
-      void flush() {
-        if (used_ != 0) {
-          const auto used = std::exchange(used_, 0);
-
-          writeText({buffer_.data(), used}, descriptor_);
-        }
-      }
+      void flush();
 
     private:
-      struct Appender {
+      // Called for each character the text formats to.
+      struct TBC_HOT_PATH Appender {
         using difference_type = std::ptrdiff_t;
 
         DescriptorWriter* writer;
 
-        Appender& operator=(char character) {
+        inline Appender& operator=(char character) {
           writer->push(character);
           return *this;
         }
 
-        Appender& operator*() noexcept {
+        inline Appender& operator*() noexcept {
           return *this;
         }
 
-        Appender& operator++() noexcept {
+        inline Appender& operator++() noexcept {
           return *this;
         }
 
-        Appender operator++(int) noexcept {
+        inline Appender operator++(int) noexcept {
           return *this;
         }
       };
 
-      void push(char character) {
+      TBC_HOT_PATH inline void push(char character) {
         if (used_ == buffer_.size()) {
           flush();
         }
@@ -193,7 +190,7 @@ export {
 
     // Writes the formatted text to `descriptor`, as one write when it fits the writer's buffer.
     template <typename... Arguments>
-    void writeFormatted(int descriptor, std::format_string<Arguments...> format, Arguments&&... arguments) {
+    TBC_GENERIC void writeFormatted(int descriptor, std::format_string<Arguments...> format, Arguments&&... arguments) {
       DescriptorWriter writer{descriptor};
 
       writer.print(format, std::forward<Arguments>(arguments)...);
@@ -237,7 +234,7 @@ struct std::formatter<telar::runtime::cli::EscapedField, char> {
   }
 
   template <typename Context>
-  tbc::view<typename Context::iterator, tbc::lt::a> format(const telar::runtime::cli::EscapedField& field, tbc::view<Context&, tbc::lt::a> context) const {
+  TBC_GENERIC tbc::view<typename Context::iterator, tbc::lt::a> format(const telar::runtime::cli::EscapedField& field, tbc::view<Context&, tbc::lt::a> context) const {
     auto output = context.out();
 
     for (const unsigned char byte : field.text) {
@@ -271,7 +268,7 @@ struct std::formatter<telar::runtime::cli::NumberOrNull<Number>, char> {
   }
 
   template <typename Context>
-  tbc::view<typename Context::iterator, tbc::lt::a> format(const telar::runtime::cli::NumberOrNull<Number>& number, tbc::view<Context&, tbc::lt::a> context) const {
+  TBC_GENERIC tbc::view<typename Context::iterator, tbc::lt::a> format(const telar::runtime::cli::NumberOrNull<Number>& number, tbc::view<Context&, tbc::lt::a> context) const {
     return number.value ? std::format_to(context.out(), "{}", *number.value) : std::format_to(context.out(), "null");
   }
 };
@@ -283,7 +280,7 @@ struct std::formatter<telar::runtime::cli::LimitDescription, char> {
   }
 
   template <typename Context>
-  tbc::view<typename Context::iterator, tbc::lt::a> format(const telar::runtime::cli::LimitDescription& description, tbc::view<Context&, tbc::lt::a> context) const {
+  TBC_GENERIC tbc::view<typename Context::iterator, tbc::lt::a> format(const telar::runtime::cli::LimitDescription& description, tbc::view<Context&, tbc::lt::a> context) const {
     const auto& reach = description.reach;
     auto output = std::format_to(context.out(), "{}: ", reach.name);
     const std::string_view space = reach.noun.empty() ? "" : " ";

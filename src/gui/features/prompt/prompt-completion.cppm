@@ -20,9 +20,7 @@ export namespace telar::gui::features::prompt {
     bool directory = false;
 
     // The copy lives in the strings' memory, region `a`, and borrows nothing else of this choice.
-    [[nodiscard]] tbc::view<Choice, tbc::lt::a> clone() const {
-      return {.text = text.clone(), .description = description.clone(), .directory = directory};
-    }
+    [[nodiscard]] tbc::view<Choice, tbc::lt::a> clone() const;
   };
 
   using Choices = ds::Vec<Choice, Memory>;

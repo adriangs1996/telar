@@ -219,7 +219,7 @@ namespace telar::gui::features::workbench {
   }
 
   template <typename Visit>
-  void arrange(const State& state, Tab<Memory>& tab, Visit visit) {
+  TBC_GENERIC void arrange(const State& state, Tab<Memory>& tab, Visit visit) {
     const auto& geometry = Access::geometry(state);
     const auto fullscreen = tab.fullscreen ? ds::Option{tab.focused_pane} : ds::none;
     const auto placements = tab.layout.arrange(geometry.cellArea(), geometry.layout_metrics, fullscreen);
@@ -232,7 +232,7 @@ namespace telar::gui::features::workbench {
   }
 
   template <typename Focus>
-  void restore(State& state, Tab<Memory>& tab, Focus&& focus) {
+  TBC_GENERIC void restore(State& state, Tab<Memory>& tab, Focus&& focus) {
     auto& restoring = Access::restoring(state);
     auto& saved_layouts = Access::saved(state);
 

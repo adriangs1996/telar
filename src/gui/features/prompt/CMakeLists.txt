@@ -5,6 +5,7 @@ telar_add_domain(gui features/prompt
     prompt-editor.cpp
     prompt-layout.cpp
     prompt-line.cpp
+    prompt-menu.cpp
     prompt-routing.cpp
     prompt-specs.cpp
     prompt-text.cpp

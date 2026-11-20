@@ -10,7 +10,7 @@ export namespace telar::gui::platform {
 
   extern "C++" class ClipboardImageTransfer {
   public:
-    void fail(ClipboardImageError error) noexcept {
+    inline void fail(ClipboardImageError error) noexcept {
       if (failed_.load(std::memory_order_relaxed)) {
         return;
       }
@@ -19,7 +19,7 @@ export namespace telar::gui::platform {
       failed_.store(true, std::memory_order_release);
     }
 
-    [[nodiscard]] ds::Option<ClipboardImageError> failure() const noexcept {
+    [[nodiscard]] inline ds::Option<ClipboardImageError> failure() const noexcept {
       if (failed_.load(std::memory_order_acquire)) {
         return error_;
       }

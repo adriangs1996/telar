@@ -36,8 +36,7 @@ export namespace telar::gui::features::terminal::copy_mode {
 
   public:
     // The search's query lives in `memory`.
-    explicit State(Memory& memory)
-        : search_(memory) {}
+    explicit State(Memory& memory);
 
   private:
     CopyMode mode_;
@@ -50,26 +49,26 @@ export namespace telar::gui::features::terminal::copy_mode {
   public:
     static constexpr std::size_t maximum_matches = CopyMode::maximum_matches;
 
-    explicit CopyModeView(tbc::view<const CopyMode&, tbc::lt::a> mode) noexcept
+    TBC_HOT_PATH inline explicit CopyModeView(tbc::view<const CopyMode&, tbc::lt::a> mode) noexcept
         : mode_(&mode) {}
 
-    [[nodiscard]] TBC_HOT_PATH tbc::view<const ds::Option<CopyState>&, tbc::lt::a> state() const noexcept {
+    [[nodiscard]] TBC_HOT_PATH inline tbc::view<const ds::Option<CopyState>&, tbc::lt::a> state() const noexcept {
       return mode_->state();
     }
 
-    [[nodiscard]] TBC_HOT_PATH bool active() const noexcept {
+    [[nodiscard]] TBC_HOT_PATH inline bool active() const noexcept {
       return mode_->active();
     }
 
-    [[nodiscard]] TBC_HOT_PATH std::uint64_t revision() const noexcept {
+    [[nodiscard]] TBC_HOT_PATH inline std::uint64_t revision() const noexcept {
       return mode_->revision();
     }
 
-    [[nodiscard]] TBC_HOT_PATH ds::Option<CopyPointerOwner> pointerOwner() const noexcept {
+    [[nodiscard]] TBC_HOT_PATH inline ds::Option<CopyPointerOwner> pointerOwner() const noexcept {
       return mode_->pointerOwner();
     }
 
-    [[nodiscard]] TBC_HOT_PATH tbc::view<std::span<const PaneMatch>, tbc::lt::a> matches() const noexcept {
+    [[nodiscard]] TBC_HOT_PATH inline tbc::view<std::span<const PaneMatch>, tbc::lt::a> matches() const noexcept {
       return mode_->matches();
     }
 
@@ -77,7 +76,7 @@ export namespace telar::gui::features::terminal::copy_mode {
     tbc::view<const CopyMode*, tbc::lt::a> mode_;
   };
 
-  [[nodiscard]] inline tbc::view<CopyModeView, tbc::lt::a> view(tbc::view<const State&, tbc::lt::a> state) noexcept;
+  [[nodiscard]] TBC_HOT_PATH inline tbc::view<CopyModeView, tbc::lt::a> view(tbc::view<const State&, tbc::lt::a> state) noexcept;
 
   // ---- entering and leaving ---------------------------------------------------------------------
 

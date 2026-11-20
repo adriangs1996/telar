@@ -1,3 +1,6 @@
+module;
+#include "tbc/annotations.hpp"
+
 // The command history panel: searching the commands run in every pane, paging through them,
 // inspecting one with its output, and the panel's presentation.
 export module telar.gui.features.history;
@@ -42,88 +45,88 @@ export namespace telar::gui::features::history {
   // What the panel reads of the history: a view of the state, valid until a use case changes it.
   // Inline, as the pointer reads it on every move over the panel.
   // A view of a history browser, region `a`: what it reads lies in the browser, not in the view.
-  class HistoryView {
+  class TBC_HOT_PATH HistoryView {
   public:
-    explicit HistoryView(tbc::view<const HistoryBrowser<Memory>&, tbc::lt::a> browser) noexcept
+    inline explicit HistoryView(tbc::view<const HistoryBrowser<Memory>&, tbc::lt::a> browser) noexcept
         : browser_(&browser) {}
 
-    [[nodiscard]] tbc::view<const ds::Vec<HistoryRow<Memory>, Memory>&, tbc::lt::a> rows() const noexcept {
+    [[nodiscard]] inline tbc::view<const ds::Vec<HistoryRow<Memory>, Memory>&, tbc::lt::a> rows() const noexcept {
       return browser_->rows();
     }
 
-    [[nodiscard]] tbc::view<const HistoryViewState&, tbc::lt::a> state() const noexcept {
+    [[nodiscard]] inline tbc::view<const HistoryViewState&, tbc::lt::a> state() const noexcept {
       return browser_->state();
     }
 
-    [[nodiscard]] tbc::view<const HistoryRow<Memory>&, tbc::lt::a> entry(std::uint64_t id) const {
+    [[nodiscard]] inline tbc::view<const HistoryRow<Memory>&, tbc::lt::a> entry(std::uint64_t id) const {
       return browser_->entry(id);
     }
 
-    [[nodiscard]] std::size_t entryIndex(std::uint64_t id) const {
+    [[nodiscard]] inline std::size_t entryIndex(std::uint64_t id) const {
       return browser_->entryIndex(id);
     }
 
-    [[nodiscard]] tbc::view<std::string_view, tbc::lt::a> command(std::uint64_t id) const {
+    [[nodiscard]] inline tbc::view<std::string_view, tbc::lt::a> command(std::uint64_t id) const {
       return browser_->command(id);
     }
 
-    [[nodiscard]] bool canPage(HistoryPage direction) const noexcept {
+    [[nodiscard]] inline bool canPage(HistoryPage direction) const noexcept {
       return browser_->canPage(direction);
     }
 
-    [[nodiscard]] bool canSubmit() const noexcept {
+    [[nodiscard]] inline bool canSubmit() const noexcept {
       return browser_->canSubmit();
     }
 
-    [[nodiscard]] tbc::view<std::string_view, tbc::lt::a> selectedCommand() const {
+    [[nodiscard]] inline tbc::view<std::string_view, tbc::lt::a> selectedCommand() const {
       return browser_->selectedCommand();
     }
 
-    [[nodiscard]] tbc::view<std::string_view, tbc::lt::a> output() const noexcept {
+    [[nodiscard]] inline tbc::view<std::string_view, tbc::lt::a> output() const noexcept {
       return browser_->output();
     }
 
-    [[nodiscard]] tbc::view<std::string_view, tbc::lt::a> error() const noexcept {
+    [[nodiscard]] inline tbc::view<std::string_view, tbc::lt::a> error() const noexcept {
       return browser_->error();
     }
 
-    [[nodiscard]] std::uint64_t viewVersion() const noexcept {
+    [[nodiscard]] inline std::uint64_t viewVersion() const noexcept {
       return browser_->viewVersion();
     }
 
-    [[nodiscard]] std::uint64_t revision() const noexcept {
+    [[nodiscard]] inline std::uint64_t revision() const noexcept {
       return browser_->revision();
     }
 
-    [[nodiscard]] std::uint64_t rowsVersion() const noexcept {
+    [[nodiscard]] inline std::uint64_t rowsVersion() const noexcept {
       return browser_->rowsVersion();
     }
 
-    [[nodiscard]] ds::Option<HistoryChoice> choice() const noexcept {
+    [[nodiscard]] inline ds::Option<HistoryChoice> choice() const noexcept {
       return browser_->choice();
     }
 
-    [[nodiscard]] bool acceptsRow(HistoryChoice candidate) const noexcept {
+    [[nodiscard]] inline bool acceptsRow(HistoryChoice candidate) const noexcept {
       return browser_->acceptsRow(candidate);
     }
 
-    [[nodiscard]] bool accepts(HistoryChoice candidate) const noexcept {
+    [[nodiscard]] inline bool accepts(HistoryChoice candidate) const noexcept {
       return browser_->accepts(candidate);
     }
 
-    [[nodiscard]] HistoryScope scope() const noexcept {
+    [[nodiscard]] inline HistoryScope scope() const noexcept {
       return browser_->scope();
     }
 
-    [[nodiscard]] HistoryMatch match() const noexcept {
+    [[nodiscard]] inline HistoryMatch match() const noexcept {
       return browser_->match();
     }
 
-    [[nodiscard]] bool deleting() const noexcept {
+    [[nodiscard]] inline bool deleting() const noexcept {
       return browser_->deleting();
     }
 
-    [[nodiscard]] bool owns(std::uint64_t request_id) const noexcept {
+    [[nodiscard]] inline bool owns(std::uint64_t request_id) const noexcept {
       return browser_->owns(request_id);
     }
 
@@ -131,7 +134,7 @@ export namespace telar::gui::features::history {
     tbc::view<const HistoryBrowser<Memory>*, tbc::lt::a> browser_;
   };
 
-  [[nodiscard]] inline HistoryView view(const State& state) noexcept;
+  [[nodiscard]] TBC_HOT_PATH inline HistoryView view(const State& state) noexcept;
 
   // A new search: `request` says what to look for, its query text read by HistorySearch (a
   // leading '!' asks for failures only). Returns the request to send; throws EncodingError when

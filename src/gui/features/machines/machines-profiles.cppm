@@ -140,16 +140,16 @@ export {
     template <Allocator Memory, MachineProfileStorage<Memory> Storage>
     class TBC_GENERIC MachineProfileStore {
     public:
-      MachineProfileStore(Memory& memory, Storage& storage) noexcept
+      inline MachineProfileStore(Memory& memory, Storage& storage) noexcept
           : memory_(memory),
             storage_(storage) {}
 
-      [[nodiscard]] MachineProfiles load() {
+      [[nodiscard]] inline MachineProfiles load() {
         return read(storage_);
       }
 
       template <MachineIdentityRandom Random>
-      [[nodiscard]] MachineProfiles change(std::span<const MachineEdit> edits, Random& random, std::string_view local_fallback) {
+      [[nodiscard]] inline MachineProfiles change(std::span<const MachineEdit> edits, Random& random, std::string_view local_fallback) {
         auto transaction = storage_.lock();
         auto profiles = read(transaction);
 
@@ -169,7 +169,7 @@ export {
 
     private:
       template <MachineProfileSource<Memory> Source>
-      MachineProfiles read(Source& storage) {
+      inline MachineProfiles read(Source& storage) {
         const auto source = storage.read(memory_);
 
         return source ? MachineProfileCodec::parse(memory_, textView(*source)) : MachineProfiles{};

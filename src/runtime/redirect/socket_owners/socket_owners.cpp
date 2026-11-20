@@ -10,6 +10,13 @@ import telar.base.ds;
 
 namespace telar::runtime::redirect {
 
+  PfCommandError::PfCommandError(std::string_view output) noexcept
+      : message_(output) {}
+
+  const char* PfCommandError::what() const noexcept {
+    return message_.c_str();
+  }
+
   LocalAddresses::LocalAddresses()
       : addresses_(nullptr, &freeifaddrs) {
     ifaddrs* addresses = nullptr;

@@ -111,6 +111,16 @@ namespace telar::gui::features::prompt {
         aliases(memory),
         alias_targets(memory) {}
 
+  PaneLine::PaneLine(Memory& memory, std::uint64_t pane_id, Keymap keymap)
+      : line(memory, keymap),
+        pane_id(pane_id),
+        jumps(memory) {}
+
+  CompletionPlan::Question::Question(Memory& memory)
+      : root(memory),
+        query(memory),
+        base(memory) {}
+
   CompletionPlan::CompletionPlan(Memory& memory)
       : context(memory),
         completion(memory),

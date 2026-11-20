@@ -1,3 +1,6 @@
+module;
+#include "tbc/annotations.hpp"
+
 export module telar.gui.foundation.system:runtime_endpoint;
 
 import std;
@@ -14,12 +17,10 @@ export {
     class Failure : public std::exception {
     public:
       template <typename... Parts>
-      explicit Failure(const Parts&... parts) noexcept
+      TBC_GENERIC explicit Failure(const Parts&... parts) noexcept
           : message_(parts...) {}
 
-      [[nodiscard]] const char* what() const noexcept override {
-        return message_.c_str();
-      }
+      [[nodiscard]] const char* what() const noexcept override;
 
     private:
       static constexpr std::size_t message_capacity = 511;
