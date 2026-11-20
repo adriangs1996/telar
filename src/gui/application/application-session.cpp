@@ -161,10 +161,8 @@ namespace telar::gui::application {
     restore_layout_ = enabled;
   }
 
-  void Session::connected(std::uint64_t identity, bool reads_rows, bool reads_theme, bool monitors) {
-    reads_rows_ = reads_rows;
-    reads_theme_ = reads_theme;
-    monitors_ = monitors;
+  void Session::connected(std::uint64_t identity, handshake::Dialect dialect) {
+    dialect_ = dialect;
     panes.clear();
     tabs.clear();
     active_tab.reset();
@@ -598,7 +596,11 @@ namespace telar::gui::application {
   }
 
   bool Session::monitors() const noexcept {
-    return monitors_;
+    return speaks(ClientTag::query_monitor);
+  }
+
+  bool Session::speaks(ClientTag tag) const noexcept {
+    return dialect_ && handshake::speaks(*dialect_, tag);
   }
 
   Change Session::apply(const ProxyStatus& message) {

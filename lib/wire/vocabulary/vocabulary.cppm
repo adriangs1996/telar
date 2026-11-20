@@ -11,6 +11,8 @@ export namespace telar {
   using telar::AgentAttachmentMarkers;
   using telar::AgentAuthority;
   using telar::AgentBlockedReason;
+  using telar::agentBlockedReasonName;
+  using telar::agentBlockedReasonNamed;
   using telar::AgentCommandPhase;
   using telar::AgentPlanOp;
   using telar::AgentPlanStatus;
@@ -21,6 +23,8 @@ export namespace telar {
   using telar::AgentSound;
   using telar::AgentSource;
   using telar::AgentStatus;
+  using telar::agentStatusName;
+  using telar::agentStatusNamed;
   using telar::AgentTitleSource;
   using telar::AgentTitleState;
   using telar::BodyCodec;
@@ -49,6 +53,7 @@ export namespace telar {
   using telar::ClientRoute;
   using telar::ClientTabLayout;
   using telar::ClientTag;
+  using telar::clientTagName;
   using telar::Codec;
   using telar::CodecWidth;
   using telar::CommandBlock;
@@ -118,6 +123,7 @@ export namespace telar {
   using telar::max_notification_link_bytes;
   using telar::max_notification_message_bytes;
   using telar::max_notification_title_bytes;
+  using telar::max_path_bytes;
   using telar::max_payload_size;
   using telar::max_workspace_tabs;
   using telar::memberValue;
@@ -169,6 +175,7 @@ export namespace telar {
   using telar::Serializer;
   using telar::SerializerSize;
   using telar::ServerTag;
+  using telar::serverTagName;
   using telar::ShellPhase;
   using telar::SignedLittleEndian;
   using telar::SizedBytes;

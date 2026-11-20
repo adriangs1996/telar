@@ -2736,6 +2736,12 @@ namespace telar::runtime {
 
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const QueryHistoryWorkspaces& message) {
+    submitBackground(background_, requireClient(clients_, identity), message);
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const ConfigureGraphics& message) {
     auto& client = requireClient(clients_, identity);
 
@@ -2880,7 +2886,7 @@ namespace telar::runtime {
         deliverEditorReply(model_.panes, *client, payload);
       } else {
         const auto tag = static_cast<ServerTag>(payload.front());
-        if (tag == ServerTag::history_results || tag == ServerTag::history_output || tag == ServerTag::history_stats_result || tag == ServerTag::command_suggestion) {
+        if (tag == ServerTag::history_results || tag == ServerTag::history_output || tag == ServerTag::history_stats_result || tag == ServerTag::history_workspaces || tag == ServerTag::command_suggestion) {
           client->connection.trySendPayload(payload);
         } else {
           client->connection.sendPayload(payload);

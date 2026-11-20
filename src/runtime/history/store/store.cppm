@@ -368,6 +368,8 @@ export {
       void prune(const PruneHistory& request, EncodedReply<ConcurrentMemory>& reply);
       void readOutput(const ReadHistoryOutput& request, EncodedReply<ConcurrentMemory>& reply);
       void stats(const HistoryStatsQuery& request, EncodedReply<ConcurrentMemory>& reply);
+      // The workspaces a session was recorded in, each path once.
+      void workspaces(const QueryHistoryWorkspaces& request, EncodedReply<ConcurrentMemory>& reply);
 
     private:
       static constexpr auto entry_columns = "id, pane_id, started_at_ms, duration_ns, exit_code, status, command, cwd, workspace_path, author, origin, provider, command_truncated";

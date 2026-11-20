@@ -58,7 +58,7 @@ namespace telar::gui::application {
       return;
     }
 
-    if (!reads_rows_) {
+    if (!speaks(ClientTag::pane_command)) {
       pasteBytes(pane_id, text);
       input(pane_id, "\r");
       return;
@@ -85,11 +85,11 @@ namespace telar::gui::application {
   }
 
   bool Session::readsRows() const noexcept {
-    return reads_rows_ && ready_;
+    return speaks(ClientTag::read_pane_rows) && ready_;
   }
 
   bool Session::readsTheme() const noexcept {
-    return reads_theme_ && ready_;
+    return speaks(ClientTag::read_pane_theme) && ready_;
   }
 
   void Session::requestRows(std::uint64_t pane_id, std::uint64_t first, std::uint64_t last) {

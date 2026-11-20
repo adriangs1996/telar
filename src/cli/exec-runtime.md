@@ -66,10 +66,10 @@ socket, including in the server's environment for nested executions.
 ## Native schema
 
 `api schema` derives the handshake identifier from `handshake::schema_id`:
-`schema_version` is `cqp00006`; `fingerprint` is the hexadecimal encoding of those
-eight bytes, `6371703030303036`. It describes the actual C++ tag enums, including
-the three native clipboard requests and three clipboard server messages. Tag
-tables are checked against the C++ declarations by CTest. `runtime status`
+`schema_version` is `cqp00007`; `fingerprint` is the hexadecimal encoding of those
+eight bytes, `6371703030303037`. It prints the names the wire gives its tags, including
+the three native clipboard requests and three clipboard server messages. CTest
+compares it with the contract of that schema published in `tests/contracts/`. `runtime status`
 reports the same native identifier.
 
 No GUI change is needed by these families. Linux-specific publication and
@@ -89,9 +89,9 @@ Common changes are `ControlFailure::message()` (owned raw refusal text), the
 optional request-buffer capacity of `ControlSession`, standard-allocator support
 in `appendJsonText`, command I/O/limit helpers, the Git observation policy moved
 to `lib/platform`, and `CommandOutput::runWithInputDiagnostics`. Repository
-discovery loads system SQLite only when needed, through its read-only API; the
-CLI neither links SQLite nor requires its headers, and hook startup loads the
-same libraries as the baseline.
+discovery asks the runtime for the workspaces its history recorded
+(`QueryHistoryWorkspaces`): the CLI neither links nor loads SQLite, and hook
+startup loads the same libraries as the baseline.
 
 `tools/measure_exec_runtime_hook.py` compares frozen before/after binaries using
 seven alternating pairs of sixteen Claude SessionStart events, checking all

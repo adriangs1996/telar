@@ -211,13 +211,13 @@ def offline(f):
     assert set(contract) == {"schema_version", "fingerprint", "client_requests", "server_messages", "agent_statuses", "bounds"}
     assert contract["client_requests"]["execution_request"] > 0
     assert contract["server_messages"]["execution_reply"] > 0
-    if contract["schema_version"] == "cqp00006":
-        assert contract["fingerprint"] == b"cqp00006".hex()
-        source = Path(__file__).resolve().parents[3] / "lib/wire/include/telar_wire/serializers/telar_messages.hpp"
-        for enum, key in (("ClientTag", "client_requests"), ("ServerTag", "server_messages"), ("AgentStatus", "agent_statuses")):
-            body = re.search(r"enum class " + enum + r" : Byte \{(.*?)\n  \};", source.read_text(), re.S)[1]
-            entries = {name: int(value, 0) for name, value in re.findall(r"(\w+)\s*=\s*(0x[0-9a-f]+|\d+)", body)}
-            assert contract[key] == entries
+    # The contract of each schema is published beside this test. A schema with no contract fails:
+    # a new one is reviewed and recorded before it passes, and the one of a published schema never
+    # changes.
+    assert contract["fingerprint"] == contract["schema_version"].encode().hex()
+    published = Path(__file__).resolve().parent / "contracts" / f"api_schema_{contract['schema_version']}.json"
+    assert published.exists(), f"publish the contract of schema {contract['schema_version']} in {published}"
+    assert contract == json.loads(published.read_text())
     f.invoke("api/text", "api", "schema")
     f.invoke("runtime/unavailable", "runtime", "status", "--socket", f.root / "absent", code=1)
     f.invoke("limits/unavailable", "diagnostics", "limits", "--socket", f.root / "absent", code=1)
@@ -626,10 +626,12 @@ def repositories(f, prepare_probe=None):
     assert not list(path.parent.glob("*.stage"))
     closed = f.root / "closed"
     shutil.copytree(path, closed)
-    database = Path(f.env["XDG_DATA_HOME"]) / "telar/history.db"
-    with sqlite3.connect(database) as connection:
-        connection.execute("INSERT INTO session (id,pane_id,location_kind,location_id,tab_id,workspace_path,shell,started_at_ms,finished_at_ms) VALUES (?,?,?,?,?,?,?,?,?)",
-                           (bytes([42]) * 16, 901, 0, 901, 1, str(closed), "/bin/sh", 0, 1))
+    # The history learns of this clone as it does of any directory: a workspace ran there and
+    # was closed. The runtime remembers it after the workspace is gone.
+    opened = json.loads(f.invoke("repository/open-closed", "workspace", "create", "--directory", closed, "--json", "--", "/bin/cat").stdout)
+    f.invoke("repository/close-closed", "tab", "close", opened["tab_id"], "--workspace", opened["workspace_id"])
+    listed = json.loads(f.invoke("repository/workspaces", "workspace", "list", "--json").stdout)
+    assert str(closed) not in json.dumps(listed), listed
     f.invoke("repository/ambiguous", *args, data=content, code=1)
     result = f.invoke("repository/selected-closed", *args, "--workspace", closed, data=content)
     assert Path(json.loads(result.stdout)["path"]) == closed

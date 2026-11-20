@@ -13,6 +13,7 @@ import telar.testing;
 import telar.testing.test_memory;
 import telar.gui.application.tests.session_fixture;
 import telar.gui.application;
+import telar.client;
 import telar.gui.foundation.terminal;
 import telar.wire.content;
 import telar.wire.vocabulary;
@@ -258,7 +259,7 @@ namespace {
     Transport legacy_transport;
     TestSession legacy{memory, legacy_transport};
 
-    legacy.connected(1, false);
+    legacy.connected(1, telar::handshake::Dialect::cqp00002);
     check(!legacy.readsRows(), "a runtime without scrollback rows is not asked for them");
   }
 

@@ -6,13 +6,13 @@ import telar.sys.posix;
 import telar.tbc;
 import telar.cli.console.output;
 import telar.base.text.utf8;
-import telar.cli.commands.tab;
 import telar.platform.fs;
 import telar.platform.primitives;
 import telar.platform.process;
 import telar.wire.agents;
 import telar.wire.clients;
 import telar.wire.content;
+import telar.wire.history;
 import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.runtime;
@@ -69,6 +69,31 @@ namespace telar::runtime::cli::repository {
 
         return result;
       }
+    }
+
+    // The workspaces the runtime's history recorded, which outlive the workspaces themselves: the
+    // runtime owns the history, so it is asked rather than its database read.
+    tbc::val_a<ds::Vec<Text, Memory>> recordedWorkspaces(tbc::mut_a<Memory> memory, const char* socket) {
+      constexpr unsigned reply_timeout_seconds = 30;
+      ControlSession session{memory, socket};
+      ds::Vec<Text, Memory> paths{memory};
+
+      session.receiveTimeout(reply_timeout_seconds);
+      try {
+        const auto recorded = session.template exchange<HistoryWorkspaces>(QueryHistoryWorkspaces{});
+        if (recorded.truncated) {
+          reportCommandLimit({.name = "repository.max_recorded_paths", .noun = "recorded paths", .value = HistoryWorkspaces::maximum_paths, .requested = HistoryWorkspaces::maximum_paths + 1});
+          throw std::runtime_error{"RepositoryDiscoveryLimit"};
+        }
+
+        for (const auto path : recorded.paths) {
+          paths.emplace(memory, path);
+        }
+      } catch (const ControlFailure&) {
+        throw std::runtime_error{"RepositoryHistoryUnavailable"};
+      }
+
+      return paths;
     }
 
     tbc::val_a<Text> managedPath(tbc::mut_a<Memory> memory, std::string_view identity) {
@@ -192,14 +217,14 @@ namespace telar::runtime::cli::repository {
       }
 
       // Keeps the one main checkout with `identity` among the paths it is shown.
-      class Consider final : public HistoryPathVisitor {
+      class Consider final {
       public:
         // What it finds lives in `memory`; it only reads `identity`.
         Consider(tbc::mut_a<Memory> memory, tbc::val_b<std::string_view> identity)
             : memory_(memory),
               identity_(identity) {}
 
-        void operator()(std::string_view path) override {
+        void operator()(std::string_view path) {
           auto candidate = matching(memory_, Candidate{.path = path, .identity = identity_});
           if (!candidate) {
             return;
@@ -232,10 +257,9 @@ namespace telar::runtime::cli::repository {
         consider(path);
       }
 
-      RuntimePaths<Memory> storage_paths{memory, ServerOptions(), environment};
-
-      storage_paths.resolveStorage(ServerOptions(), environment);
-      historyPaths(storage_paths.history.data(), consider);
+      for (const auto& path : recordedWorkspaces(memory, paths.socket.data())) {
+        consider(path.view());
+      }
 
       consider(managedPath(memory, identity));
       if (!consider.result()) {
@@ -954,46 +978,10 @@ namespace telar::runtime::cli::sessions {
       return text;
     }
 
-    std::string_view agentStatus(AgentStatus status) {
-      switch (status) {
-      case AgentStatus::unknown:
-        return "unknown";
-      case AgentStatus::working:
-        return "working";
-      case AgentStatus::blocked:
-        return "blocked";
-      case AgentStatus::ready:
-        return "ready";
-      case AgentStatus::done:
-        return "done";
-      case AgentStatus::failed:
-        return "failed";
-      }
-
-      return "unknown";
-    }
-
-    std::string_view blockedReason(AgentBlockedReason reason) {
-      switch (reason) {
-      case AgentBlockedReason::none:
-        return "none";
-      case AgentBlockedReason::permission:
-        return "permission";
-      case AgentBlockedReason::question:
-        return "question";
-      case AgentBlockedReason::plan:
-        return "plan";
-      case AgentBlockedReason::other:
-        return "other";
-      }
-
-      return "none";
-    }
-
     void worktreeAgent(Output& output, const AgentSnapshotEntry& agent) {
       constexpr auto escapes = JsonEscapes::control;
 
-      output.text("{\"pane_id\":").number(agent.pane_id).text(",\"pane_generation\":").number(agent.pane_generation).text(",\"workspace_id\":").number(agent.location.workspace.id).text(",\"tab_id\":").number(agent.location.tab_id).text(",\"pane_index\":").number(agent.pane_index).text(",\"provider\":").json(agent.provider_name.empty() ? "unknown" : agent.provider_name, escapes).text(",\"provider_index\":").number(static_cast<Byte>(agent.provider)).text(",\"status\":").json(agentStatus(agent.status), escapes).text(",\"workspace\":").json(agent.workspace_label, escapes).text(",\"tab\":").json(agent.tab_label, escapes).text(",\"title\":").json(agent.session_title, escapes).text(",\"cwd\":").json(agent.cwd_label, escapes).text(",\"blocked_reason\":").json(blockedReason(agent.blocked_reason), escapes).text(",\"status_age_s\":").number(agent.status_age_s).text(",\"worktree_id\":").number(agent.work_tree).text(",\"last_event\":").json(agent.last_event, escapes).text(R"(,"plan":{"done":)").number(agent.plan_done).text(",\"total\":").number(agent.plan_total).text(",\"step\":").json(agent.plan_step, escapes).text("},\"final_message\":").json(agent.final_message, escapes).text(",\"session_id\":").json(hexSession(agent.session_id).view(), escapes).text("}");
+      output.text("{\"pane_id\":").number(agent.pane_id).text(",\"pane_generation\":").number(agent.pane_generation).text(",\"workspace_id\":").number(agent.location.workspace.id).text(",\"tab_id\":").number(agent.location.tab_id).text(",\"pane_index\":").number(agent.pane_index).text(",\"provider\":").json(agent.provider_name.empty() ? "unknown" : agent.provider_name, escapes).text(",\"provider_index\":").number(static_cast<Byte>(agent.provider)).text(",\"status\":").json(agentStatusName(agent.status), escapes).text(",\"workspace\":").json(agent.workspace_label, escapes).text(",\"tab\":").json(agent.tab_label, escapes).text(",\"title\":").json(agent.session_title, escapes).text(",\"cwd\":").json(agent.cwd_label, escapes).text(",\"blocked_reason\":").json(agentBlockedReasonName(agent.blocked_reason), escapes).text(",\"status_age_s\":").number(agent.status_age_s).text(",\"worktree_id\":").number(agent.work_tree).text(",\"last_event\":").json(agent.last_event, escapes).text(R"(,"plan":{"done":)").number(agent.plan_done).text(",\"total\":").number(agent.plan_total).text(",\"step\":").json(agent.plan_step, escapes).text("},\"final_message\":").json(agent.final_message, escapes).text(",\"session_id\":").json(hexSession(agent.session_id).view(), escapes).text("}");
     }
 
     std::string_view worktreeState(WorktreeState state) {
@@ -1028,7 +1016,7 @@ namespace telar::runtime::cli::sessions {
       if (!json) {
         const auto member = std::ranges::find(agents, entry.worktree, &AgentSnapshotEntry::work_tree);
 
-        output.text(entry.branch).text("\t").text(entry.title.empty() ? entry.branch : entry.title).text("\t").text(worktreeState(entry.state)).text("\t").text(member == agents.end() ? "-" : agentStatus(member->status)).text("\t+").number(entry.diff_added).text(" -").number(entry.diff_removed).text(" ").number(entry.diff_files).text(" files\t").text(entry.command_label.empty() ? "-" : entry.command_label).text(" ").text(commandState(entry.command_state)).text("\t").text(entry.path).text("\n");
+        output.text(entry.branch).text("\t").text(entry.title.empty() ? entry.branch : entry.title).text("\t").text(worktreeState(entry.state)).text("\t").text(member == agents.end() ? "-" : agentStatusName(member->status)).text("\t+").number(entry.diff_added).text(" -").number(entry.diff_removed).text(" ").number(entry.diff_files).text(" files\t").text(entry.command_label.empty() ? "-" : entry.command_label).text(" ").text(commandState(entry.command_state)).text("\t").text(entry.path).text("\n");
         return;
       }
 

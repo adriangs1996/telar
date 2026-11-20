@@ -98,6 +98,32 @@ export extern "C++" {
     struct MessageSchema<HistoryStatsQuery>
         : Schema<Direction::client, ClientTag::history_stats, Field<&HistoryStatsQuery::request_id, NonzeroU64, "request_id">, Field<&HistoryStatsQuery::scope, EnumByte<HistoryScope, 3>, "scope">, ContextField<&HistoryStatsQuery::scope_value, &HistoryStatsQuery::scope, ScopedHistoryValue, "scope_value">, Field<&HistoryStatsQuery::since_ms, i64, "since_ms">> {};
 
+    // Asks for the workspaces the history recorded a session in. They outlive the workspaces
+    // themselves, which is how a command finds the checkout of a repository whose workspace closed.
+    struct QueryHistoryWorkspaces {
+      std::uint64_t request_id{};
+    };
+
+    template <>
+    struct MessageSchema<QueryHistoryWorkspaces>
+        : Schema<Direction::client, ClientTag::query_history_workspaces, Field<&QueryHistoryWorkspaces::request_id, NonzeroU64, "request_id">> {};
+
+    struct HistoryWorkspaces {
+      static constexpr std::size_t maximum_paths = 4096;
+      // The bytes of paths one reply carries: a quarter of a frame.
+      static constexpr std::size_t maximum_bytes = std::size_t{1024} * 1024;
+
+      std::uint64_t request_id{};
+      // Whether the history recorded more workspaces than the reply lists.
+      bool truncated{};
+      // The path of each workspace, once.
+      std::span<const std::string_view> paths;
+    };
+
+    template <>
+    struct MessageSchema<HistoryWorkspaces>
+        : Schema<Direction::server, ServerTag::history_workspaces, Field<&HistoryWorkspaces::request_id, NonzeroU64, "request_id">, Field<&HistoryWorkspaces::truncated, BoolByte, "truncated">, Field<&HistoryWorkspaces::paths, CountedSpan<u16, Text16<max_path_bytes>, HistoryWorkspaces::maximum_paths>, "paths">> {};
+
     struct HistoryResults {
       std::uint64_t request_id{};
       std::uint64_t snapshot_id{};

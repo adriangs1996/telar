@@ -220,6 +220,27 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
     check(commands(store, reply, QueryHistory{.request_id = 4, .limit = 10}) == std::vector<std::string>{"in b"}, "pruning one workspace removed another's commands");
   }
 
+  void testWorkspacesListEachRecordedPathOnce() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    HistoryStore store{memory, ":memory:"};
+    EncodedReply reply{memory};
+    ds::Array<Byte, 4096> storage;
+
+    store.workspaces(QueryHistoryWorkspaces{.request_id = 1}, reply);
+    check(decodeReply<HistoryWorkspaces>(reply, storage.viewMut()).paths.empty(), "a history without sessions records no workspace");
+
+    finished(store, session(1, "/project-a"), "one", "/project-a");
+    finished(store, session(2, "/project-a"), "two", "/project-a/src");
+    finished(store, session(3, "/project-b"), "three", "/project-b");
+    store.workspaces(QueryHistoryWorkspaces{.request_id = 2}, reply);
+    const auto listed = decodeReply<HistoryWorkspaces>(reply, storage.viewMut());
+    std::vector<std::string> paths{listed.paths.begin(), listed.paths.end()};
+
+    std::ranges::sort(paths);
+    check(listed.request_id == 2 && !listed.truncated && paths == std::vector<std::string>{"/project-a", "/project-b"}, "each workspace a session ran in must be listed once");
+  }
+
   // The failure code `run` threw, or nothing when it returned.
   template <typename Run>
   ds::Option<FailureCode> requestFailure(Run run) {
@@ -478,6 +499,7 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
   const telar::testing::Case case_page_respects_payload_cap{"history_store.page_respects_payload_cap", testPageRespectsPayloadCap};
   const telar::testing::Case case_prune_failed_only{"history_store.prune_failed_only", testPruneFailedOnly};
   const telar::testing::Case case_workspace_scope{"history_store.workspace_scope", testWorkspaceScope};
+  const telar::testing::Case case_workspaces_list_each_recorded_path_once{"history_store.workspaces_list_each_recorded_path_once", testWorkspacesListEachRecordedPathOnce};
   const telar::testing::Case case_refuses_linked_database{"history_store.refuses_linked_database", testRefusesLinkedDatabase};
   const telar::testing::Case case_tightens_existing_database_mode{"history_store.tightens_existing_database_mode", testTightensExistingDatabaseMode};
   const telar::testing::Case case_author_filter{"history_store.author_filter", testAuthorFilter};

@@ -195,6 +195,8 @@ namespace telar::runtime {
           store->readOutput(request, reply);
         } else if constexpr (std::same_as<Message, HistoryStatsQuery>) {
           store->stats(request, reply);
+        } else if constexpr (std::same_as<Message, QueryHistoryWorkspaces>) {
+          store->workspaces(request, reply);
         } else if constexpr (std::same_as<Message, ReportAgentCommand>) {
           store->reportAgentCommand(request, context, reply);
         }

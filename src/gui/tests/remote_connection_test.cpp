@@ -354,17 +354,17 @@ namespace {
 
       QTRY_COMPARE(first->bytesAvailable(), current_hello.size());
       QCOMPARE(first->readAll(), current_hello);
-      QVERIFY(sendHandshake(*first, ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = application::RuntimeProtocol::schema87}));
+      QVERIFY(sendHandshake(*first, ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = telar::handshake::schemaOf(telar::handshake::Dialect::schema87)}));
       QVERIFY(sendPayload(*first, QByteArrayLiteral("OLD_CONNECTION_TAIL")));
       QTRY_VERIFY(listener.hasPendingConnections());
       const std::unique_ptr<QLocalSocket> legacy{listener.nextPendingConnection()};
 
       QVERIFY(legacy != nullptr);
-      const auto legacy_hello = framedHello(application::RuntimeProtocol::schema87);
+      const auto legacy_hello = framedHello(telar::handshake::schemaOf(telar::handshake::Dialect::schema87));
 
       QTRY_COMPARE(legacy->bytesAvailable(), legacy_hello.size());
       QCOMPARE(legacy->readAll(), legacy_hello);
-      QVERIFY(sendHandshake(*legacy, ServerAccept{application::RuntimeProtocol::schema87}));
+      QVERIFY(sendHandshake(*legacy, ServerAccept{telar::handshake::schemaOf(telar::handshake::Dialect::schema87)}));
       QVERIFY(sendPayload(*legacy, QByteArrayLiteral("CURRENT_LEGACY_DATA")));
       QTRY_VERIFY(connection.ready());
       QTRY_COMPARE(delivered.size(), std::size_t{1});
@@ -405,7 +405,7 @@ namespace {
       const std::unique_ptr<QLocalSocket> first{listener.nextPendingConnection()};
 
       QVERIFY(first != nullptr);
-      QVERIFY(sendHandshake(*first, ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = application::RuntimeProtocol::schema87}));
+      QVERIFY(sendHandshake(*first, ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = telar::handshake::schemaOf(telar::handshake::Dialect::schema87)}));
       QTRY_VERIFY(listener.hasPendingConnections());
       const std::unique_ptr<QLocalSocket> second{listener.nextPendingConnection()};
 
@@ -628,7 +628,7 @@ namespace {
 
       connection.openRemote({.destination = QStringLiteral("legacy"), .program = {}, .local_endpoint = directory.filePath(QStringLiteral("runtime.sock"))});
       QTRY_VERIFY2(connection.ready(), qPrintable(connection.error()));
-      QCOMPARE(connection.schema(), application::RuntimeProtocol::schema87);
+      QCOMPARE(connection.schema(), telar::handshake::schemaOf(telar::handshake::Dialect::schema87));
       const ReportLimit report{.reach = {.name = "legacy.ssh", .noun = "cells", .value = 1, .requested = 2, .route = "gui"}, .hits = 1};
 
       connection.send(report);

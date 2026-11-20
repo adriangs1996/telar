@@ -170,6 +170,7 @@ export {
         ClientRequest<PruneHistory, ClientRole::control, RequestLane::history>,
         ClientRequest<ReadHistoryOutput, ClientRole::control, RequestLane::history>,
         ClientRequest<HistoryStatsQuery, ClientRole::control, RequestLane::history>,
+        ClientRequest<QueryHistoryWorkspaces, ClientRole::control, RequestLane::history>,
         ClientRequest<ReportLimit, ClientRole::control>,
         ClientRequest<QueryLimits, ClientRole::control>,
         ClientRequest<LaunchTab, ClientRole::control>,

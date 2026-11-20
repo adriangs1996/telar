@@ -90,6 +90,7 @@ namespace telar {
     query_monitor = 0x52,
     request_process_signal = 0x53,
     request_process_priority = 0x54,
+    query_history_workspaces = 0x55,
   };
 
   enum class ServerTag : Byte {
@@ -158,6 +159,7 @@ namespace telar {
     pane_document = 0xc3,
     monitor_snapshot = 0xc4,
     pane_theme = 0xc5,
+    history_workspaces = 0xc6,
   };
 
   struct RequestRuntimeState {
@@ -285,6 +287,372 @@ namespace telar {
     plan = 3,
     other = 4,
   };
+
+  // The name of each request, message, agent status and reason for an agent to wait, as `api schema`
+  // and every command print it: the one place that spells them. Empty for a value that names none.
+  // Each switch lists every enumerator, and here a missing one is an error: an enumerator added
+  // without its name does not compile.
+#pragma clang diagnostic push
+#pragma clang diagnostic error "-Wswitch"
+
+  [[nodiscard]] constexpr std::string_view clientTagName(ClientTag tag) noexcept {
+    switch (tag) {
+    case ClientTag::open_pane:
+      return "open_pane";
+    case ClientTag::pane_input:
+      return "pane_input";
+    case ClientTag::pane_resize:
+      return "pane_resize";
+    case ClientTag::frame_ack:
+      return "frame_ack";
+    case ClientTag::request_snapshot:
+      return "request_snapshot";
+    case ClientTag::detach_pane:
+      return "detach_pane";
+    case ClientTag::runtime_stop:
+      return "runtime_stop";
+    case ClientTag::request_tab_snapshot:
+      return "request_tab_snapshot";
+    case ClientTag::create_pane:
+      return "create_pane";
+    case ClientTag::close_pane:
+      return "close_pane";
+    case ClientTag::query_history:
+      return "query_history";
+    case ClientTag::request_workspace_snapshot:
+      return "request_workspace_snapshot";
+    case ClientTag::create_tab:
+      return "create_tab";
+    case ClientTag::rename_tab:
+      return "rename_tab";
+    case ClientTag::close_tab:
+      return "close_tab";
+    case ClientTag::move_tab:
+      return "move_tab";
+    case ClientTag::request_graphics_snapshot:
+      return "request_graphics_snapshot";
+    case ClientTag::graphics_credit:
+      return "graphics_credit";
+    case ClientTag::configure_graphics:
+      return "configure_graphics";
+    case ClientTag::request_runtime_state:
+      return "request_runtime_state";
+    case ClientTag::create_workspace:
+      return "create_workspace";
+    case ClientTag::rename_workspace:
+      return "rename_workspace";
+    case ClientTag::set_pane_viewport:
+      return "set_pane_viewport";
+    case ClientTag::copy_selection:
+      return "copy_selection";
+    case ClientTag::show_notification:
+      return "show_notification";
+    case ClientTag::update_client_layout:
+      return "update_client_layout";
+    case ClientTag::acknowledge_agent:
+      return "acknowledge_agent";
+    case ClientTag::query_agents:
+      return "query_agents";
+    case ClientTag::read_pane:
+      return "read_pane";
+    case ClientTag::send_pane_text:
+      return "send_pane_text";
+    case ClientTag::report_agent_session:
+      return "report_agent_session";
+    case ClientTag::report_agent:
+      return "report_agent";
+    case ClientTag::search_pane:
+      return "search_pane";
+    case ClientTag::import_history:
+      return "import_history";
+    case ClientTag::delete_history:
+      return "delete_history";
+    case ClientTag::prune_history:
+      return "prune_history";
+    case ClientTag::read_history_output:
+      return "read_history_output";
+    case ClientTag::history_stats:
+      return "history_stats";
+    case ClientTag::request_pane_focus:
+      return "request_pane_focus";
+    case ClientTag::complete_pane_focus:
+      return "complete_pane_focus";
+    case ClientTag::suggest_command:
+      return "suggest_command";
+    case ClientTag::report_agent_command:
+      return "report_agent_command";
+    case ClientTag::report_agent_title:
+      return "report_agent_title";
+    case ClientTag::configure_terminal_colors:
+      return "configure_terminal_colors";
+    case ClientTag::read_pane_theme:
+      return "read_pane_theme";
+    case ClientTag::query_clients:
+      return "query_clients";
+    case ClientTag::detach_client:
+      return "detach_client";
+    case ClientTag::request_client_command:
+      return "request_client_command";
+    case ClientTag::complete_client_command:
+      return "complete_client_command";
+    case ClientTag::open_editor:
+      return "open_editor";
+    case ClientTag::find_paths:
+      return "find_paths";
+    case ClientTag::register_worktree:
+      return "register_worktree";
+    case ClientTag::launch_worktree:
+      return "launch_worktree";
+    case ClientTag::forget_worktree:
+      return "forget_worktree";
+    case ClientTag::interrupt_agent:
+      return "interrupt_agent";
+    case ClientTag::report_agent_progress:
+      return "report_agent_progress";
+    case ClientTag::launch_tab:
+      return "launch_tab";
+    case ClientTag::verify_pane_descent:
+      return "verify_pane_descent";
+    case ClientTag::report_limit:
+      return "report_limit";
+    case ClientTag::query_limits:
+      return "query_limits";
+    case ClientTag::configure_frame_interval:
+      return "configure_frame_interval";
+    case ClientTag::hold_tab:
+      return "hold_tab";
+    case ClientTag::execution_request:
+      return "execution_request";
+    case ClientTag::configure_pane_desktop:
+      return "configure_pane_desktop";
+    case ClientTag::complete_clipboard_desktop:
+      return "complete_clipboard_desktop";
+    case ClientTag::paste_pane_clipboard:
+      return "paste_pane_clipboard";
+    case ClientTag::read_runtime_clipboard:
+      return "read_runtime_clipboard";
+    case ClientTag::complete_words:
+      return "complete_words";
+    case ClientTag::request_command_spec:
+      return "request_command_spec";
+    case ClientTag::read_pane_rows:
+      return "read_pane_rows";
+    case ClientTag::search_pane_rows:
+      return "search_pane_rows";
+    case ClientTag::pane_command:
+      return "pane_command";
+    case ClientTag::configure_shell_prompt:
+      return "configure_shell_prompt";
+    case ClientTag::query_monitor:
+      return "query_monitor";
+    case ClientTag::request_process_signal:
+      return "request_process_signal";
+    case ClientTag::request_process_priority:
+      return "request_process_priority";
+    case ClientTag::query_history_workspaces:
+      return "query_history_workspaces";
+    }
+
+    return {};
+  }
+
+  [[nodiscard]] constexpr std::string_view serverTagName(ServerTag tag) noexcept {
+    switch (tag) {
+    case ServerTag::pane_opened:
+      return "pane_opened";
+    case ServerTag::pane_frame:
+      return "pane_frame";
+    case ServerTag::pane_exited:
+      return "pane_exited";
+    case ServerTag::request_failed:
+      return "request_failed";
+    case ServerTag::runtime_stopping:
+      return "runtime_stopping";
+    case ServerTag::tab_snapshot:
+      return "tab_snapshot";
+    case ServerTag::history_results:
+      return "history_results";
+    case ServerTag::workspace_snapshot:
+      return "workspace_snapshot";
+    case ServerTag::tab_created:
+      return "tab_created";
+    case ServerTag::tab_renamed:
+      return "tab_renamed";
+    case ServerTag::tab_closed:
+      return "tab_closed";
+    case ServerTag::tab_moved:
+      return "tab_moved";
+    case ServerTag::graphics_snapshot:
+      return "graphics_snapshot";
+    case ServerTag::graphics_image:
+      return "graphics_image";
+    case ServerTag::graphics_image_chunk:
+      return "graphics_image_chunk";
+    case ServerTag::graphics_placement:
+      return "graphics_placement";
+    case ServerTag::graphics_delete_image:
+      return "graphics_delete_image";
+    case ServerTag::graphics_delete_placement:
+      return "graphics_delete_placement";
+    case ServerTag::resync_required:
+      return "resync_required";
+    case ServerTag::graphics_shared_image:
+      return "graphics_shared_image";
+    case ServerTag::proxy_status:
+      return "proxy_status";
+    case ServerTag::agent_snapshot:
+      return "agent_snapshot";
+    case ServerTag::system_metrics:
+      return "system_metrics";
+    case ServerTag::workspace_list:
+      return "workspace_list";
+    case ServerTag::pane_cwd:
+      return "pane_cwd";
+    case ServerTag::pane_clipboard:
+      return "pane_clipboard";
+    case ServerTag::notification:
+      return "notification";
+    case ServerTag::notification_shown:
+      return "notification_shown";
+    case ServerTag::pane_foreground:
+      return "pane_foreground";
+    case ServerTag::agent_sound:
+      return "agent_sound";
+    case ServerTag::client_layout_snapshot:
+      return "client_layout_snapshot";
+    case ServerTag::pane_text:
+      return "pane_text";
+    case ServerTag::request_completed:
+      return "request_completed";
+    case ServerTag::pane_title:
+      return "pane_title";
+    case ServerTag::pane_matches:
+      return "pane_matches";
+    case ServerTag::history_pruned:
+      return "history_pruned";
+    case ServerTag::history_output:
+      return "history_output";
+    case ServerTag::history_stats_result:
+      return "history_stats_result";
+    case ServerTag::pane_focus_command:
+      return "pane_focus_command";
+    case ServerTag::pane_focus_result:
+      return "pane_focus_result";
+    case ServerTag::command_suggestion:
+      return "command_suggestion";
+    case ServerTag::pane_progress:
+      return "pane_progress";
+    case ServerTag::client_list:
+      return "client_list";
+    case ServerTag::client_command:
+      return "client_command";
+    case ServerTag::client_command_result:
+      return "client_command_result";
+    case ServerTag::editor_opened:
+      return "editor_opened";
+    case ServerTag::path_results:
+      return "path_results";
+    case ServerTag::worktree_registered:
+      return "worktree_registered";
+    case ServerTag::limit_list:
+      return "limit_list";
+    case ServerTag::execution_reply:
+      return "execution_reply";
+    case ServerTag::clipboard_desktop_request:
+      return "clipboard_desktop_request";
+    case ServerTag::clipboard_desktop_execute:
+      return "clipboard_desktop_execute";
+    case ServerTag::clipboard_desktop_cancel:
+      return "clipboard_desktop_cancel";
+    case ServerTag::runtime_clipboard_chunk:
+      return "runtime_clipboard_chunk";
+    case ServerTag::pane_list:
+      return "pane_list";
+    case ServerTag::pane_shell:
+      return "pane_shell";
+    case ServerTag::pane_git:
+      return "pane_git";
+    case ServerTag::completion_words:
+      return "completion_words";
+    case ServerTag::pane_blocks:
+      return "pane_blocks";
+    case ServerTag::command_spec:
+      return "command_spec";
+    case ServerTag::pane_rows:
+      return "pane_rows";
+    case ServerTag::pane_scrollback:
+      return "pane_scrollback";
+    case ServerTag::pane_document:
+      return "pane_document";
+    case ServerTag::monitor_snapshot:
+      return "monitor_snapshot";
+    case ServerTag::history_workspaces:
+      return "history_workspaces";
+    case ServerTag::pane_theme:
+      return "pane_theme";
+    }
+
+    return {};
+  }
+
+  [[nodiscard]] constexpr std::string_view agentStatusName(AgentStatus status) noexcept {
+    switch (status) {
+    case AgentStatus::unknown:
+      return "unknown";
+    case AgentStatus::working:
+      return "working";
+    case AgentStatus::blocked:
+      return "blocked";
+    case AgentStatus::ready:
+      return "ready";
+    case AgentStatus::failed:
+      return "failed";
+    case AgentStatus::done:
+      return "done";
+    }
+
+    return {};
+  }
+
+  [[nodiscard]] constexpr std::string_view agentBlockedReasonName(AgentBlockedReason reason) noexcept {
+    switch (reason) {
+    case AgentBlockedReason::none:
+      return "none";
+    case AgentBlockedReason::permission:
+      return "permission";
+    case AgentBlockedReason::question:
+      return "question";
+    case AgentBlockedReason::plan:
+      return "plan";
+    case AgentBlockedReason::other:
+      return "other";
+    }
+
+    return {};
+  }
+
+#pragma clang diagnostic pop
+
+  // The status and the reason `name` spells, by the names above; nothing for any other text.
+  [[nodiscard]] constexpr ds::Option<AgentStatus> agentStatusNamed(std::string_view name) noexcept {
+    for (unsigned value = 0; !name.empty() && value <= std::numeric_limits<Byte>::max(); ++value) {
+      if (agentStatusName(static_cast<AgentStatus>(value)) == name) {
+        return static_cast<AgentStatus>(value);
+      }
+    }
+
+    return ds::none;
+  }
+
+  [[nodiscard]] constexpr ds::Option<AgentBlockedReason> agentBlockedReasonNamed(std::string_view name) noexcept {
+    for (unsigned value = 0; !name.empty() && value <= std::numeric_limits<Byte>::max(); ++value) {
+      if (agentBlockedReasonName(static_cast<AgentBlockedReason>(value)) == name) {
+        return static_cast<AgentBlockedReason>(value);
+      }
+    }
+
+    return ds::none;
+  }
 
   enum class AgentSource : Byte {
     screen = 1,

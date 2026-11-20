@@ -43,10 +43,82 @@ export {
       // cqp00002 added PaneShell, PaneGit, PaneBlocks, word completion and command specs;
       // cqp00003 added ReadPaneRows, PaneRows, PaneScrollback, SearchPaneRows, PaneCommand and
       // ConfigureShellPrompt; cqp00004 added PaneDocument; cqp00005 added the editor colors to
-      // ConfigureTerminalColors, ReadPaneTheme and PaneTheme; cqp00006 adds QueryMonitor,
-      // MonitorSnapshot, RequestProcessSignal and RequestProcessPriority. Peers without them reject
-      // the messages.
-      inline constexpr SchemaId schema_id{'c', 'q', 'p', '0', '0', '0', '0', '6'};
+      // ConfigureTerminalColors, ReadPaneTheme and PaneTheme; cqp00006 added QueryMonitor,
+      // MonitorSnapshot, RequestProcessSignal and RequestProcessPriority; cqp00007 adds
+      // QueryHistoryWorkspaces and HistoryWorkspaces. Peers without them reject the messages.
+      inline constexpr SchemaId schema_id{'c', 'q', 'p', '0', '0', '0', '0', '7'};
+
+      // The schemas a client of this build can speak with a runtime, oldest first. Each added
+      // messages to the one before it and left the layouts of the others alone, so a client that
+      // sends an older runtime only the requests it knows speaks its dialect. The last is this
+      // build's. A new schema joins the enum, dialect_schemas and, for each request it adds, since.
+      enum class Dialect : std::uint8_t {
+        schema87,
+        cqp00002,
+        cqp00003,
+        cqp00004,
+        cqp00005,
+        cqp00006,
+        cqp00007,
+      };
+
+      inline constexpr Dialect current_dialect = Dialect::cqp00007;
+
+      inline constexpr ds::Array<SchemaId, 7> dialect_schemas{
+          SchemaId{'8', '7', '6', 'b', '4', '8', '0', 'd'},
+          SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '2'},
+          SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '3'},
+          SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '4'},
+          SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '5'},
+          SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '6'},
+          schema_id,
+      };
+
+      [[nodiscard]] constexpr const SchemaId& schemaOf(Dialect dialect) noexcept {
+        return dialect_schemas.at(std::to_underlying(dialect));
+      }
+
+      // The dialect of a runtime that answers with `schema`; nothing for one this build cannot speak.
+      [[nodiscard]] constexpr ds::Option<Dialect> dialectOf(const SchemaId& schema) noexcept {
+        for (std::size_t index = 0; index < dialect_schemas.size(); ++index) {
+          if (dialect_schemas.at(index) == schema) {
+            return static_cast<Dialect>(index);
+          }
+        }
+
+        return ds::none;
+      }
+
+      // The first dialect whose runtime understands `tag`: what each schema added, in one place. A
+      // request no case names is one every dialect has.
+      [[nodiscard]] constexpr Dialect since(ClientTag tag) noexcept {
+        switch (tag) {
+        case ClientTag::hold_tab:
+          return Dialect::cqp00002;
+        case ClientTag::read_pane_rows:
+        case ClientTag::search_pane_rows:
+        case ClientTag::pane_command:
+        case ClientTag::configure_shell_prompt:
+          return Dialect::cqp00003;
+        // Its layout gained the editor colors with the schema that added ReadPaneTheme.
+        case ClientTag::configure_terminal_colors:
+        case ClientTag::read_pane_theme:
+          return Dialect::cqp00005;
+        case ClientTag::query_monitor:
+        case ClientTag::request_process_signal:
+        case ClientTag::request_process_priority:
+          return Dialect::cqp00006;
+        case ClientTag::query_history_workspaces:
+          return Dialect::cqp00007;
+        default:
+          return Dialect::schema87;
+        }
+      }
+
+      // Whether a runtime of dialect `peer` understands `tag`.
+      [[nodiscard]] constexpr bool speaks(Dialect peer, ClientTag tag) noexcept {
+        return peer >= since(tag);
+      }
 
     } // namespace handshake
 

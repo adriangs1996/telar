@@ -83,30 +83,11 @@ export {
   namespace telar::gui::application {
 
     struct RuntimeProtocol {
-      // Schema 88 only adds hold_tab (0x47); existing schema 87 message layouts are unchanged.
-      static constexpr SchemaId schema87{'8', '7', '6', 'b', '4', '8', '0', 'd'};
-      // The schema before scrollback rows: no ReadPaneRows or SearchPaneRows, and its runtime
-      // sends no PaneRows or PaneScrollback. Its other layouts are the current schema's.
-      static constexpr SchemaId cqp00002{'c', 'q', 'p', '0', '0', '0', '0', '2'};
-      // The schema before documents: its runtime sends no PaneDocument. Its other layouts are the
-      // current schema's.
-      static constexpr SchemaId cqp00003{'c', 'q', 'p', '0', '0', '0', '0', '3'};
-      // The schema before the client's whole theme: its ConfigureTerminalColors has no editor
-      // colors and it has no ReadPaneTheme. Its other layouts are the current schema's.
-      static constexpr SchemaId cqp00004{'c', 'q', 'p', '0', '0', '0', '0', '4'};
-      // The schema before the monitor: its runtime answers no QueryMonitor and acts on no process.
-      // Its other layouts are the current schema's.
-      static constexpr SchemaId cqp00005{'c', 'q', 'p', '0', '0', '0', '0', '5'};
-
+      // The window speaks every dialect of handshake::Dialect: with an older runtime it sends only the
+      // requests that dialect has (handshake::speaks).
       [[nodiscard]] static bool supports(const SchemaId& schema) noexcept;
 
       [[nodiscard]] static bool supports(const SchemaId& schema, ClientTag tag) noexcept;
-
-      // Whether the runtime reads rows of a scrollback by their stable number.
-      [[nodiscard]] static bool readsRows(const SchemaId& schema) noexcept;
-
-      // Whether the runtime keeps the client's whole theme, editor colors included.
-      [[nodiscard]] static bool readsTheme(const SchemaId& schema) noexcept;
 
       [[nodiscard]] static ds::Option<SchemaId> retry(std::span<const Byte> payload, const SchemaId& requested);
     };

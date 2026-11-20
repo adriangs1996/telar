@@ -773,6 +773,37 @@ END;
     reply.send(result);
   }
 
+  void HistoryStore::workspaces(const QueryHistoryWorkspaces& request, EncodedReply<ConcurrentMemory>& reply) {
+    rows_.clear();
+    Statement recorded{database_, "SELECT DISTINCT workspace_path FROM session LIMIT ?1"};
+
+    // One more than a reply lists, to tell a full reply from a truncated one.
+    recorded.bind(1, static_cast<std::int64_t>(HistoryWorkspaces::maximum_paths + 1));
+    ds::Vec<std::string_view, ConcurrentMemory> paths{memory_};
+    HistoryWorkspaces result{.request_id = request.request_id};
+    std::size_t bytes = 0;
+
+    while (recorded.next()) {
+      const auto path = recorded.text(0);
+
+      // No directory has such a path, so it names no workspace to look for.
+      if (path.empty() || path.size() >= max_path_bytes || path.contains('\0')) {
+        continue;
+      }
+
+      if (paths.size() == HistoryWorkspaces::maximum_paths || bytes + path.size() > HistoryWorkspaces::maximum_bytes) {
+        result.truncated = true;
+        break;
+      }
+
+      bytes += path.size();
+      paths.push(rows_.copy(path));
+    }
+
+    result.paths = paths;
+    reply.send(result);
+  }
+
   void HistoryStore::stats(const HistoryStatsQuery& request, EncodedReply<ConcurrentMemory>& reply) {
     rows_.clear();
     auto filters = string(" WHERE 1=1");

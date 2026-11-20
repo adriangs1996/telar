@@ -329,13 +329,12 @@ namespace telar::runtime::cli::hooks {
 
   AgentBlockedReason Payload::blockedReason() const {
     const auto name = fields_.value("blocked") ? fields_.text("blocked") : "none";
-    constexpr ds::Array names{"none", "permission", "question", "plan", "other"};
-    const auto* const found = std::ranges::find(names, name);
-    if (found == names.end()) {
+    const auto reason = agentBlockedReasonNamed(name);
+    if (!reason) {
       throw std::invalid_argument{"Unknown hook blocked reason"};
     }
 
-    return static_cast<AgentBlockedReason>(found - names.begin());
+    return *reason;
   }
 
   void Payload::strictBoolean(std::string_view name) {

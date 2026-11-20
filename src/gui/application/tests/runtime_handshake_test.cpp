@@ -65,32 +65,32 @@ namespace {
   }
 
   void auditedSchema87Negotiation() {
-    const auto legacy_accept = HandshakeCodec::encode(ServerAccept{application::RuntimeProtocol::schema87});
+    const auto legacy_accept = HandshakeCodec::encode(ServerAccept{handshake::schemaOf(handshake::Dialect::schema87)});
 
     check(application::RuntimeHandshake::inspect(legacy_accept).error.hasValue(), "An unsolicited legacy selection must not adopt an unrequested schema");
-    check(!application::RuntimeHandshake::inspect(legacy_accept, application::RuntimeProtocol::schema87).error, "An explicitly requested audited schema may be accepted");
-    const auto legacy_refusal = HandshakeCodec::encode(ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = application::RuntimeProtocol::schema87});
+    check(!application::RuntimeHandshake::inspect(legacy_accept, handshake::schemaOf(handshake::Dialect::schema87)).error, "An explicitly requested audited schema may be accepted");
+    const auto legacy_refusal = HandshakeCodec::encode(ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = handshake::schemaOf(handshake::Dialect::schema87)});
 
-    check(application::RuntimeProtocol::retry(legacy_refusal, handshake::schema_id) == application::RuntimeProtocol::schema87, "A supported explicit refusal may request one new connection with that schema");
-    check(!application::RuntimeProtocol::retry(legacy_refusal, application::RuntimeProtocol::schema87), "A repeated refusal must not loop on the same schema");
+    check(application::RuntimeProtocol::retry(legacy_refusal, handshake::schema_id) == handshake::schemaOf(handshake::Dialect::schema87), "A supported explicit refusal may request one new connection with that schema");
+    check(!application::RuntimeProtocol::retry(legacy_refusal, handshake::schemaOf(handshake::Dialect::schema87)), "A repeated refusal must not loop on the same schema");
     const auto current_refusal = HandshakeCodec::encode(ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = handshake::schema_id});
 
-    check(application::RuntimeProtocol::retry(current_refusal, application::RuntimeProtocol::schema87) == handshake::schema_id, "An upgraded runtime may select the current audited dialect on reconnect");
+    check(application::RuntimeProtocol::retry(current_refusal, handshake::schemaOf(handshake::Dialect::schema87)) == handshake::schema_id, "An upgraded runtime may select the current audited dialect on reconnect");
     constexpr SchemaId unknown{'8', '6', '6', 'b', '4', '8', '0', 'd'};
     const auto unknown_refusal = HandshakeCodec::encode(ServerReject{.reason = HandshakeRejectReason::incompatible_schema, .expected_schema = unknown});
 
     check(!application::RuntimeProtocol::retry(unknown_refusal, handshake::schema_id) && application::RuntimeHandshake::inspect(HandshakeCodec::encode(ServerAccept{unknown}), unknown).error.hasValue(), "A matching suffix alone must not enable an unknown protocol generation");
-    const auto full = HandshakeCodec::encode(ServerReject{.reason = HandshakeRejectReason::client_limit_reached, .expected_schema = application::RuntimeProtocol::schema87});
+    const auto full = HandshakeCodec::encode(ServerReject{.reason = HandshakeRejectReason::client_limit_reached, .expected_schema = handshake::schemaOf(handshake::Dialect::schema87)});
 
     check(!application::RuntimeProtocol::retry(full, handshake::schema_id) && !application::RuntimeProtocol::retry(legacy_accept, handshake::schema_id), "Capacity and unsolicited acceptance must never trigger a fallback");
     for (std::size_t size = 0; size < legacy_refusal.size(); ++size) {
       check(!application::RuntimeProtocol::retry(std::span<const Byte>{legacy_refusal}.first(size), handshake::schema_id), "A truncated refusal must not trigger a fallback");
     }
 
-    check(application::RuntimeProtocol::supports(handshake::schema_id, ClientTag::hold_tab) && !application::RuntimeProtocol::supports(application::RuntimeProtocol::schema87, ClientTag::hold_tab), "The new hold_tab request must stay blocked on schema 87");
-    check(application::RuntimeProtocol::supports(application::RuntimeProtocol::schema87, ClientTag::pane_input) && !application::RuntimeProtocol::supports(unknown), "Common terminal traffic may use the audited legacy dialect exclusively");
-    check(application::RuntimeProtocol::supports(application::RuntimeProtocol::cqp00004) && application::RuntimeProtocol::readsRows(application::RuntimeProtocol::cqp00004), "The schema before themes keeps its scrollback rows");
-    check(application::RuntimeProtocol::supports(handshake::schema_id, ClientTag::configure_terminal_colors) && !application::RuntimeProtocol::supports(application::RuntimeProtocol::cqp00004, ClientTag::configure_terminal_colors) && !application::RuntimeProtocol::supports(application::RuntimeProtocol::cqp00004, ClientTag::read_pane_theme), "A runtime before themes never hears the client's theme in a layout it cannot read");
+    check(application::RuntimeProtocol::supports(handshake::schema_id, ClientTag::hold_tab) && !application::RuntimeProtocol::supports(handshake::schemaOf(handshake::Dialect::schema87), ClientTag::hold_tab), "The new hold_tab request must stay blocked on schema 87");
+    check(application::RuntimeProtocol::supports(handshake::schemaOf(handshake::Dialect::schema87), ClientTag::pane_input) && !application::RuntimeProtocol::supports(unknown), "Common terminal traffic may use the audited legacy dialect exclusively");
+    check(application::RuntimeProtocol::supports(handshake::schemaOf(handshake::Dialect::cqp00004)) && application::RuntimeProtocol::supports(handshake::schemaOf(handshake::Dialect::cqp00004), ClientTag::read_pane_rows), "The schema before themes keeps its scrollback rows");
+    check(application::RuntimeProtocol::supports(handshake::schema_id, ClientTag::configure_terminal_colors) && !application::RuntimeProtocol::supports(handshake::schemaOf(handshake::Dialect::cqp00004), ClientTag::configure_terminal_colors) && !application::RuntimeProtocol::supports(handshake::schemaOf(handshake::Dialect::cqp00004), ClientTag::read_pane_theme), "A runtime before themes never hears the client's theme in a layout it cannot read");
   }
 
   void malformedResponsesKeepOriginalDecoderErrors() {

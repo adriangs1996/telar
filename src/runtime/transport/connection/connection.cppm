@@ -236,6 +236,7 @@ export {
       case ServerTag::history_pruned:
       case ServerTag::history_output:
       case ServerTag::history_stats_result:
+      case ServerTag::history_workspaces:
       case ServerTag::pane_focus_command:
       case ServerTag::pane_focus_result:
       case ServerTag::command_suggestion:

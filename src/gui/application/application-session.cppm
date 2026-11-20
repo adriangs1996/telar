@@ -25,6 +25,7 @@ import :client_view_state;
 import :sidebar;
 import telar.gui.features.palette;
 import telar.gui.features.status_bar;
+import telar.client;
 import telar.config.client;
 import telar.config.runtime;
 import telar.gui.foundation.terminal;
@@ -184,10 +185,9 @@ export {
 
       void setRestoreLayout(bool enabled) noexcept;
 
-      // `reads_rows`: the runtime reads its scrollback's rows by stable number (schema cqp00003).
-      // `reads_theme`: it keeps the client's whole theme for its panes' programs (schema cqp00005).
-      // `monitors`: it answers the monitor's queries (schema cqp00006).
-      void connected(std::uint64_t identity, bool reads_rows = true, bool reads_theme = true, bool monitors = true);
+      // `dialect`: the schema the runtime answered the handshake with. The session asks an older
+      // runtime only for what its dialect has.
+      void connected(std::uint64_t identity, handshake::Dialect dialect = handshake::current_dialect);
 
       [[nodiscard]] bool requestsPending() const noexcept;
 
@@ -225,6 +225,9 @@ export {
       [[nodiscard]] bool readsTheme() const noexcept;
 
       [[nodiscard]] bool monitors() const noexcept;
+
+      // Whether the runtime the session is connected to understands `tag`.
+      [[nodiscard]] bool speaks(ClientTag tag) const noexcept;
 
       // Asks for the rows from stable row `first` to `last` the pane holds neither on its screen
       // nor in its cache, a request at a time while requests are free.
@@ -840,9 +843,8 @@ export {
       std::uint64_t attachment_generation_ = 0;
       std::uint64_t changed_pane_ = 0;
       bool ready_ = false;
-      bool reads_rows_ = false;
-      bool reads_theme_ = false;
-      bool monitors_ = false;
+      // The dialect of the runtime the session is connected to; none before the first connection.
+      ds::Option<handshake::Dialect> dialect_;
       bool presented_ = true;
       bool leave_pending_ = false;
       bool initial_open_pending_ = false;

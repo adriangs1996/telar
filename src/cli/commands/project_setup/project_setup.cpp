@@ -40,9 +40,7 @@ namespace telar::runtime::cli::pane_agents {
   constexpr int timed_out_status = 3;
 
   constexpr ds::Array<std::string_view, 9> report_states{"working", "blocked", "ready", "exited", "settling", "continuing", "waiting", "idle", "released"};
-  constexpr ds::Array<std::string_view, 5> blocked_reasons{"none", "permission", "question", "plan", "other"};
   constexpr ds::Array<std::string_view, 3> session_file_kinds{"claude_transcript", "codex_state", "cursor_meta"};
-  constexpr ds::Array<std::string_view, 6> status_names{"unknown", "working", "blocked", "ready", "failed", "done"};
 
   namespace {
 
@@ -226,7 +224,12 @@ namespace telar::runtime::cli::pane_agents {
     // An option of `agent report-state`; false where `arg` is none of them.
     bool stateReportOption(tbc::mut_a<ReportAgent> report, Cursor& cursor, std::string_view arg) {
       if (arg == "--blocked-reason") {
-        report.blocked_reason = choice<AgentBlockedReason>(cursor.take("MissingBlockedReason"), "InvalidBlockedReason", blocked_reasons);
+        const auto reason = agentBlockedReasonNamed(cursor.take("MissingBlockedReason"));
+        if (!reason) {
+          usage("InvalidBlockedReason");
+        }
+
+        report.blocked_reason = *reason;
       } else if (arg == "--event") {
         report.event = cursor.take("MissingAgentEvent");
       } else if (arg == "--session") {
@@ -249,7 +252,7 @@ namespace telar::runtime::cli::pane_agents {
         return;
       }
 
-      options.until = choice<AgentStatus>(status == "idle" ? std::string_view{"ready"} : status, "InvalidWaitStatus", status_names);
+      options.until = agentStatusNamed(status == "idle" ? std::string_view{"ready"} : status).valueOr(AgentStatus::unknown);
       if (options.until == AgentStatus::unknown) {
         usage("InvalidWaitStatus");
       }
@@ -498,11 +501,11 @@ namespace telar::runtime::cli::pane_agents {
 
     void writeAgent(Output& out, const AgentSnapshotEntry& agent, bool json) {
       const auto provider = agent.provider_name.empty() ? std::string_view{"unknown"} : agent.provider_name;
-      const auto status = status_names[static_cast<std::size_t>(agent.status)];
+      const auto status = agentStatusName(agent.status);
 
       if (json) {
         out.text("{\"pane_id\":").number(agent.pane_id).text(",\"pane_generation\":").number(agent.pane_generation).text(",\"workspace_id\":").number(agent.location.workspace.id).text(",\"tab_id\":").number(agent.location.tab_id).text(",\"pane_index\":").number(agent.pane_index).text(",\"provider\":").json(provider, JsonEscapes::control).text(",\"provider_index\":").number(static_cast<unsigned>(agent.provider)).text(",\"status\":").json(status, JsonEscapes::control);
-        out.text(",\"workspace\":").json(agent.workspace_label, JsonEscapes::control).text(",\"tab\":").json(agent.tab_label, JsonEscapes::control).text(",\"title\":").json(agent.session_title, JsonEscapes::control).text(",\"cwd\":").json(agent.cwd_label, JsonEscapes::control).text(",\"blocked_reason\":").json(blocked_reasons[static_cast<std::size_t>(agent.blocked_reason)], JsonEscapes::control).text(",\"status_age_s\":").number(agent.status_age_s).text(",\"worktree_id\":").number(agent.work_tree).text(",\"last_event\":").json(agent.last_event, JsonEscapes::control);
+        out.text(",\"workspace\":").json(agent.workspace_label, JsonEscapes::control).text(",\"tab\":").json(agent.tab_label, JsonEscapes::control).text(",\"title\":").json(agent.session_title, JsonEscapes::control).text(",\"cwd\":").json(agent.cwd_label, JsonEscapes::control).text(",\"blocked_reason\":").json(agentBlockedReasonName(agent.blocked_reason), JsonEscapes::control).text(",\"status_age_s\":").number(agent.status_age_s).text(",\"worktree_id\":").number(agent.work_tree).text(",\"last_event\":").json(agent.last_event, JsonEscapes::control);
         out.text(R"(,"plan":{"done":)").number(agent.plan_done).text(",\"total\":").number(agent.plan_total).text(",\"step\":").json(agent.plan_step, JsonEscapes::control).text("},\"final_message\":").json(agent.final_message, JsonEscapes::control).text(R"(,"session_id":")");
         ds::Array<char, 2 * sizeof(agent.session_id)> session{};
 
@@ -782,7 +785,7 @@ namespace telar::runtime::cli::pane_agents {
         }
 
         if (std::chrono::system_clock::now() >= deadline) {
-          writeFormatted(STDERR_FILENO, "telar agent: timed out after {}s; agent is {}\n", options.timeout, status_names[static_cast<std::size_t>(agent.status)]);
+          writeFormatted(STDERR_FILENO, "telar agent: timed out after {}s; agent is {}\n", options.timeout, agentStatusName(agent.status));
           return timed_out_status;
         }
 

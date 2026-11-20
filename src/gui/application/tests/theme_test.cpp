@@ -25,6 +25,7 @@ import telar.base.text.utf8;
 import telar.gui.features.configuration;
 import telar.gui.foundation.core;
 import telar.gui.application;
+import telar.client;
 import telar.gui.application.tests.session_fixture;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
@@ -242,7 +243,7 @@ namespace {
     Transport legacy_transport;
     TestSession legacy{memory, legacy_transport};
 
-    legacy.connected(1, true, false);
+    legacy.connected(1, telar::handshake::Dialect::cqp00004);
     theme.syntax_italic = 2;
     application::configuration::setTheme(legacy, theme);
     check(legacy_transport.count(telar::ClientTag::configure_terminal_colors) == 0, "a runtime before themes never hears one");

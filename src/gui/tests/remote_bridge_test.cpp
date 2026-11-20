@@ -89,7 +89,7 @@ printf '/home/test\n/bin/sh\n/run/test/socket\n%s\n' "$3"
       const auto schema_text = telar::textView(std::span{schema});
       const auto expected = QString::fromLatin1(schema_text.data(), static_cast<qsizetype>(schema_text.size()));
       const auto mismatch = QString{expected.size(), QLatin1Char('Z')};
-      const auto legacy_text = telar::textView(std::span{application::RuntimeProtocol::schema87});
+      const auto legacy_text = telar::textView(std::span{telar::handshake::schemaOf(telar::handshake::Dialect::schema87)});
       const auto legacy = QString::fromLatin1(legacy_text.data(), static_cast<qsizetype>(legacy_text.size()));
 
       process.start(QStringLiteral("/bin/sh"), {QStringLiteral("-c"), QString::fromLatin1(script), QStringLiteral("telar-ssh-fixture"), arguments.at(arguments.size() - 2), arguments.back(), expected, mismatch, legacy}, QIODevice::ReadWrite);
@@ -197,7 +197,7 @@ printf '/home/test\n/bin/sh\n/run/test/socket\n%s\n' "$3"
         QFAIL("Legacy discovery did not publish its schema");
       }
 
-      QCOMPARE(observer.discovery->schema(), application::RuntimeProtocol::schema87);
+      QCOMPARE(observer.discovery->schema(), telar::handshake::schemaOf(telar::handshake::Dialect::schema87));
       QVERIFY(!observer.failure);
       bridge.close();
     }

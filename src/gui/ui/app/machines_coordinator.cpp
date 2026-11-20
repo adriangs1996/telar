@@ -36,6 +36,7 @@ static_assert(true);
 
 import telar.platform.process;
 import telar.gui.application;
+import telar.client;
 import telar.wire.vocabulary;
 import telar.base.ds;
 
@@ -219,7 +220,8 @@ namespace telar::gui::qt {
 
         const auto& schema = source->connection.schema();
 
-        source->session.connected(source->identity, application::RuntimeProtocol::readsRows(schema), application::RuntimeProtocol::readsTheme(schema), application::RuntimeProtocol::supports(schema, ClientTag::query_monitor));
+        // The connection accepted only a schema the window speaks.
+        source->session.connected(source->identity, handshake::dialectOf(schema).valueOr(handshake::current_dialect));
         summarize(source->key);
         if (key.machine.slot == store_.machines().active()) {
           status_.publish();

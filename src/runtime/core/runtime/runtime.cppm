@@ -783,6 +783,8 @@ export {
 
       void handle(std::uint64_t identity, const HistoryStatsQuery& message);
 
+      void handle(std::uint64_t identity, const QueryHistoryWorkspaces& message);
+
       void handle(std::uint64_t identity, const ConfigureGraphics& message);
 
       void handle(std::uint64_t identity, const GraphicsCredit& message);

@@ -121,6 +121,13 @@ export {
         reply.send(RequestCompleted{.request_id = request.request_id});
       } else if constexpr (std::same_as<Message, DeleteHistory> || std::same_as<Message, PruneHistory>) {
         reply.send(HistoryPruned{.request_id = request.request_id, .removed = 0});
+      } else if constexpr (std::same_as<Message, QueryHistoryWorkspaces>) {
+        // A runtime that keeps no history recorded no workspace; one whose history failed says so.
+        if (available) {
+          reply.send(RequestFailed{.request_id = request.request_id, .code = FailureCode::internal, .message = "history workspaces query failed"});
+        } else {
+          reply.send(HistoryWorkspaces{.request_id = request.request_id});
+        }
       } else {
         std::string_view message = "history database is unavailable";
 
