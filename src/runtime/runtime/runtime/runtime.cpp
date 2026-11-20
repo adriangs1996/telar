@@ -2581,9 +2581,11 @@ namespace telar::runtime {
       std::uint32_t bottom = 0;
 
       if (const auto* pane = model_.panes.find(message.pane_id)) {
-        const auto& screen = pane->terminal.screen();
+        // The terminal's own count: the screen is captured when a frame goes out, and output read
+        // since may have grown the scrollback past the row asked for.
+        const auto total = static_cast<std::uint32_t>(std::min<std::size_t>(pane->terminal.totalRows(), std::numeric_limits<std::uint32_t>::max()));
 
-        bottom = screen.scroll.total_rows - std::min<std::uint32_t>(screen.scroll.total_rows, screen.rows);
+        bottom = total - std::min<std::uint32_t>(total, pane->terminal.screen().rows);
       }
 
       attachment->viewport = message.offset >= bottom ? ds::none : ds::Option{message.offset};
