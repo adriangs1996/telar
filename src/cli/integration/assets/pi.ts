@@ -14,6 +14,8 @@ const MAX_PAYLOAD_BYTES = 64 * 1024;
 // Characters of a tool input string an oversized payload still carries: the
 // hook reads only short arguments from it.
 const MAX_BRIEF_STRING = 4096;
+// Characters of the final message a settled run carries: the runtime keeps 2048 bytes.
+const MAX_FINAL_MESSAGE = 2048;
 
 const brief = (input: unknown) => {
   if (typeof input !== "object" || input === null) return undefined;
@@ -22,6 +24,21 @@ const brief = (input: unknown) => {
     if (typeof value === "string" && value.length <= MAX_BRIEF_STRING) kept[key] = value;
   }
   return kept;
+};
+
+// The text of an assistant message, cut to MAX_FINAL_MESSAGE without splitting a
+// surrogate pair; `undefined` for any other message.
+const assistantText = (message: unknown) => {
+  const { role, content } = message as { role?: unknown; content?: unknown };
+  if (role !== "assistant" || !Array.isArray(content)) return undefined;
+  let text = "";
+  for (const part of content) {
+    if (part?.type === "text" && typeof part.text === "string") text += (text ? "\n" : "") + part.text;
+    if (text.length > MAX_FINAL_MESSAGE) break;
+  }
+  if (text.length <= MAX_FINAL_MESSAGE) return text;
+  const high = text.charCodeAt(MAX_FINAL_MESSAGE - 1);
+  return text.slice(0, high >= 0xd800 && high <= 0xdbff ? MAX_FINAL_MESSAGE - 1 : MAX_FINAL_MESSAGE);
 };
 
 type Event =
@@ -103,6 +120,10 @@ export default function (pi: ExtensionAPI) {
     refresh.unref();
   };
 
+  // The tool the run last started and the text of its last assistant message:
+  // the sidebar shows the first while Pi works and the second once it settles.
+  let lastTool: { toolName: string; args: unknown } | undefined;
+  let lastText = "";
   const report = (event: Event, ctx: ExtensionContext, idle?: boolean) =>
     send({
       event,
@@ -110,6 +131,9 @@ export default function (pi: ExtensionAPI) {
       idle: idle ?? ctx.isIdle(),
       blocked: promptDepth > 0,
       name: ctx.sessionManager.getSessionName() || undefined,
+      tool_name: lastTool?.toolName,
+      tool_input: lastTool?.args,
+      last_assistant_message: event === "agent_settled" ? lastText : undefined,
     });
 
   // The name the user gave the session with `/name`; `undefined` once cleared.
@@ -125,6 +149,8 @@ export default function (pi: ExtensionAPI) {
     send({
       event,
       session_id: ctx.sessionManager.getSessionId(),
+      idle: false,
+      blocked: promptDepth > 0,
       tool_name: toolName,
       tool_call_id: toolCallId,
       tool_input: args,
@@ -134,15 +160,20 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("session_start", async (_event, ctx) => {
     promptDepth = 0;
+    lastTool = undefined;
+    lastText = "";
     stopRefresh();
     report("session_start", ctx);
     if (!ctx.isIdle()) keepCurrent(ctx);
   });
   pi.on("agent_start", async (_event, ctx) => {
+    lastTool = undefined;
+    lastText = "";
     report("agent_start", ctx, false);
     keepCurrent(ctx);
   });
   pi.on("agent_settled", async (_event, ctx) => {
+    lastTool = undefined;
     report("agent_settled", ctx);
     if (ctx.isIdle() && promptDepth === 0) stopRefresh();
   });
@@ -160,9 +191,14 @@ export default function (pi: ExtensionAPI) {
     stopRefresh();
     report("session_shutdown", ctx);
   });
+  pi.on("message_end", async (event) => {
+    const text = assistantText(event.message);
+    if (text !== undefined) lastText = text;
+  });
   pi.on("session_info_changed", async (event, ctx) => reportName(event.name, ctx));
   pi.on("tool_execution_start", async (event, ctx) => {
-    pendingTools.set(event.toolCallId, { toolName: event.toolName, args: event.args });
+    lastTool = { toolName: event.toolName, args: event.args };
+    pendingTools.set(event.toolCallId, lastTool);
     reportTool("tool_execution_start", ctx, event.toolCallId, event.toolName, event.args);
   });
   pi.on("tool_execution_end", async (event, ctx) => {

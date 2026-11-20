@@ -4,6 +4,7 @@ module;
 module telar.cli.hook;
 import telar.platform.sha256;
 import telar.sys.posix;
+import telar.cli.command_limit;
 import telar.cli.control_session;
 import telar.base.memory.containers;
 import telar.base.text.utf8;
@@ -23,7 +24,69 @@ import telar.base.text.json;
 
 namespace telar::runtime::cli::hooks {
 
-  tbc::view<ds::Option<ReportAgent>, tbc::lt::a> claudeLifecycle(tbc::view<const Payload&, tbc::lt::a> input, tbc::view<FixedText<96>&, tbc::lt::a> event) {
+  // The bytes the runtime's reports carry of a session file's path and of a working directory.
+  constexpr std::size_t session_file_bytes = 1024;
+  constexpr std::size_t cwd_bytes = 4096;
+  constexpr int directory_flags = O_RDONLY | O_DIRECTORY | O_CLOEXEC; // NOLINT(bugprone-signed-bitwise): POSIX defines the open flags as int.
+
+  namespace {
+
+    // A tool call keeps Claude working; a question or a plan it presents blocks it on the user.
+    void claudeToolUse(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<MAX_EVENT_BYTES>> event, ReportAgent& report) {
+      toolEvent(event, input);
+      report.state = AgentReportState::working;
+      const auto tool = input.fields.text("tool_name");
+      if (input.event() != "PreToolUse" || (tool != "AskUserQuestion" && tool != "ExitPlanMode")) {
+        return;
+      }
+
+      report.state = AgentReportState::blocked;
+      report.blocked_reason = tool == "AskUserQuestion" ? AgentBlockedReason::question : AgentBlockedReason::plan;
+      if (tool == "AskUserQuestion") {
+        questionEvent(event, input);
+      }
+    }
+
+    // Whether the notification is one of Claude's states: idle, or blocked on the user.
+    bool claudeNotification(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<MAX_EVENT_BYTES>> event, ReportAgent& report) {
+      const auto notification = input.fields.text("notification_type");
+      if (notification == "idle_prompt") {
+        report.state = AgentReportState::idle;
+        return true;
+      }
+
+      if (notification != "permission_prompt" && notification != "elicitation_dialog" && notification != "elicitation_url_dialog" && notification != "agent_needs_input") {
+        return false;
+      }
+
+      report.state = AgentReportState::blocked;
+      report.blocked_reason = notification == "permission_prompt" ? AgentBlockedReason::permission : AgentBlockedReason::question;
+      eventLine(event, input.fields.text("message"));
+      return true;
+    }
+
+    // A Codex subagent's tool calls keep its parent working, and the last one to stop releases it.
+    ds::Option<ReportAgent> codexSubagent(const Payload& input) {
+      const auto name = input.event();
+      if (name == "PreToolUse" || name == "PostToolUse") {
+        return ReportAgent{.state = AgentReportState::continuing};
+      }
+
+      auto path = input.fields.text("transcript_path");
+      const auto session = input.session();
+      if (name == "SubagentStop" && input.running_subagents == 0 && !session.empty() && path.ends_with(".jsonl")) {
+        path.remove_suffix(sizeof(".jsonl") - 1);
+        if (path.ends_with(session) && path.substr(0, path.size() - session.size()).ends_with('-')) {
+          return ReportAgent{.state = AgentReportState::released};
+        }
+      }
+
+      return ds::none;
+    }
+
+  }
+
+  tbc::val_a<ds::Option<ReportAgent>> claudeLifecycle(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<MAX_EVENT_BYTES>> event) {
     const auto name = input.event();
 
     if (input.subagent()) {
@@ -31,23 +94,14 @@ namespace telar::runtime::cli::hooks {
     }
 
     const auto file = input.fields.text("transcript_path");
-    ReportAgent report{.session = sessionReference(input.session()), .session_file = file.size() <= 1024 ? file : ""};
+    ReportAgent report{.session = sessionReference(input.session()), .session_file = file.size() <= session_file_bytes ? file : ""};
 
     if (name == "SessionStart") {
       report.state = AgentReportState::ready;
     } else if (name == "UserPromptSubmit") {
       report.state = AgentReportState::working;
     } else if (name == "PreToolUse" || name == "PostToolUse") {
-      toolEvent(event, input);
-      report.state = AgentReportState::working;
-      const auto tool = input.fields.text("tool_name");
-      if (name == "PreToolUse" && (tool == "AskUserQuestion" || tool == "ExitPlanMode")) {
-        report.state = AgentReportState::blocked;
-        report.blocked_reason = tool == "AskUserQuestion" ? AgentBlockedReason::question : AgentBlockedReason::plan;
-        if (tool == "AskUserQuestion") {
-          questionEvent(event, input);
-        }
-      }
+      claudeToolUse(input, event, report);
     } else if (name == "Stop") {
       report.state = input.running_subagents == 0 ? AgentReportState::ready : AgentReportState::waiting;
       if (input.running_subagents == 0) {
@@ -59,14 +113,7 @@ namespace telar::runtime::cli::hooks {
       report.state = AgentReportState::exited;
       report.session = {};
     } else if (name == "Notification") {
-      const auto notification = input.fields.text("notification_type");
-      if (notification == "idle_prompt") {
-        report.state = AgentReportState::idle;
-      } else if (notification == "permission_prompt" || notification == "elicitation_dialog" || notification == "elicitation_url_dialog" || notification == "agent_needs_input") {
-        report.state = AgentReportState::blocked;
-        report.blocked_reason = notification == "permission_prompt" ? AgentBlockedReason::permission : AgentBlockedReason::question;
-        eventLine(event, input.fields.text("message"));
-      } else {
+      if (!claudeNotification(input, event, report)) {
         return ds::none;
       }
     } else {
@@ -77,27 +124,14 @@ namespace telar::runtime::cli::hooks {
     return report;
   }
 
-  tbc::view<ds::Option<ReportAgent>, tbc::lt::a> codexLifecycle(tbc::view<const Payload&, tbc::lt::a> input, tbc::view<FixedText<96>&, tbc::lt::a> event, tbc::view<std::string_view, tbc::lt::a> database) {
+  tbc::val_a<ds::Option<ReportAgent>> codexLifecycle(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<MAX_EVENT_BYTES>> event, tbc::val_a<std::string_view> database) {
     const auto name = input.event();
 
     if (input.subagent()) {
-      if (name == "PreToolUse" || name == "PostToolUse") {
-        return ReportAgent{.state = AgentReportState::continuing};
-      }
-
-      auto path = input.fields.text("transcript_path");
-      const auto session = input.session();
-      if (name == "SubagentStop" && input.running_subagents == 0 && !session.empty() && path.ends_with(".jsonl")) {
-        path.remove_suffix(sizeof(".jsonl") - 1);
-        if (path.size() > session.size() && path.ends_with(session) && path[path.size() - session.size() - 1] == '-') {
-          return ReportAgent{.state = AgentReportState::released};
-        }
-      }
-
-      return ds::none;
+      return codexSubagent(input);
     }
 
-    ReportAgent report{.session = sessionReference(input.session()), .session_file = database.size() <= 1024 ? database : "", .session_file_kind = AgentSessionFileKind::codex_state};
+    ReportAgent report{.session = sessionReference(input.session()), .session_file = database.size() <= session_file_bytes ? database : "", .session_file_kind = AgentSessionFileKind::codex_state};
 
     if ((name == "Stop" || name == "Interrupt") && input.running_subagents != 0) {
       report.state = AgentReportState::waiting;
@@ -125,17 +159,22 @@ namespace telar::runtime::cli::hooks {
     return report;
   }
 
-  ds::Option<ReportAgent> piLifecycle(const Payload& input) {
+  tbc::val_a<ds::Option<ReportAgent>> piLifecycle(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<MAX_EVENT_BYTES>> event) {
     const auto name = input.event();
     ReportAgent report{.session = sessionReference(input.session())};
 
-    if (name == "session_start" || name == "agent_settled" || name == "ui_prompt_end" || name == "state_snapshot") {
+    if (name == "session_start" || name == "agent_settled" || name == "ui_prompt_end" || name == "state_snapshot" || name == "tool_execution_start" || name == "tool_execution_end") {
       const bool idle = input.fields.boolean("idle").valueOr(name == "session_start" || name == "agent_settled");
 
       report.state = idle ? AgentReportState::ready : AgentReportState::working;
       if (input.fields.boolean("blocked").valueOr(false)) {
         report.state = AgentReportState::blocked;
         report.blocked_reason = AgentBlockedReason::question;
+      } else if (!idle) {
+        // Every report of a running agent carries the tool it last started, so the line outlives the call.
+        toolEvent(event, input);
+      } else if (name == "agent_settled") {
+        eventLine(event, input.fields.text("last_assistant_message"));
       }
     } else if (name == "agent_start") {
       report.state = AgentReportState::working;
@@ -149,10 +188,11 @@ namespace telar::runtime::cli::hooks {
       return ds::none;
     }
 
+    report.event = event.view();
     return report;
   }
 
-  tbc::view<ds::Option<ReportAgent>, tbc::lt::a> openCodeLifecycle(tbc::view<const Payload&, tbc::lt::a> input, tbc::view<FixedText<96>&, tbc::lt::a> event) {
+  tbc::val_a<ds::Option<ReportAgent>> openCodeLifecycle(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<MAX_EVENT_BYTES>> event) {
     const auto name = input.event();
     const auto blocked = input.blockedReason();
     ReportAgent report{.session = sessionReference(input.session())};
@@ -186,9 +226,9 @@ namespace telar::runtime::cli::hooks {
     return report;
   }
 
-  tbc::view<ds::Option<ReportAgent>, tbc::lt::a> cursorLifecycle(tbc::view<const Payload&, tbc::lt::a> input, tbc::view<FixedText<96>&, tbc::lt::a> event, tbc::view<std::string_view, tbc::lt::a> metadata) {
+  tbc::val_a<ds::Option<ReportAgent>> cursorLifecycle(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<MAX_EVENT_BYTES>> event, tbc::val_a<std::string_view> metadata) {
     const auto name = input.event();
-    ReportAgent report{.session = sessionReference(input.session()), .session_file = metadata.size() <= 1024 ? metadata : "", .session_file_kind = AgentSessionFileKind::cursor_meta};
+    ReportAgent report{.session = sessionReference(input.session()), .session_file = metadata.size() <= session_file_bytes ? metadata : "", .session_file_kind = AgentSessionFileKind::cursor_meta};
 
     if (name == "sessionStart" || name == "stop") {
       report.state = AgentReportState::ready;
@@ -208,108 +248,115 @@ namespace telar::runtime::cli::hooks {
     return report;
   }
 
-  ds::Option<AgentPlanStatus> planStatus(std::string_view text) noexcept {
-    constexpr ds::Array names{"pending", "in_progress", "completed", "deleted"};
-    const auto found = std::ranges::find(names, text);
+  namespace {
 
-    return found == names.end() ? ds::none : ds::Option{static_cast<AgentPlanStatus>(found - names.begin())};
-  }
+    ds::Option<AgentPlanStatus> planStatus(std::string_view text) noexcept {
+      constexpr ds::Array names{"pending", "in_progress", "completed", "deleted"};
+      const auto* const found = std::ranges::find(names, text);
 
-  void setPlan(tbc::view<const Payload&, tbc::lt::a> input, tbc::view<FixedText<96>&, tbc::lt::a> step, tbc::view<ReportAgentProgress&, tbc::lt::a> report) {
-    const bool todo = input.fields.text("tool_name") == "TodoWrite";
-    const auto items = input.tools.value(todo ? "todos" : "plan");
-    if (!items || !items->encoded().starts_with('[')) {
-      return;
+      return found == names.end() ? ds::none : ds::Option{static_cast<AgentPlanStatus>(found - names.begin())};
     }
 
-    ds::String<Memory> current{input.memory};
-    ds::String<Memory> pending{input.memory};
-
-    items->eachElement([&](JsonValue value) {
-      if (!value.encoded().starts_with('{')) {
+    void setPlan(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<MAX_EVENT_BYTES>> step, tbc::mut_a<ReportAgentProgress> report) {
+      const bool todo = input.fields.text("tool_name") == "TodoWrite";
+      const auto items = input.tools.value(todo ? "todos" : "plan");
+      if (!items || !items->encoded().starts_with('[')) {
         return;
       }
 
-      Object item{input.memory, value};
-      const auto status = planStatus(item.stringField("status").valueOr("pending")).valueOr(AgentPlanStatus::pending);
-      if (status == AgentPlanStatus::deleted) {
-        return;
-      }
+      ds::String<Memory> current{input.memory};
+      ds::String<Memory> pending{input.memory};
 
-      report.plan_total += report.plan_total < std::numeric_limits<std::uint16_t>::max();
-      if (status == AgentPlanStatus::completed) {
-        report.plan_done += report.plan_done < std::numeric_limits<std::uint16_t>::max();
-      } else if (status == AgentPlanStatus::in_progress && current.empty()) {
-        current.assign(item.stringField(todo ? "activeForm" : "step").valueOr(item.stringField(todo ? "content" : "step").valueOr("")));
-      } else if (status == AgentPlanStatus::pending && pending.empty()) {
-        pending.assign(item.stringField(todo ? "content" : "step").valueOr(""));
-      }
-    });
+      items->eachElement([&](JsonValue value) {
+        if (!value.encoded().starts_with('{')) {
+          return;
+        }
 
-    report.plan_op = AgentPlanOp::set;
-    displayText(step, current.empty() ? std::string_view{pending} : std::string_view{current}, false);
-    report.plan_text = step.view();
-  }
+        const Object item{input.memory, value};
+        const auto status = planStatus(item.stringField("status").valueOr("pending")).valueOr(AgentPlanStatus::pending);
+        if (status == AgentPlanStatus::deleted) {
+          return;
+        }
 
-  void updatePlan(tbc::view<const Payload&, tbc::lt::a> input, tbc::view<FixedText<96>&, tbc::lt::a> step, tbc::view<ReportAgentProgress&, tbc::lt::a> report) {
-    if (input.event() == "SessionStart") {
+        report.plan_total += report.plan_total < std::numeric_limits<std::uint16_t>::max();
+        if (status == AgentPlanStatus::completed) {
+          report.plan_done += report.plan_done < std::numeric_limits<std::uint16_t>::max();
+        } else if (status == AgentPlanStatus::in_progress && current.empty()) {
+          current.assign(item.stringField(todo ? "activeForm" : "step").valueOr(item.stringField(todo ? "content" : "step").valueOr("")));
+        } else if (status == AgentPlanStatus::pending && pending.empty()) {
+          pending.assign(item.stringField(todo ? "content" : "step").valueOr(""));
+        }
+      });
+
       report.plan_op = AgentPlanOp::set;
-      return;
+      displayText(step, current.empty() ? std::string_view{pending} : std::string_view{current}, false);
+      report.plan_text = step.view();
     }
 
-    if (input.event() != "PostToolUse") {
-      return;
-    }
-
-    const auto tool = input.fields.text("tool_name");
-    if (tool == "TaskCreate") {
-      if (const auto subject = input.tools.stringField("subject")) {
-        report.plan_op = AgentPlanOp::add;
-        displayText(step, *subject, false);
-        report.plan_text = step.view();
-      }
-    } else if (tool == "TaskUpdate") {
-      const auto text = input.tools.stringField("taskId");
-      const auto status = planStatus(input.tools.stringField("status").valueOr(""));
-      if (!text || !status) {
+    void updatePlan(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<MAX_EVENT_BYTES>> step, tbc::mut_a<ReportAgentProgress> report) {
+      if (input.event() == "SessionStart") {
+        report.plan_op = AgentPlanOp::set;
         return;
       }
 
-      const auto identifier = unsignedDecimal<std::uint16_t>(*text);
-      if (identifier && *identifier != 0) {
-        report.plan_op = AgentPlanOp::mark;
-        report.plan_index = *identifier - 1;
-        report.plan_status = *status;
+      if (input.event() != "PostToolUse") {
+        return;
       }
-    } else if (tool == "TodoWrite" || tool == "update_plan") {
-      setPlan(input, step, report);
+
+      const auto tool = input.fields.text("tool_name");
+      if (tool == "TaskCreate") {
+        if (const auto subject = input.tools.stringField("subject")) {
+          report.plan_op = AgentPlanOp::add;
+          displayText(step, *subject, false);
+          report.plan_text = step.view();
+        }
+      } else if (tool == "TaskUpdate") {
+        const auto text = input.tools.stringField("taskId");
+        const auto status = planStatus(input.tools.stringField("status").valueOr(""));
+        if (!text || !status) {
+          return;
+        }
+
+        const auto identifier = unsignedDecimal<std::uint16_t>(*text);
+        if (identifier && *identifier != 0) {
+          report.plan_op = AgentPlanOp::mark;
+          report.plan_index = *identifier - 1;
+          report.plan_status = *status;
+        }
+      } else if (tool == "TodoWrite" || tool == "update_plan") {
+        setPlan(input, step, report);
+      }
     }
+
   }
 
-  tbc::view<ds::Option<ReportAgentProgress>, tbc::lt::a> progressReport(tbc::view<const Payload&, tbc::lt::a> input, tbc::view<ReportTexts&, tbc::lt::a> texts) {
-    if ((input.provider != AgentProvider::claude && input.provider != AgentProvider::codex) || input.subagent()) {
+  tbc::val_a<ds::Option<ReportAgentProgress>> progressReport(tbc::ref_a<Payload> input, tbc::mut_a<ReportTexts> texts) {
+    const bool from_pi = input.provider == AgentProvider::pi;
+    if ((input.provider != AgentProvider::claude && input.provider != AgentProvider::codex && !from_pi) || input.subagent()) {
       return ds::none;
     }
 
     ReportAgentProgress report;
     const auto changed = input.provider == AgentProvider::claude ? input.fields.text("new_cwd") : std::string_view{};
-    const auto cwd = changed.empty() ? input.fields.text("cwd") : changed;
+    const auto reported = changed.empty() ? input.fields.text("cwd") : changed;
+    // Pi reports only the final message.
+    const auto cwd = from_pi ? std::string_view{} : reported;
 
     updatePlan(input, texts.step, report);
-    if (input.event() == "Stop") {
+    if (input.event() == (from_pi ? "agent_settled" : "Stop")) {
       displayText(texts.message, input.fields.optionalText("last_assistant_message").valueOr(""), true);
       report.final_message = texts.message.view();
     }
 
     // Last: the worktree it names is viewed once the texts are written.
-    if (cwd.starts_with('/') && cwd.size() <= 4096) {
+    if (cwd.starts_with('/') && cwd.size() <= cwd_bytes) {
       report.cwd = cwd;
       if (const auto linked = texts.worktree.find(cwd)) {
         try {
-          DisplayText16<200>::validate(linked->branch);
+          DisplayText16<sessions::branch_bytes>::validate(linked->branch);
           report.work_tree_path = cwd.substr(0, linked->root_length);
           report.work_tree_branch = linked->branch;
-        } catch (const EncodingError&) {
+        } catch (const EncodingError&) { // NOLINT(bugprone-empty-catch): a branch the codec refuses leaves the worktree out of the report.
         }
       }
     }
@@ -318,7 +365,7 @@ namespace telar::runtime::cli::hooks {
   }
 
   // The title an agent sets, on one line without control bytes, which the codec refuses in a title.
-  tbc::view<ds::Option<ReportAgentTitle>, tbc::lt::a> titleReport(const Payload& input, tbc::view<FixedText<96>&, tbc::lt::a> text) {
+  tbc::val_a<ds::Option<ReportAgentTitle>> titleReport(const Payload& input, tbc::mut_a<FixedText<MAX_EVENT_BYTES>> text) {
     ds::Option<std::string_view> title;
 
     if (input.provider == AgentProvider::claude) {
@@ -348,7 +395,7 @@ namespace telar::runtime::cli::hooks {
 
   template <EnvironmentLookup Environment>
   // The reports view the payload, the files and their own texts, all region `a`.
-  void map(tbc::view<Payload&, tbc::lt::a> input, tbc::view<Reports&, tbc::lt::a> reports, tbc::view<ReportTexts&, tbc::lt::a> texts, tbc::view<SessionFiles&, tbc::lt::a> files, const Environment& environment) {
+  void map(tbc::mut_a<Payload> input, tbc::mut_a<Reports> reports, tbc::mut_a<ReportTexts> texts, tbc::mut_a<SessionFiles> files, const Environment& environment) {
     TELAR_TRACE("hooks.mapReports");
     reports.command = commandReport(input);
     reports.title = titleReport(input, texts.title_text);
@@ -372,7 +419,7 @@ namespace telar::runtime::cli::hooks {
       break;
     }
     case AgentProvider::pi:
-      reports.lifecycle = piLifecycle(input);
+      reports.lifecycle = piLifecycle(input, texts.event);
       break;
     case AgentProvider::opencode:
       reports.lifecycle = openCodeLifecycle(input, texts.event);
@@ -380,7 +427,10 @@ namespace telar::runtime::cli::hooks {
     case AgentProvider::cursor:
       reports.lifecycle = cursorLifecycle(input, texts.event, files.cursor(input, environment));
       break;
-    default:
+    // Unknown and custom providers report no lifecycle.
+    case AgentProvider::unknown:
+    case AgentProvider::last_custom:
+    default: // NOLINT(clang-diagnostic-covered-switch-default): custom providers take the values between the named ones.
       break;
     }
   }
@@ -401,7 +451,7 @@ namespace telar::runtime::cli::hooks {
   }
 
   bool validWorktreeBranch(std::string_view branch) noexcept {
-    if (branch.empty() || branch.size() > 200 || branch.front() == '-' || branch.front() == '.' || branch.contains("..")) {
+    if (branch.empty() || branch.size() > sessions::branch_bytes || branch.front() == '-' || branch.front() == '.' || branch.contains("..")) {
       return false;
     }
 
@@ -411,15 +461,17 @@ namespace telar::runtime::cli::hooks {
       return false;
     }
 
+    constexpr unsigned char delete_byte = 0x7f;
+
     return std::ranges::none_of(branch, [](unsigned char byte) {
-      return byte <= ' ' || byte == 0x7f || byte == '~' || byte == '^' || byte == ':';
+      return byte <= ' ' || byte == delete_byte || byte == '~' || byte == '^' || byte == ':';
     });
   }
 
   template <EnvironmentLookup Environment>
   class Worktrees {
   public:
-    explicit Worktrees(Memory& memory, const Environment& environment, std::string_view socket)
+    explicit Worktrees(Memory& memory [[clang::lifetimebound]], const Environment& environment [[clang::lifetimebound]], std::string_view socket [[clang::lifetimebound]])
         : memory_(memory),
           environment_(environment),
           socket_(socket),
@@ -460,14 +512,14 @@ namespace telar::runtime::cli::hooks {
               diagnostics.append(bytes);
             });
         if (status != 0) {
-          ds::Array<Byte, maximum_output_bytes> buffer;
+          ds::Array<Byte, maximum_output_bytes> buffer{};
           const auto kept = diagnostics.read(diagnostics.retainedOffset(), buffer.viewMut());
 
           if (diagnostics.retainedOffset() != 0) {
-            std::fprintf(stderr, "(%llu earlier bytes of Git's output omitted)\n", static_cast<unsigned long long>(diagnostics.retainedOffset()));
+            writeFormatted(STDERR_FILENO, "({} earlier bytes of Git's output omitted)\n", diagnostics.retainedOffset());
           }
 
-          std::fwrite(kept.data(), 1, kept.size(), stderr);
+          writeBytes(STDERR_FILENO, kept);
           throw std::runtime_error{failure};
         }
 
@@ -488,11 +540,13 @@ namespace telar::runtime::cli::hooks {
         common.remove_suffix(1);
       }
 
-      if (!common.starts_with('/') || !common.ends_with("/.git")) {
+      constexpr std::string_view git_directory = "/.git";
+      if (!common.starts_with('/') || !common.ends_with(git_directory)) {
         throw std::runtime_error{"NotARepository"};
       }
 
-      root_.assign(common.substr(0, common.size() - 5));
+      common.remove_suffix(git_directory.size());
+      root_.assign(common);
     }
 
     void chooseBranch(std::string_view name) {
@@ -501,7 +555,7 @@ namespace telar::runtime::cli::hooks {
         return;
       }
 
-      branch_.resize(std::min<std::size_t>(branch_.size(), 200));
+      branch_.resize(std::min(branch_.size(), sessions::branch_bytes));
       for (auto& character : branch_.viewMut()) {
         const auto byte = static_cast<unsigned char>(character);
         const bool safe = (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') || byte == '-' || byte == '_' || byte == '/';
@@ -517,7 +571,7 @@ namespace telar::runtime::cli::hooks {
     }
 
     void create(Object& input) {
-      ds::Array<char, PATH_MAX> current;
+      ds::Array<char, PATH_MAX> current{};
       auto cwd = input.text("cwd");
       if (cwd.empty()) {
         if (::getcwd(current.dataMut(), current.size()) == nullptr) {
@@ -556,17 +610,17 @@ namespace telar::runtime::cli::hooks {
       try {
         registerWorktree();
       } catch (const std::exception& error) {
-        std::fprintf(stderr, "telar hook: worktree created but not tracked: %s\n", error.what());
+        writeFormatted(STDERR_FILENO, "telar hook: worktree created but not tracked: {}\n", error.what());
       }
 
-      std::printf("%s\n", path_.data());
+      writeFormatted(STDOUT_FILENO, "{}\n", path_.view());
     }
 
     RuntimePaths<Memory> paths() {
       ServerOptions options;
 
       options.socket = socket_;
-      return RuntimePaths{memory_, options, environment_};
+      return RuntimePaths<Memory>{memory_, options, environment_};
     }
 
     void registerWorktree() {
@@ -606,7 +660,7 @@ namespace telar::runtime::cli::hooks {
       try {
         git({"git", "-C", root_, "worktree", "remove", "--", path_}, "git worktree remove failed");
       } catch (const std::exception&) {
-        std::fprintf(stderr, "telar hook: kept %s; it has changes to review\n", path_.data());
+        writeFormatted(STDERR_FILENO, "telar hook: kept {}; it has changes to review\n", path_.view());
         return;
       }
 
@@ -614,7 +668,7 @@ namespace telar::runtime::cli::hooks {
       if (const auto pane = unsignedValue(environment_.lookup("TELAR_PANE_ID")); pane) {
         try {
           forgetWorktree();
-        } catch (const std::exception&) {
+        } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): the checkout is already gone; forgetting it is best effort.
         }
       }
     }
@@ -623,13 +677,13 @@ namespace telar::runtime::cli::hooks {
       const auto resolved = paths();
       RuntimeConnection connection{resolved.socket.data()};
 
-      connection.receiveTimeout(30);
+      connection.receiveTimeout(forget_timeout_seconds);
       ds::Vec<Byte, Memory> incoming{memory_};
       ds::Vec<Byte, Memory> decoded{memory_};
 
       incoming.resize(max_payload_size);
       decoded.resize(max_payload_size);
-      ds::Array<Byte, 64> outgoing;
+      ds::Array<Byte, request_bytes> outgoing{};
       std::uint64_t identity = 0;
 
       while (identity == 0) {
@@ -669,9 +723,13 @@ namespace telar::runtime::cli::hooks {
       }
     }
 
-    static constexpr std::size_t maximum_output_bytes = 64 * 1024;
-    Memory& memory_;
-    const Environment& environment_;
+    static constexpr std::size_t maximum_output_bytes = std::size_t{64} * 1024;
+    static constexpr unsigned forget_timeout_seconds = 30;
+    // Bytes of one encoded request to the runtime.
+    static constexpr std::size_t request_bytes = 64;
+    // Worktrees answers one hook inside the call that builds it, and is never copied or assigned.
+    Memory& memory_;                 // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
+    const Environment& environment_; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
     std::string_view socket_;
     CommandOutput<Memory> output_;
     ds::String<Memory> root_;
@@ -686,7 +744,7 @@ namespace telar::runtime::cli::hooks {
   template <EnvironmentLookup Environment>
   ds::Option<int> answerWorktree(Memory& memory, const Environment& environment, Object& fields, std::string_view socket) {
     try {
-      for (const auto name : {"hook_event_name", "cwd", "name", "worktree_path"}) {
+      for (const auto* const name : {"hook_event_name", "cwd", "name", "worktree_path"}) {
         fields.text(name);
       }
 
@@ -696,14 +754,38 @@ namespace telar::runtime::cli::hooks {
           Worktrees{memory, environment, socket}.answer(fields);
           return 0;
         } catch (const std::exception& error) {
-          std::fprintf(stderr, "telar hook: %.*s failed: %s\n", static_cast<int>(event.size()), event.data(), error.what());
+          writeFormatted(STDERR_FILENO, "telar hook: {} failed: {}\n", event, error.what());
           return 1;
         }
       }
+
+      return ds::none;
     } catch (const std::exception&) {
+      // A payload whose worktree fields are not unique strings asks for no worktree.
+      return ds::none;
+    }
+  }
+
+  void sendReports(Session& session, const Reports& reports, const Input& input) {
+    if (reports.progress) {
+      session.report(*reports.progress);
     }
 
-    return ds::none;
+    if (reports.lifecycle) {
+      session.report(*reports.lifecycle);
+    }
+
+    if (reports.title) {
+      session.report(*reports.title);
+    }
+
+    if (reports.command) {
+      session.report(*reports.command);
+    }
+
+    if (input.limited()) {
+      session.reportLimit(input.received(), Input::maximum_bytes);
+    }
   }
 
 }
@@ -720,7 +802,7 @@ namespace telar::runtime::cli {
       if (!path.empty()) {
         tracing.emplace(memory, path.data());
       }
-    } catch (const std::exception&) {
+    } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): tracing is a debugging aid; the hook runs without it.
     }
 #endif
 
@@ -749,35 +831,20 @@ namespace telar::runtime::cli {
           ServerOptions server;
 
           server.socket = options.socket;
-          const RuntimePaths paths{memory, server, environment};
+          const RuntimePaths<Memory> paths{memory, server, environment};
           hooks::Session session{memory, paths.socket.data(), *target};
 
-          if (reports.progress) {
-            session.report(*reports.progress);
-          }
-
-          if (reports.lifecycle) {
-            session.report(*reports.lifecycle);
-          }
-
-          if (reports.title) {
-            session.report(*reports.title);
-          }
-
-          if (reports.command) {
-            session.report(*reports.command);
-          }
-
-          if (input.limited()) {
-            session.reportLimit(input.received(), input.maximum_bytes);
-          }
+          hooks::sendReports(session, reports, input);
         }
       }
-    } catch (const std::exception&) {
+    } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): a hook never fails the agent it observes.
     }
 
     if (input.limited()) {
-      std::fprintf(stderr, "telar: Limit reached: hooks.max_input_bytes: %llu bytes; limit %zu\n", static_cast<unsigned long long>(input.received()), input.maximum_bytes);
+      try {
+        writeFormatted(STDERR_FILENO, "telar: Limit reached: hooks.max_input_bytes: {} bytes; limit {}\n", input.received(), hooks::Input::maximum_bytes);
+      } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): with stderr gone the notice has nowhere to go, and a hook never fails its agent.
+      }
     }
 
     return status;
@@ -789,14 +856,15 @@ namespace telar::runtime::cli {
 
 namespace telar::runtime::cli::hooks {
 
-  template void map<ProcessEnvironment>(tbc::view<Payload&, tbc::lt::a> input, tbc::view<Reports&, tbc::lt::a> reports, tbc::view<ReportTexts&, tbc::lt::a> texts, tbc::view<SessionFiles&, tbc::lt::a> files, const ProcessEnvironment& environment);
+  template void map<ProcessEnvironment>(tbc::mut_a<Payload> input, tbc::mut_a<Reports> reports, tbc::mut_a<ReportTexts> texts, tbc::mut_a<SessionFiles> files, const ProcessEnvironment& environment);
 
   Input::Input(Memory& memory)
       : text_(memory) {}
 
   void Input::read(int descriptor) {
     TELAR_TRACE("hooks.readInput");
-    ds::Array<char, 4096> buffer;
+    constexpr std::size_t chunk_bytes = 4096;
+    ds::Array<char, chunk_bytes> buffer{};
 
     for (;;) {
       const auto count = ::read(descriptor, buffer.dataMut(), buffer.size());
@@ -833,83 +901,103 @@ namespace telar::runtime::cli::hooks {
     return text_;
   }
 
-  void Input::keepWholeMembers() {
-    const auto opening = text_.view().find_first_not_of(" \r\n\t");
-    if (opening == std::string_view::npos || text_[opening] != '{') {
-      text_.assign("{}");
-      return;
-    }
+  namespace {
 
-    std::size_t depth = 0;
-    std::size_t complete = 0;
-    std::size_t member_start = opening + 1;
-    ds::String<Memory> candidate{text_.memory()};
-    bool quoted = false;
-    bool escaped = false;
-
-    for (std::size_t index = 0; index < text_.size(); ++index) {
-      const char byte = text_[index];
-
-      if (quoted) {
-        if (escaped) {
-          escaped = false;
-        } else if (byte == '\\') {
-          escaped = true;
-        } else if (byte == '"') {
-          quoted = false;
+    // Follows a JSON text byte by byte: whether each byte lies in a string literal, its quotes included.
+    class StringLiteral {
+    public:
+      bool contains(char byte) noexcept {
+        if (!quoted_) {
+          quoted_ = byte == '"';
+          return quoted_;
         }
 
-        continue;
+        if (escaped_) {
+          escaped_ = false;
+        } else if (byte == '\\') {
+          escaped_ = true;
+        } else if (byte == '"') {
+          quoted_ = false;
+        }
+
+        return true;
       }
 
-      if (byte == '"') {
-        quoted = true;
-      } else if (byte == '{' || byte == '[') {
-        ++depth;
-      } else if (byte == '}' || byte == ']') {
-        if (depth == 0) {
-          break;
+    private:
+      bool quoted_ = false;
+      bool escaped_ = false;
+    };
+
+    // Whether one member, braced alone, parses as a JSON object.
+    bool completeMember(std::string_view member, ds::String<Memory>& candidate) {
+      if (member.find_first_not_of(" \r\n\t") == std::string_view::npos) {
+        return false;
+      }
+
+      candidate.assign("{");
+      candidate.append(member);
+      candidate.append("}");
+      try {
+        JsonValue::parse(candidate);
+        validateUnicodeEscapes(candidate.memory(), candidate);
+        return true;
+      } catch (const JsonError&) {
+        return false;
+      }
+    }
+
+    // Where the members of the object opening at `opening` stop parsing whole, or 0 when the
+    // first one does not.
+    std::size_t wholeMembersEnd(std::string_view text, std::size_t opening, ds::String<Memory>& candidate) {
+      std::size_t depth = 0;
+      std::size_t complete = 0;
+      std::size_t member_start = opening + 1;
+      std::size_t next = 0;
+      StringLiteral literal;
+
+      for (const char byte : text) {
+        const auto index = next++;
+
+        if (literal.contains(byte)) {
+          continue;
         }
 
-        if (--depth == 0) {
-          if (completeMember(member_start, index, candidate)) {
-            complete = index;
+        if (byte == '{' || byte == '[') {
+          ++depth;
+        } else if (byte == '}' || byte == ']') {
+          if (depth == 0) {
+            break;
           }
 
-          break;
-        }
-      } else if (byte == ',' && depth == 1) {
-        if (!completeMember(member_start, index, candidate)) {
-          break;
-        }
+          if (--depth == 0) {
+            return completeMember(text.substr(member_start, index - member_start), candidate) ? index : complete;
+          }
+        } else if (byte == ',' && depth == 1) {
+          if (!completeMember(text.substr(member_start, index - member_start), candidate)) {
+            break;
+          }
 
-        complete = index;
-        member_start = index + 1;
+          complete = index;
+          member_start = index + 1;
+        }
       }
+
+      return complete;
     }
+
+  }
+
+  void Input::keepWholeMembers() {
+    const auto text = text_.view();
+    const auto opening = text.find_first_not_of(" \r\n\t");
+    ds::String<Memory> candidate{text_.memory()};
+    const auto complete = opening == std::string_view::npos || !text.substr(opening).starts_with('{') ? 0 : wholeMembersEnd(text, opening, candidate);
 
     if (complete == 0) {
       text_.assign("{}");
     } else {
       text_.resize(complete);
       text_.push('}');
-    }
-  }
-
-  bool Input::completeMember(std::size_t start, std::size_t end, ds::String<Memory>& candidate) {
-    if (std::string_view{text_.data() + start, end - start}.find_first_not_of(" \r\n\t") == std::string_view::npos) {
-      return false;
-    }
-
-    candidate.assign("{");
-    candidate.append(std::string_view{text_.data() + start, end - start});
-    candidate.append("}");
-    try {
-      JsonValue::parse(candidate);
-      validateUnicodeEscapes(candidate.memory(), candidate);
-      return true;
-    } catch (const JsonError&) {
-      return false;
     }
   }
 
@@ -922,11 +1010,11 @@ namespace telar::runtime::cli::hooks {
         return {};
       }
 
-      DirectoryStream directory{FileDescriptor{::open(home->data(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)}};
+      DirectoryStream directory{FileDescriptor{::open(home->data(), directory_flags)}}; // NOLINT(cppcoreguidelines-pro-type-vararg): POSIX declares open variadic; a directory takes no mode.
       ds::Option<std::uint32_t> best;
 
       while (const auto* entry = directory.next()) {
-        const std::string_view name{entry->d_name, std::strlen(entry->d_name)};
+        const std::string_view name{std::data(entry->d_name)};
         if (entry->d_type != DT_REG || !name.starts_with("state_") || !name.ends_with(".sqlite")) {
           continue;
         }
@@ -942,10 +1030,10 @@ namespace telar::runtime::cli::hooks {
         return {};
       }
 
-      ds::Array<char, 32> filename;
-      const auto length = std::snprintf(filename.dataMut(), filename.size(), "state_%u.sqlite", *best);
+      ds::Array<char, sizeof("state_4294967295.sqlite")> filename{};
+      const auto written = std::format_to_n(filename.dataMut(), static_cast<std::ptrdiff_t>(filename.size()), "state_{}.sqlite", *best);
 
-      return join(*home, {filename.data(), static_cast<std::size_t>(length)}, path_.viewMut()).valueOr("");
+      return join(*home, {filename.data(), static_cast<std::size_t>(written.size)}, path_.viewMut()).valueOr("");
     } catch (const std::exception&) {
       return {};
     }
@@ -959,7 +1047,8 @@ namespace telar::runtime::cli::hooks {
       }
 
       const auto chat = input.session();
-      if (chat.empty() || chat.size() > 64 || !std::ranges::all_of(chat, [](unsigned char byte) {
+      constexpr std::size_t chat_bytes = 64;
+      if (chat.empty() || chat.size() > chat_bytes || !std::ranges::all_of(chat, [](unsigned char byte) {
             return (byte >= '0' && byte <= '9') || (byte >= 'a' && byte <= 'f') || (byte >= 'A' && byte <= 'F') || byte == '-';
           })) {
         return {};
@@ -970,9 +1059,10 @@ namespace telar::runtime::cli::hooks {
         return {};
       }
 
+      constexpr std::size_t digest_hex_bytes = std::size_t{2} * MD5_DIGEST_LENGTH;
       const auto digest = input.workspace().empty() ? ds::none : md5(input.workspace());
       if (digest) {
-        ds::Array<char, 2 * MD5_DIGEST_LENGTH> encoded;
+        ds::Array<char, digest_hex_bytes> encoded{};
         if (const auto path = cursorPath(*root, encodeLowerHex(*digest, encoded.viewMut()), chat)) {
           return *path;
         }
@@ -983,7 +1073,7 @@ namespace telar::runtime::cli::hooks {
         return {};
       }
 
-      DirectoryStream directory{FileDescriptor{::open(chats->data(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)}};
+      DirectoryStream directory{FileDescriptor{::open(chats->data(), directory_flags)}}; // NOLINT(cppcoreguidelines-pro-type-vararg): POSIX declares open variadic; a directory takes no mode.
       constexpr std::size_t maximum_directories = 4096;
 
       for (std::size_t count = 0; count < maximum_directories; ++count) {
@@ -992,13 +1082,15 @@ namespace telar::runtime::cli::hooks {
           break;
         }
 
-        if (entry->d_type == DT_DIR && std::strlen(entry->d_name) == 32) {
-          if (const auto path = cursorPath(*root, {entry->d_name, std::strlen(entry->d_name)}, chat)) {
+        const std::string_view name{std::data(entry->d_name)};
+        if (entry->d_type == DT_DIR && name.size() == digest_hex_bytes) {
+          if (const auto path = cursorPath(*root, name, chat)) {
             return *path;
           }
         }
       }
     } catch (const std::exception&) {
+      return {};
     }
 
     return {};
@@ -1018,27 +1110,31 @@ namespace telar::runtime::cli::hooks {
   }
 
   ds::Option<std::string_view> SessionFiles::cursorPath(std::string_view root, std::string_view digest, std::string_view chat) {
-    const auto length = std::snprintf(path_.dataMut(), path_.size(), "%.*s/chats/%.*s/%.*s/meta.json", static_cast<int>(root.size()), root.data(), static_cast<int>(digest.size()), digest.data(), static_cast<int>(chat.size()), chat.data());
-    if (length < 0 || static_cast<std::size_t>(length) >= path_.size()) {
+    // One byte stays for the terminator lstat needs.
+    const auto written = std::format_to_n(path_.dataMut(), static_cast<std::ptrdiff_t>(path_.size() - 1), "{}/chats/{}/{}/meta.json", root, digest, chat);
+    const auto length = static_cast<std::size_t>(written.size);
+    if (length >= path_.size()) {
       return ds::none;
     }
 
-    struct stat status;
+    path_.atMut(length) = '\0';
+    struct stat status{};
 
-    return ::lstat(path_.data(), &status) == 0 && S_ISREG(status.st_mode) ? ds::Option{std::string_view{path_.data(), static_cast<std::size_t>(length)}} : ds::none;
+    return ::lstat(path_.data(), &status) == 0 && S_ISREG(status.st_mode) ? ds::Option{std::string_view{path_.data(), length}} : ds::none;
   }
 
-  tbc::view<ds::Option<std::string_view>, tbc::lt::a> SessionFiles::copy(std::string_view value, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept {
+  tbc::val_a<ds::Option<std::string_view>> SessionFiles::copy(std::string_view value, tbc::val_a<std::span<char>> buffer) noexcept {
     if (value.empty() || value.size() >= buffer.size() || value.contains('\0')) {
       return ds::none;
     }
 
-    std::memcpy(buffer.data(), value.data(), value.size());
-    buffer[value.size()] = '\0';
+    const auto end = std::ranges::copy(value, buffer.begin()).out;
+
+    *end = '\0';
     return std::string_view{buffer.data(), value.size()};
   }
 
-  tbc::view<ds::Option<std::string_view>, tbc::lt::a> SessionFiles::join(std::string_view root, std::string_view suffix, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept {
+  tbc::val_a<ds::Option<std::string_view>> SessionFiles::join(std::string_view root, std::string_view suffix, tbc::val_a<std::span<char>> buffer) noexcept {
     return root.empty() ? ds::none : GitFiles::join(root, suffix, buffer);
   }
 

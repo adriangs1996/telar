@@ -293,6 +293,20 @@ namespace {
     check(lifecycle(Mapped{AgentProvider::pi, R"({"event":"ui_prompt_start"})"}.reports, AgentReportState::blocked, AgentBlockedReason::question));
     check(lifecycle(Mapped{AgentProvider::pi, R"({"event":"state_snapshot","idle":false,"blocked":true})"}.reports, AgentReportState::blocked, AgentBlockedReason::question));
 
+    // A running agent's line names its tool, in a snapshot as in the call itself.
+    Mapped tool{AgentProvider::pi, R"({"event":"tool_execution_start","idle":false,"tool_name":"bash","tool_input":{"command":"ls -la"}})"};
+    Mapped snapshot{AgentProvider::pi, R"({"event":"state_snapshot","idle":false,"tool_name":"read","tool_input":{"path":"/w/a.txt"}})"};
+
+    check(lifecycle(tool.reports, AgentReportState::working) && tool.reports.lifecycle->event == "» bash ls -la");
+    check(lifecycle(snapshot.reports, AgentReportState::working) && snapshot.reports.lifecycle->event == "» read /w/a.txt");
+    check(lifecycle(Mapped{AgentProvider::pi, R"({"event":"tool_execution_end","idle":false,"blocked":true,"tool_name":"bash"})"}.reports, AgentReportState::blocked, AgentBlockedReason::question));
+
+    // A settled run shows its last assistant message, and keeps it as the final message.
+    Mapped settled{AgentProvider::pi, R"({"event":"agent_settled","idle":true,"tool_name":"bash","last_assistant_message":"All green.\nDetails follow."})"};
+
+    check(lifecycle(settled.reports, AgentReportState::ready) && settled.reports.lifecycle->event == "All green.");
+    check(settled.reports.progress && settled.reports.progress->final_message == "All green.\nDetails follow." && settled.reports.progress->cwd.empty());
+
     Mapped shutdown{AgentProvider::pi, R"({"event":"session_shutdown","session_id":"s1"})"};
 
     check(lifecycle(shutdown.reports, AgentReportState::exited) && shutdown.reports.lifecycle->session.empty());
