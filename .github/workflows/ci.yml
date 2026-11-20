@@ -39,6 +39,20 @@ jobs:
           python3 -m unittest discover -s tools/tests -p test_ui_graph.py -v
           python3 tools/ui-graph.py HEAD --rules
 
+  # The module graph of every process (tools/check-cpp-modules.py). It reads sources and
+  # docs/build/modules.json and builds nothing, so it runs on every change, whichever tree it touches.
+  cpp-modules:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check the module rules
+        run: |
+          python3 -m unittest discover -s tools/tests -p test_cpp_modules.py -v
+          python3 tools/check-cpp-modules.py
+
   cpp-format:
     runs-on: ubuntu-24.04
     steps:
