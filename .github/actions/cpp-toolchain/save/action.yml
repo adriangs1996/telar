@@ -1,0 +1,22 @@
+name: Save native dependency builds
+description: Save what ../action.yml restores, once the configure step has built it
+inputs:
+  key:
+    description: The native-key output of the cpp-toolchain step
+    required: true
+  hit:
+    description: The native-hit output of the cpp-toolchain step
+    required: false
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    # The same paths ../action.yml restores.
+    - if: inputs.hit != 'true'
+      uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+      with:
+        path: |
+          .dependencies-cache/*/*/install
+          .dependencies-cache/*/*/complete
+          .dependencies-cache/ghostty/*/.complete
+        key: ${{ inputs.key }}

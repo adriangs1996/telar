@@ -45,7 +45,8 @@ permissions:
 
 concurrency:
   group: gui-cpp-${{ github.ref }}
-  cancel-in-progress: true
+  # Only a pull request's runs give way to a newer push: a run on main finishes, so the caches it builds are saved.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   managed-qt:
@@ -65,7 +66,8 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo packaging/release/install-linux-deps.sh
 
-      - uses: ./.github/actions/cpp-toolchain
+      - id: cpp
+        uses: ./.github/actions/cpp-toolchain
         with:
           variant: ${{ matrix.configuration }}
 
@@ -76,9 +78,11 @@ jobs:
           { "$CXX" --version; cmake --version; uname -m; if [[ "$RUNNER_OS" == macOS ]]; then xcrun --show-sdk-path; fi; } > "$RUNNER_TEMP/qt-toolchain"
           echo "key=$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$RUNNER_TEMP/qt-toolchain")" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+      # Qt's installation and completion stamp, about 200 MB, not its 2-4 GB build tree: restored here
+      # and saved once the configure step has built it, whatever the later steps find.
+      - id: qt
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
-          # Qt's installation and completion stamp, about 200 MB, not its 2-4 GB build tree.
           path: |
             .qt-cache/*/install
             .qt-cache/*/complete
@@ -97,6 +101,21 @@ jobs:
           tools/cpp configure ci -- -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} \
             -DTELAR_BUILD_RUNTIME=OFF -DTELAR_BUILD_CLI=OFF -DTELAR_BUILD_AUTH=OFF -DTELAR_GUI_QT_JOBS=3
 
+      - name: Save native dependency builds
+        uses: ./.github/actions/cpp-toolchain/save
+        with:
+          key: ${{ steps.cpp.outputs.native-key }}
+          hit: ${{ steps.cpp.outputs.native-hit }}
+
+      - name: Save Qt
+        if: steps.qt.outputs.cache-hit != 'true'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: |
+            .qt-cache/*/install
+            .qt-cache/*/complete
+          key: ${{ steps.qt.outputs.cache-primary-key }}
+
       - name: Build GUI and focused regression tests
         run: |
           tools/cpp build ci -- --parallel 3 \
@@ -109,24 +128,32 @@ jobs:
           tools/cpp build ci -- --parallel 3 --target gui-platform-tests
           QT_QUICK_BACKEND=software tools/cpp test ci -- -R '^gui\.platform\.native_window_appearance\.'
 
+      # A cached tbc-lint is used as it is: its build tree would rebuild anyway, as the checkout gives every
+      # source a new time. It is saved as soon as it is built, whatever the check then finds.
       - name: Restore tbc-lint
         id: tbc-lint
         if: matrix.configuration == 'Release'
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: lib/tbc/out/release/tbc-lint
           key: tbc-lint-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('lib/tbc/**', 'tools/toolchain/manifest.json', 'tools/bootstrap-cpp.py', 'tools/cpp') }}
 
-      # A cached tbc-lint is used as it is: its build tree would rebuild anyway, as the checkout gives every
-      # source a new time.
+      - name: Build tbc-lint
+        if: matrix.configuration == 'Release' && steps.tbc-lint.outputs.cache-hit != 'true'
+        run: |
+          tools/cpp configure tbc -B lib/tbc/out/release --config Release -- -DBUILD_TESTING=OFF
+          tools/cpp build tbc -B lib/tbc/out/release -- --target tbc-lint --parallel 3
+
+      - name: Save tbc-lint
+        if: matrix.configuration == 'Release' && steps.tbc-lint.outputs.cache-hit != 'true'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: lib/tbc/out/release/tbc-lint
+          key: ${{ steps.tbc-lint.outputs.cache-primary-key }}
+
       - name: Check lifetimes
         if: matrix.configuration == 'Release'
-        run: |
-          if [ "${{ steps.tbc-lint.outputs.cache-hit }}" != true ]; then
-            tools/cpp configure tbc -B lib/tbc/out/release --config Release -- -DBUILD_TESTING=OFF
-            tools/cpp build tbc -B lib/tbc/out/release -- --target tbc-lint --parallel 3
-          fi
-          tools/cpp build ci -- --target lifetime
+        run: tools/cpp build ci -- --target lifetime
 
       - name: Check interface bodies
         if: matrix.configuration == 'Release'
