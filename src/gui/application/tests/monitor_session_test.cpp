@@ -59,8 +59,7 @@ namespace {
     check(application::monitor::refresh(client), "once the queue drains the monitor must ask again");
     const auto query = transport.last<QueryMonitor>();
 
-    check(deliver(client, MonitorSnapshot{.request_id = query.request_id, .cpu_permille = 420, .process_count = 7}) == application::Change::monitor,
-          "the answer to the query that left must update the monitor");
+    check(deliver(client, MonitorSnapshot{.request_id = query.request_id, .cpu_permille = 420, .process_count = 7}) == application::Change::monitor, "the answer to the query that left must update the monitor");
     check(application::monitor::state(client).cpu_permille == 420 && application::monitor::state(client).process_count == 7, "the monitor must show what the runtime answered");
     check(application::monitor::refresh(client) && transport.count(ClientTag::query_monitor) == 2, "an answered monitor must ask again");
   }
