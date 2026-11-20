@@ -1,6 +1,7 @@
 module telar.runtime.terminal.control;
 
 import telar.render.document;
+import telar.base.text;
 import telar.base.ds;
 
 namespace telar::runtime::control {

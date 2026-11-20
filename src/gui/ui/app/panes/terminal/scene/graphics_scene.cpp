@@ -111,10 +111,12 @@ namespace telar::gui::qt {
     retry_requested_ = false;
 
     ds::Array<GraphicsPlacement, application::terminal::graphics::GraphicsStore<Memory>::placement_capacity> placements;
-    const auto count = store.placements().size();
+    // The store keeps at most placement_capacity placements; should it ever hold more, the scene
+    // draws the first ones rather than copy past the array.
+    const auto count = std::min(store.placements().size(), placements.size());
     auto unsorted = placements.viewMut().first(count);
 
-    std::copy(store.placements().begin(), store.placements().end(), unsorted.begin());
+    std::copy_n(store.placements().begin(), count, unsorted.begin());
     std::ranges::sort(unsorted, application::terminal::graphics::placementOrder);
     cell_ = cell;
     scale_ = scale;

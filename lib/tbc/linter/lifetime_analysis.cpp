@@ -5105,8 +5105,8 @@ namespace tbc_lint {
           }
 
           const auto region = parameterAnnotation(*parameter, context_).region;
-          const auto object = parameter->getType()->isPointerType() ? parameter->getType()->getPointeeType() : parameter->getType().getNonReferenceType();
-          const bool shared_only = keepsOnlySharedInputs(object);
+          const auto written = parameter->getType()->isPointerType() ? parameter->getType()->getPointeeType() : parameter->getType().getNonReferenceType();
+          const bool shared_only = keepsOnlySharedInputs(written);
           loans incoming;
 
           for (unsigned other = 0; other < callee->getNumParams() && other + offset < call.getNumArgs(); ++other) {

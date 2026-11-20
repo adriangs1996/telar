@@ -238,7 +238,9 @@ prepare() {
         run mkdir -p "$1"
     else
         mkdir -p "$1" 2>/dev/null || true
-        [ -d "$1" ] && [ -w "$1" ] || fail "$1 is not writable; choose another directory or pass --sudo"
+        if [ ! -d "$1" ] || [ ! -w "$1" ]; then
+            fail "$1 is not writable; choose another directory or pass --sudo"
+        fi
     fi
 }
 

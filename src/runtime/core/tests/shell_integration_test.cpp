@@ -551,7 +551,25 @@ namespace {
     pane.terminal.refresh();
     const auto& screen = pane.terminal.screen();
 
-    check(screen.cursor.y < screen.row_flags.size() && (screen.row_flags[screen.cursor.y] & static_cast<Byte>(RowFlag::prompt)) != 0);
+    const bool at_prompt = screen.cursor.y < screen.row_flags.size() && (screen.row_flags[screen.cursor.y] & static_cast<Byte>(RowFlag::prompt)) != 0;
+
+    // Only a CI runner's zsh has missed this so far: its screen says what its startup files drew.
+    if (!at_prompt) {
+      std::println(stderr, "cursor at row {}, column {}; each row's flags and text:", screen.cursor.y, screen.cursor.x);
+      for (std::size_t row = 0; row < screen.rows && row < screen.row_flags.size(); ++row) {
+        std::string line;
+
+        for (std::size_t column = 0; column < screen.cols; ++column) {
+          const auto& cell = screen.cells[(row * screen.cols) + column];
+
+          line.append(reinterpret_cast<const char*>(cell.text.data()), cell.length);
+        }
+
+        std::println(stderr, "{:2} {:#04x} |{}|", row, static_cast<unsigned>(screen.row_flags[row]), line);
+      }
+    }
+
+    check(at_prompt);
     const auto revision = pane.shell_state == PaneShell{} ? 0 : pane.shell_revision;
 
     type("read -s secret; sleep 0.3\r");

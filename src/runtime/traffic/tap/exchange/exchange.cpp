@@ -5,6 +5,7 @@ module telar.runtime.traffic.tap.exchange;
 
 import telar.base.ds;
 import telar.base.text;
+import telar.wire.vocabulary;
 
 namespace telar::runtime {
 
@@ -18,24 +19,6 @@ namespace telar::runtime {
 #pragma clang unsafe_buffer_usage begin
       return {storage, count};
 #pragma clang unsafe_buffer_usage end
-    }
-
-    std::span<const std::uint8_t> asBytes(std::string_view text) noexcept {
-#pragma clang unsafe_buffer_usage begin
-      return {reinterpret_cast<const std::uint8_t*>(text.data()), text.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the bytes may alias char, and no cast-free view reads text as bytes
-#pragma clang unsafe_buffer_usage end
-    }
-
-    // The first `count` characters of text, or all of it: substr(0, count) without its throw.
-    constexpr std::string_view textPrefix(std::string_view text, std::size_t count) noexcept {
-      text.remove_suffix(text.size() - std::min(count, text.size()));
-      return text;
-    }
-
-    // Text past its first `offset` characters, or nothing: substr(offset) without its throw.
-    constexpr std::string_view textAfter(std::string_view text, std::size_t offset) noexcept {
-      text.remove_prefix(std::min(offset, text.size()));
-      return text;
     }
 
   }
@@ -209,7 +192,7 @@ namespace telar::runtime {
   }
 
   bool CaptureHalf::append(CapturePart part, std::string_view input) noexcept {
-    return append(part, asBytes(input));
+    return append(part, byteView(input));
   }
 
   void CaptureHalf::appendHead(std::string_view bytes) noexcept {

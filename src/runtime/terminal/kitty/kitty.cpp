@@ -555,11 +555,6 @@ namespace telar::runtime {
     return true;
   }
 
-  // Each method below takes its object's mutex, which its caller must not hold. The pinned clang
-  // rejects the negative capability, requires_capability(!mutex_), that would state so.
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wthread-safety-negative"
-
   bool MappedImages::adopt(const void* placeholder, MappedRegion& pixels) noexcept {
     const std::scoped_lock lock{mutex_};
 
@@ -653,8 +648,6 @@ namespace telar::runtime {
 
     return pane_used;
   }
-
-#pragma clang diagnostic pop
 
   namespace {
 

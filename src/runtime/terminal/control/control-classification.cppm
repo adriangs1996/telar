@@ -5,21 +5,15 @@ export module telar.runtime.terminal.control:classification;
 
 import std;
 import :sequence;
+import telar.wire.vocabulary;
 import telar.base.ds;
 
 export namespace telar::runtime::control {
 
-  // The bytes of text, as the terminal's byte paths take them.
-  TBC_HOT_PATH inline std::span<const std::uint8_t> byteView(std::string_view text) noexcept {
-#pragma clang unsafe_buffer_usage begin
-    return {reinterpret_cast<const std::uint8_t*>(text.data()), text.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the bytes may alias char, and no cast-free view reads text as bytes
-#pragma clang unsafe_buffer_usage end
-  }
-
-  // The text of bytes, as the parsers of a sequence's body read them.
-  TBC_HOT_PATH inline std::string_view textView(std::span<const std::uint8_t> bytes) noexcept {
-    return {reinterpret_cast<const char*>(bytes.data()), bytes.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): char may alias the bytes, and no cast-free view reads bytes as text
-  }
+  // The bytes of text, as the terminal's byte paths take them, and the text of bytes, as the
+  // parsers of a sequence's body read them.
+  using telar::byteView;
+  using telar::textView;
 
   inline constexpr ds::Array<std::uint16_t, 5> desktop_modes{1004, 2031, 2033, 2048, 5522};
 
@@ -88,17 +82,5 @@ export namespace telar::runtime::control {
   bool streamable(Sequence sequence) noexcept;
 
   bool query(Sequence sequence) noexcept;
-
-  // The first `count` characters of text, or all of it: substr(0, count) without its throw.
-  constexpr std::string_view textPrefix(std::string_view text, std::size_t count) noexcept {
-    text.remove_suffix(text.size() - std::min(count, text.size()));
-    return text;
-  }
-
-  // Text past its first `offset` characters, or nothing: substr(offset) without its throw.
-  constexpr std::string_view textAfter(std::string_view text, std::size_t offset) noexcept {
-    text.remove_prefix(std::min(offset, text.size()));
-    return text;
-  }
 
 }

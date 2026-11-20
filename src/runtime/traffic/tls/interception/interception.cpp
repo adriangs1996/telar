@@ -5,6 +5,7 @@ module telar.runtime.traffic.tls.interception;
 
 import telar.sys.socket;
 import telar.tls;
+import telar.wire.vocabulary;
 import telar.base.ds;
 
 namespace telar::runtime {
@@ -21,10 +22,6 @@ namespace telar::runtime {
     // A 24-bit big-endian number, as TLS writes a handshake's length.
     std::size_t bigEndian24(std::span<const std::uint8_t> bytes) noexcept {
       return (std::size_t{bytes[0]} << (2 * byte_bits)) | bigEndian16(bytes.subspan(1));
-    }
-
-    std::string_view textOf(std::span<const std::uint8_t> bytes) noexcept {
-      return {reinterpret_cast<const char*>(bytes.data()), bytes.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): char may alias the bytes, and no cast-free view reads bytes as text
     }
 
     // The length a record header declares, or nothing when it heads no handshake record within bounds.
@@ -272,7 +269,7 @@ namespace telar::runtime {
       }
 
       if (type == 0) {
-        const auto host = textOf(value);
+        const auto host = textView(value);
         if (!name.view().empty() || !ProxyHostname::validTarget(host)) {
           return false;
         }

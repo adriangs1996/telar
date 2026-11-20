@@ -43,9 +43,17 @@ namespace telar {
 
   static_assert(std::same_as<Byte, unsigned char>);
 
-  // The same bytes as text and as wire bytes, for the field codecs below.
-  [[nodiscard]] std::span<const Byte> byteView(std::string_view text) noexcept;
-  [[nodiscard]] std::string_view textView(std::span<const Byte> bytes) noexcept;
+  // The same bytes as text and as wire bytes, for the field codecs below, which call them per
+  // field and per byte.
+  TBC_HOT_PATH [[nodiscard]] inline std::span<const Byte> byteView(std::string_view text) noexcept {
+#pragma clang unsafe_buffer_usage begin
+    return {reinterpret_cast<const Byte*>(text.data()), text.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): Byte may alias char, and no cast-free view reads text as bytes
+#pragma clang unsafe_buffer_usage end
+  }
+
+  TBC_HOT_PATH [[nodiscard]] inline std::string_view textView(std::span<const Byte> bytes) noexcept {
+    return {reinterpret_cast<const char*>(bytes.data()), bytes.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): char may alias Byte, and no cast-free view reads bytes as text
+  }
 
   inline constexpr std::size_t max_payload_size = std::size_t{4} * 1024 * 1024;
   inline constexpr std::size_t frame_prefix_size = sizeof(std::uint32_t);

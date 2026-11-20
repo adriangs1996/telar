@@ -140,13 +140,6 @@ namespace telar::git {
 
   using telar::runtime::FileDescriptor;
 
-  // text.substr(offset, count) without its throw: an offset past the end gives an empty view.
-  inline constexpr std::string_view substring(std::string_view text, std::size_t offset, std::size_t count = std::string_view::npos) noexcept {
-    text.remove_prefix(std::min(offset, text.size()));
-    text.remove_suffix(text.size() - std::min(count, text.size()));
-    return text;
-  }
-
   Fingerprint fingerprintOf(const struct stat& status) noexcept;
 
   // The fingerprint of `name` beneath `directory`, without following a final

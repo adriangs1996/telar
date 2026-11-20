@@ -839,7 +839,9 @@ namespace telar::runtime::plugins {
 
     createPrivateDirectory(std::string_view{path}.substr(0, separator));
     const auto parent = openPrivateParent(path);
-    const auto written = writePrivateFile(parent.get(), std::string_view{path}.substr(separator + 1), {reinterpret_cast<const std::uint8_t*>(contents.data()), contents.size()}, PrivateFileMode::replace); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast,clang-diagnostic-unsafe-buffer-usage-in-container): the file takes the text as bytes, whose size the string gives
+#pragma clang unsafe_buffer_usage begin
+    const auto written = writePrivateFile(parent.get(), std::string_view{path}.substr(separator + 1), {reinterpret_cast<const std::uint8_t*>(contents.data()), contents.size()}, PrivateFileMode::replace); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the file takes the text as bytes, whose size the string gives
+#pragma clang unsafe_buffer_usage end
     if (written != 0) {
       throw SystemError{"Replace plugin trust store", written};
     }

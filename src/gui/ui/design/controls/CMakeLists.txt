@@ -40,6 +40,8 @@ telar_add_qml_sources(gui-quick
     FormTextField.qml
     KeyboardAction.qml
     OverlayHeader.qml
+    PaletteKeycap.qml
+    PaletteRow.qml
   FP_CONTRACT_OFF
     modal_reveal_layout.cpp
     native_agent_status.cpp

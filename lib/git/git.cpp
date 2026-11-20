@@ -9,6 +9,7 @@ import telar.base.ds;
 namespace telar::git {
 
   using telar::runtime::asciiEqualIgnoreCase;
+  using telar::runtime::substring;
   using telar::runtime::trimText;
 
   namespace {

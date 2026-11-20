@@ -26,7 +26,7 @@
 # Checks that crash clang-tidy 23.1.5, to re-enable once the pinned LLVM fixes them:
 #   bugprone-unchecked-optional-access and misc-static-initialization-cycle on module units that import std
 #   or see one declaration through several BMIs; performance-use-std-move at the end of
-#   lib/config/runtime/runtime.cpp and src/runtime/redirect/socket_owners/socket_owners.cpp.
+#   lib/config/runtime/runtime.cpp and src/runtime/traffic/redirect/socket_owners/socket_owners.cpp.
 #
 # The compiler's warnings are all on but:
 #   the compatibility ones of the standards before telar's;

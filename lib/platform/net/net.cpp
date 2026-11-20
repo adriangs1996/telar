@@ -20,7 +20,10 @@ namespace telar::runtime {
     NetworkAddress addressOf(const Address& address) noexcept {
       NetworkAddress result;
 
-      std::memcpy(&result.storage, &address, sizeof(address)); // NOLINT(clang-diagnostic-unsafe-buffer-usage-in-libc-call): a family's sockaddr into sockaddr_storage, which holds any
+      // A family's sockaddr into sockaddr_storage, which holds any.
+#pragma clang unsafe_buffer_usage begin
+      std::memcpy(&result.storage, &address, sizeof(address));
+#pragma clang unsafe_buffer_usage end
       result.length = sizeof(address);
       return result;
     }
@@ -103,7 +106,10 @@ namespace telar::runtime {
     NetworkAddress address;
 
     address.length = static_cast<socklen_t>(expected);
-    std::memcpy(&address.storage, source, expected); // NOLINT(clang-diagnostic-unsafe-buffer-usage-in-libc-call): a family's sockaddr, whose size `size` covers, into sockaddr_storage
+    // A family's sockaddr, whose size `size` covers, into sockaddr_storage.
+#pragma clang unsafe_buffer_usage begin
+    std::memcpy(&address.storage, source, expected);
+#pragma clang unsafe_buffer_usage end
     address.setPort(0);
     return address;
   }

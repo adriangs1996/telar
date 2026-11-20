@@ -8,6 +8,7 @@ import std;
 import telar.tbc;
 
 import telar.cli.session.control_session;
+import telar.cli.commands.hooks.command;
 import telar.wire.vocabulary;
 import telar.wire.agents;
 import telar.wire.runtime;
@@ -54,15 +55,10 @@ export {
     // The text the reports show, apart from them: a report views these and the payload, as a Rust
     // `Reports<'a>` borrows the buffers it does not own.
     struct ReportTexts {
-      // The runtime's bounds of a display line and of a message, as hooks' display_line_bytes and
-      // display_message_bytes, which the functions that write these texts take.
-      static constexpr std::size_t line_bytes = 96;
-      static constexpr std::size_t message_bytes = 2048;
-
-      FixedText<line_bytes> event;
-      FixedText<line_bytes> step;
-      FixedText<line_bytes> title_text;
-      FixedText<message_bytes> message;
+      FixedText<display_line_bytes> event;
+      FixedText<display_line_bytes> step;
+      FixedText<display_line_bytes> title_text;
+      FixedText<display_message_bytes> message;
       LinkedWorktree worktree;
     };
 

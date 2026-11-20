@@ -255,7 +255,11 @@ namespace telar::sys::captured {
   TELAR_SYS_FILE_CONSTANTS(TELAR_SYS_CAPTURE)
   TELAR_SYS_LIMITS(TELAR_SYS_CAPTURE)
 #ifndef __GLIBC__
-  TELAR_SYS_ENUMERATORS(TELAR_SYS_CAPTURE) // NOLINT(clang-diagnostic-reserved-identifier): POSIX spells the sysconf names with a leading underscore
+  // POSIX spells the sysconf names with a leading underscore.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wreserved-identifier"
+  TELAR_SYS_ENUMERATORS(TELAR_SYS_CAPTURE)
+#pragma clang diagnostic pop
 #endif
 
   inline constexpr bool isDirectory(mode_t mode) noexcept {
@@ -370,9 +374,13 @@ namespace telar::sys::captured {
 #undef RTLD_NOW
 #undef DT_DIR
 #undef DT_REG
-#undef _SC_CLK_TCK          // NOLINT(clang-diagnostic-reserved-macro-identifier): the system header defines it
-#undef _SC_NPROCESSORS_ONLN // NOLINT(clang-diagnostic-reserved-macro-identifier): the system header defines it
-#undef _SC_PAGESIZE         // NOLINT(clang-diagnostic-reserved-macro-identifier): the system header defines it
+// The system header defines it.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wreserved-macro-identifier"
+#undef _SC_CLK_TCK
+#undef _SC_NPROCESSORS_ONLN
+#undef _SC_PAGESIZE
+#pragma clang diagnostic pop
 #undef S_ISDIR
 #undef S_ISREG
 #undef S_ISSOCK
@@ -392,7 +400,10 @@ export {
   TELAR_SYS_FILE_FLAGS(TELAR_SYS_CONSTANT)     // NOLINT(readability-identifier-naming): exported under the system's own names
   TELAR_SYS_FILE_CONSTANTS(TELAR_SYS_CONSTANT) // NOLINT(readability-identifier-naming): exported under the system's own names
   TELAR_SYS_LIMITS(TELAR_SYS_CONSTANT)         // NOLINT(readability-identifier-naming): exported under the system's own names
-  TELAR_SYS_ENUMERATORS(TELAR_SYS_ENUMERATOR)  // NOLINT(bugprone-reserved-identifier,cert-dcl37-c,cert-dcl51-cpp,clang-diagnostic-reserved-identifier,readability-identifier-naming): POSIX spells these sysconf names, which the module exports as the system does
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wreserved-identifier"
+  TELAR_SYS_ENUMERATORS(TELAR_SYS_ENUMERATOR) // NOLINT(bugprone-reserved-identifier,cert-dcl37-c,cert-dcl51-cpp,readability-identifier-naming): POSIX spells these sysconf names, which the module exports as the system does
+#pragma clang diagnostic pop
 
   // NOLINTNEXTLINE(readability-identifier-naming): exported under the system's own name
   inline constexpr bool S_ISDIR(mode_t mode) noexcept {

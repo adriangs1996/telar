@@ -3,6 +3,7 @@
 static_assert(true);
 #endif
 
+#include <cerrno>
 #include <cstdlib>
 #include <cstring>
 #include <pcap/pcap.h>
@@ -32,13 +33,18 @@ namespace {
   using telar::Byte;
 
   // Waits for `socket` to become readable and reads what is there: an empty result is the service
-  // closing the connection.
+  // closing the connection, which Linux reports as a reset when the service closed it with bytes
+  // still unread.
   std::vector<Byte> receiveSome(int socket, std::size_t limit) {
     pollfd descriptor{.fd = socket, .events = POLLIN, .revents = 0};
 
     check(::poll(&descriptor, 1, 5000) > 0);
     std::vector<Byte> bytes(limit);
     const auto count = ::recv(socket, bytes.data(), bytes.size(), 0);
+
+    if (count < 0 && errno == ECONNRESET) {
+      return {};
+    }
 
     check(count >= 0);
     bytes.resize(static_cast<std::size_t>(count));
@@ -88,12 +94,16 @@ namespace {
     return socket;
   }
 
+  // Sends `event` as one frame in one write: the service may close a peer the frame breaks its role
+  // as soon as it reads the prefix, which would fail a second write.
   void publish(int socket, const traffic::Event& event) {
     std::vector<Byte> output(Limits::frame_bytes);
     const auto body = Protocol::encode(output, event);
+    const auto prefix = Protocol::prefix(body.size());
+    std::vector<Byte> frame(prefix.begin(), prefix.end());
 
-    sendAll(socket, Protocol::prefix(body.size()));
-    sendAll(socket, body);
+    frame.insert(frame.end(), body.begin(), body.end());
+    sendAll(socket, frame);
   }
 
   struct Socket {
@@ -153,11 +163,8 @@ namespace {
     }
 
     const ds::Array<Byte, 4> body{'s', 'u', 'b', 's'};
-    std::vector<Byte> output(Limits::frame_bytes);
-    const auto frame = Protocol::encode(output, traffic::Event{.link_type = DLT_RAW, .original_bytes = body.size(), .interface = "subscriber", .bytes = body});
 
-    sendAll(watcher.get(), Protocol::prefix(frame.size()));
-    sendAll(watcher.get(), frame);
+    publish(watcher.get(), traffic::Event{.link_type = DLT_RAW, .original_bytes = body.size(), .interface = "subscriber", .bytes = body});
     closed(watcher.get());
   }
 

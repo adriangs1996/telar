@@ -12,13 +12,6 @@ namespace telar::runtime {
 
   namespace {
 
-    // text.substr(offset, count) without its throw: an offset past the end gives an empty view.
-    std::string_view substring(std::string_view text, std::size_t offset, std::size_t count = std::string_view::npos) noexcept {
-      text.remove_prefix(std::min(offset, text.size()));
-      text.remove_suffix(text.size() - std::min(count, text.size()));
-      return text;
-    }
-
     // Whether the config `key` lets the repository fetch objects lazily.
     bool fetchesLazily(std::string_view key) noexcept {
       return key == "extensions.partialclone" || (key.starts_with("remote.") && (key.ends_with(".promisor") || key.ends_with(".partialclonefilter") || key.ends_with(".uploadpack")));

@@ -112,13 +112,6 @@ namespace {
       }
     };
 
-    void collect(auto& service, auto& clients) {
-      pollfd ready{.fd = service.descriptor(), .events = POLLIN, .revents = 0};
-
-      check(::poll(&ready, 1, 2000) == 1);
-      service.collect(clients);
-    }
-
     void rejected(auto&& action, FailureCode code) {
       try {
         action();
@@ -143,7 +136,7 @@ namespace {
       },
           FailureCode::resource_limit);
       Reader::blocked = false;
-      collect(service, clients);
+      collectCompleted(service, clients);
       auto chunk = first.receive<RuntimeClipboardChunk>();
 
       check(chunk.request_id == 1 && chunk.transfer_id == 1 && chunk.offset == 0);
@@ -181,7 +174,7 @@ namespace {
           FailureCode::invalid_request);
 
       service.read(clients, first.session().id, {.request_id = 6});
-      collect(service, clients);
+      collectCompleted(service, clients);
       first.receive<RuntimeClipboardChunk>();
       service.expire(clients, decltype(service)::Clock::now() + std::chrono::seconds{31});
       rejected([&] {
@@ -191,13 +184,13 @@ namespace {
 
       Reader::size = 0;
       service.read(clients, other.session().id, {.request_id = 8});
-      collect(service, clients);
+      collectCompleted(service, clients);
       chunk = other.receive<RuntimeClipboardChunk>();
       check(chunk.total_bytes == 0 && chunk.bytes.empty());
 
       Reader::fail = true;
       service.read(clients, first.session().id, {.request_id = 9});
-      collect(service, clients);
+      collectCompleted(service, clients);
       const auto failure = first.receive<RequestFailed>();
 
       check(failure.request_id == 9 && failure.message.find("graphical session") != std::string_view::npos);
@@ -205,11 +198,11 @@ namespace {
 
       Reader::size = runtime_clipboard_chunk_bytes + 1;
       service.read(clients, first.session().id, {.request_id = 10});
-      collect(service, clients);
+      collectCompleted(service, clients);
       first.receive<RuntimeClipboardChunk>();
       first.session().connection.flagsMut().closing = true;
       service.read(clients, other.session().id, {.request_id = 11});
-      collect(service, clients);
+      collectCompleted(service, clients);
       other.receive<RuntimeClipboardChunk>();
       ++other.session().generation;
       rejected([&] {

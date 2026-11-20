@@ -14,6 +14,7 @@ import :pty_response_queue;
 import :reply;
 import :sequence;
 import :vt_state;
+import telar.base.text;
 import telar.base.ds;
 
 export namespace telar::runtime::control {

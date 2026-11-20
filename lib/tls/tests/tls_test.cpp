@@ -62,7 +62,8 @@ namespace {
     check(failed);
   }
 
-  void testTlsMemory() {
+  // OpenSSL allocates through the configured library, which refuses a size past its block header.
+  void testTlsMemory(ConcurrentMemory& /*memory*/, const TlsLibrary& /*library*/) {
     auto* bytes = static_cast<unsigned char*>(OPENSSL_malloc(16));
 
     check(bytes != nullptr && reinterpret_cast<std::uintptr_t>(bytes) % alignof(std::max_align_t) == 0);
@@ -244,7 +245,7 @@ namespace {
     }
   }
 
-  const telar::testing::Case case_tls_memory{"tls.tls_memory", testTlsMemory};
+  const telar::testing::Case case_tls_memory{"tls.tls_memory", withTlsLibrary<testTlsMemory>};
   const telar::testing::Case case_authorities{"tls.authorities", withTlsLibrary<testAuthorities>};
   const telar::testing::Case case_authority_validation{"tls.authority_validation", testAuthorityValidation};
   const telar::testing::Case case_numeric_certificates{"tls.numeric_certificates", numericCertificates};

@@ -1,5 +1,6 @@
 module telar.runtime.terminal.control.clipboard;
 
+import telar.base.text;
 import telar.base.text.utf8;
 import telar.base.ds;
 

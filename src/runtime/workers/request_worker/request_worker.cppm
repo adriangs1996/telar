@@ -173,9 +173,12 @@ export {
             const std::scoped_lock lock{mutex_};
 
             result_ = std::move(result);
-            signal_.notify();
             result_ready_.store(true, std::memory_order_release);
           }
+
+          // Signalled once the lock is free: a collect the signal wakes would otherwise find it taken
+          // and leave the result for another wake.
+          signal_.notify();
 
           if (completion_ != nullptr) {
             completion_->notify();

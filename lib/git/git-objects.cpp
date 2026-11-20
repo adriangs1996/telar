@@ -9,6 +9,8 @@ import telar.base.ds;
 
 namespace telar::git {
 
+  using telar::runtime::substring;
+
   namespace {
 
     constexpr unsigned byte_bits = 8;
@@ -191,7 +193,9 @@ namespace telar::git {
     }
 
     std::span<std::uint8_t> writable(auto& string) noexcept {
-      return {reinterpret_cast<std::uint8_t*>(string.dataMut()), string.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast,clang-diagnostic-unsafe-buffer-usage-in-container): bytes may alias text, and no cast-free view writes text as bytes
+#pragma clang unsafe_buffer_usage begin
+      return {reinterpret_cast<std::uint8_t*>(string.dataMut()), string.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): bytes may alias text, and no cast-free view writes text as bytes
+#pragma clang unsafe_buffer_usage end
     }
 
     // Little-endian base-128 size of a delta header; none when it runs past the delta or 64 bits.

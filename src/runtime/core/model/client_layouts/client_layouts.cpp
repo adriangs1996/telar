@@ -137,15 +137,15 @@ namespace telar::runtime {
 
   Pane::Pane(ConcurrentMemory& memory, std::uint64_t identity, TabLocation tab, Command<ConcurrentMemory>& command, PaneLaunch settings)
       : id(identity),
-        location(tab),
-        launch(memory),
         pty_responses(std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, ConcurrentMemory>{memory})),
         observer(std::allocate_shared<PaneObserver>(AllocatorRef<PaneObserver, ConcurrentMemory>{memory}, memory, settings.size, command.cwd(), false, settings.shell ? ds::Option{settings.shell->token} : ds::none)),
         media(std::allocate_shared<PaneMedia>(AllocatorRef<PaneMedia, ConcurrentMemory>{memory}, memory, settings.media_budget, settings.graphics, settings.size, pty_responses)),
-        terminal(memory, settings.size, TerminalPurpose::separate_media, pty_responses, GraphicsQueryResources{settings.graphics, settings.media_budget, &media->queryUsage()}),
+        location(tab),
+        cwd(memory, command.cwd()),
+        launch(memory),
         input(memory, input_limit),
-        scrollback_rows(memory),
-        cwd(memory, command.cwd()) {
+        terminal(memory, settings.size, TerminalPurpose::separate_media, pty_responses, GraphicsQueryResources{settings.graphics, settings.media_budget, &media->queryUsage()}),
+        scrollback_rows(memory) {
     randomBytes(history_session.dataMut(), history_session.size());
     input.reserve(input_limit);
     launch.capture(command.arguments(), command.restorable());

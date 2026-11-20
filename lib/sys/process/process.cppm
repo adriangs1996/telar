@@ -24,7 +24,11 @@ export module telar.sys.process;
 // declarations through these using-declarations instead of including them.
 export {
   // Processes and process groups.
-  using ::_exit; // NOLINT(clang-diagnostic-reserved-identifier): POSIX's own name
+  // POSIX's own name.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wreserved-identifier"
+  using ::_exit;
+#pragma clang diagnostic pop
   using ::environ;
   using ::execv;
   using ::execve;
@@ -163,7 +167,11 @@ namespace telar::sys::captured {
 #define TELAR_SYS_CAPTURE(name) inline constexpr auto name##_ = name;
   TELAR_SYS_SIGNALS(TELAR_SYS_CAPTURE)
   TELAR_SYS_SPAWN(TELAR_SYS_CAPTURE)
-  TELAR_SYS_TERMINALS(TELAR_SYS_CAPTURE) // NOLINT(clang-diagnostic-reserved-identifier): POSIX spells _POSIX_VDISABLE with a leading underscore
+  // POSIX spells _POSIX_VDISABLE with a leading underscore.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wreserved-identifier"
+  TELAR_SYS_TERMINALS(TELAR_SYS_CAPTURE)
+#pragma clang diagnostic pop
 #ifndef __GLIBC__
   TELAR_SYS_ENUMERATORS(TELAR_SYS_CAPTURE)
 #endif
@@ -209,7 +217,11 @@ namespace telar::sys::captured {
 #undef VINTR
 #undef VQUIT
 #undef VSUSP
-#undef _POSIX_VDISABLE // NOLINT(clang-diagnostic-reserved-macro-identifier): the system header defines it
+// The system header defines it.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wreserved-macro-identifier"
+#undef _POSIX_VDISABLE
+#pragma clang diagnostic pop
 #undef PRIO_PROCESS
 #undef PTHREAD_CREATE_DETACHED
 #undef RLIMIT_NOFILE
@@ -229,9 +241,12 @@ namespace telar::sys::captured {
 #endif
 
 export {
-  TELAR_SYS_SIGNALS(TELAR_SYS_CONSTANT)       // NOLINT(readability-identifier-naming): exported under the system's own names
-  TELAR_SYS_SPAWN(TELAR_SYS_CONSTANT)         // NOLINT(readability-identifier-naming): exported under the system's own names
-  TELAR_SYS_TERMINALS(TELAR_SYS_CONSTANT)     // NOLINT(bugprone-reserved-identifier,cert-dcl37-c,cert-dcl51-cpp,clang-diagnostic-reserved-identifier,readability-identifier-naming): exported under the system's own names, _POSIX_VDISABLE among them
+  TELAR_SYS_SIGNALS(TELAR_SYS_CONSTANT) // NOLINT(readability-identifier-naming): exported under the system's own names
+  TELAR_SYS_SPAWN(TELAR_SYS_CONSTANT)   // NOLINT(readability-identifier-naming): exported under the system's own names
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wreserved-identifier"
+  TELAR_SYS_TERMINALS(TELAR_SYS_CONSTANT) // NOLINT(bugprone-reserved-identifier,cert-dcl37-c,cert-dcl51-cpp,readability-identifier-naming): exported under the system's own names, _POSIX_VDISABLE among them
+#pragma clang diagnostic pop
   TELAR_SYS_ENUMERATORS(TELAR_SYS_ENUMERATOR) // NOLINT(readability-identifier-naming): exported under the system's own names
 
   inline constexpr pthread_mutex_t PTHREAD_MUTEX_INITIALIZER = telar::sys::captured::mutex_initializer; // NOLINT(readability-identifier-naming): exported under the system's own names

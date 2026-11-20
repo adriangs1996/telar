@@ -79,12 +79,18 @@ namespace telar::runtime::lua {
     // The block Lua sees follows its allocation's header, which records the block's capacity.
     template <typename Header>
     void* pastHeader(Header* header) noexcept {
-      return header + 1; // NOLINT(clang-diagnostic-unsafe-buffer-usage): lua_Alloc trades raw blocks, each right after its header
+      // lua_Alloc trades raw blocks, each right after its header.
+#pragma clang unsafe_buffer_usage begin
+      return header + 1;
+#pragma clang unsafe_buffer_usage end
     }
 
     template <typename Header>
     Header* headerOf(void* block) noexcept {
-      return static_cast<Header*>(block) - 1; // NOLINT(clang-diagnostic-unsafe-buffer-usage): lua_Alloc trades raw blocks, each right after its header
+      // lua_Alloc trades raw blocks, each right after its header.
+#pragma clang unsafe_buffer_usage begin
+      return static_cast<Header*>(block) - 1;
+#pragma clang unsafe_buffer_usage end
     }
 
     int panic(lua_State* state) {
@@ -330,7 +336,10 @@ namespace telar::runtime::lua {
     void* const block = pastHeader(allocation);
 
     if (pointer != nullptr) {
-      std::memcpy(block, pointer, previous); // NOLINT(clang-diagnostic-unsafe-buffer-usage-in-libc-call): lua_Alloc trades raw blocks; `previous` bytes fit both
+      // lua_Alloc trades raw blocks; `previous` bytes fit both.
+#pragma clang unsafe_buffer_usage begin
+      std::memcpy(block, pointer, previous);
+#pragma clang unsafe_buffer_usage end
       machine.release(pointer);
     }
 

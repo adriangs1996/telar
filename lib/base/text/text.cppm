@@ -37,6 +37,23 @@ namespace telar::runtime::detail {
 
 export namespace telar::runtime {
 
+  // The first `count` characters of text, or all of it: substr(0, count) without its throw.
+  constexpr std::string_view textPrefix(std::string_view text, std::size_t count) noexcept {
+    text.remove_suffix(text.size() - std::min(count, text.size()));
+    return text;
+  }
+
+  // Text past its first `offset` characters, or nothing: substr(offset) without its throw.
+  constexpr std::string_view textAfter(std::string_view text, std::size_t offset) noexcept {
+    text.remove_prefix(std::min(offset, text.size()));
+    return text;
+  }
+
+  // text.substr(offset, count) without its throw: an offset past the end gives an empty view.
+  constexpr std::string_view substring(std::string_view text, std::size_t offset, std::size_t count = std::string_view::npos) noexcept {
+    return textPrefix(textAfter(text, offset), count);
+  }
+
   // The base numbers are read in unless told otherwise.
   inline constexpr int decimal_base = 10;
 

@@ -5,6 +5,13 @@ inputs:
     description: The build variant (configuration, sanitizers) whose native dependency builds to restore and save
     required: false
     default: default
+outputs:
+  native-key:
+    description: The key to save the native dependency builds under, with ./.github/actions/cpp-toolchain/save
+    value: ${{ steps.native.outputs.cache-primary-key }}
+  native-hit:
+    description: Whether the native dependency builds were restored for this exact key
+    value: ${{ steps.native.outputs.cache-hit }}
 runs:
   using: composite
   steps:
@@ -22,7 +29,10 @@ runs:
     # The managed native libraries and libghostty-vt, built from source: only their installations and
     # completion stamps, a few dozen MB, not their sources and build trees. Each one sits in a directory
     # keyed by everything that reaches its build, so an entry restored for other inputs is never used.
-    - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+    # Only restored here: the workflow saves them with ./save once its configure step has built them,
+    # so a later failing step does not throw them away, as actions/cache's post-job save would.
+    - id: native
+      uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
       with:
         path: |
           .dependencies-cache/*/*/install

@@ -19,17 +19,6 @@ import telar.wire.vocabulary;
 import telar.platform.net;
 import telar.base.ds;
 
-namespace telar::runtime {
-
-  // text.substr(offset, count) without its throw: an offset past the end gives an empty view.
-  constexpr std::string_view substring(std::string_view text, std::size_t offset, std::size_t count = std::string_view::npos) noexcept {
-    text.remove_prefix(std::min(offset, text.size()));
-    text.remove_suffix(text.size() - std::min(count, text.size()));
-    return text;
-  }
-
-}
-
 // Interface: http1/observer.cppm
 export {
   namespace telar::runtime {

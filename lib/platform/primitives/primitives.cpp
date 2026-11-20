@@ -72,7 +72,10 @@ namespace telar::runtime {
   MappedRegion::MappedRegion(int descriptor, std::size_t length, int protection) noexcept {
     void* address = ::mmap(nullptr, length, protection, MAP_SHARED, descriptor, 0);
     if (address != MAP_FAILED) {
-      bytes_ = {static_cast<std::uint8_t*>(address), length}; // NOLINT(clang-diagnostic-unsafe-buffer-usage-in-container): mmap returns the `length` bytes it mapped as a bare pointer
+      // mmap returns the `length` bytes it mapped as a bare pointer.
+#pragma clang unsafe_buffer_usage begin
+      bytes_ = {static_cast<std::uint8_t*>(address), length};
+#pragma clang unsafe_buffer_usage end
     }
   }
 

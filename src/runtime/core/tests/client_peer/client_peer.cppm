@@ -10,6 +10,7 @@ module;
 #include <cstring>
 #include <fcntl.h>
 #include <limits.h>
+#include <poll.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -34,6 +35,28 @@ import telar.base.ds;
 using telar::testing::check;
 
 export {
+  // Collects what a worker service completed, with `arguments` for its collect. A collect that finds
+  // the worker still holding its lock leaves the completion descriptor up for another wake, which
+  // the runtime's event loop gives it: the outcome is taken once the descriptor is down.
+  template <typename Service, typename... Arguments>
+  void collectCompleted(Service& service, Arguments&&... arguments) {
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
+
+    for (;;) {
+      pollfd completion{.fd = service.descriptor(), .events = POLLIN, .revents = 0};
+
+      check(::poll(&completion, 1, 2000) == 1);
+      service.collect(arguments...);
+      completion.revents = 0;
+      if (::poll(&completion, 1, 0) == 0) {
+        return;
+      }
+
+      check(std::chrono::steady_clock::now() < deadline);
+      std::this_thread::yield();
+    }
+  }
+
   class ClientPeer {
   public:
     explicit ClientPeer(telar::ConcurrentMemory& memory, telar::runtime::RuntimeModel& model, telar::runtime::ClientStore& clients, telar::runtime::ClientRole role)

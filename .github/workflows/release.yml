@@ -110,7 +110,8 @@ jobs:
           path: |
             .qt-cache/*/install
             .qt-cache/*/complete
-          key: qt-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.key }}-${{ hashFiles('tools/toolchain/manifest.json', 'tools/bootstrap-cpp.py', 'cmake/TelarToolchain.cmake', 'cmake/managed_toolchain.cmake', 'src/gui/cmake/qt.cmake', 'src/gui/cmake/qt/**') }}
+          # The key gui-cpp.yml saves its Release Qt under, so a release reuses the one main's CI built.
+          key: qt-${{ runner.os }}-${{ runner.arch }}-Release-${{ steps.toolchain.outputs.key }}-${{ hashFiles('tools/toolchain/manifest.json', 'tools/bootstrap-cpp.py', 'cmake/TelarToolchain.cmake', 'cmake/managed_toolchain.cmake', 'src/gui/cmake/qt.cmake', 'src/gui/cmake/qt/**') }}
 
       # Fails if the tree links a library outside the desktop session's or
       # needs glibc above 2.38 or a libstdc++ above GCC 13's.
@@ -159,7 +160,8 @@ jobs:
           path: |
             .qt-cache/*/install
             .qt-cache/*/complete
-          key: qt-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.key }}-${{ hashFiles('tools/toolchain/manifest.json', 'tools/bootstrap-cpp.py', 'cmake/TelarToolchain.cmake', 'cmake/managed_toolchain.cmake', 'src/gui/cmake/qt.cmake', 'src/gui/cmake/qt/**') }}
+          # The key gui-cpp.yml saves its Release Qt under, so a release reuses the one main's CI built.
+          key: qt-${{ runner.os }}-${{ runner.arch }}-Release-${{ steps.toolchain.outputs.key }}-${{ hashFiles('tools/toolchain/manifest.json', 'tools/bootstrap-cpp.py', 'cmake/TelarToolchain.cmake', 'cmake/managed_toolchain.cmake', 'src/gui/cmake/qt.cmake', 'src/gui/cmake/qt/**') }}
 
       - name: Build and check linkage
         env:

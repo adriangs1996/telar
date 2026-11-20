@@ -108,9 +108,12 @@ namespace telar {
     return Utf8Validation::valid;
   }
 
-  // Bytes that break a format's rules: the wire protocol, a configuration or a record on disk.
-  struct EncodingError final : std::exception { // NOLINT(clang-diagnostic-weak-vtables): the wire's headers throw it without a library to define it in
+  // The wire's headers throw EncodingError without a library to define its vtable in.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wweak-vtables"
 
+  // Bytes that break a format's rules: the wire protocol, a configuration or a record on disk.
+  struct EncodingError final : std::exception {
     explicit EncodingError(const char* message)
         : message_{message} {}
 
@@ -121,6 +124,8 @@ namespace telar {
   private:
     const char* message_;
   };
+
+#pragma clang diagnostic pop
 
   inline void validateUtf8(std::string_view value) {
     switch (inspectUtf8(value)) {

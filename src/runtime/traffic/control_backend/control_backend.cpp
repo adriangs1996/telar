@@ -127,10 +127,7 @@ namespace telar::runtime::traffic {
       return {};
     }
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wthread-safety-negative" // asks each locking method to require the mutex not held, an annotation Clang rejects on libc++'s std::mutex here
     std::scoped_lock lock{mutex_};
-#pragma clang diagnostic pop
     HttpPolicy result;
 
     for (const auto& entry : registrations_) {
@@ -145,10 +142,7 @@ namespace telar::runtime::traffic {
 
   template <std::size_t maximum_bytes>
   void Interception<maximum_bytes>::configure(Owner owner, InterceptionRule rule, std::uint64_t order) {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wthread-safety-negative" // asks each locking method to require the mutex not held, an annotation Clang rejects on libc++'s std::mutex here
     std::scoped_lock lock{mutex_};
-#pragma clang diagnostic pop
 
     if (owner == 0 || registration(owner)) {
       throw EncodingError{"Interception owner already registered"};
@@ -167,10 +161,7 @@ namespace telar::runtime::traffic {
 
   template <std::size_t maximum_bytes>
   void Interception<maximum_bytes>::disconnect(Owner owner) noexcept {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wthread-safety-negative" // asks each locking method to require the mutex not held, an annotation Clang rejects on libc++'s std::mutex here
     std::scoped_lock lock{mutex_};
-#pragma clang diagnostic pop
 
     for (auto& slot : registrations_.viewMut()) {
       if (slot && slot->route.owner == owner) {
@@ -188,10 +179,7 @@ namespace telar::runtime::traffic {
 
   template <std::size_t maximum_bytes>
   void Interception<maximum_bytes>::setAvailable(Owner owner, bool available) noexcept {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wthread-safety-negative" // asks each locking method to require the mutex not held, an annotation Clang rejects on libc++'s std::mutex here
     std::scoped_lock lock{mutex_};
-#pragma clang diagnostic pop
     auto* entry = registration(owner);
     if ((entry == nullptr) || (!available && !entry->available)) {
       return;
@@ -212,10 +200,7 @@ namespace telar::runtime::traffic {
 
   template <std::size_t maximum_bytes>
   bool Interception<maximum_bytes>::pending(Owner owner, std::uint64_t ticket) noexcept {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wthread-safety-negative" // asks each locking method to require the mutex not held, an annotation Clang rejects on libc++'s std::mutex here
     std::scoped_lock lock{mutex_};
-#pragma clang diagnostic pop
     const auto* entry = registration(owner);
     if ((entry == nullptr) || !entry->available) {
       return false;
@@ -236,10 +221,7 @@ namespace telar::runtime::traffic {
       return 0;
     }
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wthread-safety-negative" // asks each locking method to require the mutex not held, an annotation Clang rejects on libc++'s std::mutex here
     std::scoped_lock lock{mutex_};
-#pragma clang diagnostic pop
     ds::Array<Route, Limits::subscribers> matches;
     std::size_t count = 0;
     bool fail_closed = false;
@@ -310,10 +292,7 @@ namespace telar::runtime::traffic {
       throw EncodingError{"Invalid stream decision"};
     }
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wthread-safety-negative" // asks each locking method to require the mutex not held, an annotation Clang rejects on libc++'s std::mutex here
     std::scoped_lock lock{mutex_};
-#pragma clang diagnostic pop
 
     for (auto& slot : pending_.viewMut()) {
       if (slot && slot->decision_ticket == ticket && slot->verdict == Verdict::pending && slot->chain[slot->step].owner == owner) {
@@ -341,10 +320,7 @@ namespace telar::runtime::traffic {
       return {.verdict = Verdict::reject};
     }
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wthread-safety-negative" // asks each locking method to require the mutex not held, an annotation Clang rejects on libc++'s std::mutex here
     std::scoped_lock lock{mutex_};
-#pragma clang diagnostic pop
 
     for (auto& slot : pending_.viewMut()) {
       if (slot && slot->ticket == ticket) {
@@ -377,10 +353,7 @@ namespace telar::runtime::traffic {
 
   template <std::size_t maximum_bytes>
   auto Interception<maximum_bytes>::pending(std::uint64_t ticket) noexcept -> bool {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wthread-safety-negative" // asks each locking method to require the mutex not held, an annotation Clang rejects on libc++'s std::mutex here
     std::scoped_lock lock{mutex_};
-#pragma clang diagnostic pop
 
     for (const auto& slot : pending_) {
       if (slot && slot->ticket == ticket) {
@@ -413,10 +386,7 @@ namespace telar::runtime::traffic {
 
   template <std::size_t maximum_bytes>
   void Interception<maximum_bytes>::cancel(std::uint64_t ticket) noexcept {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wthread-safety-negative" // asks each locking method to require the mutex not held, an annotation Clang rejects on libc++'s std::mutex here
     std::scoped_lock lock{mutex_};
-#pragma clang diagnostic pop
 
     for (auto& slot : pending_.viewMut()) {
       if (slot && slot->ticket == ticket) {
@@ -428,10 +398,7 @@ namespace telar::runtime::traffic {
 
   template <std::size_t maximum_bytes>
   ds::Option<FlowControl::Time> Interception<maximum_bytes>::deadline(std::uint64_t ticket) noexcept {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wthread-safety-negative" // asks each locking method to require the mutex not held, an annotation Clang rejects on libc++'s std::mutex here
     const std::scoped_lock lock{mutex_};
-#pragma clang diagnostic pop
 
     for (const auto& slot : pending_) {
       if (slot && slot->ticket == ticket) {
@@ -670,10 +637,7 @@ namespace telar::runtime::traffic {
   }
 
   auto Service::captureStatus() const noexcept -> CaptureStatus {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wthread-safety-negative" // asks each locking method to require the mutex not held, an annotation Clang rejects on libc++'s std::mutex here
     const std::scoped_lock lock{capture_mutex_};
-#pragma clang diagnostic pop
 
     return capture_status_;
   }
@@ -912,10 +876,7 @@ namespace telar::runtime::traffic {
 
     producer_ = false;
     {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wthread-safety-negative" // asks each locking method to require the mutex not held, an annotation Clang rejects on libc++'s std::mutex here
       const std::scoped_lock lock{capture_mutex_};
-#pragma clang diagnostic pop
 
       capture_status_ = {};
     }
@@ -1056,10 +1017,7 @@ namespace telar::runtime::traffic {
 
     event.offline = *peer.role == Role::offline_capture;
     if (event.kind != Kind::packet) {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wthread-safety-negative" // asks each locking method to require the mutex not held, an annotation Clang rejects on libc++'s std::mutex here
       const std::scoped_lock lock{capture_mutex_};
-#pragma clang diagnostic pop
 
       capture_status_.session = event.session;
       if (event.kind == Kind::interface_open) {
@@ -1142,10 +1100,7 @@ namespace telar::runtime::traffic {
     enqueue(peer, encode(Event{.kind = Kind::ready}));
     if (selected == Role::live_capture || selected == Role::offline_capture) {
       {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wthread-safety-negative" // asks each locking method to require the mutex not held, an annotation Clang rejects on libc++'s std::mutex here
         const std::scoped_lock lock{capture_mutex_};
-#pragma clang diagnostic pop
 
         capture_status_ = {.state = selected == Role::live_capture ? CaptureState::live : CaptureState::offline};
       }

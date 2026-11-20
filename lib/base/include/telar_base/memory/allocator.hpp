@@ -168,9 +168,14 @@ namespace telar {
   template <typename Memory>
   concept ConcurrentAllocator = Allocator<Memory> && Memory::thread_safe;
 
+  // Memory and ConcurrentMemory are interfaces of pure virtual calls, defined only by their
+  // implementations: neither has a member to define out of line.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wweak-vtables"
+
   // An allocator behind a virtual call, so a service compiles once rather than once per allocator.
   // allocate returns nullptr, instead of throwing, when it cannot satisfy the request.
-  class TBC_SHARED Memory { // NOLINT(clang-diagnostic-weak-vtables): an interface of pure virtual calls, defined only by its implementations
+  class TBC_SHARED Memory {
   public:
     static constexpr bool thread_safe = false;
 
@@ -195,7 +200,7 @@ namespace telar {
   };
 
   // A Memory that any number of threads may call at once.
-  class TBC_SHARED ConcurrentMemory : public Memory { // NOLINT(clang-diagnostic-weak-vtables): an interface of pure virtual calls, defined only by its implementations
+  class TBC_SHARED ConcurrentMemory : public Memory {
   public:
     static constexpr bool thread_safe = true;
 
@@ -208,6 +213,8 @@ namespace telar {
     ConcurrentMemory() noexcept = default;
     ~ConcurrentMemory() = default;
   };
+
+#pragma clang diagnostic pop
 
   // A Memory that erases every block before releasing it, for secrets.
   class TBC_SHARED ErasingMemory : public Memory {
