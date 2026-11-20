@@ -45,7 +45,7 @@ target_link_libraries(consumer PRIVATE {target})
 import telar.base.text;
 import telar.base.text.json;
 int main() {
-  return telar::runtime::unsignedDecimal<unsigned>("42").value_or(0) == 42 &&
+  return telar::runtime::unsignedDecimal<unsigned>("42").valueOr(0) == 42 &&
          telar::runtime::JsonValue{"[1]"}.encoded() == "[1]" ? 0 : 1;
 }
 '''
