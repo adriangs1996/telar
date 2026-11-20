@@ -553,5 +553,66 @@ class TestPlacement(unittest.TestCase):
         self.assertEqual(placed({'src/runtime/tests/peer/peer.cppm': 'export module telar.runtime.tests.peer;\n'}), 1)
 
 
+PUBLIC_INTERFACES = {
+    'src/runtime/proxy/relay/relay.cppm': 'telar.runtime.proxy.relay',
+    'src/runtime/proxy/policy/policy.cppm': 'telar.runtime.proxy.policy',
+    'src/runtime/proxy/policy/policy-hosts.cppm': 'telar.runtime.proxy.policy:hosts',
+    'src/runtime/tls/session/session.cppm': 'telar.runtime.tls.session',
+    'src/runtime/proxy/tests/fake_peer/fake_peer.cppm': 'telar.runtime.proxy.tests.fake_peer',
+    'lib/base/text/text.cppm': 'telar.base.text',
+}
+
+
+def exposed(public, sources):
+    return checker.check_public_modules(public, PUBLIC_INTERFACES, sources)
+
+
+class PublicModules(unittest.TestCase):
+    def test_an_outside_import_needs_a_public_module(self):
+        sources = {'src/runtime/runtime/runtime/runtime.cpp': 'import telar.runtime.proxy.relay;\nimport telar.base.text;\n'}
+        public = {'src/runtime/proxy': ['telar.runtime.proxy.relay'], 'src/runtime/tls': [], 'lib/base': ['telar.base.text']}
+
+        self.assertEqual(exposed(public, sources), {'lib': 1, 'src/runtime': 1})
+        with self.assertRaisesRegex(RuntimeError, 'runtime.cpp imports telar.runtime.proxy.relay, which src/runtime/proxy does not make public'):
+            exposed(public | {'src/runtime/proxy': []}, sources)
+
+    def test_a_domain_imports_its_own_modules_freely(self):
+        sources = {'src/runtime/proxy/relay/relay.cpp': 'module telar.runtime.proxy.relay;\nimport telar.runtime.proxy.policy;\nimport :hosts;\n'}
+
+        self.assertEqual(exposed({'src/runtime/proxy': [], 'src/runtime/tls': [], 'lib/base': []}, sources),
+                         {'lib': 0, 'src/runtime': 0})
+
+    def test_a_folder_of_several_domains_shares_one_list(self):
+        sources = {'src/runtime/traffic/proxy/relay/relay.cpp': 'import telar.runtime.tls.session;\n',
+                   'src/runtime/runtime/runtime/runtime.cpp': 'import telar.runtime.proxy.relay;\n'}
+        interfaces = {'src/runtime/traffic/proxy/relay/relay.cppm': 'telar.runtime.proxy.relay',
+                      'src/runtime/traffic/tls/session/session.cppm': 'telar.runtime.tls.session'}
+
+        self.assertEqual(checker.check_public_modules({'src/runtime/traffic': ['telar.runtime.proxy.relay']}, interfaces, sources),
+                         {'src/runtime': 1})
+
+    def test_a_public_module_nothing_outside_imports_leaves_the_list(self):
+        with self.assertRaisesRegex(RuntimeError, 'telar.runtime.tls.session is public in src/runtime/tls, but nothing outside imports it'):
+            exposed({'src/runtime/proxy': [], 'src/runtime/tls': ['telar.runtime.tls.session'], 'lib/base': []}, {})
+
+    def test_tests_and_tools_reach_what_a_domain_hides(self):
+        sources = {'src/runtime/tests/flow_test.cpp': 'import telar.runtime.proxy.policy;\n',
+                   'src/runtime/tools/probe.cpp': 'import telar.runtime.tls.session;\n',
+                   'src/runtime/tls/tests/session_test.cpp': 'import telar.runtime.proxy.tests.fake_peer;\n'}
+
+        self.assertEqual(exposed({'src/runtime/proxy': [], 'src/runtime/tls': [], 'lib/base': []}, sources),
+                         {'lib': 0, 'src/runtime': 0})
+
+    def test_reads_code_only(self):
+        sources = {'src/runtime/runtime/runtime/runtime.cpp': '// import telar.runtime.proxy.relay;\n'}
+
+        self.assertEqual(exposed({'src/runtime/proxy': [], 'src/runtime/tls': [], 'lib/base': []}, sources),
+                         {'lib': 0, 'src/runtime': 0})
+
+    def test_every_module_lies_in_a_sealed_folder(self):
+        with self.assertRaisesRegex(RuntimeError, 'src/runtime/tls/session/session.cppm lies in no folder of public_modules'):
+            exposed({'src/runtime/proxy': [], 'lib/base': []}, {})
+
+
 if __name__ == '__main__':
     unittest.main()

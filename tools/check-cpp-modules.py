@@ -77,6 +77,8 @@ def main():
                                  lambda path: (ROOT / path).read_text(errors='replace'),
                                  inventory.get('import_rules', {}).get('src/gui/ui', ()))
     check_cycles(imports)
+    exposed = check_public_modules(inventory['public_modules'], inventory['interfaces'],
+                                   {name: text.decode(errors='replace') for name, text in units.items()})
     check_includes(owned, inventory['macro_headers'], inventory['header_owners'], inventory['library_owners'])
     owned = check_header_owners(inventory['header_owners'], owned_units(owned))
     check_reexports(sources)
@@ -86,7 +88,9 @@ def main():
           f'{tests} tests placed with what they check, '
           f'{len(headers)} justified textual boundaries, no textual include, '
           f'{owned} headers reached only through their owner module, no re-export, no unused import, '
-          f'{namespaced} modules exporting into the namespace of their name')
+          f'{namespaced} modules exporting into the namespace of their name, '
+          f'{sum(exposed.values())} modules public outside their domain ('
+          + ', '.join(f'{folder} {count}' for folder, count in exposed.items()) + ')')
 
 
 IMPORT_RE = re.compile(r'^(?:export )?import ([\w.:]+);', re.M)
@@ -320,6 +324,54 @@ def check_domain_targets(layers, files, read):
         raise RuntimeError('Domain targets against their imports:\n  ' + '\n  '.join(errors))
 
     return count
+
+
+def check_public_modules(public, interfaces, sources):
+    """Rule 10: a domain is a deep module, and `public_modules` in modules.json lists, per sealed
+    folder, the modules a unit outside that folder may import. A folder may hold several domains
+    (`src/runtime/traffic`): they import each other freely and share one public list. The list is
+    exact. An import of a module that is not public reaches into the structure the folder hides;
+    a public module nothing outside imports leaves the list, so the list only shrinks on purpose.
+    Tests and tools are outside the rule: they check or measure what the folder hides. `sources`
+    maps each importing unit to its text. Returns the public modules of each top folder
+    (`src/runtime`, `lib`), the measure of how much the domains expose."""
+    sealed = sorted(public, key=len, reverse=True)
+
+    def folder_of(path):
+        return next((folder for folder in sealed if path.startswith(folder + '/')), None)
+
+    owner, errors = {}, []
+    for path, name in interfaces.items():
+        if ':' in name or UNBUILT_FOLDER_RE.search('/' + path):
+            continue
+        owner[name] = folder_of(path)
+        if owner[name] is None:
+            errors.append(f'{path} lies in no folder of public_modules; add the folder of its domain')
+
+    used = {folder: {} for folder in public}
+    for path in sorted(sources):
+        if UNBUILT_FOLDER_RE.search('/' + path):
+            continue
+        for spelling in IMPORT_RE.findall(COMMENTS_RE.sub('', sources[path])):
+            name = spelling.split(':')[0]
+            folder = owner.get(name)
+            if folder and not path.startswith(folder + '/'):
+                used[folder].setdefault(name, path)
+
+    for folder in sorted(public):
+        declared = set(public[folder])
+        for name in sorted(used[folder].keys() - declared):
+            errors.append(f'{used[folder][name]} imports {name}, which {folder} does not make public')
+        for name in sorted(declared - used[folder].keys()):
+            errors.append(f'{name} is public in {folder}, but nothing outside imports it; remove it from public_modules')
+    if errors:
+        raise RuntimeError('Imports against rule 10:\n  ' + '\n  '.join(errors))
+
+    exposed = collections.Counter()
+    for folder, names in public.items():
+        parts = folder.split('/')
+        exposed['/'.join(parts[:2]) if parts[0] == 'src' else parts[0]] += len(names)
+    return dict(sorted(exposed.items()))
 
 
 TEST_FILE_RE = re.compile(r'_test\.(cpp|mm)$')

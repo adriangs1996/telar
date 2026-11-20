@@ -1086,5 +1086,427 @@
     "wlr-data-control-client-protocol.h": "telar.clipboard.wayland",
     "<arm_neon.h>": "telar.runtime.terminal.control",
     "<emmintrin.h>": "telar.runtime.terminal.control"
+  },
+  "public_modules": {
+    "lib/base": [
+      "telar.base.diagnostics",
+      "telar.base.ds",
+      "telar.base.editors",
+      "telar.base.history",
+      "telar.base.memory.allocators",
+      "telar.base.memory.containers",
+      "telar.base.memory.sensitive",
+      "telar.base.text",
+      "telar.base.text.json",
+      "telar.base.text.utf8"
+    ],
+    "lib/sys": [
+      "telar.sys.apple",
+      "telar.sys.linux_api",
+      "telar.sys.posix",
+      "telar.sys.process",
+      "telar.sys.socket"
+    ],
+    "lib/vocabulary": [
+      "telar.vocabulary"
+    ],
+    "lib/ghostty": [
+      "telar.ghostty.unicode",
+      "telar.ghostty.vt",
+      "telar.ghostty.wuffs"
+    ],
+    "lib/native": [
+      "telar.native.brotli",
+      "telar.native.nghttp2",
+      "telar.native.pcap",
+      "telar.native.sqlite",
+      "telar.native.zlib",
+      "telar.native.zstd"
+    ],
+    "lib/clipboard": [
+      "telar.clipboard"
+    ],
+    "lib/shell": [
+      "telar.shell.syntax"
+    ],
+    "lib/ebnf": [
+      "telar.ebnf.matcher"
+    ],
+    "lib/wire": [
+      "telar.wire.agents",
+      "telar.wire.clients",
+      "telar.wire.clipboard",
+      "telar.wire.content",
+      "telar.wire.editor",
+      "telar.wire.execution",
+      "telar.wire.graphics",
+      "telar.wire.history",
+      "telar.wire.layout",
+      "telar.wire.monitor",
+      "telar.wire.pane_io",
+      "telar.wire.runtime",
+      "telar.wire.vocabulary",
+      "telar.wire.worktrees"
+    ],
+    "lib/client": [
+      "telar.client"
+    ],
+    "lib/lua": [
+      "telar.lua"
+    ],
+    "lib/render": [
+      "telar.render.document",
+      "telar.render.markdown",
+      "telar.render.terminal"
+    ],
+    "lib/platform": [
+      "telar.platform.daemon",
+      "telar.platform.error",
+      "telar.platform.events",
+      "telar.platform.fs",
+      "telar.platform.graphics",
+      "telar.platform.net",
+      "telar.platform.paths",
+      "telar.platform.primitives",
+      "telar.platform.process",
+      "telar.platform.sha256",
+      "telar.platform.thread"
+    ],
+    "lib/machines": [
+      "telar.machines"
+    ],
+    "lib/git": [
+      "telar.git",
+      "telar.git.checkout"
+    ],
+    "lib/tls": [
+      "telar.tls"
+    ],
+    "lib/plugins": [
+      "telar.plugins"
+    ],
+    "lib/config": [
+      "telar.config.client",
+      "telar.config.core",
+      "telar.config.gui",
+      "telar.config.runtime",
+      "telar.config.snapshot"
+    ],
+    "lib/tbc": [
+      "telar.tbc"
+    ],
+    "lib/testing": [],
+    "src/runtime/diagnostics": [
+      "telar.runtime.diagnostics.line",
+      "telar.runtime.diagnostics.operation",
+      "telar.runtime.diagnostics.runtime_counters"
+    ],
+    "src/runtime/transport": [
+      "telar.runtime.transport.connection"
+    ],
+    "src/runtime/config": [
+      "telar.runtime.config.loader"
+    ],
+    "src/runtime/suggestions": [
+      "telar.runtime.suggestions.engine"
+    ],
+    "src/runtime/platform": [
+      "telar.runtime.platform.background_executor",
+      "telar.runtime.platform.descriptor_path",
+      "telar.runtime.platform.event_loop",
+      "telar.runtime.platform.git_status",
+      "telar.runtime.platform.host_metrics",
+      "telar.runtime.platform.launch_program",
+      "telar.runtime.platform.local_listener",
+      "telar.runtime.platform.name_resolutions",
+      "telar.runtime.platform.private_tunnel",
+      "telar.runtime.platform.proc_file",
+      "telar.runtime.platform.process_probe",
+      "telar.runtime.platform.process_table",
+      "telar.runtime.platform.request_worker",
+      "telar.runtime.platform.session_host",
+      "telar.runtime.platform.signals",
+      "telar.runtime.platform.stream_read_buffer",
+      "telar.runtime.platform.system_certificates",
+      "telar.runtime.platform.tunnel_sockets"
+    ],
+    "src/runtime/paths": [
+      "telar.runtime.paths.query_task"
+    ],
+    "src/runtime/shell_integration": [
+      "telar.runtime.shell_integration",
+      "telar.runtime.shell_integration.git_context",
+      "telar.runtime.shell_integration.token",
+      "telar.runtime.shell_integration.words"
+    ],
+    "src/runtime/workspaces": [
+      "telar.runtime.workspaces.git_probe"
+    ],
+    "src/runtime/worktrees": [
+      "telar.runtime.worktrees.git_probe"
+    ],
+    "src/runtime/metrics": [
+      "telar.runtime.metrics.host_sampler",
+      "telar.runtime.metrics.monitor"
+    ],
+    "src/runtime/terminal": [
+      "telar.runtime.terminal.control",
+      "telar.runtime.terminal.control.clipboard",
+      "telar.runtime.terminal.ghostty",
+      "telar.runtime.terminal.graphics_storage",
+      "telar.runtime.terminal.grid",
+      "telar.runtime.terminal.kitty",
+      "telar.runtime.terminal.osc_scanner",
+      "telar.runtime.terminal.text_reader"
+    ],
+    "src/runtime/history": [
+      "telar.runtime.history.command",
+      "telar.runtime.history.event",
+      "telar.runtime.history.store"
+    ],
+    "src/runtime/command_capture": [
+      "telar.runtime.command_capture.tracker"
+    ],
+    "src/runtime/graphics": [
+      "telar.runtime.graphics.pane_media",
+      "telar.runtime.graphics.synchronizer"
+    ],
+    "src/runtime/agents": [
+      "telar.runtime.agents.description_generator",
+      "telar.runtime.agents.screen_inference",
+      "telar.runtime.agents.snapshot"
+    ],
+    "src/runtime/vocabulary": [
+      "telar.runtime.vocabulary.exchange",
+      "telar.runtime.vocabulary.frames",
+      "telar.runtime.vocabulary.traffic"
+    ],
+    "src/runtime/observation": [
+      "telar.runtime.observation.processor"
+    ],
+    "src/runtime/model": [
+      "telar.runtime.model.client_layouts",
+      "telar.runtime.model.slot_store"
+    ],
+    "src/runtime/http1": [
+      "telar.runtime.http1.head"
+    ],
+    "src/runtime/http": [
+      "telar.runtime.http.content",
+      "telar.runtime.http.message"
+    ],
+    "src/runtime/exchange_capture": [
+      "telar.runtime.exchange_capture.pipeline",
+      "telar.runtime.exchange_capture.producer"
+    ],
+    "src/runtime/http2": [
+      "telar.runtime.http2.direction_observer",
+      "telar.runtime.http2.frame_reader"
+    ],
+    "src/runtime/tls": [
+      "telar.runtime.tls.interception",
+      "telar.runtime.tls.system_root_bundle"
+    ],
+    "src/runtime/redirect": [
+      "telar.runtime.redirect.direction",
+      "telar.runtime.redirect.ingress",
+      "telar.runtime.redirect.pf_rules",
+      "telar.runtime.redirect.record",
+      "telar.runtime.redirect.socket_owners"
+    ],
+    "src/runtime/traffic": [
+      "telar.runtime.traffic.capture",
+      "telar.runtime.traffic.capture_analysis",
+      "telar.runtime.traffic.control_backend",
+      "telar.runtime.traffic.control_protocol"
+    ],
+    "src/runtime/proxy": [
+      "telar.runtime.proxy.http2_capture_streams",
+      "telar.runtime.proxy.runtime"
+    ],
+    "src/runtime/plugins": [
+      "telar.runtime.plugins.run_worker",
+      "telar.runtime.plugins.service",
+      "telar.runtime.plugins.tap_configuration",
+      "telar.runtime.plugins.worker"
+    ],
+    "src/runtime/editors": [
+      "telar.runtime.editors.remote_editor"
+    ],
+    "src/runtime/persistence": [
+      "telar.runtime.persistence.session_store"
+    ],
+    "src/runtime/runtime": [
+      "telar.runtime.runtime.delivery.client_delivery",
+      "telar.runtime.runtime.media_service",
+      "telar.runtime.runtime.runtime"
+    ],
+    "src/runtime/cli": [
+      "telar.runtime.cli.server"
+    ],
+    "src/gui/foundation/core": [
+      "telar.gui.foundation.core"
+    ],
+    "src/gui/foundation/text": [
+      "telar.gui.foundation.text"
+    ],
+    "src/gui/foundation/system": [
+      "telar.gui.foundation.system"
+    ],
+    "src/gui/foundation/terminal": [
+      "telar.gui.foundation.terminal"
+    ],
+    "src/gui/foundation/fonts": [
+      "telar.gui.foundation.fonts"
+    ],
+    "src/gui/foundation/actions": [
+      "telar.gui.foundation.actions"
+    ],
+    "src/gui/foundation/keys": [
+      "telar.gui.foundation.keys"
+    ],
+    "src/gui/foundation/model": [
+      "telar.gui.foundation.model"
+    ],
+    "src/gui/foundation/agents": [
+      "telar.gui.foundation.agents"
+    ],
+    "src/gui/foundation/drawing": [
+      "telar.gui.foundation.drawing"
+    ],
+    "src/gui/foundation/forms": [
+      "telar.gui.foundation.forms"
+    ],
+    "src/gui/features/peek": [
+      "telar.gui.features.peek"
+    ],
+    "src/gui/features/monitor": [
+      "telar.gui.features.monitor"
+    ],
+    "src/gui/features/palette": [
+      "telar.gui.features.palette"
+    ],
+    "src/gui/features/paths": [
+      "telar.gui.features.paths"
+    ],
+    "src/gui/features/history": [
+      "telar.gui.features.history"
+    ],
+    "src/gui/features/prompt": [
+      "telar.gui.features.prompt"
+    ],
+    "src/gui/features/terminal/input": [
+      "telar.gui.features.terminal.input"
+    ],
+    "src/gui/features/terminal/links": [
+      "telar.gui.features.terminal.links"
+    ],
+    "src/gui/features/terminal/copy_mode": [
+      "telar.gui.features.terminal.copy_mode"
+    ],
+    "src/gui/features/terminal/graphics": [
+      "telar.gui.features.terminal.graphics"
+    ],
+    "src/gui/features/terminal/attachments": [
+      "telar.gui.features.terminal.attachments"
+    ],
+    "src/gui/features/window": [
+      "telar.gui.features.window"
+    ],
+    "src/gui/features/status_bar": [
+      "telar.gui.features.status_bar"
+    ],
+    "src/gui/features/notifications": [
+      "telar.gui.features.notifications"
+    ],
+    "src/gui/features/machines": [
+      "telar.gui.features.machines"
+    ],
+    "src/gui/features/activity": [
+      "telar.gui.features.activity"
+    ],
+    "src/gui/features/workbench": [
+      "telar.gui.features.workbench"
+    ],
+    "src/gui/features/bindings": [
+      "telar.gui.features.bindings"
+    ],
+    "src/gui/features/components": [
+      "telar.gui.features.components"
+    ],
+    "src/gui/features/configuration": [
+      "telar.gui.features.configuration"
+    ],
+    "src/gui/features/plugins": [
+      "telar.gui.features.plugins"
+    ],
+    "src/gui/platform": [],
+    "src/gui/application": [
+      "telar.gui.application"
+    ],
+    "src/cli/base": [
+      "telar.cli.base.command_error"
+    ],
+    "src/cli/output": [
+      "telar.cli.output"
+    ],
+    "src/cli/render": [
+      "telar.cli.render"
+    ],
+    "src/cli/command_limit": [
+      "telar.cli.command_limit"
+    ],
+    "src/cli/control_session": [
+      "telar.cli.control_session"
+    ],
+    "src/cli/monitor": [
+      "telar.cli.monitor"
+    ],
+    "src/cli/runtime_observer": [
+      "telar.cli.runtime_observer"
+    ],
+    "src/cli/server": [
+      "telar.cli.server"
+    ],
+    "src/cli/worktree_git": [
+      "telar.cli.worktree_git"
+    ],
+    "src/cli/history": [
+      "telar.cli.history"
+    ],
+    "src/cli/hooks": [
+      "telar.cli.hooks.command",
+      "telar.cli.hooks.session"
+    ],
+    "src/cli/integration": [
+      "telar.cli.integration.settings"
+    ],
+    "src/cli/plugin": [
+      "telar.cli.plugin"
+    ],
+    "src/cli/project_setup": [
+      "telar.cli.project_setup"
+    ],
+    "src/cli/window": [
+      "telar.cli.window"
+    ],
+    "src/cli/hook": [
+      "telar.cli.hook"
+    ],
+    "src/cli/machine_ssh": [
+      "telar.cli.machine_ssh"
+    ],
+    "src/cli/tab": [
+      "telar.cli.tab"
+    ],
+    "src/cli/worktree": [
+      "telar.cli.worktree"
+    ],
+    "src/cli/machine": [
+      "telar.cli.machine"
+    ],
+    "src/cli/launch_commands": [
+      "telar.cli.launch_commands"
+    ]
   }
 }
