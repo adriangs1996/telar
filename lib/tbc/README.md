@@ -97,6 +97,23 @@ std::string_view prefix(std::string_view input) {
 
 `tbc::view<T>` also requests elision without an explicit label.
 
+Each region has three shorthands of `view`, after Rust's `&'a T`, `&'a mut T`
+and a value that holds borrows of `'a`:
+
+| Shorthand | Stands for |
+| --- | --- |
+| `tbc::ref_a<T>` | `tbc::view<const T&, tbc::lt::a>` |
+| `tbc::mut_a<T>` | `tbc::view<T&, tbc::lt::a>` |
+| `tbc::val_a<T>` | `tbc::view<T, tbc::lt::a>` |
+
+and likewise `_b`, `_c`, `_d`, `_static` for `lt::static_storage` and `_self`
+for `lt::self`. A pointer is a value, `tbc::val_a<const T*>`; `tbc::holds` has
+no shorthand.
+
+```cpp
+tbc::val_a<std::string_view> name(tbc::ref_a<Payload> payload);
+```
+
 `view<T, region>` is an alias for `T`: ordinary calls, native methods, layout,
 and ABI remain unchanged. No macros, external traits, or parameter-name strings
 are required. Clang retains the spelled aliases for the linter. C++ itself does

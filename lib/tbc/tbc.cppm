@@ -8,7 +8,25 @@ export module telar.tbc;
 // exports no macros: the annotations stay in tbc/annotations.hpp.
 export namespace tbc {
   using tbc::holds;
+  using tbc::mut_a;
+  using tbc::mut_b;
+  using tbc::mut_c;
+  using tbc::mut_d;
+  using tbc::mut_self;
+  using tbc::mut_static;
   using tbc::raw;
+  using tbc::ref_a;
+  using tbc::ref_b;
+  using tbc::ref_c;
+  using tbc::ref_d;
+  using tbc::ref_self;
+  using tbc::ref_static;
+  using tbc::val_a;
+  using tbc::val_b;
+  using tbc::val_c;
+  using tbc::val_d;
+  using tbc::val_self;
+  using tbc::val_static;
   using tbc::view;
 }
 

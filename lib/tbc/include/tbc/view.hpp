@@ -55,6 +55,63 @@ namespace tbc {
   template <typename type, detail::lifetime_region region>
     requires std::is_reference_v<type>
   using holds = type;
+
+  // Shorthands of view for each region r, after Rust: ref_r<T> is `&'r T`, mut_r<T> is
+  // `&'r mut T`, and val_r<T> a value of T that holds borrows of r, as a string_view or a span.
+  // An elided contract stays tbc::view<T>, and tbc::holds has no shorthand.
+  template <typename type>
+  using ref_a = view<const type&, lt::a>;
+
+  template <typename type>
+  using mut_a = view<type&, lt::a>;
+
+  template <typename type>
+  using val_a = view<type, lt::a>;
+
+  template <typename type>
+  using ref_b = view<const type&, lt::b>;
+
+  template <typename type>
+  using mut_b = view<type&, lt::b>;
+
+  template <typename type>
+  using val_b = view<type, lt::b>;
+
+  template <typename type>
+  using ref_c = view<const type&, lt::c>;
+
+  template <typename type>
+  using mut_c = view<type&, lt::c>;
+
+  template <typename type>
+  using val_c = view<type, lt::c>;
+
+  template <typename type>
+  using ref_d = view<const type&, lt::d>;
+
+  template <typename type>
+  using mut_d = view<type&, lt::d>;
+
+  template <typename type>
+  using val_d = view<type, lt::d>;
+
+  template <typename type>
+  using ref_static = view<const type&, lt::static_storage>;
+
+  template <typename type>
+  using mut_static = view<type&, lt::static_storage>;
+
+  template <typename type>
+  using val_static = view<type, lt::static_storage>;
+
+  template <typename type>
+  using ref_self = view<const type&, lt::self>;
+
+  template <typename type>
+  using mut_self = view<type&, lt::self>;
+
+  template <typename type>
+  using val_self = view<type, lt::self>;
 }
 
 #endif
