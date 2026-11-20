@@ -25,6 +25,16 @@ namespace telar::runtime::traffic::control {
 }
 
 namespace telar::runtime::traffic {
+  namespace {
+
+    // Whether the mask sets the bit an enumerator's value names.
+    template <typename Enum>
+      requires std::is_enum_v<Enum>
+    bool hasBit(Byte mask, Enum value) noexcept {
+      return (mask & (1U << static_cast<Byte>(value))) != 0;
+    }
+
+  }
 
   auto InterceptionCodec::rule(tbc::val_a<std::span<Byte>> output, InterceptionRule rule) -> tbc::val_a<std::span<const Byte>> {
     plugins::FrameWriter writer{output};
@@ -74,9 +84,9 @@ namespace telar::runtime::traffic {
   }
 
   template <std::size_t maximum_bytes>
-  Interception<maximum_bytes>::Pending::Pending(Secure& memory, std::uint64_t ticket, const FlowEvent& event, std::span<const Route> matches)
-      : ticket(ticket),
-        decision_ticket(ticket),
+  Interception<maximum_bytes>::Pending::Pending(Secure& memory, std::uint64_t issued, const FlowEvent& event, std::span<const Route> matches)
+      : ticket(issued),
+        decision_ticket(issued),
         id(event.id),
         offset(event.offset),
         direction(event.direction),
@@ -97,13 +107,13 @@ namespace telar::runtime::traffic {
   }
 
   template <std::size_t maximum_bytes>
-  Interception<maximum_bytes>::Interception(ConcurrentMemory& memory, CompletionSignal* completion, CompletionSignal* requests)
+  Interception<maximum_bytes>::Interception(ConcurrentMemory& memory, InterceptionSignals signals)
       : upstream_(memory),
         memory_(memory),
-        completion_((completion != nullptr) ? *completion : wake_),
-        request_signal_((requests != nullptr) ? *requests : requests_) {
+        completion_((signals.completion != nullptr) ? *signals.completion : wake_),
+        request_signal_((signals.requests != nullptr) ? *signals.requests : requests_) {
     randomBytes(&next_, sizeof(next_));
-    next_ >>= 1;
+    next_ >>= 1U;
   }
 
   template <std::size_t maximum_bytes>
@@ -117,11 +127,14 @@ namespace telar::runtime::traffic {
       return {};
     }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-negative" // asks each locking method to require the mutex not held, an annotation Clang rejects on libc++'s std::mutex here
     std::scoped_lock lock{mutex_};
+#pragma clang diagnostic pop
     HttpPolicy result;
 
     for (const auto& entry : registrations_) {
-      if (entry && entry->hosts.contains(event.host) && (entry->directions & (1 << static_cast<Byte>(event.direction))) && (entry->visibility & (1 << static_cast<Byte>(event.visibility)))) {
+      if (entry && serves(*entry, event)) {
         result.enabled = true;
         result.fail_closed |= entry->route.fail_closed;
       }
@@ -132,7 +145,10 @@ namespace telar::runtime::traffic {
 
   template <std::size_t maximum_bytes>
   void Interception<maximum_bytes>::configure(Owner owner, InterceptionRule rule, std::uint64_t order) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-negative" // asks each locking method to require the mutex not held, an annotation Clang rejects on libc++'s std::mutex here
     std::scoped_lock lock{mutex_};
+#pragma clang diagnostic pop
 
     if (owner == 0 || registration(owner)) {
       throw EncodingError{"Interception owner already registered"};
@@ -151,7 +167,10 @@ namespace telar::runtime::traffic {
 
   template <std::size_t maximum_bytes>
   void Interception<maximum_bytes>::disconnect(Owner owner) noexcept {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-negative" // asks each locking method to require the mutex not held, an annotation Clang rejects on libc++'s std::mutex here
     std::scoped_lock lock{mutex_};
+#pragma clang diagnostic pop
 
     for (auto& slot : registrations_.viewMut()) {
       if (slot && slot->route.owner == owner) {
@@ -162,14 +181,17 @@ namespace telar::runtime::traffic {
 
     for (auto& slot : pending_.viewMut()) {
       if (slot && slot->verdict == Verdict::pending && slot->chain[slot->step].owner == owner) {
-        advance(slot.getMut(), failure(*slot), registrations_, next_, completion_, request_signal_);
+        advance(slot.getMut(), failure(*slot), registrations_, next_, {.completion = completion_, .requests = request_signal_});
       }
     }
   }
 
   template <std::size_t maximum_bytes>
   void Interception<maximum_bytes>::setAvailable(Owner owner, bool available) noexcept {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-negative" // asks each locking method to require the mutex not held, an annotation Clang rejects on libc++'s std::mutex here
     std::scoped_lock lock{mutex_};
+#pragma clang diagnostic pop
     auto* entry = registration(owner);
     if ((entry == nullptr) || (!available && !entry->available)) {
       return;
@@ -178,7 +200,7 @@ namespace telar::runtime::traffic {
     entry->available = false;
     for (auto& pending : pending_.viewMut()) {
       if (pending && pending->verdict == Verdict::pending && pending->chain[pending->step].owner == owner) {
-        advance(pending.getMut(), failure(*pending), registrations_, next_, completion_, request_signal_);
+        advance(pending.getMut(), failure(*pending), registrations_, next_, {.completion = completion_, .requests = request_signal_});
       }
     }
 
@@ -190,7 +212,10 @@ namespace telar::runtime::traffic {
 
   template <std::size_t maximum_bytes>
   bool Interception<maximum_bytes>::pending(Owner owner, std::uint64_t ticket) noexcept {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-negative" // asks each locking method to require the mutex not held, an annotation Clang rejects on libc++'s std::mutex here
     std::scoped_lock lock{mutex_};
+#pragma clang diagnostic pop
     const auto* entry = registration(owner);
     if ((entry == nullptr) || !entry->available) {
       return false;
@@ -211,24 +236,29 @@ namespace telar::runtime::traffic {
       return 0;
     }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-negative" // asks each locking method to require the mutex not held, an annotation Clang rejects on libc++'s std::mutex here
     std::scoped_lock lock{mutex_};
+#pragma clang diagnostic pop
     ds::Array<Route, Limits::subscribers> matches;
     std::size_t count = 0;
     bool fail_closed = false;
 
     for (const auto& entry : registrations_) {
-      if (entry && entry->hosts.contains(event.host) && (entry->directions & (1 << static_cast<Byte>(event.direction))) && (entry->visibility & (1 << static_cast<Byte>(event.visibility)))) {
-        if (!entry->available) {
-          if (entry->route.fail_closed) {
-            return rejected_ticket;
-          }
+      if (!entry || !serves(*entry, event)) {
+        continue;
+      }
 
-          continue;
+      if (!entry->available) {
+        if (entry->route.fail_closed) {
+          return rejected_ticket;
         }
 
-        matches.atMut(count++) = entry->route;
-        fail_closed |= entry->route.fail_closed;
+        continue;
       }
+
+      matches.atMut(count++) = entry->route;
+      fail_closed |= entry->route.fail_closed;
     }
 
     if (count == 0) {
@@ -239,25 +269,34 @@ namespace telar::runtime::traffic {
       return left.order < right.order || (left.order == right.order && left.generation < right.generation);
     });
 
-    for (auto& slot : pending_.viewMut()) {
-      if (!slot) {
-        try {
-          if (event.bytes.size() > maximum_bytes) {
-            return fail_closed ? rejected_ticket : 0;
-          }
+    return queue(event, std::span{matches}.first(count), fail_closed);
+  }
 
-          slot.emplace(memory_, ++next_, event, std::span{matches}.first(count));
-          slot.getMut().deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds{matches[0].timeout_ms};
-          request_signal_.notify();
-          return slot->ticket;
-        } catch (...) {
-          slot.reset();
-          return fail_closed ? rejected_ticket : 0;
+  template <std::size_t maximum_bytes>
+  auto Interception<maximum_bytes>::queue(const FlowEvent& event, std::span<const Route> routes, bool fail_closed) noexcept -> std::uint64_t {
+    const std::uint64_t refused = fail_closed ? rejected_ticket : 0;
+
+    for (auto& slot : pending_.viewMut()) {
+      if (slot) {
+        continue;
+      }
+
+      try {
+        if (event.bytes.size() > maximum_bytes) {
+          return refused;
         }
+
+        slot.emplace(memory_, ++next_, event, routes);
+        slot.getMut().deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds{routes.front().timeout_ms};
+        request_signal_.notify();
+        return slot->ticket;
+      } catch (...) {
+        slot.reset();
+        return refused;
       }
     }
 
-    return fail_closed ? rejected_ticket : 0;
+    return refused;
   }
 
   template <std::size_t maximum_bytes>
@@ -271,12 +310,15 @@ namespace telar::runtime::traffic {
       throw EncodingError{"Invalid stream decision"};
     }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-negative" // asks each locking method to require the mutex not held, an annotation Clang rejects on libc++'s std::mutex here
     std::scoped_lock lock{mutex_};
+#pragma clang diagnostic pop
 
     for (auto& slot : pending_.viewMut()) {
       if (slot && slot->decision_ticket == ticket && slot->verdict == Verdict::pending && slot->chain[slot->step].owner == owner) {
         if (std::chrono::steady_clock::now() >= slot->deadline) {
-          advance(slot.getMut(), failure(*slot), registrations_, next_, completion_, request_signal_);
+          advance(slot.getMut(), failure(*slot), registrations_, next_, {.completion = completion_, .requests = request_signal_});
           return;
         }
 
@@ -286,7 +328,7 @@ namespace telar::runtime::traffic {
           slot.getMut().replaced = true;
         }
 
-        advance(slot.getMut(), verdict, registrations_, next_, completion_, request_signal_);
+        advance(slot.getMut(), verdict, registrations_, next_, {.completion = completion_, .requests = request_signal_});
         return;
       }
     }
@@ -299,12 +341,15 @@ namespace telar::runtime::traffic {
       return {.verdict = Verdict::reject};
     }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-negative" // asks each locking method to require the mutex not held, an annotation Clang rejects on libc++'s std::mutex here
     std::scoped_lock lock{mutex_};
+#pragma clang diagnostic pop
 
     for (auto& slot : pending_.viewMut()) {
       if (slot && slot->ticket == ticket) {
         if (slot->verdict == Verdict::pending && std::chrono::steady_clock::now() >= slot->deadline) {
-          advance(slot.getMut(), failure(*slot), registrations_, next_, completion_, request_signal_);
+          advance(slot.getMut(), failure(*slot), registrations_, next_, {.completion = completion_, .requests = request_signal_});
         }
 
         const auto verdict = slot->verdict;
@@ -332,7 +377,10 @@ namespace telar::runtime::traffic {
 
   template <std::size_t maximum_bytes>
   auto Interception<maximum_bytes>::pending(std::uint64_t ticket) noexcept -> bool {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-negative" // asks each locking method to require the mutex not held, an annotation Clang rejects on libc++'s std::mutex here
     std::scoped_lock lock{mutex_};
+#pragma clang diagnostic pop
 
     for (const auto& slot : pending_) {
       if (slot && slot->ticket == ticket) {
@@ -365,7 +413,10 @@ namespace telar::runtime::traffic {
 
   template <std::size_t maximum_bytes>
   void Interception<maximum_bytes>::cancel(std::uint64_t ticket) noexcept {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-negative" // asks each locking method to require the mutex not held, an annotation Clang rejects on libc++'s std::mutex here
     std::scoped_lock lock{mutex_};
+#pragma clang diagnostic pop
 
     for (auto& slot : pending_.viewMut()) {
       if (slot && slot->ticket == ticket) {
@@ -377,7 +428,10 @@ namespace telar::runtime::traffic {
 
   template <std::size_t maximum_bytes>
   ds::Option<FlowControl::Time> Interception<maximum_bytes>::deadline(std::uint64_t ticket) noexcept {
-    std::lock_guard lock{mutex_};
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-negative" // asks each locking method to require the mutex not held, an annotation Clang rejects on libc++'s std::mutex here
+    const std::scoped_lock lock{mutex_};
+#pragma clang diagnostic pop
 
     for (const auto& slot : pending_) {
       if (slot && slot->ticket == ticket) {
@@ -421,17 +475,25 @@ namespace telar::runtime::traffic {
   }
 
   template <std::size_t maximum_bytes>
+  bool Interception<maximum_bytes>::serves(const Registration& registration, const FlowEvent& event) noexcept {
+    return registration.hosts.contains(event.host) && hasBit(registration.directions, event.direction) && hasBit(registration.visibility, event.visibility);
+  }
+
+  template <std::size_t maximum_bytes>
   Verdict Interception<maximum_bytes>::failure(const Pending& pending) noexcept {
     return pending.chain[pending.step].fail_closed ? Verdict::reject : Verdict::allow;
   }
 
   template <std::size_t maximum_bytes>
-  void Interception<maximum_bytes>::advance(Pending& pending, Verdict verdict, const Registrations& registrations, std::uint64_t& next, CompletionSignal& completion, CompletionSignal& requests) noexcept {
+  void Interception<maximum_bytes>::advance(Pending& pending, Verdict verdict, const Registrations& registrations, std::uint64_t& next, Wakes wakes) noexcept {
     for (;;) {
       if (verdict == Verdict::reject || ++pending.step == pending.routes) {
-        pending.verdict = verdict == Verdict::reject ? Verdict::reject : pending.replaced ? Verdict::replace
-                                                                                          : Verdict::allow;
-        completion.notify();
+        if (verdict != Verdict::reject) {
+          verdict = pending.replaced ? Verdict::replace : Verdict::allow;
+        }
+
+        pending.verdict = verdict;
+        wakes.completion.notify();
         return;
       }
 
@@ -441,8 +503,8 @@ namespace telar::runtime::traffic {
         pending.decision_ticket = ++next;
         pending.deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds{route.timeout_ms};
         pending.delivered = false;
-        requests.notify();
-        completion.notify();
+        wakes.requests.notify();
+        wakes.completion.notify();
         return;
       }
 
@@ -450,17 +512,37 @@ namespace telar::runtime::traffic {
     }
   }
 
+  void reportFailure(std::string_view component, const std::exception& error) noexcept {
+    constexpr std::size_t line_bytes = 1024;
+    ds::Array<char, line_bytes> line{};
+    const std::string_view message{error.what()};
+    std::span<char> output = line.viewMut();
+    // The line is cut to the buffer, and written in one call so that lines from threads do not mix.
+    const auto append = [&](std::string_view part) {
+      const auto count = std::min(part.size(), output.size());
+
+      std::ranges::copy(std::span<const char>{part}.first(count), output.begin());
+      output = output.subspan(count);
+    };
+
+    append(component);
+    append(": ");
+    append(message);
+    append("\n");
+    static_cast<void>(::write(STDERR_FILENO, line.data(), line.size() - output.size()));
+  }
+
   int PackageChannel::get() const noexcept {
     return socket.get();
   }
 
-  void PackagePort::packageFailure(const plugins::ServiceSpec&, FlowEvent) noexcept {}
+  void PackagePort::packageFailure(const plugins::ServiceSpec& /*specification*/, FlowEvent /*event*/) noexcept {}
 
-  FileDescriptor PackagePort::openControl(const plugins::ServiceSpec&) {
+  FileDescriptor PackagePort::openControl(const plugins::ServiceSpec& /*specification*/) {
     throw SystemError{"Package control is not available", EAGAIN};
   }
 
-  void PackagePort::revokePackage(const plugins::ServiceSpec&) noexcept {}
+  void PackagePort::revokePackage(const plugins::ServiceSpec& /*specification*/) noexcept {}
 }
 
 namespace telar::runtime::traffic::recording {
@@ -484,9 +566,9 @@ namespace telar::runtime::traffic::recording {
 
 namespace telar::runtime::traffic {
 
-  Service::Peer::Peer(SensitiveMemory& memory, FileDescriptor socket, uid_t uid)
-      : socket(std::move(socket)),
-        uid(uid),
+  Service::Peer::Peer(SensitiveMemory& memory, FileDescriptor channel, uid_t user)
+      : socket(std::move(channel)),
+        uid(user),
         input(memory) {}
 
   Service::Service(ConcurrentMemory& memory, std::string_view path, bool allow_interception)
@@ -494,7 +576,7 @@ namespace telar::runtime::traffic {
         memory_(memory),
         listener_(path),
         interception_(memory),
-        http_interception_(memory, &interception_.completionSignal(), &interception_.requestSignal()),
+        http_interception_(memory, {.completion = &interception_.completionSignal(), .requests = &interception_.requestSignal()}),
         analysis_(memory),
         recordings_(memory),
         allow_interception_(allow_interception) {
@@ -542,16 +624,19 @@ namespace telar::runtime::traffic {
       throw EncodingError{"Package has no granted traffic capability"};
     }
 
-    ds::Array<int, 2> descriptors;
+    ds::Array<int, 2> descriptors{};
     if (::socketpair(AF_UNIX, SOCK_STREAM, 0, descriptors.dataMut()) != 0) {
       throw SystemError{"Create package traffic channel"};
     }
 
-    FileDescriptor native{descriptors[0]}, client{descriptors[1]};
+    FileDescriptor native{descriptors[0]};
+    FileDescriptor client{descriptors[1]};
 
     configureProxySocket(native.get());
     configureProxySocket(client.get());
-    const auto order = (static_cast<std::uint64_t>(specification.package_index) << 32) | registration;
+    // A package's registrations order after every registration of the packages before it.
+    constexpr unsigned registration_bits = 32;
+    const auto order = (static_cast<std::uint64_t>(specification.package_index) << registration_bits) | registration;
     const auto owner = ++next_owner_;
     if (!attachments_.publish(Attachment{.socket = std::move(native), .package = {.id = specification.plugin_id, .digest = specification.digest, .generation = specification.generation, .observe = observe, .intercept = intercept, .order = order, .permission = specification.permission}, .owner = owner})) {
       throw SystemError{"Package traffic attachment queue is full", EBUSY};
@@ -571,17 +656,24 @@ namespace telar::runtime::traffic {
   }
 
   void Service::packageFailure(const plugins::ServiceSpec& specification, FlowEvent event) noexcept {
-    ds::Array<char, 128> reason;
-    const auto name = specification.name.view();
-    const auto length = std::snprintf(reason.dataMut(), reason.size(), "app_callback_error:%.*s", static_cast<int>(name.size()), name.data());
+    constexpr std::size_t reason_bytes = 128;
+    constexpr std::string_view prefix = "app_callback_error:";
+    ds::Array<char, reason_bytes> reason{};
+    const std::span<const char> name{specification.name.view()};
+    // The reason keeps a byte free, as the C string it was written as did.
+    const auto kept = name.first(std::min(name.size(), reason.size() - 1 - prefix.size()));
 
-    event.reason = {reason.data(), length > 0 ? std::min(static_cast<std::size_t>(length), reason.size() - 1) : 0};
+    std::ranges::copy(kept, std::ranges::copy(prefix, reason.viewMut().begin()).out);
+    event.reason = {reason.data(), prefix.size() + kept.size()};
     event.bytes = {};
     observeFlow(Kind::flow_error, event);
   }
 
   auto Service::captureStatus() const noexcept -> CaptureStatus {
-    std::lock_guard lock{capture_mutex_};
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-negative" // asks each locking method to require the mutex not held, an annotation Clang rejects on libc++'s std::mutex here
+    const std::scoped_lock lock{capture_mutex_};
+#pragma clang diagnostic pop
 
     return capture_status_;
   }
@@ -690,7 +782,7 @@ namespace telar::runtime::traffic {
       try {
         step();
       } catch (const std::exception& error) {
-        std::fprintf(stderr, "telar traffic: %s\n", error.what());
+        reportFailure("telar traffic", error);
       }
     }
   }
@@ -703,8 +795,9 @@ namespace telar::runtime::traffic {
     descriptors.atMut(2) = {.fd = interception_.requestDescriptor(), .events = POLLIN, .revents = 0};
     for (std::size_t index = 0; index < peers_.size(); ++index) {
       const auto& peer = peers_[index];
+      const bool writable = peer && peer->count != 0;
 
-      descriptors.atMut(index + 3) = {.fd = peer ? peer->socket.get() : -1, .events = static_cast<short>(POLLIN | (peer && (peer->count != 0u) ? POLLOUT : 0)), .revents = 0};
+      descriptors.atMut(index + 3) = {.fd = peer ? peer->socket.get() : -1, .events = static_cast<short>(writable ? combineFlags(POLLIN, POLLOUT) : POLLIN), .revents = 0};
     }
 
     constexpr int heartbeat_ms = 1000;
@@ -726,103 +819,121 @@ namespace telar::runtime::traffic {
       }
     }
 
-    if ((descriptors[1].revents & POLLIN) != 0) {
+    if (pollReady(descriptors[1], POLLIN)) {
       wake_.drain();
-      while (auto attachment = attachments_.tryReceive()) {
-        for (auto& slot : peers_.viewMut()) {
-          if (!slot) {
-            slot.emplace(memory_, std::move(attachment.getMut().socket), ::geteuid());
-            slot.getMut().package = attachment->package;
-            slot.getMut().owner = attachment->owner;
-            break;
-          }
-        }
-      }
-
-      while (auto frame = injections_.tryReceive()) {
-        const auto event = Protocol::decode((*frame)->bytes.bytes());
-
-        // A share of the frame, as Rust clones an Arc: the event views the bytes this one keeps.
-        publish(event, *frame);
-      }
+      receive();
     }
 
-    if ((descriptors[2].revents & POLLIN) != 0) {
+    if (pollReady(descriptors[2], POLLIN)) {
       interception_.drainRequests();
     }
 
     for (std::size_t index = 0; index < peers_.size(); ++index) {
       auto& peer = peers_.atMut(index);
-      if (!peer) {
-        continue;
-      }
-
-      const auto ready = descriptors[index + 3].revents;
-
-      try {
-        if ((ready & (POLLIN | POLLHUP)) != 0) {
-          read(peer.getMut());
-        }
-
-        if ((ready & POLLOUT) != 0) {
-          write(peer.getMut());
-        }
-      } catch (const std::exception&) {
-        peer.getMut().failed = true;
-      }
-
-      constexpr auto handshake_timeout = std::chrono::seconds{5};
-      const bool expired = !peer->role && std::chrono::steady_clock::now() - peer->connected >= handshake_timeout;
-      if (peer->failed || expired || ((ready & (POLLERR | POLLNVAL)) != 0)) {
-        const bool producer = peer->role == Role::live_capture || peer->role == Role::offline_capture;
-
-        if (peer->role == Role::intercept) {
-          interception_.disconnect(peer->owner);
-          http_interception_.disconnect(peer->owner);
-        }
-
-        if (peer->role == Role::subscribe && selects(peer->selection, Selection::exchanges)) {
-          exchange_subscribers_.fetch_sub(1, std::memory_order_release);
-        }
-
-        if (peer->role == Role::subscribe && selects(peer->selection, Selection::flows)) {
-          flow_subscribers_.fetch_sub(1, std::memory_order_release);
-        }
-
-        if (peer->role == Role::subscribe && selects(peer->selection, Selection::datagrams)) {
-          datagram_subscribers_.fetch_sub(1, std::memory_order_release);
-        }
-
-        peer.reset();
-        if (producer) {
-          producer_ = false;
-          {
-            std::lock_guard lock{capture_mutex_};
-
-            capture_status_ = {};
-          }
-
-          analysis_.expire([&](const Event& event) {
-            publish(event);
-          },
-              true);
-          publish(Event{.kind = Kind::capture_stopped});
-        }
+      if (peer && exchange(peer.getMut(), descriptors[index + 3])) {
+        retire(index);
       }
     }
 
     capture_stopped_.store(stop_capture, std::memory_order_release);
 
-    if ((descriptors[0].revents & POLLIN) != 0) {
+    if (pollReady(descriptors[0], POLLIN)) {
       accept();
     }
 
+    deliverRequests();
+    heartbeat();
+  }
+
+  void Service::receive() {
+    while (auto attachment = attachments_.tryReceive()) {
+      for (auto& slot : peers_.viewMut()) {
+        if (!slot) {
+          slot.emplace(memory_, std::move(attachment.getMut().socket), ::geteuid());
+          slot.getMut().package = attachment->package;
+          slot.getMut().owner = attachment->owner;
+          break;
+        }
+      }
+    }
+
+    while (const auto frame = injections_.tryReceive()) {
+      const auto event = Protocol::decode((*frame)->bytes.bytes());
+
+      // A share of the frame, as Rust clones an Arc: the event views the bytes this one keeps.
+      publish(event, *frame);
+    }
+  }
+
+  bool Service::exchange(Peer& peer, const pollfd& descriptor) {
+    try {
+      if (pollReady(descriptor, combineFlags(POLLIN, POLLHUP))) {
+        read(peer);
+      }
+
+      if (pollReady(descriptor, POLLOUT)) {
+        write(peer);
+      }
+    } catch (const std::exception&) {
+      peer.failed = true;
+    }
+
+    constexpr auto handshake_timeout = std::chrono::seconds{5};
+    const bool expired = !peer.role && std::chrono::steady_clock::now() - peer.connected >= handshake_timeout;
+
+    return peer.failed || expired || pollReady(descriptor, combineFlags(POLLERR, POLLNVAL));
+  }
+
+  void Service::retire(std::size_t slot) {
+    auto& peer = peers_.atMut(slot);
+    const bool producer = peer->role == Role::live_capture || peer->role == Role::offline_capture;
+
+    if (peer->role == Role::intercept) {
+      interception_.disconnect(peer->owner);
+      http_interception_.disconnect(peer->owner);
+    }
+
+    if (peer->role == Role::subscribe && selects(peer->selection, Selection::exchanges)) {
+      exchange_subscribers_.fetch_sub(1, std::memory_order_release);
+    }
+
+    if (peer->role == Role::subscribe && selects(peer->selection, Selection::flows)) {
+      flow_subscribers_.fetch_sub(1, std::memory_order_release);
+    }
+
+    if (peer->role == Role::subscribe && selects(peer->selection, Selection::datagrams)) {
+      datagram_subscribers_.fetch_sub(1, std::memory_order_release);
+    }
+
+    peer.reset();
+    if (!producer) {
+      return;
+    }
+
+    producer_ = false;
+    {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-negative" // asks each locking method to require the mutex not held, an annotation Clang rejects on libc++'s std::mutex here
+      const std::scoped_lock lock{capture_mutex_};
+#pragma clang diagnostic pop
+
+      capture_status_ = {};
+    }
+
+    analysis_.expire([&](const Event& event) {
+      publish(event);
+    },
+        true);
+    publish(Event{.kind = Kind::capture_stopped});
+  }
+
+  void Service::deliverRequests() {
     for (auto& peer : peers_.viewMut()) {
       if (!peer || peer->failed || !peer->configured || peer->role != Role::intercept) {
         continue;
       }
 
-      auto deliver = [&](const FlowEvent& flow) {
+      const auto deliver = [&](const FlowEvent& flow) {
         if (peer->count == peer->queue.size()) {
           return false;
         }
@@ -841,17 +952,21 @@ namespace telar::runtime::traffic {
         interception_.deliver(peer->owner, deliver);
       }
     }
+  }
 
+  void Service::heartbeat() {
     const auto now = std::chrono::steady_clock::now();
-    if (now - heartbeat_ >= std::chrono::seconds{1}) {
-      analysis_.expire([&](const Event& event) {
-        publish(event);
-      });
-
-      recordings_.expire();
-      publish(Event{.kind = Kind::statistics, .runtime_drops = injections_.metrics().dropped + allocation_drops_.load(std::memory_order_relaxed)});
-      heartbeat_ = now;
+    if (now - heartbeat_ < std::chrono::seconds{1}) {
+      return;
     }
+
+    analysis_.expire([&](const Event& event) {
+      publish(event);
+    });
+
+    recordings_.expire();
+    publish(Event{.kind = Kind::statistics, .runtime_drops = injections_.metrics().dropped + allocation_drops_.load(std::memory_order_relaxed)});
+    heartbeat_ = now;
   }
 
   void Service::accept() {
@@ -880,7 +995,8 @@ namespace telar::runtime::traffic {
       const auto previous = peer.input.size();
 
       peer.input.resize(peer.expected);
-      const auto count = ::recv(peer.socket.get(), peer.input.dataMut() + previous, peer.expected - previous, 0);
+      const auto space = peer.input.viewMut().subspan(previous);
+      const auto count = ::recv(peer.socket.get(), space.data(), space.size(), 0);
       if (count <= 0) {
         peer.input.resize(previous);
         if (count == 0 || !socketWouldBlock(sys::lastError())) {
@@ -895,66 +1011,9 @@ namespace telar::runtime::traffic {
         return;
       }
 
-      if (!peer.role) {
-        if (!greet(peer)) {
-          continue;
-        }
-      } else {
-        if (*peer.role == Role::subscribe) {
-          throw EncodingError{"Subscribers cannot publish traffic"};
-        }
-
-        if (peer.expected == Protocol::prefix_bytes) {
-          plugins::FrameReader reader{peer.input};
-          const auto size = reader.integer<std::uint32_t>();
-          const auto limit = peer.http ? Limits::http_frame_bytes : Limits::frame_bytes;
-          if (size == 0 || size > limit || reader.integer<std::uint64_t>() != 0) {
-            throw EncodingError{"Invalid capture frame prefix"};
-          }
-
-          peer.expected = size;
-          peer.input.clear();
-          continue;
-        }
-
-        if (*peer.role == Role::intercept) {
-          control(peer);
-          peer.input.clear();
-          peer.expected = Protocol::prefix_bytes;
-          continue;
-        }
-
-        auto event = Protocol::decode(peer.input);
-        if (event.kind >= Kind::exchange) {
-          throw EncodingError{"Capture helpers cannot publish decrypted exchanges"};
-        }
-
-        event.offline = *peer.role == Role::offline_capture;
-        if (event.kind != Kind::packet) {
-          std::lock_guard lock{capture_mutex_};
-
-          capture_status_.session = event.session;
-          if (event.kind == Kind::interface_open) {
-            ++capture_status_.interfaces;
-          } else if (event.kind == Kind::interface_closed && capture_status_.interfaces != 0) {
-            --capture_status_.interfaces;
-          } else if (event.kind == Kind::interface_error) {
-            ++capture_status_.interface_errors;
-          }
-        }
-
-        publish(event);
-        if (event.kind == Kind::packet) {
-          const bool flows = flow_subscribers_.load(std::memory_order_acquire) != 0 || recordings_.selects(Selection::flows);
-          const bool datagrams = datagram_subscribers_.load(std::memory_order_acquire) != 0 || recordings_.selects(Selection::datagrams);
-          if (flows || datagrams) {
-            const auto selected = static_cast<Selection>((flows ? static_cast<Byte>(Selection::flows) : 0) | (datagrams ? static_cast<Byte>(Selection::datagrams) : 0));
-
-            analysis_.packet(event, selected, [&](const Event& item) {
-              publish(item);
-            });
-          }
-        }
+      const bool whole = peer.role ? consume(peer) : greet(peer);
+      if (!whole) {
+        continue;
       }
 
       peer.input.clear();
@@ -962,8 +1021,83 @@ namespace telar::runtime::traffic {
     }
   }
 
+  bool Service::consume(Peer& peer) {
+    if (*peer.role == Role::subscribe) {
+      throw EncodingError{"Subscribers cannot publish traffic"};
+    }
+
+    if (peer.expected == Protocol::prefix_bytes) {
+      plugins::FrameReader reader{peer.input};
+      const auto size = reader.integer<std::uint32_t>();
+      const auto limit = peer.http ? Limits::http_frame_bytes : Limits::frame_bytes;
+      if (size == 0 || size > limit || reader.integer<std::uint64_t>() != 0) {
+        throw EncodingError{"Invalid capture frame prefix"};
+      }
+
+      peer.expected = size;
+      peer.input.clear();
+      return false;
+    }
+
+    if (*peer.role == Role::intercept) {
+      control(peer);
+    } else {
+      ingest(peer);
+    }
+
+    return true;
+  }
+
+  void Service::ingest(Peer& peer) {
+    auto event = Protocol::decode(peer.input);
+    if (event.kind >= Kind::exchange) {
+      throw EncodingError{"Capture helpers cannot publish decrypted exchanges"};
+    }
+
+    event.offline = *peer.role == Role::offline_capture;
+    if (event.kind != Kind::packet) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-negative" // asks each locking method to require the mutex not held, an annotation Clang rejects on libc++'s std::mutex here
+      const std::scoped_lock lock{capture_mutex_};
+#pragma clang diagnostic pop
+
+      capture_status_.session = event.session;
+      if (event.kind == Kind::interface_open) {
+        ++capture_status_.interfaces;
+      } else if (event.kind == Kind::interface_closed && capture_status_.interfaces != 0) {
+        --capture_status_.interfaces;
+      } else if (event.kind == Kind::interface_error) {
+        ++capture_status_.interface_errors;
+      }
+    }
+
+    publish(event);
+    if (event.kind != Kind::packet) {
+      return;
+    }
+
+    const bool flows = flow_subscribers_.load(std::memory_order_acquire) != 0 || recordings_.selects(Selection::flows);
+    const bool datagrams = datagram_subscribers_.load(std::memory_order_acquire) != 0 || recordings_.selects(Selection::datagrams);
+    if (!flows && !datagrams) {
+      return;
+    }
+
+    // Analysis reads only the flow and datagram bits, so both wanted is every bit.
+    auto selected = Selection::all;
+
+    if (!datagrams) {
+      selected = Selection::flows;
+    } else if (!flows) {
+      selected = Selection::datagrams;
+    }
+
+    analysis_.packet(event, selected, [&](const Event& item) {
+      publish(item);
+    });
+  }
+
   bool Service::greet(Peer& peer) {
-    if (peer.package && peer.package->permission && !peer.package->permission->load(std::memory_order_acquire)) {
+    if (revoked(peer)) {
       throw EncodingError{"Package traffic permission revoked"};
     }
 
@@ -989,55 +1123,29 @@ namespace telar::runtime::traffic {
     }
 
     const auto selected = static_cast<Role>(role);
-    if (peer.package && !((selected == Role::subscribe && peer.package->observe) || (selected == Role::intercept && peer.package->intercept))) {
+    if (peer.package && !grants(*peer.package, selected)) {
       throw EncodingError{"Package traffic capability denied"};
     }
 
     peer.selection = static_cast<Selection>(selection);
+    admit(peer, selected, size);
     if (selected == Role::subscribe) {
-      const auto subscribers = std::ranges::count_if(peers_, [](const auto& slot) {
-        return slot && slot->role == Role::subscribe;
-      });
-      if (static_cast<std::size_t>(subscribers) >= Limits::subscribers || peer.uid != ::geteuid()) {
-        throw EncodingError{"Traffic subscription is unavailable"};
-      }
+      peer.filter.emplace(textView(input));
+      enroll(peer);
+    }
 
-      peer.filter.emplace(std::string_view{reinterpret_cast<const char*>(input.data()), input.size()});
-      if (selects(peer.selection, Selection::flows)) {
-        flow_subscribers_.fetch_add(1, std::memory_order_release);
-      }
-
-      if (selects(peer.selection, Selection::datagrams)) {
-        datagram_subscribers_.fetch_add(1, std::memory_order_release);
-      }
-
-      if (selects(peer.selection, Selection::exchanges)) {
-        exchange_subscribers_.fetch_add(1, std::memory_order_release);
-      }
-    } else if (selected == Role::intercept) {
-      const auto controllers = std::ranges::count_if(peers_, [](const auto& slot) {
-        return slot && slot->role == Role::intercept;
-      });
-      if (!allow_interception_ || static_cast<std::size_t>(controllers) >= Limits::subscribers || size != 0 || peer.uid != ::geteuid()) {
-        throw EncodingError{"Stream interception is unavailable"};
-      }
-
-      if (peer.owner == 0) {
-        peer.owner = ++next_owner_;
-      }
-    } else {
-      if (producer_ || size != 0 || (selected == Role::live_capture && peer.uid != 0)) {
-        throw EncodingError{"Traffic capture requires one authorized helper"};
-      }
-
-      producer_ = true;
+    if (selected == Role::intercept && peer.owner == 0) {
+      peer.owner = ++next_owner_;
     }
 
     peer.role = selected;
     enqueue(peer, encode(Event{.kind = Kind::ready}));
     if (selected == Role::live_capture || selected == Role::offline_capture) {
       {
-        std::lock_guard lock{capture_mutex_};
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-negative" // asks each locking method to require the mutex not held, an annotation Clang rejects on libc++'s std::mutex here
+        const std::scoped_lock lock{capture_mutex_};
+#pragma clang diagnostic pop
 
         capture_status_ = {.state = selected == Role::live_capture ? CaptureState::live : CaptureState::offline};
       }
@@ -1048,8 +1156,60 @@ namespace telar::runtime::traffic {
     return true;
   }
 
+  void Service::admit(const Peer& peer, Role role, std::uint32_t filter_bytes) {
+    if (role == Role::subscribe) {
+      const auto subscribers = std::ranges::count_if(peers_, [](const auto& slot) {
+        return slot && slot->role == Role::subscribe;
+      });
+      if (std::cmp_greater_equal(subscribers, Limits::subscribers) || peer.uid != ::geteuid()) {
+        throw EncodingError{"Traffic subscription is unavailable"};
+      }
+
+      return;
+    }
+
+    if (role == Role::intercept) {
+      const auto controllers = std::ranges::count_if(peers_, [](const auto& slot) {
+        return slot && slot->role == Role::intercept;
+      });
+      if (!allow_interception_ || std::cmp_greater_equal(controllers, Limits::subscribers) || filter_bytes != 0 || peer.uid != ::geteuid()) {
+        throw EncodingError{"Stream interception is unavailable"};
+      }
+
+      return;
+    }
+
+    if (producer_ || filter_bytes != 0 || (role == Role::live_capture && peer.uid != 0)) {
+      throw EncodingError{"Traffic capture requires one authorized helper"};
+    }
+
+    producer_ = true;
+  }
+
+  void Service::enroll(const Peer& peer) noexcept {
+    if (selects(peer.selection, Selection::flows)) {
+      flow_subscribers_.fetch_add(1, std::memory_order_release);
+    }
+
+    if (selects(peer.selection, Selection::datagrams)) {
+      datagram_subscribers_.fetch_add(1, std::memory_order_release);
+    }
+
+    if (selects(peer.selection, Selection::exchanges)) {
+      exchange_subscribers_.fetch_add(1, std::memory_order_release);
+    }
+  }
+
+  bool Service::revoked(const Peer& peer) noexcept {
+    return peer.package && peer.package->permission && !peer.package->permission->load(std::memory_order_acquire);
+  }
+
+  bool Service::grants(const Peer::PackageIdentity& package, Role role) noexcept {
+    return (role == Role::subscribe && package.observe) || (role == Role::intercept && package.intercept);
+  }
+
   void Service::control(Peer& peer) {
-    if (peer.package && peer.package->permission && !peer.package->permission->load(std::memory_order_acquire)) {
+    if (revoked(peer)) {
       throw EncodingError{"Package traffic permission revoked"};
     }
 
@@ -1139,7 +1299,7 @@ namespace telar::runtime::traffic {
 
     auto& delivery = peer.queue.atMut((peer.head + peer.count) % peer.queue.size());
 
-    delivery.prefix = Protocol::prefix(frame->bytes.bytes().size(), peer.dropped);
+    delivery.prefix = Protocol::prefix(frame->bytes.bytes().size(), {.frames = peer.dropped});
     delivery.frame = std::move(frame);
     delivery.offset = 0;
     ++peer.count;
@@ -1177,18 +1337,20 @@ namespace telar::runtime::traffic::control {
         cancelled_(cancelled) {}
 
   void TrustCommand::run(std::span<const std::string_view> arguments) {
-    bool allowed = !arguments.empty() && arguments.front() == "/usr/bin/security";
 #ifdef __linux__
     constexpr ds::Array executables{"/usr/bin/trust", "/usr/bin/install", "/usr/bin/rm", "/usr/sbin/update-ca-certificates"};
-    allowed = arguments.size() >= 3 && arguments[0] == "/usr/bin/sudo" && arguments[1] == "--" && std::ranges::find(executables, arguments[2]) != executables.end();
+    const bool allowed = arguments.size() >= 3 && arguments[0] == "/usr/bin/sudo" && arguments[1] == "--" && std::ranges::find(executables, arguments[2]) != executables.end();
+#else
+    const bool allowed = !arguments.empty() && arguments.front() == "/usr/bin/security";
 #endif
     if (!allowed) {
       throw std::invalid_argument{"Invalid trust operation"};
     }
 
+    constexpr auto store_timeout = std::chrono::seconds{10};
     Command command{memory_, Launch{.arguments = arguments}, CommandPurpose::administration};
-    CommandOutput output{memory_, Limits::reply_bytes, &cancelled_};
-    if (output.run(command, std::chrono::steady_clock::now() + std::chrono::seconds{10}, true) != 0) {
+    CommandOutput<ConcurrentMemory> output{memory_, Limits::reply_bytes, &cancelled_};
+    if (output.run(command, std::chrono::steady_clock::now() + store_timeout, true) != 0) {
       throw SystemError{"Certificate store operation failed", EACCES};
     }
   }

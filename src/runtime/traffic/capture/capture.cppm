@@ -61,6 +61,7 @@ export {
       Capture& operator=(const Capture&) = delete;
       Capture(Capture&&) = delete;
       Capture& operator=(Capture&&) = delete;
+      ~Capture() = default;
 
       void live();
 
@@ -70,10 +71,13 @@ export {
       class Signals {
       public:
         Signals();
-
+        Signals(const Signals&) = delete;
+        Signals& operator=(const Signals&) = delete;
+        Signals(Signals&&) = delete;
+        Signals& operator=(Signals&&) = delete;
         ~Signals();
 
-        [[nodiscard]] bool stopped() const noexcept;
+        [[nodiscard]] static bool stopped() noexcept;
 
       private:
         sigset_t selected_{};
@@ -105,6 +109,12 @@ export {
       void drainControl();
 
       void discover();
+
+      // Marks the device open on the interface seen, or closes one whose index changed: true when it stays.
+      bool keep(std::string_view name, std::uint32_t index);
+
+      // Opens a device on the interface in a free slot, reporting why when it cannot.
+      void attach(const pcap_if_t& interface, std::uint32_t index);
 
       // Reads a batch of a device's packets. The device is named by its slot: what it emits is written
       // through the capture, so its name and handle are read out of the table first.

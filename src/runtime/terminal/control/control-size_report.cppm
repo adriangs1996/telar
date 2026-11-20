@@ -12,13 +12,32 @@ import telar.base.ds;
 
 export namespace telar::runtime::control {
 
-  enum class SizeReport : unsigned {
+  enum class SizeReport : std::uint8_t {
     pixels = 4,
     cell = 6,
     text = 8,
     screen = 9,
     event = 48,
   };
+
+  // The CSI that begins a report: its number is the request's.
+  constexpr std::string_view sizeReportPrefix(SizeReport kind) noexcept {
+    switch (kind) {
+    case SizeReport::pixels:
+      return "\x1b[4;";
+    case SizeReport::cell:
+      return "\x1b[6;";
+    case SizeReport::text:
+      return "\x1b[8;";
+    case SizeReport::screen:
+      return "\x1b[9;";
+    case SizeReport::event:
+      return "\x1b[48;";
+    }
+
+    // A value outside the enum reports as an event.
+    return "\x1b[48;";
+  }
 
   // Generic over the caller's allocator, so it stays here.
   template <SizeReport Kind, Allocator Memory>
@@ -29,18 +48,16 @@ export namespace telar::runtime::control {
     static_assert(sizeof(size.cols) == sizeof(std::uint16_t));
     static_assert(sizeof(size.cell_height_px) == sizeof(std::uint16_t));
     static_assert(sizeof(size.cell_width_px) == sizeof(std::uint16_t));
-    ds::Array<char, maximum_reply_bytes> encoded;
-    constexpr std::string_view prefix = Kind == SizeReport::pixels ? "\x1b[4;" : Kind == SizeReport::cell ? "\x1b[6;"
-                                                                             : Kind == SizeReport::text   ? "\x1b[8;"
-                                                                             : Kind == SizeReport::screen ? "\x1b[9;"
-                                                                                                          : "\x1b[48;";
+    ds::Array<char, maximum_reply_bytes> encoded{};
+    constexpr std::string_view prefix = sizeReportPrefix(Kind);
     // One mutable borrow of the buffer, which `next` walks.
     const std::span<char> output{encoded.dataMut(), encoded.size()};
-    auto* next = std::copy(prefix.begin(), prefix.end(), output.data());
+    auto* next = std::ranges::copy(prefix, output.data()).out;
     const auto number = [&](std::uint32_t value) {
       const auto result = std::to_chars(next, output.data() + output.size(), value);
 
-      TELAR_ASSERT(result.ec == std::errc{});
+      // to_chars reports success as the errc of value 0, which names no error.
+      TELAR_ASSERT(std::to_underlying(result.ec) == 0);
       next = result.ptr;
     };
 

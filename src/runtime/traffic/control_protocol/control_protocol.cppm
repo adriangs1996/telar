@@ -89,6 +89,11 @@ export {
       std::span<const Byte> bytes;
     };
 
+    // The frames a subscriber lost before the one a prefix announces.
+    struct Drops {
+      std::uint64_t frames = 0;
+    };
+
     // The independent data socket keeps packet backpressure out of terminal control delivery.
     class Protocol {
     public:
@@ -104,7 +109,7 @@ export {
 
       static auto decode(std::span<const Byte> input) -> Event;
 
-      static auto prefix(std::size_t bytes, std::uint64_t dropped = 0) -> ds::Array<Byte, prefix_bytes>;
+      static auto prefix(std::size_t bytes, Drops drops = {}) -> ds::Array<Byte, prefix_bytes>;
 
       static auto name(Kind kind) noexcept -> std::string_view;
 
@@ -121,11 +126,11 @@ export {
 
     struct Limits {
       static constexpr std::size_t sessions = 4;
-      static constexpr std::size_t session_bytes = 64 * 1024 * 1024;
-      static constexpr std::size_t total_bytes = 128 * 1024 * 1024;
+      static constexpr std::size_t session_bytes = std::size_t{64} * 1024 * 1024;
+      static constexpr std::size_t total_bytes = std::size_t{128} * 1024 * 1024;
       static constexpr std::size_t events = 4096;
       static constexpr std::uint32_t age_ms = 60 * 60 * 1000;
-      static constexpr std::size_t page_bytes = 512 * 1024;
+      static constexpr std::size_t page_bytes = std::size_t{512} * 1024;
       static constexpr std::uint32_t page_events = 128;
     };
 
@@ -144,13 +149,18 @@ export {
     };
 
     struct Request {
+      static constexpr std::uint64_t default_bytes = std::uint64_t{8} * 1024 * 1024;
+      static constexpr std::uint32_t default_events = 4096;
+      static constexpr std::uint32_t default_age_ms = 60 * 1000;
+      static constexpr std::uint32_t default_limit = 64;
+
       Operation operation = Operation::query;
       std::uint64_t id = 0;
       std::uint64_t cursor = 0;
-      std::uint64_t max_bytes = 8 * 1024 * 1024;
-      std::uint32_t max_events = 4096;
-      std::uint32_t max_age_ms = 60000;
-      std::uint32_t limit = 64;
+      std::uint64_t max_bytes = default_bytes;
+      std::uint32_t max_events = default_events;
+      std::uint32_t max_age_ms = default_age_ms;
+      std::uint32_t limit = default_limit;
       Selection selection = Selection::all;
       std::string_view filter;
       std::string_view host;
@@ -325,6 +335,11 @@ export {
     struct FilterProgram {
       bpf_program value{};
 
+      FilterProgram() = default;
+      FilterProgram(const FilterProgram&) = delete;
+      FilterProgram& operator=(const FilterProgram&) = delete;
+      FilterProgram(FilterProgram&&) = delete;
+      FilterProgram& operator=(FilterProgram&&) = delete;
       ~FilterProgram();
     };
 
@@ -337,6 +352,9 @@ export {
     public:
       Filter(const Filter&) = delete;
       Filter& operator=(const Filter&) = delete;
+      Filter(Filter&&) = delete;
+      Filter& operator=(Filter&&) = delete;
+      ~Filter() = default;
 
       explicit Filter(std::string_view expression);
 
@@ -423,10 +441,10 @@ export {
     class TBC_SHARED FlowControl {
     public:
       using Time = std::chrono::steady_clock::time_point;
-      static constexpr std::size_t chunk_bytes = 64 * 1024;
+      static constexpr std::size_t chunk_bytes = std::size_t{64} * 1024;
 
       struct Decision {
-        Verdict verdict;
+        Verdict verdict = Verdict::pending;
         std::size_t bytes = 0;
       };
 
@@ -440,6 +458,13 @@ export {
       virtual void drain() noexcept = 0;
 
       virtual HttpControl* http() noexcept;
+
+    protected:
+      FlowControl() = default;
+      FlowControl(const FlowControl&) = default;
+      FlowControl(FlowControl&&) = default;
+      FlowControl& operator=(const FlowControl&) = default;
+      FlowControl& operator=(FlowControl&&) = default;
     };
 
     struct HttpPolicy {
@@ -457,6 +482,13 @@ export {
       virtual void cancelHttp(std::uint64_t ticket) noexcept = 0;
       virtual ds::Option<FlowControl::Time> httpDeadline(std::uint64_t ticket) noexcept = 0;
       virtual void httpUnavailable(const FlowEvent& event) noexcept = 0;
+
+    protected:
+      HttpControl() = default;
+      HttpControl(const HttpControl&) = default;
+      HttpControl(HttpControl&&) = default;
+      HttpControl& operator=(const HttpControl&) = default;
+      HttpControl& operator=(HttpControl&&) = default;
     };
 
     bool isFlow(Kind kind) noexcept;

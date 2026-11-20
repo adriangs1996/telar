@@ -13,6 +13,7 @@ static_assert(true);
 #include <array>
 #include <cstddef>
 #include <cstring>
+#include <functional>
 #include <optional>
 #include <string_view>
 #include <utility>
@@ -43,7 +44,7 @@ namespace telar::gui::qt {
       }
 
       for (const auto& entry : entries_) {
-        if (entry.font && entry.scale == scale) {
+        if (entry.font && std::equal_to<>{}(entry.scale, scale)) {
           return *entry.font;
         }
       }
@@ -70,7 +71,7 @@ namespace telar::gui::qt {
     };
 
     static bool sameGeometry(const FontConfiguration& first, const FontConfiguration& second) noexcept {
-      return first.family.view() == second.family.view() && first.style.view() == second.style.view() && first.size == second.size && first.line_height == second.line_height && first.letter_spacing == second.letter_spacing;
+      return first.family.view() == second.family.view() && first.style.view() == second.style.view() && std::equal_to<>{}(first.size, second.size) && std::equal_to<>{}(first.line_height, second.line_height) && std::equal_to<>{}(first.letter_spacing, second.letter_spacing);
     }
 
     ResolvedFont replace(const FontConfiguration& font, qreal scale) {

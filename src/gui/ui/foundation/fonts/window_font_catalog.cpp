@@ -157,8 +157,8 @@ namespace telar::gui::qt {
     }
 
     try {
-      const auto future = QtConcurrent::run([query = *query, generation = generation_] {
-        return discover(query, generation);
+      const auto future = QtConcurrent::run([request = *query, generation = generation_] {
+        return discover(request, generation);
       });
 
       running_ = true;

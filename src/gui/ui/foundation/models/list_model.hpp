@@ -13,6 +13,13 @@ namespace telar::gui::qt {
     explicit ListModel(QObject* parent = nullptr)
         : QAbstractListModel(parent) {}
 
+    ~ListModel() override;
+
+    ListModel(const ListModel&) = delete;
+    ListModel& operator=(const ListModel&) = delete;
+    ListModel(ListModel&&) = delete;
+    ListModel& operator=(ListModel&&) = delete;
+
     [[nodiscard]] int rowCount(const QModelIndex& parent = {}) const override {
       return parent.isValid() ? 0 : static_cast<int>(rows_.size());
     }

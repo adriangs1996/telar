@@ -16,7 +16,7 @@ export namespace telar::runtime {
   public:
     static constexpr std::size_t message_capacity = 64;
     static constexpr std::size_t message_byte_capacity = 1024;
-    static constexpr std::size_t total_byte_capacity = 2 * 1024 * 1024;
+    static constexpr std::size_t total_byte_capacity = std::size_t{2} * 1024 * 1024;
 
     struct Snapshot {
       std::size_t messages;

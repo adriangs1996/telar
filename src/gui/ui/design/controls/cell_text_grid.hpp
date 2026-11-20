@@ -30,7 +30,7 @@ namespace telar::gui::qt {
           {QStringLiteral("pixelHeight"), metrics.pixel_height / scale},
           {QStringLiteral("cellWidth"), metrics.width / scale},
           {QStringLiteral("cellHeight"), metrics.height / scale},
-          {QStringLiteral("baseline"), metrics.baseline / scale},
+          {QStringLiteral("baseline"), static_cast<qreal>(metrics.baseline) / scale},
       };
     }
 

@@ -31,9 +31,13 @@ namespace telar::gui::qt {
         return QStringLiteral("accent");
       case application::paths::PathLabelTone::name:
         return QStringLiteral("text");
-      default:
+      case application::paths::PathLabelTone::directory:
+      case application::paths::PathLabelTone::ellipsis:
         return QStringLiteral("subtext0");
       }
+
+      // A tone outside the enum draws as the dimmed text.
+      return QStringLiteral("subtext0");
     }
 
     template <typename MapBounds>

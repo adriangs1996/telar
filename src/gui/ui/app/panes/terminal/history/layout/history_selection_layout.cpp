@@ -17,6 +17,7 @@ static_assert(true);
 #include <QtCore/qtypes.h>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <optional>
 
 import telar.gui.application;
@@ -41,7 +42,7 @@ namespace telar::gui::qt {
   }
 
   qreal HistorySelectionLayout::selectedOpen() const noexcept {
-    return expansion_.open;
+    return static_cast<qreal>(expansion_.open);
   }
 
   int HistorySelectionLayout::leavingIndex() const noexcept {
@@ -53,7 +54,7 @@ namespace telar::gui::qt {
   }
 
   qreal HistorySelectionLayout::leavingOpen() const noexcept {
-    return expansion_.leaving_open;
+    return static_cast<qreal>(expansion_.leaving_open);
   }
 
   void HistorySelectionLayout::setSelection(const QVariantMap& selection) {
@@ -105,7 +106,7 @@ namespace telar::gui::qt {
 
     const auto timestamp = clock_->now();
     const auto expansion = motion_.sample(generation_, selected_, timestamp);
-    const bool changed = expansion_.open != expansion.open || expansion_.leaving != expansion.leaving || expansion_.leaving_open != expansion.leaving_open;
+    const bool changed = std::not_equal_to<>{}(expansion_.open, expansion.open) || expansion_.leaving != expansion.leaving || std::not_equal_to<>{}(expansion_.leaving_open, expansion.leaving_open);
 
     expansion_ = expansion;
     leaving_key_ = expansion.leaving ? QString::number(expansion.leaving->id) : QString{};

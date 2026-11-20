@@ -30,9 +30,9 @@ namespace telar::gui::qt {
 
     const auto gap = margin * chrome_scale;
     const auto pad = padding * chrome_scale;
-    const auto available = std::min(maximum_width * chrome_scale, surface.content.width - (2 * gap));
-    const auto room = std::floor((surface.content.height - (2 * gap) - (2 * pad)) / surface.cell.y);
-    if (available < (2 * pad) + surface.cell.x || room < 1) {
+    const auto available = std::min(maximum_width * chrome_scale, static_cast<qreal>(surface.content.width) - (2 * gap));
+    const auto room = std::floor((static_cast<qreal>(surface.content.height) - (2 * gap) - (2 * pad)) / static_cast<qreal>(surface.cell.y));
+    if (available < (2 * pad) + static_cast<qreal>(surface.cell.x) || room < 1) {
       return {};
     }
 
@@ -73,14 +73,14 @@ namespace telar::gui::qt {
     }
 
     const auto width = lines.size() > 1 || clipped ? available : std::min(available, (2 * pad) + widest);
-    const auto height = (2 * pad) + (static_cast<qreal>(lines.size()) * surface.cell.y);
+    const auto height = (2 * pad) + (static_cast<qreal>(lines.size()) * static_cast<qreal>(surface.cell.y));
     const auto anchor_x = hit.area.x - surface.content.x;
     const auto anchor_y = hit.area.y - surface.content.y;
-    const auto above = anchor_y - gap - height;
-    const auto y = std::clamp(above >= 0 ? above : anchor_y + hit.area.height + gap, qreal{0}, std::max(qreal{0}, surface.content.height - height));
-    const auto x = std::clamp(qreal{anchor_x}, gap, std::max(gap, surface.content.width - gap - width));
+    const auto above = static_cast<qreal>(anchor_y) - gap - height;
+    const auto y = std::clamp(above >= 0 ? above : static_cast<qreal>(anchor_y + hit.area.height) + gap, qreal{0}, std::max(qreal{0}, static_cast<qreal>(surface.content.height) - height));
+    const auto x = std::clamp(qreal{anchor_x}, gap, std::max(gap, static_cast<qreal>(surface.content.width) - gap - width));
 
-    return LinkPreview{.bounds = {x, y, width, height}, .lines = std::move(lines), .font = font, .inset = pad, .row_height = surface.cell.y, .corner_radius = radius * chrome_scale};
+    return LinkPreview{.bounds = {x, y, width, height}, .lines = std::move(lines), .font = font, .inset = pad, .row_height = static_cast<qreal>(surface.cell.y), .corner_radius = radius * chrome_scale};
   }
 
 }

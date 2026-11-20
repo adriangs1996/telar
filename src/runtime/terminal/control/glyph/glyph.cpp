@@ -9,21 +9,23 @@ namespace telar::runtime::control {
       value.remove_prefix(1);
     }
 
-    constexpr std::uint32_t maximum_codepoint = (1u << 21) - 1;
-    const auto result = unsignedNumber<std::uint32_t>(value, maximum_codepoint, 16);
+    constexpr std::uint32_t maximum_codepoint = (1U << 21U) - 1;
+    constexpr unsigned hexadecimal_base = 16;
+    const auto result = unsignedNumber<std::uint32_t>(value, maximum_codepoint, hexadecimal_base);
 
     return result ? ds::Option{*result} : ds::none;
   }
 
-  tbc::val_a<ds::Option<std::string_view>> glyphOption(tbc::val_a<std::string_view> options, std::string_view key) noexcept {
+  tbc::val_a<ds::Option<std::string_view>> glyphOption(tbc::val_a<std::string_view> options, GlyphKey key) noexcept {
+    const std::string_view name = key == GlyphKey::codepoint ? "cp" : "reply";
     ds::Option<std::string_view> result;
 
     while (!options.empty()) {
       const auto end = options.find(';');
-      const auto pair = options.substr(0, end);
+      const auto pair = textPrefix(options, end);
       const auto separator = pair.find('=');
-      if (separator != std::string_view::npos && pair.substr(0, separator) == key) {
-        result = pair.substr(separator + 1);
+      if (separator != std::string_view::npos && textPrefix(pair, separator) == name) {
+        result = textAfter(pair, separator + 1);
       }
 
       if (end == std::string_view::npos) {
@@ -48,11 +50,11 @@ namespace telar::runtime::control {
       reply.append("\x1b_25a1;s;fmt=\x1b\\");
       break;
     case 'q': {
-      const auto encoded = glyphOption(options, "cp");
+      const auto encoded = glyphOption(options, GlyphKey::codepoint);
       const auto codepoint = encoded ? glyphCodepoint(*encoded) : ds::none;
       if (codepoint) {
         reply.append("\x1b_25a1;q;cp=");
-        reply.hex(*codepoint, 1);
+        reply.hex(*codepoint, {.width = 1});
         reply.append(";status=\x1b\\");
       }
 
@@ -65,15 +67,15 @@ namespace telar::runtime::control {
       }
 
       const auto metadata = options.substr(0, payload_separator);
-      if (glyphOption(metadata, "reply") == "0") {
+      if (glyphOption(metadata, GlyphKey::reply) == "0") {
         return;
       }
 
-      const auto encoded = glyphOption(metadata, "cp");
+      const auto encoded = glyphOption(metadata, GlyphKey::codepoint);
       const auto codepoint = encoded ? glyphCodepoint(*encoded) : ds::none;
 
       reply.append("\x1b_25a1;r;cp=");
-      reply.hex(codepoint.valueOr(0), 1);
+      reply.hex(codepoint.valueOr(0), {.width = 1});
       reply.append(";status=1;reason=unsupported_format\x1b\\");
       break;
     }

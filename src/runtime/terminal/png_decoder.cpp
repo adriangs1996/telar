@@ -24,7 +24,7 @@ namespace telar::runtime {
             length_(length),
             alignment_(static_cast<std::uint8_t>(alignment)) {
         if (length != 0 && length <= limit) {
-          data_ = static_cast<Byte*>(allocator_->vtable->alloc(allocator_->ctx, length, alignment_, 0));
+          data_ = allocator_->vtable->alloc(allocator_->ctx, length, alignment_, 0);
         }
       }
 
@@ -36,13 +36,20 @@ namespace telar::runtime {
 
       CodecBuffer(const CodecBuffer&) = delete;
       CodecBuffer& operator=(const CodecBuffer&) = delete;
+      CodecBuffer(CodecBuffer&&) = delete;
+      CodecBuffer& operator=(CodecBuffer&&) = delete;
 
       explicit operator bool() const noexcept {
         return length_ == 0 || data_ != nullptr;
       }
 
-      [[nodiscard]] Byte* data() const noexcept {
+      // Not const: the codec writes through the block they return.
+      [[nodiscard]] void* data() noexcept {
         return data_;
+      }
+
+      [[nodiscard]] Byte* bytes() noexcept {
+        return static_cast<Byte*>(data_);
       }
 
       [[nodiscard]] std::size_t size() const noexcept {
@@ -50,20 +57,24 @@ namespace telar::runtime {
       }
 
       tbc::val_a<Byte*> release() noexcept {
-        return std::exchange(data_, nullptr);
+        return static_cast<Byte*>(std::exchange(data_, nullptr));
       }
 
     private:
       tbc::val_a<const GhosttyAllocator*> allocator_;
-      tbc::val_a<Byte*> data_ = nullptr;
+      tbc::val_a<void*> data_ = nullptr;
       std::size_t length_;
       std::uint8_t alignment_;
     };
 
-    bool decodePng(void* context, tbc::val_a<const GhosttyAllocator*> allocator, const Byte* bytes, std::size_t length, tbc::val_a<GhosttySysImage*> image) noexcept {
+    bool decodePng(void* context, tbc::val_a<const GhosttyAllocator*> allocator, const Byte* bytes, std::size_t length, tbc::val_a<GhosttySysImage*> image) noexcept { // NOLINT(misc-const-correctness): GhosttySysDecodePngFn's C signature takes a mutable userdata
       const auto limit = context == nullptr ? graphics_screen_bytes : *static_cast<const std::size_t*>(context);
+      // GhosttySysDecodePngFn hands the PNG as a C pointer and length.
+#pragma clang unsafe_buffer_usage begin
+      const std::span<const Byte> png{bytes, length};
+#pragma clang unsafe_buffer_usage end
 
-      return decodePngImage(allocator, {bytes, length}, *image, limit);
+      return decodePngImage(allocator, png, *image, limit);
     }
 
   }
@@ -77,14 +88,14 @@ namespace telar::runtime {
       return false;
     }
 
-    auto* decoder = reinterpret_cast<wuffs_png__decoder*>(decoder_storage.data());
+    auto* decoder = static_cast<wuffs_png__decoder*>(decoder_storage.data());
     auto status = wuffs_png__decoder__initialize(decoder, decoder_storage.size(), WUFFS_VERSION, WUFFS_INITIALIZE__LEAVE_INTERNAL_BUFFERS_UNINITIALIZED);
     if (!ghostty::wuffs::isOk(&status)) {
       return false;
     }
 
     wuffs_base__io_buffer source{
-        .data = {.ptr = const_cast<Byte*>(bytes.data()), .len = bytes.size()},
+        .data = {.ptr = const_cast<Byte*>(bytes.data()), .len = bytes.size()}, // NOLINT(cppcoreguidelines-pro-type-const-cast): wuffs's io_buffer has no read-only form; the decoder only reads its source
         .meta = {.wi = bytes.size(), .ri = 0, .pos = 0, .closed = true},
     };
 
@@ -111,7 +122,7 @@ namespace telar::runtime {
     }
 
     const auto work_length = wuffs_png__decoder__workbuf_len(decoder).max_incl;
-    if (work_length > std::numeric_limits<std::size_t>::max()) {
+    if (!std::in_range<std::size_t>(work_length)) {
       return false;
     }
 
@@ -122,12 +133,12 @@ namespace telar::runtime {
 
     wuffs_base__pixel_buffer destination{};
 
-    status = ghostty::wuffs::setPixelBuffer(&destination, &config.pixcfg, ghostty::wuffs::makeSlice(pixels.data(), pixels.size()));
+    status = ghostty::wuffs::setPixelBuffer(&destination, &config.pixcfg, ghostty::wuffs::makeSlice(pixels.bytes(), pixels.size()));
     if (!ghostty::wuffs::isOk(&status)) {
       return false;
     }
 
-    status = ghostty::wuffs::decodeFrame(decoder, &destination, &source, WUFFS_BASE__PIXEL_BLEND__SRC, ghostty::wuffs::makeSlice(workspace.data(), workspace.size()));
+    status = ghostty::wuffs::decodeFrame(decoder, &destination, &source, WUFFS_BASE__PIXEL_BLEND__SRC, ghostty::wuffs::makeSlice(workspace.bytes(), workspace.size()));
     if (!ghostty::wuffs::isOk(&status)) {
       return false;
     }
@@ -143,7 +154,7 @@ namespace telar::runtime {
   }
 
   void installPngDecoder() {
-    checkGhostty(ghostty_sys_set(GHOSTTY_SYS_OPT_DECODE_PNG, reinterpret_cast<const void*>(&decodePng)));
+    checkGhostty(ghostty_sys_set(GHOSTTY_SYS_OPT_DECODE_PNG, reinterpret_cast<const void*>(&decodePng))); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): ghostty_sys_set takes the callback as a const void*
   }
 
 }

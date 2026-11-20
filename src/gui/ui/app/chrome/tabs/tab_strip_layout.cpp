@@ -30,6 +30,7 @@ static_assert(true);
 #include <cstdint>
 #include <cstring>
 #include <exception>
+#include <functional>
 #include <limits>
 #include <optional>
 #include <span>
@@ -73,7 +74,7 @@ namespace telar::gui::qt {
       const auto width = static_cast<float>(bounds.width());
       const auto height = static_cast<float>(bounds.height());
       const auto chip_side = std::max(0.0F, std::min(size.chip, width - (2 * metrics.leading)));
-      const QRectF chip{metrics.leading, 0, chip_side, height};
+      const QRectF chip{static_cast<qreal>(metrics.leading), 0, static_cast<qreal>(chip_side), static_cast<qreal>(height)};
       const auto status_right = width - (fit == Geometry::Fit::compact ? metrics.leading : metrics.trailing);
       const auto caption_left = metrics.leading + chip_side + metrics.spacing;
       const auto caption_right = status_right - size.statusSpace(metrics);
@@ -84,8 +85,8 @@ namespace telar::gui::qt {
           {QStringLiteral("tab"), tab},
           {QStringLiteral("bounds"), bounds},
           {QStringLiteral("chip"), chip},
-          {QStringLiteral("caption"), QRectF{caption_left, 0, caption_width, height}},
-          {QStringLiteral("status"), QRectF{status_right - size.status, 0, size.status, bounds.height()}},
+          {QStringLiteral("caption"), QRectF{static_cast<qreal>(caption_left), 0, static_cast<qreal>(caption_width), static_cast<qreal>(height)}},
+          {QStringLiteral("status"), QRectF{static_cast<qreal>(status_right - size.status), 0, static_cast<qreal>(size.status), bounds.height()}},
           {QStringLiteral("compact"), fit == Geometry::Fit::compact},
           {QStringLiteral("truncated"), fit != Geometry::Fit::compact && size.caption > caption_width},
       };
@@ -233,7 +234,7 @@ namespace telar::gui::qt {
     for (std::size_t index = 0; index < count; ++index) {
       const auto& slot = drop_slots_[index];
 
-      output[index] = {.id = slot.id, .bounds = {.x = static_cast<float>((origin.x() + slot.bounds.x) * scale), .y = static_cast<float>((origin.y() + slot.bounds.y) * scale), .width = static_cast<float>(slot.bounds.width * scale), .height = static_cast<float>(slot.bounds.height * scale)}};
+      output[index] = {.id = slot.id, .bounds = {.x = static_cast<float>((origin.x() + static_cast<qreal>(slot.bounds.x)) * scale), .y = static_cast<float>((origin.y() + static_cast<qreal>(slot.bounds.y)) * scale), .width = static_cast<float>(static_cast<qreal>(slot.bounds.width) * scale), .height = static_cast<float>(static_cast<qreal>(slot.bounds.height) * scale)}};
     }
 
     return count;
@@ -299,7 +300,7 @@ namespace telar::gui::qt {
   }
 
   void TabStripLayout::setPixelSize(qreal size) {
-    if (std::isfinite(size) && size > 0 && size <= ChromeMetrics::maximum_text && pixel_size_ != size) {
+    if (std::isfinite(size) && size > 0 && size <= static_cast<qreal>(ChromeMetrics::maximum_text) && std::not_equal_to<>{}(pixel_size_, size)) {
       pixel_size_ = size;
       emit fontChanged();
       polish();
@@ -308,7 +309,7 @@ namespace telar::gui::qt {
 
   void TabStripLayout::setRatio(qreal ratio) {
     constexpr auto maximum_ratio = std::numeric_limits<float>::max() / Geometry::selected_maximum;
-    if (std::isfinite(ratio) && ratio > 0 && ratio <= maximum_ratio && ratio_ != ratio) {
+    if (std::isfinite(ratio) && ratio > 0 && ratio <= static_cast<qreal>(maximum_ratio) && std::not_equal_to<>{}(ratio_, ratio)) {
       ratio_ = ratio;
       emit ratioChanged();
       polish();
@@ -336,13 +337,13 @@ namespace telar::gui::qt {
 
   QVariantMap TabStripLayout::style() const {
     return {
-        {QStringLiteral("pillRadius"), Geometry::pill_radius * ratio_},
-        {QStringLiteral("tileWidth"), Geometry::tile_width * ratio_},
-        {QStringLiteral("tileHeight"), Geometry::tile_height * ratio_},
-        {QStringLiteral("tileRadius"), Geometry::tile_radius * ratio_},
-        {QStringLiteral("pathGap"), Geometry::path_gap * ratio_},
-        {QStringLiteral("markSide"), Geometry::mark_side * ratio_},
-        {QStringLiteral("fadeWidth"), Geometry::fade_width * ratio_},
+        {QStringLiteral("pillRadius"), static_cast<qreal>(Geometry::pill_radius) * ratio_},
+        {QStringLiteral("tileWidth"), static_cast<qreal>(Geometry::tile_width) * ratio_},
+        {QStringLiteral("tileHeight"), static_cast<qreal>(Geometry::tile_height) * ratio_},
+        {QStringLiteral("tileRadius"), static_cast<qreal>(Geometry::tile_radius) * ratio_},
+        {QStringLiteral("pathGap"), static_cast<qreal>(Geometry::path_gap) * ratio_},
+        {QStringLiteral("markSide"), static_cast<qreal>(Geometry::mark_side) * ratio_},
+        {QStringLiteral("fadeWidth"), static_cast<qreal>(Geometry::fade_width) * ratio_},
     };
   }
 
@@ -481,7 +482,7 @@ namespace telar::gui::qt {
       const Rect physical{.x = static_cast<float>(bounds.x() * density), .y = static_cast<float>(bounds.y() * density), .width = static_cast<float>(bounds.width() * density), .height = static_cast<float>(bounds.height() * density)};
       const auto visible = motions_.place({.id = id, .bounds = physical, .immediate = dragging}, frame);
 
-      bounds = {visible.x / density, visible.y / density, visible.width / density, visible.height / density};
+      bounds = {static_cast<qreal>(visible.x) / density, static_cast<qreal>(visible.y) / density, static_cast<qreal>(visible.width) / density, static_cast<qreal>(visible.height) / density};
     }
 
     if (dragging) {
@@ -510,7 +511,7 @@ namespace telar::gui::qt {
     const auto written = card_motions_.place(std::span{inputs}.first(count), placed.viewMut(), frame);
 
     // Delegates follow pane order, so a card keeps its item while its pose moves.
-    std::sort(placed.dataMut(), placed.dataMut() + written, [](const application::workbench::TabCardPlacement& left, const application::workbench::TabCardPlacement& right) {
+    std::ranges::sort(placed.viewMut().first(written), [](const application::workbench::TabCardPlacement& left, const application::workbench::TabCardPlacement& right) {
       return left.pane < right.pane;
     });
 
@@ -523,8 +524,8 @@ namespace telar::gui::qt {
 
       auto record = row->toMap();
 
-      record.insert(QStringLiteral("x"), card.pose.x * ratio_);
-      record.insert(QStringLiteral("y"), card.pose.y * ratio_);
+      record.insert(QStringLiteral("x"), static_cast<qreal>(card.pose.x) * ratio_);
+      record.insert(QStringLiteral("y"), static_cast<qreal>(card.pose.y) * ratio_);
       record.insert(QStringLiteral("rotation"), card.pose.rotation);
       record.insert(QStringLiteral("scale"), card.pose.scale);
       record.insert(QStringLiteral("rank"), static_cast<qulonglong>(card.rank));
@@ -572,7 +573,7 @@ namespace telar::gui::qt {
     const auto attention = hiddenAttention(records, plan);
 
     counter_ = {
-        {QStringLiteral("bounds"), QRectF{left, row.top, counter_width, row.height}},
+        {QStringLiteral("bounds"), QRectF{static_cast<qreal>(left), static_cast<qreal>(row.top), static_cast<qreal>(counter_width), static_cast<qreal>(row.height)}},
         {QStringLiteral("count"), static_cast<qulonglong>(plan.hidden())},
         {QStringLiteral("attentionColor"), attention},
         {QStringLiteral("key"), records[static_cast<qsizetype>(*nearest)].value(QStringLiteral("key"))},
@@ -599,7 +600,7 @@ namespace telar::gui::qt {
 
     const auto visible = selection_motion_.getMut().place(*selection, frame, dragging || !workspace_);
 
-    selection_bounds_ = {visible.x / density, visible.y / density, visible.width / density, visible.height / density};
+    selection_bounds_ = {static_cast<qreal>(visible.x) / density, static_cast<qreal>(visible.y) / density, static_cast<qreal>(visible.width) / density, static_cast<qreal>(visible.height) / density};
   }
 
   void TabStripLayout::finishMotions(const application::workbench::TabMotionFrame& frame) {
@@ -618,7 +619,7 @@ namespace telar::gui::qt {
   }
 
   void TabStripLayout::rebuild() {
-    if (width() <= 0 || height() <= 0 || !std::isfinite(width()) || !std::isfinite(height()) || width() > std::numeric_limits<float>::max() || height() > std::numeric_limits<float>::max()) {
+    if (width() <= 0 || height() <= 0 || !std::isfinite(width()) || !std::isfinite(height()) || width() > static_cast<qreal>(std::numeric_limits<float>::max()) || height() > static_cast<qreal>(std::numeric_limits<float>::max())) {
       clearLayout();
 
       return;
@@ -633,7 +634,7 @@ namespace telar::gui::qt {
     const auto available = static_cast<float>(width());
     const auto height = std::min(static_cast<float>(this->height()), Geometry::pill_height * ratio);
     const auto density = window() == nullptr ? qreal{1} : window()->effectiveDevicePixelRatio();
-    const auto top = static_cast<float>(std::floor((this->height() - height) * density / 2) / density);
+    const auto top = static_cast<float>(std::floor((this->height() - static_cast<qreal>(height)) * density / 2) / density);
     QList<QVariantMap> records;
     ds::Array<Geometry::Measure, Geometry::maximum_tabs> sizes;
     const Geometry::Room room{.width = available, .metrics = metrics};
@@ -667,7 +668,7 @@ namespace telar::gui::qt {
         left += metrics.gap;
       }
 
-      QRectF bounds{left, top, plan.widths[index], height};
+      QRectF bounds{static_cast<qreal>(left), static_cast<qreal>(top), static_cast<qreal>(plan.widths[index]), static_cast<qreal>(height)};
       const auto& record = records[static_cast<qsizetype>(index)];
       const auto id = record.value(QStringLiteral("key")).toString().toULongLong();
       const auto dragging = dragged_ == id;
@@ -694,7 +695,7 @@ namespace telar::gui::qt {
     raiseDraggedSlot();
 
     left = placeCounter(records, plan, metrics, {.top = top, .height = height, .available = available}, left);
-    strip_bounds_ = count != 0 ? QRectF{0, top, std::min(left, available), height} : QRectF{};
+    strip_bounds_ = count != 0 ? QRectF{0, static_cast<qreal>(top), static_cast<qreal>(std::min(left, available)), static_cast<qreal>(height)} : QRectF{};
     placeSelection(selection, selection_dragging, frame, density);
 
     if (count != 0) {

@@ -15,6 +15,7 @@ import telar.base.memory.containers;
 import telar.base.memory.sensitive;
 import telar.vocabulary;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 // Interface: traffic/network_packet.cppm
 export {
@@ -36,15 +37,18 @@ export {
 
     // The addresses of an IP packet and its payload, which views the packet, region `a`.
     struct IpPayload {
-      ds::Array<Byte, 16> source{};
-      ds::Array<Byte, 16> destination{};
+      // An IPv6 address, which an IPv4 one fills the start of.
+      static constexpr std::size_t address_bytes = 16;
+
+      ds::Array<Byte, address_bytes> source{};
+      ds::Array<Byte, address_bytes> destination{};
       tbc::val_a<std::span<const Byte>> bytes;
       std::size_t original_bytes = 0;
       Byte protocol = 0;
       bool ipv6 = false;
       bool truncated = false;
 
-      static ds::Array<char, INET6_ADDRSTRLEN> addressText(const ds::Array<Byte, 16>& address, bool ipv6) noexcept;
+      static ds::Array<char, INET6_ADDRSTRLEN> addressText(const ds::Array<Byte, address_bytes>& address, bool ipv6) noexcept;
 
       static ds::Option<IpPayload> decode(std::span<const Byte> bytes) noexcept;
     };
@@ -65,8 +69,8 @@ export {
     struct DatagramEvent {
       DatagramTransport transport = DatagramTransport::udp;
       bool ipv6 = false;
-      ds::Array<Byte, 16> source_address{};
-      ds::Array<Byte, 16> destination_address{};
+      ds::Array<Byte, IpPayload::address_bytes> source_address{};
+      ds::Array<Byte, IpPayload::address_bytes> destination_address{};
       std::uint16_t source_port = 0;
       std::uint16_t destination_port = 0;
       Byte icmp_type = 0;
@@ -86,7 +90,7 @@ export {
 
       static DatagramEvent decode(std::span<const Byte> input);
 
-      static ds::Option<DatagramEvent> parse(const IpPayload& ip) noexcept;
+      static ds::Option<DatagramEvent> parse(const IpPayload& payload) noexcept;
 
     private:
       static void validate(const DatagramEvent& event);
@@ -102,12 +106,14 @@ export {
     class IpFragments {
       using Clock = std::chrono::steady_clock;
 
+      static constexpr std::size_t maximum_ranges = 128;
+
       struct Key {
         std::uint64_t session = 0;
         std::uint32_t interface = 0;
         std::uint32_t link_type = 0;
         ds::Array<char, Limits::interface_bytes> name{};
-        ds::Array<Byte, 32> addresses{};
+        ds::Array<Byte, 2 * IpPayload::address_bytes> addresses{};
         std::uint32_t identification = 0;
         Byte protocol = 0;
         bool ipv6 = false;
@@ -131,12 +137,12 @@ export {
         bool more;
       };
 
-      struct Entry {
+      struct Entry { // NOLINT(cppcoreguidelines-pro-type-member-init): only the first count ranges are read, and zeroing all of them would add work to every fragment
         Key key;
         Event event;
         Clock::time_point created;
         ds::Option<SensitiveAllocation<ConcurrentMemory>> storage;
-        ds::Array<Range, 128> ranges;
+        ds::Array<Range, maximum_ranges> ranges;
         std::size_t count = 0;
         std::size_t received = 0;
         std::size_t prefix = 0;
@@ -271,6 +277,9 @@ export {
       // The reason a fragment is refused, a literal, or empty.
       static tbc::val_static<std::string_view> append(Entry& entry, const Fragment& part);
 
+      // Copies a fragment into the entry's storage, and the header of the first one before it.
+      static void store(Entry& entry, const Fragment& part);
+
       static std::span<const Byte> assembled(Entry& entry);
 
       template <typename Report>
@@ -294,7 +303,7 @@ export {
   namespace telar::runtime::traffic {
 
     struct TcpEndpoint {
-      ds::Array<Byte, 16> address{};
+      ds::Array<Byte, IpPayload::address_bytes> address{};
       std::uint16_t port = 0;
       bool ipv6 = false;
       auto operator<=>(const TcpEndpoint&) const = default;
@@ -322,7 +331,7 @@ export {
 
       static ds::Option<TcpPacket> decodeNetwork(std::span<const Byte> bytes) noexcept;
 
-      static tbc::val_a<ds::Option<TcpPacket>> decodePayload(const IpPayload& ip) noexcept;
+      static tbc::val_a<ds::Option<TcpPacket>> decodePayload(const IpPayload& payload) noexcept;
     };
 
   }
@@ -369,7 +378,7 @@ export {
       };
 
       struct Flow {
-        explicit Flow(Secure& memory, std::uint64_t id, bool reverse, bool offline);
+        explicit Flow(Secure& memory, std::uint64_t flow_id, bool reversed, bool replayed);
 
         std::uint64_t id;
         bool reverse;
@@ -389,6 +398,7 @@ export {
       TcpFlows& operator=(const TcpFlows&) = delete;
       TcpFlows(TcpFlows&&) = delete;
       TcpFlows& operator=(TcpFlows&&) = delete;
+      ~TcpFlows() = default;
 
       // Generic over the caller's callbacks, and called for every captured packet.
       template <typename Emit>
@@ -400,8 +410,8 @@ export {
       }
 
       template <typename Emit>
-      TBC_GENERIC void payload(const Event& event, const IpPayload& ip, Emit emit) {
-        const auto parsed = TcpPacketDecoder::decodePayload(ip);
+      TBC_GENERIC void payload(const Event& event, const IpPayload& ip_payload, Emit emit) {
+        const auto parsed = TcpPacketDecoder::decodePayload(ip_payload);
         if (parsed) {
           consumePacket(event, *parsed, emit);
         }
@@ -414,21 +424,52 @@ export {
 
         flows_.retain([&](const Key& key, const Flow& flow) {
           const bool gap = flow.outbound.gap || flow.inbound.gap;
-          const bool expired_gap = (flow.outbound.gap && now - *flow.outbound.gap >= std::chrono::seconds{2}) || (flow.inbound.gap && now - *flow.inbound.gap >= std::chrono::seconds{2});
-          if (!stop && now - flow.touched < std::chrono::seconds{60} && !expired_gap) {
+          const bool expired_gap = (flow.outbound.gap && now - *flow.outbound.gap >= gap_timeout) || (flow.inbound.gap && now - *flow.inbound.gap >= gap_timeout);
+          if (!stop && now - flow.touched < idle_timeout && !expired_gap) {
             return true;
           }
 
-          announceClose(key, flow, event, stop ? "capture_stopped" : gap ? "tcp_gap_timeout"
-                                                                         : "idle_timeout",
-              emit,
-              gap,
-              buffered_);
+          std::string_view reason = gap ? "tcp_gap_timeout" : "idle_timeout";
+
+          if (stop) {
+            reason = "capture_stopped";
+          }
+
+          announceClose(key, flow, event, {.reason = reason, .gap = gap}, emit);
+          buffered_ -= flow.buffered;
           return false;
         });
       }
 
     private:
+      // What a packet brings to one direction of a flow: the flow's key, the packet and the event that
+      // carried it.
+      struct Arrival {
+        const Key& key;
+        const TcpPacket& packet;
+        const Event& event;
+        Direction direction;
+      };
+
+      // A flow event to publish and its kind.
+      struct Notice {
+        Kind kind;
+        FlowEvent item;
+      };
+
+      // Why a flow ends, and whether bytes of it went missing.
+      struct Ending {
+        std::string_view reason;
+        bool gap = false;
+      };
+
+      // How a segment meets the ones a side holds: a copy of one, bytes that differ from one, or neither.
+      enum class Overlap : std::uint8_t {
+        none,
+        duplicate,
+        conflict,
+      };
+
       template <typename Emit>
       TBC_GENERIC void consumePacket(const Event& event, const TcpPacket& packet, Emit emit) {
         const bool reverse = packet.destination < packet.source;
@@ -436,39 +477,23 @@ export {
 
         std::ranges::copy(event.interface, key.name.viewMut().begin());
         auto* found = flows_.findMut(key);
-        if (found != nullptr && (packet.flags & syn) && !(packet.flags & ack)) {
-          const auto& side = reverse == found->reverse ? found->outbound : found->inbound;
-          if (side.started && side.initial != packet.sequence + 1u) {
-            close(key, event, "tuple_reused", emit, false);
-            found = nullptr;
-          }
+        if (found != nullptr && reused(*found, packet, reverse)) {
+          close(key, event, "tuple_reused", emit, false);
+          found = nullptr;
         }
 
         if (found == nullptr) {
           if (flows_.size() == maximum_flows) {
-            const Key* oldest = nullptr;
-            const Flow* oldest_flow = nullptr;
-
-            for (const auto& entry : flows_) {
-              if (oldest_flow == nullptr || entry.value.touched < oldest_flow->touched) {
-                oldest = &entry.key;
-                oldest_flow = &entry.value;
-              }
-            }
-
-            // The key is copied before the entry it lies in goes.
-            const Key evicted = *oldest;
-
-            close(evicted, event, "flow_limit", emit, true);
+            evictOldest(event, emit);
           }
 
           const bool initial_reverse = (packet.flags & syn) && (packet.flags & ack) ? !reverse : reverse;
 
-          static_cast<void>(flows_.insert(key, Flow{memory_, (std::uint64_t{1} << 63) | ++next_, initial_reverse, event.offline}));
+          static_cast<void>(flows_.insert(key, Flow{memory_, capture_flow_bit | ++next_, initial_reverse, event.offline}));
           found = flows_.findMut(key);
-          publish(Kind::flow_open, key, *found, event, {}, emit);
+          publish(key, *found, event, {.kind = Kind::flow_open}, emit);
           if (!(packet.flags & syn)) {
-            publish(Kind::flow_gap, key, *found, event, {.reason = "capture_started_midstream"}, emit);
+            publish(key, *found, event, {.kind = Kind::flow_gap, .item = {.reason = "capture_started_midstream"}}, emit);
           }
         }
 
@@ -487,7 +512,7 @@ export {
           return;
         }
 
-        const auto sequence = packet.sequence + ((packet.flags & syn) ? 1u : 0u);
+        const auto sequence = packet.sequence + ((packet.flags & syn) ? 1U : 0U);
 
         if (!side.started) {
           side.started = true;
@@ -501,26 +526,66 @@ export {
           }
         }
 
-        if (side.closed && !packet.bytes.empty() && distance(sequence + static_cast<std::uint32_t>(packet.bytes.size()), side.next - 1u) > 0) {
+        if (side.closed && !packet.bytes.empty() && distance(sequence + static_cast<std::uint32_t>(packet.bytes.size()), side.next - 1U) > 0) {
           close(key, event, "data_after_fin", emit, true);
           return;
         }
 
-        if (!consume(key, flow, direction, buffered_, memory_, packet, event, emit)) {
+        if (!consume({.key = key, .packet = packet, .event = event, .direction = direction}, flow, buffered_, memory_, emit)) {
           close(key, event, "reassembly_limit_or_overlap", emit, true);
           return;
         }
 
         auto& consumed = flow;
-        auto& settled = direction == Direction::outbound ? consumed.outbound : consumed.inbound;
-        if (settled.fin && settled.next == *settled.fin && !settled.closed) {
-          ++settled.next;
-          settled.closed = true;
-        }
-
-        if (consumed.outbound.closed && consumed.inbound.closed) {
+        if (settle(consumed, direction)) {
           close(key, event, "fin", emit, false);
         }
+      }
+
+      // Whether a SYN without ACK opens the flow's tuple anew, at a sequence other than the one it
+      // started at.
+      TBC_HOT_PATH inline static bool reused(const Flow& flow, const TcpPacket& packet, bool reverse) noexcept {
+        if (!(packet.flags & syn) || (packet.flags & ack)) {
+          return false;
+        }
+
+        const auto& side = reverse == flow.reverse ? flow.outbound : flow.inbound;
+
+        return side.started && side.initial != packet.sequence + 1U;
+      }
+
+      // Ends the flow touched longest ago, for a new one to take its place.
+      template <typename Emit>
+      TBC_GENERIC void evictOldest(const Event& event, Emit emit) {
+        const Key* oldest = nullptr;
+        const Flow* oldest_flow = nullptr;
+
+        for (const auto& entry : flows_) {
+          if (oldest_flow == nullptr || entry.value.touched < oldest_flow->touched) {
+            oldest = &entry.key;
+            oldest_flow = &entry.value;
+          }
+        }
+
+        if (oldest == nullptr) {
+          return;
+        }
+
+        // The key is copied before the entry it lies in goes.
+        const Key evicted = *oldest;
+
+        close(evicted, event, "flow_limit", emit, true);
+      }
+
+      // Closes the direction once its bytes reach its FIN; true when both directions are closed.
+      TBC_HOT_PATH inline static bool settle(Flow& flow, Direction direction) noexcept {
+        auto& side = direction == Direction::outbound ? flow.outbound : flow.inbound;
+        if (side.fin && side.next == *side.fin && !side.closed) {
+          ++side.next;
+          side.closed = true;
+        }
+
+        return flow.outbound.closed && flow.inbound.closed;
       }
 
       static std::int32_t distance(std::uint32_t a, std::uint32_t b) noexcept;
@@ -528,9 +593,10 @@ export {
       // Reassembles one direction of a flow; the bytes buffered over every flow and the allocator are lent
       // apart from it.
       template <typename Emit>
-      TBC_GENERIC inline static bool consume(const Key& key, tbc::mut_a<Flow> flow, Direction direction, std::size_t& total_buffered, tbc::mut_a<Secure> memory, const TcpPacket& packet, const Event& event, Emit emit) {
-        auto& side = direction == Direction::outbound ? flow.outbound : flow.inbound;
-        auto sequence = packet.sequence + ((packet.flags & syn) ? 1u : 0u);
+      TBC_GENERIC inline static bool consume(const Arrival& arrival, tbc::mut_a<Flow> flow, std::size_t& total_buffered, tbc::mut_a<Secure> memory, Emit emit) {
+        const auto& packet = arrival.packet;
+        auto& side = arrival.direction == Direction::outbound ? flow.outbound : flow.inbound;
+        auto sequence = packet.sequence + ((packet.flags & syn) ? 1U : 0U);
         auto bytes = packet.bytes;
         const auto behind = distance(side.next, sequence);
         if (behind > 0) {
@@ -540,32 +606,17 @@ export {
           sequence += static_cast<std::uint32_t>(skip);
         }
 
-        for (const auto& pending : side.pending) {
-          if (bytes.empty()) {
-            break;
-          }
-
-          if (pending.sequence == sequence && std::ranges::equal(pending.bytes, bytes)) {
-            return true;
-          }
-
-          const auto delta = distance(sequence, pending.sequence);
-          if ((delta >= 0 && std::size_t(delta) < pending.bytes.size()) || (delta < 0 && std::size_t(-std::int64_t(delta)) < bytes.size())) {
-            const auto incoming = delta < 0 ? static_cast<std::size_t>(-std::int64_t(delta)) : 0;
-            const auto queued = delta > 0 ? static_cast<std::size_t>(delta) : 0;
-            const auto count = std::min(bytes.size() - incoming, pending.bytes.size() - queued);
-            if (!std::ranges::equal(bytes.subspan(incoming, count), std::span<const Byte>{pending.bytes}.subspan(queued, count))) {
-              return false;
-            }
-          }
+        const auto overlap = compare(side, sequence, bytes);
+        if (overlap != Overlap::none) {
+          return overlap == Overlap::duplicate;
         }
 
         if (!bytes.empty() && sequence == side.next) {
-          publish(Kind::stream_data, key, flow, event, {.direction = direction, .offset = side.offset, .bytes = bytes}, emit);
+          publish(arrival.key, flow, arrival.event, {.kind = Kind::stream_data, .item = {.direction = arrival.direction, .offset = side.offset, .bytes = bytes}}, emit);
           side.next += static_cast<std::uint32_t>(bytes.size());
           side.offset += bytes.size();
         } else if (!bytes.empty() && distance(sequence, side.next) > 0) {
-          if (side.pending.size() == 32 || flow.buffered + bytes.size() > per_flow_bytes || total_buffered + bytes.size() > total_bytes) {
+          if (side.pending.size() == maximum_pending_segments || flow.buffered + bytes.size() > per_flow_bytes || total_buffered + bytes.size() > total_bytes) {
             return false;
           }
 
@@ -587,7 +638,7 @@ export {
           const auto skip = std::min(pending.bytes.size(), static_cast<std::size_t>((side.next - pending.sequence)));
           const auto ready = std::span<const Byte>{pending.bytes}.subspan(skip);
           if (!ready.empty()) {
-            publish(Kind::stream_data, key, flow, event, {.direction = direction, .offset = side.offset, .bytes = ready}, emit);
+            publish(arrival.key, flow, arrival.event, {.kind = Kind::stream_data, .item = {.direction = arrival.direction, .offset = side.offset, .bytes = ready}}, emit);
             side.next += static_cast<std::uint32_t>(ready.size());
             side.offset += ready.size();
           }
@@ -605,10 +656,35 @@ export {
         return true;
       }
 
+      TBC_HOT_PATH inline static Overlap compare(const Side& side, std::uint32_t sequence, std::span<const Byte> bytes) noexcept {
+        if (bytes.empty()) {
+          return Overlap::none;
+        }
+
+        for (const auto& pending : side.pending) {
+          if (pending.sequence == sequence && std::ranges::equal(pending.bytes, bytes)) {
+            return Overlap::duplicate;
+          }
+
+          const auto delta = distance(sequence, pending.sequence);
+          if ((delta >= 0 && static_cast<std::size_t>(delta) < pending.bytes.size()) || (delta < 0 && static_cast<std::size_t>(-static_cast<std::int64_t>(delta)) < bytes.size())) {
+            const auto incoming = delta < 0 ? static_cast<std::size_t>(-static_cast<std::int64_t>(delta)) : 0;
+            const auto queued = delta > 0 ? static_cast<std::size_t>(delta) : 0;
+            const auto count = std::min(bytes.size() - incoming, pending.bytes.size() - queued);
+            if (!std::ranges::equal(bytes.subspan(incoming, count), std::span<const Byte>{pending.bytes}.subspan(queued, count))) {
+              return Overlap::conflict;
+            }
+          }
+        }
+
+        return Overlap::none;
+      }
+
       template <typename Emit>
-      TBC_GENERIC static void publish(Kind kind, const Key& key, const Flow& flow, Event event, FlowEvent item, Emit emit) {
+      TBC_GENERIC static void publish(const Key& key, const Flow& flow, Event event, Notice notice, Emit emit) {
         const auto client = (flow.reverse ? key.second : key.first).text();
         const auto server = (flow.reverse ? key.first : key.second).text();
+        auto& item = notice.item;
 
         item.id = flow.id;
         item.source = FlowSource::capture;
@@ -616,7 +692,7 @@ export {
         item.server = server.view();
         SensitiveBuffer<Limits::frame_bytes> output;
 
-        event.kind = kind;
+        event.kind = notice.kind;
         event.session = key.session;
         event.offline = flow.offline;
         event.interface_index = key.interface;
@@ -625,37 +701,42 @@ export {
         emit(event);
       }
 
-      // Publishes the end of a flow and returns its buffered bytes; the caller drops the flow. It borrows
-      // the buffered total alone, so the flow, which the table holds, stays borrowed meanwhile.
+      // Publishes the end of a flow; the caller drops the flow and the bytes it buffered.
       template <typename Emit>
-      TBC_GENERIC static void announceClose(const Key& key, const Flow& flow, const Event& event, std::string_view reason, Emit emit, bool gap, std::size_t& buffered) {
+      TBC_GENERIC static void announceClose(const Key& key, const Flow& flow, const Event& event, Ending ending, Emit emit) {
         if (flow.outbound.gap) {
-          publish(Kind::flow_gap, key, flow, event, {.offset = flow.outbound.offset, .reason = reason}, emit);
+          publish(key, flow, event, {.kind = Kind::flow_gap, .item = {.offset = flow.outbound.offset, .reason = ending.reason}}, emit);
         }
 
         if (flow.inbound.gap) {
-          publish(Kind::flow_gap, key, flow, event, {.direction = Direction::inbound, .offset = flow.inbound.offset, .reason = reason}, emit);
+          publish(key, flow, event, {.kind = Kind::flow_gap, .item = {.direction = Direction::inbound, .offset = flow.inbound.offset, .reason = ending.reason}}, emit);
         }
 
-        if (gap && !flow.outbound.gap && !flow.inbound.gap) {
-          publish(Kind::flow_gap, key, flow, event, {.reason = reason}, emit);
+        if (ending.gap && !flow.outbound.gap && !flow.inbound.gap) {
+          publish(key, flow, event, {.kind = Kind::flow_gap, .item = {.reason = ending.reason}}, emit);
         }
 
-        publish(Kind::flow_close, key, flow, event, {.reason = reason}, emit);
-        buffered -= flow.buffered;
+        publish(key, flow, event, {.kind = Kind::flow_close, .item = {.reason = ending.reason}}, emit);
       }
 
       // Ends the flow of a key this Map holds.
       template <typename Emit>
       TBC_GENERIC void close(const Key& key, const Event& event, std::string_view reason, Emit emit, bool gap) {
-        announceClose(key, *flows_.find(key), event, reason, emit, gap, buffered_);
+        const auto& flow = *flows_.find(key);
+
+        announceClose(key, flow, event, {.reason = reason, .gap = gap}, emit);
+        buffered_ -= flow.buffered;
         static_cast<void>(flows_.remove(key));
       }
 
       static constexpr Byte fin = 1, syn = 2, rst = 4, ack = 16;
       static constexpr std::size_t maximum_flows = 256;
-      static constexpr std::size_t per_flow_bytes = 64 * 1024;
-      static constexpr std::size_t total_bytes = 8 * 1024 * 1024;
+      static constexpr std::size_t maximum_pending_segments = 32;
+      static constexpr std::size_t per_flow_bytes = std::size_t{64} * 1024;
+      static constexpr std::size_t total_bytes = std::size_t{8} * 1024 * 1024;
+      static constexpr std::uint64_t capture_flow_bit = std::uint64_t{1} << 63U;
+      static constexpr auto gap_timeout = std::chrono::seconds{2};
+      static constexpr auto idle_timeout = std::chrono::seconds{60};
       Secure memory_;
       tbc::val_self<Map> flows_;
       std::size_t buffered_ = 0;
@@ -677,20 +758,20 @@ export {
       template <typename Emit>
       TBC_GENERIC void packet(const Event& event, Selection selection, Emit emit) {
         fragments_.packet(event, [&](std::span<const Byte> bytes) {
-          const auto ip = IpPayload::decode(bytes);
-          if (!ip) {
+          const auto ip_payload = IpPayload::decode(bytes);
+          if (!ip_payload) {
             return;
           }
 
-          if (ip->protocol == IPPROTO_TCP && selects(selection, Selection::flows)) {
-            tcp_.payload(event, *ip, emit);
+          if (ip_payload->protocol == IPPROTO_TCP && selects(selection, Selection::flows)) {
+            tcp_.payload(event, *ip_payload, emit);
           }
 
           if (!selects(selection, Selection::datagrams)) {
             return;
           }
 
-          const auto datagram = DatagramCodec::parse(*ip);
+          const auto datagram = DatagramCodec::parse(*ip_payload);
           if (!datagram) {
             return;
           }
@@ -720,7 +801,7 @@ export {
       template <typename Emit>
       TBC_GENERIC static void fragmentError(Event event, std::string_view reason, Emit emit) {
         event.kind = Kind::error;
-        event.bytes = {reinterpret_cast<const Byte*>(reason.data()), reason.size()};
+        event.bytes = byteView(reason);
         emit(event);
       }
 

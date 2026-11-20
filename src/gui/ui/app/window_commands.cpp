@@ -88,9 +88,60 @@ namespace telar::gui::qt {
       case window_actions::Action::focus_up:
       case window_actions::Action::resize_up:
         return PaneDirection::up;
-      default:
+      case window_actions::Action::none:
+      case window_actions::Action::new_tab:
+      case window_actions::Action::select_tab:
+      case window_actions::Action::select_tab_index:
+      case window_actions::Action::next_tab:
+      case window_actions::Action::previous_tab:
+      case window_actions::Action::move_tab_next:
+      case window_actions::Action::move_tab_previous:
+      case window_actions::Action::focus_down:
+      case window_actions::Action::resize_down:
+      case window_actions::Action::detach:
+      case window_actions::Action::close_tab:
+      case window_actions::Action::select_workspace:
+      case window_actions::Action::focus_pane:
+      case window_actions::Action::select_agent:
+      case window_actions::Action::split_horizontal:
+      case window_actions::Action::split_vertical:
+      case window_actions::Action::close_pane:
+      case window_actions::Action::fullscreen:
+      case window_actions::Action::toggle_sidebar:
+      case window_actions::Action::toggle_workspace_list:
+      case window_actions::Action::history:
+      case window_actions::Action::palette:
+      case window_actions::Action::goto_picker:
+      case window_actions::Action::leave_worktree:
+      case window_actions::Action::forget_gone_worktrees:
+      case window_actions::Action::new_workspace:
+      case window_actions::Action::rename_tab:
+      case window_actions::Action::rename_workspace:
+      case window_actions::Action::cancel:
+      case window_actions::Action::copy_mode:
+      case window_actions::Action::path_picker:
+      case window_actions::Action::suggest_command:
+      case window_actions::Action::machine_picker:
+      case window_actions::Action::next_machine:
+      case window_actions::Action::previous_machine:
+      case window_actions::Action::add_machine:
+      case window_actions::Action::monitor:
+      case window_actions::Action::process_picker:
+      case window_actions::Action::process_terminate:
+      case window_actions::Action::process_kill:
+      case window_actions::Action::process_stop:
+      case window_actions::Action::process_continue:
+      case window_actions::Action::process_lower_priority:
+      case window_actions::Action::process_copy_command:
+      case window_actions::Action::process_focus_pane:
+      case window_actions::Action::process_review_stack:
+      case window_actions::Action::process_review_files:
+      case window_actions::Action::process_review_logs:
         return PaneDirection::down;
       }
+
+      // An action outside the enum points down.
+      return PaneDirection::down;
     }
 
     auto dialogFor(window_actions::Action action) -> Store::Dialog {
@@ -105,9 +156,62 @@ namespace telar::gui::qt {
         return Dialog::rename_tab;
       case window_actions::Action::rename_workspace:
         return Dialog::rename_workspace;
-      default:
+      case window_actions::Action::none:
+      case window_actions::Action::new_tab:
+      case window_actions::Action::select_tab:
+      case window_actions::Action::select_tab_index:
+      case window_actions::Action::next_tab:
+      case window_actions::Action::previous_tab:
+      case window_actions::Action::move_tab_next:
+      case window_actions::Action::move_tab_previous:
+      case window_actions::Action::focus_left:
+      case window_actions::Action::focus_right:
+      case window_actions::Action::focus_up:
+      case window_actions::Action::focus_down:
+      case window_actions::Action::resize_left:
+      case window_actions::Action::resize_right:
+      case window_actions::Action::resize_up:
+      case window_actions::Action::resize_down:
+      case window_actions::Action::detach:
+      case window_actions::Action::close_tab:
+      case window_actions::Action::select_workspace:
+      case window_actions::Action::focus_pane:
+      case window_actions::Action::select_agent:
+      case window_actions::Action::split_horizontal:
+      case window_actions::Action::split_vertical:
+      case window_actions::Action::close_pane:
+      case window_actions::Action::fullscreen:
+      case window_actions::Action::toggle_sidebar:
+      case window_actions::Action::toggle_workspace_list:
+      case window_actions::Action::history:
+      case window_actions::Action::goto_picker:
+      case window_actions::Action::leave_worktree:
+      case window_actions::Action::forget_gone_worktrees:
+      case window_actions::Action::cancel:
+      case window_actions::Action::copy_mode:
+      case window_actions::Action::path_picker:
+      case window_actions::Action::suggest_command:
+      case window_actions::Action::machine_picker:
+      case window_actions::Action::next_machine:
+      case window_actions::Action::previous_machine:
+      case window_actions::Action::add_machine:
+      case window_actions::Action::monitor:
+      case window_actions::Action::process_picker:
+      case window_actions::Action::process_terminate:
+      case window_actions::Action::process_kill:
+      case window_actions::Action::process_stop:
+      case window_actions::Action::process_continue:
+      case window_actions::Action::process_lower_priority:
+      case window_actions::Action::process_copy_command:
+      case window_actions::Action::process_focus_pane:
+      case window_actions::Action::process_review_stack:
+      case window_actions::Action::process_review_files:
+      case window_actions::Action::process_review_logs:
         return Dialog::none;
       }
+
+      // An action outside the enum opens no dialog.
+      return Dialog::none;
     }
 
     ds::Option<window_actions::Action> nativeAction(BindingActionKind kind) noexcept {
@@ -398,36 +502,41 @@ namespace telar::gui::qt {
       return;
     }
 
+    executeWindowBinding(action, resolved);
+  }
+
+  void WindowCommands::executeWindowBinding(BindingAction action, const ConfigurationSource::Actions* resolved) {
     switch (action.kind) {
     case BindingActionKind::select_tab:
       application::workbench::selectTabAt(store_.sessionMut(), static_cast<std::size_t>(action.parameter));
-      break;
+      return;
     case BindingActionKind::select_tab_offset:
       application::workbench::selectTabBeside(store_.sessionMut(), action.parameter);
-      break;
+      return;
     case BindingActionKind::select_workspace:
       application::workbench::selectWorkspaceAt(store_.sessionMut(), static_cast<std::size_t>(action.parameter));
-      break;
+      return;
     case BindingActionKind::scroll_pane_up:
     case BindingActionKind::scroll_pane_down:
       scrollBinding(action.kind == BindingActionKind::scroll_pane_up ? application::ScrollDirection::up : application::ScrollDirection::down);
-      break;
+      return;
     case BindingActionKind::resize_sidebar_left:
     case BindingActionKind::resize_sidebar_right: {
       constexpr float resize_columns = 2;
       const auto change = resize_columns * display_.cell().width * (action.kind == BindingActionKind::resize_sidebar_left ? -1.0F : 1.0F);
 
-      display_.setSidebarWidth(display_.sidebarWidth() + change);
-    } break;
+      display_.setSidebarWidth(display_.sidebarWidth() + static_cast<qreal>(change));
+      return;
+    }
     case BindingActionKind::command_tab:
       executeCommandTab(action, resolved);
-      break;
+      return;
     case BindingActionKind::close_panel:
       components_.closePanel();
-      break;
+      return;
     case BindingActionKind::refresh_panel:
       components_.refreshPanel();
-      break;
+      return;
     case BindingActionKind::extended:
       if (const auto named = configuration_source_.namedAction(action, resolved)) {
         executeNamedAction(*named);
@@ -435,10 +544,67 @@ namespace telar::gui::qt {
         executeNotificationBinding(action, resolved);
       }
 
-      break;
-    default:
+      return;
+    case BindingActionKind::none:
+    case BindingActionKind::split_horizontal:
+    case BindingActionKind::split_vertical:
+    case BindingActionKind::focus_left:
+    case BindingActionKind::focus_right:
+    case BindingActionKind::focus_up:
+    case BindingActionKind::focus_down:
+    case BindingActionKind::navigate_left:
+    case BindingActionKind::navigate_right:
+    case BindingActionKind::navigate_up:
+    case BindingActionKind::navigate_down:
+    case BindingActionKind::resize_left:
+    case BindingActionKind::resize_right:
+    case BindingActionKind::resize_up:
+    case BindingActionKind::resize_down:
+    case BindingActionKind::toggle_pane_fullscreen:
+    case BindingActionKind::toggle_sidebar:
+    case BindingActionKind::toggle_workspace_list:
+    case BindingActionKind::leave_worktree:
+    case BindingActionKind::forget_gone_worktrees:
+    case BindingActionKind::new_workspace:
+    case BindingActionKind::rename_workspace:
+    case BindingActionKind::close_pane:
+    case BindingActionKind::new_tab:
+    case BindingActionKind::next_tab:
+    case BindingActionKind::previous_tab:
+    case BindingActionKind::rename_tab:
+    case BindingActionKind::close_tab:
+    case BindingActionKind::move_tab_previous:
+    case BindingActionKind::move_tab_next:
+    case BindingActionKind::detach:
+    case BindingActionKind::copy_mode:
+    case BindingActionKind::goto_picker:
+    case BindingActionKind::history_palette:
+    case BindingActionKind::path_picker:
+    case BindingActionKind::suggest_command:
+    case BindingActionKind::next_machine:
+    case BindingActionKind::previous_machine:
+    case BindingActionKind::machine_picker:
+    case BindingActionKind::add_machine:
+    case BindingActionKind::monitor:
+    case BindingActionKind::process_picker:
+    case BindingActionKind::process_terminate:
+    case BindingActionKind::process_kill:
+    case BindingActionKind::process_stop:
+    case BindingActionKind::process_continue:
+    case BindingActionKind::process_lower_priority:
+    case BindingActionKind::process_copy_command:
+    case BindingActionKind::process_focus_pane:
+    case BindingActionKind::process_review_stack:
+    case BindingActionKind::process_review_files:
+    case BindingActionKind::process_review_logs:
+    case BindingActionKind::palette:
+    case BindingActionKind::callback:
+    case BindingActionKind::expression:
       throw std::runtime_error{"Binding action is not yet available in the C++ GUI"};
     }
+
+    // A binding outside the enum is unsupported.
+    throw std::runtime_error{"Binding action is not yet available in the C++ GUI"};
   }
 
   void WindowCommands::executeNamedAction(const NamedActionDescription& named) {
@@ -535,9 +701,42 @@ namespace telar::gui::qt {
 
       return true;
     }
-    default:
+    case ClientAction::workspace_select:
+    case ClientAction::tab_create:
+    case ClientAction::tab_select:
+    case ClientAction::tab_next:
+    case ClientAction::tab_previous:
+    case ClientAction::pane_create:
+    case ClientAction::pane_split:
+    case ClientAction::pane_close:
+    case ClientAction::pane_focus:
+    case ClientAction::pane_resize:
+    case ClientAction::pane_fullscreen:
+    case ClientAction::pane_scroll:
+    case ClientAction::sidebar_get:
+    case ClientAction::sidebar_show:
+    case ClientAction::sidebar_hide:
+    case ClientAction::sidebar_resize:
+    case ClientAction::workspace_list_expand:
+    case ClientAction::workspace_list_collapse:
+    case ClientAction::client_open_goto:
+    case ClientAction::client_open_history:
+    case ClientAction::client_copy_mode:
+    case ClientAction::notification_dismiss:
+    case ClientAction::client_open_link:
+    case ClientAction::client_clipboard_copy:
+    case ClientAction::pane_copy:
+    case ClientAction::layout_get:
+    case ClientAction::layout_apply:
+    case ClientAction::config_reload:
+    case ClientAction::plugin_enable:
+    case ClientAction::plugin_disable:
+    case ClientAction::plugin_run:
       return false;
     }
+
+    // A host action outside the enum is not a configuration query.
+    return false;
   }
 
   void WindowCommands::executeHostCommand(const ClientCommand& message, CompleteClientCommand& reply) {
@@ -546,15 +745,15 @@ namespace telar::gui::qt {
     case ClientAction::plugin_disable:
       configuration_source_.setPluginEnabled(message, message.action == ClientAction::plugin_enable);
       reply.status = ClientCommandStatus::admitted;
-      break;
+      return;
     case ClientAction::plugin_run:
       plugins_.start(configuration_source_.pluginInvocation(message, context()));
       reply.status = ClientCommandStatus::admitted;
-      break;
+      return;
     case ClientAction::config_reload:
       configuration_source_.requestReload();
       reply.status = ClientCommandStatus::admitted;
-      break;
+      return;
     // Name prompts: none opens over copy mode or another prompt, and
     // copy mode does not start over a prompt.
     case ClientAction::client_open_goto:
@@ -563,7 +762,7 @@ namespace telar::gui::qt {
       }
 
       executeWindowAction(window_actions::Action::goto_picker);
-      break;
+      return;
     case ClientAction::client_open_history:
       if (copy_.active() || store_.dialog().kind != Dialog::none) {
         throw EncodingError{"ClientPromptUnavailable"};
@@ -571,7 +770,7 @@ namespace telar::gui::qt {
 
       executeWindowAction(window_actions::Action::history);
       reply.status = ClientCommandStatus::admitted;
-      break;
+      return;
     case ClientAction::client_copy_mode:
       if (!copy_.active()) {
         if (store_.dialog().kind != Dialog::none) {
@@ -584,7 +783,7 @@ namespace telar::gui::qt {
         }
       }
 
-      break;
+      return;
     case ClientAction::client_open_link: {
       const auto target = application::terminal::links::LinkTarget::fromUri(message.text);
       if (!target) {
@@ -598,12 +797,40 @@ namespace telar::gui::qt {
 
       reply.text = {};
       reply.status = ClientCommandStatus::admitted;
-      break;
+      return;
     }
-    default:
+    case ClientAction::workspace_select:
+    case ClientAction::tab_create:
+    case ClientAction::tab_select:
+    case ClientAction::tab_next:
+    case ClientAction::tab_previous:
+    case ClientAction::pane_create:
+    case ClientAction::pane_split:
+    case ClientAction::pane_close:
+    case ClientAction::pane_focus:
+    case ClientAction::pane_resize:
+    case ClientAction::pane_fullscreen:
+    case ClientAction::pane_scroll:
+    case ClientAction::sidebar_get:
+    case ClientAction::sidebar_show:
+    case ClientAction::sidebar_hide:
+    case ClientAction::sidebar_resize:
+    case ClientAction::workspace_list_expand:
+    case ClientAction::workspace_list_collapse:
+    case ClientAction::notification_dismiss:
+    case ClientAction::client_clipboard_copy:
+    case ClientAction::pane_copy:
+    case ClientAction::layout_get:
+    case ClientAction::layout_apply:
+    case ClientAction::config_show:
+    case ClientAction::plugin_list:
+    case ClientAction::plugin_get:
       application::UnsupportedClientCommand{}(message, reply);
-      break;
+      return;
     }
+
+    // A host action outside the enum is unsupported.
+    application::UnsupportedClientCommand{}(message, reply);
   }
 
   void WindowCommands::execute(window_actions::Action action, const QString& target) {
@@ -782,21 +1009,72 @@ namespace telar::gui::qt {
     switch (action) {
     case window_actions::Action::machine_picker:
       dialogs_.showPalette(application::palette::PaletteMode::machines);
-      break;
+      return true;
     case window_actions::Action::next_machine:
       machines_.move(1);
-      break;
+      return true;
     case window_actions::Action::previous_machine:
       machines_.move(-1);
-      break;
+      return true;
     case window_actions::Action::add_machine:
       dialogs_.showMachinePrompt();
-      break;
-    default:
+      return true;
+    case window_actions::Action::none:
+    case window_actions::Action::new_tab:
+    case window_actions::Action::select_tab:
+    case window_actions::Action::select_tab_index:
+    case window_actions::Action::next_tab:
+    case window_actions::Action::previous_tab:
+    case window_actions::Action::move_tab_next:
+    case window_actions::Action::move_tab_previous:
+    case window_actions::Action::focus_left:
+    case window_actions::Action::focus_right:
+    case window_actions::Action::focus_up:
+    case window_actions::Action::focus_down:
+    case window_actions::Action::resize_left:
+    case window_actions::Action::resize_right:
+    case window_actions::Action::resize_up:
+    case window_actions::Action::resize_down:
+    case window_actions::Action::detach:
+    case window_actions::Action::close_tab:
+    case window_actions::Action::select_workspace:
+    case window_actions::Action::focus_pane:
+    case window_actions::Action::select_agent:
+    case window_actions::Action::split_horizontal:
+    case window_actions::Action::split_vertical:
+    case window_actions::Action::close_pane:
+    case window_actions::Action::fullscreen:
+    case window_actions::Action::toggle_sidebar:
+    case window_actions::Action::toggle_workspace_list:
+    case window_actions::Action::history:
+    case window_actions::Action::palette:
+    case window_actions::Action::goto_picker:
+    case window_actions::Action::leave_worktree:
+    case window_actions::Action::forget_gone_worktrees:
+    case window_actions::Action::new_workspace:
+    case window_actions::Action::rename_tab:
+    case window_actions::Action::rename_workspace:
+    case window_actions::Action::cancel:
+    case window_actions::Action::copy_mode:
+    case window_actions::Action::path_picker:
+    case window_actions::Action::suggest_command:
+    case window_actions::Action::monitor:
+    case window_actions::Action::process_picker:
+    case window_actions::Action::process_terminate:
+    case window_actions::Action::process_kill:
+    case window_actions::Action::process_stop:
+    case window_actions::Action::process_continue:
+    case window_actions::Action::process_lower_priority:
+    case window_actions::Action::process_copy_command:
+    case window_actions::Action::process_focus_pane:
+    case window_actions::Action::process_review_stack:
+    case window_actions::Action::process_review_files:
+    case window_actions::Action::process_review_logs:
       return false;
     }
 
-    return true;
+    // An action outside the enum is not a machine action.
+    return false;
   }
 
   void WindowCommands::editMachineResult(const QVariantMap& choice, window_actions::MachineEditAction action) {

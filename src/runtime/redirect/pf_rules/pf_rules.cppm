@@ -47,12 +47,16 @@ export {
   namespace telar::runtime::redirect {
 
     class NatLookup {
+      // pf_addr holds either family's address.
+      static constexpr std::size_t address_bytes = sizeof(in6_addr);
+      static constexpr std::size_t request_bytes = 84;
+
       // Darwin pfioc_natlook, including four 32-bit pf_state_xport unions.
       struct Request {
-        ds::Array<Byte, 16> source{};
-        ds::Array<Byte, 16> destination{};
-        ds::Array<Byte, 16> translated_source{};
-        ds::Array<Byte, 16> translated_destination{};
+        ds::Array<Byte, address_bytes> source{};
+        ds::Array<Byte, address_bytes> destination{};
+        ds::Array<Byte, address_bytes> translated_source{};
+        ds::Array<Byte, address_bytes> translated_destination{};
         std::uint32_t source_port = 0;
         std::uint32_t destination_port = 0;
         std::uint32_t translated_source_port = 0;
@@ -63,7 +67,7 @@ export {
         std::uint8_t direction = 2; // PF_OUT: reverse lookup from accepted socket.
       };
 
-      static_assert(sizeof(Request) == 84);
+      static_assert(sizeof(Request) == request_bytes);
       static constexpr unsigned long lookup = sys::ioctlReadWrite<Request>('D', 23);
 
     public:
@@ -74,7 +78,7 @@ export {
       static bool peerMatches(int socket, const FlowKey& flow);
 
     private:
-      static void address(const sockaddr_storage& socket, std::span<Byte, 16> bytes, std::uint32_t& port);
+      static void address(const sockaddr_storage& socket, std::span<Byte, address_bytes> bytes, std::uint32_t& port);
 
       FileDescriptor device_;
     };
@@ -101,7 +105,8 @@ export {
 
       static std::size_t aligned(std::size_t size) noexcept;
 
-      static void addressText(FixedText<INET6_ADDRSTRLEN>& target, int family, const void* address);
+      // The gateway a route reply's socket address names, as text; `address` holds its aligned size.
+      static void gatewayText(FixedText<INET6_ADDRSTRLEN>& target, std::span<const Byte> address);
     };
 
   }
@@ -156,6 +161,15 @@ export {
     extern template ds::String<ConcurrentMemory> pfRules<ConcurrentMemory>(ConcurrentMemory& memory, std::span<const Mapping> mappings, const PfScope& scope);
 
   }
+}
+
+// Not exported. pfRules, a template its importers name, runs this, so it keeps module linkage: an
+// internal one would be exposed to the importers (-Wreference-tu-local-entity-in-other-tu).
+namespace telar::runtime::redirect {
+
+  // Validates the scope, then hands each of its rules to `append`, in the order pf reads them.
+  void writePfRules(std::span<const Mapping> mappings, const PfScope& scope, ds::Function<void(std::string_view)> append);
+
 }
 
 #endif

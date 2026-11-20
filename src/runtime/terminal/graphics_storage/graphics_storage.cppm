@@ -19,7 +19,7 @@ import telar.base.ds;
 export {
   namespace telar::runtime {
 
-    inline constexpr std::size_t graphics_screen_bytes = 128 * 1024 * 1024;
+    inline constexpr std::size_t graphics_screen_bytes = std::size_t{128} * 1024 * 1024;
     inline constexpr std::size_t graphics_credit_bytes = 2 * graphics_screen_bytes;
     inline constexpr std::size_t graphics_image_count = 32;
     inline constexpr std::size_t graphics_placement_count = 128;
@@ -32,6 +32,8 @@ export {
 
       GraphicsScreenScope(const GraphicsScreenScope&) = delete;
       GraphicsScreenScope& operator=(const GraphicsScreenScope&) = delete;
+      GraphicsScreenScope(GraphicsScreenScope&&) = delete;
+      GraphicsScreenScope& operator=(GraphicsScreenScope&&) = delete;
 
       bool select(GhosttyTerminalScreen screen);
 
@@ -116,7 +118,8 @@ export {
       GhosttyAllocatorBridge<Memory> allocator_;
       GraphicsStorageLimits<Memory> limits_;
       GhosttyHandle<GhosttyKittyGraphicsPlacementIterator, ghostty_kitty_graphics_placement_iterator_free> iterator_;
-      ds::Array<GraphicsImageView, graphics_image_count> images_{};
+      // Default-initialized: each view's description starts from its members' defaults.
+      ds::Array<GraphicsImageView, graphics_image_count> images_;
       ds::Array<GraphicsPlacement, graphics_placement_count> placements_{};
       std::size_t image_count_ = 0;
       std::size_t placement_count_ = 0;

@@ -52,6 +52,10 @@ namespace telar::gui::qt {
   class WindowStatus;
   class WorkspaceFormController;
 
+// An interface of pure virtual calls with a protected, non-virtual destructor has no member to define out of line.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wweak-vtables"
+
   // What running a command needs from the window, which only the window can do.
   class CommandsHost {
   public:
@@ -69,6 +73,8 @@ namespace telar::gui::qt {
     CommandsHost() = default;
     ~CommandsHost() = default;
   };
+
+#pragma clang diagnostic pop
 
   // Runs what the user asks of the window: the actions QML sends, the key bindings and what
   // their Lua callbacks return, the palette's choices, the effects of a plugin and the commands
@@ -170,6 +176,8 @@ namespace telar::gui::qt {
   private:
     [[nodiscard]] BindingContext context() const;
     void executeBinding(BindingAction action, const ConfigurationSource::Actions* resolved = nullptr);
+    // A binding that is neither a window action nor a navigation.
+    void executeWindowBinding(BindingAction action, const ConfigurationSource::Actions* resolved);
     void luaBindingFinished(KeyBindings::Hold hold, bool stale, const QString& error, ds::Function<void()> apply);
     void applyEffects(const application::components::ResolvedEffects<ApplicationAllocator>& effects);
     void executeNamedAction(const NamedActionDescription& named);

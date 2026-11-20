@@ -153,10 +153,16 @@ namespace telar::gui::qt {
       case platform::ClipboardImageError::pixels:
         emit quotaReached(*result->failure);
         return;
-      default:
+      case platform::ClipboardImageError::changed:
+      case platform::ClipboardImageError::invalid_image:
+      case platform::ClipboardImageError::read_failed:
         emit failed(result->error);
         return;
       }
+
+      // An error outside the enum reports the worker's message.
+      emit failed(result->error);
+      return;
     }
 
     if (!result->error.isEmpty()) {

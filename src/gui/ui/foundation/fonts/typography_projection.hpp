@@ -23,8 +23,8 @@ namespace telar::gui::qt {
         {QStringLiteral("body"), chrome.body / density},
         {QStringLiteral("small"), chrome.small / density},
         {QStringLiteral("title"), chrome.title / density},
-        {QStringLiteral("bodyRow"), ChromeMetrics::lineHeight(chrome.body) / density},
-        {QStringLiteral("smallRow"), ChromeMetrics::lineHeight(chrome.small) / density},
+        {QStringLiteral("bodyRow"), static_cast<double>(ChromeMetrics::lineHeight(chrome.body)) / density},
+        {QStringLiteral("smallRow"), static_cast<double>(ChromeMetrics::lineHeight(chrome.small)) / density},
         {QStringLiteral("primaryFamily"), toQString(font.family.view())},
         {QStringLiteral("primaryStyle"), toQString(font.style.view())},
     };

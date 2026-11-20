@@ -6,6 +6,7 @@ static_assert(true);
 #include "machine_profiles_source.hpp"
 #include "foundation/core/application_memory.hpp"
 #include "telar_base/memory/allocator.hpp"
+#include <QDebug>
 #include <QFuture>
 #include <QString>
 #include <QtConcurrentRun>
@@ -72,7 +73,7 @@ namespace telar::gui::qt {
         static_cast<void>(future.takeResult());
       }
     } catch (const std::exception& error) {
-      qWarning("Machine profile worker failed during shutdown: %s", error.what());
+      qWarning() << "Machine profile worker failed during shutdown:" << error.what();
     }
   }
 
@@ -172,7 +173,7 @@ namespace telar::gui::qt {
       }
 
       system::ProfileFile file{textView(request.path), request.stop};
-      application::machines::MachineProfileStore store{memory, file};
+      application::machines::MachineProfileStore<ApplicationAllocator, system::ProfileFile> store{memory, file};
 
       if (request.edit) {
         system::SecureRandom random;
@@ -218,8 +219,8 @@ namespace telar::gui::qt {
       busy_ = true;
       editing_ = request.edit.hasValue();
       reopen_pending_ = false;
-      task_.setFuture(QtConcurrent::run([memory = &memory_, request = std::move(request)] {
-        return prepare(*memory, request);
+      task_.setFuture(QtConcurrent::run([memory = &memory_, pending = std::move(request)] {
+        return prepare(*memory, pending);
       }));
     } catch (const std::exception& error) {
       busy_ = false;

@@ -11,6 +11,7 @@ static_assert(true);
 #include <QtCore/qcontainerfwd.h>
 #include <QtQml/qqmlregistration.h>
 #include <cstdint>
+#include <functional>
 #include <string_view>
 
 #pragma once
@@ -78,7 +79,9 @@ namespace telar::gui::qt {
       Rect meta;
       std::uint16_t more = 0;
 
-      bool operator==(const GeometryState&) const = default;
+      bool operator==(const GeometryState& other) const {
+        return row == other.row && std::equal_to<>{}(density, other.density) && std::equal_to<>{}(ratio, other.ratio) && std::equal_to<>{}(card_height, other.card_height) && meta == other.meta && more == other.more;
+      }
     };
 
     [[nodiscard]] GeometryState geometryState() const noexcept;

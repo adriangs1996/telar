@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 #include <QByteArray>
+#include <QByteArrayView>
 #include <QFont>
 #include <QFontInfo>
 #include <QRawFont>
@@ -51,11 +52,11 @@ namespace telar::gui::qt {
       constexpr qsizetype underline_thickness_offset = 10;
       glyphs::BoxStroke stroke;
       if (head.size() >= units_per_em_offset + static_cast<qsizetype>(sizeof(stroke.units_per_em))) {
-        stroke.units_per_em = qFromBigEndian<std::uint16_t>(head.constData() + units_per_em_offset);
+        stroke.units_per_em = qFromBigEndian<std::uint16_t>(QByteArrayView{head}.sliced(units_per_em_offset).data());
       }
 
       if (post.size() >= underline_thickness_offset + static_cast<qsizetype>(sizeof(stroke.underline_thickness))) {
-        stroke.underline_thickness = qFromBigEndian<std::int16_t>(post.constData() + underline_thickness_offset);
+        stroke.underline_thickness = qFromBigEndian<std::int16_t>(QByteArrayView{post}.sliced(underline_thickness_offset).data());
       }
 
       return stroke.pixels(height);

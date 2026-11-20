@@ -10,6 +10,7 @@ static_assert(true);
 #include "tbc/view.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
+#include "ui/foundation/scene/qt_buffers.hpp"
 #include "ui/foundation/scene/scene_nodes.hpp"
 #include <QImage>
 #include <QRgb>
@@ -36,6 +37,7 @@ static_assert(true);
 #include <QSGOpacityNode>
 #include <QSGTexture>
 #include <QSize>
+#include <QtCore/qendian.h>
 #include <QtCore/qtversionchecks.h>
 #include <QtCore/qtypes.h>
 #include <bit>
@@ -73,18 +75,28 @@ namespace telar::gui::qt {
       return vcombine_u8(vrshrn_n_u16(low, channel_bits), vrshrn_n_u16(high, channel_bits));
     }
 
-    void convertRow(const std::uint8_t* input, std::uint8_t* output, int width) noexcept {
+    // The pixels of an image that stays shared: constBits() never detaches it, as bits() would.
+    std::span<const uchar> constImageBytes(const QImage& image) noexcept {
+#pragma clang unsafe_buffer_usage begin
+      return {image.constBits(), static_cast<std::size_t>(image.sizeInBytes())};
+#pragma clang unsafe_buffer_usage end
+    }
+
+    void convertRow(std::span<const std::uint8_t> input, std::span<std::uint8_t> output, int width) noexcept {
       constexpr std::size_t block_pixels = 32;
+      constexpr std::size_t block_bytes = block_pixels * sizeof(QRgb);
       constexpr std::size_t vector_pixels = vector_bytes / sizeof(QRgb);
       constexpr std::uint8_t channel_maximum = 255;
       int column = 0;
 
       for (; column + static_cast<int>(block_pixels) <= width; column += block_pixels) {
+        const auto block_input = input.subspan(static_cast<std::size_t>(column) * sizeof(QRgb), block_bytes);
+        auto block_output = output.subspan(static_cast<std::size_t>(column) * sizeof(QRgb), block_bytes);
         ds::Array<uint8x16_t, block_pixels / vector_pixels> vectors{};
         auto all = vdupq_n_u8(channel_maximum);
 
         for (std::size_t index = 0; index < vectors.size(); ++index) {
-          vectors.atMut(index) = vld1q_u8(input + (column * sizeof(QRgb)) + (index * vector_bytes));
+          vectors.atMut(index) = vld1q_u8(block_input.subspan(index * vector_bytes, vector_bytes).data());
           all = vandq_u8(all, vectors[index]);
         }
 
@@ -95,16 +107,15 @@ namespace telar::gui::qt {
         }
 
         for (std::size_t index = 0; index < vectors.size(); ++index) {
-          vst1q_u8(output + (column * sizeof(QRgb)) + (index * vector_bytes), vectors[index]);
+          vst1q_u8(block_output.subspan(index * vector_bytes, vector_bytes).data(), vectors[index]);
         }
       }
 
       for (; column < width; ++column) {
-        QRgb pixel = 0;
+        const auto offset = static_cast<std::size_t>(column) * sizeof(QRgb);
+        const auto pixel = qPremultiply(qFromUnaligned<QRgb>(input.subspan(offset, sizeof(QRgb)).data()));
 
-        std::memcpy(&pixel, input + (column * sizeof(QRgb)), sizeof(pixel));
-        pixel = qPremultiply(pixel);
-        std::memcpy(output + (column * sizeof(QRgb)), &pixel, sizeof(pixel));
+        qToUnaligned(pixel, output.subspan(offset, sizeof(QRgb)).data());
       }
     }
 
@@ -122,7 +133,11 @@ namespace telar::gui::qt {
         }
       };
 
+// The pool joins its workers when the thread that made it exits, so it keeps its destructor.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wexit-time-destructors"
       thread_local Workers workers;
+#pragma clang diagnostic pop
 
       return workers.pool;
     }
@@ -148,15 +163,15 @@ namespace telar::gui::qt {
         return {};
       }
 
-      const auto* input_bytes = source.constBits();
-      auto* output_bytes = retained.bits();
-      const auto input_stride = source.bytesPerLine();
-      const auto output_stride = retained.bytesPerLine();
+      const auto input_bytes = constImageBytes(source);
+      auto output_bytes = imageBytes(retained);
+      const auto input_stride = static_cast<std::size_t>(source.bytesPerLine());
+      const auto output_stride = static_cast<std::size_t>(retained.bytesPerLine());
       const auto width = source.width();
       const auto height = source.height();
       const auto convert_rows = [&](int begin, int end) noexcept {
         for (int row = begin; row < end; ++row) {
-          convertRow(input_bytes + (static_cast<qsizetype>(row) * input_stride), output_bytes + (static_cast<qsizetype>(row) * output_stride), width);
+          convertRow(input_bytes.subspan(static_cast<std::size_t>(row) * input_stride), output_bytes.subspan(static_cast<std::size_t>(row) * output_stride), width);
         }
       };
 
@@ -233,12 +248,7 @@ namespace telar::gui::qt {
       return false;
     }
 
-    void commitTextureOperations([[maybe_unused]] QRhi* rhi, QRhiResourceUpdateBatch* updates) override {
-      if (!pixels_.isNull()) {
-        updates->uploadTexture(rhiTexture(), pixels_);
-        pixels_ = {};
-      }
-    }
+    void commitTextureOperations(QRhi* rhi, QRhiResourceUpdateBatch* updates) override;
 
     [[nodiscard]] bool replace(const QImage& source) {
       pixels_ = {};
@@ -268,8 +278,8 @@ namespace telar::gui::qt {
       const auto& source = geometry.source;
       const auto& destination = geometry.destination;
 
-      node->setSourceRect({source.x, source.y, source.width, source.height});
-      node->setRect({destination.x, destination.y, destination.width, destination.height});
+      node->setSourceRect({static_cast<qreal>(source.x), static_cast<qreal>(source.y), static_cast<qreal>(source.width), static_cast<qreal>(source.height)});
+      node->setRect({static_cast<qreal>(destination.x), static_cast<qreal>(destination.y), static_cast<qreal>(destination.width), static_cast<qreal>(destination.height)});
       adoptSceneNode(*this, std::move(node));
 
       // The resource's draw nodes form an intrusive list of raw links that each node leaves when
@@ -281,21 +291,7 @@ namespace telar::gui::qt {
       resource_->first_node_ = tbc::raw(this);
     }
 
-    ~ImageDrawNode() override {
-      if (resource_ == nullptr) {
-        return;
-      }
-
-      if (previous_ != nullptr) {
-        previous_->next_ = tbc::raw(next_);
-      } else {
-        resource_->first_node_ = tbc::raw(next_);
-      }
-
-      if (next_ != nullptr) {
-        next_->previous_ = tbc::raw(previous_);
-      }
-    }
+    ~ImageDrawNode() override;
 
     ImageDrawNode(const ImageDrawNode&) = delete;
     ImageDrawNode& operator=(const ImageDrawNode&) = delete;
@@ -322,6 +318,31 @@ namespace telar::gui::qt {
     ImageDrawNode* previous_ = nullptr;
     ImageDrawNode* next_;
   };
+
+  // Out of line, so that this unit alone emits the class's vtable.
+  void UploadTexture::commitTextureOperations([[maybe_unused]] QRhi* rhi, QRhiResourceUpdateBatch* updates) {
+    if (!pixels_.isNull()) {
+      updates->uploadTexture(rhiTexture(), pixels_);
+      pixels_ = {};
+    }
+  }
+
+  // Out of line, so that this unit alone emits the class's vtable.
+  ImageDrawNode::~ImageDrawNode() {
+    if (resource_ == nullptr) {
+      return;
+    }
+
+    if (previous_ != nullptr) {
+      previous_->next_ = tbc::raw(next_);
+    } else {
+      resource_->first_node_ = tbc::raw(next_);
+    }
+
+    if (next_ != nullptr) {
+      next_->previous_ = tbc::raw(previous_);
+    }
+  }
 
   ImageResource::~ImageResource() {
     clear();
@@ -367,8 +388,8 @@ namespace telar::gui::qt {
     std::ignore = native.release();
     auto uploaded = std::make_unique<UploadTexture>(std::move(wrapped), std::move(owned_pixels), std::move(retained));
 
-    upload_texture_ = uploaded.get();
     texture_ = std::move(uploaded);
+    upload_texture_ = tbc::raw(dynamic_cast<UploadTexture*>(texture_.get()));
     ++usage_.allocations;
     return true;
   }

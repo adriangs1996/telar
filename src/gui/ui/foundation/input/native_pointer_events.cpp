@@ -16,30 +16,7 @@ namespace telar::gui::qt {
       QWindowSystemInterfacePrivate::installWindowSystemEventHandler(this);
     }
 
-    ~Native() override {
-      for (auto* scope = active_; scope != nullptr; scope = scope->previous) {
-        scope->owner = nullptr;
-      }
-
-      auto* const head = QWindowSystemInterfacePrivate::eventHandler;
-      if (head == this) {
-        QWindowSystemInterfacePrivate::removeWindowSystemEventhandler(this);
-        if (previous_ != nullptr) {
-          QWindowSystemInterfacePrivate::installWindowSystemEventHandler(previous_);
-        }
-      } else {
-        auto* current = dynamic_cast<Native*>(head);
-
-        while (current != nullptr) {
-          if (current->previous_ == this) {
-            current->previous_ = previous_;
-            break;
-          }
-
-          current = dynamic_cast<Native*>(current->previous_);
-        }
-      }
-    }
+    ~Native() override;
 
     Native(const Native&) = delete;
     Native& operator=(const Native&) = delete;
@@ -91,6 +68,31 @@ namespace telar::gui::qt {
     QWindowSystemEventHandler* previous_ = QWindowSystemInterfacePrivate::eventHandler;
     Dispatch* active_ = nullptr;
   };
+
+  NativePointerEvents::Native::~Native() {
+    for (auto* scope = active_; scope != nullptr; scope = scope->previous) {
+      scope->owner = nullptr;
+    }
+
+    auto* const head = QWindowSystemInterfacePrivate::eventHandler;
+    if (head == this) {
+      QWindowSystemInterfacePrivate::removeWindowSystemEventhandler(this);
+      if (previous_ != nullptr) {
+        QWindowSystemInterfacePrivate::installWindowSystemEventHandler(previous_);
+      }
+    } else {
+      auto* current = dynamic_cast<Native*>(head);
+
+      while (current != nullptr) {
+        if (current->previous_ == this) {
+          current->previous_ = previous_;
+          break;
+        }
+
+        current = dynamic_cast<Native*>(current->previous_);
+      }
+    }
+  }
 
   NativePointerEvents::NativePointerEvents(ApplicationAllocator& memory)
       : native_(ds::makeBox<Native>(memory)) {}

@@ -199,7 +199,7 @@ namespace telar::gui::qt {
       const auto request = target_;
       const auto generation = generation_;
 
-      options_task_.setFuture(QtConcurrent::run([request, generation] {
+      options_task_.setFuture(QtConcurrent::run([request, generation] -> OptionsResult {
         OptionsResult result{.arguments = {}, .generation = generation};
 
         try {

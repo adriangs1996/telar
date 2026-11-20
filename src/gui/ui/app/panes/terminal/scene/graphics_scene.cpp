@@ -17,6 +17,7 @@ static_assert(true);
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <span>
 #include <stdexcept>
@@ -51,7 +52,7 @@ namespace telar::gui::qt {
   }
 
   std::span<const GraphicsScene::ResolvedImage> GraphicsScene::resolvedImages() const noexcept {
-    return {resolved_.data(), resolved_count_};
+    return resolved_.view().first(resolved_count_);
   }
 
   const WindowImage* GraphicsScene::texture(const application::terminal::graphics::GraphicsStore<Memory>& store, ImageKey key) {
@@ -100,7 +101,7 @@ namespace telar::gui::qt {
     images_->observeCatalog(store);
     const auto lifetime = store.lifetime();
     const Rect viewport{.width = static_cast<float>(owner.width()), .height = static_cast<float>(owner.height())};
-    if (!invalidated_ && lifetime.cacheable() && graphics_lifetime_ == lifetime && graphics_revision_ == store.revision() && placement_revision_ == images_->placements().revision() && rows_revision_ == rows.revision && cell_ == cell && scale_ == scale && viewport_ == viewport) {
+    if (!invalidated_ && lifetime.cacheable() && graphics_lifetime_ == lifetime && graphics_revision_ == store.revision() && placement_revision_ == images_->placements().revision() && rows_revision_ == rows.revision && cell_ == cell && std::equal_to<>{}(scale_, scale) && viewport_ == viewport) {
       return;
     }
 
@@ -111,9 +112,10 @@ namespace telar::gui::qt {
 
     ds::Array<GraphicsPlacement, application::terminal::graphics::GraphicsStore<Memory>::placement_capacity> placements;
     const auto count = store.placements().size();
+    auto unsorted = placements.viewMut().first(count);
 
-    std::copy(store.placements().begin(), store.placements().end(), placements.dataMut());
-    std::sort(placements.dataMut(), placements.dataMut() + count, application::terminal::graphics::placementOrder);
+    std::copy(store.placements().begin(), store.placements().end(), unsorted.begin());
+    std::ranges::sort(unsorted, application::terminal::graphics::placementOrder);
     cell_ = cell;
     scale_ = scale;
     viewport_ = viewport;
@@ -121,11 +123,13 @@ namespace telar::gui::qt {
     const auto sorted = std::span{placements}.first(count);
     const auto below_text = std::ranges::lower_bound(sorted, below_background_limit, {}, &GraphicsPlacement::z_index);
     const auto above_text = std::ranges::lower_bound(sorted, 0, {}, &GraphicsPlacement::z_index);
+    const auto below_count = static_cast<std::size_t>(below_text - sorted.begin());
+    const auto above_start = static_cast<std::size_t>(above_text - sorted.begin());
 
-    drawPlacements(store, {sorted.begin(), below_text}, rows);
-    drawPlacements(store, {below_text, above_text}, rows);
+    drawPlacements(store, sorted.first(below_count), rows);
+    drawPlacements(store, sorted.subspan(below_count, above_start - below_count), rows);
     placeholders(store, rows);
-    drawPlacements(store, {above_text, sorted.end()}, rows);
+    drawPlacements(store, sorted.subspan(above_start), rows);
 
     invalidated_ = retry_requested_;
     graphics_revision_ = store.revision();

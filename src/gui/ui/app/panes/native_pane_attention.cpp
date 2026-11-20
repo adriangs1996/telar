@@ -19,6 +19,7 @@ static_assert(true);
 #include <QtCore/qtypes.h>
 #include <cmath>
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -90,7 +91,7 @@ namespace telar::gui::qt {
 
   void NativePaneAttention::setRatio(qreal ratio) {
     constexpr auto maximum = std::numeric_limits<float>::max() / application::workbench::PaneDecorationGeometry::frame_radius;
-    if (std::isfinite(ratio) && ratio > 0 && ratio <= maximum && ratio_ != ratio) {
+    if (std::isfinite(ratio) && ratio > 0 && ratio <= static_cast<qreal>(maximum) && std::not_equal_to<>{}(ratio_, ratio)) {
       ratio_ = ratio;
       update();
       emit ratioChanged();
@@ -102,7 +103,7 @@ namespace telar::gui::qt {
   }
 
   void NativePaneAttention::setRadius(qreal radius) {
-    if (std::isfinite(radius) && radius >= 0 && radius <= std::numeric_limits<float>::max() && radius_ != radius) {
+    if (std::isfinite(radius) && radius >= 0 && radius <= static_cast<qreal>(std::numeric_limits<float>::max()) && std::not_equal_to<>{}(radius_, radius)) {
       radius_ = radius;
       update();
       emit radiusChanged();
@@ -110,11 +111,11 @@ namespace telar::gui::qt {
   }
 
   qreal NativePaneAttention::alpha() const noexcept {
-    return alpha_;
+    return static_cast<qreal>(alpha_);
   }
 
   void NativePaneAttention::setAlpha(float alpha) {
-    if (alpha_ == alpha) {
+    if (std::equal_to<>{}(alpha_, alpha)) {
       return;
     }
 
@@ -206,8 +207,8 @@ namespace telar::gui::qt {
     const auto physical_ratio = static_cast<float>(ratio_ * window()->effectiveDevicePixelRatio());
     const auto physical_width = static_cast<float>(width() * window()->effectiveDevicePixelRatio());
     const auto physical_height = static_cast<float>(height() * window()->effectiveDevicePixelRatio());
-    const auto physical_radius = radius_ * physical_ratio;
-    if (!std::isfinite(physical_width) || !std::isfinite(physical_height) || !std::isfinite(physical_ratio) || !std::isfinite(physical_radius) || physical_radius > std::numeric_limits<float>::max()) {
+    const auto physical_radius = radius_ * static_cast<qreal>(physical_ratio);
+    if (!std::isfinite(physical_width) || !std::isfinite(physical_height) || !std::isfinite(physical_ratio) || !std::isfinite(physical_radius) || physical_radius > static_cast<qreal>(std::numeric_limits<float>::max())) {
       const std::unique_ptr<QSGNode> retired{previous};
 
       return nullptr;

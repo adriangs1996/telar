@@ -34,6 +34,21 @@ namespace telar::gui::qt {
 
   namespace {
 
+    // Spans over the pixels QImage hands out as raw pointers. This target has no Qt Quick, so it
+    // cannot use ui/foundation/scene/qt_buffers.hpp.
+    std::span<uchar> imageBytes(QImage& image) {
+#pragma clang unsafe_buffer_usage begin
+      return {image.bits(), static_cast<std::size_t>(image.sizeInBytes())};
+#pragma clang unsafe_buffer_usage end
+    }
+
+    // constBits() never detaches a shared image, as bits() would.
+    std::span<const uchar> constImageBytes(const QImage& image) noexcept {
+#pragma clang unsafe_buffer_usage begin
+      return {image.constBits(), static_cast<std::size_t>(image.sizeInBytes())};
+#pragma clang unsafe_buffer_usage end
+    }
+
     struct ImagePixels {
       ApplicationAllocator& memory;
       SensitiveBytes<ApplicationAllocator> bytes;
@@ -51,7 +66,7 @@ namespace telar::gui::qt {
           : image_(std::move(image)) {}
 
       ~DecodedImage() {
-        eraseSensitiveBytes(std::as_writable_bytes(std::span{image_.bits(), static_cast<std::size_t>(image_.sizeInBytes())}));
+        eraseSensitiveBytes(std::as_writable_bytes(imageBytes(image_)));
       }
 
       DecodedImage(const DecodedImage&) = delete;
@@ -69,7 +84,7 @@ namespace telar::gui::qt {
           throw std::bad_alloc{};
         }
 
-        eraseSensitiveBytes(std::as_writable_bytes(std::span{image_.bits(), static_cast<std::size_t>(image_.sizeInBytes())}));
+        eraseSensitiveBytes(std::as_writable_bytes(imageBytes(image_)));
         image_ = std::move(converted);
       }
 
@@ -83,19 +98,19 @@ namespace telar::gui::qt {
 
     QImage resampled(ApplicationAllocator& memory, const QImage& source, application::terminal::attachments::AttachmentPreviewSize size) {
       const auto byte_count = static_cast<std::size_t>(size.width) * size.height * application::terminal::graphics::RgbaImageView::channels;
-      auto pixels = ds::makeBox<ImagePixels>(memory, ImagePixels{.memory = memory, .bytes = SensitiveBytes{memory}});
+      auto pixels = ds::makeBox<ImagePixels>(memory, ImagePixels{.memory = memory, .bytes = SensitiveBytes<ApplicationAllocator>{memory}});
 
       pixels.getMut().bytes.resizeZeroed(byte_count, static_cast<std::size_t>(application::terminal::attachments::AttachmentPreviewSize::full_pixels) * application::terminal::graphics::RgbaImageView::channels);
       const auto view = pixels.getMut().bytes.unsignedBytesMut();
       auto* const rgba = view.data();
       const application::terminal::graphics::RgbaImageView input{
-          .pixels = std::as_bytes(std::span{source.constBits(), static_cast<std::size_t>(source.sizeInBytes())}),
+          .pixels = std::as_bytes(constImageBytes(source)),
           .stride = static_cast<std::size_t>(source.bytesPerLine()),
           .width = static_cast<std::size_t>(source.width()),
           .height = static_cast<std::size_t>(source.height()),
       };
 
-      const std::span output{rgba, byte_count};
+      const auto output = view.first(byte_count);
       if (!application::terminal::graphics::ArtworkResize::rectangle(input, output, size.width, size.height)) {
         throw std::invalid_argument{"InvalidClipboardImage"};
       }

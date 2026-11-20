@@ -7,6 +7,7 @@ static_assert(true);
 #endif
 
 #include "alpha_mask.hpp"
+#include "qt_buffers.hpp"
 #include "tbc/view.hpp"
 #include <QColor>
 #include <QHash>
@@ -161,7 +162,7 @@ namespace telar::gui::qt {
         for (std::uint32_t row = 0; row < bitmap.height; ++row) {
           const auto coverage = bitmap.row(row);
 
-          std::memcpy(alpha.scanLine(static_cast<int>(row)), coverage.data(), coverage.size());
+          std::ranges::copy(coverage, imageLine(alpha, static_cast<int>(row)).first(coverage.size()).begin());
         }
       }
 
@@ -215,7 +216,11 @@ namespace telar::gui::qt {
     [[nodiscard]] static tbc::val_a<std::shared_ptr<ChromeGlyphImages>> shared(tbc::mut_a<QQuickWindow> window, tbc::val_a<std::shared_ptr<FontSet>> fonts, fonts::GlyphRasterization rasterization = {}) {
       using Source = QPair<QQuickWindow*, const FontSet*>;
       using Key = std::conditional_t<optical, std::pair<Source, std::uint32_t>, Source>;
+// A thread that exits must drop its weak references, or the images' shared allocations leak with it.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wexit-time-destructors"
       thread_local QHash<Key, std::weak_ptr<ChromeGlyphImages>> caches;
+#pragma clang diagnostic pop
 
       for (auto entry = caches.begin(); entry != caches.end();) {
         if (entry.value().expired()) {

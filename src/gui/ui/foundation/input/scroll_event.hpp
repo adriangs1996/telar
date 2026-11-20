@@ -17,9 +17,13 @@ namespace telar::gui::qt {
       return ScrollPhase::begin;
     case Qt::ScrollEnd:
       return ScrollPhase::end;
-    default:
+    case Qt::ScrollUpdate:
+    case Qt::ScrollMomentum:
       return ScrollPhase::update;
     }
+
+    // A phase Qt adds later still reads as an update.
+    return ScrollPhase::update;
   }
 
   [[nodiscard]] inline ScrollSample scrollSample(const QWheelEvent& event, double cell_height) noexcept {

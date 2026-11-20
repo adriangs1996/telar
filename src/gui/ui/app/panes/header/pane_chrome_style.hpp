@@ -16,13 +16,13 @@ namespace telar::gui::qt {
 
   inline QVariantMap paneChromeStyle(qreal ratio, qreal density) {
     return {
-        {QStringLiteral("chipInset"), application::workbench::PaneStatusChip::inset * ratio},
-        {QStringLiteral("chipHeight"), application::workbench::PaneStatusChip::height * ratio},
-        {QStringLiteral("chipRadius"), application::workbench::PaneStatusChip::radius * ratio},
-        {QStringLiteral("progressPadding"), ProgressGeometry::padding * ratio},
-        {QStringLiteral("progressSide"), ProgressGeometry::ring_side * ratio},
-        {QStringLiteral("progressHeight"), ProgressGeometry::height * ratio},
-        {QStringLiteral("progressInset"), ProgressGeometry::ring_inset * ratio},
+        {QStringLiteral("chipInset"), static_cast<qreal>(application::workbench::PaneStatusChip::inset) * ratio},
+        {QStringLiteral("chipHeight"), static_cast<qreal>(application::workbench::PaneStatusChip::height) * ratio},
+        {QStringLiteral("chipRadius"), static_cast<qreal>(application::workbench::PaneStatusChip::radius) * ratio},
+        {QStringLiteral("progressPadding"), static_cast<qreal>(ProgressGeometry::padding) * ratio},
+        {QStringLiteral("progressSide"), static_cast<qreal>(ProgressGeometry::ring_side) * ratio},
+        {QStringLiteral("progressHeight"), static_cast<qreal>(ProgressGeometry::height) * ratio},
+        {QStringLiteral("progressInset"), static_cast<qreal>(ProgressGeometry::ring_inset) * ratio},
         {QStringLiteral("density"), density},
     };
   }

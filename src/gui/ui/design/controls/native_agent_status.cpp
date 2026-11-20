@@ -19,6 +19,7 @@ static_assert(true);
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
 #include <cstdint>
+#include <functional>
 #include <optional>
 
 import telar.gui.foundation.system;
@@ -136,7 +137,7 @@ namespace telar::gui::qt {
     const QAnyStringView label{text.view()};
     const auto alpha = display_mode_ != DisplayMode::pane_chip && connected_ && status_ == AgentStatus::working ? application::activity::AgentAnimation::alpha(now_ns) : 1;
     const auto text_changed = QAnyStringView::compare(status_text_, label) != 0;
-    const auto alpha_changed = animated_alpha_ != alpha;
+    const auto alpha_changed = !std::equal_to<>{}(animated_alpha_, static_cast<qreal>(alpha));
     if (!text_changed && !alpha_changed) {
       return;
     }
@@ -145,7 +146,7 @@ namespace telar::gui::qt {
       status_text_ = label.toString();
     }
 
-    animated_alpha_ = alpha;
+    animated_alpha_ = static_cast<qreal>(alpha);
     const QPointer<NativeAgentStatus> alive{this};
 
     if (text_changed) {

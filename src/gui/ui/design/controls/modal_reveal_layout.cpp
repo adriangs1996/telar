@@ -14,6 +14,7 @@ static_assert(true);
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
 #include <cstdint>
+#include <functional>
 #include <optional>
 
 namespace telar::gui::qt {
@@ -94,9 +95,9 @@ namespace telar::gui::qt {
 
     const auto timestamp = clock_->now();
     const auto reveal = motion_.sample(active_ ? identity_ : ds::none, timestamp);
-    const bool changed = reveal_ != reveal;
+    const bool changed = !std::equal_to<>{}(reveal_, static_cast<qreal>(reveal));
 
-    reveal_ = reveal;
+    reveal_ = static_cast<qreal>(reveal);
     next_sample_ns_ = motion_.deadline(timestamp, clock_->frameInterval());
     dirty_ = false;
     frame_requested_ = false;

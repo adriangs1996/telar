@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 
 namespace telar::gui {
 
@@ -148,7 +149,7 @@ namespace telar::gui {
 
     // A wheel's distance, added to where the last notches were going; the position eases there.
     void wheel(double delta, ScrollTime now) noexcept {
-      if (!std::isfinite(delta) || delta == 0) {
+      if (!std::isfinite(delta) || std::equal_to<>{}(delta, 0)) {
         return;
       }
 
@@ -275,7 +276,7 @@ namespace telar::gui {
 
       position_ = bounded(next);
       velocity_ *= std::pow(std::clamp(tuning_.friction, 0.0, most_kept), elapsed);
-      if (next != position_ || std::abs(velocity_) < stopped) {
+      if (std::not_equal_to<>{}(next, position_) || std::abs(velocity_) < stopped) {
         stop();
       }
     }

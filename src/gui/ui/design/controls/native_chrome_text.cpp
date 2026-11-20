@@ -26,6 +26,7 @@ static_assert(true);
 #include <cstdint>
 #include <cstring>
 #include <exception>
+#include <functional>
 #include <memory>
 #include <string_view>
 
@@ -116,7 +117,7 @@ namespace telar::gui::qt {
   }
 
   void NativeChromeText::setPixelSize(qreal size) {
-    if (std::isfinite(size) && size > 0 && size <= ChromeMetrics::maximum_text && pixel_size_ != size) {
+    if (std::isfinite(size) && size > 0 && size <= static_cast<qreal>(ChromeMetrics::maximum_text) && !std::equal_to<>{}(pixel_size_, size)) {
       pixel_size_ = size;
       emit pixelSizeChanged();
       invalidateLayout();
@@ -140,7 +141,7 @@ namespace telar::gui::qt {
   }
 
   void NativeChromeText::setFadeWidth(qreal width) {
-    if (std::isfinite(width) && width >= 0 && fade_width_ != width) {
+    if (std::isfinite(width) && width >= 0 && !std::equal_to<>{}(fade_width_, width)) {
       fade_width_ = width;
       emit layoutChanged();
       update();
@@ -159,7 +160,7 @@ namespace telar::gui::qt {
   }
 
   void NativeChromeText::setHorizontalAlignment(int alignment) {
-    const auto value = Qt::Alignment::fromInt(alignment);
+    const auto value = Qt::Alignment::fromInt(static_cast<Qt::Alignment::Int>(alignment));
     if (alignment_ != value) {
       alignment_ = value;
       emit layoutChanged();
@@ -293,7 +294,7 @@ namespace telar::gui::qt {
 
   void NativeChromeText::geometryChange(const QRectF& current, const QRectF& previous) {
     QQuickItem::geometryChange(current, previous);
-    if (current.width() != previous.width()) {
+    if (!std::equal_to<>{}(current.width(), previous.width())) {
       fit_dirty_ = true;
     }
 

@@ -15,6 +15,7 @@ static_assert(true);
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
 #include <cmath>
+#include <functional>
 
 import telar.gui.application;
 
@@ -40,7 +41,7 @@ namespace telar::gui::qt {
   }
 
   void PaneHeaderLayout::setRatio(qreal ratio) {
-    if (std::isfinite(ratio) && ratio > 0 && ratio_ != ratio) {
+    if (std::isfinite(ratio) && ratio > 0 && std::not_equal_to<>{}(ratio_, ratio)) {
       ratio_ = ratio;
       emit metricsChanged();
       polish();
@@ -52,7 +53,7 @@ namespace telar::gui::qt {
   }
 
   void PaneHeaderLayout::setBandHeight(qreal height) {
-    if (std::isfinite(height) && height >= 0 && band_height_ != height) {
+    if (std::isfinite(height) && height >= 0 && std::not_equal_to<>{}(band_height_, height)) {
       band_height_ = height;
       emit metricsChanged();
       polish();
@@ -64,7 +65,7 @@ namespace telar::gui::qt {
   }
 
   QRectF PaneHeaderLayout::logical(Rect bounds) const noexcept {
-    return {bounds.x / density_, bounds.y / density_, bounds.width / density_, bounds.height / density_};
+    return {static_cast<qreal>(bounds.x) / density_, static_cast<qreal>(bounds.y) / density_, static_cast<qreal>(bounds.width) / density_, static_cast<qreal>(bounds.height) / density_};
   }
 
   QRectF PaneHeaderLayout::indexBounds() const noexcept {
@@ -110,7 +111,7 @@ namespace telar::gui::qt {
     };
 
     const auto layout = application::workbench::PaneHeaderGeometry::derive({.width = static_cast<float>(width() * density), .height = static_cast<float>(height() * density)}, {.ratio = static_cast<float>(ratio_ * density), .maximum_band_height = static_cast<float>(band_height_ * density)}, measurements);
-    if (layout != layout_ || density_ != density) {
+    if (layout != layout_ || std::not_equal_to<>{}(density_, density)) {
       layout_ = layout;
       density_ = density;
       emit metricsChanged();

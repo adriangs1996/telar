@@ -33,6 +33,7 @@ static_assert(true);
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -108,7 +109,7 @@ namespace telar::gui::qt {
       // A view scrolled by pixels draws one row past the screen's last, partly shown.
       const auto drawn = frame.rows.empty() ? fitted->rows : fitted->rows + 1;
 
-      return {.width = std::min(fitted->cols, frame.screen.columns()), .height = static_cast<std::uint16_t>(std::min<std::size_t>(drawn, frame.rowCount()))};
+      return {.width = std::min(fitted->cols, frame.screen.columns()), .height = static_cast<std::uint16_t>(std::min<std::size_t>(static_cast<std::size_t>(drawn), frame.rowCount()))};
     }
 
     ds::Option<std::size_t> cursorColumn(const TerminalPresentation& frame, std::size_t row, std::size_t columns) {
@@ -259,10 +260,8 @@ namespace telar::gui::qt {
     std::unique_ptr<QSGNode> node{previous};
     auto* scene = dynamic_cast<TerminalScene*>(node.get());
     if (scene == nullptr) {
-      auto replacement = std::make_unique<TerminalScene>(window);
-
-      scene = replacement.get();
-      node = std::move(replacement);
+      node = std::make_unique<TerminalScene>(window);
+      scene = dynamic_cast<TerminalScene*>(node.get());
     }
 
     scene->synchronize(window, frame);
@@ -356,7 +355,7 @@ namespace telar::gui::qt {
     background_.setColor(frame.background_provided || frame.configuration.background_opacity < 1 ? QColor{Qt::transparent} : toQColor(frame.configuration.theme.background));
     synchronizeGrid(visibleCells(frame));
     // The rows, the images and what is drawn over them move up by the shift.
-    if (shift_ != frame.shift) {
+    if (std::not_equal_to<>{}(shift_, frame.shift)) {
       QMatrix4x4 rows;
 
       rows.translate(0, static_cast<float>(-frame.shift));
@@ -367,7 +366,7 @@ namespace telar::gui::qt {
       shift_ = frame.shift;
     }
 
-    const auto glyphs_changed = appearance_ != frame.appearance || scale_ != frame.scale;
+    const auto glyphs_changed = appearance_ != frame.appearance || std::not_equal_to<>{}(scale_, frame.scale);
     if (glyphs_changed) {
       glyphs_.configure(frame.font.faces.front(), frame.scale, frame.box_stroke);
       text_.configure(frame.configuration.font, frame.grid, frame.fonts);
@@ -390,7 +389,7 @@ namespace telar::gui::qt {
 
       const auto revealed = frame.revealed(position);
       const auto offset = frame.offset(position);
-      if (revealed != row.revealed || offset != row.offset) {
+      if (std::not_equal_to<>{}(revealed, row.revealed) || std::not_equal_to<>{}(offset, row.offset)) {
         row.revealed = revealed;
         row.offset = offset;
 
@@ -402,8 +401,8 @@ namespace telar::gui::qt {
         lift.translate(0, (static_cast<float>(frame.font.cell.height()) * reveal_drop_cells * (1.0F - settled)) + offset);
         row.text->setMatrix(lift);
         row.background->setMatrix(lift);
-        row.text_opacity->setOpacity(revealed);
-        row.background_opacity->setOpacity(revealed);
+        row.text_opacity->setOpacity(static_cast<qreal>(revealed));
+        row.background_opacity->setOpacity(static_cast<qreal>(revealed));
       }
 
       const bool shown = std::exchange(row.hidden, false);
@@ -460,7 +459,7 @@ namespace telar::gui::qt {
       auto color = theme.warning;
 
       color.a *= match.current ? current_alpha : match_alpha;
-      const QRectF bounds{static_cast<qreal>(match.column) * frame.font.cell.width(), (static_cast<qreal>(match.row) * frame.font.cell.height()) + frame.offset(match.row), static_cast<qreal>(match.length) * frame.font.cell.width(), frame.font.cell.height()};
+      const QRectF bounds{static_cast<qreal>(match.column) * frame.font.cell.width(), (static_cast<qreal>(match.row) * frame.font.cell.height()) + static_cast<qreal>(frame.offset(match.row)), static_cast<qreal>(match.length) * frame.font.cell.width(), frame.font.cell.height()};
 
       appendSceneNode<QSGSimpleRectNode>(matches_, bounds, toQColor(color));
     }
@@ -484,7 +483,7 @@ namespace telar::gui::qt {
         continue;
       }
 
-      const QRectF bounds{area->x * frame.font.cell.width(), ((static_cast<qreal>(*drawn) + 1) * frame.font.cell.height()) + frame.offset(*drawn) - (underline_inset_pixels / frame.scale), area->width * frame.font.cell.width(), underline_thickness_pixels / frame.scale};
+      const QRectF bounds{area->x * frame.font.cell.width(), ((static_cast<qreal>(*drawn) + 1) * frame.font.cell.height()) + static_cast<qreal>(frame.offset(*drawn)) - (underline_inset_pixels / frame.scale), area->width * frame.font.cell.width(), underline_thickness_pixels / frame.scale};
 
       appendSceneNode<QSGSimpleRectNode>(overlay_, bounds, toQColor(frame.configuration.theme.accent));
     }
@@ -521,7 +520,7 @@ namespace telar::gui::qt {
     }
 
     const auto& theme = frame.configuration.theme;
-    QRectF bounds{static_cast<qreal>(column) * frame.font.cell.width(), (static_cast<qreal>(*drawn) * frame.font.cell.height()) + frame.offset(*drawn), cell_columns * frame.font.cell.width(), frame.font.cell.height()};
+    QRectF bounds{static_cast<qreal>(column) * frame.font.cell.width(), (static_cast<qreal>(*drawn) * frame.font.cell.height()) + static_cast<qreal>(frame.offset(*drawn)), cell_columns * frame.font.cell.width(), frame.font.cell.height()};
     const auto color = toQColor(theme.cursor);
     constexpr qreal cursor_thickness = 2;
 

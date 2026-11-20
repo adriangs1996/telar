@@ -9,7 +9,8 @@ import telar.base.ds;
 namespace telar::runtime {
 
   GraphicsScreenScope::GraphicsScreenScope(GhosttyTerminal terminal)
-      : terminal_(terminal) {
+      : terminal_(terminal),
+        original_(GHOSTTY_TERMINAL_SCREEN_PRIMARY) {
     checkGhostty(ghostty_terminal_get(terminal_, GHOSTTY_TERMINAL_DATA_ACTIVE_SCREEN, &original_));
   }
 
@@ -56,7 +57,7 @@ namespace telar::runtime {
   void GraphicsStorageLimits<Memory>::enforceScreen(GhosttyTerminal terminal) {
     GhosttyKittyGraphics storage = nullptr;
 
-    checkGhostty(ghostty_terminal_get(terminal, GHOSTTY_TERMINAL_DATA_KITTY_GRAPHICS, &storage));
+    checkGhostty(ghostty_terminal_get(terminal, GHOSTTY_TERMINAL_DATA_KITTY_GRAPHICS, static_cast<void*>(&storage)));
     std::size_t image_count = 0;
 
     checkGhostty(ghostty_kitty_graphics_get(storage, GHOSTTY_KITTY_GRAPHICS_DATA_IMAGE_COUNT, &image_count));
@@ -117,7 +118,7 @@ namespace telar::runtime {
 
     auto* iterator = images_.get();
 
-    checkGhostty(ghostty_kitty_graphics_get(storage, GHOSTTY_KITTY_GRAPHICS_DATA_IMAGE_ITERATOR, &iterator));
+    checkGhostty(ghostty_kitty_graphics_get(storage, GHOSTTY_KITTY_GRAPHICS_DATA_IMAGE_ITERATOR, static_cast<void*>(&iterator)));
     ds::Option<std::uint32_t> oldest;
     std::uint64_t oldest_generation = std::numeric_limits<std::uint64_t>::max();
 
@@ -154,7 +155,7 @@ namespace telar::runtime {
 
     auto* iterator = placements_.get();
 
-    checkGhostty(ghostty_kitty_graphics_get(storage, GHOSTTY_KITTY_GRAPHICS_DATA_PLACEMENT_ITERATOR, &iterator));
+    checkGhostty(ghostty_kitty_graphics_get(storage, GHOSTTY_KITTY_GRAPHICS_DATA_PLACEMENT_ITERATOR, static_cast<void*>(&iterator)));
     return iterator;
   }
 
@@ -207,7 +208,7 @@ namespace telar::runtime {
     limits_.enforce(terminal);
     GhosttyKittyGraphics storage = nullptr;
 
-    checkGhostty(ghostty_terminal_get(terminal, GHOSTTY_TERMINAL_DATA_KITTY_GRAPHICS, &storage));
+    checkGhostty(ghostty_terminal_get(terminal, GHOSTTY_TERMINAL_DATA_KITTY_GRAPHICS, static_cast<void*>(&storage)));
     std::uint64_t generation = 0;
 
     checkGhostty(ghostty_kitty_graphics_get(storage, GHOSTTY_KITTY_GRAPHICS_DATA_GENERATION, &generation));
@@ -215,7 +216,7 @@ namespace telar::runtime {
       return;
     }
 
-    ds::Array<std::uint32_t, graphics_image_count> identities;
+    ds::Array<std::uint32_t, graphics_image_count> identities{};
     std::size_t count = 0;
 
     checkGhostty(ghostty_kitty_graphics_image_ids(storage, identities.dataMut(), identities.size(), &count));
@@ -241,7 +242,7 @@ namespace telar::runtime {
 
     auto* iterator = iterator_.get();
 
-    checkGhostty(ghostty_kitty_graphics_get(storage, GHOSTTY_KITTY_GRAPHICS_DATA_PLACEMENT_ITERATOR, &iterator));
+    checkGhostty(ghostty_kitty_graphics_get(storage, GHOSTTY_KITTY_GRAPHICS_DATA_PLACEMENT_ITERATOR, static_cast<void*>(&iterator)));
     std::size_t placement_count = 0;
 
     while (placement_count < placements_.size() && ghostty_kitty_graphics_placement_next(iterator)) {
@@ -270,7 +271,7 @@ namespace telar::runtime {
 
       GhosttyKittyGraphics storage = nullptr;
 
-      checkGhostty(ghostty_terminal_get(terminal, GHOSTTY_TERMINAL_DATA_KITTY_GRAPHICS, &storage));
+      checkGhostty(ghostty_terminal_get(terminal, GHOSTTY_TERMINAL_DATA_KITTY_GRAPHICS, static_cast<void*>(&storage)));
       std::size_t placements = 0;
       std::size_t loading_bytes = 0;
 
@@ -283,7 +284,7 @@ namespace telar::runtime {
       sample.placements += placements;
       sample.loading_bytes += loading_bytes;
 
-      ds::Array<std::uint32_t, graphics_image_count> identities;
+      ds::Array<std::uint32_t, graphics_image_count> identities{};
       std::size_t count = 0;
 
       checkGhostty(ghostty_kitty_graphics_image_ids(storage, identities.dataMut(), identities.size(), &count));
@@ -331,17 +332,20 @@ namespace telar::runtime {
     GhosttyKittyImageFormat format{};
     const Byte* pixels = nullptr;
     std::size_t length = 0;
-    const GhosttyKittyGraphicsImageData keys[] = {GHOSTTY_KITTY_IMAGE_DATA_ID, GHOSTTY_KITTY_IMAGE_DATA_GENERATION, GHOSTTY_KITTY_IMAGE_DATA_WIDTH, GHOSTTY_KITTY_IMAGE_DATA_HEIGHT, GHOSTTY_KITTY_IMAGE_DATA_FORMAT, GHOSTTY_KITTY_IMAGE_DATA_DATA_LEN, GHOSTTY_KITTY_IMAGE_DATA_DATA_PTR};
-    void* values[] = {&view.description.key.image_id, &view.description.key.generation, &view.description.width, &view.description.height, &format, &length, &pixels};
+    constexpr ds::Array keys{GHOSTTY_KITTY_IMAGE_DATA_ID, GHOSTTY_KITTY_IMAGE_DATA_GENERATION, GHOSTTY_KITTY_IMAGE_DATA_WIDTH, GHOSTTY_KITTY_IMAGE_DATA_HEIGHT, GHOSTTY_KITTY_IMAGE_DATA_FORMAT, GHOSTTY_KITTY_IMAGE_DATA_DATA_LEN, GHOSTTY_KITTY_IMAGE_DATA_DATA_PTR};
+    ds::Array<void*, keys.size()> values{&view.description.key.image_id, &view.description.key.generation, &view.description.width, &view.description.height, &format, &length, static_cast<void*>(&pixels)};
 
-    checkGhostty(ghostty_kitty_graphics_image_get_multi(image, std::size(keys), keys, values, nullptr));
+    checkGhostty(ghostty_kitty_graphics_image_get_multi(image, keys.size(), keys.data(), values.dataMut(), nullptr));
     if (format != GHOSTTY_KITTY_IMAGE_FORMAT_RGB && format != GHOSTTY_KITTY_IMAGE_FORMAT_RGBA) {
       return ds::none;
     }
 
     view.description.format = format == GHOSTTY_KITTY_IMAGE_FORMAT_RGB ? ImageFormat::rgb : ImageFormat::rgba;
+    // Ghostty hands the pixels as a C pointer and length.
+#pragma clang unsafe_buffer_usage begin
     view.pixels = {pixels, length};
-    if constexpr (requires(Memory& memory) { memory.imagePixels(view.pixels); }) {
+#pragma clang unsafe_buffer_usage end
+    if constexpr (requires(Memory& allocator) { allocator.imagePixels(view.pixels); }) {
       view.pixels = memory.imagePixels(view.pixels);
     }
 
@@ -354,10 +358,10 @@ namespace telar::runtime {
     GraphicsPlacement placement{};
     bool internal = false;
     bool placeholders = false;
-    const GhosttyKittyGraphicsPlacementData keys[] = {GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_IMAGE_ID, GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_PLACEMENT_ID, GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_IS_INTERNAL, GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_IS_VIRTUAL, GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_COLUMNS, GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_ROWS, GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_X_OFFSET, GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_Y_OFFSET, GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_Z};
-    void* values[] = {&placement.key.image_id, &placement.placement_id, &internal, &placeholders, &placement.columns, &placement.rows, &placement.offset_x, &placement.offset_y, &placement.z_index};
+    constexpr ds::Array keys{GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_IMAGE_ID, GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_PLACEMENT_ID, GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_IS_INTERNAL, GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_IS_VIRTUAL, GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_COLUMNS, GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_ROWS, GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_X_OFFSET, GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_Y_OFFSET, GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_Z};
+    ds::Array<void*, keys.size()> values{&placement.key.image_id, &placement.placement_id, &internal, &placeholders, &placement.columns, &placement.rows, &placement.offset_x, &placement.offset_y, &placement.z_index};
 
-    checkGhostty(ghostty_kitty_graphics_placement_get_multi(iterator, std::size(keys), keys, values, nullptr));
+    checkGhostty(ghostty_kitty_graphics_placement_get_multi(iterator, keys.size(), keys.data(), values.dataMut(), nullptr));
     if (std::ranges::none_of(images(), [&](const auto& image) {
           return image.description.key.image_id == placement.key.image_id;
         })) {
@@ -368,7 +372,10 @@ namespace telar::runtime {
 
     checkGhostty(ghostty_kitty_graphics_image_get(image, GHOSTTY_KITTY_IMAGE_DATA_GENERATION, &placement.key.generation));
     checkGhostty(ghostty_kitty_graphics_placement_source_rect(iterator, image, &placement.source_x, &placement.source_y, &placement.source_width, &placement.source_height));
-    placement.virtual_id = ((static_cast<std::uint64_t>(!internal) << 32) | placement.placement_id) + 1;
+    // The virtual id sets the bit above the placement id for the placements a program numbered.
+    constexpr unsigned placement_id_bits = 32;
+
+    placement.virtual_id = ((static_cast<std::uint64_t>(!internal) << placement_id_bits) | placement.placement_id) + 1;
     placement.placement_id = internal ? 0 : placement.placement_id;
     if (placeholders) {
       placement.location = PlacementLocation::placeholders;

@@ -58,9 +58,12 @@ namespace telar::gui::qt {
       return QStringLiteral("import");
     case application::history::HistoryEmpty::Action::everywhere:
       return QStringLiteral("everywhere");
-    default:
+    case application::history::HistoryEmpty::Action::none:
       return QStringLiteral("none");
     }
+
+    // An action outside the enum offers none.
+    return QStringLiteral("none");
   }
 
   void HistoryEmptyLayout::setInput(const QVariantMap& input) {
@@ -126,9 +129,9 @@ namespace telar::gui::qt {
         {QStringLiteral("title"), toQRectF(geometry_.title, density_)},
         {QStringLiteral("subtitle"), toQRectF(geometry_.subtitle, density_)},
         {QStringLiteral("action"), toQRectF(geometry_.action, density_)},
-        {QStringLiteral("importInset"), application::history::HistoryEmptyGeometry::import_inset * ratio_},
-        {QStringLiteral("importRadius"), application::history::HistoryEmptyGeometry::import_radius * ratio_},
-        {QStringLiteral("buttonRadius"), FormButtonStyle::radius * ratio_},
+        {QStringLiteral("importInset"), static_cast<qreal>(application::history::HistoryEmptyGeometry::import_inset) * ratio_},
+        {QStringLiteral("importRadius"), static_cast<qreal>(application::history::HistoryEmptyGeometry::import_radius) * ratio_},
+        {QStringLiteral("buttonRadius"), static_cast<qreal>(FormButtonStyle::radius) * ratio_},
         {QStringLiteral("disabledAlpha"), FormButtonStyle::disabled_alpha},
         {QStringLiteral("pressedAlpha"), FormButtonStyle::pressed_alpha},
     };
@@ -148,7 +151,7 @@ namespace telar::gui::qt {
     const auto pixels = [this](const QString& key) {
       const auto value = input_.value(key).toDouble() * density_;
 
-      return std::isfinite(value) ? static_cast<std::uint16_t>(std::clamp(std::round(value), 0.0, static_cast<double>(std::numeric_limits<std::uint16_t>::max()))) : 0;
+      return std::isfinite(value) ? static_cast<std::uint16_t>(std::clamp(std::round(value), 0.0, static_cast<double>(std::numeric_limits<std::uint16_t>::max()))) : std::uint16_t{0};
     };
 
     chrome.body = pixels(QStringLiteral("bodyPixels"));

@@ -55,7 +55,7 @@ import telar.config.core;
 namespace telar::gui::qt {
 
   inline QRectF toQRectF(Rect bounds, qreal density = 1) {
-    return {bounds.x / density, bounds.y / density, bounds.width / density, bounds.height / density};
+    return {static_cast<qreal>(bounds.x) / density, static_cast<qreal>(bounds.y) / density, static_cast<qreal>(bounds.width) / density, static_cast<qreal>(bounds.height) / density};
   }
 
   inline QColor toQColor(Color color) {
@@ -294,15 +294,15 @@ namespace telar::gui::qt {
     record.insert(QStringLiteral("attentionKey"), paneAttentionValue({.pane_id = pane.id, .attachment_generation = pane.attachment_generation}));
     record.insert(QStringLiteral("title"), pane.title.empty() ? toQString(pane.foreground) : toQString(pane.title));
     record.insert(QStringLiteral("cwd"), toQString(pane.cwd));
-    record.insert(QStringLiteral("x"), geometry.outer.x / density);
-    record.insert(QStringLiteral("y"), geometry.outer.y / density);
-    record.insert(QStringLiteral("width"), geometry.outer.width / density);
-    record.insert(QStringLiteral("height"), geometry.outer.height / density);
+    record.insert(QStringLiteral("x"), static_cast<qreal>(geometry.outer.x) / density);
+    record.insert(QStringLiteral("y"), static_cast<qreal>(geometry.outer.y) / density);
+    record.insert(QStringLiteral("width"), static_cast<qreal>(geometry.outer.width) / density);
+    record.insert(QStringLiteral("height"), static_cast<qreal>(geometry.outer.height) / density);
     record.insert(QStringLiteral("content"), local(geometry.content));
     record.insert(QStringLiteral("frame"), local(geometry.frame));
     record.insert(QStringLiteral("panels"), panels);
     record.insert(QStringLiteral("frameRadius"), application::workbench::PaneDecorationGeometry::frame_radius);
-    record.insert(QStringLiteral("frameLineWidth"), application::workbench::PaneDecorationGeometry::frame_line_width / density);
+    record.insert(QStringLiteral("frameLineWidth"), static_cast<qreal>(application::workbench::PaneDecorationGeometry::frame_line_width) / density);
     record.insert(QStringLiteral("dimAlpha"), application::workbench::PaneDecorationGeometry::dim_alpha);
     record.insert(QStringLiteral("focused"), focused);
     record.insert(QStringLiteral("framed"), placement.framed);

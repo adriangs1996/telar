@@ -34,6 +34,7 @@ static_assert(true);
 #include <cstdint>
 #include <cstring>
 #include <exception>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <span>
@@ -221,7 +222,7 @@ namespace telar::gui::qt {
         {QStringLiteral("labelBounds"), toQRectF(geometry.label, density_)},
         {QStringLiteral("discBounds"), toQRectF(geometry.disc, density_)},
         {QStringLiteral("attentionBounds"), toQRectF(geometry.attention, density_)},
-        {QStringLiteral("radius"), geometry.radius / density_},
+        {QStringLiteral("radius"), static_cast<qreal>(geometry.radius) / density_},
     };
   }
 
@@ -246,7 +247,7 @@ namespace telar::gui::qt {
   void MachineChromeLayout::rebuild() {
     if (controller_ == nullptr || window() == nullptr || !shown_ || height() <= 0) {
       items_.reconcile({});
-      if (preferred_width_ != 0) {
+      if (std::not_equal_to<>{}(preferred_width_, 0)) {
         preferred_width_ = 0;
         emit layoutChanged();
       }
@@ -269,7 +270,7 @@ namespace telar::gui::qt {
     hover_background.setAlphaF(gui::ChromeStyle::hover_alpha);
     // The sidebar's rows sit beside its cards and follow the chrome text as they do.
     const auto length = [this](float logical) {
-      return (mode_ == Mode::list ? chrome_.textPx(logical) : chrome_.px(logical)) / density_;
+      return (mode_ == Mode::list ? static_cast<qreal>(chrome_.textPx(logical)) : static_cast<qreal>(chrome_.px(logical))) / density_;
     };
 
     QVariantMap style{
@@ -302,7 +303,7 @@ namespace telar::gui::qt {
       break;
     }
 
-    if (style != style_ || preferred != preferred_width_) {
+    if (style != style_ || std::not_equal_to<>{}(preferred, preferred_width_)) {
       style_ = std::move(style);
       preferred_width_ = preferred;
       emit layoutChanged();
@@ -327,7 +328,7 @@ namespace telar::gui::qt {
         records.append(controlRecord(*source, area, advance));
       }
 
-      return application::machines::MachineChromeGeometry::preferredSegment(chrome_, advance) / density_;
+      return static_cast<qreal>(application::machines::MachineChromeGeometry::preferredSegment(chrome_, advance)) / density_;
     }
 
     return 0;
@@ -350,8 +351,9 @@ namespace telar::gui::qt {
     }
 
     const auto shown = std::min(count, stack_cards);
+    auto stacked = chosen.viewMut().first(count);
 
-    std::partial_sort(chosen.dataMut(), chosen.dataMut() + static_cast<std::ptrdiff_t>(shown), chosen.dataMut() + static_cast<std::ptrdiff_t>(count), [&](std::size_t left, std::size_t right) {
+    std::partial_sort(stacked.begin(), stacked.begin() + static_cast<std::ptrdiff_t>(shown), stacked.end(), [&](std::size_t left, std::size_t right) {
       return application::activity::AgentOrder::priority(agents[left]) < application::activity::AgentOrder::priority(agents[right]);
     });
 
@@ -374,8 +376,8 @@ namespace telar::gui::qt {
       const auto& pose = application::workbench::TabCardMotion::rest[rank];
       auto record = applicationMarkRecord(runtime::describeProvider(static_cast<AgentProvider>(card.provider)).display_name);
 
-      record.insert(QStringLiteral("x"), chrome_.textPx(pose.x) / density_);
-      record.insert(QStringLiteral("y"), chrome_.textPx(pose.y) / density_);
+      record.insert(QStringLiteral("x"), static_cast<qreal>(chrome_.textPx(pose.x)) / density_);
+      record.insert(QStringLiteral("y"), static_cast<qreal>(chrome_.textPx(pose.y)) / density_);
       record.insert(QStringLiteral("rotation"), pose.rotation);
       record.insert(QStringLiteral("scale"), pose.scale);
       record.insert(QStringLiteral("layer"), static_cast<int>(stack_cards - 1 - rank));
@@ -431,7 +433,7 @@ namespace telar::gui::qt {
       ++index;
     }
 
-    return std::ceil(widest) / density_;
+    return static_cast<qreal>(std::ceil(widest)) / density_;
   }
 
   QVariantMap MachineChromeLayout::factRecord(const Source& source, const application::machines::MachineFacts::Geometry& geometry) const {
@@ -479,7 +481,7 @@ namespace telar::gui::qt {
       any = true;
     }
 
-    return (left - area.x) / density_;
+    return (static_cast<qreal>(left - area.x)) / density_;
   }
 
   void MachineChromeLayout::activate(const QString& identity) {

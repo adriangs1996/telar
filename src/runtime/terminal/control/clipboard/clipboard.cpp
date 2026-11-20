@@ -30,8 +30,55 @@ namespace telar::runtime::control {
     return "EINVAL";
   }
 
+  namespace {
+
+    // The operation a metadata's type names.
+    ds::Option<ClipboardOperation> clipboardOperation(std::string_view type) noexcept {
+      if (type == "read") {
+        return ClipboardOperation::read;
+      }
+
+      if (type == "write") {
+        return ClipboardOperation::write;
+      }
+
+      if (type == "wdata") {
+        return ClipboardOperation::data;
+      }
+
+      if (type == "walias") {
+        return ClipboardOperation::alias;
+      }
+
+      return ds::none;
+    }
+
+    // What the desktop's answer makes of a request.
+    constexpr ClipboardStatus desktopResult(ClipboardDesktopStatus status) noexcept {
+      if (status == ClipboardDesktopStatus::success) {
+        return ClipboardStatus::done;
+      }
+
+      if (status == ClipboardDesktopStatus::denied) {
+        return ClipboardStatus::denied;
+      }
+
+      return status == ClipboardDesktopStatus::unsupported ? ClipboardStatus::unsupported : ClipboardStatus::io_error;
+    }
+
+    constexpr bool idCharacter(char byte) noexcept {
+      return (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') || byte == '-' || byte == '_' || byte == '+' || byte == '.';
+    }
+
+  }
+
   ds::Option<ClipboardMetadata> ClipboardMetadata::parse(std::string_view input) {
-    std::string_view operation, location, id, mime, password, name;
+    std::string_view type;
+    std::string_view location;
+    std::string_view id;
+    std::string_view mime;
+    std::string_view password;
+    std::string_view name;
 
     while (true) {
       const auto colon = input.find(':');
@@ -45,7 +92,7 @@ namespace telar::runtime::control {
       const auto value = record.substr(equal + 1);
 
       if (key == "type") {
-        operation = value;
+        type = value;
       } else if (key == "loc") {
         location = value;
       } else if (key == "id") {
@@ -65,32 +112,24 @@ namespace telar::runtime::control {
       input.remove_prefix(colon + 1);
     }
 
-    ClipboardMetadata result;
-
-    if (operation == "read") {
-      result.operation = ClipboardOperation::read;
-    } else if (operation == "write") {
-      result.operation = ClipboardOperation::write;
-    } else if (operation == "wdata") {
-      result.operation = ClipboardOperation::data;
-    } else if (operation == "walias") {
-      result.operation = ClipboardOperation::alias;
-    } else {
+    const auto operation = clipboardOperation(type);
+    if (!operation) {
       return ds::none;
     }
 
+    ClipboardMetadata result;
+
+    result.operation = *operation;
     result.primary = location == "primary";
-    ds::Array<char, maximum_id> sanitized;
+    ds::Array<char, maximum_id> sanitized{};
     std::size_t size = 0;
 
     for (const auto byte : id) {
-      const bool accepted = (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') || byte == '-' || byte == '_' || byte == '+' || byte == '.';
-
       if (size == sanitized.size()) {
         break;
       }
 
-      if (accepted) {
+      if (idCharacter(byte)) {
         sanitized.atMut(size++) = byte;
       }
     }
@@ -120,7 +159,7 @@ namespace telar::runtime::control {
       return MetadataValue::overflow;
     }
 
-    const std::string_view decoded{reinterpret_cast<const char*>(output.data()), *length};
+    const auto decoded = textView(output.view().first(*length));
 
     try {
       validateUtf8(decoded);
@@ -149,7 +188,7 @@ namespace telar::runtime::control {
 
     if (entry == nullptr) {
       if (count_ == entries_.size()) {
-        std::move(entries_.dataMut() + 1, (entries_.dataMut() + entries_.size()), entries_.dataMut());
+        std::ranges::move(entries_.viewMut().subspan(1), entries_.viewMut().begin());
         --count_;
       }
 
@@ -193,7 +232,7 @@ namespace telar::runtime::control {
     const auto route = entry.route;
 
     if (entry.once) {
-      std::move(entries_.dataMut() + index + 1, entries_.dataMut() + count_, entries_.dataMut() + index);
+      std::ranges::move(entries_.viewMut().first(count_).subspan(index + 1), entries_.viewMut().subspan(index).begin());
       --count_;
     }
 
@@ -204,7 +243,7 @@ namespace telar::runtime::control {
     std::size_t kept = 0;
 
     for (std::size_t index = 0; index < count_; ++index) {
-      if (std::find(routes.begin(), routes.end(), entries_[index].route) != routes.end()) {
+      if (std::ranges::contains(routes, entries_[index].route)) {
         if (kept != index) {
           entries_.atMut(kept) = entries_[index];
         }
@@ -221,12 +260,14 @@ namespace telar::runtime::control {
   }
 
   auto ClipboardGrants::password() -> FixedText<password_length> {
+    // A power of two, so that masking a random byte picks each character alike.
+    constexpr std::size_t alphabet_size = 64;
     constexpr std::string_view alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-    static_assert(alphabet.size() == 64);
-    ds::Array<std::uint8_t, password_length> random;
+    static_assert(alphabet.size() == alphabet_size);
+    ds::Array<std::uint8_t, password_length> random{};
 
     randomBytes(random.dataMut(), random.size());
-    ds::Array<char, password_length> output;
+    ds::Array<char, password_length> output{};
 
     for (std::size_t index = 0; index < output.size(); ++index) {
       output.atMut(index) = alphabet[random[index] & (alphabet.size() - 1)];
@@ -238,44 +279,54 @@ namespace telar::runtime::control {
     return result;
   }
 
-  ClipboardWrite::ClipboardWrite(tbc::mut_a<ConcurrentMemory> memory, const ClipboardMetadata& metadata, std::size_t limit)
-      : metadata(metadata),
+  ClipboardWrite::ClipboardWrite(tbc::mut_a<ConcurrentMemory> memory, ClipboardMetadata request, std::size_t limit)
+      : metadata(std::move(request)),
         memory_(memory),
         spool_(memory),
         limit_(limit) {}
 
-  ClipboardStatus ClipboardWrite::data(std::string_view mime, std::string_view encoded) {
-    if (!current_ || entries_[*current_].mime.view() != mime) {
-      if (finishCurrent() != ClipboardStatus::ok) {
-        return ClipboardStatus::invalid;
+  ds::Option<ClipboardStatus> ClipboardWrite::selectEntry(std::string_view mime) {
+    if (current_ && entries_[*current_].mime.view() == mime) {
+      return ds::none;
+    }
+
+    if (finishCurrent() != ClipboardStatus::ok) {
+      return ClipboardStatus::invalid;
+    }
+
+    current_.reset();
+    for (std::size_t index = 0; index < entry_count_; ++index) {
+      if (entries_[index].mime.view() == mime) {
+        current_ = index;
+        break;
+      }
+    }
+
+    if (!current_) {
+      // Representations past the limit are dropped, and the write goes on without them.
+      if (entry_count_ == maximum_mimes) {
+        return ClipboardStatus::ok;
       }
 
-      current_.reset();
-      for (std::size_t index = 0; index < entry_count_; ++index) {
-        if (entries_[index].mime.view() == mime) {
-          current_ = index;
-          break;
-        }
-      }
+      current_ = entry_count_++;
+      entries_.atMut(*current_).mime.assign(mime);
+    }
 
-      if (!current_) {
-        if (entry_count_ == maximum_mimes) {
-          return ClipboardStatus::ok;
-        }
+    auto& entry = entries_.atMut(*current_);
 
-        current_ = entry_count_++;
-        entries_.atMut(*current_).mime.assign(mime);
-      }
+    entry.offset = spool_.size();
+    entry.length = 0;
+    return ds::none;
+  }
 
-      auto& entry = entries_.atMut(*current_);
-
-      entry.offset = spool_.size();
-      entry.length = 0;
+  ClipboardStatus ClipboardWrite::data(const ClipboardMetadata& request, std::string_view encoded) {
+    if (const auto selected = selectEntry(request.mime.view())) {
+      return *selected;
     }
 
     for (std::size_t index = 0; index < encoded.size(); ++index) {
       const auto byte = encoded[index];
-      if (byte != '=' && base64::alphabet.find(byte) == std::string_view::npos) {
+      if (byte != '=' && !base64::alphabet.contains(byte)) {
         return ClipboardStatus::invalid;
       }
 
@@ -284,7 +335,7 @@ namespace telar::runtime::control {
         continue;
       }
 
-      ds::Array<std::uint8_t, 3> decoded;
+      ds::Array<std::uint8_t, 3> decoded{};
       const auto count = base64::decode<base64::Padding::required>({group_.dataMut(), group_.size()}, decoded.viewMut());
       if (!count || (*count != decoded.size() && index + 1 != encoded.size())) {
         return ClipboardStatus::invalid;
@@ -295,14 +346,15 @@ namespace telar::runtime::control {
       }
 
       reserve(*count);
-      spool_.extend({decoded.begin(), decoded.begin() + *count});
+      spool_.extend(decoded.view().first(*count));
       group_size_ = 0;
     }
 
     return ClipboardStatus::ok;
   }
 
-  ClipboardStatus ClipboardWrite::alias(std::string_view mime, std::string_view encoded) {
+  ClipboardStatus ClipboardWrite::alias(const ClipboardMetadata& request, std::string_view encoded) {
+    const auto mime = request.mime.view();
     ds::Vec<std::uint8_t, ConcurrentMemory> decoded{memory_};
 
     if (encoded.size() / 4 * 3 > limit_) {
@@ -315,7 +367,7 @@ namespace telar::runtime::control {
       return ClipboardStatus::invalid;
     }
 
-    std::string_view remaining{reinterpret_cast<const char*>(decoded.data()), *length};
+    auto remaining = textView(decoded.view().first(*length));
 
     try {
       validateUtf8(remaining);
@@ -424,9 +476,9 @@ namespace telar::runtime::control {
 
     remaining.remove_prefix(first);
     const auto end = remaining.find_first_of(whitespace);
-    const auto result = remaining.substr(0, end);
+    const auto result = textPrefix(remaining, end);
 
-    remaining = end == std::string_view::npos ? std::string_view{} : remaining.substr(end + 1);
+    remaining = end == std::string_view::npos ? std::string_view{} : textAfter(remaining, end + 1);
     return result;
   }
 
@@ -444,13 +496,13 @@ namespace telar::runtime::control {
 
   void ClipboardWrite::reserve(std::size_t count) {
     if (count > spool_.capacity() - spool_.size()) {
-      spool_.reserve(std::min(limit_, std::max(spool_.size() + count, std::max(initial_capacity, spool_.capacity() * 2))));
+      spool_.reserve(std::min(limit_, std::max({spool_.size() + count, initial_capacity, spool_.capacity() * 2})));
     }
   }
 
   void clipboardBase64(Reply<ConcurrentMemory>& reply, std::span<const std::uint8_t> input) {
     constexpr std::size_t raw_chunk_bytes = 3072;
-    ds::Array<char, raw_chunk_bytes / 3 * 4> encoded;
+    ds::Array<char, raw_chunk_bytes / 3 * 4> encoded; // NOLINT(cppcoreguidelines-pro-type-member-init): encode writes the bytes a chunk appends before they are read, so zeroing 4 KiB per reply is work no read needs
 
     while (!input.empty()) {
       const auto count = std::min(input.size(), raw_chunk_bytes);
@@ -465,7 +517,7 @@ namespace telar::runtime::control {
   }
 
   void clipboardBase64(Reply<ConcurrentMemory>& reply, std::string_view input) {
-    clipboardBase64(reply, std::span{reinterpret_cast<const std::uint8_t*>(input.data()), input.size()});
+    clipboardBase64(reply, byteView(input));
   }
 
   void clipboardPacket(Reply<ConcurrentMemory>& reply, const ClipboardPacket& packet) {
@@ -506,11 +558,11 @@ namespace telar::runtime::control {
     clipboardPacket(reply, packet);
     packet.primary = false;
     if (listing) {
-      ds::Array<std::uint8_t, clipboard_chunk_bytes> joined;
+      ds::Array<std::uint8_t, clipboard_chunk_bytes> joined; // NOLINT(cppcoreguidelines-pro-type-member-init): the listing writes the bytes it sends before they are read, so zeroing 4 KiB per listing is work no read needs
       std::size_t length = 0;
 
       for (const auto mime : available) {
-        const auto separator = length == 0 ? 0u : 1u;
+        const auto separator = length == 0 ? 0U : 1U;
         if (mime.size() + separator + 1 > joined.size() - length) {
           break;
         }
@@ -519,7 +571,7 @@ namespace telar::runtime::control {
           joined.atMut(length++) = ' ';
         }
 
-        std::copy(mime.begin(), mime.end(), joined.dataMut() + length);
+        std::ranges::copy(mime, joined.viewMut().subspan(length).begin());
         length += mime.size();
       }
 
@@ -563,7 +615,7 @@ namespace telar::runtime::control {
       throw std::logic_error{"Too many clipboard client routes"};
     }
 
-    std::copy(routes.begin(), routes.end(), routes_.dataMut());
+    std::ranges::copy(routes, routes_.viewMut().begin());
     route_count_ = routes.size();
     preferred_ = preferred;
     grants_.retain(routes);
@@ -575,7 +627,8 @@ namespace telar::runtime::control {
 
   void Clipboard::traditional(std::string_view payload, const Policy& policy) {
     const auto separator = payload.find(';');
-    if (separator == std::string_view::npos || separator > 1) {
+    // npos, a missing separator, is past 1 too.
+    if (separator > 1) {
       return;
     }
 
@@ -608,7 +661,7 @@ namespace telar::runtime::control {
       request.mimes.atMut(request.mime_count++).assign("text/plain");
       if (!read) {
         request.text.clear();
-        request.text.extend({decoded_.begin(), decoded_.end()});
+        request.text.extend(decoded_.view());
       }
     } catch (const std::bad_alloc&) {
       pending_.reset();
@@ -650,25 +703,7 @@ namespace telar::runtime::control {
         return;
       case ClipboardOperation::data:
       case ClipboardOperation::alias:
-        if (!transaction_) {
-          return;
-        }
-
-        if (metadata->operation == ClipboardOperation::data && metadata->mime.view().empty()) {
-          commit(ending, policy, reply);
-          return;
-        }
-
-        if (metadata->mime.view().empty()) {
-          abort(ClipboardStatus::invalid, ending, reply);
-          return;
-        }
-
-        const auto result = metadata->operation == ClipboardOperation::data ? transaction_.getMut().data(metadata->mime.view(), data) : transaction_.getMut().alias(metadata->mime.view(), data);
-        if (result != ClipboardStatus::ok) {
-          abort(result, ending, reply);
-        }
-
+        transactionChunk(*metadata, data, ending, policy, reply);
         return;
       }
     } catch (const std::bad_alloc&) {
@@ -681,6 +716,27 @@ namespace telar::runtime::control {
       } else {
         status(*metadata, ClipboardStatus::io_error, ending, reply);
       }
+    }
+  }
+
+  void Clipboard::transactionChunk(const ClipboardMetadata& metadata, std::string_view data, Ending ending, const Policy& policy, Reply<ConcurrentMemory>& reply) {
+    if (!transaction_) {
+      return;
+    }
+
+    if (metadata.operation == ClipboardOperation::data && metadata.mime.view().empty()) {
+      commit(ending, policy, reply);
+      return;
+    }
+
+    if (metadata.mime.view().empty()) {
+      abort(ClipboardStatus::invalid, ending, reply);
+      return;
+    }
+
+    const auto result = metadata.operation == ClipboardOperation::data ? transaction_.getMut().data(metadata, data) : transaction_.getMut().alias(metadata, data);
+    if (result != ClipboardStatus::ok) {
+      abort(result, ending, reply);
     }
   }
 
@@ -738,8 +794,7 @@ namespace telar::runtime::control {
           builder.commit();
         }
 
-        finish(completion.status == ClipboardDesktopStatus::unsupported ? ClipboardStatus::unsupported : completion.status == ClipboardDesktopStatus::denied ? ClipboardStatus::denied
-                                                                                                                                                             : ClipboardStatus::io_error);
+        finish(desktopResult(completion.status));
         return true;
       }
 
@@ -762,9 +817,7 @@ namespace telar::runtime::control {
   }
 
   void Clipboard::completeResult(ClipboardRoute sender, const CompleteClipboardDesktop& completion) {
-    const auto result = completion.status == ClipboardDesktopStatus::success ? ClipboardStatus::done : completion.status == ClipboardDesktopStatus::denied    ? ClipboardStatus::denied
-                                                                                                   : completion.status == ClipboardDesktopStatus::unsupported ? ClipboardStatus::unsupported
-                                                                                                                                                              : ClipboardStatus::io_error;
+    const auto result = desktopResult(completion.status);
     const auto& pending = *pending_;
 
     if (result != ClipboardStatus::done) {
@@ -781,55 +834,60 @@ namespace telar::runtime::control {
 
     if (pending.traditional) {
       if (!pending.write) {
-        asynchronous_reply.append("\x1b]52;");
-        asynchronous_reply.append({&pending.selection, 1});
-        asynchronous_reply.append(";");
-        for (const auto& content : completion.contents) {
-          if (textMime(content.mime)) {
-            clipboardBase64(asynchronous_reply, content.data);
-            break;
-          }
-        }
-
-        asynchronous_reply.append("\x1b\\");
+        traditionalRead(pending, completion, asynchronous_reply);
       }
     } else if (pending.write) {
       status(pending.metadata, ClipboardStatus::done, pending.ending, asynchronous_reply);
-    } else {
-      ds::Array<ClipboardContentView, 4> contents;
-      std::size_t count = 0;
-      std::size_t total = 0;
-
-      for (std::size_t index = 0; index < pending.mime_count; ++index) {
-        const auto mime = pending.mimes[index].view();
-
-        for (const auto& content : completion.contents) {
-          if (content.mime != mime && !(textMime(mime) && textMime(content.mime))) {
-            continue;
-          }
-
-          if (content.data.size() > maximum_bytes - total) {
-            status(pending.metadata, ClipboardStatus::too_large, pending.ending, asynchronous_reply);
-            builder.commit();
-            pending_.reset();
-            return;
-          }
-
-          contents.atMut(count++) = {.mime = mime, .data = content.data};
-          total += content.data.size();
-          break;
-        }
-      }
-
-      clipboardReadSuccess(asynchronous_reply, ClipboardPacket{.primary = pending.metadata.primary, .id = pending.metadata.id.view(), .ending = pending.ending}, std::span{contents}.first(count), completion.available, pending.listing);
+    } else if (!kittyRead(pending, completion, asynchronous_reply)) {
+      status(pending.metadata, ClipboardStatus::too_large, pending.ending, asynchronous_reply);
     }
 
     builder.commit();
     pending_.reset();
-    return;
   }
 
-  void Clipboard::discard() noexcept {
+  void Clipboard::traditionalRead(const Pending& pending, const CompleteClipboardDesktop& completion, Reply<ConcurrentMemory>& reply) {
+    reply.append("\x1b]52;");
+    reply.append({&pending.selection, 1});
+    reply.append(";");
+    for (const auto& content : completion.contents) {
+      if (textMime(content.mime)) {
+        clipboardBase64(reply, content.data);
+        break;
+      }
+    }
+
+    reply.append("\x1b\\");
+  }
+
+  bool Clipboard::kittyRead(const Pending& pending, const CompleteClipboardDesktop& completion, Reply<ConcurrentMemory>& reply) {
+    ds::Array<ClipboardContentView, 4> contents;
+    std::size_t count = 0;
+    std::size_t total = 0;
+
+    for (std::size_t index = 0; index < pending.mime_count; ++index) {
+      const auto mime = pending.mimes[index].view();
+
+      for (const auto& content : completion.contents) {
+        if (content.mime != mime && !(textMime(mime) && textMime(content.mime))) {
+          continue;
+        }
+
+        if (content.data.size() > maximum_bytes - total) {
+          return false;
+        }
+
+        contents.atMut(count++) = {.mime = mime, .data = content.data};
+        total += content.data.size();
+        break;
+      }
+    }
+
+    clipboardReadSuccess(reply, ClipboardPacket{.primary = pending.metadata.primary, .id = pending.metadata.id.view(), .ending = pending.ending}, std::span{contents}.first(count), completion.available, pending.listing);
+    return true;
+  }
+
+  void Clipboard::discard() noexcept { // NOLINT(bugprone-exception-escape): the empty Vec shares the old one's memory, so the move hands storage over without allocating
     if (pending_) {
       cancelPending();
     }
@@ -939,7 +997,7 @@ namespace telar::runtime::control {
   }
 
   bool Clipboard::live(ClipboardRoute route) const noexcept {
-    return std::find(routes_.begin(), routes_.begin() + route_count_, route) != routes_.begin() + route_count_;
+    return std::ranges::contains(routes_.view().first(route_count_), route);
   }
 
   template <base64::Padding Rule>
@@ -999,7 +1057,7 @@ namespace telar::runtime::control {
       return;
     }
 
-    std::string_view decoded{reinterpret_cast<const char*>(decoded_.data()), decoded_.size()};
+    auto decoded = textView(decoded_.view());
 
     try {
       validateUtf8(decoded);

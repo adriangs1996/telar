@@ -132,7 +132,7 @@ namespace telar::gui::qt {
   }
 
   QRectF HistoryMetaLayout::logical(Rect area) const noexcept {
-    return {area.x / density_, area.y / density_, area.width / density_, area.height / density_};
+    return {static_cast<qreal>(area.x) / density_, static_cast<qreal>(area.y) / density_, static_cast<qreal>(area.width) / density_, static_cast<qreal>(area.height) / density_};
   }
 
   QVariantMap HistoryMetaLayout::layout() const {
@@ -162,9 +162,9 @@ namespace telar::gui::qt {
     application::history::HistoryActionSurface result{.generation = generation, .scale = density_};
     bool valid_revision = false;
     const auto revision = input_.value(QStringLiteral("revision")).toString().toULongLong(&valid_revision);
-    const auto index = input_.value(QStringLiteral("historyIndex"), -1).toInt();
-    if (valid_revision && index >= 0) {
-      result.choice = application::history::HistoryChoice{.index = static_cast<std::size_t>(index), .revision = revision};
+    const auto history_index = input_.value(QStringLiteral("historyIndex"), -1).toInt();
+    if (valid_revision && history_index >= 0) {
+      result.choice = application::history::HistoryChoice{.index = static_cast<std::size_t>(history_index), .revision = revision};
     }
 
     if (!isVisible() || window() == nullptr) {

@@ -14,6 +14,7 @@ static_assert(true);
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <functional>
 #include <span>
 #include <utility>
 
@@ -245,7 +246,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    if (surface.machine_view != capture_surface_.machine_view || surface.viewport != capture_surface_.viewport || surface.threshold != capture_surface_.threshold || std::ranges::find(surface.view(), drag_.source()->tab_id, &application::workbench::TabDropSlot::id) == surface.view().end()) {
+    if (surface.machine_view != capture_surface_.machine_view || surface.viewport != capture_surface_.viewport || std::not_equal_to<>{}(surface.threshold, capture_surface_.threshold) || std::ranges::find(surface.view(), drag_.source()->tab_id, &application::workbench::TabDropSlot::id) == surface.view().end()) {
       cancelDrag();
       return;
     }
@@ -281,7 +282,7 @@ namespace telar::gui::qt {
       // A queued tab snapshot can overlap another widget after the bar moves.
       const auto current = dropSurface(ratio);
       const auto* target = current.at({event.position().x() * current.scale, event.position().y() * current.scale});
-      if (target == nullptr || target->id != slot->id || current.workspace.kind != surface.workspace.kind || current.workspace.id != surface.workspace.id || current.viewport != surface.viewport || current.scale != surface.scale || current.threshold != surface.threshold) {
+      if (target == nullptr || target->id != slot->id || current.workspace.kind != surface.workspace.kind || current.workspace.id != surface.workspace.id || current.viewport != surface.viewport || std::not_equal_to<>{}(current.scale, surface.scale) || std::not_equal_to<>{}(current.threshold, surface.threshold)) {
         return false;
       }
 
@@ -289,7 +290,7 @@ namespace telar::gui::qt {
       drop_slots_.capture(surface.view());
       capture_surface_ = surface;
       pointer_ = event.position();
-      grab_offset_ = (x - slot->bounds.x) / surface.scale;
+      grab_offset_ = (x - static_cast<double>(slot->bounds.x)) / surface.scale;
       return true;
     }
 

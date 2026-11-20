@@ -25,6 +25,7 @@ static_assert(true);
 #include <QtCore/qtypes.h>
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <memory>
 #include <utility>
 
@@ -88,7 +89,7 @@ namespace telar::gui::qt {
   ProviderMark::~ProviderMark() = default;
 
   qreal ProviderMark::dimmedAlpha() noexcept {
-    return application::activity::ApplicationMark::dimmed_alpha;
+    return static_cast<qreal>(application::activity::ApplicationMark::dimmed_alpha);
   }
 
   int ProviderMark::provider() const noexcept {
@@ -175,7 +176,7 @@ namespace telar::gui::qt {
   }
 
   void ProviderMark::setRatio(qreal ratio) {
-    if (std::isfinite(ratio) && ratio > 0 && ratio_ != ratio) {
+    if (std::isfinite(ratio) && ratio > 0 && !std::equal_to<>{}(ratio_, ratio)) {
       ratio_ = ratio;
       dirty_ = true;
       emit ratioChanged();

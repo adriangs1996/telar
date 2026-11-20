@@ -4,6 +4,7 @@
 #include "platform/clipboard_image_source.hpp"
 #include "telar_base/ds/values.hpp"
 #include "telar_base/memory/allocator.hpp"
+#include <QDebug>
 #include <QFuture>
 #include <QObject>
 #include <QString>
@@ -44,7 +45,7 @@ namespace telar::gui::qt {
         static_cast<void>(future.takeResult());
       }
     } catch (const std::exception& error) {
-      qWarning("Clipboard image worker failed during shutdown: %s", error.what());
+      qWarning() << "Clipboard image worker failed during shutdown:" << error.what();
     }
   }
 
@@ -88,8 +89,8 @@ namespace telar::gui::qt {
     try {
       auto source = clipboard_.snapshot();
 
-      task_.setFuture(QtConcurrent::run(&worker_pool_, [memory = &memory_, job, source = std::move(source)] mutable {
-        return prepare(*memory, job, std::move(source));
+      task_.setFuture(QtConcurrent::run(&worker_pool_, [memory = &memory_, job, snapshot = std::move(source)] mutable {
+        return prepare(*memory, job, std::move(snapshot));
       }));
     } catch (const platform::ClipboardImageFailure& error) {
       result_ = ClipboardImageResult{.job = job, .failure = error.code(), .error = QString::fromUtf8(error.what())};

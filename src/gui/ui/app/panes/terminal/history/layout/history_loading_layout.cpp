@@ -16,6 +16,7 @@ static_assert(true);
 #include <QtCore/qtypes.h>
 #include <cmath>
 #include <cstdint>
+#include <functional>
 #include <optional>
 
 import telar.gui.foundation.system;
@@ -48,7 +49,7 @@ namespace telar::gui::qt {
   }
 
   qreal HistoryLoadingLayout::rowsOpacity() const noexcept {
-    return cue_visible_ ? application::history::HistoryLoading::row_opacity : 1;
+    return cue_visible_ ? static_cast<qreal>(application::history::HistoryLoading::row_opacity) : 1;
   }
 
   QRectF HistoryLoadingLayout::line() const noexcept {
@@ -68,7 +69,7 @@ namespace telar::gui::qt {
   }
 
   void HistoryLoadingLayout::setRatio(qreal ratio) {
-    if (std::isfinite(ratio) && ratio > 0 && ratio_ != ratio) {
+    if (std::isfinite(ratio) && ratio > 0 && std::not_equal_to<>{}(ratio_, ratio)) {
       ratio_ = ratio;
       const QPointer<HistoryLoadingLayout> alive{this};
 

@@ -235,8 +235,8 @@ namespace telar::gui::qt {
     application::history::HistoryScrollSurface surface{
         .generation = generation,
         .revision = browser.revision(),
-        .row_height = metrics_.cell_height,
-        .cell_height = metrics_.cell_height,
+        .row_height = static_cast<double>(metrics_.cell_height),
+        .cell_height = static_cast<double>(metrics_.cell_height),
         .scale = density,
     };
 
@@ -270,14 +270,14 @@ namespace telar::gui::qt {
         row_height = row_height ? std::min(*row_height, frame.height) : frame.height;
         const auto index = row->historyIndex();
         if (index >= 0 && std::cmp_less(index, application::history::HistoryLimits::page_entries)) {
-          const auto bounds = row->mapRectToScene(toQRectF(frame, density)).intersected(viewport);
+          const auto row_bounds = row->mapRectToScene(toQRectF(frame, density)).intersected(viewport);
 
-          hover.append({.identity = {.action = application::history::HistoryChoice{.index = static_cast<std::size_t>(index), .revision = browser.revision()}, .generation = generation}, .bounds = {.x = static_cast<float>(bounds.x() * density), .y = static_cast<float>(bounds.y() * density), .width = static_cast<float>(bounds.width() * density), .height = static_cast<float>(bounds.height() * density)}});
+          hover.append({.identity = {.action = application::history::HistoryChoice{.index = static_cast<std::size_t>(index), .revision = browser.revision()}, .generation = generation}, .bounds = {.x = static_cast<float>(row_bounds.x() * density), .y = static_cast<float>(row_bounds.y() * density), .width = static_cast<float>(row_bounds.width() * density), .height = static_cast<float>(row_bounds.height() * density)}});
         }
       }
     }
 
-    surface.row_height = row_height.valueOr(metrics_.cell_height);
+    surface.row_height = static_cast<double>(row_height.valueOr(metrics_.cell_height));
     surface.has_rows = row_height.hasValue();
 
     return surface;
@@ -487,8 +487,8 @@ namespace telar::gui::qt {
         {QStringLiteral("footer"), local(geometry.footer)},
         {QStringLiteral("inspectionContent"), local(geometry.inspectionContent(metrics_.chrome))},
         {QStringLiteral("inspectionActions"), local(geometry.inspectionActions(metrics_.chrome))},
-        {QStringLiteral("rowHeight"), geometry.row_height / density},
-        {QStringLiteral("groupHeight"), geometry.group_height / density},
+        {QStringLiteral("rowHeight"), static_cast<qreal>(geometry.row_height) / density},
+        {QStringLiteral("groupHeight"), static_cast<qreal>(geometry.group_height) / density},
         {QStringLiteral("compact"), geometry.compact},
         {QStringLiteral("density"), density},
     };

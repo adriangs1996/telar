@@ -232,9 +232,13 @@ namespace telar::gui::qt {
       }
 
       return true;
-    default:
+    case Outcome::pending:
+    case Outcome::discard:
       return true;
     }
+
+    // An outcome outside the enum consumes the event, as a pending or discarded one does.
+    return true;
   }
 
   auto KeyBindings::leaseOf(std::uint64_t physical) noexcept -> Recipient* {
@@ -326,7 +330,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    const QScopedValueRollback guard{delivering_, true};
+    const QScopedValueRollback<bool> guard{delivering_, true};
     QKeyEvent key{event.phase == KeyPhase::release ? QEvent::KeyRelease : QEvent::KeyPress, event.key, event.modifiers, event.scan, event.native_key, event.native_modifiers, event.text, event.phase == KeyPhase::repeat};
 
     QCoreApplication::sendEvent(event.recipient, &key);

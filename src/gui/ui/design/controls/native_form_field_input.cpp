@@ -221,13 +221,22 @@ namespace telar::gui::qt {
     }
     case Qt::ImHints:
       return static_cast<int>(Qt::ImhNoPredictiveText | Qt::ImhNoAutoUppercase);
-    default:
-      return QQuickItem::inputMethodQuery(query);
+    case Qt::ImPreferredLanguage:
+    case Qt::ImEnterKeyType:
+    case Qt::ImInputItemClipRectangle:
+    case Qt::ImReadOnly:
+    case Qt::ImPlatformData:
+    case Qt::ImQueryInput:
+    case Qt::ImQueryAll:
+      break;
     }
+
+    // The queries the field leaves to the item, and values outside the enum.
+    return QQuickItem::inputMethodQuery(query);
   }
 
   std::size_t NativeFormField::pointerPosition(qreal x) const {
-    const auto target = std::max(qreal{0}, ((x * density_) - geometry_.content.x) / geometry_.cell_width);
+    const auto target = std::max(qreal{0}, ((x * density_) - static_cast<qreal>(geometry_.content.x)) / static_cast<qreal>(geometry_.cell_width));
     auto display = editor_;
     const auto visible = display.view(geometry_.columns);
     const auto first = display.scroll();

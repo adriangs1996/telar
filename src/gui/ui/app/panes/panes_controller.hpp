@@ -11,6 +11,7 @@ static_assert(true);
 #include <QVariantList>
 #include <QtQml/qqmlregistration.h>
 #include <cstdint>
+#include <functional>
 #include <optional>
 
 #pragma once
@@ -73,7 +74,9 @@ namespace telar::gui::qt {
       std::uint64_t viewport = 0;
       double scale = 1;
 
-      bool operator==(const Inputs&) const = default;
+      bool operator==(const Inputs& other) const {
+        return machine_view == other.machine_view && runtime_generation == other.runtime_generation && active_tab == other.active_tab && panes == other.panes && host == other.host && configuration == other.configuration && chrome == other.chrome && agents == other.agents && graphics == other.graphics && elements == other.elements && viewport == other.viewport && std::equal_to<>{}(scale, other.scale);
+      }
     };
 
     [[nodiscard]] Inputs inputs() const;

@@ -54,9 +54,13 @@ namespace telar::gui::qt {
         return QStringLiteral("Actions");
       case application::palette::PaletteRowKind::machine:
         return QStringLiteral("Machines");
-      default:
+      case application::palette::PaletteRowKind::pick:
+      case application::palette::PaletteRowKind::suggestion:
         return {};
       }
+
+      // A kind outside the enum names no group.
+      return {};
     }
 
     // The selected row's kind, which picks the shortcuts the footer shows.
@@ -68,9 +72,15 @@ namespace telar::gui::qt {
         return QStringLiteral("machine");
       case application::palette::PaletteRowKind::suggestion:
         return QStringLiteral("suggestion");
-      default:
+      case application::palette::PaletteRowKind::context:
+      case application::palette::PaletteRowKind::tab:
+      case application::palette::PaletteRowKind::agent:
+      case application::palette::PaletteRowKind::pick:
         return QStringLiteral("navigation");
       }
+
+      // A kind outside the enum shows the navigation shortcuts.
+      return QStringLiteral("navigation");
     }
 
     application::palette::PaletteRowKind kindOf(const PaletteTarget& target) noexcept {
@@ -861,7 +871,7 @@ namespace telar::gui::qt {
         {QStringLiteral("footer"), local(geometry.footer_caption)},
         {QStringLiteral("button"), local(geometry.button)},
         {QStringLiteral("separator"), local(geometry.separator)},
-        {QStringLiteral("previewRadius"), display_.chrome.px(application::palette::SuggestionGeometry::preview_radius) / density},
+        {QStringLiteral("previewRadius"), static_cast<double>(display_.chrome.px(application::palette::SuggestionGeometry::preview_radius)) / density},
         {QStringLiteral("messageAlpha"), application::palette::SuggestionGeometry::message_alpha},
         {QStringLiteral("titleAlpha"), application::palette::SuggestionGeometry::title_alpha},
         {QStringLiteral("grid"), std::move(grid)},

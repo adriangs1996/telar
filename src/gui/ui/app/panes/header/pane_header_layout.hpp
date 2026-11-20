@@ -64,7 +64,7 @@ namespace telar::gui::qt {
     QVariantMap measurements_;
     application::workbench::PaneHeaderGeometry layout_;
     qreal ratio_ = 1;
-    qreal band_height_ = ChromeMetrics::logical_pane_header;
+    qreal band_height_ = static_cast<qreal>(ChromeMetrics::logical_pane_header);
     qreal density_ = 1;
   };
 

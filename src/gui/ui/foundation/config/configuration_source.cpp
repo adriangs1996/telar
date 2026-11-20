@@ -104,7 +104,7 @@ namespace telar::gui::qt {
         static_cast<void>(future.takeResult());
       }
     } catch (const std::exception& error) {
-      qWarning("Configuration worker failed during shutdown: %s", error.what());
+      qWarning() << "Configuration worker failed during shutdown:" << error.what();
     }
   }
 
@@ -171,11 +171,11 @@ namespace telar::gui::qt {
     const auto number = generation->number();
     const auto known = static_cast<std::size_t>(watch_.modules.size());
 
-    lua_.post([generation, known, work = std::move(work)] mutable {
+    lua_.post([generation, known, job = std::move(work)] mutable -> TrackedResult<Value> {
       TrackedResult<Value> result;
 
       try {
-        result.value.emplace(work(*generation));
+        result.value.emplace(job(*generation));
       } catch (const std::exception& error) {
         result.error = QString::fromUtf8(error.what());
       }
@@ -184,7 +184,7 @@ namespace telar::gui::qt {
 
       return result;
     },
-        [this, number, done = std::move(done)](LuaOutcome<TrackedResult<Value>> tracked) mutable {
+        [this, number, finish = std::move(done)](LuaOutcome<TrackedResult<Value>> tracked) mutable {
           LuaOutcome<Value> outcome;
 
           outcome.stale = configurationGeneration() != number;
@@ -198,7 +198,7 @@ namespace telar::gui::qt {
             outcome.error = std::move(tracked.error);
           }
 
-          done(std::move(outcome));
+          finish(std::move(outcome));
         });
   }
 
@@ -222,15 +222,15 @@ namespace telar::gui::qt {
   }
 
   void ConfigurationSource::renderBar(application::components::Position position, const application::components::Context& context, Done<BarRender> done) {
-    run<BarRender>([position, context = ContextCopy{context}](Generation& generation) {
-      return generation.renderedBar(position, context.view());
+    run<BarRender>([position, copied = ContextCopy{context}](Generation& generation) {
+      return generation.renderedBar(position, copied.view());
     },
         std::move(done));
   }
 
   void ConfigurationSource::renderPanel(std::size_t index, const application::components::Context& context, Done<PanelRender> done) {
-    run<PanelRender>([index, context = ContextCopy{context}](Generation& generation) {
-      return generation.renderedPanel(index, context.view());
+    run<PanelRender>([index, copied = ContextCopy{context}](Generation& generation) {
+      return generation.renderedPanel(index, copied.view());
     },
         std::move(done));
   }
@@ -247,15 +247,15 @@ namespace telar::gui::qt {
   }
 
   void ConfigurationSource::renderElements(application::components::Slot slot, std::uint64_t instance, const application::components::Context& context, const QByteArray& item, Done<ElementsRender> done) {
-    run<ElementsRender>([slot, instance, item, context = ContextCopy{context}](Generation& generation) {
-      return generation.renderElements(slot, instance, context.view(), {item.constData(), static_cast<std::size_t>(item.size())});
+    run<ElementsRender>([slot, instance, item, copied = ContextCopy{context}](Generation& generation) {
+      return generation.renderElements(slot, instance, copied.view(), {item.constData(), static_cast<std::size_t>(item.size())});
     },
         std::move(done));
   }
 
   void ConfigurationSource::invokeElement(std::uint64_t instance, std::uint32_t callback, const application::components::Context& context, const QByteArray& item, Done<Effects> done) {
-    run<Effects>([instance, callback, item, context = ContextCopy{context}](Generation& generation) {
-      return generation.invokeElement({.instance = instance, .callback = callback}, context.view(), {item.constData(), static_cast<std::size_t>(item.size())});
+    run<Effects>([instance, callback, item, copied = ContextCopy{context}](Generation& generation) {
+      return generation.invokeElement({.instance = instance, .callback = callback}, copied.view(), {item.constData(), static_cast<std::size_t>(item.size())});
     },
         std::move(done));
   }
@@ -272,10 +272,10 @@ namespace telar::gui::qt {
   }
 
   void ConfigurationSource::renderPick(std::size_t index, const application::components::Context& context, Done<PickRender> done) {
-    run<PickRender>([this, index, context = ContextCopy{context}](Generation& generation) {
+    run<PickRender>([this, index, copied = ContextCopy{context}](Generation& generation) {
       auto items = ds::makeBox<application::components::PickItems>(memory_);
 
-      generation.renderPick(index, context.view(), items.getMut());
+      generation.renderPick(index, copied.view(), items.getMut());
 
       return items;
     },
@@ -599,8 +599,8 @@ namespace telar::gui::qt {
 
       active_revision_ = work.revision;
 
-      const auto future = QtConcurrent::run([memory = &memory_, work = std::move(work)] {
-        return ConfigurationLoader::prepare(*memory, work);
+      const auto future = QtConcurrent::run([memory = &memory_, job = std::move(work)] {
+        return ConfigurationLoader::prepare(*memory, job);
       });
 
       busy_ = true;

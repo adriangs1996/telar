@@ -97,6 +97,7 @@ export namespace telar::runtime::control {
     // input and partial application.
     void writeAscii(std::span<const std::uint32_t> codepoints);
 
+    static constexpr unsigned palette_colors = 256;
     static constexpr unsigned foreground = 256;
     static constexpr unsigned background = 257;
     static constexpr unsigned cursor_color = 258;
@@ -113,7 +114,7 @@ export namespace telar::runtime::control {
       template <typename Read>
       Value get(std::uint64_t epoch, Read&& read) const {
         if (epoch_ != epoch) {
-          value_ = read();
+          value_ = std::forward<Read>(read)();
           epoch_ = epoch;
         }
 
@@ -151,6 +152,7 @@ export namespace telar::runtime::control {
 
     static constexpr std::uint16_t origin_mode = 6;
     static constexpr unsigned mode_ansi_hash = 32;
+    static constexpr std::size_t mode_cache_slots = 64;
     std::uint64_t epoch_ = 1;
     Cached<TerminalSize> size_cache_;
     Cached<Position> cursor_cache_;
@@ -158,14 +160,14 @@ export namespace telar::runtime::control {
     Cached<std::uint8_t> keyboard_cache_;
     Cached<GhosttyStyle> style_cache_;
     Cached<GhosttyRenderStateCursor> visual_cursor_cache_;
-    mutable ds::Array<ModeCache, 64> modes_;
+    mutable ds::Array<ModeCache, mode_cache_slots> modes_;
     ds::Array<ds::Option<GhosttyColorRgb>, 3> colors_;
     ds::Array<bool, 3> color_valid_{};
     tbc::val_a<GhosttyTerminal> terminal_ = nullptr;
     tbc::val_a<GhosttyRenderState> render_ = nullptr;
     GraphicsCursor graphics_cursor_;
     TerminalSize size_{};
-    ds::Array<GhosttyColorRgb, 256> palette_;
+    ds::Array<GhosttyColorRgb, palette_colors> palette_;
     bool palette_valid_ = false;
     bool possibly_pending_input_ = false;
     bool separate_media_ = false;

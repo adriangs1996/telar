@@ -128,7 +128,7 @@ namespace telar::gui::qt {
         return;
       }
 
-      setBaselineOffset(resolved_.metrics.baseline / scale_);
+      setBaselineOffset(static_cast<qreal>(resolved_.metrics.baseline) / scale_);
       if (!alive) {
         return;
       }

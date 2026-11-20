@@ -8,6 +8,7 @@ static_assert(true);
 #include "alpha_mask_material.hpp"
 #include "alpha_mask_vertex.hpp"
 #include "chrome_glyph_images.hpp"
+#include "qt_buffers.hpp"
 #include "scene_nodes.hpp"
 #include "ui/foundation/fonts/font_asset.hpp"
 #include "ui/foundation/fonts/resident_fonts.hpp"
@@ -48,14 +49,14 @@ namespace telar::gui::qt {
       [[nodiscard]] QRectF map(Rect glyph) const noexcept {
         const auto bounds = fit.map(glyph);
 
-        return {(bounds.x - anchor.x()) / scale, (bounds.y - anchor.y()) / scale, bounds.width / scale, bounds.height / scale};
+        return {(static_cast<qreal>(bounds.x) - anchor.x()) / scale, (static_cast<qreal>(bounds.y) - anchor.y()) / scale, static_cast<qreal>(bounds.width) / scale, static_cast<qreal>(bounds.height) / scale};
       }
     };
 
     IconProjection projection(const ChromeIconPaint& paint) {
       const Rect bounds{.x = static_cast<float>(paint.scene_origin.x() * paint.scale), .y = static_cast<float>(paint.scene_origin.y() * paint.scale), .width = static_cast<float>(paint.bounds.width() * paint.scale), .height = static_cast<float>(paint.bounds.height() * paint.scale)};
 
-      return {.fit = fonts::IconPlacement::resolve(paint.ink, bounds, paint.target_side), .anchor = {std::floor(bounds.x), std::floor(bounds.y)}, .scale = paint.scale};
+      return {.fit = fonts::IconPlacement::resolve(paint.ink, bounds, paint.target_side), .anchor = {static_cast<qreal>(std::floor(bounds.x)), static_cast<qreal>(std::floor(bounds.y))}, .scale = paint.scale};
     }
 
     struct IconQuad {
@@ -76,13 +77,13 @@ namespace telar::gui::qt {
       }
 
       void paint(const IconProjection& position, Color foreground) {
-        auto* vertices = static_cast<AlphaMaskVertex*>(geometry_.vertexData());
+        const auto vertices = geometryVertices<AlphaMaskVertex>(geometry_, static_cast<std::size_t>(geometry_.vertexCount()));
         std::size_t offset = 0;
 
         for (const auto& quad : glyphs_) {
           const auto source = quad.mask->texture->normalizedTextureSubRect();
 
-          writeAlphaMaskQuad(std::span<AlphaMaskVertex, alpha_mask_triangle_vertices>{vertices + offset, alpha_mask_triangle_vertices}, position.map(quad.glyph.ink), source, 1);
+          writeAlphaMaskQuad(vertices.subspan(offset).first<alpha_mask_triangle_vertices>(), position.map(quad.glyph.ink), source, 1);
           offset += alpha_mask_triangle_vertices;
         }
 

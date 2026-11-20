@@ -12,6 +12,7 @@ static_assert(true);
 #include <QVariantMap>
 #include <QtQml/qqmlregistration.h>
 #include <cstdint>
+#include <functional>
 #include <optional>
 
 #pragma once
@@ -82,7 +83,9 @@ namespace telar::gui::qt {
       double density = 1;
       bool shelf = false;
 
-      bool operator==(const Inputs&) const = default;
+      bool operator==(const Inputs& other) const {
+        return host == other.host && terminal == other.terminal && reserved == other.reserved && std::equal_to<>{}(density, other.density) && shelf == other.shelf;
+      }
     };
 
     void shelfChanged();

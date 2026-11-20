@@ -8,7 +8,7 @@ import telar.base.ds;
 
 namespace telar::runtime {
 
-  PtyResponseQueue::PtyResponseQueue() noexcept {} // NOLINT(cppcoreguidelines-pro-type-member-init)
+  PtyResponseQueue::PtyResponseQueue() noexcept = default; // NOLINT(cppcoreguidelines-pro-type-member-init): a slot's bytes are written when a reply is published, so zeroing the queue's 64 KiB at construction is work no reader needs
 
   PtyResponseQueue::Producer::Producer(PtyResponseQueue& queue)
       : queue_(queue),
@@ -49,7 +49,7 @@ namespace telar::runtime {
   }
 
   bool PtyResponseQueue::push(std::span<const std::uint8_t> response) noexcept {
-    const std::lock_guard lock{mutex_};
+    const std::scoped_lock lock{mutex_};
 
     if (closed_) {
       return false;
@@ -64,31 +64,31 @@ namespace telar::runtime {
   }
 
   bool PtyResponseQueue::tryPush(std::span<const std::uint8_t> response) noexcept {
-    const std::lock_guard lock{mutex_};
+    const std::scoped_lock lock{mutex_};
 
     return append(response);
   }
 
   bool PtyResponseQueue::tryPushOwned(std::span<const std::uint8_t> response, std::shared_ptr<const void> owner) noexcept {
-    const std::lock_guard lock{mutex_};
+    const std::scoped_lock lock{mutex_};
 
     return append(response, std::move(owner));
   }
 
   bool PtyResponseQueue::hasCapacityFor(std::size_t bytes) const noexcept {
-    const std::lock_guard lock{mutex_};
+    const std::scoped_lock lock{mutex_};
 
     return !closed_ && count_ != message_capacity && bytes <= total_byte_capacity - byte_count_;
   }
 
   bool PtyResponseQueue::closed() const noexcept {
-    const std::lock_guard lock{mutex_};
+    const std::scoped_lock lock{mutex_};
 
     return closed_;
   }
 
   bool PtyResponseQueue::retainWorkerPriority() noexcept {
-    const std::lock_guard lock{mutex_};
+    const std::scoped_lock lock{mutex_};
 
     if (closed_) {
       return false;
@@ -99,7 +99,7 @@ namespace telar::runtime {
   }
 
   void PtyResponseQueue::releaseWorkerPriority() noexcept {
-    const std::lock_guard lock{mutex_};
+    const std::scoped_lock lock{mutex_};
 
     TELAR_ASSERT(priority_workers_ != 0);
     --priority_workers_;
@@ -112,10 +112,7 @@ namespace telar::runtime {
 
     const auto index = (head_ + count_) % message_capacity;
 
-    if (!response.empty()) {
-      std::memcpy(bytes_.atMut(index).dataMut(), response.data(), response.size());
-    }
-
+    std::ranges::copy(response, bytes_.atMut(index).viewMut().begin());
     commit(index, std::span<const std::uint8_t>{bytes_[index]}.first(response.size()));
     return true;
   }
@@ -137,7 +134,7 @@ namespace telar::runtime {
   }
 
   ds::Option<std::span<const std::uint8_t>> PtyResponseQueue::peek() const noexcept {
-    const std::lock_guard lock{mutex_};
+    const std::scoped_lock lock{mutex_};
 
     if (count_ == 0) {
       return ds::none;
@@ -149,7 +146,7 @@ namespace telar::runtime {
   }
 
   PtyResponseQueue::Batch PtyResponseQueue::peekBatch() const noexcept {
-    const std::lock_guard lock{mutex_};
+    const std::scoped_lock lock{mutex_};
     const auto first_count = std::min(count_, message_capacity - head_);
     const auto entries = std::span{views_};
 
@@ -163,7 +160,7 @@ namespace telar::runtime {
   }
 
   void PtyResponseQueue::consumeBytes(std::size_t bytes) noexcept {
-    const std::lock_guard lock{mutex_};
+    const std::scoped_lock lock{mutex_};
 
     TELAR_ASSERT(bytes <= byte_count_);
     while (count_ != 0) {
@@ -183,7 +180,7 @@ namespace telar::runtime {
   }
 
   void PtyResponseQueue::consume(std::size_t bytes) noexcept {
-    const std::lock_guard lock{mutex_};
+    const std::scoped_lock lock{mutex_};
 
     TELAR_ASSERT(count_ != 0 && bytes <= lengths_[head_] - offset_);
     consumeHead(bytes);
@@ -202,26 +199,26 @@ namespace telar::runtime {
   }
 
   bool PtyResponseQueue::empty() const noexcept {
-    const std::lock_guard lock{mutex_};
+    const std::scoped_lock lock{mutex_};
 
     return count_ == 0;
   }
 
   void PtyResponseQueue::stopProducing() noexcept {
-    const std::lock_guard lock{mutex_};
+    const std::scoped_lock lock{mutex_};
 
     closed_ = true;
   }
 
   void PtyResponseQueue::close() noexcept {
-    const std::lock_guard lock{mutex_};
+    const std::scoped_lock lock{mutex_};
 
     closed_ = true;
     clearLocked();
   }
 
   void PtyResponseQueue::clear() noexcept {
-    const std::lock_guard lock{mutex_};
+    const std::scoped_lock lock{mutex_};
 
     clearLocked();
   }
@@ -238,7 +235,7 @@ namespace telar::runtime {
   }
 
   PtyResponseQueue::Snapshot PtyResponseQueue::snapshot() const noexcept {
-    const std::lock_guard lock{mutex_};
+    const std::scoped_lock lock{mutex_};
 
     return {.messages = count_, .bytes = byte_count_, .dropped = dropped_};
   }

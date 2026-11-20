@@ -6,6 +6,62 @@ import telar.base.ds;
 
 namespace telar::runtime::redirect {
 
+  namespace {
+
+    // Whether the peer of a redirected origin socket is the destination its target names.
+    bool reaches(const sockaddr_storage& actual, const Target& target) noexcept {
+      if (actual.ss_family == AF_INET) {
+        const auto origin = addressAs<sockaddr_in>(actual);
+        const auto expected = addressAs<sockaddr_in>(target.endpoint.storage);
+
+        return origin.sin_port == htons(target.port) && origin.sin_addr.s_addr == expected.sin_addr.s_addr;
+      }
+
+      const auto origin = addressAs<sockaddr_in6>(actual);
+      const auto expected = addressAs<sockaddr_in6>(target.endpoint.storage);
+
+      return origin.sin6_port == htons(target.port) && sameBytes(origin.sin6_addr, expected.sin6_addr);
+    }
+
+    // How many descriptors an SCM_RIGHTS message carries whose data starts `offset` bytes into
+    // `control`; none for another message, or one that overruns the buffer.
+    ds::Option<std::size_t> rightsCount(const cmsghdr& header, std::span<const std::byte> control, std::size_t offset) noexcept {
+      if (header.cmsg_level != SOL_SOCKET || header.cmsg_type != SCM_RIGHTS || header.cmsg_len < CMSG_LEN(0)) {
+        return ds::none;
+      }
+
+      const auto descriptors = (header.cmsg_len - CMSG_LEN(0)) / sizeof(int);
+      if (offset > control.size() || descriptors > (control.size() - offset) / sizeof(int)) {
+        return ds::none;
+      }
+
+      return descriptors;
+    }
+
+  }
+
+  ds::Option<sockaddr_storage> socketAddress(int socket, SocketEnd end) noexcept {
+    sockaddr_storage address{};
+    socklen_t length = sizeof(address);
+    auto* const generic = reinterpret_cast<sockaddr*>(&address); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the socket API passes every address family as a sockaddr
+    const auto result = end == SocketEnd::local ? ::getsockname(socket, generic, &length) : ::getpeername(socket, generic, &length);
+    if (result != 0) {
+      return ds::none;
+    }
+
+    return address;
+  }
+
+  tbc::val_a<std::string_view> formatAuthority(tbc::val_a<std::span<char>> output, std::string_view host, std::uint16_t port) {
+    const bool bracketed = host.contains(':');
+    const auto written = std::format_to_n(output.data(), static_cast<std::ptrdiff_t>(output.size()), "{}{}{}:{}", bracketed ? "[" : "", host, bracketed ? "]" : "", port);
+    if (std::cmp_greater_equal(written.size, output.size())) {
+      return {};
+    }
+
+    return {output.data(), static_cast<std::size_t>(written.size)};
+  }
+
   ProxyTarget Target::authority(std::string_view text) {
     const auto colon = text.rfind(':');
     if (colon == std::string_view::npos) {
@@ -37,24 +93,24 @@ namespace telar::runtime::redirect {
 
     std::ranges::copy(host, terminated.viewMut().begin());
     Target result;
-    in_addr v4{};
-    in6_addr v6{};
+    in_addr ipv4{};
+    in6_addr ipv6{};
 
-    if (::inet_pton(AF_INET, terminated.data(), &v4) == 1) {
-      const auto address = ntohl(v4.s_addr);
+    if (::inet_pton(AF_INET, terminated.data(), &ipv4) == 1) {
+      const auto address = ntohl(ipv4.s_addr);
       if (address == INADDR_ANY || address == INADDR_BROADCAST || IN_MULTICAST(address)) {
         throw std::invalid_argument{"Redirect target must be unicast"};
       }
 
-      result.endpoint = NetworkAddress::ipv4(v4);
-      ::inet_ntop(AF_INET, &v4, terminated.dataMut(), terminated.size());
-    } else if (::inet_pton(AF_INET6, terminated.data(), &v6) == 1) {
-      if (IN6_IS_ADDR_UNSPECIFIED(&v6) || IN6_IS_ADDR_MULTICAST(&v6) || IN6_IS_ADDR_LINKLOCAL(&v6) || IN6_IS_ADDR_V4MAPPED(&v6)) {
+      result.endpoint = NetworkAddress::ipv4(ipv4);
+      ::inet_ntop(AF_INET, &ipv4, terminated.dataMut(), terminated.size());
+    } else if (::inet_pton(AF_INET6, terminated.data(), &ipv6) == 1) {
+      if (IN6_IS_ADDR_UNSPECIFIED(&ipv6) || IN6_IS_ADDR_MULTICAST(&ipv6) || IN6_IS_ADDR_LINKLOCAL(&ipv6) || IN6_IS_ADDR_V4MAPPED(&ipv6)) {
         throw std::invalid_argument{"Redirect IPv6 target must be unicast without a scope"};
       }
 
-      result.endpoint = NetworkAddress::ipv6(v6);
-      ::inet_ntop(AF_INET6, &v6, terminated.dataMut(), terminated.size());
+      result.endpoint = NetworkAddress::ipv6(ipv6);
+      ::inet_ntop(AF_INET6, &ipv6, terminated.dataMut(), terminated.size());
     } else {
       throw std::invalid_argument{"Redirect target must be a numeric IP address"};
     }
@@ -67,9 +123,11 @@ namespace telar::runtime::redirect {
 
   Discovery::Discovery()
       : injection_(nullptr, &pcap_close) {
+    // Injection captures nothing: the snapshot length only has to be valid.
+    constexpr int snapshot_bytes = 64;
     ds::Array<char, PCAP_ERRBUF_SIZE> error{};
 
-    injection_.reset(pcap_open_live("lo0", 64, 0, 1, error.dataMut()));
+    injection_.reset(pcap_open_live("lo0", snapshot_bytes, 0, 1, error.dataMut()));
     if (!injection_) {
       throw std::runtime_error{error.data()};
     }
@@ -83,11 +141,12 @@ namespace telar::runtime::redirect {
     setCloseOnExec(descriptor);
     unsigned complete = 1;
     constexpr unsigned long complete_headers = sys::ioctlWrite<unsigned int>('B', 117); // Darwin BIOCSHDRCMPLT
-    if (::ioctl(descriptor, complete_headers, &complete) != 0) {
+    if (::ioctl(descriptor, complete_headers, &complete) != 0) {                        // NOLINT(cppcoreguidelines-pro-type-vararg): ioctl's C signature is variadic
       throw SystemError{"Configure complete loopback injection headers"};
     }
 
-    bpf_insn reject = BPF_STMT(BPF_RET | BPF_K, 0);
+    constexpr auto return_constant = static_cast<unsigned short>(combineFlags(BPF_RET, BPF_K));
+    bpf_insn reject = BPF_STMT(return_constant, 0);
     bpf_program filter{.bf_len = 1, .bf_insns = &reject};
     if (pcap_setfilter(injection_.get(), &filter) != 0) {
       throw std::runtime_error{pcap_geterr(injection_.get())};
@@ -120,12 +179,11 @@ namespace telar::runtime::redirect {
       throw std::invalid_argument{"Truncated discovery frame"};
     }
 
-    std::uint32_t family;
-
-    std::memcpy(&family, frame.data(), sizeof(family));
-    family = ntohl(family);
-    std::memcpy(frame.data(), &family, sizeof(family));
     // utun uses network byte order; DLT_NULL requires the host-order family.
+    const auto family = ntohl(loadValue<std::uint32_t>(std::as_bytes(frame)));
+
+    storeValue(std::as_writable_bytes(frame), family);
+
     const auto count = pcap_inject(injection_.get(), frame.data(), frame.size());
     if (count < 0 || static_cast<std::size_t>(count) != frame.size()) {
       throw std::runtime_error{pcap_geterr(injection_.get())};
@@ -143,35 +201,36 @@ namespace telar::runtime::redirect {
   }
 
   void Protocol::send(int channel, const Connection& connection) {
-    ds::Array<Byte, frame_bytes> output;
-    const auto frame = encode(output.viewMut(), Kind::connection, connection.target);
-    iovec vector{.iov_base = const_cast<Byte*>(frame.data()), .iov_len = frame.size()};
-    alignas(cmsghdr) ds::Array<Byte, CMSG_SPACE(descriptor_count * sizeof(int))> control{};
+    ds::Array<Byte, frame_bytes> output{};
+    const auto frame_size = encode(output.viewMut(), Kind::connection, connection.target).size();
+    auto frame = output.viewMut().first(frame_size);
+    iovec vector{.iov_base = frame.data(), .iov_len = frame.size()};
+    constexpr std::size_t descriptor_bytes = descriptor_count * sizeof(int);
+    alignas(cmsghdr) ds::Array<Byte, CMSG_SPACE(descriptor_bytes)> control{};
+    auto control_bytes = std::as_writable_bytes(control.viewMut());
+    const ds::Array descriptors{connection.child.get(), connection.origin.get()};
+    // One control message: its header at the front, the descriptors where CMSG_DATA finds them.
+    const cmsghdr header{.cmsg_len = CMSG_LEN(descriptor_bytes), .cmsg_level = SOL_SOCKET, .cmsg_type = SCM_RIGHTS};
+
+    storeValue(control_bytes, header);
+    storeValue(control_bytes.subspan(CMSG_LEN(0)), descriptors);
     msghdr message{};
 
     message.msg_iov = &vector;
     message.msg_iovlen = 1;
     message.msg_control = control.dataMut();
     message.msg_controllen = control.size();
-    auto* header = CMSG_FIRSTHDR(&message);
+    auto written = ::sendmsg(channel, &message, 0);
 
-    header->cmsg_level = SOL_SOCKET;
-    header->cmsg_type = SCM_RIGHTS;
-    header->cmsg_len = CMSG_LEN(descriptor_count * sizeof(int));
-    const ds::Array descriptors{connection.child.get(), connection.origin.get()};
-
-    std::memcpy(CMSG_DATA(header), descriptors.data(), sizeof(descriptors));
-    ssize_t written;
-
-    do {
+    while (written < 0 && sys::lastError() == EINTR) {
       written = ::sendmsg(channel, &message, 0);
-    } while (written < 0 && sys::lastError() == EINTR);
+    }
 
     if (written <= 0) {
       throw SystemError{"Transfer redirected sockets"};
     }
 
-    auto remaining = frame.subspan(static_cast<std::size_t>(written));
+    auto remaining = std::span<const Byte>{frame}.subspan(static_cast<std::size_t>(written));
 
     while (!remaining.empty()) {
       written = ::send(channel, remaining.data(), remaining.size(), 0);
@@ -190,8 +249,11 @@ namespace telar::runtime::redirect {
   }
 
   bool Incoming::receive(int channel) {
-    iovec vector{.iov_base = bytes_.dataMut() + size_, .iov_len = bytes_.size() - size_};
-    alignas(cmsghdr) ds::Array<Byte, CMSG_SPACE(8 * sizeof(int))> control{};
+    auto unread = bytes_.viewMut().subspan(size_);
+    iovec vector{.iov_base = unread.data(), .iov_len = unread.size()};
+    // Room for more descriptors than a frame carries: extra ones are adopted, closed and fail it.
+    constexpr std::size_t descriptor_room = 8;
+    alignas(cmsghdr) ds::Array<Byte, CMSG_SPACE(descriptor_room * sizeof(int))> control{};
     msghdr message{};
 
     message.msg_iov = &vector;
@@ -207,21 +269,21 @@ namespace telar::runtime::redirect {
       throw SystemError{"Receive redirected sockets"};
     }
 
-    bool invalid = (message.msg_flags & MSG_CTRUNC) != 0;
+    bool invalid = anyFlag(message.msg_flags, MSG_CTRUNC);
+    const auto control_bytes = std::as_bytes(control.view());
 
     for (auto* header = CMSG_FIRSTHDR(&message); header != nullptr; header = CMSG_NXTHDR(&message, header)) {
-      if (header->cmsg_level != SOL_SOCKET || header->cmsg_type != SCM_RIGHTS || header->cmsg_len < CMSG_LEN(0)) {
+      const auto data = static_cast<std::size_t>(CMSG_DATA(header) - control.data());
+      const auto descriptors = rightsCount(*header, control_bytes, data);
+      if (!descriptors) {
         invalid = true;
         continue;
       }
 
-      const auto descriptors = (header->cmsg_len - CMSG_LEN(0)) / sizeof(int);
+      const auto payload = control_bytes.subspan(data, *descriptors * sizeof(int));
 
-      for (std::size_t index = 0; index < descriptors; ++index) {
-        int raw;
-
-        std::memcpy(&raw, CMSG_DATA(header) + (index * sizeof(int)), sizeof(raw));
-        FileDescriptor received{raw};
+      for (std::size_t index = 0; index < *descriptors; ++index) {
+        FileDescriptor received{loadValue<int>(payload.subspan(index * sizeof(int)))};
 
         if (received_ == sockets_.size()) {
           invalid = true;
@@ -306,35 +368,34 @@ namespace telar::runtime::redirect {
     }
 
     ds::Array<char, Protocol::frame_bytes> address{};
-    const auto count = std::snprintf(address.dataMut(), address.size(), host.contains(':') ? "[%.*s]:%u" : "%.*s:%u", static_cast<int>(host.size()), host.data(), port);
-    if (count < 0 || static_cast<std::size_t>(count) >= address.size()) {
+    const auto authority = formatAuthority(address.viewMut(), host, port);
+    if (authority.empty()) {
       throw EncodingError{"Invalid redirect destination"};
     }
 
-    auto target = Target::parse(address.data());
+    const auto target = Target::parse(authority);
 
     for (const auto& socket : sockets_) {
       int type = 0;
       socklen_t length = sizeof(type);
-      sockaddr_storage peer{};
-      socklen_t peer_length = sizeof(peer);
-      if (::getsockopt(socket.get(), SOL_SOCKET, SO_TYPE, &type, &length) != 0 || type != SOCK_STREAM || ::getpeername(socket.get(), reinterpret_cast<sockaddr*>(&peer), &peer_length) != 0 || peer.ss_family != target.endpoint.storage.ss_family) {
+      if (::getsockopt(socket.get(), SOL_SOCKET, SO_TYPE, &type, &length) != 0 || type != SOCK_STREAM) {
+        throw EncodingError{"Redirect handoff requires connected TCP sockets"};
+      }
+
+      const auto peer = socketAddress(socket.get(), SocketEnd::peer);
+      if (!peer || peer->ss_family != target.endpoint.storage.ss_family) {
         throw EncodingError{"Redirect handoff requires connected TCP sockets"};
       }
 
       configureProxySocket(socket.get());
     }
 
-    sockaddr_storage actual{};
-    socklen_t size = sizeof(actual);
-    if (::getpeername(sockets_[1].get(), reinterpret_cast<sockaddr*>(&actual), &size) != 0) {
+    const auto actual = socketAddress(sockets_[1].get(), SocketEnd::peer);
+    if (!actual) {
       throw SystemError{"Inspect redirected origin"};
     }
 
-    const bool matches = actual.ss_family == AF_INET
-                             ? reinterpret_cast<const sockaddr_in*>(&actual)->sin_port == htons(target.port) && reinterpret_cast<const sockaddr_in*>(&actual)->sin_addr.s_addr == reinterpret_cast<const sockaddr_in*>(&target.endpoint.storage)->sin_addr.s_addr
-                             : reinterpret_cast<const sockaddr_in6*>(&actual)->sin6_port == htons(target.port) && std::memcmp(&reinterpret_cast<const sockaddr_in6*>(&actual)->sin6_addr, &reinterpret_cast<const sockaddr_in6*>(&target.endpoint.storage)->sin6_addr, sizeof(in6_addr)) == 0;
-    if (!matches) {
+    if (!reaches(*actual, target)) {
       throw EncodingError{"Redirected origin does not match its original destination"};
     }
 

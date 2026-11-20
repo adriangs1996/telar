@@ -51,20 +51,7 @@ export namespace telar::runtime::control {
     bool publish(Sink& queue, const VtState& state, ClientFacts facts, bool enabled) {
       while (pending()) {
         if (!prepared_) {
-          for (const auto report : {Report::scheme, Report::visibility, Report::focus, Report::size}) {
-            const auto bit = static_cast<std::uint8_t>(report);
-            if ((pending_ & bit) == 0) {
-              continue;
-            }
-
-            pending_ &= ~bit;
-            if (enabled) {
-              encode(report, state, facts);
-            }
-
-            prepared_ = true;
-            break;
-          }
+          prepare(state, facts, enabled);
         }
 
         if (!reply_.publish(queue)) {
@@ -79,6 +66,24 @@ export namespace telar::runtime::control {
     }
 
   private:
+    // Takes the first pending report in priority order, and encodes it when reports are enabled.
+    void prepare(const VtState& state, ClientFacts facts, bool enabled) {
+      for (const auto report : {Report::scheme, Report::visibility, Report::focus, Report::size}) {
+        const auto bit = static_cast<std::uint8_t>(report);
+        if ((pending_ & bit) == 0) {
+          continue;
+        }
+
+        pending_ ^= bit;
+        if (enabled) {
+          encode(report, state, facts);
+        }
+
+        prepared_ = true;
+        return;
+      }
+    }
+
     void encode(Report report, const VtState& state, ClientFacts facts) {
       switch (report) {
       case Report::scheme:

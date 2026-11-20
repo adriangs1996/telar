@@ -10,6 +10,7 @@ static_assert(true);
 #include "chrome_glyph_images.hpp"
 #include "foundation/core/memory.hpp"
 #include "platform/font.h"
+#include "qt_buffers.hpp"
 #include "scene_nodes.hpp"
 #include "tbc/view.hpp"
 #include "telar_base/ds/values.hpp"
@@ -46,6 +47,7 @@ static_assert(true);
 #include <cstdint>
 #include <cstring>
 #include <freetype/freetype.h>
+#include <functional>
 #include <ghostty/vt/unicode.h>
 #include <hb.h>
 #include <initializer_list>
@@ -132,7 +134,7 @@ namespace telar::gui::qt {
           const auto span = area.right() - start;
           const auto center = clipped.x + (clipped.width / 2);
 
-          opacity = span == 0 ? static_cast<float>(center < area.right()) : std::clamp((area.right() - center) / span, 0.0F, 1.0F);
+          opacity = std::equal_to<>{}(span, 0.0F) ? static_cast<float>(center < area.right()) : std::clamp((area.right() - center) / span, 0.0F, 1.0F);
         }
 
         if (sampling == MaskSampling::pixel_centers) {
@@ -148,16 +150,16 @@ namespace telar::gui::qt {
 
         return {
             .bounds = {
-                (clipped.x - anchor.x()) / scale,
-                (clipped.y - anchor.y()) / scale,
-                clipped.width / scale,
-                clipped.height / scale,
+                (static_cast<qreal>(clipped.x) - anchor.x()) / scale,
+                (static_cast<qreal>(clipped.y) - anchor.y()) / scale,
+                static_cast<qreal>(clipped.width) / scale,
+                static_cast<qreal>(clipped.height) / scale,
             },
             .source = {
-                (clipped.x - full.x) / full.width,
-                (clipped.y - full.y) / full.height,
-                clipped.width / full.width,
-                clipped.height / full.height,
+                static_cast<qreal>((clipped.x - full.x) / full.width),
+                static_cast<qreal>((clipped.y - full.y) / full.height),
+                static_cast<qreal>(clipped.width / full.width),
+                static_cast<qreal>(clipped.height / full.height),
             },
             .opacity = opacity,
         };
@@ -167,7 +169,7 @@ namespace telar::gui::qt {
     void validateCoordinates(std::initializer_list<float> coordinates) {
       constexpr auto maximum_coordinate = static_cast<double>(std::numeric_limits<std::int32_t>::max()) / 2;
       if (std::ranges::any_of(coordinates, [](float value) {
-            return !std::isfinite(value) || std::abs(value) > maximum_coordinate;
+            return !std::isfinite(value) || static_cast<double>(std::abs(value)) > maximum_coordinate;
           })) {
         throw std::out_of_range{"ChromeTextBoundsOutOfRange"};
       }
@@ -212,7 +214,7 @@ namespace telar::gui::qt {
       const auto line_baseline = std::floor(raw_y + ((height - line_height) / 2)) + ascender;
       const auto baseline = paint.grid ? std::round(line_baseline) : line_baseline;
 
-      return {.origin = {.fixed_x = static_cast<std::int64_t>(std::round(x * fixed_unit)), .baseline = baseline, .x = x}, .anchor = {std::floor(raw_x), std::floor(raw_y)}, .area = {.x = raw_x, .y = raw_y, .width = width, .height = height}, .fade_width = static_cast<float>(paint.fade_width * paint.scale), .scale = paint.scale};
+      return {.origin = {.fixed_x = static_cast<std::int64_t>(std::round(x * fixed_unit)), .baseline = baseline, .x = x}, .anchor = {static_cast<qreal>(std::floor(raw_x)), static_cast<qreal>(std::floor(raw_y))}, .area = {.x = raw_x, .y = raw_y, .width = width, .height = height}, .fade_width = static_cast<float>(paint.fade_width * paint.scale), .scale = paint.scale};
     }
 
     Color ink(const ChromeTextPaint& paint) noexcept {
@@ -271,7 +273,7 @@ namespace telar::gui::qt {
         constexpr std::size_t batch_glyphs = 16;
         const auto& glyphs = glyphs_;
         const auto count = static_cast<std::size_t>(glyphs.size());
-        auto* vertices = static_cast<AlphaMaskVertex*>(geometry_.vertexData());
+        const auto vertices = geometryVertices<AlphaMaskVertex>(geometry_, static_cast<std::size_t>(geometry_.vertexCount()));
         ds::Array<Rect, batch_glyphs> full;
         ds::Array<Rect, batch_glyphs> clipped;
         std::size_t offset = 0;
@@ -295,7 +297,7 @@ namespace telar::gui::qt {
             const auto atlas = glyph.mask->texture->normalizedTextureSubRect();
             const QRectF source{atlas.x() + (quad.source.x() * atlas.width()), atlas.y() + (quad.source.y() * atlas.height()), quad.source.width() * atlas.width(), quad.source.height() * atlas.height()};
 
-            writeAlphaMaskQuad(std::span<AlphaMaskVertex, alpha_mask_triangle_vertices>{vertices + offset, alpha_mask_triangle_vertices}, quad.bounds, source, quad.opacity);
+            writeAlphaMaskQuad(vertices.subspan(offset).first<alpha_mask_triangle_vertices>(), quad.bounds, source, quad.opacity);
             offset += alpha_mask_triangle_vertices;
           }
         }
@@ -342,7 +344,7 @@ namespace telar::gui::qt {
         colored_ = std::move(colored);
         image_.setRect(quad.bounds);
         image_.setSourceRect({quad.source.x() * placed_.mask->alpha.width(), quad.source.y() * placed_.mask->alpha.height(), quad.source.width() * placed_.mask->alpha.width(), quad.source.height() * placed_.mask->alpha.height()});
-        setOpacity(quad.opacity);
+        setOpacity(static_cast<qreal>(quad.opacity));
       }
 
     private:
@@ -557,8 +559,10 @@ namespace telar::gui::qt {
       if (scene == nullptr || scene->fonts() != fonts.get() || (retain_meshes && scene->rasterization() != rasterization)) {
         auto replacement = std::make_unique<ChromeScene<ResidentFonts, retain_meshes>>(window, std::move(fonts), rasterization);
 
-        scene = replacement.get();
-        owner = std::move(replacement);
+        owner.reset();
+        replacement->paint(paint);
+
+        return replacement.release();
       }
 
       scene->paint(paint);

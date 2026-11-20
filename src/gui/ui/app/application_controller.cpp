@@ -46,6 +46,7 @@ static_assert(true);
 #include <cstdint>
 #include <cstring>
 #include <exception>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -577,7 +578,7 @@ namespace telar::gui::qt {
       return frames_.defer();
     }
 
-    if (watched == window_ && window_ != nullptr && event->type() == QEvent::DevicePixelRatioChange && window_->effectiveDevicePixelRatio() != display_.grid().scale) {
+    if (watched == window_ && window_ != nullptr && event->type() == QEvent::DevicePixelRatioChange && std::not_equal_to<>{}(window_->effectiveDevicePixelRatio(), display_.grid().scale)) {
       synchronizeDisplay();
     }
 

@@ -181,7 +181,7 @@ namespace telar::gui::qt {
     }
 
     {
-      const QScopedValueRollback aborting{closed_, true};
+      const QScopedValueRollback<bool> aborting{closed_, true};
 
       if (remote_) {
         remote_.getMut().close();
@@ -484,7 +484,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    const QScopedValueRollback dispatching{dispatching_payload_, true};
+    const QScopedValueRollback<bool> dispatching{dispatching_payload_, true};
 
     emit payloadReceived(QByteArrayView{
         payload.data(),
@@ -547,7 +547,7 @@ namespace telar::gui::qt {
     }
 
     {
-      const QScopedValueRollback aborting{closed_, true};
+      const QScopedValueRollback<bool> aborting{closed_, true};
 
       socket_.abort();
     }

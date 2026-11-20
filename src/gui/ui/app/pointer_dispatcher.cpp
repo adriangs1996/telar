@@ -177,10 +177,10 @@ namespace telar::gui::qt {
       return false;
     }
 
-    const QScopedValueRollback handoff{handing_off_, true};
+    const QScopedValueRollback<bool> handoff{handing_off_, true};
 
     event.setExclusiveGrabber(event.point(0), nullptr);
-    const QScopedValueRollback delivery{delivering_, true};
+    const QScopedValueRollback<bool> delivery{delivering_, true};
 
     QCoreApplication::sendEvent(window_, &event);
 
@@ -247,7 +247,8 @@ namespace telar::gui::qt {
     }
 
     try {
-      switch (event->type()) {
+      // QEvent::Type is open: custom events carry values past its enumerators, so the switch is on the number.
+      switch (static_cast<int>(event->type())) {
       case QEvent::Wheel:
         if (store_.dialog().kind == Store::Dialog::history) {
           terminals_.retireScroll();

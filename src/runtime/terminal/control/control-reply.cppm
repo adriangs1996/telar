@@ -10,13 +10,19 @@ import telar.base.ds;
 
 export namespace telar::runtime::control {
 
+  // How Reply::hex spells a number: at least `width` digits, in upper or lower case.
+  struct HexFormat {
+    unsigned width = 1;
+    bool upper = false;
+  };
+
   // Generic over the caller's allocator, so it stays here.
   template <Allocator Memory>
   class TBC_GENERIC Reply {
     // The bytes a sealed reply moved out of its overflow, in their memory's region `a`.
     struct Storage {
-      explicit Storage(tbc::view<ds::Vec<std::uint8_t, Memory>&&, tbc::lt::a> bytes)
-          : bytes(std::move(bytes)) {}
+      explicit Storage(tbc::view<ds::Vec<std::uint8_t, Memory>&&, tbc::lt::a> moved)
+          : bytes(std::move(moved)) {}
 
       tbc::val_a<ds::Vec<std::uint8_t, Memory>> bytes;
     };
@@ -32,6 +38,7 @@ export namespace telar::runtime::control {
     Reply& operator=(const Reply&) = delete;
     Reply(Reply&&) = delete;
     Reply& operator=(Reply&&) = delete;
+    ~Reply() = default;
 
     void append(std::string_view text) {
       if (text.empty()) {
@@ -58,32 +65,35 @@ export namespace telar::runtime::control {
           overflow_.reserve(std::min(maximum_bytes, std::max(size_ + text.size(), overflow_.capacity() * 2)));
         }
 
-        overflow_.extend({reinterpret_cast<const std::uint8_t*>(text.data()), text.size()});
+        overflow_.extend({reinterpret_cast<const std::uint8_t*>(text.data()), text.size()}); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the bytes may alias char, and no cast-free view reads text as bytes
       }
 
       size_ += text.size();
     }
 
     void number(std::uint64_t value) {
-      ds::Array<char, std::numeric_limits<std::uint64_t>::digits10 + 1> bytes;
+      ds::Array<char, std::numeric_limits<std::uint64_t>::digits10 + 1> bytes{};
       const auto formatted = std::to_chars(bytes.dataMut(), bytes.dataMut() + bytes.size(), value);
 
       append({bytes.data(), static_cast<std::size_t>(formatted.ptr - bytes.data())});
     }
 
-    void hex(std::uint64_t value, unsigned width, bool upper = false) {
+    void hex(std::uint64_t value, HexFormat format) {
       constexpr std::string_view lower_digits = "0123456789abcdef";
       constexpr std::string_view upper_digits = "0123456789ABCDEF";
-      ds::Array<char, sizeof(value) * 2> bytes;
-
-      width = std::min<unsigned>(width, bytes.size());
-      const auto digits = upper ? upper_digits : lower_digits;
+      ds::Array<char, sizeof(value) * 2> bytes{};
+      const auto width = std::min<unsigned>(format.width, bytes.size());
+      const auto digits = format.upper ? upper_digits : lower_digits;
       auto offset = bytes.size();
 
-      do {
+      // Zero still spells one digit.
+      while (true) {
         bytes.atMut(--offset) = digits[value & (digits.size() - 1)];
-        value >>= 4;
-      } while (value != 0);
+        value >>= 4U;
+        if (value == 0) {
+          break;
+        }
+      }
 
       while (bytes.size() - offset < width) {
         bytes.atMut(--offset) = '0';
@@ -133,7 +143,7 @@ export namespace telar::runtime::control {
     }
 
     Memory& memory_;
-    ds::Array<std::uint8_t, PtyResponseQueue::message_byte_capacity> inline_;
+    ds::Array<std::uint8_t, PtyResponseQueue::message_byte_capacity> inline_{};
     ds::Vec<std::uint8_t, Memory> overflow_;
     std::shared_ptr<Storage> owned_;
     std::size_t size_ = 0;

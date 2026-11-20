@@ -6,11 +6,24 @@ import telar.platform.error;
 import telar.platform.fs;
 import telar.base.ds;
 import telar.base.text;
+import telar.wire.vocabulary;
+import telar.runtime.redirect.ingress;
 #ifdef __APPLE__
 import telar.sys.apple;
 #endif
 
 namespace telar::runtime::redirect {
+
+  namespace {
+
+    // Names the request's interface after the private log interface at `index`.
+    void nameLogInterface(ifreq& request, unsigned index) {
+      const auto name = std::span{sys::interfaceName(request)};
+
+      std::format_to_n(name.data(), static_cast<std::ptrdiff_t>(name.size() - 1), "pflog{}", index);
+    }
+
+  }
 
   unsigned LogInterface::create() {
     FileDescriptor control{::socket(AF_INET, SOCK_DGRAM, 0)};
@@ -21,8 +34,8 @@ namespace telar::runtime::redirect {
     for (unsigned candidate = maximum; candidate != 0; --candidate) {
       ifreq request{};
 
-      std::snprintf(request.ifr_name, sizeof(request.ifr_name), "pflog%u", candidate - 1);
-      if (::ioctl(control.get(), SIOCIFCREATE, &request) == 0) {
+      nameLogInterface(request, candidate - 1);
+      if (::ioctl(control.get(), SIOCIFCREATE, &request) == 0) { // NOLINT(cppcoreguidelines-pro-type-vararg): ioctl's C signature is variadic
         return candidate - 1;
       }
 
@@ -46,14 +59,14 @@ namespace telar::runtime::redirect {
 
     ifreq request{};
 
-    std::snprintf(request.ifr_name, sizeof(request.ifr_name), "pflog%u", index);
-    if (::ioctl(control.get(), SIOCIFDESTROY, &request) != 0 && sys::lastError() != ENXIO && sys::lastError() != ENODEV) {
+    nameLogInterface(request, index);
+    if (::ioctl(control.get(), SIOCIFDESTROY, &request) != 0 && sys::lastError() != ENXIO && sys::lastError() != ENODEV) { // NOLINT(cppcoreguidelines-pro-type-vararg): ioctl's C signature is variadic
       throw SystemError{"Remove private PF log interface"};
     }
   }
 
   void LoopbackFlags::setSkipped(bool skipped) {
-    FileDescriptor device{::open("/dev/pf", O_RDWR | O_CLOEXEC | O_NOFOLLOW)};
+    FileDescriptor device{::open("/dev/pf", combineFlags(O_RDWR, O_CLOEXEC, O_NOFOLLOW))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
     if (!device) {
       throw SystemError{"Open PF loopback control"};
     }
@@ -64,7 +77,7 @@ namespace telar::runtime::redirect {
     std::ranges::copy(loopback, request.name.viewMut().begin());
     request.flags = skip_flag;
     const auto operation = skipped ? Operation::set_flags : Operation::clear_flags;
-    if (::ioctl(device.get(), static_cast<unsigned long>(operation), &request) != 0) {
+    if (::ioctl(device.get(), static_cast<unsigned long>(operation), &request) != 0) { // NOLINT(cppcoreguidelines-pro-type-vararg): ioctl's C signature is variadic
       throw SystemError{"Change PF loopback skip flag"};
     }
   }
@@ -73,14 +86,15 @@ namespace telar::runtime::redirect {
   RecordFile<Memory>::RecordFile(tbc::mut_a<Memory> memory, std::string_view name, RecordLock mode)
       : memory_(memory),
         name_(memory, name) {
-    if (name.empty() || name.size() > 64 || name.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_") != std::string_view::npos) {
+    constexpr std::size_t maximum_name_bytes = 64;
+    if (name.empty() || name.size() > maximum_name_bytes || name.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_") != std::string_view::npos) {
       throw std::invalid_argument{"Invalid redirect record name"};
     }
 
     constexpr std::string_view directory = "/var/run/telar-redirect";
 
     createPrivateDirectory(directory);
-    directory_.reset(::open(directory.data(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
+    directory_.reset(::open(directory.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_NOFOLLOW, O_CLOEXEC))); // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
     ds::String<Memory> lock_name{memory, name_};
 
     lock_name.append(".lock");
@@ -90,20 +104,21 @@ namespace telar::runtime::redirect {
     }
 
     validate(lock_.get());
+    constexpr auto retry_interval = std::chrono::milliseconds{10};
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{6};
 
-    while (::flock(lock_.get(), LOCK_EX | LOCK_NB) != 0) {
+    while (::flock(lock_.get(), combineFlags(LOCK_EX, LOCK_NB)) != 0) {
       if (mode == RecordLock::owner || sys::lastError() != EWOULDBLOCK || std::chrono::steady_clock::now() >= deadline) {
         throw SystemError{"Redirect helper already active or recovery update busy"};
       }
 
-      std::this_thread::sleep_for(std::chrono::milliseconds{10});
+      std::this_thread::sleep_for(retry_interval);
     }
   }
 
   template <Allocator Memory>
   ds::Option<ds::String<Memory>> RecordFile<Memory>::load() {
-    FileDescriptor file{::openat(directory_.get(), name_.data(), O_RDONLY | O_NONBLOCK | O_NOFOLLOW | O_CLOEXEC)};
+    FileDescriptor file{::openat(directory_.get(), name_.data(), combineFlags(O_RDONLY, O_NONBLOCK, O_NOFOLLOW, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
     if (!file && sys::lastError() == ENOENT) {
       return ds::none;
     }
@@ -113,12 +128,14 @@ namespace telar::runtime::redirect {
     }
 
     validate(file.get());
-    return readFileContents(memory_, file.get(), 4096);
+    constexpr std::size_t maximum_record_bytes = 4096;
+
+    return readFileContents(memory_, file.get(), maximum_record_bytes);
   }
 
   template <Allocator Memory>
   void RecordFile<Memory>::save(std::string_view content) {
-    const auto error = writePrivateFile(directory_.get(), name_, {reinterpret_cast<const std::uint8_t*>(content.data()), content.size()}, PrivateFileMode::replace);
+    const auto error = writePrivateFile(directory_.get(), name_, byteView(content), PrivateFileMode::replace);
     if (error != 0) {
       throw SystemError{"Save redirect recovery record", error};
     }
@@ -133,8 +150,9 @@ namespace telar::runtime::redirect {
 
   template <Allocator Memory>
   void RecordFile<Memory>::validate(int descriptor) {
+    constexpr mode_t shared_permissions = 0077;
     struct stat metadata{};
-    if (::fstat(descriptor, &metadata) != 0 || !S_ISREG(metadata.st_mode) || metadata.st_uid != 0 || metadata.st_nlink != 1 || (metadata.st_mode & 0077) != 0) {
+    if (::fstat(descriptor, &metadata) != 0 || !S_ISREG(metadata.st_mode) || metadata.st_uid != 0 || metadata.st_nlink != 1 || (metadata.st_mode & shared_permissions) != 0) {
       throw SystemError{"Unsafe redirect recovery file", EACCES};
     }
   }
@@ -172,8 +190,8 @@ namespace telar::runtime::redirect {
   }
 
   std::span<Byte> PacketLog::receive() {
-    pcap_pkthdr* header;
-    const u_char* packet;
+    pcap_pkthdr* header = nullptr;
+    const u_char* packet = nullptr;
     const auto result = pcap_next_ex(capture_.get(), &header, &packet);
     if (result == 0) {
       return {};
@@ -183,7 +201,11 @@ namespace telar::runtime::redirect {
       throw std::runtime_error{pcap_geterr(capture_.get())};
     }
 
-    const auto frame = normalize({packet, header->caplen}, uid_, bytes_.viewMut(), &metadata_, direction_);
+    // libpcap hands a packet as its address and captured length.
+#pragma clang unsafe_buffer_usage begin
+    const std::span<const Byte> captured{packet, header->caplen};
+#pragma clang unsafe_buffer_usage end
+    const auto frame = normalize(captured, uid_, bytes_.viewMut(), &metadata_, direction_);
 
     return bytes_.viewMut().first(frame);
   }
@@ -193,9 +215,7 @@ namespace telar::runtime::redirect {
       return 0;
     }
 
-    Header header;
-
-    std::memcpy(&header, packet.data(), sizeof(header));
+    const auto header = loadValue<Header>(std::as_bytes(packet));
     const bool incoming = header.direction == static_cast<Byte>(PfDirection::incoming);
     const bool outgoing = header.direction == static_cast<Byte>(PfDirection::outgoing);
     if (header.length != __builtin_offsetof(Header, padding) || !((incoming && allowsIncoming(direction)) || (outgoing && allowsOutgoing(direction))) || header.action != static_cast<Byte>(Action::pass) || header.uid != uid || (header.family != AF_INET && header.family != AF_INET6) || packet.size() - sizeof(Header) > output.size() - sizeof(std::uint32_t)) {
@@ -204,8 +224,9 @@ namespace telar::runtime::redirect {
 
     if (metadata != nullptr) {
       // The name ends at its NUL; one that fills the field is malformed.
-      const auto length = ::strnlen(header.interface.data(), header.interface.size());
-      if (length == header.interface.size()) {
+      const auto interface = header.interface.view();
+      const auto length = static_cast<std::size_t>(std::ranges::find(interface, '\0') - interface.begin());
+      if (length == interface.size()) {
         return 0;
       }
 
@@ -220,7 +241,7 @@ namespace telar::runtime::redirect {
 
     const auto family = htonl(static_cast<std::uint32_t>(header.family));
 
-    std::memcpy(output.data(), &family, sizeof(family));
+    storeValue(std::as_writable_bytes(output), family);
     std::copy(packet.begin() + sizeof(Header), packet.end(), output.begin() + sizeof(family));
     return sizeof(family) + packet.size() - sizeof(Header);
   }
@@ -270,15 +291,10 @@ namespace telar::runtime::redirect {
     ds::String<Memory> content{memory_, endpoint_};
 
     content.push('\n');
-    ds::Array<char, 32> value{};
-    const auto result = std::to_chars(value.dataMut(), value.dataMut() + value.size(), token);
-
-    content.append(std::string_view{value.data(), static_cast<std::size_t>(result.ptr - value.data())});
+    ds::formatTo(content, "{}", token);
     if (log_index_) {
       content.push('\n');
-      const auto log = std::to_chars(value.dataMut(), value.dataMut() + value.size(), *log_index_);
-
-      content.append(std::string_view{value.data(), static_cast<std::size_t>(log.ptr - value.data())});
+      ds::formatTo(content, "{}", *log_index_);
     }
 
     file_.save(content);

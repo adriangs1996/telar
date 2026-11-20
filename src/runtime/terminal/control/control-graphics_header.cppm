@@ -18,89 +18,107 @@ export namespace telar::runtime::control {
     template <typename ProcessField>
       requires requires(ProcessField& process) { { process(std::uint8_t{}, std::string_view{}) } noexcept -> std::same_as<bool>; }
     TBC_GENERIC static bool scan(std::string_view header, bool has_payload, ProcessField&& process) noexcept {
-      enum class Phase {
-        key,
-        ignored_key,
-        value,
-        ignored_value,
-        data,
-      };
+      ScanState state;
+      const auto finish = [&] {
+        const bool accepted = std::forward<ProcessField>(process)(state.key, state.field());
 
-      Phase phase = Phase::key;
-      std::uint8_t key = 0;
-      ds::Array<char, maximum_field_bytes> temporary;
-      std::size_t length = 0;
-      const auto finish = [&]() {
-        const bool accepted = process(key, std::string_view{temporary.data(), length});
-
-        length = 0;
+        state.length = 0;
         return accepted;
       };
 
-      const auto accumulate = [&](char byte, Phase overflow) {
+      for (std::size_t offset = 0; offset < header.size() + (has_payload ? 1 : 0); ++offset) {
+        const char byte = offset == header.size() ? ';' : header[offset];
+
+        if (state.phase == ScanPhase::value && (byte == ',' || byte == ';')) {
+          if (!finish()) {
+            return false;
+          }
+
+          state.phase = byte == ',' ? ScanPhase::key : ScanPhase::data;
+          continue;
+        }
+
+        state.step(byte);
+      }
+
+      return state.phase != ScanPhase::key && state.phase != ScanPhase::ignored_key && (state.phase != ScanPhase::value || finish());
+    }
+
+  private:
+    static constexpr std::size_t maximum_field_bytes = 11;
+
+    enum class ScanPhase : std::uint8_t {
+      key,
+      ignored_key,
+      value,
+      ignored_value,
+      data,
+    };
+
+    // Where scan() is in a header, and the field it is reading.
+    struct ScanState {
+      ScanPhase phase = ScanPhase::key;
+      std::uint8_t key = 0;
+      ds::Array<char, maximum_field_bytes> temporary{};
+      std::size_t length = 0;
+
+      [[nodiscard]] constexpr std::string_view field() const noexcept {
+        return std::string_view{temporary.view().first(length)};
+      }
+
+      // Keeps a byte of the field, or ignores the field once it outgrows the buffer.
+      constexpr void accumulate(char byte, ScanPhase overflow) noexcept {
         if (length == temporary.size()) {
           phase = overflow;
           length = 0;
         } else {
           temporary.atMut(length++) = byte;
         }
-      };
+      }
 
-      for (std::size_t offset = 0; offset < header.size() + (has_payload ? 1 : 0); ++offset) {
-        const char byte = offset == header.size() ? ';' : header[offset];
-
+      // Every byte but the one that ends a value's field, which scan() hands to its caller.
+      constexpr void step(char byte) noexcept {
         switch (phase) {
-        case Phase::key:
+        case ScanPhase::key:
+          keyByte(byte);
+          break;
+        case ScanPhase::ignored_key:
           if (byte == '=') {
-            phase = length == 1 ? Phase::value : Phase::ignored_value;
-            if (length == 1) {
-              key = static_cast<std::uint8_t>(temporary.front());
-            }
-
-            length = 0;
-          } else if (byte == ';') {
-            phase = Phase::data;
-          } else {
-            accumulate(byte, Phase::ignored_key);
+            phase = ScanPhase::ignored_value;
           }
 
           break;
-        case Phase::ignored_key:
-          if (byte == '=') {
-            phase = Phase::ignored_value;
-          }
-
+        case ScanPhase::value:
+          accumulate(byte, ScanPhase::ignored_value);
           break;
-        case Phase::value:
-          if (byte == ',' || byte == ';') {
-            if (!finish()) {
-              return false;
-            }
-
-            phase = byte == ',' ? Phase::key : Phase::data;
-          } else {
-            accumulate(byte, Phase::ignored_value);
-          }
-
-          break;
-        case Phase::ignored_value:
+        case ScanPhase::ignored_value:
           if (byte == ',') {
-            phase = Phase::ignored_key;
+            phase = ScanPhase::ignored_key;
           } else if (byte == ';') {
-            phase = Phase::data;
+            phase = ScanPhase::data;
           }
 
           break;
-        case Phase::data:
+        case ScanPhase::data:
           break;
         }
       }
 
-      return phase != Phase::key && phase != Phase::ignored_key && (phase != Phase::value || finish());
-    }
+      constexpr void keyByte(char byte) noexcept {
+        if (byte == '=') {
+          phase = length == 1 ? ScanPhase::value : ScanPhase::ignored_value;
+          if (length == 1) {
+            key = static_cast<std::uint8_t>(temporary.front());
+          }
 
-  private:
-    static constexpr std::size_t maximum_field_bytes = 11;
+          length = 0;
+        } else if (byte == ';') {
+          phase = ScanPhase::data;
+        } else {
+          accumulate(byte, ScanPhase::ignored_key);
+        }
+      }
+    };
   };
 
 }

@@ -19,6 +19,7 @@ static_assert(true);
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <string_view>
 
@@ -62,13 +63,13 @@ namespace telar::gui::qt {
   }
 
   QRectF HistoryRowLayout::logical(Rect area) const noexcept {
-    return {area.x / density_, area.y / density_, area.width / density_, area.height / density_};
+    return {static_cast<qreal>(area.x) / density_, static_cast<qreal>(area.y) / density_, static_cast<qreal>(area.width) / density_, static_cast<qreal>(area.height) / density_};
   }
 
   QVariantMap HistoryRowLayout::layout() const {
     auto result = geometryLayout();
 
-    result.insert(QStringLiteral("needed"), command_width_ / density_);
+    result.insert(QStringLiteral("needed"), static_cast<qreal>(command_width_) / density_);
     result.insert(QStringLiteral("lines"), commandLines());
 
     return result;
@@ -86,14 +87,14 @@ namespace telar::gui::qt {
         {QStringLiteral("provider"), logical(geometry_.provider)},
         {QStringLiteral("cwd"), logical(geometry_.cwd)},
         {QStringLiteral("time"), logical(geometry_.time)},
-        {QStringLiteral("radius"), application::history::HistoryRowGeometry::corner_radius * ratio_},
+        {QStringLiteral("radius"), static_cast<qreal>(application::history::HistoryRowGeometry::corner_radius) * ratio_},
         {QStringLiteral("stroke"), ratio_},
-        {QStringLiteral("providerRadius"), application::history::HistoryRowGeometry::provider_radius * ratio_},
+        {QStringLiteral("providerRadius"), static_cast<qreal>(application::history::HistoryRowGeometry::provider_radius) * ratio_},
         {QStringLiteral("selectionTintAlpha"), application::history::HistoryRowGeometry::selection_tint_alpha},
         {QStringLiteral("selectionRingAlpha"), application::history::HistoryRowGeometry::selection_ring_alpha},
         {QStringLiteral("hoverAlpha"), application::history::HistoryRowGeometry::hover_alpha},
         {QStringLiteral("cwdAlpha"), application::history::HistoryRowGeometry::cwd_alpha},
-        {QStringLiteral("cardHeight"), card_.height / density_},
+        {QStringLiteral("cardHeight"), static_cast<qreal>(card_.height) / density_},
         {QStringLiteral("meta"), logical(card_.meta)},
         {QStringLiteral("more"), card_.more},
         {QStringLiteral("moreBound"), application::history::HistoryCard::more_bound},
@@ -210,7 +211,7 @@ namespace telar::gui::qt {
 
     const auto row_height = advance(QStringLiteral("rowHeight"));
     const auto geometry = application::history::HistoryRowGeometry::derive({.width = static_cast<float>(width() * density), .height = static_cast<float>(height() * density)}, chrome, row_height, measured);
-    if (geometry != geometry_ || density != density_ || ratio != ratio_ || command_width != command_width_ || measurements_dirty_) {
+    if (geometry != geometry_ || std::not_equal_to<>{}(density, density_) || std::not_equal_to<>{}(ratio, ratio_) || std::not_equal_to<>{}(command_width, command_width_) || measurements_dirty_) {
       const auto previous_geometry = geometryState();
 
       geometry_ = geometry;

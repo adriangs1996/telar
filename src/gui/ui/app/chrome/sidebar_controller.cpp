@@ -111,7 +111,7 @@ namespace telar::gui::qt {
 
   void SidebarController::fit() {
     if (window_ != nullptr) {
-      emit widthRequested(naturalWidth());
+      emit widthRequested(static_cast<qreal>(naturalWidth()));
     }
   }
 

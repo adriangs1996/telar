@@ -26,6 +26,7 @@ static_assert(true);
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -78,11 +79,11 @@ namespace telar::gui::qt {
   }
 
   qreal NativeTabActivity::fraction() const noexcept {
-    return fraction_;
+    return static_cast<qreal>(fraction_);
   }
 
   qreal NativeTabActivity::turns() const noexcept {
-    return turns_;
+    return static_cast<qreal>(turns_);
   }
 
   void NativeTabActivity::setRecord(const QVariantMap& record) {
@@ -120,7 +121,7 @@ namespace telar::gui::qt {
 
   void NativeTabActivity::setRatio(qreal ratio) {
     const auto maximum = std::numeric_limits<float>::max() / ProgressGeometry::compactWidth();
-    if (std::isfinite(ratio) && ratio > 0 && ratio <= maximum && ratio_ != ratio) {
+    if (std::isfinite(ratio) && ratio > 0 && ratio <= static_cast<qreal>(maximum) && !std::equal_to<>{}(ratio_, ratio)) {
       ratio_ = ratio;
       update();
       emit ratioChanged();
@@ -186,7 +187,7 @@ namespace telar::gui::qt {
       }
     }
 
-    if (fraction_ != fraction || turns_ != turns) {
+    if (!std::equal_to<>{}(fraction_, fraction) || !std::equal_to<>{}(turns_, turns)) {
       fraction_ = fraction;
       turns_ = turns;
       update();

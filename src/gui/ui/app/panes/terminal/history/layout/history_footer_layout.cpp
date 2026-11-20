@@ -119,7 +119,7 @@ namespace telar::gui::qt {
   }
 
   QRectF HistoryFooterLayout::logical(Rect area) const noexcept {
-    return {area.x / density_, area.y / density_, area.width / density_, area.height / density_};
+    return {static_cast<qreal>(area.x) / density_, static_cast<qreal>(area.y) / density_, static_cast<qreal>(area.width) / density_, static_cast<qreal>(area.height) / density_};
   }
 
   QVariantMap HistoryFooterLayout::layout() const {

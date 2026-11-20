@@ -39,21 +39,25 @@ export {
   namespace telar::runtime::redirect {
 
     class LoopbackFlags {
+      static constexpr std::size_t request_bytes = 40;
+      static constexpr std::size_t flags_offset = 36;
+
       // Darwin's pfioc_iface layout is absent from the public SDK. Keep this ABI
       // limited to DIOCSETIFFLAG/DIOCCLRIFFLAG and the PFI_IFLAG_SKIP bit on lo0.
       // https://github.com/apple-oss-distributions/xnu/blob/main/bsd/net/pfvar.h
+      // Its user address and the field after it are aligned to eight bytes.
       struct InterfaceRequest {
         // A C array's layout: Array is one.
         ds::Array<char, IFNAMSIZ> name{};
-        alignas(8) void* buffer = nullptr;
-        alignas(8) int element_size = 0;
+        alignas(std::uint64_t) void* buffer = nullptr;
+        alignas(std::uint64_t) int element_size = 0;
         int size = 0;
         int zero = 0;
         int flags = 0;
       };
 
-      static_assert(sizeof(InterfaceRequest) == 40 && __builtin_offsetof(InterfaceRequest, flags) == 36);
-      enum class Operation : unsigned long {
+      static_assert(sizeof(InterfaceRequest) == request_bytes && __builtin_offsetof(InterfaceRequest, flags) == flags_offset);
+      enum class Operation : std::uint32_t {
         set_flags = sys::ioctlReadWrite<InterfaceRequest>('D', 89),
         clear_flags = sys::ioctlReadWrite<InterfaceRequest>('D', 90),
       };
@@ -124,7 +128,7 @@ export {
 export {
   namespace telar::runtime::redirect {
 
-    enum class RecordLock {
+    enum class RecordLock : std::uint8_t {
       owner,
       update,
     };
@@ -214,6 +218,9 @@ export {
     private:
       static constexpr std::size_t owner_bytes = 21;
       static constexpr std::size_t maximum_owners = 64;
+      // The first line of a record: whether lo0 skipped pf before the first owner.
+      static constexpr std::string_view skip_header = "skip\n";
+      static constexpr std::string_view filter_header = "filter\n";
 
       static void validateOwner(std::string_view owner);
 
@@ -229,12 +236,12 @@ export {
         }
 
         auto content = std::string_view{*saved};
-        if (!content.starts_with("skip\n") && !content.starts_with("filter\n")) {
+        if (!content.starts_with(skip_header) && !content.starts_with(filter_header)) {
           throw std::runtime_error{"Invalid PF loopback recovery record"};
         }
 
-        restore_skip_ = content.starts_with("skip\n");
-        content.remove_prefix(restore_skip_ ? 5 : 7);
+        restore_skip_ = content.starts_with(skip_header);
+        content.remove_prefix(restore_skip_ ? skip_header.size() : filter_header.size());
         if (content.empty() || content.size() % owner_bytes != 0 || content.size() > maximum_owners * owner_bytes) {
           throw std::runtime_error{"Invalid PF loopback owner list"};
         }
@@ -255,7 +262,7 @@ export {
 
       template <typename Store>
       TBC_GENERIC void save(Store& store) {
-        ds::String<Memory> content{memory_, restore_skip_ ? "skip\n" : "filter\n"};
+        ds::String<Memory> content{memory_, restore_skip_ ? skip_header : filter_header};
 
         content.append(owners_);
         store.save(content);
@@ -306,13 +313,21 @@ export {
   namespace telar::runtime::redirect {
 
     class PacketLog {
+      // Darwin's pfloghdr.
+      static constexpr std::size_t name_bytes = 16;
+      static constexpr std::size_t header_bytes = 64;
+      static constexpr std::size_t uid_offset = 44;
+      static constexpr std::size_t direction_offset = 60;
+      // The capture's snapshot, which its filter returns too: a whole 64 KiB packet behind the header.
+      static constexpr unsigned snapshot_bytes = 65600;
+
       struct Header {
         Byte length;
         Byte family;
         Byte action;
         Byte reason;
-        ds::Array<char, 16> interface;
-        ds::Array<char, 16> ruleset;
+        ds::Array<char, name_bytes> interface;
+        ds::Array<char, name_bytes> ruleset;
         std::uint32_t rule;
         std::uint32_t subrule;
         uid_t uid;
@@ -323,7 +338,7 @@ export {
         ds::Array<Byte, 3> padding;
       };
 
-      static_assert(sizeof(Header) == 64 && __builtin_offsetof(Header, uid) == 44 && __builtin_offsetof(Header, direction) == 60);
+      static_assert(sizeof(Header) == header_bytes && __builtin_offsetof(Header, uid) == uid_offset && __builtin_offsetof(Header, direction) == direction_offset);
       enum class PfDirection : Byte {
         incoming = 1,
         outgoing = 2,
@@ -333,6 +348,9 @@ export {
       };
 
     public:
+      // A logged packet behind its 4-byte family word: a 64 KiB IP packet at most.
+      static constexpr std::size_t frame_bytes = 65540;
+
       struct Metadata {
         pid_t pid = 0;
         FixedText<IFNAMSIZ> interface;
@@ -345,8 +363,8 @@ export {
       TBC_GENERIC explicit PacketLog(State& state, uid_t uid, Direction direction = Direction::outbound)
           : uid_(uid),
             direction_(direction),
+            index_(LogInterface::create()),
             capture_(nullptr, &pcap_close) {
-        index_ = LogInterface::create();
         try {
           state.saveLog(index_);
         } catch (...) {
@@ -354,9 +372,9 @@ export {
           throw;
         }
 
-        ds::Array<char, 16> name{};
+        ds::Array<char, IFNAMSIZ> name{};
 
-        std::snprintf(name.dataMut(), name.size(), "pflog%u", index_);
+        std::format_to_n(name.dataMut(), static_cast<std::ptrdiff_t>(name.size() - 1), "pflog{}", index_);
         ds::Array<char, PCAP_ERRBUF_SIZE> error{};
 
         capture_.reset(pcap_create(name.dataMut(), error.dataMut()));
@@ -364,19 +382,23 @@ export {
           throw std::runtime_error{error.data()};
         }
 
-        if (pcap_set_snaplen(capture_.get(), 65600) != 0 || pcap_set_timeout(capture_.get(), 1) != 0 || pcap_set_immediate_mode(capture_.get(), 1) != 0 || pcap_activate(capture_.get()) < 0 || pcap_datalink(capture_.get()) != DLT_PFLOG || pcap_setnonblock(capture_.get(), 1, error.dataMut()) != 0) {
+        if (pcap_set_snaplen(capture_.get(), static_cast<int>(snapshot_bytes)) != 0 || pcap_set_timeout(capture_.get(), 1) != 0 || pcap_set_immediate_mode(capture_.get(), 1) != 0 || pcap_activate(capture_.get()) < 0 || pcap_datalink(capture_.get()) != DLT_PFLOG || pcap_setnonblock(capture_.get(), 1, error.dataMut()) != 0) {
           throw std::runtime_error{"Cannot capture private PF discovery log"};
         }
 
         setCloseOnExec(pcap_fileno(capture_.get()));
-        bpf_insn instructions[] = {
-            BPF_STMT(BPF_LD | BPF_W | BPF_ABS, __builtin_offsetof(Header, uid)),
-            BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, htonl(uid_), 0, 1),
-            BPF_STMT(BPF_RET | BPF_K, 65600),
-            BPF_STMT(BPF_RET | BPF_K, 0),
+        // Keeps the packets pf logged for this account and drops the rest.
+        constexpr auto load_word = static_cast<unsigned short>(combineFlags(BPF_LD, BPF_W, BPF_ABS));
+        constexpr auto jump_equal = static_cast<unsigned short>(combineFlags(BPF_JMP, BPF_JEQ, BPF_K));
+        constexpr auto return_constant = static_cast<unsigned short>(combineFlags(BPF_RET, BPF_K));
+        ds::Array<bpf_insn, 4> instructions{
+            BPF_STMT(load_word, __builtin_offsetof(Header, uid)),
+            BPF_JUMP(jump_equal, htonl(uid_), 0, 1),
+            BPF_STMT(return_constant, snapshot_bytes),
+            BPF_STMT(return_constant, 0),
         };
 
-        bpf_program filter{.bf_len = std::size(instructions), .bf_insns = instructions};
+        bpf_program filter{.bf_len = static_cast<unsigned>(instructions.size()), .bf_insns = instructions.dataMut()};
         if (pcap_setfilter(capture_.get(), &filter) != 0) {
           throw std::runtime_error{pcap_geterr(capture_.get())};
         }
@@ -397,7 +419,7 @@ export {
       Direction direction_;
       unsigned index_ = 0;
       std::unique_ptr<pcap_t, decltype(&pcap_close)> capture_;
-      ds::Array<Byte, 65540> bytes_{};
+      ds::Array<Byte, frame_bytes> bytes_{};
       Metadata metadata_;
     };
 

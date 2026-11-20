@@ -35,6 +35,10 @@ namespace telar::gui::qt {
   class WindowDisplay;
   class WindowStatus;
 
+// An interface of pure virtual calls with a protected, non-virtual destructor has no member to define out of line.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wweak-vtables"
+
   // What the machines need from the window that shows the active one, which only the window
   // can do. The window implements it; none of these calls is on the path of a runtime's payload.
   class MachinesHost {
@@ -59,6 +63,8 @@ namespace telar::gui::qt {
     MachinesHost() = default;
     ~MachinesHost() = default;
   };
+
+#pragma clang diagnostic pop
 
   // The machines of the window: the client admitted to each one, its runtime connection, which
   // of them the window shows and the summary the machine list reads.

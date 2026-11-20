@@ -58,6 +58,8 @@ export namespace telar::runtime {
 
     GhosttyHandle(const GhosttyHandle&) = delete;
     GhosttyHandle& operator=(const GhosttyHandle&) = delete;
+    GhosttyHandle(GhosttyHandle&&) = delete;
+    GhosttyHandle& operator=(GhosttyHandle&&) = delete;
 
     Handle get() const noexcept {
       return handle_;
@@ -83,7 +85,7 @@ export namespace telar::runtime {
   class TBC_GENERIC GhosttyAllocatorBridge {
   public:
     explicit GhosttyAllocatorBridge(tbc::mut_a<Memory> memory) noexcept
-        : allocator_{.ctx = &memory, .vtable = &callbacks_} {}
+        : allocator_{.ctx = &memory, .vtable = &callbacks} {}
 
     [[nodiscard]] const GhosttyAllocator* get() const noexcept {
       return &allocator_;
@@ -94,7 +96,7 @@ export namespace telar::runtime {
     }
 
   private:
-    static void* allocate(void* context, std::size_t size, std::uint8_t alignment, std::uintptr_t) noexcept {
+    static void* allocate(void* context, std::size_t size, std::uint8_t alignment, std::uintptr_t /*return_address*/) noexcept {
       TELAR_DIAGNOSTIC(TerminalAllocationScope allocation_scope);
       // The pinned ABI passes log2(alignment), despite allocator.h describing bytes.
       if (alignment >= std::numeric_limits<std::size_t>::digits) {
@@ -104,19 +106,19 @@ export namespace telar::runtime {
       return static_cast<Memory*>(context)->allocate(size, std::size_t{1} << alignment);
     }
 
-    static bool resize(void*, void*, std::size_t, std::uint8_t, std::size_t, std::uintptr_t) noexcept {
+    static bool resize(void* /*context*/, void* /*memory*/, std::size_t /*size*/, std::uint8_t /*alignment*/, std::size_t /*new_size*/, std::uintptr_t /*return_address*/) noexcept { // NOLINT(readability-function-size): GhosttyAllocatorVtable's C signature takes six parameters
       return false;
     }
 
-    static void* remap(void*, void*, std::size_t, std::uint8_t, std::size_t, std::uintptr_t) noexcept {
+    static void* remap(void* /*context*/, void* /*memory*/, std::size_t /*size*/, std::uint8_t /*alignment*/, std::size_t /*new_size*/, std::uintptr_t /*return_address*/) noexcept { // NOLINT(readability-function-size): GhosttyAllocatorVtable's C signature takes six parameters
       return nullptr;
     }
 
-    static void deallocate(void* context, void* pointer, std::size_t size, std::uint8_t alignment, std::uintptr_t) noexcept {
+    static void deallocate(void* context, void* pointer, std::size_t size, std::uint8_t alignment, std::uintptr_t /*return_address*/) noexcept {
       static_cast<Memory*>(context)->deallocate(pointer, size, std::size_t{1} << alignment);
     }
 
-    inline static constexpr GhosttyAllocatorVtable callbacks_{
+    inline static constexpr GhosttyAllocatorVtable callbacks{
         .alloc = allocate,
         .resize = resize,
         .remap = remap,

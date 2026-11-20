@@ -9,7 +9,7 @@ import telar.base.ds;
 
 export namespace telar::runtime::control {
 
-  enum class ChecksumFlag : unsigned {
+  enum class ChecksumFlag : std::uint8_t {
     positive = 1,
     no_attributes = 2,
     no_trim = 4,
@@ -54,6 +54,10 @@ export namespace telar::runtime::control {
     template <unsigned SelectedFlags>
     std::uint16_t accumulate(const VtState& state, Rectangle rectangle);
 
+    // One row of the rectangle; `first` tells whether no cell before it counted, which trimming reads.
+    template <unsigned SelectedFlags>
+    std::uint16_t accumulateRow(GhosttyGridRef& reference, Rectangle rectangle, bool& first);
+
     using Accumulator = std::uint16_t (Checksum::*)(const VtState&, Rectangle);
     static const ds::Array<Accumulator, 16> accumulators;
 
@@ -64,7 +68,6 @@ export namespace telar::runtime::control {
     std::uint16_t combining(const GhosttyGridRef& reference);
 
     static constexpr unsigned origin_mode = 6;
-    static constexpr std::uint16_t escape_value = 0x1b;
     static constexpr std::size_t maximum_grapheme_points = std::numeric_limits<std::uint16_t>::max();
     static constexpr std::size_t maximum_batch_columns = 256;
     static constexpr std::size_t batch_points = 256;

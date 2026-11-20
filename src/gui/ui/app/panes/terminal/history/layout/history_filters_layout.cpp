@@ -105,7 +105,7 @@ namespace telar::gui::qt {
   }
 
   QRectF HistoryFiltersLayout::logical(Rect area) const noexcept {
-    return {area.x / density_, area.y / density_, area.width / density_, area.height / density_};
+    return {static_cast<qreal>(area.x) / density_, static_cast<qreal>(area.y) / density_, static_cast<qreal>(area.width) / density_, static_cast<qreal>(area.height) / density_};
   }
 
   QVariantMap HistoryFiltersLayout::chipRecord(const application::history::HistoryFilterChipGeometry& chip) const {
@@ -149,9 +149,9 @@ namespace telar::gui::qt {
         {QStringLiteral("showKeys"), geometry_.show_keys},
         {QStringLiteral("showRight"), geometry_.show_right},
         {QStringLiteral("visible"), geometry_.visible},
-        {QStringLiteral("groupRadius"), application::history::HistoryFilterGeometry::group_radius * ratio_},
-        {QStringLiteral("chipRadius"), application::history::HistoryFilterChipGeometry::corner_radius * ratio_},
-        {QStringLiteral("ringWidth"), application::history::HistoryFilterChipGeometry::ring_width * ratio_},
+        {QStringLiteral("groupRadius"), static_cast<qreal>(application::history::HistoryFilterGeometry::group_radius) * ratio_},
+        {QStringLiteral("chipRadius"), static_cast<qreal>(application::history::HistoryFilterChipGeometry::corner_radius) * ratio_},
+        {QStringLiteral("ringWidth"), static_cast<qreal>(application::history::HistoryFilterChipGeometry::ring_width) * ratio_},
         {QStringLiteral("dangerRingAlpha"), application::history::HistoryFilterChipGeometry::danger_ring_alpha},
     };
   }

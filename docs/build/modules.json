@@ -864,6 +864,7 @@
     "src/gui/ui/app/panes/pane_motion_layout.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/panes/pane_projection.hpp": "Qt moc/QML integration",
     "src/gui/ui/foundation/scene/physical_pixel_matrix.hpp": "Qt moc/QML integration",
+    "src/gui/ui/foundation/scene/qt_buffers.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/chrome/components/pick_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/foundation/config/plugin_packages.hpp": "Qt moc/QML integration",
     "src/gui/ui/foundation/plugins/plugin_worker.hpp": "Qt moc/QML integration",

@@ -12,6 +12,66 @@ import telar.base.text;
 
 namespace telar::runtime::control {
 
+  namespace {
+
+    // The palette indexes SGR names with codes of their own, and the standard eight among them.
+    constexpr unsigned ansi_colors = 16;
+    constexpr unsigned standard_colors = 8;
+
+    // The bytes of the UTF-8 sequence that a lead byte begins.
+    constexpr std::size_t utf8Length(std::uint8_t first) noexcept {
+      constexpr std::uint8_t first_multibyte = 0x80;
+      constexpr std::uint8_t first_three_byte = 0xe0;
+      constexpr std::uint8_t first_four_byte = 0xf0;
+
+      if (first < first_multibyte) {
+        return 1;
+      }
+
+      if (first < first_three_byte) {
+        return 2;
+      }
+
+      return first < first_four_byte ? 3 : 4;
+    }
+
+    // A title's character other than a C0 or C1 control or DEL, which a reply must not carry.
+    constexpr bool titleCharacter(std::string_view text) noexcept {
+      constexpr std::uint8_t c1_lead = 0xc2;
+      constexpr std::uint8_t c1_continuation_end = 0xa0;
+      const auto first = static_cast<std::uint8_t>(text.front());
+
+      if (text.size() == 1) {
+        return first >= ' ' && first != '\x7f';
+      }
+
+      return text.size() != 2 || first != c1_lead || static_cast<std::uint8_t>(text[1]) >= c1_continuation_end;
+    }
+
+    // DECSCUSR's blinking style for the cursor's shape; the steady style is the number after it.
+    constexpr unsigned blinkingCursorStyle(const GhosttyRenderStateCursor& cursor) noexcept {
+      constexpr unsigned blinking_block = 1;
+      constexpr unsigned blinking_underline = 3;
+      constexpr unsigned blinking_bar = 5;
+
+      if (cursor.visual_style == GHOSTTY_RENDER_STATE_CURSOR_VISUAL_STYLE_BAR) {
+        return blinking_bar;
+      }
+
+      return cursor.visual_style == GHOSTTY_RENDER_STATE_CURSOR_VISUAL_STYLE_UNDERLINE ? blinking_underline : blinking_block;
+    }
+
+    // The SGR code of the first of the eight colors a palette index below 16 is among: 30, 40, 90 or 100.
+    constexpr unsigned sgrColor(bool background, bool bright) noexcept {
+      constexpr unsigned foreground_base = 30;
+      constexpr unsigned background_offset = 10;
+      constexpr unsigned bright_offset = 60;
+
+      return foreground_base + (background ? background_offset : 0) + (bright ? bright_offset : 0);
+    }
+
+  }
+
   Engine::Engine(tbc::mut_a<ConcurrentMemory> memory, tbc::mut_a<PtyResponseQueue> responses, bool enabled, tbc::val_a<GraphicsQueryResources> resources)
       : parser_(memory),
         reply_(memory),
@@ -144,7 +204,7 @@ namespace telar::runtime::control {
     return stream;
   }
 
-  bool Engine::borrowableApc(Sequence header) const noexcept {
+  bool Engine::borrowableApc(Sequence header) noexcept {
     return graphicsQuery(header.body());
   }
 
@@ -163,7 +223,7 @@ namespace telar::runtime::control {
       return true;
     }
 
-    return responses_.tryPush({reinterpret_cast<const std::uint8_t*>(policy.answerback.data()), policy.answerback_length});
+    return responses_.tryPush(byteView(std::string_view{policy.answerback.view().first(policy.answerback_length)}));
   }
 
   bool Engine::complete(Sequence sequence) {
@@ -175,21 +235,8 @@ namespace telar::runtime::control {
     const bool history_erased = !prepared_ && std::exchange(history_erased_, false);
     const bool homed = !prepared_ && std::exchange(homed_, false);
 
-    if (sequence.kind == Kind::osc) {
-      const auto operation = oscOperation(sequence.body().substr(0, sequence.body().find(';')));
-      if (operation == 4 || operation == 5) {
-        return colors_.palette({.state = state_, .reply = reply_, .policy = policy}, sequence, enabled_, responses_);
-      }
-    }
-
-    if (sequence.kind == Kind::dcs) {
-      const auto header_end = sequence.body().find_first_of("@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~");
-      if (header_end != std::string_view::npos) {
-        const auto parameters = Parameters::parse(sequence.body().substr(0, header_end + 1));
-        if (parameters && !parameters->colon && parameters->final == 'q' && parameters->modifiers() == "+") {
-          return termcap(sequence.body().substr(header_end + 1));
-        }
-      }
+    if (const auto published = publishing(sequence)) {
+      return *published;
     }
 
     if (!prepared_) {
@@ -236,6 +283,30 @@ namespace telar::runtime::control {
     prepared_ = false;
     clipboard_before_reply_ = false;
     return true;
+  }
+
+  ds::Option<bool> Engine::publishing(Sequence sequence) {
+    constexpr unsigned palette_operation = 4;
+    constexpr unsigned special_color_operation = 5;
+
+    if (sequence.kind == Kind::osc) {
+      const auto operation = oscOperation(sequence.body().substr(0, sequence.body().find(';')));
+      if (operation == palette_operation || operation == special_color_operation) {
+        return colors_.palette({.state = state_, .reply = reply_, .policy = policy}, sequence, enabled_, responses_);
+      }
+    }
+
+    if (sequence.kind == Kind::dcs) {
+      const auto header_end = sequence.body().find_first_of("@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~");
+      if (header_end != std::string_view::npos) {
+        const auto parameters = Parameters::parse(sequence.body().substr(0, header_end + 1));
+        if (parameters && !parameters->colon && parameters->final == 'q' && parameters->modifiers() == "+") {
+          return termcap(sequence.body().substr(header_end + 1));
+        }
+      }
+    }
+
+    return ds::none;
   }
 
   void Engine::configureSize(TerminalSize size) {
@@ -289,7 +360,7 @@ namespace telar::runtime::control {
     return clipboard_;
   }
 
-  auto Engine::takeZone() noexcept -> tbc::val_a<ds::Option<Zone>> {
+  auto Engine::takeZone() noexcept -> tbc::val_a<ds::Option<Zone>> { // NOLINT(bugprone-exception-escape): the zones' bytes share the engine's memory, so moving them down hands their storage over without allocating
     if (zones_.empty()) {
       return ds::none;
     }
@@ -300,7 +371,7 @@ namespace telar::runtime::control {
     return zone;
   }
 
-  bool Engine::takeDocument(ds::Vec<std::uint8_t, ConcurrentMemory>& into) noexcept {
+  bool Engine::takeDocument(ds::Vec<std::uint8_t, ConcurrentMemory>& into) noexcept { // NOLINT(bugprone-exception-escape): the terminal's document shares the engine's memory, so the swap hands storage over without allocating
     if (!document_pending_) {
       return false;
     }
@@ -336,8 +407,7 @@ namespace telar::runtime::control {
         document_ = std::move(bytes);
         document_pending_ = true;
       }
-    } catch (const std::bad_alloc&) {
-      // A document that cannot be kept is not shown; its text stays.
+    } catch (const std::bad_alloc&) { // NOLINT(bugprone-empty-catch): a document that cannot be kept is not shown; its text stays
     }
   }
 
@@ -361,9 +431,12 @@ namespace telar::runtime::control {
       }
 
       zones_.push(std::move(zone));
-    } catch (const std::bad_alloc&) {
+    } catch (const std::bad_alloc&) { // NOLINT(bugprone-empty-catch): a zone that cannot be kept is not shown; its text stays
     }
   }
+
+  Engine::ReleaseProducer::ReleaseProducer(PtyResponseQueue::Producer& lease) noexcept
+      : producer(lease) {}
 
   Engine::ReleaseProducer::~ReleaseProducer() {
     producer.release();
@@ -373,9 +446,7 @@ namespace telar::runtime::control {
     responses_.release();
     state_.write(sequence.bytes);
     if (sequence.ending != Ending::final_byte) {
-      const auto terminator = sequence.terminator();
-
-      state_.write({reinterpret_cast<const std::uint8_t*>(terminator.data()), terminator.size()});
+      state_.write(byteView(sequence.terminator()));
     }
   }
 
@@ -423,134 +494,158 @@ namespace telar::runtime::control {
       return;
     }
 
-    const auto parsed = Parameters::parse(body);
-    if (!parsed) {
+    const auto parameters = Parameters::parse(body);
+    if (!parameters) {
       return;
     }
 
-    const auto& parameters = *parsed;
+    if (parameters->colon && parameters->final != 'm') {
+      return;
+    }
+
+    if (!csiAnswered(sequence, *parameters, history_erased, homed)) {
+      passthrough(sequence);
+    }
+  }
+
+  bool Engine::csiAnswered(Sequence sequence, const Parameters& parameters, bool history_erased, bool homed) {
     const auto modifiers = parameters.modifiers();
-
-    if (parameters.colon && parameters.final != 'm') {
-      return;
-    }
 
     switch (parameters.final) {
     case 'H':
     case 'f':
-      if (modifiers.empty()) {
-        history_erased_ = history_erased;
-        homed_ = parameters.count <= 2 && std::all_of(parameters.values.begin(), parameters.values.begin() + parameters.count, [](std::uint16_t value) {
-          return value <= 1;
-        });
-      }
-
-      break;
+      cursorHome(parameters, history_erased);
+      return false;
     case 'J':
       if (modifiers.empty() && parameters.count <= 1) {
         eraseDisplay(sequence, parameters.count == 0 ? 0 : parameters.values[0], history_erased, homed);
-        return;
+        return true;
       }
 
-      break;
+      return false;
     case 'h':
     case 'l':
-      if (modifiers == "?") {
-        privateModes(parameters);
-        return;
-      }
-
-      break;
     case 's':
     case 'r':
       if (modifiers == "?") {
         privateModes(parameters);
-        return;
+        return true;
       }
 
-      break;
+      return false;
     case 'y':
-      if (modifiers == "*" && parameters.count <= 6) {
-        if (enabled_ && policy.checksum_report) {
-          reply_.append("\x1bP");
-          reply_.number(parameters.count == 0 ? 0 : parameters.values[0]);
-          reply_.append("!~");
-          reply_.hex(checksum_.compute(state_, parameters), 4, true);
-          reply_.append("\x1b\\");
-        }
-
-        return;
-      }
-
-      if (modifiers == "#" && parameters.count <= 1) {
-        if (policy.checksum_report) {
-          checksum_.flags = parameters.count == 0 ? 0 : parameters.values[0] & 31;
-        }
-
-        return;
-      }
-
-      break;
+      return checksumRequest(parameters);
     case 'c':
       if (modifiers.empty() || modifiers == ">") {
         attributes(modifiers == ">");
       }
 
-      return;
+      return true;
     case 'n':
       if (modifiers.empty() || modifiers == "?") {
         status(parameters);
-        return;
+        return true;
       }
 
-      break;
+      return false;
     case 'p':
-      if (modifiers == "!") {
-        checksum_.flags = 0;
-      }
-
-      if (modifiers == "$" || modifiers == "?$") {
-        modeReport(parameters);
-        return;
-      }
-
-      break;
+      return modeRequest(parameters);
     case 'q':
       if (modifiers == ">") {
-        if (enabled_) {
-          reply_.append("\x1bP>|telar ");
-          reply_.append(program_version);
-          reply_.append("\x1b\\");
-        }
-
-        return;
+        versionReport();
+        return true;
       }
 
-      break;
+      return false;
     case 't':
-      if (modifiers.empty() && parameters.count == 1 && parameters.values[0] >= 14 && parameters.values[0] <= 21) {
+      if (modifiers.empty() && parameters.count == 1 && parameters.values[0] >= pixels_request && parameters.values[0] <= title_request) {
         sizeReport(parameters.values[0]);
-        return;
+        return true;
       }
 
-      break;
+      return false;
     case 'u':
       if (modifiers == "?") {
-        if (enabled_) {
-          reply_.append("\x1b[?");
-          reply_.number(state_.keyboard());
-          reply_.append("u");
-        }
-
-        return;
+        keyboardReport();
+        return true;
       }
 
-      break;
+      return false;
     default:
-      break;
+      return false;
+    }
+  }
+
+  bool Engine::modeRequest(const Parameters& parameters) {
+    const auto modifiers = parameters.modifiers();
+
+    if (modifiers == "!") {
+      checksum_.flags = 0;
     }
 
-    passthrough(sequence);
+    if (modifiers == "$" || modifiers == "?$") {
+      modeReport(parameters);
+      return true;
+    }
+
+    return false;
+  }
+
+  void Engine::versionReport() {
+    if (enabled_) {
+      reply_.append("\x1bP>|telar ");
+      reply_.append(program_version);
+      reply_.append("\x1b\\");
+    }
+  }
+
+  void Engine::keyboardReport() {
+    if (enabled_) {
+      reply_.append("\x1b[?");
+      reply_.number(state_.keyboard());
+      reply_.append("u");
+    }
+  }
+
+  void Engine::cursorHome(const Parameters& parameters, bool history_erased) {
+    if (!parameters.modifiers().empty()) {
+      return;
+    }
+
+    history_erased_ = history_erased;
+    homed_ = parameters.count <= 2 && std::ranges::all_of(parameters.values.view().first(parameters.count), [](std::uint16_t value) {
+      return value <= 1;
+    });
+  }
+
+  bool Engine::checksumRequest(const Parameters& parameters) {
+    // DECRQCRA's Pid, Pp and the four edges of its rectangle.
+    constexpr std::size_t checksum_parameters = 6;
+    // The five XTCHECKSUM flags of ChecksumFlag.
+    constexpr unsigned checksum_flags = 0x1f;
+    const auto modifiers = parameters.modifiers();
+
+    if (modifiers == "*" && parameters.count <= checksum_parameters) {
+      if (enabled_ && policy.checksum_report) {
+        reply_.append("\x1bP");
+        reply_.number(parameters.count == 0 ? 0 : parameters.values[0]);
+        reply_.append("!~");
+        reply_.hex(checksum_.compute(state_, parameters), {.width = 4, .upper = true});
+        reply_.append("\x1b\\");
+      }
+
+      return true;
+    }
+
+    if (modifiers == "#" && parameters.count <= 1) {
+      if (policy.checksum_report) {
+        checksum_.flags = parameters.count == 0 ? 0 : static_cast<unsigned>(parameters.values[0]) & checksum_flags;
+      }
+
+      return true;
+    }
+
+    return false;
   }
 
   void Engine::eraseDisplay(Sequence sequence, unsigned mode, bool history_erased, bool homed) {
@@ -581,7 +676,7 @@ namespace telar::runtime::control {
   void Engine::privateModes(const Parameters& parameters) {
     for (std::size_t index = 0; index < parameters.count; ++index) {
       const auto mode = parameters.values[index];
-      const auto* const owned = std::find(desktop_modes.begin(), desktop_modes.end(), mode);
+      const auto* const owned = std::ranges::find(desktop_modes, mode);
       if (owned != desktop_modes.end()) {
         const auto slot = static_cast<std::size_t>(owned - desktop_modes.begin());
 
@@ -649,11 +744,13 @@ namespace telar::runtime::control {
       return;
     }
 
+    constexpr unsigned operating_status_request = 5;
+    constexpr unsigned cursor_position_request = 6;
     const auto request = parameters.values[0];
     const bool private_request = parameters.modifiers() == "?";
-    if (request == 5 && !private_request) {
+    if (request == operating_status_request && !private_request) {
       operatingStatus();
-    } else if (request == 6) {
+    } else if (request == cursor_position_request) {
       reportCursor(private_request);
     } else if (private_request && request == scheme_request) {
       reply_.append(facts_.light ? "\x1b[?997;2n" : "\x1b[?997;1n");
@@ -682,53 +779,15 @@ namespace telar::runtime::control {
   }
 
   bool Engine::knownMode(std::uint16_t value, bool ansi) noexcept {
+    // KAM, IRM, SRM and LNM.
+    constexpr ds::Array<std::uint16_t, 4> ansi_modes{2, 4, 12, 20};
+    constexpr ds::Array<std::uint16_t, 38> private_modes{1, 3, 4, 5, 6, 7, 8, 9, 12, 25, 40, 45, 47, 66, 67, 69, 1000, 1002, 1003, 1004, 1005, 1006, 1007, 1015, 1016, 1035, 1036, 1039, 1045, 1047, 1048, 1049, 2004, 2026, 2027, 2031, 2033, 2048};
+
     if (ansi) {
-      return value == 2 || value == 4 || value == 12 || value == 20;
+      return std::ranges::contains(ansi_modes, value);
     }
 
-    switch (value) {
-    case 1:
-    case 3:
-    case 4:
-    case 5:
-    case 6:
-    case 7:
-    case 8:
-    case 9:
-    case 12:
-    case 25:
-    case 40:
-    case 45:
-    case 47:
-    case 66:
-    case 67:
-    case 69:
-    case 1000:
-    case 1002:
-    case 1003:
-    case 1004:
-    case 1005:
-    case 1006:
-    case 1007:
-    case 1015:
-    case 1016:
-    case 1035:
-    case 1036:
-    case 1039:
-    case 1045:
-    case 1047:
-    case 1048:
-    case 1049:
-    case 2004:
-    case 2026:
-    case 2027:
-    case 2031:
-    case 2033:
-    case 2048:
-      return true;
-    default:
-      return false;
-    }
+    return std::ranges::contains(private_modes, value);
   }
 
   void Engine::modeReport(const Parameters& parameters) {
@@ -736,7 +795,7 @@ namespace telar::runtime::control {
       return;
     }
 
-    enum class ModeStatus : unsigned {
+    enum class ModeStatus : std::uint8_t {
       unknown,
       set,
       reset,
@@ -744,6 +803,8 @@ namespace telar::runtime::control {
       permanently_reset,
     };
 
+    // The ANSI modes of a VT100 that no terminal emulator implements.
+    constexpr ds::Array<std::uint16_t, 12> permanently_reset_ansi_modes{1, 5, 7, 10, 11, 13, 14, 15, 16, 17, 18, 19};
     const auto value = parameters.values[0];
     const bool ansi = parameters.modifiers() == "$";
     ModeStatus report = ModeStatus::unknown;
@@ -752,27 +813,8 @@ namespace telar::runtime::control {
       report = paste_events_ ? ModeStatus::set : ModeStatus::reset;
     } else if (knownMode(value, ansi)) {
       report = state_.mode(value, ansi) ? ModeStatus::set : ModeStatus::reset;
-    } else if (!ansi && value == erase_color_mode) {
+    } else if ((!ansi && value == erase_color_mode) || (ansi && std::ranges::contains(permanently_reset_ansi_modes, value))) {
       report = ModeStatus::permanently_reset;
-    } else if (ansi) {
-      switch (value) {
-      case 1:
-      case 5:
-      case 7:
-      case 10:
-      case 11:
-      case 13:
-      case 14:
-      case 15:
-      case 16:
-      case 17:
-      case 18:
-      case 19:
-        report = ModeStatus::permanently_reset;
-        break;
-      default:
-        break;
-      }
     }
 
     reply_.append(ansi ? "\x1b[" : "\x1b[?");
@@ -797,35 +839,7 @@ namespace telar::runtime::control {
 
     if (request == title_request) {
       if (policy.title_report) {
-        reply_.append("\x1b]l");
-        auto title = state_.title();
-
-        while (!title.empty()) {
-          const auto first = static_cast<std::uint8_t>(title.front());
-          const std::size_t count = first < 0x80 ? 1 : first < 0xe0 ? 2
-                                                   : first < 0xf0   ? 3
-                                                                    : 4;
-          if (title.size() < count) {
-            break;
-          }
-
-          const auto text = title.substr(0, count);
-
-          title.remove_prefix(count);
-          if ((count == 1 && (first < ' ' || first == '\x7f')) || (count == 2 && first == 0xc2 && static_cast<std::uint8_t>(text[1]) < 0xa0)) {
-            continue;
-          }
-
-          try {
-            validateUtf8(text);
-          } catch (const EncodingError&) {
-            continue;
-          }
-
-          reply_.append(text);
-        }
-
-        reply_.append("\x1b\\");
+        titleReport();
       }
 
       return;
@@ -849,6 +863,36 @@ namespace telar::runtime::control {
     default:
       break;
     }
+  }
+
+  void Engine::titleReport() {
+    reply_.append("\x1b]l");
+    auto title = state_.title();
+
+    while (!title.empty()) {
+      const auto first = static_cast<std::uint8_t>(title.front());
+      const auto count = utf8Length(first);
+      if (title.size() < count) {
+        break;
+      }
+
+      const auto text = title.substr(0, count);
+
+      title.remove_prefix(count);
+      if (!titleCharacter(text)) {
+        continue;
+      }
+
+      try {
+        validateUtf8(text);
+      } catch (const EncodingError&) {
+        continue;
+      }
+
+      reply_.append(text);
+    }
+
+    reply_.append("\x1b\\");
   }
 
   bool Engine::termcap(std::string_view request) {
@@ -901,12 +945,7 @@ namespace telar::runtime::control {
       attributesString();
       reply_.append("m");
     } else if (request == " q") {
-      const auto cursor = state_.visualCursor();
-      const auto shape = cursor.visual_style;
-      const unsigned style = shape == GHOSTTY_RENDER_STATE_CURSOR_VISUAL_STYLE_BAR ? 5 : shape == GHOSTTY_RENDER_STATE_CURSOR_VISUAL_STYLE_UNDERLINE ? 3
-                                                                                                                                                     : 1;
-
-      reply_.number(style + static_cast<unsigned int>(!state_.mode(cursor_blink_mode)));
+      reply_.number(blinkingCursorStyle(state_.visualCursor()) + static_cast<unsigned int>(!state_.mode(cursor_blink_mode)));
       reply_.append(" q");
     } else if (request == "r" || horizontal) {
       const auto margins = state_.margins();
@@ -933,7 +972,7 @@ namespace telar::runtime::control {
         reply_.number(codes[index]);
         if (codes[index] == 4 && style.underline != 1) {
           reply_.append(":");
-          reply_.number(style.underline);
+          reply_.number(static_cast<std::uint64_t>(style.underline));
         }
       }
     }
@@ -950,8 +989,8 @@ namespace telar::runtime::control {
     reply_.append(";");
     if (color.tag == GHOSTTY_STYLE_COLOR_PALETTE) {
       const auto index = color.value.palette;
-      if (index < 16) {
-        reply_.number((background ? (index < 8 ? 40 : 100) : (index < 8 ? 30 : 90)) + (index % 8));
+      if (index < ansi_colors) {
+        reply_.number(sgrColor(background, index >= standard_colors) + (index % standard_colors));
       } else {
         reply_.append(background ? "48:5:" : "38:5:");
         reply_.number(index);
@@ -982,9 +1021,11 @@ namespace telar::runtime::control {
       return;
     }
 
+    constexpr unsigned clipboard_operation = 52;
+    constexpr unsigned kitty_clipboard_operation = 5522;
     auto remaining = sequence.body();
     const auto operation = oscOperation(takeField(remaining));
-    if (operation == 52) {
+    if (operation == clipboard_operation) {
       if (enabled_) {
         clipboard_.traditional(remaining, policy);
       }
@@ -992,7 +1033,7 @@ namespace telar::runtime::control {
       return;
     }
 
-    if (operation == 5522) {
+    if (operation == kitty_clipboard_operation) {
       if (enabled_) {
         clipboard_.kitty(remaining, sequence.ending, policy, reply_);
       }
@@ -1004,9 +1045,11 @@ namespace telar::runtime::control {
   }
 
   void Engine::apc(Sequence sequence) {
-    if (sequence.body().starts_with("25a1;")) {
+    constexpr std::string_view glyph_prefix = "25a1;";
+
+    if (sequence.body().starts_with(glyph_prefix)) {
       if (enabled_) {
-        glyph(sequence.body().substr(5), reply_);
+        glyph(sequence.body().substr(glyph_prefix.size()), reply_);
       }
 
       return;

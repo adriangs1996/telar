@@ -23,6 +23,7 @@ static_assert(true);
 #include <cstdint>
 #include <cstring>
 #include <exception>
+#include <functional>
 #include <limits>
 #include <stdexcept>
 #include <string_view>
@@ -106,7 +107,7 @@ namespace telar::gui::qt {
   }
 
   void NativeModeLayout::setRatio(qreal ratio) {
-    if (std::isfinite(ratio) && ratio > 0 && ratio_ != ratio) {
+    if (std::isfinite(ratio) && ratio > 0 && std::not_equal_to<>{}(ratio_, ratio)) {
       ratio_ = ratio;
       emit ratioChanged();
       polish();
@@ -114,7 +115,7 @@ namespace telar::gui::qt {
   }
 
   void NativeModeLayout::setPixelSize(qreal pixel_size) {
-    if (std::isfinite(pixel_size) && pixel_size >= 0 && pixel_size_ != pixel_size) {
+    if (std::isfinite(pixel_size) && pixel_size >= 0 && std::not_equal_to<>{}(pixel_size_, pixel_size)) {
       pixel_size_ = pixel_size;
       emit pixelSizeChanged();
       polish();
@@ -199,7 +200,7 @@ namespace telar::gui::qt {
     auto layout = historyHintStyle(ratio_);
     const auto title = geometry.title;
 
-    layout.insert(QStringLiteral("title"), QRectF{title.x / density, title.y / density, title.width / density, title.height / density});
+    layout.insert(QStringLiteral("title"), QRectF{static_cast<qreal>(title.x) / density, static_cast<qreal>(title.y) / density, static_cast<qreal>(title.width) / density, static_cast<qreal>(title.height) / density});
     layout.insert(QStringLiteral("hints"), hints);
     layout.insert(QStringLiteral("hintCount"), static_cast<qulonglong>(geometry.count));
     if (layout_ != layout) {

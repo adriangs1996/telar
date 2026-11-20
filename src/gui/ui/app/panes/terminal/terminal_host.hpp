@@ -16,6 +16,10 @@ namespace telar::gui::qt {
 
   class TerminalItem;
 
+// An interface of pure virtual calls with a protected, non-virtual destructor has no member to define out of line.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wweak-vtables"
+
   // What a terminal's input needs from the window it is in, which only the window can do: its key
   // bindings and the views that take a pane's keys before its terminal, the pane's focus, the
   // pointer gestures over the whole window, opening links, and the window's font. The window
@@ -46,5 +50,7 @@ namespace telar::gui::qt {
     TerminalHost() = default;
     ~TerminalHost() = default;
   };
+
+#pragma clang diagnostic pop
 
 }

@@ -39,13 +39,13 @@ namespace telar::gui::qt {
     }
 
     std::shared_ptr<const FontAsset> textSource() {
-      static const auto source = std::make_shared<const FontAsset>(FontData{.bytes = loadFontBytes(QStringLiteral(":/telar/fonts/JetBrainsMono-Regular.ttf"))});
+      [[clang::no_destroy]] static const auto source = std::make_shared<const FontAsset>(FontData{.bytes = loadFontBytes(QStringLiteral(":/telar/fonts/JetBrainsMono-Regular.ttf"))});
 
       return source;
     }
 
     std::shared_ptr<const FontAsset> symbolSource() {
-      static const auto source = std::make_shared<const FontAsset>(FontData{.bytes = loadFontBytes(QStringLiteral(":/telar/fonts/SymbolsNerdFontMono-Regular.ttf"))});
+      [[clang::no_destroy]] static const auto source = std::make_shared<const FontAsset>(FontData{.bytes = loadFontBytes(QStringLiteral(":/telar/fonts/SymbolsNerdFontMono-Regular.ttf"))});
 
       return source;
     }
@@ -93,12 +93,22 @@ namespace telar::gui::qt {
       return text_;
     case fonts::FontRole::symbols:
       return symbols_;
-    default:
-      if (const auto index = fonts::fallbackIndex(role); index && *index < fallbackCount()) {
-        auto& face = fallbacks_.atMut(*index);
-        if (face) {
-          return face.getMut();
-        }
+    case fonts::FontRole::fallback_0:
+    case fonts::FontRole::fallback_1:
+    case fonts::FontRole::fallback_2:
+    case fonts::FontRole::fallback_3:
+    case fonts::FontRole::fallback_4:
+    case fonts::FontRole::fallback_5:
+    case fonts::FontRole::fallback_6:
+    case fonts::FontRole::fallback_7:
+      break;
+    }
+
+    // fallbackIndex rejects every role but a fallback one, a value outside the enum included.
+    if (const auto index = fonts::fallbackIndex(role); index && *index < fallbackCount()) {
+      auto& face = fallbacks_.atMut(*index);
+      if (face) {
+        return face.getMut();
       }
     }
 
@@ -117,10 +127,22 @@ namespace telar::gui::qt {
       return *text_source_;
     case fonts::FontRole::symbols:
       return *symbols_source_;
-    default:
-      if (const auto index = fonts::fallbackIndex(role); index && *index < fallbackCount()) {
-        return *collection_->fallback[*index];
-      }
+    case fonts::FontRole::regular:
+    case fonts::FontRole::emphasized:
+    case fonts::FontRole::fallback_0:
+    case fonts::FontRole::fallback_1:
+    case fonts::FontRole::fallback_2:
+    case fonts::FontRole::fallback_3:
+    case fonts::FontRole::fallback_4:
+    case fonts::FontRole::fallback_5:
+    case fonts::FontRole::fallback_6:
+    case fonts::FontRole::fallback_7:
+      break;
+    }
+
+    // fallbackIndex rejects every role but a fallback one, a value outside the enum included.
+    if (const auto index = fonts::fallbackIndex(role); index && *index < fallbackCount()) {
+      return *collection_->fallback[*index];
     }
 
     throw std::invalid_argument{"MissingNativeFontAsset"};
@@ -131,7 +153,11 @@ namespace telar::gui::qt {
   }
 
   std::shared_ptr<const FontAsset> ResidentFonts::resolveSource(const QString& family, const QString& style) {
+// A thread that exits must drop its weak references, or the fonts' shared allocations leak with it.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wexit-time-destructors"
     thread_local QHash<std::pair<QString, QString>, std::weak_ptr<const FontAsset>> sources;
+#pragma clang diagnostic pop
 
     forgetExpired(sources);
     const std::pair key{family.isEmpty() ? QStringLiteral("Telar Forma") : family, style};
@@ -149,7 +175,11 @@ namespace telar::gui::qt {
   }
 
   tbc::val_static<std::shared_ptr<ResidentFonts>> ResidentFonts::shared(const std::shared_ptr<const FontAsset>& source) {
+// A thread that exits must drop its weak references, or the fonts' shared allocations leak with it.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wexit-time-destructors"
     thread_local QHash<const FontAsset*, std::weak_ptr<ResidentFonts>> cached;
+#pragma clang diagnostic pop
 
     forgetExpired(cached);
     auto fonts = cached.value(source.get()).lock();
@@ -170,7 +200,11 @@ namespace telar::gui::qt {
       return shared(collection->primary);
     }
 
+// A thread that exits must drop its weak references, or the fonts' shared allocations leak with it.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wexit-time-destructors"
     thread_local QHash<const FontCollection*, std::weak_ptr<ResidentFonts>> cached;
+#pragma clang diagnostic pop
 
     forgetExpired(cached);
     auto fonts = cached.value(collection.get()).lock();

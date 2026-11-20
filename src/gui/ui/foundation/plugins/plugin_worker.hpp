@@ -35,7 +35,6 @@ static_assert(true);
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
-#include <cstring>
 #include <dirent.h>
 #include <exception>
 #include <fcntl.h>
@@ -173,7 +172,7 @@ namespace telar::gui::qt {
       execution_ = execution;
       output_length_ = 0;
       try {
-        preparation_.setFuture(QtConcurrent::run([&memory = memory_, invocation, executable] {
+        preparation_.setFuture(QtConcurrent::run([&memory = memory_, invocation, executable] -> PluginWorkerPreparation {
           PluginWorkerPreparation result{};
 
           try {
@@ -191,7 +190,7 @@ namespace telar::gui::qt {
     }
 
     void commandOutput(std::span<const char> bytes) noexcept {
-      std::memcpy(output_.dataMut() + output_length_, bytes.data(), bytes.size());
+      std::ranges::copy(bytes, output_.viewMut().subspan(output_length_, bytes.size()).begin());
       output_length_ += bytes.size();
     }
 

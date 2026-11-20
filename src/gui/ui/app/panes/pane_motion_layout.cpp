@@ -143,7 +143,7 @@ namespace telar::gui::qt {
       const auto& record = records[index];
       const auto visual = bounds == placements[static_cast<std::size_t>(index)].bounds
                               ? QRectF{record.value(QStringLiteral("x")).toReal(), record.value(QStringLiteral("y")).toReal(), record.value(QStringLiteral("width")).toReal(), record.value(QStringLiteral("height")).toReal()}
-                              : QRectF{bounds.x, bounds.y, bounds.width, bounds.height};
+                              : QRectF{static_cast<qreal>(bounds.x), static_cast<qreal>(bounds.y), static_cast<qreal>(bounds.width), static_cast<qreal>(bounds.height)};
 
       records[index].insert(QStringLiteral("visualBounds"), visual);
     }

@@ -42,7 +42,7 @@ namespace telar::gui::qt {
   }
 
   const QStringList& bundledFonts() {
-    static const QStringList families = registerFonts();
+    [[clang::no_destroy]] static const QStringList families = registerFonts();
 
     return families;
   }

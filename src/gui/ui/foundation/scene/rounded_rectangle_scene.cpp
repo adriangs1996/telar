@@ -5,6 +5,7 @@ static_assert(true);
 
 #include "rounded_rectangle_scene.hpp"
 #include "physical_pixel_matrix.hpp"
+#include "qt_buffers.hpp"
 #include <QByteArray>
 #include <QSGGeometry>
 #include <QSGGeometryNode>
@@ -19,7 +20,7 @@ static_assert(true);
 #include <QtQuick/qsgmaterialtype.h>
 #include <array>
 #include <cstddef>
-#include <cstring>
+#include <functional>
 #include <memory>
 #include <span>
 #include <stdexcept>
@@ -59,7 +60,7 @@ namespace telar::gui::qt {
         if (last == nullptr) {
           const float replace = replace_background_ ? 1 : 0;
 
-          std::memcpy(buffer.data() + offsetof(ShapeUniforms, replace_background), &replace, sizeof(replace));
+          writeUniform<offsetof(ShapeUniforms, replace_background)>(buffer, std::as_bytes(std::span<const float, 1>{&replace, 1}));
           changed = true;
         }
 
@@ -72,14 +73,14 @@ namespace telar::gui::qt {
             matrix.scale(inverse_density, inverse_density);
           }
 
-          std::memcpy(buffer.data() + offsetof(ShapeUniforms, matrix), matrix.constData(), sizeof(ShapeUniforms::matrix));
+          writeUniform<offsetof(ShapeUniforms, matrix)>(buffer, std::as_bytes(matrixValues(matrix)));
           changed = true;
         }
 
         if (state.isOpacityDirty() || last == nullptr) {
           const auto opacity = state.opacity();
 
-          std::memcpy(buffer.data() + offsetof(ShapeUniforms, opacity), &opacity, sizeof(opacity));
+          writeUniform<offsetof(ShapeUniforms, opacity)>(buffer, std::as_bytes(std::span<const float, 1>{&opacity, 1}));
           changed = true;
         }
 
@@ -152,7 +153,7 @@ namespace telar::gui::qt {
       const auto shape = paint.shape;
       const Point local{.x = corner.x * shape.size.x, .y = corner.y * shape.size.y};
 
-      return {.position = {.x = static_cast<float>((paint.origin.x + local.x) / density), .y = static_cast<float>((paint.origin.y + local.y) / density)}, .local = local, .size = shape.size, .outline = {.x = shape.style.radius, .y = shape.style.border_width}, .fill = shape.style.fill, .border = shape.style.border, .backdrop = shape.style.backdrop};
+      return {.position = {.x = static_cast<float>(static_cast<qreal>(paint.origin.x + local.x) / density), .y = static_cast<float>(static_cast<qreal>(paint.origin.y + local.y) / density)}, .local = local, .size = shape.size, .outline = {.x = shape.style.radius, .y = shape.style.border_width}, .fill = shape.style.fill, .border = shape.style.border, .backdrop = shape.style.backdrop};
     }
 
     const QSGGeometry::AttributeSet& shapeAttributes() {
@@ -183,7 +184,7 @@ namespace telar::gui::qt {
 
       void refresh(RoundedRectanglePaint paint, qreal density) {
         const auto shape = paint.shape;
-        if (shape_ == shape && density_ == density && origin_ == paint.origin) {
+        if (shape_ == shape && std::equal_to<>{}(density_, density) && origin_ == paint.origin) {
           return;
         }
 
@@ -194,7 +195,7 @@ namespace telar::gui::qt {
         shape_ = shape;
         origin_ = paint.origin;
         density_ = density;
-        const auto vertices = std::span{static_cast<ShapeVertex*>(geometry_.vertexData()), corners.size()};
+        const auto vertices = geometryVertices<ShapeVertex>(geometry_, corners.size());
 
         for (std::size_t index = 0; index < corners.size(); ++index) {
           vertices[index] = shapeVertex(paint, corners[index], density);
@@ -235,7 +236,7 @@ namespace telar::gui::qt {
         }
 
         bool changed = resized;
-        const auto vertices = std::span{static_cast<ShapeVertex*>(geometry_.vertexData()), static_cast<std::size_t>(vertex_count)};
+        const auto vertices = geometryVertices<ShapeVertex>(geometry_, static_cast<std::size_t>(vertex_count));
 
         for (std::size_t index = 0; index < paints.size(); ++index) {
           if (paints[index].shape.style.replace_background != replace) {
@@ -297,8 +298,10 @@ namespace telar::gui::qt {
     if (node == nullptr) {
       auto replacement = std::make_unique<RoundedRectangleNode>();
 
-      node = replacement.get();
-      owner = std::move(replacement);
+      owner.reset();
+      replacement->refresh(paint, density);
+
+      return replacement.release();
     }
 
     node->refresh(paint, density);

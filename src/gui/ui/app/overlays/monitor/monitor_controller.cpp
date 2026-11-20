@@ -374,42 +374,88 @@ namespace telar::gui::qt {
     switch (action) {
     case Action::process_terminate:
       signal(QStringLiteral("TERM"));
-      break;
+      return true;
     case Action::process_kill:
       signal(QStringLiteral("KILL"));
-      break;
+      return true;
     case Action::process_stop:
       signal(QStringLiteral("STOP"));
-      break;
+      return true;
     case Action::process_continue:
       signal(QStringLiteral("CONT"));
-      break;
+      return true;
     case Action::process_lower_priority: {
       constexpr int step = 5;
       const auto& state = application::monitor::state(store_.session());
 
       renice((state.detail ? state.detail->process.nice : 0) + step);
-    } break;
+      return true;
+    }
     case Action::process_copy_command:
       copyCommand();
-      break;
+      return true;
     case Action::process_focus_pane:
       focusPane();
-      break;
+      return true;
     case Action::process_review_stack:
       review(QStringLiteral("stack"));
-      break;
+      return true;
     case Action::process_review_files:
       review(QStringLiteral("files"));
-      break;
+      return true;
     case Action::process_review_logs:
       review(QStringLiteral("logs"));
-      break;
-    default:
+      return true;
+    case Action::none:
+    case Action::new_tab:
+    case Action::select_tab:
+    case Action::select_tab_index:
+    case Action::next_tab:
+    case Action::previous_tab:
+    case Action::move_tab_next:
+    case Action::move_tab_previous:
+    case Action::focus_left:
+    case Action::focus_right:
+    case Action::focus_up:
+    case Action::focus_down:
+    case Action::resize_left:
+    case Action::resize_right:
+    case Action::resize_up:
+    case Action::resize_down:
+    case Action::detach:
+    case Action::close_tab:
+    case Action::select_workspace:
+    case Action::focus_pane:
+    case Action::select_agent:
+    case Action::split_horizontal:
+    case Action::split_vertical:
+    case Action::close_pane:
+    case Action::fullscreen:
+    case Action::toggle_sidebar:
+    case Action::toggle_workspace_list:
+    case Action::history:
+    case Action::palette:
+    case Action::goto_picker:
+    case Action::leave_worktree:
+    case Action::forget_gone_worktrees:
+    case Action::new_workspace:
+    case Action::rename_tab:
+    case Action::rename_workspace:
+    case Action::cancel:
+    case Action::copy_mode:
+    case Action::path_picker:
+    case Action::suggest_command:
+    case Action::machine_picker:
+    case Action::next_machine:
+    case Action::previous_machine:
+    case Action::add_machine:
+    case Action::monitor:
+    case Action::process_picker:
       return false;
     }
 
-    return true;
+    // An action outside the enum performs nothing.
+    return false;
   }
 
   void MonitorController::close() {

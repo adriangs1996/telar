@@ -13,6 +13,79 @@ import telar.sys.apple;
 
 namespace telar::runtime::redirect {
 
+  namespace {
+
+    // The minimum sizes of the headers a discovered SYN carries.
+    constexpr std::size_t ipv4_header_bytes = 20;
+    constexpr std::size_t ipv6_header_bytes = 40;
+    constexpr std::size_t tcp_header_bytes = 20;
+
+    // IPv4's header length and TCP's data offset count 32-bit words.
+    constexpr std::size_t header_word_bytes = 4;
+    constexpr unsigned nibble_bits = 4;
+    constexpr unsigned low_nibble = 0x0f;
+
+    // The IP version in the high nibble of the first byte.
+    constexpr unsigned ipv4_version = 4;
+    constexpr unsigned ipv6_version = 6;
+
+    // Field offsets in the IPv4 header.
+    constexpr std::size_t ipv4_total_length = 2;
+    constexpr std::size_t ipv4_fragment = 6;
+    constexpr std::size_t ipv4_protocol = 9;
+    constexpr std::size_t ipv4_source = 12;
+    constexpr std::size_t ipv4_destination = 16;
+    // The more-fragments flag and the fragment offset.
+    constexpr unsigned ipv4_fragment_mask = 0x3fff;
+
+    // Field offsets in the IPv6 header.
+    constexpr std::size_t ipv6_payload_length = 4;
+    constexpr std::size_t ipv6_next_header = 6;
+    constexpr std::size_t ipv6_source = 8;
+    constexpr std::size_t ipv6_destination = 24;
+    constexpr std::size_t maximum_extension_headers = 8;
+    // Hop-by-hop, routing and destination options count 8-byte units past the first; an
+    // authentication header counts 4-byte words past the first two.
+    constexpr std::size_t extension_unit_bytes = 8;
+    constexpr std::size_t authentication_word_bytes = 4;
+
+    // Field offsets in the TCP header.
+    constexpr std::size_t tcp_data_offset = 12;
+    constexpr std::size_t tcp_flags = 13;
+    // FIN, SYN, RST and ACK: a SYN carries only its own.
+    constexpr unsigned handshake_flags = 0x17;
+    constexpr unsigned syn_flag = 0x02;
+
+    constexpr unsigned highNibble(Byte byte) noexcept {
+      return static_cast<unsigned>(byte) >> nibble_bits;
+    }
+
+    constexpr unsigned lowNibble(Byte byte) noexcept {
+      return static_cast<unsigned>(byte) & low_nibble;
+    }
+
+    // Where the TCP header starts behind an IPv6 header and the extension headers a SYN may carry.
+    ds::Option<std::size_t> ipv6TcpOffset(std::span<const Byte> packet) noexcept {
+      std::size_t offset = ipv6_header_bytes;
+      unsigned next = packet[ipv6_next_header];
+
+      for (std::size_t count = 0; next != IPPROTO_TCP; ++count) {
+        if (count == maximum_extension_headers || offset + 2 > packet.size() || (next != IPPROTO_HOPOPTS && next != IPPROTO_ROUTING && next != IPPROTO_DSTOPTS && next != IPPROTO_AH)) {
+          return ds::none;
+        }
+
+        const std::size_t units = packet[offset + 1];
+        const auto length = next == IPPROTO_AH ? (units + 2) * authentication_word_bytes : (units + 1) * extension_unit_bytes;
+
+        next = packet[offset];
+        offset += length;
+      }
+
+      return offset;
+    }
+
+  }
+
   bool FlowKey::matches(const FlowKey& other) const noexcept {
     return same(source, other.source) && same(destination, other.destination);
   }
@@ -26,54 +99,43 @@ namespace telar::runtime::redirect {
       return ds::none;
     }
 
-    std::uint32_t encoded_family;
+    const auto family = ntohl(loadValue<std::uint32_t>(std::as_bytes(frame)));
+    const auto packet = frame.subspan(sizeof(std::uint32_t));
+    std::size_t offset = 0;
+    std::size_t source = 0;
+    std::size_t destination = 0;
 
-    std::memcpy(&encoded_family, frame.data(), sizeof(encoded_family));
-    const auto family = ntohl(encoded_family);
-    const auto packet = frame.subspan(sizeof(encoded_family));
-    std::size_t offset;
-    std::size_t source;
-    std::size_t destination;
-
-    if (family == AF_INET && packet.size() >= 20 && packet[0] >> 4 == 4) {
-      offset = (packet[0] & 0x0f) * 4;
-      if (offset < 20 || offset > packet.size() || number(packet, 2) != packet.size() || (number(packet, 6) & 0x3fff) != 0 || packet[9] != IPPROTO_TCP) {
+    if (family == AF_INET && packet.size() >= ipv4_header_bytes && highNibble(packet[0]) == ipv4_version) {
+      offset = std::size_t{lowNibble(packet[0])} * header_word_bytes;
+      if (offset < ipv4_header_bytes || offset > packet.size() || number(packet, ipv4_total_length) != packet.size() || (static_cast<unsigned>(number(packet, ipv4_fragment)) & ipv4_fragment_mask) != 0 || packet[ipv4_protocol] != IPPROTO_TCP) {
         return ds::none;
       }
 
-      source = 12;
-      destination = 16;
-    } else if (family == AF_INET6 && packet.size() >= 40 && packet[0] >> 4 == 6) {
-      if (number(packet, 4) + 40 != packet.size()) {
+      source = ipv4_source;
+      destination = ipv4_destination;
+    } else if (family == AF_INET6 && packet.size() >= ipv6_header_bytes && highNibble(packet[0]) == ipv6_version) {
+      if (number(packet, ipv6_payload_length) + ipv6_header_bytes != packet.size()) {
         return ds::none;
       }
 
-      offset = 40;
-      unsigned next = packet[6];
-
-      for (std::size_t count = 0; next != IPPROTO_TCP; ++count) {
-        if (count == 8 || offset + 2 > packet.size() || (next != IPPROTO_HOPOPTS && next != IPPROTO_ROUTING && next != IPPROTO_DSTOPTS && next != IPPROTO_AH)) {
-          return ds::none;
-        }
-
-        const auto length = next == IPPROTO_AH ? (packet[offset + 1] + 2) * 4 : (packet[offset + 1] + 1) * 8;
-
-        next = packet[offset];
-        offset += static_cast<std::size_t>(length);
+      const auto tcp = ipv6TcpOffset(packet);
+      if (!tcp) {
+        return ds::none;
       }
 
-      source = 8;
-      destination = 24;
+      offset = *tcp;
+      source = ipv6_source;
+      destination = ipv6_destination;
     } else {
       return ds::none;
     }
 
-    if (offset + 20 > packet.size() || (packet[offset + 13] & 0x17) != 0x02) {
+    if (offset + tcp_header_bytes > packet.size() || (static_cast<unsigned>(packet[offset + tcp_flags]) & handshake_flags) != syn_flag) {
       return ds::none;
     }
 
-    const auto header = static_cast<std::size_t>(packet[offset + 12] >> 4) * 4;
-    if (header < 20 || header > packet.size() - offset) {
+    const auto header = std::size_t{highNibble(packet[offset + tcp_data_offset])} * header_word_bytes;
+    if (header < tcp_header_bytes || header > packet.size() - offset) {
       return ds::none;
     }
 
@@ -85,7 +147,9 @@ namespace telar::runtime::redirect {
   }
 
   std::uint16_t FlowKey::number(std::span<const Byte> bytes, std::size_t offset) noexcept {
-    return static_cast<std::uint16_t>(static_cast<unsigned>(bytes[offset]) << 8 | bytes[offset + 1]);
+    constexpr unsigned byte_bits = 8;
+
+    return static_cast<std::uint16_t>((static_cast<unsigned>(bytes[offset]) << byte_bits) | static_cast<unsigned>(bytes[offset + 1]));
   }
 
   Target FlowKey::endpoint(unsigned family, std::span<const Byte> bytes, std::uint16_t port) {
@@ -94,43 +158,242 @@ namespace telar::runtime::redirect {
       throw std::invalid_argument{"Invalid discovery address"};
     }
 
-    ds::Array<char, INET6_ADDRSTRLEN + 16> text{};
+    // Room for the brackets, the colon and the port.
+    constexpr std::size_t port_text_bytes = 16;
+    ds::Array<char, INET6_ADDRSTRLEN + port_text_bytes> text{};
 
-    std::snprintf(text.dataMut(), text.size(), family == AF_INET6 ? "[%s]:%u" : "%s:%u", host.dataMut(), port);
-    return Target::parse(text.data());
+    return Target::parse(formatAuthority(text.viewMut(), std::string_view{host.data()}, port));
   }
 
 #ifdef __APPLE__
 
+  namespace {
+
+    constexpr std::size_t maximum_label_bytes = 48;
+    // Every flow, incoming flow and bypass is a rule of its own.
+    constexpr std::size_t maximum_scope_entries = 256;
+    constexpr unsigned maximum_log_interfaces = 16;
+    constexpr std::string_view tunnel_prefix = "utun";
+    constexpr std::string_view label_characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
+    constexpr std::string_view interface_characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-";
+
+    std::string_view familyName(const Target& target) noexcept {
+      return target.endpoint.storage.ss_family == AF_INET6 ? "inet6" : "inet";
+    }
+
+    std::string_view loopbackHost(const Target& target) noexcept {
+      return target.endpoint.storage.ss_family == AF_INET6 ? "::1" : "127.0.0.1";
+    }
+
+    bool validLabel(std::string_view label) noexcept {
+      return !label.empty() && label.size() <= maximum_label_bytes && label.find_first_not_of(label_characters) == std::string_view::npos;
+    }
+
+    bool validDiscoveryInterface(std::string_view interface) {
+      return interface.starts_with(tunnel_prefix) && interface.size() > tunnel_prefix.size() && interface.size() < IFNAMSIZ && interface.substr(tunnel_prefix.size()).find_first_not_of("0123456789") == std::string_view::npos;
+    }
+
+    // At least one direction, and flows only in the directions the scope allows.
+    bool validDirections(const PfScope& scope) noexcept {
+      const bool incoming = allowsIncoming(scope.direction);
+      const bool outgoing = allowsOutgoing(scope.direction);
+
+      return (incoming || outgoing) && (outgoing || (scope.flows.empty() && scope.bypasses.empty())) && (incoming || scope.incoming_flows.empty());
+    }
+
+    void validateListeners(std::span<const Mapping> mappings) {
+      for (const auto& mapping : mappings) {
+        if (mapping.listener_port == 0 || (mapping.target.host.view() == "127.0.0.1" && mapping.listener_port == mapping.target.port) || (mapping.target.host.view() == "::1" && mapping.listener_port == mapping.target.port)) {
+          throw std::invalid_argument{"Redirect listener overlaps its destination"};
+        }
+      }
+    }
+
+    // Discovery has already selected the account. Exact tuples survive loopback
+    // metadata changes and cannot match the helper's distinct upstream sockets.
+    void validateIncomingFlows(std::span<const Mapping> mappings, std::span<const FlowKey> flows) {
+      for (const auto& flow : flows) {
+        if (!std::ranges::any_of(mappings, [&](const auto& mapping) {
+              return mapping.incoming && FlowKey::same(mapping.target, flow.destination);
+            })) {
+          throw std::invalid_argument{"Incoming flow is outside the local destination scope"};
+        }
+      }
+    }
+
+    void validateBypass(const Bypass& bypass, std::string_view discovery_interface, std::span<const Mapping> mappings) {
+      const auto& flow = bypass.key;
+      const auto name = bypass.route.interface.view();
+      const auto gateway = bypass.route.gateway.view();
+      const auto family = flow.destination.endpoint.storage.ss_family;
+      ds::Array<char, INET6_ADDRSTRLEN> text{};
+      ds::Array<Byte, sizeof(in6_addr)> address{};
+
+      if (name.empty() || name.size() >= IFNAMSIZ || name == discovery_interface || name.find_first_not_of(interface_characters) != std::string_view::npos || gateway.empty() || gateway.size() >= text.size() || family != flow.source.endpoint.storage.ss_family || !std::ranges::any_of(mappings, [&](const auto& mapping) {
+            return FlowKey::same(mapping.target, flow.destination);
+          })) {
+        throw std::invalid_argument{"Invalid original route bypass"};
+      }
+
+      std::ranges::copy(gateway, text.viewMut().begin());
+      if (::inet_pton(family, text.dataMut(), address.dataMut()) != 1) {
+        throw std::invalid_argument{"Bypass gateway must be numeric"};
+      }
+    }
+
+    void validateScope(std::span<const Mapping> mappings, const PfScope& scope) {
+      if (scope.uid == 0 || mappings.empty() || mappings.size() > Target::maximum_targets || !validLabel(scope.label) || !validDiscoveryInterface(scope.discovery_interface) || scope.flows.size() + scope.incoming_flows.size() + scope.bypasses.size() > maximum_scope_entries || !validDirections(scope)) {
+        throw std::invalid_argument{"Invalid transparent redirect scope"};
+      }
+
+      if ((scope.log_interface && *scope.log_interface >= maximum_log_interfaces) || (allowsIncoming(scope.direction) && !std::ranges::any_of(mappings, [](const auto& mapping) {
+            return mapping.incoming;
+          }))) {
+        throw std::invalid_argument{"Invalid incoming discovery scope"};
+      }
+
+      validateListeners(mappings);
+      validateIncomingFlows(mappings, scope.incoming_flows);
+      for (const auto& bypass : scope.bypasses) {
+        validateBypass(bypass, scope.discovery_interface, mappings);
+      }
+    }
+
+    // The mapping that redirects a discovered flow's destination.
+    tbc::ref_a<Mapping> selectedMapping(tbc::val_a<std::span<const Mapping>> mappings, const FlowKey& flow) {
+      const auto selected = std::ranges::find_if(mappings, [&](const auto& mapping) {
+        return FlowKey::same(mapping.target, flow.destination);
+      });
+      if (selected == mappings.end() || flow.source.endpoint.storage.ss_family != flow.destination.endpoint.storage.ss_family) {
+        throw std::invalid_argument{"Discovered flow is outside the redirect scope"};
+      }
+
+      return *selected;
+    }
+
+    // A rule never outgrows its line: every field it formats is bounded.
+    constexpr std::size_t rule_bytes = 512;
+
+    // Where the rules go, a line at a time.
+    struct Rules {
+      ds::Function<void(std::string_view)> append;
+      ds::Array<char, rule_bytes> line{};
+    };
+
+    template <typename... Arguments>
+    void emit(Rules& rules, std::format_string<Arguments...> format, Arguments&&... arguments) {
+      const auto written = std::format_to_n(rules.line.dataMut(), static_cast<std::ptrdiff_t>(rules.line.size()), format, std::forward<Arguments>(arguments)...);
+      if (std::cmp_greater(written.size, rules.line.size())) {
+        throw std::length_error{"PF rule exceeds its bound"};
+      }
+
+      rules.append(std::string_view{rules.line.data(), static_cast<std::size_t>(written.size)});
+    }
+
+    // Translates each discovered flow to its listener on loopback.
+    void writeRedirects(Rules& rules, std::span<const Mapping> mappings, std::span<const FlowKey> flows) {
+      for (const auto& flow : flows) {
+        const auto& selected = selectedMapping(mappings, flow);
+
+        emit(rules, "rdr on lo0 {} proto tcp from {} port {} to {} port {} -> {} port {}\n", familyName(flow.destination), flow.source.host.view(), flow.source.port, flow.destination.host.view(), flow.destination.port, selected.listenerAddress(), selected.listener_port);
+      }
+    }
+
+    // Sends a flow the process selection leaves alone out its original route.
+    void writeBypasses(Rules& rules, std::span<const Bypass> bypasses, uid_t uid) {
+      for (const auto& bypass : bypasses) {
+        const auto& flow = bypass.key;
+
+        emit(rules, "pass out quick route-to ({} {}) {} proto tcp from {} port {} to {} port {} user {} flags S/SA no state\n", bypass.route.interface.view(), bypass.route.gateway.view(), familyName(flow.destination), flow.source.host.view(), flow.source.port, flow.destination.host.view(), flow.destination.port, uid);
+      }
+    }
+
+    // Lets each translated flow reach its listener, labeled for the session.
+    void writeListenerPasses(Rules& rules, std::span<const Mapping> mappings, std::span<const FlowKey> flows, std::string_view label) {
+      for (const auto& flow : flows) {
+        const auto& selected = selectedMapping(mappings, flow);
+
+        emit(rules, "pass in quick on lo0 {} proto tcp from {} port {} to {} port {} flags S/SA keep state label \"{}\"\n", familyName(flow.destination), flow.source.host.view(), flow.source.port, selected.listenerAddress(), selected.listener_port, label);
+      }
+    }
+
+    // Routes each discovered flow through loopback, where the redirect translates it.
+    void writeLoopbackRoutes(Rules& rules, std::span<const FlowKey> flows, std::string_view rule, uid_t uid) {
+      for (const auto& flow : flows) {
+        emit(rules, "{} route-to (lo0 {}) {} proto tcp from {} port {} to {} port {} user {} flags any no state\n", rule, loopbackHost(flow.destination), familyName(flow.destination), flow.source.host.view(), flow.source.port, flow.destination.host.view(), flow.destination.port, uid);
+      }
+    }
+
+    // Routes each destination's new connections through the discovery tunnel.
+    void writeDiscovery(Rules& rules, std::span<const Mapping> mappings, const PfScope& scope) {
+      const auto interface = scope.discovery_interface;
+
+      for (const auto& mapping : mappings) {
+        const auto host = mapping.target.host.view();
+        const bool logged = (host == "::1" || scope.log_all) && scope.log_interface;
+        if (logged && *scope.log_interface >= maximum_log_interfaces) {
+          throw std::invalid_argument{"Invalid discovery log interface"};
+        }
+
+        if (allowsOutgoing(scope.direction)) {
+          emit(rules, "pass out");
+          if (logged) {
+            emit(rules, " log (user, to pflog{})", *scope.log_interface);
+          }
+
+          emit(rules, " quick on ! {} route-to {} {} proto tcp from any to {} port {} user {} flags S/SA no state\n", interface, interface, familyName(mapping.target), host, mapping.target.port, scope.uid);
+        }
+
+        if (allowsIncoming(scope.direction) && mapping.incoming && scope.log_interface) {
+          emit(rules, "pass in log (user, to pflog{}) quick on ! lo0 route-to {} {} proto tcp from any to {} port {} user {} flags S/SA no state\n", *scope.log_interface, interface, familyName(mapping.target), host, mapping.target.port, scope.uid);
+        }
+      }
+    }
+
+  }
+
+  void writePfRules(std::span<const Mapping> mappings, const PfScope& scope, ds::Function<void(std::string_view)> append) {
+    validateScope(mappings, scope);
+    Rules rules{.append = std::move(append)};
+
+    writeRedirects(rules, mappings, scope.flows);
+    writeRedirects(rules, mappings, scope.incoming_flows);
+    writeBypasses(rules, scope.bypasses, scope.uid);
+    writeListenerPasses(rules, mappings, scope.flows, scope.label);
+    writeListenerPasses(rules, mappings, scope.incoming_flows, scope.label);
+    writeLoopbackRoutes(rules, scope.flows, "pass out quick", scope.uid);
+    writeLoopbackRoutes(rules, scope.incoming_flows, "pass in quick on ! lo0", scope.uid);
+    writeDiscovery(rules, mappings, scope);
+  }
+
   NatLookup::NatLookup()
-      : device_(::open("/dev/pf", O_RDWR | O_CLOEXEC | O_NOFOLLOW)) {
+      : device_(::open("/dev/pf", combineFlags(O_RDWR, O_CLOEXEC, O_NOFOLLOW))) { // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
     if (!device_) {
       throw SystemError{"Open redirect NAT lookup"};
     }
   }
 
   bool NatLookup::matches(int socket, const FlowKey& flow) const {
+    const auto peer = socketAddress(socket, SocketEnd::peer);
+    if (!peer) {
+      return false;
+    }
+
+    const auto local = socketAddress(socket, SocketEnd::local);
+    if (!local || peer->ss_family != local->ss_family || peer->ss_family != flow.source.endpoint.storage.ss_family) {
+      return false;
+    }
+
     Request request;
-    sockaddr_storage peer{};
-    sockaddr_storage local{};
-    socklen_t size = sizeof(peer);
-    if (::getpeername(socket, reinterpret_cast<sockaddr*>(&peer), &size) != 0) {
+
+    request.family = peer->ss_family;
+    address(*peer, request.source.viewMut(), request.source_port);
+    address(*local, request.destination.viewMut(), request.destination_port);
+    if (::ioctl(device_.get(), lookup, &request) != 0) { // NOLINT(cppcoreguidelines-pro-type-vararg): ioctl's C signature is variadic
       return false;
     }
 
-    size = sizeof(local);
-    if (::getsockname(socket, reinterpret_cast<sockaddr*>(&local), &size) != 0 || peer.ss_family != local.ss_family || peer.ss_family != flow.source.endpoint.storage.ss_family) {
-      return false;
-    }
-
-    request.family = peer.ss_family;
-    address(peer, request.source.viewMut(), request.source_port);
-    address(local, request.destination.viewMut(), request.destination_port);
-    if (::ioctl(device_.get(), lookup, &request) != 0) {
-      return false;
-    }
-
-    ds::Array<Byte, 16> expected{};
+    ds::Array<Byte, address_bytes> expected{};
     std::uint32_t port = 0;
 
     address(flow.destination.endpoint.storage, expected.viewMut(), port);
@@ -138,32 +401,31 @@ namespace telar::runtime::redirect {
   }
 
   bool NatLookup::peerMatches(int socket, const FlowKey& flow) {
-    sockaddr_storage peer{};
-    socklen_t size = sizeof(peer);
-    if (::getpeername(socket, reinterpret_cast<sockaddr*>(&peer), &size) != 0 || peer.ss_family != flow.source.endpoint.storage.ss_family) {
+    const auto peer = socketAddress(socket, SocketEnd::peer);
+    if (!peer || peer->ss_family != flow.source.endpoint.storage.ss_family) {
       return false;
     }
 
-    ds::Array<Byte, 16> actual{};
-    ds::Array<Byte, 16> expected{};
+    ds::Array<Byte, address_bytes> actual{};
+    ds::Array<Byte, address_bytes> expected{};
     std::uint32_t actual_port = 0;
     std::uint32_t expected_port = 0;
 
-    address(peer, actual.viewMut(), actual_port);
+    address(*peer, actual.viewMut(), actual_port);
     address(flow.source.endpoint.storage, expected.viewMut(), expected_port);
     return actual == expected && actual_port == expected_port;
   }
 
-  void NatLookup::address(const sockaddr_storage& socket, std::span<Byte, 16> bytes, std::uint32_t& port) {
+  void NatLookup::address(const sockaddr_storage& socket, std::span<Byte, address_bytes> bytes, std::uint32_t& port) {
     if (socket.ss_family == AF_INET) {
-      const auto& value = reinterpret_cast<const sockaddr_in&>(socket);
+      const auto value = addressAs<sockaddr_in>(socket);
 
-      std::memcpy(bytes.data(), &value.sin_addr, sizeof(value.sin_addr));
+      storeValue(std::as_writable_bytes(bytes), value.sin_addr);
       port = value.sin_port;
     } else {
-      const auto& value = reinterpret_cast<const sockaddr_in6&>(socket);
+      const auto value = addressAs<sockaddr_in6>(socket);
 
-      std::memcpy(bytes.data(), &value.sin6_addr, sizeof(value.sin6_addr));
+      storeValue(std::as_writable_bytes(bytes), value.sin6_addr);
       port = value.sin6_port;
     }
   }
@@ -180,50 +442,50 @@ namespace telar::runtime::redirect {
 
     setCloseOnExec(socket.get());
     setNonblocking(socket.get());
+    // The request: the header, the destination and the interface to scope the route to.
+    const auto destination_bytes = aligned(target.endpoint.length);
     rt_msghdr message{};
+    sockaddr_dl interface{};
+    auto destination = target.endpoint;
 
-    message.rtm_msglen = sizeof(message) + aligned(target.endpoint.length);
+    message.rtm_msglen = static_cast<unsigned short>(sizeof(message) + destination_bytes + aligned(sizeof(interface)));
     message.rtm_version = RTM_VERSION;
     message.rtm_type = RTM_GET;
     message.rtm_index = static_cast<unsigned short>(scope);
-    message.rtm_flags = RTF_UP | RTF_HOST | ((scope != 0u) ? RTF_IFSCOPE : 0);
-    message.rtm_addrs = RTA_DST | RTA_IFP;
+    message.rtm_flags = combineFlags(RTF_UP, RTF_HOST, scope != 0 ? RTF_IFSCOPE : 0);
+    message.rtm_addrs = combineFlags(RTA_DST, RTA_IFP);
     message.rtm_pid = ::getpid();
     message.rtm_seq = 1;
-    ds::Array<Byte, maximum_message_bytes> bytes{};
-
-    std::memcpy(bytes.dataMut(), &message, sizeof(message));
-    auto destination = target.endpoint;
-
     destination.setPort(0);
-    std::memcpy(bytes.dataMut() + sizeof(message), destination.address(), destination.length);
-    sockaddr_dl interface{};
-
     interface.sdl_len = sizeof(interface);
     interface.sdl_family = AF_LINK;
     interface.sdl_index = static_cast<unsigned short>(scope);
-    std::memcpy(bytes.dataMut() + message.rtm_msglen, &interface, sizeof(interface));
-    message.rtm_msglen += aligned(sizeof(interface));
-    std::memcpy(bytes.dataMut(), &message, sizeof(message));
-    ssize_t sent;
+    ds::Array<Byte, maximum_message_bytes> bytes{};
+    const auto request = std::as_writable_bytes(bytes.viewMut());
 
-    do {
+    storeValue(request, message);
+    std::ranges::copy(std::as_bytes(std::span{&destination.storage, 1}).first(destination.length), request.subspan(sizeof(message)).begin());
+    storeValue(request.subspan(sizeof(message) + destination_bytes), interface);
+    auto sent = ::write(socket.get(), bytes.data(), message.rtm_msglen);
+
+    while (sent < 0 && sys::lastError() == EINTR) {
       sent = ::write(socket.get(), bytes.data(), message.rtm_msglen);
-    } while (sent < 0 && sys::lastError() == EINTR);
+    }
 
-    if (sent != message.rtm_msglen) {
+    if (std::cmp_not_equal(sent, message.rtm_msglen)) {
       throw SystemError{"Request original route"};
     }
 
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds{500};
 
     while (std::chrono::steady_clock::now() < deadline) {
+      constexpr int poll_ms = 25;
       pollfd ready{.fd = socket.get(), .events = POLLIN, .revents = 0};
-      if (::poll(&ready, 1, 25) < 0 && sys::lastError() != EINTR) {
+      if (::poll(&ready, 1, poll_ms) < 0 && sys::lastError() != EINTR) {
         throw SystemError{"Wait for original route"};
       }
 
-      if ((ready.revents & POLLIN) == 0) {
+      if (!anyFlag(ready.revents, POLLIN)) {
         continue;
       }
 
@@ -232,18 +494,16 @@ namespace telar::runtime::redirect {
         continue;
       }
 
-      if (received < static_cast<ssize_t>(sizeof(message))) {
+      if (std::cmp_less(received, sizeof(message))) {
         throw SystemError{"Read original route", EIO};
       }
 
-      rt_msghdr reply;
-
-      std::memcpy(&reply, bytes.data(), sizeof(reply));
+      const auto reply = loadValue<rt_msghdr>(std::as_bytes(bytes.view()));
       if (reply.rtm_pid != message.rtm_pid || reply.rtm_seq != message.rtm_seq || reply.rtm_type != RTM_GET) {
         continue;
       }
 
-      auto result = decode(std::span<const Byte>{bytes}.first(received), target);
+      auto result = decode(std::span<const Byte>{bytes}.first(static_cast<std::size_t>(received)), target);
       if (scope != 0 && result.index != scope) {
         throw SystemError{"Original route changed interface", ENETUNREACH};
       }
@@ -259,9 +519,7 @@ namespace telar::runtime::redirect {
       throw EncodingError{"Truncated route reply"};
     }
 
-    rt_msghdr message;
-
-    std::memcpy(&message, bytes.data(), sizeof(message));
+    const auto message = loadValue<rt_msghdr>(std::as_bytes(bytes));
     if (message.rtm_msglen != bytes.size() || message.rtm_version != RTM_VERSION || message.rtm_type != RTM_GET) {
       throw EncodingError{"Invalid route reply"};
     }
@@ -270,7 +528,7 @@ namespace telar::runtime::redirect {
       throw SystemError{"Resolve original route", message.rtm_errno};
     }
 
-    if ((message.rtm_flags & (RTF_REJECT | RTF_BLACKHOLE)) != 0) {
+    if (anyFlag(message.rtm_flags, RTF_REJECT, RTF_BLACKHOLE)) {
       throw SystemError{"Original route does not forward traffic", ENETUNREACH};
     }
 
@@ -280,7 +538,7 @@ namespace telar::runtime::redirect {
     std::size_t offset = sizeof(message);
 
     for (unsigned index = 0; index < RTAX_MAX; ++index) {
-      if ((message.rtm_addrs & (1U << index)) == 0u) {
+      if ((static_cast<unsigned>(message.rtm_addrs) & (1U << index)) == 0) {
         continue;
       }
 
@@ -288,32 +546,13 @@ namespace telar::runtime::redirect {
         throw EncodingError{"Truncated route address"};
       }
 
-      const auto length = bytes[offset];
-      const auto family = bytes[offset + 1];
-      const auto size = aligned(length);
+      const auto size = aligned(bytes[offset]);
       if (size > bytes.size() - offset) {
         throw EncodingError{"Invalid route address size"};
       }
 
-      if (index == RTAX_GATEWAY && ((message.rtm_flags & RTF_GATEWAY) != 0)) {
-        if (family == AF_INET && length >= sizeof(sockaddr_in)) {
-          sockaddr_in address;
-
-          std::memcpy(&address, bytes.data() + offset, sizeof(address));
-          addressText(path.gateway, AF_INET, &address.sin_addr);
-        } else if (family == AF_INET6 && length >= sizeof(sockaddr_in6)) {
-          sockaddr_in6 address;
-
-          std::memcpy(&address, bytes.data() + offset, sizeof(address));
-          if (IN6_IS_ADDR_LINKLOCAL(&address.sin6_addr)) {
-            // Darwin embeds the interface scope in the second 16-bit word.
-            std::fill_n(sys::addressBytes(address.sin6_addr) + sizeof(std::uint16_t), sizeof(std::uint16_t), Byte{0});
-          }
-
-          addressText(path.gateway, AF_INET6, &address.sin6_addr);
-        } else {
-          throw EncodingError{"Unsupported original route gateway"};
-        }
+      if (index == RTAX_GATEWAY && anyFlag(message.rtm_flags, RTF_GATEWAY)) {
+        gatewayText(path.gateway, bytes.subspan(offset, size));
       }
 
       offset += size;
@@ -336,9 +575,29 @@ namespace telar::runtime::redirect {
     return size == 0 ? address_alignment : (size + address_alignment - 1) & ~(address_alignment - 1);
   }
 
-  void RoutePath::addressText(FixedText<INET6_ADDRSTRLEN>& target, int family, const void* address) {
+  void RoutePath::gatewayText(FixedText<INET6_ADDRSTRLEN>& target, std::span<const Byte> address) {
+    const auto length = address[0];
+    const auto family = address[1];
     ds::Array<char, INET6_ADDRSTRLEN> text{};
-    if (::inet_ntop(family, address, text.dataMut(), text.size()) == nullptr) {
+    const char* formatted = nullptr;
+
+    if (family == AF_INET && length >= sizeof(sockaddr_in)) {
+      const auto gateway = loadValue<sockaddr_in>(std::as_bytes(address));
+
+      formatted = ::inet_ntop(AF_INET, &gateway.sin_addr, text.dataMut(), text.size());
+    } else if (family == AF_INET6 && length >= sizeof(sockaddr_in6)) {
+      auto gateway = loadValue<sockaddr_in6>(std::as_bytes(address));
+      if (IN6_IS_ADDR_LINKLOCAL(&gateway.sin6_addr)) {
+        // Darwin embeds the interface scope in the second 16-bit word.
+        std::ranges::fill(std::span{sys::addressBytes(gateway.sin6_addr)}.subspan(sizeof(std::uint16_t), sizeof(std::uint16_t)), Byte{0});
+      }
+
+      formatted = ::inet_ntop(AF_INET6, &gateway.sin6_addr, text.dataMut(), text.size());
+    } else {
+      throw EncodingError{"Unsupported original route gateway"};
+    }
+
+    if (formatted == nullptr) {
       throw SystemError{"Format original route gateway"};
     }
 
@@ -346,166 +605,29 @@ namespace telar::runtime::redirect {
   }
 
   std::string_view Mapping::listenerAddress() const noexcept {
-    return incoming ? target.host.view() : target.endpoint.storage.ss_family == AF_INET6 ? "::1"
-                                                                                         : "127.0.0.1";
+    if (incoming) {
+      return target.host.view();
+    }
+
+    return loopbackHost(target);
   }
 
   template <Allocator Memory>
   PfIdentity<Memory>::PfIdentity(Memory& memory, std::string_view endpoint)
       : anchor(memory),
         label(memory) {
-    const auto hash = plugins::stableId(endpoint);
-    ds::Array<char, 32> hex{};
-
-    std::snprintf(hex.dataMut(), hex.size(), "tlr_%016llx", static_cast<unsigned long long>(hash));
-    label.assign(hex.data());
+    ds::formatTo(label, "tlr_{:016x}", plugins::stableId(endpoint));
     anchor.assign("com.apple/telar-redirect-");
     anchor.append(label);
   }
 
   template <Allocator Memory>
   tbc::val_a<ds::String<Memory>> pfRules(tbc::mut_a<Memory> memory, std::span<const Mapping> mappings, const PfScope& scope) {
-    const auto uid = scope.uid;
-    const auto label = scope.label;
-    const auto interface = scope.discovery_interface;
-    if (uid == 0 || mappings.empty() || mappings.size() > Target::maximum_targets || label.empty() || label.size() > 48 || label.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_") != std::string_view::npos || !interface.starts_with("utun") || interface.size() <= 4 || interface.size() >= IFNAMSIZ || interface.substr(4).find_first_not_of("0123456789") != std::string_view::npos || scope.flows.size() + scope.incoming_flows.size() + scope.bypasses.size() > 256 || (!allowsIncoming(scope.direction) && !allowsOutgoing(scope.direction)) || (!allowsOutgoing(scope.direction) && (!scope.flows.empty() || !scope.bypasses.empty())) || (!allowsIncoming(scope.direction) && !scope.incoming_flows.empty())) {
-      throw std::invalid_argument{"Invalid transparent redirect scope"};
-    }
-
     ds::String<Memory> rules{memory};
 
-    if ((scope.log_interface && *scope.log_interface >= 16) || (allowsIncoming(scope.direction) && !std::ranges::any_of(mappings, [](const auto& mapping) {
-          return mapping.incoming;
-        }))) {
-      throw std::invalid_argument{"Invalid incoming discovery scope"};
-    }
-
-    ds::Array<char, 512> line{};
-
-    for (const auto& mapping : mappings) {
-      if (mapping.listener_port == 0 || (mapping.target.host.view() == "127.0.0.1" && mapping.listener_port == mapping.target.port) || (mapping.target.host.view() == "::1" && mapping.listener_port == mapping.target.port)) {
-        throw std::invalid_argument{"Redirect listener overlaps its destination"};
-      }
-    }
-
-    // Discovery has already selected the account. Exact tuples survive loopback
-    // metadata changes and cannot match the helper's distinct upstream sockets.
-    for (const auto& flow : scope.incoming_flows) {
-      if (!std::ranges::any_of(mappings, [&](const auto& mapping) {
-            return mapping.incoming && FlowKey::same(mapping.target, flow.destination);
-          })) {
-        throw std::invalid_argument{"Incoming flow is outside the local destination scope"};
-      }
-    }
-
-    for (const auto& bypass : scope.bypasses) {
-      const auto& flow = bypass.key;
-      const auto name = bypass.route.interface.view();
-      const auto gateway = bypass.route.gateway.view();
-      const auto family = flow.destination.endpoint.storage.ss_family;
-      ds::Array<char, INET6_ADDRSTRLEN> text{};
-      ds::Array<Byte, sizeof(in6_addr)> address{};
-
-      if (name.empty() || name.size() >= IFNAMSIZ || name == interface || name.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-") != std::string_view::npos || gateway.empty() || gateway.size() >= text.size() || family != flow.source.endpoint.storage.ss_family || !std::ranges::any_of(mappings, [&](const auto& mapping) {
-            return FlowKey::same(mapping.target, flow.destination);
-          })) {
-        throw std::invalid_argument{"Invalid original route bypass"};
-      }
-
-      std::ranges::copy(gateway, text.viewMut().begin());
-      if (::inet_pton(family, text.dataMut(), address.dataMut()) != 1) {
-        throw std::invalid_argument{"Bypass gateway must be numeric"};
-      }
-    }
-
-    for (const auto group : {scope.flows, scope.incoming_flows}) {
-      for (const auto& flow : group) {
-        const auto selected = std::ranges::find_if(mappings, [&](const auto& mapping) {
-          return FlowKey::same(mapping.target, flow.destination);
-        });
-        if (selected == mappings.end() || flow.source.endpoint.storage.ss_family != flow.destination.endpoint.storage.ss_family) {
-          throw std::invalid_argument{"Discovered flow is outside the redirect scope"};
-        }
-
-        const bool ipv6 = flow.destination.endpoint.storage.ss_family == AF_INET6;
-        const auto source = flow.source.host.view();
-        const auto destination = flow.destination.host.view();
-        const auto listener = selected->listenerAddress();
-        const auto count = std::snprintf(line.dataMut(), line.size(), "rdr on lo0 %s proto tcp from %.*s port %u to %.*s port %u -> %.*s port %u\n", ipv6 ? "inet6" : "inet", static_cast<int>(source.size()), source.data(), flow.source.port, static_cast<int>(destination.size()), destination.data(), flow.destination.port, static_cast<int>(listener.size()), listener.data(), selected->listener_port);
-
-        rules.append(std::string_view{line.data(), static_cast<std::size_t>(count)});
-      }
-    }
-
-    for (const auto& bypass : scope.bypasses) {
-      const auto& flow = bypass.key;
-      const auto source = flow.source.host.view();
-      const auto destination = flow.destination.host.view();
-      const auto name = bypass.route.interface.view();
-      const auto gateway = bypass.route.gateway.view();
-      const auto count = std::snprintf(line.dataMut(), line.size(), "pass out quick route-to (%.*s %.*s) %s proto tcp from %.*s port %u to %.*s port %u user %u flags S/SA no state\n", static_cast<int>(name.size()), name.data(), static_cast<int>(gateway.size()), gateway.data(), flow.destination.endpoint.storage.ss_family == AF_INET6 ? "inet6" : "inet", static_cast<int>(source.size()), source.data(), flow.source.port, static_cast<int>(destination.size()), destination.data(), flow.destination.port, uid);
-
-      rules.append(std::string_view{line.data(), static_cast<std::size_t>(count)});
-    }
-
-    for (const auto group : {scope.flows, scope.incoming_flows}) {
-      for (const auto& flow : group) {
-        const auto selected = std::ranges::find_if(mappings, [&](const auto& mapping) {
-          return FlowKey::same(mapping.target, flow.destination);
-        });
-
-        const bool ipv6 = flow.destination.endpoint.storage.ss_family == AF_INET6;
-        const auto source = flow.source.host.view();
-        const auto listener = selected->listenerAddress();
-        const auto count = std::snprintf(line.dataMut(), line.size(), "pass in quick on lo0 %s proto tcp from %.*s port %u to %.*s port %u flags S/SA keep state label \"%.*s\"\n", ipv6 ? "inet6" : "inet", static_cast<int>(source.size()), source.data(), flow.source.port, static_cast<int>(listener.size()), listener.data(), selected->listener_port, static_cast<int>(label.size()), label.data());
-
-        rules.append(std::string_view{line.data(), static_cast<std::size_t>(count)});
-      }
-    }
-
-    for (const auto& flow : scope.flows) {
-      const bool ipv6 = flow.destination.endpoint.storage.ss_family == AF_INET6;
-      const auto source = flow.source.host.view();
-      const auto destination = flow.destination.host.view();
-      const auto count = std::snprintf(line.dataMut(), line.size(), "pass out quick route-to (lo0 %s) %s proto tcp from %.*s port %u to %.*s port %u user %u flags any no state\n", ipv6 ? "::1" : "127.0.0.1", ipv6 ? "inet6" : "inet", static_cast<int>(source.size()), source.data(), flow.source.port, static_cast<int>(destination.size()), destination.data(), flow.destination.port, uid);
-
-      rules.append(std::string_view{line.data(), static_cast<std::size_t>(count)});
-    }
-
-    for (const auto& flow : scope.incoming_flows) {
-      const bool ipv6 = flow.destination.endpoint.storage.ss_family == AF_INET6;
-      const auto source = flow.source.host.view();
-      const auto destination = flow.destination.host.view();
-      const auto count = std::snprintf(line.dataMut(), line.size(), "pass in quick on ! lo0 route-to (lo0 %s) %s proto tcp from %.*s port %u to %.*s port %u user %u flags any no state\n", ipv6 ? "::1" : "127.0.0.1", ipv6 ? "inet6" : "inet", static_cast<int>(source.size()), source.data(), flow.source.port, static_cast<int>(destination.size()), destination.data(), flow.destination.port, uid);
-
-      rules.append(std::string_view{line.data(), static_cast<std::size_t>(count)});
-    }
-
-    for (const auto& mapping : mappings) {
-      const bool ipv6 = mapping.target.endpoint.storage.ss_family == AF_INET6;
-      const auto host = mapping.target.host.view();
-      ds::Array<char, 48> logging{};
-
-      if ((host == "::1" || scope.log_all) && scope.log_interface) {
-        if (*scope.log_interface >= 16) {
-          throw std::invalid_argument{"Invalid discovery log interface"};
-        }
-
-        std::snprintf(logging.dataMut(), logging.size(), " log (user, to pflog%u)", *scope.log_interface);
-      }
-
-      if (allowsOutgoing(scope.direction)) {
-        const auto count = std::snprintf(line.dataMut(), line.size(), "pass out%s quick on ! %.*s route-to %.*s %s proto tcp from any to %.*s port %u user %u flags S/SA no state\n", logging.dataMut(), static_cast<int>(interface.size()), interface.data(), static_cast<int>(interface.size()), interface.data(), ipv6 ? "inet6" : "inet", static_cast<int>(host.size()), host.data(), mapping.target.port, uid);
-
-        rules.append(std::string_view{line.data(), static_cast<std::size_t>(count)});
-      }
-
-      if (allowsIncoming(scope.direction) && mapping.incoming && scope.log_interface) {
-        const auto count = std::snprintf(line.dataMut(), line.size(), "pass in log (user, to pflog%u) quick on ! lo0 route-to %.*s %s proto tcp from any to %.*s port %u user %u flags S/SA no state\n", *scope.log_interface, static_cast<int>(interface.size()), interface.data(), ipv6 ? "inet6" : "inet", static_cast<int>(host.size()), host.data(), mapping.target.port, uid);
-
-        rules.append(std::string_view{line.data(), static_cast<std::size_t>(count)});
-      }
-    }
+    writePfRules(mappings, scope, [&rules](std::string_view rule) {
+      rules.append(rule);
+    });
 
     return rules;
   }

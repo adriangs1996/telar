@@ -25,7 +25,10 @@ namespace telar::runtime::control {
 
       // Bits per byte in a scanner's match mask.
       template <Isa Set>
-      constexpr unsigned match_bits = Set == Isa::vector ? vector_match_bits : 1;
+      constexpr unsigned match_bits = 1;
+
+      template <>
+      constexpr unsigned match_bits<Isa::vector> = vector_match_bits;
 
       // Keys own complete validated blocks: one numeric SGR followed only by bytes
       // without ESC/ENQ. UINT64_MAX cannot equal a block beginning with ESC.
@@ -58,19 +61,19 @@ namespace telar::runtime::control {
 #if (defined(__aarch64__) && defined(__AARCH64EL__)) || defined(__SSE2__)
       if constexpr (Set == Isa::vector) {
         while (input_.size() - offset >= vector_bytes) {
-          std::uint64_t candidates;
+          std::uint64_t candidates = 0;
 
           if (offset >= window_begin_ && offset < window_end_) {
             candidates = matches_ & (std::numeric_limits<std::uint64_t>::max() << ((offset - window_begin_) * match_bits<Set>));
           } else {
 #if defined(__aarch64__) && defined(__AARCH64EL__)
-            const auto bytes = vld1q_u8(input_.data() + offset);
+            const auto bytes = vld1q_u8(input_.subspan(offset).data());
             const auto matches = vorrq_u8(vceqq_u8(bytes, vdupq_n_u8(enquiry)), vceqq_u8(bytes, vdupq_n_u8(escape)));
             const auto packed = vshrn_n_u16(vreinterpretq_u16_u8(matches), match_bits<Set>);
 
             matches_ = vget_lane_u64(vreinterpret_u64_u8(packed), 0);
 #else
-            const auto bytes = _mm_loadu_si128(reinterpret_cast<const __m128i*>(input_.data() + offset));
+            const auto bytes = _mm_loadu_si128(reinterpret_cast<const __m128i*>(input_.subspan(offset).data()));
             const auto matches = _mm_or_si128(_mm_cmpeq_epi8(bytes, _mm_set1_epi8(enquiry)), _mm_cmpeq_epi8(bytes, _mm_set1_epi8(escape)));
             matches_ = static_cast<unsigned>(_mm_movemask_epi8(matches));
 #endif
@@ -80,7 +83,7 @@ namespace telar::runtime::control {
           }
 
           if (candidates != 0) {
-            return window_begin_ + (std::countr_zero(candidates) / match_bits<Set>);
+            return window_begin_ + (static_cast<unsigned>(std::countr_zero(candidates)) / match_bits<Set>);
           }
 
           offset = window_end_;
@@ -104,6 +107,14 @@ namespace telar::runtime::control {
 
     using styled_detail::Isa;
 
+    // An unaligned load of eight bytes in the target's order, which compiles to one instruction.
+    [[gnu::always_inline]] inline std::uint64_t loadWord(std::span<const std::uint8_t, sizeof(std::uint64_t)> bytes) noexcept {
+      ds::Array<std::uint8_t, sizeof(std::uint64_t)> word{};
+
+      std::ranges::copy(bytes, word.dataMut());
+      return std::bit_cast<std::uint64_t>(word);
+    }
+
     // The scans are inlined into each caller, writeOrdinaryRun and the exported entry points for
     // the tests, whichever of them the link keeps.
     template <Isa Set>
@@ -118,7 +129,7 @@ namespace telar::runtime::control {
         std::uint64_t word = 0;
         const bool has_block = input.size() - length >= ShortSgrBlockCache::block_bytes;
         if (has_block) {
-          std::memcpy(&word, input.data() + length, sizeof(word));
+          word = loadWord(input.subspan(length).template first<ShortSgrBlockCache::block_bytes>());
           if (cache.contains(word)) {
             length = scanner.next(length + ShortSgrBlockCache::block_bytes);
             continue;
@@ -151,6 +162,9 @@ namespace telar::runtime::control {
       return length;
     }
 
+    // The first byte that is not a C0 control.
+    constexpr std::uint8_t first_printable = 0x20;
+
     constexpr bool asciiStop(std::uint8_t byte) noexcept {
       return byte >= ascii_detail::non_ascii_first || byte == styled_detail::escape || byte == styled_detail::enquiry;
     }
@@ -169,14 +183,14 @@ namespace telar::runtime::control {
       return vget_lane_u64(vreinterpret_u64_u8(vshrn_n_u16(vreinterpretq_u16_u8(stops), styled_detail::vector_match_bits)), 0);
     }
 
-    void widenBlock(ByteVector bytes, std::uint32_t* output) noexcept {
+    void widenBlock(ByteVector bytes, std::span<std::uint32_t, styled_detail::vector_bytes> output) noexcept {
       const auto low = vmovl_u8(vget_low_u8(bytes));
       const auto high = vmovl_high_u8(bytes);
 
-      vst1q_u32(output, vmovl_u16(vget_low_u16(low)));
-      vst1q_u32(output + 4, vmovl_high_u16(low));
-      vst1q_u32(output + 8, vmovl_u16(vget_low_u16(high)));
-      vst1q_u32(output + 12, vmovl_high_u16(high));
+      vst1q_u32(output.data(), vmovl_u16(vget_low_u16(low)));
+      vst1q_u32(output.subspan<4>().data(), vmovl_high_u16(low));
+      vst1q_u32(output.subspan<8>().data(), vmovl_u16(vget_low_u16(high)));
+      vst1q_u32(output.subspan<12>().data(), vmovl_high_u16(high));
     }
 #elifdef __SSE2__
     using ByteVector = __m128i;
@@ -190,14 +204,14 @@ namespace telar::runtime::control {
       return static_cast<unsigned>(_mm_movemask_epi8(_mm_or_si128(controls, bytes)));
     }
 
-    void widenBlock(ByteVector bytes, std::uint32_t* output) noexcept {
+    void widenBlock(ByteVector bytes, std::span<std::uint32_t, styled_detail::vector_bytes> output) noexcept {
       const auto zero = _mm_setzero_si128();
       const auto low = _mm_unpacklo_epi8(bytes, zero);
       const auto high = _mm_unpackhi_epi8(bytes, zero);
-      _mm_storeu_si128(reinterpret_cast<__m128i*>(output), _mm_unpacklo_epi16(low, zero));
-      _mm_storeu_si128(reinterpret_cast<__m128i*>(output + 4), _mm_unpackhi_epi16(low, zero));
-      _mm_storeu_si128(reinterpret_cast<__m128i*>(output + 8), _mm_unpacklo_epi16(high, zero));
-      _mm_storeu_si128(reinterpret_cast<__m128i*>(output + 12), _mm_unpackhi_epi16(high, zero));
+      _mm_storeu_si128(reinterpret_cast<__m128i*>(output.data()), _mm_unpacklo_epi16(low, zero));
+      _mm_storeu_si128(reinterpret_cast<__m128i*>(output.subspan<4>().data()), _mm_unpackhi_epi16(low, zero));
+      _mm_storeu_si128(reinterpret_cast<__m128i*>(output.subspan<8>().data()), _mm_unpacklo_epi16(high, zero));
+      _mm_storeu_si128(reinterpret_cast<__m128i*>(output.subspan<12>().data()), _mm_unpackhi_epi16(high, zero));
     }
 #endif
 
@@ -209,17 +223,11 @@ namespace telar::runtime::control {
 
 #if (defined(__aarch64__) && defined(__AARCH64EL__)) || defined(__SSE2__)
       if constexpr (Set == Isa::vector) {
-        return stopMask(load(input.data())) == 0 && stopMask(load(input.data() + styled_detail::vector_bytes)) == 0;
+        return stopMask(load(input.data())) == 0 && stopMask(load(input.subspan(styled_detail::vector_bytes).data())) == 0;
       }
 #endif
 
-      for (const auto byte : input.first(ascii_detail::gate_bytes)) {
-        if (asciiStop(byte)) {
-          return false;
-        }
-      }
-
-      return true;
+      return std::ranges::none_of(input.first(ascii_detail::gate_bytes), asciiStop);
     }
 
     template <Isa Set>
@@ -230,12 +238,12 @@ namespace telar::runtime::control {
 #if (defined(__aarch64__) && defined(__AARCH64EL__)) || defined(__SSE2__)
       if constexpr (Set == Isa::vector) {
         while (capacity - offset >= styled_detail::vector_bytes) {
-          const auto bytes = load(input.data() + offset);
+          const auto bytes = load(input.subspan(offset).data());
           const auto stops = stopMask(bytes);
 
-          widenBlock(bytes, output.data() + offset);
+          widenBlock(bytes, output.subspan(offset).first<styled_detail::vector_bytes>());
           if (stops != 0) {
-            return offset + (std::countr_zero(stops) / styled_detail::vector_match_bits);
+            return offset + (static_cast<unsigned>(std::countr_zero(stops)) / styled_detail::vector_match_bits);
           }
 
           offset += styled_detail::vector_bytes;
@@ -258,7 +266,7 @@ namespace telar::runtime::control {
     // Widens an eligible ASCII run in one batch and writes it. Out of line, so that only this path
     // reserves the codepoint scratch on the stack.
     [[gnu::noinline]] std::size_t writeAsciiRun(VtState& state, std::span<const std::uint8_t> input) {
-      ds::Array<std::uint32_t, ascii_detail::codepoint_capacity> codepoints;
+      ds::Array<std::uint32_t, ascii_detail::codepoint_capacity> codepoints; // NOLINT(cppcoreguidelines-pro-type-member-init): the widening writes each codepoint the run keeps before ghostty reads it, so zeroing 16 KiB per run is work the hottest path never needs
 
       TELAR_ASSERT(input.size() >= ascii_detail::gate_bytes);
 
@@ -266,7 +274,7 @@ namespace telar::runtime::control {
       // remaining input needs stop detection; the C bridge still validates all.
 #if (defined(__aarch64__) && defined(__AARCH64EL__)) || defined(__SSE2__)
       for (std::size_t offset = 0; offset < ascii_detail::gate_bytes; offset += styled_detail::vector_bytes) {
-        widenBlock(load(input.data() + offset), codepoints.dataMut() + offset);
+        widenBlock(load(input.subspan(offset).data()), codepoints.viewMut().subspan(offset).first<styled_detail::vector_bytes>());
       }
 #else
       std::copy_n(input.data(), ascii_detail::gate_bytes, codepoints.data());
@@ -321,7 +329,7 @@ namespace telar::runtime::control {
     if (!bytes.empty()) {
       const auto last = bytes.back();
 
-      possibly_pending_input_ = last >= 0x80 || last < 0x20;
+      possibly_pending_input_ = last >= ascii_detail::non_ascii_first || last < first_printable;
     }
 
     if (separate_media_ && (CheckGraphics || !graphics_cursor_.ground())) {
@@ -442,10 +450,10 @@ namespace telar::runtime::control {
   Margins VtState::margins() const {
     return margin_cache_.get(epoch_, [&] {
       Margins result{};
-      const GhosttyTerminalData keys[] = {GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_TOP, GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_BOTTOM, GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_LEFT, GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_RIGHT};
-      void* values[] = {&result.top, &result.bottom, &result.left, &result.right};
+      const ds::Array<GhosttyTerminalData, 4> keys{GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_TOP, GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_BOTTOM, GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_LEFT, GHOSTTY_TERMINAL_DATA_SCROLLING_REGION_RIGHT};
+      ds::Array<void*, keys.size()> values{&result.top, &result.bottom, &result.left, &result.right};
 
-      checkGhostty(ghostty_terminal_get_multi(terminal_, std::size(keys), keys, values, nullptr));
+      checkGhostty(ghostty_terminal_get_multi(terminal_, keys.size(), keys.data(), values.dataMut(), nullptr));
       return result;
     });
   }
@@ -494,8 +502,14 @@ namespace telar::runtime::control {
 
     const auto index = selector - foreground;
     if (!color_valid_[index]) {
-      const auto key = selector == foreground ? GHOSTTY_TERMINAL_DATA_COLOR_FOREGROUND : selector == background ? GHOSTTY_TERMINAL_DATA_COLOR_BACKGROUND
-                                                                                                                : GHOSTTY_TERMINAL_DATA_COLOR_CURSOR;
+      auto key = GHOSTTY_TERMINAL_DATA_COLOR_CURSOR;
+
+      if (selector == foreground) {
+        key = GHOSTTY_TERMINAL_DATA_COLOR_FOREGROUND;
+      } else if (selector == background) {
+        key = GHOSTTY_TERMINAL_DATA_COLOR_BACKGROUND;
+      }
+
       GhosttyColorRgb result{};
 
       colors_.atMut(index) = ghostty_terminal_get(terminal_, key, &result) == GHOSTTY_SUCCESS ? ds::Option{result} : ds::none;
@@ -519,7 +533,7 @@ namespace telar::runtime::control {
     GhosttyString result{};
 
     checkGhostty(ghostty_terminal_get(terminal_, GHOSTTY_TERMINAL_DATA_TITLE, &result));
-    return {reinterpret_cast<const char*>(result.ptr), result.len};
+    return {reinterpret_cast<const char*>(result.ptr), result.len}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): ghostty hands the title as a pointer to bytes and a length, which char may alias
   }
 
   void VtState::writeAscii(std::span<const std::uint32_t> codepoints) {
@@ -528,7 +542,7 @@ namespace telar::runtime::control {
     }
 
     invalidate();
-    possibly_pending_input_ = codepoints.back() < 0x20;
+    possibly_pending_input_ = codepoints.back() < first_printable;
     std::size_t consumed = 0;
 
     checkGhostty(ghostty_terminal_vt_write_ascii(terminal_, codepoints.data(), codepoints.size(), &consumed));

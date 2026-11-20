@@ -79,7 +79,7 @@ namespace telar::gui::qt {
       const auto color = toQColor(foreground);
 
       for (const auto rectangle : ink.rectangles()) {
-        appendSceneNode<QSGSimpleRectNode>(parent, QRectF{rectangle.x / scale, rectangle.y / scale, rectangle.width / scale, rectangle.height / scale}, color);
+        appendSceneNode<QSGSimpleRectNode>(parent, QRectF{static_cast<qreal>(rectangle.x) / scale, static_cast<qreal>(rectangle.y) / scale, static_cast<qreal>(rectangle.width) / scale, static_cast<qreal>(rectangle.height) / scale}, color);
       }
     }
 

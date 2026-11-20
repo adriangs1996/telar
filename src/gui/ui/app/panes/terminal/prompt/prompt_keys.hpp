@@ -75,9 +75,13 @@ namespace telar::gui::qt {
     case KeyChord::Key::back_tab:
       result.key = application::prompt::Key::backtab;
       return result;
-    default:
+    case KeyChord::Key::page_up:
+    case KeyChord::Key::page_down:
       return ds::none;
     }
+
+    // A key outside the enum stays with the terminal and bindings.
+    return ds::none;
   }
 
 }

@@ -14,6 +14,14 @@ import telar.platform.primitives;
 import telar.vocabulary;
 import telar.base.ds;
 
+namespace telar::runtime {
+
+  // What decodePngImage may allocate unless told otherwise: the screen's graphics budget, which
+  // telar.runtime.terminal.graphics_storage names graphics_screen_bytes.
+  inline constexpr std::size_t png_image_bytes = std::size_t{128} * 1024 * 1024;
+
+}
+
 // What the terminal reads of kitty graphics: command framing, the cursor movement a placement
 // causes, child files and the media budget that graphics queries charge.
 export namespace telar::runtime {
@@ -52,13 +60,13 @@ export namespace telar::runtime {
   };
 
   struct ImageDisplayRequest {
-    std::uint32_t width;
-    std::uint32_t height;
+    std::uint32_t width = 0;
+    std::uint32_t height = 0;
     DisplayCells requested;
-    std::uint32_t offset_x;
-    std::uint32_t offset_y;
-    std::uint32_t cell_width;
-    std::uint32_t cell_height;
+    std::uint32_t offset_x = 0;
+    std::uint32_t offset_y = 0;
+    std::uint32_t cell_width = 0;
+    std::uint32_t cell_height = 0;
   };
 
   constexpr std::uint32_t saturatedDimension(std::uint64_t value) noexcept {
@@ -73,7 +81,7 @@ export namespace telar::runtime {
 
   class KittyFraming {
   public:
-    enum class Transition {
+    enum class Transition : std::uint8_t {
       started,
       ended,
     };
@@ -100,7 +108,7 @@ export namespace telar::runtime {
     }
 
   private:
-    enum class State {
+    enum class State : std::uint8_t {
       ground,
       escape,
       identify,
@@ -109,17 +117,38 @@ export namespace telar::runtime {
     };
 
     static constexpr bool opens(std::uint8_t byte) noexcept {
-      return byte == 'X' || byte == '^' || byte == '_' || byte == 0x98 || byte == 0x9e || byte == 0x9f;
+      return byte == 'X' || byte == '^' || byte == '_' || byte == start_of_string || byte == privacy_message || byte == application_program_command;
     }
 
+    // Every C1 control up to OSC but SOS ends a string; SOS, PM and APC open one.
     static constexpr bool ends(std::uint8_t byte) noexcept {
-      return byte == cancel_byte || byte == substitute_byte || byte == escape_byte || (byte >= first_c1 && byte <= 0x97) || (byte >= 0x99 && byte <= 0x9d);
+      return byte == cancel_byte || byte == substitute_byte || byte == escape_byte || (byte >= first_c1 && byte < start_of_string) || (byte > start_of_string && byte <= operating_system_command);
     }
+
+    // The state the byte after an escape leads to.
+    static constexpr State afterEscape(std::uint8_t byte) noexcept {
+      if (opens(byte)) {
+        return State::identify;
+      }
+
+      return byte == escape_byte ? State::escape : State::ground;
+    }
+
+    // Moves `position` past the next escape, from ground; false when the bytes hold none.
+    bool skipToEscape(std::span<const std::uint8_t> bytes, std::size_t& position) noexcept;
+
+    // Moves past one byte outside ground; the transition it makes, if any.
+    ds::Option<Transition> step(std::uint8_t byte) noexcept;
 
     static constexpr std::uint8_t escape_byte = 0x1b;
     static constexpr std::uint8_t cancel_byte = 0x18;
     static constexpr std::uint8_t substitute_byte = 0x1a;
+    // C1 controls: their first, the openers of the strings that are not OSC, and OSC.
     static constexpr std::uint8_t first_c1 = 0x80;
+    static constexpr std::uint8_t start_of_string = 0x98;
+    static constexpr std::uint8_t operating_system_command = 0x9d;
+    static constexpr std::uint8_t privacy_message = 0x9e;
+    static constexpr std::uint8_t application_program_command = 0x9f;
     State state_ = State::ground;
   };
 
@@ -145,9 +174,12 @@ export namespace telar::runtime {
   private:
     void capture(std::span<const std::uint8_t> bytes) noexcept;
 
+    static constexpr std::size_t control_capacity = 256;
+    static constexpr std::size_t payload_prefix_capacity = 64;
+
     KittyFraming framing_;
-    ds::Array<char, 256> control_;
-    ds::Array<char, 64> payload_;
+    ds::Array<char, control_capacity> control_{};
+    ds::Array<char, payload_prefix_capacity> payload_{};
     std::size_t control_length_ = 0;
     std::size_t payload_length_ = 0;
     bool in_payload_ = false;
@@ -185,6 +217,12 @@ export namespace telar::runtime {
     };
 
     ds::Option<DisplayCells> execute(const Header& header, std::uint32_t cell_width, std::uint32_t cell_height) noexcept;
+
+    // Keeps the size of the image a transmission names.
+    void remember(const Header& header) noexcept;
+
+    // Forgets the sizes a deletion names.
+    void forget(const Header& header) noexcept;
 
     ImageSize* find(const Header& header) noexcept;
 
@@ -292,6 +330,9 @@ export namespace telar::runtime {
 
     MediaAllocator(const MediaAllocator&) = delete;
     MediaAllocator& operator=(const MediaAllocator&) = delete;
+    MediaAllocator(MediaAllocator&&) = delete;
+    MediaAllocator& operator=(MediaAllocator&&) = delete;
+    ~MediaAllocator() = default;
 
     void* allocate(std::size_t size, std::size_t alignment) noexcept {
       if (!reserve(size)) {
@@ -383,6 +424,8 @@ export namespace telar::runtime {
 
     GraphicsTemporaryPath(const GraphicsTemporaryPath&) = delete;
     GraphicsTemporaryPath& operator=(const GraphicsTemporaryPath&) = delete;
+    GraphicsTemporaryPath(GraphicsTemporaryPath&&) = delete;
+    GraphicsTemporaryPath& operator=(GraphicsTemporaryPath&&) = delete;
 
     ~GraphicsTemporaryPath();
 
@@ -400,7 +443,7 @@ export namespace telar::runtime {
   extern "C++" {
   void installPngDecoder();
   // The decoded pixels are a block of the allocator, region `a`, that the image keeps.
-  bool decodePngImage(tbc::val_a<const GhosttyAllocator*> allocator, std::span<const std::uint8_t> bytes, tbc::mut_a<GhosttySysImage> image, std::size_t limit = 128 * 1024 * 1024) noexcept;
+  bool decodePngImage(tbc::val_a<const GhosttyAllocator*> allocator, std::span<const std::uint8_t> bytes, tbc::mut_a<GhosttySysImage> image, std::size_t limit = png_image_bytes) noexcept;
   }
 
 }

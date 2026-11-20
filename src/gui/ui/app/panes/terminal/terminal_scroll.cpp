@@ -17,6 +17,7 @@ static_assert(true);
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <optional>
 
@@ -175,7 +176,7 @@ namespace telar::gui::qt {
       view_rows_.clear();
       controller_->sessionMut().findPaneMut(pane_id_)->shown_top.reset();
       top_row_ = current->screen.scroll().offset;
-      if (std::exchange(shift_, 0) != 0) {
+      if (std::not_equal_to<>{}(std::exchange(shift_, 0), 0)) {
         emit scrollChanged();
       }
 
@@ -417,7 +418,7 @@ namespace telar::gui::qt {
       fold_fade_row_ = -1;
     }
 
-    if (from != fold_from_ || offset != fold_offset_) {
+    if (from != fold_from_ || std::not_equal_to<>{}(offset, fold_offset_)) {
       fold_from_ = from;
       fold_offset_ = offset;
       emit scrollChanged();
@@ -484,13 +485,13 @@ namespace telar::gui::qt {
 
     shift = std::max(0.0, shift);
     const bool crossed = top != top_row_;
-    const bool shifted = shift != shift_;
+    const bool shifted = std::not_equal_to<>{}(shift, shift_);
 
     top_row_ = top;
     placeFoldMotion();
     // The session moves the view from where it is drawn, not from the runtime's view.
     controller_->sessionMut().findPaneMut(pane_id_)->shown_top = top;
-    if (shift != shift_) {
+    if (std::not_equal_to<>{}(shift, shift_)) {
       shift_ = shift;
       emit scrollChanged();
     }
@@ -635,23 +636,19 @@ namespace telar::gui::qt {
     const auto now = scrollTime();
     const auto precise = !event.pixelDelta().isNull() && event.source() == Qt::MouseEventSynthesizedBySystem;
     if (precise) {
-      switch (event.phase()) {
-      case Qt::ScrollBegin:
+      const auto phase = event.phase();
+      if (phase == Qt::ScrollBegin) {
         // A finger on the trackpad stops a fling.
         motion_.stop();
-        break;
-      case Qt::ScrollEnd:
+      } else if (phase == Qt::ScrollEnd) {
         // macOS continues the gesture with its own momentum; elsewhere the view flings on.
         if constexpr (platform::native_scroll_events) {
           motion_.settle();
         } else {
           motion_.release(now);
         }
-
-        break;
-      default:
+      } else {
         motion_.follow(-event.pixelDelta().y(), now);
-        break;
       }
     } else {
       constexpr double wheel_unit = 120;
@@ -773,7 +770,7 @@ namespace telar::gui::qt {
       emit blocksChanged();
     }
 
-    if (rail_top != rail_top_ || rail_height != rail_height_) {
+    if (std::not_equal_to<>{}(rail_top, rail_top_) || std::not_equal_to<>{}(rail_height, rail_height_)) {
       rail_top_ = rail_top;
       rail_height_ = rail_height;
       emit scrollChanged();

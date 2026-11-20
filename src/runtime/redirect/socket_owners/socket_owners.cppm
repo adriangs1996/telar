@@ -74,7 +74,9 @@ export {
       [[nodiscard]] const char* what() const noexcept override;
 
     private:
-      ErrorText<1023> message_;
+      static constexpr std::size_t message_bytes = 1023;
+
+      ErrorText<message_bytes> message_;
     };
 
     class PfCommand {
@@ -108,12 +110,14 @@ export {
         try {
           stop();
         } catch (const std::exception& error) {
-          std::fprintf(stderr, "telar redirect cleanup: %s; retry traffic redirect-cleanup\n", error.what());
+          writeErrorLine("telar redirect cleanup: {}; retry traffic redirect-cleanup", error.what());
         }
       }
 
       PfSession(const PfSession&) = delete;
       PfSession& operator=(const PfSession&) = delete;
+      PfSession(PfSession&&) = delete;
+      PfSession& operator=(PfSession&&) = delete;
 
       // The state the session records into, lent through it: nothing else may write it while the session runs.
       inline State& stateMut() noexcept {
@@ -166,11 +170,12 @@ export {
         }
 
         loopback_.release();
-        ds::Array<char, 32> value{};
-        const auto result = std::to_chars(value.dataMut(), value.dataMut() + value.size(), *token_);
+        constexpr std::size_t token_text_bytes = 32;
+        ds::Array<char, token_text_bytes> value{};
+        const auto written = std::format_to_n(value.dataMut(), static_cast<std::ptrdiff_t>(value.size()), "{}", *token_);
 
         if (*token_ != 0) {
-          run({"-X", std::string_view{value.data(), static_cast<std::size_t>(result.ptr - value.data())}});
+          run({"-X", std::string_view{value.data(), static_cast<std::size_t>(written.size)}});
           token_ = 0;
           state_.save(0);
         }
@@ -182,15 +187,9 @@ export {
       inline static std::uint64_t parseToken(std::string_view output) {
         while (!output.empty()) {
           const auto newline = output.find('\n');
-          auto line = output.substr(0, newline);
-          if (line.starts_with("Token")) {
-            const auto colon = line.find(':');
-            if (colon != std::string_view::npos) {
-              const auto token = parseExact<std::uint64_t>(trimText(line.substr(colon + 1), " \t\r")).valueOr(0);
-              if (token != 0) {
-                return token;
-              }
-            }
+          const auto token = lineToken(output.substr(0, newline));
+          if (token != 0) {
+            return token;
           }
 
           if (newline == std::string_view::npos) {
@@ -212,6 +211,20 @@ export {
       }
 
     private:
+      // The enable-reference token a `Token : <n>` line of pfctl's output carries; 0 for any other line.
+      inline static std::uint64_t lineToken(std::string_view line) {
+        if (!line.starts_with("Token")) {
+          return 0;
+        }
+
+        const auto colon = line.find(':');
+        if (colon == std::string_view::npos) {
+          return 0;
+        }
+
+        return parseExact<std::uint64_t>(trimText(line.substr(colon + 1), " \t\r")).valueOr(0);
+      }
+
       inline auto run(std::initializer_list<std::string_view> arguments, std::string_view input = {}) {
         return command_.run(std::span{arguments.begin(), arguments.size()}, input);
       }
@@ -267,7 +280,7 @@ export {
 
       static bool matches(const xinpcb64& pcb, const sockaddr_storage& local, const sockaddr_storage& peer) noexcept;
 
-      static constexpr std::size_t maximum_bytes = 4 * 1024 * 1024;
+      static constexpr std::size_t maximum_bytes = std::size_t{4} * 1024 * 1024;
       Memory& memory_;
       ds::Option<SensitiveAllocation<Memory>> snapshot_;
       std::size_t size_ = 0;
@@ -399,7 +412,7 @@ export {
       ds::Array<ProcessIdentity, maximum_processes> processes_;
       std::size_t count_ = 0;
 #ifdef __APPLE__
-      ds::Array<proc_fdinfo, maximum_descriptors> descriptors_;
+      ds::Array<proc_fdinfo, maximum_descriptors> descriptors_{};
 #endif
     };
 
@@ -442,7 +455,13 @@ export {
 
       ~ShutdownSignals();
 
-      [[nodiscard]] bool stopping() const noexcept;
+      ShutdownSignals(const ShutdownSignals&) = delete;
+      ShutdownSignals& operator=(const ShutdownSignals&) = delete;
+      ShutdownSignals(ShutdownSignals&&) = delete;
+      ShutdownSignals& operator=(ShutdownSignals&&) = delete;
+
+      // Whether a shutdown signal is pending, which the signals an instance blocks keep pending.
+      [[nodiscard]] static bool stopping() noexcept;
 
     private:
       sigset_t selected_{};
@@ -456,10 +475,13 @@ export {
         std::size_t flow;
       };
 
+      // How long a discovered flow waits for its connection, and an accepted one for its origin.
+      static constexpr auto connection_grace = std::chrono::seconds{10};
+
       struct Flow {
         FlowKey key;
-        FileDescriptor lifetime{};
-        std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10};
+        FileDescriptor lifetime{}; // NOLINT(readability-redundant-member-init): the default constructor is explicit, so a designated initializer that leaves the member out needs this one
+        std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + connection_grace;
         bool accepted = false;
         bool incoming = false;
         ds::Option<RoutePath> bypass;
@@ -476,7 +498,7 @@ export {
       // Generic over the caller's session.
       template <typename Session>
       TBC_GENERIC void discover(Session& session, uid_t uid, const PfIdentity<Memory>& identity) {
-        ds::Array<Byte, 65540> bytes;
+        ds::Array<Byte, PacketLog::frame_bytes> bytes; // NOLINT(cppcoreguidelines-pro-type-member-init): the read fills what it returns; zeroing 64 KiB for every discovery packet is wasted work
         auto packet = discovery_.getMut().receive(bytes.viewMut());
         if (packet.empty()) {
           return;
@@ -492,66 +514,82 @@ export {
       template <typename Session>
       TBC_GENERIC void discovered(Session& session, uid_t uid, const PfIdentity<Memory>& identity, std::span<Byte> packet, const PacketLog::Metadata* metadata = nullptr) {
         const auto key = FlowKey::syn(packet);
-        const bool incoming = metadata && metadata->incoming;
-        if (!key || (incoming ? !allowsIncoming(direction_) : !allowsOutgoing(direction_)) || !std::ranges::any_of(std::span{mappings_}.first(count_), [&](const auto& mapping) {
-              return (!incoming || mapping.incoming) && FlowKey::same(mapping.target, key->destination);
-            })) {
-          std::fprintf(stderr, "telar redirect: rejected unsupported discovery packet\n");
+        const bool incoming = metadata != nullptr && metadata->incoming;
+        if (!key || !selects(*key, incoming)) {
+          writeErrorLine("telar redirect: rejected unsupported discovery packet");
           return;
         }
 
-        if (incoming && (metadata->interface_index == 0 || metadata->interface.view() == "lo0" || metadata->interface.view() == discovery_->name() || !LocalAddresses{}.contains(key->destination))) {
+        if (incoming && !reachesLocally(*metadata, key->destination)) {
           throw SystemError{"Incoming redirect destination/interface is no longer local", EADDRNOTAVAIL};
         }
 
-        const auto found = std::ranges::find_if(flows_, [&](const auto& flow) {
-          return flow && flow->incoming == incoming && flow->key.matches(*key);
-        });
-        if (found == flows_.end()) {
-          const auto flows = flows_.viewMut();
-          const auto empty = std::ranges::find_if(flows, [](const auto& flow) {
-            return !flow;
-          });
-          if (empty == flows.end()) {
-            return;
-          }
+        const auto tracking = track(*key, incoming, metadata);
+        if (tracking == Tracking::full) {
+          return;
+        }
 
-          Flow flow{.key = *key, .incoming = incoming};
-
-          if (owners_) {
-            const auto owner = owners_.getMut().find(*key);
-            if (!owner.process) {
-              if (!metadata || metadata->interface_index == 0) {
-                throw SystemError{"Original process route is unavailable", ENXIO};
-              }
-
-              flow.bypass = RoutePath::lookup(key->destination, metadata->interface_index);
-              flow.deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
-              if (!owner.complete) {
-                std::fprintf(stderr, "telar redirect: incomplete process ownership lookup; retaining the direct route\n");
-              }
-            }
-          }
-
-          empty->emplace(std::move(flow));
+        if (tracking == Tracking::added) {
           session.replace(plan(uid, identity));
-          std::fprintf(stderr, "telar redirect: discovered TCP flow for destination port %u\n", key->destination.port);
+          writeErrorLine("telar redirect: discovered TCP flow for destination port {}", key->destination.port);
         }
 
         discovery_.getMut().inject(packet);
       }
 
+      enum class Tracking : std::uint8_t {
+        known,
+        added,
+        full,
+      };
+
+      // Whether the session redirects a flow to this destination in this direction.
+      [[nodiscard]] bool selects(const FlowKey& key, bool incoming) const;
+
+      // Whether an incoming flow arrived on, and still reaches, a local interface other than loopback
+      // and the discovery tunnel.
+      [[nodiscard]] bool reachesLocally(const PacketLog::Metadata& metadata, const Target& destination) const;
+
+      // Records a newly discovered flow, with the direct route for one the process selection leaves
+      // alone; full when the table has no room.
+      Tracking track(const FlowKey& key, bool incoming, const PacketLog::Metadata* metadata);
+
       static void readAll(int socket, std::span<Byte> bytes);
 
       // The listener is named by its index, as accepting updates the pending and flow tables beside it.
-      void accept(std::size_t listener, uid_t uid);
+      void accept(std::size_t listener);
 
-      void handoff(const Connection& connection, std::size_t flow, uid_t uid);
+      void handoff(const Connection& connection, std::size_t flow);
 
       static constexpr std::size_t maximum_pending = 32;
       static constexpr std::size_t maximum_accept_batch = 16;
       static constexpr std::size_t maximum_flows = 256;
       static constexpr std::size_t pending_offset = 3 + Target::maximum_targets;
+
+      using RedirectLoopback = SharedLoopback<Memory, PfLoopback<PfCommand>>;
+      using RedirectSession = PfSession<PfCommand, Record<Memory>, RedirectLoopback, Memory>;
+      // The monitor, the discovery tunnel, the packet log, the listeners, the pending origins and the flows.
+      using Descriptors = ds::Array<pollfd, pending_offset + maximum_pending + maximum_flows>;
+
+      // Checks the runtime's account against its socket and greets the runtime as its monitor.
+      void greet(int monitor);
+
+      // Whether discovery reads pf's packet log rather than only the tunnel.
+      [[nodiscard]] bool watchesPacketLog() const;
+
+      // Fills `descriptors` with what the helper waits on, and waits for any of them.
+      void pollEvents(Descriptors& descriptors, int monitor) const;
+
+      // Drops the flows whose connection ended or whose deadline passed; whether any did.
+      bool expireFlows(const Descriptors& descriptors);
+
+      void acceptReady(const Descriptors& descriptors);
+
+      // Hands each pending origin that connected to the runtime, and drops those that failed or are late.
+      void completePending(const Descriptors& descriptors);
+
+      void drainPacketLog(RedirectSession& session, const PfIdentity<Memory>& identity);
+
       Memory& memory_;
       ds::String<Memory> endpoint_;
       ds::Array<ds::Option<Listener>, Target::maximum_targets> listeners_;
@@ -567,6 +605,8 @@ export {
       std::size_t process_count_ = 0;
       std::size_t count_ = 0;
       Direction direction_ = Direction::outbound;
+      // The runtime's account, which run reads from its socket.
+      uid_t uid_ = 0;
     };
 
   }

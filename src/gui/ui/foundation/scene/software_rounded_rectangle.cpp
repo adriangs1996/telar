@@ -21,6 +21,7 @@ static_assert(true);
 #include <QtCore/qtypes.h>
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <memory>
 #include <utility>
 
@@ -30,13 +31,18 @@ namespace telar::gui::qt {
   namespace {
 
     QTransform devicePixelTransform(const QTransform& matrix) {
-      return {static_cast<float>(matrix.m11()), static_cast<float>(matrix.m12()), static_cast<float>(matrix.m13()), static_cast<float>(matrix.m21()), static_cast<float>(matrix.m22()), static_cast<float>(matrix.m23()), static_cast<float>(matrix.m31()), static_cast<float>(matrix.m32()), static_cast<float>(matrix.m33())};
+      // Each entry rounded to float precision.
+      const auto rounded = [](qreal value) {
+        return static_cast<qreal>(static_cast<float>(value));
+      };
+
+      return {rounded(matrix.m11()), rounded(matrix.m12()), rounded(matrix.m13()), rounded(matrix.m21()), rounded(matrix.m22()), rounded(matrix.m23()), rounded(matrix.m31()), rounded(matrix.m32()), rounded(matrix.m33())};
     }
 
     QRectF rasterCoverage(const QTransform& transform, Point size, qreal density) {
       constexpr unsigned subpixel_bits = 8;
       constexpr qreal subpixel_steps = 1U << subpixel_bits;
-      const auto bounds = transform.mapRect(QRectF{0, 0, size.x / density, size.y / density});
+      const auto bounds = transform.mapRect(QRectF{0, 0, static_cast<qreal>(size.x) / density, static_cast<qreal>(size.y) / density});
       const auto quantize = [](qreal coordinate) {
         return std::round(coordinate * subpixel_steps) / subpixel_steps;
       };
@@ -54,8 +60,8 @@ namespace telar::gui::qt {
             device_to_item_(item_to_device.inverted()),
             raster_size_(raster_size),
             raster_coverage_(rasterCoverage(item_to_device, raster_size, density)) {
-        const auto padding = (shape.style.radius + shape.style.border_width + 1) / density;
-        const QRectF interior{padding, 0, std::max(0.0, (shape.size.x / density) - (2 * padding)), shape.size.y / density};
+        const auto padding = static_cast<qreal>(shape.style.radius + shape.style.border_width + 1) / density;
+        const QRectF interior{padding, 0, std::max(0.0, (static_cast<qreal>(shape.size.x) / density) - (2 * padding)), static_cast<qreal>(shape.size.y) / density};
         if (item_to_device.type() <= QTransform::TxScale && interior.width() > 0) {
           const auto device_interior = item_to_device.mapRect(interior);
 
@@ -147,7 +153,7 @@ namespace telar::gui::qt {
           : window_(window) {}
 
       void refresh(RoundedRectanglePaint paint, qreal density) {
-        if (shape_ != paint.shape || density_ != density || origin_ != paint.origin) {
+        if (shape_ != paint.shape || !std::equal_to<>{}(density_, density) || origin_ != paint.origin) {
           shape_ = paint.shape;
           origin_ = paint.origin;
           density_ = density;
@@ -159,7 +165,7 @@ namespace telar::gui::qt {
         constexpr qreal raster_padding = 1;
         const auto padding = raster_padding / density_;
 
-        return {(origin_.x / density_) - padding, (origin_.y / density_) - padding, (shape_.size.x / density_) + (2 * padding), (shape_.size.y / density_) + (2 * padding)};
+        return {(static_cast<qreal>(origin_.x) / density_) - padding, (static_cast<qreal>(origin_.y) / density_) - padding, (static_cast<qreal>(shape_.size.x) / density_) + (2 * padding), (static_cast<qreal>(shape_.size.y) / density_) + (2 * padding)};
       }
 
       [[nodiscard]] RenderingFlags flags() const override {
@@ -178,14 +184,14 @@ namespace telar::gui::qt {
         }
 
         painter->setWorldTransform(matrix()->toTransform());
-        painter->translate(origin_.x / density_, origin_.y / density_);
+        painter->translate(static_cast<qreal>(origin_.x) / density_, static_cast<qreal>(origin_.y) / density_);
         const auto item_to_device = devicePixelTransform(painter->deviceTransform());
         if (!item_to_device.isInvertible()) {
           return;
         }
 
         const Point raster_size{.x = (origin_.x + shape_.size.x) - origin_.x, .y = (origin_.y + shape_.size.y) - origin_.y};
-        const QRectF local_bounds{0, 0, raster_size.x / density_, raster_size.y / density_};
+        const QRectF local_bounds{0, 0, static_cast<qreal>(raster_size.x) / density_, static_cast<qreal>(raster_size.y) / density_};
         const auto bounds = item_to_device.mapRect(local_bounds).toAlignedRect().intersected(QRect{0, 0, painter->device()->width(), painter->device()->height()});
 
         painter->resetTransform();
@@ -211,8 +217,10 @@ namespace telar::gui::qt {
     if (node == nullptr) {
       auto replacement = std::make_unique<SoftwareRoundedRectangleNode>(window);
 
-      node = replacement.get();
-      owner = std::move(replacement);
+      owner.reset();
+      replacement->refresh(paint, density);
+
+      return replacement.release();
     }
 
     node->refresh(paint, density);

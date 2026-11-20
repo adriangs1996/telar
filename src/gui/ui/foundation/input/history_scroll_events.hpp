@@ -15,11 +15,7 @@ namespace telar::gui::qt {
   // instantiated is up to each compiler, so the virtual ones live in this plain class.
   class NativeScrollFilter : public QAbstractNativeEventFilter {
   public:
-    ~NativeScrollFilter() override {
-      if (installed_ && QCoreApplication::instance() != nullptr) {
-        QCoreApplication::instance()->removeNativeEventFilter(this);
-      }
-    }
+    ~NativeScrollFilter() override;
 
     NativeScrollFilter(const NativeScrollFilter&) = delete;
     NativeScrollFilter& operator=(const NativeScrollFilter&) = delete;

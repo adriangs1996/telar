@@ -32,9 +32,12 @@ namespace telar::gui::qt {
         return QStringLiteral("workspace");
       case HistoryScope::pane:
         return QStringLiteral("pane");
-      default:
+      case HistoryScope::global:
         return QStringLiteral("global");
       }
+
+      // A scope outside the enum reads as global.
+      return QStringLiteral("global");
     }
 
     QString authorName(HistoryAuthorFilter author) {
@@ -43,9 +46,12 @@ namespace telar::gui::qt {
         return QStringLiteral("human");
       case HistoryAuthorFilter::agent:
         return QStringLiteral("agent");
-      default:
+      case HistoryAuthorFilter::all:
         return QStringLiteral("all");
       }
+
+      // A filter outside the enum reads as all authors.
+      return QStringLiteral("all");
     }
 
     HistoryScope parseScope(const QString& scope) {
@@ -88,9 +94,12 @@ namespace telar::gui::qt {
         return QStringLiteral("ready");
       case application::history::HistoryPhase::failed:
         return QStringLiteral("failed");
-      default:
+      case application::history::HistoryPhase::idle:
         return QStringLiteral("idle");
       }
+
+      // A phase outside the enum reads as idle.
+      return QStringLiteral("idle");
     }
 
   }

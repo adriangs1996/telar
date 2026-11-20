@@ -9,6 +9,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <functional>
 #include <optional>
 #include <utility>
 
@@ -197,7 +198,7 @@ namespace telar::gui::qt {
   }
 
   void ElementCanvas::setRatio(qreal ratio) {
-    if (ratio != ratio_) {
+    if (!std::equal_to<>{}(ratio, ratio_)) {
       ratio_ = ratio;
       emit operationsChanged();
       update();

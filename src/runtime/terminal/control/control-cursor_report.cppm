@@ -16,7 +16,7 @@ export namespace telar::runtime::control {
   template <Allocator Memory>
   TBC_GENERIC void cursorReport(Reply<Memory>& reply, Position position, bool extended) {
     constexpr std::size_t maximum_cursor_reply = 32;
-    ds::Array<char, maximum_cursor_reply> encoded;
+    ds::Array<char, maximum_cursor_reply> encoded{};
     // One mutable borrow of the buffer, which `next` walks.
     const std::span<char> output{encoded.dataMut(), encoded.size()};
     auto* next = output.data();
@@ -29,12 +29,13 @@ export namespace telar::runtime::control {
 
     const auto row = std::to_chars(next, output.data() + output.size(), static_cast<unsigned>(position.row) + 1);
 
-    TELAR_ASSERT(row.ec == std::errc{});
+    // to_chars reports success as the errc of value 0, which names no error.
+    TELAR_ASSERT(std::to_underlying(row.ec) == 0);
     next = row.ptr;
     *next++ = ';';
     const auto column = std::to_chars(next, output.data() + output.size(), static_cast<unsigned>(position.column) + 1);
 
-    TELAR_ASSERT(column.ec == std::errc{});
+    TELAR_ASSERT(std::to_underlying(column.ec) == 0);
     next = column.ptr;
     if (extended) {
       *next++ = ';';

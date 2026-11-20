@@ -23,6 +23,7 @@ static_assert(true);
 #include <cstdint>
 #include <cstring>
 #include <exception>
+#include <functional>
 #include <memory>
 #include <string_view>
 
@@ -76,7 +77,7 @@ namespace telar::gui::qt {
   }
 
   void NativeChromeIcon::setPixelSize(qreal size) {
-    if (std::isfinite(size) && size > 0 && size <= ChromeMetrics::maximum_text && pixel_size_ != size) {
+    if (std::isfinite(size) && size > 0 && size <= static_cast<qreal>(ChromeMetrics::maximum_text) && !std::equal_to<>{}(pixel_size_, size)) {
       pixel_size_ = size;
       emit pixelSizeChanged();
       invalidateLayout();

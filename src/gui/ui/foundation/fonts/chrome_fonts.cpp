@@ -18,8 +18,8 @@ namespace telar::gui::qt {
   namespace {
 
     QByteArray bundledFont(bool emphasized) {
-      static const auto regular = loadFontBytes(QStringLiteral(":/telar/fonts/IBMPlexSans-Regular.ttf"));
-      static const auto semibold = loadFontBytes(QStringLiteral(":/telar/fonts/IBMPlexSans-SemiBold.ttf"));
+      [[clang::no_destroy]] static const auto regular = loadFontBytes(QStringLiteral(":/telar/fonts/IBMPlexSans-Regular.ttf"));
+      [[clang::no_destroy]] static const auto semibold = loadFontBytes(QStringLiteral(":/telar/fonts/IBMPlexSans-SemiBold.ttf"));
 
       return emphasized ? semibold : regular;
     }
@@ -57,7 +57,11 @@ namespace telar::gui::qt {
   }
 
   std::shared_ptr<ChromeFonts> ChromeFonts::shared() {
+// A thread that exits must drop its weak reference, or the fonts' shared allocation leaks with it.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wexit-time-destructors"
     thread_local std::weak_ptr<ChromeFonts> cached;
+#pragma clang diagnostic pop
     auto fonts = cached.lock();
     if (!fonts) {
       fonts = std::make_shared<ChromeFonts>();

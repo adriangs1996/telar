@@ -32,7 +32,7 @@ namespace telar::gui::qt {
     template <Allocator Memory, runtime::EnvironmentLookup Environment = runtime::ProcessEnvironment>
     [[nodiscard]] static QString resolve(Memory& memory, const Environment& environment = {}) {
       const runtime::cli::ServerOptions options{};
-      const runtime::cli::RuntimePaths paths(memory, options, environment);
+      const runtime::cli::RuntimePaths<Memory> paths(memory, options, environment);
       auto path = QString::fromUtf8(paths.socket.data(), static_cast<qsizetype>(paths.socket.size()));
       QLocalSocket probe;
 
@@ -40,11 +40,11 @@ namespace telar::gui::qt {
       constexpr int connect_deadline_ms = 100;
       if (probe.state() == QLocalSocket::ConnectedState || probe.waitForConnected(connect_deadline_ms)) {
         probe.abort();
-
-        return path;
+      } else {
+        path = Startup::resolve();
       }
 
-      return Startup::resolve();
+      return path;
     }
   };
 

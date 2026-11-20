@@ -15,6 +15,7 @@ static_assert(true);
 #include <QtCore/qtypes.h>
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -50,7 +51,7 @@ namespace telar::gui::qt {
   void NativeProgressRing::setFraction(qreal fraction) {
     if (std::isfinite(fraction)) {
       const auto bounded = std::clamp(fraction, 0.0, 1.0);
-      if (fraction_ != bounded) {
+      if (!std::equal_to<>{}(fraction_, bounded)) {
         fraction_ = bounded;
         update();
         emit fractionChanged();
@@ -59,7 +60,7 @@ namespace telar::gui::qt {
   }
 
   void NativeProgressRing::setTurns(qreal turns) {
-    if (std::isfinite(turns) && std::abs(turns) <= std::numeric_limits<float>::max() && turns_ != turns) {
+    if (std::isfinite(turns) && std::abs(turns) <= static_cast<qreal>(std::numeric_limits<float>::max()) && !std::equal_to<>{}(turns_, turns)) {
       turns_ = turns;
       update();
       emit turnsChanged();
@@ -71,7 +72,7 @@ namespace telar::gui::qt {
   }
 
   void NativeProgressRing::setStrokeWidth(qreal width) {
-    if (std::isfinite(width) && width >= 0 && width <= std::numeric_limits<float>::max() && stroke_width_ != width) {
+    if (std::isfinite(width) && width >= 0 && width <= static_cast<qreal>(std::numeric_limits<float>::max()) && !std::equal_to<>{}(stroke_width_, width)) {
       stroke_width_ = width;
       update();
       emit strokeWidthChanged();

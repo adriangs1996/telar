@@ -45,23 +45,13 @@ export namespace telar::runtime::control {
         return false;
       }
 
-      if (*operation == 21) {
-        kittyColors(context, remaining, sequence.terminator());
+      if (*operation == kitty_colors_operation) {
+        kittyColors(context, remaining, sequence);
         return true;
       }
 
-      if (*operation >= 10 && *operation <= 19) {
-        for (unsigned selector = *operation; selector <= 19 && !remaining.empty(); ++selector) {
-          const auto value = takeField(remaining);
-          if (value == "?") {
-            if (selector <= 12) {
-              traditionalColor(context, selector, ds::none, sequence.terminator());
-            }
-          } else {
-            forwardOsc(context, selector, value);
-          }
-        }
-
+      if (*operation >= first_dynamic_color && *operation <= last_dynamic_color) {
+        dynamicColors(context, *operation, remaining, sequence);
         return true;
       }
 
@@ -99,24 +89,11 @@ export namespace telar::runtime::control {
         }
 
         while (!remaining.empty()) {
-          const auto index_field = takeField(remaining);
-          const auto index = decimal(index_field);
+          const auto index = takeField(remaining);
           const auto value = takeField(remaining);
 
           palette_offset_ = body.size() - remaining.size();
-          if (index && *index < 256 && !value.empty()) {
-            if (value == "?") {
-              if (*operation == 4) {
-                traditionalColor(context, 4, *index, sequence.terminator());
-              }
-            } else {
-              queue.release();
-              const auto count = static_cast<std::size_t>(value.data() + value.size() - index_field.data());
-
-              forwardOsc(context, *operation, {index_field.data(), count});
-            }
-          }
-
+          paletteItem(context, {.operation = *operation, .index = index, .value = value, .terminator = sequence.terminator()}, queue);
           if (context.reply.size() > PtyResponseQueue::message_byte_capacity - maximum_color_reply) {
             break;
           }
@@ -127,45 +104,99 @@ export namespace telar::runtime::control {
     }
 
   private:
+    // The OSC operations this class answers or forwards.
+    static constexpr unsigned palette_operation = 4;
+    static constexpr unsigned first_dynamic_color = 10;
+    static constexpr unsigned cursor_color_operation = 12;
+    static constexpr unsigned last_dynamic_color = 19;
+    static constexpr unsigned kitty_colors_operation = 21;
     static constexpr std::size_t maximum_color_reply = 64;
     static constexpr std::size_t inline_osc_bytes = 64;
+    static constexpr std::string_view hexadecimal_digits = "0123456789abcdef";
+    static constexpr std::uint8_t low_nibble = 0x0f;
+
+    // One index=value pair of an OSC 4 palette sequence.
+    struct PaletteItem {
+      unsigned operation = 0;
+      std::string_view index;
+      std::string_view value;
+      std::string_view terminator;
+    };
+
+    // OSC 10 to 19 each set or query one dynamic color, from `first` on; ghostty answers only the
+    // queries up to the cursor color.
+    void dynamicColors(Context context, unsigned first, std::string_view remaining, Sequence sequence) {
+      for (unsigned selector = first; selector <= last_dynamic_color && !remaining.empty(); ++selector) {
+        const auto value = takeField(remaining);
+        if (value == "?") {
+          if (selector <= cursor_color_operation) {
+            traditionalColor(context, selector, ds::none, sequence.terminator());
+          }
+        } else {
+          forwardOsc(context, selector, value);
+        }
+      }
+    }
+
+    // A query is answered in the reply; a color set is forwarded once the queue no longer holds
+    // the parser's input.
+    template <typename Sink>
+    void paletteItem(Context context, PaletteItem item, Sink& queue) {
+      const auto index = decimal(item.index);
+      if (!index || *index >= VtState::palette_colors || item.value.empty()) {
+        return;
+      }
+
+      if (item.value == "?") {
+        if (item.operation == palette_operation) {
+          traditionalColor(context, palette_operation, *index, item.terminator);
+        }
+
+        return;
+      }
+
+      queue.release();
+      const auto count = static_cast<std::size_t>(std::to_address(item.value.end()) - item.index.data());
+
+      forwardOsc(context, item.operation, {item.index.data(), count});
+    }
 
     void forwardOsc(Context context, unsigned operation, std::string_view payload) {
       constexpr std::string_view introducer = "\x1b]";
       constexpr std::string_view terminator = "\x1b\\";
       static_assert(introducer.size() + std::numeric_limits<unsigned>::digits10 + 2 + terminator.size() <= inline_osc_bytes);
-      ds::Array<char, inline_osc_bytes> packet;
-      // One mutable borrow of the packet, which `position` walks.
-      const std::span<char> output{packet.dataMut(), packet.size()};
-      auto* position = std::copy(introducer.begin(), introducer.end(), output.data());
-      auto number = std::to_chars(position, output.data() + output.size() - 1, operation);
+      ds::Array<char, inline_osc_bytes> packet{};
+      const auto output = packet.viewMut();
 
-      TELAR_ASSERT(number.ec == std::errc{});
-      *number.ptr = ';';
-      position = number.ptr + 1;
-      const auto header_size = static_cast<std::size_t>(position - output.data());
+      std::ranges::copy(introducer, output.begin());
+      const auto digits = output.subspan(introducer.size()).first(output.size() - introducer.size() - 1);
+      const auto number = std::to_chars(digits.data(), std::to_address(digits.end()), operation);
 
+      // to_chars reports success as the errc of value 0, which names no error.
+      TELAR_ASSERT(std::to_underlying(number.ec) == 0);
+      auto header_size = static_cast<std::size_t>(number.ptr - output.data());
+
+      output[header_size++] = ';';
       if (payload.size() <= output.size() - header_size - terminator.size()) {
-        if (!payload.empty()) {
-          std::memcpy(position, payload.data(), payload.size());
-          position += payload.size();
-        }
+        const auto rest = output.subspan(header_size);
 
-        position = std::copy(terminator.begin(), terminator.end(), position);
-        context.state.write({reinterpret_cast<const std::uint8_t*>(output.data()), static_cast<std::size_t>(position - output.data())});
+        std::ranges::copy(payload, rest.begin());
+        std::ranges::copy(terminator, rest.subspan(payload.size()).begin());
+        context.state.write(byteView(std::string_view{std::span<const char>{output}.first(header_size + payload.size() + terminator.size())}));
         return;
       }
 
-      context.state.write({reinterpret_cast<const std::uint8_t*>(output.data()), header_size});
-      context.state.write({reinterpret_cast<const std::uint8_t*>(payload.data()), payload.size()});
-      context.state.write({reinterpret_cast<const std::uint8_t*>(terminator.data()), terminator.size()});
+      context.state.write(byteView(std::string_view{std::span<const char>{output}.first(header_size)}));
+      context.state.write(byteView(payload));
+      context.state.write(byteView(terminator));
     }
 
     void kittyColorItem(Context context, unsigned selector, std::string_view key) {
       // Supported keys are at most ten bytes (numeric selectors use <=3).
       // The longest complete item is 24 bytes, including a present RGB value.
-      static_assert(std::string_view{";foreground=rgb:00/00/00"}.size() <= maximum_color_reply);
-      ds::Array<char, maximum_color_reply> encoded;
+      constexpr std::size_t longest_item = std::string_view{";foreground=rgb:00/00/00"}.size();
+      static_assert(longest_item <= maximum_color_reply);
+      ds::Array<char, maximum_color_reply> encoded{};
       // One mutable borrow of the buffer, which `position` walks.
       const std::span<char> output{encoded.dataMut(), encoded.size()};
       auto* position = output.data();
@@ -174,17 +205,17 @@ export namespace telar::runtime::control {
       if (selector < VtState::foreground) {
         const auto number = std::to_chars(position, output.data() + output.size(), selector);
 
-        TELAR_ASSERT(number.ec == std::errc{});
+        // to_chars reports success as the errc of value 0, which names no error.
+        TELAR_ASSERT(std::to_underlying(number.ec) == 0);
         position = number.ptr;
       } else {
-        position = std::copy(key.begin(), key.end(), position);
+        position = std::ranges::copy(key, position).out;
       }
 
       *position++ = '=';
 
       if (const auto color = context.state.color(selector)) {
         position = std::copy_n("rgb:", 4, position);
-        constexpr std::string_view digits = "0123456789abcdef";
         const ds::Array components{color->r, color->g, color->b};
 
         for (std::size_t index = 0; index < components.size(); ++index) {
@@ -192,8 +223,8 @@ export namespace telar::runtime::control {
             *position++ = '/';
           }
 
-          *position++ = digits[components[index] >> 4];
-          *position++ = digits[components[index] & 0x0f];
+          *position++ = hexadecimal_digits[components[index] >> 4];
+          *position++ = hexadecimal_digits[components[index] & low_nibble];
         }
       }
 
@@ -205,9 +236,9 @@ export namespace telar::runtime::control {
         return;
       }
 
-      const auto selector = index.valueOr(VtState::foreground + operation - 10);
+      const auto selector = index.valueOr(VtState::foreground + operation - first_dynamic_color);
       auto color = context.state.color(selector);
-      if (!color && operation == 12) {
+      if (!color && operation == cursor_color_operation) {
         color = context.state.color(VtState::foreground);
       }
 
@@ -215,14 +246,15 @@ export namespace telar::runtime::control {
         return;
       }
 
-      ds::Array<char, maximum_color_reply> encoded;
+      ds::Array<char, maximum_color_reply> encoded{};
       // One mutable borrow of the buffer, which `position` walks.
       const std::span<char> output{encoded.dataMut(), encoded.size()};
       auto* position = std::copy_n("\x1b]", 2, output.data());
       const auto number = [&](unsigned value) {
         const auto formatted = std::to_chars(position, output.data() + output.size(), value);
 
-        TELAR_ASSERT(formatted.ec == std::errc{});
+        // to_chars reports success as the errc of value 0, which names no error.
+        TELAR_ASSERT(std::to_underlying(formatted.ec) == 0);
         position = formatted.ptr;
       };
 
@@ -234,7 +266,6 @@ export namespace telar::runtime::control {
       }
 
       position = std::copy_n("rgb:", 4, position);
-      constexpr std::string_view digits = "0123456789abcdef";
       const ds::Array components{color->r, color->g, color->b};
       const bool sixteen_bit = context.policy.color_format == ColorFormat::sixteen_bit;
 
@@ -243,8 +274,8 @@ export namespace telar::runtime::control {
           *position++ = '/';
         }
 
-        const auto high = digits[components[component] >> 4];
-        const auto low = digits[components[component] & 0x0f];
+        const auto high = hexadecimal_digits[components[component] >> 4];
+        const auto low = hexadecimal_digits[components[component] & low_nibble];
 
         *position++ = high;
         *position++ = low;
@@ -254,7 +285,7 @@ export namespace telar::runtime::control {
         }
       }
 
-      position = std::copy(terminator.begin(), terminator.end(), position);
+      position = std::ranges::copy(terminator, position).out;
       context.reply.append({output.data(), static_cast<std::size_t>(position - output.data())});
     }
 
@@ -273,7 +304,7 @@ export namespace telar::runtime::control {
 
       const auto index = decimal(key);
 
-      return index && *index < 256 ? index : ds::none;
+      return index && *index < VtState::palette_colors ? index : ds::none;
     }
 
     // The frozen application bounds the complete transaction at 526 items.
@@ -292,15 +323,15 @@ export namespace telar::runtime::control {
           return false;
         }
 
-        const bool had_separator = remaining.find(';') != std::string_view::npos;
+        const bool had_separator = remaining.contains(';');
         const auto pair = takeField(remaining);
         const auto equal = pair.find('=');
-        const auto key = pair.substr(0, equal);
-        auto value = equal == std::string_view::npos ? std::string_view{} : pair.substr(equal + 1);
+        const auto key = textPrefix(pair, equal);
+        auto value = equal == std::string_view::npos ? std::string_view{} : textAfter(pair, equal + 1);
         const auto first = value.find_first_not_of(' ');
 
-        value = first == std::string_view::npos ? std::string_view{} : value.substr(first, value.find_last_not_of(' ') - first + 1);
-        const bool known = colorKey(key).hasValue() || std::find(unsupported_colors.begin(), unsupported_colors.end(), key) != unsupported_colors.end();
+        value = first == std::string_view::npos ? std::string_view{} : textPrefix(textAfter(value, first), value.find_last_not_of(' ') - first + 1);
+        const bool known = colorKey(key).hasValue() || std::ranges::find(unsupported_colors, key) != unsupported_colors.end();
         if (known && (value.empty() || value == "?" || colorValue(value))) {
           ++keys;
         }
@@ -311,7 +342,7 @@ export namespace telar::runtime::control {
       }
     }
 
-    void kittyColors(Context context, std::string_view remaining, std::string_view terminator) {
+    void kittyColors(Context context, std::string_view remaining, Sequence sequence) {
       constexpr std::size_t maximum_kitty_color_bytes = 2048;
       if (remaining.size() > maximum_kitty_color_bytes || !validKittyColors(remaining)) {
         return;
@@ -320,8 +351,8 @@ export namespace telar::runtime::control {
       while (!remaining.empty()) {
         const auto pair = takeField(remaining);
         const auto separator = pair.find('=');
-        const auto key = pair.substr(0, separator);
-        auto value = separator == std::string_view::npos ? std::string_view{} : pair.substr(separator + 1);
+        const auto key = textPrefix(pair, separator);
+        auto value = separator == std::string_view::npos ? std::string_view{} : textAfter(pair, separator + 1);
 
         while (!value.empty() && value.front() == ' ') {
           value.remove_prefix(1);
@@ -333,7 +364,7 @@ export namespace telar::runtime::control {
 
         const auto selector = colorKey(key);
         if (!selector) {
-          if (enabled_ && value == "?" && std::find(unsupported_colors.begin(), unsupported_colors.end(), key) != unsupported_colors.end() && context.reply.size() == 0) {
+          if (enabled_ && value == "?" && std::ranges::find(unsupported_colors, key) != unsupported_colors.end() && context.reply.size() == 0) {
             context.reply.append("\x1b]21");
           }
 
@@ -341,7 +372,7 @@ export namespace telar::runtime::control {
         }
 
         if (value != "?") {
-          forwardOsc(context, 21, pair);
+          forwardOsc(context, kitty_colors_operation, pair);
           continue;
         }
 
@@ -357,7 +388,7 @@ export namespace telar::runtime::control {
       }
 
       if (context.reply.size() != 0) {
-        context.reply.append(terminator);
+        context.reply.append(sequence.terminator());
       }
     }
 

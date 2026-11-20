@@ -3,6 +3,7 @@ module telar.runtime.traffic.control_protocol;
 import telar.native.pcap;
 import telar.base.text.utf8;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 namespace telar::runtime::traffic {
 
@@ -73,7 +74,7 @@ namespace telar::runtime::traffic {
     return event;
   }
 
-  auto Protocol::prefix(std::size_t bytes, std::uint64_t dropped) -> ds::Array<Byte, prefix_bytes> {
+  auto Protocol::prefix(std::size_t bytes, Drops drops) -> ds::Array<Byte, prefix_bytes> {
     if (bytes > Limits::http_frame_bytes) {
       throw EncodingError{"Traffic frame exceeds its limit"};
     }
@@ -82,14 +83,19 @@ namespace telar::runtime::traffic {
     plugins::FrameWriter writer{output.viewMut()};
 
     writer.integer(static_cast<std::uint32_t>(bytes));
-    writer.integer(dropped);
+    writer.integer(drops.frames);
     return output;
   }
 
   auto Protocol::name(Kind kind) noexcept -> std::string_view {
     constexpr ds::Array names{"ready", "packet", "interface.open", "interface.closed", "interface.error", "statistics", "capture.started", "capture.stopped", "error", "exchange", "flow.open", "stream.data", "flow.close", "flow.error", "flow.gap", "intercept.request", "http.intercept.request", "datagram"};
 
-    return names.at(static_cast<std::size_t>(kind));
+    const auto index = static_cast<std::size_t>(kind);
+    if (index >= names.size()) {
+      std::abort();
+    }
+
+    return names[index];
   }
 
   void Protocol::validate(const Event& event) {
@@ -178,9 +184,10 @@ namespace telar::runtime::traffic::recording {
   }
 
   void Protocol::validate(const Request& request) {
+    constexpr std::size_t host_bytes = 255;
     const auto selection = static_cast<Byte>(request.selection);
     const bool no_identity = request.operation == Operation::start || request.operation == Operation::list;
-    if (request.max_bytes == 0 || request.max_bytes > Limits::session_bytes || request.max_events == 0 || request.max_events > Limits::events || request.max_age_ms == 0 || request.max_age_ms > Limits::age_ms || request.limit == 0 || request.limit > Limits::page_events || selection == 0 || selection > static_cast<Byte>(Selection::all) || request.filter.size() > traffic::Limits::filter_bytes || request.filter.contains('\0') || request.host.size() > 255 || request.host.contains('\0') || (no_identity ? request.id != 0 : request.id == 0)) {
+    if (request.max_bytes == 0 || request.max_bytes > Limits::session_bytes || request.max_events == 0 || request.max_events > Limits::events || request.max_age_ms == 0 || request.max_age_ms > Limits::age_ms || request.limit == 0 || request.limit > Limits::page_events || selection == 0 || selection > static_cast<Byte>(Selection::all) || request.filter.size() > traffic::Limits::filter_bytes || request.filter.contains('\0') || request.host.size() > host_bytes || request.host.contains('\0') || (no_identity ? request.id != 0 : request.id == 0)) {
       throw EncodingError{"Invalid recording request"};
     }
 
@@ -191,6 +198,21 @@ namespace telar::runtime::traffic::recording {
 }
 
 namespace telar::runtime::traffic::control {
+  namespace {
+
+    std::uint32_t requestMagic(const Request& request) noexcept {
+      if (request.direction != redirect::Direction::outbound) {
+        return Protocol::direction_magic;
+      }
+
+      if (request.process_count != 0) {
+        return Protocol::selection_magic;
+      }
+
+      return request.recording ? Protocol::recording_magic : Protocol::magic;
+    }
+
+  }
 
   Request Protocol::action(std::string_view name) {
     constexpr ds::Array names{"status", "capture.start", "capture.stop", "redirect.start", "redirect.stop", "ca.certificate", "ca.install", "ca.uninstall", "ca.rotate"};
@@ -213,7 +235,7 @@ namespace telar::runtime::traffic::control {
       throw EncodingError{"Invalid network control frame size"};
     }
 
-    ds::Array<Byte, prefix_bytes> output;
+    ds::Array<Byte, prefix_bytes> output{};
     plugins::FrameWriter writer{output.viewMut()};
 
     writer.integer(static_cast<std::uint32_t>(size));
@@ -224,9 +246,7 @@ namespace telar::runtime::traffic::control {
     validate(request);
     plugins::FrameWriter writer{output.first(std::min(output.size(), Limits::request_bytes))};
 
-    writer.integer(request.direction != redirect::Direction::outbound ? direction_magic : request.process_count != 0 ? selection_magic
-                                                                                      : request.recording            ? recording_magic
-                                                                                                                     : magic);
+    writer.integer(requestMagic(request));
     writer.tag(request.operation);
     writer.integer(static_cast<Byte>(request.target_count));
     for (const auto target : std::span{request.targets}.first(request.target_count)) {
@@ -413,16 +433,21 @@ namespace telar::runtime::traffic::control {
   }
 
   void Protocol::validate(const Reply& reply) {
+    constexpr std::size_t message_bytes = 1024;
+    constexpr std::size_t sha1_hex_bytes = 40;
+    constexpr std::size_t sha256_hex_bytes = 64;
+    constexpr std::size_t argument_bytes = 4096;
+
     if (reply.recording.size() > recording::Limits::page_bytes) {
       throw EncodingError{"Recording reply exceeds its bound"};
     }
 
-    if (reply.message.size() > 1024 || reply.certificate.size() > Limits::certificate_bytes || reply.argument_count > reply.authorization.size() || (!reply.fingerprint_sha1.empty() && reply.fingerprint_sha1.size() != 40) || (!reply.fingerprint_sha256.empty() && reply.fingerprint_sha256.size() != 64)) {
+    if (reply.message.size() > message_bytes || reply.certificate.size() > Limits::certificate_bytes || reply.argument_count > reply.authorization.size() || (!reply.fingerprint_sha1.empty() && reply.fingerprint_sha1.size() != sha1_hex_bytes) || (!reply.fingerprint_sha256.empty() && reply.fingerprint_sha256.size() != sha256_hex_bytes)) {
       throw EncodingError{"Invalid network control reply"};
     }
 
     for (const auto argument : std::span{reply.authorization}.first(reply.argument_count)) {
-      if (argument.empty() || argument.size() > 4096 || argument.contains('\0')) {
+      if (argument.empty() || argument.size() > argument_bytes || argument.contains('\0')) {
         throw EncodingError{"Invalid authorization argument"};
       }
     }
@@ -430,6 +455,23 @@ namespace telar::runtime::traffic::control {
 }
 
 namespace telar::runtime::traffic {
+  namespace {
+
+    // PCAPNG block types and options, and the fixed bytes of the blocks this writer emits.
+    constexpr std::uint32_t section_block = 0x0a0d0d0a;
+    constexpr std::uint32_t byte_order_magic = 0x1a2b3c4d;
+    constexpr std::uint32_t interface_block = 1;
+    constexpr std::uint32_t packet_block = 6;
+    constexpr std::uint16_t name_option = 2;
+    constexpr std::size_t interface_block_bytes = 20;
+    constexpr std::size_t interface_options_bytes = 8;
+    constexpr std::size_t packet_block_bytes = 32;
+    constexpr unsigned timestamp_high_shift = 32;
+
+    // The longest reason a flow event carries.
+    constexpr std::size_t reason_bytes = 128;
+
+  }
 
   FilterProgram::~FilterProgram() {
     pcap_freecode(&value);
@@ -496,9 +538,15 @@ namespace telar::runtime::traffic {
   FlowIdentity FlowIdentity::of(const FlowEvent& event) noexcept {
     FlowIdentity identity{.id = event.id, .visibility = event.visibility, .source = event.source};
 
-    identity.client.assign(event.client.substr(0, endpoint_bytes));
-    identity.server.assign(event.server.substr(0, endpoint_bytes));
-    identity.host.assign(event.host.substr(0, ProxyHostname::maximum_bytes));
+    // Each text is cut to its capacity first, so no assignment throws.
+    try {
+      identity.client.assign(event.client.substr(0, endpoint_bytes));
+      identity.server.assign(event.server.substr(0, endpoint_bytes));
+      identity.host.assign(event.host.substr(0, ProxyHostname::maximum_bytes));
+    } catch (...) {
+      std::abort();
+    }
+
     return identity;
   }
 
@@ -539,7 +587,7 @@ namespace telar::runtime::traffic {
     event.reason = reader.text();
     event.bytes = reader.bytes();
     reader.finish();
-    if (event.client.size() > 128 || event.server.size() > 128 || event.host.size() > 253 || event.reason.size() > 128) {
+    if (event.client.size() > FlowIdentity::endpoint_bytes || event.server.size() > FlowIdentity::endpoint_bytes || event.host.size() > ProxyHostname::maximum_bytes || event.reason.size() > reason_bytes) {
       throw EncodingError{"Invalid flow metadata"};
     }
 
@@ -559,9 +607,9 @@ namespace telar::runtime::traffic {
   }
 
   void Pcapng::section(plugins::FrameWriter& writer) {
-    writer.integer<std::uint32_t>(0x0a0d0d0a);
+    writer.integer(section_block);
     writer.integer<std::uint32_t>(section_bytes);
-    writer.integer<std::uint32_t>(0x1a2b3c4d);
+    writer.integer(byte_order_magic);
     writer.integer<std::uint16_t>(1);
     writer.integer<std::uint16_t>(0);
     writer.integer<std::uint64_t>(std::numeric_limits<std::uint64_t>::max());
@@ -569,7 +617,7 @@ namespace telar::runtime::traffic {
   }
 
   std::size_t Pcapng::packetBytes(const Event& event) {
-    return 20 + 8 + padded(event.interface.size()) + 32 + padded(event.bytes.size());
+    return interface_block_bytes + interface_options_bytes + padded(event.interface.size()) + packet_block_bytes + padded(event.bytes.size());
   }
 
   void Pcapng::packet(plugins::FrameWriter& writer, const Event& event, std::uint32_t interface) {
@@ -577,24 +625,24 @@ namespace telar::runtime::traffic {
       throw EncodingError{"Packet cannot be represented in PCAPNG"};
     }
 
-    const auto interface_bytes = static_cast<std::uint32_t>(20 + 8 + padded(event.interface.size()));
+    const auto interface_bytes = static_cast<std::uint32_t>(interface_block_bytes + interface_options_bytes + padded(event.interface.size()));
 
-    writer.integer<std::uint32_t>(1);
+    writer.integer(interface_block);
     writer.integer(interface_bytes);
     writer.integer(static_cast<std::uint16_t>(event.link_type));
     writer.integer<std::uint16_t>(0);
     writer.integer<std::uint32_t>(Limits::packet_bytes);
-    writer.integer<std::uint16_t>(2);
+    writer.integer(name_option);
     writer.integer(static_cast<std::uint16_t>(event.interface.size()));
-    raw(writer, {reinterpret_cast<const Byte*>(event.interface.data()), event.interface.size()});
+    raw(writer, byteView(event.interface));
     writer.integer<std::uint32_t>(0);
     writer.integer(interface_bytes);
-    const auto packet_bytes = static_cast<std::uint32_t>(32 + padded(event.bytes.size()));
+    const auto packet_bytes = static_cast<std::uint32_t>(packet_block_bytes + padded(event.bytes.size()));
 
-    writer.integer<std::uint32_t>(6);
+    writer.integer(packet_block);
     writer.integer(packet_bytes);
     writer.integer(interface);
-    writer.integer(static_cast<std::uint32_t>(event.timestamp_us >> 32));
+    writer.integer(static_cast<std::uint32_t>(event.timestamp_us >> timestamp_high_shift));
     writer.integer(static_cast<std::uint32_t>(event.timestamp_us));
     writer.integer(static_cast<std::uint32_t>(event.bytes.size()));
     writer.integer(event.original_bytes);

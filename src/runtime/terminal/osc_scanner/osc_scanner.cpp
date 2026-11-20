@@ -10,6 +10,26 @@ import telar.base.memory.sensitive;
 import telar.base.ds;
 
 namespace telar::runtime {
+  namespace {
+
+    // The length of the UTF-8 sequence a valid lead byte starts.
+    std::size_t sequenceLength(Byte first) noexcept {
+      constexpr Byte one_byte_end = 0x80;
+      constexpr Byte three_byte_lead = 0xe0;
+      constexpr Byte four_byte_lead = 0xf0;
+
+      if (first < one_byte_end) {
+        return 1;
+      }
+
+      if (first < three_byte_lead) {
+        return 2;
+      }
+
+      return first < four_byte_lead ? 3 : 4;
+    }
+
+  }
 
   void FramePacer::configure(std::chrono::nanoseconds interval) noexcept {
     interval_ = interval;
@@ -231,24 +251,25 @@ namespace telar::runtime {
       throw std::length_error{"Graphics acknowledgement exceeds its staging budget"};
     }
 
-    const auto length = static_cast<std::uint16_t>(response.size());
+    // Each record is its length's bytes, as the machine orders them, then the response.
+    const auto header = std::bit_cast<ds::Array<std::uint8_t, header_bytes>>(static_cast<std::uint16_t>(response.size()));
     const auto required = size_ + header_bytes + response.size();
     if (overflow_.empty() && required <= inline_.size()) {
-      std::memcpy(inline_.dataMut() + size_, &length, header_bytes);
-      std::memcpy(inline_.dataMut() + size_ + header_bytes, response.data(), response.size());
+      const auto record = inline_.viewMut().subspan(size_);
+
+      std::ranges::copy(header.view(), record.begin());
+      std::ranges::copy(response, record.subspan(header_bytes).begin());
     } else {
       if (required > overflow_.capacity()) {
         overflow_.reserve(std::min(maximum_bytes, std::max(required, std::max(inline_bytes * 2, overflow_.capacity() * 2))));
       }
 
       if (overflow_.empty()) {
-        overflow_.extend({inline_.begin(), inline_.begin() + size_});
+        overflow_.extend(inline_.view().first(size_));
       }
 
-      const auto* header = reinterpret_cast<const std::uint8_t*>(&length);
-
-      overflow_.extend({header, header + header_bytes});
-      overflow_.extend({response.begin(), response.end()});
+      overflow_.extend(header.view());
+      overflow_.extend(response);
     }
 
     size_ = required;
@@ -266,8 +287,7 @@ namespace telar::runtime {
 
     while (pending()) {
       const auto count = nextSize();
-      const auto* data = overflow_.empty() ? inline_.data() : overflow_.data();
-      if (!queue_->tryPush({data + consumed_ + header_bytes, count})) {
+      if (!queue_->tryPush(staged().subspan(consumed_ + header_bytes, count))) {
         return false;
       }
 
@@ -300,19 +320,23 @@ namespace telar::runtime {
       return 0;
     }
 
-    const auto* data = overflow_.empty() ? inline_.data() : overflow_.data();
-    std::uint16_t length;
+    const auto record = staged().subspan(consumed_);
+    const auto length = std::bit_cast<std::uint16_t>(ds::Array<std::uint8_t, header_bytes>{record[0], record[1]});
 
-    std::memcpy(&length, data + consumed_, header_bytes);
     TELAR_ASSERT(length <= size_ - consumed_ - header_bytes);
     return length;
   }
 
+  template <Allocator Memory>
+  std::span<const std::uint8_t> ResponseOutbox<Memory>::staged() const noexcept {
+    return overflow_.empty() ? std::span<const std::uint8_t>{inline_.view()} : overflow_.view();
+  }
+
   TextSearch::TextSearch(const SearchPane& request, std::uint64_t revision)
-      : TextSearch(request.request_id, request.pane_id, request.needle, {}, revision) {}
+      : TextSearch({.request_id = request.request_id, .pane_id = request.pane_id}, request.needle, Rows(), revision) {}
 
   TextSearch::TextSearch(const SearchPaneRows& request, std::uint64_t revision)
-      : TextSearch(request.request_id, request.pane_id, request.needle, {.first = request.first_row, .last = request.last_row}, revision) {}
+      : TextSearch({.request_id = request.request_id, .pane_id = request.pane_id}, request.needle, {.first = request.first_row, .last = request.last_row}, revision) {}
 
   bool TextSearch::advance(GhosttyTerminal terminal, std::uint64_t revision) {
     if (revision != revision_) {
@@ -348,13 +372,13 @@ namespace telar::runtime {
   }
 
   PaneMatches TextSearch::result() {
-    std::reverse(matches_.dataMut(), matches_.dataMut() + count_);
+    std::ranges::reverse(matches_.viewMut().first(count_));
     return PaneMatches{.request_id = request_id, .pane_id = pane_id, .truncated = truncated_, .matches = std::span<const PaneMatch>{matches_}.first(count_)};
   }
 
-  TextSearch::TextSearch(std::uint64_t request, std::uint64_t pane, std::string_view needle, Rows rows, std::uint64_t revision)
-      : request_id(request),
-        pane_id(pane),
+  TextSearch::TextSearch(Origin origin, std::string_view needle, Rows rows, std::uint64_t revision)
+      : request_id(origin.request_id),
+        pane_id(origin.pane_id),
         rows_(rows),
         revision_(revision),
         deadline_(Clock::now() + deadline_budget) {
@@ -363,17 +387,19 @@ namespace telar::runtime {
     }
 
     validateUtf8(needle);
+    // A lead byte keeps the bits below its length's marker; each continuation byte adds six.
+    constexpr std::uint32_t lead_mask = 0x7fU;
+    constexpr std::uint32_t continuation_mask = 0x3fU;
+    constexpr unsigned continuation_bits = 6;
     auto text = needle;
 
     while (!text.empty()) {
       const auto first = static_cast<Byte>(text.front());
-      const std::size_t length = first < 0x80 ? 1 : first < 0xe0 ? 2
-                                                : first < 0xf0   ? 3
-                                                                 : 4;
-      std::uint32_t codepoint = length == 1 ? first : first & (0x7f >> length);
+      const std::size_t length = sequenceLength(first);
+      std::uint32_t codepoint = length == 1 ? first : first & (lead_mask >> length);
 
       for (std::size_t index = 1; index < length; ++index) {
-        codepoint = (codepoint << 6) | (static_cast<Byte>(text[index]) & 0x3f);
+        codepoint = (codepoint << continuation_bits) | (static_cast<Byte>(text[index]) & continuation_mask);
       }
 
       needle_.atMut(needle_length_++) = codepoint;
@@ -406,7 +432,7 @@ namespace telar::runtime {
 
   bool TextSearch::searchRow(GhosttyTerminal terminal, std::uint32_t row) {
     auto reference = gridReference(terminal, GHOSTTY_POINT_TAG_SCREEN, {.x = 0, .y = row});
-    ds::Array<std::uint16_t, maximum_columns> positions;
+    ds::Array<std::uint16_t, maximum_columns> positions; // NOLINT(cppcoreguidelines-pro-type-member-init): each position is written before it is read, and zeroing them would cost every row a search reads
     ds::Array<PaneMatch, maximum_columns> found;
     std::size_t found_count = 0;
     std::size_t row_length = 0;
@@ -429,7 +455,7 @@ namespace telar::runtime {
 
       positions.atMut(row_length++) = column;
       const auto content = cell_layout::content_tag(cell);
-      auto codepoint = content == GHOSTTY_CELL_CONTENT_CODEPOINT || content == GHOSTTY_CELL_CONTENT_CODEPOINT_GRAPHEME ? cell_layout::codepoint(cell) : 0;
+      auto codepoint = content == GHOSTTY_CELL_CONTENT_CODEPOINT || content == GHOSTTY_CELL_CONTENT_CODEPOINT_GRAPHEME ? static_cast<std::uint32_t>(cell_layout::codepoint(cell)) : 0U;
 
       codepoint = normalize(codepoint == 0 ? ' ' : codepoint);
       while (matched != 0 && codepoint != needle_[matched]) {

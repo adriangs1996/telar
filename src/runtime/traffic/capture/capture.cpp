@@ -7,8 +7,17 @@ import telar.platform.error;
 import telar.platform.net;
 import telar.runtime.vocabulary.traffic;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 namespace telar::runtime::traffic {
+  namespace {
+
+    // poll's events that end the data channel, and pcap's flag of a running interface, as unsigned
+    // values: flags are tested with unsigned bitwise operations.
+    constexpr auto channel_closed = static_cast<unsigned>(POLLHUP) | static_cast<unsigned>(POLLERR) | static_cast<unsigned>(POLLNVAL);
+    constexpr auto interface_up = static_cast<bpf_u_int32>(PCAP_IF_UP);
+
+  }
 
   void KernelDrops::observe(Sample& previous, std::uint32_t buffer, std::uint32_t interface) noexcept {
     // libpcap counters are cumulative within one capture handle and can wrap.
@@ -47,10 +56,10 @@ namespace telar::runtime::traffic {
     }
 
     greet(Role::live_capture);
-    Signals signals;
+    const Signals signals;
     auto discovery = std::chrono::steady_clock::time_point::min();
 
-    while (!signals.stopped()) {
+    while (!Signals::stopped()) {
       const auto now = std::chrono::steady_clock::now();
       if (discovery == std::chrono::steady_clock::time_point::min() || now - discovery >= std::chrono::seconds{1}) {
         discover();
@@ -70,7 +79,7 @@ namespace telar::runtime::traffic {
         throw SystemError{"Poll packet capture"};
       }
 
-      if ((descriptors[0].revents & (POLLHUP | POLLERR | POLLNVAL)) != 0) {
+      if ((static_cast<unsigned>(descriptors[0].revents) & channel_closed) != 0) {
         return;
       }
 
@@ -93,8 +102,8 @@ namespace telar::runtime::traffic {
     greet(Role::offline_capture);
     channel_.offline = true;
     for (;;) {
-      pcap_pkthdr* header;
-      const u_char* bytes;
+      pcap_pkthdr* header = nullptr;
+      const u_char* bytes = nullptr;
       const auto result = pcap_next_ex(file.get(), &header, &bytes);
       if (result == PCAP_ERROR_BREAK) {
         return;
@@ -126,21 +135,21 @@ namespace telar::runtime::traffic {
     pthread_sigmask(SIG_SETMASK, &previous_, nullptr);
   }
 
-  bool Capture::Signals::stopped() const noexcept {
-    sigset_t pending;
+  bool Capture::Signals::stopped() noexcept {
+    sigset_t pending{};
 
     return ::sigpending(&pending) == 0 && ((sigismember(&pending, SIGTERM) != 0) || (sigismember(&pending, SIGINT) != 0));
   }
 
   void Capture::greet(Role role) {
-    ds::Array<Byte, Protocol::greeting_bytes> output;
+    ds::Array<Byte, Protocol::greeting_bytes> output{};
 
     sendAll(channel_.socket.get(), Protocol::greeting(output.viewMut(), role));
     setNonblocking(channel_.socket.get());
   }
 
   void Capture::drainControl() {
-    ds::Array<Byte, Limits::metadata_bytes> bytes;
+    ds::Array<Byte, Limits::metadata_bytes> bytes; // NOLINT(cppcoreguidelines-pro-type-member-init): offline capture drains after every packet, and recv writes what is read
     const auto count = ::recv(channel_.socket.get(), bytes.dataMut(), bytes.size(), MSG_DONTWAIT);
     if (count == 0 || (count < 0 && !socketWouldBlock(sys::lastError()))) {
       throw SystemError{"Traffic runtime disconnected", ECONNRESET};
@@ -200,7 +209,7 @@ namespace telar::runtime::traffic {
   }
 
   void Capture::Channel::notice(Kind kind, std::string_view interface, std::string_view message, std::uint32_t index) {
-    emit(Event{.kind = kind, .interface_index = index, .interface = interface, .bytes = {reinterpret_cast<const Byte*>(message.data()), message.size()}});
+    emit(Event{.kind = kind, .interface_index = index, .interface = interface, .bytes = byteView(message)});
   }
 
   void Capture::discover() {
@@ -218,60 +227,16 @@ namespace telar::runtime::traffic {
       }
     }
 
-    for (auto* interface = raw; interface != nullptr; interface = interface->next) {
+    for (const auto* interface = raw; interface != nullptr; interface = interface->next) {
       const std::string_view name{interface->name};
       const auto index = ::if_nametoindex(interface->name);
-      if ((interface->flags & PCAP_IF_UP) == 0 || name.size() > Limits::interface_bytes || index == 0) {
+      if ((interface->flags & interface_up) == 0 || name.size() > Limits::interface_bytes || index == 0) {
         continue;
       }
 
-      const auto devices = devices_.viewMut();
-      auto existing = std::ranges::find_if(devices, [&](auto& device) {
-        return device && device->name.view() == name;
-      });
-      if (existing != devices.end()) {
-        if ((*existing)->index == index) {
-          existing->getMut().seen = true;
-          continue;
-        }
-
-        close(static_cast<std::size_t>(existing - devices.begin()));
+      if (!keep(name, index)) {
+        attach(*interface, index);
       }
-
-      // Asked again: closing a device borrowed the capture whole.
-      const auto free = devices_.viewMut();
-      auto slot = std::ranges::find_if(free, [](auto& device) {
-        return !device;
-      });
-      if (slot == free.end()) {
-        channel_.notice(Kind::interface_error, name, "Capture interface limit reached", index);
-        continue;
-      }
-
-      pcap_t* handle = pcap_create(interface->name, error.dataMut());
-      if (handle == nullptr) {
-        channel_.notice(Kind::interface_error, name, error.data(), index);
-        continue;
-      }
-
-      slot->emplace(handle, name, index);
-      auto& capture = slot->getMut();
-      constexpr int read_timeout_ms = 50;
-      constexpr int kernel_buffer_bytes = 1024 * 1024;
-      if (pcap_set_snaplen(handle, Limits::packet_bytes) != 0 || pcap_set_promisc(handle, 0) != 0 || pcap_set_timeout(handle, read_timeout_ms) != 0 || pcap_set_buffer_size(handle, kernel_buffer_bytes) != 0 || pcap_set_immediate_mode(handle, 1) != 0 || pcap_activate(handle) < 0 || pcap_setnonblock(handle, 1, error.dataMut()) != 0) {
-        channel_.notice(Kind::interface_error, name, pcap_geterr(handle), index);
-        slot->reset();
-        continue;
-      }
-
-      if (::if_nametoindex(interface->name) != index) {
-        channel_.notice(Kind::interface_error, name, "Interface changed during capture activation", index);
-        slot->reset();
-        continue;
-      }
-
-      capture.seen = true;
-      channel_.notice(Kind::interface_open, name, {}, index);
     }
 
     for (std::size_t slot = 0; slot < devices_.size(); ++slot) {
@@ -279,6 +244,66 @@ namespace telar::runtime::traffic {
         close(slot);
       }
     }
+  }
+
+  bool Capture::keep(std::string_view name, std::uint32_t index) {
+    const auto devices = devices_.view();
+    const auto existing = std::ranges::find_if(devices, [&](const auto& device) {
+      return device && device->name.view() == name;
+    });
+    if (existing == devices.end()) {
+      return false;
+    }
+
+    const auto slot = static_cast<std::size_t>(existing - devices.begin());
+
+    if ((*existing)->index == index) {
+      devices_.atMut(slot).getMut().seen = true;
+      return true;
+    }
+
+    close(slot);
+    return false;
+  }
+
+  void Capture::attach(const pcap_if_t& interface, std::uint32_t index) {
+    const std::string_view name{interface.name};
+    ds::Array<char, PCAP_ERRBUF_SIZE> error{};
+    const auto devices = devices_.view();
+    const auto free = std::ranges::find_if(devices, [](const auto& device) {
+      return !device;
+    });
+    if (free == devices.end()) {
+      channel_.notice(Kind::interface_error, name, "Capture interface limit reached", index);
+      return;
+    }
+
+    auto& slot = devices_.atMut(static_cast<std::size_t>(free - devices.begin()));
+
+    pcap_t* handle = pcap_create(interface.name, error.dataMut());
+    if (handle == nullptr) {
+      channel_.notice(Kind::interface_error, name, error.data(), index);
+      return;
+    }
+
+    slot.emplace(handle, name, index);
+    auto& capture = slot.getMut();
+    constexpr int read_timeout_ms = 50;
+    constexpr int kernel_buffer_bytes = 1024 * 1024;
+    if (pcap_set_snaplen(handle, Limits::packet_bytes) != 0 || pcap_set_promisc(handle, 0) != 0 || pcap_set_timeout(handle, read_timeout_ms) != 0 || pcap_set_buffer_size(handle, kernel_buffer_bytes) != 0 || pcap_set_immediate_mode(handle, 1) != 0 || pcap_activate(handle) < 0 || pcap_setnonblock(handle, 1, error.dataMut()) != 0) {
+      channel_.notice(Kind::interface_error, name, pcap_geterr(handle), index);
+      slot.reset();
+      return;
+    }
+
+    if (::if_nametoindex(interface.name) != index) {
+      channel_.notice(Kind::interface_error, name, "Interface changed during capture activation", index);
+      slot.reset();
+      return;
+    }
+
+    capture.seen = true;
+    channel_.notice(Kind::interface_open, name, {}, index);
   }
 
   bool Capture::drain(std::size_t slot) {
@@ -289,8 +314,8 @@ namespace telar::runtime::traffic {
     const auto link_type = static_cast<std::uint32_t>(pcap_datalink(handle));
 
     for (std::size_t round = 0; round < batch_packets; ++round) {
-      pcap_pkthdr* header;
-      const u_char* bytes;
+      pcap_pkthdr* header = nullptr;
+      const u_char* bytes = nullptr;
       const auto result = pcap_next_ex(handle, &header, &bytes);
       if (result == 0) {
         return true;

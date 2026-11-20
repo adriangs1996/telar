@@ -37,8 +37,8 @@ namespace telar::gui::qt {
       Memory* memory;
       void (*destroy)(Memory& memory, void* items);
 
-      void operator()(void* items) const noexcept {
-        destroy(*memory, items);
+      void operator()(void* lane_items) const noexcept {
+        destroy(*memory, lane_items);
       }
     };
 

@@ -9,6 +9,8 @@
 #include <QList>
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
+#include <functional>
 #include <limits>
 #include <utility>
 
@@ -262,7 +264,7 @@ namespace telar::gui::qt {
   }
 
   void ElementLayout::setGap(qreal gap) {
-    if (gap != gap_) {
+    if (!std::equal_to<>{}(gap, gap_)) {
       gap_ = gap;
       emit layoutChanged();
       polish();
@@ -275,7 +277,7 @@ namespace telar::gui::qt {
 
   void ElementLayout::setPadding(const QVariantList& padding) {
     for (qsizetype index = 0; index < 4; ++index) {
-      padding_.atMut(index) = index < padding.size() ? padding[index].toReal() : 0;
+      padding_.atMut(static_cast<std::size_t>(index)) = index < padding.size() ? padding[index].toReal() : 0;
     }
 
     emit layoutChanged();
@@ -311,7 +313,7 @@ namespace telar::gui::qt {
   }
 
   void ElementLayout::setRatio(qreal ratio) {
-    if (ratio != ratio_) {
+    if (!std::equal_to<>{}(ratio, ratio_)) {
       ratio_ = ratio;
       emit layoutChanged();
       polish();
@@ -395,7 +397,9 @@ namespace telar::gui::qt {
     motion.seen = true;
     const bool fresh = motion.duration_ns == 0 && motion.start_ns == 0;
     const auto same = [](const Pose& left, const Pose& right) {
-      return left.x == right.x && left.y == right.y && left.rotation == right.rotation && left.scale == right.scale && left.opacity == right.opacity;
+      const std::equal_to<> equal;
+
+      return equal(left.x, right.x) && equal(left.y, right.y) && equal(left.rotation, right.rotation) && equal(left.scale, right.scale) && equal(left.opacity, right.opacity);
     };
 
     if (fresh) {

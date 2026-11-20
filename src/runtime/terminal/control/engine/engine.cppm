@@ -52,7 +52,7 @@ export namespace telar::runtime::control {
 
     bool streamable(Sequence sequence) noexcept;
 
-    bool borrowableApc(Sequence header) const noexcept;
+    static bool borrowableApc(Sequence header) noexcept;
 
     bool streamComplete() noexcept;
 
@@ -105,8 +105,17 @@ export namespace telar::runtime::control {
     struct ReleaseProducer {
       PtyResponseQueue::Producer& producer;
 
+      explicit ReleaseProducer(PtyResponseQueue::Producer& lease) noexcept;
+      ReleaseProducer(const ReleaseProducer&) = delete;
+      ReleaseProducer& operator=(const ReleaseProducer&) = delete;
+      ReleaseProducer(ReleaseProducer&&) = delete;
+      ReleaseProducer& operator=(ReleaseProducer&&) = delete;
       ~ReleaseProducer();
     };
+
+    // A palette query or an XTGETTCAP request publishes its replies as it goes, and returns whether
+    // it finished; none for every other sequence.
+    ds::Option<bool> publishing(Sequence sequence);
 
     void passthrough(Sequence sequence);
 
@@ -115,6 +124,21 @@ export namespace telar::runtime::control {
     void attributes(bool secondary);
 
     void csi(Sequence sequence, bool history_erased, bool homed);
+
+    // Whether the engine answered the CSI rather than leave it to ghostty.
+    bool csiAnswered(Sequence sequence, const Parameters& parameters, bool history_erased, bool homed);
+
+    // DECRQCRA and XTCHECKSUM, whether the engine answered them.
+    bool checksumRequest(const Parameters& parameters);
+
+    void cursorHome(const Parameters& parameters, bool history_erased);
+
+    // DECSTR and DECRQM, whether the engine answered them.
+    bool modeRequest(const Parameters& parameters);
+
+    void versionReport();
+
+    void keyboardReport();
 
     // `clear` erases the scrollback before the screen (ED 3, CUP, ED 2), and Ghostty moves a screen
     // whose last line is a prompt into the scrollback on ED 2 rather than erase it. The scrollback
@@ -143,6 +167,9 @@ export namespace telar::runtime::control {
     void sizeEvent();
 
     void sizeReport(unsigned request);
+
+    // The window title, without the controls and malformed UTF-8 a reply must not carry.
+    void titleReport();
 
     // Only an offset survives retries; the parser owns the complete request
     // until this method has published every admitted capability response.

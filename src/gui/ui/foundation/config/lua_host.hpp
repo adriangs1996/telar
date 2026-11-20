@@ -54,22 +54,22 @@ namespace telar::gui::qt {
       auto task = std::make_shared<Task>(Task{.work = std::move(work), .done = std::move(done), .outcome = {}});
 
       ++pending_;
-      QMetaObject::invokeMethod(worker_, [this, task = std::move(task)] mutable {
+      QMetaObject::invokeMethod(worker_, [this, job = std::move(task)] mutable {
         try {
           if constexpr (std::is_void_v<Value>) {
-            task->work();
-            task->outcome.done = true;
+            job->work();
+            job->outcome.done = true;
           } else {
-            task->outcome.value.emplace(task->work());
+            job->outcome.value.emplace(job->work());
           }
         } catch (const std::exception& error) {
-          task->outcome.error = QString::fromUtf8(error.what());
+          job->outcome.error = QString::fromUtf8(error.what());
         }
 
         // The window thread owns `this`; its destructor waits for this thread first.
-        QMetaObject::invokeMethod(this, [this, task] mutable {
+        QMetaObject::invokeMethod(this, [this, job] mutable {
           --pending_;
-          task->done(std::move(task->outcome));
+          job->done(std::move(job->outcome));
         },
             Qt::QueuedConnection);
       },

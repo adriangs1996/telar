@@ -6,6 +6,7 @@ static_assert(true);
 #include "curve_scene.hpp"
 #include "curve_mask.hpp"
 #include "curve_mask_node.hpp"
+#include "qt_buffers.hpp"
 #include "scene_nodes.hpp"
 #include "telar_base/ds/values.hpp"
 #include "ui/foundation/models/projection.hpp"
@@ -34,7 +35,7 @@ namespace telar::gui::qt {
   namespace {
 
     QRectF curveBounds(const CurvePaint& paint) noexcept {
-      return {paint.cell.x / paint.scale, paint.cell.y / paint.scale, paint.cell.width / paint.scale, paint.cell.height / paint.scale};
+      return {static_cast<qreal>(paint.cell.x) / paint.scale, static_cast<qreal>(paint.cell.y) / paint.scale, static_cast<qreal>(paint.cell.width) / paint.scale, static_cast<qreal>(paint.cell.height) / paint.scale};
     }
 
   }
@@ -52,7 +53,7 @@ namespace telar::gui::qt {
       return ds::none;
     }
 
-    glyphs::BoxCurve{shape, cell, thickness}.rasterize({.pixels = std::span{alpha.bits(), static_cast<std::size_t>(alpha.sizeInBytes())}, .stride = static_cast<std::size_t>(alpha.bytesPerLine()), .width = static_cast<std::uint16_t>(alpha.width()), .height = static_cast<std::uint16_t>(alpha.height())});
+    glyphs::BoxCurve{shape, cell, thickness}.rasterize({.pixels = imageBytes(alpha), .stride = static_cast<std::size_t>(alpha.bytesPerLine()), .width = static_cast<std::uint16_t>(alpha.width()), .height = static_cast<std::uint16_t>(alpha.height())});
     std::unique_ptr<QSGTexture> texture;
 
     if (window_.rendererInterface()->graphicsApi() != QSGRendererInterface::Software) {

@@ -31,6 +31,7 @@ static_assert(true);
 #include <cstdint>
 #include <cstring>
 #include <exception>
+#include <functional>
 #include <limits>
 #include <optional>
 #include <string_view>
@@ -93,7 +94,7 @@ namespace telar::gui::qt {
   }
 
   void NativeFormField::setRatio(qreal ratio) {
-    if (std::isfinite(ratio) && ratio > 0 && ratio_ != ratio) {
+    if (std::isfinite(ratio) && ratio > 0 && !std::equal_to<>{}(ratio_, ratio)) {
       ratio_ = ratio;
       emit ratioChanged();
       invalidateLayout();
@@ -268,7 +269,7 @@ namespace telar::gui::qt {
 
     if (composing && hasActiveFocus()) {
       {
-        const QScopedValueRollback discarding{discarding_composition_, true};
+        const QScopedValueRollback<bool> discarding{discarding_composition_, true};
 
         QGuiApplication::inputMethod()->reset();
       }
@@ -334,7 +335,7 @@ namespace telar::gui::qt {
 
       const auto view = display.view(geometry_.columns);
       const auto logical = [this](Rect area) {
-        return QRectF{area.x / density_, area.y / density_, area.width / density_, area.height / density_};
+        return QRectF{static_cast<qreal>(area.x) / density_, static_cast<qreal>(area.y) / density_, static_cast<qreal>(area.width) / density_, static_cast<qreal>(area.height) / density_};
       };
 
       const auto underline = geometry_.underline(cellTextColumns(view.text));

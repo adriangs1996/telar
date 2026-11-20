@@ -17,6 +17,7 @@ static_assert(true);
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -31,7 +32,7 @@ namespace telar::gui::qt {
   class TerminalDecorations {
   public:
     static void rectangle(QQuickWindow& window, QSGNode& parent, const QRectF& bounds, Color foreground, qreal scale) {
-      if (foreground.a == 1) {
+      if (std::equal_to<>{}(foreground.a, 1)) {
         appendSceneNode<QSGSimpleRectNode>(parent, bounds, toQColor(foreground));
         return;
       }

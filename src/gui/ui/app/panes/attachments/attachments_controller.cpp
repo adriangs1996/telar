@@ -27,9 +27,13 @@ namespace telar::gui::qt {
         return AttachmentMarkerPolicy::stable_number;
       case AgentAttachmentMarkers::pasted_path:
         return AttachmentMarkerPolicy::pasted_path;
-      default:
+      case AgentAttachmentMarkers::none:
+      case AgentAttachmentMarkers::ordered:
         return AttachmentMarkerPolicy::ordered;
       }
+
+      // Markers outside the enum keep the ordered policy.
+      return AttachmentMarkerPolicy::ordered;
     }
 
   }
@@ -69,7 +73,15 @@ namespace telar::gui::qt {
         noun = "pixels";
         value = AttachmentLimits::maximum_pixels;
         break;
-      default:
+      case platform::ClipboardImageError::no_image:
+      case platform::ClipboardImageError::changed:
+      case platform::ClipboardImageError::invalid_image:
+      case platform::ClipboardImageError::read_failed:
+        return;
+      }
+
+      // An error outside the enum names no limit.
+      if (name.empty()) {
         return;
       }
 
@@ -105,7 +117,7 @@ namespace telar::gui::qt {
     const auto area = application::workbench::geometry(session).pixels(tab->layout.reservedArea());
     const auto density = display_.density;
 
-    return {{QStringLiteral("x"), area.x / density}, {QStringLiteral("y"), area.y / density}, {QStringLiteral("width"), area.width / density}, {QStringLiteral("height"), area.height / density}};
+    return {{QStringLiteral("x"), static_cast<double>(area.x) / density}, {QStringLiteral("y"), static_cast<double>(area.y) / density}, {QStringLiteral("width"), static_cast<double>(area.width) / density}, {QStringLiteral("height"), static_cast<double>(area.height) / density}};
   }
 
   QVariantMap AttachmentsController::modalGeometry() const {

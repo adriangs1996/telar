@@ -25,6 +25,7 @@ static_assert(true);
 #include "ui/foundation/input/key_adapter.hpp"
 #include "ui/foundation/input/key_encoding.hpp"
 #include <QClipboard>
+#include <QDebug>
 #include <QGuiApplication>
 #include <QHoverEvent>
 #include <QInputMethod>
@@ -60,6 +61,7 @@ static_assert(true);
 #include <cstring>
 #include <exception>
 #include <freetype/freetype.h>
+#include <functional>
 #include <hb.h>
 #include <limits>
 #include <memory>
@@ -96,7 +98,7 @@ namespace telar::gui::qt {
     // At rest, with nothing drawn from them, the rows kept beyond the screen are given back.
     scroll_release_.setSingleShot(true);
     connect(&scroll_release_, &QTimer::timeout, this, [this] {
-      if (auto* current = controller_ == nullptr ? nullptr : controller_->sessionMut().findPaneMut(pane_id_); current != nullptr && !motion_.moving() && shift_ == 0 && current->folds.empty()) {
+      if (auto* current = controller_ == nullptr ? nullptr : controller_->sessionMut().findPaneMut(pane_id_); current != nullptr && !motion_.moving() && std::equal_to<>{}(shift_, 0) && current->folds.empty()) {
         current->rows.release();
       }
     });
@@ -143,7 +145,7 @@ namespace telar::gui::qt {
       releaseKeys();
       releaseMouse();
     } catch (const std::exception& error) {
-      qWarning("Unable to release terminal input: %s", error.what());
+      qWarning() << "Unable to release terminal input:" << error.what();
     }
   }
 
@@ -282,7 +284,7 @@ namespace telar::gui::qt {
       update();
       refreshLinkHover();
     } catch (const std::exception& error) {
-      qWarning("Terminal font: %s", error.what());
+      qWarning() << "Terminal font:" << error.what();
     }
   }
 
@@ -738,7 +740,7 @@ namespace telar::gui::qt {
 
         if (stretches.count == stretches.spans.size()) {
           // The oldest give way to the newest.
-          std::shift_left(stretches.spans.dataMut(), stretches.spans.dataMut() + stretches.spans.size(), 1);
+          std::ranges::shift_left(stretches.spans.viewMut(), 1);
           --stretches.count;
         }
 
@@ -1063,7 +1065,7 @@ namespace telar::gui::qt {
       }
     }
 
-    static const QString no_preedit;
+    [[clang::no_destroy]] static const QString no_preedit;
     const TerminalPresentation frame{
         .screen = current->screen,
         .graphics = current->graphics,
@@ -1279,7 +1281,7 @@ namespace telar::gui::qt {
     for (qsizetype offset = 0; offset < text.size();) {
       const auto paired = text[offset].isHighSurrogate() && offset + 1 < text.size() && text[offset + 1].isLowSurrogate();
       const auto length = paired ? 2 : 1;
-      const auto scalar = QString::fromRawData(text.constData() + offset, length);
+      const auto scalar = QString::fromRawData(QStringView{text}.sliced(offset, length).constData(), length);
       const QKeyEvent key{QEvent::KeyPress, Qt::Key_unknown, Qt::NoModifier, scalar};
 
       static_cast<void>(controller_->copy().handleKey(pane_id_, key));
@@ -1308,9 +1310,27 @@ namespace telar::gui::qt {
       return font_.faces[0];
     case Qt::ImHints:
       return static_cast<int>(Qt::ImhNoPredictiveText | Qt::ImhNoAutoUppercase);
-    default:
+    case Qt::ImCursorPosition:
+    case Qt::ImSurroundingText:
+    case Qt::ImCurrentSelection:
+    case Qt::ImMaximumTextLength:
+    case Qt::ImAnchorPosition:
+    case Qt::ImPreferredLanguage:
+    case Qt::ImAbsolutePosition:
+    case Qt::ImTextBeforeCursor:
+    case Qt::ImTextAfterCursor:
+    case Qt::ImEnterKeyType:
+    case Qt::ImAnchorRectangle:
+    case Qt::ImInputItemClipRectangle:
+    case Qt::ImReadOnly:
+    case Qt::ImPlatformData:
+    case Qt::ImQueryInput:
+    case Qt::ImQueryAll:
       return QQuickItem::inputMethodQuery(query);
     }
+
+    // Qt answers a query outside the enum, such as a combination of queries.
+    return QQuickItem::inputMethodQuery(query);
   }
 
   void TerminalItem::focusInEvent(QFocusEvent* event) {

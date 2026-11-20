@@ -5,6 +5,7 @@ static_assert(true);
 
 #include "provider_artwork.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
+#include "ui/foundation/scene/qt_buffers.hpp"
 #include <QByteArray>
 #include <QFile>
 #include <QIODevice>
@@ -35,7 +36,7 @@ namespace telar::gui::qt {
     constexpr auto sheet_bytes = source_stride * source_side;
 
     const QByteArray& providerSheet() {
-      static const auto pixels = [] {
+      [[clang::no_destroy]] static const auto pixels = [] {
         QFile source{QStringLiteral(":/telar/fonts/provider-symbols-320x64.rgba")};
         if (!source.open(QIODevice::ReadOnly)) {
           return QByteArray{};
@@ -95,18 +96,18 @@ namespace telar::gui::qt {
     }
 
     const auto offset = static_cast<std::size_t>(std::distance(providers.begin(), found)) * source_side * application::terminal::graphics::RgbaImageView::channels;
-    const application::terminal::graphics::RgbaImageView source{.pixels = std::as_bytes(std::span{sheet.constData(), static_cast<std::size_t>(sheet.size())}).subspan(offset), .stride = source_stride, .width = source_side, .height = source_side};
+    const application::terminal::graphics::RgbaImageView source{.pixels = std::as_bytes(std::span<const char>{sheet}).subspan(offset), .stride = source_stride, .width = source_side, .height = source_side};
+    // A failed allocation leaves the image null.
     QImage output{side, side, QImage::Format_RGBA8888_Premultiplied};
-    if (output.isNull()) {
-      return {};
-    }
+    if (!output.isNull()) {
+      const auto destination = imageBytes(output);
 
-    const auto destination = std::span{output.bits(), static_cast<std::size_t>(output.sizeInBytes())};
-    if (!application::terminal::graphics::ArtworkResize::square(source, destination, static_cast<std::size_t>(side))) {
-      return {};
+      if (application::terminal::graphics::ArtworkResize::square(source, destination, static_cast<std::size_t>(side))) {
+        application::terminal::graphics::ArtworkResize::premultiply(destination);
+      } else {
+        output = QImage{};
+      }
     }
-
-    application::terminal::graphics::ArtworkResize::premultiply(destination);
 
     return output;
   }
@@ -132,13 +133,10 @@ namespace telar::gui::qt {
       return {};
     }
 
+    // A failed allocation leaves the image null.
     QImage output{side, side, QImage::Format_ARGB32_Premultiplied};
-    if (output.isNull()) {
-      return {};
-    }
-
-    output.fill(Qt::transparent);
-    {
+    if (!output.isNull()) {
+      output.fill(Qt::transparent);
       QPainter painter{&output};
 
       painter.setRenderHint(QPainter::Antialiasing);

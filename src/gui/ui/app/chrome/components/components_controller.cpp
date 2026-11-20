@@ -279,7 +279,7 @@ namespace telar::gui::qt {
         {QStringLiteral("search"), local(geometry.search)},
         {QStringLiteral("results"), local(application::palette::PaletteGeometry::inset(geometry.results, display_.chrome.px(application::palette::PaletteRowWindow::content_inset)))},
         {QStringLiteral("footer"), local(geometry.footer)},
-        {QStringLiteral("rowHeight"), geometry.row_height / density},
+        {QStringLiteral("rowHeight"), static_cast<double>(geometry.row_height) / density},
     };
   }
 

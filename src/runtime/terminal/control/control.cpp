@@ -5,17 +5,93 @@ import telar.base.ds;
 
 namespace telar::runtime::control {
 
-  std::string_view Sequence::body() const noexcept {
-    const auto prefix = kind == Kind::escape ? 1u : 2u;
+  namespace {
 
-    return {reinterpret_cast<const char*>(bytes.data() + prefix), bytes.size() - prefix};
+    constexpr unsigned decimal_base = 10;
+
+    // The parameters of a control sequence as its bytes arrive, one byte at a time.
+    struct ParameterScan {
+      Parameters result;
+      std::uint32_t accumulator = 0;
+      unsigned digits = 0;
+      bool intermediate_phase = false;
+
+      // False when the parameters already hold as many values as they can.
+      bool pushValue() noexcept {
+        if (result.count == Parameters::capacity) {
+          return false;
+        }
+
+        result.values.atMut(result.count++) = static_cast<std::uint16_t>(accumulator);
+        return true;
+      }
+
+      bool digit(char byte) noexcept {
+        if (++digits > Parameters::maximum_digits) {
+          return false;
+        }
+
+        accumulator = std::min(Parameters::maximum_value, (accumulator * decimal_base) + static_cast<unsigned>(byte - '0'));
+        return true;
+      }
+
+      bool separator(char byte) noexcept {
+        if (!pushValue()) {
+          return false;
+        }
+
+        result.colon |= byte == ':';
+        accumulator = 0;
+        digits = 0;
+        return true;
+      }
+
+      bool intermediate(char byte) noexcept {
+        const bool prefix = byte >= '<' && byte <= '?' && !intermediate_phase && digits == 0 && result.count == 0;
+        if (!prefix && (byte < ' ' || byte > '/')) {
+          return false;
+        }
+
+        if (result.intermediate_count == Parameters::intermediate_capacity) {
+          return false;
+        }
+
+        result.intermediate.atMut(result.intermediate_count++) = byte;
+        intermediate_phase |= !prefix;
+        return true;
+      }
+
+      // False when the byte makes the parameters invalid.
+      bool feed(char byte) noexcept {
+        if (byte == '\x7f') {
+          return true;
+        }
+
+        if (!intermediate_phase && byte >= '0' && byte <= '9') {
+          return digit(byte);
+        }
+
+        if (!intermediate_phase && (byte == ';' || byte == ':')) {
+          return separator(byte);
+        }
+
+        return intermediate(byte);
+      }
+    };
+
+  }
+
+  std::string_view Sequence::body() const noexcept {
+    const auto prefix = kind == Kind::escape ? 1U : 2U;
+
+    return textView(bytes.subspan(prefix));
   }
 
   std::string_view takeField(std::string_view& remaining, char separator) noexcept {
     const auto end = remaining.find(separator);
-    const auto result = remaining.substr(0, end);
+    const auto result = textPrefix(remaining, end);
 
-    remaining = end == std::string_view::npos ? std::string_view{} : remaining.substr(end + 1);
+    remaining = end == std::string_view::npos ? std::string_view{} : textAfter(remaining, end + 1);
     return result;
   }
 
@@ -24,63 +100,21 @@ namespace telar::runtime::control {
       return ds::none;
     }
 
-    Parameters result;
+    ParameterScan scan;
 
-    result.final = body.back();
+    scan.result.final = body.back();
     body.remove_suffix(1);
-    bool intermediate_phase = false;
-    std::uint32_t accumulator = 0;
-    unsigned digits = 0;
-
     for (const auto byte : body) {
-      if (byte == '\x7f') {
-        continue;
+      if (!scan.feed(byte)) {
+        return ds::none;
       }
+    }
 
-      if (!intermediate_phase && byte >= '0' && byte <= '9') {
-        if (++digits > maximum_digits) {
-          return ds::none;
-        }
-
-        accumulator = std::min(maximum_value, (accumulator * 10) + static_cast<unsigned>(byte - '0'));
-        continue;
-      }
-
-      if (!intermediate_phase && (byte == ';' || byte == ':')) {
-        if (result.count == capacity) {
-          return ds::none;
-        }
-
-        result.values.atMut(result.count++) = static_cast<std::uint16_t>(accumulator);
-        result.colon |= byte == ':';
-        accumulator = 0;
-        digits = 0;
-        continue;
-      }
-
-      const bool prefix = byte >= '<' && byte <= '?' && !intermediate_phase && digits == 0 && result.count == 0;
-      if (prefix || (byte >= ' ' && byte <= '/')) {
-        if (result.intermediate_count == intermediate_capacity) {
-          return ds::none;
-        }
-
-        result.intermediate.atMut(result.intermediate_count++) = byte;
-        intermediate_phase |= !prefix;
-        continue;
-      }
-
+    if (scan.digits != 0 && !scan.pushValue()) {
       return ds::none;
     }
 
-    if (digits != 0) {
-      if (result.count == capacity) {
-        return ds::none;
-      }
-
-      result.values.atMut(result.count++) = static_cast<std::uint16_t>(accumulator);
-    }
-
-    return result;
+    return scan.result;
   }
 
   [[gnu::noinline]] std::size_t completeAsciiApc(std::span<const std::uint8_t> input, std::size_t limit) noexcept {
@@ -92,12 +126,13 @@ namespace telar::runtime::control {
     constexpr std::uint8_t space = 0x20;
     constexpr std::uint8_t last_ascii = 0x7f;
     const auto body = input.subspan(3, std::min(input.size() - 3, limit - 2));
-    const auto* terminator = static_cast<const std::uint8_t*>(std::memchr(body.data(), escape, body.size()));
-    if (terminator == nullptr) {
+    // libc++ lowers a find over bytes to memchr.
+    const auto terminator = std::ranges::find(body, escape);
+    if (terminator == body.end()) {
       return 0;
     }
 
-    const auto count = static_cast<std::size_t>(terminator - body.data());
+    const auto count = static_cast<std::size_t>(terminator - body.begin());
     std::uint8_t maximum_offset = 0;
 
     for (const auto byte : body.first(count)) {
@@ -129,14 +164,14 @@ namespace telar::runtime::control {
         return ds::none;
       }
 
-      return 0u - *magnitude;
+      return 0U - *magnitude;
     }
 
     if (signed_field && *magnitude > std::numeric_limits<std::int32_t>::max()) {
       return ds::none;
     }
 
-    return magnitude;
+    return *magnitude;
   }
 
   bool graphicsQuery(std::string_view body) noexcept {
@@ -145,7 +180,7 @@ namespace telar::runtime::control {
     }
 
     const auto separator = body.find(';');
-    const auto header = body.substr(1, separator == std::string_view::npos ? separator : separator - 1);
+    const auto header = textPrefix(textAfter(body, 1), separator == std::string_view::npos ? separator : separator - 1);
     bool query = false;
 
     GraphicsHeader::scan(header, separator != std::string_view::npos, [&](std::uint8_t key, std::string_view text) noexcept {
@@ -165,7 +200,7 @@ namespace telar::runtime::control {
     switch (sequence.kind) {
     case Kind::osc: {
       // Documents are buffered whole for the engine; ghostty never sees them.
-      const auto number = oscOperation(body.substr(0, body.find(';')));
+      const auto number = oscOperation(textPrefix(body, body.find(';')));
 
       return !number || (!nativeOsc(*number) && *number != ::telar::render::sequence_number);
     }
@@ -178,9 +213,13 @@ namespace telar::runtime::control {
       }
 
       return !graphicsQuery(body);
-    default:
+    case Kind::escape:
+    case Kind::csi:
       return false;
     }
+
+    // A kind outside the enum is not streamable.
+    return false;
   }
 
   bool query(Sequence sequence) noexcept {
@@ -196,13 +235,13 @@ namespace telar::runtime::control {
         return false;
       }
 
-      const auto header = Parameters::parse(body.substr(0, end + 1));
+      const auto header = Parameters::parse(textPrefix(body, end + 1));
 
       return header && header->final == 'q' && (header->modifiers() == "+" || header->modifiers() == "$");
     }
 
     if (sequence.kind == Kind::osc) {
-      const auto operation = oscOperation(body.substr(0, body.find(';')));
+      const auto operation = oscOperation(textPrefix(body, body.find(';')));
 
       return operation && nativeOsc(*operation);
     }
@@ -216,6 +255,8 @@ namespace telar::runtime::control {
       return false;
     }
 
+    constexpr std::uint16_t first_window_report = 14;
+    constexpr std::uint16_t last_window_report = 21;
     const auto modifiers = header->modifiers();
 
     switch (header->final) {
@@ -230,7 +271,7 @@ namespace telar::runtime::control {
     case 'u':
       return modifiers == "?";
     case 't':
-      return modifiers.empty() && header->count == 1 && header->values[0] >= 14 && header->values[0] <= 21;
+      return modifiers.empty() && header->count == 1 && header->values[0] >= first_window_report && header->values[0] <= last_window_report;
     case 'y':
       return modifiers == "*" || modifiers == "#";
     default:
@@ -284,16 +325,16 @@ namespace telar::runtime::control {
     result.placement = number(Field::placement);
     result.width = number(Field::width);
     result.height = number(Field::height);
-    result.format = number(Field::format, 32);
+    result.format = number(Field::format, rgba_format);
     if (result.format == 0) {
-      result.format = 32;
+      result.format = rgba_format;
     }
 
     result.quiet = number(Field::quiet);
     result.offset = number(Field::offset);
     result.length = number(Field::length);
     const auto medium = number(Field::medium, 'd');
-    if (medium > std::numeric_limits<std::uint8_t>::max() || std::string_view{"dfst"}.find(static_cast<char>(medium)) == std::string_view::npos) {
+    if (medium > std::numeric_limits<std::uint8_t>::max() || !std::string_view{"dfst"}.contains(static_cast<char>(medium))) {
       return ds::none;
     }
 
@@ -308,7 +349,10 @@ namespace telar::runtime::control {
   }
 
   std::span<const std::uint8_t> capability(std::string_view hex) noexcept {
-    ds::Array<char, 32> decoded;
+    constexpr std::size_t maximum_name_bytes = 32;
+    constexpr int hexadecimal_base = 16;
+    constexpr int hexadecimal_letter_value = 10;
+    ds::Array<char, maximum_name_bytes> decoded{};
     if (hex.size() % 2 != 0 || hex.size() > decoded.size() * 2) {
       return {};
     }
@@ -319,11 +363,11 @@ namespace telar::runtime::control {
       }
 
       if (value >= 'A' && value <= 'F') {
-        return value - 'A' + 10;
+        return value - 'A' + hexadecimal_letter_value;
       }
 
       if (value >= 'a' && value <= 'f') {
-        return value - 'a' + 10;
+        return value - 'a' + hexadecimal_letter_value;
       }
 
       return -1;
@@ -336,7 +380,7 @@ namespace telar::runtime::control {
         return {};
       }
 
-      decoded.atMut(index / 2) = static_cast<char>((high * 16) + low);
+      decoded.atMut(index / 2) = static_cast<char>((high * hexadecimal_base) + low);
     }
 
     const std::string_view name{decoded.data(), hex.size() / 2};
@@ -360,8 +404,8 @@ namespace telar::runtime::control {
       return false;
     }
 
-    return std::all_of(value.begin(), value.end(), [](char c) {
-      return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+    return std::ranges::all_of(value, [](char digit) {
+      return (digit >= '0' && digit <= '9') || (digit >= 'a' && digit <= 'f') || (digit >= 'A' && digit <= 'F');
     });
   }
 
@@ -376,21 +420,21 @@ namespace telar::runtime::control {
     bool nonzero_fraction = false;
     bool digit = false;
 
-    for (const auto c : value) {
-      if (c == '.' && !fractional) {
+    for (const auto character : value) {
+      if (character == '.' && !fractional) {
         fractional = true;
         continue;
       }
 
-      if (c < '0' || c > '9') {
+      if (character < '0' || character > '9') {
         return false;
       }
 
       digit = true;
       if (fractional) {
-        nonzero_fraction |= c != '0';
+        nonzero_fraction |= character != '0';
       } else {
-        integral = (integral * 10) + static_cast<unsigned>(c - '0');
+        integral = (integral * decimal_base) + static_cast<unsigned>(character - '0');
         if (integral > 1) {
           return false;
         }
@@ -400,39 +444,42 @@ namespace telar::runtime::control {
     return digit && (!negative || (integral == 0 && !nonzero_fraction)) && (integral == 0 || !nonzero_fraction);
   }
 
-  bool colorValue(std::string_view value) noexcept {
-    const auto start = value.find_first_not_of(" \t");
-    if (start == std::string_view::npos) {
-      return false;
+  namespace {
+
+    constexpr std::size_t color_channels = 3;
+    constexpr std::string_view rgb_prefix = "rgb:";
+    constexpr std::string_view rgb_intensity_prefix = "rgbi:";
+
+    // Three hexadecimal channels of equal width, as #rgb and its longer forms spell them.
+    bool hexadecimalChannels(std::string_view value) noexcept {
+      const auto width = value.size() / color_channels;
+
+      return hexadecimalColorChannel(textPrefix(value, width)) && hexadecimalColorChannel(textPrefix(textAfter(value, width), width)) && hexadecimalColorChannel(textAfter(value, width * 2));
     }
 
-    value = value.substr(start, value.find_last_not_of(" \t") - start + 1);
-    if (value.starts_with('#')) {
-      value.remove_prefix(1);
-      if (value.size() != 3 && value.size() != 6 && value.size() != 9 && value.size() != 12) {
+    // #rgb, #rrggbb, #rrrgggbbb or #rrrrggggbbbb, without its #.
+    bool hashColor(std::string_view value) noexcept {
+      constexpr std::size_t maximum_channel_digits = 4;
+      const auto width = value.size() / color_channels;
+      if (value.size() % color_channels != 0 || width == 0 || width > maximum_channel_digits) {
         return false;
       }
 
-      const auto width = value.size() / 3;
-
-      return hexadecimalColorChannel(value.substr(0, width)) && hexadecimalColorChannel(value.substr(width, width)) && hexadecimalColorChannel(value.substr(width * 2));
+      return hexadecimalChannels(value);
     }
 
-    if ((value.size() == 3 || value.size() == 6) && hexadecimalColorChannel(value.substr(0, value.size() / 3)) && hexadecimalColorChannel(value.substr(value.size() / 3, value.size() / 3)) && hexadecimalColorChannel(value.substr(value.size() * 2 / 3))) {
-      return true;
-    }
+    // rgb:r/g/b with hexadecimal channels, or rgbi:r/g/b with intensities.
+    bool rgbColor(std::string_view value) noexcept {
+      const bool intensity = value.starts_with(rgb_intensity_prefix);
 
-    if (value.starts_with("rgb:") || value.starts_with("rgbi:")) {
-      const bool intensity = value.starts_with("rgbi:");
-
-      value.remove_prefix(intensity ? 5 : 4);
-      for (unsigned channel = 0; channel < 3; ++channel) {
+      value.remove_prefix(intensity ? rgb_intensity_prefix.size() : rgb_prefix.size());
+      for (unsigned channel = 0; channel < color_channels; ++channel) {
         const auto slash = value.find('/');
-        if ((slash == std::string_view::npos) != (channel == 2)) {
+        if ((slash == std::string_view::npos) != (channel == color_channels - 1)) {
           return false;
         }
 
-        const auto token = value.substr(0, slash);
+        const auto token = textPrefix(value, slash);
         if (!(intensity ? intensityColorChannel(token) : hexadecimalColorChannel(token))) {
           return false;
         }
@@ -445,18 +492,47 @@ namespace telar::runtime::control {
       return true;
     }
 
-    ds::Array<char, 64> lower;
-    if (value.size() > lower.size()) {
+    // One of X11's color names, whatever its case.
+    bool namedColor(std::string_view value) noexcept {
+      constexpr std::size_t maximum_name_bytes = 64;
+      ds::Array<char, maximum_name_bytes> lower{};
+      if (value.size() > lower.size()) {
+        return false;
+      }
+
+      for (std::size_t index = 0; index < value.size(); ++index) {
+        const auto character = value[index];
+
+        lower.atMut(index) = character >= 'A' && character <= 'Z' ? static_cast<char>(character + ('a' - 'A')) : character;
+      }
+
+      return std::ranges::binary_search(named_colors, std::string_view{lower.data(), value.size()});
+    }
+
+  }
+
+  bool colorValue(std::string_view value) noexcept {
+    constexpr std::size_t short_hexadecimal_color = 3;
+    constexpr std::size_t long_hexadecimal_color = 6;
+    const auto start = value.find_first_not_of(" \t");
+    if (start == std::string_view::npos) {
       return false;
     }
 
-    for (std::size_t i = 0; i < value.size(); ++i) {
-      const auto c = value[i];
-
-      lower.atMut(i) = c >= 'A' && c <= 'Z' ? static_cast<char>(c + ('a' - 'A')) : c;
+    value = textPrefix(textAfter(value, start), value.find_last_not_of(" \t") - start + 1);
+    if (value.starts_with('#')) {
+      return hashColor(textAfter(value, 1));
     }
 
-    return std::binary_search(named_colors.begin(), named_colors.end(), std::string_view{lower.data(), value.size()});
+    if ((value.size() == short_hexadecimal_color || value.size() == long_hexadecimal_color) && hexadecimalChannels(value)) {
+      return true;
+    }
+
+    if (value.starts_with(rgb_prefix) || value.starts_with(rgb_intensity_prefix)) {
+      return rgbColor(value);
+    }
+
+    return namedColor(value);
   }
 
 }

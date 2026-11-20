@@ -33,7 +33,8 @@ export {
       static constexpr unsigned idle_burst = 4;
       static constexpr unsigned input_burst = 16;
       static constexpr auto input_grace = std::chrono::milliseconds{30};
-      std::chrono::nanoseconds interval_{1'000'000'000 / 60};
+      static constexpr unsigned default_frame_rate = 60;
+      std::chrono::nanoseconds interval_{std::chrono::nanoseconds{std::chrono::seconds{1}} / default_frame_rate};
       ds::Option<Time> anchor_;
       ds::Option<Time> last_input_;
       unsigned credits_ = idle_burst;
@@ -74,7 +75,7 @@ export {
       [[nodiscard]] ds::Option<std::string_view> typedText() const noexcept;
 
     private:
-      enum class State {
+      enum class State : std::uint8_t {
         ground,
         escape,
         csi,
@@ -82,7 +83,7 @@ export {
         paste_escape,
         paste_csi,
       };
-      enum class PasteMarker : std::uint16_t {
+      enum class PasteMarker : std::uint8_t {
         begin = 200,
         end = 201,
       };
@@ -97,7 +98,7 @@ export {
       State state_ = State::ground;
       std::uint16_t parameter_ = 0;
       bool has_parameter_ = false;
-      ds::Array<char, maximum_typed_bytes> typed_;
+      ds::Array<char, maximum_typed_bytes> typed_{};
       std::size_t typed_length_ = 0;
       bool typed_exact_ = true;
     };
@@ -111,7 +112,7 @@ export {
 
     class OscScanner {
     public:
-      enum class Event {
+      enum class Event : std::uint8_t {
         none,
         start,
         payload,
@@ -121,7 +122,7 @@ export {
       Event next(std::uint8_t byte) noexcept;
 
     private:
-      enum class State {
+      enum class State : std::uint8_t {
         ground,
         escape,
         osc,
@@ -149,6 +150,8 @@ export {
 
       ResponseOutbox(const ResponseOutbox&) = delete;
       ResponseOutbox& operator=(const ResponseOutbox&) = delete;
+      ResponseOutbox(ResponseOutbox&&) = delete;
+      ResponseOutbox& operator=(ResponseOutbox&&) = delete;
 
       void append(std::span<const std::uint8_t> response);
 
@@ -164,7 +167,11 @@ export {
       static constexpr std::size_t inline_bytes = 2048;
       static constexpr std::size_t maximum_bytes = PtyResponseQueue::total_byte_capacity;
       static constexpr std::size_t header_bytes = sizeof(std::uint16_t);
-      ds::Array<std::uint8_t, inline_bytes> inline_;
+
+      // The staged records: the inline buffer until they outgrow it, then the overflow.
+      [[nodiscard]] std::span<const std::uint8_t> staged() const noexcept;
+
+      ds::Array<std::uint8_t, inline_bytes> inline_{};
       ds::Vec<std::uint8_t, Memory> overflow_;
       std::shared_ptr<PtyResponseQueue> queue_;
       std::size_t size_ = 0;
@@ -203,7 +210,13 @@ export {
         std::uint32_t last = std::numeric_limits<std::uint32_t>::max();
       };
 
-      TextSearch(std::uint64_t request, std::uint64_t pane, std::string_view needle, Rows rows, std::uint64_t revision);
+      // Whose search it is.
+      struct Origin {
+        std::uint64_t request_id = 0;
+        std::uint64_t pane_id = 0;
+      };
+
+      TextSearch(Origin origin, std::string_view needle, Rows rows, std::uint64_t revision);
 
       [[nodiscard]] std::uint32_t normalize(std::uint32_t codepoint) const noexcept;
 
@@ -214,9 +227,11 @@ export {
       static constexpr std::size_t maximum_columns = 512;
       static constexpr std::size_t rows_per_turn = 32;
       static constexpr auto deadline_budget = std::chrono::milliseconds{(maximum_rows + rows_per_turn - 1) / rows_per_turn};
-      ds::Array<std::uint32_t, 128> needle_{};
-      ds::Array<std::size_t, 128> prefix_{};
-      ds::Array<PaneMatch, 256> matches_{};
+      static constexpr std::size_t maximum_needle = 128;
+      static constexpr std::size_t maximum_matches = 256;
+      ds::Array<std::uint32_t, maximum_needle> needle_{};
+      ds::Array<std::size_t, maximum_needle> prefix_{};
+      ds::Array<PaneMatch, maximum_matches> matches_{};
       Rows rows_;
       std::uint64_t revision_;
       Clock::time_point deadline_;

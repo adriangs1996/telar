@@ -40,6 +40,30 @@ import telar.runtime.vocabulary.exchange;
 import telar.runtime.vocabulary.frames;
 import telar.base.ds;
 
+namespace telar::runtime::traffic {
+
+  // Whether poll found any of the events on the descriptor; the bits are tested unsigned, as they are
+  // combined.
+  constexpr bool pollReady(const pollfd& descriptor, int events) noexcept {
+    return (static_cast<unsigned>(descriptor.revents) & static_cast<unsigned>(events)) != 0;
+  }
+
+}
+
+namespace telar::runtime::traffic::control {
+
+  // The longest message a control reply carries.
+  inline constexpr std::size_t reply_message_bytes = 1024;
+
+}
+
+namespace telar::runtime::traffic {
+
+  // Reports a failure a service thread survives on standard error, as `component: message`.
+  void reportFailure(std::string_view component, const std::exception& error) noexcept;
+
+}
+
 // Interface: traffic/control_access.cppm
 export {
   namespace telar::runtime::traffic::control {
@@ -50,6 +74,13 @@ export {
     public:
       virtual ~PackagePort() = default;
       virtual FileDescriptor openPackage(const plugins::ServiceSpec& package) = 0;
+
+    protected:
+      PackagePort() = default;
+      PackagePort(const PackagePort&) = default;
+      PackagePort(PackagePort&&) = default;
+      PackagePort& operator=(const PackagePort&) = default;
+      PackagePort& operator=(PackagePort&&) = default;
     };
 
   }
@@ -86,6 +117,13 @@ export {
       static auto decision(tbc::val_a<std::span<Byte>> output, std::uint64_t ticket, Verdict verdict, std::span<const Byte> bytes = {}) -> tbc::val_a<std::span<const Byte>>;
     };
 
+    // The signals an interception wakes, its own where none is given: proxy threads wait on completion,
+    // hooks are told of requests.
+    struct InterceptionSignals {
+      CompletionSignal* completion = nullptr;
+      CompletionSignal* requests = nullptr;
+    };
+
     // Each chunk snapshots registration order. A new ticket authenticates every step of the chain.
     // Decides intercepted exchanges with the hooks registered for them. Proxy threads offer exchanges and
     // the control thread decides them, at once, under its mutex.
@@ -113,7 +151,9 @@ export {
       };
 
       struct Pending {
-        Pending(Secure& memory, std::uint64_t ticket, const FlowEvent& event, std::span<const Route> matches);
+        static constexpr std::size_t reason_bytes = 128;
+
+        Pending(Secure& memory, std::uint64_t issued, const FlowEvent& event, std::span<const Route> matches);
 
         [[nodiscard]] auto event() const noexcept -> FlowEvent;
 
@@ -125,8 +165,10 @@ export {
         Visibility visibility;
         FlowSource source;
         FlowControl::Time deadline;
-        SensitiveText<128> client, server, reason;
-        SensitiveText<253> host;
+        SensitiveText<FlowIdentity::endpoint_bytes> client;
+        SensitiveText<FlowIdentity::endpoint_bytes> server;
+        SensitiveText<reason_bytes> reason;
+        SensitiveText<ProxyHostname::maximum_bytes> host;
         Verdict verdict = Verdict::pending;
         ds::Vec<Byte, Secure> bytes;
         ds::Array<Route, Limits::subscribers> chain;
@@ -138,8 +180,14 @@ export {
 
       using Registrations = ds::Array<ds::Option<Registration>, Limits::subscribers>;
 
+      // The signals an exchange's progress wakes, lent apart from the exchange.
+      struct Wakes {
+        tbc::mut_a<CompletionSignal> completion;
+        tbc::mut_a<CompletionSignal> requests;
+      };
+
     public:
-      explicit Interception(ConcurrentMemory& memory, CompletionSignal* completion = nullptr, CompletionSignal* requests = nullptr);
+      explicit Interception(ConcurrentMemory& memory, InterceptionSignals signals = {});
 
       void configure(InterceptionRule rule);
 
@@ -165,7 +213,7 @@ export {
 
       // The service queues requests on its own thread, without a lossy cross-thread channel.
       template <typename Consumer>
-      TBC_GENERIC void deliver(Owner owner, Consumer&& consumer) noexcept {
+      TBC_GENERIC void deliver(Owner owner, Consumer consumer) noexcept {
         std::scoped_lock lock{mutex_};
 
         for (auto& slot : pending_.viewMut()) {
@@ -174,7 +222,7 @@ export {
           }
 
           if (std::chrono::steady_clock::now() >= slot->deadline) {
-            advance(slot.getMut(), failure(*slot), registrations_, next_, completion_, request_signal_);
+            advance(slot.getMut(), failure(*slot), registrations_, next_, {.completion = completion_, .requests = request_signal_});
             continue;
           }
 
@@ -182,10 +230,10 @@ export {
             if (consumer(slot->event())) {
               slot.getMut().delivered = true;
             } else {
-              advance(slot.getMut(), failure(*slot), registrations_, next_, completion_, request_signal_);
+              advance(slot.getMut(), failure(*slot), registrations_, next_, {.completion = completion_, .requests = request_signal_});
             }
           } catch (...) {
-            advance(slot.getMut(), failure(*slot), registrations_, next_, completion_, request_signal_);
+            advance(slot.getMut(), failure(*slot), registrations_, next_, {.completion = completion_, .requests = request_signal_});
           }
         }
       }
@@ -213,17 +261,25 @@ export {
 
       static auto registration(const Registrations& registrations, Owner owner) noexcept -> const Registration*;
 
+      // Whether the registration's hook asked for the event's host, direction and visibility.
+      static bool serves(const Registration& registration, const FlowEvent& event) noexcept;
+
+      // Queues the event for the routes matched, in their order: its ticket, or the refusal a full
+      // table or an oversized event gets. The mutex is held.
+      auto queue(const FlowEvent& event, std::span<const Route> routes, bool fail_closed) noexcept -> std::uint64_t;
+
       static Verdict failure(const Pending& pending) noexcept;
 
       // Moves an exchange to its next hook, or settles it. The tables it reads are lent apart from it.
-      static void advance(Pending& pending, Verdict verdict, const Registrations& registrations, std::uint64_t& next, CompletionSignal& completion, CompletionSignal& requests) noexcept;
+      static void advance(Pending& pending, Verdict verdict, const Registrations& registrations, std::uint64_t& next, Wakes wakes) noexcept;
 
       static constexpr Owner default_owner = 1;
+      static constexpr std::size_t maximum_pending = 64;
       ConcurrentMemory& upstream_;
       Secure memory_;
       std::mutex mutex_;
       Registrations registrations_;
-      ds::Array<ds::Option<Pending>, 64> pending_;
+      ds::Array<ds::Option<Pending>, maximum_pending> pending_;
       CompletionSignal wake_;
       CompletionSignal requests_;
       CompletionSignal& completion_;
@@ -261,11 +317,18 @@ export {
       virtual void setPackageAvailable(std::uint64_t owner, bool available) noexcept = 0;
       virtual bool packagePending(std::uint64_t owner, std::uint64_t ticket, bool http) noexcept = 0;
 
-      virtual void packageFailure(const plugins::ServiceSpec&, FlowEvent) noexcept;
+      virtual void packageFailure(const plugins::ServiceSpec& specification, FlowEvent event) noexcept;
 
-      virtual FileDescriptor openControl(const plugins::ServiceSpec&);
+      virtual FileDescriptor openControl(const plugins::ServiceSpec& specification);
 
-      virtual void revokePackage(const plugins::ServiceSpec&) noexcept;
+      virtual void revokePackage(const plugins::ServiceSpec& specification) noexcept;
+
+    protected:
+      PackagePort() = default;
+      PackagePort(const PackagePort&) = default;
+      PackagePort(PackagePort&&) = default;
+      PackagePort& operator=(const PackagePort&) = default;
+      PackagePort& operator=(PackagePort&&) = default;
     };
 
   }
@@ -303,15 +366,15 @@ export {
       using Request = recording::Request;
 
       struct Entry {
-        std::uint64_t cursor;
+        std::uint64_t cursor = 0;
         Clock::time_point created;
         std::shared_ptr<EventFrame> frame;
       };
 
       struct Session {
-        inline explicit Session(ConcurrentMemory& memory, const Request& request, std::uint64_t id, recording::Owner owner)
-            : id(id),
-              owner(std::move(owner)),
+        inline explicit Session(ConcurrentMemory& memory, const Request& request, std::uint64_t identity, recording::Owner granted)
+            : id(identity),
+              owner(std::move(granted)),
               budget(request.max_bytes),
               age(request.max_age_ms),
               selection(request.selection),
@@ -444,7 +507,7 @@ export {
       }
 
       inline void revoke(const recording::Owner& owner) noexcept {
-        const std::lock_guard lock{mutex_};
+        const std::scoped_lock lock{mutex_};
 
         for (auto& session : sessions_.viewMut()) {
           if (session && owner.matches(session->owner)) {
@@ -461,93 +524,27 @@ export {
           throw EncodingError{"Recording output is too small"};
         }
 
-        ds::Array<Byte, 8192> validation;
+        ds::Array<Byte, control::Limits::request_bytes> validation{};
         plugins::FrameWriter validated{validation.viewMut()};
 
         recording::Protocol::write(validated, request);
-        ProxyHostPolicy scope{memory_};
+        ProxyHostPolicy<ConcurrentMemory> scope{memory_};
         if (!request.host.empty() && !scope.append(request.host)) {
           throw EncodingError{"Invalid recording query host"};
         }
 
         scope.finish();
-        const std::lock_guard lock{mutex_};
+        const std::scoped_lock lock{mutex_};
 
         if (!owner.authorized()) {
           throw EncodingError{"Recording package permission has been revoked"};
         }
 
         if (request.operation == recording::Operation::list) {
-          output = output.first(std::min(output.size(), recording::Limits::page_bytes));
-          plugins::FrameWriter rows{output.subspan(recording::Protocol::page_header_bytes)};
-          recording::Page page{.format = recording::Format::list};
-
-          for (auto& slot : sessions_.viewMut()) {
-            if (!slot || !owner.canRead(slot->owner)) {
-              continue;
-            }
-
-            slot.getMut().expire(Clock::now());
-            ds::Array<Byte, recording::Protocol::page_header_bytes> bytes;
-            plugins::FrameWriter child{bytes.viewMut()};
-
-            recording::Protocol::header(child, describe(slot.getMut(), contention_drops_.load(std::memory_order_relaxed)));
-            rows.bytes(child.finish());
-            ++page.count;
-          }
-
-          plugins::FrameWriter header{output.first(recording::Protocol::page_header_bytes)};
-
-          recording::Protocol::header(header, page);
-          return output.first(header.finish().size() + rows.finish().size());
+          return list(owner, output.first(std::min(output.size(), recording::Limits::page_bytes)));
         }
 
-        Session* session = nullptr;
-
-        if (request.operation == recording::Operation::start) {
-          std::uint64_t reserved = request.max_bytes;
-
-          for (const auto& existing : sessions_) {
-            if (existing) {
-              reserved += existing->budget;
-            }
-          }
-
-          if (reserved > recording::Limits::total_bytes) {
-            throw EncodingError{"Recording runtime budget exhausted"};
-          }
-
-          for (auto& slot : sessions_.viewMut()) {
-            if (slot) {
-              continue;
-            }
-
-            if (++next_id_ == 0) {
-              ++next_id_;
-            }
-
-            slot.emplace(memory_, request, next_id_, owner);
-            session = &slot.getMut();
-            break;
-          }
-
-          if (session == nullptr) {
-            throw EncodingError{"Recording session limit reached"};
-          }
-
-          refreshInterest();
-        } else {
-          for (auto& slot : sessions_.viewMut()) {
-            if (slot && slot->id == request.id && owner.canRead(slot->owner)) {
-              session = &slot.getMut();
-              break;
-            }
-          }
-
-          if (session == nullptr) {
-            throw EncodingError{"Unknown or expired recording identity"};
-          }
-        }
+        auto* const session = request.operation == recording::Operation::start ? open(request, owner) : find(request, owner);
 
         session->expire(Clock::now());
         if (request.operation == recording::Operation::stop) {
@@ -562,49 +559,11 @@ export {
           throw EncodingError{"Recording output is too small"};
         }
 
-        plugins::FrameWriter rows{output.subspan(recording::Protocol::page_header_bytes)};
+        const auto space = output.subspan(recording::Protocol::page_header_bytes);
+        std::span<const Byte> rows = space.first(0);
 
         if (request.operation == recording::Operation::query || request.operation == recording::Operation::pcapng) {
-          if (request.cursor > session->next) {
-            throw EncodingError{"Recording cursor is beyond the current end"};
-          }
-
-          page.gap = request.cursor != 0 && request.cursor < page.oldest;
-          page.next = request.cursor == 0 ? page.oldest : std::max(request.cursor, page.oldest);
-          const bool pcapng = request.operation == recording::Operation::pcapng;
-
-          page.format = pcapng ? recording::Format::pcapng : recording::Format::events;
-          if (pcapng) {
-            Pcapng::section(rows);
-          }
-
-          for (std::size_t index = 0; index < session->count; ++index) {
-            auto& entry = session->at(index);
-            if (entry.cursor < page.next) {
-              continue;
-            }
-
-            const auto event = Protocol::decode(entry.frame->bytes.bytes());
-            if (!selected(request.selection, event.kind) || !matches(scope, event) || (pcapng && event.kind != Kind::packet)) {
-              page.next = entry.cursor + 1;
-              continue;
-            }
-
-            const auto size = pcapng ? Pcapng::packetBytes(event) : sizeof(std::uint64_t) + sizeof(std::uint32_t) + entry.frame->bytes.bytes().size();
-            if (size > output.size() - recording::Protocol::page_header_bytes - rows.finish().size() || page.count == request.limit) {
-              break;
-            }
-
-            if (pcapng) {
-              Pcapng::packet(rows, event, page.count);
-            } else {
-              rows.integer(entry.cursor);
-              rows.bytes(entry.frame->bytes.bytes());
-            }
-
-            ++page.count;
-            page.next = entry.cursor + 1;
-          }
+          rows = query(request, scope, *session, page, space);
         }
 
         if (request.operation == recording::Operation::erase) {
@@ -623,10 +582,126 @@ export {
         plugins::FrameWriter header{output.first(recording::Protocol::page_header_bytes)};
 
         recording::Protocol::header(header, page);
-        return output.first(header.finish().size() + rows.finish().size());
+        return output.first(header.finish().size() + rows.size());
       }
 
     private:
+      // Lists the sessions the owner may read into the output, region `b`. The mutex is held.
+      inline tbc::val_b<std::span<const Byte>> list(const recording::Owner& owner, tbc::val_b<std::span<Byte>> output) {
+        plugins::FrameWriter rows{output.subspan(recording::Protocol::page_header_bytes)};
+        recording::Page page{.format = recording::Format::list};
+
+        for (auto& slot : sessions_.viewMut()) {
+          if (!slot || !owner.canRead(slot->owner)) {
+            continue;
+          }
+
+          slot.getMut().expire(Clock::now());
+          ds::Array<Byte, recording::Protocol::page_header_bytes> bytes{};
+          plugins::FrameWriter child{bytes.viewMut()};
+
+          recording::Protocol::header(child, describe(slot.getMut(), contention_drops_.load(std::memory_order_relaxed)));
+          rows.bytes(child.finish());
+          ++page.count;
+        }
+
+        plugins::FrameWriter header{output.first(recording::Protocol::page_header_bytes)};
+
+        recording::Protocol::header(header, page);
+        return output.first(header.finish().size() + rows.finish().size());
+      }
+
+      // Starts a session for the owner, within the runtime's budget. The mutex is held.
+      inline Session* open(const Request& request, const recording::Owner& owner) {
+        std::uint64_t reserved = request.max_bytes;
+
+        for (const auto& existing : sessions_) {
+          if (existing) {
+            reserved += existing->budget;
+          }
+        }
+
+        if (reserved > recording::Limits::total_bytes) {
+          throw EncodingError{"Recording runtime budget exhausted"};
+        }
+
+        for (auto& slot : sessions_.viewMut()) {
+          if (slot) {
+            continue;
+          }
+
+          if (++next_id_ == 0) {
+            ++next_id_;
+          }
+
+          slot.emplace(memory_, request, next_id_, owner);
+          refreshInterest();
+          return &slot.getMut();
+        }
+
+        throw EncodingError{"Recording session limit reached"};
+      }
+
+      // The session the request names, when the owner may read it. The mutex is held.
+      inline Session* find(const Request& request, const recording::Owner& owner) {
+        for (auto& slot : sessions_.viewMut()) {
+          if (slot && slot->id == request.id && owner.canRead(slot->owner)) {
+            return &slot.getMut();
+          }
+        }
+
+        throw EncodingError{"Unknown or expired recording identity"};
+      }
+
+      // Writes the session's events from the page's cursor into the space, region `b`, as rows or PCAPNG
+      // blocks, and moves the page on. The mutex is held.
+      inline static tbc::val_b<std::span<const Byte>> query(const Request& request, const ProxyHostPolicy<ConcurrentMemory>& scope, Session& session, recording::Page& page, tbc::val_b<std::span<Byte>> space) {
+        if (request.cursor > session.next) {
+          throw EncodingError{"Recording cursor is beyond the current end"};
+        }
+
+        plugins::FrameWriter rows{space};
+
+        page.gap = request.cursor != 0 && request.cursor < page.oldest;
+        page.next = request.cursor == 0 ? page.oldest : std::max(request.cursor, page.oldest);
+        const bool pcapng = request.operation == recording::Operation::pcapng;
+
+        page.format = pcapng ? recording::Format::pcapng : recording::Format::events;
+        if (pcapng) {
+          Pcapng::section(rows);
+        }
+
+        for (std::size_t index = 0; index < session.count; ++index) {
+          auto& entry = session.at(index);
+          if (entry.cursor < page.next) {
+            continue;
+          }
+
+          const auto event = Protocol::decode(entry.frame->bytes.bytes());
+          if (!selected(request.selection, event.kind) || !matches(scope, event) || (pcapng && event.kind != Kind::packet)) {
+            page.next = entry.cursor + 1;
+            continue;
+          }
+
+          const auto size = pcapng ? Pcapng::packetBytes(event) : sizeof(std::uint64_t) + sizeof(std::uint32_t) + entry.frame->bytes.bytes().size();
+          if (size > space.size() - rows.finish().size() || page.count == request.limit) {
+            break;
+          }
+
+          if (pcapng) {
+            Pcapng::packet(rows, event, page.count);
+          } else {
+            rows.integer(entry.cursor);
+            rows.bytes(entry.frame->bytes.bytes());
+          }
+
+          ++page.count;
+          page.next = entry.cursor + 1;
+        }
+
+        return rows.finish();
+      }
+
       // The session's counters, copied: the page views no rows yet, so it borrows nothing of the session.
       inline static tbc::val_static<recording::Page> describe(Session& session, std::uint64_t contention_drops) noexcept {
         return {
@@ -644,9 +719,16 @@ export {
 
       inline static bool selected(Selection selection, Kind kind) noexcept {
         const auto mask = static_cast<Byte>(selection);
-        const auto bit = kind == Kind::packet ? Selection::packets : kind == Kind::exchange ? Selection::exchanges
-                                                                 : kind == Kind::datagram   ? Selection::datagrams
-                                                                                            : Selection::flows;
+        auto bit = Selection::flows;
+
+        if (kind == Kind::packet) {
+          bit = Selection::packets;
+        } else if (kind == Kind::exchange) {
+          bit = Selection::exchanges;
+        } else if (kind == Kind::datagram) {
+          bit = Selection::datagrams;
+        }
+
         const bool public_event = kind == Kind::packet || kind == Kind::exchange || kind == Kind::datagram || (kind >= Kind::flow_open && kind <= Kind::flow_gap);
 
         return public_event && (mask & static_cast<Byte>(bit)) != 0;
@@ -683,7 +765,7 @@ export {
 
       tbc::mut_a<ConcurrentMemory> memory_;
       tbc::val_a<ds::Array<ds::Option<Session>, recording::Limits::sessions>> sessions_;
-      std::uint64_t next_id_;
+      std::uint64_t next_id_ = 0;
       std::mutex mutex_;
       // Written through shared access, as Rust's AtomicU8 is.
       mutable std::atomic<Byte> interest_{0};
@@ -698,7 +780,7 @@ export {
   namespace telar::runtime::traffic {
 
     // The traffic control service: its own thread serves clients while proxy threads report flows to it.
-    class TBC_SHARED Service : public FlowControl, public HttpControl, public PackagePort {
+    class TBC_SHARED Service : public FlowControl, public HttpControl, public PackagePort { // NOLINT(misc-multiple-inheritance): one service is what proxy threads report flows, HTTP and packages to, and the ports' default hooks are what other implementations keep
       using SensitiveMemory = ErasingAllocator<ConcurrentMemory>;
       using Bytes = ds::Vec<Byte, SensitiveMemory>;
       static constexpr std::size_t maximum_peers = (Limits::subscribers * 2) + 1;
@@ -712,7 +794,7 @@ export {
       };
 
       struct Peer {
-        explicit Peer(SensitiveMemory& memory, FileDescriptor socket, uid_t uid);
+        explicit Peer(SensitiveMemory& memory, FileDescriptor channel, uid_t user);
 
         FileDescriptor socket;
         uid_t uid;
@@ -757,6 +839,8 @@ export {
 
       Service(const Service&) = delete;
       Service& operator=(const Service&) = delete;
+      Service(Service&&) = delete;
+      Service& operator=(Service&&) = delete;
 
       bool listening() const noexcept;
 
@@ -830,13 +914,43 @@ export {
 
       void step();
 
+      // Takes the peers attached and the frames injected since the last wake.
+      void receive();
+
+      // Reads and writes a peer as poll found it: true when the peer must close.
+      bool exchange(Peer& peer, const pollfd& descriptor);
+
+      // Closes the peer in the slot, and ends the capture it produced.
+      void retire(std::size_t slot);
+
+      // Offers the pending interception requests to the hooks' peers.
+      void deliverRequests();
+
+      void heartbeat();
+
       void accept();
 
       // Not inlined: step runs on every wake of the traffic thread and reads only from the peers that are
       // ready; its locals in step's frame would put every wake on deeper stack pages.
       [[gnu::noinline]] void read(Peer& peer);
 
+      // Handles a whole frame from a peer that greeted: false when only its prefix was read.
+      bool consume(Peer& peer);
+
+      // Publishes a capture helper's event, and what analysing its packet finds.
+      void ingest(Peer& peer);
+
       bool greet(Peer& peer);
+
+      // Checks a greeted peer may take its role, whose greeting carried a filter of the bytes given.
+      void admit(const Peer& peer, Role role, std::uint32_t filter_bytes);
+
+      // Counts a subscriber in for the events its selection asks for.
+      void enroll(const Peer& peer) noexcept;
+
+      static bool revoked(const Peer& peer) noexcept;
+
+      static bool grants(const Peer::PackageIdentity& package, Role role) noexcept;
 
       void control(Peer& peer);
 
@@ -911,6 +1025,10 @@ export {
     class TBC_GENERIC Backend {
       using Clock = std::chrono::steady_clock;
 
+      // How long a helper gets to stop or start, and how often it is checked meanwhile.
+      static constexpr auto helper_timeout = std::chrono::seconds{5};
+      static constexpr int helper_poll_ms = 5;
+
     public:
       // What it keeps of its owner, and what its replies view of it, is region `a`.
       inline explicit Backend(tbc::mut_a<ConcurrentMemory> memory, tbc::mut_a<Proxy> proxy, tbc::val_a<traffic::Service*> capture, tbc::val_a<Configuration> configuration)
@@ -918,6 +1036,11 @@ export {
             proxy_(proxy),
             capture_(capture),
             configuration_(configuration) {}
+
+      Backend(const Backend&) = delete;
+      Backend& operator=(const Backend&) = delete;
+      Backend(Backend&&) = delete;
+      Backend& operator=(Backend&&) = delete;
 
       inline ~Backend() {
         capture_cancelled_ = true;
@@ -930,11 +1053,11 @@ export {
           proxy_.stopRedirect();
         }
 
-        const auto deadline = Clock::now() + std::chrono::seconds{5};
+        const auto deadline = Clock::now() + helper_timeout;
 
         while ((capture_child_ > 0 || redirect_child_ > 0) && Clock::now() < deadline) {
           tick();
-          ::poll(nullptr, 0, 5);
+          ::poll(nullptr, 0, helper_poll_ms);
         }
       }
 
@@ -956,7 +1079,7 @@ export {
       inline tbc::val_a<std::span<const Byte>> handle(const Request& request, tbc::val_a<std::span<Byte>> output, const std::atomic<bool>& cancelled, const plugins::ServiceSpec* package = nullptr) {
         Reply reply;
         ds::Option<SensitiveAllocation<ConcurrentMemory>> recording_output;
-        ds::Array<char, 1025> error{};
+        ds::Array<char, reply_message_bytes + 1> error{};
 
         try {
           if ((package != nullptr) && !authorized(*package, request)) {
@@ -975,65 +1098,18 @@ export {
               start(request, reply, cancelled);
               break;
             case Operation::capture_stop:
-              if (capture_ == nullptr) {
-                reply.result = Result::disabled;
-              } else {
-                capture_cancelled_ = true;
-                const auto revision = capture_->stopCapture();
-                if (!wait([&] {
-                      return capture_->captureStopped(revision) && capture_child_ <= 0;
-                    },
-                        cancelled)) {
-                  reply.result = Result::busy;
-                  reply.message = "Capture is stopping";
-                }
-              }
-
+              stopCapture(reply, cancelled);
               break;
             case Operation::redirect_stop:
-              if (!configuration_.redirect) {
-                reply.result = Result::disabled;
-              } else {
-                redirect_cancelled_ = true;
-                proxy_.stopRedirect();
-                if (!wait([&] {
-                      const auto state = proxy_.redirectStatus();
-
-                      return redirect_child_ <= 0 && (state == redirect::MonitorState::idle || state == redirect::MonitorState::cleanup_required);
-                    },
-                        cancelled)) {
-                  reply.result = Result::busy;
-                  reply.message = "Redirect cleanup is still running";
-                } else if (proxy_.redirectStatus() == redirect::MonitorState::cleanup_required) {
-                  reply.result = Result::cleanup_required;
-                  reply.message = "The helper disconnected without confirming PF cleanup";
-                  authorization(request, reply, "redirect-cleanup");
-                }
-              }
-
+              stopRedirect(request, reply, cancelled);
               break;
             case Operation::ca_install:
             case Operation::ca_uninstall:
             case Operation::ca_rotate:
-              if (!configuration_.proxy) {
-                reply.result = Result::disabled;
-              } else {
-                TrustCommand command{memory_, cancelled};
-
-                proxy_.manageAuthority(request.operation == Operation::ca_install ? proxy_trust::Action::install : request.operation == Operation::ca_uninstall ? proxy_trust::Action::uninstall
-                                                                                                                                                                : proxy_trust::Action::rotate,
-                    command);
-              }
-
+              manageAuthority(request, reply, cancelled);
               break;
             case Operation::recording:
-              if (capture_ == nullptr) {
-                reply.result = Result::disabled;
-              } else {
-                recording_output.emplace(memory_, recording::Limits::page_bytes);
-                reply.recording = capture_->recording(*request.recording, recording_output.getMut().bytesMut(), (package != nullptr) ? recording::Owner::package(*package) : recording::Owner{});
-              }
-
+              reply.recording = record(request, reply, recording_output, package);
               break;
             }
           }
@@ -1115,14 +1191,10 @@ export {
       }
 
       inline void authorization(const Request& request, tbc::mut_a<Reply> reply, tbc::val_a<std::string_view> action) const {
-        reply.authorization.atMut(0) = "/usr/bin/sudo";
-        reply.authorization.atMut(1) = "--";
-        reply.authorization.atMut(2) = configuration_.executable;
-        reply.authorization.atMut(3) = "traffic";
-        reply.authorization.atMut(4) = action;
-        reply.authorization.atMut(5) = "--socket";
-        reply.authorization.atMut(6) = configuration_.endpoint;
-        reply.argument_count = 7;
+        const ds::Array helper{std::string_view{"/usr/bin/sudo"}, std::string_view{"--"}, configuration_.executable, std::string_view{"traffic"}, std::string_view{action}, std::string_view{"--socket"}, configuration_.endpoint};
+
+        std::ranges::copy(helper.view(), reply.authorization.viewMut().begin());
+        reply.argument_count = helper.size();
         if (action == "redirect") {
           for (std::size_t index = 0; index < selection_->targets().size(); ++index) {
             reply.authorization.atMut(reply.argument_count++) = "--target";
@@ -1139,6 +1211,94 @@ export {
             reply.authorization.atMut(reply.argument_count++) = redirect::directionName(request.direction);
           }
         }
+      }
+
+      // Pages the recording the request names into an output allocated here, region `b`; disabled
+      // without a capture service.
+      inline tbc::val_b<std::span<const Byte>> record(const Request& request, Reply& reply, tbc::mut_b<ds::Option<SensitiveAllocation<ConcurrentMemory>>> output, const plugins::ServiceSpec* package) {
+        if (capture_ == nullptr) {
+          reply.result = Result::disabled;
+          return {};
+        }
+
+        output.emplace(memory_, recording::Limits::page_bytes);
+        return capture_->recording(*request.recording, output.getMut().bytesMut(), (package != nullptr) ? recording::Owner::package(*package) : recording::Owner{});
+      }
+
+      inline void stopCapture(Reply& reply, const std::atomic<bool>& cancelled) {
+        if (capture_ == nullptr) {
+          reply.result = Result::disabled;
+          return;
+        }
+
+        capture_cancelled_ = true;
+        const auto revision = capture_->stopCapture();
+        if (!wait([&] {
+              return capture_->captureStopped(revision) && capture_child_ <= 0;
+            },
+                cancelled)) {
+          reply.result = Result::busy;
+          reply.message = "Capture is stopping";
+        }
+      }
+
+      inline void stopRedirect(const Request& request, Reply& reply, const std::atomic<bool>& cancelled) {
+        if (!configuration_.redirect) {
+          reply.result = Result::disabled;
+          return;
+        }
+
+        redirect_cancelled_ = true;
+        proxy_.stopRedirect();
+        if (!wait([&] {
+              const auto state = proxy_.redirectStatus();
+
+              return redirect_child_ <= 0 && (state == redirect::MonitorState::idle || state == redirect::MonitorState::cleanup_required);
+            },
+                cancelled)) {
+          reply.result = Result::busy;
+          reply.message = "Redirect cleanup is still running";
+        } else if (proxy_.redirectStatus() == redirect::MonitorState::cleanup_required) {
+          reply.result = Result::cleanup_required;
+          reply.message = "The helper disconnected without confirming PF cleanup";
+          authorization(request, reply, "redirect-cleanup");
+        }
+      }
+
+      inline void manageAuthority(const Request& request, Reply& reply, const std::atomic<bool>& cancelled) {
+        if (!configuration_.proxy) {
+          reply.result = Result::disabled;
+          return;
+        }
+
+        auto action = proxy_trust::Action::rotate;
+
+        if (request.operation == Operation::ca_install) {
+          action = proxy_trust::Action::install;
+        } else if (request.operation == Operation::ca_uninstall) {
+          action = proxy_trust::Action::uninstall;
+        }
+
+        TrustCommand command{memory_, cancelled};
+
+        proxy_.manageAuthority(action, command);
+      }
+
+      // Checks the processes the redirect selects and resolves its targets.
+      inline void selectRedirect(const Request& request, const std::atomic<bool>& cancelled) {
+        const ProcessInspector inspector;
+
+        for (std::size_t index = 0; index < request.process_count; ++index) {
+          const auto process = inspector.identity(static_cast<pid_t>(request.processes[index]));
+          if (!process) {
+            throw std::invalid_argument{"Selected process must be running under the runtime account"};
+          }
+
+          process_arguments_.atMut(index) = redirect::ProcessToken::format(*process);
+        }
+
+        selection_.emplace(std::span{request.targets}.first(request.target_count), cancelled, Clock::now() + std::chrono::seconds{3});
+        redirect::LocalAddresses::selection(selection_->targets(), request.direction);
       }
 
       inline void start(const Request& request, Reply& reply, const std::atomic<bool>& cancelled) {
@@ -1159,19 +1319,7 @@ export {
         }
 
         if (!capture) {
-          const ProcessInspector inspector;
-
-          for (std::size_t index = 0; index < request.process_count; ++index) {
-            const auto process = inspector.identity(static_cast<pid_t>(request.processes[index]));
-            if (!process) {
-              throw std::invalid_argument{"Selected process must be running under the runtime account"};
-            }
-
-            process_arguments_.atMut(index) = redirect::ProcessToken::format(*process);
-          }
-
-          selection_.emplace(std::span{request.targets}.first(request.target_count), cancelled, Clock::now() + std::chrono::seconds{3});
-          redirect::LocalAddresses::selection(selection_->targets(), request.direction);
+          selectRedirect(request, cancelled);
         }
 
         auto& child = capture ? capture_child_ : redirect_child_;
@@ -1193,7 +1341,7 @@ export {
         std::ranges::copy(std::span{reply.authorization}.subspan(1, reply.argument_count - 1), arguments.viewMut().begin() + 3);
         const auto count = reply.argument_count + 2;
         Command preflight{memory_, Launch{.arguments = std::span{arguments}.first(count)}, CommandPurpose::administration};
-        CommandOutput result{memory_, Limits::reply_bytes, &cancelled};
+        CommandOutput<ConcurrentMemory> result{memory_, Limits::reply_bytes, &cancelled};
         if (result.run(preflight, Clock::now() + std::chrono::seconds{3}, true) != 0) {
           reply.result = Result::authorization_required;
           reply.message = "Run authorization_argv in a terminal to authorize this native helper";
@@ -1205,7 +1353,7 @@ export {
         Command command{memory_, Launch{.arguments = std::span{arguments}.first(count - 1)}, CommandPurpose::administration};
         const auto specification = command.specification({});
         SpawnOptions spawn{0};
-        FileDescriptor input{::open("/dev/null", O_RDONLY | O_CLOEXEC)};
+        FileDescriptor input{::open("/dev/null", combineFlags(O_RDONLY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
         if (!input) {
           throw SystemError{"Prepare privileged helper input"};
         }
@@ -1213,7 +1361,7 @@ export {
         spawn.redirect(input.get(), STDIN_FILENO);
         spawn.keepStandardStreams();
 
-        pid_t started;
+        pid_t started = 0;
 
         checkSpawn(::posix_spawn(&started, specification.executable, &spawn.actions, &spawn.attributes, specification.arguments, specification.environment));
         child = started;
@@ -1231,9 +1379,7 @@ export {
           (capture ? capture_cancelled_ : redirect_cancelled_) = true;
           if (capture) {
             capture_->stopCapture();
-          }
-
-          if (!capture) {
+          } else {
             proxy_.stopRedirect();
           }
 
@@ -1246,7 +1392,7 @@ export {
       // Generic over the caller's callback.
       template <typename Predicate>
       TBC_GENERIC bool wait(Predicate predicate, const std::atomic<bool>& cancelled) {
-        const auto deadline = Clock::now() + std::chrono::seconds{5};
+        const auto deadline = Clock::now() + helper_timeout;
 
         while (!predicate()) {
           if (cancelled.load(std::memory_order_acquire)) {
@@ -1258,7 +1404,7 @@ export {
           }
 
           tick();
-          ::poll(nullptr, 0, 5);
+          ::poll(nullptr, 0, helper_poll_ms);
         }
 
         return true;
@@ -1269,7 +1415,7 @@ export {
           return;
         }
 
-        int status;
+        int status = 0;
         const auto waited = ::waitpid(child, &status, WNOHANG);
         if (waited == child || (waited < 0 && sys::lastError() == ECHILD)) {
           child = -1;
@@ -1305,6 +1451,9 @@ export {
     class TBC_GENERIC Service : public PackagePort {
       using Clock = std::chrono::steady_clock;
 
+      // How long a peer gets to send its request, and to read its reply.
+      static constexpr auto exchange_timeout = std::chrono::seconds{5};
+
       struct Peer {
         inline explicit Peer(Memory& memory, FileDescriptor channel)
             : socket(std::move(channel)),
@@ -1314,7 +1463,7 @@ export {
         FileDescriptor socket;
         SensitiveAllocation<Memory> input;
         SensitiveAllocation<Memory> output;
-        Clock::time_point deadline = Clock::now() + std::chrono::seconds{5};
+        Clock::time_point deadline = Clock::now() + exchange_timeout;
         std::size_t expected = Protocol::prefix_bytes;
         std::size_t received = 0;
         std::size_t reply_bytes = 0;
@@ -1344,18 +1493,21 @@ export {
 
       Service(const Service&) = delete;
       Service& operator=(const Service&) = delete;
+      Service(Service&&) = delete;
+      Service& operator=(Service&&) = delete;
 
       inline FileDescriptor openPackage(const plugins::ServiceSpec& package) override {
         if (!package.traffic() || package.plugin_id == 0 || package.generation == 0) {
           throw SystemError{"Package control capability denied", EACCES};
         }
 
-        ds::Array<int, 2> descriptors;
+        ds::Array<int, 2> descriptors{};
         if (::socketpair(AF_UNIX, SOCK_STREAM, 0, descriptors.dataMut()) != 0) {
           throw SystemError{"Create package control channel"};
         }
 
-        FileDescriptor native{descriptors[0]}, client{descriptors[1]};
+        FileDescriptor native{descriptors[0]};
+        FileDescriptor client{descriptors[1]};
 
         configureProxySocket(native.get());
         configureProxySocket(client.get());
@@ -1373,12 +1525,13 @@ export {
           try {
             step();
           } catch (const std::exception& error) {
-            std::fprintf(stderr, "telar network control: %s\n", error.what());
+            reportFailure("telar network control", error);
           }
         }
       }
 
       inline void step() {
+        constexpr int poll_ms = 100;
         ds::Array<pollfd, Limits::peers + 2> descriptors{};
 
         descriptors.atMut(0) = {.fd = listener_.descriptor(), .events = POLLIN, .revents = 0};
@@ -1389,7 +1542,7 @@ export {
           descriptors.atMut(index + 2) = {.fd = peer ? peer->socket.get() : -1, .events = static_cast<short>(peer && peer->reply_bytes ? POLLOUT : POLLIN)};
         }
 
-        if (::poll(descriptors.dataMut(), descriptors.size(), 100) < 0 && sys::lastError() != EINTR) {
+        if (::poll(descriptors.dataMut(), descriptors.size(), poll_ms) < 0 && sys::lastError() != EINTR) {
           throw SystemError{"Poll network control"};
         }
 
@@ -1399,52 +1552,65 @@ export {
 
         handler_.tick();
 
-        if ((descriptors[1].revents & POLLIN) != 0) {
+        if (pollReady(descriptors[1], POLLIN)) {
           wake_.drain();
-          while (auto attachment = attachments_.tryReceive()) {
-            for (auto& peer : peers_.viewMut()) {
-              if (!peer) {
-                peer.emplace(memory_, std::move(attachment.getMut().socket));
-                peer.getMut().package = std::move(attachment.getMut().package);
-                break;
-              }
-            }
-          }
+          attach();
         }
 
         for (std::size_t index = 0; index < peers_.size(); ++index) {
-          auto& peer = peers_.atMut(index);
-          if (!peer) {
-            continue;
-          }
-
-          const auto readiness = descriptors[index + 2].revents;
-          bool close = (readiness & (POLLERR | POLLNVAL)) || Clock::now() >= peer->deadline;
-
-          try {
-            if (!close && ((readiness & (POLLIN | POLLOUT | POLLHUP)) != 0)) {
-              close = advance(peer.getMut(), handler_, stopping_);
-            }
-          } catch (const std::exception&) {
-            close = true;
-          }
-
-          if (close) {
-            peer.reset();
-          }
+          serve(peers_.atMut(index), descriptors[index + 2], handler_, stopping_);
         }
 
-        if ((descriptors[0].revents & POLLIN) != 0) {
-          auto socket = listener_.accept();
-          if (!socket) {
-            return;
-          }
+        if (pollReady(descriptors[0], POLLIN)) {
+          accept();
+        }
+      }
 
+      // Takes the package channels attached since the last wake.
+      inline void attach() {
+        while (auto attachment = attachments_.tryReceive()) {
           for (auto& peer : peers_.viewMut()) {
             if (!peer) {
-              peer.emplace(memory_, std::move(socket));
+              peer.emplace(memory_, std::move(attachment.getMut().socket));
+              peer.getMut().package = std::move(attachment.getMut().package);
               break;
             }
+          }
+        }
+      }
+
+      // Moves a peer's exchange on as poll found it, closing it when it fails or runs out of time; the
+      // handler and the stop flag are lent apart from it.
+      inline static void serve(ds::Option<Peer>& peer, const pollfd& descriptor, Handler& handler, const std::atomic<bool>& stopping) {
+        if (!peer) {
+          return;
+        }
+
+        bool close = pollReady(descriptor, combineFlags(POLLERR, POLLNVAL)) || Clock::now() >= peer->deadline;
+
+        try {
+          if (!close && pollReady(descriptor, combineFlags(POLLIN, POLLOUT, POLLHUP))) {
+            close = advance(peer.getMut(), handler, stopping);
+          }
+        } catch (const std::exception&) {
+          close = true;
+        }
+
+        if (close) {
+          peer.reset();
+        }
+      }
+
+      inline void accept() {
+        auto socket = listener_.accept();
+        if (!socket) {
+          return;
+        }
+
+        for (auto& peer : peers_.viewMut()) {
+          if (!peer) {
+            peer.emplace(memory_, std::move(socket));
+            break;
           }
         }
       }
@@ -1500,14 +1666,14 @@ export {
           try {
             reply = handler.handle(request, output, stopping, peer.package ? &*peer.package : nullptr);
           } catch (const std::exception& error) {
-            reply = Protocol::encode(output, Reply{.result = Result::failed, .message = std::string_view{error.what()}.substr(0, 1024)});
+            reply = Protocol::encode(output, Reply{.result = Result::failed, .message = std::string_view{error.what()}.substr(0, reply_message_bytes)});
           }
 
           const auto prefix = Protocol::prefix(reply.size());
 
           std::ranges::copy(prefix, buffer.begin());
           peer.reply_bytes = prefix.size() + reply.size();
-          peer.deadline = Clock::now() + std::chrono::seconds{5};
+          peer.deadline = Clock::now() + exchange_timeout;
           return false;
         }
 

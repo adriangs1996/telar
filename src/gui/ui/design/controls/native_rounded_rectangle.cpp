@@ -14,6 +14,7 @@ static_assert(true);
 #include <QtCore/qtypes.h>
 #include <array>
 #include <cmath>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -98,7 +99,7 @@ namespace telar::gui::qt {
   }
 
   qreal NativeRoundedRectangle::borderAlpha() const noexcept {
-    return border_alpha_;
+    return static_cast<qreal>(border_alpha_);
   }
 
   void NativeRoundedRectangle::setBorderAlpha(qreal alpha) {
@@ -107,7 +108,7 @@ namespace telar::gui::qt {
     }
 
     const auto scalar = static_cast<float>(alpha);
-    if (scalar != border_alpha_) {
+    if (!std::equal_to<>{}(scalar, border_alpha_)) {
       border_alpha_ = scalar;
       emit borderAlphaChanged();
       update();
@@ -119,7 +120,7 @@ namespace telar::gui::qt {
   }
 
   void NativeRoundedRectangle::setRadius(qreal radius) {
-    if (std::isfinite(radius) && radius >= 0 && radius_ != radius) {
+    if (std::isfinite(radius) && radius >= 0 && !std::equal_to<>{}(radius_, radius)) {
       radius_ = radius;
       emit radiusChanged();
       update();
@@ -131,7 +132,7 @@ namespace telar::gui::qt {
   }
 
   void NativeRoundedRectangle::setBorderWidth(qreal width) {
-    if (std::isfinite(width) && width >= 0 && border_width_ != width) {
+    if (std::isfinite(width) && width >= 0 && !std::equal_to<>{}(border_width_, width)) {
       border_width_ = width;
       emit borderWidthChanged();
       update();
@@ -164,7 +165,7 @@ namespace telar::gui::qt {
     const auto density = window() == nullptr ? 0 : window()->effectiveDevicePixelRatio();
     const auto physical_width = static_cast<float>(width() * density);
     const auto physical_height = static_cast<float>(height() * density);
-    const auto transparent = !replace_background_ && color_.alphaF() <= 0 && (border_color_.alphaF() <= 0 || border_alpha_ == 0 || border_width_ <= 0);
+    const auto transparent = !replace_background_ && color_.alphaF() <= 0 && (border_color_.alphaF() <= 0 || std::equal_to<>{}(border_alpha_, 0.0F) || border_width_ <= 0);
     if (transparent || !std::isfinite(physical_width) || !std::isfinite(physical_height) || physical_width <= 0 || physical_height <= 0) {
       const auto retired = std::unique_ptr<QSGNode>{previous};
 

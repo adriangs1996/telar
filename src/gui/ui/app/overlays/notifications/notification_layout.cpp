@@ -31,6 +31,7 @@ static_assert(true);
 #include <cstdint>
 #include <cstring>
 #include <exception>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -46,7 +47,7 @@ namespace telar::gui::qt {
   namespace {
 
     QRectF logicalBounds(Rect bounds, qreal density) {
-      return {bounds.x / density, bounds.y / density, bounds.width / density, bounds.height / density};
+      return {static_cast<qreal>(bounds.x) / density, static_cast<qreal>(bounds.y) / density, static_cast<qreal>(bounds.width) / density, static_cast<qreal>(bounds.height) / density};
     }
 
     QString accent(NotificationLevel level) {
@@ -243,7 +244,7 @@ namespace telar::gui::qt {
       throw std::logic_error{"NotificationContentCapacityExceeded"};
     }
 
-    if (found->id != item.id || found->width != width) {
+    if (found->id != item.id || std::not_equal_to<>{}(found->width, width)) {
       found->id = item.id;
       found->width = width;
       found->message.assign(item.message.view());
@@ -287,7 +288,7 @@ namespace telar::gui::qt {
     for (std::size_t layer = 0; layer < application::notifications::NotificationMetrics::shadow_layers; ++layer) {
       const auto spread = metrics_.px(static_cast<float>(application::notifications::NotificationMetrics::shadow_layers - layer) * application::notifications::NotificationMetrics::shadow_spread);
 
-      shadows.append(QVariantMap{{QStringLiteral("bounds"), logicalBounds({.x = -spread, .y = -spread + metrics_.px(application::notifications::NotificationMetrics::shadow_offset), .width = content.width + (2 * spread), .height = content.height + (2 * spread)}, density_)}, {QStringLiteral("radius"), (metrics_.px(application::notifications::NotificationMetrics::radius) + spread) / density_}});
+      shadows.append(QVariantMap{{QStringLiteral("bounds"), logicalBounds({.x = -spread, .y = -spread + metrics_.px(application::notifications::NotificationMetrics::shadow_offset), .width = content.width + (2 * spread), .height = content.height + (2 * spread)}, density_)}, {QStringLiteral("radius"), (static_cast<qreal>(metrics_.px(application::notifications::NotificationMetrics::radius) + spread)) / density_}});
     }
 
     const auto action_bounds = geometry.action();
@@ -342,11 +343,11 @@ namespace telar::gui::qt {
     const auto physical_host = controller_->host();
     const auto host = logicalBounds(physical_host, density_);
     const QVariantMap style{
-        {QStringLiteral("radius"), metrics_.px(application::notifications::NotificationMetrics::radius) / density_},
-        {QStringLiteral("iconRadius"), metrics_.px(application::notifications::NotificationMetrics::icon_radius) / density_},
-        {QStringLiteral("closeRadius"), metrics_.px(application::notifications::NotificationMetrics::close_radius) / density_},
-        {QStringLiteral("borderWidth"), metrics_.px(application::notifications::NotificationMetrics::border_width) / density_},
-        {QStringLiteral("focusBorderWidth"), metrics_.px(application::notifications::NotificationMetrics::focus_border_width) / density_},
+        {QStringLiteral("radius"), static_cast<qreal>(metrics_.px(application::notifications::NotificationMetrics::radius)) / density_},
+        {QStringLiteral("iconRadius"), static_cast<qreal>(metrics_.px(application::notifications::NotificationMetrics::icon_radius)) / density_},
+        {QStringLiteral("closeRadius"), static_cast<qreal>(metrics_.px(application::notifications::NotificationMetrics::close_radius)) / density_},
+        {QStringLiteral("borderWidth"), static_cast<qreal>(metrics_.px(application::notifications::NotificationMetrics::border_width)) / density_},
+        {QStringLiteral("focusBorderWidth"), static_cast<qreal>(metrics_.px(application::notifications::NotificationMetrics::focus_border_width)) / density_},
         {QStringLiteral("borderAlpha"), application::notifications::NotificationMetrics::border_alpha},
         {QStringLiteral("iconAlpha"), application::notifications::NotificationMetrics::icon_alpha},
         {QStringLiteral("shadowAlpha"), application::notifications::NotificationMetrics::shadow_alpha},

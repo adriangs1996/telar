@@ -197,7 +197,7 @@ namespace telar::gui::qt {
                         { observer.commandOutput(bytes) } noexcept -> std::same_as<void>;
                       }) {
           if (channel == QProcess::StandardOutput) {
-            observer_.commandOutput({buffer.data(), static_cast<std::size_t>(count)});
+            observer_.commandOutput(std::span<const char>{buffer.view()}.first(static_cast<std::size_t>(count)));
           }
         }
       }

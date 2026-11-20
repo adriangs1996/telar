@@ -7,55 +7,181 @@ import telar.base.text.utf8;
 import telar.base.ds;
 
 namespace telar::runtime::traffic {
+  namespace {
 
-  std::uint16_t NetworkPacket::word(std::span<const Byte> bytes, std::size_t offset) noexcept {
-    return static_cast<std::uint16_t>((std::uint16_t{bytes[offset]} << 8) | bytes[offset + 1]);
-  }
+    constexpr unsigned byte_bits = 8;
+    constexpr unsigned word_bits = 16;
 
-  std::span<const Byte> NetworkPacket::decode(const Event& event) noexcept {
-    auto bytes = event.bytes;
+    // Ethernet framing: its header, where the EtherType sits, and the VLAN tags that may come first.
+    constexpr std::size_t ethernet_header_bytes = 14;
+    constexpr std::size_t ether_type_offset = 12;
+    constexpr std::uint16_t vlan_tag = 0x8100;
+    constexpr std::uint16_t provider_vlan_tag = 0x88a8;
+    constexpr std::size_t vlan_tag_bytes = 4;
+    constexpr unsigned maximum_vlan_tags = 2;
+    constexpr std::uint16_t ipv4_ether_type = 0x0800;
+    constexpr std::uint16_t ipv6_ether_type = 0x86dd;
 
-    switch (event.link_type) {
-    case DLT_EN10MB: {
-      if (bytes.size() < 14) {
-        return {};
-      }
+    // The link headers of loopback and Linux cooked captures.
+    constexpr std::size_t loopback_header_bytes = 4;
+    constexpr std::size_t cooked_header_bytes = 16;
+    constexpr std::size_t cooked_v2_header_bytes = 20;
 
-      auto protocol = word(bytes, 12);
+    // The IP version is the high nibble of a packet's first byte, and IPv4's header length in words the low one.
+    constexpr unsigned high_nibble_shift = 4;
+    constexpr unsigned ipv4_version = 4;
+    constexpr unsigned ipv6_version = 6;
+    constexpr unsigned header_length_bits = 0x0f;
+    constexpr std::size_t header_word_bytes = 4;
 
-      bytes = bytes.subspan(14);
-      for (unsigned depth = 0; protocol == 0x8100 || protocol == 0x88a8; ++depth) {
-        if (depth == 2 || bytes.size() < 4) {
+    // IPv4 header fields.
+    constexpr std::size_t ipv4_header_bytes = 20;
+    constexpr std::size_t ipv4_length_offset = 2;
+    constexpr std::size_t ipv4_identification_offset = 4;
+    constexpr std::size_t ipv4_flags_offset = 6;
+    constexpr std::size_t ipv4_protocol_offset = 9;
+    constexpr std::size_t ipv4_checksum_offset = 10;
+    constexpr std::size_t ipv4_source_offset = 12;
+    constexpr std::size_t ipv4_destination_offset = 16;
+    constexpr std::size_t ipv4_address_bytes = 4;
+    constexpr unsigned ipv4_fragment_bits = 0x3fff;
+    constexpr unsigned ipv4_fragment_offset_bits = 0x1fff;
+    constexpr unsigned ipv4_more_fragments = 0x2000;
+    constexpr unsigned ipv4_forbidden_fragment_flags = 0xc000;
+
+    // IPv6 header fields, its extension headers, and the fragment header that ends them.
+    constexpr std::size_t ipv6_header_bytes = 40;
+    constexpr std::size_t ipv6_length_offset = 4;
+    constexpr std::size_t ipv6_next_header_offset = 6;
+    constexpr std::size_t ipv6_source_offset = 8;
+    constexpr std::size_t ipv6_destination_offset = 24;
+    constexpr Byte hop_by_hop_options = 0;
+    constexpr Byte routing_header = 43;
+    constexpr Byte fragment_header = 44;
+    constexpr Byte authentication_header = 51;
+    constexpr Byte destination_options = 60;
+    constexpr unsigned maximum_extension_headers = 8;
+    constexpr std::size_t extension_unit_bytes = 8;
+    constexpr std::size_t fragment_header_bytes = 8;
+    constexpr std::size_t fragment_flags_offset = 2;
+    constexpr std::size_t fragment_identification_offset = 4;
+    constexpr unsigned ipv6_fragment_offset_bits = 0xfff8;
+    constexpr unsigned ipv6_more_fragments = 1;
+
+    // Fragment offsets count units of eight bytes.
+    constexpr std::size_t fragment_unit_bytes = 8;
+
+    // UDP and ICMP headers, and the ICMP echo messages.
+    constexpr std::size_t udp_header_bytes = 8;
+    constexpr std::size_t icmp_echo_bytes = 8;
+    constexpr Byte icmp_echo_reply = 0;
+    constexpr Byte icmp_echo_request = 8;
+    constexpr Byte icmpv6_echo_request = 128;
+    constexpr Byte icmpv6_echo_reply = 129;
+
+    // TCP header fields.
+    constexpr std::size_t tcp_header_bytes = 20;
+    constexpr std::size_t tcp_sequence_offset = 4;
+    constexpr std::size_t tcp_data_offset_offset = 12;
+    constexpr std::size_t tcp_flags_offset = 13;
+
+    constexpr std::uint64_t fnv_prime = 1099511628211ULL;
+
+    unsigned ipVersion(std::span<const Byte> bytes) noexcept {
+      return unsigned{bytes[0]} >> high_nibble_shift;
+    }
+
+    bool isExtension(Byte protocol) noexcept {
+      return protocol == hop_by_hop_options || protocol == routing_header || protocol == destination_options || protocol == authentication_header;
+    }
+
+    // The bytes of the extension header the given bytes start with: an authentication header counts
+    // words of four bytes past the first two, the others units of eight past the first.
+    std::size_t extensionBytes(Byte protocol, std::span<const Byte> header) noexcept {
+      return protocol == authentication_header ? (std::size_t{header[1]} + 2) * header_word_bytes : (std::size_t{header[1]} + 1) * extension_unit_bytes;
+    }
+
+    // Where the fragment header of an IPv6 packet starts, past its extension headers, and the offset of
+    // the next-header field that names it.
+    struct FragmentHeader {
+      std::size_t offset = ipv6_header_bytes;
+      std::size_t previous_header = ipv6_next_header_offset;
+    };
+
+    ds::Option<FragmentHeader> fragmentHeader(std::span<const Byte> bytes) noexcept {
+      auto protocol = bytes[ipv6_next_header_offset];
+      FragmentHeader header;
+
+      for (unsigned depth = 0; protocol != fragment_header; ++depth) {
+        if (depth == maximum_extension_headers || header.offset > bytes.size() || bytes.size() - header.offset < 2 || !isExtension(protocol)) {
           return {};
         }
 
-        protocol = word(bytes, 2);
-        bytes = bytes.subspan(4);
+        const auto head = extensionBytes(protocol, bytes.subspan(header.offset));
+
+        header.previous_header = header.offset;
+        protocol = bytes[header.offset];
+        header.offset += head;
       }
 
-      if (protocol != 0x0800 && protocol != 0x86dd) {
+      return header;
+    }
+
+    tbc::val_a<std::span<const Byte>> linkPayload(tbc::val_a<std::span<const Byte>> bytes, std::size_t header) noexcept {
+      return bytes.size() < header ? std::span<const Byte>{} : bytes.subspan(header);
+    }
+
+    tbc::val_a<std::span<const Byte>> ethernetPayload(tbc::val_a<std::span<const Byte>> bytes) noexcept {
+      if (bytes.size() < ethernet_header_bytes) {
+        return {};
+      }
+
+      auto protocol = NetworkPacket::word(bytes, ether_type_offset);
+
+      bytes = bytes.subspan(ethernet_header_bytes);
+      for (unsigned depth = 0; protocol == vlan_tag || protocol == provider_vlan_tag; ++depth) {
+        if (depth == maximum_vlan_tags || bytes.size() < vlan_tag_bytes) {
+          return {};
+        }
+
+        protocol = NetworkPacket::word(bytes, 2);
+        bytes = bytes.subspan(vlan_tag_bytes);
+      }
+
+      if (protocol != ipv4_ether_type && protocol != ipv6_ether_type) {
         return {};
       }
 
       return bytes;
     }
+
+  }
+
+  std::uint16_t NetworkPacket::word(std::span<const Byte> bytes, std::size_t offset) noexcept {
+    return static_cast<std::uint16_t>((unsigned{bytes[offset]} << byte_bits) | bytes[offset + 1]);
+  }
+
+  std::span<const Byte> NetworkPacket::decode(const Event& event) noexcept {
+    switch (event.link_type) {
+    case DLT_EN10MB:
+      return ethernetPayload(event.bytes);
     case DLT_NULL:
     case DLT_LOOP:
-      return bytes.size() < 4 ? std::span<const Byte>{} : bytes.subspan(4);
+      return linkPayload(event.bytes, loopback_header_bytes);
     case DLT_LINUX_SLL:
-      return bytes.size() < 16 ? std::span<const Byte>{} : bytes.subspan(16);
+      return linkPayload(event.bytes, cooked_header_bytes);
     case DLT_LINUX_SLL2:
-      return bytes.size() < 20 ? std::span<const Byte>{} : bytes.subspan(20);
+      return linkPayload(event.bytes, cooked_v2_header_bytes);
     case DLT_RAW:
     case DLT_IPV4:
     case DLT_IPV6:
-      return bytes;
+      return event.bytes;
     default:
       return {};
     }
   }
 
-  ds::Array<char, INET6_ADDRSTRLEN> IpPayload::addressText(const ds::Array<Byte, 16>& address, bool ipv6) noexcept {
+  ds::Array<char, INET6_ADDRSTRLEN> IpPayload::addressText(const ds::Array<Byte, address_bytes>& address, bool ipv6) noexcept {
     ds::Array<char, INET6_ADDRSTRLEN> text{};
 
     ::inet_ntop(ipv6 ? AF_INET6 : AF_INET, address.data(), text.dataMut(), text.size());
@@ -69,43 +195,43 @@ namespace telar::runtime::traffic {
 
     IpPayload result;
 
-    if ((bytes[0] >> 4) == 4) {
-      if (bytes.size() < 20 || (NetworkPacket::word(bytes, 6) & 0x3fff) != 0) {
+    if (ipVersion(bytes) == ipv4_version) {
+      if (bytes.size() < ipv4_header_bytes || (NetworkPacket::word(bytes, ipv4_flags_offset) & ipv4_fragment_bits) != 0) {
         return {};
       }
 
-      const auto head = std::size_t{bytes[0] & 15u} * 4;
-      const auto length = NetworkPacket::word(bytes, 2);
-      if (head < 20 || length < head || bytes.size() < head) {
+      const auto head = std::size_t{bytes[0] & header_length_bits} * header_word_bytes;
+      const auto length = NetworkPacket::word(bytes, ipv4_length_offset);
+      if (head < ipv4_header_bytes || length < head || bytes.size() < head) {
         return {};
       }
 
       result.truncated = bytes.size() < length;
-      result.protocol = bytes[9];
+      result.protocol = bytes[ipv4_protocol_offset];
       result.original_bytes = length - head;
-      std::ranges::copy(bytes.subspan(12, 4), result.source.viewMut().begin());
-      std::ranges::copy(bytes.subspan(16, 4), result.destination.viewMut().begin());
+      std::ranges::copy(bytes.subspan(ipv4_source_offset, ipv4_address_bytes), result.source.viewMut().begin());
+      std::ranges::copy(bytes.subspan(ipv4_destination_offset, ipv4_address_bytes), result.destination.viewMut().begin());
       result.bytes = bytes.first(std::min(bytes.size(), std::size_t{length})).subspan(head);
-    } else if ((bytes[0] >> 4) == 6) {
-      if (bytes.size() < 40 || NetworkPacket::word(bytes, 4) == 0) {
+    } else if (ipVersion(bytes) == ipv6_version) {
+      if (bytes.size() < ipv6_header_bytes || NetworkPacket::word(bytes, ipv6_length_offset) == 0) {
         return {};
       }
 
       result.ipv6 = true;
-      std::ranges::copy(bytes.subspan(8, 16), result.source.viewMut().begin());
-      std::ranges::copy(bytes.subspan(24, 16), result.destination.viewMut().begin());
-      const auto length = std::size_t{NetworkPacket::word(bytes, 4)} + 40;
+      std::ranges::copy(bytes.subspan(ipv6_source_offset, address_bytes), result.source.viewMut().begin());
+      std::ranges::copy(bytes.subspan(ipv6_destination_offset, address_bytes), result.destination.viewMut().begin());
+      const auto length = std::size_t{NetworkPacket::word(bytes, ipv6_length_offset)} + ipv6_header_bytes;
 
       result.truncated = bytes.size() < length;
-      result.protocol = bytes[6];
-      bytes = bytes.first(std::min(bytes.size(), length)).subspan(40);
-      result.original_bytes = length - 40;
-      for (unsigned depth = 0; result.protocol == 0 || result.protocol == 43 || result.protocol == 60 || result.protocol == 51; ++depth) {
-        if (depth == 8 || bytes.size() < 2) {
+      result.protocol = bytes[ipv6_next_header_offset];
+      bytes = bytes.first(std::min(bytes.size(), length)).subspan(ipv6_header_bytes);
+      result.original_bytes = length - ipv6_header_bytes;
+      for (unsigned depth = 0; isExtension(result.protocol); ++depth) {
+        if (depth == maximum_extension_headers || bytes.size() < 2) {
           return {};
         }
 
-        const auto head = result.protocol == 51 ? (std::size_t{bytes[1]} + 2) * 4 : (std::size_t{bytes[1]} + 1) * 8;
+        const auto head = extensionBytes(result.protocol, bytes);
         if (head > bytes.size()) {
           return {};
         }
@@ -124,7 +250,7 @@ namespace telar::runtime::traffic {
   }
 
   bool DatagramEvent::echo() const noexcept {
-    return transport != DatagramTransport::udp && icmp_code == 0 && bytes.size() >= 8 && (transport == DatagramTransport::icmp ? icmp_type == 0 || icmp_type == 8 : icmp_type == 128 || icmp_type == 129);
+    return transport != DatagramTransport::udp && icmp_code == 0 && bytes.size() >= icmp_echo_bytes && (transport == DatagramTransport::icmp ? icmp_type == icmp_echo_reply || icmp_type == icmp_echo_request : icmp_type == icmpv6_echo_request || icmp_type == icmpv6_echo_reply);
   }
 
   std::string_view DatagramCodec::name(DatagramTransport transport) noexcept {
@@ -177,33 +303,33 @@ namespace telar::runtime::traffic {
     return event;
   }
 
-  ds::Option<DatagramEvent> DatagramCodec::parse(const IpPayload& ip) noexcept {
-    DatagramEvent event{.ipv6 = ip.ipv6, .source_address = ip.source, .destination_address = ip.destination};
+  ds::Option<DatagramEvent> DatagramCodec::parse(const IpPayload& payload) noexcept {
+    DatagramEvent event{.ipv6 = payload.ipv6, .source_address = payload.source, .destination_address = payload.destination};
 
-    if (ip.protocol == IPPROTO_UDP) {
-      if (ip.bytes.size() < 8) {
+    if (payload.protocol == IPPROTO_UDP) {
+      if (payload.bytes.size() < udp_header_bytes) {
         return {};
       }
 
-      const auto length = NetworkPacket::word(ip.bytes, 4);
-      if (length < 8 || length > ip.original_bytes) {
+      const auto length = NetworkPacket::word(payload.bytes, 4);
+      if (length < udp_header_bytes || length > payload.original_bytes) {
         return {};
       }
 
-      event.source_port = NetworkPacket::word(ip.bytes, 0);
-      event.destination_port = NetworkPacket::word(ip.bytes, 2);
-      event.original_bytes = length - 8;
-      event.bytes = ip.bytes.first(std::min(ip.bytes.size(), std::size_t{length})).subspan(8);
-    } else if ((!ip.ipv6 && ip.protocol == IPPROTO_ICMP) || (ip.ipv6 && ip.protocol == IPPROTO_ICMPV6)) {
-      if (ip.bytes.size() < 4) {
+      event.source_port = NetworkPacket::word(payload.bytes, 0);
+      event.destination_port = NetworkPacket::word(payload.bytes, 2);
+      event.original_bytes = length - udp_header_bytes;
+      event.bytes = payload.bytes.first(std::min(payload.bytes.size(), std::size_t{length})).subspan(udp_header_bytes);
+    } else if ((!payload.ipv6 && payload.protocol == IPPROTO_ICMP) || (payload.ipv6 && payload.protocol == IPPROTO_ICMPV6)) {
+      if (payload.bytes.size() < 4) {
         return {};
       }
 
-      event.transport = ip.ipv6 ? DatagramTransport::icmpv6 : DatagramTransport::icmp;
-      event.icmp_type = ip.bytes[0];
-      event.icmp_code = ip.bytes[1];
-      event.original_bytes = static_cast<std::uint32_t>(ip.original_bytes);
-      event.bytes = ip.bytes;
+      event.transport = payload.ipv6 ? DatagramTransport::icmpv6 : DatagramTransport::icmp;
+      event.icmp_type = payload.bytes[0];
+      event.icmp_code = payload.bytes[1];
+      event.original_bytes = static_cast<std::uint32_t>(payload.original_bytes);
+      event.bytes = payload.bytes;
     } else {
       return {};
     }
@@ -240,69 +366,63 @@ namespace telar::runtime::traffic {
 
     Fragment part;
 
-    if ((bytes[0] >> 4) == 4) {
-      if (bytes.size() < 20 || (NetworkPacket::word(bytes, 6) & 0x3fff) == 0) {
+    if (ipVersion(bytes) == ipv4_version) {
+      if (bytes.size() < ipv4_header_bytes || (NetworkPacket::word(bytes, ipv4_flags_offset) & ipv4_fragment_bits) == 0) {
         return {};
       }
 
-      const auto flags = NetworkPacket::word(bytes, 6);
+      const auto flags = NetworkPacket::word(bytes, ipv4_flags_offset);
 
-      part.offset = std::size_t{flags & 0x1fffu} * 8;
-      part.more = (flags & 0x2000) != 0;
-      part.key.identification = NetworkPacket::word(bytes, 4);
-      part.key.protocol = bytes[9];
-      std::copy_n(bytes.begin() + 12, 8, part.key.addresses.dataMut());
-      const auto head = std::size_t{bytes[0] & 15u} * 4;
-      const auto length = NetworkPacket::word(bytes, 2);
-      if (head < 20 || head > bytes.size() || length <= head || length > bytes.size() || (flags & 0xc000) != 0) {
+      part.offset = std::size_t{flags & ipv4_fragment_offset_bits} * fragment_unit_bytes;
+      part.more = (flags & ipv4_more_fragments) != 0;
+      part.key.identification = NetworkPacket::word(bytes, ipv4_identification_offset);
+      part.key.protocol = bytes[ipv4_protocol_offset];
+      std::copy_n(bytes.begin() + ipv4_source_offset, 2 * ipv4_address_bytes, part.key.addresses.dataMut());
+      const auto head = std::size_t{bytes[0] & header_length_bits} * header_word_bytes;
+      const auto length = NetworkPacket::word(bytes, ipv4_length_offset);
+      if (head < ipv4_header_bytes || head > bytes.size() || length <= head || length > bytes.size() || (flags & ipv4_forbidden_fragment_flags) != 0) {
         part.error = "ip_fragment_invalid_or_truncated";
         return part;
       }
 
       part.prefix = bytes.first(head);
       part.payload = bytes.subspan(head, length - head);
-    } else if ((bytes[0] >> 4) == 6) {
-      if (bytes.size() < 40) {
+    } else if (ipVersion(bytes) == ipv6_version) {
+      if (bytes.size() < ipv6_header_bytes) {
         return {};
       }
 
-      const auto length = std::size_t{NetworkPacket::word(bytes, 4)} + 40;
-      auto protocol = bytes[6];
-      std::size_t offset = 40;
-
-      part.previous_header = 6;
-      for (unsigned depth = 0; protocol != 44; ++depth) {
-        if (depth == 8 || offset > bytes.size() || bytes.size() - offset < 2 || (protocol != 0 && protocol != 43 && protocol != 60 && protocol != 51)) {
-          return {};
-        }
-
-        const auto head = protocol == 51 ? (std::size_t{bytes[offset + 1]} + 2) * 4 : (std::size_t{bytes[offset + 1]} + 1) * 8;
-
-        part.previous_header = offset;
-        protocol = bytes[offset];
-        offset += head;
+      const auto length = std::size_t{NetworkPacket::word(bytes, ipv6_length_offset)} + ipv6_header_bytes;
+      const auto header = fragmentHeader(bytes);
+      if (!header) {
+        return {};
       }
 
+      const auto offset = header->offset;
+
+      part.previous_header = header->previous_header;
       part.key.ipv6 = true;
-      if (offset > bytes.size() || bytes.size() - offset < 8 || length > bytes.size() || length <= offset + 8 || offset > maximum_prefix) {
+      if (offset > bytes.size() || bytes.size() - offset < fragment_header_bytes || length > bytes.size() || length <= offset + fragment_header_bytes || offset > maximum_prefix) {
         part.error = "ip_fragment_invalid_or_truncated";
         return part;
       }
 
-      std::copy_n(bytes.begin() + 8, 32, part.key.addresses.dataMut());
-      part.key.identification = (std::uint32_t{NetworkPacket::word(bytes, offset + 4)} << 16) | NetworkPacket::word(bytes, offset + 6);
-      const auto flags = NetworkPacket::word(bytes, offset + 2);
+      const auto identification = offset + fragment_identification_offset;
 
-      part.offset = flags & 0xfff8u;
-      part.more = (flags & 1) != 0;
+      std::copy_n(bytes.begin() + ipv6_source_offset, 2 * IpPayload::address_bytes, part.key.addresses.dataMut());
+      part.key.identification = (std::uint32_t{NetworkPacket::word(bytes, identification)} << word_bits) | NetworkPacket::word(bytes, identification + 2);
+      const auto flags = NetworkPacket::word(bytes, offset + fragment_flags_offset);
+
+      part.offset = flags & ipv6_fragment_offset_bits;
+      part.more = (flags & ipv6_more_fragments) != 0;
       part.next_header = bytes[offset];
       part.prefix = bytes.first(offset);
-      part.payload = bytes.subspan(offset + 8, length - offset - 8);
+      part.payload = bytes.subspan(offset + fragment_header_bytes, length - offset - fragment_header_bytes);
     } else {
       return {};
     }
 
-    if ((part.more && part.payload.size() % 8 != 0) || part.offset + part.payload.size() > maximum_payload) {
+    if ((part.more && part.payload.size() % fragment_unit_bytes != 0) || part.offset + part.payload.size() > maximum_payload) {
       part.error = "ip_fragment_size_limit";
     }
 
@@ -345,52 +465,58 @@ namespace telar::runtime::traffic {
       return "ip_fragment_piece_limit";
     }
 
-    if (part.offset == 0) {
-      entry.prefix = part.prefix.size();
-      entry.next_header = part.next_header;
-      std::ranges::copy(part.prefix, entry.storage.getMut().bytesMut().begin() + maximum_prefix - entry.prefix);
-      if (part.key.ipv6) {
-        entry.storage.getMut().bytesMut()[maximum_prefix - entry.prefix + part.previous_header] = part.next_header;
-      }
-    }
-
-    std::ranges::copy(part.payload, entry.storage.getMut().bytesMut().begin() + maximum_prefix + part.offset);
+    store(entry, part);
     entry.ranges.atMut(entry.count++) = {.offset = part.offset, .size = part.payload.size(), .more = part.more};
     entry.received += part.payload.size();
     if (!part.more) {
       entry.length = end;
     }
 
-    if (entry.prefix != 0 && entry.length && entry.prefix - (entry.key.ipv6 ? 40 : 0) + *entry.length > std::numeric_limits<std::uint16_t>::max()) {
+    if (entry.prefix != 0 && entry.length && entry.prefix - (entry.key.ipv6 ? ipv6_header_bytes : 0) + *entry.length > std::numeric_limits<std::uint16_t>::max()) {
       return "ip_fragment_size_limit";
     }
 
     return {};
   }
 
+  void IpFragments::store(Entry& entry, const Fragment& part) {
+    const auto storage = entry.storage.getMut().bytesMut();
+
+    if (part.offset == 0) {
+      entry.prefix = part.prefix.size();
+      entry.next_header = part.next_header;
+      std::ranges::copy(part.prefix, storage.subspan(maximum_prefix - entry.prefix).begin());
+      if (part.key.ipv6) {
+        storage[maximum_prefix - entry.prefix + part.previous_header] = part.next_header;
+      }
+    }
+
+    std::ranges::copy(part.payload, storage.subspan(maximum_prefix + part.offset).begin());
+  }
+
   std::span<const Byte> IpFragments::assembled(Entry& entry) {
     auto bytes = entry.storage.getMut().bytesMut().subspan(maximum_prefix - entry.prefix, entry.prefix + *entry.length);
-    const auto length = bytes.size() - (entry.key.ipv6 ? 40 : 0);
-    const auto offset = entry.key.ipv6 ? 4u : 2u;
+    const auto length = bytes.size() - (entry.key.ipv6 ? ipv6_header_bytes : 0);
+    const auto offset = entry.key.ipv6 ? ipv6_length_offset : ipv4_length_offset;
 
-    bytes[offset] = static_cast<Byte>(length >> 8);
+    bytes[offset] = static_cast<Byte>(length >> byte_bits);
     bytes[offset + 1] = static_cast<Byte>(length);
     if (!entry.key.ipv6) {
-      bytes[6] = bytes[7] = bytes[10] = bytes[11] = 0;
+      bytes[ipv4_flags_offset] = bytes[ipv4_flags_offset + 1] = bytes[ipv4_checksum_offset] = bytes[ipv4_checksum_offset + 1] = 0;
       std::uint32_t sum = 0;
 
       for (std::size_t index = 0; index < entry.prefix; index += 2) {
         sum += NetworkPacket::word(bytes, index);
       }
 
-      while ((sum >> 16) != 0u) {
-        sum = (sum & std::numeric_limits<std::uint16_t>::max()) + (sum >> 16);
+      while ((sum >> word_bits) != 0U) {
+        sum = (sum & std::numeric_limits<std::uint16_t>::max()) + (sum >> word_bits);
       }
 
       const auto checksum = static_cast<std::uint16_t>(~sum);
 
-      bytes[10] = static_cast<Byte>(checksum >> 8);
-      bytes[11] = static_cast<Byte>(checksum);
+      bytes[ipv4_checksum_offset] = static_cast<Byte>(checksum >> byte_bits);
+      bytes[ipv4_checksum_offset + 1] = static_cast<Byte>(checksum);
     }
 
     return bytes;
@@ -399,7 +525,7 @@ namespace telar::runtime::traffic {
   FixedText<TcpEndpoint::text_bytes> TcpEndpoint::text() const {
     const auto host = IpPayload::addressText(address, ipv6);
     const std::string_view name{host.data()};
-    ds::Array<char, text_bytes> buffer;
+    ds::Array<char, text_bytes> buffer; // NOLINT(cppcoreguidelines-pro-type-member-init): every flow event formats two endpoints, and only what format_to_n writes is read
     const auto written = ipv6 ? std::format_to_n(buffer.dataMut(), buffer.size(), "[{}]:{}", name, port) : std::format_to_n(buffer.dataMut(), buffer.size(), "{}:{}", name, port);
     FixedText<text_bytes> text;
 
@@ -416,49 +542,49 @@ namespace telar::runtime::traffic {
   }
 
   ds::Option<TcpPacket> TcpPacketDecoder::decodeNetwork(std::span<const Byte> bytes) noexcept {
-    const auto ip = IpPayload::decode(bytes);
+    const auto payload = IpPayload::decode(bytes);
 
-    return ip ? decodePayload(*ip) : ds::none;
+    return payload ? decodePayload(*payload) : ds::none;
   }
 
-  tbc::val_a<ds::Option<TcpPacket>> TcpPacketDecoder::decodePayload(const IpPayload& ip) noexcept {
-    if (ip.protocol != IPPROTO_TCP) {
+  tbc::val_a<ds::Option<TcpPacket>> TcpPacketDecoder::decodePayload(const IpPayload& payload) noexcept {
+    if (payload.protocol != IPPROTO_TCP) {
       return {};
     }
 
     TcpPacket packet;
 
-    packet.source.address = ip.source;
-    packet.destination.address = ip.destination;
-    packet.source.ipv6 = packet.destination.ipv6 = ip.ipv6;
-    packet.truncated = ip.truncated;
-    auto bytes = ip.bytes;
-    if (bytes.size() < 20) {
+    packet.source.address = payload.source;
+    packet.destination.address = payload.destination;
+    packet.source.ipv6 = packet.destination.ipv6 = payload.ipv6;
+    packet.truncated = payload.truncated;
+    const auto bytes = payload.bytes;
+    if (bytes.size() < tcp_header_bytes) {
       return {};
     }
 
-    const auto head = static_cast<std::size_t>(bytes[12] >> 4) * 4;
-    if (head < 20 || head > bytes.size()) {
+    const auto head = static_cast<std::size_t>(unsigned{bytes[tcp_data_offset_offset]} >> high_nibble_shift) * header_word_bytes;
+    if (head < tcp_header_bytes || head > bytes.size()) {
       return {};
     }
 
     packet.source.port = word(bytes, 0);
     packet.destination.port = word(bytes, 2);
-    packet.sequence = (std::uint32_t{word(bytes, 4)} << 16) | word(bytes, 6);
-    packet.flags = bytes[13];
+    packet.sequence = (std::uint32_t{word(bytes, tcp_sequence_offset)} << word_bits) | word(bytes, tcp_sequence_offset + 2);
+    packet.flags = bytes[tcp_flags_offset];
     packet.bytes = bytes.subspan(head);
     return packet;
   }
 
   std::uint64_t TcpFlows::Hash::operator()(const Key& key) const noexcept {
     std::size_t hash = key.session;
-    auto add = [&](unsigned value) {
-      hash = (hash ^ value) * 1099511628211ull;
+    const auto add = [&](unsigned value) {
+      hash = (hash ^ value) * fnv_prime;
     };
 
     add(key.interface);
-    for (const auto c : key.name) {
-      add(static_cast<unsigned char>(c));
+    for (const auto character : key.name) {
+      add(static_cast<unsigned char>(character));
     }
 
     for (const auto* endpoint : {&key.first, &key.second}) {
@@ -477,10 +603,10 @@ namespace telar::runtime::traffic {
   TcpFlows::Side::Side(Secure& memory)
       : pending(memory) {}
 
-  TcpFlows::Flow::Flow(Secure& memory, std::uint64_t id, bool reverse, bool offline)
-      : id(id),
-        reverse(reverse),
-        offline(offline),
+  TcpFlows::Flow::Flow(Secure& memory, std::uint64_t flow_id, bool reversed, bool replayed)
+      : id(flow_id),
+        reverse(reversed),
+        offline(replayed),
         outbound(memory),
         inbound(memory) {}
 

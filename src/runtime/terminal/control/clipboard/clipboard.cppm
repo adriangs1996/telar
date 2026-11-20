@@ -110,15 +110,19 @@ export namespace telar::runtime::control {
     static constexpr std::size_t maximum_aliases = 64;
 
     // Copies the metadata; it keeps only its allocator, region `a`.
-    explicit ClipboardWrite(tbc::mut_a<ConcurrentMemory> memory, const ClipboardMetadata& metadata, std::size_t limit);
+    explicit ClipboardWrite(tbc::mut_a<ConcurrentMemory> memory, ClipboardMetadata request, std::size_t limit);
 
     // Its contents view its own spool and names, so it stays where it is built.
     ClipboardWrite(const ClipboardWrite&) = delete;
     ClipboardWrite& operator=(const ClipboardWrite&) = delete;
+    ClipboardWrite(ClipboardWrite&&) = delete;
+    ClipboardWrite& operator=(ClipboardWrite&&) = delete;
+    ~ClipboardWrite() = default;
 
-    ClipboardStatus data(std::string_view mime, std::string_view encoded);
+    // The request's mime names the representation the encoded bytes add to.
+    ClipboardStatus data(const ClipboardMetadata& request, std::string_view encoded);
 
-    ClipboardStatus alias(std::string_view mime, std::string_view encoded);
+    ClipboardStatus alias(const ClipboardMetadata& request, std::string_view encoded);
 
     ClipboardStatus commit();
 
@@ -142,6 +146,10 @@ export namespace telar::runtime::control {
 
     ClipboardStatus finishCurrent() noexcept;
 
+    // Moves the data that follows to the entry of `mime`: none once it may, or what the request
+    // ends with when it may not.
+    ds::Option<ClipboardStatus> selectEntry(std::string_view mime);
+
     void reserve(std::size_t count);
 
     static constexpr std::size_t initial_capacity = 4096;
@@ -155,7 +163,7 @@ export namespace telar::runtime::control {
     std::size_t alias_count_ = 0;
     std::size_t content_count_ = 0;
     ds::Option<std::size_t> current_;
-    ds::Array<char, 4> group_;
+    ds::Array<char, 4> group_{};
     std::size_t group_size_ = 0;
   };
 
@@ -256,6 +264,11 @@ export namespace telar::runtime::control {
 
       Pending(const Pending&) = delete;
       Pending& operator=(const Pending&) = delete;
+      Pending(Pending&&) = delete;
+      Pending& operator=(Pending&&) = delete;
+      ~Pending() = default;
+
+      static constexpr std::size_t maximum_contents = 128;
 
       // Points the views at the request's own texts and contents; how many contents there are.
       std::size_t prepareViews() noexcept;
@@ -268,7 +281,7 @@ export namespace telar::runtime::control {
       std::uint64_t nonce = 0;
       ds::Array<FixedText<ClipboardMetadata::maximum_mime>, 4> mimes;
       tbc::val_self<ds::Array<std::string_view, 4>> mime_views;
-      tbc::val_self<ds::Array<ClipboardRepresentation, 128>> content_views;
+      tbc::val_self<ds::Array<ClipboardRepresentation, maximum_contents>> content_views;
       std::size_t mime_count = 0;
       ds::Vec<std::uint8_t, ConcurrentMemory> text;
       ds::Box<ClipboardWrite, ConcurrentMemory> transaction;
@@ -305,6 +318,15 @@ export namespace telar::runtime::control {
 
     void commit(Ending ending, const Policy& policy, Reply<ConcurrentMemory>& reply);
 
+    // The reply to an OSC 52 read: the first text representation the desktop returned.
+    static void traditionalRead(const Pending& pending, const CompleteClipboardDesktop& completion, Reply<ConcurrentMemory>& reply);
+
+    // The reply to a kitty read, false when the contents exceed the clipboard's limit.
+    static bool kittyRead(const Pending& pending, const CompleteClipboardDesktop& completion, Reply<ConcurrentMemory>& reply);
+
+    // A wdata or walias packet of the open write transaction.
+    void transactionChunk(const ClipboardMetadata& metadata, std::string_view data, Ending ending, const Policy& policy, Reply<ConcurrentMemory>& reply);
+
     // The replies completions queue, oldest first: building one borrows these alone, so what the
     // clipboard is completing stays borrowed meanwhile.
     struct ReplyRing {
@@ -321,6 +343,8 @@ export namespace telar::runtime::control {
 
       ReplyBuilder(const ReplyBuilder&) = delete;
       ReplyBuilder& operator=(const ReplyBuilder&) = delete;
+      ReplyBuilder(ReplyBuilder&&) = delete;
+      ReplyBuilder& operator=(ReplyBuilder&&) = delete;
 
       Reply<ConcurrentMemory>& reply() noexcept;
 

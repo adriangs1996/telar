@@ -68,7 +68,7 @@ namespace telar::gui::qt {
   }
 
   qreal WindowDisplay::chromeTextScale() const {
-    return configuration().chrome_scale;
+    return static_cast<qreal>(configuration().chrome_scale);
   }
 
   QVariantMap WindowDisplay::geometry() const {
@@ -94,7 +94,7 @@ namespace telar::gui::qt {
         {QStringLiteral("terminal"), toQRectF(geometry.terminal, density)},
         {QStringLiteral("status"), toQRectF(geometry.status, density)},
         {QStringLiteral("rail"), geometry.rail},
-        {QStringLiteral("paneHeader"), chrome.pane_header / density},
+        {QStringLiteral("paneHeader"), static_cast<qreal>(chrome.pane_header) / density},
         {QStringLiteral("paneBorder"), ChromeMetrics::logical_pane_border},
         {QStringLiteral("typography"), std::move(typography)},
     };
@@ -179,7 +179,7 @@ namespace telar::gui::qt {
   }
 
   qreal WindowDisplay::sidebarWidth() const {
-    return store_.session().configuration.sidebar_width;
+    return static_cast<qreal>(store_.session().configuration.sidebar_width);
   }
 
   bool WindowDisplay::workspaceListCollapsed() const {
@@ -187,7 +187,7 @@ namespace telar::gui::qt {
   }
 
   qreal WindowDisplay::windowControls() const {
-    return window_ == nullptr ? 0 : platform::windowControls(*window_);
+    return window_ == nullptr ? 0 : static_cast<qreal>(platform::windowControls(*window_));
   }
 
 }

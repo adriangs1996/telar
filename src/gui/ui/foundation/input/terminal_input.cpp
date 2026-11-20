@@ -97,7 +97,7 @@ namespace telar::gui::qt {
           return cursorKey(static_cast<char>('P' + index));
         }
 
-        return tildeKey(function_codes[index]);
+        return tildeKey(function_codes[static_cast<std::size_t>(index)]);
       }
 
       if (event.key() >= Qt::Key_Space && event.key() <= Qt::Key_AsciiTilde) {

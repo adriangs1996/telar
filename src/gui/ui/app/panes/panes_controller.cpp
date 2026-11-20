@@ -55,13 +55,13 @@ namespace telar::gui::qt {
       const auto divider_bounds = geometry.pixels(divider->bounds);
       const bool horizontal = divider->axis == ClientLayoutAxis::horizontal;
       const auto extent = horizontal ? parent_bounds.width - divider_bounds.width : parent_bounds.height - divider_bounds.height;
-      const auto offset = horizontal ? (x * scale_) - parent_bounds.x - (divider_bounds.width / 2) : (y * scale_) - parent_bounds.y - (divider_bounds.height / 2);
+      const auto offset = horizontal ? (x * scale_) - static_cast<double>(parent_bounds.x) - (static_cast<double>(divider_bounds.width / 2)) : (y * scale_) - static_cast<double>(parent_bounds.y) - (static_cast<double>(divider_bounds.height / 2));
 
       if (extent <= 0) {
         return;
       }
 
-      const auto ratio = static_cast<std::uint16_t>(std::clamp(offset / extent, 0.0, 1.0) * PaneLayout::ratio_maximum);
+      const auto ratio = static_cast<std::uint16_t>(std::clamp(offset / static_cast<double>(extent), 0.0, 1.0) * PaneLayout::ratio_maximum);
       if (tab->layout.setSplitRatio({.node_index = static_cast<std::size_t>(index), .ratio = ratio})) {
         session.invalidateView();
         synchronize();
@@ -184,10 +184,10 @@ namespace telar::gui::qt {
         QVariantMap record;
 
         record.insert(QStringLiteral("key"), QString::number(divider.node_index));
-        record.insert(QStringLiteral("x"), bounds.x / scale_);
-        record.insert(QStringLiteral("y"), bounds.y / scale_);
-        record.insert(QStringLiteral("width"), bounds.width / scale_);
-        record.insert(QStringLiteral("height"), bounds.height / scale_);
+        record.insert(QStringLiteral("x"), static_cast<double>(bounds.x) / scale_);
+        record.insert(QStringLiteral("y"), static_cast<double>(bounds.y) / scale_);
+        record.insert(QStringLiteral("width"), static_cast<double>(bounds.width) / scale_);
+        record.insert(QStringLiteral("height"), static_cast<double>(bounds.height) / scale_);
         record.insert(QStringLiteral("horizontal"), divider.axis == ClientLayoutAxis::horizontal);
         dividers.append(record);
       }

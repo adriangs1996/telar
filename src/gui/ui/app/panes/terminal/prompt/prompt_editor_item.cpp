@@ -5,6 +5,7 @@ static_assert(true);
 
 #include "prompt_editor_item.hpp"
 #include "ui/design/controls/native_cell_text.hpp"
+#include "ui/foundation/scene/qt_buffers.hpp"
 #include "ui/foundation/scene/scene_nodes.hpp"
 #include <QEasingCurve>
 #include <QQuickWindow>
@@ -45,7 +46,7 @@ namespace telar::gui::qt {
     }
 
     QColor blend(const QColor& from, const QColor& target, qreal amount) {
-      return QColor::fromRgbF(static_cast<float>(from.redF() + ((target.redF() - from.redF()) * amount)), static_cast<float>(from.greenF() + ((target.greenF() - from.greenF()) * amount)), static_cast<float>(from.blueF() + ((target.blueF() - from.blueF()) * amount)), static_cast<float>(from.alphaF() + ((target.alphaF() - from.alphaF()) * amount)));
+      return QColor::fromRgbF(static_cast<float>(static_cast<qreal>(from.redF()) + ((static_cast<qreal>(target.redF() - from.redF())) * amount)), static_cast<float>(static_cast<qreal>(from.greenF()) + ((static_cast<qreal>(target.greenF() - from.greenF())) * amount)), static_cast<float>(static_cast<qreal>(from.blueF()) + ((static_cast<qreal>(target.blueF() - from.blueF())) * amount)), static_cast<float>(static_cast<qreal>(from.alphaF()) + ((static_cast<qreal>(target.alphaF() - from.alphaF())) * amount)));
     }
 
     constexpr int menu_page = 8;
@@ -305,7 +306,7 @@ namespace telar::gui::qt {
         const bool hit = offset < choice.text.size() && matched < typed.size() && fold(choice.text[offset]) == fold(typed[matched]);
         const bool boundary = offset == choice.text.size() || (hit != marked && !continuationByte(choice.text[offset]));
         if (boundary && offset > start) {
-          segments.push_back(QVariantMap{{QStringLiteral("text"), QString::fromUtf8(choice.text.data() + start, static_cast<qsizetype>(offset - start))}, {QStringLiteral("marked"), marked}});
+          segments.push_back(QVariantMap{{QStringLiteral("text"), QString::fromUtf8(choice.text.view().substr(start, offset - start).data(), static_cast<qsizetype>(offset - start))}, {QStringLiteral("marked"), marked}});
           start = offset;
         }
 
@@ -746,7 +747,7 @@ namespace telar::gui::qt {
     auto* item = runs_[index];
 
     item->setGrid(grid_);
-    item->setText(QString::fromUtf8(display_.data() + run.start, static_cast<qsizetype>(run.end - run.start)));
+    item->setText(QString::fromUtf8(display_.view().substr(run.start, run.end - run.start).data(), static_cast<qsizetype>(run.end - run.start)));
     item->setColor(look.color);
     item->setPosition({run.column * cell.width(), ((static_cast<int>(run.row) - first_row_) * cell.height()) + look.lift});
     item->setOpacity(look.opacity);
@@ -756,8 +757,8 @@ namespace telar::gui::qt {
   // Fresh text rises into place or sweeps in from the accent, adding where it glows; a new
   // suggestion fades in.
   PromptEditorItem::RunLook PromptEditorItem::look(const application::prompt::Run& run, QSizeF cell, qint64 now, QVariantList& glows) const {
-    static const QEasingCurve rise_curve{QEasingCurve::OutCubic};
-    static const QEasingCurve sweep_curve{QEasingCurve::OutQuad};
+    [[clang::no_destroy]] static const QEasingCurve rise_curve{QEasingCurve::OutCubic};
+    [[clang::no_destroy]] static const QEasingCurve sweep_curve{QEasingCurve::OutQuad};
     RunLook result{.color = styleColor(run.style)};
 
     if (run.group == 0 || run.group > fresh_.size()) {
@@ -1111,13 +1112,13 @@ namespace telar::gui::qt {
 
       geometry->allocate(wavy ? points : (points / 2) * 2);
       geometry->setDrawingMode(wavy ? QSGGeometry::DrawLineStrip : QSGGeometry::DrawLines);
-      auto* vertices = geometry->vertexDataAsPoint2D();
+      auto vertices = geometryVertices<QSGGeometry::Point2D>(*geometry, static_cast<std::size_t>(geometry->vertexCount()));
 
       for (int index = 0; index < geometry->vertexCount(); ++index) {
         const auto x = std::min(right, left + (index * step));
         const auto y = wavy ? baseline + (index % 2 == 0 ? -pixel : pixel) : baseline;
 
-        vertices[index].set(static_cast<float>(x), static_cast<float>(y));
+        vertices[static_cast<std::size_t>(index)].set(static_cast<float>(x), static_cast<float>(y));
       }
 
       auto color = wavy ? styleColor(run.style) : underline_;

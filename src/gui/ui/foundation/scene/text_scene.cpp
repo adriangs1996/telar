@@ -182,7 +182,7 @@ namespace telar::gui::qt {
     paint.scale = scale_;
     paint.revision = revision_;
     paint.style = batch.style;
-    paint.placement = TextInkPlacement{.origin = bounds_.topLeft(), .baseline = grid_.baseline / scale_, .clip = clip_};
+    paint.placement = TextInkPlacement{.origin = bounds_.topLeft(), .baseline = static_cast<qreal>(grid_.baseline) / scale_, .clip = clip_};
     try {
       if (auto painted = paintChunk(next_chunk_, window_, collection_, rasterization_, paint)) {
         appendChunk(*text_, next_chunk_, std::move(painted));
@@ -205,7 +205,7 @@ namespace telar::gui::qt {
 
       const QPointF origin{bounds_.x() + (static_cast<qreal>(column) * grid_.width / scale_), bounds_.y()};
 
-      addQtText(QString::fromUtf8(cells[column].utf8()), batch.font, format, {.origin = origin, .baseline = grid_.baseline / scale_, .style = batch.style});
+      addQtText(QString::fromUtf8(cells[column].utf8()), batch.font, format, {.origin = origin, .baseline = static_cast<qreal>(grid_.baseline) / scale_, .style = batch.style});
     }
   }
 

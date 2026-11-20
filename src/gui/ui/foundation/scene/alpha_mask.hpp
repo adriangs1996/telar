@@ -11,9 +11,9 @@ namespace telar::gui::qt {
 
   class AlphaMask final : public QSharedData {
   public:
-    AlphaMask(QImage alpha, std::unique_ptr<QSGTexture> texture)
-        : alpha(std::move(alpha)),
-          texture(std::move(texture)) {}
+    AlphaMask(QImage mask, std::unique_ptr<QSGTexture> mask_texture)
+        : alpha(std::move(mask)),
+          texture(std::move(mask_texture)) {}
 
     const QImage alpha;
     const std::unique_ptr<QSGTexture> texture;

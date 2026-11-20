@@ -10,34 +10,56 @@ import telar.base.ds;
 
 namespace telar::runtime {
 
-  static CellColor rgbColor(GhosttyColorRgb color) noexcept {
-    return CellColor{.kind = CellColor::Kind::rgb, .channels = {color.r, color.g, color.b}};
-  }
+  namespace {
 
-  static Byte encodeCodepoint(std::uint32_t codepoint, Byte* output) noexcept {
-    if (codepoint < 0x80) {
-      output[0] = codepoint == 0 ? ' ' : static_cast<Byte>(codepoint);
-      return 1;
+    // UTF-8's encoding: the first codepoint each sequence length cannot hold, the lead byte of each
+    // length, and the six payload bits of each continuation byte.
+    constexpr std::uint32_t one_byte_end = 0x80U;
+    constexpr std::uint32_t two_byte_end = 0x800U;
+    constexpr std::uint32_t three_byte_end = 0x10000U;
+    constexpr std::uint32_t two_byte_lead = 0xc0U;
+    constexpr std::uint32_t three_byte_lead = 0xe0U;
+    constexpr std::uint32_t four_byte_lead = 0xf0U;
+    constexpr std::uint32_t continuation_lead = 0x80U;
+    constexpr std::uint32_t continuation_mask = 0x3fU;
+    constexpr unsigned continuation_bits = 6;
+
+    CellColor rgbColor(GhosttyColorRgb color) noexcept {
+      return CellColor{.kind = CellColor::Kind::rgb, .channels = {color.r, color.g, color.b}};
     }
 
-    if (codepoint < 0x800) {
-      output[0] = static_cast<Byte>(0xc0 | (codepoint >> 6));
-      output[1] = static_cast<Byte>(0x80 | (codepoint & 0x3f));
-      return 2;
+    // The continuation byte of the six bits `shift` bits up the codepoint.
+    constexpr Byte continuation(std::uint32_t codepoint, unsigned shift) noexcept {
+      return static_cast<Byte>(continuation_lead | ((codepoint >> shift) & continuation_mask));
     }
 
-    if (codepoint < 0x10000) {
-      output[0] = static_cast<Byte>(0xe0 | (codepoint >> 12));
-      output[1] = static_cast<Byte>(0x80 | ((codepoint >> 6) & 0x3f));
-      output[2] = static_cast<Byte>(0x80 | (codepoint & 0x3f));
-      return 3;
+    // Writes up to four bytes; the caller leaves that room in `output`.
+    Byte encodeCodepoint(std::uint32_t codepoint, std::span<Byte> output) noexcept {
+      if (codepoint < one_byte_end) {
+        output[0] = codepoint == 0 ? ' ' : static_cast<Byte>(codepoint);
+        return 1;
+      }
+
+      if (codepoint < two_byte_end) {
+        output[0] = static_cast<Byte>(two_byte_lead | (codepoint >> continuation_bits));
+        output[1] = continuation(codepoint, 0);
+        return 2;
+      }
+
+      if (codepoint < three_byte_end) {
+        output[0] = static_cast<Byte>(three_byte_lead | (codepoint >> (2 * continuation_bits)));
+        output[1] = continuation(codepoint, continuation_bits);
+        output[2] = continuation(codepoint, 0);
+        return 3;
+      }
+
+      output[0] = static_cast<Byte>(four_byte_lead | (codepoint >> (3 * continuation_bits)));
+      output[1] = continuation(codepoint, 2 * continuation_bits);
+      output[2] = continuation(codepoint, continuation_bits);
+      output[3] = continuation(codepoint, 0);
+      return 4;
     }
 
-    output[0] = static_cast<Byte>(0xf0 | (codepoint >> 18));
-    output[1] = static_cast<Byte>(0x80 | ((codepoint >> 12) & 0x3f));
-    output[2] = static_cast<Byte>(0x80 | ((codepoint >> 6) & 0x3f));
-    output[3] = static_cast<Byte>(0x80 | (codepoint & 0x3f));
-    return 4;
   }
 
   bool CellProjection::updateColors(GhosttyTerminal terminal, GhosttyRenderState render_state) {
@@ -68,7 +90,7 @@ namespace telar::runtime {
 
   CellColor CellProjection::paletteColor(Byte index) const noexcept {
     if (palette_overrides_[index] != 0) {
-      return rgbColor(colors_.palette[index]);
+      return rgbColor(std::span{colors_.palette}[index]);
     }
 
     return CellColor{.kind = CellColor::Kind::indexed, .channels = {index, 0, 0}};
@@ -80,9 +102,13 @@ namespace telar::runtime {
       return rgbColor(color.value.rgb);
     case GHOSTTY_STYLE_COLOR_PALETTE:
       return paletteColor(color.value.palette);
-    default:
+    case GHOSTTY_STYLE_COLOR_NONE:
+    case decltype(color.tag)::GHOSTTY_STYLE_COLOR_TAG_MAX_VALUE:
       return fallback;
     }
+
+    // A tag outside the enum, as the old default.
+    return fallback;
   }
 
   CellStyle CellProjection::translateStyle(const GhosttyStyle& style) const noexcept {
@@ -108,23 +134,24 @@ namespace telar::runtime {
     flag(style.overline, CellAttribute::overline);
     constexpr unsigned underline_shift = 8;
 
-    translated.flags |= static_cast<std::uint16_t>(style.underline << underline_shift);
+    translated.flags |= static_cast<std::uint16_t>(static_cast<unsigned>(style.underline) << underline_shift);
     return translated;
   }
 
   void CellProjection::writeGrapheme(GhosttyRenderStateRowCells cells, ScreenCell& destination) {
     constexpr std::size_t maximum_extra_codepoints = 15;
-    ds::Array<std::uint32_t, maximum_extra_codepoints> storage;
+    ds::Array<std::uint32_t, maximum_extra_codepoints> storage; // NOLINT(cppcoreguidelines-pro-type-member-init): ghostty writes the codepoints it reports, and zeroing them would cost every grapheme cell
     GhosttyCodepointsBuffer codepoints{.ptr = storage.dataMut(), .cap = storage.size(), .len = 0};
 
     checkGhostty(ghostty_render_state_row_cells_get(cells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_GRAPHEMES_EXTRA, &codepoints));
-    for (const auto codepoint : std::span<const std::uint32_t>{codepoints.ptr, codepoints.len}) {
+    // Ghostty fills `storage` through codepoints.ptr.
+    for (const auto codepoint : storage.view().first(std::min(codepoints.len, storage.size()))) {
       constexpr std::size_t maximum_utf8_bytes = 4;
       if (destination.text.size() - destination.length < maximum_utf8_bytes) {
         break;
       }
 
-      destination.length += encodeCodepoint(codepoint, destination.text.dataMut() + destination.length);
+      destination.length += encodeCodepoint(codepoint, destination.text.viewMut().subspan(destination.length));
     }
   }
 
@@ -132,17 +159,20 @@ namespace telar::runtime {
     GhosttyCellsView source{};
 
     checkGhostty(ghostty_render_state_row_get(row, GHOSTTY_RENDER_STATE_ROW_DATA_CELLS_RAW, &source));
-    checkGhostty(ghostty_render_state_row_get(row, GHOSTTY_RENDER_STATE_ROW_DATA_CELLS, &cells));
+    checkGhostty(ghostty_render_state_row_get(row, GHOSTTY_RENDER_STATE_ROW_DATA_CELLS, static_cast<void*>(&cells)));
 
     GhosttyStyleId previous_style_id = 0;
     CellStyle previous_style = default_style_;
-    const auto count = std::min(destination.size(), source.len);
+    // Ghostty hands the row's cells as a C pointer and length.
+#pragma clang unsafe_buffer_usage begin
+    const std::span<const GhosttyCell> raw_cells{source.ptr, source.len};
+#pragma clang unsafe_buffer_usage end
+    const auto count = std::min(destination.size(), raw_cells.size());
 
     for (std::size_t column = 0; column < count; ++column) {
-      const GhosttyCell raw = source.ptr[column];
+      const GhosttyCell raw = raw_cells[column];
       const auto style_id = static_cast<GhosttyStyleId>(cell_layout::style_id(raw));
       const auto width = static_cast<GhosttyCellWide>(cell_layout::wide(raw));
-      const auto content = static_cast<GhosttyCellContentTag>(cell_layout::content_tag(raw));
       ScreenCell cell{};
 
       if (style_id != 0 && style_id != previous_style_id) {
@@ -169,34 +199,40 @@ namespace telar::runtime {
       }
 
       cell.width = width == GHOSTTY_CELL_WIDE_WIDE ? CellWidth::wide : CellWidth::single;
-      switch (content) {
-      case GHOSTTY_CELL_CONTENT_CODEPOINT:
-        cell.length = encodeCodepoint(static_cast<std::uint32_t>(cell_layout::codepoint(raw)), cell.text.dataMut());
-        break;
-      case GHOSTTY_CELL_CONTENT_CODEPOINT_GRAPHEME:
-        cell.length = encodeCodepoint(static_cast<std::uint32_t>(cell_layout::codepoint(raw)), cell.text.dataMut());
-        checkGhostty(ghostty_render_state_row_cells_select(cells, static_cast<std::uint16_t>(column)));
-        writeGrapheme(cells, cell);
-        break;
-      case GHOSTTY_CELL_CONTENT_BG_COLOR_PALETTE:
-        cell.style = {};
-        cell.style.background = paletteColor(static_cast<Byte>(cell_layout::index(raw)));
-        break;
-      case GHOSTTY_CELL_CONTENT_BG_COLOR_RGB:
-        cell.style = {};
-        cell.style.background = rgbColor(GhosttyColorRgb{
-            .r = static_cast<Byte>(cell_layout::r(raw)),
-            .g = static_cast<Byte>(cell_layout::g(raw)),
-            .b = static_cast<Byte>(cell_layout::b(raw)),
-        });
-
-        break;
-      default:
-        throw TerminalError{GHOSTTY_INVALID_VALUE};
-      }
-
+      projectContent(raw, cells, column, cell);
       destination[column] = cell;
     }
+  }
+
+  void CellProjection::projectContent(GhosttyCell raw, GhosttyRenderStateRowCells cells, std::size_t column, ScreenCell& cell) const {
+    switch (static_cast<GhosttyCellContentTag>(cell_layout::content_tag(raw))) {
+    case GHOSTTY_CELL_CONTENT_CODEPOINT:
+      cell.length = encodeCodepoint(static_cast<std::uint32_t>(cell_layout::codepoint(raw)), cell.text.viewMut());
+      return;
+    case GHOSTTY_CELL_CONTENT_CODEPOINT_GRAPHEME:
+      cell.length = encodeCodepoint(static_cast<std::uint32_t>(cell_layout::codepoint(raw)), cell.text.viewMut());
+      checkGhostty(ghostty_render_state_row_cells_select(cells, static_cast<std::uint16_t>(column)));
+      writeGrapheme(cells, cell);
+      return;
+    case GHOSTTY_CELL_CONTENT_BG_COLOR_PALETTE:
+      cell.style = {};
+      cell.style.background = paletteColor(static_cast<Byte>(cell_layout::index(raw)));
+      return;
+    case GHOSTTY_CELL_CONTENT_BG_COLOR_RGB:
+      cell.style = {};
+      cell.style.background = rgbColor(GhosttyColorRgb{
+          .r = static_cast<Byte>(cell_layout::r(raw)),
+          .g = static_cast<Byte>(cell_layout::g(raw)),
+          .b = static_cast<Byte>(cell_layout::b(raw)),
+      });
+
+      return;
+    case GhosttyCellContentTag::GHOSTTY_CELL_CONTENT_TAG_MAX_VALUE:
+      break;
+    }
+
+    // A tag no case names, as the old default.
+    throw TerminalError{GHOSTTY_INVALID_VALUE};
   }
 
 }

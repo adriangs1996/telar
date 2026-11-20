@@ -107,7 +107,7 @@ namespace telar::gui::qt {
   }
 
   QRectF HistoryInspectionLayout::logical(Rect area) const noexcept {
-    return {area.x / density_, area.y / density_, area.width / density_, area.height / density_};
+    return {static_cast<qreal>(area.x) / density_, static_cast<qreal>(area.y) / density_, static_cast<qreal>(area.width) / density_, static_cast<qreal>(area.height) / density_};
   }
 
   float HistoryInspectionLayout::physical(const QVariant& value) const {
@@ -143,7 +143,7 @@ namespace telar::gui::qt {
         {QStringLiteral("mono"), line.mono},
         {QStringLiteral("bounds"), logical(row)},
         {QStringLiteral("textBounds"), logical(geometry.text(row, line.kind))},
-        {QStringLiteral("labelWidth"), geometry.label_width / density_},
+        {QStringLiteral("labelWidth"), static_cast<qreal>(geometry.label_width) / density_},
     };
   }
 
@@ -256,7 +256,7 @@ namespace telar::gui::qt {
 
     layout_ = prepareContent(geometry);
     layout_.insert(QStringLiteral("buttons"), prepareButtons(geometry, chrome));
-    layout_.insert(QStringLiteral("buttonRadius"), application::history::HistoryInspectionGeometry::button_radius * ratio);
+    layout_.insert(QStringLiteral("buttonRadius"), static_cast<double>(application::history::HistoryInspectionGeometry::button_radius) * ratio);
     layout_.insert(QStringLiteral("disabledAlpha"), application::history::HistoryInspectionGeometry::disabled_alpha);
     layout_.insert(QStringLiteral("pressedAlpha"), application::history::HistoryInspectionGeometry::pressed_alpha);
     emit layoutChanged();

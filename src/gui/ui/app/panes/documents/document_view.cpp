@@ -70,9 +70,13 @@ namespace telar::gui::qt {
         return QStringLiteral("warning");
       case Callout::caution:
         return QStringLiteral("caution");
-      default:
+      case Callout::none:
+      case Callout::count:
         return {};
       }
+
+      // A callout outside the enum has no name.
+      return {};
     }
 
     QString calloutTitle(Callout callout) {
@@ -87,9 +91,13 @@ namespace telar::gui::qt {
         return QStringLiteral("Warning");
       case Callout::caution:
         return QStringLiteral("Caution");
-      default:
+      case Callout::none:
+      case Callout::count:
         return {};
       }
+
+      // A callout outside the enum has no title.
+      return {};
     }
 
     QString marker(const render::Block& block) {
@@ -104,9 +112,13 @@ namespace telar::gui::qt {
         return QStringLiteral("☑");
       case Marker::footnote:
         return QString::number(block.number) + QLatin1Char(':');
-      default:
+      case Marker::none:
+      case Marker::count:
         return {};
       }
+
+      // A marker outside the enum draws nothing.
+      return {};
     }
 
     QString alignName(Align align) {
@@ -115,9 +127,14 @@ namespace telar::gui::qt {
         return QStringLiteral("center");
       case Align::right:
         return QStringLiteral("right");
-      default:
+      case Align::start:
+      case Align::left:
+      case Align::count:
         return QStringLiteral("left");
       }
+
+      // An alignment outside the enum lays out from the left.
+      return QStringLiteral("left");
     }
 
     // A pane's own document (id 0) or one of its inline documents.

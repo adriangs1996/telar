@@ -5,6 +5,7 @@ static_assert(true);
 
 #include "alpha_mask_material.hpp"
 #include "physical_pixel_matrix.hpp"
+#include "qt_buffers.hpp"
 #include "telar_base/ds/values.hpp"
 #include <QByteArray>
 #include <QSGMaterial>
@@ -15,11 +16,13 @@ static_assert(true);
 #include <QtCore/qlogging.h>
 #include <QtCore/qtypes.h>
 #include <QtQuick/qsgmaterialtype.h>
+#include <algorithm>
 #include <array>
 #include <cstddef>
-#include <cstring>
 #include <memory>
+#include <span>
 #include <tuple>
+#include <utility>
 
 namespace telar::gui::qt {
   namespace {
@@ -71,14 +74,14 @@ namespace telar::gui::qt {
       if (state.isMatrixDirty() || old_material == nullptr) {
         const auto matrix = physicalPixelMatrix(state);
 
-        std::memcpy(buffer.data() + offsetof(MaskUniforms, matrix), matrix.constData(), sizeof(MaskUniforms::matrix));
+        writeUniform<offsetof(MaskUniforms, matrix)>(buffer, std::as_bytes(matrixValues(matrix)));
         changed = true;
       }
 
       if (state.isOpacityDirty() || old_material == nullptr) {
         const auto opacity = state.opacity();
 
-        std::memcpy(buffer.data() + offsetof(MaskUniforms, opacity), &opacity, sizeof(opacity));
+        writeUniform<offsetof(MaskUniforms, opacity)>(buffer, std::as_bytes(std::span<const float, 1>{&opacity, 1}));
         changed = true;
       }
 
@@ -89,11 +92,11 @@ namespace telar::gui::qt {
       ds::Array<float, 4> previous_foreground{};
       const auto material_changed = new_material != old_material || state.dirtyStates().testFlag(RenderState::DirtyCachedMaterialData);
       if (!material_changed) {
-        std::memcpy(previous_foreground.dataMut(), buffer.constData() + offsetof(MaskUniforms, foreground), sizeof(previous_foreground));
+        std::ranges::copy(std::as_bytes(std::span<const char>{std::as_const(buffer)}.subspan<offsetof(MaskUniforms, foreground), sizeof(previous_foreground)>()), std::as_writable_bytes(previous_foreground.viewMut()).begin());
       }
 
       if (material_changed || previous_foreground != foreground) {
-        std::memcpy(buffer.data() + offsetof(MaskUniforms, foreground), foreground.data(), sizeof(foreground));
+        writeUniform<offsetof(MaskUniforms, foreground)>(buffer, std::as_bytes(foreground.view()));
         changed = true;
       }
 

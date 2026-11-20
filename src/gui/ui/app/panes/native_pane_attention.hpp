@@ -81,7 +81,7 @@ namespace telar::gui::qt {
     ds::Option<application::workbench::PaneAttentionKey> key_;
     QColor color_ = Qt::transparent;
     qreal ratio_ = 1;
-    qreal radius_ = gui::application::workbench::PaneDecorationGeometry::frame_radius;
+    qreal radius_ = static_cast<qreal>(gui::application::workbench::PaneDecorationGeometry::frame_radius);
     float alpha_ = 0;
     bool active_ = false;
     bool notification_pending_ = false;

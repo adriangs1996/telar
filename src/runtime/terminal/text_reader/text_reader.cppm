@@ -28,6 +28,13 @@ import telar.runtime.terminal.ghostty;
 import telar.runtime.terminal.kitty;
 import telar.base.ds;
 
+namespace telar::runtime {
+
+  // The colors of the 256-color palette.
+  inline constexpr std::size_t palette_colors = 256;
+
+}
+
 // Interface: terminal/text_metadata.cppm
 export {
   namespace telar::runtime {
@@ -88,7 +95,11 @@ export {
   namespace telar::runtime {
 
     struct ScreenCell {
-      ds::Array<Byte, 16> text{' '};
+      static constexpr std::size_t text_bytes = 16;
+      // Its size on the wire and in memory, which it compares as.
+      static constexpr std::size_t packed_bytes = 32;
+
+      ds::Array<Byte, text_bytes> text{' '};
       Byte length = 1;
       CellWidth width = CellWidth::single;
       CellStyle style{};
@@ -98,7 +109,7 @@ export {
       [[nodiscard]] Cell view() const noexcept;
     };
 
-    static_assert(sizeof(ScreenCell) == 32);
+    static_assert(sizeof(ScreenCell) == ScreenCell::packed_bytes);
     static_assert(std::has_unique_object_representations_v<ScreenCell>);
 
     class Screen {
@@ -143,9 +154,11 @@ export {
       [[nodiscard]] CellColor resolveColor(const GhosttyStyleColor& color, CellColor fallback) const noexcept;
       [[nodiscard]] CellStyle translateStyle(const GhosttyStyle& style) const noexcept;
       static void writeGrapheme(GhosttyRenderStateRowCells cells, ScreenCell& destination);
+      // Fills `cell` from the content `raw` holds, column `column` of `cells`.
+      void projectContent(GhosttyCell raw, GhosttyRenderStateRowCells cells, std::size_t column, ScreenCell& cell) const;
 
       GhosttyRenderStateColors colors_ = ghosttySized<GhosttyRenderStateColors>();
-      ds::Array<Byte, 256> palette_overrides_{};
+      ds::Array<Byte, palette_colors> palette_overrides_{};
       CellStyle default_style_{};
     };
 
@@ -220,8 +233,11 @@ export {
 
       void updateCwd(std::string_view raw);
 
-      ds::Array<char, 256> title_{};
-      ds::Array<char, 4096> cwd_{};
+      static constexpr std::size_t maximum_title_bytes = 256;
+      static constexpr std::size_t maximum_cwd_bytes = 4096;
+
+      ds::Array<char, maximum_title_bytes> title_{};
+      ds::Array<char, maximum_cwd_bytes> cwd_{};
       std::size_t title_length_ = 0;
       std::size_t cwd_length_ = 0;
     };
@@ -248,6 +264,9 @@ export {
 
       FrameSync(const FrameSync&) = delete;
       FrameSync& operator=(const FrameSync&) = delete;
+      FrameSync(FrameSync&&) = delete;
+      FrameSync& operator=(FrameSync&&) = delete;
+      ~FrameSync() = default;
 
       bool acknowledge(std::uint64_t frame_id) noexcept;
 
@@ -309,7 +328,7 @@ export {
 export {
   namespace telar::runtime {
 
-    enum class TerminalPurpose {
+    enum class TerminalPurpose : std::uint8_t {
       interactive,
       separate_media,
       observation,
@@ -331,6 +350,8 @@ export {
       TerminalMedia() = default;
       TerminalMedia(const TerminalMedia&) = default;
       TerminalMedia& operator=(const TerminalMedia&) = default;
+      TerminalMedia(TerminalMedia&&) = default;
+      TerminalMedia& operator=(TerminalMedia&&) = default;
       ~TerminalMedia() = default;
     };
 
@@ -344,6 +365,11 @@ export {
 
       // The documents' tracked rows belong to the terminal, which goes before the effects do.
       ~Terminal();
+
+      Terminal(const Terminal&) = delete;
+      Terminal& operator=(const Terminal&) = delete;
+      Terminal(Terminal&&) = delete;
+      Terminal& operator=(Terminal&&) = delete;
 
       // A terminal with media attached is fed, resumed and resized through the overloads that
       // take it, so the media sees every byte the terminal parses.
@@ -512,14 +538,14 @@ export {
       tbc::val_a<ResponseOutbox<ConcurrentMemory>> response_outbox_;
       // Which media the terminal feeds, never dereferenced: its owner passes it to every call.
       const TerminalMedia* media_ = nullptr;
-      static constexpr std::size_t control_input_limit = 128 * 1024;
+      static constexpr std::size_t control_input_limit = std::size_t{128} * 1024;
       // The engine keeps the queue responses_ owns, a shared type, so the terminal stays where it was built.
       tbc::val_a<control::Engine> control_;
       tbc::val_a<ByteQueue<ConcurrentMemory>> pending_control_input_;
       TerminalPurpose purpose_;
       CellProjection projection_;
       TerminalSize size_{};
-      ds::Array<GhosttyColorRgb, 256> default_palette_{};
+      ds::Array<GhosttyColorRgb, palette_colors> default_palette_{};
       bool dirty_ = true;
       bool force_ = true;
       std::uint64_t content_revision_ = 1;
@@ -568,7 +594,7 @@ export {
 
     // Plain text of `selection`. Pane reads keep the spaces a program wrote, as
     // Ghostty's `Screen.dumpString`; copies trim them, as `Screen.selectionString`.
-    void formatTerminalSelection(Terminal& terminal, const GhosttySelection& selection, bool unwrap, TrailingSpaces spaces, GhosttyWriter writer);
+    void formatTerminalSelection(const Terminal& terminal, const GhosttySelection& selection, bool unwrap, TrailingSpaces spaces, GhosttyWriter writer);
 
   }
 }

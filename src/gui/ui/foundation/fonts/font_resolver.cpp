@@ -17,6 +17,7 @@ static_assert(true);
 #include <cstddef>
 #include <cstring>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <utility>
 
@@ -44,17 +45,19 @@ namespace telar::gui::qt {
 
     base.setPointSizeF(grid.pixel_height / scale * points_per_inch / dpi);
     const auto variation = face.variation();
+    const auto tags = std::span{variation.tags};
+    const auto values = std::span{variation.values};
 
     for (std::size_t index = 0; index < variation.count; ++index) {
-      const auto tag = QFont::Tag::fromValue(variation.tags[index]);
+      const auto tag = QFont::Tag::fromValue(tags[index]);
       if (!tag) {
         throw std::invalid_argument{"FontVariationAxisMissing"};
       }
 
-      base.setVariableAxis(*tag, variation.values[index]);
+      base.setVariableAxis(*tag, values[index]);
     }
 
-    auto font = TerminalFont::fromFont(std::move(base), {grid.width / scale, grid.height / scale}, grid.baseline / scale);
+    auto font = TerminalFont::fromFont(std::move(base), {grid.width / scale, grid.height / scale}, static_cast<qreal>(grid.baseline) / scale);
 
     font.fixed_pitch = face.fixedPitch();
 

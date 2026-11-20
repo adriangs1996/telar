@@ -76,7 +76,7 @@ namespace telar::gui::qt {
     auto grid = grid_;
 
     grid.scale = 1;
-    const auto size = grid.fit(geometry.terminal.width, geometry.terminal.height);
+    const auto size = grid.fit(static_cast<double>(geometry.terminal.width), static_cast<double>(geometry.terminal.height));
 
     return size ? Rect{.x = geometry.terminal.x, .y = geometry.terminal.y, .width = static_cast<float>(size->cols * grid.cell_width_px), .height = static_cast<float>(size->rows * grid.cell_height_px)} : Rect{};
   }
