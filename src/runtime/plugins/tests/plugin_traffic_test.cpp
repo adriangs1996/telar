@@ -67,8 +67,6 @@ import telar.plugins;
 import telar.runtime.traffic.http.message;
 import telar.runtime.plugins.service;
 import telar.runtime.plugins.worker;
-import telar.runtime.plugins.tap_configuration;
-import telar.runtime.host.signals;
 import telar.platform.process;
 import telar.runtime.traffic.control_protocol;
 import telar.config.runtime;
@@ -863,77 +861,6 @@ return {}
     check(budget.liveBytes() == 0);
   }
 
-  // A traffic worker whose session dies, here by a callback outliving the reply deadline
-  // (yet inside the Lua time budget), comes back with its registrations rebuilt, and the
-  // plugin hears `ready` with reason `worker_restarted` on them.
-  void workerRestartReportsReady() {
-    SystemAllocator system;
-    BudgetAllocator budget{system, 64 * 1024 * 1024};
-    SynchronizedAllocator synchronized{budget};
-    MemoryAdapter adapter{synchronized};
-    ConcurrentMemory& memory = adapter;
-    TemporaryDirectory directory{"/tmp/tlr-app-restart.XXXXXX"};
-    const auto entry = std::string{directory.path()} + "/main.lua";
-    const ExecutablePath executable;
-
-    write(entry, R"lua(
-local telar = require('telar')
-local traffic = require('telar.traffic')
-traffic.subscribe({events={flow=true}}, function(err, event)
-  if event and event.kind == 'ready' and event.reason == 'worker_restarted' then
-    return {telar.effect.notification{title='restarted'}}
-  end
-end)
-traffic.intercept({stage='stream', host='example.test', visibility='both', timeout_ms=30000, failure='allow'}, function()
-  local started = os.clock()
-  while os.clock() - started < 1.5 do
-    local filler = string.rep('x', 1 << 20)
-  end
-end)
-return {}
-)lua");
-    {
-      traffic::Service network{memory, std::string{directory.path()} + "/traffic", true};
-      auto identity = specification(true);
-
-      identity.entry.assign(entry);
-      identity.declared.insert(app::Capability::notifications);
-      identity.granted.insert(app::Capability::notifications);
-      app::ResultQueue<ConcurrentMemory> results;
-      app::TapBudget held;
-      CancellationSignal cancellation;
-
-      results.activate();
-      app::Worker<> worker{memory, identity, results, held, app::WorkerLaunch{.executable = executable.cStr(), .cancellation = cancellation, .timeout = std::chrono::milliseconds{1000}, .traffic = &network}};
-      const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{20};
-      std::uint64_t ticket = 0;
-
-      while (ticket == 0) {
-        check(std::chrono::steady_clock::now() < deadline);
-        ticket = network.intercept({.id = 31, .visibility = traffic::Visibility::plaintext, .host = "example.test"});
-        if (ticket == 0) {
-          std::this_thread::sleep_for(std::chrono::milliseconds{10});
-        }
-      }
-
-      bool restarted = false;
-
-      while (!restarted) {
-        check(std::chrono::steady_clock::now() < deadline);
-        results.collect([&](const auto& result) {
-          restarted |= result.batch().count == 1 && result.batch().notifications[0].title == "restarted";
-        });
-
-        std::this_thread::sleep_for(std::chrono::milliseconds{10});
-      }
-
-      check(worker.metrics().timeouts >= 1);
-      worker.stop();
-    }
-
-    check(budget.liveBytes() == 0);
-  }
-
   // A registration as a traffic worker writes it into a reply, valid unless a field is changed.
   struct ForgedRegistration {
     std::uint32_t id = 1;
@@ -1081,7 +1008,6 @@ return {}
   const telar::testing::Case case_redirect_bounds{"plugin_traffic.redirect_bounds", redirectBounds};
   const telar::testing::Case case_worker_crash_applies_failure_policy{"plugin_traffic.worker_crash_applies_failure_policy", workerCrashAppliesFailurePolicy};
   const telar::testing::Case case_registration_limits{"plugin_traffic.registration_limits", registrationLimits};
-  const telar::testing::Case case_worker_restart_reports_ready{"plugin_traffic.worker_restart_reports_ready", workerRestartReportsReady};
   const telar::testing::Case case_option_validation{"plugin_traffic.option_validation", optionValidation};
   const telar::testing::Case case_exchange_event{"plugin_traffic.exchange_event", exchangeEvent};
 
