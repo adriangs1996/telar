@@ -1,0 +1,352 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+#include <arpa/inet.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <unistd.h>
+#if (defined(__APPLE__))
+#include <libproc.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <cerrno>
+#endif
+#if (!(defined(__APPLE__)))
+#include <fcntl.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <dirent.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <cstdio>
+#endif
+#include <csignal>
+#include <poll.h>
+#include <sys/stat.h>
+#include <sys/un.h>
+#if (defined(__APPLE__))
+#include <net/if.h>
+#endif
+#if (defined(__APPLE__))
+#include <net/if_utun.h>
+#endif
+#if (defined(__APPLE__))
+#include <netinet6/in6_var.h>
+#endif
+#if (defined(__APPLE__))
+#include <sys/ioctl.h>
+#endif
+#if (defined(__APPLE__))
+#include <sys/kern_control.h>
+#endif
+#if (defined(__APPLE__))
+#include <sys/sys_domain.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <linux/if_ether.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <linux/if_tun.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <net/if.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <sys/ioctl.h>
+#endif
+#if (!(defined(__APPLE__)))
+#include <sys/uio.h>
+#endif
+#include <cstdio>
+#include <fcntl.h>
+#include <ifaddrs.h>
+#include <limits.h>
+#include <net/if.h>
+#include <pcap/pcap.h>
+#include <sys/ioctl.h>
+#if (defined(__linux__) && !defined(__GLIBC__))
+#include <linux/fs.h>
+#endif
+#if (defined(__linux__) && !defined(__GLIBC__))
+#include <sys/syscall.h>
+#endif
+#include <cerrno>
+#include <cstdlib>
+#include <net/if_dl.h>
+#include <net/route.h>
+#include <netinet/in_pcb.h>
+#include <netinet/tcp.h>
+#include <netinet/tcp_fsm.h>
+#include <netinet/tcp_var.h>
+#include <sys/file.h>
+#include <sys/socketvar.h>
+#include <sys/sockio.h>
+#include <sys/sysctl.h>
+#include <sys/uio.h>
+#include <sys/wait.h>
+
+import std;
+import telar.base.memory.allocators;
+import telar.base.text.utf8;
+import telar.platform.primitives;
+import telar.testing;
+import telar.testing.test_memory;
+import telar.runtime.traffic.redirect.socket_owners;
+import telar.runtime.traffic.redirect.pf_rules;
+import telar.wire.vocabulary;
+import telar.runtime.traffic.redirect.direction;
+import telar.runtime.traffic.redirect.ingress;
+import telar.runtime.platform.process_probe;
+import telar.base.ds;
+
+namespace {
+
+  using telar::testing::check;
+
+  using namespace telar;
+  using namespace telar::runtime;
+  namespace redirect = telar::runtime::redirect;
+
+  void receive(int descriptor, std::span<std::uint8_t> bytes) {
+    while (!bytes.empty()) {
+      pollfd ready{descriptor, POLLIN, 0};
+
+      check(::poll(&ready, 1, 5000) > 0);
+      const auto count = ::read(descriptor, bytes.data(), bytes.size());
+
+      check(count > 0);
+      bytes = bytes.subspan(count);
+    }
+  }
+
+  void socketOwner(bool ipv6) {
+    const auto endpoint = redirect::Target::parse(ipv6 ? "[::1]:1" : "127.0.0.1:1");
+    redirect::Listener listener{endpoint};
+    auto target = endpoint;
+
+    target.port = listener.mapping().listener_port;
+    target.endpoint.setPort(target.port);
+    ds::Array<int, 2> control, result;
+
+    check(::pipe(control.dataMut()) == 0 && ::pipe(result.dataMut()) == 0);
+    FileDescriptor stop_read{control[0]}, stop_write{control[1]}, result_read{result[0]}, result_write{result[1]};
+    const auto pid = ::fork();
+
+    check(pid >= 0);
+    if (pid == 0) {
+      ::close(stop_write.get());
+      ::close(result_read.get());
+      const auto socket = ::socket(target.endpoint.storage.ss_family, SOCK_STREAM, IPPROTO_TCP);
+      if (socket < 0 || ::connect(socket, target.endpoint.address(), target.endpoint.length) != 0) {
+        ::_exit(2);
+      }
+
+      sockaddr_storage local{};
+      socklen_t size = sizeof(local);
+      if (::getsockname(socket, reinterpret_cast<sockaddr*>(&local), &size) != 0) {
+        ::_exit(3);
+      }
+
+      const auto port = ntohs(ipv6 ? reinterpret_cast<sockaddr_in6*>(&local)->sin6_port : reinterpret_cast<sockaddr_in*>(&local)->sin_port);
+      if (::write(result_write.get(), &port, sizeof(port)) != sizeof(port)) {
+        ::_exit(4);
+      }
+
+      std::uint8_t byte;
+
+      ::read(stop_read.get(), &byte, sizeof(byte));
+      ::_exit(0);
+    }
+
+    stop_read = FileDescriptor{};
+    result_write = FileDescriptor{};
+    std::uint16_t port;
+
+    receive(result_read.get(), {reinterpret_cast<std::uint8_t*>(&port), sizeof(port)});
+    pollfd ready{listener.descriptor(), POLLIN, 0};
+
+    check(::poll(&ready, 1, 5000) > 0);
+    const auto peer = listener.accept();
+
+    check(static_cast<bool>(peer));
+    telar::testing::TestMemory adapter;
+    redirect::SocketAccounts accounts{static_cast<Memory&>(adapter)};
+
+    accounts.validate();
+    check(accounts.peer(peer.get()) == ::geteuid());
+    redirect::FlowKey flow{.source = endpoint, .destination = target};
+
+    flow.source.port = port;
+    flow.source.endpoint.setPort(port);
+    const ds::Array selected{ProcessIdentity{.pid = pid}};
+    redirect::SocketOwners owner{::geteuid(), selected};
+    const auto identified = owner.find(flow);
+
+    check(identified.complete && identified.process && identified.process->pid == pid);
+    const auto pinned = owner.processes()[0];
+
+    check(pinned.started_seconds != 0 && pinned.sameInstance(*identified.process));
+    const auto token = redirect::ProcessToken::format(pinned);
+
+    check(redirect::ProcessToken::parse(token.view()).sameInstance(pinned));
+    const ds::Array parent{ProcessIdentity{.pid = ::getpid()}};
+    redirect::SocketOwners unselected{::geteuid(), parent};
+    const auto excluded = unselected.find(flow);
+
+    check(excluded.complete && !excluded.process);
+    auto other_flow = flow;
+
+    other_flow.destination.port = target.port == UINT16_MAX ? 1 : target.port + 1;
+    other_flow.destination.endpoint.setPort(other_flow.destination.port);
+    check(!owner.find(other_flow).process);
+    auto stale = pinned;
+
+    ++stale.started_seconds;
+    bool replaced = false;
+
+    try {
+      const ds::Array requested{stale};
+      redirect::SocketOwners invalid{::geteuid(), requested};
+    } catch (const std::invalid_argument&) {
+      replaced = true;
+    }
+
+    check(replaced);
+    bool other_account = false;
+
+    try {
+      redirect::SocketOwners invalid{static_cast<uid_t>(::geteuid() == 0 ? 1 : 0), selected};
+    } catch (const std::invalid_argument&) {
+      other_account = true;
+    }
+
+    check(other_account);
+    stop_write = FileDescriptor{};
+    int status = 0;
+
+    check(::waitpid(pid, &status, 0) == pid && WIFEXITED(status) && WEXITSTATUS(status) == 0);
+    check(!owner.find(flow).process);
+  }
+
+  void accountSnapshot(bool ipv6) {
+    const auto origin = redirect::Target::parse(ipv6 ? "[::2]:50000" : "127.0.0.2:50000");
+    const auto server = redirect::Target::parse(ipv6 ? "[::1]:443" : "127.0.0.1:443");
+    xinpgen header{};
+
+    header.xig_len = sizeof(header);
+    header.xig_count = 2;
+    xtcpcb64 peer{};
+
+    peer.xt_len = sizeof(peer);
+    peer.t_state = TCPS_SYN_RECEIVED;
+    auto& pcb = peer.xt_inpcb;
+
+    pcb.xi_len = 0;
+    pcb.inp_vflag = ipv6 ? INP_IPV6 : INP_IPV4;
+    pcb.inp_lport = htons(server.port);
+    pcb.inp_fport = htons(origin.port);
+    if (ipv6) {
+      pcb.inp_dependladdr.inp6_local = reinterpret_cast<const sockaddr_in6&>(server.endpoint.storage).sin6_addr;
+      pcb.inp_dependfaddr.inp6_foreign = reinterpret_cast<const sockaddr_in6&>(origin.endpoint.storage).sin6_addr;
+    } else {
+      pcb.inp_laddr = reinterpret_cast<const sockaddr_in&>(server.endpoint.storage).sin_addr;
+      pcb.inp_faddr = reinterpret_cast<const sockaddr_in&>(origin.endpoint.storage).sin_addr;
+    }
+
+    pcb.xi_socket.xso_len = sizeof(xsocket64);
+    pcb.xi_socket.xso_protocol = IPPROTO_TCP;
+    pcb.xi_socket.so_type = SOCK_STREAM;
+    pcb.xi_socket.so_uid = 501;
+    auto client = peer;
+
+    std::swap(client.xt_inpcb.inp_lport, client.xt_inpcb.inp_fport);
+    if (ipv6) {
+      std::swap(client.xt_inpcb.inp_dependladdr.inp6_local, client.xt_inpcb.inp_dependfaddr.inp6_foreign);
+    } else {
+      std::swap(client.xt_inpcb.inp_laddr, client.xt_inpcb.inp_faddr);
+    }
+
+    client.xt_inpcb.xi_socket.so_uid = 0;
+    std::vector<std::uint8_t> bytes(2 * sizeof(header) + 2 * sizeof(peer));
+
+    std::memcpy(bytes.data(), &header, sizeof(header));
+    std::memcpy(bytes.data() + sizeof(header), &client, sizeof(client));
+    std::memcpy(bytes.data() + sizeof(header) + sizeof(client), &peer, sizeof(peer));
+    std::memcpy(bytes.data() + bytes.size() - sizeof(header), &header, sizeof(header));
+    using Accounts = redirect::SocketAccounts;
+
+    check(Accounts::decode(bytes, origin.endpoint.storage, server.endpoint.storage) == 501);
+    check(Accounts::decode(bytes, server.endpoint.storage, origin.endpoint.storage) == 0);
+    auto other = server;
+
+    other.endpoint.setPort(444);
+    check(!Accounts::decode(bytes, origin.endpoint.storage, other.endpoint.storage));
+    bool truncated = false;
+
+    try {
+      Accounts::decode(std::span{bytes}.first(bytes.size() - 1), origin.endpoint.storage, server.endpoint.storage);
+    } catch (const telar::EncodingError&) {
+      truncated = true;
+    }
+
+    check(truncated);
+  }
+
+  void localAddresses() {
+    const redirect::LocalAddresses addresses;
+
+    check(!addresses.contains(redirect::Target::parse("127.0.0.1:443")) && !addresses.contains(redirect::Target::parse("[::1]:443")));
+    bool rejected_local = false;
+
+    try {
+      const ds::Array targets{redirect::Target::parse("127.0.0.1:443")};
+
+      redirect::LocalAddresses::selection(targets, redirect::Direction::inbound);
+    } catch (const std::invalid_argument&) {
+      rejected_local = true;
+    }
+
+    check(rejected_local);
+    for (const auto name : {"127.0.0.1:443", "[::1]:443"}) {
+      const auto route = redirect::RoutePath::lookup(redirect::Target::parse(name));
+
+      check(route.interface.view() == "lo0" && route.index == ::if_nametoindex("lo0"));
+      const auto scoped = redirect::RoutePath::lookup(redirect::Target::parse(name), route.index);
+
+      check(scoped.index == route.index && scoped.gateway.view() == route.gateway.view());
+    }
+  }
+
+  const telar::testing::Case case_account_snapshot_ipv4{
+      "socket_owner.account_snapshot_ipv4",
+      [] {
+        accountSnapshot(false);
+      },
+  };
+  const telar::testing::Case case_account_snapshot_ipv6{
+      "socket_owner.account_snapshot_ipv6",
+      [] {
+        accountSnapshot(true);
+      },
+  };
+  const telar::testing::Case case_socket_owner_ipv4{
+      "socket_owner.socket_owner_ipv4",
+      [] {
+        socketOwner(false);
+      },
+  };
+  const telar::testing::Case case_socket_owner_ipv6{
+      "socket_owner.socket_owner_ipv6",
+      [] {
+        socketOwner(true);
+      },
+  };
+  const telar::testing::Case case_local_addresses{"socket_owner.local_addresses", localAddresses};
+
+}

@@ -8,7 +8,7 @@ telar_add_test(runtime-tools-support STATIC
   LIBRARIES ${runtime_settings} runtime-runtime-tests-support telar::base telar::client telar::platform telar::vocabulary telar::wire telar::testing)
 target_compile_options(runtime-tools-support PUBLIC ${TELAR_PROCESS_OPTIONS})
 
-telar_add_test(plugin-exchange-probe PROBE SOURCES plugin_exchange_probe.cpp LIBRARIES runtime-vocabulary runtime-plugins runtime-tools-support)
+telar_add_test(plugin-exchange-probe PROBE SOURCES plugin_exchange_probe.cpp LIBRARIES runtime-traffic-tap runtime-plugins runtime-tools-support)
 telar_add_test(control-pty-latency-probe PROBE SOURCES control_pty_latency_probe.cpp LIBRARIES runtime-tools-support)
 telar_add_test(control-query-probe SHARED
   SOURCES control_query_probe.cpp control_component_probe.cpp control_clipboard_fixture/control_clipboard_fixture.cppm

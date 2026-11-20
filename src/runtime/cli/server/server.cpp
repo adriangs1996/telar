@@ -17,7 +17,7 @@ import telar.runtime.history.event;
 import telar.runtime.platform.background_executor;
 import telar.runtime.plugins.service;
 import telar.runtime.plugins.tap_configuration;
-import telar.runtime.proxy.runtime;
+import telar.runtime.traffic.proxy.runtime;
 import telar.runtime.runtime.delivery.client_delivery;
 import telar.runtime.runtime.media_service;
 import telar.runtime.runtime.runtime;
@@ -27,17 +27,17 @@ import :tap;
 import telar.plugins;
 import telar.runtime.platform.event_loop;
 import telar.runtime.shell_integration;
-import telar.runtime.vocabulary.traffic;
+import telar.runtime.traffic.tap.protocol;
 import telar.runtime.suggestions.engine;
 import telar.runtime.platform.name_resolutions;
 import telar.base.ds;
 #ifdef __APPLE__
-import telar.runtime.redirect.socket_owners;
+import telar.runtime.traffic.redirect.socket_owners;
 import telar.runtime.platform.process_probe;
-import telar.runtime.redirect.direction;
-import telar.runtime.redirect.ingress;
-import telar.runtime.redirect.record;
-import telar.runtime.redirect.pf_rules;
+import telar.runtime.traffic.redirect.direction;
+import telar.runtime.traffic.redirect.ingress;
+import telar.runtime.traffic.redirect.record;
+import telar.runtime.traffic.redirect.pf_rules;
 #endif
 
 namespace telar::runtime::cli {

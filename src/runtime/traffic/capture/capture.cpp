@@ -5,7 +5,7 @@ import telar.sys.socket;
 import telar.sys.process;
 import telar.platform.error;
 import telar.platform.net;
-import telar.runtime.vocabulary.traffic;
+import telar.runtime.traffic.tap.protocol;
 import telar.base.ds;
 import telar.wire.vocabulary;
 

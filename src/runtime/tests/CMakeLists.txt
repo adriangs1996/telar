@@ -2,7 +2,7 @@
 # The tests of one domain live in its own tests/ folder (tools/check-cpp-modules.py, rule 9).
 telar_add_tests(runtime-tests LABEL runtime.integration DIRECTORY .
   LINK runtime-editors runtime-paths runtime-platform runtime-suggestions runtime-transport runtime-traffic
-    runtime-exchange_capture runtime-vocabulary runtime-workspaces runtime-worktrees
+    runtime-traffic-exchange_capture runtime-traffic-tap runtime-workspaces runtime-worktrees
     telar::base telar::config telar::platform telar::vocabulary telar::wire)
 
 # End-to-end checks of the built programs, labelled runtime.e2e.

@@ -7,10 +7,10 @@ import std;
 import telar.native.pcap;
 import telar.tbc;
 
-import telar.runtime.vocabulary.frames;
-import telar.runtime.http.message;
+import telar.runtime.traffic.tap.frames;
+import telar.runtime.traffic.http.message;
 
-import telar.runtime.redirect.direction;
+import telar.runtime.traffic.redirect.direction;
 import telar.base.text;
 import telar.vocabulary;
 import telar.base.memory.containers;

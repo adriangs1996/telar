@@ -16,8 +16,8 @@ import telar.wire.runtime;
 import telar.platform.primitives;
 import telar.runtime.diagnostics.line;
 
-import telar.runtime.vocabulary.exchange;
-import telar.runtime.proxy.http2_capture_streams;
+import telar.runtime.traffic.tap.exchange;
+import telar.runtime.traffic.proxy.http2_capture_streams;
 
 import telar.runtime.model.client_layouts;
 import telar.base.memory.allocators;

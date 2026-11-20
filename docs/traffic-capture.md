@@ -201,7 +201,7 @@ Import a PCAP through the same data channel. Every imported event is labelled
 From the repository root, run the focused checks:
 
 ```sh
-cmake --build out/dev --target telar-runtime runtime-tests runtime-traffic-tests runtime-plugins-tests runtime-tls-tests telar-tls-tests
+cmake --build out/dev --target telar-runtime runtime-tests runtime-traffic-tests runtime-plugins-tests runtime-traffic-tls-tests telar-tls-tests
 ctest --test-dir out/dev -L '^(runtime\.(integration|traffic|plugins|tls)|lib\.tls)$' --output-on-failure
 ```
 

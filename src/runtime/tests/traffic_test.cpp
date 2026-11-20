@@ -26,13 +26,13 @@ import telar.testing;
 import telar.testing.test_memory;
 import telar.runtime.traffic.capture;
 import telar.runtime.traffic.control_backend;
-import telar.runtime.exchange_capture.producer;
+import telar.runtime.traffic.exchange_capture.producer;
 import telar.vocabulary;
 import telar.config.runtime;
 import telar.runtime.traffic.control_protocol;
-import telar.runtime.vocabulary.exchange;
-import telar.runtime.vocabulary.frames;
-import telar.runtime.vocabulary.traffic;
+import telar.runtime.traffic.tap.exchange;
+import telar.runtime.traffic.tap.frames;
+import telar.runtime.traffic.tap.protocol;
 import telar.base.ds;
 
 namespace {

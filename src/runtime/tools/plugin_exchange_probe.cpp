@@ -14,8 +14,8 @@ import telar.runtime.plugins.service;
 import telar.vocabulary;
 import telar.config.runtime;
 import telar.plugins;
-import telar.runtime.vocabulary.exchange;
-import telar.runtime.vocabulary.traffic;
+import telar.runtime.traffic.tap.exchange;
+import telar.runtime.traffic.tap.protocol;
 import telar.platform.error;
 import telar.base.ds;
 

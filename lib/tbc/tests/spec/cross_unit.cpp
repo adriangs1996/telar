@@ -182,7 +182,7 @@ namespace cross_unit {
 
 // CASE: cross_unit.defined_streams_keep_wrappers
 // PAIR: cross_unit.stream_wrappers
-// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: ApplicationRelay::advance
+// SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: ApplicationRelay::advance
 // STATUS: implemented
 // CONTRACT: A wrapper keeps a mutable reference to the stream it wraps; a call that receives the wrapper by mutable reference may invalidate the stream's storage but not the wrapper's own reference to it, as a Rust `&mut` reborrows what its fields lend.
 // SCENARIO: Each wrapper views its own socket, whose reads and writes another unit defines; accept.
@@ -197,7 +197,7 @@ bool crossUnitDefinedStreams(cross_unit::relays& relays, cross_unit::socket_stre
 
 // CASE: cross_unit.opaque_streams_keep_wrappers
 // PAIR: cross_unit.stream_wrappers
-// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: ApplicationRelay::advance
+// SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: ApplicationRelay::advance
 // STATUS: implemented
 // CONTRACT: A wrapper keeps a mutable reference to the stream it wraps; a call that receives the wrapper by mutable reference may invalidate the stream's storage but not the wrapper's own reference to it, as a Rust `&mut` reborrows what its fields lend.
 // SCENARIO: No checked unit defines the streams' reads and writes, which changes nothing: the calls are known by their declarations either way; accept.
@@ -212,7 +212,7 @@ bool crossUnitOpaqueStreams(cross_unit::relays& relays, cross_unit::opaque_strea
 
 // CASE: cross_unit.shared_stream_overlaps
 // PAIR: cross_unit.stream_wrappers
-// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: ApplicationRelay::advance
+// SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: ApplicationRelay::advance
 // STATUS: implemented
 // CONTRACT: A wrapper keeps a mutable reference to the stream it wraps; a call that receives the wrapper by mutable reference may invalidate the stream's storage but not the wrapper's own reference to it, as a Rust `&mut` reborrows what its fields lend.
 // SCENARIO: Both wrappers view the same socket, so mutating it through either one invalidates the other's borrow of it; reject each wrapper at the call.

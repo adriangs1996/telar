@@ -64,8 +64,8 @@ import telar.base.memory.sensitive;
 import telar.config.runtime;
 import telar.plugins;
 import telar.runtime.platform.signals;
-import telar.runtime.vocabulary.exchange;
-import telar.runtime.vocabulary.traffic;
+import telar.runtime.traffic.tap.exchange;
+import telar.runtime.traffic.tap.protocol;
 import telar.base.ds;
 
 namespace {

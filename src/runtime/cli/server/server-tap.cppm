@@ -7,7 +7,7 @@ import std;
 
 import telar.runtime.traffic.control_backend;
 import telar.runtime.traffic.control_protocol;
-import telar.runtime.vocabulary.exchange;
+import telar.runtime.traffic.tap.exchange;
 
 // Interface: traffic/tap.cppm
 export {

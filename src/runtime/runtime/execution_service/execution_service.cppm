@@ -16,7 +16,7 @@ import telar.runtime.transport.connection;
 
 import telar.platform.process;
 
-import telar.runtime.proxy.runtime;
+import telar.runtime.traffic.proxy.runtime;
 
 export import :execution;
 import telar.runtime.shell_integration;

@@ -64,7 +64,7 @@ import telar.runtime.traffic.capture_analysis;
 import telar.runtime.traffic.control_backend;
 import telar.base.memory.sensitive;
 import telar.plugins;
-import telar.runtime.http.message;
+import telar.runtime.traffic.http.message;
 import telar.runtime.plugins.service;
 import telar.runtime.plugins.worker;
 import telar.runtime.plugins.tap_configuration;
@@ -72,9 +72,9 @@ import telar.runtime.platform.signals;
 import telar.platform.process;
 import telar.runtime.traffic.control_protocol;
 import telar.config.runtime;
-import telar.runtime.vocabulary.exchange;
-import telar.runtime.vocabulary.frames;
-import telar.runtime.vocabulary.traffic;
+import telar.runtime.traffic.tap.exchange;
+import telar.runtime.traffic.tap.frames;
+import telar.runtime.traffic.tap.protocol;
 import telar.base.ds;
 
 namespace {

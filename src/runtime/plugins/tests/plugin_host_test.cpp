@@ -49,8 +49,8 @@ import telar.runtime.plugins.run_worker;
 import telar.base.text.utf8;
 import telar.platform.fs;
 import telar.plugins;
-import telar.runtime.vocabulary.exchange;
-import telar.runtime.vocabulary.traffic;
+import telar.runtime.traffic.tap.exchange;
+import telar.runtime.traffic.tap.protocol;
 import telar.base.ds;
 
 namespace {

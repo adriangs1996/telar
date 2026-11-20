@@ -374,7 +374,7 @@ client features. The example does not install trust or change redirection.
 ## Verification
 
 ```sh
-cmake --build out/dev --target telar-runtime runtime-tests runtime-traffic-tests runtime-proxy-tests runtime-tls-tests telar-tls-tests
+cmake --build out/dev --target telar-runtime runtime-tests runtime-traffic-tests runtime-traffic-proxy-tests runtime-traffic-tls-tests telar-tls-tests
 ctest --test-dir out/dev -L '^(runtime\.(integration|traffic|proxy|tls)|lib\.tls)$' --output-on-failure
 ctest --test-dir out/dev -R '^redirect-check-tests$' --output-on-failure
 ```

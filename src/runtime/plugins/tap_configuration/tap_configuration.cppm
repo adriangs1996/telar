@@ -13,8 +13,8 @@ import telar.plugins;
 import telar.platform.fs;
 import telar.platform.paths;
 
-import telar.runtime.vocabulary.exchange;
-import telar.runtime.vocabulary.traffic;
+import telar.runtime.traffic.tap.exchange;
+import telar.runtime.traffic.tap.protocol;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
 import telar.platform.error;

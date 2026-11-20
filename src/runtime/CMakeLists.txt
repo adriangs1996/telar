@@ -109,8 +109,8 @@ endif()
 
 # The domains of docs/build/modules.json (process_layers), lowest first.
 foreach(domain IN ITEMS diagnostics transport config suggestions platform paths shell_integration
-    workspaces worktrees metrics terminal history command_capture graphics agents vocabulary
-    observation model http1 http exchange_capture http2 tls redirect traffic proxy plugins editors
+    workspaces worktrees metrics terminal history command_capture graphics agents traffic/tap
+    observation model traffic/http1 traffic/http traffic/exchange_capture traffic/http2 traffic/tls traffic/redirect traffic traffic/proxy plugins editors
     persistence runtime cli)
   add_subdirectory(${domain})
 endforeach()

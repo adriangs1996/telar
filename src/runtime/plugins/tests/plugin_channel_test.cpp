@@ -17,7 +17,7 @@ import telar.wire.vocabulary;
 import telar.platform.error;
 import telar.platform.net;
 import telar.plugins;
-import telar.runtime.vocabulary.traffic;
+import telar.runtime.traffic.tap.protocol;
 import telar.base.ds;
 
 namespace {

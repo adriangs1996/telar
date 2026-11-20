@@ -7,10 +7,10 @@ import std;
 import telar.sys.posix;
 import telar.tbc;
 
-import telar.runtime.vocabulary.traffic;
+import telar.runtime.traffic.tap.protocol;
 import telar.lua;
 
-import telar.runtime.http.message;
+import telar.runtime.traffic.http.message;
 
 import telar.runtime.plugins.worker;
 
@@ -21,7 +21,7 @@ import telar.base.memory.sensitive;
 import telar.wire.vocabulary;
 import telar.base.text;
 import telar.runtime.traffic.control_protocol;
-import telar.runtime.vocabulary.exchange;
+import telar.runtime.traffic.tap.exchange;
 import telar.base.ds;
 
 // Interface: plugins/lua_effects.cppm

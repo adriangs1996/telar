@@ -5,7 +5,7 @@ module telar.runtime.plugins.worker;
 
 import telar.sys.socket;
 import telar.sys.process;
-import telar.runtime.http.message;
+import telar.runtime.traffic.http.message;
 import telar.base.ds;
 
 namespace telar::runtime::plugins {

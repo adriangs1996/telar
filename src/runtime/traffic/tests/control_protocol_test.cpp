@@ -1,7 +1,7 @@
 import std;
 import telar.testing;
 import telar.runtime.traffic.control_protocol;
-import telar.runtime.vocabulary.frames;
+import telar.runtime.traffic.tap.frames;
 import telar.wire.vocabulary;
 
 namespace {

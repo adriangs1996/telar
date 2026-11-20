@@ -8,8 +8,8 @@ telar_add_domain(runtime runtime
     runtime/runtime.cpp
     runtime_telemetry/runtime_telemetry.cpp
   DEPS diagnostics transport suggestions platform paths shell_integration workspaces worktrees
-       metrics terminal history graphics agents vocabulary observation model exchange_capture
-       proxy plugins editors persistence)
+       metrics terminal history graphics agents traffic/tap observation model traffic/exchange_capture
+       traffic/proxy plugins editors persistence)
 
 if(BUILD_TESTING)
   # A case that drives a runtime host ends within the timeout even if a process it started hangs.

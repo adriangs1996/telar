@@ -9,7 +9,7 @@ import telar.sys.posix;
 import telar.tbc;
 
 import telar.runtime.platform.stream_read_buffer;
-import telar.runtime.vocabulary.traffic;
+import telar.runtime.traffic.tap.protocol;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.base.memory.sensitive;
@@ -28,7 +28,7 @@ import telar.runtime.platform.signals;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
 import telar.base.text;
-import telar.runtime.vocabulary.frames;
+import telar.runtime.traffic.tap.frames;
 import telar.base.ds;
 
 // Interface: plugins/frame_channel.cppm

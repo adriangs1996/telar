@@ -1225,7 +1225,7 @@ inferred::checked_view inferredConstructorUnwindingEscape() {
 
 // CASE: inference.function_address
 // PAIR: inference.function_address
-// SOURCE: src/runtime/redirect/socket_owners/socket_owners.cppm :: LocalAddresses
+// SOURCE: src/runtime/traffic/redirect/socket_owners/socket_owners.cppm :: LocalAddresses
 // STATUS: implemented
 // CONTRACT: A function's address is static storage, not a borrow of the object that keeps it.
 // SCENARIO: A copyable owner keeps a deleter function pointer; accept.
@@ -1253,7 +1253,7 @@ void inferredFunctionAddress() {
 
 // CASE: inference.function_address_object
 // PAIR: inference.function_address
-// SOURCE: src/runtime/redirect/socket_owners/socket_owners.cppm :: LocalAddresses
+// SOURCE: src/runtime/traffic/redirect/socket_owners/socket_owners.cppm :: LocalAddresses
 // STATUS: implemented
 // CONTRACT: A function's address is static storage, not a borrow of the object that keeps it.
 // SCENARIO: A copyable owner keeps the address of its own field instead; reject.

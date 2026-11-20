@@ -125,7 +125,7 @@ void libraryViewsInOwnerLive(const library::string& owner) {
 
 // CASE: library.compiled_function
 // PAIR: library.function
-// SOURCE: src/runtime/tls/interception/interception.cppm :: selectAlpn
+// SOURCE: src/runtime/traffic/tls/interception/interception.cppm :: selectAlpn
 // STATUS: implemented
 // CONTRACT: A compiled library function is outside the analysis and is not reported.
 // SCENARIO: The result of a function without a visible body is used; accept.
@@ -137,7 +137,7 @@ void libraryCompiledFunction() {
 
 // CASE: library.inline_function
 // PAIR: library.function
-// SOURCE: src/runtime/tls/interception/interception.cppm :: selectAlpn
+// SOURCE: src/runtime/traffic/tls/interception/interception.cppm :: selectAlpn
 // STATUS: implemented
 // CONTRACT: A library function with a visible body is inferred from the shape of its arguments.
 // SCENARIO: The pointer passed through the library function views a local buffer and is returned.
@@ -175,7 +175,7 @@ std::string_view libraryConstantAlongsideLocal(bool constant) {
 
 // CASE: library.raw_stream_pointer
 // PAIR: library.raw_stream
-// SOURCE: src/runtime/exchange_capture/producer/producer.cppm :: FlateDecoder::decode
+// SOURCE: src/runtime/traffic/exchange_capture/producer/producer.cppm :: FlateDecoder::decode
 // STATUS: implemented
 // CONTRACT: A pointer field of a C struct a system header declares is a raw pointer, as Rust's `*const T` in an FFI struct, so storing a buffer in it keeps no borrow.
 // SCENARIO: A decoder hands one call's buffers to its C stream; accept.
@@ -206,7 +206,7 @@ int libraryRawStreamPointer(third_party::decoder& decoder, std::string_view inpu
 
 // CASE: library.project_stream_pointer
 // PAIR: library.raw_stream
-// SOURCE: src/runtime/exchange_capture/producer/producer.cppm :: FlateDecoder::decode
+// SOURCE: src/runtime/traffic/exchange_capture/producer/producer.cppm :: FlateDecoder::decode
 // STATUS: implemented
 // CONTRACT: A pointer field of a C struct a system header declares is a raw pointer, as Rust's `*const T` in an FFI struct, so storing a buffer in it keeps no borrow.
 // SCENARIO: The same stream declared by the project keeps the borrow its declaration does not allow; reject the store.
@@ -234,7 +234,7 @@ void libraryProjectStreamPointer(third_party::project_decoder& decoder, std::str
 
 // CASE: library.raw_struct_value
 // PAIR: library.raw_struct
-// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: Http2EndpointConnection::Fields::add
+// SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: Http2EndpointConnection::Fields::add
 // STATUS: implemented
 // CONTRACT: A value of a C struct a system header declares holds raw pointers, as Rust's FFI structs do, so it carries no borrow of what they point at.
 // SCENARIO: A header list keeps entries pointing at names it owns and at the caller's values; accept.
@@ -261,7 +261,7 @@ void libraryRawStructValue(third_party::field_list& list, std::string_view value
 
 // CASE: library.project_struct_value
 // PAIR: library.raw_struct
-// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: Http2EndpointConnection::Fields::add
+// SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: Http2EndpointConnection::Fields::add
 // STATUS: implemented
 // CONTRACT: A value of a C struct a system header declares holds raw pointers, as Rust's FFI structs do, so it carries no borrow of what they point at.
 // SCENARIO: The same entry declared by the project keeps the caller's value its declaration does not allow; reject the store.

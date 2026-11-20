@@ -420,7 +420,7 @@ namespace pointers {
 
 // CASE: pointer.reference_field_read
 // PAIR: pointer.reference_field
-// SOURCE: src/runtime/tls/interception/interception.cppm :: TlsStream::peekView
+// SOURCE: src/runtime/traffic/tls/interception/interception.cppm :: TlsStream::peekView
 // STATUS: pending
 // CONTRACT: Reading a reference field yields what its referent holds, not the referent itself; a result that names the referent's region rather than the reference's, as `&'s &'b str` does, needs one region per level.
 // SCENARIO: The local view refers to the caller's string, so the view read back may be returned; accept.
@@ -434,7 +434,7 @@ std::string_view pointerReferenceFieldRead(const std::string& text) {
 
 // CASE: pointer.reference_field_dead
 // PAIR: pointer.reference_field
-// SOURCE: src/runtime/tls/interception/interception.cppm :: TlsStream::peekView
+// SOURCE: src/runtime/traffic/tls/interception/interception.cppm :: TlsStream::peekView
 // STATUS: implemented
 // CONTRACT: Reading a reference field yields what its referent holds, not the referent itself.
 // SCENARIO: The view read back refers to a local string that dies on return.
@@ -449,7 +449,7 @@ std::string_view pointerReferenceFieldDead() {
 
 // CASE: pointer.nested_reference_wrapper
 // PAIR: pointer.nested_reference
-// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: ApplicationRelay::advance
+// SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: ApplicationRelay::advance
 // STATUS: pending
 // CONTRACT: A wrapper's view of the stream it wraps can name the stream's own region rather than the wrapper's, as `&'s Stream<'b>` does; one label per field cannot yet tell the two apart.
 // SCENARIO: The relay keeps a pointer into the caller's buffer through two local wrappers; accept.
@@ -463,7 +463,7 @@ void pointerNestedReferenceWrapper(pointers::buffer& source, pointers::relay& ou
 
 // CASE: pointer.nested_reference_dead
 // PAIR: pointer.nested_reference
-// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: ApplicationRelay::advance
+// SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: ApplicationRelay::advance
 // STATUS: implemented
 // CONTRACT: Wrappers that hold references to streams reach the buffer the innermost one designates.
 // SCENARIO: The relay keeps a pointer into a local buffer past its lifetime.
@@ -478,7 +478,7 @@ void pointerNestedReferenceDead(pointers::relay& out) {
 
 // CASE: pointer.aggregate_reference_member
 // PAIR: pointer.aggregate_reference
-// SOURCE: src/runtime/proxy/intercepted_relay/intercepted_relay.cppm :: Http1InterceptedRelay::Sink
+// SOURCE: src/runtime/traffic/proxy/intercepted_relay/intercepted_relay.cppm :: Http1InterceptedRelay::Sink
 // STATUS: implemented
 // CONTRACT: An aggregate's reference member is bound to its initializer, so operations through it reach the referent.
 // SCENARIO: Clearing the string through the member invalidates an earlier view of it.
@@ -493,7 +493,7 @@ void pointerAggregateReferenceMember(std::string& text) {
 
 // CASE: pointer.aggregate_reference_read
 // PAIR: pointer.aggregate_reference
-// SOURCE: src/runtime/proxy/intercepted_relay/intercepted_relay.cppm :: Http1InterceptedRelay::Sink
+// SOURCE: src/runtime/traffic/proxy/intercepted_relay/intercepted_relay.cppm :: Http1InterceptedRelay::Sink
 // STATUS: implemented
 // CONTRACT: An aggregate's reference member is bound to its initializer, so operations through it reach the referent.
 // SCENARIO: The view is read before the string is cleared through the member; accept.
@@ -508,7 +508,7 @@ void pointerAggregateReferenceRead(std::string& text) {
 
 // CASE: pointer.parameter_write_dead
 // PAIR: pointer.parameter_write_through
-// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: FlowGate::write
+// SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: FlowGate::write
 // STATUS: implemented
 // CONTRACT: A write through a pointer parameter lands in the object the argument designates.
 // SCENARIO: The record behind the pointer keeps a view of a string that dies before it is read.
@@ -526,7 +526,7 @@ void pointerParameterWriteDead() {
 
 // CASE: pointer.parameter_write_live
 // PAIR: pointer.parameter_write_through
-// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: FlowGate::write
+// SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: FlowGate::write
 // STATUS: implemented
 // CONTRACT: A write through a pointer parameter lands in the object the argument designates.
 // SCENARIO: The record behind the pointer is read while the string lives; accept.
@@ -542,7 +542,7 @@ void pointerParameterWriteLive() {
 
 // CASE: pointer.parameter_read_invalidated
 // PAIR: pointer.parameter_read_through
-// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: FlowStream::write
+// SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: FlowStream::write
 // STATUS: implemented
 // CONTRACT: A callee that reads through a pointer parameter uses what the argument's pointee holds.
 // SCENARIO: The record's view is invalidated before the callee reads it through the pointer.
@@ -556,7 +556,7 @@ void pointerParameterReadInvalidated(std::string& text) {
 
 // CASE: pointer.parameter_read_live
 // PAIR: pointer.parameter_read_through
-// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: FlowStream::write
+// SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: FlowStream::write
 // STATUS: implemented
 // CONTRACT: A callee that reads through a pointer parameter uses what the argument's pointee holds.
 // SCENARIO: The callee reads the record before the string is cleared; accept.
@@ -650,7 +650,7 @@ bool functionPointerResource(column_text text, void* statement) {
 
 // CASE: pointer.read_live_pointee
 // PAIR: pointer.read_through
-// SOURCE: src/runtime/redirect/record/record.cppm :: PacketLog::normalize
+// SOURCE: src/runtime/traffic/redirect/record/record.cppm :: PacketLog::normalize
 // STATUS: implemented
 // CONTRACT: Reading through a pointer needs a live pointee wherever the read appears, as any use of a borrow does in Rust.
 // SCENARIO: The caller's string outlives the read in the condition; accept.
@@ -666,7 +666,7 @@ bool readLivePointee(const std::string& source) {
 
 // CASE: pointer.read_dead_pointee
 // PAIR: pointer.read_through
-// SOURCE: src/runtime/redirect/record/record.cppm :: PacketLog::normalize
+// SOURCE: src/runtime/traffic/redirect/record/record.cppm :: PacketLog::normalize
 // STATUS: implemented
 // CONTRACT: Reading through a pointer needs a live pointee wherever the read appears, as any use of a borrow does in Rust.
 // SCENARIO: The temporary string dies with its declaration, before the condition reads through the pointer.

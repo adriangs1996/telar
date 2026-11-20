@@ -239,7 +239,7 @@ void exchangeLive(std::string_view text) {
 
 // CASE: std.get_if_escape
 // PAIR: std.get_if
-// SOURCE: src/runtime/proxy/authenticate/authenticate.cppm :: ProxyDecision
+// SOURCE: src/runtime/traffic/proxy/authenticate/authenticate.cppm :: ProxyDecision
 // STATUS: implemented
 // CONTRACT: std::get_if points into the variant passed by address.
 // SCENARIO: A pointer into a local variant is returned.
@@ -252,7 +252,7 @@ const std::string_view* getIfEscape() {
 
 // CASE: std.get_if_parameter
 // PAIR: std.get_if
-// SOURCE: src/runtime/proxy/authenticate/authenticate.cppm :: ProxyDecision
+// SOURCE: src/runtime/traffic/proxy/authenticate/authenticate.cppm :: ProxyDecision
 // STATUS: implemented
 // CONTRACT: A pointer into a caller's variant may outlive the call.
 // SCENARIO: The variant belongs to the caller; accept.
@@ -551,7 +551,7 @@ std::vector<std::string_view> insertedRangeParameter(const std::string& text) {
 
 // CASE: std.ranges_find_local
 // PAIR: std.ranges_find
-// SOURCE: src/runtime/redirect/record/record.cppm :: PacketLog::normalize
+// SOURCE: src/runtime/traffic/redirect/record/record.cppm :: PacketLog::normalize
 // STATUS: implemented
 // CONTRACT: std::ranges::find returns an iterator into its range, not into the value it searches for.
 // SCENARIO: The searched character is a temporary of the call; the iterator into the live local array stays valid.
@@ -565,7 +565,7 @@ std::size_t rangesFindLocal(const std::array<char, 16>& input) {
 
 // CASE: std.ranges_find_escape
 // PAIR: std.ranges_find
-// SOURCE: src/runtime/redirect/record/record.cppm :: PacketLog::normalize
+// SOURCE: src/runtime/traffic/redirect/record/record.cppm :: PacketLog::normalize
 // STATUS: implemented
 // CONTRACT: std::ranges::find returns an iterator into its range, not into the value it searches for.
 // SCENARIO: The iterator points into a local array that dies when the function returns.

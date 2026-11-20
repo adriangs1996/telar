@@ -885,7 +885,7 @@ void declarationExclusiveFieldAlias(const std::vector<int>& values) {
 
 // CASE: declaration.static_input
 // PAIR: declaration.static_input
-// SOURCE: src/runtime/proxy/http2_capture_streams/http2_capture_streams.cppm :: respond (ProxyRejection::response)
+// SOURCE: src/runtime/traffic/proxy/http2_capture_streams/http2_capture_streams.cppm :: respond (ProxyRejection::response)
 // STATUS: implemented
 // CONTRACT: A parameter labeled static_storage takes only storage that outlives every caller, which the call checks at the argument, so it supplies static fields and results, as a Rust `&'static str` parameter does.
 // SCENARIO: A reply keeps a literal it is handed and forwards another; accept.
@@ -918,7 +918,7 @@ std::size_t declarationStaticInput(declarations::reply& out) {
 
 // CASE: declaration.static_input_owned
 // PAIR: declaration.static_input
-// SOURCE: src/runtime/proxy/http2_capture_streams/http2_capture_streams.cppm :: respond (ProxyRejection::response)
+// SOURCE: src/runtime/traffic/proxy/http2_capture_streams/http2_capture_streams.cppm :: respond (ProxyRejection::response)
 // STATUS: implemented
 // CONTRACT: A parameter labeled static_storage takes only storage that outlives every caller, which the call checks at the argument, so it supplies static fields and results, as a Rust `&'static str` parameter does.
 // SCENARIO: The reply is handed a local string; reject at the argument.
@@ -995,7 +995,7 @@ std::size_t declarationMutableReferent(declarations::settings& values) {
 
 // CASE: declaration.raw_pointer
 // PAIR: declaration.raw_pointer
-// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: Http2EndpointConnection::advance
+// SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: Http2EndpointConnection::advance
 // STATUS: implemented
 // CONTRACT: A pointer passed through tbc::raw carries no borrow, as Rust's `as *mut T` does, so the code that dereferences it answers for the object being alive.
 // SCENARIO: A connection resolves each stream of its own table through a raw pointer, by index, since a method of the connection lends it whole; accept.
@@ -1035,7 +1035,7 @@ void declarationRawPointer(declarations::raw_connection& connection) {
 
 // CASE: declaration.checked_pointer
 // PAIR: declaration.raw_pointer
-// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: Http2EndpointConnection::advance
+// SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: Http2EndpointConnection::advance
 // STATUS: implemented
 // CONTRACT: A pointer passed through tbc::raw carries no borrow, as Rust's `as *mut T` does, so the code that dereferences it answers for the object being alive.
 // SCENARIO: The same connection resolves its streams through the table's own pointers; reject the overlapping argument.
@@ -1067,7 +1067,7 @@ void declarationCheckedPointer(declarations::checked_connection& connection) {
 
 // CASE: declaration.template_constructor_copy
 // PAIR: declaration.template_constructor
-// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: ApplicationRelay::transfer (Http1Connection)
+// SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: ApplicationRelay::transfer (Http1Connection)
 // STATUS: implemented
 // CONTRACT: A constructor template keeps by its declaration, as any constructor does: a parameter taken by value keeps a copy of what its argument holds, not the argument.
 // SCENARIO: A factory builds a relay from a moved local through a constructor template taking it by value; accept.
@@ -1130,7 +1130,7 @@ void declarationTemplateConstructorCopy(declarations::arena& memory, declaration
 
 // CASE: declaration.template_constructor_reference
 // PAIR: declaration.template_constructor
-// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: ApplicationRelay::transfer (Http1Connection)
+// SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: ApplicationRelay::transfer (Http1Connection)
 // STATUS: implemented
 // CONTRACT: A constructor template keeps by its declaration, as any constructor does: a parameter taken by value keeps a copy of what its argument holds, not the argument.
 // SCENARIO: The relay's constructor template keeps the observer by reference, and the local dies before the relay is used; reject at the use.
@@ -1165,7 +1165,7 @@ int declarationTemplateConstructorReference(declarations::arena& memory, declara
 
 // CASE: declaration.static_field_result
 // PAIR: declaration.static_field_result
-// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: FlowGate::failureReason
+// SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: FlowGate::failureReason
 // STATUS: implemented
 // CONTRACT: What a field labeled static_storage holds outlives every caller, so it supplies a static result and may be kept anywhere, as a static input may.
 // SCENARIO: A gate keeps the literal it fails with and returns it; a transport forwards a literal to the gate it owns; accept.
@@ -1206,7 +1206,7 @@ std::size_t declarationStaticFieldResult(declarations::failure_transport& transp
 
 // CASE: declaration.dynamic_field_result
 // PAIR: declaration.static_field_result
-// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: FlowGate::failureReason
+// SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: FlowGate::failureReason
 // STATUS: implemented
 // CONTRACT: What a field labeled static_storage holds outlives every caller, so it supplies a static result and may be kept anywhere, as a static input may.
 // SCENARIO: A gate returns a field without the label as static; reject the result.
@@ -1233,7 +1233,7 @@ std::size_t declarationDynamicFieldResult(const declarations::dynamic_gate& gate
 
 // CASE: declaration.owned_receiver_call
 // PAIR: declaration.owned_receiver
-// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: ApplicationRelay::Relays::transfer (http1_->advance)
+// SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: ApplicationRelay::Relays::transfer (http1_->advance)
 // STATUS: implemented
 // CONTRACT: The object a sole owner holds, as a unique_ptr's, is that owner's own: a call through it invalidates other borrows of what it designates, not the owner's own.
 // SCENARIO: An owner feeds a screen twice through the feeder its unique_ptr holds; accept.
@@ -1262,7 +1262,7 @@ void declarationOwnedReceiverCall(declarations::screen& shown) {
 
 // CASE: declaration.owned_receiver_alias
 // PAIR: declaration.owned_receiver
-// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: ApplicationRelay::Relays::transfer (http1_->advance)
+// SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: ApplicationRelay::Relays::transfer (http1_->advance)
 // STATUS: pending
 // CONTRACT: The object a sole owner holds, as a unique_ptr's, is that owner's own: a call through it invalidates other borrows of what it designates, not the owner's own.
 // SCENARIO: A view of the screen's cells is read after the owned feeder grows them; reject at the feed.
@@ -1553,7 +1553,7 @@ declarations::erased_bytes declarationAbstractSharedEscapes(declarations::arena&
 
 // CASE: declaration.abstract_shared_sibling_marked
 // PAIR: declaration.abstract_shared_sibling
-// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: Http2EndpointConnection (budget_ lent to sibling fields)
+// SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: Http2EndpointConnection (budget_ lent to sibling fields)
 // STATUS: implemented
 // CONTRACT: The TBC_SHARED mark is not inherited: a field keeps a sibling through a shared base only when the sibling's own type is marked and its object is pinned.
 // SCENARIO: A pinned service lends its marked adapter to a buffer beside it as `Memory &`; accept.
@@ -1587,7 +1587,7 @@ bool declarationAbstractSharedSiblingMarked(declarations::arena& system) {
 
 // CASE: declaration.abstract_shared_sibling_unmarked
 // PAIR: declaration.abstract_shared_sibling
-// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: Http2EndpointConnection (budget_ lent to sibling fields)
+// SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: Http2EndpointConnection (budget_ lent to sibling fields)
 // STATUS: implemented
 // CONTRACT: The TBC_SHARED mark is not inherited: a field keeps a sibling through a shared base only when the sibling's own type is marked and its object is pinned.
 // SCENARIO: The adapter derives from the marked interface but is not marked itself; reject where the constructor lends it.
@@ -2005,7 +2005,7 @@ std::size_t declarationSharedBorrowHeldElement(tbc::view<declarations::model_mem
 
 // CASE: declaration.nested_reference_reached
 // PAIR: declaration.nested_reference
-// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: ApplicationRelay::advance
+// SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: ApplicationRelay::advance
 // STATUS: implemented
 // CONTRACT: A call that receives an object by mutable reference may mutate what it reaches through each mutable reference in turn, as a Rust `&mut` reaches through nested `&mut` fields.
 // SCENARIO: The call receives a wrapper of a wrapper of the vector a borrow points into, so it may grow that vector; reject at the call.
@@ -2036,7 +2036,7 @@ void declarationNestedReferenceReached() {
 
 // CASE: declaration.nested_reference_shared
 // PAIR: declaration.nested_reference
-// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: ApplicationRelay::advance
+// SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: ApplicationRelay::advance
 // STATUS: implemented
 // CONTRACT: A call that receives an object by mutable reference may mutate what it reaches through each mutable reference in turn, as a Rust `&mut` reaches through nested `&mut` fields.
 // SCENARIO: The inner wrapper refers to the vector through a reference to const, so the call cannot reach it mutably; accept.

@@ -295,9 +295,9 @@ configuration and compilation errors fail the command. No fixes are applied.
 | `worktrees/` | Linked-worktree discovery and Git status/base-distance observation. |
 | `paths/` | Bounded path indexes, filesystem/Git discovery, fuzzy ranking and highlights. |
 | `editors/` | Existing Neovim, Vim and Emacs endpoint discovery and process validation. |
-| `proxy/` | Host policy, authentication, port recovery, bounded resolution, CONNECT, relay, connection actor and child configuration. |
-| `tls/` | Injected OpenSSL allocation, authority persistence, system roots, ALPN and verified two-sided TLS sessions. |
-| `exchange_capture/` | Erased buffers, shared quotas, directional metadata, joining, publication and bounded content decoding. |
+| `traffic/proxy/` | Host policy, authentication, port recovery, bounded resolution, CONNECT, relay, connection actor and child configuration. |
+| `traffic/tls/` | Injected OpenSSL allocation, authority persistence, system roots, ALPN and verified two-sided TLS sessions. |
+| `traffic/exchange_capture/` | Erased buffers, shared quotas, directional metadata, joining, publication and bounded content decoding. |
 | `suggestions/` | A reusable Pi RPC process, bounded messages, deadlines and idle shutdown. |
 | `diagnostics/` | Limit ledgers, Debug function tracing, counters and operation timings shared by every component. |
 

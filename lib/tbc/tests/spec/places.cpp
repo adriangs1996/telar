@@ -355,7 +355,7 @@ void placeRebuiltViews() {
 
 // CASE: place.owned_sibling_mutation
 // PAIR: place.owned_sibling
-// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: Http2EndpointConnection::streams_
+// SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: Http2EndpointConnection::streams_
 // STATUS: implemented
 // CONTRACT: Mutating one field of an object owned through a pointer leaves borrows of its other fields valid.
 // SCENARIO: The request method is read after the response headers of the same stream are cleared; accept.
@@ -370,7 +370,7 @@ void placeOwnedSiblingMutation(std::vector<std::unique_ptr<places::stream>>& str
 
 // CASE: place.owned_field_mutation
 // PAIR: place.owned_sibling
-// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: Http2EndpointConnection::streams_
+// SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: Http2EndpointConnection::streams_
 // STATUS: implemented
 // CONTRACT: Reassigning the field a view borrows invalidates the view.
 // SCENARIO: The request method is read after it is reassigned.
@@ -385,7 +385,7 @@ void placeOwnedFieldMutation(std::vector<std::unique_ptr<places::stream>>& strea
 
 // CASE: place.returned_half_mutation
 // PAIR: place.returned_half
-// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: Http2EndpointConnection::Endpoint::half
+// SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: Http2EndpointConnection::Endpoint::half
 // STATUS: implemented
 // CONTRACT: A borrow last used before a mutation through a returned reference is not affected by it.
 // SCENARIO: The request method is read before the headers of whichever half is selected are cleared; accept.
@@ -400,7 +400,7 @@ void placeReturnedHalfMutation(std::vector<std::unique_ptr<places::stream>>& str
 
 // CASE: place.returned_half_headers
 // PAIR: place.returned_half
-// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: Http2EndpointConnection::Endpoint::half
+// SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: Http2EndpointConnection::Endpoint::half
 // STATUS: implemented
 // CONTRACT: A returned reference designates some part of its argument the declaration does not name, so mutating through it may invalidate any borrow of that argument, as Rust's `&mut` result does.
 // SCENARIO: A request header is read after the headers of whichever half is selected are cleared.
@@ -415,7 +415,7 @@ void placeReturnedHalfHeaders(std::vector<std::unique_ptr<places::stream>>& stre
 
 // CASE: place.callee_sibling_mutation
 // PAIR: place.callee_field
-// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: Http2EndpointConnection::streams_
+// SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: Http2EndpointConnection::streams_
 // STATUS: implemented
 // CONTRACT: A callee known by its declaration borrows its whole argument, as a Rust `&mut` does, so it may mutate any field.
 // SCENARIO: The request method is read after a helper clears only the response headers; reject at the call.
@@ -430,7 +430,7 @@ void placeCalleeSiblingMutation(std::vector<std::unique_ptr<places::stream>>& st
 
 // CASE: place.direct_sibling_mutation
 // PAIR: place.callee_field
-// SOURCE: src/runtime/http1/head/head.cppm :: Http1Session::response_
+// SOURCE: src/runtime/traffic/http1/head/head.cppm :: Http1Session::response_
 // STATUS: implemented
 // CONTRACT: Mutating one field directly leaves borrows of the object's other fields valid.
 // SCENARIO: The request method is read after the response headers are cleared in place; accept.
@@ -445,7 +445,7 @@ void placeDirectSiblingMutation(std::vector<std::unique_ptr<places::stream>>& st
 
 // CASE: place.callee_field_mutation
 // PAIR: place.callee_field
-// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: Http2EndpointConnection::streams_
+// SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: Http2EndpointConnection::streams_
 // STATUS: implemented
 // CONTRACT: A callee that mutates a field of its argument invalidates borrows of that field.
 // SCENARIO: A response header is read after a helper clears the response headers.
@@ -646,7 +646,7 @@ void placeAssignedThroughDangling(std::vector<std::string>& names) {
 
 // CASE: place.captured_receiver_sibling
 // PAIR: place.captured_receiver
-// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: ProxyService::run
+// SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: ProxyService::run
 // STATUS: implemented
 // CONTRACT: Inside a lambda, `this` is the captured object, so a field it mutates belongs to that object, not to the closure; a closure's caller sees which fields, as Rust closures capture them.
 // SCENARIO: A name is read after a closure defined in the same method releases a slot; accept.
@@ -670,7 +670,7 @@ namespace places {
 
 // CASE: place.captured_receiver_field
 // PAIR: place.captured_receiver
-// SOURCE: src/runtime/proxy/runtime/runtime.cppm :: ProxyService::run
+// SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: ProxyService::run
 // STATUS: implemented
 // CONTRACT: A field a lambda mutates through its captured `this` is invalidated in the captured object.
 // SCENARIO: A pointer to a released slot is read after the callback grows the released slots.

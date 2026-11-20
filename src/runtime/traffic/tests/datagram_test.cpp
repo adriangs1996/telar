@@ -22,7 +22,7 @@ import telar.runtime.traffic.capture_analysis;
 import telar.runtime.traffic.control_backend;
 import telar.vocabulary;
 import telar.runtime.traffic.control_protocol;
-import telar.runtime.vocabulary.frames;
+import telar.runtime.traffic.tap.frames;
 import telar.base.ds;
 
 namespace {

@@ -17,8 +17,8 @@ import telar.testing;
 import telar.runtime.traffic.control_backend;
 import telar.runtime.traffic.control_protocol;
 import telar.runtime.traffic.tests.packet_fixture;
-import telar.runtime.vocabulary.frames;
-import telar.runtime.vocabulary.traffic;
+import telar.runtime.traffic.tap.frames;
+import telar.runtime.traffic.tap.protocol;
 import telar.vocabulary;
 import telar.base.ds;
 

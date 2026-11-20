@@ -3,7 +3,7 @@
 The proxy's certificate authority as both the runtime and the `telar` CLI see
 it: OpenSSL handles and allocation, certificate pairs, PEM documents, the
 authority directory, and the system trust records `telar proxy trust` installs.
-The runtime's TLS sessions and interception stay in `src/runtime/tls`.
+The runtime's TLS sessions and interception stay in `src/runtime/traffic/tls`.
 It is C++23 with compiled standard module interfaces and links OpenSSL 3.
 
 ```cmake

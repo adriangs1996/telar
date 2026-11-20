@@ -8,7 +8,7 @@ static_assert(true);
 import std;
 import telar.base.memory.allocators;
 import telar.testing;
-import telar.runtime.redirect.ingress;
+import telar.runtime.traffic.redirect.ingress;
 import telar.runtime.traffic.control_backend;
 import telar.runtime.traffic.control_protocol;
 import telar.tls;

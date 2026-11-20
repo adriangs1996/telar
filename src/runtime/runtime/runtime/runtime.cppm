@@ -27,7 +27,7 @@ import telar.runtime.platform.local_listener;
 import telar.runtime.worktrees.git_probe;
 
 import telar.runtime.runtime.runtime_telemetry;
-import telar.runtime.vocabulary.exchange;
+import telar.runtime.traffic.tap.exchange;
 
 import telar.runtime.platform.background_executor;
 
@@ -49,7 +49,7 @@ import telar.wire.worktrees;
 import telar.platform.primitives;
 import telar.runtime.terminal.control;
 import telar.base.text.json;
-import telar.runtime.exchange_capture.pipeline;
+import telar.runtime.traffic.exchange_capture.pipeline;
 import telar.runtime.platform.stream_read_buffer;
 import telar.runtime.runtime.delivery.client_delivery;
 import telar.runtime.shell_integration.words;
@@ -62,10 +62,10 @@ import telar.runtime.history.event;
 import telar.runtime.platform.event_loop;
 import telar.runtime.model.slot_store;
 import telar.runtime.platform.host_metrics;
-import telar.runtime.proxy.runtime;
+import telar.runtime.traffic.proxy.runtime;
 import telar.runtime.shell_integration.git_context;
 import telar.runtime.transport.connection;
-import telar.runtime.vocabulary.traffic;
+import telar.runtime.traffic.tap.protocol;
 import telar.runtime.workspaces.git_probe;
 import telar.base.ds;
 

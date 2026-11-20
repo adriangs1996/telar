@@ -62,7 +62,7 @@ import telar.runtime.platform.event_loop;
 import telar.runtime.plugins.service;
 import telar.runtime.runtime.execution_service;
 import telar.runtime.transport.connection;
-import telar.runtime.vocabulary.traffic;
+import telar.runtime.traffic.tap.protocol;
 import telar.base.ds;
 #if (TELAR_DIAGNOSTICS)
 import telar.runtime.runtime.runtime_telemetry;

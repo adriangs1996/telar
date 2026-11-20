@@ -166,7 +166,7 @@ can continue. The existing startup trust maintenance still applies.
 ## Verification
 
 ```sh
-cmake --build out/dev --target telar-runtime runtime-proxy-tests runtime-tls-tests telar-tls-tests
+cmake --build out/dev --target telar-runtime runtime-traffic-proxy-tests runtime-traffic-tls-tests telar-tls-tests
 ctest --test-dir out/dev -L '^(runtime\.(proxy|tls)|lib\.tls)$' --output-on-failure
 ```
 

@@ -8,7 +8,7 @@ import std;
 import telar.sys.posix;
 import telar.tbc;
 
-import telar.runtime.vocabulary.traffic;
+import telar.runtime.traffic.tap.protocol;
 
 import telar.runtime.plugins.worker;
 import telar.base.memory.allocators;
@@ -16,7 +16,7 @@ import telar.base.memory.containers;
 import telar.runtime.platform.signals;
 import telar.runtime.plugins.tap_configuration;
 import telar.runtime.traffic.control_backend;
-import telar.runtime.vocabulary.exchange;
+import telar.runtime.traffic.tap.exchange;
 import telar.base.ds;
 
 // Interface: plugins/event_source.cppm

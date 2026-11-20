@@ -16,15 +16,15 @@ import telar.base.memory.containers;
 import telar.base.memory.sensitive;
 import telar.config.runtime;
 
-import telar.runtime.vocabulary.traffic;
+import telar.runtime.traffic.tap.protocol;
 import telar.runtime.traffic.capture;
 
 import telar.runtime.platform.local_listener;
 import telar.runtime.platform.signals;
 import telar.runtime.traffic.capture_analysis;
 
-import telar.runtime.redirect.socket_owners;
-import telar.runtime.redirect.ingress;
+import telar.runtime.traffic.redirect.socket_owners;
+import telar.runtime.traffic.redirect.ingress;
 import telar.tls;
 import telar.wire.vocabulary;
 import telar.platform.primitives;
@@ -33,11 +33,11 @@ import telar.platform.net;
 import telar.platform.process;
 import telar.base.text;
 import telar.plugins;
-import telar.runtime.http.message;
+import telar.runtime.traffic.http.message;
 import telar.runtime.platform.process_probe;
-import telar.runtime.redirect.direction;
-import telar.runtime.vocabulary.exchange;
-import telar.runtime.vocabulary.frames;
+import telar.runtime.traffic.redirect.direction;
+import telar.runtime.traffic.tap.exchange;
+import telar.runtime.traffic.tap.frames;
 import telar.base.ds;
 
 namespace telar::runtime::traffic {
